@@ -4,3 +4,4 @@ package-lock.json
 yarn.lock
 .idea
 dist
+.ds_store

@@ -27,10 +27,10 @@ const cancelBtn = document.getElementById('yes-or-no-button-no');
 /**
  * 模板创建结果对象
  * @type {Object}
- * @property {string|null} texture - 所选纹理路径
- * @property {string|null} backgroundColor - 背景颜色（如果是纯色）
- * @property {string|null} backgroundImage - 背景图片路径（如果是图片）
- * @property {string|null} name - 模板名称
+ * @property {string} texture - 所选纹理路径
+ * @property {string} backgroundColor - 背景颜色（如果是纯色）
+ * @property {string} backgroundImage - 背景图片路径（如果是图片）
+ * @property {string} name - 模板名称
  */
 let result = {
   texture: null,
@@ -130,20 +130,20 @@ cancelBtn.addEventListener('click', () => {
  */
 confirmBtn.addEventListener('click', async () => {
   result.texture = chooseTextureBtn.value;
-  
+
   if (nameInput.value === '') {
     nameInput.focus();
     blink(nameInput);
     toast.warning('请输入样式名');
     return;
   }
-  
+
   result.name = nameInput.value;
-  
+
   if (deleteID) {
     await ipc.invoke('template-remove', deleteID, 'NewFile');
   }
-  
+
   ipc.send('new-template-result', result);
   ipc.send('close-window', 'NewTemplate');
 });
@@ -159,7 +159,7 @@ confirmBtn.addEventListener('click', async () => {
 ipc.on('init-new-template-from-other-template', (event, templateInfo, pathStr, prevID) => {
   nameInput.value = templateInfo.name;
   result.name = nameInput.value;
-  
+
   if (templateInfo.backgroundType === 'solid') {
     solidOpt.checked = true;
     color.value = templateInfo.background;
@@ -169,7 +169,7 @@ ipc.on('init-new-template-from-other-template', (event, templateInfo, pathStr, p
       .peek('backgroundImage', templateInfo.background)
       .getPath();
   }
-  
+
   deleteID = prevID;
   previewScreenFlush();
 });
