@@ -2,13 +2,7 @@
  * @author Zhou Chenyu
  */
 
-/**
- * 分子操作类
- * @class
- * @author Zhou Chenyu
- */
-class MolecularOperation {
-}
+const { MolecularOperation } = require("./operation")
 
 /**
  * 分子节点

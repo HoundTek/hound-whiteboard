@@ -12,8 +12,6 @@
 - 函数 $p(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 的点集
 - 函数 $s(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 入度为 $0$ 的点的点集
 - 函数 $t(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 出度为 $0$ 的点的点集
-- $from(X) = \mathbb{I}$，其中 $\forall I \in \mathbb{I}$ 都有边 $I \to X$ 且 $\forall I \notin \mathbb{I}$ 都没有边 $I \to X$。
-- $to(X) = \mathbb{I}$, 其中 $\forall I \in \mathbb{I}$ 都有边 $X \to I$ 且 $\forall I \notin \mathbb{I}$ 都没有边 $X \to I$。
 - $P \to Q$ 表示 $P$ 与 $Q$ 间有条 $P$ 到 $Q$ 的边
 
 ## 层叠图概述
@@ -48,68 +46,79 @@
 
 直接将其从动态图和静态图中删去即可，记得清理动态图。
 
-### 在白板上选择单个对象
+### 在白板上选择单个对象 (单人)
 
-将被选择的对象记为 $\mathbf{a}$，将提取出以选择对象为起点的子图加入动态图中，然后连接所有的 $T \in t(\mathcal{D}) \to A$。
+将被选择的对象记为 $\mathbf{a}$。
 
-接下来，以拓扑序去重。若有重复，则保留拓扑序靠后的那个。
+提取出一个 $\mathcal{S}$ 的子图 $\mathcal{G}$，满足
 
-### 在白板上选择多个对象
+1. $s(\mathcal{G}) = \{\mathbb{A}\}$
+2. $\forall P \in p(\mathcal{G})$，存在从 $A$ 到 $P$ 的路径
+3. $\forall P \in \complement_{p(\mathcal{S})}\mathcal{G}$，不存在从 $A$ 到 $P$ 的路径
+
+动态图即为 $\mathcal{G}$。
+
+### 在白板上选择多个对象 (单人)
 
 将被选择的对象集记为 $\mathbb{A}$。
 
 首先，提取出一个 $\mathcal{S}$ 的子图 $\mathcal{G}$，满足
 
-1. $s(\mathcal{G}) \sube \mathbb{A}$
-2. $p(\mathcal{G}) \sube \mathbb{G}$
+1. $s(\mathcal{G}) \subseteq \mathbb{A}$
+2. $\forall P \in p(\mathcal{G}), \exist Q \in \mathbb{A}$，存在从 $Q$ 到 $P$ 的路径
+3. $\forall P \in \complement_{p(\mathcal{S})}\mathcal{G}, \forall Q \in \mathbb{A}$，不存在从 $Q$ 到 $P$ 的路径
 
-我们称 $\mathcal{G}$ 为在 $\mathcal{S}$ 中以 $a \in \mathbb{A}$ 中的点为起点的子图。
 
-得到 $\mathcal{G}$ 后，将其分块。分块的规则如下:
+得到 $\mathcal{G}$ 后，将其分层并删除跨层边，算法如下:
 
-1. 在每个块内都有一张有向无环图 $\mathcal{G}_x$，若忽略边的方向，则它应该是一张连通图
-2. 对 $\forall T \in t(\mathcal{G}_x)$ 都有 $T \in t(\mathcal{G}) \cup \mathbb{A}$
-3. 对 $\forall S \in s(\mathcal{G}_x)$ 都有 $S \in s(\mathcal{G})$ 或存在边 $A \in \mathbb{A} \to S$
-4. $\complement_{p(\mathcal{G}_x)}t(\mathcal{G}_x) \cap \mathbb{A} = \emptyset$ (可由 2. 和 3. 证出)
+1. 对于每个点，有属性 `layer` 表示该点所在的层，属性 `stash` 表示该点的暂存的边，有全局变量 `currentLayer` 表示当前正在处理的层，`activeNumber` 表示当前是还需处理多少个 `activeQueue` 中的点，队列 `activeQueue` 和 `inactiveQueue` 分别存被选中对象和未被选中对象
+2. 计算每个点的入度
+3. 将入度为 $0$ 的点入队，将 `currentLayer` 赋予这些点
+4. 若 `inactiveQueue` 中有元素且 `activeNumber` 为 $0$，则将 `inactiveQueue` 中一元素出队，记为 $P$，对 $P$ 的所有后继节点进行如下操作
+   1. 假设当前操作的节点为 $Q$
+   2. 若 $Q$ 的 `layer` 比 `currentLayer` 小，则将其 `stash` 里的所有边从 $\mathcal{G}$ 中删去，将 `stash` 清空，并将 `currentLayer` 赋予 $Q$
+   3. 将 $Q$ 的入度减一，若 $Q$ 的入度变成了 $0$，则将 $Q$ 入队，并清空 $Q$ 的 `stash`，否则，将 $P \to Q$ 加入 $Q$ 的 `stash`
+5. 若 `inactiveQueue` 中无元素但 `activeQueue` 中有元素，则将 `activeNumber` 设为 `activeQueue` 的元素数
+6. 若 `activeNumber` 不为 $0$ 且 `activeQueue` 中有元素，则将 `activeQueue` 中一元素出队，记为 $P$，对 $P$ 的所有后继节点进行如下操作
+   1. 假设当前操作的节点为 $Q$
+   2. 若 $Q$ 的 `layer` 比 `currentLayer` 小，则将其 `stash` 里的所有边从 $\mathcal{G}$ 中删去，将 `stash` 清空，并将 `currentLayer` 赋予 $Q$
+   3. 将 $Q$ 的入度减一，若 $Q$ 的入度变成了 $0$，则将 $Q$ 入队，并清空 $Q$ 的 `stash`，否则，将 $P \to Q$ 加入 $Q$ 的 `stash`
+   4. 将 `activeNumber` 减一，若 `activeNumber` 被减为 $0$，则将 `currentLayer` 加一
+7. 若 `inactiveQueue` 或 `activeQueue` 中有元素，则重复第 4 到第 6 步
+8. 在跨层的边不算入度和出度的情况下计算每个点的入度和出度
+9. 创建 `currentLayer + 1` 个虚节点，其中虚节点指不对应对象的节点，记为 $V_i (i \in \mathbb{N})$
+10. 再创建 `currentLayer + 1` 个虚节点，记为 $L_i (i \in \mathbb{N})$
+11. 让 $V_i$ 向 `layer` 为 $i$ 的、入度为 $0$ 的节点连边
+12. 让 `layer` 为 $i$ 的、出度为 $0$ 的、被选中的节点向 $V_{i+1}$ 连边，其中 $i$ 小于等于 `currentLayer`
+13. 让 $L_i$ 向 `layer` 为 $i$ 的、出度为 $0$ 的、被选中的节点连边
+14. 让 `layer` 为 $i$ 的、出度为 $0$ 的、未被选中的节点向 $L_i$ 连边
+15. 最终，得到图 $\mathcal{G'}$
 
-然后，以块为节点创建一张块的有向图 $\mathcal{B}$。若两块间节点有相连，则两块所在节点也应相连且方向一致，易得 $\mathcal{B}$ 无环。又可由上述规则证明出每一块内的有向图是无环的。
+将图 $\mathcal{G'}$ 加入 $\mathcal{D}$ 中，连接所有的 $T \in t(\mathcal{D}) \to S \in \mathbb{A}$。
 
-现在将 $\mathcal{B}$ 的边反向，记为 $\mathcal{B'}$，然后使用拓扑排序求每个 $B \in p(\mathcal{B'})$ 的深度。这里的 $B$ 既是图 $\mathcal{B'}$ 中的点，也是一张图。
+在白板上选择单个对象是在白板上选择多个对象的特殊情况。
 
-记函数 $get\_depth(B)$ 为点 $B$ 在 $\mathcal{B'}$ 中的深度 (深度已用拓扑排序定义)。
-
-对于 $\forall W \in \mathcal{B}$，$\mathcal{W}$ 是 $W$ 下的有向无环图，则有有向无环图集 $\mathbb{V}$ 表示与 $W$ 同深度的节点下的有向无环图，而 $\mathbb{U}$ 表示比 $W$ 深度小 $1$ 的节点下的有向无环图集。
-
-则 $\forall V_i \in \mathbb{V}, \mathcal{V_i}$ 是 $V_i$ 下的有向无环图，$t(\mathcal{V}) = \bigcup t(\mathcal{V_i})$，$\forall U_i \in \mathbb{U}, \mathcal{U_i}$ 是 $U_i$ 下的有向无环图，$t(\mathcal{U}) = \bigcup t(\mathcal{U_i})$
-
-我们将在 $\mathcal{G}$ 中连接以下的边
-- $\forall X \in from(t(\mathcal{W})) \to \forall Y \in t(\mathcal{W})$
-- $\forall X \in from(t(\mathcal{W})) \to \forall Y \in t(\mathcal{V})$
-- $\forall X \in t(\mathcal{W}) \to \forall Y \in s(\mathcal{U})$
-
-接下来，将刚刚处理完了的图 $\mathcal{G}$ 加入 $\mathcal{D}$ 中，连接所有的 $T \in t(\mathcal{D}) \to S \in \mathbb{A}$。
-
-最终，以拓扑序去重。去重的规则见[上文](#在白板上选择单个对象)。
-
-在白板上先择单个对象是在白板上选择多个对象的特殊情况。
-
-### 取消选择对象
+### 取消选择对象 (单人)
 
 首先将要取消选择的对象集合 $\mathbb{A}$ 提取出来，对于每一个 $a \in \mathbb{A}$，都有对象集 $\mathbb{B}_a$ 表示动态图中它能到达的对象，有对象集 $\mathbb{C}_a$ 表示与它有交集的对象，于是我们有对象集 $\mathbb{D}_a = \mathbb{B}_a \cap \mathbb{C}_a$ 表示在静态图中它将要连边的对象，而 $\mathbb{E}_a = \complement_{\mathbb{C}_a}\mathbb{D}_a$ 表示在静态图中将要连边到它的对象。
 
-然后，我们在静态图中将原有的 $a \in \mathbb{A}$ 删去，再依据刚刚算出来的 $\mathbb{D}_a$ 和 $\mathbb{E}_a$ 连边。
+然后，清空静态图，再依据刚刚算出来的 $\mathbb{D}_a$ 和 $\mathbb{E}_a$ 连边。
 
-### 置顶选择的对象
+### 置顶选择的对象 (单人)
 
-将要置顶的对象集记为 $\mathbb{A}$。
+在动态图中，直接将不是被选择的节点删去。
 
-首先，将 $A \in \mathbb{A}$ 从动态图中删去，然后清理动态图，再连接所有的 $T \in t(\mathcal{D})$ 到 $A \in \mathbb{A}$ 的边。
+## 层叠图实现
+
+在 [tire-graph.js](./tier-graph.js) 中，选用邻接表来实现一个有向无环图。
 
 ## 层叠图示例
 
 下面将以几个示例来演示层叠图的工作方式
 
-### 原始状态
+### 示例一: 单人单对象
+
+#### 原始状态
 
 静态图如下:
 
@@ -126,8 +135,6 @@ graph BT
 ```
 
 动态图为空。
-
-### 示例一: 单人单对象
 
 #### C 被选择
 
@@ -160,6 +167,24 @@ graph BT
 
 ### 示例二: 单人多对象
 
+#### 原始状态
+
+静态图如下:
+
+```mermaid
+graph BT
+  D --> C
+  D --> E
+  H --> C
+  C --> B
+  B --> A
+  E --> A
+  E --> F
+  G
+```
+
+动态图为空。
+
 #### C、E、H 被选择
 
 现在，我们提取出来的子图 $\mathcal{G}$ 如下:
@@ -176,77 +201,63 @@ graph BT
   style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
 ```
 
-然后将其分块，如下:
+然后将其分层，$\mathcal{G'}$ 如下:
 
 ```mermaid
 graph BT
-  H --> C
-  C --> B
+  V0
   B --> A
-  E --> A
-  E --> F
+  L0 --> H
+  L0 --> E
+  V0 --> H
+  V0 --> E
+  H --> V1
+  E --> V1
+  V1 --> C
+  V1 --> F
+  F --> L1
+  L1 --> C
+  C --> V2
+  F --> V2
+  V2 --> B
   style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
 
-  subgraph "depth: 1"
+  subgraph "layer: 2"
     A
     B
-    F
+    L2
   end
-  subgraph "depth: 2"
+  subgraph "layer: 1"
     C
-    E
+    F
+    L1
   end
-  subgraph "depth: 3"
+  subgraph "layer: 0"
     H
+    E
+    L0
   end
 ```
 
-连边处理，如下:
+放入动态图中，静态图不变，动态图清理后如下:
 
 ```mermaid
 graph BT
-  H --> C
-  C --> B
   B --> A
-  E --> A
-  E --> F
+  H --> V1
+  E --> V1
+  V1 --> C
+  V1 --> F
+  F --> L1
+  L1 --> C
+  C --> V2
+  F --> V2
+  V2 --> B
   style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-
-  subgraph "depth: 1"
-    A
-    B
-    F
-  end
-  subgraph "depth: 2"
-    C
-    E
-  end
-  subgraph "depth: 3"
-    H
-  end
-
-  C --> F
-  E --> B
-```
-
-放入动态图中，静态图不变，动态图如下:
-```mermaid
-graph BT
-  H --> C
-  C --> B
-  B --> A
-  E --> A
-  E --> F
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  C --> F
-  E --> B
-  H --> E
 ```
 
 #### 将 E 移走，H 移到 D 上，C 移到 A、B、F 之下，取消选择
@@ -267,88 +278,3 @@ graph BT
 ```
 
 动态图为空。
-
-### 示例三: 多人协作同选·一
-
-#### 甲先选 C，乙再选 G
-
-静态图不变，动态图如下:
-
-```mermaid
-graph BT
-  C --> G
-  C --> B
-  B --> G
-  B --> A
-  A --> G
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style G fill:#9999ff,stroke:#3333ff,stroke-width:2px,color:#fff
-```
-
-#### 乙把 G 移到 A 之上，乙取消选择
-
-静态图如下:
-
-```mermaid
-graph BT
-  D --> C
-  D --> E
-  H --> C
-  C --> B
-  B --> A
-  E --> A
-  E --> F
-  A --> G
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-```
-
-动态图如下:
-
-```mermaid
-graph BT
-  C --> B
-  B --> A
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-```
-
-### 示例四: 多人协作同选·二
-
-#### 甲先选 C，乙再选 G
-
-静态图不变，动态图如下:
-
-```mermaid
-graph BT
-  C --> G
-  C --> B
-  B --> G
-  B --> A
-  A --> G
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style G fill:#9999ff,stroke:#3333ff,stroke-width:2px,color:#fff
-```
-
-#### 甲取消选择
-
-静态图如下:
-
-```mermaid
-graph BT
-  D --> C
-  D --> E
-  H --> C
-  C --> B
-  B --> A
-  E --> A
-  E --> F
-  G
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-```
-
-动态图如下:
-
-```mermaid
-graph BT
-  G
-  style G fill:#9999ff,stroke:#3333ff,stroke-width:2px,color:#fff
-```

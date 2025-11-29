@@ -32,6 +32,8 @@ const { randomInt } = require("crypto");
  * pool.remove(rnum1); // 返回 false (删除未成功，因为池中已经没有这个数了)
  */
 class randomNumberPool {
+  pool;
+
   /**
    * 创建随机数池
    * @param {number} min 随机数的最小值
@@ -50,7 +52,12 @@ class randomNumberPool {
    */
   initFromArray(arr) {
     for (let i = 0; i < arr.length; i++) {
-      this.pool[arr[i]] = true;
+      if (this.min <= arr[i] && arr[i] <= this.max) {
+        if (!this.pool[arr[i]]) {
+          this.pool[arr[i]] = true;
+          this.length++;
+        }
+      }
     }
   }
 
@@ -60,9 +67,10 @@ class randomNumberPool {
    * @returns {boolean} 是否成功添加
    */
   add(num) {
-    if (!(min <= num && num <= max)) return false;
+    if (!(this.min <= num && num <= this.max)) return false;
     if (this.pool[num]) return false;
     this.pool[num] = true;
+    this.length++;
     return true;
   }
 
@@ -72,8 +80,8 @@ class randomNumberPool {
    * @returns {boolean} 是否成功添加
    */
   include(num) {
-    if (!(min <= num && num <= max)) return false;
-    return this.pool[num]
+    if (!(this.min <= num && num <= this.max)) return false;
+    return !!this.pool[num]; // duck type
   }
 
   /**
@@ -95,9 +103,10 @@ class randomNumberPool {
     }
     let num;
     do {
-      num = randomInt(this.min, this.max);
+      num = randomInt(this.min, this.max + 1);
     } while (this.pool[num]);
     this.pool[num] = true;
+    this.length++;
     return num;
   }
 
@@ -107,8 +116,9 @@ class randomNumberPool {
    * @returns {boolean} 是否成功删除
    */
   remove(num) {
-    if (this.pool[num]){
+    if (this.pool[num]) {
       delete this.pool[num];
+      this.length--;
       return true;
     }
     return false;

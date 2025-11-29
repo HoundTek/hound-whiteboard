@@ -4,15 +4,20 @@
   "description": "A whiteboard app",
   "main": "./src/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
   },
   "author": "Frank Steven",
   "license": "MIT",
   "dependencies": {
-    "adm-zip": "^0.5.16",
-    "hidefile": "^3.0.0",
-    "electron-packager": "^17.1.0",
-    "electron": "^38.0.0",
-    "mathjs": "^14.8.2"
+    "adm-zip": "0.5",
+    "hidefile": "3",
+    "@electron/packager": "19",
+    "electron": "39",
+    "mathjs": "15",
+    "jest": "30"
+  },
+  "jest": {
+    "testEnvironment": "node"
   }
 }
