@@ -34,7 +34,7 @@ const pageMeta = {
  * @param {Object} app - Electron应用对象
  */
 function init(app) {
-  templatesDir = new directory(app.getPath('userData'), 'templates').make();
+  templatesDir = new directory(app.getPath('userData'), 'data').cd("templates").existOrMake();
 }
 
 /**
@@ -126,7 +126,7 @@ function addPage(pool, templateID) {
  * @returns {BrowserWindow} 浏览器窗口实例
  */
 function openBoard(boardFile) {
-  let win = winManager.createFullScreenWindow('full-screen.html');
+  let win = winManager.createFullScreenWindow('whiteboard');
 
   const fileDir = new directory(boardFile.address, boardFile.name);
   directory.getHideResult(fileDir).rmWhenExist();

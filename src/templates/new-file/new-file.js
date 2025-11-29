@@ -59,7 +59,7 @@ let filePath = '';
  */
 const boardInfo = {
   templateID: null,
-  file: null,
+  filePath: null,
   width: 800,
   height: 600,
 };
@@ -108,11 +108,11 @@ function sanitizeFilename(value) {
  * @param {string} fileName - 当前文件名输入
  */
 function updateFilePathDisplay(fileName) {
-  boardInfo.file = path.join(
+  boardInfo.filePath = path.join(
     filePath,
     fileName ? `${fileName}.hwb` : ''
   );
-  filePathSpan.textContent = boardInfo.file || "未选择路径";
+  filePathSpan.textContent = boardInfo.filePath || "未选择路径";
 }
 
 // 输入验证
@@ -136,8 +136,8 @@ choosePathBtn.addEventListener('click', async () => {
   const result = await ipc.invoke('path-choose');
   if (result) {
     filePath = result[0];
-    boardInfo.file = path.join(filePath, input.value === '' ? '' : input.value + '.hwb');
-    filePathSpan.textContent = boardInfo.file;
+    boardInfo.filePath = path.join(filePath, input.value === '' ? '' : input.value + '.hwb');
+    filePathSpan.textContent = boardInfo.filePath;
   }
 });
 
@@ -188,7 +188,7 @@ confirmBtn.addEventListener('click', () => {
   }
 
   if (input.value !== '' && filePath !== '') {
-    if (directory.parse(boardInfo.file).peek(input.value, 'hwb').exist()) {
+    if (directory.parse(boardInfo.filePath).peek(input.value, 'hwb').exist()) {
       input.focus();
       blink(input);
       toast.warning('已有同名文件存在');
@@ -197,6 +197,7 @@ confirmBtn.addEventListener('click', () => {
   }
 
   if (!canConfirm) return;
+  console.log(boardInfo);
   ipc.send('create-new-board-templated', boardInfo);
 });
 
@@ -209,7 +210,7 @@ window.chooseButton = function(templateID) {
   const button = document.getElementById(templateID);
   if (boardInfo.templateID) {
     document.getElementById(boardInfo.templateID)
-            .style.border = '2px solid transparent';
+      .style.border = '2px solid transparent';
   }
   boardInfo.templateID = templateID;
   button.style.border = '2px solid #007aff';

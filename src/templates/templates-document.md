@@ -10,17 +10,17 @@
 3. JavaScript文件 - 定义行为
 
 模板共享公共资源：
-- [global.css](./css/global.css) - 全局样式
-- [global.js](./js/global.js) - 全局工具(主题/语言管理)
+- [global.css](./global.css) - 全局样式
+- [global.js](./global.js) - 全局工具(主题/语言管理)
 
 ## 主菜单模板 (`main-menu`)
 
 应用的主入口点。
 
 ### 文件:
-- [main-menu.html](./html/main-menu.html) - 主结构
-- [main-menu.css](./css/main-menu.css) - 特定样式
-- [main-menu.js](./js/main-menu.js) - 逻辑和IPC处理器
+- [main-menu.html](./main-menu/main-menu.html) - 主结构
+- [main-menu.css](./main-menu/main-menu.css) - 特定样式
+- [main-menu.js](./main-menu/main-menu.js) - 逻辑和IPC处理器
 
 ### 功能:
 - 侧边栏导航
@@ -48,13 +48,13 @@
 
 ## 全局资源
 
-### [global.js](./js/global.js)
+### [global.js](./global.js)
 提供共享功能:
 - 主题管理(`setTheme`)
 - 语言管理(`setLanguage`)
 - 设置变更的IPC处理器
 
-### [global.css](./css/global.css)
+### [global.css](./global.css)
 提供共享样式:
 - 所有模板的基础样式
 - 通用按钮样式
@@ -63,17 +63,17 @@
 ## 其他模板
 
 ### 新建文件模板 (`new-file`)
-- 文件: [new-file.html](./html/new-file.html), [new-file.css](./css/new-file.css), [new-file.js](./js/new-file.js)
+- 文件: [new-file.html](./new-file/new-file.html), [new-file.css](./new-file/new-file.css), [new-file.js](./new-file/new-file.js)
 - 用途: 创建新的白板文件
 
 ### 新建模板模板 (`new-template`)
-- 文件: [new-template.html](./html/new-template.html), [new-template.css](./css/new-template.css), [new-template.js](./js/new-template.js)
+- 文件: [new-template.html](./new-template/new-template.html), [new-template.css](./new-template/new-template.css), [new-template.js](./new-template/new-template.js)
 - 用途: 创建新模板
 
-### 全屏模板 (`full-screen`)
-- 文件: [full-screen.html](./html/full-screen.html), [full-screen.css](./css/full-screen.css), [full-screen.js](./js/full-screen.js)
-- 用途: 白板编辑界面
-- 包含`full-screen-utils/`中的工具模块
+### 全屏模板 (`whiteboard`)
+- 文件: [whiteboard.html](./whiteboard/whiteboard.html), [whiteboard.css](./whiteboard/whiteboard.css), [whiteboard.js](./whiteboard/whiteboard.js)
+- 用途: 白板主界面
+- 包含 `whiteboard-utils/` 中的工具模块和 `whiteboard-components` 中的组件模块
 
 ## 模板关系图
 
@@ -84,5 +84,5 @@ global.css ───┘
              
 main-menu.js ─── new-file.js
                  new-template.js
-                 full-screen.js
+                 whiteboard.js
 ```

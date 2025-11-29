@@ -42,6 +42,7 @@ function init(app) {
  */
 function saveTemplate(template) {
   const tempDir = templatePool.generate();
+  console.log(templatePool.dir);
   const templateID = tempDir.name;
 
   let templateData = {
