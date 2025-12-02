@@ -4,6 +4,8 @@
  * @author Zhou Chenyu
  */
 
+const { Queue } = require("../../../utils/queue");
+
 /**
  * 自定义图错误基类
  */
@@ -14,6 +16,10 @@ class GraphError extends Error {
    */
   name;
 
+  /**
+   * @param {string} message - 错误信息
+   * @constructor
+   */
   constructor(message) {
     super(message);
     this.name = "GraphError";
@@ -30,6 +36,10 @@ class NodeNotExistError extends GraphError {
    */
   node;
 
+  /**
+   * @param {number} node - 不存在的节点
+   * @constructor
+   */
   constructor(node) {
     super(`Node ${node} does not exist.`);
     this.name = "NodeNotExistError";
@@ -41,6 +51,23 @@ class NodeNotExistError extends GraphError {
  * 边不存在错误
  */
 class EdgeNotExistError extends GraphError {
+  /**
+   * 边起点
+   * @type {number}
+   */
+  from;
+
+  /**
+   * 边终点
+   * @type {number}
+   */
+  to;
+
+  /**
+   * @param {number} from - 不存在的边的起点
+   * @param {number} to - 不存在的边的终点
+   * @constructor
+   */
   constructor(from, to) {
     super(`Edge from ${from} to ${to} does not exist.`);
     this.name = "EdgeNotExistError";
@@ -53,6 +80,16 @@ class EdgeNotExistError extends GraphError {
  * 节点已存在错误
  */
 class NodeAlreadyExistError extends GraphError {
+  /**
+   * 已存在的节点
+   * @type {number}
+   */
+  node;
+
+  /**
+   * @param {number} node - 已存在的节点
+   * @constructor
+   */
   constructor(node) {
     super(`Node ${node} already exists.`);
     this.name = "NodeAlreadyExistError";
@@ -64,6 +101,23 @@ class NodeAlreadyExistError extends GraphError {
  * 边已存在错误
  */
 class EdgeAlreadyExistError extends GraphError {
+  /**
+   * 边起点
+   * @type {number}
+   */
+  from;
+
+  /**
+   * 边终点
+   * @type {number}
+   */
+  to;
+
+  /**
+   * @param {number} from - 已存在的边的起点
+   * @param {number} to - 已存在的边的终点
+   * @constructor
+   */
   constructor(from, to) {
     super(`Edge from ${from} to ${to} already exists.`);
     this.name = "EdgeAlreadyExistError";
@@ -101,14 +155,14 @@ class DirectedGraph {
   /**
    * 查询图中是否包含某个节点
    * @param {number} node - 要查询的节点
-   * @returns {boolean} 如果图中包含该节点，则返回 true，否则返回 false。
+   * @returns {boolean} 如果图中包含该节点，则返回 true，否则返回 false
    */
   hasNode(node) {
     return this.adjList.has(node);
   }
 
   /**
-   * 查询图中是否存在从 fromNode 到 toNode 的边
+   * 查询图中是否存在某边
    * @param {number} from - 起点
    * @param {number} to - 终点
    */
@@ -126,9 +180,9 @@ class DirectedGraph {
   }
 
   /**
-   * 添加一个节点到图中。如果节点已存在，则抛出错误。
+   * 添加一个节点到图中，如果节点已存在，则抛出错误
    * @param {number} node - 要添加的节点
-   * @throws {Error} 如果节点已存在
+   * @throws {NodeAlreadyExistError} 如果节点已存在
    */
   addNode(node) {
     if (this.hasNode(node)) {
@@ -148,10 +202,10 @@ class DirectedGraph {
   }
 
   /**
-   * 添加一条边。如果起点或终点不存在，或边已存在，则抛出错误。
+   * 添加一条边，如果起点或终点不存在，或边已存在，则抛出错误
    * @param {number} from - 起点
    * @param {number} to - 终点
-   * @throws {Error} 如果起点或终点不存在，或边已存在
+   * @throws {NodeNotExistError | EdgeAlreadyExistError} 如果起点或终点不存在，或边已存在
    */
   addEdge(from, to) {
     if (!this.hasNode(from)) {
@@ -177,10 +231,10 @@ class DirectedGraph {
   }
 
   /**
-   * 删除一条边。如果起点或终点不存在，或边不存在，则抛出错误。
+   * 删除一条边，如果起点或终点不存在，或边不存在，则抛出错误
    * @param {number} from - 起点
    * @param {number} to - 终点
-   * @throws {Error} 如果起点或终点不存在，或边不存在
+   * @throws {NodeNotExistError | EdgeNotExistError} 如果起点或终点不存在，或边不存在
    */
   deleteEdge(from, to) {
     if (!this.hasNode(from)) {
@@ -196,7 +250,7 @@ class DirectedGraph {
   }
 
   /**
-   * 更改节点名称（不安全版本）。
+   * 更改节点名称
    * @param {number} oldNode - 旧节点名称
    * @param {number} newNode - 新节点名称
    */
@@ -222,10 +276,10 @@ class DirectedGraph {
   }
 
   /**
-   * 更改节点名称。若节点不存在，则抛出错误。
+   * 更改节点名称，若节点不存在，则抛出错误
    * @param {number} oldNode - 旧节点名称
    * @param {number} newNode - 新节点名称
-   * @throws {Error} 如果旧节点不存在或新节点已存在
+   * @throws {NodeNotExistError | NodeAlreadyExistError} 如果旧节点不存在或新节点已存在
    */
   changeNodeName(oldNode, newNode) {
     if (!this.hasNode(oldNode)) {
@@ -239,7 +293,7 @@ class DirectedGraph {
 
   /**
    * 删除某个节点的所有边 (包括出边和入边)
-   * @param {number} node 要删除边的节点
+   * @param {number} node - 要删除边的节点
    */
   deleteAllEdgesOfNodeUnsafe(node) {
     for (const neighbor of this.adjList.get(node)) {
@@ -253,9 +307,9 @@ class DirectedGraph {
   }
 
   /**
-   * 删除某个节点的所有边 (包括出边和入边)。如果节点不存在，则抛出错误。
-   * @param {number} node 要删除边的节点
-   * @throws {Error} 如果节点不存在
+   * 删除某个节点的所有边 (包括出边和入边)，如果节点不存在，则抛出错误
+   * @param {number} node - 要删除边的节点
+   * @throws {NodeNotExistError} 如果节点不存在
    */
   deleteAllEdgesOfNode(node) {
     if (!this.hasNode(node)) {
@@ -275,9 +329,9 @@ class DirectedGraph {
   }
 
   /**
-   * 删除某个节点及其所有关联的边。如果节点不存在，则抛出错误。
+   * 删除某个节点及其所有关联的边，如果节点不存在，则抛出错误
    * @param {number} node - 要删除的节点
-   * @throws {Error} 如果节点不存在
+   * @throws {NodeNotExistError} 如果节点不存在
    */
   deleteNode(node) {
     if (!this.hasNode(node)) {
@@ -285,38 +339,138 @@ class DirectedGraph {
     }
     this.deleteNodeUnsafe(node);
   }
+
+  /**
+   * 查询节点的后继点，如果节点不存在，则抛出错误
+   * @param {number} node - 要查询的节点
+   * @throws {NodeNotExistError} 如果节点不存在
+   * @returns {Set<number> | undefined} 该节点的后继
+   */
+  neighbors(node) {
+    if (!this.hadNode(node)) {
+      throw new NodeNotExistError(node);
+    }
+    return this.neighborsUnsafe(node);
+  }
+
+  /**
+   * 查询节点的后继点
+   * @param {number} node - 要查询的节点
+   * @returns {Set<number> | undefined} 该节点的后继
+   */
+  neighborsUnsafe(node) {
+    return this.adjList.get(node);
+  }
 }
 
 /**
  * 层叠图
  * @author Zhou Chenyu
  */
-class TireManager {
+class TierManager {
   /**
    * 静态状态图
    * @type {DirectedGraph}
    */
-  StaticGraph;
+  staticGraph;
 
   /**
    * 动态状态图
    * @type {DirectedGraph}
    */
-  DynamicGraph;
+  dynamicGraph;
 
   /**
    * 创建一个新的层叠图管理器
    * @constructor
    */
   constructor() {
-    this.StaticGraph = new DirectedGraph();
-    this.DynamicGraph = new DirectedGraph();
+    this.staticGraph = new DirectedGraph();
+    this.dynamicGraph = new DirectedGraph();
   }
+
+  /**
+   * 选择单个对象
+   * @param {number} obj - 选择的对象 id
+   * @throws {NodeNotExistError} 当选择的对象不存在时
+   */
+  chooseOne(obj) {
+    if (!this.staticGraph.hasNode(obj)) {
+      throw new NodeNotExistError(obj);
+    }
+
+    /** @type {Set<number>} */
+    const reachable = new Set();
+    /** @type {Map<number, number} */
+    const inDegree = new Map();
+    const queue = new Queue();
+    queue.push(obj);
+    reachable.add(obj);
+    inDegree.set(obj, 0);
+
+    while (!queue.empty()) {
+      const node = queue.pop();
+      const neighbors = this.staticGraph.neighborsUnsafe(node);
+      if (neighbors) {
+        for (const to of neighbors) {
+          if (!reachable.has(to)) {
+            reachable.add(to);
+            queue.push(to);
+          }
+          const degree = inDegree.get(to);
+          if (degree) {
+            inDegree.set(to, degree + 1);
+          } else {
+            inDegree.set(to, 1);
+          }
+        }
+      }
+    }
+
+    queue.clear();
+    /** @type {Array<int>} */
+    const topologicalOrder = [];
+
+    for (const node of reachable) {
+      if (inDegree.get(node) === 0) {
+        queue.push(node);
+      }
+    }
+
+    while (!queue.empty()) {
+      const node = queue.pop();
+      topologicalOrder.push(node);
+
+      const neighbors = this.staticGraph.neighborsUnsafe(node);
+      if (neighbors) {
+        for (const to of neighbors) {
+          inDegree.set(to, inDegree.get(to) - 1);
+          if (inDegree.get(to) === 0) {
+            queue.push(to);
+          }
+        }
+      }
+    }
+
+    if (topologicalOrder.length !== reachable.size) {
+      console.warn(
+        `Cycle detected in the graph reachable from node ${obj}. Topological sort is incomplete.`
+      );
+    }
+
+    return topologicalOrder;
+  }
+
+  /**
+   * 选择多个对象
+   * @param {Array<number>} objs - 选择的对象
+   */
+  chooseMul(objs) {}
 }
 
 module.exports = {
   DirectedGraph,
-  TireManager,
+  TierManager,
   GraphError,
   NodeNotExistError,
   EdgeNotExistError,
