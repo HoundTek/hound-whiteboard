@@ -1,4 +1,6 @@
 /**
+ * @file 时间回溯树的核心模块
+ * @module undo-tree-core
  * @author Zhou Chenyu
  */
 
@@ -86,4 +88,8 @@ class UndoTree {
 	 * @type {MolecularNode}
 	 */
 	currentNode;
+}
+
+module.exports = {
+	UndoTree
 }

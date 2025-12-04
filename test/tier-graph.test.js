@@ -123,6 +123,27 @@ describe("DirectedGraph", () => {
     expect(graph.adjList.get(3).has(10)).toBe(true);
     expect(graph.adjListR.get(10).has(3)).toBe(true);
   });
+
+  test("neighborsUnsafe 应返回节点的所有后继", () => {
+    graph.addNodeUnsafe(1);
+    graph.addNodeUnsafe(2);
+    graph.addNodeUnsafe(3);
+    graph.addNodeUnsafe(4);
+    graph.addEdgeUnsafe(1, 2);
+    graph.addEdgeUnsafe(1, 3);
+    graph.addEdgeUnsafe(1, 4);
+    graph.addEdgeUnsafe(2, 3);
+
+    const neighbors = graph.neighborsUnsafe(1);
+    expect(neighbors).toBeInstanceOf(Set);
+    expect(neighbors.size).toBe(3);
+    expect(neighbors.has(2)).toBe(true);
+    expect(neighbors.has(3)).toBe(true);
+    expect(neighbors.has(4)).toBe(true);
+    expect(neighbors.has(1)).toBe(false);
+    expect(neighbors.has(5)).toBe(false);
+
+  });
 });
 
 describe("DirectedGraph Safe Methods", () => {
@@ -252,6 +273,10 @@ describe("DirectedGraph Safe Methods", () => {
     graph.addNode(1);
     graph.addNode(10);
     expect(() => graph.changeNodeName(1, 10)).toThrow(NodeAlreadyExistError);
+  });
+
+  test("neighbors 应在节点不存在时抛出错误", () => {
+    expect(() => graph.neighbors(1)).toThrow(NodeNotExistError);
   });
 });
 

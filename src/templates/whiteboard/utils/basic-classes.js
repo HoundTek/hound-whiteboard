@@ -35,6 +35,11 @@ class Point {
    */
   y;
 
+  /**
+   * @constructor
+   * @param {number} x 点的横坐标
+   * @param {number} y 点的纵坐标
+   */
   constructor(x, y) {
     this.x = x;
     this.y = y;
@@ -45,7 +50,7 @@ class Point {
    * @returns {{x: number, y: number}} 包含 x 和 y 坐标的对象
    * @example
    * const point = new Point(10, 20);
-   * const serialized = point.serialize(); // { x: 10, y: 20 }
+   * console.log(point.serialize()); // { x: 10, y: 20 }
    */
   serialize() {
     return { x: this.x, y: this.y };
@@ -56,9 +61,9 @@ class Point {
    * @returns {number[]} 包含 x 和 y 坐标的数组
    * @example
    * const point = new Point(10, 20);
-   * const arrailzed = point.arrailize(); // [10, 20]
+   * console.log(point.serializeToArray()); // [10, 20]
    */
-  arrailize() {
+  serializeToArray() {
     return [this.x, this.y];
   }
 
@@ -80,9 +85,9 @@ class Point {
    * @returns {Point} Point 实例
    * @static
    * @example
-   * const point = Point.parse_from_array([10, 20]); // 点 (10, 20)
+   * const point = Point.parseFromArray([10, 20]); // 点 (10, 20)
    */
-  static parse_from_array(point) {
+  static parseFromArray(point) {
     return new Point(point[0], point[1]);
   }
 
@@ -245,7 +250,7 @@ class PolygonQuark extends Quark {
     if (quark.type !== "solidPolygon") throw Error("Error: incorrect type");
     const q = new PolygonQuark(
       Point.parse(quark.position),
-      quark.points.map((p) => Point.parse_from_array(p))
+      quark.points.map((p) => Point.parseFromArray(p))
     );
     q.mixture = quark.mixture;
     return q;
@@ -261,7 +266,7 @@ class PolygonQuark extends Quark {
       type: "solidPolygon",
       position: this.position.serialize(),
       mixture: this.mixture,
-      points: this.points.map((p) => p.arrailize()),
+      points: this.points.map((p) => p.serializeToArray()),
       color: this.color,
     };
   }

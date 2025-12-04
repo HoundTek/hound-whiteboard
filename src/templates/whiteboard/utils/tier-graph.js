@@ -347,7 +347,7 @@ class DirectedGraph {
    * @returns {Set<number> | undefined} 该节点的后继
    */
   neighbors(node) {
-    if (!this.hadNode(node)) {
+    if (!this.hasNode(node)) {
       throw new NodeNotExistError(node);
     }
     return this.neighborsUnsafe(node);
@@ -401,7 +401,7 @@ class TierManager {
 
     /** @type {Set<number>} */
     const reachable = new Set();
-    /** @type {Map<number, number} */
+    /** @type {Map<number, number>} */
     const inDegree = new Map();
     const queue = new Queue();
     queue.push(obj);
