@@ -1,0 +1,9 @@
+target/
+*.node
+npm/
+*.dylib
+*.so
+*.dll
+Cargo.lock
+index.js
+index.d.ts

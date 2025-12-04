@@ -5,7 +5,17 @@
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
+    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests",
+    "build:rust": "napi build --platform --release --manifest-path native/Cargo.toml",
+    "build:rust:dev": "napi build --platform --manifest-path native/Cargo.toml",
+    "clean:rust": "rimraf native/target native/*.node native/npm"
+  },
+  "napi": {
+    "binaryName": "hound-whiteboard-native",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin"
+    ]
   },
   "author": "Frank Steven",
   "license": "MIT",
@@ -16,6 +26,10 @@
     "electron": "39",
     "mathjs": "15",
     "jest": "30"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "3",
+    "rimraf": "6"
   },
   "jest": {
     "testEnvironment": "node"
