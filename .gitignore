@@ -10,12 +10,7 @@ yarn.lock
 # MacOS
 .ds_store
 
-# Rust
-
-
 # napi-rs
-/*.node
-/index.js
-/index.d.ts
-/Cargo.lock
-/target
+*.node
+Cargo.lock
+target
