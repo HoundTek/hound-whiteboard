@@ -224,6 +224,28 @@ impl Matrix {
         self * &m
     }
 
+    /// 计算矩阵的逆矩阵
+    /// 如果矩阵不可逆（行列式为0），返回错误
+    #[napi]
+    pub fn inv(&self) -> Result<Matrix> {
+        let det = self.det();
+        
+        if det.abs() < 1e-10 {
+            return Err(napi::Error::from_reason(
+                "Matrix is not invertible (determinant is zero)",
+            ));
+        }
+        
+        let inv_det = 1.0 / det;
+        
+        Ok(Matrix {
+            a: self.d * inv_det,
+            b: -self.b * inv_det,
+            c: -self.c * inv_det,
+            d: self.a * inv_det,
+        })
+    }
+
     /// 判断两矩阵是否在某精度范围内相等
     #[napi]
     pub fn nearly_eq(&self, other: &Matrix, eps: f64) -> bool {

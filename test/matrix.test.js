@@ -447,6 +447,117 @@ describe("Matrix Class", () => {
     });
   });
 
+  describe("inverse", () => {
+    test("应能正确计算单位矩阵的逆", () => {
+      const identity = Matrix.identity();
+      const inv = identity.inv();
+      expect(inv.a).toBeCloseTo(1);
+      expect(inv.b).toBeCloseTo(0);
+      expect(inv.c).toBeCloseTo(0);
+      expect(inv.d).toBeCloseTo(1);
+    });
+
+    test("应能正确计算简单矩阵的逆", () => {
+      const m = new Matrix(1, 0, 0, 2);
+      const inv = m.inv();
+      // [[1, 0], [0, 2]] 的逆矩阵是 [[1, 0], [0, 0.5]]
+      expect(inv.a).toBeCloseTo(1);
+      expect(inv.b).toBeCloseTo(0);
+      expect(inv.c).toBeCloseTo(0);
+      expect(inv.d).toBeCloseTo(0.5);
+    });
+
+    test("应能正确计算一般矩阵的逆", () => {
+      const m = new Matrix(1, 2, 3, 4);
+      const inv = m.inv();
+      // [[1, 3], [2, 4]] 的行列式是 1 * 4 - 2 * 3 = -2
+      // 逆矩阵是 1 / -2 * [[4, -3], [-2, 1]] = [[-2, 1.5], [1, -0.5]]
+      expect(inv.a).toBeCloseTo(-2);
+      expect(inv.b).toBeCloseTo(1);
+      expect(inv.c).toBeCloseTo(1.5);
+      expect(inv.d).toBeCloseTo(-0.5);
+    });
+
+    test("矩阵与其逆矩阵相乘应得到单位矩阵", () => {
+      const m = new Matrix(2, 3, 1, 4);
+      const inv = m.inv();
+      const result = m.mul(inv);
+      expect(result.a).toBeCloseTo(1);
+      expect(result.b).toBeCloseTo(0);
+      expect(result.c).toBeCloseTo(0);
+      expect(result.d).toBeCloseTo(1);
+    });
+
+    test("逆矩阵与原矩阵相乘应得到单位矩阵", () => {
+      const m = new Matrix(2, 3, 1, 4);
+      const inv = m.inv();
+      const result = inv.mul(m);
+      expect(result.a).toBeCloseTo(1);
+      expect(result.b).toBeCloseTo(0);
+      expect(result.c).toBeCloseTo(0);
+      expect(result.d).toBeCloseTo(1);
+    });
+
+    test("不可逆矩阵应抛出错误", () => {
+      // 行列式为0的矩阵
+      const m = new Matrix(1, 2, 2, 4);
+      expect(() => m.inv()).toThrow();
+    });
+
+    test("零矩阵应抛出错误", () => {
+      const m = new Matrix(0, 0, 0, 0);
+      expect(() => m.inv()).toThrow();
+    });
+
+    test("不应修改原矩阵", () => {
+      const m = new Matrix(1, 2, 3, 4);
+      m.inv();
+      expect(m.a).toBe(1);
+      expect(m.b).toBe(2);
+      expect(m.c).toBe(3);
+      expect(m.d).toBe(4);
+    });
+
+    test("旋转矩阵的逆应该是反向旋转", () => {
+      const rotate90 = new Matrix(0, 1, -1, 0);
+      const inv = rotate90.inv();
+      // 逆矩阵应该是 -90 度旋转，即 [[0, 1], [-1, 0]]
+      expect(inv.a).toBeCloseTo(0);
+      expect(inv.b).toBeCloseTo(-1);
+      expect(inv.c).toBeCloseTo(1);
+      expect(inv.d).toBeCloseTo(0);
+    });
+
+    test("缩放矩阵的逆应该是倒数缩放", () => {
+      const scale = new Matrix(2, 0, 0, 3);
+      const inv = scale.inv();
+      expect(inv.a).toBeCloseTo(0.5);
+      expect(inv.b).toBeCloseTo(0);
+      expect(inv.c).toBeCloseTo(0);
+      expect(inv.d).toBeCloseTo(1 / 3);
+    });
+
+    test("逆矩阵的逆应该等于原矩阵", () => {
+      const m = new Matrix(2, 3, 1, 4);
+      const inv = m.inv();
+      const invInv = inv.inv();
+      expect(invInv.a).toBeCloseTo(m.a);
+      expect(invInv.b).toBeCloseTo(m.b);
+      expect(invInv.c).toBeCloseTo(m.c);
+      expect(invInv.d).toBeCloseTo(m.d);
+    });
+
+    test("应能正确处理负数矩阵", () => {
+      const m = new Matrix(-1, -2, -3, -4);
+      const inv = m.inv();
+      const result = m.mul(inv);
+      expect(result.a).toBeCloseTo(1);
+      expect(result.b).toBeCloseTo(0);
+      expect(result.c).toBeCloseTo(0);
+      expect(result.d).toBeCloseTo(1);
+    });
+  });
+
   describe("rotate", () => {
     test("应能正确旋转矩阵 0 度", () => {
       const m = Matrix.identity();
@@ -587,7 +698,7 @@ describe("Matrix and Point", () => {
       const p = new Point(1, 2);
       const m = new Matrix(2, 0, 0, 3);
       const result = p.applyTransform(m);
-      // [[2, 0], [0, 3]] * [1, 2] = [2*1+0*2, 0*1+3*2] = [2, 6]
+      // [[2, 0], [0, 3]] * [1, 2] = [2 * 1 + 0 * 2, 0 * 1 + 3 * 2] = [2, 6]
       expect(result.x).toBe(2);
       expect(result.y).toBe(6);
     });
@@ -609,7 +720,7 @@ describe("Matrix and Point", () => {
     });
 
     test("应能正确处理旋转变换", () => {
-      // 90度旋转矩阵: [[0, -1], [1, 0]]
+      // 90 度旋转矩阵: [[0, -1], [1, 0]]
       const rotate90 = new Matrix(0, 1, -1, 0);
       const p = new Point(1, 0);
       p.applyTransform(rotate90);
@@ -619,7 +730,7 @@ describe("Matrix and Point", () => {
 
     test("应能正确处理复合变换", () => {
       const p = new Point(1, 1);
-      const m1 = new Matrix(2, 0, 0, 2); // 缩放2倍
+      const m1 = new Matrix(2, 0, 0, 2); // 缩放 2 倍
       const m2 = new Matrix(1, 0, 1, 1); // 剪切变换
 
       // 先缩放
@@ -629,8 +740,8 @@ describe("Matrix and Point", () => {
 
       // 再剪切
       p.applyTransform(m2);
-      expect(p.x).toBe(4); // 2*1 + 2*1
-      expect(p.y).toBe(2); // 2*0 + 2*1
+      expect(p.x).toBe(4); // 2 * 1 + 2 * 1
+      expect(p.y).toBe(2); // 2 * 0 + 2 * 1
     });
 
     test("应能正确处理负数", () => {
