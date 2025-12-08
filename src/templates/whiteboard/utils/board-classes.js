@@ -8,7 +8,7 @@
  */
 
 const { Point, Quark, TextQuark, PolygonQuark, ImageQuark, BasicObject, ZeroDimensionObject, OneDimensionObject, TwoDimensionObject } = require("./basic-classes");
-const math = require("mathjs");
+const { Matrix } = require("../../../rust-bindings/matrix");
 
 /**
  * 对象容器类
@@ -89,7 +89,7 @@ class PolygonObject extends ZeroDimensionObject {
    */
   set points(points) {
     this.points = points;
-    this.#transformedPoints = points.map((p) => {Point.multiplyMatrix(this.transform, p);});
+    this.#transformedPoints = points.map((p) => {Point.mulMatrix(this.transform, p);});
   }
 
   /**
@@ -100,12 +100,12 @@ class PolygonObject extends ZeroDimensionObject {
   #transformedPoints = [];
 
   /**
-   * @param {math.Matrix} trans - 新的变换矩阵
+   * @param {Matrix} trans - 新的变换矩阵
    * @description 设置变换矩阵时，它会直接修改其富数据中的顶点坐标，但不会修改基础数据。
    */
   setTransform(trans) {
     this.transform = trans;
-    this.#transformedPoints = this.points.map((p) => Point.multiplyMatrix(trans, p));
+    this.#transformedPoints = this.points.map((p) => Point.mulMatrix(trans, p));
   }
 
   get transformedPoints() {

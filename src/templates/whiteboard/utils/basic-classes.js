@@ -14,116 +14,7 @@
  * @author Zhou Chenyu
  */
 
-const math = require("mathjs");
-
-/**
- * 二维点
- * @class
- * @description 表示二维平面上的一个点，包含 x 和 y 坐标，支持矩阵变换
- * @author Zhou Chenyu
- */
-class Point {
-  /**
-   * 点的横坐标
-   * @type {number}
-   */
-  x;
-
-  /**
-   * 点的纵坐标
-   * @type {number}
-   */
-  y;
-
-  /**
-   * @constructor
-   * @param {number} x 点的横坐标
-   * @param {number} y 点的纵坐标
-   */
-  constructor(x, y) {
-    this.x = x;
-    this.y = y;
-  }
-
-  /**
-   * 将此对象序列化为普通 JSON 对象
-   * @returns {{x: number, y: number}} 包含 x 和 y 坐标的对象
-   * @example
-   * const point = new Point(10, 20);
-   * console.log(point.serialize()); // { x: 10, y: 20 }
-   */
-  serialize() {
-    return { x: this.x, y: this.y };
-  }
-
-  /**
-   * 将此对象序列化为数组对象
-   * @returns {number[]} 包含 x 和 y 坐标的数组
-   * @example
-   * const point = new Point(10, 20);
-   * console.log(point.serializeToArray()); // [10, 20]
-   */
-  serializeToArray() {
-    return [this.x, this.y];
-  }
-
-  /**
-   * 将序列化的对象转化为 Point 实例
-   * @param {{x: number, y: number}} point - 包含 x 和 y 坐标的对象
-   * @returns {Point} Point 实例
-   * @static
-   * @example
-   * const point = Point.parse({ x: 10, y: 20 }); // 点 (10, 20)
-   */
-  static parse(point) {
-    return new Point(point.x, point.y);
-  }
-
-  /**
-   * 将序列化成数组的对象转化为 Point 实例
-   * @param {number[]} point - 一个长度为 2 的数组，分别表示其横坐标和纵坐标
-   * @returns {Point} Point 实例
-   * @static
-   * @example
-   * const point = Point.parseFromArray([10, 20]); // 点 (10, 20)
-   */
-  static parseFromArray(point) {
-    return new Point(point[0], point[1]);
-  }
-
-  /**
-   * 应用变换矩阵
-   * @description 此方法为破坏性操作，会直接修改当前点的坐标
-   * @param {math.Matrix} trans - 2x2 变换矩阵
-   * @returns {Point} 返回自己以支持链式调用
-   * @example
-   * const point = new Point(1, 0);
-   * const rotationMatrix = math.matrix([[0, -1], [1, 0]]); // 90度旋转
-   * point.applyTransform(rotationMatrix); // point 现在是 (0, 1)
-   */
-  applyTransform(trans) {
-    let p = Point.multiplyMatrix(trans, this);
-    this.x = p.x;
-    this.y = p.y;
-    return this;
-  }
-
-  /**
-   * 将矩阵与点相乘
-   * @description 执行矩阵-向量乘法，返回新的点而不修改原点
-   * @param {math.Matrix} m - 2x2 变换矩阵
-   * @param {Point} p - 要变换的点
-   * @returns {Point} 变换后的新点
-   * @static
-   */
-  static multiplyMatrix(m, p) {
-    return new Point(
-      m.get([0, 0]) * p.x + m.get([0, 1]) * p.y,
-      m.get([1, 0]) * p.x + m.get([1, 1]) * p.y
-    );
-  }
-}
-
+const { Matrix, Point } = require("../../../../native");
 
 /**
  * Quark 抽象基类 - 最底层的渲染单元
@@ -135,11 +26,11 @@ class Point {
 class Quark {
   /**
    * 变换矩阵
-   * @type {math.Matrix}
-   * @default math.identity(2)
+   * @type {Matrix}
+   * @default Matrix.identity()
    * @description 用于对象的几何变换（旋转、缩放等）
    */
-  transform = math.identity(2);
+  transform = Matrix.identity();
 
   /**
    * 位置
@@ -163,7 +54,7 @@ class Quark {
    * @constructor
    */
   constructor(p) {
-    this.transform = math.identity(2);
+    this.transform = Matrix.identity();
     this.position = p;
   }
 
@@ -359,7 +250,7 @@ class TextQuark extends Quark {
       quark.color,
       quark.font
     );
-    q.transform = math.matrix(quark.transform);
+    q.transform = Matrix.parse(quark.transform);
     q.mixture = quark.mixture;
     return q;
   }
@@ -373,7 +264,7 @@ class TextQuark extends Quark {
     return {
       type: "text",
       position: this.position.serialize(),
-      transform: this.transform.toJSON().data,
+      transform: this.transform.serialize(),
       mixture: this.mixture,
       text: this.text,
       font: this.font,
@@ -458,7 +349,7 @@ class ImageQuark extends Quark {
       quark.width,
       quark.height
     );
-    q.transform = math.matrix(quark.transform);
+    q.transform = Matrix.parse(quark.transform);
     q.mixture = quark.mixture;
     return q;
   }
@@ -472,7 +363,7 @@ class ImageQuark extends Quark {
     return {
       type: "img",
       position: this.position.serialize(),
-      transform: this.transform.toJSON().data,
+      transform: this.transform.serialize(),
       mixture: this.mixture,
       src: this.src,
       width: this.width,
@@ -498,36 +389,36 @@ class BasicObject {
 
   /**
    * 变换矩阵
-   * @type {math.Matrix}
-   * @default math.identity(2)
+   * @type {Matrix}
+   * @default Matrix.identity()
    * @description 用于对象的几何变换
    */
-  transform = math.identity(2);
+  transform = Matrix.identity();
 
   /**
    * 对象的矩形边界范围
    * @private
-   * @type {math.Matrix}
+   * @type {Matrix}
    * @description 存储对象的边界矩形，用于碰撞检测和选择
    */
   #rectangle;
 
   /**
    * 设置对象的矩形边界范围
-   * @param {math.Matrix} rect - 矩形边界矩阵
+   * @param {Matrix} rect - 矩形边界矩阵
    * @description 设置边界时会自动计算几何中心
    */
   set rectangle(rect) {
     this.#rectangle = rect;
     this.#center = new Point(
-      (rect.get([0, 0]) + rect.get([1, 0])) / 2,
-      (rect.get([0, 1]) + rect.get([1, 1])) / 2
-    ).applyTransform(math.inv(this.transform));
+      (rect.a + rect.c) / 2,
+      (rect.b + rect.d) / 2
+    ).applyTransform(this.transform.inv());
   }
 
   /**
    * 获取对象的矩形边界范围
-   * @returns {math.Matrix} 矩形边界矩阵
+   * @returns {Matrix} 矩形边界矩阵
    */
   get rectangle() {
     return this.#rectangle;
@@ -563,7 +454,7 @@ class BasicObject {
    */
   get rotateCenter() {
     if (this.isDirected) return this.#rotateCenter;
-    return this.#center.applyTransform(math.inv(this.transform));
+    return this.#center.applyTransform(this.transform.inv());
   }
 
   /**
@@ -575,7 +466,9 @@ class BasicObject {
     if (this.#isDirected) {
       this.#rotateCenter = rotateCenter;
     } else {
-      throw new Error("Error: the object is not directed so that it's rotate center can not be moved");
+      throw new Error(
+        "Error: the object is not directed so that it's rotate center can not be moved"
+      );
     }
   }
 
@@ -631,9 +524,9 @@ class BasicObject {
 
   /**
    * 设置对象的变换矩阵
-   * 
+   *
    * **⚠ [warning] 你应该使用此方法而不是直接修改 transform ⚠**
-   * @param {math.Matrix} trans - 新的变换矩阵
+   * @param {Matrix} trans - 新的变换矩阵
    */
   setTransform(trans) {
     this.transform = trans;
@@ -641,11 +534,11 @@ class BasicObject {
 
   /**
    * 应用变换矩阵到对象
-   * @param {math.Matrix} trans - 要应用的变换矩阵
+   * @param {Matrix} trans - 要应用的变换矩阵
    * @description 将变换矩阵与当前变换矩阵相乘
    */
   applyTransform(trans) {
-    this.transform = math.multiply(this.transform, trans);
+    this.transform = this.transform.mul(trans);
   }
 
   /**
@@ -724,7 +617,7 @@ class OneDimensionObject extends BasicObject {
    * @param {Point} p - 对象的初始位置
    * @param {boolean} [erasable = false] - 对象是否为可擦对象
    * @param {boolean} [directed = false] - 对象是否为有向对象
-   * @param {boolean} [xAxis = true] 
+   * @param {boolean} [xAxis = true]
    * @constructor
    */
   constructor(p, erasable = false, directed = false, xAxis = true) {

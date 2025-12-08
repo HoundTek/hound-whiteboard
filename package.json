@@ -24,7 +24,6 @@
     "hidefile": "3",
     "@electron/packager": "19",
     "electron": "39",
-    "mathjs": "15",
     "jest": "30"
   },
   "devDependencies": {
