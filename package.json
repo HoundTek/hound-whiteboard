@@ -12,9 +12,12 @@
   "dependencies": {
     "adm-zip": "0.5",
     "hidefile": "3",
+    "electron": "39"
+  },
+  "devDependencies": {
     "@electron/packager": "19",
-    "electron": "39",
-    "jest": "30"
+    "jest": "30",
+    "benchmark": "2.1.4"
   },
   "jest": {
     "testEnvironment": "node"
