@@ -9,8 +9,3 @@ yarn.lock
 
 # MacOS
 .ds_store
-
-# napi-rs
-*.node
-Cargo.lock
-target

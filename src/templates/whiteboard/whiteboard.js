@@ -1,5 +1,5 @@
-const RenderManager = require("./components/render-manager.js");
-const { Matrix } = require("../../rust-bindings/matrix");
+const RenderManager = require("./components/render-manager");
+const { Matrix, Point } = require("../../utils/math");
 
 const canvas = document.getElementById('canvas');
 
@@ -10,8 +10,7 @@ canvas.height = 600;
 
 let testRenderManager = new RenderManager(canvas);
 
-const { Point } = require("./utils/basic-classes.js");
-const creator = require("./utils/board-objects-creator.js");
+const creator = require("./utils/board-objects-creator");
 
 let outerTriangle = creator.generetePolygonObject(new Point(0, 0), [new Point(0, 0), new Point(100, 100), new Point(0, 100)]);
 outerTriangle.color = "#000000";

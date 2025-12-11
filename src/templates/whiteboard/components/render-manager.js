@@ -15,7 +15,7 @@ class RenderManager {
 
   /**
    * @param {Object} quark - 被序列化后的 quark
-   * @param {string} quark.type - "solidPolygon" 或 "img" 或 "text"
+   * @param {"solidPolygon" | "img" | "text"} quark.type - quark 的类型
    * @param {Object} quark.position - 位置
    * @param {number} quark.position.x - 横坐标
    * @param {number} quark.position.y - 纵坐标

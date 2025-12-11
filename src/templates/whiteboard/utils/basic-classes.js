@@ -2,7 +2,6 @@
  * @file 基本对象定义
  * @description
  * 定义白板系统中使用的所有基础类，包括:
- * - 点 Point
  * - 基础渲染单元 Quark
  * - 多边形渲染单元 PolygonQuark: Quark
  * - 文本渲染单元 TextQuark: Quark
@@ -11,10 +10,11 @@
  * - 零维对象 ZeroDimensionObject: BasicObject
  * - 一维对象 OneDimensionObject: BasicObject
  * - 二维对象 TwoDimensionObject: BasicObject
+ * @module basic-classes
  * @author Zhou Chenyu
  */
 
-const { Matrix, Point } = require("../../../../native");
+const { Matrix, Point } = require("../../../utils/math");
 
 /**
  * Quark 抽象基类 - 最底层的渲染单元
@@ -637,7 +637,6 @@ class OneDimensionObject extends BasicObject {
 class TwoDimensionObject extends BasicObject {}
 
 module.exports = {
-  Point,
   Quark,
   TextQuark,
   ImageQuark,

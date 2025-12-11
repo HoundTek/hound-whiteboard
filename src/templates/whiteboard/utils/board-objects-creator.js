@@ -5,14 +5,15 @@
  * @author Zhou Chenyu
  */
 
-const { Point } = require("./basic-classes.js");
-const BoardClasses = require("./board-classes.js");
+const { Point } = require("../../../utils/math");
+const BoardClasses = require("./board-classes");
 
 /**
  * 生成一个新的多边形对象
  * @param {Point} p - 多边形逻辑左上角的绝对位置
  * @param {Point[]} points - 多边形各顶点相对其左上角的相对位置
  * @returns {BoardClasses.PolygonObject} 生成的多边形对象
+ * @author Zhou Chenyu
  */
 function generetePolygonObject(p, points) {
 	return new BoardClasses.PolygonObject(p, points);

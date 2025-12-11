@@ -4,11 +4,12 @@
  * 定义白板上的所有对象类，包括:
  * - 对象容器 Container: ZeroDimensionObject
  * - 多边形对象 PolygonObject: ZeroDimensionObject
+ * @module board-classes
  * @author Zhou Chenyu
  */
 
-const { Point, Quark, TextQuark, PolygonQuark, ImageQuark, BasicObject, ZeroDimensionObject, OneDimensionObject, TwoDimensionObject } = require("./basic-classes");
-const { Matrix } = require("../../../rust-bindings/matrix");
+const { Quark, TextQuark, PolygonQuark, ImageQuark, BasicObject, ZeroDimensionObject, OneDimensionObject, TwoDimensionObject } = require("./basic-classes");
+const { Matrix, Point } = require("../../../utils/math");
 
 /**
  * 对象容器类
