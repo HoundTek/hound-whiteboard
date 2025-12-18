@@ -92,7 +92,7 @@ class RenderManager {
       ctx.fillStyle = color;
       ctx.closePath();
       ctx.fill();
-    } else if (type === "img"){
+    } else if (type === "img") {
       const { src, width, height } = quark;
       const img = new Image();
       img.src = src;
@@ -109,13 +109,17 @@ class RenderManager {
   }
 
   /**
-   * 
+   *
    * @param {BasicObject} obj - 要渲染的对象
    */
   renderObject(obj) {
     const quarks = obj.getQuarks();
-    quarks.forEach((quark) => {this.renderQuark(quark.serialize());});
+    quarks.forEach((quark) => {
+      this.renderQuark(quark.serialize());
+    });
   }
-};
+}
 
-module.exports = RenderManager;
+module.exports = {
+  RenderManager,
+};

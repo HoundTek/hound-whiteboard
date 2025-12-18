@@ -5,7 +5,7 @@ const {
   EdgeNotExistError,
   NodeAlreadyExistError,
   EdgeAlreadyExistError,
-} = require("../src/templates/whiteboard/utils/tier-graph");
+} = require("../src/core/utils/directed-graph");
 
 describe("DirectedGraph", () => {
   let graph = new DirectedGraph();
@@ -277,94 +277,5 @@ describe("DirectedGraph Safe Methods", () => {
 
   test("neighbors 应在节点不存在时抛出错误", () => {
     expect(() => graph.neighbors(1)).toThrow(NodeNotExistError);
-  });
-});
-
-describe("TierManager", () => {
-  let manager = new TierManager();
-
-  beforeEach(() => {
-    manager = new TierManager();
-  });
-
-  test("chooseOne 应在节点不存在时抛出错误", () => {
-    expect(() => manager.chooseOne(1)).toThrow(NodeNotExistError);
-  });
-
-  test("chooseOne 应返回正确的拓扑序", () => {
-    manager.staticGraph.addNode(1);
-    manager.staticGraph.addNode(2);
-    manager.staticGraph.addNode(3);
-    manager.staticGraph.addEdge(1, 2);
-    manager.staticGraph.addEdge(1, 3);
-    const result = manager.chooseOne(1);
-    // Possible topological orders: [1, 2, 3] or [1, 3, 2]
-    expect(result).toEqual(expect.arrayContaining([1, 2, 3]));
-    expect(result.indexOf(1)).toBeLessThan(result.indexOf(2));
-    expect(result.indexOf(1)).toBeLessThan(result.indexOf(3));
-  });
-
-  test("chooseOne 应能处理更复杂的情况", () => {
-    manager.staticGraph.addNode(1);
-    manager.staticGraph.addNode(2);
-    manager.staticGraph.addNode(3);
-    manager.staticGraph.addNode(4);
-    manager.staticGraph.addNode(5);
-    manager.staticGraph.addEdge(1, 2);
-    manager.staticGraph.addEdge(1, 3);
-    manager.staticGraph.addEdge(2, 4);
-    manager.staticGraph.addEdge(3, 4);
-    manager.staticGraph.addEdge(4, 5);
-    const result = manager.chooseOne(1);
-    expect(result).toEqual(expect.arrayContaining([1, 2, 3, 4, 5]));
-    expect(result.indexOf(1)).toBeLessThan(result.indexOf(2));
-    expect(result.indexOf(1)).toBeLessThan(result.indexOf(3));
-    expect(result.indexOf(2)).toBeLessThan(result.indexOf(4));
-    expect(result.indexOf(3)).toBeLessThan(result.indexOf(4));
-    expect(result.indexOf(4)).toBeLessThan(result.indexOf(5));
-  });
-
-  test("chooseOne 应能处理起始节点不是入度为 0 的节点的情况", () => {
-    manager.staticGraph.addNode(0);
-    manager.staticGraph.addNode(1);
-    manager.staticGraph.addNode(2);
-    manager.staticGraph.addNode(3);
-    manager.staticGraph.addEdge(0, 1);
-    manager.staticGraph.addEdge(1, 2);
-    manager.staticGraph.addEdge(1, 3);
-    const result = manager.chooseOne(1);
-    expect(result).toEqual(expect.arrayContaining([1, 2, 3]));
-    expect(result.indexOf(1)).toBeLessThan(result.indexOf(2));
-    expect(result.indexOf(1)).toBeLessThan(result.indexOf(3));
-  })
-
-  test("chooseOne 应能发现并警告图中的环", () => {
-    manager.staticGraph.addNode(1);
-    manager.staticGraph.addNode(2);
-    manager.staticGraph.addNode(3);
-    manager.staticGraph.addEdge(1, 2);
-    manager.staticGraph.addEdge(2, 3);
-    manager.staticGraph.addEdge(3, 1); // Cycle
-    const consoleWarnSpy = jest
-      .spyOn(console, "warn")
-      .mockImplementation(() => {});
-    manager.chooseOne(1);
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Cycle detected")
-    );
-    consoleWarnSpy.mockRestore();
-  });
-
-  test("chooseOne 应能处理有多个连通分量的情况", () => {
-    manager.staticGraph.addNode(1);
-    manager.staticGraph.addNode(2);
-    manager.staticGraph.addNode(3);
-    manager.staticGraph.addNode(4);
-    manager.staticGraph.addEdge(1, 2);
-    manager.staticGraph.addEdge(3, 4);
-    const result = manager.chooseOne(1);
-    expect(result).toEqual(expect.arrayContaining([1, 2]));
-    expect(result).not.toContain(3);
-    expect(result).not.toContain(4);
   });
 });

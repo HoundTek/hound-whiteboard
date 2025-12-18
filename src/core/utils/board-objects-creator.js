@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-const { Point } = require("../../../utils/math");
-const BoardClasses = require("./board-classes");
+const { Point } = require("../../utils/math");
+const BoardClasses = require("../classes/board-classes");
 
 /**
  * 生成一个新的多边形对象
@@ -16,7 +16,7 @@ const BoardClasses = require("./board-classes");
  * @author Zhou Chenyu
  */
 function generetePolygonObject(p, points) {
-	return new BoardClasses.PolygonObject(p, points);
+	return new BoardClasses.PolygonObject(p, 0, 0, points);
 }
 
 module.exports = {

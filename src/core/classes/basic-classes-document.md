@@ -2,22 +2,6 @@
 
 本文档提供白板中基础类型对象的概述。
 
-## Point
-
-Point 是一个二维向量，用来表示二维平面上的一点。
-
-### 属性
-- `x` - 点的横坐标
-- `y` - 点的纵坐标
-
-### 方法
-- `(static) parse(point)` - 将序列化成 JSON 的 Point 转化为 Point 实例
-- `(static) parse_from_array(point)` - 将序列化成数组的 Point 转化为 Point 实例
-- `serialize()` - 将 Point 对象序列化成一个 `{x: number, y: number}` 的 JSON 对象
-- `arrailize()` - 将 Point 对象序列化成长度为 2 的数组
-- `applyTransform(trans)` - 将此对象乘上变换矩阵，此操作是破坏性的操作
-- `(static) multiplyMatrix(trans)` - 返回此对象乘变换矩阵的结果
-
 ## Quark
 
 Quark 类是 Hound Whiteboard 中的基础渲染单元，通过 [RenderManager](../components/render-manager.js) 与 canvas 交互。

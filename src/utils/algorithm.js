@@ -11,10 +11,6 @@ const { randomInt } = require("crypto");
 /**
  * 不重复的随机数池
  * @class
- * @property {number} min 随机数的最小值
- * @property {number} max 随机数的最大值
- * @property {number} length 池中随机数的数量
- * @property {Object} pool 随机数池的 number -> boolean 映射
  * @example
  * let pool = new randomNumberPool(114514, 114516);
  * pool.initFromArray([1, 2, 3, 114515]); // 只会添加 114515
@@ -32,6 +28,28 @@ const { randomInt } = require("crypto");
  * pool.remove(rnum1); // 返回 false (删除未成功，因为池中已经没有这个数了)
  */
 class randomNumberPool {
+  /**
+   * 随机数池的最小值
+   * @type {number}
+   */
+  min;
+
+  /**
+   * 随机数池的最大值
+   * @type {number}
+   */
+  max;
+
+  /**
+   * 随机数池中数的数量
+   * @type {number}
+   */
+  length;
+
+  /**
+   * 随机数池的映射
+   * @type {Set<number>}
+   */
   pool;
 
   /**
@@ -43,7 +61,7 @@ class randomNumberPool {
     this.min = min;
     this.max = max;
     this.length = 0;
-    this.pool = {};
+    this.pool = new Set();
   }
 
   /**
@@ -51,12 +69,12 @@ class randomNumberPool {
    * @param {number[]} arr 用于初始化的数字数组
    */
   initFromArray(arr) {
+    this.pool.clear();
+    this.length = 0;
     for (let i = 0; i < arr.length; i++) {
       if (this.min <= arr[i] && arr[i] <= this.max) {
-        if (!this.pool[arr[i]]) {
-          this.pool[arr[i]] = true;
-          this.length++;
-        }
+        this.pool.add(arr[i]);
+        this.length++;
       }
     }
   }
@@ -68,8 +86,8 @@ class randomNumberPool {
    */
   add(num) {
     if (!(this.min <= num && num <= this.max)) return false;
-    if (this.pool[num]) return false;
-    this.pool[num] = true;
+    if (this.pool.has(num)) return false;
+    this.pool.add(num);
     this.length++;
     return true;
   }
@@ -81,7 +99,7 @@ class randomNumberPool {
    */
   include(num) {
     if (!(this.min <= num && num <= this.max)) return false;
-    return !!this.pool[num]; // duck type
+    return this.pool.has(num);
   }
 
   /**
@@ -104,8 +122,8 @@ class randomNumberPool {
     let num;
     do {
       num = randomInt(this.min, this.max + 1);
-    } while (this.pool[num]);
-    this.pool[num] = true;
+    } while (this.pool.has(num));
+    this.pool.add(num);
     this.length++;
     return num;
   }
@@ -116,12 +134,10 @@ class randomNumberPool {
    * @returns {boolean} 是否成功删除
    */
   remove(num) {
-    if (this.pool[num]) {
-      delete this.pool[num];
-      this.length--;
-      return true;
-    }
-    return false;
+    if (!this.pool.has(num)) return false;
+    this.pool.delete(num);
+    this.length--;
+    return true;
   }
 
   /**
@@ -157,7 +173,22 @@ class randomNumberPool {
  * @param {number} fq 原矩阵的 f
  * @returns {Object} a, b, c, d, e, f, 为 ctx.transform() 的参数
  */
-function getDualFingerResult(x1, y1, x2, y2, x1q, y1q, x2q, y2q, aq, bq, cq, dq, eq, fq) {
+function getDualFingerResult(
+  x1,
+  y1,
+  x2,
+  y2,
+  x1q,
+  y1q,
+  x2q,
+  y2q,
+  aq,
+  bq,
+  cq,
+  dq,
+  eq,
+  fq
+) {
   // 计算矩阵 A = [[a c][b d]] 使 A * [[x1 - x2][y1 - y2]] = [[x1q - x2q][y1q - y2q]]
   let delta = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
   let a = ((x1 - x2) * (x1q - x2q) + (y1 - y2) * (y1q - y2q)) / delta;
@@ -181,12 +212,12 @@ function getDualFingerResult(x1, y1, x2, y2, x1q, y1q, x2q, y2q, aq, bq, cq, dq,
   let f = (bq * dx - aq * dy) / (bq * cq - aq * dq);
   // 返回矩阵 [[a c e][b d f][0 0 1]] 中的 a, b, c, d, e, f
   return {
-    "a": a,
-    "b": b,
-    "c": c,
-    "d": d,
-    "e": e,
-    "f": f,
+    a: a,
+    b: b,
+    c: c,
+    d: d,
+    e: e,
+    f: f,
   };
 }
 
@@ -215,7 +246,26 @@ function getDualFingerResult(x1, y1, x2, y2, x1q, y1q, x2q, y2q, aq, bq, cq, dq,
  * @param {number} fq 原矩阵的 f
  * @returns {Object} a, b, c, d, e, f, 为 ctx.transform() 的参数
  */
-function getTriFingerResult(x1, y1, x2, y2, x3, y3, x1q, y1q, x2q, y2q, x3q, y3q, aq, bq, cq, dq, eq, fq) {
+function getTriFingerResult(
+  x1,
+  y1,
+  x2,
+  y2,
+  x3,
+  y3,
+  x1q,
+  y1q,
+  x2q,
+  y2q,
+  x3q,
+  y3q,
+  aq,
+  bq,
+  cq,
+  dq,
+  eq,
+  fq
+) {
   // 计算矩阵 A = [[a c][b d]] 使：
   // A * [[x1 - x2][y1 - y2]] = [[x1q - x2q][y1q - y2q]]
   // A * [[x1 - x3][y1 - y3]] = [[x1q - x3q][y1q - y3q]]
@@ -241,12 +291,12 @@ function getTriFingerResult(x1, y1, x2, y2, x3, y3, x1q, y1q, x2q, y2q, x3q, y3q
   let f = (bq * dx - aq * dy) / (bq * cq - aq * dq);
   // 返回矩阵 [[a c e][b d f][0 0 1]] 中的 a, b, c, d, e, f
   return {
-    "a": a,
-    "b": b,
-    "c": c,
-    "d": d,
-    "e": e,
-    "f": f,
+    a: a,
+    b: b,
+    c: c,
+    d: d,
+    e: e,
+    f: f,
   };
 }
 
@@ -254,4 +304,4 @@ module.exports = {
   getDualFingerResult,
   getTriFingerResult,
   randomNumberPool,
-}
+};

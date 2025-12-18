@@ -3,13 +3,13 @@ const { randomInt } = require("crypto");
 
 // 模拟 randomInt 以使测试具有确定性
 jest.mock("crypto", () => ({
-	randomInt: jest.fn(),
+  randomInt: jest.fn(),
 }));
 
 describe("randomNumberPool", () => {
-  let pool;
   const MIN = 114514;
   const MAX = 114516;
+  let pool = new randomNumberPool(MIN, MAX);
 
   beforeEach(() => {
     pool = new randomNumberPool(MIN, MAX);
@@ -21,20 +21,27 @@ describe("randomNumberPool", () => {
     expect(pool.min).toBe(MIN);
     expect(pool.max).toBe(MAX);
     expect(pool.length).toBe(0);
-    expect(pool.pool).toEqual({});
+    expect(pool.pool).toEqual(new Set());
   });
 
-  test("initFromArray 应将范围内的数字添加到池中", () => {
+  test("initFromArray 应能将范围内的数字添加到池中", () => {
     pool.initFromArray([1, 2, 3, 114515, 114514, 114517]);
-    expect(pool.pool).toEqual({
-      "114514": true,
-      "114515": true,
-    });
-		expect(pool.length).toEqual(2);
+    expect(pool.pool).toEqual(new Set([114514, 114515]));
+    expect(pool.length).toEqual(2);
   });
+
+  test("initFromArray 应能覆盖原有数据", () => {
+    pool.initFromArray([114514]);
+    pool.initFromArray([114515]);
+    expect(pool.pool).toEqual(new Set([114515]));
+    expect(pool.length).toEqual(1);
+  })
 
   test("generate 应返回范围内唯一的随机数", () => {
-    randomInt.mockReturnValueOnce(114514).mockReturnValueOnce(114515).mockReturnValueOnce(114516);
+    randomInt
+      .mockReturnValueOnce(114514)
+      .mockReturnValueOnce(114515)
+      .mockReturnValueOnce(114516);
 
     const rnum1 = pool.generate();
     expect(rnum1).toBe(114514);
@@ -52,7 +59,9 @@ describe("randomNumberPool", () => {
   test("如果池已满，generate 应抛出错误", () => {
     pool.initFromArray([114514, 114515, 114516]); // 填满池子
     expect(pool.isFull()).toBe(true);
-    expect(() => pool.generate()).toThrow("randomNumberPool: no space for a new number");
+    expect(() => pool.generate()).toThrow(
+      "randomNumberPool: no space for a new number"
+    );
   });
 
   test("remove 应从池中删除数字并在成功时返回 true", () => {
@@ -125,6 +134,8 @@ describe("randomNumberPool", () => {
 
   test("如果生成新数字时池已满，rename 应抛出错误", () => {
     pool.initFromArray([114514, 114515, 114516]); // 填满池子
-    expect(() => pool.rename(114514)).toThrow("randomNumberPool: no space for a new number");
+    expect(() => pool.rename(114514)).toThrow(
+      "randomNumberPool: no space for a new number"
+    );
   });
 });

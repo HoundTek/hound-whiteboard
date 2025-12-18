@@ -102,12 +102,15 @@
    3. 将 $Q$ 的入度减一，若 $Q$ 的入度变成了 $0$，则将 $Q$ 入队，并清空 $Q$ 的 `stash`，否则，将 $P \to Q$ 加入 $Q$ 的 `stash`
    4. 将 `activeNumber` 减一，若 `activeNumber` 被减为 $0$，则将 `currentLayer` 加一
 7. 若 `inactiveQueue` 或 `activeQueue` 中有元素，则重复第 4 到第 6 步
-8. 在跨层的边不算入度和出度的情况下计算每个点的入度和出度
-9. 创建 `currentLayer + 1` 个外虚点，记为 $V_i (i \in \mathbb{N})$
-10. 再创建 `currentLayer + 1` 个内虚点，记为 $L_i (i \in \mathbb{N})$
-11. 让 `layer` 为 $i$ 的、出度为 $0$ 的节点向 $V_i$ 连边
-12. 在 `layer` 为 $i$ 的、入度为 $0$ 的节点向 $L_i$ 连边，且让 $L_i$ 连向它们的后继，删除原有的边
-13. 最终，得到图 $\mathcal{G'}$
+8. 将所有被选中的对象对应的节点的 `layer` 加一
+9. 现在，删除被选中的节点在动态图中的所有边，然后计算每个未被选中的节点的入度和出度
+10. 创建 `currentLayer` 个虚点，记为 $A_i$
+11. 创建 `currentLayer` 个虚点，记为 $B_i$
+12. 将 $A_i$ 连至 `layer` 为 $i$ 的入度为 $0$ 的未被选中的节点
+13. 将 `layer` 为 $i$ 的被选中的节点连至 $A_i$
+14. 将 $B_i$ 连至 `layer` 为 $i + 1$ 的被选中的节点
+15. 将 `layer` 为 $i$ 的出度为 $0$ 的未被选中的节点连至 $B_i$ 
+16. 最终，得到图 $\mathcal{G'}$
 
 将 $\mathcal{G}'$ 的每一层按照以下规则插入:
 
@@ -225,39 +228,35 @@ graph BT
 
 ```mermaid
 graph BT
-  V0
+  H --> A1
+  E --> A1
+  A1 --> B1
+  B1 --> C
+  C --> A2
+  A2 -->B
   B --> A
-  L0 --> H
-  L0 --> E
-  V0 --> H
-  V0 --> E
-  H --> V1
-  E --> V1
-  V1 --> C
-  V1 --> F
-  F --> L1
-  L1 --> C
-  C --> V2
-  F --> V2
-  V2 --> B
+  A2 --> F
+  A --> B2
+  F --> B2
+
   style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
 
   subgraph "layer: 2"
-    A
-    B
-    L2
+  C
+  A2
+  B
+  A
+  F
+  B2
   end
+
   subgraph "layer: 1"
-    C
-    F
-    L1
-  end
-  subgraph "layer: 0"
-    H
-    E
-    L0
+  H
+  E
+  A1
+  B1
   end
 ```
 
@@ -265,16 +264,17 @@ graph BT
 
 ```mermaid
 graph BT
+  H --> A1
+  E --> A1
+  A1 --> B1
+  B1 --> C
+  C --> A2
+  A2 -->B
   B --> A
-  H --> V1
-  E --> V1
-  V1 --> C
-  V1 --> F
-  F --> L1
-  L1 --> C
-  C --> V2
-  F --> V2
-  V2 --> B
+  A2 --> F
+  A --> B2
+  F --> B2
+
   style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff

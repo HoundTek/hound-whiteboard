@@ -9,7 +9,7 @@
  */
 
 const { Quark, TextQuark, PolygonQuark, ImageQuark, BasicObject, ZeroDimensionObject, OneDimensionObject, TwoDimensionObject } = require("./basic-classes");
-const { Matrix, Point } = require("../../../utils/math");
+const { Matrix, Point } = require("../../utils/math");
 
 /**
  * 对象容器类
@@ -38,11 +38,13 @@ class Container extends ZeroDimensionObject {
   /**
    * 创建一个新的容器对象
    * @param {Point} p - 容器的位置
+   * @param {number} id - 对象 id
+   * @param {number} pageId - 对象所在页的 id
    * @param {OneDimensionObject | TwoDimensionObject} child - 容器的子对象
    * @constructor
    */
-  constructor(p, child) {
-    super(p, false);
+  constructor(p, id, pageId, child) {
+    super(p, id, pageId, false);
     this.child = child;
   }
 
@@ -67,11 +69,13 @@ class PolygonObject extends ZeroDimensionObject {
   /**
    * 创建一个新的多边形对象
    * @param {Point} p - 多边形逻辑左上角的绝对位置
+   * @param {number} id - 对象 id
+   * @param {number} pageId - 对象所在页的 id
    * @param {Point[]} points - 多边形各顶点相对其左上角的相对位置
    * @constructor
    */
-  constructor(p, points) {
-    super(p, false, true);
+  constructor(p, id, pageId, points) {
+    super(p, id, pageId, false, true);
     if (points) {
       this.points = points;
       this.#transformedPoints = points;
