@@ -179,7 +179,7 @@ class DirectedGraph {
   }
 
   /**
-   * 添加一个节点到图中
+   * 添加一个节点
    * @param {any} node - 要添加的节点
    */
   addNodeUnsafe(node) {
@@ -188,7 +188,7 @@ class DirectedGraph {
   }
 
   /**
-   * 添加一个节点到图中，如果节点已存在，则抛出错误
+   * 添加一个节点，如果节点已存在，则抛出错误
    * @param {any} node - 要添加的节点
    * @throws {NodeAlreadyExistError} 如果节点已存在
    */
@@ -368,6 +368,50 @@ class DirectedGraph {
    */
   neighborsUnsafe(node) {
     return this.adjList.get(node);
+  }
+
+  clear() {
+    this.adjList.clear();
+    this.adjListR.clear();
+  }
+
+  /**
+   * 从 JSON 构建一个有向图实例
+   * @param {Object} json - JSON
+   * @static
+   * @returns {DirectedGraph} 创建的实例
+   */
+  static parse(json) {
+    let graph = new DirectedGraph();
+
+    for (let fromKey in json) {
+      let from = isNaN(Number(fromKey)) ? fromKey : Number(fromKey);
+      if (!graph.hasNode(from)) {
+        graph.addNodeUnsafe(from);
+      }
+      const neighbors = json[fromKey];
+      for (let toKey of neighbors) {
+        let to = isNaN(Number(toKey)) ? toKey : Number(toKey);
+        if (!graph.hasNode(to)) {
+          graph.addNodeUnsafe(to);
+        }
+        graph.addEdgeUnsafe(from, to);
+      }
+    }
+
+    return graph;
+  }
+
+  toJSON() {
+    let json = {};
+    for (const [from, toSet] of this.adjList.entries()) {
+      json[from] = Array.from(toSet);
+    }
+    return json;
+  }
+
+  toString() {
+    return JSON.stringify(this.toJSON(), null, 2);
   }
 }
 

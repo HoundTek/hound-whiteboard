@@ -112,36 +112,15 @@
 
 ## 操作存储结构
 
-在 .wb 文件里，其根目录下有一个 history/ 文件夹用以专门存放与时间回溯树有关的文件。该文件夹的结构如下所示
+在 [`.hwb` 文件](../docs/file-documents.md)里，其根目录下的 [`history/` 文件夹](../docs/file-documents.md#history)用以专门存放与时间回溯树有关的文件。
 
-```
-.wb/
-  history/
-    trash/
-      114514.json
-      1919810.json
-    edition/
-      110-1.json
-      110-2.json
-    hit/
-      114514.json
-      1145141919810.json
-  objects/
-    stash/
-      91.json
-      8177919.json
-    110.json
-    2778.json
-    10086.json
-```
+其中，[`trash/` 文件夹](../docs/file-documents.md#trash)用来存放不在当前状态上，但在仍能通过 hit 将其找回的对象，即曾经存在并未被遗忘的对象。
 
-其中，trash/ 文件夹用来存放不在当前状态上，但在仍能通过 hit 将其找回的对象，即曾经存在并未被遗忘的对象。
+[`edition/` 文件夹](../docs/file-documents.md#edition)用来存放各个文件的修改历史。
 
-edition/ 文件夹用来存放各个文件的修改历史。
+[`hit/` 文件夹](../docs/file-documents.md#hit)用来存放时间回溯树的树块和尝试块。
 
-hit/ 文件夹用来存放时间回溯树的树块和尝试块。
-
-除了 history/ 文件夹外，时间回溯树还会读取 objects/ 文件夹。该文件夹存放了当前状态直接或间接 (如在容器里等) 在白板上的对象。
+除了 history/ 文件夹外，时间回溯树还会读取 [`objects/` 文件夹](../docs/file-documents.md#objects)。该文件夹存放了当前状态直接或间接 (如在容器里等) 在白板上的对象。
 
 ## 内存结构
 

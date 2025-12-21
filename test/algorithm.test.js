@@ -1,4 +1,4 @@
-const { randomNumberPool } = require("../src/utils/algorithm");
+const { RandomNumberPool } = require("../src/utils/algorithm");
 const { randomInt } = require("crypto");
 
 // 模拟 randomInt 以使测试具有确定性
@@ -6,13 +6,13 @@ jest.mock("crypto", () => ({
   randomInt: jest.fn(),
 }));
 
-describe("randomNumberPool", () => {
+describe("RandomNumberPool", () => {
   const MIN = 114514;
   const MAX = 114516;
-  let pool = new randomNumberPool(MIN, MAX);
+  let pool = new RandomNumberPool(MIN, MAX);
 
   beforeEach(() => {
-    pool = new randomNumberPool(MIN, MAX);
+    pool = new RandomNumberPool(MIN, MAX);
     // 在每个测试前清除 mock
     randomInt.mockClear();
   });
@@ -60,7 +60,7 @@ describe("randomNumberPool", () => {
     pool.initFromArray([114514, 114515, 114516]); // 填满池子
     expect(pool.isFull()).toBe(true);
     expect(() => pool.generate()).toThrow(
-      "randomNumberPool: no space for a new number"
+      "RandomNumberPool: no space for a new number"
     );
   });
 
@@ -135,7 +135,7 @@ describe("randomNumberPool", () => {
   test("如果生成新数字时池已满，rename 应抛出错误", () => {
     pool.initFromArray([114514, 114515, 114516]); // 填满池子
     expect(() => pool.rename(114514)).toThrow(
-      "randomNumberPool: no space for a new number"
+      "RandomNumberPool: no space for a new number"
     );
   });
 });

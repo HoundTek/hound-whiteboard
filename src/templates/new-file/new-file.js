@@ -8,7 +8,7 @@
  */
 
 const path = require('path');
-const { file, directory } = require('../../utils/io');
+const { File, Directory } = require('../../utils/io');
 
 const Toast = require('../../utils/ui/toast');
 const toast = new Toast();
@@ -188,7 +188,7 @@ confirmBtn.addEventListener('click', () => {
   }
 
   if (input.value !== '' && filePath !== '') {
-    if (directory.parse(boardInfo.filePath).peek(input.value, 'hwb').exist()) {
+    if (Directory.parse(boardInfo.filePath).peek(input.value, 'hwb').exist()) {
       input.focus();
       blink(input);
       toast.warning('已有同名文件存在');

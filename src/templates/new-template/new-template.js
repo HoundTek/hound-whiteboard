@@ -7,7 +7,7 @@
  * - 模板创建确认
  */
 
-const { directory } = require('../../utils/io');
+const { Directory } = require('../../utils/io');
 
 const Toast = require('../../utils/ui/toast');
 const toast = new Toast();
@@ -165,7 +165,7 @@ ipc.on('init-new-template-from-other-template', (event, templateInfo, pathStr, p
     color.value = templateInfo.background;
   } else {
     imageOpt.checked = true;
-    backgroundImage = directory.parse(pathStr)
+    backgroundImage = Directory.parse(pathStr)
       .peek('backgroundImage', templateInfo.background)
       .getPath();
   }

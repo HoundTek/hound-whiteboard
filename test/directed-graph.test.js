@@ -1,6 +1,5 @@
 const {
   DirectedGraph,
-  TierManager,
   NodeNotExistError,
   EdgeNotExistError,
   NodeAlreadyExistError,
@@ -105,6 +104,7 @@ describe("DirectedGraph", () => {
     expect(graph.adjList.get(3).has(1)).toBe(false);
     expect(graph.adjListR.get(2).has(1)).toBe(false);
   });
+
   test("changeNodeNameUnsafe 应更改节点名称", () => {
     graph.addNodeUnsafe(1);
     graph.addNodeUnsafe(2);
@@ -142,7 +142,77 @@ describe("DirectedGraph", () => {
     expect(neighbors.has(4)).toBe(true);
     expect(neighbors.has(1)).toBe(false);
     expect(neighbors.has(5)).toBe(false);
+  });
 
+  test("clear 应将图清空", () => {
+    graph.addNodeUnsafe(1);
+    graph.addNodeUnsafe(2);
+    graph.addEdgeUnsafe(1, 2);
+    graph.clear();
+
+    expect(graph.adjList.size).toBe(0);
+    expect(graph.adjListR.size).toBe(0);
+  });
+});
+
+describe("DirectedGraph persistence", () => {
+  let graph = new DirectedGraph();
+
+  beforeEach(() => {
+    graph = new DirectedGraph();
+  });
+
+  test("toJSON 应正确序列化图", () => {
+    graph.addNodeUnsafe(1);
+    graph.addNodeUnsafe(2);
+    graph.addNodeUnsafe(3);
+    graph.addEdgeUnsafe(1, 2);
+    graph.addEdgeUnsafe(2, 3);
+    graph.addEdgeUnsafe(1, 3);
+    const json = graph.toJSON();
+    expect(json).toEqual({
+      1: [2, 3],
+      2: [3],
+      3: [],
+    });
+  });
+
+  test("toJSON 应正确序列化空图", () => {
+    const json = graph.toJSON();
+    expect(json).toEqual({});
+  });
+
+  test("parse 应正确反序列化图", () => {
+    graph = DirectedGraph.parse({
+      1: [2],
+      2: [3],
+      3: [],
+    });
+    expect(graph.hasNode(1)).toBe(true);
+    expect(graph.hasNode(2)).toBe(true);
+    expect(graph.hasNode(3)).toBe(true);
+    expect(graph.hasEdge(1, 2)).toBe(true);
+    expect(graph.hasEdge(2, 3)).toBe(true);
+    expect(graph.hasEdge(1, 3)).toBe(false);
+    expect(graph.adjListR.get(2).has(1)).toBe(true);
+    expect(graph.adjListR.get(3).has(2)).toBe(true);
+  });
+
+  test("parse 应处理空图", () => {
+    const newGraph = DirectedGraph.parse({});
+    expect(newGraph.adjList.size).toBe(0);
+    expect(newGraph.adjListR.size).toBe(0);
+  });
+
+  test("parse 应处理只有节点的图", () => {
+    graph = DirectedGraph.parse({
+      1: [],
+      2: [],
+    });
+    expect(graph.hasNode(1)).toBe(true);
+    expect(graph.hasNode(2)).toBe(true);
+    expect(graph.adjList.get(1).size).toBe(0);
+    expect(graph.adjList.get(2).size).toBe(0);
   });
 });
 

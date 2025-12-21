@@ -4,6 +4,7 @@
  * @author Zhou Chenyu
  */
 
+const { Directory } = require("../../utils/io");
 const { DirectedGraph } = require("../utils/directed-graph");
 const { UndoTree } = require("../utils/undo-tree-core");
 const { ActiveObjectManager } = require("./active-object-manager");
@@ -24,16 +25,20 @@ class BoardManager {
   undoTree;
 
   /**
+   * 活动对象管理器
    * @type {ActiveObjectManager}
    */
   activeObjectManager;
 
   /**
+   * 页 id -> 页实例映射
+   * @description 拥有页实例的所有权
    * @type {Map<number, PageManager>}
    */
   pages;
 
   /**
+   * 页顺序（使用 id）
    * @type {number[]}
    */
   pageOrder;
@@ -51,13 +56,12 @@ class BoardManager {
   width;
 
   /**
-   * 创建新的白板管理器实例
-   * @param {number} height - 白板的高度
-   * @param {number} width - 白板的宽度
+   * 白板的文件路径
+   * @type {Directory}
    */
-  constructor(height, width) {
-    this.height = height;
-    this.width = width;
+  Directory;
+
+  constructor() {
     this.undoTree = new UndoTree();
     this.activeObjectManager = new ActiveObjectManager();
     this.pages = new Array();
@@ -67,6 +71,26 @@ class BoardManager {
     let page = new PageManager();
     this.pages.push(page);
     return page;
+  }
+
+  /**
+   * 加载白板
+   * @param {Directory} directory - 白板根目录
+   */
+  load(directory) {
+    const metaFile = directory.peek("meta", "json");
+    const configFile = directory.peek("config", "json");
+    if (!metaFile.exist()) {
+      console.log("meta does not exist.");
+    }
+    if (!configFile.exist()) {
+      console.log("config does not exist.");
+    }
+
+    const meta = metaFile.catJSON();
+    const config = configFile.catJSON();
+    this.width = config.width;
+    this.height = config.height;
   }
 }
 

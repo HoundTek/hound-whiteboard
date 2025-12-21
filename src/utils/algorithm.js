@@ -12,7 +12,7 @@ const { randomInt } = require("crypto");
  * 不重复的随机数池
  * @class
  * @example
- * let pool = new randomNumberPool(114514, 114516);
+ * let pool = new RandomNumberPool(114514, 114516);
  * pool.initFromArray([1, 2, 3, 114515]); // 只会添加 114515
  * // 此时 pool.length 为 1
  * let rnum1 = pool.generate();
@@ -27,7 +27,7 @@ const { randomInt } = require("crypto");
  * pool.remove(rnum1); // 返回 true
  * pool.remove(rnum1); // 返回 false (删除未成功，因为池中已经没有这个数了)
  */
-class randomNumberPool {
+class RandomNumberPool {
   /**
    * 随机数池的最小值
    * @type {number}
@@ -117,7 +117,7 @@ class randomNumberPool {
    */
   generate() {
     if (this.isFull()) {
-      throw new Error("randomNumberPool: no space for a new number");
+      throw new Error("RandomNumberPool: no space for a new number");
     }
     let num;
     do {
@@ -303,5 +303,5 @@ function getTriFingerResult(
 module.exports = {
   getDualFingerResult,
   getTriFingerResult,
-  randomNumberPool,
+  RandomNumberPool,
 };

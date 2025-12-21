@@ -3,17 +3,27 @@ const { Matrix, Point } = require("../../utils/math");
 const creator = require("../../core/utils/board-objects-creator");
 const { BoardManager } = require("../../core/components/board-manager");
 const { PageManager } = require("../../core/components/page-manager");
+const { Directory } = require("../../utils/io");
+
+const board = new BoardManager();
+
+ipc.on("board-opened", (event, path) => {
+  console.log("In board-opened event. path: ", path);
+  board.Directory = Directory.parse(path);
+  // [todo] 在这里读取基础的白板配置文件，以供前端使用
+  // 如 width height 等
+  // 应在 path/config.json 处
+});
 
 const canvas = document.getElementById("canvas");
 
 // 设置 canvas 的内部分辨率，使其与 CSS 尺寸匹配
 // 这样可以避免内容被拉伸
+board.width = 800;
+board.height = 600;
 canvas.width = 800;
 canvas.height = 600;
 
-const board = new BoardManager(800, 600);
-
-const page = board.appendPage();
 console.log(board);
 
 let testRenderManager = new RenderManager(canvas);

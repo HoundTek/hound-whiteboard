@@ -4,6 +4,7 @@
 
 const { DirectedGraph } = require("../utils/directed-graph");
 const { BasicObject } = require("../classes/basic-classes");
+const { Directory, File } = require("../../utils/io");
 
 /**
  * 页静态对象管理器
@@ -32,19 +33,31 @@ class PageObjectManager {
    */
   pageObjects;
 
-  /**
-   * 跨页对象连接图
-   * @description 这个里面的对象只能为属于当前页的跨页对象，两对象间连边表示在 staticGraph 中它们有路径连通
-   * @type {DirectedGraph}
-   */
-  crossPageConnection;
-
   constructor() {
     this.staticGraph = new DirectedGraph();
     this.coverOtherPage = new Map();
     this.pageObjects = new Map();
-    this.crossPageConnection = new DirectedGraph();
   }
+
+  /**
+   * 加载层叠图
+   * @param {File} file - 从何处加载
+   */
+  loadTiermap(file) {
+    this.staticGraph = DirectedGraph.parse(file.cat());
+  }
+
+  /**
+   * 保存层叠图
+   * @param {File} file - 保存至何方
+   */
+  saveTiermap(file) {}
+
+  loadObjects(directory) {}
+
+  saveObjects(directory) {}
+
+  unload(file) {}
 }
 
 module.exports = {

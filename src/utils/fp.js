@@ -10,7 +10,7 @@ const AdmZip = require("adm-zip");
 
 /**
  * 创建指定目录
- * @param {directory} dir 要创建的目录实例
+ * @param {Directory} dir 要创建的目录实例
  */
 function mkdir(dir) {
   fs.mkdirSync(dir.getPath(), { recursive: true });
@@ -18,8 +18,8 @@ function mkdir(dir) {
 
 /**
  * 获取目录中的所有子目录
- * @param {directory} dir 要读取的目录实例
- * @returns {Array<directory>} 子目录实例数组
+ * @param {Directory} dir 要读取的目录实例
+ * @returns {Array<Directory>} 子目录实例数组
  */
 function lsDir(dir) {
   return fs.readdirSync(dir.getPath())
@@ -29,8 +29,8 @@ function lsDir(dir) {
 
 /**
  * 读取目录中的文件
- * @param {directory} dir - 要读取的目录
- * @returns {Array<file>} 文件数组
+ * @param {Directory} dir - 要读取的目录
+ * @returns {Array<File>} 文件数组
  */
 function lsFile(dir) {
   return fs.readdirSync(dir.getPath())
@@ -38,13 +38,13 @@ function lsFile(dir) {
            .map(name => {
               const nameWithoutExt = name.split(".").slice(0, -1).join(".");
               const ext = name.split(".").pop();
-              return new file(dir.getPath(), nameWithoutExt, ext);
+              return new File(dir.getPath(), nameWithoutExt, ext);
             })
 }
 
 /**
  * 读取目录中的内容
- * @param {directory} dir - 要读取的目录
+ * @param {Directory} dir - 要读取的目录
  * @returns {Array<string>} 文件名数组
  */
 function ls(dir) {
@@ -53,7 +53,7 @@ function ls(dir) {
 
 /**
  * 判断文件是否存在
- * @param {file|directory} file - 要判断的文件
+ * @param {File|Directory} File - 要判断的文件
  * @returns {boolean} 是否存在
  */
 function exist(file) {
@@ -62,7 +62,7 @@ function exist(file) {
 
 /**
  * 读取文件内容
- * @param {file} file - 要读取的文件
+ * @param {File} file - 要读取的文件
  * @returns {string} 文件内容
  */
 function readFile(file) {
@@ -71,7 +71,7 @@ function readFile(file) {
 
 /**
  * 写入文件内容
- * @param {file} file - 要写入的文件
+ * @param {File} file - 要写入的文件
  * @param {string} content - 要写入的内容
  */
 function writeFile(file, content) {
@@ -80,7 +80,7 @@ function writeFile(file, content) {
 
 /**
  * 创建文件
- * @param {file} file - 要创建的文件
+ * @param {File} file - 要创建的文件
  */
 function touch(file) {
   this.writeFile(file, "");
@@ -88,7 +88,7 @@ function touch(file) {
 
 /**
  * 删除文件
- * @param {file} file - 要删除的文件
+ * @param {File} file - 要删除的文件
  */
 function rm(file) {
   fs.unlinkSync(file.getPath());
@@ -96,7 +96,7 @@ function rm(file) {
 
 /**
  * 删除目录
- * @param {directory} dir - 要删除的目录
+ * @param {Directory} dir - 要删除的目录
  */
 function rmDir(dir) {
   fs.rmSync(dir.getPath(), { recursive: true, force: true});
@@ -104,8 +104,8 @@ function rmDir(dir) {
 
 /**
  * 复制文件
- * @param {file} source - 要复制的文件
- * @param {file} dest - 复制到的文件
+ * @param {File} source - 要复制的文件
+ * @param {File} dest - 复制到的文件
  */
 function cp(source, dest) {
   fs.copyFileSync(source.getPath(), dest.getPath());
@@ -113,8 +113,8 @@ function cp(source, dest) {
 
 /**
  * 复制目录
- * @param {directory} source - 要复制的目录
- * @param {directory} dest - 复制到的目录
+ * @param {Directory} source - 要复制的目录
+ * @param {Directory} dest - 复制到的目录
  */
 function cpDir(source, dest) {
   fs.cpSync(source.getPath(), dest.getPath(), { recursive: true });
@@ -122,8 +122,8 @@ function cpDir(source, dest) {
 
 /**
  * 移动文件
- * @param {file} source - 要移动的文件
- * @param {file} dest - 移动到的文件
+ * @param {File} source - 要移动的文件
+ * @param {File} dest - 移动到的文件
  */
 function mv(source, dest) {
   fs.renameSync(source.getPath(), dest.getPath());
@@ -131,8 +131,8 @@ function mv(source, dest) {
 
 /**
  * 解压文件
- * @param {file} source - 要解压的文件路径
- * @param {directory} dest - 解压到的目录路径
+ * @param {File} source - 要解压的文件路径
+ * @param {Directory} dest - 解压到的目录路径
  */
 function extractFile(source, dest) {
   const zip = new AdmZip(source.getPath());
@@ -141,8 +141,8 @@ function extractFile(source, dest) {
 
 /**
  * 压缩文件
- * @param {directory} source - 要压缩的文件夹路径
- * @param {file} dest - 压缩后的文件路径
+ * @param {Directory} source - 要压缩的文件夹路径
+ * @param {File} dest - 压缩后的文件路径
  * @param {boolean} remove - 是否删除原文件
  */
 function compressFile(source, dest, remove = false) {

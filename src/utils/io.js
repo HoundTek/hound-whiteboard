@@ -15,7 +15,7 @@ const fp = require("./fp")
  * @property {string} address - 目录所在路径
  * @property {string} name - 目录名称
  */
-class directory {
+class Directory {
   address = "";
   name = "";
 
@@ -40,28 +40,28 @@ class directory {
   /**
    * 进入指定子目录并返回新实例
    * @param {string} pathStr - 子目录路径(相对路径或目录名)
-   * @returns {directory} 新的目录实例
+   * @returns {Directory} 新的目录实例
    */
   cd(pathStr) {
-    return new directory(this.getPath(), pathStr);
+    return new Directory(this.getPath(), pathStr);
   }
 
   /**
    * 获取当前目录的父目录实例
-   * @returns {directory} 父目录实例，如果是根目录则返回null
+   * @returns {Directory} 父目录实例，如果是根目录则返回null
    */
   father() {
-    return new directory(path.dirname(this.address), path.basename(this.address));
+    return new Directory(path.dirname(this.address), path.basename(this.address));
   }
 
   /**
    * 创建并返回指定文件的实例
    * @param {string} fileName - 文件名(不含扩展名)
    * @param {string} fileExt - 文件扩展名(不含点)
-   * @returns {file} 文件实例
+   * @returns {File} 文件实例
    */
   peek(fileName, fileExt) {
-    return new file(this.getPath(), fileName, fileExt)
+    return new File(this.getPath(), fileName, fileExt)
   }
 
   /**
@@ -93,7 +93,7 @@ class directory {
 
   /**
    * 创建该目录
-   * @returns {directory} 当前目录对象
+   * @returns {Directory} 当前目录对象
    */
   make() {
     fp.mkdir(this);
@@ -102,7 +102,7 @@ class directory {
 
   /**
    * 若该目录不存在则创建
-   * @returns {directory} 当前目录对象
+   * @returns {Directory} 当前目录对象
    */
   existOrMake() {
     if (!this.exist()) this.make();
@@ -111,8 +111,8 @@ class directory {
 
   /**
    * 复制目录
-   * @param {directory} dest - 目标目录
-   * @returns {directory} 目标目录对象
+   * @param {Directory} dest - 目标目录
+   * @returns {Directory} 目标目录对象
    */
   cp(dest) {
     let ret;
@@ -127,7 +127,7 @@ class directory {
 
   /**
    * 删除该目录
-   * @returns {directory} 当前目录对象
+   * @returns {Directory} 当前目录对象
    */
   rm() {
     fp.rmDir(this);
@@ -136,7 +136,7 @@ class directory {
 
   /**
    * 当目录存在时删除该目录
-   * @returns {directory} 当前目录对象
+   * @returns {Directory} 当前目录对象
    */
   rmWhenExist() {
     if (this.exist()) this.rm();
@@ -145,8 +145,8 @@ class directory {
 
   /**
    * 移动目录
-   * @param {directory} dest - 目标目录
-   * @returns {directory} 目标目录对象
+   * @param {Directory} dest - 目标目录
+   * @returns {Directory} 目标目录对象
    */
   mv(dest) {
     this.cp(dest);
@@ -156,7 +156,7 @@ class directory {
 
   /**
    * 列出目录中的所有内容
-   * @returns {Array<directory|file>} 目录和文件数组
+   * @returns {Array<Directory|File>} 目录和文件数组
    */
   ls() {
     return fp.ls(this);
@@ -164,7 +164,7 @@ class directory {
 
   /**
    * 列出目录中的所有子目录
-   * @returns {Array<directory>} 目录数组
+   * @returns {Array<Directory>} 目录数组
    */
   lsDir() {
     return fp.lsDir(this);
@@ -172,7 +172,7 @@ class directory {
 
   /**
    * 列出目录中的所有文件
-   * @returns {Array<file>} 文件数组
+   * @returns {Array<File>} 文件数组
    */
   lsFile() {
     return fp.lsFile(this);
@@ -180,10 +180,10 @@ class directory {
 
   /**
    * 隐藏目录
-   * @returns {directory} 当前目录对象
+   * @returns {Directory} 当前目录对象
    */
   hide() {
-    const tempDir = directory.parse(hidefile.hideSync(this.getPath()));
+    const tempDir = Directory.parse(hidefile.hideSync(this.getPath()));
     this.address = tempDir.address;
     this.name = tempDir.name;
     return this;
@@ -191,10 +191,10 @@ class directory {
 
   /**
    * 取消隐藏目录
-   * @returns {directory} 当前目录对象
+   * @returns {Directory} 当前目录对象
    */
   unhide() {
-    const tempDir = directory.parse(hidefile.revealSync(this.getPath()));
+    const tempDir = Directory.parse(hidefile.revealSync(this.getPath()));
     this.address = tempDir.address;
     this.name = tempDir.name;
     return this;
@@ -202,9 +202,9 @@ class directory {
 
   /**
    * 压缩目录
-   * @param {file} file - 压缩后的文件
+   * @param {File} file - 压缩后的文件
    * @param {boolean} remove - 是否删除原目录
-   * @returns {file} 压缩后的文件对象
+   * @returns {File} 压缩后的文件对象
    */
   compress(file, remove = false) {
     fp.compressFile(this, file, remove);
@@ -213,29 +213,29 @@ class directory {
 
   /**
    * 获取隐藏后的目录结果
-   * @param {directory} dir - 目录对象
-   * @returns {directory} 隐藏后的目录对象
+   * @param {Directory} dir - 目录对象
+   * @returns {Directory} 隐藏后的目录对象
    */
   static getHideResult(dir) {
-    return new directory(dir.address, "." + dir.name);
+    return new Directory(dir.address, "." + dir.name);
   }
 
   /**
    * 获取取消隐藏后的目录结果
-   * @param {directory} dir - 目录对象
-   * @returns {directory} 取消隐藏后的目录对象
+   * @param {Directory} dir - 目录对象
+   * @returns {Directory} 取消隐藏后的目录对象
    */
   static getUnHideResult(dir) {
-    return new directory(dir.address, dir.name.substring(1));
+    return new Directory(dir.address, dir.name.substring(1));
   }
 
   /**
    * 解析路径字符串为目录对象
    * @param {string} pathStr - 路径字符串
-   * @returns {directory} 目录对象
+   * @returns {Directory} 目录对象
    */
   static parse(pathStr) {
-    return new directory(path.dirname(pathStr), path.basename(pathStr));
+    return new Directory(path.dirname(pathStr), path.basename(pathStr));
   }
 }
 
@@ -245,7 +245,7 @@ class directory {
  * @property {string} name - 文件名 (不含扩展名)
  * @property {string} extension - 文件扩展名 (不含点)
  */
-class file {
+class File {
   address = "";
   name = "";
   extension = "";
@@ -273,10 +273,10 @@ class file {
 
   /**
    * 获取文件所在的目录实例
-   * @returns {directory} 父目录实例
+   * @returns {Directory} 父目录实例
    */
   unPeek() {
-    return new directory(path.dirname(this.address), path.basename(this.address));
+    return new Directory(path.dirname(this.address), path.basename(this.address));
   }
 
   /**
@@ -298,7 +298,7 @@ class file {
   /**
    * 写入字符串
    * @param {string} content - 要写入的内容
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   write(content) {
     fp.writeFile(this, content);
@@ -308,7 +308,7 @@ class file {
   /**
    * 写入 JSON
    * @param {JSON} content - 要写入的内容
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   writeJSON(content) {
     this.write(JSON.stringify(content, null, 2));
@@ -325,7 +325,7 @@ class file {
 
   /**
    * 将该文件置空
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   init() {
     fp.touch(this);
@@ -334,7 +334,7 @@ class file {
 
   /**
    * 若该文件不存在则创建并将该文件置空
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   existOrInit() {
     if (!this.exist()) this.init();
@@ -344,7 +344,7 @@ class file {
   /**
    * 若该文件不存在则创建并写入内容
    * @param {string} content - 要写入的内容
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   existOrWrite(content) {
     if(!this.exist()) this.write(content);
@@ -354,7 +354,7 @@ class file {
   /**
    * 若该文件不存在则创建并写入 JSON
    * @param {Object} content - 要写入的内容
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   existOrWriteJSON(content) {
     if(!this.exist()) this.writeJSON(content);
@@ -371,12 +371,12 @@ class file {
 
   /**
    * 复制文件
-   * @param {file|directory} dest - 目标文件或目录
-   * @returns {file} 目标文件对象
+   * @param {File|Directory} dest - 目标文件或目录
+   * @returns {File} 目标文件对象
    */
   cp(dest) {
     let ret;
-    if (dest instanceof file) {
+    if (dest instanceof File) {
       ret = dest;
     } else {
       ret = dest.peek(this.name, this.extension);
@@ -387,8 +387,8 @@ class file {
 
   /**
    * 移动文件
-   * @param {file|directory} dest - 目标文件或目录
-   * @returns {file} 目标文件对象
+   * @param {File|Directory} dest - 目标文件或目录
+   * @returns {File} 目标文件对象
    */
   mv(dest) {
     this.cp(dest);
@@ -398,7 +398,7 @@ class file {
 
   /**
    * 删除该文件
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   rm() {
     fp.rm(this);
@@ -407,7 +407,7 @@ class file {
 
   /**
    * 当该文件存在时删除该文件
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   rmWhenExist() {
     if (this.exist()) this.rm();
@@ -416,10 +416,10 @@ class file {
 
   /**
    * 隐藏文件
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   hide() {
-    const tempFile = file.parse(hidefile.hideSync(this.getPath()));
+    const tempFile = File.parse(hidefile.hideSync(this.getPath()));
     this.address = tempFile.address;
     this.extension = tempFile.extension;
     this.name = tempFile.name;
@@ -428,10 +428,10 @@ class file {
 
   /**
    * 取消隐藏文件
-   * @returns {file} 当前文件对象
+   * @returns {File} 当前文件对象
    */
   unhide() {
-    const tempFile = file.parse(hidefile.revealSync(this.getPath()));
+    const tempFile = File.parse(hidefile.revealSync(this.getPath()));
     this.address = tempFile.address;
     this.extension = tempFile.extension;
     this.name = tempFile.name;
@@ -440,8 +440,8 @@ class file {
 
   /**
    * 解压文件
-   * @param {directory} dir - 解压到的目录
-   * @returns {directory} 目标目录对象
+   * @param {Directory} dir - 解压到的目录
+   * @returns {Directory} 目标目录对象
    */
   extract(dir) {
     fp.extractFile(this, dir);
@@ -450,59 +450,59 @@ class file {
 
   /**
    * 获取隐藏后的文件结果
-   * @param {file} f - 文件对象
-   * @returns {file} 隐藏后的文件对象
+   * @param {File} file - 文件对象
+   * @returns {File} 隐藏后的文件对象
    */
-  static getHideResult(f) {
-    return new file(f.address, "." + f.name, f.extension);
+  static getHideResult(file) {
+    return new File(file.address, "." + file.name, file.extension);
   }
 
   /**
    * 获取取消隐藏后的文件结果
-   * @param {file} f - 文件对象
-   * @returns {file} 取消隐藏后的文件对象
+   * @param {File} file - 文件对象
+   * @returns {File} 取消隐藏后的文件对象
    */
-  static getUnHideResult(f) {
-    return new file(f.address, f.name.substring(1), f.extension);
+  static getUnHideResult(file) {
+    return new File(file.address, file.name.substring(1), file.extension);
   }
 
   /**
    * 解析路径字符串为文件对象
    * @param {string} pathStr - 路径字符串
-   * @returns {file} 文件对象
+   * @returns {File} 文件对象
    */
   static parse(pathStr) {
     const pathRes = path.parse(pathStr);
-    return new file(pathRes.dir, pathRes.name, pathRes.ext.substring(1));
+    return new File(pathRes.dir, pathRes.name, pathRes.ext.substring(1));
   }
 }
 
-const { randomNumberPool } = require("../utils/algorithm");
+const { RandomNumberPool } = require("../utils/algorithm");
 
 /**
  * 不重复的随机文件名池
  * @class
- * @property {directory} dir 目标目录实例
- * @property {string} type "directory" 表示目录池，其他值表示文件扩展名
- * @property {randomNumberPool} pool 内部随机数池
+ * @property {Directory} dir 目标目录实例
+ * @property {string} type "Directory" 表示目录池，其他值表示文件扩展名
+ * @property {RandomNumberPool} pool 内部随机数池
  * @example
- * let pool = new fileNameRandomPool(myDir, "txt");
+ * let pool = new FilenameRandomPool(myDir, "txt");
  * let file1 = pool.generate(); // 创建一个随机命名的 .txt 文件
  * let file2 = pool.generate(); // 创建另一个不重复的 .txt 文件
  * pool.remove(file1.name); // 删除文件并从池中移除
  * let file3 = pool.rename(file2.name); // 重命名文件为新的随机名称
  */
-class fileNameRandomPool {
+class FilenameRandomPool {
   /**
    * 创建随机文件名池实例
-   * @param {directory} dir 目标目录实例
-   * @param {string} type "directory"表示目录池，其他值表示文件扩展名
+   * @param {Directory} dir 目标目录实例
+   * @param {string} type "Directory"表示目录池，其他值表示文件扩展名
    */
-  constructor(dir, type = "directory") {
+  constructor(dir, type = "Directory") {
     this.dir = dir;
     this.type = type;
     const min = 1, max = 1145141919810;
-    this.pool = new randomNumberPool(min, max);
+    this.pool = new RandomNumberPool(min, max);
     const numbers = fp.lsDir(dir)
                       .map(parseInt)
                       .filter(t => min <= t && t <= max);
@@ -537,17 +537,17 @@ class fileNameRandomPool {
 
   /**
    * 生成不重复的随机目录/文件实例
-   * @returns {directory|file} 新创建的目录或文件实例
+   * @returns {Directory|File} 新创建的目录或文件实例
    * @throws {Error} 当随机池已被占满时
    */
   generate() {
     const name = this.pool.generate().toString();
-    if (this.type === "directory") {
-      const newDir = new directory(this.dir.getPath(), name);
+    if (this.type === "Directory") {
+      const newDir = new Directory(this.dir.getPath(), name);
       fp.mkdir(newDir);
       return newDir;
     } else {
-      const newFile = new file(this.dir.getPath(), name, this.type);
+      const newFile = new File(this.dir.getPath(), name, this.type);
       fp.touch(newFile);
       return newFile;
     }
@@ -559,7 +559,7 @@ class fileNameRandomPool {
    * @returns {boolean} 是否成功删除
    */
   remove(ID) {
-    if (this.type === "directory") {
+    if (this.type === "Directory") {
       this.dir.cd(ID).rm();
     } else {
       this.dir.peek(ID, this.type).rm();
@@ -570,11 +570,11 @@ class fileNameRandomPool {
   /**
    * 在池中重新生成一个不重复的 ID 并重命名目录/文件
    * @param {string} ID - 要重命名的目录/文件 ID
-   * @returns {directory|file} 重命名后的文件或目录
+   * @returns {Directory|File} 重命名后的文件或目录
    */
   rename(ID) {
     let newID = this.pool.rename(parseInt(ID)).toString();
-    if (this.type === "directory") {
+    if (this.type === "Directory") {
       this.dir.cd(ID).mv(this.dir.cd(newID));
       return this.dir.cd(newID);
     } else {
@@ -585,7 +585,7 @@ class fileNameRandomPool {
 }
 
 module.exports = {
-  directory,
-  file,
-  fileNameRandomPool,
+  Directory,
+  File,
+  FilenameRandomPool,
 };

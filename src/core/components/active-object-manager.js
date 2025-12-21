@@ -2,8 +2,9 @@
  * @module active-object-manager
  */
 
-const { randomNumberPool } = require("../../utils/algorithm");
+const { RandomNumberPool } = require("../../utils/algorithm");
 const { Queue } = require("../../utils/queue");
+const { CounterPool } = require("../utils/counter-pool");
 const { DirectedGraph, NodeNotExistError } = require("../utils/directed-graph");
 const { PageManager } = require("./page-manager");
 
@@ -20,7 +21,7 @@ class ActiveObjectManager {
   activeGraph;
 
   /**
-   * @type {randomNumberPool}
+   * @type {RandomNumberPool}
    */
   layerPool;
 
@@ -38,8 +39,8 @@ class ActiveObjectManager {
 
   constructor() {
     this.activeGraph = new DirectedGraph();
-    this.layerPool = new randomNumberPool(1, 10000000);
-    this.layerOrder = new Array();
+    this.layerPool = new RandomNumberPool(1, 10000000);
+    this.layerOrder = [];
     this.onLayer = new Map();
   }
 
@@ -66,47 +67,33 @@ class ActiveObjectManager {
   /**
    * 获取虚点对应的层的 id
    * @description [tier-graph-document.md](./tier-graph-document.md)
-   * @param {number} layerId - A 虚点或 B 虚点 id
+   * @param {number} pointId - A 虚点或 B 虚点 id
    * @returns {number} 层 id
    */
   getLayerByVirtualPoint(pointId) {
-    return pointId % 2 == 0 ? -(pointId / 2) : -((pointId - 1) / 2);
+    return pointId % 2 === 0 ? -(pointId / 2) : -((pointId - 1) / 2);
   }
 
   /**
-   *
+   * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
    * @param {number} obj - 作为起点的对象 id
    * @param {PageManager} pge - 该对象所在的页
-   * @returns {{graph: DirectedGraph, layer: number}}
-   * @throws {NodeNotExistError} 当对象不存在
+   * @returns {DirectedGraph}
    * @private
    * @todo 暂不支持跨页
    */
-  pickupGraph(obj, pge) {
+  pickupSingle(obj, pge) {
     let tier = pge.objectTier;
     let graph = tier.staticGraph;
-    if (!graph.hasNode(obj)) {
-      throw new NodeNotExistError(obj);
-    }
 
-    /**
-     * DFS 递归构建子图
-     * @param {number} now - 当前所在的节点
-     */
-    function pickup(now) {}
-
-    const visit = new Set();
     const q = new Queue();
+    const visit = new Set();
+    const activeGraph = new DirectedGraph();
     q.push(obj);
     visit.add(obj);
-    const activeGraph = new DirectedGraph();
-    activeGraph.addNode(obj);
-    const layer = this.layerPool.generate();
-    const aPoint = this.getAPointForLayer(layer);
-    const bPoint = this.getBPointForLayer(layer);
-    activeGraph.addNodeUnsafe(aPoint);
-    activeGraph.addNodeUnsafe(bPoint);
+    activeGraph.addNodeUnsafe(obj);
 
+    // BFS 遍历
     while (!q.empty()) {
       const node = q.pop();
       const neighbors = graph.neighborsUnsafe(node);
@@ -119,21 +106,50 @@ class ActiveObjectManager {
           }
           activeGraph.addEdgeUnsafe(node, next);
         }
-      } else {
-        activeGraph.addEdgeUnsafe(node, bPoint);
       }
     }
 
-    let neighbors = graph.neighborsUnsafe(obj);
-    activeGraph.addEdgeUnsafe(obj, aPoint);
-    if (neighbors) {
-      for (const next of neighbors) {
-        activeGraph.deleteEdgeUnsafe(obj, next);
-        activeGraph.addEdgeUnsafe(aPoint, next);
+    return activeGraph;
+  }
+
+  /**
+   * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
+   * @param {number[]} obj - 作为起点的对象 id 们
+   * @param {PageManager} pge - 对象所在的页，当前只能处理在同一页的对象
+   * @returns {DirectedGraph}
+   * @private
+   * @todo 暂不支持跨页
+   */
+  pickupMulti(objs, pge) {
+    let tier = pge.objectTier;
+    let graph = tier.staticGraph;
+
+    const q = new Queue();
+    const visit = new Set();
+    const activeGraph = new DirectedGraph();
+    for (const obj of objs) {
+      q.push(obj);
+      visit.add(obj);
+      activeGraph.addNodeUnsafe(obj);
+    }
+
+    // BFS 遍历
+    while (!q.empty()) {
+      const node = q.pop();
+      const neighbors = graph.neighborsUnsafe(node);
+      if (neighbors) {
+        for (const next of neighbors) {
+          if (!visit.has(next)) {
+            visit.add(next);
+            activeGraph.addNodeUnsafe(next);
+            q.push(next);
+          }
+          activeGraph.addEdgeUnsafe(node, next);
+        }
       }
     }
 
-    return { graph: activeGraph, layer: layer };
+    return activeGraph;
   }
 
   /**
@@ -142,11 +158,22 @@ class ActiveObjectManager {
    */
   choose(arr, pges) {
     if (arr.length === 1) {
-      let g = this.pickupGraph(arr[0], pges[0]);
-      // [todo]
+      let g = this.pickupSingle(arr[0], pges[0]);
+      // [todo] activeGraph 不能直接等于 g，而应进行处理
+      this.activeGraph = g;
+    } else {
+      // [todo] 现在不能选跨页的多个对象
+      let g = this.pickupMulti(arr, pges[0]);
+      // [todo] activeGraph 不能直接等于 g，而应进行处理
       this.activeGraph = g;
     }
   }
+
+  /**
+   * 在顶端添加一个对象
+   * @param {number} obj - 对象 id
+   */
+  addTopObj(obj) {}
 }
 
 module.exports = {
