@@ -43,7 +43,7 @@ class NodeNotExistError extends GraphError {
    * @constructor
    */
   constructor(node) {
-    super(`Node ${node} does not exist.`);
+    super(`Node ${node} is not exist.`);
     this.name = "NodeNotExistError";
     this.node = node;
   }
@@ -73,7 +73,7 @@ class EdgeNotExistError extends GraphError {
    * @constructor
    */
   constructor(from, to) {
-    super(`Edge from ${from} to ${to} does not exist.`);
+    super(`Edge from ${from} to ${to} is not exist.`);
     this.name = "EdgeNotExistError";
     this.from = from;
     this.to = to;
@@ -368,6 +368,28 @@ class DirectedGraph {
    */
   neighborsUnsafe(node) {
     return this.adjList.get(node);
+  }
+
+  /**
+   * 查询节点的前驱点，如果节点不存在，则抛出错误
+   * @param {any} node - 要查询的节点
+   * @throws {NodeNotExistError} 如果节点不存在
+   * @returns {Set<any> | undefined} 该节点的前驱
+   */
+  predecessors(node) {
+    if (!this.hasNode(node)) {
+      throw new NodeNotExistError(node);
+    }
+    return this.predecessorsUnsafe(node);
+  }
+
+  /**
+   * 查询节点的前驱点
+   * @param {any} node - 要查询的节点
+   * @returns {Set<any> | undefined} 该节点的前驱
+   */
+  predecessorsUnsafe(node) {
+    return this.adjListR.get(node);
   }
 
   clear() {

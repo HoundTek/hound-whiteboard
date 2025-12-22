@@ -9,10 +9,10 @@ const board = new BoardManager();
 
 ipc.on("board-opened", (event, path) => {
   console.log("In board-opened event. path: ", path);
-  board.Directory = Directory.parse(path);
-  // [todo] 在这里读取基础的白板配置文件，以供前端使用
-  // 如 width height 等
-  // 应在 path/config.json 处
+  board.root = Directory.parse(path);
+  // [todo] 文件流程已在 BoardManager 中完成
+  // 由于该处是对 BoardManager 的测试，故不调用 load 方法
+  // 而是手动完成加载
 });
 
 const canvas = document.getElementById("canvas");

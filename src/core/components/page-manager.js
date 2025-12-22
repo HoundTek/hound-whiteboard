@@ -1,5 +1,7 @@
 /**
+ * 页面管理器
  * @module page-manager
+ * @author Zhou Chenyu
  */
 
 const { Directory } = require("../../utils/io");
@@ -7,6 +9,8 @@ const { PageObjectManager } = require("./page-object-manager");
 
 /**
  * 页管理器
+ * @class
+ * @author Zhou Chenyu
  */
 class PageManager {
   /**
@@ -14,7 +18,7 @@ class PageManager {
    * @description 包括页对象和层级关系
    * @type {PageObjectManager}
    */
-  objectTier;
+  objectManager;
 
   /**
    * 后一页
@@ -54,7 +58,7 @@ class PageManager {
    * @param {number} pageId - 页 id
    */
   constructor(pageId) {
-    this.objectTier = new PageObjectManager();
+    this.objectManager = new PageObjectManager();
     this.nextPage = null;
     this.prevPage = null;
     this.id = pageId;
@@ -77,7 +81,7 @@ class PageManager {
    * @param {number[]} above - 应在该对象之上的对象
    */
   addObject(obj, below, above) {
-    const graph = this.objectTier.staticGraph;
+    const graph = this.objectManager.staticGraph;
     for (const from of below) {
       if (!graph.hasNode(from)) continue; // 在其它页，不管
       graph.addEdgeUnsafe(from, obj);
@@ -106,12 +110,23 @@ class PageManager {
     return false;
   }
 
-  unload(file) {
-    this.objectTier.unload(file);
-    this.objectTier = null; // 垃圾回收
+  unload() {
+    this.objectManager.unload();
+    this.objectManager = null; // 垃圾回收
     this.isLoad = false;
     this.isTempLoad = false;
     // [todo]
+  }
+
+  unloadTemp() {
+    if (!this.isTempLoad) {
+      // 要么是没加载，要么是完整加载，不能卸载
+      return false;
+    }
+    this.objectManager.unloadTiermap();
+    this.isLoad = false;
+    this.isTempLoad = false;
+    return true;
   }
 
   /**
@@ -121,11 +136,12 @@ class PageManager {
    */
   loadTemp(directory) {
     if (this.isLoad) {
+      // 已加载，不管是完整加载还是临时加载，都不能重复加载
       return false;
     }
     this.isLoad = true;
     this.isTempLoad = true;
-    this.objectTier.loadTiermap(
+    this.objectManager.loadTiermap(
       directory.cd("pages").peek(this.id.toString(), "json")
     );
     return true;
