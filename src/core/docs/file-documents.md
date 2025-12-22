@@ -10,6 +10,7 @@
 
 ```
 .hwb/
+  devices/
   history/
     trash/
       page1/
@@ -41,6 +42,7 @@
     1.json
     2.json
   config.json
+  trace.json
   meta.json
 ```
 
@@ -48,7 +50,7 @@
 
 ### `history/`
 
-`.hwb/history/` 文件夹用来存放所有对象和页的历史版本、已删除的对象和页，以及 hit 的块。
+该文件夹用来存放所有对象和页的历史版本、已删除的对象和页，以及 hit 的块。
 
 #### `trash/`
 
@@ -62,10 +64,37 @@
 
 #### `connection.json`
 
-`connection.json` 内含一个 JSON 对象。存储页的总数，和页与页间的连接顺序。
+该文件存放了页的连接顺序。
 
-由于 `connection.json` 的内容较少且关键，所以它会在一开始就读入内存并一直存在。
+示例：
+```json
+{
+  "count": 8,
+  "order": [1, 6, 3, 4, 2],
+  "size": 5,
+}
+```
+
+其中，`count` 是给 `CounterPool` 使用的
+
+### `config.json`
+
+该文件存放了白板的基础配置。
+
+### `trace.json`
+
+该文件存放了上次打开时的情况。
+
+示例：
+```json
+{
+  "onPage": 3,
+  "offset": 0.1,
+}
+```
 
 ### `meta.json`
+
+白板的元数据
 
 ## 缓存

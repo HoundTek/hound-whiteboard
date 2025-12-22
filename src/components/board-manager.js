@@ -51,9 +51,10 @@ function createEmptyBoard(boardInfo) {
   const boardFile = File.parse(boardInfo.filePath);
   const tempDir = new Directory(boardFile.address, boardFile.name).rmWhenExist().make();
 
+  // [FIXME] 不应在此处创建文件结构，而应由 BoardManager 负责。
+
   // 创建元数据文件
   tempDir.peek("meta", "json").writeJSON(boardMeta);
-  tempDir.peek("histroy", "json").writeJSON([]);
   tempDir.peek("config", "json").writeJSON({
     width: boardInfo.width,
     height: boardInfo.height,

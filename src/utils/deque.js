@@ -1,14 +1,14 @@
 /**
- * @file 队列
- * @module queue
+ * @file 双端队列
+ * @module deque
  * @author Zhou Chenyu
  */
 
 /**
- * 队列
+ * 双端队列
  * @author Zhou Chenyu
  */
-class Queue {
+class Deque {
   /**
    * 循环数组存储元素
    * @type {Array<any>}
@@ -51,17 +51,17 @@ class Queue {
    * @constructor
    */
   constructor() {
-    this.capacity = Queue.INITIAL_CAPACITY;
+    this.capacity = Deque.INITIAL_CAPACITY;
     this.elements = new Array(this.capacity);
     this.head = 0;
     this.tail = 0;
   }
 
   /**
-   * 入队
+   * 从队尾入队
    * @param {any} elem - 要入队的元素
    */
-  push(elem) {
+  pushBack(elem) {
     // 检查是否需要扩容（预留一个空位用于区分满和空）
     if ((this.tail + 1) % this.capacity === this.head) {
       this.#resize();
@@ -71,17 +71,47 @@ class Queue {
   }
 
   /**
-   * 出队
+   * 从队头入队
+   * @param {any} elem - 要入队的元素
+   */
+  pushFront(elem) {
+    // 检查是否需要扩容（预留一个空位用于区分满和空）
+    if ((this.tail + 1) % this.capacity === this.head) {
+      this.#resize();
+    }
+    // head 向前移动（循环）
+    this.head = (this.head - 1 + this.capacity) % this.capacity;
+    this.elements[this.head] = elem;
+  }
+
+  /**
+   * 从队头出队
    * @throws {RangeError} 当队列为空时
    * @returns {any}
    */
-  pop() {
+  popFront() {
     if (this.empty()) {
-      throw new RangeError("Queue is empty");
+      throw new RangeError("Deque is empty");
     }
     const item = this.elements[this.head];
     this.elements[this.head] = undefined; // 避免内存泄漏
     this.head = (this.head + 1) % this.capacity;
+    return item;
+  }
+
+  /**
+   * 从队尾出队
+   * @throws {RangeError} 当队列为空时
+   * @returns {any}
+   */
+  popBack() {
+    if (this.empty()) {
+      throw new RangeError("Deque is empty");
+    }
+    // tail 向前移动（循环）
+    this.tail = (this.tail - 1 + this.capacity) % this.capacity;
+    const item = this.elements[this.tail];
+    this.elements[this.tail] = undefined; // 避免内存泄漏
     return item;
   }
 
@@ -106,18 +136,32 @@ class Queue {
    * @throws {RangeError} 当队列为空时
    * @returns {any}
    */
-  peek() {
+  peekFront() {
     if (this.empty()) {
-      throw new RangeError("Queue is empty");
+      throw new RangeError("Deque is empty");
     }
     return this.elements[this.head];
+  }
+
+  /**
+   * 获取队尾元素
+   * @throws {RangeError} 当队列为空时
+   * @returns {any}
+   */
+  peekBack() {
+    if (this.empty()) {
+      throw new RangeError("Deque is empty");
+    }
+    // 队尾元素在 tail - 1 位置
+    const backIndex = (this.tail - 1 + this.capacity) % this.capacity;
+    return this.elements[backIndex];
   }
 
   /**
    * 清空队列
    */
   clear() {
-    this.capacity = Queue.INITIAL_CAPACITY;
+    this.capacity = Deque.INITIAL_CAPACITY;
     this.elements = new Array(this.capacity);
     this.head = 0;
     this.tail = 0;
@@ -129,7 +173,7 @@ class Queue {
    */
   #resize() {
     const oldCapacity = this.capacity;
-    const newCapacity = oldCapacity * Queue.GROWTH_FACTOR;
+    const newCapacity = oldCapacity * Deque.GROWTH_FACTOR;
     const newElements = new Array(newCapacity);
 
     // 将元素复制到新数组（保持顺序）
@@ -148,5 +192,5 @@ class Queue {
 }
 
 module.exports = {
-  Queue,
+  Deque,
 };
