@@ -6,6 +6,7 @@
 
 const { RandomNumberPool } = require("../../utils/algorithm");
 const { Deque } = require("../../utils/deque");
+const { Directory } = require("../../utils/io");
 const { Queue } = require("../../utils/queue");
 const { CounterPool } = require("../utils/counter-pool");
 const { DirectedGraph } = require("../utils/directed-graph");
@@ -257,10 +258,8 @@ class ActiveObjectManager {
       let indexAbove = this.layerIndex.get(layerAbove);
       if (indexAbove == 0) {
         layerBelow = undefined;
-      } else if (indexAbove != -1) {
-        layerBelow = this.layerOrder[indexAbove - 1];
       } else {
-        throw new Error(`Layer ${layerAbove} is not exist.`);
+        layerBelow = this.layerOrder[indexAbove - 1];
       }
     } else {
       layerBelow = this.layerOrder[this.layerOrder.length - 1];
@@ -320,6 +319,13 @@ class ActiveObjectManager {
   }
 }
 
+/**
+ * 页加载管理器
+ * @class
+ * @author Zhou Chenyu
+ * @description 管理页的临时加载与卸载。只加载其层叠图，且不可以修改保存。
+ * @todo
+ */
 class PageLoadManager {
   /**
    * 已临时加载的页
@@ -342,9 +348,17 @@ class PageLoadManager {
   pagesLoadedLimit;
 
   /**
-   * @param {number} [limit = 4] - 可以加载的页数上限
+   * 加载目录
+   * @type {Directory}
    */
-  constructor(limit = 4) {
+  loadDirectory;
+
+  /**
+   * @param {number} [limit = 4] - 可以加载的页数上限
+   * @param {Directory} loadDirectory - 加载目录
+   */
+  constructor(loadDirectory, limit = 4) {
+    this.loadDirectory = loadDirectory;
     this.pagesLoadedLimit = limit;
     this.pagesLoaded = new Deque();
   }
@@ -364,12 +378,13 @@ class PageLoadManager {
     // 加载当前页
     this.pagesLoaded = new Deque();
     this.pagesLoaded.pushBack(page);
-    page.objectManager.loadTiermap(/* [todo] file */);
+    page.objectManager.loadTiermap(
+      this.loadDirectory.cd("pages").peek(page.id.toString(), "json")
+    );
   }
 
   /**
    * 将当前页右移
-   * @todo
    */
   moveToRight() {
     // 加载右页
@@ -399,14 +414,15 @@ class PageLoadManager {
       throw new Error("Next page is not exist.");
     }
     if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
+      pageToLoad.objectManager.loadTiermap(
+        this.loadDirectory.cd("pages").peek(pageToLoad.id.toString(), "json")
+      );
       this.pagesLoaded.pushBack(pageToLoad);
     }
   }
 
   /**
    * 将当前页左移
-   * @todo
    */
   moveToLeft() {
     // 加载左页
@@ -436,7 +452,9 @@ class PageLoadManager {
       throw new Error("Previous page is not exist.");
     }
     if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
+      pageToLoad.objectManager.loadTiermap(
+        this.loadDirectory.cd("pages").peek(pageToLoad.id.toString(), "json")
+      );
       this.pagesLoaded.pushFront(pageToLoad);
     }
   }

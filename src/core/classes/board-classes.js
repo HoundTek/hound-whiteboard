@@ -8,7 +8,16 @@
  * @author Zhou Chenyu
  */
 
-const { Quark, TextQuark, PolygonQuark, ImageQuark, BasicObject, ZeroDimensionObject, OneDimensionObject, TwoDimensionObject } = require("./basic-classes");
+const {
+  Quark,
+  TextQuark,
+  PolygonQuark,
+  ImageQuark,
+  BasicObject,
+  ZeroDimensionObject,
+  OneDimensionObject,
+  TwoDimensionObject,
+} = require("./basic-classes");
 const { Matrix, Point } = require("../../utils/math");
 
 /**
@@ -94,7 +103,14 @@ class PolygonObject extends ZeroDimensionObject {
    */
   set points(points) {
     this.points = points;
-    this.#transformedPoints = points.map((p) => {Point.mulMatrix(this.transform, p);});
+    this.#transformedPoints = points.map((p) => {
+      Point.mulMatrix(this.transform, p);
+    });
+    this.calculateConvexHull();
+  }
+
+  calculateConvexHull() {
+    // [todo] 实现凸包计算算法
   }
 
   /**
