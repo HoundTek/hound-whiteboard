@@ -1,4 +1,4 @@
-const { Chain, Node } = require("../src/utils/chain");
+const { Chain, Node } = require("./chain");
 
 describe("Node", () => {
   test("构造函数应正确初始化 value 和 next", () => {

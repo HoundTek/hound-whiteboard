@@ -1,4 +1,4 @@
-const { Deque } = require("../src/utils/deque");
+const { Deque } = require("./deque");
 
 describe("Deque", () => {
   let deque = new Deque();

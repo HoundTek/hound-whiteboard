@@ -4,7 +4,7 @@
 
 ## Container
 
-Container 类是用来包装一、二维对象的容器类。派生于 [ZeroDimensionObject](./basic-classes-document.md#zero-dimension-object)。
+Container 类是用来包装一、二维对象的容器类。派生于 [ZeroDimensionObject](../basic-classes-document.md#zero-dimension-object)。
 
 ### 功能
 
@@ -19,11 +19,6 @@ Container 类是用来包装一、二维对象的容器类。派生于 [ZeroDime
 ### 属性
 - `child` - 被容器包装的一维对象或二维对象
 
-## PolygonObject
+## Graph
 
-PolygonObject 类是白板上的多边形对象类，是图形的一种，由多个顶点组成。派生于 [ZeroDimensionObject](./basic-classes-document.md#zero-dimension-object)。
-
-### 属性
-- `points` - 多边形对象的顶点集
-- `transformedPoints` - 经变换后多边形对象的顶点集
-- `color` - 多边形对象的颜色
+见 [graph-classes-document.md](./graph/graph-classes-document.md)

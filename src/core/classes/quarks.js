@@ -6,7 +6,7 @@
  * - 多边形渲染单元 PolygonQuark: Quark
  * - 文本渲染单元 TextQuark: Quark
  * - 图像渲染单元 ImageQuark: Quark
- * @module basic-classes
+ * @module quarks
  * @author Zhou Chenyu
  */
 

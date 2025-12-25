@@ -1,4 +1,4 @@
-const { RandomNumberPool } = require("../src/utils/algorithm");
+const { RandomNumberPool } = require("./algorithm");
 const { randomInt } = require("crypto");
 
 // 模拟 randomInt 以使测试具有确定性

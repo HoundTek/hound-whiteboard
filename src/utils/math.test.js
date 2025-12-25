@@ -1,4 +1,4 @@
-const { Point, Matrix } = require("../src/utils/math");
+const { Point, Matrix } = require("./math");
 
 describe("Point Class", () => {
   describe("构造函数", () => {

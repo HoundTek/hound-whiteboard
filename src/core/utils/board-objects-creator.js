@@ -6,19 +6,19 @@
  */
 
 const { Point } = require("../../utils/math");
-const BoardClasses = require("../classes/board-classes");
+const { PolygonObject } = require("../classes/board/graph/polygon");
 
 /**
  * 生成一个新的多边形对象
  * @param {Point} p - 多边形逻辑左上角的绝对位置
  * @param {Point[]} points - 多边形各顶点相对其左上角的相对位置
- * @returns {BoardClasses.PolygonObject} 生成的多边形对象
+ * @returns {PolygonObject} 生成的多边形对象
  * @author Zhou Chenyu
  */
 function generetePolygonObject(p, points) {
-	return new BoardClasses.PolygonObject(p, 0, 0, points);
+  return new PolygonObject(p, 0, 0, points);
 }
 
 module.exports = {
-	generetePolygonObject,
+  generetePolygonObject,
 };
