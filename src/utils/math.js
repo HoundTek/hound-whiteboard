@@ -1,6 +1,7 @@
 /**
- * @file 数学模块
- * @description 定义一些数学对象的类，包括
+ * @file 二维数学模块
+ * @description
+ * 提供二维平面上点和矩阵的表示与操作功能，包括:
  * - 二维点 Point
  * - 2x2 矩阵 Matrix
  * @module math
@@ -10,7 +11,7 @@
 /**
  * 二维点
  * @class
- * @description 表示二维平面上的一个点，包含 x 和 y 坐标，支持矩阵变换
+ * @description 表示二维平面上的一个点，包含 X 和 Y 坐标，支持矩阵变换
  * @author Zhou Chenyu
  */
 class Point {
@@ -116,7 +117,7 @@ class Point {
 
   /**
    * 将矩阵与点相乘
-   * @description 执行矩阵-向量乘法，返回新的点而不修改原点
+   * @description 执行矩阵-向量乘法，返回新的 Point 实例而非修改传入点
    * @param {Matrix} m - 2x2 变换矩阵
    * @param {Point} p - 要变换的点
    * @returns {Point} 变换后的新点
@@ -132,10 +133,10 @@ class Point {
 
   /**
    * 判断两点是否在精度范围内相等
-   * @param {Point} a - 一个点
-   * @param {Point} b - 另一个点
-   * @param {number} eps - 精度，默认为 1e-10
-   * @returns {boolean} 是否在精度范围内相等，若相等，返回 true，否则返回 false
+   * @param {Point} a - 第一个点
+   * @param {Point} b - 第二个点
+   * @param {number} [eps = 1e-10] - 允许的误差范围
+   * @returns {boolean} 如果两个点在误差范围内相等则返回 true，否则返回 false
    * @static
    * @example
    * const p1 = new Point(1, 2);
@@ -152,10 +153,10 @@ class Point {
   }
 
   /**
-   * 计算两点间的距离
-   * @param {Point} a - 一个点
-   * @param {Point} b - 另一个点
-   * @returns {number} 两点间距离
+   * 计算两点之间的距离
+   * @param {Point} a - 第一个点
+   * @param {Point} b - 第二个点
+   * @returns {number} 两点之间的距离
    * @static
    * @example
    * const p1 = new Point(0, 0);
@@ -167,10 +168,10 @@ class Point {
   }
 
   /**
-   * 计算两点间的距离的平方
-   * @param {Point} a - 一个点
-   * @param {Point} b - 另一个点
-   * @returns {number} 两点间距离的平方
+   * 计算两点之间距离的平方
+   * @param {Point} a - 第一个点
+   * @param {Point} b - 第二个点
+   * @returns {number} 两点之间距离的平方
    * @static
    * @example
    * const p1 = new Point(1, 0)
@@ -552,18 +553,13 @@ class Matrix {
     if (Math.abs(det) < 0.000001) {
       throw new Error("Matrix is not invertible (determinant is zero)");
     }
-    let inv_det = 1.0 / det;
-    return new Matrix(
-      this.d * inv_det,
-      -this.b * inv_det,
-      -this.c * inv_det,
-      this.a * inv_det
-    );
+    return new Matrix(this.d, -this.b, -this.c, this.a).scale(1.0 / det);
   }
 
   /**
    * 判断两矩阵是否在精度范围内相等
-   * @param {Matrix} other - 要与之比较的矩阵
+   * @param {Matrix} a - 第一个矩阵
+   * @param {Matrix} b - 第二个矩阵
    * @param {number} eps - 精度，默认为 1e-10
    * @returns {boolean}
    * @example
@@ -573,12 +569,12 @@ class Matrix {
    * console.log(Matrix.nearlyEq(m1, m2, 0.01)); // false
    * console.log(Matrix.nearlyEq(m1, m2, 0.1)); // true
    */
-  nearlyEq(other, eps = 1e-10) {
+  static nearlyEq(a, b, eps = 1e-10) {
     return (
-      Math.abs(this.a - other.a) <= Math.abs(eps) &&
-      Math.abs(this.b - other.b) <= Math.abs(eps) &&
-      Math.abs(this.c - other.c) <= Math.abs(eps) &&
-      Math.abs(this.d - other.d) <= Math.abs(eps)
+      Math.abs(a.a - b.a) <= Math.abs(eps) &&
+      Math.abs(a.b - b.b) <= Math.abs(eps) &&
+      Math.abs(a.c - b.c) <= Math.abs(eps) &&
+      Math.abs(a.d - b.d) <= Math.abs(eps)
     );
   }
 }

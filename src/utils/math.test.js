@@ -453,32 +453,32 @@ describe("Matrix Class", () => {
     test("应能正确判断两矩阵是否在精度范围内相等", () => {
       const m1 = new Matrix(5, 10, 15, 20);
       const m2 = new Matrix(5.0001, 10, 15, 20);
-      expect(m1.nearlyEq(m2, 0.0001)).toBe(true);
-      expect(m1.nearlyEq(m2, 0.0002)).toBe(true);
-      expect(m1.nearlyEq(m2, 0.00005)).toBe(false);
+      expect(Matrix.nearlyEq(m1, m2, 0.0001)).toBe(true);
+      expect(Matrix.nearlyEq(m1, m2, 0.0002)).toBe(true);
+      expect(Matrix.nearlyEq(m1, m2, 0.00005)).toBe(false);
     });
 
     test("应能正确处理精度为零的情况", () => {
       const m1 = new Matrix(5, 10, 15, 20);
       const m2 = new Matrix(5, 10, 15, 20);
       const m3 = new Matrix(5.00001, 10, 15, 20);
-      expect(m1.nearlyEq(m2, 0)).toBe(true);
-      expect(m1.nearlyEq(m3, 0)).toBe(false);
+      expect(Matrix.nearlyEq(m1, m2, 0)).toBe(true);
+      expect(Matrix.nearlyEq(m1, m3, 0)).toBe(false);
     });
 
     test("应能正确处理精度为负的情况", () => {
       const m1 = new Matrix(5, 10, 15, 20);
       const m2 = new Matrix(5.0001, 10, 15, 20);
-      expect(m1.nearlyEq(m2, -0.0001)).toBe(true);
-      expect(m1.nearlyEq(m2, -0.0002)).toBe(true);
-      expect(m1.nearlyEq(m2, -0.00005)).toBe(false);
+      expect(Matrix.nearlyEq(m1, m2, -0.0001)).toBe(true);
+      expect(Matrix.nearlyEq(m1, m2, -0.0002)).toBe(true);
+      expect(Matrix.nearlyEq(m1, m2, -0.00005)).toBe(false);
     });
 
     test("应能判断所有元素都在精度范围内", () => {
       const m1 = new Matrix(1, 2, 3, 4);
       const m2 = new Matrix(1.0001, 2.0001, 3.0001, 4.0001);
-      expect(m1.nearlyEq(m2, 0.00015)).toBe(true);
-      expect(m1.nearlyEq(m2, 0.00005)).toBe(false);
+      expect(Matrix.nearlyEq(m1, m2, 0.00015)).toBe(true);
+      expect(Matrix.nearlyEq(m1, m2, 0.00005)).toBe(false);
     });
   });
 
