@@ -29,7 +29,6 @@ class PolygonObject extends GraphObject {
     super(p, id, pageId, false, true);
     if (points) {
       this.setPoints(points);
-      this.#transformedPoints = points;
     }
   }
 
@@ -49,10 +48,21 @@ class PolygonObject extends GraphObject {
    */
   setPoints(points) {
     this.points = points;
-    this.#transformedPoints = points.map((p) => {
-      Point.mulMatrix(this.transform, p);
-    });
+    this.#transformedPoints = points.map((p) =>
+      Point.mulMatrix(this.transform, p)
+    );
     this.calculateConvexHull();
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (let p of this.#transformedPoints) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    this.rectangle = new Matrix(minX, minY, maxX, maxY);
   }
 
   /**
@@ -134,6 +144,50 @@ class PolygonObject extends GraphObject {
     let quark = new PolygonQuark(this.position, this.#transformedPoints);
     quark.color = this.color;
     return [quark];
+  }
+
+  /**
+   * @description 使用绳钉法判断点是否在多边形内
+   * @returns {boolean} 点是否在多边形内
+   */
+  isPointIntersect(p) {
+    // 先用矩形框进行初步检测
+    if (!super.isPointIntersect(p)) {
+      return false;
+    }
+
+    let counter = 0;
+    for (let i = 0; i < this.#transformedPoints.length; i++) {
+      let first = this.#transformedPoints[i];
+      let second =
+        this.#transformedPoints[(i + 1) % this.#transformedPoints.length];
+      if (first.x < second.x) {
+        if (p.x < first.x || second.x < p.x) {
+          continue;
+        }
+      } else {
+        if (p.x < second.x || first.x < p.x) {
+          continue;
+        }
+      }
+
+      if (first.x == p.x && first.y == p.y) {
+        return true; // 在顶点上
+      }
+
+      let k = (second.y - first.y) / (second.x - first.x);
+      let ly = first.y + k * (p.x - first.x);
+      if (p.y < ly) {
+        if (first.x <= second.x) {
+          counter++;
+        } else {
+          counter--;
+        }
+      } else if (p.y == ly) {
+        return true; // 在边上
+      }
+    }
+    return counter != 0;
   }
 }
 

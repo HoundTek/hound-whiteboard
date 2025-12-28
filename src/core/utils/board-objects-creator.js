@@ -6,7 +6,7 @@
  */
 
 const { Point } = require("../../utils/math");
-const { PolygonObject } = require("../classes/board/graph/polygon");
+const { PolygonObject } = require("../objects/board/graph/polygon");
 
 /**
  * 生成一个新的多边形对象

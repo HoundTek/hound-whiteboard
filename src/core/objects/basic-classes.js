@@ -54,6 +54,7 @@ class BasicObject {
    * 对象的矩形边界范围
    * @type {Matrix}
    * @description 存储对象的边界矩形，用于碰撞检测和选择。
+   * 格式为 [[minX, maxX], [minY, maxY]]。
    */
   rectangle;
 
@@ -70,6 +71,21 @@ class BasicObject {
    */
   calculateConvexHull() {
     this.convexHull = this.rectangle;
+  }
+
+  /**
+   * 判断某点是否在对象内
+   * @param {Point} p - 要检测的点
+   * @returns {boolean} 点是否在对象内
+   * @description 基类使用矩形边界进行检测，子类可重写此方法以实现更精确的检测逻辑。
+   */
+  isPointIntersect(p) {
+    return !(
+      this.rectangle.a <= p.x &&
+      p.x <= this.rectangle.b &&
+      this.rectangle.c <= p.y &&
+      p.y <= this.rectangle.d
+    );
   }
 
   /**

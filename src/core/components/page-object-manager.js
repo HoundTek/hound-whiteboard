@@ -5,7 +5,7 @@
  */
 
 const { DirectedGraph } = require("../utils/directed-graph");
-const { BasicObject } = require("../classes/basic-classes");
+const { BasicObject } = require("../objects/basic-classes");
 const { Directory, File } = require("../../utils/io");
 
 /**

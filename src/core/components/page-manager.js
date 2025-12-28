@@ -5,6 +5,7 @@
  */
 
 const { Directory } = require("../../utils/io");
+const { BasicObject } = require("../objects/basic-classes");
 const { PageObjectManager } = require("./page-object-manager");
 
 /**
@@ -22,13 +23,13 @@ class PageManager {
 
   /**
    * 后一页
-   * @type {PageManager}
+   * @type {PageManager | undefined}
    */
   nextPage;
 
   /**
    * 前一页
-   * @type {PageManager}
+   * @type {PageManager | undefined}
    */
   prevPage;
 
@@ -59,15 +60,15 @@ class PageManager {
    */
   constructor(pageId) {
     this.objectManager = new PageObjectManager();
-    this.nextPage = null;
-    this.prevPage = null;
+    this.nextPage = undefined;
+    this.prevPage = undefined;
     this.id = pageId;
   }
 
   /**
    * 连接两页
-   * @param {PageManager} first 前一页
-   * @param {PageManager} second 后一页
+   * @param {PageManager | undefined} first 前一页
+   * @param {PageManager | undefined} second 后一页
    */
   static connectTwoPage(first, second) {
     first.nextPage = second;
@@ -90,6 +91,18 @@ class PageManager {
       if (!graph.hasNode(to)) continue; // 在其它页，不管
       graph.addEdgeUnsafe(obj, to);
     }
+  }
+
+  /**
+   * 
+   * @param {BasicObject} obj - 要添加的对象
+   */
+  addNewObject(obj) {
+    // [todo] 计算新对象是否与现有对象交集
+    
+
+    // [todo] 更新层叠图
+    this.objectManager.staticGraph.addNode(obj.id);
   }
 
   /**

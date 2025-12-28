@@ -6,6 +6,7 @@
 
 const { Deque } = require("../../utils/deque");
 const { Directory } = require("../../utils/io");
+const { BasicObject } = require("../objects/basic-classes");
 const { CounterPool } = require("../utils/counter-pool");
 const { DirectedGraph } = require("../utils/directed-graph");
 const { UndoTree } = require("../utils/undo-tree-core");
@@ -87,16 +88,37 @@ class BoardManager {
     this.activeObjectManager = new ActiveObjectManager();
   }
 
+  /**
+   * 添加新页
+   * @todo
+   * @returns {PageManager}
+   */
   appendPage() {
-    let page = new PageManager();
-    this.pageMap.push(page);
+    let page = new PageManager(this.pageCounterPool.generate());
+
+    // [todo] 创建页文件夹和必要文件
+
+    // [todo] 初始化页内容（如模板等）
+
+    // 加入页映射和链表
+    this.pageMap.set(page.id, page);
+    if (this.pageOrder.length > 0) {
+      let lastPage = this.pageMap.get(
+        this.pageOrder[this.pageOrder.length - 1]
+      );
+      PageManager.connectTwoPage(lastPage, page)
+    }
+    this.pageOrder.push(page.id);
+
+    // [todo] 加入 Undotree
     return page;
   }
 
   /**
    * 加载白板
+   * @description 加载白板的 meta、config 以及页等信息
    * @param {Directory} directory - 白板根目录
-   * @return {BoardManager}
+   * @return {BoardManager} 返回自身以支持链式调用
    * @todo
    */
   load(directory) {
@@ -247,6 +269,20 @@ class BoardManager {
     directory.cd("pages").rmWhenExist().make();
     // [todo] 创建文件结构
     return manager;
+  }
+
+  /**
+   * 
+   * @param {BasicObject} obj - 要添加的对象
+   * @param {number} pageId - 要添加到的页 id
+   */
+  addObject(obj, pageId) {
+    const page = this.pageMap.get(pageId);
+    if (!page) {
+      console.warn(`Page ${pageId} does not exist.`);
+      throw new Error("Page not exist.");
+    }
+    page.addObject(obj);
   }
 }
 
