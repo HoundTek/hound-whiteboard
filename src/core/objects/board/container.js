@@ -10,7 +10,6 @@ const {
   TwoDimensionObject,
 } = require("../basic-classes");
 
-const { Quark } = require("../quarks");
 const { Point } = require("../../../utils/math");
 
 /**
@@ -51,12 +50,11 @@ class Container extends ZeroDimensionObject {
   }
 
   /**
-   * 获取容器的渲染 Quark
-   * @returns {Quark[]} 子对象的 Quark
-   * @description 容器本身不渲染，而是返回子对象的 Quark
+   * 渲染容器及其子对象
+   * @param {CanvasRenderingContext2D} ctx - 渲染上下文
    */
-  getQuarks() {
-    return this.child.getQuarks();
+  render(ctx) {
+    this.child.render(ctx);
   }
 }
 

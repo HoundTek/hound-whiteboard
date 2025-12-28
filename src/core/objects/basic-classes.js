@@ -11,7 +11,6 @@
  */
 
 const { Matrix, Point } = require("../../utils/math");
-const { Quark, ImageQuark, PolygonQuark, TextQuark } = require("./quarks");
 
 /**
  * 所有白板对象的抽象基类
@@ -89,47 +88,6 @@ class BasicObject {
   }
 
   /**
-   * 对象在变换前的几何中心
-   * @private
-   * @type {Point}
-   * @description 存储对象的原始几何中心点。
-   */
-  #center;
-
-  /**
-   * 对象的旋转中心点
-   * @private
-   * @type {Point}
-   * @description 对象旋转时的中心点，仅对有向对象有效。
-   */
-  #rotateCenter;
-
-  /**
-   * 获取对象的旋转中心
-   * @returns {Point} 旋转中心点
-   * @description 对于有向对象返回自定义旋转中心，否则返回几何中心。
-   */
-  get rotateCenter() {
-    if (this.isDirected) return this.#rotateCenter;
-    return this.#center.applyTransform(this.transform.inv());
-  }
-
-  /**
-   * 设置对象的旋转中心
-   * @param {Point} rotateCenter - 新的旋转中心点
-   * @throws {Error} 当对象不是有向对象时抛出错误
-   */
-  set rotateCenter(rotateCenter) {
-    if (this.#isDirected) {
-      this.#rotateCenter = rotateCenter;
-    } else {
-      throw new Error(
-        "Error: the object is not directed so that it's rotate center can not be moved"
-      );
-    }
-  }
-
-  /**
    * 标识对象是否是有向对象
    * @private
    * @type {boolean}
@@ -199,12 +157,13 @@ class BasicObject {
   }
 
   /**
-   * 获取该对象的渲染 Quark
+   * 渲染对象到画布上下文
    * @abstract
-   * @returns {Quark[]} 多个 Quark 对象
-   * @description 子类必须实现此方法以返回用于渲染的 Quark
+   * @param {CanvasRenderingContext2D} ctx - 画布上下文
+   * @description 子类必须实现此方法以支持对象的渲染
+   * @throws {Error} 基类未实现此方法
    */
-  getQuarks() {
+  render(ctx) {
     throw new Error("Method not implemented.");
   }
 

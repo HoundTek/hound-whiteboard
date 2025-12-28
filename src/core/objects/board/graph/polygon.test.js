@@ -278,5 +278,21 @@ describe("PolygonObject", () => {
       expect(polygon.isPointIntersect(insidePoint)).toBe(true);
       expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
     });
+
+    test("应正确处理位置移动后的多边形的点相交检测", () => {
+      const points = [
+        { x: 0, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 4 },
+        { x: 0, y: 4 },
+      ].map((p) => Point.parse(p));
+      const polygon = new PolygonObject(new Point(10, 10), 1, 1, points);
+
+      const insidePoint = Point.parse({ x: 12, y: 12 });
+      const outsidePoint = Point.parse({ x: 5, y: 5 });
+
+      expect(polygon.isPointIntersect(insidePoint)).toBe(true);
+      expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
+    });
   });
 });

@@ -4,7 +4,6 @@
  * @author Zhou Chenyu
  */
 
-const { Quark, TextQuark } = require("../quarks");
 const { OneDimensionObject } = require("../basic-classes");
 const { Point } = require("../../../utils/math");
 
@@ -66,17 +65,24 @@ class TextObject extends OneDimensionObject {
   font = "Arial";
 
   /**
-   * @returns {Quark[]}
+   * 渲染文字到画布上下文
+   * @param {CanvasRenderingContext2D} ctx - 画布上下文
    */
-  getQuarks() {
-    let quark = new TextQuark(
-      this.position,
-      this.text,
-      this.size,
-      this.color,
-      this.font
+  render(ctx) {
+    ctx.save();
+    ctx.setTransform(
+      this.transform.a,
+      this.transform.b,
+      this.transform.c,
+      this.transform.d,
+      this.position.x,
+      this.position.y
     );
-    return [quark];
+    ctx.fillStyle = this.color;
+    ctx.font = `${this.size}px ${this.font}`;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillText(this.text, 0, 0);
+    ctx.restore();
   }
 }
 

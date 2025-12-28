@@ -4,7 +4,6 @@
  * @author Zhou Chenyu
  */
 
-const { Quark, PolygonQuark } = require("../../quarks");
 const { GraphObject } = require("./graph");
 const { Matrix, Point } = require("../../../../utils/math");
 
@@ -138,16 +137,37 @@ class PolygonObject extends GraphObject {
   color = "#000000";
 
   /**
-   * @returns {Quark[]}
+   *
+   * @param {CanvasRenderingContext2D} ctx
    */
-  getQuarks() {
-    let quark = new PolygonQuark(this.position, this.#transformedPoints);
-    quark.color = this.color;
-    return [quark];
+  render(ctx) {
+    if (!this.points || this.points.length === 0) {
+      return;
+    }
+    ctx.save();
+    ctx.setTransform(
+      this.transform.a,
+      this.transform.b,
+      this.transform.c,
+      this.transform.d,
+      this.position.x,
+      this.position.y
+    );
+    ctx.fillStyle = this.color;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.beginPath();
+    ctx.moveTo(this.points[0].x, this.points[0].y);
+    for (let i = 1; i < this.points.length; i++) {
+      ctx.lineTo(this.points[i].x, this.points[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   /**
-   * @description 使用绳钉法判断点是否在多边形内
+   * @param {Point} p - 要检测的点
+   * @description 判断原则：若将该多边形用 canvas 绘制出来，点 p 是否会落在填充区域内或边界上。
    * @returns {boolean} 点是否在多边形内
    */
   isPointIntersect(p) {
@@ -155,6 +175,9 @@ class PolygonObject extends GraphObject {
     if (!super.isPointIntersect(p)) {
       return false;
     }
+
+    // 将点转换到多边形的局部坐标系中（减掉相对位置）
+    p = p.sub(this.position);
 
     let counter = 0;
     for (let i = 0; i < this.#transformedPoints.length; i++) {
@@ -177,14 +200,14 @@ class PolygonObject extends GraphObject {
 
       let k = (second.y - first.y) / (second.x - first.x);
       let ly = first.y + k * (p.x - first.x);
-      if (p.y < ly) {
+      if (p.y > ly) {
         if (first.x <= second.x) {
           counter++;
         } else {
           counter--;
         }
-      } else if (p.y == ly) {
-        return true; // 在边上
+      } else if (p.y >= ly - 1e-5) {
+        return true; // 在边上（允许一定误差）
       }
     }
     return counter != 0;
