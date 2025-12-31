@@ -2,8 +2,9 @@ const { Matrix, Point } = require("../../utils/math");
 const { BoardManager } = require("../../core/components/board-manager");
 const { PageManager } = require("../../core/components/page-manager");
 const { Directory } = require("../../utils/io");
-const { PolygonObject } = require("../../core/objects/board/graph/polygon");
 const { TextObject } = require("../../core/objects/board/text");
+const { PolygonCreatorTool } = require("../../core/tools/creator/polygon");
+const { CounterPool } = require("../../core/utils/counter-pool");
 
 const board = new BoardManager();
 
@@ -27,28 +28,45 @@ canvas.height = 600;
 
 console.log(board);
 
-let outerTriangle = new PolygonObject(new Point(0, 0), 1, 1);
-outerTriangle.setPoints(
-  [
-    { x: 0, y: 0 },
-    { x: 0, y: 100 },
-    { x: 100, y: 100 },
-  ].map((p) => Point.parse(p))
-);
+let tool = new PolygonCreatorTool();
+let pool = new CounterPool();
+
+tool.create(new Point(0, 0), pool.generate(), 1);
+let outerTriangle = tool.obj;
+[
+  { x: 0, y: 0 },
+  { x: 0, y: 100 },
+  { x: 100, y: 100 },
+]
+  .map((p) => Point.parse(p))
+  .forEach((p) => {
+    // 模拟用户绘制过程（轻触）
+    tool.start(p);
+    tool.end(p);
+  });
 outerTriangle.color = "#000000";
 outerTriangle.setTransform(new Matrix(2, 0, 0, 2));
 outerTriangle.render(ctx);
+console.log("outer triangle", outerTriangle);
 
-let innerTriangle = new PolygonObject(new Point(10, 20), 2, 1);
-innerTriangle.setPoints(
-  [
-    { x: 0, y: 0 },
-    { x: 0, y: 70 },
-    { x: 70, y: 70 },
-  ].map((p) => Point.parse(p))
-);
+tool = new PolygonCreatorTool();
+tool.create(new Point(10, 20), pool.generate(), 1);
+
+let innerTriangle = tool.obj;
+[
+  { x: 0, y: 0 },
+  { x: 0, y: 70 },
+  { x: 70, y: 70 },
+]
+  .map((p) => Point.parse(p))
+  .forEach((p) => {
+    // 模拟用户绘制过程（轻触）
+    tool.start(p);
+    tool.end(p);
+  });
 innerTriangle.color = "#ffffff";
 innerTriangle.render(ctx);
+console.log("inner triangle", innerTriangle);
 
 let testText = new TextObject(new Point(100, 100), 3, 1);
 testText.text = "Triangles with same color flock together.";
