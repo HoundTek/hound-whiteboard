@@ -5,7 +5,7 @@
  * - 获取应用配置
  */
 
-import { directory } from "../utils/io";
+import { Directory } from "../utils/io";
 import { app } from "electron";
 
 let userDataDir, configFile;
@@ -15,7 +15,7 @@ let userDataDir, configFile;
  * @function init
  */
 function init() {
-  userDataDir = directory.parse(app.getPath("userData"));
+  userDataDir = Directory.parse(app.getPath("userData"));
   configFile = userDataDir.cd("data").existOrMake().peek("config", "json");
 }
 

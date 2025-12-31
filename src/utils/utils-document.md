@@ -18,7 +18,7 @@
 
 ### 主要类:
 
-- `randomNumberPool` - 不重复随机数池类
+- `RandomNumberPool` - 不重复随机数池类
 
 ### 依赖:
 
@@ -65,13 +65,13 @@
 
 ### 主要类:
 
-- `directory` - 目录操作类
+- `Directory` - 目录操作类
 - `file` - 文件操作类
 - `fileNameRandomPool` - 随机文件名池类
 
 ### 主要方法:
 
-- `directory` 类方法: `getPath()`, `cd()`, `make()`, `exist()`, `ls()`, `cp()`, `mv()`, `rm()`
+- `Directory` 类方法: `getPath()`, `cd()`, `make()`, `exist()`, `ls()`, `cp()`, `mv()`, `rm()`
 - `file` 类方法: `getPath()`, `cat()`, `write()`, `exist()`, `cp()`, `mv()`, `rm()`
 - `fileNameRandomPool` 类方法: `generate()`, `add()`, `remove()`, `rename()`
 

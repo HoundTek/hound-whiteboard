@@ -8,7 +8,7 @@
  */
 
 const winManager = require('./window-manager');
-const { file, directory, fileNameRandomPool } = require('../utils/io');
+const { File, Directory, FilenameRandomPool } = require('../utils/io');
 
 let templatesDir, templatePool;
 const templateMeta = {
@@ -22,16 +22,16 @@ const templateMeta = {
  * @param {Object} app - Electron应用对象
  */
 function init(app) {
-  const userDataDir = directory.parse(app.getPath('userData'));
+  const userDataDir = Directory.parse(app.getPath('userData'));
   templatesDir = userDataDir.cd('data').cd('templates').make();
-  templatePool = new fileNameRandomPool(templatesDir);
+  templatePool = new FilenameRandomPool(templatesDir);
 }
 
 /**
  * 保存模板
  * @function saveTemplate
  * @param {Object} template - 模板对象
- * @param {file} [template.texture] - 纹理文件(当前未使用)
+ * @param {File} [template.texture] - 纹理文件(当前未使用)
  * @param {string} [template.backgroundColor] - 背景色(十六进制)
  * @param {string} [template.backgroundImage] - 背景图片路径
  * @param {string} template.name - 模板名称
@@ -52,7 +52,7 @@ function saveTemplate(template) {
   };
 
   if (template.backgroundImage) {
-    const imgFile = file.parse(template.backgroundImage);
+    const imgFile = File.parse(template.backgroundImage);
     const destImgFile = tempDir.peek('backgroundImage', imgFile.extension);
     imgFile.cp(destImgFile);
     templateData.background = imgFile.extension;
@@ -165,7 +165,7 @@ function setupTemplateOperationIPC(ipc, windows) {
   ipc.on('template-edit', (event, templateID) => {
     const info = loadTemplateByID(templateID);
     if (info) {
-      const pathStr = file.parse(info.imgPath).unPeek().getPath();
+      const pathStr = File.parse(info.imgPath).unPeek().getPath();
       windows.NewTemplate = winManager.createModalWindow(
         'new-template.html',
         windows.NewFile,
@@ -190,7 +190,7 @@ function setupTemplateOperationIPC(ipc, windows) {
   ipc.on('template-copy', (event, templateID) => {
     const info = loadTemplateByID(templateID);
     if (info) {
-      const pathStr = file.parse(info.imgPath).unPeek().getPath();
+      const pathStr = File.parse(info.imgPath).unPeek().getPath();
       windows.NewTemplate = winManager.createModalWindow(
         'new-template.html',
         windows.NewFile,

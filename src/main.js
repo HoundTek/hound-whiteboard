@@ -4,7 +4,7 @@ const foManager = require("./components/file-open-manager");
 const winManager = require("./components/window-manager");
 const boardManager = require("./components/board-manager");
 const templateManager = require("./components/template-manager");
-const { file, directory } = require("./utils/io");
+const { File, Directory } = require("./utils/io");
 const ipc = require("electron").ipcMain;
 
 let windows = {
@@ -57,20 +57,20 @@ app.on("window-all-closed", () => {
 // 参数说明:
 // {
 //   {string} templateID - 模板ID
-//   {file} boardFile - 白板文件对象
+//   {File} boardFile - 白板文件对象
 // } boardInfo - 白板信息对象
 ipc.on("create-new-board-templated", (event, boardInfo) => {
   console.log("create-new-board-templated: %s At %s", boardInfo.templateID, boardInfo.filePath);
   boardManager.createEmptyBoard(boardInfo);
   BrowserWindow.getAllWindows().forEach((win) => { win.close(); });
-  windows.FullScreen = boardManager.openBoard(file.parse(boardInfo.filePath));
+  windows.FullScreen = boardManager.openBoard(File.parse(boardInfo.filePath));
 });
 
 ipc.on("open-board-templated", (event, filePath) => {
   console.log(filePath);
   console.log("open-board-templated: At %s", filePath);
   BrowserWindow.getAllWindows().forEach((win) => { win.close(); });
-  windows.FullScreen = boardManager.openBoard(file.parse(filePath));
+  windows.FullScreen = boardManager.openBoard(File.parse(filePath));
 });
 
 ipc.on("save-board-templated", (event, dirPath) => {
@@ -81,5 +81,5 @@ ipc.on("save-board-templated", (event, dirPath) => {
     minWidth: 800,
     minHeight: 600,
   });
-  boardManager.saveBoard(directory.parse(dirPath));
+  boardManager.saveBoard(Directory.parse(dirPath));
 });

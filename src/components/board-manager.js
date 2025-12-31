@@ -8,7 +8,7 @@
  */
 
 const winManager = require('./window-manager');
-const { fileNameRandomPool, directory, file } = require('../utils/io');
+const { FilenameRandomPool, Directory, File } = require('../utils/io');
 
 let templatesDir;
 
@@ -34,7 +34,7 @@ const pageMeta = {
  * @param {Object} app - Electron应用对象
  */
 function init(app) {
-  templatesDir = new directory(app.getPath('userData'), 'data').cd("templates").existOrMake();
+  templatesDir = new Directory(app.getPath('userData'), 'data').cd("templates").existOrMake();
 }
 
 /**
@@ -48,12 +48,13 @@ function init(app) {
  */
 function createEmptyBoard(boardInfo) {
   // 创建根目录
-  const boardFile = file.parse(boardInfo.filePath);
-  const tempDir = new directory(boardFile.address, boardFile.name).rmWhenExist().make();
+  const boardFile = File.parse(boardInfo.filePath);
+  const tempDir = new Directory(boardFile.address, boardFile.name).rmWhenExist().make();
+
+  // [FIXME] 不应在此处创建文件结构，而应由 BoardManager 负责。
 
   // 创建元数据文件
   tempDir.peek("meta", "json").writeJSON(boardMeta);
-  tempDir.peek("histroy", "json").writeJSON([]);
   tempDir.peek("config", "json").writeJSON({
     width: boardInfo.width,
     height: boardInfo.height,
@@ -63,7 +64,7 @@ function createEmptyBoard(boardInfo) {
   tempDir.cd("pages").make();
 
   // 生成第一页
-  const pagePool = new fileNameRandomPool(tempDir.cd("pages"));
+  const pagePool = new FilenameRandomPool(tempDir.cd("pages"));
   const firstPageDir = pagePool.generate();
   const firstPageID = firstPageDir.name;
 
@@ -96,10 +97,10 @@ function createEmptyBoard(boardInfo) {
 /**
  * 向白板添加新页面
  * @function addPage
- * @param {fileNameRandomPool} pool - 文件名随机池实例
+ * @param {FilenameRandomPool} pool - 文件名随机池实例
  * @param {string} templateID - 要应用的模板ID
  * @returns {Object} 结果对象
- * @returns {fileNameRandomPool} pool - 更新后的文件名随机池
+ * @returns {FilenameRandomPool} pool - 更新后的文件名随机池
  * @returns {string} pageID - 新页面ID
  */
 function addPage(pool, templateID) {
@@ -122,14 +123,14 @@ function addPage(pool, templateID) {
 /**
  * 打开白板文件
  * @function openBoard
- * @param {file} boardFile - 要打开的.hwb文件
+ * @param {File} boardFile - 要打开的.hwb文件
  * @returns {BrowserWindow} 浏览器窗口实例
  */
 function openBoard(boardFile) {
   let win = winManager.createFullScreenWindow('whiteboard');
 
-  const fileDir = new directory(boardFile.address, boardFile.name);
-  directory.getHideResult(fileDir).rmWhenExist();
+  const fileDir = new Directory(boardFile.address, boardFile.name);
+  Directory.getHideResult(fileDir).rmWhenExist();
 
   // 提取并隐藏临时目录
   const tempDir = boardFile.extract(fileDir).hide();
@@ -144,10 +145,10 @@ function openBoard(boardFile) {
 /**
  * 保存白板
  * @function saveBoard
- * @param {directory} boardDir - 要保存的白板目录
+ * @param {Directory} boardDir - 要保存的白板目录
  */
 function saveBoard(boardDir) {
-  const boardFile = new file(boardDir.address, boardDir.name.substring(1), 'hwb').rmWhenExist();
+  const boardFile = new File(boardDir.address, boardDir.name.substring(1), 'hwb').rmWhenExist();
   boardDir.compress(boardFile, true);
 }
 

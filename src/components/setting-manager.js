@@ -7,7 +7,7 @@
  * - 设置变更通知
  */
 
-const { directory } = require('../utils/io');
+const { Directory } = require('../utils/io');
 
 let userDataDir, settingsFile;
 const defaultSettings = { theme: 'light', language: 'zh-CN' };
@@ -18,7 +18,7 @@ const defaultSettings = { theme: 'light', language: 'zh-CN' };
  * @param {Object} app - Electron 应用对象
  */
 function init(app) {
-  userDataDir = directory.parse(app.getPath('userData'));
+  userDataDir = Directory.parse(app.getPath('userData'));
   settingsFile = userDataDir.cd("data").existOrMake().peek('settings', 'json').existOrWriteJSON(defaultSettings);
 }
 

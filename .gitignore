@@ -1,7 +1,14 @@
+# Node.js
 node_modules
-.vscode
 package-lock.json
 yarn.lock
+
+# Editor
 .idea
-dist
+.vscode
+
+# MacOS
 .ds_store
+
+coverage
+release
