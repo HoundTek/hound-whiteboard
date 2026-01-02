@@ -5,7 +5,7 @@
  */
 
 const { GraphObject } = require("./graph");
-const { Matrix, Point } = require("../../../../utils/math");
+const { Matrix, Point } = require("../../../utils/math");
 
 /**
  * 多边形类
@@ -25,7 +25,7 @@ class PolygonObject extends GraphObject {
    * @constructor
    */
   constructor(p, id, pageId, points) {
-    super(p, id, pageId, false, true);
+    super(p, id, pageId);
     if (points) {
       this.setPoints(points);
     }

@@ -135,7 +135,7 @@ class Point {
    * 判断两点是否在精度范围内相等
    * @param {Point} a - 第一个点
    * @param {Point} b - 第二个点
-   * @param {number} [eps = 1e-10] - 允许的误差范围
+   * @param {number} [eps = 1e-10] - 允许的误差范围，留空为 1e-10
    * @returns {boolean} 如果两个点在误差范围内相等则返回 true，否则返回 false
    * @static
    * @example

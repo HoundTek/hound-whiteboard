@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { PolygonObject } = require("../../objects/board/graph/polygon");
+const { PolygonObject } = require("../../objects/graph/polygon");
 const { Point } = require("../../../utils/math");
 const { ObjectModifierTool } = require("./obj-modifier");
 

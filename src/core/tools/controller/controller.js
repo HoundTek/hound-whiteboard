@@ -17,6 +17,8 @@ const { Point } = require("../../../utils/math");
  *
  * 控制杆的具体实现应继承此类并实现其特定功能。
  * 控制杆应包括位置、类型等属性。由前端根据对象的类型和状态动态生成控制杆的 React 组件。
+ * 
+ * 基于事件或传入闭包实现具体的交互逻辑。
  * @abstract
  */
 class Controller {

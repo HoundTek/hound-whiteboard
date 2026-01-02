@@ -8,8 +8,8 @@
  */
 
 const { GraphObject } = require("./graph");
-const { Matrix, Point } = require("../../../../utils/math");
-const { Matrix3D } = require("../../../../utils/math3d");
+const { Matrix, Point } = require("../../../utils/math");
+const { Matrix3D } = require("../../../utils/math3d");
 
 /**
  * 多边形类

@@ -1,5 +1,5 @@
 /**
- * @file 层叠图实现
+ * @file 有向图模块
  * @module directed-graph
  * @author Zhou Chenyu
  */

@@ -2,7 +2,7 @@ const { Matrix, Point } = require("../../utils/math");
 const { BoardManager } = require("../../core/components/board-manager");
 const { PageManager } = require("../../core/components/page-manager");
 const { Directory } = require("../../utils/io");
-const { TextObject } = require("../../core/objects/board/text");
+const { TextObject } = require("../../core/objects/one-dim/text");
 const { PolygonCreatorTool } = require("../../core/tools/creator/polygon");
 const { CounterPool } = require("../../core/utils/counter-pool");
 
@@ -68,16 +68,23 @@ innerTriangle.color = "#ffffff";
 innerTriangle.render(ctx);
 console.log("inner triangle", innerTriangle);
 
-let testText = new TextObject(new Point(100, 100), 3, 1);
-testText.text = "Triangles with same color flock together.";
-testText.size = 24;
-testText.color = "#ff0000";
-testText.font = "Maple Mono NF CN";
+let testText = new TextObject(new Point(100, 100 - 24), 3, 1);
+testText.setText("Triangles with same color flock together.", ctx);
+testText.setTextProperty(
+  { size: 24, color: "blue", font: "Maple Mono NF CN" },
+  ctx
+);
+testText.setMainAxisLength(600, ctx);
 testText.render(ctx);
 
-let helloText = new TextObject(new Point(200, 200), 4, 1);
-helloText.text = "Hello, Hound Whiteboard!";
-helloText.size = 32;
-helloText.color = "green";
-helloText.font = "Maple Mono NF CN";
+let helloText = new TextObject(new Point(200, 200 - 32), 4, 1);
+helloText.setText("Hello, Hound Whiteboard!", ctx);
+helloText.setTextProperty(
+  { size: 32, color: "green", font: "Maple Mono NF CN" },
+  ctx
+);
+helloText.setMainAxisLength(600, ctx);
 helloText.render(ctx);
+
+console.log("test text", testText);
+console.log("hello text", helloText);
