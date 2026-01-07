@@ -34,16 +34,16 @@ class GraphError extends Error {
 class NodeNotExistError extends GraphError {
   /**
    * 不存在的节点
-   * @type {any}
+   * @type {*}
    */
   node;
 
   /**
-   * @param {any} node - 不存在的节点
+   * @param {*} node - 不存在的节点
    * @constructor
    */
   constructor(node) {
-    super(`Node ${node} is not exist.`);
+    super(`Node ${node} does not exist.`);
     this.name = "NodeNotExistError";
     this.node = node;
   }
@@ -57,23 +57,23 @@ class NodeNotExistError extends GraphError {
 class EdgeNotExistError extends GraphError {
   /**
    * 边起点
-   * @type {any}
+   * @type {*}
    */
   from;
 
   /**
    * 边终点
-   * @type {any}
+   * @type {*}
    */
   to;
 
   /**
-   * @param {any} from - 不存在的边的起点
-   * @param {any} to - 不存在的边的终点
+   * @param {*} from - 不存在的边的起点
+   * @param {*} to - 不存在的边的终点
    * @constructor
    */
   constructor(from, to) {
-    super(`Edge from ${from} to ${to} is not exist.`);
+    super(`Edge from ${from} to ${to} does not exist.`);
     this.name = "EdgeNotExistError";
     this.from = from;
     this.to = to;
@@ -88,12 +88,12 @@ class EdgeNotExistError extends GraphError {
 class NodeAlreadyExistError extends GraphError {
   /**
    * 已存在的节点
-   * @type {any}
+   * @type {*}
    */
   node;
 
   /**
-   * @param {any} node - 已存在的节点
+   * @param {*} node - 已存在的节点
    * @constructor
    */
   constructor(node) {
@@ -111,19 +111,19 @@ class NodeAlreadyExistError extends GraphError {
 class EdgeAlreadyExistError extends GraphError {
   /**
    * 边起点
-   * @type {any}
+   * @type {*}
    */
   from;
 
   /**
    * 边终点
-   * @type {any}
+   * @type {*}
    */
   to;
 
   /**
-   * @param {any} from - 已存在的边的起点
-   * @param {any} to - 已存在的边的终点
+   * @param {*} from - 已存在的边的起点
+   * @param {*} to - 已存在的边的终点
    * @constructor
    */
   constructor(from, to) {
@@ -141,13 +141,13 @@ class EdgeAlreadyExistError extends GraphError {
 class DirectedGraph {
   /**
    * 该图的邻接表
-   * @type {Map<any, Set<any>>}
+   * @type {Map<*, Set<*>>}
    */
   adjList;
 
   /**
    * 该图的反向邻接表
-   * @type {Map<any, Set<any>>}
+   * @type {Map<*, Set<*>>}
    */
   adjListR;
 
@@ -162,7 +162,7 @@ class DirectedGraph {
 
   /**
    * 查询图中是否包含某个节点
-   * @param {any} node - 要查询的节点
+   * @param {*} node - 要查询的节点
    * @returns {boolean} 如果图中包含该节点，则返回 true，否则返回 false
    */
   hasNode(node) {
@@ -171,8 +171,8 @@ class DirectedGraph {
 
   /**
    * 查询图中是否存在某边
-   * @param {any} from - 起点
-   * @param {any} to - 终点
+   * @param {*} from - 起点
+   * @param {*} to - 终点
    */
   hasEdge(from, to) {
     return this.adjList.has(from) && this.adjList.get(from).has(to);
@@ -180,7 +180,7 @@ class DirectedGraph {
 
   /**
    * 添加一个节点
-   * @param {any} node - 要添加的节点
+   * @param {*} node - 要添加的节点
    */
   addNodeUnsafe(node) {
     this.adjList.set(node, new Set());
@@ -189,7 +189,7 @@ class DirectedGraph {
 
   /**
    * 添加一个节点，如果节点已存在，则抛出错误
-   * @param {any} node - 要添加的节点
+   * @param {*} node - 要添加的节点
    * @throws {NodeAlreadyExistError} 如果节点已存在
    */
   addNode(node) {
@@ -201,8 +201,8 @@ class DirectedGraph {
 
   /**
    * 添加一条边
-   * @param {any} from - 起点
-   * @param {any} to - 终点
+   * @param {*} from - 起点
+   * @param {*} to - 终点
    */
   addEdgeUnsafe(from, to) {
     this.adjList.get(from).add(to);
@@ -211,8 +211,8 @@ class DirectedGraph {
 
   /**
    * 添加一条边，如果起点或终点不存在，或边已存在，则抛出错误
-   * @param {any} from - 起点
-   * @param {any} to - 终点
+   * @param {*} from - 起点
+   * @param {*} to - 终点
    * @throws {NodeNotExistError | EdgeAlreadyExistError} 如果起点或终点不存在，或边已存在
    */
   addEdge(from, to) {
@@ -230,8 +230,8 @@ class DirectedGraph {
 
   /**
    * 删除一条边
-   * @param {any} from - 起点
-   * @param {any} to - 终点
+   * @param {*} from - 起点
+   * @param {*} to - 终点
    */
   deleteEdgeUnsafe(from, to) {
     this.adjList.get(from).delete(to);
@@ -240,8 +240,8 @@ class DirectedGraph {
 
   /**
    * 删除一条边，如果起点或终点不存在，或边不存在，则抛出错误
-   * @param {any} from - 起点
-   * @param {any} to - 终点
+   * @param {*} from - 起点
+   * @param {*} to - 终点
    * @throws {NodeNotExistError | EdgeNotExistError} 如果起点或终点不存在，或边不存在
    */
   deleteEdge(from, to) {
@@ -259,8 +259,8 @@ class DirectedGraph {
 
   /**
    * 更改节点名称
-   * @param {any} oldNode - 旧节点名称
-   * @param {any} newNode - 新节点名称
+   * @param {*} oldNode - 旧节点名称
+   * @param {*} newNode - 新节点名称
    */
   changeNodeNameUnsafe(oldNode, newNode) {
     const outgoing = this.adjList.get(oldNode);
@@ -285,8 +285,8 @@ class DirectedGraph {
 
   /**
    * 更改节点名称，若节点不存在，则抛出错误
-   * @param {any} oldNode - 旧节点名称
-   * @param {any} newNode - 新节点名称
+   * @param {*} oldNode - 旧节点名称
+   * @param {*} newNode - 新节点名称
    * @throws {NodeNotExistError | NodeAlreadyExistError} 如果旧节点不存在或新节点已存在
    */
   changeNodeName(oldNode, newNode) {
@@ -301,7 +301,7 @@ class DirectedGraph {
 
   /**
    * 删除某个节点的所有边 (包括出边和入边)
-   * @param {any} node - 要删除边的节点
+   * @param {*} node - 要删除边的节点
    */
   deleteAllEdgesOfNodeUnsafe(node) {
     for (const neighbor of this.adjList.get(node)) {
@@ -316,7 +316,7 @@ class DirectedGraph {
 
   /**
    * 删除某个节点的所有边 (包括出边和入边)，如果节点不存在，则抛出错误
-   * @param {any} node - 要删除边的节点
+   * @param {*} node - 要删除边的节点
    * @throws {NodeNotExistError} 如果节点不存在
    */
   deleteAllEdgesOfNode(node) {
@@ -328,7 +328,7 @@ class DirectedGraph {
 
   /**
    * 删除某个节点及其所有关联的边
-   * @param {any} node - 要删除的节点
+   * @param {*} node - 要删除的节点
    */
   deleteNodeUnsafe(node) {
     this.deleteAllEdgesOfNodeUnsafe(node); // 先删除所有关联的边
@@ -338,7 +338,7 @@ class DirectedGraph {
 
   /**
    * 删除某个节点及其所有关联的边，如果节点不存在，则抛出错误
-   * @param {any} node - 要删除的节点
+   * @param {*} node - 要删除的节点
    * @throws {NodeNotExistError} 如果节点不存在
    */
   deleteNode(node) {
@@ -350,9 +350,9 @@ class DirectedGraph {
 
   /**
    * 查询节点的后继点，如果节点不存在，则抛出错误
-   * @param {any} node - 要查询的节点
+   * @param {*} node - 要查询的节点
    * @throws {NodeNotExistError} 如果节点不存在
-   * @returns {Set<any> | undefined} 该节点的后继
+   * @returns {Set<*> | undefined} 该节点的后继
    */
   neighbors(node) {
     if (!this.hasNode(node)) {
@@ -363,8 +363,8 @@ class DirectedGraph {
 
   /**
    * 查询节点的后继点
-   * @param {any} node - 要查询的节点
-   * @returns {Set<any> | undefined} 该节点的后继
+   * @param {*} node - 要查询的节点
+   * @returns {Set<*> | undefined} 该节点的后继
    */
   neighborsUnsafe(node) {
     return this.adjList.get(node);
@@ -372,9 +372,9 @@ class DirectedGraph {
 
   /**
    * 查询节点的前驱点，如果节点不存在，则抛出错误
-   * @param {any} node - 要查询的节点
+   * @param {*} node - 要查询的节点
    * @throws {NodeNotExistError} 如果节点不存在
-   * @returns {Set<any> | undefined} 该节点的前驱
+   * @returns {Set<*> | undefined} 该节点的前驱
    */
   predecessors(node) {
     if (!this.hasNode(node)) {
@@ -385,13 +385,76 @@ class DirectedGraph {
 
   /**
    * 查询节点的前驱点
-   * @param {any} node - 要查询的节点
-   * @returns {Set<any> | undefined} 该节点的前驱
+   * @param {*} node - 要查询的节点
+   * @returns {Set<*> | undefined} 该节点的前驱
    */
   predecessorsUnsafe(node) {
     return this.adjListR.get(node);
   }
 
+  /**
+   * 图中节点数量
+   * @returns {number} 节点数量
+   */
+  get size() {
+    return this.adjList.size;
+  }
+
+  /**
+   * 获取图中所有节点的入度映射
+   * @returns {Map<*, number>} 节点到入度的映射
+   */
+  getInDegreeMap() {
+    let inDegreeMap = new Map();
+    for (const [node, predecessors] of this.adjListR.entries()) {
+      inDegreeMap.set(node, predecessors.size);
+    }
+    return inDegreeMap;
+  }
+
+  /**
+   * 获取所有入度为 0 的节点
+   * @returns {Array<*>} 所有入度为 0 的节点
+   */
+  getNoIncomingNodes() {
+    let noIncoming = [];
+    for (const [node, predecessors] of this.adjListR.entries()) {
+      if (predecessors.size === 0) {
+        noIncoming.push(node);
+      }
+    }
+    return noIncoming;
+  }
+
+  /**
+   * 获取图中所有节点的出度映射
+   * @returns {Map<*, number>} 节点到出度的映射
+   */
+  getOutDegreeMap() {
+    let outDegreeMap = new Map();
+    for (const [node, neighbors] of this.adjList.entries()) {
+      outDegreeMap.set(node, neighbors.size);
+    }
+    return outDegreeMap;
+  }
+
+  /**
+   * 获取所有出度为 0 的节点
+   * @returns {Array<*>} 所有出度为 0 的节点
+   */
+  getNoOutgoingNodes() {
+    let noOutgoing = [];
+    for (const [node, neighbors] of this.adjList.entries()) {
+      if (neighbors.size === 0) {
+        noOutgoing.push(node);
+      }
+    }
+    return noOutgoing;
+  }
+
+  /**
+   * 清空图
+   */
   clear() {
     this.adjList.clear();
     this.adjListR.clear();

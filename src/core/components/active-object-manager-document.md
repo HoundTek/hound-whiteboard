@@ -1,6 +1,8 @@
-# 层叠图文档
+# 活动对象管理器文档
 
-本文档提供白板中用来管理对象间层级关系的工具——层叠图的概述。
+本文档提供白板中的管理活动对象管理器的概述。
+
+活动对象管理器用“层叠图”来管理活动对象间的层级关系。
 
 ## 符号约定
 
@@ -79,40 +81,40 @@
 
 将被选择的对象集记为 $\mathbb{A}$。
 
-首先，提取出一个 $\mathcal{S}$ 的子图 $\mathcal{G}$，满足
+#### 首先，提取出一个 $\mathcal{S}$ 的子图 $\mathcal{G}$：
 
 1. $s(\mathcal{G}) \subseteq \mathbb{A}$
 2. $\forall P \in p(\mathcal{G}), \exist Q \in \mathbb{A}$，存在从 $Q$ 到 $P$ 的路径
 3. $\forall P \in \complement_{p(\mathcal{S})}\mathcal{G}, \forall Q \in \mathbb{A}$，不存在从 $Q$ 到 $P$ 的路径
 
 
-得到 $\mathcal{G}$ 后，将其分层并删除跨层边，算法如下:
+#### 得到 $\mathcal{G}$ 后，将其分层并删除跨层边，算法如下:
 
-1. 对于每个点，有属性 `layer` 表示该点所在的层，属性 `stash` 表示该点的暂存的边，有全局变量 `currentLayer` 表示当前正在处理的层，`activeNumber` 表示当前是还需处理多少个 `activeQueue` 中的点，队列 `activeQueue` 和 `inactiveQueue` 分别存被选中对象和未被选中对象
+1. 对于每个点，有属性 `layer` 表示该点所在的层，属性 `stash` 表示该点的暂存的边，有全局变量 `currentLayer` 表示当前正在处理的层，`activeNumber` 表示当前是还需处理多少个 `activeQueue` 中的点，队列 `activeQueue` 和 `inactiveQueue` 分别存活动对象和非活动对象
 2. 计算每个点的入度
 3. 将入度为 $0$ 的点入队，将 `currentLayer` 赋予这些点
 4. 若 `inactiveQueue` 中有元素且 `activeNumber` 为 $0$，则将 `inactiveQueue` 中一元素出队，记为 $P$，对 $P$ 的所有后继节点进行如下操作
    1. 假设当前操作的节点为 $Q$
    2. 若 $Q$ 的 `layer` 比 `currentLayer` 小，则将其 `stash` 里的所有边从 $\mathcal{G}$ 中删去，将 `stash` 清空，并将 `currentLayer` 赋予 $Q$
    3. 将 $Q$ 的入度减一，若 $Q$ 的入度变成了 $0$，则将 $Q$ 入队，并清空 $Q$ 的 `stash`，否则，将 $P \to Q$ 加入 $Q$ 的 `stash`
-5. 若 `inactiveQueue` 中无元素但 `activeQueue` 中有元素，则将 `activeNumber` 设为 `activeQueue` 的元素数
-6. 若 `activeNumber` 不为 $0$ 且 `activeQueue` 中有元素，则将 `activeQueue` 中一元素出队，记为 $P$，对 $P$ 的所有后继节点进行如下操作
+5. 若 `inactiveQueue` 中无元素但 `activeQueue` 中有元素，则将 `activeNumber` 设为 `activeQueue` 的元素数，且将 `currentLayer` 加一
+6. 若 `activeNumber` 不为 $0$ 且 `activeQueue` 中有元素，则将 `activeQueue` 中一元素出队，记为 $P$，先将 $P$ 的 `layer` 置为 `currentLayer`，再对 $P$ 的所有后继节点进行如下操作
    1. 假设当前操作的节点为 $Q$
-   2. 若 $Q$ 的 `layer` 比 `currentLayer` 小，则将其 `stash` 里的所有边从 $\mathcal{G}$ 中删去，将 `stash` 清空，并将 `currentLayer` 赋予 $Q$
+   2. 若 $Q$ 的 `layer` 比 `currentLayer - 1` 小，则将其 `stash` 里的所有边从 $\mathcal{G}$ 中删去，将 `stash` 清空，并将 `currentLayer` 赋予 $Q$
    3. 将 $Q$ 的入度减一，若 $Q$ 的入度变成了 $0$，则将 $Q$ 入队，并清空 $Q$ 的 `stash`，否则，将 $P \to Q$ 加入 $Q$ 的 `stash`
-   4. 将 `activeNumber` 减一，若 `activeNumber` 被减为 $0$，则将 `currentLayer` 加一
+   4. 将 `activeNumber` 减一
 7. 若 `inactiveQueue` 或 `activeQueue` 中有元素，则重复第 4 到第 6 步
-8. 将所有被选中的对象对应的节点的 `layer` 加一
-9. 现在，删除被选中的节点在动态图中的所有边，然后计算每个未被选中的节点的入度和出度
+8. 将所有活动对象对应的节点的 `layer` 加一
+9. 现在，删除活动节点在动态图中的所有边，然后计算每个非活动节点的入度和出度
 10. 创建 `currentLayer` 个虚点，记为 $A_i$
 11. 创建 `currentLayer` 个虚点，记为 $B_i$
-12. 将 $A_i$ 连至 `layer` 为 $i$ 的入度为 $0$ 的未被选中的节点
-13. 将 `layer` 为 $i$ 的被选中的节点连至 $A_i$
-14. 将 $B_i$ 连至 `layer` 为 $i + 1$ 的被选中的节点
-15. 将 `layer` 为 $i$ 的出度为 $0$ 的未被选中的节点连至 $B_i$ 
+12. 将 $A_i$ 连至 `layer` 为 $i$ 的入度为 $0$ 的非活动节点
+13. 将 `layer` 为 $i$ 的活动节点连至 $A_i$
+14. 将 $B_i$ 连至 `layer` 为 $i + 1$ 的活动节点
+15. 将 `layer` 为 $i$ 的出度为 $0$ 的非活动节点连至 $B_i$ 
 16. 最终，得到图 $\mathcal{G'}$
 
-将 $\mathcal{G}'$ 的每一层按照以下规则插入:
+#### 将 $\mathcal{G}'$ 的每一层按照以下规则插入:
 
 1. 原来就在某一层之上的层，插入之后不会出现在这层之上
 2. 这层内的对象如果是以前被选择的对象，那这个对象的层一定不会在这层之下
