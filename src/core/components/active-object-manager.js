@@ -11,6 +11,32 @@ const { CounterPool } = require("../utils/counter-pool");
 const { DirectedGraph } = require("../utils/directed-graph");
 const { PageManager } = require("./page-manager");
 
+class Layer {
+  /**
+   * 层 id
+   * @type {number}
+   */
+  id;
+
+  /**
+   * 该层上的活动对象 id 集合
+   * @type {Set<number>}
+   */
+  activeObjects;
+
+  /**
+   * 该层上的非活动对象子图
+   * @type {DirectedGraph}
+   */
+  inactiveGraph;
+
+  constructor(id) {
+    this.id = id;
+    this.activeObjects = new Set();
+    this.inactiveGraph = new DirectedGraph();
+  }
+}
+
 /**
  * 全局活动对象管理器
  * @class
@@ -18,14 +44,7 @@ const { PageManager } = require("./page-manager");
  */
 class ActiveObjectManager {
   /**
-   * 活动对象所构成的动态图
-   * @description 见 [tier-graph-document.md](./tier-graph-document.md)。
-   * 不能有环，不能有重复的对象 id。
-   * @type {DirectedGraph}
-   */
-  activeGraph;
-
-  /**
+   * 层 id 池
    * @type {RandomNumberPool}
    */
   layerPool;
@@ -55,15 +74,16 @@ class ActiveObjectManager {
   }
 
   /**
-   * 对象 id 到层 id 的映射
-   * @type {Map<number, number>}
+   * 对象所在的层
+   * @description 对象 id -> 层实例的引用，便于快速查找某对象所在层。
+   * @type {Map<number, Layer>}
    */
   onLayer;
 
   /**
    * 层与层间的顺序
-   * @description 层索引 -> 层 id，便于按层次顺序遍历各层。
-   * @type {number[]}
+   * @description 层索引 -> 层实例，便于按层次顺序遍历各层。
+   * @type {Layer[]}
    */
   layerOrder;
 
@@ -74,70 +94,19 @@ class ActiveObjectManager {
    */
   layerIndex;
 
+  /**
+   * 当前所有活动对象 id 集合
+   * @type {Set<number>}
+   */
+  activeObjects;
+
   constructor() {
-    this.activeGraph = new DirectedGraph();
     this.layerPool = new RandomNumberPool(1, 10000000);
     this.initJunkPool();
     this.layerOrder = [];
     this.onLayer = new Map();
     this.layerIndex = new Map();
-  }
-
-  /**
-   * 获取某层对应的 A 虚点的 id
-   * @description [tier-graph-document.md](./tier-graph-document.md)
-   * @param {number} layerId - 层 id
-   * @returns {number} A 虚点 id
-   */
-  getAPointForLayer(layerId) {
-    return -layerId * 2;
-  }
-
-  /**
-   * 获取某层对应的 B 虚点的 id
-   * @description [tier-graph-document.md](./tier-graph-document.md)
-   * @param {number} layerId - 层 id
-   * @returns {number} B 虚点 id
-   */
-  getBPointForLayer(layerId) {
-    return -layerId * 2 + 1;
-  }
-
-  /**
-   * 获取虚点对应的层的 id
-   * @description [tier-graph-document.md](./tier-graph-document.md)
-   * @param {number} pointId - A 虚点或 B 虚点 id
-   * @returns {number} 层 id
-   */
-  getLayerByVirtualPoint(pointId) {
-    return pointId % 2 === 0 ? -(pointId / 2) : -((pointId - 1) / 2);
-  }
-
-  /**
-   * 判断某点是否为非虚点
-   * @param {number} pointId - 点 id
-   * @returns {boolean} 如果该点不是虚点，则返回 true，否则返回 false
-   */
-  isNotVirtualPoint(pointId) {
-    return !(-this.layerPool.max * 2 + 1 <= pointId && pointId <= -1);
-  }
-
-  /**
-   * 判断某点是否为 A 虚点
-   * @param {number} pointId - 点 id
-   * @returns {boolean} 如果该点是 A 虚点，则返回 true，否则返回 false
-   */
-  isAPoint(pointId) {
-    return !this.isNotVirtualPoint(pointId) && pointId % 2 === 0;
-  }
-
-  /**
-   * 判断某点是否为 B 虚点
-   * @param {number} pointId - 点 id
-   * @returns {boolean} 如果该点是 B 虚点，则返回 true，否则返回 false
-   */
-  isBPoint(pointId) {
-    return !this.isNotVirtualPoint(pointId) && pointId % 2 === 1;
+    this.activeObjects = new Set();
   }
 
   /**
@@ -236,458 +205,143 @@ class ActiveObjectManager {
   /**
    * @param {number[]} objs - 要选择的对象 id 的数组
    * @param {PageManager[]} pges - 这些对象所在的页
-   * @todo 检查逻辑问题
    */
   choose(objs, pges) {
+    // 提取出这些对象所构成的子图
     let graph = this.pickup(objs, pges);
-    // [todo] 检查逻辑问题
 
-    // ======== 将 graph 分层并删除跨层边 ========
-    // see markdown `active-object-manager-document.md`
-
-    /**
-     * 待处理的非活动对象队列
-     * @type {Queue}
-     */
-    let inactiveQueue = new Queue();
-
-    /**
-     * 每个点暂存的边的映射
-     * @description 是指向该点的边，即映射 A --> B 表示有一条边从 A 指向该点 B。
-     * @type {Map<*, Set<*>>}
-     */
-    let stash = new Map();
-
-    /**
-     * 当前正在处理的层
-     * @description 从 0 开始计数，在处理过程中会不断增加，最终表示图中的最大层数。
-     * @type {number}
-     */
-    let currentLayer = 0;
-
-    /**
-     * 当前层的活动对象数
-     * @description 当前还需处理多少个活动对象。
-     */
-    let activeNumber = 0;
-
-    /**
-     * 待处理的活动对象队列
-     * @type {Queue}
-     */
-    let activeQueue = new Queue();
-
-    /**
-     * 当前图的入度映射
-     * @type {Map<*, number>}
-     */
-    let inDeree;
-
-    /**
-     * 每个点与其所在层的映射（临时）
-     * @description 用于在处理过程中记录每个点所在的临时层，不是最终加入 `onLayer` 的层。
-     * 临时层是从 0 开始计数的连续整数。
-     * @type {Map<*, number>}
-     */
-    let layerMapTemp = new Map();
-
-    // 初始化入度映射，并将所有入度为 0 的点入队
-    // see markdown 1. 2. 3.
-    inDeree = graph.getInDegreeMap();
-    for (const [node, degree] of inDeree.entries()) {
-      if (degree === 0) {
-        if (objs.includes(node)) {
-          activeQueue.push(node);
-        } else {
-          inactiveQueue.push(node);
-        }
-        layerMapTemp.set(node, currentLayer);
-      }
-    }
-
-    // see markdown 7.
-    while (!inactiveQueue.empty() || !activeQueue.empty()) {
-      // 处理非活动对象
-      // see markdown 4.
-      if (inactiveQueue.empty() && activeNumber === 0) {
-        let p = inactiveQueue.pop();
-        const neighbors = graph.neighborsUnsafe(p);
-        if (neighbors) {
-          for (const q of neighbors) {
-            if (layerMapTemp.has(q)) {
-              // q 已被访问，且访问它的人的层更低
-              if (layerMapTemp.get(q) < currentLayer) {
-                // q 的暂存区内都是跨层边
-                let presuccs = stash.get(q) || new Set();
-                // 将这些边删去
-                for (const presucc of presuccs) {
-                  graph.deleteEdgeUnsafe(presucc, q);
-                }
-                // 将暂存区清空
-                stash.set(q, new Set());
-                // 更新 q 的层
-                layerMapTemp.set(q, currentLayer);
-              }
-            } else {
-              // q 第一次被访问
-              layerMapTemp.set(q, currentLayer);
-            }
-            // 入度减一
-            let inDeg = inDeree.get(q) || 1;
-            inDeg--;
-            inDeree.set(q, inDeg);
-            // 入度为 0，入队
-            if (inDeg === 0) {
-              if (objs.includes(q)) {
-                activeQueue.push(q);
-              } else {
-                inactiveQueue.push(q);
-              }
-            }
-            // 将边 p --> q 加入暂存区
-            let presuccs = stash.get(q) || new Set();
-            presuccs.add(p);
-            stash.set(q, presuccs);
-          }
-        }
-      }
-
-      // see markdown 5.
-      if (inactiveQueue.empty() && !activeQueue.empty()) {
-        // 当前层的非活动对象处理完毕，且有活动对象待处理，进入下一层
-        currentLayer++;
-        // 计算当前层的活动对象数
-        activeNumber = activeQueue.count();
-      }
-
-      // 处理活动对象
-      // see markdown 6.
-      if (!activeQueue.empty() && activeNumber > 0) {
-        let p = activeQueue.pop();
-        layerMapTemp.set(p, currentLayer);
-        const neighbors = graph.neighborsUnsafe(p);
-        if (neighbors) {
-          for (const q of neighbors) {
-            if (layerMapTemp.has(q)) {
-              // q 已被访问，且访问它的人的层更低
-              if (layerMapTemp.get(q) < currentLayer - 1) {
-                // q 的暂存区内都是跨层边
-                let presuccs = stash.get(q) || new Set();
-                // 将这些边删去
-                for (const presucc of presuccs) {
-                  graph.deleteEdgeUnsafe(presucc, q);
-                }
-                // 将暂存区清空
-                stash.set(q, new Set());
-                // 更新 q 的层
-                layerMapTemp.set(q, currentLayer);
-              }
-            } else {
-              // q 第一次被访问
-              layerMapTemp.set(q, currentLayer);
-            }
-            // 入度减一
-            let inDeg = inDeree.get(q) || 1;
-            inDeg--;
-            inDeree.set(q, inDeg);
-            // 入度为 0，入队
-            if (inDeg === 0) {
-              if (objs.includes(q)) {
-                activeQueue.push(q);
-              } else {
-                inactiveQueue.push(q);
-              }
-            }
-            // 将边 p --> q 加入暂存区
-            let presuccs = stash.get(q) || new Set();
-            presuccs.add(p);
-            stash.set(q, presuccs);
-          }
-        }
-        activeNumber--;
-      }
-    }
-
-    // 为每个临时层分配永久层 id
-    let layerTempToPermanent = new Map();
-    for (let i = 0; i <= currentLayer; i++) {
-      let layer = this.layerPool.generate();
-      layerTempToPermanent.set(i, layer);
-    }
-
-    // 加入虚点
-    // see markdown 10. 11.
-    for (let i = 0; i <= currentLayer; i++) {
-      let layer = layerTempToPermanent.get(i);
-      let aPoint = this.getAPointForLayer(layer);
-      let bPoint = this.getBPointForLayer(layer);
-      graph.addNodeUnsafe(aPoint);
-      graph.addNodeUnsafe(bPoint);
-    }
-
-    // 连接虚点
-
-    // 处理活动对象
-    // see markdown 9. 13. 14.
-    for (const node of objs) {
-      let tempLayer = layerMapTemp.get(node);
-      graph.deleteAllEdgesOfNodeUnsafe(node);
-      let aPoint = this.getAPointForLayer(layerTempToPermanent.get(tempLayer));
-      if (tempLayer !== 0) {
-        let bPoint = this.getBPointForLayer(
-          layerTempToPermanent.get(tempLayer - 1)
-        );
-        graph.addEdgeUnsafe(bPoint, node);
-      }
-      graph.addEdgeUnsafe(node, aPoint);
-    }
-
-    // 处理入度为 0 的点
-    // see markdown 12.
-    for (const node of graph.getNoIncomingNodes()) {
-      if (!this.isNotVirtualPoint(node)) {
-        // 跳过虚点
-        continue;
-      }
-      let tempLayer = layerMapTemp.get(node);
-      let aPoint = this.getAPointForLayer(layerTempToPermanent.get(tempLayer));
-      graph.addEdgeUnsafe(aPoint, node);
-    }
-
-    // 处理出度为 0 的点
-    // see markdown 15.
-    for (const node of graph.getNoOutgoingNodes()) {
-      if (!this.isNotVirtualPoint(node)) {
-        // 跳过虚点
-        continue;
-      }
-      let tempLayer = layerMapTemp.get(node);
-      let bPoint = this.getBPointForLayer(layerTempToPermanent.get(tempLayer));
-      graph.addEdgeUnsafe(node, bPoint);
-    }
-
-    // ======== 依据层次关系插入到 activeGraph 中 ========
-    // 确立层次关系
-    // see markdown 1. 2.
-    /**
-     * 每个临时层在哪一个永久层之下
-     * @description 里面是层索引。也就是 temporary layer index -> permanent layer index。
-     * @type {Array<number>}
-     */
-    let underWhich = [];
-
-    // BFS 遍历一定是遵循层次关系的
+    // 获取对象所在层
+    let layerIndex = new Map();
+    let visit = new Set();
     let queue = new Queue();
-    const visited = new Set();
     for (const node of graph.getNoIncomingNodes()) {
+      visit.add(node);
       queue.push(node);
+      layerIndex.set(node, 1);
     }
-
-    /**
-     * 当前正在处理的重复点集合
-     * @description 用于在遍历过程中记录当前层中已存在于 activeGraph 中的重复点。
-     * @type {Array<number>}
-     */
-    let duplicatesLayer = [];
-
-    /**
-     * 所有重复点集合
-     * @description 用于在遍历过程中记录所有已存在于 activeGraph 中的重复点。
-     * @type {Array<number>}
-     */
-    let duplicates = [];
 
     while (!queue.empty()) {
-      // bfs logic starts here
-      let p = queue.pop();
-      if (visited.has(p)) {
-        continue;
-      }
-      visited.add(p);
-      // bfs logic ends here
-
-      // 现在到了该层的最上面，开始处理重复点
-      if (this.isBPoint(p)) {
-        // 现在，看看重复的点中哪一个的层次最低，将该层放在它之下
-        let minLayer =
-          duplicatesLayer.length > 0
-            ? Math.min(
-                ...duplicatesLayer.map((d) => {
-                  return this.layerIndex.get(this.onLayer.get(d));
-                })
-              )
-            : -1;
-        underWhich.push(
-          minLayer === -1 ? undefined : this.layerOrder[minLayer]
-        );
-        duplicatesLayer = [];
-      }
-
-      if (this.onLayer.has(p)) {
-        // 已存在于 activeGraph 中，标记为重复点
-        duplicatesLayer.push(p);
-        duplicates.push(p);
-      }
-
-      // bfs logic starts here
-      const neighbors = graph.neighborsUnsafe(p);
-      if (neighbors) {
-        for (const q of neighbors) {
-          if (!visited.has(q)) {
-            queue.push(q);
-          }
+      let node = queue.pop();
+      let layerNow = layerIndex.get(node);
+      for (const next of graph.neighborsUnsafe(node) || []) {
+        if (objs.includes(next)) {
+          layerIndex.set(
+            next,
+            Math.max(layerNow + 1, layerIndex.get(next) || 0)
+          );
+        } else {
+          layerIndex.set(next, Math.max(layerNow, layerIndex.get(next) || 0));
+        }
+        if (!visit.has(next)) {
+          visit.add(next);
+          queue.push(next);
         }
       }
-      // bfs logic ends here
-    } // while loop ends here
+    }
 
-    // 再度处理：临时层中在上层的对象在永久层中不能出现在下层
-    // 向下调整 underWhich
-    for (let i = currentLayer - 1; i >= 0; i--) {
-      if (
-        (underWhich[i] || this.layerOrder.length) >
-        (underWhich[i + 1] || this.layerOrder.length)
-      ) {
-        underWhich[i] = underWhich[i + 1];
+    // 处理层的上下关系
+    let underWhich = Array.from({ length: layerIndex.size }, () => undefined); // 层索引 -> 层索引
+    let layers = Array.from(
+      { length: layerIndex.size },
+      () => new Layer(this.layerPool.generate())
+    );
+    let duplicates = new Map(); // 记录重复对象，键为对象 id，值为旧层的 id（该对象以前出现在哪一层）
+    for (const node of graph.getNodes()) {
+      let layer = layerIndex.get(node);
+      if (this.activeObjects.has(node)) {
+        // 它是以前就有的活动对象
+        // 此时该层应在其之下
+        if (underWhich[layer - 1]) {
+          if (
+            this.compareLayerOrder(
+              underWhich[layer - 1],
+              this.onLayer.get(node).id
+            ) > 0
+          ) {
+            // 如果新层本来应在旧层之上，那么调整为新层应在旧层之下
+            underWhich[layer - 1] = this.onLayer.get(node).id;
+          }
+        } else {
+          underWhich[layer - 1] = this.onLayer.get(node).id;
+        }
+        duplicates.set(node, this.onLayer.get(node).id);
+      } else if (this.onLayer.has(node)) {
+        // 它以前就有，但不是活动对象
+        // 对该层的上下关系无影响
+        duplicates.set(node, this.onLayer.get(node).id);
       }
     }
 
-    // 开始删去重复的点（用垃圾点替代）
-    // [fixme] 这里的逻辑有问题，可能删掉活动点！虽然可以正常显示，但总归是不好的。
-    for (const dup of duplicates) {
-      let junkId = this.newJunkId();
-      // 删的应该是在更下面的那个层里的重复点
-      if (this.onLayer.get(dup) >= underWhich[layerMapTemp.get(dup)]) {
-        // 在 activeGraph 中的点的层次更高，删去 graph 中的点
-        graph.changeNodeNameUnsafe(dup, junkId);
+    // 将对象加入层并处理重复对象
+    for (const node of graph.getNodes()) {
+      let layer = layerIndex.get(node);
+      if (duplicates.has(node)) {
+        /** @type {Layer} */
+        let oldLayer =
+          this.layerOrder[this.layerIndex.get(duplicates.get(node))];
+        if (
+          underWhich[layer - 1] &&
+          this.compareLayerOrder(underWhich[layer - 1], oldLayer.id) <= 0
+        ) {
+          // 新层应在旧层之下
+          // 那么新层就不应出现重复对象
+          // pass
+        } else {
+          // 新层应在旧层之上
+          // 那么旧层就不应出现重复对象
+          // 且该对象在旧层中一定不是活动对象
+          oldLayer.inactiveGraph.deleteNodeUnsafe(node);
+        }
+      }
+      if (objs.includes(node)) {
+        // 活动对象
+        layers[layer - 1].activeObjects.add(node);
+        this.onLayer.set(node, layers[layer - 1]);
+        this.activeObjects.add(node);
       } else {
-        // 在 graph 中的点的层次更高，删去 activeGraph 中的点
-        this.activeGraph.changeNodeNameUnsafe(dup, junkId);
+        // 非活动对象
+        layers[layer - 1].inactiveGraph.addNodeUnsafe(node);
+        for (const next of graph.neighborsUnsafe(node) || []) {
+          if (!objs.includes(next) && layerIndex.get(next) === layer) {
+            // 仅连接同层非活动对象
+            layers[layer - 1].inactiveGraph.addEdgeUnsafe(node, next);
+          }
+        }
+        this.onLayer.set(node, layers[layer - 1]);
       }
     }
 
-    // 将 graph 并入 activeGraph
-    // 这里，underWhich 从层索引转换为层 id
-    underWhich = underWhich.map((layer) => {
-      return layer ? this.layerOrder[layer] : undefined;
+    // 插入各层
+    layers.forEach((layer, index) => {
+      this.insertLayerUnder(layer, underWhich[index]);
     });
-    for (let i = 0; i <= currentLayer; i++) {
-      this.insertLayerUnder(layerTempToPermanent.get(i), underWhich[i]);
-    }
   }
 
   /**
-   * 在顶端添加一个或多个对象
-   * @description 这些对象不能有交集。
-   * 用于置顶、粘贴、添加新对象等
-   * @param {number[]} objs - 要添加的对象
-   */
-  addObjectsToTop(objs) {
-    // 分配一个新层
-    let layer = this.layerPool.generate();
-    this.layerOrder.push(layer);
-    for (const obj of objs) {
-      if (this.onLayer.has(obj)) {
-        // [todo] 移去原有的对象
-        throw new Error(
-          `Object ${obj} already on layer ${this.onLayer.get(obj)}`
-        );
-      }
-      this.activeGraph.addNodeUnsafe(obj);
-      this.onLayer.set(obj, layer);
-    }
-
-    // 在动态图中添加虚点和边
-    let aPoint = this.getAPointForLayer(layer);
-    this.activeGraph.addNodeUnsafe(aPoint);
-    let bPoint = this.getBPointForLayer(layer);
-    this.activeGraph.addNodeUnsafe(bPoint);
-    this.activeGraph.addEdgeUnsafe(aPoint, bPoint);
-    for (const obj of objs) {
-      this.activeGraph.addEdgeUnsafe(obj, aPoint);
-    }
-
-    // 连接该层与上一层
-    if (this.layerOrder.length > 1) {
-      let prevLayer = this.layerOrder[this.layerOrder.length - 2];
-      let prevBPoint = this.getBPointForLayer(prevLayer);
-      this.activeGraph.addEdgeUnsafe(prevBPoint, aPoint);
-    }
-  }
-
-  /**
-   * 将某层移动到另一层之下
-   * @description 该方法不会断开 layerNow 与上下层的连接，请在调用前后自行处理。
-   * @param {number} layerNow - 要移动的层
+   * 将某层插入到另一层之下
+   * @description 层实例应该不存在于 `layerOrder` 中。
+   * @param {Layer} layerNow - 要移动的层
    * @param {number | undefined} [layerAbove = undefined] - 要移动到何层之下，若未指定则移至顶层
    */
   insertLayerUnder(layerNow, layerAbove = undefined) {
-    // 确定 layerBelow
-    let layerBelow;
-    if (layerAbove) {
-      let indexAbove = this.layerIndex.get(layerAbove);
-      if (indexAbove == 0) {
-        layerBelow = undefined;
-      } else if (indexAbove != -1) {
-        layerBelow = this.layerOrder[indexAbove - 1];
-      } else {
-        throw new Error(`Layer ${layerAbove} is not exist.`);
-      }
-    } else {
-      layerBelow = this.layerOrder[this.layerOrder.length - 1];
-    }
-
-    // 图示说明：
-    // ... --> Bp . -+> activen1 -+> An --> ... --> Bn . -+> actives1 -+> As --> ...
-    //            .  |            |                    .  |            |
-    //            .  +> activen2 -+                    .  +> actives2 -+
-    //            .  |                                 .  |
-    //            .  ...                               .  ...
-    //            .                                    .
-    //  layerPre  .              layerNow              .          layerSuc
-
-    // 与其下层连接
-    if (layerBelow) {
-      let aPointNow = this.getAPointForLayer(layerNow);
-      let bPointBelow = this.getBPointForLayer(layerBelow);
-      let activeObjs = this.activeGraph.predecessorsUnsafe(aPointNow);
-      for (const activeObj of activeObjs) {
-        this.activeGraph.addEdgeUnsafe(bPointBelow, activeObj);
-      }
-    }
-
-    // 与其上层连接
-    if (layerAbove) {
-      let bPointNow = this.getBPointForLayer(layerNow);
-      let aPointAbove = this.getAPointForLayer(layerAbove);
-      let activeObjs = this.activeGraph.predecessorsUnsafe(aPointAbove);
-      for (const activeObj of activeObjs) {
-        this.activeGraph.addEdgeUnsafe(bPointNow, activeObj);
-      }
-    }
-
-    // 更新 layerOrder 和 layerIndex
-    let indexFrom = this.layerIndex.get(layerNow);
-    let indexTo = layerAbove
+    let indexAbove = layerAbove
       ? this.layerIndex.get(layerAbove)
-      : this.layerOrder.length - 1;
-    if (indexFrom < indexTo) {
-      // 向前移动
-      for (let i = indexFrom; i < indexTo; i++) {
-        this.layerOrder[i] = this.layerOrder[i + 1];
-        this.layerIndex.set(this.layerOrder[i], i);
-      }
-      this.layerOrder[indexTo] = layerNow;
-      this.layerIndex.set(layerNow, indexTo);
-    } else if (indexFrom > indexTo) {
-      // 向后移动
-      for (let i = indexFrom; i > indexTo; i--) {
-        this.layerOrder[i] = this.layerOrder[i - 1];
-        this.layerIndex.set(this.layerOrder[i], i);
-      }
-      this.layerOrder[indexTo] = layerNow;
-      this.layerIndex.set(layerNow, indexTo);
-    }
+      : this.layerOrder.length;
+    this.layerOrder.splice(indexAbove, 0, layerNow);
+    // 更新 layerIndex
+    this.layerOrder.forEach((layer, index) => {
+      this.layerIndex.set(layer.id, index);
+    });
+  }
+
+  /**
+   * 比较两层的层次顺序
+   * @param {number} layer1 - 层 1 的 id
+   * @param {number} layer2 - 层 2 的 id
+   * @returns {number} 若层 1 在层 2 之上则返回正数，若层 1 在层 2 之下则返回负数，若二者相等则返回 0
+   */
+  compareLayerOrder(layer1, layer2) {
+    return this.layerIndex.get(layer2) - this.layerIndex.get(layer1);
   }
 }
 

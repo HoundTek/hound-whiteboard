@@ -269,7 +269,7 @@ describe("DirectedGraph", () => {
     });
   });
 
-  describe("图的遍历方法", () => {
+  describe("图的查询方法", () => {
     describe("查询后继", () => {
       test("neighborsUnsafe 应返回节点的所有后继", () => {
         graph.addNodeUnsafe(1);
@@ -361,9 +361,110 @@ describe("DirectedGraph", () => {
         expect(() => graph.predecessors(1)).toThrow(NodeNotExistError);
       });
     });
+
+    describe("查询度数", () => {
+      test("getInDegreeUnsafe 应返回节点的入度", () => {
+        graph.addNodeUnsafe(1);
+        graph.addNodeUnsafe(2);
+        graph.addNodeUnsafe(3);
+        graph.addEdgeUnsafe(2, 1);
+        graph.addEdgeUnsafe(3, 1);
+
+        const inDegree = graph.getInDegreeUnsafe(1);
+        expect(inDegree).toBe(2);
+      });
+
+      test("getInDegree 应返回节点的入度", () => {
+        graph.addNode(1);
+        graph.addNode(2);
+        graph.addNode(3);
+        graph.addEdge(2, 1);
+        graph.addEdge(3, 1);
+
+        const inDegree = graph.getInDegree(1);
+        expect(inDegree).toBe(2);
+      });
+
+      test("getInDegree 应在节点不存在时抛出错误", () => {
+        expect(() => graph.getInDegree(1)).toThrow(NodeNotExistError);
+      });
+
+      test("getOutDegreeUnsafe 应返回节点的出度", () => {
+        graph.addNodeUnsafe(1);
+        graph.addNodeUnsafe(2);
+        graph.addNodeUnsafe(3);
+        graph.addEdgeUnsafe(1, 2);
+        graph.addEdgeUnsafe(1, 3);
+
+        const outDegree = graph.getOutDegreeUnsafe(1);
+        expect(outDegree).toBe(2);
+      });
+
+      test("getOutDegree 应返回节点的出度", () => {
+        graph.addNode(1);
+        graph.addNode(2);
+        graph.addNode(3);
+        graph.addEdge(1, 2);
+        graph.addEdge(1, 3);
+
+        const outDegree = graph.getOutDegree(1);
+        expect(outDegree).toBe(2);
+      });
+
+      test("getOutDegree 应在节点不存在时抛出错误", () => {
+        expect(() => graph.getOutDegree(1)).toThrow(NodeNotExistError);
+      });
+    });
+
+    describe("查询所有节点", () => {
+      test("getNodes 应返回图中所有节点", () => {
+        graph.addNodeUnsafe(1);
+        graph.addNodeUnsafe(2);
+        graph.addNodeUnsafe(3);
+
+        const nodes = graph.getNodes();
+        expect(nodes).toBeInstanceOf(Array);
+        expect(nodes.length).toBe(3);
+        expect(nodes).toContain(1);
+        expect(nodes).toContain(2);
+        expect(nodes).toContain(3);
+      });
+    });
+
+    describe("查询入度为 0 的节点", () => {
+      test("getNoIncomingNodes 应返回所有入度为 0 的节点", () => {
+        graph.addNodeUnsafe(1);
+        graph.addNodeUnsafe(2);
+        graph.addNodeUnsafe(3);
+        graph.addEdgeUnsafe(1, 2);
+
+        const noIncoming = graph.getNoIncomingNodes();
+        expect(noIncoming).toBeInstanceOf(Array);
+        expect(noIncoming.length).toBe(2);
+        expect(noIncoming).toContain(1);
+        expect(noIncoming).toContain(3);
+        expect(noIncoming).not.toContain(2);
+      });
+    });
+
+    describe("查询出度为 0 的节点", () => {
+      test("getNoOutgoingNodes 应返回所有出度为 0 的节点", () => {
+        graph.addNodeUnsafe(1);
+        graph.addNodeUnsafe(2);
+        graph.addNodeUnsafe(3);
+        graph.addEdgeUnsafe(1, 2);
+
+        const noOutgoing = graph.getNoOutgoingNodes();
+        expect(noOutgoing).toBeInstanceOf(Array);
+        expect(noOutgoing.length).toBe(2);
+        expect(noOutgoing).toContain(2);
+        expect(noOutgoing).toContain(3);
+        expect(noOutgoing).not.toContain(1);
+      });
+    });
   });
 
-  describe("持久化", () => {
+  describe("图的持久化", () => {
     test("toJSON 应正确序列化图", () => {
       graph.addNodeUnsafe(1);
       graph.addNodeUnsafe(2);

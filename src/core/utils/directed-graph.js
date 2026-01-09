@@ -401,6 +401,50 @@ class DirectedGraph {
   }
 
   /**
+   * 查询节点的入度
+   * @param {*} node - 要查询的节点
+   * @returns {number} 节点的入度
+   */
+  getInDegreeUnsafe(node) {
+    return this.adjListR.get(node).size;
+  }
+  
+  /**
+   * 查询节点的入度，若节点不存在，则抛出错误
+   * @param {*} node - 要查询的节点
+   * @throws {NodeNotExistError} 如果节点不存在
+   * @returns {number} 节点的入度
+   */
+  getInDegree(node) {
+    if (!this.hasNode(node)) {
+      throw new NodeNotExistError(node);
+    }
+    return this.getInDegreeUnsafe(node);
+  }
+
+  /**
+   * 查询节点的出度
+   * @param {*} node - 要查询的节点
+   * @returns {number} 节点的出度
+   */
+  getOutDegreeUnsafe(node) {
+    return this.adjList.get(node).size;
+  }
+
+  /**
+   * 查询节点的出度，若节点不存在，则抛出错误
+   * @param {*} node - 要查询的节点
+   * @throws {NodeNotExistError} 如果节点不存在
+   * @returns {number} 节点的出度
+   */
+  getOutDegree(node) {
+    if (!this.hasNode(node)) {
+      throw new NodeNotExistError(node);
+    }
+    return this.getOutDegreeUnsafe(node);
+  }
+
+  /**
    * 获取图中所有节点的入度映射
    * @returns {Map<*, number>} 节点到入度的映射
    */
@@ -450,6 +494,14 @@ class DirectedGraph {
       }
     }
     return noOutgoing;
+  }
+
+  /**
+   * 获取图中所有节点
+   * @returns {Array<*>} 图中所有节点
+   */
+  getNodes() {
+    return Array.from(this.adjList.keys());
   }
 
   /**
