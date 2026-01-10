@@ -7,7 +7,6 @@
 const { RandomNumberPool } = require("../../utils/algorithm");
 const { Deque } = require("../../utils/deque");
 const { Queue } = require("../../utils/queue");
-const { CounterPool } = require("../utils/counter-pool");
 const { DirectedGraph } = require("../utils/directed-graph");
 const { PageManager } = require("./page-manager");
 
@@ -50,30 +49,6 @@ class ActiveObjectManager {
   layerPool;
 
   /**
-   * 垃圾对象 id 池
-   * @type {CounterPool}
-   * @description 用于分配在动态图中被删去的对象的占位 id。
-   */
-  junkPool;
-
-  /**
-   * 新分配一个垃圾对象 id
-   * @returns {number} 新分配的垃圾对象 id
-   * @private
-   */
-  newJunkId() {
-    return -this.junkPool.generate();
-  }
-
-  /**
-   * 初始化垃圾对象 id 池
-   * @private
-   */
-  initJunkPool() {
-    this.junkPool = new CounterPool(this.layerPool.max + 1);
-  }
-
-  /**
    * 对象所在的层
    * @description 对象 id -> 层实例的引用，便于快速查找某对象所在层。
    * @type {Map<number, Layer>}
@@ -102,7 +77,6 @@ class ActiveObjectManager {
 
   constructor() {
     this.layerPool = new RandomNumberPool(1, 10000000);
-    this.initJunkPool();
     this.layerOrder = [];
     this.onLayer = new Map();
     this.layerIndex = new Map();
@@ -112,12 +86,10 @@ class ActiveObjectManager {
   /**
    * 获取以指定对象集合为起点的子图
    * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
-   * @param {number[]} objs - 作为起点的对象 id 数组
-   * @param {PageManager[]} pges - 该对象所在的页，为 `PageManager` 实例数组
+   * @param {Set<{id: number, page: PageManager}>} startFrom - 作为起点的对象 id 和其所在页实例的集合
    * @returns {DirectedGraph}
-   * @private
    */
-  pickup(objs, pges) {
+  pickup(startFrom) {
     const visit = new Set();
     const graph = new DirectedGraph();
 
@@ -195,20 +167,24 @@ class ActiveObjectManager {
       dfs(obj);
     } // function pickupSingle ends here
 
-    for (let i = 0; i < objs.length; i++) {
-      pickupSingle(objs[i], pges[i]);
+    for (const {id: obj, page: pge} of startFrom) {
+      pickupSingle(obj, pge);
     }
 
     return graph;
   }
 
   /**
-   * @param {number[]} objs - 要选择的对象 id 的数组
-   * @param {PageManager[]} pges - 这些对象所在的页
+   * @param {Set<{id: number, page: PageManager}>} startFrom - 要选择的活动对象 id 和其所在页实例的集合
    */
-  choose(objs, pges) {
+  choose(startFrom) {
     // 提取出这些对象所构成的子图
-    let graph = this.pickup(objs, pges);
+    let graph = this.pickup(startFrom);
+    let objs = new Set();
+    for (const {id} of startFrom) {
+      objs.add(id);
+    }
+    startFrom = null; // 释放内存
 
     // 获取对象所在层
     let layerIndex = new Map();
@@ -224,7 +200,7 @@ class ActiveObjectManager {
       let node = queue.pop();
       let layerNow = layerIndex.get(node);
       for (const next of graph.neighborsUnsafe(node) || []) {
-        if (objs.includes(next)) {
+        if (objs.has(next)) {
           layerIndex.set(
             next,
             Math.max(layerNow + 1, layerIndex.get(next) || 0)
@@ -253,7 +229,7 @@ class ActiveObjectManager {
         // 此时该层应在其之下
         if (underWhich[layer - 1]) {
           if (
-            this.compareLayerOrder(
+            this.compareLayerOrderById(
               underWhich[layer - 1],
               this.onLayer.get(node).id
             ) > 0
@@ -281,7 +257,7 @@ class ActiveObjectManager {
           this.layerOrder[this.layerIndex.get(duplicates.get(node))];
         if (
           underWhich[layer - 1] &&
-          this.compareLayerOrder(underWhich[layer - 1], oldLayer.id) <= 0
+          this.compareLayerOrderById(underWhich[layer - 1], oldLayer.id) <= 0
         ) {
           // 新层应在旧层之下
           // 那么新层就不应出现重复对象
@@ -293,7 +269,7 @@ class ActiveObjectManager {
           oldLayer.inactiveGraph.deleteNodeUnsafe(node);
         }
       }
-      if (objs.includes(node)) {
+      if (objs.has(node)) {
         // 活动对象
         layers[layer - 1].activeObjects.add(node);
         this.onLayer.set(node, layers[layer - 1]);
@@ -302,7 +278,7 @@ class ActiveObjectManager {
         // 非活动对象
         layers[layer - 1].inactiveGraph.addNodeUnsafe(node);
         for (const next of graph.neighborsUnsafe(node) || []) {
-          if (!objs.includes(next) && layerIndex.get(next) === layer) {
+          if (!objs.has(next) && layerIndex.get(next) === layer) {
             // 仅连接同层非活动对象
             layers[layer - 1].inactiveGraph.addEdgeUnsafe(node, next);
           }
@@ -311,37 +287,82 @@ class ActiveObjectManager {
       }
     }
 
+    // 确保旧层的顺序不变，从上到下遍历 underWhich，把下层“拽”到上层之下
+    // 确保 this.compareLayerOrder(underWhich[i], underWhich[i + 1]) <= 0
+    for (let i = underWhich.length - 1; i >= 0; i--) {
+      if (underWhich[i] && underWhich[i + 1]) {
+        if (
+          !(this.compareLayerOrderById(underWhich[i], underWhich[i + 1]) <= 0)
+        ) {
+          // 下层居然在上层的上面，这是绝对不允许的
+          underWhich[i] = underWhich[i + 1];
+        }
+      } else if (underWhich[i]) {
+        // 下层未定义，那下层就是在最上面的
+        underWhich[i] = underWhich[i + 1];
+      }
+    }
+
     // 插入各层
-    layers.forEach((layer, index) => {
-      this.insertLayerUnder(layer, underWhich[index]);
-    });
+    for (let i = underWhich.length - 1; i >= 0; i--) {
+      this.insertLayerUnderById(layers[i], underWhich[i]);
+    }
   }
 
   /**
    * 将某层插入到另一层之下
-   * @description 层实例应该不存在于 `layerOrder` 中。
-   * @param {Layer} layerNow - 要移动的层
-   * @param {number | undefined} [layerAbove = undefined] - 要移动到何层之下，若未指定则移至顶层
+   * @description 欲插入的那一层的实例应该不存在于 `layerOrder` 中。
+   * @param {Layer} layerNow - 要插入的层
+   * @param {Layer | undefined} [layerAbove = undefined] - 要插入到何层之下，若未指定则移至顶层
    */
-  insertLayerUnder(layerNow, layerAbove = undefined) {
-    let indexAbove = layerAbove
-      ? this.layerIndex.get(layerAbove)
-      : this.layerOrder.length;
-    this.layerOrder.splice(indexAbove, 0, layerNow);
-    // 更新 layerIndex
-    this.layerOrder.forEach((layer, index) => {
-      this.layerIndex.set(layer.id, index);
-    });
+  insertLayerUnder(layerNow, layerAbove) {
+    this.insertLayerUnderById(layerNow, layerAbove ? layerAbove.id : undefined);
   }
 
   /**
-   * 比较两层的层次顺序
+   * 将某层插入到另一层（用 id 表示）之下
+   * @description 欲插入的那一层的实例应该不存在于 `layerOrder` 中。
+   * @param {Layer} layerNow - 要插入的层
+   * @param {number | undefined} [layerAboveId = undefined] - 要插入到何层之下，若未指定则移至顶层，是层 id
+   */
+  insertLayerUnderById(layerNow, layerAboveId) {
+    let indexAbove = layerAboveId
+      ? this.layerIndex.get(layerAboveId)
+      : this.layerOrder.length;
+    this.layerOrder.splice(indexAbove, 0, layerNow);
+    // 更新 layerIndex
+    for (let i = indexAbove; i < this.layerOrder.length; i++) {
+      this.layerIndex.set(this.layerOrder[i].id, i);
+    }
+  }
+
+  /**
+   * 将某层插入至顶层
+   * @param {Layer} layerNow - 要插入的层
+   * @description 欲插入的那一层的实例应该不存在于 `layerOrder` 中。
+   */
+  insertLayerToTop(layerNow) {
+    this.insertLayerUnderById(layerNow, undefined);
+  }
+
+  /**
+   * 比较两层的层次顺序（用 id 表示）
    * @param {number} layer1 - 层 1 的 id
    * @param {number} layer2 - 层 2 的 id
    * @returns {number} 若层 1 在层 2 之上则返回正数，若层 1 在层 2 之下则返回负数，若二者相等则返回 0
    */
+  compareLayerOrderById(layer1, layer2) {
+    return this.layerIndex.get(layer1) - this.layerIndex.get(layer2);
+  }
+
+  /**
+   * 比较两层的层次顺序
+   * @param {Layer} layer1 - 层 1 的实例
+   * @param {Layer} layer2 - 层 2 的实例
+   * @returns {number} 若层 1 在层 2 之上则返回正数，若层 1 在层 2 之下则返回负数，若二者相等则返回 0
+   */
   compareLayerOrder(layer1, layer2) {
-    return this.layerIndex.get(layer2) - this.layerIndex.get(layer1);
+    return this.compareLayerOrderById(layer1.id, layer2.id);
   }
 }
 
@@ -381,7 +402,7 @@ class PageLoadManager {
   resetCurrentPage(page) {
     this.pageNow = page;
     // 卸载所有已加载页
-    while (this.pagesLoaded.size() > 0) {
+    while (this.pagesLoaded.count() > 0) {
       /** @type {PageManager} */
       let pageToUnload = this.pagesLoaded.popFront();
       pageToUnload.objectManager.unloadTiermap();
@@ -404,7 +425,7 @@ class PageLoadManager {
       throw e;
     }
     // 右移当前页
-    this.pageNow = pageToLoad;
+    this.pageNow = this.pageNow.nextPage;
   }
 
   /**
@@ -413,7 +434,7 @@ class PageLoadManager {
    */
   loadRight() {
     // 卸载多余页
-    while (this.pagesLoaded.size() >= this.pagesLoadedLimit) {
+    while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
       /** @type {PageManager} */
       let pageToUnload = this.pagesLoaded.popFront();
       pageToUnload.objectManager.unloadTiermap();
@@ -441,7 +462,7 @@ class PageLoadManager {
       throw e;
     }
     // 左移当前页
-    this.pageNow = pageToLoad;
+    this.pageNow = this.pageNow.prevPage;
   }
 
   /**
@@ -450,7 +471,7 @@ class PageLoadManager {
    */
   loadLeft() {
     // 卸载多余页
-    while (this.pagesLoaded.size() >= this.pagesLoadedLimit) {
+    while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
       /** @type {PageManager} */
       let pageToUnload = this.pagesLoaded.popBack();
       pageToUnload.objectManager.unloadTiermap();
@@ -469,4 +490,6 @@ class PageLoadManager {
 
 module.exports = {
   ActiveObjectManager,
+  Layer,
+  PageLoadManager,
 };

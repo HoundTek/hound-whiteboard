@@ -55,7 +55,7 @@ class PageObjectManager {
    * @todo
    */
   loadTiermap(file) {
-    this.staticGraph = DirectedGraph.parse(file.cat());
+    if (file) this.staticGraph = DirectedGraph.parse(file.cat());
   }
 
   /**
