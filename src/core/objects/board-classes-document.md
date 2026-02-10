@@ -4,7 +4,7 @@
 
 ## Container
 
-Container 类是用来包装一、二维对象的容器类。派生于 [ZeroDimensionObject](../basic-classes-document.md#zero-dimension-object)。
+Container 类是用来包装一、二维对象的容器类。派生于 [BasicObject](./basic-classes-document.md#basic-object)。
 
 ### 功能
 
@@ -17,7 +17,11 @@ Container 类是用来包装一、二维对象的容器类。派生于 [ZeroDime
 用户通过“进入”容器来修改内部对象的内容 (不是更改对象！)。
 
 ### 属性
-- `child` - 被容器包装的一维对象或二维对象
+
+
+|名称|描述|类型|
+|:-:|:-:|:-:|
+|`child`|被窗口包装的一维对象或二维对象|`OneDimensionObject\|TwoDimensionObject`|
 
 ## Graph
 

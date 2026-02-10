@@ -9,6 +9,7 @@ yarn.lock
 
 # MacOS
 .ds_store
+**/.ds_store
 
 coverage
 release

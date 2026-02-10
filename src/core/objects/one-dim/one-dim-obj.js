@@ -10,18 +10,16 @@ const { Container } = require("../container");
  */
 class OneDimensionObject extends Container {
   /**
-   * 标识该一维对象的主轴是否是 x 轴
-   * @type {boolean}
-   * @static
-   * @description true 表示主轴是 x 轴（水平），false 表示主轴是 y 轴（垂直）
-   */
-  static isMainAxisX = true;
-
-  /**
    * 一维对象的主轴长度
    * @type {number}
    */
-  mainAxisLength = 0;
+  ihatLength = 0;
+
+  /**
+   * 一维对象的主轴相对 x-hat 的旋转角度
+   * @type {number}
+   */
+  ihatRotate = 0;
 
   /**
    * 创建一个新的一维对象
