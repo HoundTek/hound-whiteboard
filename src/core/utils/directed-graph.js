@@ -181,32 +181,37 @@ class DirectedGraph {
   /**
    * 添加一个节点
    * @param {*} node - 要添加的节点
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   addNodeUnsafe(node) {
     this.adjList.set(node, new Set());
     this.adjListR.set(node, new Set());
+    return this;
   }
 
   /**
    * 添加一个节点，如果节点已存在，则抛出错误
    * @param {*} node - 要添加的节点
    * @throws {NodeAlreadyExistError} 如果节点已存在
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   addNode(node) {
     if (this.hasNode(node)) {
       throw new NodeAlreadyExistError(node);
     }
-    this.addNodeUnsafe(node);
+    return this.addNodeUnsafe(node);
   }
 
   /**
    * 添加一条边
    * @param {*} from - 起点
    * @param {*} to - 终点
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   addEdgeUnsafe(from, to) {
     this.adjList.get(from).add(to);
     this.adjListR.get(to).add(from);
+    return this;
   }
 
   /**
@@ -214,6 +219,7 @@ class DirectedGraph {
    * @param {*} from - 起点
    * @param {*} to - 终点
    * @throws {NodeNotExistError | EdgeAlreadyExistError} 如果起点或终点不存在，或边已存在
+   * @return {DirectedGraph} 返回自身以方便链式调用
    */
   addEdge(from, to) {
     if (!this.hasNode(from)) {
@@ -225,17 +231,19 @@ class DirectedGraph {
     if (this.hasEdge(from, to)) {
       throw new EdgeAlreadyExistError(from, to);
     }
-    this.addEdgeUnsafe(from, to);
+    return this.addEdgeUnsafe(from, to);
   }
 
   /**
    * 删除一条边
    * @param {*} from - 起点
    * @param {*} to - 终点
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   deleteEdgeUnsafe(from, to) {
     this.adjList.get(from).delete(to);
     this.adjListR.get(to).delete(from);
+    return this;
   }
 
   /**
@@ -243,6 +251,7 @@ class DirectedGraph {
    * @param {*} from - 起点
    * @param {*} to - 终点
    * @throws {NodeNotExistError | EdgeNotExistError} 如果起点或终点不存在，或边不存在
+   * @return {DirectedGraph} 返回自身以方便链式调用
    */
   deleteEdge(from, to) {
     if (!this.hasNode(from)) {
@@ -254,13 +263,14 @@ class DirectedGraph {
     if (!this.hasEdge(from, to)) {
       throw new EdgeNotExistError(from, to);
     }
-    this.deleteEdgeUnsafe(from, to);
+    return this.deleteEdgeUnsafe(from, to);
   }
 
   /**
    * 更改节点名称
    * @param {*} oldNode - 旧节点名称
    * @param {*} newNode - 新节点名称
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   changeNodeNameUnsafe(oldNode, newNode) {
     const outgoing = this.adjList.get(oldNode);
@@ -281,6 +291,8 @@ class DirectedGraph {
       this.adjList.get(neighbor).delete(oldNode);
       this.adjList.get(neighbor).add(newNode);
     }
+
+    return this;
   }
 
   /**
@@ -288,6 +300,7 @@ class DirectedGraph {
    * @param {*} oldNode - 旧节点名称
    * @param {*} newNode - 新节点名称
    * @throws {NodeNotExistError | NodeAlreadyExistError} 如果旧节点不存在或新节点已存在
+   * @return {DirectedGraph} 返回自身以方便链式调用
    */
   changeNodeName(oldNode, newNode) {
     if (!this.hasNode(oldNode)) {
@@ -296,12 +309,13 @@ class DirectedGraph {
     if (this.hasNode(newNode)) {
       throw new NodeAlreadyExistError(newNode);
     }
-    this.changeNodeNameUnsafe(oldNode, newNode);
+    return this.changeNodeNameUnsafe(oldNode, newNode);
   }
 
   /**
    * 删除某个节点的所有边 (包括出边和入边)
    * @param {*} node - 要删除边的节点
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   deleteAllEdgesOfNodeUnsafe(node) {
     for (const neighbor of this.adjList.get(node)) {
@@ -312,40 +326,46 @@ class DirectedGraph {
       this.adjList.get(neighbor).delete(node);
     }
     this.adjListR.get(node).clear();
+    return this;
   }
 
   /**
    * 删除某个节点的所有边 (包括出边和入边)，如果节点不存在，则抛出错误
    * @param {*} node - 要删除边的节点
    * @throws {NodeNotExistError} 如果节点不存在
+   * @return {DirectedGraph} 返回自身以方便链式调用
    */
   deleteAllEdgesOfNode(node) {
     if (!this.hasNode(node)) {
       throw new NodeNotExistError(node);
     }
-    this.deleteAllEdgesOfNodeUnsafe(node);
+    return this.deleteAllEdgesOfNodeUnsafe(node);
   }
 
   /**
    * 删除某个节点及其所有关联的边
    * @param {*} node - 要删除的节点
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   deleteNodeUnsafe(node) {
     this.deleteAllEdgesOfNodeUnsafe(node); // 先删除所有关联的边
     this.adjList.delete(node);
     this.adjListR.delete(node);
+    return this;
   }
 
   /**
    * 删除某个节点及其所有关联的边，如果节点不存在，则抛出错误
    * @param {*} node - 要删除的节点
    * @throws {NodeNotExistError} 如果节点不存在
+   * @return {DirectedGraph} 返回自身以方便链式调用
    */
   deleteNode(node) {
     if (!this.hasNode(node)) {
       throw new NodeNotExistError(node);
     }
     this.deleteNodeUnsafe(node);
+    return this;
   }
 
   /**
@@ -401,6 +421,50 @@ class DirectedGraph {
   }
 
   /**
+   * 查询节点的入度
+   * @param {*} node - 要查询的节点
+   * @returns {number} 节点的入度
+   */
+  getInDegreeUnsafe(node) {
+    return this.adjListR.get(node).size;
+  }
+
+  /**
+   * 查询节点的入度，若节点不存在，则抛出错误
+   * @param {*} node - 要查询的节点
+   * @throws {NodeNotExistError} 如果节点不存在
+   * @returns {number} 节点的入度
+   */
+  getInDegree(node) {
+    if (!this.hasNode(node)) {
+      throw new NodeNotExistError(node);
+    }
+    return this.getInDegreeUnsafe(node);
+  }
+
+  /**
+   * 查询节点的出度
+   * @param {*} node - 要查询的节点
+   * @returns {number} 节点的出度
+   */
+  getOutDegreeUnsafe(node) {
+    return this.adjList.get(node).size;
+  }
+
+  /**
+   * 查询节点的出度，若节点不存在，则抛出错误
+   * @param {*} node - 要查询的节点
+   * @throws {NodeNotExistError} 如果节点不存在
+   * @returns {number} 节点的出度
+   */
+  getOutDegree(node) {
+    if (!this.hasNode(node)) {
+      throw new NodeNotExistError(node);
+    }
+    return this.getOutDegreeUnsafe(node);
+  }
+
+  /**
    * 获取图中所有节点的入度映射
    * @returns {Map<*, number>} 节点到入度的映射
    */
@@ -453,30 +517,83 @@ class DirectedGraph {
   }
 
   /**
+   * 获取图中所有节点
+   * @returns {Array<*>} 图中所有节点
+   */
+  getNodes() {
+    return Array.from(this.adjList.keys());
+  }
+
+  /**
    * 清空图
+   * @returns {DirectedGraph} 返回自身以方便链式调用
    */
   clear() {
     this.adjList.clear();
     this.adjListR.clear();
+    return this;
   }
 
   /**
-   * 从 JSON 构建一个有向图实例
-   * @param {Object} json - JSON
+   * 检测图是否为有向无环图 (DAG)
+   * @returns {boolean} 如果图为 DAG，则返回 true，否则返回 false
+   */
+  isDAG() {
+    // 使用 Kahn 算法检测是否有环
+    let inDegreeMap = this.getInDegreeMap();
+    let queue = [];
+    for (const [node, inDegree] of inDegreeMap.entries()) {
+      if (inDegree === 0) {
+        queue.push(node);
+      }
+    }
+
+    let visitedCount = 0;
+
+    while (queue.length > 0) {
+      let node = queue.shift();
+      visitedCount++;
+
+      for (const neighbor of this.neighborsUnsafe(node) || []) {
+        inDegreeMap.set(neighbor, inDegreeMap.get(neighbor) - 1);
+        if (inDegreeMap.get(neighbor) === 0) {
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    return visitedCount === this.size;
+  }
+
+  /**
+   * 检测图是否为空
+   * @returns {boolean} 如果图为空，则返回 true，否则返回 false
+   */
+  isEmpty() {
+    return this.size === 0;
+  }
+
+  /**
+   * 从邻接表构建一个有向图实例
+   * @param {Array<Array<any>>} arr - 邻接表表示的有向图
+   * @example
+   * let graph = DirectedGraph.parse([[1, [2, 3]], [2, [3]], [3, []]]);
+   * // graph 表示的有向图为：1 -> 2, 1 -> 3, 2 -> 3
    * @static
    * @returns {DirectedGraph} 创建的实例
    */
-  static parse(json) {
+  static parse(arr) {
     let graph = new DirectedGraph();
 
-    for (let fromKey in json) {
-      let from = isNaN(Number(fromKey)) ? fromKey : Number(fromKey);
+    for (const item of arr) {
+      const from = item[0];
       if (!graph.hasNode(from)) {
         graph.addNodeUnsafe(from);
       }
-      const neighbors = json[fromKey];
-      for (let toKey of neighbors) {
-        let to = isNaN(Number(toKey)) ? toKey : Number(toKey);
+      for (const to of item[1]) {
+        if (!graph.hasNode(from)) {
+          graph.addNodeUnsafe(from);
+        }
         if (!graph.hasNode(to)) {
           graph.addNodeUnsafe(to);
         }
@@ -487,16 +604,58 @@ class DirectedGraph {
     return graph;
   }
 
-  toJSON() {
-    let json = {};
-    for (const [from, toSet] of this.adjList.entries()) {
-      json[from] = Array.from(toSet);
+  /**
+   * 将图转换为邻接表表示的数组
+   * @returns {Array<Array<any>>} 邻接表表示的数组
+   */
+  toArray() {
+    let arr = [];
+    for (const [node, neighbors] of this.adjList.entries()) {
+      arr.push([node, Array.from(neighbors)]);
     }
-    return json;
+    return arr;
   }
 
+  /**
+   * 将图转换为字符串表示
+   * @returns {string} 图的字符串表示
+   * @description 每行表示一个节点及其所有邻居，格式为 "node -> neighbor1, neighbor2, ..."，调试用。
+   */
   toString() {
-    return JSON.stringify(this.toJSON(), null, 2);
+    let str = "";
+    for (const [node, neighbors] of this.adjList.entries()) {
+      str += `${node} -> ${Array.from(neighbors).join(", ")}\n`;
+    }
+    return str;
+  }
+
+  /**
+   * 比较该图与另一个图是否相等
+   * @param {DirectedGraph} otherGraph - 另一个有向图
+   * @returns {boolean} 是否与另一个图相等，即节点和边均相同，相等则返回 true，否则返回 false
+   */
+  equals(otherGraph) {
+    if (this.size !== otherGraph.size) {
+      return false;
+    }
+
+    for (const node of this.getNodes()) {
+      if (!otherGraph.hasNode(node)) {
+        return false;
+      }
+      const thisNeighbors = this.neighborsUnsafe(node);
+      const otherNeighbors = otherGraph.neighborsUnsafe(node);
+      if (thisNeighbors.size !== otherNeighbors.size) {
+        return false;
+      }
+      for (const neighbor of thisNeighbors) {
+        if (!otherNeighbors.has(neighbor)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 }
 

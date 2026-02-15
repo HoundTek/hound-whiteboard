@@ -102,7 +102,7 @@ class TextObject extends OneDimensionObject {
     this.rectangle = new Matrix(
       0,
       0,
-      this.mainAxisLength,
+      this.ihatLength,
       this.textProperty.size * 1.2 * this.dividedText.length
     );
   }
@@ -113,10 +113,10 @@ class TextObject extends OneDimensionObject {
    * @description 目前仅支持水平文本框。
    * @default 400
    */
-  mainAxisLength = 400;
+  ihatLength = 400;
 
-  setMainAxisLength(length, ctx) {
-    this.mainAxisLength = length;
+  setIhatLength(length, ctx) {
+    this.ihatLength = length;
     this.divideText(ctx);
   }
 

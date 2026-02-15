@@ -10,6 +10,7 @@
 - 所有对象均用小写正粗体表示，如对象 $\mathbf{a}$，如未特殊说明，字母相同的对象与点被视为对应的，比如 $\mathbf{a}$ 在图上对应的点为 $A$
 - 所有的图均用大写手写体表示，如图 $\mathcal{G}$
 - 所有图上的点均用大写斜体表示，如点 $A$
+- 所有数组均用大写正粗体表示，如数组 $\mathbf{A}$
 - 所有函数和自然数变量均用小写斜体表示，如 $f(x)$
 - 函数 $p(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 的点集
 - 函数 $s(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 入度为 $0$ 的点的点集
@@ -20,11 +21,11 @@
 
 对于一页上的对象，我们可以用有向无环图来表示对象间的层级关系（可以不连通）。
 
-我们将维护两张有向无环图: 静态状态图 $\mathcal{S}$ 和动态状态图 $\mathcal{D}$。其中，每一页都有一张静态状态图，而每一个白板都有一张动态状态图。它们并称层叠图。
+我们将维护一张有向无环图: 静态状态图 $\mathcal{S}$。还会维护一个有着 $n$ 个数组 $\mathbf{A}_i$ 和 $n$ 张有向无环图 $\mathcal{D}_i$ 的数组，称为动态状态图 $\mathbf{D}$。其中，每一页都有一张静态状态图，而每一个白板都有一张动态状态图。它们并称层叠图。
 
-静态状态图表示最后一次刷新时对象间的层级关系。若 $P, Q \in \mathcal{S}$ 且存在边 $P \to Q$，则 $P$、$Q$ 间有交集，且 $\mathbf{p}$ 在 $\mathbf{q}$ 之下。
+静态状态图表示最后一次刷新时对象间的层级关系。若 $P, Q \in p(\mathcal{S})$ 且存在边 $P \to Q$，则 $P$、$Q$ 间有交集，且 $\mathbf{p}$ 在 $\mathbf{q}$ 之下。
 
-动态状态图表示下次刷新时对象额外应遵循的层级关系，主要是判断谁应在该对象之上。若 $P, Q \in \mathcal{D}$ 且 $P$ 能到达 $Q$，则在下次刷新时，若 $\mathbf{p}$、$\mathbf{q}$ 间有交集，则 $\mathbf{p}$ 应在 $\mathbf{q}$ 之下。
+动态状态图表示下次刷新时对象额外应遵循的层级关系，主要是判断谁应在该对象之上。若 $P, Q \in \mathbf{D}$ 且 $P$ 能到达 $Q$，则在下次刷新时，若 $\mathbf{p}$、$\mathbf{q}$ 间有交集，则 $\mathbf{p}$ 应在 $\mathbf{q}$ 之下。
 
 ## 层叠图基础操作
 
@@ -36,7 +37,7 @@
 
 ### 清理动态图
 
-清理动态图是保证 $\forall \mathbf{p} \in p(\mathcal{D})$ 都是正在被操作的对象，或是它对应的点可以被某被操作的对象对应的点到达，且保证不存在重复对象的操作。
+清理动态图是指将无法被被选择的对象到达的层以及空层删去。
 
 ## 层叠图操作逻辑
 
@@ -64,11 +65,7 @@
 2. $\forall P \in p(\mathcal{G})$，存在从 $A$ 到 $P$ 的路径
 3. $\forall P \in \complement_{p(\mathcal{S})}\mathcal{G}$，不存在从 $A$ 到 $P$ 的路径
 
-然后额外创建一个外虚点 $V$ ，将 $\mathcal{G}$ 中出度为 $0$ 的点向 $V$ 连边。其中虚点指的是没有对应对象的点。
-
-如果 $\mathcal{G}$ 之中没有先前被选择过的节点，则动态图就是 $\mathcal{G}$。
-
-如果有，那就 $\mathcal{G}$ 之中先前被选择的节点之中 `layer` 最低的那一个所在的层。这一层的下层存在一个外虚点，记为 $V'$。
+则动态图就是图 $\complement_{\mathcal{G}}A$ 和数组 $\{A\}$ 的集合。
 
 - 若下层存在，将 $V'$ 连向的对象集记为 $\mathbb{V}$，对 $\forall Q \in \mathbb{V}$，创建边 $V \to Q$，并删除边 $V' \to Q$。然后创建边 $V' \to A$ 即可。
 - 若下层不存在，则直接将 $V$ 连向这一层中入度为 $0$ 的对象。
@@ -87,32 +84,17 @@
 2. $\forall P \in p(\mathcal{G}), \exist Q \in \mathbb{A}$，存在从 $Q$ 到 $P$ 的路径
 3. $\forall P \in \complement_{p(\mathcal{S})}\mathcal{G}, \forall Q \in \mathbb{A}$，不存在从 $Q$ 到 $P$ 的路径
 
+#### 得到 $\mathcal{G}$ 后，将其分层并删除跨层边:
 
-#### 得到 $\mathcal{G}$ 后，将其分层并删除跨层边，算法如下:
+1. 定义某点所在的层为“从入度为 $0$ 的点到该点的所有链中拥有活动点数量的最大值”，层是一个正整数
+2. 定义某边的层差为“该边终点所在层与该边起点所在层之差”，层差是一个自然数
+3. 跨层边为“边终点为活动点且层差大于 $1$ 的边或边终点不为活动点且层差大于 $0$ 的边”
+4. 将所在跨层边删去，得到 $\mathcal{G'}$
 
-1. 对于每个点，有属性 `layer` 表示该点所在的层，属性 `stash` 表示该点的暂存的边，有全局变量 `currentLayer` 表示当前正在处理的层，`activeNumber` 表示当前是还需处理多少个 `activeQueue` 中的点，队列 `activeQueue` 和 `inactiveQueue` 分别存活动对象和非活动对象
-2. 计算每个点的入度
-3. 将入度为 $0$ 的点入队，将 `currentLayer` 赋予这些点
-4. 若 `inactiveQueue` 中有元素且 `activeNumber` 为 $0$，则将 `inactiveQueue` 中一元素出队，记为 $P$，对 $P$ 的所有后继节点进行如下操作
-   1. 假设当前操作的节点为 $Q$
-   2. 若 $Q$ 的 `layer` 比 `currentLayer` 小，则将其 `stash` 里的所有边从 $\mathcal{G}$ 中删去，将 `stash` 清空，并将 `currentLayer` 赋予 $Q$
-   3. 将 $Q$ 的入度减一，若 $Q$ 的入度变成了 $0$，则将 $Q$ 入队，并清空 $Q$ 的 `stash`，否则，将 $P \to Q$ 加入 $Q$ 的 `stash`
-5. 若 `inactiveQueue` 中无元素但 `activeQueue` 中有元素，则将 `activeNumber` 设为 `activeQueue` 的元素数，且将 `currentLayer` 加一
-6. 若 `activeNumber` 不为 $0$ 且 `activeQueue` 中有元素，则将 `activeQueue` 中一元素出队，记为 $P$，先将 $P$ 的 `layer` 置为 `currentLayer`，再对 $P$ 的所有后继节点进行如下操作
-   1. 假设当前操作的节点为 $Q$
-   2. 若 $Q$ 的 `layer` 比 `currentLayer - 1` 小，则将其 `stash` 里的所有边从 $\mathcal{G}$ 中删去，将 `stash` 清空，并将 `currentLayer` 赋予 $Q$
-   3. 将 $Q$ 的入度减一，若 $Q$ 的入度变成了 $0$，则将 $Q$ 入队，并清空 $Q$ 的 `stash`，否则，将 $P \to Q$ 加入 $Q$ 的 `stash`
-   4. 将 `activeNumber` 减一
-7. 若 `inactiveQueue` 或 `activeQueue` 中有元素，则重复第 4 到第 6 步
-8. 将所有活动对象对应的节点的 `layer` 加一
-9. 现在，删除活动节点在动态图中的所有边，然后计算每个非活动节点的入度和出度
-10. 创建 `currentLayer` 个虚点，记为 $A_i$
-11. 创建 `currentLayer` 个虚点，记为 $B_i$
-12. 将 $A_i$ 连至 `layer` 为 $i$ 的入度为 $0$ 的非活动节点
-13. 将 `layer` 为 $i$ 的活动节点连至 $A_i$
-14. 将 $B_i$ 连至 `layer` 为 $i + 1$ 的活动节点
-15. 将 `layer` 为 $i$ 的出度为 $0$ 的非活动节点连至 $B_i$ 
-16. 最终，得到图 $\mathcal{G'}$
+#### 将 $\mathcal{G}'$ 分至数组 $\mathbf{G}$:
+
+1. 将所有活动对象按层 $i$ 加入 $\mathbf{G}$ 的数组 $\mathbf{A}_i$
+2. 将所有活动对象从 $\mathcal{G}'$ 中删去，并将属于层 $i$ 的子图加入 $\mathcal{D}_i$
 
 #### 将 $\mathcal{G}'$ 的每一层按照以下规则插入:
 
@@ -123,19 +105,18 @@
 
 ### 取消选择对象
 
-首先将要取消选择的对象集合 $\mathbb{A}$ 提取出来，对于每一个 $\mathbf{a} \in \mathbb{A}$，都有对象集 $\mathbb{B}_{\mathbf{a}}$ 表示动态图中它能到达的对象，有对象集 $\mathbb{C}_{\mathbf{a}}$ 表示与它有交集的对象，于是我们有对象集 $\mathbb{D}_{\mathbf{a}} = \mathbb{B}_{\mathbf{a}} \cap \mathbb{C}_{\mathbf{a}}$ 表示在静态图中它将要连边的对象，而 $\mathbb{E}_{\mathbf{a}} = \complement_{\mathbb{C}_{\mathbf{a}}}\mathbb{D}_{\mathbf{a}}$ 表示在静态图中将要连边到它的对象。
-
-然后依据刚刚算出来的 $\mathbb{D}_a$ 和 $\mathbb{E}_a$ 连边。
-
-最后合并每一个刚刚取消选择了对象的层和它下一层。
+1. 直接将要取消选择的对象从图中删去
+2. 清理状态图
 
 ### 置顶选择的对象
 
-todo
+1. 直接将要置顶的对象从图中删去
+2. 清理状态图
+3. 将这些要置顶的对象按层级重新加入到状态图中
 
 ## 层叠图实现
 
-在 [tire-graph.js](./tier-graph.js) 中，选用邻接表来实现一个有向无环图。
+在 [tire-graph.js](../utils/tier-graph.js) 中，选用邻接表来实现一个有向无环图。
 
 ## 层叠图示例
 
@@ -230,57 +211,32 @@ graph BT
 
 ```mermaid
 graph BT
-  H --> A1
-  E --> A1
-  A1 --> B1
-  B1 --> C
-  C --> A2
-  A2 -->B
   B --> A
-  A2 --> F
-  A --> B2
-  F --> B2
 
   style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
   style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
 
   subgraph "layer: 2"
-  C
-  A2
-  B
-  A
-  F
-  B2
+    subgraph "active: 2"
+      C
+    end
+    subgraph "inactive: 2"
+      B
+      A
+      F
+    end
   end
 
   subgraph "layer: 1"
-  H
-  E
-  A1
-  B1
+    subgraph "active: 1"
+      H
+      E
+    end
   end
 ```
 
-放入动态图中，静态图不变，动态图清理后如下:
-
-```mermaid
-graph BT
-  H --> A1
-  E --> A1
-  A1 --> B1
-  B1 --> C
-  C --> A2
-  A2 -->B
-  B --> A
-  A2 --> F
-  A --> B2
-  F --> B2
-
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-```
+放入动态图中，静态图不变，动态图同上。
 
 #### 将 E 移走，H 移到 D 上，C 移到 A、B、F 之下，取消选择
 

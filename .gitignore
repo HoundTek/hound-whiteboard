@@ -5,10 +5,10 @@ yarn.lock
 
 # Editor
 .idea
-.vscode
 
 # MacOS
 .ds_store
+**/.ds_store
 
 coverage
 release
