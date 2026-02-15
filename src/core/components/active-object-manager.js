@@ -34,6 +34,14 @@ class Layer {
     this.activeObjects = new Set();
     this.inactiveGraph = new DirectedGraph();
   }
+
+  /**
+   * 清空该层
+   */
+  clear() {
+    this.activeObjects.clear();
+    this.inactiveGraph.clear();
+  }
 }
 
 /**
@@ -167,7 +175,7 @@ class ActiveObjectManager {
       dfs(obj);
     } // function pickupSingle ends here
 
-    for (const {id: obj, page: pge} of startFrom) {
+    for (const { id: obj, page: pge } of startFrom) {
       pickupSingle(obj, pge);
     }
 
@@ -180,34 +188,41 @@ class ActiveObjectManager {
   choose(startFrom) {
     // 提取出这些对象所构成的子图
     let graph = this.pickup(startFrom);
-    let objs = new Set();
-    for (const {id} of startFrom) {
+    let objs = new Set(); // 只要对象 id
+    for (const { id } of startFrom) {
       objs.add(id);
     }
     startFrom = null; // 释放内存
 
     // 获取对象所在层
+    /** @description 对象 id -> 层索引 @type {Map<number, number>} */
     let layerIndex = new Map();
+    // BFS logic
     let visit = new Set();
     let queue = new Queue();
     for (const node of graph.getNoIncomingNodes()) {
       visit.add(node);
       queue.push(node);
-      layerIndex.set(node, 1);
+      layerIndex.set(node, 0);
     }
-
+    // 某点所在的层数指“从入度为 0 的点到该点的所有链中拥有活动点数量的最大值”
+    // 这里是层索引，层索引 = 层数 - 1
     while (!queue.empty()) {
       let node = queue.pop();
       let layerNow = layerIndex.get(node);
       for (const next of graph.neighborsUnsafe(node) || []) {
+        // 计算 next 的层数
         if (objs.has(next)) {
+          // 活动对象所在层数至少比它的前驱层数大 1
           layerIndex.set(
             next,
-            Math.max(layerNow + 1, layerIndex.get(next) || 0)
+            Math.max(layerNow + 1, layerIndex.get(next) || -1),
           );
         } else {
-          layerIndex.set(next, Math.max(layerNow, layerIndex.get(next) || 0));
+          // 非活动对象所在层数至少和它的前驱层数一样
+          layerIndex.set(next, Math.max(layerNow, layerIndex.get(next) || -1));
         }
+        // BFS logic
         if (!visit.has(next)) {
           visit.add(next);
           queue.push(next);
@@ -216,80 +231,92 @@ class ActiveObjectManager {
     }
 
     // 处理层的上下关系
-    let underWhich = Array.from({ length: layerIndex.size }, () => undefined); // 层索引 -> 层索引
+    let layerCount = Math.max(...layerIndex.values()) + 1;
+    /**
+     * 新层在哪一层之下
+     * @description 新层索引 -> 旧层 id；若为 undefined 表示它在最上面
+     * @type {Array<number | undefined>}
+     */
+    let underWhich = Array.from({ length: layerCount }, () => undefined);
+    /** @description 新层索引 -> 新层实例 @type {Array<Layer>} */
     let layers = Array.from(
-      { length: layerIndex.size },
-      () => new Layer(this.layerPool.generate())
+      { length: layerCount },
+      () => new Layer(this.layerPool.generate()),
     );
-    let duplicates = new Map(); // 记录重复对象，键为对象 id，值为旧层的 id（该对象以前出现在哪一层）
+    /** 记录重复对象 id @type {Set<number>} */
+    let duplicates = new Set();
     for (const node of graph.getNodes()) {
-      let layer = layerIndex.get(node);
+      let layerIdx = layerIndex.get(node);
       if (this.activeObjects.has(node)) {
         // 它是以前就有的活动对象
         // 此时该层应在其之下
-        if (underWhich[layer - 1]) {
+        if (underWhich[layerIdx]) {
           if (
             this.compareLayerOrderById(
-              underWhich[layer - 1],
-              this.onLayer.get(node).id
+              underWhich[layerIdx],
+              this.onLayer.get(node).id,
             ) > 0
           ) {
             // 如果新层本来应在旧层之上，那么调整为新层应在旧层之下
-            underWhich[layer - 1] = this.onLayer.get(node).id;
+            underWhich[layerIdx] = this.onLayer.get(node).id;
           }
         } else {
-          underWhich[layer - 1] = this.onLayer.get(node).id;
+          underWhich[layerIdx] = this.onLayer.get(node).id;
         }
-        duplicates.set(node, this.onLayer.get(node).id);
+        duplicates.add(node);
       } else if (this.onLayer.has(node)) {
         // 它以前就有，但不是活动对象
         // 对该层的上下关系无影响
-        duplicates.set(node, this.onLayer.get(node).id);
+        duplicates.add(node);
       }
     }
 
-    // 将对象加入层并处理重复对象
-    for (const node of graph.getNodes()) {
-      let layer = layerIndex.get(node);
-      if (duplicates.has(node)) {
-        /** @type {Layer} */
-        let oldLayer =
-          this.layerOrder[this.layerIndex.get(duplicates.get(node))];
-        if (
-          underWhich[layer - 1] &&
-          this.compareLayerOrderById(underWhich[layer - 1], oldLayer.id) <= 0
-        ) {
-          // 新层应在旧层之下
-          // 那么新层就不应出现重复对象
-          // pass
-        } else {
-          // 新层应在旧层之上
-          // 那么旧层就不应出现重复对象
-          // 且该对象在旧层中一定不是活动对象
-          oldLayer.inactiveGraph.deleteNodeUnsafe(node);
-        }
+    // 处理在旧层中的重复对象
+    for (const node of duplicates.values()) {
+      // 如果新层应在旧层的上方，那旧层里的这个对象就应该被删去，该对象不再为重复对象
+      if (
+        this.compareLayerOrderById(
+          underWhich[layerIndex.get(node)],
+          this.onLayer.get(node).id,
+        ) > 0
+      ) {
+        this.onLayer.get(node).inactiveGraph.deleteNodeUnsafe(node);
+        duplicates.delete(node);
       }
+    }
+
+    // 将对象加入新层，重复对象将不会被加入
+    for (const node of graph.getNodes()) {
+      let newLayer = layers[layerIndex.get(node) || 0];
       if (objs.has(node)) {
-        // 活动对象
-        layers[layer - 1].activeObjects.add(node);
-        this.onLayer.set(node, layers[layer - 1]);
+        // 该对象是新活动对象，加入新层中的活动对象集
+        // 新活动对象在这个位置绝对不可能是重复对象
+        newLayer.activeObjects.add(node);
+        this.onLayer.set(node, newLayer);
         this.activeObjects.add(node);
       } else {
-        // 非活动对象
-        layers[layer - 1].inactiveGraph.addNodeUnsafe(node);
-        for (const next of graph.neighborsUnsafe(node) || []) {
-          if (!objs.has(next) && layerIndex.get(next) === layer) {
-            // 仅连接同层非活动对象
-            layers[layer - 1].inactiveGraph.addEdgeUnsafe(node, next);
+        if (!duplicates.has(node)) {
+          // 必须是非重复对象才能加入此处
+          if (!newLayer.inactiveGraph.hasNode(node)) {
+            newLayer.inactiveGraph.addNodeUnsafe(node);
           }
+          for (const next of graph.neighborsUnsafe(node)) {
+            if (duplicates.has(next)) continue;
+            if (layers[layerIndex.get(next)].id !== newLayer.id) continue;
+            // 必须是非重复对象和同层对象才能连边
+            if (!newLayer.inactiveGraph.hasNode(next)) {
+              newLayer.inactiveGraph.addNodeUnsafe(next);
+            }
+            newLayer.inactiveGraph.addEdgeUnsafe(node, next);
+          }
+          this.onLayer.set(node, newLayer);
         }
-        this.onLayer.set(node, layers[layer - 1]);
       }
     }
 
     // 确保旧层的顺序不变，从上到下遍历 underWhich，把下层“拽”到上层之下
     // 确保 this.compareLayerOrder(underWhich[i], underWhich[i + 1]) <= 0
-    for (let i = underWhich.length - 1; i >= 0; i--) {
+    for (let i = underWhich.length - 2; i >= 0; i--) {
       if (underWhich[i] && underWhich[i + 1]) {
         if (
           !(this.compareLayerOrderById(underWhich[i], underWhich[i + 1]) <= 0)
@@ -303,10 +330,81 @@ class ActiveObjectManager {
       }
     }
 
-    // 插入各层
-    for (let i = underWhich.length - 1; i >= 0; i--) {
+    // 将层插入到正确的位置（正着插）
+    for (let i = 0; i < layers.length; i++) {
       this.insertLayerUnderById(layers[i], underWhich[i]);
     }
+  }
+
+  /**
+   * 清理动态图
+   */
+  tidyup() {
+    let count = 0;
+    for (const layer of this.layerOrder) {
+      if (layer.activeObjects.size !== 0) break;
+      layer.clear();
+      count++;
+    }
+    this.layerOrder.splice(0, count);
+    // 更新 layerIndex
+    this.layerOrder.forEach((layer, index) => {
+      this.layerIndex.set(layer.id, index);
+    });
+  }
+
+  /**
+   * 置顶选择对象
+   * @param {Set<number>} objs
+   */
+  liftup(objs) {
+    /**
+     * @description 层索引 -> 新层实例
+     * @type {Map<number, Layer>}
+     */
+    let newLayers = new Map();
+    for (const obj of objs) {
+      let layerIndex;
+      if (this.activeObjects.has(obj)) {
+        let oldLayer = this.onLayer.get(obj);
+        layerIndex = this.layerIndex.get(oldLayer.id);
+        if (!newLayers.has(layerIndex)) {
+          newLayers.set(layerIndex, new Layer(this.layerPool.generate()));
+        }
+        // 将对象从旧层移除
+        oldLayer.activeObjects.delete(obj);
+      } else {
+        layerIndex = this.layerOrder.length;
+        if (!newLayers.has(layerIndex)) {
+          newLayers.set(layerIndex, new Layer(this.layerPool.generate()));
+        }
+      }
+
+      // 将对象加入新层
+      let newLayer = newLayers.get(layerIndex);
+      this.onLayer.set(obj, newLayer);
+      newLayer.activeObjects.add(obj);
+    }
+    this.tidyup();
+    Array.from(newLayers.entries())
+      .sort((a, b) => a[0] - b[0])
+      .forEach(([layerIndex, newLayer]) => {
+        this.insertLayerToTop(newLayer);
+      });
+  }
+
+  /**
+   * 取消选择对象
+   * @param {Set<number>} objs
+   */
+  remove(objs) {
+    for (const obj of objs) {
+      if (!this.activeObjects.has(obj)) continue;
+      this.activeObjects.delete(obj);
+      let layer = this.onLayer.get(obj);
+      layer.activeObjects.delete(obj);
+    }
+    this.tidyup();
   }
 
   /**
@@ -347,11 +445,14 @@ class ActiveObjectManager {
 
   /**
    * 比较两层的层次顺序（用 id 表示）
-   * @param {number} layer1 - 层 1 的 id
-   * @param {number} layer2 - 层 2 的 id
+   * @param {number | undefined} layer1 - 层 1 的 id
+   * @param {number | undefined} layer2 - 层 2 的 id
    * @returns {number} 若层 1 在层 2 之上则返回正数，若层 1 在层 2 之下则返回负数，若二者相等则返回 0
    */
   compareLayerOrderById(layer1, layer2) {
+    if (layer1 === layer2) return 0;
+    if (layer1 === undefined) return 1;
+    if (layer2 === undefined) return -1;
     return this.layerIndex.get(layer1) - this.layerIndex.get(layer2);
   }
 
