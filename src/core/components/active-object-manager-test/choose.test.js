@@ -43,7 +43,6 @@ describe("ActiveObjectManager/choose", () => {
         [1, []],
       ]);
 
-      console.log(aom);
       expect(aom.layerOrder.length).toBe(1);
       expect(aom.layerOrder[0].activeObjects).toEqual(expectedActiveSet);
       expect(
