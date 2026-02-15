@@ -5,7 +5,6 @@ yarn.lock
 
 # Editor
 .idea
-.vscode
 
 # MacOS
 .ds_store
