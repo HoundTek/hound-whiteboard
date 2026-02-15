@@ -6,6 +6,7 @@
 
 const { GraphObject } = require("./graph");
 const { Matrix, Point } = require("../../../utils/math");
+const { calculateConvexHull } = require("../../utils/math-algorithm");
 
 /**
  * 多边形类
@@ -47,7 +48,7 @@ class PolygonObject extends GraphObject {
    */
   setPoints(points) {
     this.points = points;
-    this.#transformedPoints = points.map((p) =>
+    this.transformedPoints = points.map((p) =>
       Point.mulMatrix(this.transform, p)
     );
     this.calculateConvexHull();
@@ -55,7 +56,7 @@ class PolygonObject extends GraphObject {
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    for (let p of this.#transformedPoints) {
+    for (let p of this.transformedPoints) {
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
       if (p.y < minY) minY = p.y;
@@ -65,48 +66,10 @@ class PolygonObject extends GraphObject {
   }
 
   /**
-   * @description 使用 Graham 扫描算法计算凸包。
+   * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。为富数据。
    */
   calculateConvexHull() {
-    if (!this.points || this.points.length < 3) {
-      this.convexHull = this.points ? [...this.points] : [];
-      return;
-    }
-
-    let points = [...this.points];
-    points.sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
-    function cross(o, a, b) {
-      return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-    }
-
-    const lower = [];
-    for (let p of points) {
-      while (
-        lower.length >= 2 &&
-        cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0
-      ) {
-        lower.pop();
-      }
-      lower.push(p);
-    }
-
-    const upper = [];
-    for (let i = points.length - 1; i >= 0; i--) {
-      const p = points[i];
-      while (
-        upper.length >= 2 &&
-        cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0
-      ) {
-        upper.pop();
-      }
-      upper.push(p);
-    }
-
-    // 移除每一半的最后一个点，因为它在另一半的开头被重复了
-    upper.pop();
-    lower.pop();
-
-    this.convexHull = lower.concat(upper);
+    this.convexHull = calculateConvexHull(this.points);
   }
 
   /**
@@ -114,7 +77,7 @@ class PolygonObject extends GraphObject {
    * @type {Point[]}
    * @description 每一个点在变换后，相对 position 的位置数组，属于富数据。
    */
-  #transformedPoints = [];
+  transformedPoints = [];
 
   /**
    * @param {Matrix} trans - 新的变换矩阵
@@ -122,11 +85,7 @@ class PolygonObject extends GraphObject {
    */
   setTransform(trans) {
     this.transform = trans;
-    this.#transformedPoints = this.points.map((p) => Point.mulMatrix(trans, p));
-  }
-
-  get transformedPoints() {
-    return this.#transformedPoints;
+    this.transformedPoints = this.points.map((p) => Point.mulMatrix(trans, p));
   }
 
   /**
@@ -180,10 +139,10 @@ class PolygonObject extends GraphObject {
     p = p.sub(this.position);
 
     let counter = 0;
-    for (let i = 0; i < this.#transformedPoints.length; i++) {
-      let first = this.#transformedPoints[i];
+    for (let i = 0; i < this.transformedPoints.length; i++) {
+      let first = this.transformedPoints[i];
       let second =
-        this.#transformedPoints[(i + 1) % this.#transformedPoints.length];
+        this.transformedPoints[(i + 1) % this.transformedPoints.length];
       if (first.x < second.x) {
         if (p.x < first.x || second.x < p.x) {
           continue;

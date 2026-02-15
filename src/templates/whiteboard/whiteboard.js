@@ -5,6 +5,9 @@ const { Directory } = require("../../utils/io");
 const { TextObject } = require("../../core/objects/one-dim/text");
 const { PolygonCreatorTool } = require("../../core/tools/creator/polygon");
 const { CounterPool } = require("../../core/utils/counter-pool");
+const { StrokeObject } = require("../../core/objects/stroke/stroke");
+const { insertPoints } = require("../../core/utils/math-algorithm");
+const { StrokeCreatorTool } = require("../../core/tools/creator/stroke");
 
 const board = new BoardManager();
 
@@ -72,19 +75,46 @@ let testText = new TextObject(new Point(100, 100 - 24), 3, 1);
 testText.setText("Triangles with same color flock together.", ctx);
 testText.setTextProperty(
   { size: 24, color: "blue", font: "Maple Mono NF CN" },
-  ctx
+  ctx,
 );
-testText.setMainAxisLength(600, ctx);
+testText.setIhatLength(600, ctx);
 testText.render(ctx);
 
 let helloText = new TextObject(new Point(200, 200 - 32), 4, 1);
 helloText.setText("Hello, Hound Whiteboard!", ctx);
 helloText.setTextProperty(
   { size: 32, color: "green", font: "Maple Mono NF CN" },
-  ctx
+  ctx,
 );
-helloText.setMainAxisLength(600, ctx);
+helloText.setIhatLength(600, ctx);
 helloText.render(ctx);
 
 console.log("test text", testText);
 console.log("hello text", helloText);
+
+tool = new StrokeCreatorTool();
+tool.create(new Point(300, 300), pool.generate(), 1);
+let stroke = tool.obj;
+const strokePoints = insertPoints(
+  [
+    { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 40, y: 0 },
+    { x: 60, y: 0 },
+    { x: 80, y: 0 },
+    { x: 100, y: 0 },
+    { x: 110, y: 10 },
+    { x: 120, y: 20 },
+    { x: 130, y: 30 },
+  ].map((p) => Point.parse(p)),
+  0,
+);
+strokePoints.forEach((p) => {
+  tool.start(p);
+  tool.end(p);
+});
+stroke.color = "#ff0000";
+
+stroke.setTransform(new Matrix(2, 0, 0, 1));
+
+stroke.render(ctx);
