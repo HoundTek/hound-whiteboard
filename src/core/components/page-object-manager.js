@@ -5,7 +5,7 @@
  */
 
 const { DirectedGraph } = require("../utils/directed-graph");
-const { BasicObject } = require("../objects/basic-classes");
+const { BasicObject } = require("../objects/basic-obj");
 const { Directory, File } = require("../../utils/io");
 
 /**
@@ -55,7 +55,7 @@ class PageObjectManager {
    * @todo
    */
   loadTiermap(file) {
-    this.staticGraph = DirectedGraph.parse(file.cat());
+    if (file) this.staticGraph = DirectedGraph.parse(file.cat());
   }
 
   /**

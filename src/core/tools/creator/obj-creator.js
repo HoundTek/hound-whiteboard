@@ -5,7 +5,7 @@
  */
 
 const { Point } = require("../../../utils/math");
-const { BasicObject } = require("../../objects/basic-classes");
+const { BasicObject } = require("../../objects/basic-obj");
 const { Controller } = require("../controller/controller");
 const { Tool } = require("../tool");
 
@@ -27,7 +27,6 @@ class ObjectCreatorTool extends Tool {
    */
   constructor() {
     super();
-    this.contorllers = [];
   }
 
   /**
@@ -36,7 +35,6 @@ class ObjectCreatorTool extends Tool {
    * @abstract
    * @param {Object} toolData - 序列化的工具数据
    * @returns {ObjectCreatorTool} 创建的对象生成工具实例
-   * @throws {Error} 基类未实现此方法
    */
   static parse(toolData) {
     throw new Error("Method not implemented.");
@@ -46,7 +44,6 @@ class ObjectCreatorTool extends Tool {
    * 序列化对象生成工具实例以保存工具数据
    * @abstract
    * @return {Object} 序列化后的对象生成工具数据
-   * @throws {Error} 基类未实现此方法
    */
   serialize() {
     throw new Error("Method not implemented.");
@@ -59,10 +56,11 @@ class ObjectCreatorTool extends Tool {
   obj;
 
   /**
-   * 当前对象的控制点
-   * @type {Controller[]}
+   * @returns {Controller[]} 控制点列表
    */
-  contorllers;
+  getControllers() {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 按下设备
@@ -71,7 +69,9 @@ class ObjectCreatorTool extends Tool {
    * @description 对应用户按下设备的操作
    * @abstract
    */
-  start(point, option) {}
+  start(point, option) {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 松开设备
@@ -80,7 +80,9 @@ class ObjectCreatorTool extends Tool {
    * @description 对应用户松开设备的操作
    * @abstract
    */
-  end(point, option) {}
+  end(point, option) {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 移动设备
@@ -89,7 +91,9 @@ class ObjectCreatorTool extends Tool {
    * @description 对应用户移动设备的操作
    * @abstract
    */
-  move(point, option) {}
+  move(point, option) {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 创建新的对象实例
@@ -99,7 +103,9 @@ class ObjectCreatorTool extends Tool {
    * @description 在用户使用该工具创建新对象（而不是编辑正在创建的对象）时调用此方法以生成新的对象实例
    * @abstract
    */
-  create(position, id, pageId) {}
+  create(position, id, pageId) {
+    throw new Error("Method not implemented.");
+  }
 }
 
 module.exports = {

@@ -4,20 +4,24 @@
  * @author Zhou Chenyu
  */
 
-const { ZeroDimensionObject } = require("../../basic-classes");
+const { BasicObject } = require("../basic-obj");
 
 /**
  * 图形对象类
  * @class
- * @extends ZeroDimensionObject
+ * @extends BasicObject
  * @description
  * 表示一个图形，图形是不可擦的有向对象。
  * @author Zhou Chenyu
  */
-class GraphObject extends ZeroDimensionObject {
+class GraphObject extends BasicObject {
   constructor(p, id, pageId) {
-    super(p, id, pageId, false, true);
+    super(p, id, pageId);
   }
+
+  static isDirected = true;
+
+  static isErasable = false;
 }
 
 module.exports = {

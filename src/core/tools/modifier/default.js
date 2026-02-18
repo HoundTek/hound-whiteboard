@@ -4,9 +4,9 @@
  * @author Zhou Chenyu
  */
 
-const { ObjModifierTool } = require("./obj-modifier");
+const { ObjectModifierTool } = require("./obj-modifier");
 
-class DefaultModifierTool extends ObjModifierTool {}
+class DefaultModifierTool extends ObjectModifierTool {}
 
 module.exports = {
   DefaultModifierTool,

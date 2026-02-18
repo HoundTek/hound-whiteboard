@@ -5,7 +5,7 @@
  */
 
 const { Directory } = require("../../utils/io");
-const { BasicObject } = require("../objects/basic-classes");
+const { BasicObject } = require("../objects/basic-obj");
 const { PageObjectManager } = require("./page-object-manager");
 
 /**

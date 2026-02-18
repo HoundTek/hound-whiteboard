@@ -14,6 +14,7 @@ describe("Chain", () => {
   beforeEach(() => {
     chain = new Chain();
   });
+
   describe("基础操作", () => {
     test("构造函数应正确初始化 head, tail 和 length", () => {
       expect(chain.head).toBeNull();

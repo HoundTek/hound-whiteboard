@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { PolygonObject } = require("../../objects/board/graph/polygon");
+const { PolygonObject } = require("../../objects/graph/polygon");
 const { Point } = require("../../../utils/math");
 const { ObjectCreatorTool } = require("./obj-creator");
 const { Controller } = require("../controller/controller");
@@ -25,6 +25,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    */
   constructor() {
     super();
+    this.vertixControllers = [];
   }
 
   /**
@@ -59,6 +60,16 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   obj;
 
   /**
+   * 当前对象的控制点
+   * @type {Controller[]}
+   */
+  vertixControllers;
+
+  getControllers() {
+    return this.vertixControllers;
+  }
+
+  /**
    * @param {Point} position - 对象位置
    * @param {number} id - 对象 id
    * @param {number} pageId - 页 id
@@ -73,9 +84,9 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @param {Object} option - 选项
    */
   start(point, option) {
-    this.contorllers.push(new Controller(point));
+    this.vertixControllers.push(new Controller(point));
     this.obj.setPoints(
-      this.contorllers.map((controller) => controller.position)
+      this.vertixControllers.map((controller) => controller.position)
     );
   }
 
@@ -88,15 +99,17 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   move(point, option) {
     if (
       Point.nearlyEq(
-        this.contorllers[this.contorllers.length - 1].position,
+        this.vertixControllers[this.vertixControllers.length - 1].position,
         point
       )
     ) {
       return;
     }
-    this.contorllers[this.contorllers.length - 1].setPosition(point);
+    this.vertixControllers[this.vertixControllers.length - 1].setPosition(
+      point
+    );
     this.obj.setPoints(
-      this.contorllers.map((controller) => controller.position)
+      this.vertixControllers.map((controller) => controller.position)
     );
   }
 
@@ -109,15 +122,17 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   end(point, option) {
     if (
       Point.nearlyEq(
-        this.contorllers[this.contorllers.length - 1].position,
+        this.vertixControllers[this.vertixControllers.length - 1].position,
         point
       )
     ) {
       return;
     }
-    this.contorllers[this.contorllers.length - 1].setPosition(point);
+    this.vertixControllers[this.vertixControllers.length - 1].setPosition(
+      point
+    );
     this.obj.setPoints(
-      this.contorllers.map((controller) => controller.position)
+      this.vertixControllers.map((controller) => controller.position)
     );
   }
 }

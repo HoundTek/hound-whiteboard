@@ -6,10 +6,10 @@
 
 const { Deque } = require("../../utils/deque");
 const { Directory } = require("../../utils/io");
-const { BasicObject } = require("../objects/basic-classes");
+const { BasicObject } = require("../objects/basic-obj");
 const { CounterPool } = require("../utils/counter-pool");
 const { DirectedGraph } = require("../utils/directed-graph");
-const { UndoTree } = require("../utils/undo-tree-core");
+const { UndoTree } = require("../hit/undo-tree-core");
 const { ActiveObjectManager } = require("./active-object-manager");
 const { PageManager } = require("./page-manager");
 const { PageObjectManager } = require("./page-object-manager");
