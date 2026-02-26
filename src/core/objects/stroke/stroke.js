@@ -71,18 +71,9 @@ class StrokeObject extends BasicObject {
       // [todo] 删点
     }
     this.calculateConvexHull();
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let i = 0; i < this.transformedPoints.length; i++) {
-      const p = this.transformedPoints[i];
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    this.rectangle = new Matrix(minX, minY, maxX, maxY);
+    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
+      this.transform,
+    );
   }
 
   setPoints(points) {

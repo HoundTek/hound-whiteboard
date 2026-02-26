@@ -6,7 +6,11 @@
 
 const { GraphObject } = require("./graph");
 const { Matrix, Point } = require("../../../utils/math");
-const { calculateConvexHull } = require("../../utils/math-algorithm");
+const {
+  calculateConvexHull,
+  ropeNailIntersect,
+} = require("../../utils/math-algorithm");
+const { RectangleRange } = require("../../range/rectangle");
 
 /**
  * 多边形类
@@ -49,20 +53,30 @@ class PolygonObject extends GraphObject {
   setPoints(points) {
     this.points = points;
     this.transformedPoints = points.map((p) =>
-      Point.mulMatrix(this.transform, p)
+      Point.mulMatrix(this.transform, p),
     );
     this.calculateConvexHull();
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (let p of this.transformedPoints) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
+    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
+      this.transform,
+    );
+  }
+
+  /**
+   * 修改指定索引的顶点
+   * @param {number} index - 要修改的顶点索引
+   * @param {Point} points - 新的顶点坐标
+   */
+  changePoints(index, points) {
+    // 修改指定索引的顶点，并更新变换后的顶点集和凸包。
+    if (index < 0 || index >= this.points.length) {
+      throw new Error("Index out of bounds");
     }
-    this.rectangle = new Matrix(minX, minY, maxX, maxY);
+    this.points[index] = points;
+    this.transformedPoints[index] = Point.mulMatrix(this.transform, points);
+    this.calculateConvexHull();
+    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
+      this.transform,
+    );
   }
 
   /**
@@ -86,6 +100,9 @@ class PolygonObject extends GraphObject {
   setTransform(trans) {
     this.transform = trans;
     this.transformedPoints = this.points.map((p) => Point.mulMatrix(trans, p));
+    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
+      this.transform,
+    );
   }
 
   /**
@@ -110,7 +127,7 @@ class PolygonObject extends GraphObject {
       this.transform.c,
       this.transform.d,
       this.position.x,
-      this.position.y
+      this.position.y,
     );
     ctx.fillStyle = this.color;
     ctx.globalCompositeOperation = "source-over";
@@ -138,38 +155,8 @@ class PolygonObject extends GraphObject {
     // 将点转换到多边形的局部坐标系中（减掉相对位置）
     p = p.sub(this.position);
 
-    let counter = 0;
-    for (let i = 0; i < this.transformedPoints.length; i++) {
-      let first = this.transformedPoints[i];
-      let second =
-        this.transformedPoints[(i + 1) % this.transformedPoints.length];
-      if (first.x < second.x) {
-        if (p.x < first.x || second.x < p.x) {
-          continue;
-        }
-      } else {
-        if (p.x < second.x || first.x < p.x) {
-          continue;
-        }
-      }
-
-      if (first.x == p.x && first.y == p.y) {
-        return true; // 在顶点上
-      }
-
-      let k = (second.y - first.y) / (second.x - first.x);
-      let ly = first.y + k * (p.x - first.x);
-      if (p.y > ly) {
-        if (first.x <= second.x) {
-          counter++;
-        } else {
-          counter--;
-        }
-      } else if (p.y >= ly - 1e-5) {
-        return true; // 在边上（允许一定误差）
-      }
-    }
-    return counter != 0;
+    // 再用绳钉算法进行精确检测
+    return ropeNailIntersect(this.transformedPoints, p) !== 0;
   }
 }
 
