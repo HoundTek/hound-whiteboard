@@ -5,6 +5,7 @@
  */
 
 const { Matrix, Point } = require("../../../utils/math");
+const { RectangleRange } = require("../../range/rectangle");
 const {
   calculateConvexHull,
   insertPoints,

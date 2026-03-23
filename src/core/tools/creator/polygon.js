@@ -8,6 +8,7 @@ const { PolygonObject } = require("../../objects/graph/polygon");
 const { Point } = require("../../../utils/math");
 const { ObjectCreatorTool } = require("./obj-creator");
 const { Controller } = require("../controller/controller");
+const { VertexController } = require("../controller/vertex-controller");
 
 /**
  * 多边形创建工具类
@@ -17,6 +18,9 @@ const { Controller } = require("../controller/controller");
  * 多边形创建工具允许用户在白板上绘制多边形对象。
  *
  * 用户可以通过点击来添加多边形的顶点，形成所需的形状。
+ * 或者拖动操作杆来调整顶点位置以修改多边形的形状。
+ *
+ * 当用户完成绘制后，可以通过点击菜单中的完成按钮来结束绘制过程。（todo）
  * @author Zhou Chenyu
  */
 class PolygonCreatorTool extends ObjectCreatorTool {
@@ -26,6 +30,8 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   constructor() {
     super();
     this.vertixControllers = [];
+    this.count = 0;
+    this.lastPoint = null;
   }
 
   /**
@@ -33,6 +39,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @static
    * @param {Object} toolData - 序列化的多边形工具数据
    * @returns {PolygonCreatorTool} 创建的多边形工具实例
+   * @todo
    */
   static parse(toolData) {
     let tool = new PolygonCreatorTool();
@@ -45,11 +52,12 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   /**
    * 序列化多边形工具实例以保存工具数据
    * @return {Object} 序列化后的多边形工具数据
+   * @todo
    */
   serialize() {
     return {
       type: "PolygonTool",
-      obj: this.obj ? this.obj.serialize() : null,
+      obj: this.obj?.serialize(),
     };
   }
 
@@ -64,6 +72,18 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @type {Controller[]}
    */
   vertixControllers;
+
+  /**
+   * 当前顶点数量
+   * @type {number}
+   */
+  count;
+
+  /**
+   * 上一个顶点位置
+   * @type {Point}
+   */
+  lastPoint;
 
   getControllers() {
     return this.vertixControllers;
@@ -84,10 +104,9 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @param {Object} option - 选项
    */
   start(point, option) {
-    this.vertixControllers.push(new Controller(point));
-    this.obj.setPoints(
-      this.vertixControllers.map((controller) => controller.position)
-    );
+    this.obj.appendPoint(point);
+    this.lastPoint = point;
+    this.count++;
   }
 
   /**
@@ -97,20 +116,10 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @param {Object} option - 选项
    */
   move(point, option) {
-    if (
-      Point.nearlyEq(
-        this.vertixControllers[this.vertixControllers.length - 1].position,
-        point
-      )
-    ) {
-      return;
+    if (!Point.nearlyEq(this.lastPoint, point)) {
+      this.lastPoint = point;
+      this.obj.changePoint(this.count - 1, point);
     }
-    this.vertixControllers[this.vertixControllers.length - 1].setPosition(
-      point
-    );
-    this.obj.setPoints(
-      this.vertixControllers.map((controller) => controller.position)
-    );
   }
 
   /**
@@ -120,20 +129,15 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @param {Object} option - 选项
    */
   end(point, option) {
-    if (
-      Point.nearlyEq(
-        this.vertixControllers[this.vertixControllers.length - 1].position,
-        point
-      )
-    ) {
-      return;
+    if (!Point.nearlyEq(this.lastPoint, point)) {
+      this.lastPoint = point;
+      this.obj.changePoint(this.count - 1, point);
     }
-    this.vertixControllers[this.vertixControllers.length - 1].setPosition(
-      point
-    );
-    this.obj.setPoints(
-      this.vertixControllers.map((controller) => controller.position)
-    );
+    let controller = new VertexController(point);
+    controller.onDrag = (newPosition) => {
+      this.obj.changePoint(this.count - 1, newPosition);
+    };
+    this.vertixControllers.push(controller);
   }
 }
 

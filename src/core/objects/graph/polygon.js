@@ -56,9 +56,7 @@ class PolygonObject extends GraphObject {
       Point.mulMatrix(this.transform, p),
     );
     this.calculateConvexHull();
-    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
-      this.transform,
-    );
+    this.calculateRectangle();
   }
 
   /**
@@ -66,21 +64,40 @@ class PolygonObject extends GraphObject {
    * @param {number} index - 要修改的顶点索引
    * @param {Point} points - 新的顶点坐标
    */
-  changePoints(index, points) {
+  changePoint(index, points) {
     // 修改指定索引的顶点，并更新变换后的顶点集和凸包。
     if (index < 0 || index >= this.points.length) {
-      throw new Error("Index out of bounds");
+      throw new RangeError("Index out of bounds");
     }
     this.points[index] = points;
     this.transformedPoints[index] = Point.mulMatrix(this.transform, points);
     this.calculateConvexHull();
+    this.calculateRectangle();
+  }
+
+  /**
+   * 在末尾添加一个新的顶点
+   * @param {Point} point - 新的顶点坐标
+   */
+  appendPoint(point) {
+    // 在末尾添加一个新的顶点，并更新变换后的顶点集和凸包。
+    this.points.push(point);
+    this.transformedPoints.push(Point.mulMatrix(this.transform, point));
+    this.calculateConvexHull();
+    this.calculateRectangle();
+  }
+
+  /**
+   * @description 计算多边形对象的矩形范围。是在凸包的基础上进行计算的变换后的矩形范围。
+   */
+  calculateRectangle() {
     this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
       this.transform,
     );
   }
 
   /**
-   * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。为富数据。
+   * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。
    */
   calculateConvexHull() {
     this.convexHull = calculateConvexHull(this.points);
@@ -100,9 +117,7 @@ class PolygonObject extends GraphObject {
   setTransform(trans) {
     this.transform = trans;
     this.transformedPoints = this.points.map((p) => Point.mulMatrix(trans, p));
-    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
-      this.transform,
-    );
+    this.calculateRectangle();
   }
 
   /**

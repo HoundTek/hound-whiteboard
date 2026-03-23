@@ -51,8 +51,22 @@ class BasicObject {
    * 对象的矩形边界范围
    * @type {RectangleRange}
    * @description 存储对象的边界矩形，用于碰撞检测和选择。
+   * 边界矩形是相对于变换后的坐标而言的。
    */
   rectangle;
+
+  /**
+   * 计算对象的边界矩形
+   * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
+   */
+  calculateRectangle() {
+    this.rectangle = new RectangleRange(
+      this.position.x,
+      this.position.y,
+      this.position.x,
+      this.position.y,
+    );
+  }
 
   /**
    * 对象的凸包
@@ -81,7 +95,7 @@ class BasicObject {
    * @description 基类使用矩形边界进行检测，子类可重写此方法以实现更精确的检测逻辑。
    */
   isPointIntersect(p) {
-    p = p.sub(this.position);
+    p = p.sub(this.position); // 将点 p 转换到对象的局部坐标系
     return (
       this.rectangle.minX <= p.x &&
       p.x <= this.rectangle.maxX &&
