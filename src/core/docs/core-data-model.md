@@ -1,0 +1,113 @@
+# Core 数据模型与术语统一
+
+本文把散落在多个文档中的术语与数据结构做统一整理。
+
+## 1. `.hwb` 的数据视角
+
+依据 `src/core/docs/file-document.md` 与当前代码，可将 `.hwb` 理解为：
+
+1. 白板元数据与配置（`meta.json`、`config.json`）
+2. 页面组织（`pages/connection.json` 与页文件）
+3. 对象数据（`objects/`）
+4. 历史数据（`history/trash`、`history/edition`、`history/hit`）
+5. 打开轨迹（`trace.json`）
+
+主进程侧在打开/保存时使用“解压到临时目录再回写”的策略。
+
+## 2. 内存对象模型
+
+### 2.1 白板级
+
+`BoardManager` 持有：
+
+- `pageMap`: 页 id -> `PageManager`
+- `pageOrder`: 页顺序
+- `loadedPages`: 当前已加载页队列（上限策略）
+- `activeObjectManager`: 活动对象层管理
+- `undoTree`: 历史树
+
+### 2.2 页级
+
+`PageManager` 持有：
+
+- 双向链接：`prevPage` / `nextPage`
+- `objectManager`（`PageObjectManager`）
+
+`PageObjectManager` 持有：
+
+- `staticGraph`: 页内对象层叠图（有向图）
+- `pageObjects`: 对象实例映射
+- `coverLeftPage` / `coverRightPage`: 跨页对象线索
+
+### 2.3 对象级
+
+`BasicObject` 的统一字段：
+
+- `id`、`pageId`
+- `position`、`transform`
+- `rectangle`、`convexHull`
+
+典型派生：
+
+- `StrokeObject`（可擦、无向）
+- `PolygonObject`（不可擦、有向）
+- `TextObject`
+- `Container` 与一/二维对象层
+
+## 3. 层级关系模型
+
+按设计文档，存在两类图：
+
+1. 静态图：稳定层叠关系
+2. 动态状态图（按层拆分）：用于活动对象交互期间的临时关系
+
+`ActiveObjectManager` 当前已经把“活动层 + 非活动子图 + 层顺序”这一模型落到代码。
+
+## 4. 工具与设备模型
+
+- 工具：交互策略（创建、修改、选择、擦除、白板操作）
+- 设备：输入来源（鼠标/触屏/调试设备）
+- 控制杆：对象上的可拖拽控制点
+
+工具文档提出了“工具栈”概念：
+
+- 一级工具（如选择器）可重置上下文
+- 对象级工具（如对象修改器）可在当前工具之上压栈
+- 退出时弹栈回退
+
+这套机制与当前代码方向一致，但完整调度链尚未实现。
+
+## 5. 历史模型（Undo Tree）
+
+设计上区分：
+
+- 原子操作（对象/页面增删改）
+- 分子操作（原子组合）
+- 树状历史（支持回到已撤销分支）
+
+现状是术语和结构已定义，核心执行逻辑尚在建设阶段。
+
+## 6. 术语对照表
+
+- 活动对象（Active Object）: 当前被选择或被操作的对象
+- 层叠图（Tier Graph）: 表示遮挡关系的有向图
+- 静态图（Static Graph）: 稳定层叠关系
+- 动态层（Dynamic Layers）: 活动阶段临时层关系
+- 当前点（Current Node）: Undo Tree 中当前状态对应节点
+- 焦点链（Focus Chain）: 从根沿后继点的主链
+
+## 7. 开发时的认知边界
+
+为了减少误解，建议把 Core 内容分成三类看待：
+
+1. 已稳定基础设施
+   - `DirectedGraph`
+   - 几何算法与范围工具
+   - 基础对象抽象
+2. 已有算法但待联调
+   - 活动对象分层管理
+   - 页加载器与跨页访问策略
+3. 设计先行、实现待补
+   - Undo Tree 细节
+   - 工具栈完整闭环
+   - 页对象持久化全链路
