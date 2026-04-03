@@ -54,7 +54,7 @@ class PageObjectManager {
    * @param {File} file - 从何处加载
    * @todo
    */
-  loadTiermap(file) {
+  loadTierGraph(file) {
     if (file) this.staticGraph = DirectedGraph.parse(file.cat());
   }
 
@@ -63,13 +63,13 @@ class PageObjectManager {
    * @param {File} file - 保存至何方
    * @todo
    */
-  saveTiermap(file) {}
+  saveTierGraph(file) {}
 
   /**
    * 卸载层叠图
    * @todo
    */
-  unloadTiermap() {
+  unloadTierGraph() {
     this.staticGraph = null;
   }
 

@@ -518,12 +518,12 @@ class PageLoadManager {
     while (this.pagesLoaded.count() > 0) {
       /** @type {PageManager} */
       let pageToUnload = this.pagesLoaded.popFront();
-      pageToUnload.objectManager.unloadTiermap();
+      pageToUnload.objectManager.unloadTierGraph();
     }
     // 加载当前页
     this.pagesLoaded = new Deque();
     this.pagesLoaded.pushBack(page);
-    page.objectManager.loadTiermap(/* [todo] file */);
+    page.objectManager.loadTierGraph(/* [todo] file */);
   }
 
   /**
@@ -550,7 +550,7 @@ class PageLoadManager {
     while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
       /** @type {PageManager} */
       let pageToUnload = this.pagesLoaded.popFront();
-      pageToUnload.objectManager.unloadTiermap();
+      pageToUnload.objectManager.unloadTierGraph();
     }
     // 加载右页
     let pageToLoad = this.pageNow.nextPage;
@@ -558,7 +558,7 @@ class PageLoadManager {
       throw new Error("Next page is not exist.");
     }
     if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
+      pageToLoad.objectManager.loadTierGraph(/* [todo] file */);
       this.pagesLoaded.pushBack(pageToLoad);
     }
   }
@@ -587,7 +587,7 @@ class PageLoadManager {
     while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
       /** @type {PageManager} */
       let pageToUnload = this.pagesLoaded.popBack();
-      pageToUnload.objectManager.unloadTiermap();
+      pageToUnload.objectManager.unloadTierGraph();
     }
     // 加载左页
     let pageToLoad = this.pageNow.prevPage;
@@ -595,7 +595,7 @@ class PageLoadManager {
       throw new Error("Previous page is not exist.");
     }
     if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
+      pageToLoad.objectManager.loadTierGraph(/* [todo] file */);
       this.pagesLoaded.pushFront(pageToLoad);
     }
   }

@@ -136,7 +136,7 @@ class PageManager {
       // 要么是没加载，要么是完整加载，不能卸载
       return false;
     }
-    this.objectManager.unloadTiermap();
+    this.objectManager.unloadTierGraph();
     this.isLoad = false;
     this.isTempLoad = false;
     return true;
@@ -154,7 +154,7 @@ class PageManager {
     }
     this.isLoad = true;
     this.isTempLoad = true;
-    this.objectManager.loadTiermap(
+    this.objectManager.loadTierGraph(
       directory.cd("pages").peek(this.id.toString(), "json")
     );
     return true;

@@ -9,7 +9,7 @@ const { Device } = require("./device");
  * 测试设备类
  * @class
  * @extends Device
- * @description 用于调试设备
+ * @description 用于调试
  * @author Zhou Chenyu
  */
 class DebuggerDevice extends Device {

@@ -8,6 +8,7 @@ const { CounterPool } = require("../../core/utils/counter-pool");
 const { StrokeObject } = require("../../core/objects/stroke/stroke");
 const { insertPoints } = require("../../core/utils/math-algorithm");
 const { StrokeCreatorTool } = require("../../core/tools/creator/stroke");
+const { Monitor } = require("../../core/devices/monitor");
 
 const board = new BoardManager();
 
@@ -19,15 +20,21 @@ ipc.on("board-opened", (event, path) => {
   // 而是手动完成加载
 });
 
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const monitor = new Monitor();
+
+monitor.canvas = document.createElement("canvas");
+monitor.canvas.width = 800;
+monitor.canvas.height = 600;
+
+document.getElementById("app-foreground-layer").appendChild(monitor.canvas);
+monitor.canvas.id = "canvas";
 
 // 设置 canvas 的内部分辨率，使其与 CSS 尺寸匹配
 // 这样可以避免内容被拉伸
 board.width = 800;
 board.height = 600;
-canvas.width = 800;
-canvas.height = 600;
+
+const ctx = monitor.canvas.getContext("2d");
 
 console.log(board);
 

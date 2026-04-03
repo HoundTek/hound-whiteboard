@@ -20,7 +20,7 @@ Container 类是用来包装一、二维对象的容器类。派生于 [BasicObj
 
 
 |名称|描述|类型|
-|:-:|:-:|:-:|
+|:--|:--|:--|
 |`child`|被窗口包装的一维对象或二维对象|`OneDimensionObject\|TwoDimensionObject`|
 
 ## Graph

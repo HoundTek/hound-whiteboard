@@ -42,7 +42,7 @@
 当前状态：
 
 - `staticGraph`、`coverLeftPage`、`coverRightPage`、`pageObjects` 数据结构已定义。
-- `loadTiermap()` 能解析图结构。
+- `loadTierGraph()` 能解析图结构。
 - 对象读写与图落盘方法仍为空。
 
 ### 1.4 ActiveObjectManager
