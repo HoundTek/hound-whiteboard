@@ -1,16 +1,23 @@
-// Page 4 component
+/**
+ * @file 我的页面
+ * @module pages/Page4
+ * @description 功能：
+ * - 用户个人中心页面，显示用户信息和快捷操作
+ */
+
+/**
+ * 我的页面组件
+ * @returns {React.ReactElement[]} 页面内容
+ */
 function Page4() {
   const t = (keyPath, params = {}) => {
-    // Use localeManager to get translation
     return window.localeManager.t(keyPath, params);
   };
   
-  // Get icon path from themeManager
   const getIconPath = (iconName) => {
     return window.themeManager.getIconPath(iconName) || './asset/imgs/add.svg';
   };
   
-  // Get user info from userManager
   const getUserInfo = () => {
     const user = window.userManager.getCurrentUser();
     return {
@@ -21,7 +28,6 @@ function Page4() {
   
   const userInfo = getUserInfo();
   
-  // Breadcrumb items
   const breadcrumbItems = [
     { label: t('pages.mine.title'), onClick: () => {} }
   ];
@@ -29,7 +35,6 @@ function Page4() {
   return [
     React.createElement(window.Breadcrumb, { key: 'breadcrumb', items: breadcrumbItems }),
     
-    // User info section
     React.createElement('div', { key: 'user-info', className: 'user-info' }, [
       React.createElement('div', { key: 'avatar', className: 'user-avatar' }, [
         React.createElement('img', {
@@ -45,7 +50,6 @@ function Page4() {
       ])
     ]),
     
-    // Button container
     React.createElement('div', { key: 'button-container', className: 'button-container' }, [
       React.createElement('button', { key: 'btn1', className: 'icon-button' }, [
         React.createElement('img', { key: 'icon1', src: getIconPath('add'), alt: t('pages.mine.history'), className: 'button-icon' }),
@@ -67,5 +71,8 @@ function Page4() {
   ];
 }
 
-// Export for use in App.js
+/**
+ * 我的页面组件
+ * @type {function}
+ */
 window.Page4 = Page4;

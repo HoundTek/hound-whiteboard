@@ -1,13 +1,20 @@
-// Scroll indicator utility functions for Hound Whiteboard
+/**
+ * @file 滚动指示器工具
+ * @module utils/scrollIndicator
+ * @description 功能：
+ * - 自定义滚动指示器，隐藏原生滚动条
+ */
 
-// Track if scroll indicator is being dragged
+/**
+ * 滚动指示器拖动状态
+ * @type {boolean}
+ */
 let isDragging = false;
 
 /**
- * Update scroll indicator position and size
+ * 更新滚动指示器位置和大小
  */
 const updateScrollIndicator = () => {
-  // Skip update if currently dragging to avoid interference
   if (isDragging) return;
   
   const scrollIndicator = document.getElementById('scroll-indicator');
@@ -17,17 +24,12 @@ const updateScrollIndicator = () => {
   const clientHeight = document.documentElement.clientHeight;
   const scrollTop = document.documentElement.scrollTop;
   
-  // Calculate if page is scrollable
   const isScrollable = scrollHeight > clientHeight + 1;
   
   if (isScrollable) {
-    // Calculate handle size with a more reasonable algorithm
-    // Handle height should be proportional to the viewport height relative to total content height
-    // But also have a minimum and maximum size
     const handleHeightRatio = Math.min(0.5, Math.max(0.1, clientHeight / scrollHeight));
-    const handleHeight = handleHeightRatio * 100; // Convert to percentage
+    const handleHeight = handleHeightRatio * 100;
     
-    // Calculate handle position considering the handle height
     const maxScrollTop = scrollHeight - clientHeight;
     const maxHandleTop = 100 - handleHeight;
     const handleTop = (scrollTop / maxScrollTop) * maxHandleTop;
@@ -41,21 +43,19 @@ const updateScrollIndicator = () => {
 };
 
 /**
- * Initialize scroll indicator drag functionality
+ * 初始化滚动指示器拖动功能
  */
 const initScrollIndicatorDrag = () => {
   const scrollIndicator = document.getElementById('scroll-indicator');
   if (!scrollIndicator) return;
   
-  let mouseOffset = 0; // Mouse offset relative to the top of the handle
+  let mouseOffset = 0;
   
   scrollIndicator.addEventListener('mousedown', (e) => {
     isDragging = true;
     document.body.style.userSelect = 'none';
-    // Add dragging class
     scrollIndicator.classList.add('dragging');
     
-    // Calculate mouse offset relative to the top of the handle
     const rect = scrollIndicator.getBoundingClientRect();
     const handleHeightStr = getComputedStyle(scrollIndicator).getPropertyValue('--handle-height');
     const handleHeight = parseFloat(handleHeightStr) / 100 * rect.height;
@@ -63,7 +63,6 @@ const initScrollIndicatorDrag = () => {
     const handleTop = parseFloat(handleTopStr) / 100 * rect.height;
     
     mouseOffset = e.clientY - rect.top - handleTop;
-    // Clamp offset to be within the handle height
     mouseOffset = Math.max(0, Math.min(handleHeight, mouseOffset));
   });
   
@@ -77,20 +76,16 @@ const initScrollIndicatorDrag = () => {
     const scrollHeight = document.documentElement.scrollHeight;
     const clientHeight = document.documentElement.clientHeight;
     
-    // Get handle height from CSS variable
     const handleHeightStr = getComputedStyle(scrollIndicator).getPropertyValue('--handle-height');
     const handleHeight = parseFloat(handleHeightStr) / 100 * rect.height;
     
-    // Calculate new scroll position considering the handle height and mouse offset
     const mouseY = e.clientY - rect.top - mouseOffset;
     const maxMouseY = rect.height - handleHeight;
     const normalizedMouseY = Math.max(0, Math.min(maxMouseY, mouseY));
     const scrollPosition = (normalizedMouseY / maxMouseY) * (scrollHeight - clientHeight);
     
-    // Set scroll position without smooth behavior when dragging
     window.scrollTo({ top: scrollPosition, behavior: 'auto' });
     
-    // Update handle position directly to avoid delay
     const maxHandleTop = 100 - (handleHeight / rect.height * 100);
     const handleTop = (normalizedMouseY / maxMouseY) * maxHandleTop;
     scrollIndicator.style.setProperty('--handle-top', `${handleTop}%`);
@@ -99,16 +94,18 @@ const initScrollIndicatorDrag = () => {
   document.addEventListener('mouseup', () => {
     isDragging = false;
     document.body.style.userSelect = '';
-    mouseOffset = 0; // Reset offset
-    // Remove dragging class
+    mouseOffset = 0;
     const scrollIndicator = document.getElementById('scroll-indicator');
     if (scrollIndicator) {
       scrollIndicator.classList.remove('dragging');
-    };
+    }
   });
 };
 
-// Export for global access
+/**
+ * 滚动指示器工具对象
+ * @type {Object}
+ */
 window.scrollIndicatorUtils = {
   updateScrollIndicator,
   initScrollIndicatorDrag

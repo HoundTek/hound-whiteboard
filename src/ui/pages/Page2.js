@@ -1,16 +1,26 @@
-// Page 2 component
+/**
+ * @file 设置页面
+ * @module pages/Page2
+ * @description 功能：
+ * - 应用设置页面，包含外观、插件、存档、更新、语言、面板等设置
+ */
+
+/**
+ * 设置页面组件
+ * @param {Object} props 组件属性
+ * @param {function} props.onNavigateToAppearance 导航到外观子页面
+ * @param {function} props.onNavigateToLanguage 导航到语言子页面
+ * @returns {React.ReactElement[]} 页面内容
+ */
 function Page2({ onNavigateToAppearance, onNavigateToLanguage }) {
   const t = (keyPath, params = {}) => {
-    // Use localeManager to get translation
     return window.localeManager.t(keyPath, params);
   };
   
-  // Get icon path from themeManager
   const getIconPath = (iconName) => {
     return window.themeManager.getIconPath(iconName) || './asset/imgs/add.svg';
   };
   
-  // Breadcrumb items
   const breadcrumbItems = [
     { label: t('pages.settings.title'), onClick: () => {} }
   ];
@@ -54,5 +64,8 @@ function Page2({ onNavigateToAppearance, onNavigateToLanguage }) {
   ];
 }
 
-// Export for use in App.js
+/**
+ * 设置页面组件
+ * @type {function}
+ */
 window.Page2 = Page2;

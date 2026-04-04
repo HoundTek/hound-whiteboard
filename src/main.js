@@ -30,10 +30,10 @@ class Window {
     }
     // 创建浏览器窗口
     this.win = new BrowserWindow({
-      width: 1200,
-      height: 800,
-      minWidth: 800,
-      minHeight: 600,
+      width: 800,
+      height: 600,
+      minWidth: 400,
+      minHeight: 300,
       show: false,
       autoHideMenuBar: true,
       webPreferences: {

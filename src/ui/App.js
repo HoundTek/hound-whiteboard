@@ -1,4 +1,14 @@
-// Main App component
+/**
+ * @file 应用主组件
+ * @module App
+ * @description 功能：
+ * - 应用主组件，管理页面切换和状态
+ */
+
+/**
+ * 应用主组件
+ * @returns {React.ReactElement} 应用元素
+ */
 function App() {
   const [activeTab, setActiveTab] = React.useState(0);
   const [showAppearanceSubpage, setShowAppearanceSubpage] = React.useState(false);
@@ -182,7 +192,6 @@ function App() {
   React.useEffect(() => {
     // Calculate columns when tab changes
     const calculateAfterRender = () => {
-      // Use requestAnimationFrame instead of setTimeout for smoother rendering
       requestAnimationFrame(() => {
         window.layoutUtils.calculateOptimalColumns();
         window.scrollIndicatorUtils.updateScrollIndicator();
@@ -192,8 +201,8 @@ function App() {
     
     calculateAfterRender();
     
-    // Add resize event listener with debounce to avoid too frequent calculations
-    const debouncedCalculate = () => {
+    // 窗口大小变化时立即重新计算
+    const handleResize = () => {
       requestAnimationFrame(() => {
         window.layoutUtils.calculateOptimalColumns();
         window.scrollIndicatorUtils.updateScrollIndicator();
@@ -201,7 +210,7 @@ function App() {
       });
     };
     
-    window.addEventListener('resize', debouncedCalculate);
+    window.addEventListener('resize', handleResize);
     window.addEventListener('scroll', window.scrollIndicatorUtils.updateScrollIndicator);
     
     // Initialize scroll indicator drag functionality
@@ -209,7 +218,7 @@ function App() {
     
     // Clean up event listeners
     return () => {
-      window.removeEventListener('resize', debouncedCalculate);
+      window.removeEventListener('resize', handleResize);
       window.removeEventListener('scroll', window.scrollIndicatorUtils.updateScrollIndicator);
     };
   }, [activeTab, showAppearanceSubpage, showLanguageSubpage, languageVersion]);
@@ -284,5 +293,8 @@ function App() {
   ]);
 }
 
-// Export for use in index.html
+/**
+ * 应用主组件
+ * @type {function}
+ */
 window.App = App;

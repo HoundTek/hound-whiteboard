@@ -1,7 +1,12 @@
-// Tab utility functions for Hound Whiteboard
+/**
+ * @file 标签页工具
+ * @module utils/tabUtils
+ * @description 功能：
+ * - 管理底部标签页滑块和悬停效果
+ */
 
 /**
- * Update tab slider position and size
+ * 更新标签页滑块位置和大小
  */
 const updateTabSlider = () => {
   const tabContainer = document.querySelector('.tab-container');
@@ -11,25 +16,23 @@ const updateTabSlider = () => {
     const containerRect = tabContainer.getBoundingClientRect();
     const buttonRect = activeButton.getBoundingClientRect();
     
-    // Calculate relative position and size
-    const left = buttonRect.left - containerRect.left + 4; // 4px offset
-    const width = buttonRect.width - 8; // 4px offset on each side
+    const left = buttonRect.left - containerRect.left + 4;
+    const width = buttonRect.width - 8;
     
-    // Update slider position and size
     tabContainer.style.setProperty('--slider-left', `${left}px`);
     tabContainer.style.setProperty('--slider-width', `${width}px`);
   }
 };
 
 /**
- * Add event listeners for tab button hover
+ * 添加标签页按钮悬停事件监听器
+ * @returns {function} 清理函数
  */
 const addTabButtonHoverListeners = () => {
   const tabButtons = document.querySelectorAll('.tab-button');
   const tabContainer = document.querySelector('.tab-container');
   
   if (tabButtons && tabContainer) {
-    // Add hover event listeners
     tabButtons.forEach(button => {
       button.addEventListener('mouseenter', () => {
         if (button.classList.contains('active')) {
@@ -42,7 +45,6 @@ const addTabButtonHoverListeners = () => {
       });
     });
     
-    // Return cleanup function
     return () => {
       tabButtons.forEach(button => {
         button.removeEventListener('mouseenter', () => {});
@@ -54,7 +56,10 @@ const addTabButtonHoverListeners = () => {
   return () => {};
 };
 
-// Export for global access
+/**
+ * 标签页工具对象
+ * @type {Object}
+ */
 window.tabUtils = {
   updateTabSlider,
   addTabButtonHoverListeners

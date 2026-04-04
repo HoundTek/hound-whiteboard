@@ -1,11 +1,19 @@
-// Page 1 component
+/**
+ * @file 开始页面
+ * @module pages/Page1
+ * @description 功能：
+ * - 应用首页，显示问候语和快捷操作
+ */
+
+/**
+ * 开始页面组件
+ * @returns {React.ReactElement[]} 页面内容
+ */
 function Page1() {
   const t = (keyPath, params = {}) => {
-    // Use localeManager to get translation
     return window.localeManager.t(keyPath, params);
   };
   
-  // Get greeting based on current time
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 6) return t('pages.start.title.evening');
@@ -15,13 +23,11 @@ function Page1() {
     return t('pages.start.title.evening');
   };
   
-  // Get username from userManager
   const getUsername = () => {
     const user = window.userManager.getCurrentUser();
     return user ? user.username : t('user.defaultName');
   };
   
-  // Get icon path from themeManager
   const getIconPath = (iconName) => {
     return window.themeManager.getIconPath(iconName) || './asset/imgs/add.svg';
   };
@@ -49,5 +55,8 @@ function Page1() {
   ];
 }
 
-// Export for use in App.js
+/**
+ * 开始页面组件
+ * @type {function}
+ */
 window.Page1 = Page1;

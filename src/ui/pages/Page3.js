@@ -1,11 +1,19 @@
-// Page 3 component
+/**
+ * @file 帮助页面
+ * @module pages/Page3
+ * @description 功能：
+ * - 应用帮助页面
+ */
+
+/**
+ * 帮助页面组件
+ * @returns {React.ReactElement[]} 页面内容
+ */
 function Page3() {
   const t = (keyPath, params = {}) => {
-    // Use localeManager to get translation
     return window.localeManager.t(keyPath, params);
   };
   
-  // Breadcrumb items
   const breadcrumbItems = [
     { label: t('tabs.help'), onClick: () => {} }
   ];
@@ -20,5 +28,8 @@ function Page3() {
   ];
 }
 
-// Export for use in App.js
+/**
+ * 帮助页面组件
+ * @type {function}
+ */
 window.Page3 = Page3;

@@ -1,4 +1,18 @@
-// Breadcrumb navigation component
+/**
+ * @file 面包屑导航组件
+ * @module components/Breadcrumb
+ * @description 功能：
+ * - 显示当前页面层级，支持点击返回上级
+ */
+
+/**
+ * 面包屑导航组件
+ * @param {Object} props 组件属性
+ * @param {Array} props.items 面包屑项数组
+ * @param {string} props.items[].label 显示文本
+ * @param {function} props.items[].onClick 点击回调
+ * @returns {React.ReactElement} 面包屑导航元素
+ */
 function Breadcrumb({ items }) {
   const t = (keyPath, params = {}) => {
     return window.localeManager.t(keyPath, params);
@@ -22,5 +36,8 @@ function Breadcrumb({ items }) {
   );
 }
 
-// Export for use in other components
+/**
+ * 面包屑导航组件
+ * @type {function}
+ */
 window.Breadcrumb = Breadcrumb;

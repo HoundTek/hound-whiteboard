@@ -1,27 +1,34 @@
-// Appearance subpage component
+/**
+ * @file 外观子页面
+ * @module pages/AppearanceSubpage
+ * @description 功能：
+ * - 配置主题和图标包
+ */
+
+/**
+ * 外观子页面组件
+ * @param {Object} props 组件属性
+ * @param {function} props.onBack 返回回调
+ * @returns {React.ReactElement[]} 页面内容
+ */
 function AppearanceSubpage({ onBack }) {
   const t = (keyPath, params = {}) => {
-    // Use localeManager to get translation
     return window.localeManager.t(keyPath, params);
   };
   
-  // Get icon path from themeManager
   const getIconPath = (iconName) => {
     return window.themeManager.getIconPath(iconName) || './asset/imgs/add.svg';
   };
 
-  // Theme options
   const themes = [
     { id: 'default', name: t('themes.default') || '默认', icon: 'add' },
     { id: 'dark', name: t('themes.dark') || '深色', icon: 'add' }
   ];
 
-  // Icon pack options
   const iconPacks = [
     { id: 'default', name: t('iconPacks.default') || '默认', icon: 'add' }
   ];
 
-  // Current theme and icon pack
   const [currentTheme, setCurrentTheme] = React.useState(
     window.userManager.getSetting('theme') || 'default'
   );
@@ -29,16 +36,12 @@ function AppearanceSubpage({ onBack }) {
     window.userManager.getSetting('iconPack') || 'default'
   );
 
-  // Load theme
   const loadTheme = async (themeId) => {
     try {
       await window.themeManager.loadTheme(themeId);
       setCurrentTheme(themeId);
-      // Save to user settings
       await window.userManager.setSetting('theme', themeId);
-      // Notify current window
       window.dispatchEvent(new Event('themeChanged'));
-      // Notify other windows
       if (window.electronAPI) {
         window.electronAPI.sendConfigChange({ type: 'theme', value: themeId });
       }
@@ -47,16 +50,12 @@ function AppearanceSubpage({ onBack }) {
     }
   };
 
-  // Load icon pack
   const loadIconPack = async (iconPackId) => {
     try {
       await window.themeManager.loadIcons(iconPackId);
       setCurrentIconPack(iconPackId);
-      // Save to user settings
       await window.userManager.setSetting('iconPack', iconPackId);
-      // Notify current window
       window.dispatchEvent(new Event('themeChanged'));
-      // Notify other windows
       if (window.electronAPI) {
         window.electronAPI.sendConfigChange({ type: 'iconPack', value: iconPackId });
       }
@@ -65,7 +64,6 @@ function AppearanceSubpage({ onBack }) {
     }
   };
 
-  // Breadcrumb items
   const breadcrumbItems = [
     { label: t('pages.settings.title'), onClick: onBack },
     { label: t('pages.appearance.title'), onClick: () => {} }
@@ -74,7 +72,6 @@ function AppearanceSubpage({ onBack }) {
   return [
     React.createElement(window.Breadcrumb, { key: 'breadcrumb', items: breadcrumbItems }),
 
-    // Theme selection section
     React.createElement('div', { key: 'theme-section', className: 'settings-section' }, [
       React.createElement('h2', { key: 'theme-title', className: 'section-title' }, t('pages.appearance.theme')),
       React.createElement('div', { key: 'theme-options', className: 'options-container' },
@@ -98,7 +95,6 @@ function AppearanceSubpage({ onBack }) {
       )
     ]),
 
-    // Icon pack selection section
     React.createElement('div', { key: 'icon-section', className: 'settings-section' }, [
       React.createElement('h2', { key: 'icon-title', className: 'section-title' }, t('pages.appearance.iconPack')),
       React.createElement('div', { key: 'icon-options', className: 'options-container' },
@@ -127,5 +123,8 @@ function AppearanceSubpage({ onBack }) {
   ];
 }
 
-// Export for use in App.js
+/**
+ * 外观子页面组件
+ * @type {function}
+ */
 window.AppearanceSubpage = AppearanceSubpage;

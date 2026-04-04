@@ -1,11 +1,27 @@
-// Animation utilities for page transitions
+/**
+ * @file 动画工具
+ * @module utils/animationUtils
+ * @description 功能：
+ * - 页面过渡动画管理
+ */
 
+/**
+ * 动画工具对象
+ * @typedef {Object} AnimationUtils
+ * @property {Object} pageHierarchy 页面层级关系
+ * @property {function} getAnimationType 获取动画类型
+ * @property {function} applyAnimation 应用动画
+ * @property {function} updateCurrentPage 更新当前页面状态
+ */
+
+/**
+ * 动画工具对象
+ * @type {AnimationUtils}
+ */
 const AnimationUtils = {
-  // Track current page state
   currentPage: null,
   currentDepth: 0,
   
-  // Page hierarchy
   pageHierarchy: {
     0: { name: 'start', depth: 0 },
     1: { name: 'settings', depth: 0 },
@@ -15,7 +31,12 @@ const AnimationUtils = {
     'language': { name: 'language', depth: 1, parent: 1 }
   },
   
-  // Determine animation type
+  /**
+   * 获取动画类型
+   * @param {string|number} fromPage 源页面ID
+   * @param {string|number} toPage 目标页面ID
+   * @returns {string} 动画类型（slide-left、slide-right、push-in、pull-out、none）
+   */
   getAnimationType(fromPage, toPage) {
     const fromInfo = this.pageHierarchy[fromPage];
     const toInfo = this.pageHierarchy[toPage];
@@ -24,28 +45,22 @@ const AnimationUtils = {
       return 'none';
     }
     
-    // If different top-level pages (depth 0), use horizontal slide
     if (fromInfo.depth === 0 && toInfo.depth === 0) {
       return fromPage < toPage ? 'slide-left' : 'slide-right';
     }
     
-    // If same parent section, use push/pull based on depth
     if (fromInfo.depth === 0 && toInfo.depth === 1) {
-      // Going deeper: push in (scale up)
       return 'push-in';
     }
     
     if (fromInfo.depth === 1 && toInfo.depth === 0) {
-      // Going up: pull out (scale down)
       return 'pull-out';
     }
     
-    // If switching between subpages of same parent
     if (fromInfo.depth === 1 && toInfo.depth === 1 && fromInfo.parent === toInfo.parent) {
       return fromPage < toPage ? 'slide-left' : 'slide-right';
     }
     
-    // If switching between subpages of different parents
     if (fromInfo.depth === 1 && toInfo.depth === 1 && fromInfo.parent !== toInfo.parent) {
       return fromInfo.parent < toInfo.parent ? 'slide-left' : 'slide-right';
     }
@@ -53,11 +68,14 @@ const AnimationUtils = {
     return 'none';
   },
   
-  // Apply animation to content
+  /**
+   * 应用动画到内容元素
+   * @param {HTMLElement} contentElement 内容元素
+   * @param {string} animationType 动画类型
+   */
   applyAnimation(contentElement, animationType) {
     if (!contentElement) return;
     
-    // Remove all animation classes first
     contentElement.classList.remove(
       'anim-slide-left',
       'anim-slide-right',
@@ -65,16 +83,17 @@ const AnimationUtils = {
       'anim-pull-out'
     );
     
-    // Force reflow to restart animation
     void contentElement.offsetWidth;
     
-    // Add animation class
     if (animationType !== 'none') {
       contentElement.classList.add(`anim-${animationType}`);
     }
   },
   
-  // Update current page state
+  /**
+   * 更新当前页面状态
+   * @param {string|number} pageId 页面ID
+   */
   updateCurrentPage(pageId) {
     this.currentPage = pageId;
     const info = this.pageHierarchy[pageId];
@@ -82,5 +101,8 @@ const AnimationUtils = {
   }
 };
 
-// Export for global access
+/**
+ * 动画工具对象
+ * @type {AnimationUtils}
+ */
 window.animationUtils = AnimationUtils;
