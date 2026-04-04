@@ -1,0 +1,16 @@
+{
+  "id": "default",
+  "name": "Default",
+  "description": "Default icon pack for Hound Whiteboard",
+  "icons": {
+    "add": "./add.svg",
+    "install": "./install.svg",
+    "left": "./left.svg",
+    "right": "./right.svg",
+    "tab": "./download/标签_tag-one.svg",
+    "button": "./download/按钮_button.svg",
+    "setting": "./download/设置_setting-two.svg",
+    "help": "./download/帮助_help.svg",
+    "user": "./download/信息_info.svg"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "default",
+  "username": "默认用户",
+  "avatar": null,
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "lastLoginAt": "2026-04-04T18:57:38.137Z",
+  "settings": {
+    "theme": "dark",
+    "iconPack": "default",
+    "locale": "zh-CN"
+  }
+}

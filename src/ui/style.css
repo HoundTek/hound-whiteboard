@@ -1,0 +1,640 @@
+/* Basic CSS for Hound Whiteboard */
+:root {
+  /* Default theme variables */
+  --primary-color: #667eea;
+  --secondary-color: #764ba2;
+  --background-color: #f5f5f5;
+  --surface-color: #ffffff;
+  --text-color: #333333;
+  --text-secondary-color: #666666;
+  --border-color: #e0e0e0;
+  --hover-color: #f0f0f0;
+  --active-color: #667eea;
+  --active-text-color: #ffffff;
+  --font-family: Arial, sans-serif;
+  --font-size-small: 12px;
+  --font-size-medium: 14px;
+  --font-size-large: 16px;
+  --font-size-xlarge: 24px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  line-height: 1.6;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  scrollbar-gutter: stable both-edges;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 80px; /* Space for tab container */
+}
+
+.page-content h1 {
+  margin-bottom: 30px;
+  font-size: var(--font-size-xlarge);
+  color: var(--text-color);
+}
+
+.button-container {
+  display: grid;
+  grid-template-columns: repeat(var(--columns, auto-fit), minmax(150px, 1fr));
+  gap: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  width: 100%;
+}
+
+.content {
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* For all icon buttons */
+.icon-button {
+  min-width: 150px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.rounded-button {
+  padding: 15px 30px;
+  border: none;
+  border-radius: 25px;
+  background-color: var(--primary-color);
+  color: var(--active-text-color);
+  font-size: var(--font-size-large);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.rounded-button:hover {
+  background-color: var(--secondary-color);
+}
+
+.tab-container {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0;
+  min-width: 370px;
+  background-color: var(--surface-color);
+  padding: 0;
+  border-radius: 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+/* Common slider pseudo-element */
+.tab-container::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: var(--slider-left, 4px);
+  width: var(--slider-width, 100px);
+  background-color: var(--active-color);
+  border-radius: 26px;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+/* Change slider color when hovering over active tab button */
+.tab-container.active-hover::before {
+  background-color: var(--secondary-color);
+  transition: all 0.3s ease;
+}
+
+.tab-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 2;
+}
+
+.tab-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  transition: all 0.2s ease;
+  filter: var(--icon-filter, brightness(0) saturate(100%) invert(40%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%));
+}
+
+.tab-button.active {
+  color: var(--active-text-color);
+  --icon-filter: brightness(0) invert(1);
+}
+
+.tab-button:hover {
+  color: var(--text-color);
+}
+
+.tab-button.active:hover {
+  color: var(--active-text-color);
+}
+
+.rounded-button {
+  padding: 15px 30px;
+  border: none;
+  border-radius: 25px;
+  background-color: var(--primary-color);
+  color: var(--active-text-color);
+  font-size: var(--font-size-large);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rounded-button:hover {
+  background-color: var(--secondary-color);
+  color: var(--active-text-color);
+}
+
+.icon-button {
+  padding: 20px;
+  border: none;
+  border-radius: 15px;
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  font-size: var(--font-size-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 120px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+}
+
+.icon-button:hover {
+  background-color: var(--hover-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.icon-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.icon-button .button-icon {
+  width: 48px;
+  height: 48px;
+  transition: all 0.2s ease;
+  filter: var(--button-icon-filter, brightness(0) saturate(100%) invert(40%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%));
+}
+
+.icon-button:hover .button-icon {
+  filter: var(--button-icon-hover-filter, brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%));
+}
+
+/* Custom scrollbar - hide scrollbar but keep functionality */
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+}
+
+/* Enable scrolling */
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom scrollbar - hide scrollbar but keep functionality */
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+}
+
+/* Enable scrolling */
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  position: relative;
+}
+
+/* Custom scroll indicator container */
+#scroll-indicator {
+  position: fixed;
+  top: 20px;
+  right: 8px;
+  width: 8px;
+  height: calc(100vh - 40px);
+  background-color: transparent;
+  opacity: 1;
+  pointer-events: none;
+  z-index: 9999;
+  transition: all 0.3s ease;
+}
+
+/* Scroll indicator handle */
+#scroll-indicator::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: var(--handle-height, 20%);
+  top: var(--handle-top, 0%);
+  background-color: var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.2s ease;
+}
+
+/* Show scroll indicator when page is scrollable and hovered */
+body:hover #scroll-indicator {
+  opacity: 1;
+  transition: all 0.3s ease;
+}
+
+/* Make scroll indicator more visible on hover */
+#scroll-indicator:hover {
+  width: 10px;
+  transition: all 0.2s ease;
+}
+
+#scroll-indicator:hover::after {
+  background-color: var(--hover-color);
+  transition: all 0.2s ease;
+}
+
+/* Scroll indicator handle when dragging */
+#scroll-indicator.dragging {
+  width: 12px;
+  right: 12px;
+  transition: all 0.2s ease;
+}
+
+#scroll-indicator.dragging::after {
+  background-color: var(--primary-color);
+  width: 100%;
+  left: 0;
+  transition: none;
+}
+
+/* Back button */
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 12px;
+  background-color: transparent;
+  color: var(--text-color);
+  font-size: var(--font-size-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+  align-self: flex-start;
+}
+
+.back-button:hover {
+  background-color: var(--hover-color);
+}
+
+.back-icon {
+  width: 20px;
+  height: 20px;
+  filter: brightness(0) saturate(100%) invert(40%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
+}
+
+/* Settings section */
+.settings-section {
+  margin-bottom: 40px;
+  text-align: left;
+}
+
+.section-title {
+  font-size: var(--font-size-large);
+  color: var(--text-color);
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+/* Options container */
+.options-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+/* Option button */
+.option-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  font-size: var(--font-size-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.option-button:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.option-button.active {
+  border-color: var(--primary-color);
+  background-color: rgba(102, 126, 234, 0.05);
+}
+
+/* Theme preview */
+.theme-preview {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Icon preview */
+.icon-preview {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--surface-color);
+}
+
+.preview-icon {
+  width: 32px;
+  height: 32px;
+  filter: brightness(0) saturate(100%) invert(40%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
+}
+
+/* Language preview */
+.language-preview {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--surface-color);
+  border: 2px solid var(--border-color);
+}
+
+.language-code {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+/* User info section */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  width: 100%;
+  margin-bottom: 20px;
+  background-color: var(--surface-color);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.user-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--background-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+}
+
+.avatar-img {
+  width: 50px;
+  height: 50px;
+  filter: brightness(0) saturate(100%) invert(40%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-name {
+  font-size: var(--font-size-xlarge);
+  font-weight: 600;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.account-type {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary-color);
+}
+
+/* Breadcrumb navigation */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: var(--font-size-xlarge);
+  color: var(--text-secondary-color);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.breadcrumb-item:hover:not(:disabled) {
+  background-color: var(--hover-color);
+  color: var(--text-color);
+}
+
+.breadcrumb-item.active {
+  color: var(--text-color);
+  font-weight: 600;
+  cursor: default;
+}
+
+.breadcrumb-item:disabled {
+  cursor: default;
+}
+
+.breadcrumb-separator {
+  color: var(--text-secondary-color);
+  font-size: var(--font-size-xlarge);
+  user-select: none;
+}
+
+/* Page transition animations */
+.content {
+  position: relative;
+  overflow: hidden;
+}
+
+.page-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 700px;
+  animation-duration: 0.3s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+/* Page1 specific styles - must be after .page-content to override */
+.page1-content {
+  align-items: center;
+  padding-top: 60px;
+}
+
+.greeting-title {
+  font-size: 42px;
+  font-weight: 600;
+  color: var(--text-color);
+  text-align: center;
+  margin-bottom: 40px;
+  margin-top: 20px;
+}
+
+/* Slide animations (horizontal) */
+.anim-slide-left {
+  animation-name: slideLeft;
+}
+
+.anim-slide-right {
+  animation-name: slideRight;
+}
+
+@keyframes slideLeft {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideRight {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Push/Pull animations (scale) */
+.anim-push-in {
+  animation-name: pushIn;
+}
+
+.anim-pull-out {
+  animation-name: pullOut;
+}
+
+@keyframes pushIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pullOut {
+  from {
+    transform: scale(1.05);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

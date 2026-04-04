@@ -1,0 +1,26 @@
+{
+  "name": "Dark",
+  "description": "Dark theme for Hound Whiteboard",
+  "colors": {
+    "primary": "#667eea",
+    "secondary": "#764ba2",
+    "background": "#121212",
+    "surface": "#1e1e1e",
+    "text": "#ffffff",
+    "textSecondary": "#b0b0b0",
+    "border": "#333333",
+    "hover": "#2a2a2a",
+    "active": "#667eea",
+    "activeText": "#ffffff"
+  },
+  "fonts": {
+    "family": "Arial, sans-serif",
+    "size": {
+      "small": "12px",
+      "medium": "14px",
+      "large": "16px",
+      "xlarge": "24px"
+    }
+  },
+  "icons": "default"
+}
