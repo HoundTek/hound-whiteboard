@@ -156,6 +156,25 @@ describe("Deque", () => {
       expect(() => deque.peekFront()).toThrow(RangeError);
       expect(() => deque.peekBack()).toThrow(RangeError);
     });
+
+    test("toArray 方法应返回当前顺序的数组副本", () => {
+      deque.pushBack(1);
+      deque.pushFront(0);
+      deque.pushBack(2);
+
+      expect(deque.toArray()).toEqual([0, 1, 2]);
+      expect(deque.count()).toBe(3);
+    });
+
+    test("includes 方法应正确判断元素是否存在", () => {
+      const target = { id: 2 };
+
+      deque.pushBack({ id: 1 });
+      deque.pushBack(target);
+
+      expect(deque.includes(target)).toBe(true);
+      expect(deque.includes({ id: 2 })).toBe(false);
+    });
   });
 
   // ========== 混合操作测试 ==========

@@ -168,6 +168,34 @@ class Deque {
   }
 
   /**
+   * 转换为数组
+   * @returns {Array<any>}
+   */
+  toArray() {
+    const result = [];
+    let index = this.head;
+    while (index !== this.tail) {
+      result.push(this.elements[index]);
+      index = (index + 1) % this.capacity;
+    }
+    return result;
+  }
+
+  /**
+   * 判断是否包含某个元素
+   * @param {any} elem - 要查询的元素
+   * @returns {boolean}
+   */
+  includes(elem) {
+    let index = this.head;
+    while (index !== this.tail) {
+      if (this.elements[index] === elem) return true;
+      index = (index + 1) % this.capacity;
+    }
+    return false;
+  }
+
+  /**
    * 动态扩容
    * @private
    */

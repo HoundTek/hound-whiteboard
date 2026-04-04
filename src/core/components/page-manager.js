@@ -64,6 +64,8 @@ class PageManager {
     this.nextPage = undefined;
     this.prevPage = undefined;
     this.id = pageId;
+    this.isLoad = false;
+    this.isTempLoad = false;
   }
 
   /**
@@ -117,20 +119,21 @@ class PageManager {
   load(directory) {
     // 处理三种情况中的两种：已加载和未加载
     if (this.isLoad && !this.isTempLoad) return false;
-    if (/* !this.isLoad && */ !this.isTempLoad) this.loadTemp(directory);
+    if (!this.isLoad) this.loadTemp(directory);
     this.isTempLoad = false;
 
     // 剩下的情况就是未完全加载
     // [todo] 加载 Objects
-    return false;
+    this.objectManager.loadObjects(directory);
+    return true;
   }
 
   unload() {
-    this.objectManager.unload();
-    this.objectManager = null; // 垃圾回收
+    if (this.objectManager) this.objectManager.unload();
+    this.objectManager = new PageObjectManager();
     this.isLoad = false;
     this.isTempLoad = false;
-    // [todo]
+    return true;
   }
 
   unloadTemp() {
@@ -138,7 +141,8 @@ class PageManager {
       // 要么是没加载，要么是完整加载，不能卸载
       return false;
     }
-    this.objectManager.unloadTierGraph();
+    if (this.objectManager) this.objectManager.unloadTierGraph();
+    this.objectManager = new PageObjectManager();
     this.isLoad = false;
     this.isTempLoad = false;
     return true;
@@ -154,12 +158,34 @@ class PageManager {
       // 已加载，不管是完整加载还是临时加载，都不能重复加载
       return false;
     }
+    const tierGraphFile = this.#resolveTierGraphFile(directory);
     this.isLoad = true;
     this.isTempLoad = true;
-    this.objectManager.loadTierGraph(
-      directory.cd("pages").peek(this.id.toString(), "json")
-    );
+    if (!this.objectManager) this.objectManager = new PageObjectManager();
+    this.objectManager.loadTierGraph(tierGraphFile);
     return true;
+  }
+
+  /**
+   * 解析页层叠图文件位置
+   * @param {Directory} directory - 可能是白板根目录、pages 目录或单页目录
+   * @returns {import("../../utils/io").File | undefined}
+   */
+  #resolveTierGraphFile(directory) {
+    if (!directory) return undefined;
+
+    const candidates = [
+      directory.peek("page", "json"),
+      directory.peek(this.id.toString(), "json"),
+      directory.cd("pages").peek(this.id.toString(), "json"),
+      directory.cd("pages").cd(this.id.toString()).peek("page", "json"),
+      directory.cd(this.id.toString()).peek("page", "json"),
+    ];
+
+    for (const file of candidates) {
+      if (file.exist()) return file;
+    }
+    return undefined;
   }
 }
 
