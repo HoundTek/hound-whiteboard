@@ -15,7 +15,7 @@ describe("BoardManager 页加载", () => {
     PageManager.connectTwoPage(page2, page3);
 
     for (const page of [page1, page2, page3]) {
-      page.load = jest.fn(function load() {
+      page.loadFull = jest.fn(function loadFull() {
         this.isLoad = true;
         this.isTempLoad = false;
         return true;
@@ -68,7 +68,7 @@ describe("BoardManager 页加载", () => {
     board.pageLoadManager.forceMoveCurrentRightFullLoad();
 
     expect(page2.loadTemp).toHaveBeenCalledTimes(1);
-    expect(page2.load).toHaveBeenCalledTimes(1);
+    expect(page2.loadFull).toHaveBeenCalledTimes(1);
     expect(board.pageTemporaryLoadedCount.has(2)).toBe(false);
     expect(board.pageFullyLoadedCount.get(2)).toBe(1);
     expect(board.pageLoadManager.pageNow).toBe(page2);

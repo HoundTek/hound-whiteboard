@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { Directory } = require("../../utils/io");
+const { File, Directory } = require("../../utils/io");
 const { BasicObject } = require("../objects/basic-obj");
 const { PageObjectManager } = require("./page-object-manager");
 
@@ -98,36 +98,33 @@ class PageManager {
   }
 
   /**
-   * 
-   * @param {BasicObject} obj - 要添加的对象
-   */
-  addNewObject(obj) {
-    // [todo] 计算新对象是否与现有对象交集
-    
-
-    // [todo] 更新层叠图
-    this.objectManager.staticGraph.addNode(obj.id);
-  }
-
-  /**
-   * 加载该页
+   * 完整加载该页
    * @description
-   * @param {Directory} directory - 白板文件夹
+   * @param {Directory} directory - 白板根目录
    * @todo
    * @returns {boolean} 是否成功
    */
-  load(directory) {
-    // 处理三种情况中的两种：已加载和未加载
+  loadFull(directory) {
+    // 已完整加载
     if (this.isLoad && !this.isTempLoad) return false;
+
+    // 未加载，升级为临时加载
     if (!this.isLoad) this.loadTemp(directory);
     this.isTempLoad = false;
 
-    // 剩下的情况就是未完全加载
+    // 升级为完整加载，加载对象
     // [todo] 加载 Objects
     this.objectManager.loadObjects(directory);
     return true;
   }
 
+  /**
+   * 完整卸载该页
+   * @returns {boolean} 是否成功卸载
+   * @description
+   * 该方法会把该页变成未加载状态。
+   * 无论该页之前是完整加载还是临时加载，调用后都会变成未加载状态。
+   */
   unload() {
     if (this.objectManager) this.objectManager.unload();
     this.objectManager = new PageObjectManager();
@@ -136,6 +133,12 @@ class PageManager {
     return true;
   }
 
+  /**
+   * 卸载该页，仅当该页被临时加载
+   * @returns {boolean} 是否成功卸载
+   * @description
+   * 该方法只能在该页是临时加载状态时调用，调用后该页会变成未加载状态。
+   */
   unloadTemp() {
     if (!this.isTempLoad) {
       // 要么是没加载，要么是完整加载，不能卸载
@@ -150,7 +153,7 @@ class PageManager {
 
   /**
    * 临时加载该页
-   * @param {Directory} directory - 白板文件夹
+   * @param {Directory} directory - 白板根目录
    * @returns {boolean} 是否成功
    */
   loadTemp(directory) {
@@ -168,23 +171,13 @@ class PageManager {
 
   /**
    * 解析页层叠图文件位置
-   * @param {Directory} directory - 可能是白板根目录、pages 目录或单页目录
-   * @returns {import("../../utils/io").File | undefined}
+   * @param {Directory} directory - 白板根目录
+   * @returns {File | undefined} 层叠图文件，若未找到，则为 undefined
    */
   #resolveTierGraphFile(directory) {
     if (!directory) return undefined;
-
-    const candidates = [
-      directory.peek("page", "json"),
-      directory.peek(this.id.toString(), "json"),
-      directory.cd("pages").peek(this.id.toString(), "json"),
-      directory.cd("pages").cd(this.id.toString()).peek("page", "json"),
-      directory.cd(this.id.toString()).peek("page", "json"),
-    ];
-
-    for (const file of candidates) {
-      if (file.exist()) return file;
-    }
+    const file = directory.cd("page").peek(this.id.toString(), "json");
+    if (file.exist()) return file;
     return undefined;
   }
 }

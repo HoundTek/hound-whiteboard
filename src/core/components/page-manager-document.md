@@ -72,8 +72,7 @@
 |:--|:--|:--|
 | `connectTwoPage(first, second)` | 连接两页 | `PageManager -> PageManager -> void` |
 | `addObject(obj, below, above)` | 按上下关系加入对象 | `number -> number[] -> number[] -> void` |
-| `addNewObject(obj)` | 新增对象（自动关系） | `BasicObject -> void` |
-| `load(directory)` | 完整加载页面 | `Directory -> boolean` |
+| `loadFull(directory)` | 完整加载页面 | `Directory -> boolean` |
 | `loadTemp(directory)` | 临时加载页面 | `Directory -> boolean` |
 | `unload()` | 完整卸载页面 | `void -> void` |
 | `unloadTemp()` | 临时卸载页面 | `void -> boolean` |
@@ -87,4 +86,4 @@
 
 - [page-object-manager-document.md](./page-object-manager-document.md)
 - [board-manager-document.md](./board-manager-document.md)
-- [tire-graph-document.md](./tire-graph-document.md)
+- [tier-graph-document.md](./tier-graph-document.md)

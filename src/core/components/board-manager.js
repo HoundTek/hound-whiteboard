@@ -389,7 +389,7 @@ class BoardManager {
 
     if (strategy === PAGE_LOAD_STRATEGIES.FULL) {
       const needUpgrade = page.isLoad && page.isTempLoad;
-      const changed = page.load(pageDirectory);
+      const changed = page.loadFull(pageDirectory);
 
       if (!alreadyBuffered) {
         this.#increasePageLoadCount(this.pageFullyLoadedCount, page.id);

@@ -156,4 +156,4 @@
 - [page-load-manager-document.md](./page-load-manager-document.md)
 - [page-manager-document.md](./page-manager-document.md)
 - [active-object-document.md](./active-object-document.md)
-- [tire-graph-document.md](./tire-graph-document.md)
+- [tier-graph-document.md](./tier-graph-document.md)

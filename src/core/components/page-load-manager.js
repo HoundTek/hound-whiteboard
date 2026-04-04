@@ -161,14 +161,13 @@ class PageLoadManager {
 
   /**
    * 重置当前页
-   * @param {number | PageManager | undefined} pageId - 页 id 或页实例
+   * @param {PageManager} page - 页实例
    * @returns {PageManager | undefined} 重置后的当前页实例，若参数无效，则为 undefined
    * @description
    * 该方法会清空当前缓冲区并把参数页设为当前页。
    * 如果参数页不在当前板中，则不进行任何操作。
    */
-  resetCurrentPage(pageId) {
-    const page = pageId instanceof PageManager ? pageId : undefined;
+  resetCurrentPage(page) {
     this.pagesLoaded.clear();
     this.pageNow = page;
     if (page) this.pagesLoaded.pushBack(page);

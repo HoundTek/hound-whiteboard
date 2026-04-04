@@ -43,7 +43,7 @@ graph LR
 
 活动对象不直接写入页静态图，而是由 `ActiveObjectManager` 维护动态层关系。这样可以在拖拽、框选等频繁操作期间减少对静态关系的破坏。
 
-层叠图细节见 [tire-graph-document.md](./tire-graph-document.md)。
+层叠图细节见 [tier-graph-document.md](./tier-graph-document.md)。
 
 ## 与其它目录的关系
 

@@ -43,7 +43,7 @@
 3. 构造新层并处理与旧层的相对顺序约束。
 4. 插入新层到 `layerOrder`。
 
-该流程对应 [tire-graph-document.md](./tire-graph-document.md) 中“选择单个/多个对象”章节。
+该流程对应 [tier-graph-document.md](./tier-graph-document.md) 中“选择单个/多个对象”章节。
 
 ### 取消选择 `remove(objs)`
 
@@ -84,7 +84,7 @@
 
 ## 相关文档
 
-- [tire-graph-document.md](./tire-graph-document.md)
+- [tier-graph-document.md](./tier-graph-document.md)
 - [page-manager-document.md](./page-manager-document.md)
 - [page-object-manager-document.md](./page-object-manager-document.md)
 - [page-load-manager-document.md](./page-load-manager-document.md)
