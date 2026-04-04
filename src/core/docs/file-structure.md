@@ -41,6 +41,9 @@
     connection.json
     1.json
     2.json
+  templates/
+    1.json
+    2.json
   config.json
   trace.json
   meta.json
@@ -54,9 +57,15 @@
 
 #### `trash/`
 
+该文件夹用来存放所有已被删除的对象和页。
+
 #### `edition/`
 
+该文件夹用来存放所有对象和页的历史版本
+
 #### `hit/`
+
+该文件夹用来存放 hit 的块。
 
 ### `objects/`
 
@@ -75,7 +84,7 @@
 }
 ```
 
-其中，`count` 是给 `CounterPool` 使用的
+其中，`count` 是给 `CounterPool` 使用的。
 
 ### `config.json`
 
@@ -83,7 +92,7 @@
 
 ### `trace.json`
 
-该文件存放了上次打开时的情况。
+该文件存放了上次关闭白板时的情况。
 
 示例：
 ```json
@@ -93,8 +102,10 @@
 }
 ```
 
+表示上次关闭时在第三页，但第三页的左边有 10% 没有显示。
+
 ### `meta.json`
 
-白板的元数据
+白板的元数据。
 
 ## 缓存

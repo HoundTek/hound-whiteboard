@@ -87,3 +87,4 @@
 - [tire-graph-document.md](./tire-graph-document.md)
 - [page-manager-document.md](./page-manager-document.md)
 - [page-object-manager-document.md](./page-object-manager-document.md)
+- [page-load-manager-document.md](./page-load-manager-document.md)

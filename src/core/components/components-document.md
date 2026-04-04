@@ -10,7 +10,7 @@ components 目录下的模块用于管理白板运行时状态，负责把对象
 - `PageManager`：单页管理器，负责页链关系、页加载/卸载流程。
 - `PageObjectManager`：页对象管理器，负责静态层叠图与页对象映射。
 - `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
-- `PageLoadManager`：活动对象拾取期间的临时页加载器（定义在 `active-object-manager.js` 内）。
+- `PageLoadManager`：页缓冲区与当前页位置管理器，定义在 `page-load-manager.js`。
 
 ## 组件关系图
 

@@ -22,7 +22,7 @@ class DebuggerDevice extends Device {
   constructor() {
     super();
   }
-};
+}
 
 module.exports = {
   DebuggerDevice,

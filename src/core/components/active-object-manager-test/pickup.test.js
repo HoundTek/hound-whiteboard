@@ -1,3 +1,9 @@
+const { MockPageLoadManager } = require("./page-load-manager.mock");
+
+jest.mock("../page-load-manager", () => ({
+  PageLoadManager: MockPageLoadManager,
+}));
+
 const { DirectedGraph } = require("../../utils/directed-graph");
 const { ActiveObjectManager } = require("../active-object-manager");
 const { PageManager } = require("../page-manager");

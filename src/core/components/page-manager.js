@@ -11,6 +11,7 @@ const { PageObjectManager } = require("./page-object-manager");
 /**
  * 页管理器
  * @class
+ * @description 管理一页
  * @author Zhou Chenyu
  */
 class PageManager {
@@ -71,11 +72,12 @@ class PageManager {
    * @param {PageManager | undefined} second 后一页
    */
   static connectTwoPage(first, second) {
-    first.nextPage = second;
-    second.prevPage = first;
+    if (first) first.nextPage = second;
+    if (second) second.prevPage = first;
   }
 
   /**
+   * 添加对象并更新层叠图
    *
    * @param {number} obj - 要添加的对象
    * @param {number[]} below - 应在该对象之下的对象

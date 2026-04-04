@@ -168,10 +168,14 @@ class BasicObject {
    * @abstract
    * @returns {Object} 序列化后的对象
    * @description 子类必须实现此方法以支持对象的持久化
-   * @throws {Error} 基类未实现此方法
    */
   serialize() {
-    throw new Error("Method not implemented.");
+    return {
+      id: this.id,
+      pageId: this.pageId,
+      position: this.position.serialize(),
+      transform: this.transform.serialize(),
+    }
   }
 
   /**

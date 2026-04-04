@@ -173,6 +173,30 @@ class PolygonObject extends GraphObject {
     // 再用绳钉算法进行精确检测
     return ropeNailIntersect(this.transformedPoints, p) !== 0;
   }
+
+  serialize() {
+    return {
+      ...super.serialize(),
+      type: "PolygonObject",
+      points: this.points.map(p => p.serialize()),
+      color: this.color,
+    };
+  }
+
+  static parse(data) {
+    if (data.type !== "PolygonObject") {
+      throw new TypeError("Invalid type for PolygonObject parsing");
+    }
+    let obj = new PolygonObject(
+      Point.parse(data.position),
+      data.id,
+      data.pageId,
+      data.points.map((p) => Point.parse(p)),
+    );
+    obj.setTransform(Matrix.parse(data.transform));
+    obj.color = data.color;
+    return obj;
+  }
 }
 
 module.exports = {

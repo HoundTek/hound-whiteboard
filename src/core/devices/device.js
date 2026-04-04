@@ -13,14 +13,21 @@ class Device {
    */
   name;
 
-  constructor() {
-  };
+  constructor() {}
 
   /**
    * 设备的工具链
    * @type {Tool[]}
    */
   toolChain = [];
+
+  /**
+   * 获取当前工具链中的最后一个工具，即正在使用的工具
+   * @return {Tool} 当前工具
+   */
+  get currentTool() {
+    return this.toolChain[this.toolChain.length - 1];
+  }
 
   /**
    * 将工具添加到工具链中
@@ -38,7 +45,7 @@ class Device {
    */
   toolPop() {
     this.toolChain.pop();
-    return this.toolChain[this.toolChain.length - 1];
+    return this.currentTool;
   }
 }
 
