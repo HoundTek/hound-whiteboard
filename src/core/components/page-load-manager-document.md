@@ -10,7 +10,7 @@
 - 记录当前页引用 `pageNow`
 - 限制缓冲区最大页数 `pagesLoadedLimit`
 - 提供左右移动当前页位置的接口
-- 提供向左右扩展缓冲区的接口
+- 提供向左右扩展与收缩缓冲区的接口
 - 提供重置当前页和重置缓冲区的接口
 
 ## 设计边界
@@ -92,6 +92,20 @@
 
 向左扩展缓冲区，并要求采用“完整加载”策略。
 
+### 收缩缓冲区
+
+#### `shrinkBufferRight()`
+
+从右边界向左收缩缓冲区。
+
+若右边界就是当前页，则不执行操作。
+
+#### `shrinkBufferLeft()`
+
+从左边界向右收缩缓冲区。
+
+若左边界就是当前页，则不执行操作。
+
 ### 重置接口
 
 #### `resetCurrentPage(pageId)`
@@ -101,6 +115,14 @@
 #### `resetBuffer()`
 
 清空当前缓冲区状态，重新开始管理页加载窗口。
+
+## 事件协作
+
+`PageLoadManager` 自身不执行加载，而是通过事件总线把意图发送给 `BoardManager`。
+
+- 加载事件会携带请求来源 `requesterId`
+- 卸载事件也会携带请求来源 `requesterId`
+- 这样 `BoardManager` 可以在多个 `PageLoadManager` 同时存在时正确维护页的引用计数
 
 ## API
 
@@ -112,6 +134,8 @@
 | `expandBufferRightFullLoad()` | 向右扩展缓冲区并完整加载 | `void -> void` |
 | `expandBufferLeftTempLoad()` | 向左扩展缓冲区并临时加载 | `void -> void` |
 | `expandBufferLeftFullLoad()` | 向左扩展缓冲区并完整加载 | `void -> void` |
+| `shrinkBufferRight()` | 从右边界收缩缓冲区 | `void -> boolean` |
+| `shrinkBufferLeft()` | 从左边界收缩缓冲区 | `void -> boolean` |
 | `resetCurrentPage(pageId)` | 重置当前页 | `number -> void` |
 | `resetBuffer()` | 重置缓冲区 | `void -> void` |
 
@@ -123,8 +147,8 @@
 
 ## 实现状态
 
-- 已实现：字段定义、接口骨架、职责边界说明。
-- 待完善：具体缓冲区移动逻辑、扩展逻辑、与 `BoardManager` 的请求接口。
+- 已实现：缓冲区移动、扩展、收缩、事件请求接口、请求方标识。
+- 待完善：更细的策略调度与更高层交互状态联动。
 
 ## 备注
 

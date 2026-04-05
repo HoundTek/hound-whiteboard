@@ -118,6 +118,12 @@ class BoardManager {
    */
   pageLoadManager;
 
+  /**
+   * 每页由哪些 PLM 持有以及持有策略
+   * @type {Map<number, Map<number | string, "temp" | "full">>}
+   */
+  pageLoadOwners;
+
   constructor() {
     this.undoTree = new UndoTree();
     this.activeObjectManager = new ActiveObjectManager();
@@ -125,16 +131,24 @@ class BoardManager {
     this.pageOrder = [];
     this.pageTemporaryLoadedCount = new Map();
     this.pageFullyLoadedCount = new Map();
+    this.pageLoadOwners = new Map();
     this.loadedPages = new Deque();
     this.pageCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
     this.pageLoadEventBus = new EventBus();
-    this.pageLoadManager = new PageLoadManager(
-      BoardManager.PAGE_BUFFER_LIMIT,
-      this.pageLoadEventBus,
-    );
+    this.pageLoadManager = this.createPageLoadManager();
     this.loadedPages = this.pageLoadManager.pagesLoaded;
     this.#bindPageLoadEvents();
+  }
+
+  /**
+   * 创建绑定到当前 BoardManager 的页加载管理器
+   * @param {number} [limit] - 缓冲区上限
+   * @param {number | string} [requesterId] - 请求方 id
+   * @returns {PageLoadManager}
+   */
+  createPageLoadManager(limit = BoardManager.PAGE_BUFFER_LIMIT, requesterId) {
+    return new PageLoadManager(limit, this.pageLoadEventBus, requesterId);
   }
 
   /**
@@ -226,6 +240,8 @@ class BoardManager {
       this.pageCounterPool = new CounterPool(connection.count);
     }
 
+    this.pageLoadManager.resetBuffer();
+    this.pageLoadOwners.clear();
     this.pageTemporaryLoadedCount.clear();
     this.pageFullyLoadedCount.clear();
 
@@ -266,9 +282,13 @@ class BoardManager {
     }
 
     // 初始化缓冲区并加载当前页
-    this.pageLoadManager.resetBuffer();
     this.pageLoadManager.resetCurrentPage(currentPage);
-    this.#loadPage(currentPage, PAGE_LOAD_STRATEGIES.FULL, false);
+    this.#loadPage(
+      currentPage,
+      PAGE_LOAD_STRATEGIES.FULL,
+      false,
+      this.pageLoadManager.requesterId,
+    );
 
     if (currentPage.prevPage) {
       this.pageLoadManager.expandBufferLeftFullLoad();
@@ -361,15 +381,15 @@ class BoardManager {
   #bindPageLoadEvents() {
     this.pageLoadEventBus.on(
       PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD,
-      ({ page, strategy, alreadyBuffered }) => {
-        this.#loadPage(page, strategy, alreadyBuffered);
+      ({ requesterId, page, strategy, alreadyBuffered }) => {
+        this.#loadPage(page, strategy, alreadyBuffered, requesterId);
       },
     );
 
     this.pageLoadEventBus.on(
       PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD,
-      ({ page }) => {
-        this.#unloadPage(page);
+      ({ requesterId, page }) => {
+        this.#unloadPage(page, requesterId);
       },
     );
   }
@@ -379,50 +399,57 @@ class BoardManager {
    * @param {PageManager} page - 要加载的页
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
+   * @param {number | string} requesterId - 发起加载请求的 PLM id
    * @returns {boolean} 是否成功加载
    * @private
    */
-  #loadPage(page, strategy, alreadyBuffered) {
-    if (!page) return false;
+  #loadPage(page, strategy, alreadyBuffered, requesterId) {
+    if (!page || requesterId === undefined) return false;
+
+    const effectiveStrategy = this.#registerPageLoadRequest(
+      page.id,
+      requesterId,
+      strategy,
+    );
 
     const pageDirectory = this.#resolvePageDirectory(page.id);
 
-    if (strategy === PAGE_LOAD_STRATEGIES.FULL) {
-      const needUpgrade = page.isLoad && page.isTempLoad;
+    if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
       const changed = page.loadFull(pageDirectory);
-
-      if (!alreadyBuffered) {
-        this.#increasePageLoadCount(this.pageFullyLoadedCount, page.id);
-      } else if (needUpgrade) {
-        this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, page.id);
-        this.#increasePageLoadCount(this.pageFullyLoadedCount, page.id);
-      }
       return changed;
     }
 
-    const changed = page.loadTemp(pageDirectory);
-    if (!alreadyBuffered) {
-      this.#increasePageLoadCount(this.pageTemporaryLoadedCount, page.id);
+    if (page.isLoad && !page.isTempLoad) {
+      return false;
     }
-    return changed;
+
+    return page.loadTemp(pageDirectory);
   }
 
   /**
    * 卸载页
    * @param {PageManager} page - 要卸载的页
+   * @param {number | string} requesterId - 发起卸载请求的 PLM id
    * @returns {boolean} 是否成功卸载
    * @private
    */
-  #unloadPage(page) {
-    if (!page || !page.isLoad) return false;
+  #unloadPage(page, requesterId) {
+    if (!page || requesterId === undefined) return false;
 
-    if (page.isTempLoad) {
-      this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, page.id);
-      return page.unloadTemp();
+    const removedStrategy = this.#unregisterPageLoadRequest(page.id, requesterId);
+    if (!removedStrategy) return false;
+
+    if (this.pageFullyLoadedCount.has(page.id)) {
+      return false;
     }
 
-    this.#decreasePageLoadCount(this.pageFullyLoadedCount, page.id);
-    return page.unload();
+    if (this.pageTemporaryLoadedCount.has(page.id)) {
+      if (!page.isLoad) return false;
+      return page.isTempLoad ? false : page.downgradeToTemp();
+    }
+
+    if (!page.isLoad) return false;
+    return page.isTempLoad ? page.unloadTemp() : page.unload();
   }
 
   /**
@@ -476,6 +503,86 @@ class BoardManager {
       return;
     }
     map.set(pageId, count - 1);
+  }
+
+  /**
+   * 记录某个 PLM 对某页的加载持有关系
+   * @param {number} pageId - 页 id
+   * @param {number | string} requesterId - PLM id
+   * @param {"temp" | "full"} strategy - 加载策略
+   * @returns {"temp" | "full"} 生效后的策略
+   * @private
+   */
+  #registerPageLoadRequest(pageId, requesterId, strategy) {
+    if (!this.pageLoadOwners.has(pageId)) {
+      this.pageLoadOwners.set(pageId, new Map());
+    }
+
+    const owners = this.pageLoadOwners.get(pageId);
+    const previousStrategy = owners.get(requesterId);
+    const effectiveStrategy =
+      previousStrategy === PAGE_LOAD_STRATEGIES.FULL
+        ? PAGE_LOAD_STRATEGIES.FULL
+        : strategy;
+
+    if (previousStrategy === effectiveStrategy) {
+      return effectiveStrategy;
+    }
+
+    if (previousStrategy === PAGE_LOAD_STRATEGIES.TEMP) {
+      this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+    } else if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
+      this.#decreasePageLoadCount(this.pageFullyLoadedCount, pageId);
+    }
+
+    owners.set(requesterId, effectiveStrategy);
+    if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
+      this.#increasePageLoadCount(this.pageFullyLoadedCount, pageId);
+    } else {
+      this.#increasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+    }
+    return effectiveStrategy;
+  }
+
+  /**
+   * 取消某个 PLM 对某页的加载持有关系
+   * @param {number} pageId - 页 id
+   * @param {number | string} requesterId - PLM id
+   * @returns {"temp" | "full" | undefined} 被移除的策略
+   * @private
+   */
+  #unregisterPageLoadRequest(pageId, requesterId) {
+    if (!this.pageLoadOwners.has(pageId)) return undefined;
+
+    const owners = this.pageLoadOwners.get(pageId);
+    const previousStrategy = owners.get(requesterId);
+    if (!previousStrategy) return undefined;
+
+    owners.delete(requesterId);
+    if (owners.size === 0) {
+      this.pageLoadOwners.delete(pageId);
+    }
+
+    if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
+      this.#decreasePageLoadCount(this.pageFullyLoadedCount, pageId);
+    } else {
+      this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+    }
+
+    return previousStrategy;
+  }
+
+  /**
+   * 获取某页当前总持有数
+   * @param {number} pageId - 页 id
+   * @returns {number}
+   * @private
+   */
+  #getPageLoadCount(pageId) {
+    return (
+      (this.pageTemporaryLoadedCount.get(pageId) || 0) +
+      (this.pageFullyLoadedCount.get(pageId) || 0)
+    );
   }
 }
 

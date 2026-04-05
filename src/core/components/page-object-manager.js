@@ -17,7 +17,7 @@ class PageObjectManager {
   /**
    * 该页的静态图
    * @description 见 [tier-graph-document.md](./tier-graph-document.md)。
-   * 内部存储所有对象的层叠关系，只包含该页内的对象。存储对象 id，不拥有对象实例的所有权。
+   * 内部存储所有对象的层叠关系，包含在该页的对象（可以不属于该页）。存储对象 id，不拥有对象实例的所有权。
    * @type {DirectedGraph}
    */
   staticGraph;
@@ -53,9 +53,11 @@ class PageObjectManager {
    * 加载层叠图
    * @param {File} file - 从何处加载
    * @todo
+   * @throws {Error} 如果文件不存在
    */
   loadTierGraph(file) {
-    if (file) this.staticGraph = DirectedGraph.parse(file.cat());
+    if (file.exist) this.staticGraph = DirectedGraph.parse(file.cat());
+    else throw new Error(`file ${file.toUrl()} does not exist.`);
   }
 
   /**
@@ -63,7 +65,9 @@ class PageObjectManager {
    * @param {File} file - 保存至何方
    * @todo
    */
-  saveTierGraph(file) {}
+  saveTierGraph(file) {
+    file.rmWhenExist().init().write(JSON.stringify(this.staticGraph.toArray()));
+  }
 
   /**
    * 卸载层叠图

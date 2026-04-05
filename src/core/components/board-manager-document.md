@@ -60,16 +60,24 @@
 - 持有白板的完整页集合与页顺序
 - 判断当前交互场景需要什么加载策略
 - 决定应加载哪些页、应卸载哪些页
-- 调用 `PageManager.load(...)`、`PageManager.loadTemp(...)`、`PageManager.unload()`、`PageManager.unloadTemp()` 等方法执行实际加载
+- 调用 `PageManager.loadFull(...)`、`PageManager.loadTemp(...)`、`PageManager.unload()`、`PageManager.unloadTemp()`、`PageManager.downgradeToTemp()` 等方法执行实际加载
 - 维护白板级的 `loadedPages`、当前打开位置、恢复状态等信息
+- 维护“某页被哪些 `PageLoadManager` 以何种策略持有”的引用关系
 
 #### `PageLoadManager` 负责的事
 
 - 表达缓冲区窗口及其变化方向
 - 记录当前页引用
-- 提供“向左/向右移动当前页”“向左/向右扩展缓冲区”的接口
+- 提供“向左/向右移动当前页”“向左/向右扩展缓冲区”“向左/向右收缩缓冲区”的接口
 - 提供临时加载与完整加载两种策略入口
 - 为 `BoardManager` 提供一个更稳定的页缓冲区控制抽象
+
+### 多个 `PageLoadManager` 并存时的规则
+
+- 同一个 `BoardManager` 可以挂接多个 `PageLoadManager`
+- 某页只要仍被任意一个 `PageLoadManager` 持有，就不能真正卸载
+- 若某页的完整加载持有者清零，但仍有临时加载持有者，则该页应从完整加载降级为临时加载
+- 只有当完整加载持有者和临时加载持有者都清零时，该页才会真正卸载
 
 ### 典型协作流程
 
@@ -87,6 +95,13 @@
 2. `BoardManager` 驱动 `PageLoadManager` 向目标方向扩展缓冲区。
 3. `BoardManager` 采用临时加载策略加载目标页。
 4. 操作结束后，`BoardManager` 决定是否回收临时页。
+
+#### 场景三：完整页回收但仍需保留层叠图
+
+1. 一个 `PageLoadManager` 请求完整加载某页，另一个 `PageLoadManager` 只请求该页的临时加载。
+2. 完整加载持有者释放该页后，`BoardManager` 检查到仍存在临时加载持有者。
+3. `BoardManager` 不直接卸载该页，而是调用 `PageManager.downgradeToTemp()`。
+4. 该页保留层叠图，等待最后一个临时持有者释放后再真正卸载。
 
 ### 为什么执行权必须在 `BoardManager`
 
@@ -147,7 +162,7 @@
 
 ## 实现状态
 
-- 已实现：白板读取校验、页链恢复、邻页加载骨架、活动对象管理器/历史树挂载。
+- 已实现：白板读取校验、页链恢复、邻页加载骨架、活动对象管理器/历史树挂载、多 `PageLoadManager` 引用计数与完整页降级。
 - 待完善：完整新建流程、对象计数池初始化、历史与设备状态恢复、页与对象全链路落盘。
 
 ## 相关文档

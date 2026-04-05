@@ -41,6 +41,16 @@
 2. 若未加载，先执行临时加载
 3. 计划继续加载对象内容（当前仍为 `todo`）
 
+### 降级 `downgradeToTemp()`
+
+当某页已经完整加载，但之后只剩下“临时加载需求”时，可以从完整加载降级为临时加载。
+
+当前设计目标：
+
+- 保留层叠图
+- 卸载完整对象内容
+- 保持页处于 `isLoad = true` 且 `isTempLoad = true` 的状态
+
 ### 卸载 `unload()` / `unloadTemp()`
 
 - `unload()`：计划完整释放页资源（当前保留 `todo`）。
@@ -74,13 +84,14 @@
 | `addObject(obj, below, above)` | 按上下关系加入对象 | `number -> number[] -> number[] -> void` |
 | `loadFull(directory)` | 完整加载页面 | `Directory -> boolean` |
 | `loadTemp(directory)` | 临时加载页面 | `Directory -> boolean` |
+| `downgradeToTemp()` | 从完整加载降级为临时加载 | `void -> boolean` |
 | `unload()` | 完整卸载页面 | `void -> void` |
 | `unloadTemp()` | 临时卸载页面 | `void -> boolean` |
 
 ## 实现状态
 
-- 已实现：页链结构、临时加载与临时卸载接口、静态图基础加边。
-- 待完善：对象完整加载/保存、完整卸载、自动相交分析。
+- 已实现：页链结构、临时加载与临时卸载接口、完整加载到临时加载的降级入口、静态图基础加边。
+- 待完善：对象完整加载/保存、完整卸载细节、自动相交分析。
 
 ## 相关文档
 

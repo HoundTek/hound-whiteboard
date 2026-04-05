@@ -85,4 +85,47 @@ describe("PageLoadManager", () => {
       }),
     );
   });
+
+  test("shrinkBufferRight 应该移除右边界，但不能移除当前页", () => {
+    const bus = new EventBus();
+    const loader = new PageLoadManager(3, bus);
+    const { page1, page2, page3 } = createPages();
+    const unloadHandler = jest.fn();
+
+    bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
+
+    loader.resetCurrentPage(page1);
+    loader.expandBufferRightTempLoad();
+    loader.expandBufferRightTempLoad();
+
+    const shrunk = loader.shrinkBufferRight();
+
+    expect(shrunk).toBe(true);
+    expect(loader.pageNow).toBe(page1);
+    expect(loader.getLoadedPages()).toEqual([page1, page2]);
+    expect(unloadHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: page3,
+        source: "shrink-buffer",
+      }),
+    );
+  });
+
+  test("shrinkBufferLeft 在当前页位于左边界时不应收缩", () => {
+    const bus = new EventBus();
+    const loader = new PageLoadManager(3, bus);
+    const { page1, page2 } = createPages();
+    const unloadHandler = jest.fn();
+
+    bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
+
+    loader.resetCurrentPage(page1);
+    loader.expandBufferRightTempLoad();
+
+    const shrunk = loader.shrinkBufferLeft();
+
+    expect(shrunk).toBe(false);
+    expect(loader.getLoadedPages()).toEqual([page1, page2]);
+    expect(unloadHandler).not.toHaveBeenCalled();
+  });
 });

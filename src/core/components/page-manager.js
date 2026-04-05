@@ -152,6 +152,22 @@ class PageManager {
   }
 
   /**
+   * 从完整加载降级为临时加载
+   * @returns {boolean} 是否成功降级
+   * @description
+   * 该方法会保留层叠图，只卸载完整加载阶段持有的对象内容。
+   * 若当前页不是完整加载状态，则不进行任何操作。
+   */
+  downgradeToTemp() {
+    if (!this.isLoad || this.isTempLoad) {
+      return false;
+    }
+    if (this.objectManager) this.objectManager.unloadObjects();
+    this.isTempLoad = true;
+    return true;
+  }
+
+  /**
    * 临时加载该页
    * @param {Directory} directory - 白板根目录
    * @returns {boolean} 是否成功

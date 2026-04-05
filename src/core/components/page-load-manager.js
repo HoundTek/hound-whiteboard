@@ -19,6 +19,8 @@ const PAGE_LOAD_STRATEGIES = Object.freeze({
   FULL: "full",
 });
 
+let pageLoadManagerIdCounter = 0;
+
 /**
  * 页面加载管理器
  * @class
@@ -56,13 +58,25 @@ class PageLoadManager {
   eventBus;
 
   /**
+   * 当前 PLM 在事件总线中的请求方 id
+   * @type {number | string}
+   */
+  requesterId;
+
+  /**
    * @param {number} [limit = 0] - 可以加载的页数上限
    * @param {EventBus} [eventBus] - 页加载事件总线
+   * @param {number | string} [requesterId] - 请求方 id
    */
-  constructor(limit = 0, eventBus = new EventBus()) {
+  constructor(
+    limit = 0,
+    eventBus = new EventBus(),
+    requesterId = ++pageLoadManagerIdCounter,
+  ) {
     this.pagesLoadedLimit = limit;
     this.pagesLoaded = new Deque();
     this.eventBus = eventBus;
+    this.requesterId = requesterId;
   }
 
   /**
@@ -160,6 +174,24 @@ class PageLoadManager {
   }
 
   /**
+   * 从右侧收缩缓冲区
+   * @description 如果当前页已经是右界，则不进行任何操作。
+   * @returns {boolean} 是否成功收缩
+   */
+  shrinkBufferRight() {
+    return this.#shrinkBuffer("right");
+  }
+
+  /**
+   * 从左侧收缩缓冲区
+   * @description 如果当前页已经是左界，则不进行任何操作。
+   * @returns {boolean} 是否成功收缩
+   */
+  shrinkBufferLeft() {
+    return this.#shrinkBuffer("left");
+  }
+
+  /**
    * 重置当前页
    * @param {PageManager} page - 页实例
    * @returns {PageManager | undefined} 重置后的当前页实例，若参数无效，则为 undefined
@@ -195,6 +227,14 @@ class PageLoadManager {
    */
   getLoadedPages() {
     return this.pagesLoaded.toArray();
+  }
+
+  /**
+   * 当前页缓冲区页数
+   * @returns {number}
+   */
+  get pagesLoadedCount() {
+    return this.pagesLoaded.count();
   }
 
   /**
@@ -284,6 +324,33 @@ class PageLoadManager {
   }
 
   /**
+   * 收缩缓冲区边界
+   * @param {"right" | "left"} direction - 收缩方向
+   * @returns {boolean} 是否成功收缩
+   * @private
+   */
+  #shrinkBuffer(direction) {
+    if (this.pagesLoaded.empty()) return false;
+
+    const boundaryPage =
+      direction === "right"
+        ? this.pagesLoaded.peekBack()
+        : this.pagesLoaded.peekFront();
+
+    if (!boundaryPage || boundaryPage === this.pageNow) {
+      return false;
+    }
+
+    const removed =
+      direction === "right"
+        ? this.pagesLoaded.popBack()
+        : this.pagesLoaded.popFront();
+    this.#emitUnloadRequest(removed, "shrink-buffer");
+    this.#emitBufferUpdated("shrink", direction);
+    return true;
+  }
+
+  /**
    * 把页加载到缓冲区中
    * @param {PageManager} page - 要加载的页
    * @param {"right" | "left"} direction - 加载方向
@@ -367,6 +434,7 @@ class PageLoadManager {
    */
   #emitLoadRequest(page, strategy, direction, source, alreadyBuffered) {
     this.eventBus.emit(PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD, {
+      requesterId: this.requesterId,
       page,
       strategy,
       direction,
@@ -383,6 +451,7 @@ class PageLoadManager {
    */
   #emitUnloadRequest(page, source) {
     this.eventBus.emit(PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, {
+      requesterId: this.requesterId,
       page,
       source,
     });
