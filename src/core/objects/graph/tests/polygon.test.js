@@ -1,5 +1,5 @@
-const { PolygonObject } = require("./polygon");
-const { Point, Matrix } = require("../../../utils/math");
+const { PolygonObject } = require("../polygon");
+const { Point, Matrix } = require("../../../../utils/math");
 
 describe("PolygonObject", () => {
   describe("构造与属性修改", () => {

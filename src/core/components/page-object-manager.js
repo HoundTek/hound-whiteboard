@@ -16,7 +16,7 @@ const { Directory, File } = require("../../utils/io");
 class PageObjectManager {
   /**
    * 该页的静态图
-   * @description 见 [tier-graph-document.md](./tier-graph-document.md)。
+   * @description 见 [tier-graph-document.md](./docs/tier-graph-document.md)。
    * 内部存储所有对象的层叠关系，包含在该页的对象（可以不属于该页）。存储对象 id，不拥有对象实例的所有权。
    * @type {DirectedGraph}
    */

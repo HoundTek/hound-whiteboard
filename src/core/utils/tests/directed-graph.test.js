@@ -4,7 +4,7 @@ const {
   EdgeNotExistError,
   NodeAlreadyExistError,
   EdgeAlreadyExistError,
-} = require("./directed-graph");
+} = require("../directed-graph");
 
 describe("DirectedGraph", () => {
   let graph = new DirectedGraph();

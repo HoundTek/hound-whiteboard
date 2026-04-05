@@ -1,12 +1,12 @@
 const { MockPageLoadManager } = require("./page-load-manager.mock");
 
-jest.mock("../page-load-manager", () => ({
+jest.mock("../../page-load-manager", () => ({
   PageLoadManager: MockPageLoadManager,
 }));
 
-const { DirectedGraph } = require("../../utils/directed-graph");
-const { ActiveObjectManager } = require("../active-object-manager");
-const { PageManager } = require("../page-manager");
+const { DirectedGraph } = require("../../../utils/directed-graph");
+const { ActiveObjectManager } = require("../../active-object-manager");
+const { PageManager } = require("../../page-manager");
 const { onePageData } = require("./data");
 
 describe("ActiveObjectManager/choose", () => {
