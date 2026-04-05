@@ -5,6 +5,7 @@
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
+    "build-win": "electron-packager . --out=dist/win/ --platform=win32",
     "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
   },
   "author": "Frank Steven",
