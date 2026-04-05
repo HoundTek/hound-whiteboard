@@ -115,6 +115,7 @@ class BoardManager {
   /**
    * 页缓冲区控制器
    * @type {PageLoadManager}
+   * @todo 这个应该是由 Monitor 设备来创建和持有的，BoardManager 只负责调用它提供的接口来加载和卸载页
    */
   pageLoadManager;
 
