@@ -7,6 +7,7 @@ jest.mock("../../page-load-manager", () => ({
 const { DirectedGraph } = require("../../../utils/directed-graph");
 const { ActiveObjectManager } = require("../../active-object-manager");
 const { PageManager } = require("../../page-manager");
+const { PageObjectManager } = require("../../page-object-manager");
 const { onePageData } = require("./data");
 
 describe("ActiveObjectManager/choose", () => {
@@ -23,6 +24,7 @@ describe("ActiveObjectManager/choose", () => {
   beforeEach(() => {
     aom = new ActiveObjectManager();
     page = createPage(1);
+    page.objectManager = new PageObjectManager(1);
     page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
 
     // 将 RandomNumberPool Mock 一下

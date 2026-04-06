@@ -8,7 +8,7 @@ const { CounterPool } = require("../../core/utils/counter-pool");
 const { StrokeObject } = require("../../core/objects/stroke/stroke");
 const { insertPoints } = require("../../core/utils/math-algorithm");
 const { StrokeCreatorTool } = require("../../core/tools/creator/stroke");
-const { Monitor } = require("../../core/devices/monitor");
+const { Monitor } = require("../../core/components/monitor");
 
 const board = new BoardManager();
 

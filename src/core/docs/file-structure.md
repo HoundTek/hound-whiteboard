@@ -88,9 +88,9 @@
 
 其中，`count` 是给 `CounterPool` 使用的。
 
-#### 数字 id `json` 文件
+#### 页层叠图：`{id}.json`
 
-其文件名就是页 id，内部存放的是层叠图 DAG。
+其文件名就是页 id，内部存放的是层叠图 DAG 数组化的结果。
 
 ### 白板配置：`config.json`
 
