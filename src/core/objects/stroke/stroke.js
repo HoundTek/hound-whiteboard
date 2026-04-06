@@ -124,6 +124,32 @@ class StrokeObject extends BasicObject {
     ctx.stroke();
     ctx.restore();
   }
+
+  serialize() {
+    return {
+      ...super.serialize(),
+      type: "StrokeObject",
+      points: this.points.map((point) => point.serialize()),
+      color: this.color,
+    };
+  }
+
+  static parse(data) {
+    if (data.type !== "StrokeObject") {
+      throw new TypeError("Invalid type for StrokeObject parsing");
+    }
+
+    const obj = new StrokeObject(
+      Point.parse(data.position),
+      data.id,
+      data.pageId,
+    );
+
+    obj.setPoints((data.points ?? []).map((point) => Point.parse(point)));
+    obj.setTransform(Matrix.parse(data.transform));
+    obj.color = data.color ?? obj.color;
+    return obj;
+  }
 }
 
 module.exports = {

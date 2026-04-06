@@ -163,6 +163,10 @@ class TextObject extends OneDimensionObject {
   }
 
   static parse(data) {
+    if (data.type !== "TextObject") {
+      throw new TypeError("Invalid type for TextObject parsing");
+    }
+
     let obj = new TextObject(
       Point.parse(data.position),
       data.id,
@@ -170,8 +174,8 @@ class TextObject extends OneDimensionObject {
     );
     obj.setTransform(Matrix.parse(data.transform));
     obj.setText(data.text);
-    obj.setTextProperty(data.textProperty);
-    obj.setIhatLength(data.ihatLength);
+    obj.setTextProperty(data.textProperty ?? {});
+    obj.setIhatLength(data.ihatLength ?? obj.ihatLength);
     return obj;
   }
 }
