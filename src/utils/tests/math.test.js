@@ -1,4 +1,4 @@
-const { Point, Matrix } = require("../math");
+import { Point, Matrix } from "../math.js";
 
 describe("Point Class", () => {
   describe("构造函数", () => {

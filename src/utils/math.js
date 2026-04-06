@@ -579,7 +579,7 @@ class Matrix {
   }
 }
 
-module.exports = {
+export {
   Point,
   Matrix,
 };

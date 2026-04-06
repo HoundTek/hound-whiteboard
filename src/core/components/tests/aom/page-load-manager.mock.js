@@ -58,6 +58,6 @@ class MockPageLoadManager {
   }
 }
 
-module.exports = {
+export {
   MockPageLoadManager,
 };

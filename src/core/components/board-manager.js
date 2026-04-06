@@ -4,21 +4,21 @@
  * @author Zhou Chenyu
  */
 
-const { Deque } = require("../../utils/deque");
-const { Directory } = require("../../utils/io");
-const { BasicObject } = require("../objects/basic-obj");
-const { CounterPool } = require("../utils/counter-pool");
-const { DirectedGraph } = require("../utils/directed-graph");
-const { EventBus } = require("../utils/event-bus");
-const { UndoTree } = require("../hit/undo-tree-core");
-const { ActiveObjectManager } = require("./active-object-manager");
-const {
+import { Deque } from "../../utils/deque.js";
+import { Directory } from "../../utils/io.js";
+import { BasicObject } from "../objects/basic-obj.js";
+import { CounterPool } from "../utils/counter-pool.js";
+import { DirectedGraph } from "../utils/directed-graph.js";
+import { EventBus } from "../utils/event-bus.js";
+import { UndoTree } from "../hit/undo-tree-core.js";
+import { ActiveObjectManager } from "./active-object-manager.js";
+import {
   PageLoadManager,
   PAGE_LOAD_MANAGER_EVENTS,
   PAGE_LOAD_STRATEGIES,
-} = require("./page-load-manager");
-const { PageManager } = require("./page-manager");
-const { PageObjectManager } = require("./page-object-manager");
+} from "./page-load-manager.js";
+import { PageManager } from "./page-manager.js";
+import { PageObjectManager } from "./page-object-manager.js";
 
 /**
  * 白板管理器
@@ -592,6 +592,6 @@ const boardMeta = {
   version: "0.1.0",
 };
 
-module.exports = {
+export {
   BoardManager,
 };

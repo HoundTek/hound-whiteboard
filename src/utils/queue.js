@@ -147,6 +147,6 @@ class Queue {
   }
 }
 
-module.exports = {
+export {
   Queue,
 };

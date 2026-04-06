@@ -4,12 +4,12 @@
  * @author Zhou Chenyu
  */
 
-const { RandomNumberPool } = require("../../utils/algorithm");
-const { Deque } = require("../../utils/deque");
-const { Queue } = require("../../utils/queue");
-const { DirectedGraph } = require("../utils/directed-graph");
-const { PageManager } = require("./page-manager");
-const { PageLoadManager } = require("./page-load-manager");
+import { RandomNumberPool } from "../../utils/algorithm.js";
+import { Deque } from "../../utils/deque.js";
+import { Queue } from "../../utils/queue.js";
+import { DirectedGraph } from "../utils/directed-graph.js";
+import { PageManager } from "./page-manager.js";
+import { PageLoadManager } from "./page-load-manager.js";
 
 class Layer {
   /**
@@ -480,7 +480,7 @@ class ActiveObjectManager {
   }
 }
 
-module.exports = {
+export {
   ActiveObjectManager,
   Layer,
 };

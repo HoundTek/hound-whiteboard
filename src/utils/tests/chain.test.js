@@ -1,4 +1,4 @@
-const { Chain, Node } = require("../chain");
+import { Chain, Node } from "../chain.js";
 
 describe("Node", () => {
   test("构造函数应正确初始化 value 和 next", () => {

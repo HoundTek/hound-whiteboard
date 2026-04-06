@@ -6,9 +6,9 @@
  * - 封装了文件类与目录类
  */
 
-const path = require("path");
-const hidefile = require("hidefile");
-const fp = require("./fp")
+import path from "path";
+import hidefile from "hidefile";
+import * as fp from "./fp.js";
 
 /**
  * @class
@@ -477,7 +477,7 @@ class File {
   }
 }
 
-const { RandomNumberPool } = require("../utils/algorithm");
+import { RandomNumberPool } from "../utils/algorithm.js";
 
 /**
  * 不重复的随机文件名池
@@ -584,7 +584,7 @@ class FilenameRandomPool {
   }
 }
 
-module.exports = {
+export {
   Directory,
   File,
   FilenameRandomPool,

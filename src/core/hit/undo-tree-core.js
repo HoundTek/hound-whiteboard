@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { MolecularOperation } = require("./operation")
+import { MolecularOperation } from "./operation.js";
 
 /**
  * 分子节点
@@ -90,6 +90,6 @@ class UndoTree {
 	currentNode;
 }
 
-module.exports = {
+export {
 	UndoTree
-}
+};

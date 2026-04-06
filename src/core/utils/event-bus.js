@@ -88,6 +88,6 @@ class EventBus {
   }
 }
 
-module.exports = {
+export {
   EventBus,
 };

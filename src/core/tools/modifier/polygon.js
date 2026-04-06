@@ -4,9 +4,9 @@
  * @author Zhou Chenyu
  */
 
-const { PolygonObject } = require("../../objects/graph/polygon");
-const { Point } = require("../../../utils/math");
-const { ObjectModifierTool } = require("./obj-modifier");
+import { PolygonObject } from "../../objects/graph/polygon.js";
+import { Point } from "../../../utils/math.js";
+import { ObjectModifierTool } from "./obj-modifier.js";
 
 /**
  * @class
@@ -173,6 +173,6 @@ class PolygonModifierTool extends ObjectModifierTool {
   }
 }
 
-module.exports = {
+export {
   PolygonModifierTool,
 };

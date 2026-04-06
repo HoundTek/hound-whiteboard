@@ -1,9 +1,10 @@
-const {
+import { jest } from "@jest/globals";
+import {
   PageLoadManager,
   PAGE_LOAD_MANAGER_EVENTS,
-} = require("../page-load-manager");
-const { PageManager } = require("../page-manager");
-const { EventBus } = require("../../utils/event-bus");
+} from "../page-load-manager.js";
+import { PageManager } from "../page-manager.js";
+import { EventBus } from "../../utils/event-bus.js";
 
 describe("PageLoadManager", () => {
   function createPages() {

@@ -1,4 +1,4 @@
-const { Deque } = require("../deque");
+import { Deque } from "../deque.js";
 
 describe("Deque", () => {
   let deque = new Deque();

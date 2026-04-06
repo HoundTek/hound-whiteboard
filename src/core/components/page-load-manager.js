@@ -4,9 +4,9 @@
  * @author Zhou Chenyu
  */
 
-const { Deque } = require("../../utils/deque");
-const { PageManager } = require("./page-manager");
-const { EventBus } = require("../utils/event-bus");
+import { Deque } from "../../utils/deque.js";
+import { PageManager } from "./page-manager.js";
+import { EventBus } from "../utils/event-bus.js";
 
 const PAGE_LOAD_MANAGER_EVENTS = Object.freeze({
   REQUEST_LOAD: "page-load-manager:request-load",
@@ -473,7 +473,7 @@ class PageLoadManager {
   }
 }
 
-module.exports = {
+export {
   PageLoadManager,
   PAGE_LOAD_MANAGER_EVENTS,
   PAGE_LOAD_STRATEGIES,

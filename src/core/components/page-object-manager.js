@@ -4,9 +4,9 @@
  * @author Zhou Chenyu
  */
 
-const { DirectedGraph } = require("../utils/directed-graph");
-const { BasicObject } = require("../objects/basic-obj");
-const { Directory, File } = require("../../utils/io");
+import { DirectedGraph } from "../utils/directed-graph.js";
+import { BasicObject } from "../objects/basic-obj.js";
+import { Directory, File } from "../../utils/io.js";
 
 /**
  * 页静态对象管理器
@@ -160,6 +160,6 @@ class PageObjectManager {
   }
 }
 
-module.exports = {
+export {
   PageObjectManager,
 };

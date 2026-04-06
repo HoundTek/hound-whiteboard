@@ -3,12 +3,16 @@
  * @module benchmarks/all
  */
 
-const { execSync } = require("child_process");
-const path = require("path");
+import { execSync } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
 
 console.log("═══════════════════════════════════════════════════");
 console.log("         HoundWhiteboard Benchmark Suite          ");
 console.log("═══════════════════════════════════════════════════\n");
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const benchmarks = [
   { name: "Queue", file: "queue.bench.js" },

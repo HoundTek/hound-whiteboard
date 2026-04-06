@@ -4,8 +4,8 @@
  * @author Zhou Chenyu
  */
 
-const { StrokeObject } = require("../../objects/stroke/stroke");
-const { ObjectCreatorTool } = require("./obj-creator");
+import { StrokeObject } from "../../objects/stroke/stroke.js";
+import { ObjectCreatorTool } from "./obj-creator.js";
 
 class StrokeCreatorTool extends ObjectCreatorTool {
   /**
@@ -35,6 +35,6 @@ class StrokeCreatorTool extends ObjectCreatorTool {
   }
 }
 
-module.exports = {
+export {
   StrokeCreatorTool,
 };

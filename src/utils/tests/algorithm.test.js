@@ -1,10 +1,11 @@
-const { RandomNumberPool } = require("../algorithm");
-const { randomInt } = require("crypto");
+import { jest } from "@jest/globals";
 
-// 模拟 randomInt 以使测试具有确定性
-jest.mock("crypto", () => ({
+jest.unstable_mockModule("crypto", () => ({
   randomInt: jest.fn(),
 }));
+
+const { RandomNumberPool } = await import("../algorithm.js");
+const { randomInt } = await import("crypto");
 
 describe("RandomNumberPool", () => {
   const MIN = 114514;

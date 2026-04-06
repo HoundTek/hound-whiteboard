@@ -1,4 +1,4 @@
-const { Container } = require("../container");
+import { Container } from "../container.js";
 
 /**
  * 一维对象基类
@@ -33,6 +33,6 @@ class OneDimensionObject extends Container {
   }
 }
 
-module.exports = {
+export {
   OneDimensionObject,
 };

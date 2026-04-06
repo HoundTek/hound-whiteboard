@@ -5,8 +5,8 @@
  * - 将 fs 的文件操作做了特化、封装
  */
 
-const fs = require("fs");
-const AdmZip = require("adm-zip");
+import fs from "fs";
+import AdmZip from "adm-zip";
 
 /**
  * 创建指定目录
@@ -157,7 +157,7 @@ function compressFile(source, dest, remove = false) {
   }
 }
 
-module.exports = {
+export {
 	mkdir,
 	lsDir,
 	lsFile,

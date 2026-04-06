@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { Tool } = require("../tools/tool");
+import { Tool } from "../tools/tool.js";
 
 class Device {
   /**
@@ -49,6 +49,6 @@ class Device {
   }
 }
 
-module.exports = {
+export {
   Device,
 };

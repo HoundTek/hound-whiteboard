@@ -219,6 +219,6 @@ class Deque {
   }
 }
 
-module.exports = {
+export {
   Deque,
 };

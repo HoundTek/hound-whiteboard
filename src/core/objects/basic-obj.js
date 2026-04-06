@@ -4,8 +4,8 @@
  * @author Zhou Chenyu
  */
 
-const { Matrix, Point } = require("../../utils/math");
-const { RectangleRange } = require("../range/rectangle");
+import { Matrix, Point } from "../../utils/math.js";
+import { RectangleRange } from "../range/rectangle.js";
 
 /**
  * 白板对象基类
@@ -192,6 +192,6 @@ class BasicObject {
   }
 }
 
-module.exports = {
+export {
   BasicObject,
 };

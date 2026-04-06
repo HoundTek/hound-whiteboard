@@ -1,8 +1,9 @@
-const os = require("os");
+import { jest } from "@jest/globals";
+import os from "os";
 
-const { Directory } = require("../../../utils/io");
-const { BoardManager } = require("../board-manager");
-const { PageManager } = require("../page-manager");
+import { Directory } from "../../../utils/io.js";
+import { BoardManager } from "../board-manager.js";
+import { PageManager } from "../page-manager.js";
 
 describe("BoardManager 页加载", () => {
   function createBoard() {

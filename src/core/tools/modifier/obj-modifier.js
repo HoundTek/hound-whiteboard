@@ -4,10 +4,10 @@
  * @author Zhou Chenyu
  */
 
-const { Tool } = require("../tool");
+import { Tool } from "../tool.js";
 
 class ObjectModifierTool extends Tool {}
 
-module.exports = {
+export {
   ObjectModifierTool,
 };

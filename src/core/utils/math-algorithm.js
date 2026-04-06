@@ -1,4 +1,4 @@
-const { Point } = require("../../utils/math");
+import { Point } from "../../utils/math.js";
 
 /**
  * 计算点集的凸包
@@ -147,7 +147,7 @@ function ropeNailIntersect(rope, nail) {
   return count;
 }
 
-module.exports = {
+export {
   calculateConvexHull,
   insertPoints,
   ropeNailIntersect,

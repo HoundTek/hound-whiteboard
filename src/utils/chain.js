@@ -217,7 +217,7 @@ class Chain {
   }
 }
 
-module.exports = {
+export {
   Chain,
   Node,
 };

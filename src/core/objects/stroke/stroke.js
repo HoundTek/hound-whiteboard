@@ -4,13 +4,13 @@
  * @author Zhou Chenyu
  */
 
-const { Matrix, Point } = require("../../../utils/math");
-const { RectangleRange } = require("../../range/rectangle");
-const {
+import { Matrix, Point } from "../../../utils/math.js";
+import { RectangleRange } from "../../range/rectangle.js";
+import {
   calculateConvexHull,
   insertPoints,
-} = require("../../utils/math-algorithm");
-const { BasicObject } = require("../basic-obj");
+} from "../../utils/math-algorithm.js";
+import { BasicObject } from "../basic-obj.js";
 
 /**
  * 笔画类
@@ -152,6 +152,6 @@ class StrokeObject extends BasicObject {
   }
 }
 
-module.exports = {
+export {
   StrokeObject,
 };

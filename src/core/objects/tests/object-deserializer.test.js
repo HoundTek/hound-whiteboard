@@ -1,8 +1,8 @@
-const { deserialize } = require("../object-deserializer");
-const { PolygonObject } = require("../graph/polygon");
-const { TextObject } = require("../one-dim/text");
-const { StrokeObject } = require("../stroke/stroke");
-const { Matrix, Point } = require("../../../utils/math");
+import { deserialize } from "../object-deserializer.js";
+import { PolygonObject } from "../graph/polygon.js";
+import { TextObject } from "../one-dim/text.js";
+import { StrokeObject } from "../stroke/stroke.js";
+import { Matrix, Point } from "../../../utils/math.js";
 
 describe("object deserializer", () => {
   test("应能还原 PolygonObject", () => {

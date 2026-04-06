@@ -4,8 +4,8 @@
  * @author Zhou Chenyu
  */
 
-const { BasicObject } = require("./basic-obj");
-const { Point } = require("../../utils/math");
+import { BasicObject } from "./basic-obj.js";
+import { Point } from "../../utils/math.js";
 
 /**
  * 对象容器类
@@ -90,7 +90,7 @@ class ContainerMode {
   static SHRINK = new ContainerMode("SHRINK");
 }
 
-module.exports = {
+export {
   Container,
   ContainerMode,
 };

@@ -1,10 +1,10 @@
-const {
+import {
   DirectedGraph,
   NodeNotExistError,
   EdgeNotExistError,
   NodeAlreadyExistError,
   EdgeAlreadyExistError,
-} = require("../directed-graph");
+} from "../directed-graph.js";
 
 describe("DirectedGraph", () => {
   let graph = new DirectedGraph();

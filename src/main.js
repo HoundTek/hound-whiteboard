@@ -1,6 +1,10 @@
-const { app, BrowserWindow } = require("electron");
+import path from "path";
+import { fileURLToPath } from "url";
+import { app, BrowserWindow } from "electron";
 
 let window;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.whenReady().then(() => {
   window = new BrowserWindow({
@@ -15,7 +19,7 @@ app.whenReady().then(() => {
     transparent: true
   });
 
-  window.loadFile(__dirname + "/templates/whiteboard.html");
+  window.loadFile(path.join(__dirname, "templates/whiteboard.html"));
 });
 
 app.on("window-all-closed", () => {

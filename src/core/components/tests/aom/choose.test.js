@@ -1,14 +1,15 @@
-const { MockPageLoadManager } = require("./page-load-manager.mock");
+import { jest } from "@jest/globals";
+import { MockPageLoadManager } from "./page-load-manager.mock.js";
+import { DirectedGraph } from "../../../utils/directed-graph.js";
+import { PageManager } from "../../page-manager.js";
+import { PageObjectManager } from "../../page-object-manager.js";
+import { onePageData } from "./data.js";
 
-jest.mock("../../page-load-manager", () => ({
+jest.unstable_mockModule("../../page-load-manager.js", () => ({
   PageLoadManager: MockPageLoadManager,
 }));
 
-const { DirectedGraph } = require("../../../utils/directed-graph");
-const { ActiveObjectManager } = require("../../active-object-manager");
-const { PageManager } = require("../../page-manager");
-const { PageObjectManager } = require("../../page-object-manager");
-const { onePageData } = require("./data");
+const { ActiveObjectManager } = await import("../../active-object-manager.js");
 
 describe("ActiveObjectManager/choose", () => {
   let aom = new ActiveObjectManager();

@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { Matrix, Point } = require("../../utils/math");
+import { Matrix, Point } from "../../utils/math.js";
 
 /**
  * 矩形范围类
@@ -80,6 +80,6 @@ class RectangleRange {
   }
 }
 
-module.exports = {
+export {
   RectangleRange,
 };

@@ -659,7 +659,7 @@ class DirectedGraph {
   }
 }
 
-module.exports = {
+export {
   DirectedGraph,
   GraphError,
   NodeNotExistError,

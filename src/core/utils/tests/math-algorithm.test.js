@@ -1,5 +1,5 @@
-const { Point } = require("../../../utils/math");
-const { calculateConvexHull, ropeNailIntersect } = require("../math-algorithm");
+import { Point } from "../../../utils/math.js";
+import { calculateConvexHull, ropeNailIntersect } from "../math-algorithm.js";
 
 describe("math-algorithm", () => {
   describe("calculateConvexHull", () => {

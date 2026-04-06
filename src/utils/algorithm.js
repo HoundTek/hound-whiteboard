@@ -6,7 +6,7 @@
  * - 计算双指和三指操作的矩阵
  */
 
-const { randomInt } = require("crypto");
+import { randomInt } from "crypto";
 
 /**
  * 不重复的随机数池
@@ -300,7 +300,7 @@ function getTriFingerResult(
   };
 }
 
-module.exports = {
+export {
   getDualFingerResult,
   getTriFingerResult,
   RandomNumberPool,

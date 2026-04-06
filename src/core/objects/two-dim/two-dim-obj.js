@@ -1,4 +1,4 @@
-const { Container } = require("../container");
+import { Container } from "../container.js";
 
 /**
  * 二维对象基类
@@ -10,6 +10,6 @@ const { Container } = require("../container");
  */
 class TwoDimensionObject extends Container {}
 
-module.exports = {
+export {
   TwoDimensionObject,
 };

@@ -1,5 +1,5 @@
-const { PolygonObject } = require("../polygon");
-const { Point, Matrix } = require("../../../../utils/math");
+import { PolygonObject } from "../polygon.js";
+import { Point, Matrix } from "../../../../utils/math.js";
 
 describe("PolygonObject", () => {
   describe("构造与属性修改", () => {

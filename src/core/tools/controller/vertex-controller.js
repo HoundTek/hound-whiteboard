@@ -4,8 +4,8 @@
  * @author Zhou Chenyu
  */
 
-const { Point } = require("../../../utils/math");
-const { Controller } = require("./controller");
+import { Point } from "../../../utils/math.js";
+import { Controller } from "./controller.js";
 
 /**
  * 顶点控制杆类
@@ -28,6 +28,6 @@ class VertexController extends Controller {
   }
 }
 
-module.exports = {
+export {
   VertexController,
 };

@@ -4,11 +4,11 @@
  * @author Zhou Chenyu
  */
 
-const { PolygonObject } = require("../../objects/graph/polygon");
-const { Point } = require("../../../utils/math");
-const { ObjectCreatorTool } = require("./obj-creator");
-const { Controller } = require("../controller/controller");
-const { VertexController } = require("../controller/vertex-controller");
+import { PolygonObject } from "../../objects/graph/polygon.js";
+import { Point } from "../../../utils/math.js";
+import { ObjectCreatorTool } from "./obj-creator.js";
+import { Controller } from "../controller/controller.js";
+import { VertexController } from "../controller/vertex-controller.js";
 
 /**
  * 多边形创建工具类
@@ -141,6 +141,6 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   }
 }
 
-module.exports = {
+export {
   PolygonCreatorTool,
 };

@@ -27,6 +27,6 @@ class CounterPool {
   }
 }
 
-module.exports = {
+export {
   CounterPool,
 };

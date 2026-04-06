@@ -1,4 +1,5 @@
-const { EventBus } = require("../event-bus");
+import { jest } from "@jest/globals";
+import { EventBus } from "../event-bus.js";
 
 describe("EventBus", () => {
   test("on 和 emit 应该按注册顺序触发监听器", () => {

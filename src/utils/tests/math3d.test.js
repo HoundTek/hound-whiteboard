@@ -1,4 +1,4 @@
-const { Point3D, Matrix3D } = require("../math3d");
+import { Point3D, Matrix3D } from "../math3d.js";
 
 describe("Point3D Class", () => {
   describe("构造函数", () => {

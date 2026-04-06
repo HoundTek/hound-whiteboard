@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { Device } = require("./device");
+import { Device } from "./device.js";
 /**
  * 测试设备类
  * @class
@@ -24,6 +24,6 @@ class DebuggerDevice extends Device {
   }
 }
 
-module.exports = {
+export {
   DebuggerDevice,
 };

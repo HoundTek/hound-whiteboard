@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { Point } = require("../../../utils/math");
+import { Point } from "../../../utils/math.js";
 
 /**
  * 控制杆基类
@@ -115,6 +115,6 @@ class Controller {
   }
 }
 
-module.exports = {
+export {
   Controller,
 };

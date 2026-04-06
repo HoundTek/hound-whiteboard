@@ -1,16 +1,10 @@
-const { Matrix, Point } = require("../utils/math");
-const { BoardManager } = require("../core/components/board-manager");
-const { PageManager } = require("../core/components/page-manager");
-const { Directory } = require("../utils/io");
-const { TextObject } = require("../core/objects/one-dim/text");
-const { PolygonCreatorTool } = require("../core/tools/creator/polygon");
-const { CounterPool } = require("../core/utils/counter-pool");
-const { StrokeObject } = require("../core/objects/stroke/stroke");
-const { insertPoints } = require("../core/utils/math-algorithm");
-const { StrokeCreatorTool } = require("../core/tools/creator/stroke");
-const { Monitor } = require("../core/components/monitor");
-
-const board = new BoardManager();
+import { Matrix, Point } from "../utils/math.js";
+import { TextObject } from "../core/objects/one-dim/text.js";
+import { PolygonCreatorTool } from "../core/tools/creator/polygon.js";
+import { CounterPool } from "../core/utils/counter-pool.js";
+import { insertPoints } from "../core/utils/math-algorithm.js";
+import { StrokeCreatorTool } from "../core/tools/creator/stroke.js";
+import { Monitor } from "../core/components/monitor.js";
 
 const monitor = new Monitor();
 
@@ -23,8 +17,10 @@ monitor.canvas.id = "canvas";
 
 // 设置 canvas 的内部分辨率，使其与 CSS 尺寸匹配
 // 这样可以避免内容被拉伸
-board.width = 800;
-board.height = 600;
+const board = {
+  width: 800,
+  height: 600,
+};
 
 const ctx = monitor.canvas.getContext("2d");
 

@@ -29,6 +29,6 @@ class AtomOperation {
 class MolecularOperation {
 }
 
-module.exports = {
+export {
 	MolecularOperation,
 };

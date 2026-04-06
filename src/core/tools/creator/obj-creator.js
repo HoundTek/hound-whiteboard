@@ -4,10 +4,10 @@
  * @author Zhou Chenyu
  */
 
-const { Point } = require("../../../utils/math");
-const { BasicObject } = require("../../objects/basic-obj");
-const { Controller } = require("../controller/controller");
-const { Tool } = require("../tool");
+import { Point } from "../../../utils/math.js";
+import { BasicObject } from "../../objects/basic-obj.js";
+import { Controller } from "../controller/controller.js";
+import { Tool } from "../tool.js";
 
 /**
  * 对象创建工具基类
@@ -75,6 +75,6 @@ class ObjectCreatorTool extends Tool {
   }
 }
 
-module.exports = {
+export {
   ObjectCreatorTool,
 };

@@ -727,7 +727,7 @@ class Matrix3D {
   }
 }
 
-module.exports = {
+export {
   Matrix3D,
   Point3D,
 };

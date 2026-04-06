@@ -131,7 +131,7 @@ const multiPageData = [
   ],
 ];
 
-module.exports = {
+export {
   onePageData,
   twoPageData,
   multiPageData,

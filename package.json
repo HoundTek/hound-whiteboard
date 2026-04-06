@@ -1,11 +1,12 @@
 {
   "name": "hound-whiteboard",
   "version": "0.0.0",
+  "type": "module",
   "description": "A whiteboard app",
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
+    "test": "NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
   },
   "author": "Frank Steven",
   "license": "MIT",

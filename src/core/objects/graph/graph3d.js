@@ -7,9 +7,9 @@
  * @author Zhou Chenyu
  */
 
-const { GraphObject } = require("./graph");
-const { Matrix, Point } = require("../../../utils/math");
-const { Matrix3D } = require("../../../utils/math3d");
+import { GraphObject } from "./graph.js";
+import { Matrix, Point } from "../../../utils/math.js";
+import { Matrix3D } from "../../../utils/math3d.js";
 
 /**
  * 三维图形类
@@ -32,6 +32,6 @@ class Graph3DObject extends GraphObject {
   transform3d;
 }
 
-module.exports = {
+export {
   Graph3DObject,
 };

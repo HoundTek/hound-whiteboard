@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { BasicObject } = require("../basic-obj");
+import { BasicObject } from "../basic-obj.js";
 
 /**
  * 图形对象类
@@ -24,6 +24,6 @@ class GraphObject extends BasicObject {
   static isErasable = false;
 }
 
-module.exports = {
+export {
   GraphObject,
 };

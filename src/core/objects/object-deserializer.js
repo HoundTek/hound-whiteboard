@@ -4,10 +4,10 @@
  * @author Zhou Chenyu
  */
 
-const { BasicObject } = require("./basic-obj");
-const { PolygonObject } = require("./graph/polygon");
-const { TextObject } = require("./one-dim/text");
-const { StrokeObject } = require("./stroke/stroke");
+import { BasicObject } from "./basic-obj.js";
+import { PolygonObject } from "./graph/polygon.js";
+import { TextObject } from "./one-dim/text.js";
+import { StrokeObject } from "./stroke/stroke.js";
 
 /**
  * @type {Map<string, {parse: function}>}
@@ -86,7 +86,7 @@ function registerDeserializer(type, parser) {
   parserRegistry.set(type, parser);
 }
 
-module.exports = {
+export {
   deserialize,
   registerDeserializer,
 };

@@ -86,6 +86,6 @@ class Tool {
   }
 }
 
-module.exports = {
+export {
   Tool,
 };

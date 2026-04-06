@@ -4,9 +4,9 @@
  * @author Zhou Chenyu
  */
 
-const { File, Directory } = require("../../utils/io");
-const { BasicObject } = require("../objects/basic-obj");
-const { PageObjectManager } = require("./page-object-manager");
+import { File, Directory } from "../../utils/io.js";
+import { BasicObject } from "../objects/basic-obj.js";
+import { PageObjectManager } from "./page-object-manager.js";
 
 /**
  * 页管理器
@@ -169,6 +169,6 @@ class PageManager {
   }
 }
 
-module.exports = {
+export {
   PageManager,
 };

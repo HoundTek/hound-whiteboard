@@ -4,10 +4,10 @@
  * @author Zhou Chenyu
  */
 
-const { ObjectModifierTool } = require("./obj-modifier");
+import { ObjectModifierTool } from "./obj-modifier.js";
 
 class DefaultModifierTool extends ObjectModifierTool {}
 
-module.exports = {
+export {
   DefaultModifierTool,
 };

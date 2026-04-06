@@ -4,8 +4,8 @@
  * @author Zhou Chenyu
  */
 
-const { OneDimensionObject } = require("./one-dim-obj");
-const { Point, Matrix } = require("../../../utils/math");
+import { OneDimensionObject } from "./one-dim-obj.js";
+import { Point, Matrix } from "../../../utils/math.js";
 
 /**
  * 文本对象类
@@ -180,6 +180,6 @@ class TextObject extends OneDimensionObject {
   }
 }
 
-module.exports = {
+export {
   TextObject,
 };

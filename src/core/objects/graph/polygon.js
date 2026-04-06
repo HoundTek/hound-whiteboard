@@ -4,13 +4,13 @@
  * @author Zhou Chenyu
  */
 
-const { GraphObject } = require("./graph");
-const { Matrix, Point } = require("../../../utils/math");
-const {
+import { GraphObject } from "./graph.js";
+import { Matrix, Point } from "../../../utils/math.js";
+import {
   calculateConvexHull,
   ropeNailIntersect,
-} = require("../../utils/math-algorithm");
-const { RectangleRange } = require("../../range/rectangle");
+} from "../../utils/math-algorithm.js";
+import { RectangleRange } from "../../range/rectangle.js";
 
 /**
  * 多边形类
@@ -199,6 +199,6 @@ class PolygonObject extends GraphObject {
   }
 }
 
-module.exports = {
+export {
   PolygonObject,
 };

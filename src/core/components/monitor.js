@@ -4,8 +4,7 @@
  * @author Zhou Chenyu
  */
 
-const { Device } = require("../devices/device");
-const { PageLoadManager } = require("./page-load-manager");
+import { Device } from "../devices/device.js";
 
 /**
  * 显示器组件
@@ -36,6 +35,6 @@ class Monitor {
   constructor() {}
 }
 
-module.exports = {
+export {
   Monitor,
 };
