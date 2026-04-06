@@ -63,39 +63,6 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 按下设备
-   * @param {Point} point - 用户按下设备时的位置
-   * @param {Object} option - 选项
-   * @description 对应用户按下设备的操作
-   * @abstract
-   */
-  start(point, option) {
-    throw new Error("Method not implemented.");
-  }
-
-  /**
-   * 松开设备
-   * @param {Point} point - 用户松开设备时的位置
-   * @param {Object} option - 选项
-   * @description 对应用户松开设备的操作
-   * @abstract
-   */
-  end(point, option) {
-    throw new Error("Method not implemented.");
-  }
-
-  /**
-   * 移动设备
-   * @param {Point} point - 用户移动设备时的位置
-   * @param {Object} option - 选项
-   * @description 对应用户移动设备的操作
-   * @abstract
-   */
-  move(point, option) {
-    throw new Error("Method not implemented.");
-  }
-
-  /**
    * 创建新的对象实例
    * @param {Point} position - 新对象的位置
    * @param {number} id - 新对象的 id

@@ -9,8 +9,14 @@ const { Directory } = require("../../utils/io");
 const { BasicObject } = require("../objects/basic-obj");
 const { CounterPool } = require("../utils/counter-pool");
 const { DirectedGraph } = require("../utils/directed-graph");
+const { EventBus } = require("../utils/event-bus");
 const { UndoTree } = require("../hit/undo-tree-core");
 const { ActiveObjectManager } = require("./active-object-manager");
+const {
+  PageLoadManager,
+  PAGE_LOAD_MANAGER_EVENTS,
+  PAGE_LOAD_STRATEGIES,
+} = require("./page-load-manager");
 const { PageManager } = require("./page-manager");
 const { PageObjectManager } = require("./page-object-manager");
 
@@ -21,6 +27,8 @@ const { PageObjectManager } = require("./page-object-manager");
  * @author Zhou Chenyu
  */
 class BoardManager {
+  static PAGE_BUFFER_LIMIT = 4;
+
   /**
    * 时间回溯树
    * @type {UndoTree}
@@ -30,6 +38,7 @@ class BoardManager {
   /**
    * 活动对象管理器
    * @type {ActiveObjectManager}
+   * @description 管理当前活动对象（如选中对象、正在操作的对象等）
    */
   activeObjectManager;
 
@@ -45,6 +54,20 @@ class BoardManager {
    * @type {number[]}
    */
   pageOrder;
+
+  /**
+   * 某页被临时加载的次数
+   * @description 仅当页被临时加载时才增加
+   * @type {Map<number, number>}
+   */
+  pageTemporaryLoadedCount;
+
+  /**
+   * 某页被完整加载的次数
+   * @description 仅当页被完整加载时才增加
+   * @type {Map<number, number>}
+   */
+  pageFullyLoadedCount;
 
   /**
    * 已加载的页
@@ -83,9 +106,50 @@ class BoardManager {
    */
   objectCounterPool;
 
+  /**
+   * 页加载事件总线
+   * @type {EventBus}
+   */
+  pageLoadEventBus;
+
+  /**
+   * 页缓冲区控制器
+   * @type {PageLoadManager}
+   * @todo 这个应该是由 Monitor 设备来创建和持有的，BoardManager 只负责调用它提供的接口来加载和卸载页
+   */
+  pageLoadManager;
+
+  /**
+   * 每页由哪些 PLM 持有以及持有策略
+   * @type {Map<number, Map<number | string, "temp" | "full">>}
+   */
+  pageLoadOwners;
+
   constructor() {
     this.undoTree = new UndoTree();
     this.activeObjectManager = new ActiveObjectManager();
+    this.pageMap = new Map();
+    this.pageOrder = [];
+    this.pageTemporaryLoadedCount = new Map();
+    this.pageFullyLoadedCount = new Map();
+    this.pageLoadOwners = new Map();
+    this.loadedPages = new Deque();
+    this.pageCounterPool = new CounterPool();
+    this.objectCounterPool = new CounterPool();
+    this.pageLoadEventBus = new EventBus();
+    this.pageLoadManager = this.createPageLoadManager();
+    this.loadedPages = this.pageLoadManager.pagesLoaded;
+    this.#bindPageLoadEvents();
+  }
+
+  /**
+   * 创建绑定到当前 BoardManager 的页加载管理器
+   * @param {number} [limit] - 缓冲区上限
+   * @param {number | string} [requesterId] - 请求方 id
+   * @returns {PageLoadManager}
+   */
+  createPageLoadManager(limit = BoardManager.PAGE_BUFFER_LIMIT, requesterId) {
+    return new PageLoadManager(limit, this.pageLoadEventBus, requesterId);
   }
 
   /**
@@ -93,22 +157,31 @@ class BoardManager {
    * @todo
    * @returns {PageManager}
    */
-  appendPage() {
+  appendPage(templateId) {
     let page = new PageManager(this.pageCounterPool.generate());
 
-    // [todo] 创建页文件夹和必要文件
+    // 创建页文件夹和必要文件
+    const pageDirectory = this.root.cd("pages").cd(page.id.toString());
+    pageDirectory.rmWhenExist().make();
+    this.root
+      .cd("objects")
+      .cd("page" + page.id.toString())
+      .rmWhenExist()
+      .make();
 
     // [todo] 初始化页内容（如模板等）
+    // [todo] 模板现在还没有实现，先不管 templateId 参数
 
     // 加入页映射和链表
     this.pageMap.set(page.id, page);
     if (this.pageOrder.length > 0) {
       let lastPage = this.pageMap.get(
-        this.pageOrder[this.pageOrder.length - 1]
+        this.pageOrder[this.pageOrder.length - 1],
       );
-      PageManager.connectTwoPage(lastPage, page)
+      PageManager.connectTwoPage(lastPage, page);
     }
     this.pageOrder.push(page.id);
+    this.#persistPageConnection();
 
     // [todo] 加入 Undotree
     return page;
@@ -119,69 +192,75 @@ class BoardManager {
    * @description 加载白板的 meta、config 以及页等信息
    * @param {Directory} directory - 白板根目录
    * @return {BoardManager} 返回自身以支持链式调用
+   * @throws {Error} 如果目录不合法或文件损坏
    * @todo
    */
   load(directory) {
     this.root = directory;
+
+    // 检查是否是合法的白板文件
     const metaFile = this.root.peek("meta", "json");
     if (!metaFile.exist()) {
-      console.warn("meta is not exist.");
+      console.warn("meta.json does not exist.");
       throw new Error("Not a board file.");
     }
     const meta = metaFile.catJSON();
     if (meta.type !== boardMeta.type) {
       console.warn(
-        `Not a board file. Expected type ${boardMeta.type}, got ${meta.type}.`
+        `Not a board file. Expected type ${boardMeta.type}, got ${meta.type}.`,
       );
       throw new Error("Not a board file.");
     }
     if (meta.version !== boardMeta.version) {
       console.warn(
-        `Board version mismatch. Expected ${boardMeta.version}, got ${meta.version}.`
+        `Board version mismatch. Expected ${boardMeta.version}, got ${meta.version}.`,
       );
     }
 
+    // 加载 config
     const configFile = this.root.peek("config", "json");
     if (!configFile.exist()) {
-      console.warn("config is not exist.");
+      console.warn("config.json does not exist.");
       throw new Error("Corrupted board file.");
     }
     const config = configFile.catJSON();
 
     this.width = config.width;
     this.height = config.height;
+
     // [todo] 加载其它 meta 和 config 相关的东西
 
-    // [todo] 加载页
+    // 加载页顺序信息
     const connectionFile = this.root.cd("pages").peek("connection", "json");
     if (!connectionFile.exist()) {
-      console.warn("pages/connection.json is not exist.");
+      console.warn("pages/connection.json does not exist.");
+      throw new Error("Corrupted board file.");
     } else {
       const connection = connectionFile.catJSON();
       this.pageOrder = connection.order;
       this.pageCounterPool = new CounterPool(connection.count);
     }
 
+    this.pageLoadManager.resetBuffer();
+    this.pageLoadOwners.clear();
+    this.pageTemporaryLoadedCount.clear();
+    this.pageFullyLoadedCount.clear();
+
     // 构建页链表和页映射
     this.pageMap = new Map();
     let previousPage = null;
     for (const pageId of this.pageOrder) {
-      const currentPage = new PageManager();
-      if (previousPage) {
-        previousPage.nextPage = currentPage;
-        currentPage.prevPage = previousPage;
-      }
+      const currentPage = new PageManager(pageId);
+      PageManager.connectTwoPage(previousPage, currentPage);
       this.pageMap.set(pageId, currentPage);
       previousPage = currentPage;
     }
 
     const traceFile = this.root.peek("trace", "json");
     let trace;
-    // [FIXME] 应是由设备来决定加载哪一页
-    // 但现在设备管理器还没做，所以先写成这样
-    // 敏捷开发魅力时刻
+    // [FIXME] 应该由 Monitor 设备来决定加载哪一页
     if (!traceFile.exist()) {
-      console.log("trace is not exist.");
+      console.log("trace.json does not exist.");
       // 默认加载第一页
       trace = {
         onPage: this.pageOrder[0],
@@ -189,55 +268,43 @@ class BoardManager {
       };
     } else {
       trace = traceFile.catJSON();
-      trace = {
-        onPage: trace.onPage ? trace.onPage : this.pageOrder[0],
-        offset: trace.offset ? trace.offset : 0,
-      };
+      if (!trace.onPage) {
+        trace.onPage = this.pageOrder[0];
+      }
+      if (trace.offset === undefined) {
+        trace.offset = 0;
+      }
     }
 
-    // 加载当前页
-    this.loadedPages = new Deque();
-    this.pageMap
-      .get(trace.onPage)
-      .load(this.root.cd("pages").cd(trace.onPage.toString()));
-    this.loadedPages.pushBack(trace.onPage);
-
-    // 加载前一页
-    if (this.pageMap.get(trace.onPage).prevPage) {
-      this.pageMap
-        .get(trace.onPage)
-        .prevPage.load(
-          this.root
-            .cd("pages")
-            .cd(this.pageMap.get(trace.onPage).prevPage.id.toString())
-        );
-      this.loadedPages.pushBack(this.pageMap.get(trace.onPage).prevPage.id);
+    // 检查 trace 中的页是否合法
+    const currentPage = this.pageMap.get(trace.onPage);
+    if (!currentPage) {
+      throw new Error(`Trace page ${trace.onPage} does not exist.`);
     }
 
-    // 加载后一页
-    if (this.pageMap.get(trace.onPage).nextPage) {
-      this.pageMap
-        .get(trace.onPage)
-        .nextPage.load(
-          this.root
-            .cd("pages")
-            .cd(this.pageMap.get(trace.onPage).nextPage.id.toString())
-        );
-      this.loadedPages.pushBack(this.pageMap.get(trace.onPage).nextPage.id);
+    // 初始化缓冲区并加载当前页
+    this.pageLoadManager.resetCurrentPage(currentPage);
+    this.#loadPage(
+      currentPage,
+      PAGE_LOAD_STRATEGIES.FULL,
+      false,
+      this.pageLoadManager.requesterId,
+    );
+
+    if (currentPage.prevPage) {
+      this.pageLoadManager.expandBufferLeftFullLoad();
     }
 
-    // 加载后两页
-    if (trace.offset != 0 && this.pageMap.get(trace.onPage).nextPage.nextPage) {
-      this.pageMap
-        .get(trace.onPage)
-        .nextPage.nextPage.load(
-          this.root
-            .cd("pages")
-            .cd(this.pageMap.get(trace.onPage).nextPage.nextPage.id.toString())
-        );
-      this.loadedPages.pushBack(
-        this.pageMap.get(trace.onPage).nextPage.nextPage.id
-      );
+    if (currentPage.nextPage) {
+      this.pageLoadManager.expandBufferRightFullLoad();
+    }
+
+    if (
+      trace.offset !== 0 &&
+      currentPage.nextPage &&
+      currentPage.nextPage.nextPage
+    ) {
+      this.pageLoadManager.expandBufferRightFullLoad();
     }
 
     // [todo] 加载上次打开的历史，如工具、设备等
@@ -246,6 +313,7 @@ class BoardManager {
   }
 
   /**
+   * 创建新白板
    *
    * @param {Directory} directory - 白板根目录
    * @param {Object} boardInfo - 白板信息
@@ -259,20 +327,42 @@ class BoardManager {
    * @todo
    */
   static create(directory, boardInfo) {
-    const manager = new BoardManager().load(directory);
-    directory.existOrMake();
+    const manager = new BoardManager();
+    manager.directory = directory;
+    manager.root = directory;
+    directory.rmWhenExist().make();
     directory.peek("meta", "json").writeJSON(boardMeta);
     directory.peek("config", "json").writeJSON({
       width: boardInfo.width,
       height: boardInfo.height,
     });
-    directory.cd("pages").rmWhenExist().make();
+    directory.cd("devices").make();
+    directory.cd("history").make();
+    directory.cd("objects").make();
+    directory.cd("pages").make();
+    directory.cd("templates").make();
+
     // [todo] 创建文件结构
+    // 创建页
+    const firstPage = manager.appendPage(boardInfo.templateID);
+    directory
+      .cd("pages")
+      .peek("connection", "json")
+      .writeJSON({
+        count: 1,
+        order: [firstPage.id],
+        size: 1,
+      });
+    directory.peek("trace", "json").writeJSON({
+      onPage: firstPage.id,
+      offset: 0,
+    });
+
     return manager;
   }
 
   /**
-   * 
+   * 添加对象到指定页
    * @param {BasicObject} obj - 要添加的对象
    * @param {number} pageId - 要添加到的页 id
    */
@@ -283,6 +373,217 @@ class BoardManager {
       throw new Error("Page not exist.");
     }
     page.addObject(obj);
+  }
+
+  /**
+   * 绑定页加载相关事件
+   * @private
+   */
+  #bindPageLoadEvents() {
+    this.pageLoadEventBus.on(
+      PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD,
+      ({ requesterId, page, strategy, alreadyBuffered }) => {
+        this.#loadPage(page, strategy, alreadyBuffered, requesterId);
+      },
+    );
+
+    this.pageLoadEventBus.on(
+      PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD,
+      ({ requesterId, page }) => {
+        this.#unloadPage(page, requesterId);
+      },
+    );
+  }
+
+  /**
+   * 加载页
+   * @param {PageManager} page - 要加载的页
+   * @param {"temp" | "full"} strategy - 加载策略
+   * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
+   * @param {number | string} requesterId - 发起加载请求的 PLM id
+   * @returns {boolean} 是否成功加载
+   * @private
+   */
+  #loadPage(page, strategy, alreadyBuffered, requesterId) {
+    if (!page || requesterId === undefined) return false;
+
+    const effectiveStrategy = this.#registerPageLoadRequest(
+      page.id,
+      requesterId,
+      strategy,
+    );
+
+    const pageDirectory = this.#resolvePageDirectory(page.id);
+
+    if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
+      const changed = page.loadFull(pageDirectory);
+      return changed;
+    }
+
+    if (page.isLoad && !page.isTempLoad) {
+      return false;
+    }
+
+    return page.loadTemp(pageDirectory);
+  }
+
+  /**
+   * 卸载页
+   * @param {PageManager} page - 要卸载的页
+   * @param {number | string} requesterId - 发起卸载请求的 PLM id
+   * @returns {boolean} 是否成功卸载
+   * @private
+   */
+  #unloadPage(page, requesterId) {
+    if (!page || requesterId === undefined) return false;
+
+    const removedStrategy = this.#unregisterPageLoadRequest(page.id, requesterId);
+    if (!removedStrategy) return false;
+
+    if (this.pageFullyLoadedCount.has(page.id)) {
+      return false;
+    }
+
+    if (this.pageTemporaryLoadedCount.has(page.id)) {
+      if (!page.isLoad) return false;
+      return page.isTempLoad ? false : page.downgradeToTemp();
+    }
+
+    if (!page.isLoad) return false;
+    return page.isTempLoad ? page.unloadTemp() : page.unload();
+  }
+
+  /**
+   * 解析页目录
+   * @param {number} pageId - 页 id
+   * @returns {Directory} 页目录
+   * @private
+   */
+  #resolvePageDirectory(pageId) {
+    const pagesDirectory = this.root.cd("pages");
+    const nestedDirectory = pagesDirectory.cd(pageId.toString());
+    if (nestedDirectory.exist()) {
+      return nestedDirectory;
+    }
+    return pagesDirectory;
+  }
+
+  /**
+   * 持久化页连接信息
+   * @private
+   */
+  #persistPageConnection() {
+    if (!this.root) return;
+    this.root.cd("pages").peek("connection", "json").writeJSON({
+      count: this.pageCounterPool.counter,
+      order: this.pageOrder,
+      size: this.pageOrder.length,
+    });
+  }
+
+  /**
+   * 增加页加载计数
+   * @param {Map<number, number>} map - 页加载计数映射
+   * @param {number} pageId - 页 id
+   * @private
+   */
+  #increasePageLoadCount(map, pageId) {
+    map.set(pageId, (map.get(pageId) || 0) + 1);
+  }
+
+  /**
+   * 减少页加载计数
+   * @param {Map<number, number>} map - 页加载计数映射
+   * @param {number} pageId - 页 id
+   * @private
+   */
+  #decreasePageLoadCount(map, pageId) {
+    const count = map.get(pageId) || 0;
+    if (count <= 1) {
+      map.delete(pageId);
+      return;
+    }
+    map.set(pageId, count - 1);
+  }
+
+  /**
+   * 记录某个 PLM 对某页的加载持有关系
+   * @param {number} pageId - 页 id
+   * @param {number | string} requesterId - PLM id
+   * @param {"temp" | "full"} strategy - 加载策略
+   * @returns {"temp" | "full"} 生效后的策略
+   * @private
+   */
+  #registerPageLoadRequest(pageId, requesterId, strategy) {
+    if (!this.pageLoadOwners.has(pageId)) {
+      this.pageLoadOwners.set(pageId, new Map());
+    }
+
+    const owners = this.pageLoadOwners.get(pageId);
+    const previousStrategy = owners.get(requesterId);
+    const effectiveStrategy =
+      previousStrategy === PAGE_LOAD_STRATEGIES.FULL
+        ? PAGE_LOAD_STRATEGIES.FULL
+        : strategy;
+
+    if (previousStrategy === effectiveStrategy) {
+      return effectiveStrategy;
+    }
+
+    if (previousStrategy === PAGE_LOAD_STRATEGIES.TEMP) {
+      this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+    } else if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
+      this.#decreasePageLoadCount(this.pageFullyLoadedCount, pageId);
+    }
+
+    owners.set(requesterId, effectiveStrategy);
+    if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
+      this.#increasePageLoadCount(this.pageFullyLoadedCount, pageId);
+    } else {
+      this.#increasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+    }
+    return effectiveStrategy;
+  }
+
+  /**
+   * 取消某个 PLM 对某页的加载持有关系
+   * @param {number} pageId - 页 id
+   * @param {number | string} requesterId - PLM id
+   * @returns {"temp" | "full" | undefined} 被移除的策略
+   * @private
+   */
+  #unregisterPageLoadRequest(pageId, requesterId) {
+    if (!this.pageLoadOwners.has(pageId)) return undefined;
+
+    const owners = this.pageLoadOwners.get(pageId);
+    const previousStrategy = owners.get(requesterId);
+    if (!previousStrategy) return undefined;
+
+    owners.delete(requesterId);
+    if (owners.size === 0) {
+      this.pageLoadOwners.delete(pageId);
+    }
+
+    if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
+      this.#decreasePageLoadCount(this.pageFullyLoadedCount, pageId);
+    } else {
+      this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+    }
+
+    return previousStrategy;
+  }
+
+  /**
+   * 获取某页当前总持有数
+   * @param {number} pageId - 页 id
+   * @returns {number}
+   * @private
+   */
+  #getPageLoadCount(pageId) {
+    return (
+      (this.pageTemporaryLoadedCount.get(pageId) || 0) +
+      (this.pageFullyLoadedCount.get(pageId) || 0)
+    );
   }
 }
 

@@ -5,6 +5,7 @@
  */
 
 const { Matrix, Point } = require("../../../utils/math");
+const { RectangleRange } = require("../../range/rectangle");
 const {
   calculateConvexHull,
   insertPoints,
@@ -71,18 +72,9 @@ class StrokeObject extends BasicObject {
       // [todo] 删点
     }
     this.calculateConvexHull();
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let i = 0; i < this.transformedPoints.length; i++) {
-      const p = this.transformedPoints[i];
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    this.rectangle = new Matrix(minX, minY, maxX, maxY);
+    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
+      this.transform,
+    );
   }
 
   setPoints(points) {
@@ -131,6 +123,32 @@ class StrokeObject extends BasicObject {
     }
     ctx.stroke();
     ctx.restore();
+  }
+
+  serialize() {
+    return {
+      ...super.serialize(),
+      type: "StrokeObject",
+      points: this.points.map((point) => point.serialize()),
+      color: this.color,
+    };
+  }
+
+  static parse(data) {
+    if (data.type !== "StrokeObject") {
+      throw new TypeError("Invalid type for StrokeObject parsing");
+    }
+
+    const obj = new StrokeObject(
+      Point.parse(data.position),
+      data.id,
+      data.pageId,
+    );
+
+    obj.setPoints((data.points ?? []).map((point) => Point.parse(point)));
+    obj.setTransform(Matrix.parse(data.transform));
+    obj.color = data.color ?? obj.color;
+    return obj;
   }
 }
 

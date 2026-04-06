@@ -9,6 +9,7 @@ const { Deque } = require("../../utils/deque");
 const { Queue } = require("../../utils/queue");
 const { DirectedGraph } = require("../utils/directed-graph");
 const { PageManager } = require("./page-manager");
+const { PageLoadManager } = require("./page-load-manager");
 
 class Layer {
   /**
@@ -137,7 +138,7 @@ class ActiveObjectManager {
 
         // 跨左页
         if (pageLoader.pageNow.objectManager.coverLeftPage.has(node)) {
-          pageLoader.moveToLeft();
+          pageLoader.forceMoveCurrentLeftTempLoad();
           const neighborsLeft =
             pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
           if (neighborsLeft) {
@@ -150,12 +151,12 @@ class ActiveObjectManager {
               graph.addEdgeUnsafe(node, next);
             }
           }
-          pageLoader.moveToRight();
+          pageLoader.forceMoveCurrentRightTempLoad();
         }
 
         // 跨右页
         if (pageLoader.pageNow.objectManager.coverRightPage.has(node)) {
-          pageLoader.moveToRight();
+          pageLoader.forceMoveCurrentRightTempLoad();
           const neighborsRight =
             pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
           if (neighborsRight) {
@@ -168,7 +169,7 @@ class ActiveObjectManager {
               graph.addEdgeUnsafe(node, next);
             }
           }
-          pageLoader.moveToLeft();
+          pageLoader.forceMoveCurrentLeftTempLoad();
         }
       } // function dfs ends here
 
@@ -479,130 +480,7 @@ class ActiveObjectManager {
   }
 }
 
-class PageLoadManager {
-  /**
-   * 已临时加载的页
-   * @description 页数不超过 `pagesLoadedLimit` 页，为页实例引用的双端队列。
-   * @type {Deque}
-   */
-  pagesLoaded;
-
-  /**
-   * 当前页
-   * @type {PageManager}
-   */
-  pageNow;
-
-  /**
-   * 已加载页数上限
-   * @type {number}
-   * @default 4
-   */
-  pagesLoadedLimit;
-
-  /**
-   * @param {number} [limit = 4] - 可以加载的页数上限
-   */
-  constructor(limit = 4) {
-    this.pagesLoadedLimit = limit;
-    this.pagesLoaded = new Deque();
-  }
-
-  /**
-   * 重置当前页
-   * @param {PageManager} page - 新的当前页
-   */
-  resetCurrentPage(page) {
-    this.pageNow = page;
-    // 卸载所有已加载页
-    while (this.pagesLoaded.count() > 0) {
-      /** @type {PageManager} */
-      let pageToUnload = this.pagesLoaded.popFront();
-      pageToUnload.objectManager.unloadTiermap();
-    }
-    // 加载当前页
-    this.pagesLoaded = new Deque();
-    this.pagesLoaded.pushBack(page);
-    page.objectManager.loadTiermap(/* [todo] file */);
-  }
-
-  /**
-   * 将当前页右移
-   * @todo
-   */
-  moveToRight() {
-    // 加载右页
-    try {
-      this.loadRight();
-    } catch (e) {
-      throw e;
-    }
-    // 右移当前页
-    this.pageNow = this.pageNow.nextPage;
-  }
-
-  /**
-   * 加载右页但不切换当前页
-   * @todo
-   */
-  loadRight() {
-    // 卸载多余页
-    while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
-      /** @type {PageManager} */
-      let pageToUnload = this.pagesLoaded.popFront();
-      pageToUnload.objectManager.unloadTiermap();
-    }
-    // 加载右页
-    let pageToLoad = this.pageNow.nextPage;
-    if (!pageToLoad) {
-      throw new Error("Next page is not exist.");
-    }
-    if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
-      this.pagesLoaded.pushBack(pageToLoad);
-    }
-  }
-
-  /**
-   * 将当前页左移
-   * @todo
-   */
-  moveToLeft() {
-    // 加载左页
-    try {
-      this.loadLeft();
-    } catch (e) {
-      throw e;
-    }
-    // 左移当前页
-    this.pageNow = this.pageNow.prevPage;
-  }
-
-  /**
-   * 加载左页但不切换当前页
-   * @todo
-   */
-  loadLeft() {
-    // 卸载多余页
-    while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
-      /** @type {PageManager} */
-      let pageToUnload = this.pagesLoaded.popBack();
-      pageToUnload.objectManager.unloadTiermap();
-    }
-    // 加载左页
-    let pageToLoad = this.pageNow.prevPage;
-    if (!pageToLoad) {
-      throw new Error("Previous page is not exist.");
-    }
-    if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
-      this.pagesLoaded.pushFront(pageToLoad);
-    }
-  }
-}
-
 module.exports = {
   ActiveObjectManager,
   Layer,
-  PageLoadManager,
 };

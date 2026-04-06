@@ -41,6 +41,9 @@
     connection.json
     1.json
     2.json
+  templates/
+    1.json
+    2.json
   config.json
   trace.json
   meta.json
@@ -48,21 +51,29 @@
 
 ## 内部结构
 
-### `history/`
+### 历史记录：`history/`
 
 该文件夹用来存放所有对象和页的历史版本、已删除的对象和页，以及 hit 的块。
 
-#### `trash/`
+#### 回收站：`trash/`
 
-#### `edition/`
+该文件夹用来存放所有已被删除的对象和页。
 
-#### `hit/`
+#### 对象历史版本：`edition/`
 
-### `objects/`
+该文件夹用来存放所有对象和页的历史版本
 
-### `pages/`
+#### 时间回溯树：`hit/`
 
-#### `connection.json`
+该文件夹用来存放 hit 的块。
+
+### 对象：`objects/`
+
+### 页面：`pages/`
+
+该文件夹存放了关于页面的连接和对象层叠。
+
+#### 连接顺序：`connection.json`
 
 该文件存放了页的连接顺序。
 
@@ -75,15 +86,19 @@
 }
 ```
 
-其中，`count` 是给 `CounterPool` 使用的
+其中，`count` 是给 `CounterPool` 使用的。
 
-### `config.json`
+#### 页层叠图：`{id}.json`
+
+其文件名就是页 id，内部存放的是层叠图 DAG 数组化的结果。
+
+### 白板配置：`config.json`
 
 该文件存放了白板的基础配置。
 
-### `trace.json`
+### 上次打开：`trace.json`
 
-该文件存放了上次打开时的情况。
+该文件存放了上次关闭白板时的情况。
 
 示例：
 ```json
@@ -93,8 +108,10 @@
 }
 ```
 
+表示上次关闭时在第三页，但第三页的左边有 10% 没有显示。
+
 ### `meta.json`
 
-白板的元数据
+白板的元数据。
 
 ## 缓存

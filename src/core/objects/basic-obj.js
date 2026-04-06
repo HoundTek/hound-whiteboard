@@ -5,6 +5,7 @@
  */
 
 const { Matrix, Point } = require("../../utils/math");
+const { RectangleRange } = require("../range/rectangle");
 
 /**
  * 白板对象基类
@@ -48,11 +49,24 @@ class BasicObject {
 
   /**
    * 对象的矩形边界范围
-   * @type {Matrix}
+   * @type {RectangleRange}
    * @description 存储对象的边界矩形，用于碰撞检测和选择。
-   * 格式为 [[minX, maxX], [minY, maxY]]。
+   * 边界矩形是相对于变换后的坐标而言的。
    */
   rectangle;
+
+  /**
+   * 计算对象的边界矩形
+   * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
+   */
+  calculateRectangle() {
+    this.rectangle = new RectangleRange(
+      this.position.x,
+      this.position.y,
+      this.position.x,
+      this.position.y,
+    );
+  }
 
   /**
    * 对象的凸包
@@ -66,7 +80,12 @@ class BasicObject {
    * @description 统一 API，子类可重写此方法以计算对象的凸包。默认是矩形边界。
    */
   calculateConvexHull() {
-    this.convexHull = this.rectangle;
+    this.convexHull = [
+      { x: this.rectangle.minX, y: this.rectangle.minY },
+      { x: this.rectangle.maxX, y: this.rectangle.minY },
+      { x: this.rectangle.maxX, y: this.rectangle.maxY },
+      { x: this.rectangle.minX, y: this.rectangle.maxY },
+    ];
   }
 
   /**
@@ -76,11 +95,12 @@ class BasicObject {
    * @description 基类使用矩形边界进行检测，子类可重写此方法以实现更精确的检测逻辑。
    */
   isPointIntersect(p) {
-    return !(
-      this.rectangle.a <= p.x &&
-      p.x <= this.rectangle.b &&
-      this.rectangle.c <= p.y &&
-      p.y <= this.rectangle.d
+    p = p.sub(this.position); // 将点 p 转换到对象的局部坐标系
+    return (
+      this.rectangle.minX <= p.x &&
+      p.x <= this.rectangle.maxX &&
+      this.rectangle.minY <= p.y &&
+      p.y <= this.rectangle.maxY
     );
   }
 
@@ -148,10 +168,14 @@ class BasicObject {
    * @abstract
    * @returns {Object} 序列化后的对象
    * @description 子类必须实现此方法以支持对象的持久化
-   * @throws {Error} 基类未实现此方法
    */
   serialize() {
-    throw new Error("Method not implemented.");
+    return {
+      id: this.id,
+      pageId: this.pageId,
+      position: this.position.serialize(),
+      transform: this.transform.serialize(),
+    }
   }
 
   /**

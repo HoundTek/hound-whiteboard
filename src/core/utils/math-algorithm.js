@@ -96,7 +96,59 @@ function insertPoints(points, countInside = 1) {
   return result;
 }
 
+/**
+ * 判断收绳时绳子钉子会被绳子缠绕几圈
+ * @description
+ * 这个函数用于判断在一个闭合的曲线（绳子）中，某个点（钉子）被缠绕了多少圈。
+ * 如果点在曲线的顶点上或边界上，则返回 NaN，表示无法确定缠绕情况。
+ * 顺时针缠绕计数为正，逆时针缠绕计数为负。
+ * @param {Point[]} rope - 绳子
+ * @param {Point} nail - 钉子
+ */
+function ropeNailIntersect(rope, nail) {
+  function check(first, second) {
+    if (Math.abs(first.x - second.x) < 1e-5) {
+      // 竖直线段特殊处理，避免除以零
+      if (first.x <= nail.x && nail.x <= second.x) {
+        if (first.y <= nail.y && nail.y <= second.y) {
+          return NaN; // 在边上或在顶点上
+        } else if (second.y <= nail.y && nail.y <= first.y) {
+          return NaN; // 在边上或在顶点上
+        }
+      }
+      return 0; // 够不到
+    } else if (first.x < second.x) {
+      if (nail.x < first.x || second.x < nail.x) {
+        return 0; // 够不到
+      }
+    } else if (first.x > second.x) {
+      if (nail.x < second.x || first.x < nail.x) {
+        return 0; // 够不到
+      }
+    }
+    let k = (second.y - first.y) / (second.x - first.x);
+    let ly = first.y + k * (nail.x - first.x);
+    if (nail.y > ly) {
+      return first.x <= second.x ? 1 : -1;
+    } else if (nail.y >= ly - 1e-5) {
+      return NaN; // 在边上（允许一定误差）
+    }
+    return 0;
+  }
+  let count = check(rope[rope.length - 1], rope[0]);
+  if (isNaN(count)) return NaN;
+  for (let i = 1; i < rope.length; i++) {
+    const first = rope[i - 1];
+    const second = rope[i];
+    const result = check(first, second);
+    if (isNaN(result)) return NaN;
+    count += result;
+  }
+  return count;
+}
+
 module.exports = {
   calculateConvexHull,
   insertPoints,
+  ropeNailIntersect,
 };

@@ -1,8 +1,8 @@
-# 活动对象管理器文档
+# 层叠图文档
 
-本文档提供白板中的管理活动对象管理器的概述。
+本文档提供层叠图（tier graph）的概述。
 
-活动对象管理器用“层叠图”来管理活动对象间的层级关系。
+层叠图是活动对象管理器（AOM）用来管理对象间层级关系的工具。
 
 ## 符号约定
 
@@ -116,7 +116,18 @@
 
 ## 层叠图实现
 
-在 [tire-graph.js](../utils/tier-graph.js) 中，选用邻接表来实现一个有向无环图。
+在 [directed-graph.js](../utils/directed-graph.js) 中，选用邻接表来实现一个有向无环图。
+
+### API
+
+|名称|描述|类型|
+|:--|:--|:--|
+|`pickup(startFrom)`|获取以指定对象集合为起点的子图|`Set<{id: number, page: PageManager}> -> DirectedGraph`|
+|`insertLayerUnder(layerNow, layerAbove)`|将某层插入到另一层之下|`Layer -> Layer \| Undefined -> void`|
+|`insertLayerUnderById(layerNow, LayerAboveId)`|将某层插入到另一层之下，其中另一层用 id 表示|`Layer -> number \| undefined -> void`|
+|`insertLayerToTop(layerNow)`|将某层插至顶层|`Layer -> void`|
+|`compareLayerOrderById(layer1, layer2)`|比较两层的层次顺序，其中两层都用 id 表示|`number \| undefined -> number \| undefined -> number`|
+|`compareLayerOrder(layer1, layer2)`|比较两层的层次顺序|`Layer -> Layer -> number`|
 
 ## 层叠图示例
 

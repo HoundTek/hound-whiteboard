@@ -4,13 +4,14 @@
  * @author Zhou Chenyu
  */
 
-const { Directory } = require("../../utils/io");
+const { File, Directory } = require("../../utils/io");
 const { BasicObject } = require("../objects/basic-obj");
 const { PageObjectManager } = require("./page-object-manager");
 
 /**
  * 页管理器
  * @class
+ * @description 管理一页
  * @author Zhou Chenyu
  */
 class PageManager {
@@ -59,10 +60,12 @@ class PageManager {
    * @param {number} pageId - 页 id
    */
   constructor(pageId) {
-    this.objectManager = new PageObjectManager();
+    this.objectManager = undefined;
     this.nextPage = undefined;
     this.prevPage = undefined;
     this.id = pageId;
+    this.isLoad = false;
+    this.isTempLoad = false;
   }
 
   /**
@@ -71,11 +74,12 @@ class PageManager {
    * @param {PageManager | undefined} second 后一页
    */
   static connectTwoPage(first, second) {
-    first.nextPage = second;
-    second.prevPage = first;
+    if (first) first.nextPage = second;
+    if (second) second.prevPage = first;
   }
 
   /**
+   * 添加对象并更新层叠图
    *
    * @param {number} obj - 要添加的对象
    * @param {number[]} below - 应在该对象之下的对象
@@ -94,69 +98,73 @@ class PageManager {
   }
 
   /**
-   * 
-   * @param {BasicObject} obj - 要添加的对象
-   */
-  addNewObject(obj) {
-    // [todo] 计算新对象是否与现有对象交集
-    
-
-    // [todo] 更新层叠图
-    this.objectManager.staticGraph.addNode(obj.id);
-  }
-
-  /**
-   * 加载该页
+   * 完整加载该页
    * @description
-   * @param {Directory} directory - 白板文件夹
+   * @param {Directory} root - 白板根目录
    * @todo
    * @returns {boolean} 是否成功
    */
-  load(directory) {
-    // 处理三种情况中的两种：已加载和未加载
+  loadFull(root) {
+    // 已完整加载
     if (this.isLoad && !this.isTempLoad) return false;
-    if (/* !this.isLoad && */ !this.isTempLoad) this.loadTemp(directory);
+
+    // 未加载，升级为临时加载
+    if (!this.isLoad) this.loadTemp(root);
     this.isTempLoad = false;
 
-    // 剩下的情况就是未完全加载
+    // 升级为完整加载，加载对象
     // [todo] 加载 Objects
-    return false;
+    this.objectManager.loadObjects(root);
+    return true;
   }
 
+  /**
+   * 完整卸载该页
+   * @returns {boolean} 是否成功卸载
+   * @description
+   * 该方法会把该页变成未加载状态。
+   * 无论该页之前是完整加载还是临时加载，调用后都会变成未加载状态。
+   */
   unload() {
-    this.objectManager.unload();
-    this.objectManager = null; // 垃圾回收
-    this.isLoad = false;
-    this.isTempLoad = false;
-    // [todo]
-  }
-
-  unloadTemp() {
-    if (!this.isTempLoad) {
-      // 要么是没加载，要么是完整加载，不能卸载
-      return false;
-    }
-    this.objectManager.unloadTiermap();
+    if (this.objectManager) this.objectManager.unload();
+    this.objectManager = undefined;
     this.isLoad = false;
     this.isTempLoad = false;
     return true;
   }
 
   /**
+   * 从完整加载降级为临时加载
+   * @returns {boolean} 是否成功降级
+   * @description
+   * 该方法会保留层叠图，只卸载完整加载阶段持有的对象内容。
+   * 若当前页不是完整加载状态，则不进行任何操作。
+   */
+  downgradeToTemp() {
+    if (!this.isLoad || this.isTempLoad) {
+      return false;
+    }
+    if (this.objectManager) this.objectManager.unloadObjects();
+    this.isTempLoad = true;
+    return true;
+  }
+
+  /**
    * 临时加载该页
-   * @param {Directory} directory - 白板文件夹
+   * @param {Directory} root - 白板根目录
    * @returns {boolean} 是否成功
    */
-  loadTemp(directory) {
+  loadTemp(root) {
     if (this.isLoad) {
       // 已加载，不管是完整加载还是临时加载，都不能重复加载
       return false;
     }
     this.isLoad = true;
     this.isTempLoad = true;
-    this.objectManager.loadTiermap(
-      directory.cd("pages").peek(this.id.toString(), "json")
-    );
+    if (!this.objectManager) {
+      this.objectManager = new PageObjectManager(this.id);
+    }
+    this.objectManager.loadTierGraph(root);
     return true;
   }
 }

@@ -1,5 +1,5 @@
-const { RandomNumberPool } = require("../../../utils/algorithm");
-const { ActiveObjectManager } = require("../active-object-manager");
+const { RandomNumberPool } = require("../../../../utils/algorithm");
+const { ActiveObjectManager } = require("../../active-object-manager");
 
 describe("ActiveObjectManager/basic", () => {
   let aom = new ActiveObjectManager();

@@ -20,9 +20,15 @@ Container 类是用来包装一、二维对象的容器类。派生于 [BasicObj
 
 
 |名称|描述|类型|
-|:-:|:-:|:-:|
+|:--|:--|:--|
 |`child`|被窗口包装的一维对象或二维对象|`OneDimensionObject\|TwoDimensionObject`|
 
 ## Graph
 
 见 [graph-classes-document.md](./graph/graph-classes-document.md)
+
+## 对象持久化
+
+白板对象在持久化时，应先调用具体对象实例的 `serialize()` 生成普通 JSON 对象；恢复时，统一使用 [src/core/objects/object-deserializer.js](src/core/objects/object-deserializer.js) 导出的 `deserializer(data)`。
+
+这样可以把对象类型分发逻辑收敛在一处，避免业务层散落 `if/else` 或 `switch(type)`。

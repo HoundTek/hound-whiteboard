@@ -1,5 +1,5 @@
-const { DirectedGraph } = require("../../utils/directed-graph");
-const { ActiveObjectManager, Layer } = require("../active-object-manager");
+const { DirectedGraph } = require("../../../utils/directed-graph");
+const { ActiveObjectManager, Layer } = require("../../active-object-manager");
 
 describe("ActiveObjectManager/layer", () => {
   let aom = new ActiveObjectManager();

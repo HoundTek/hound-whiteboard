@@ -1,6 +1,13 @@
-const { DirectedGraph } = require("../../utils/directed-graph");
-const { ActiveObjectManager } = require("../active-object-manager");
-const { PageManager } = require("../page-manager");
+const { MockPageLoadManager } = require("./page-load-manager.mock");
+
+jest.mock("../../page-load-manager", () => ({
+  PageLoadManager: MockPageLoadManager,
+}));
+
+const { DirectedGraph } = require("../../../utils/directed-graph");
+const { ActiveObjectManager } = require("../../active-object-manager");
+const { PageManager } = require("../../page-manager");
+const { PageObjectManager } = require("../../page-object-manager");
 const { onePageData, twoPageData, multiPageData } = require("./data");
 
 describe("ActiveObjectManager/pickup", () => {
@@ -27,6 +34,7 @@ describe("ActiveObjectManager/pickup", () => {
 
     beforeEach(() => {
       page = createPage(1);
+      page.objectManager = new PageObjectManager(1);
       page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
     });
 
@@ -91,6 +99,9 @@ describe("ActiveObjectManager/pickup", () => {
       page2 = createPage(2);
 
       pageConnect(page1, page2);
+
+      page1.objectManager = new PageObjectManager(1);
+      page2.objectManager = new PageObjectManager(2);
 
       page1.objectManager.staticGraph = DirectedGraph.parse(twoPageData[0]);
       page2.objectManager.staticGraph = DirectedGraph.parse(twoPageData[1]);
@@ -165,6 +176,12 @@ describe("ActiveObjectManager/pickup", () => {
       page3 = createPage(3);
       page4 = createPage(4);
       page5 = createPage(5);
+
+      page1.objectManager = new PageObjectManager(1);
+      page2.objectManager = new PageObjectManager(2);
+      page3.objectManager = new PageObjectManager(3);
+      page4.objectManager = new PageObjectManager(4);
+      page5.objectManager = new PageObjectManager(5);
 
       page1.objectManager.staticGraph = DirectedGraph.parse(multiPageData[0]);
       page2.objectManager.staticGraph = DirectedGraph.parse(multiPageData[1]);

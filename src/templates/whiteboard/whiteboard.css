@@ -55,10 +55,6 @@
   z-index: 1;
 }
 
-#app-controls-side-controls-left-page-number {
-  
-}
-
 #app-controls-side-controls-left img {
   width: 38px;
   height: 38px;
@@ -79,11 +75,6 @@
   width: 38px;
   height: 38px;
 }
-
-#app-controls-side-controls-right-page-number {
-  
-}
-
 
 #app-controls-bottom-controls {
   display: flex;
@@ -129,4 +120,24 @@
   height: 600px;
   z-index: -1;
   background-color: aqua;
+}
+
+.controller-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: red;
+  border: 1px solid pink;
+}
+
+.vertex-controller-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: white;
+  border: 1px solid black;
 }

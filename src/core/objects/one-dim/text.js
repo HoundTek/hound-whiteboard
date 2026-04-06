@@ -151,6 +151,33 @@ class TextObject extends OneDimensionObject {
     }
     ctx.restore();
   }
+
+  serialize() {
+    return {
+      type: "TextObject",
+      ...super.serialize(),
+      text: this.text,
+      textProperty: this.textProperty,
+      ihatLength: this.ihatLength,
+    };
+  }
+
+  static parse(data) {
+    if (data.type !== "TextObject") {
+      throw new TypeError("Invalid type for TextObject parsing");
+    }
+
+    let obj = new TextObject(
+      Point.parse(data.position),
+      data.id,
+      data.pageId
+    );
+    obj.setTransform(Matrix.parse(data.transform));
+    obj.setText(data.text);
+    obj.setTextProperty(data.textProperty ?? {});
+    obj.setIhatLength(data.ihatLength ?? obj.ihatLength);
+    return obj;
+  }
 }
 
 module.exports = {

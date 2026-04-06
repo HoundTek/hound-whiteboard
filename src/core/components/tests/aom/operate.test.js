@@ -1,6 +1,13 @@
-const { DirectedGraph } = require("../../utils/directed-graph");
-const { ActiveObjectManager } = require("../active-object-manager");
-const { PageManager } = require("../page-manager");
+const { MockPageLoadManager } = require("./page-load-manager.mock");
+
+jest.mock("../../page-load-manager", () => ({
+  PageLoadManager: MockPageLoadManager,
+}));
+
+const { DirectedGraph } = require("../../../utils/directed-graph");
+const { ActiveObjectManager } = require("../../active-object-manager");
+const { PageManager } = require("../../page-manager");
+const { PageObjectManager } = require("../../page-object-manager");
 const { onePageData } = require("./data");
 
 describe("ActiveObjectManager/operate", () => {
@@ -17,6 +24,7 @@ describe("ActiveObjectManager/operate", () => {
   beforeEach(() => {
     aom = new ActiveObjectManager();
     page = createPage(1);
+    page.objectManager = new PageObjectManager(1);
     page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
   });
 

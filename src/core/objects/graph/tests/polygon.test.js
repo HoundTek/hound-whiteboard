@@ -1,5 +1,5 @@
-const { PolygonObject } = require("./polygon");
-const { Point, Matrix } = require("../../../utils/math");
+const { PolygonObject } = require("../polygon");
+const { Point, Matrix } = require("../../../../utils/math");
 
 describe("PolygonObject", () => {
   describe("构造与属性修改", () => {
@@ -9,6 +9,7 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Point.parse(p));
+
       const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
       expect(polygon.points).toEqual(points);
     });
