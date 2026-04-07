@@ -20,8 +20,7 @@
 
 | 名称 | 描述 | 类型 |
 |:--|:--|:--|
-| `address` | 父路径 | `string` |
-| `name` | 目录名 | `string` |
+| `paths` | 目录路径分段数组，兼容不同平台路径分隔符 | `string[]` |
 
 ### 常用方法
 
@@ -38,7 +37,7 @@
 | `mv(dest)` | 移动目录 | `Directory -> Directory` |
 | `rm()` | 删除目录 | `void -> Directory` |
 | `rmWhenExist()` | 存在则删除 | `void -> Directory` |
-| `ls()` | 列出全部内容 | `void -> Array<Directory\|File>` |
+| `ls()` | 列出全部内容名称 | `void -> string[]` |
 | `lsDir()` | 列出子目录 | `void -> Directory[]` |
 | `lsFile()` | 列出文件 | `void -> File[]` |
 | `hide()` | 隐藏目录 | `void -> Directory` |
@@ -61,7 +60,7 @@
 
 | 名称 | 描述 | 类型 |
 |:--|:--|:--|
-| `address` | 父路径 | `string` |
+| `dir` | 所在目录对象 | `Directory` |
 | `name` | 文件名（不含扩展名） | `string` |
 | `extension` | 扩展名 | `string` |
 
@@ -123,18 +122,22 @@
 ## 模块特点
 
 - 高层 API 基于对象而不是裸字符串路径。
+- `Directory` 内部以路径分段数组保存目录路径，适配 Windows、Linux 与 macOS 的分隔符差异。
+- `File` 内部以 `Directory + name + extension` 保存文件定位信息。
 - 支持链式调用，适合白板文件结构初始化。
 - 目录与文件都支持隐藏/取消隐藏。
 - 文件压缩与解压已被纳入统一封装。
+- 目录、文件、压缩与解压操作直接调用 `fs`/`adm-zip`。
 
 ## 注意事项
 
 - `toUrl()` 当前实现会引用外部 `previewScreen`，因此它并不是纯粹的路径转换方法，更偏特定 UI 场景辅助函数。
-- `FilenameRandomPool` 初始化时会读取现有目录项，并尝试从名称中解析数字作为已占用 id。
+- `FilenameRandomPool` 初始化时会按类型扫描现有目录项：目录池读取子目录名，文件池读取同扩展名文件名，并尝试从名称中解析数字作为已占用 id。
 
 ## 依赖
 
 - Node.js `path`
+- Node.js `fs`
+- `adm-zip`
 - `hidefile`
-- `./fp`
 - `../utils/algorithm`
