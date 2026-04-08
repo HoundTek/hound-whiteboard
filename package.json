@@ -6,7 +6,11 @@
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
+    "test": "NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests",
+    "bench": "node benchmarks/all.bench.js",
+    "bench:io": "node benchmarks/io-bridge.bench.js",
+    "bench:io:direct": "node benchmarks/io-direct.bench.js",
+    "bench:io:roundtrip": "electron benchmarks/io-roundtrip.bench.js"
   },
   "author": "Frank Steven",
   "license": "MIT",

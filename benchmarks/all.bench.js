@@ -17,6 +17,9 @@ const __dirname = path.dirname(__filename);
 const benchmarks = [
   { name: "Queue", file: "queue.bench.js" },
   { name: "Chain", file: "chain.bench.js" },
+  { name: "IO Bridge", file: "io-bridge.bench.js" },
+  { name: "IO Direct", file: "io-direct.bench.js" },
+  { name: "IO Roundtrip", file: "io-roundtrip.bench.js", runner: "electron" },
 ];
 
 benchmarks.forEach((bench, index) => {
@@ -26,7 +29,15 @@ benchmarks.forEach((bench, index) => {
 
   try {
     const benchPath = path.join(__dirname, bench.file);
-    execSync(`node "${benchPath}"`, { stdio: "inherit" });
+    const runner = bench.runner === "electron"
+      ? path.join(
+          process.cwd(),
+          "node_modules",
+          ".bin",
+          process.platform === "win32" ? "electron.cmd" : "electron",
+        )
+      : "node";
+    execSync(`"${runner}" "${benchPath}"`, { stdio: "inherit" });
   } catch (error) {
     console.error(`\n❌ ${bench.name} 测试失败:`, error.message);
   }
