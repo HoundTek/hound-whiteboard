@@ -1,14 +1,18 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
+import { registerIOBridge } from "./io-bridge-main.js";
 
 let window;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.whenReady().then(() => {
+  registerIOBridge(ipcMain);
+
   window = new BrowserWindow({
     webPreferences: {
+      preload: path.join(__dirname, "preload-io.js"),
       nodeIntegration: true,
       contextIsolation: false,
       nodeIntegrationInSubFrames: true

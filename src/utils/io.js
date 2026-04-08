@@ -104,7 +104,7 @@ function getOccupiedNumbers(dir, type, min, max) {
  * @class
  * @example
  * const dir = new Directory("/tmp", "demo");
- * console.log(dir.getPath());
+ * console.log(dir.getPath()); // "/tmp/demo"
  */
 class Directory {
   /**
@@ -477,7 +477,7 @@ class Directory {
  * @property {string} extension - 文件扩展名 (不含点)
  * @example
  * const file = new File("/tmp/demo", "note", "txt");
- * console.log(file.getPath());
+ * console.log(file.getPath()); // "/tmp/demo/note.txt"
  */
 class File {
   dir = new Directory([]);
