@@ -10,7 +10,8 @@
     "bench": "node benchmarks/all.bench.js",
     "bench:io": "node benchmarks/io-bridge.bench.js",
     "bench:io:direct": "node benchmarks/io-direct.bench.js",
-    "bench:io:roundtrip": "electron benchmarks/io-roundtrip.bench.js"
+    "bench:io:roundtrip": "electron benchmarks/io-roundtrip.bench.js",
+    "bench:io:accum": "electron benchmarks/io-accumulatable.bench.js"
   },
   "author": "Frank Steven",
   "license": "MIT",

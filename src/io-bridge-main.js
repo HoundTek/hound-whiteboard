@@ -1,5 +1,8 @@
 import { Directory, File } from "./utils/io.js";
-import { IO_BRIDGE_CHANNEL } from "./io-bridge-common.js";
+import {
+  IO_BRIDGE_BATCH_CHANNEL,
+  IO_BRIDGE_CHANNEL,
+} from "./io-bridge-common.js";
 
 /**
  * 允许通过 IPC 调用的 Directory 方法集合。
@@ -139,15 +142,52 @@ function handleIOBridgeRequest(_event, request) {
 }
 
 /**
+ * 顺序处理来自渲染进程的 I/O 批处理请求。
+ * @param {import("electron").IpcMainInvokeEvent | null} _event - IPC 事件对象
+ * @param {{ target: any, operations?: Array<{ method: string, args?: any[] }> }} request - I/O 批处理请求体
+ * @returns {{ results: any[], target: any }} 序列化后的批处理结果与最终目标状态
+ * @throws {Error} 当请求不合法或方法未被允许时抛出错误
+ */
+function handleIOBridgeBatchRequest(_event, request) {
+  const target = deserializeIOValue(request?.target);
+  const operations = request?.operations ?? [];
+
+  if (!target || !Array.isArray(operations)) {
+    throw new Error("Invalid io bridge batch request.");
+  }
+
+  const results = operations.map((operation) => {
+    if (!operation || typeof operation.method !== "string") {
+      throw new Error("Invalid io bridge batch operation.");
+    }
+
+    if (!isAllowedMethod(target, operation.method)) {
+      throw new Error(`Unsupported io bridge method: ${operation.method}`);
+    }
+
+    const args = deserializeIOValue(operation.args ?? []);
+    return serializeIOValue(target[operation.method](...args));
+  });
+
+  return {
+    results,
+    target: serializeIOValue(target),
+  };
+}
+
+/**
  * 在主进程注册 I/O IPC handler。
  * @param {import("electron").IpcMain} ipcMain - Electron 主进程 ipcMain 实例
  */
 function registerIOBridge(ipcMain) {
   ipcMain.handle(IO_BRIDGE_CHANNEL, handleIOBridgeRequest);
+  ipcMain.handle(IO_BRIDGE_BATCH_CHANNEL, handleIOBridgeBatchRequest);
 }
 
 export {
+  IO_BRIDGE_BATCH_CHANNEL,
   IO_BRIDGE_CHANNEL,
+  handleIOBridgeBatchRequest,
   handleIOBridgeRequest,
   registerIOBridge,
 };

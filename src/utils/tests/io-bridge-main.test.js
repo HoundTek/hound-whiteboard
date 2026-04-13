@@ -2,7 +2,21 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-import { handleIOBridgeRequest } from "../../io-bridge-main.js";
+import {
+  handleIOBridgeBatchRequest,
+  handleIOBridgeRequest,
+} from "../../io-bridge-main.js";
+
+function toDirectoryPayload(dirPath) {
+  const parsed = path.parse(dirPath);
+  return {
+    __houndType: "Directory",
+    paths: [
+      parsed.root,
+      ...dirPath.slice(parsed.root.length).split(path.sep).filter(Boolean),
+    ],
+  };
+}
 
 describe("io-bridge-main", () => {
   let tempRoot;
@@ -17,12 +31,7 @@ describe("io-bridge-main", () => {
 
   test("应能处理 Directory.make 和 lsFile", () => {
     handleIOBridgeRequest(null, {
-      target: {
-        __houndType: "Directory",
-        paths: tempRoot.split(path.sep).filter(Boolean).length === 0
-          ? [path.parse(tempRoot).root]
-          : [path.parse(tempRoot).root, ...tempRoot.slice(path.parse(tempRoot).root.length).split(path.sep).filter(Boolean), "docs"],
-      },
+      target: toDirectoryPayload(path.join(tempRoot, "docs")),
       method: "make",
       args: [],
     });
@@ -30,10 +39,7 @@ describe("io-bridge-main", () => {
     fs.writeFileSync(path.join(tempRoot, "docs", "note.txt"), "hello", "utf8");
 
     const files = handleIOBridgeRequest(null, {
-      target: {
-        __houndType: "Directory",
-        paths: [path.parse(tempRoot).root, ...tempRoot.slice(path.parse(tempRoot).root.length).split(path.sep).filter(Boolean), "docs"],
-      },
+      target: toDirectoryPayload(path.join(tempRoot, "docs")),
       method: "lsFile",
       args: [],
     });
@@ -43,7 +49,7 @@ describe("io-bridge-main", () => {
         __houndType: "File",
         dir: {
           __houndType: "Directory",
-          paths: [path.parse(tempRoot).root, ...tempRoot.slice(path.parse(tempRoot).root.length).split(path.sep).filter(Boolean), "docs"],
+          paths: toDirectoryPayload(path.join(tempRoot, "docs")).paths,
         },
         name: "note",
         extension: "txt",
@@ -54,7 +60,7 @@ describe("io-bridge-main", () => {
   test("应能处理 File.write 和 cat", () => {
     const docsPath = path.join(tempRoot, "docs");
     fs.mkdirSync(docsPath, { recursive: true });
-    const dirPaths = [path.parse(docsPath).root, ...docsPath.slice(path.parse(docsPath).root.length).split(path.sep).filter(Boolean)];
+    const dirPaths = toDirectoryPayload(docsPath).paths;
 
     handleIOBridgeRequest(null, {
       target: {
@@ -85,5 +91,29 @@ describe("io-bridge-main", () => {
     });
 
     expect(content).toBe("hello bridge");
+  });
+
+  test("应能顺序处理批量请求并返回最终目标状态", () => {
+    const docsPath = path.join(tempRoot, "docs");
+    fs.mkdirSync(docsPath, { recursive: true });
+    const filePayload = {
+      __houndType: "File",
+      dir: toDirectoryPayload(docsPath),
+      name: "note",
+      extension: "txt",
+    };
+
+    const result = handleIOBridgeBatchRequest(null, {
+      target: filePayload,
+      operations: [
+        { method: "write", args: ["hello batch"] },
+        { method: "cat", args: [] },
+      ],
+    });
+
+    expect(result).toEqual({
+      results: [filePayload, "hello batch"],
+      target: filePayload,
+    });
   });
 });

@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { IO_BRIDGE_CHANNEL } from "./io-bridge-common.js";
+import {
+  IO_BRIDGE_BATCH_CHANNEL,
+  IO_BRIDGE_CHANNEL,
+} from "./io-bridge-common.js";
 
 /**
  * 预加载层暴露给渲染进程的 I/O 桥接对象。
- * @type {{ call(request: object): Promise<any> }}
+ * @type {{ call(request: object): Promise<any>, callBatch(request: object): Promise<any> }}
  */
 const ioBridge = {
   /**
@@ -13,6 +16,15 @@ const ioBridge = {
    */
   call(request) {
     return ipcRenderer.invoke(IO_BRIDGE_CHANNEL, request);
+  },
+
+  /**
+   * 转发渲染进程的 I/O 批处理请求到主进程。
+   * @param {object} request - I/O 批处理请求体
+   * @returns {Promise<any>} 主进程返回的序列化批处理结果
+   */
+  callBatch(request) {
+    return ipcRenderer.invoke(IO_BRIDGE_BATCH_CHANNEL, request);
   },
 };
 
