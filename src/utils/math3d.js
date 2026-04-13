@@ -2,42 +2,42 @@
  * @file 三维数学模块
  * @description
  * 提供三维空间中点和矩阵的表示与操作功能，包括:
- * - 三维点 Point3D
+ * - 三维点 Vector3D
  * - 3x3 矩阵 Matrix3D
  * @module math3d
  * @author Zhou Chenyu
  */
 
 /**
- * 三维点
+ * 三维向量
  * @class
- * @description 表示三维空间中的一个点，包含 X、Y 和 Z 坐标，支持矩阵变换
+ * @description 表示三维向量，包含 X、Y 和 Z 坐标，支持矩阵变换
  * @author Zhou Chenyu
  */
-class Point3D {
+class Vector3D {
   /**
-   * 点的 X 坐标
+   * 向量的 X 坐标
    * @type {number}
    */
   x;
 
   /**
-   * 点的 Y 坐标
+   * 向量的 Y 坐标
    * @type {number}
    */
   y;
 
   /**
-   * 点的 Z 坐标
+   * 向量的 Z 坐标
    * @type {number}
    */
   z;
 
   /**
    * @constructor
-   * @param {number} x - 点的 X 坐标
-   * @param {number} y - 点的 Y 坐标
-   * @param {number} z - 点的 Z 坐标
+   * @param {number} x - 向量的 X 坐标
+   * @param {number} y - 向量的 Y 坐标
+   * @param {number} z - 向量的 Z 坐标
    */
   constructor(x, y, z) {
     this.x = x;
@@ -47,10 +47,10 @@ class Point3D {
 
   /**
    * 将此对象序列化为普通 JSON 对象
-   * @returns {{x: number, y: number, z: number}} 包含点坐标的对象
+   * @returns {{x: number, y: number, z: number}} 包含向量坐标的对象
    * @example
-   * const p = new Point3D(10, 20, 30);
-   * console.log(p.serialize()); // { x: 10, y: 20, z: 30 }
+   * const v = new Vector3D(10, 20, 30);
+   * console.log(v.serialize()); // { x: 10, y: 20, z: 30 }
    */
   serialize() {
     return {
@@ -62,10 +62,10 @@ class Point3D {
 
   /**
    * 将此对象序列化为数组对象
-   * @returns {number[]} 包含点坐标的数组
+   * @returns {number[]} 包含向量坐标的数组
    * @example
-   * const p = new Point3D(10, 20, 30);
-   * console.log(p.serializeToArray()); // [10, 20, 30]
+   * const v = new Vector3D(10, 20, 30);
+   * console.log(v.serializeToArray()); // [10, 20, 30]
    */
   serializeToArray() {
     return [this.x, this.y, this.z];
@@ -75,54 +75,54 @@ class Point3D {
    * 将此对象序列化为字符串
    * @returns {String}
    * @example
-   * const p = new Point3D(10, 20, 30);
-   * console.log(p.toString()); // Point3D(10, 20, 30)
+   * const v = new Vector3D(10, 20, 30);
+   * console.log(v.toString()); // Vector3D(10, 20, 30)
    */
   toString() {
-    return `Point3D(${this.x}, ${this.y}, ${this.z})`;
+    return `Vector3D(${this.x}, ${this.y}, ${this.z})`;
   }
 
   /**
-   * 将序列化的对象转化为 Point3D 实例
-   * @param {{x: number, y: number, z: number}} point - 包含点坐标的对象
-   * @returns {Point3D} Point3D 实例
+   * 将序列化的对象转化为 Vector3D 实例
+   * @param {{x: number, y: number, z: number}} vec - 包含向量坐标的对象
+   * @returns {Vector3D} Vector3D 实例
    * @static
    * @example
-   * const point = Point3D.parse({ x: 10, y: 20, z: 30 }); // Point3D(10, 20, 30)
+   * const vec = Vector3D.parse({ x: 10, y: 20, z: 30 }); // Vector3D(10, 20, 30)
    */
-  static parse(point) {
-    return new Point3D(point.x, point.y, point.z);
+  static parse(vec) {
+    return new Vector3D(vec.x, vec.y, vec.z);
   }
 
   /**
-   * 将序列化成数组的对象转化为 Point3D 实例
-   * @param {number[]} arr - 包含点坐标的数组
-   * @returns {Point3D} Point3D 实例
+   * 将序列化成数组的对象转化为 Vector3D 实例
+   * @param {number[]} arr - 包含向量坐标的数组
+   * @returns {Vector3D} Vector3D 实例
    * @static
    * @throws {RangeError} 当 `arr` 的大小小于 3 时
    * @example
-   * const point = Point3D.parseFromArray([10, 20, 30]); // Point3D(10, 20, 30)
+   * const vec = Vector3D.parseFromArray([10, 20, 30]); // Vector3D(10, 20, 30)
    */
   static parseFromArray(arr) {
     if (arr.length < 3) {
       throw new RangeError("Array must have at least 3 elements");
     }
-    return new Point3D(arr[0], arr[1], arr[2]);
+    return new Vector3D(arr[0], arr[1], arr[2]);
   }
 
   /**
    * 应用变换矩阵
    * @description 此方法会修改当前点的坐标
    * @param {Matrix3D} matrix - 要应用的变换矩阵
-   * @returns {Point3D} 返回自己以支持链式调用
+   * @returns {Vector3D} 返回自己以支持链式调用
    * @example
    * const matrix = new Matrix3D(1, 0, 0, 0, 1, 0, 10, 20, 1);
-   * const point = new Point3D(5, 5, 1);
-   * point.applyTransform(matrix);
-   * console.log(point.toString()); // Point3D(15, 25, 1)
+   * const vec = new Vector3D(5, 5, 1);
+   * vec.applyTransform(matrix);
+   * console.log(vec.toString()); // Vector3D(15, 25, 1)
    */
   applyTransform(matrix) {
-    let p = Point3D.mulMatrix(matrix, this);
+    let p = Vector3D.mulMatrix(matrix, this);
     this.x = p.x;
     this.y = p.y;
     this.z = p.z;
@@ -130,34 +130,34 @@ class Point3D {
   }
 
   /**
-   * 将矩阵与点相乘
-   * @description 执行矩阵-向量乘法，返回新的 Point3D 实例而非修改传入点
+   * 将矩阵与向量相乘
+   * @description 执行矩阵-向量乘法，返回新的 Vector3D 实例而非修改传入向量
    * @param {Matrix3D} m - 3x3 变换矩阵
-   * @param {Point3D} p - 要变换的点
-   * @returns {Point3D} 变换后的新点
+   * @param {Vector3D} v - 要变换的向量
+   * @returns {Vector3D} 变换后的新向量
    * @example
    * const matrix = new Matrix3D(1, 0, 0, 0, 1, 0, 10, 20, 1);
-   * const point = new Point3D(5, 5, 1);
-   * const transformedPoint = Point3D.mulMatrix(matrix, point);
-   * console.log(transformedPoint.toString()); // Point3D(15, 25, 1)
+   * const vec = new Vector3D(5, 5, 1);
+   * const transformedVec = Vector3D.mulMatrix(matrix, vec);
+   * console.log(transformedVec.toString()); // Vector3D(15, 25, 1)
    */
-  static mulMatrix(m, p) {
-    const x = m.a11 * p.x + m.a12 * p.y + m.a13 * p.z;
-    const y = m.a21 * p.x + m.a22 * p.y + m.a23 * p.z;
-    const z = m.a31 * p.x + m.a32 * p.y + m.a33 * p.z;
-    return new Point3D(x, y, z);
+  static mulMatrix(m, v) {
+    const x = m.a11 * v.x + m.a12 * v.y + m.a13 * v.z;
+    const y = m.a21 * v.x + m.a22 * v.y + m.a23 * v.z;
+    const z = m.a31 * v.x + m.a32 * v.y + m.a33 * v.z;
+    return new Vector3D(x, y, z);
   }
 
   /**
-   * 判断两点是否在精度范围内相等
-   * @param {Point3D} a - 第一个点
-   * @param {Point3D} b - 第二个点
+   * 判断两向量是否在精度范围内相等
+   * @param {Vector3D} a - 第一个向量
+   * @param {Vector3D} b - 第二个向量
    * @param {number} [eps = 1e-10] - 允许的误差范围
-   * @returns {boolean} 如果两个点在误差范围内相等则返回 true，否则返回 false
+   * @returns {boolean} 如果两个向量在误差范围内相等则返回 true，否则返回 false
    * @example
-   * const p1 = new Point3D(10.0000000001, 20.0000000001, 30.0000000001);
-   * const p2 = new Point3D(10.0000000002, 20.0000000002, 30.0000000002);
-   * console.log(Point3D.nearlyEq(p1, p2)); // true
+   * const v1 = new Vector3D(10.0000000001, 20.0000000001, 30.0000000001);
+   * const v2 = new Vector3D(10.0000000002, 20.0000000002, 30.0000000002);
+   * console.log(Vector3D.nearlyEq(v1, v2)); // true
    */
   static nearlyEq(a, b, eps = 1e-10) {
     return (
@@ -168,28 +168,28 @@ class Point3D {
   }
 
   /**
-   * 计算两点之间的距离
-   * @param {Point3D} a - 第一个点
-   * @param {Point3D} b - 第二个点
-   * @returns {number} 两点之间的距离
+   * 计算两向量相减的模长
+   * @param {Vector3D} a - 第一个向量
+   * @param {Vector3D} b - 第二个向量
+   * @returns {number} 两向量相减的模长
    * @example
-   * const p1 = new Point3D(0, 0, 0);
-   * const p2 = new Point3D(3, 4, 0);
-   * console.log(Point3D.distanceTo(p1, p2)); // 5
+   * const v1 = new Vector3D(0, 0, 0);
+   * const v2 = new Vector3D(3, 4, 0);
+   * console.log(Vector3D.distanceTo(v1, v2)); // 5
    */
   static distanceTo(a, b) {
-    return Math.sqrt(Point3D.distanceSq(a, b));
+    return Math.sqrt(Vector3D.distanceSq(a, b));
   }
 
   /**
-   * 计算两点之间距离的平方
-   * @param {Point3D} a - 第一个点
-   * @param {Point3D} b - 第二个点
-   * @returns {number} 两点之间距离的平方
+   * 计算两向量相减的模长的平方
+   * @param {Vector3D} a - 第一个向量
+   * @param {Vector3D} b - 第二个向量
+   * @returns {number} 两向量相减的模长的平方
    * @example
-   * const p1 = new Point3D(0, 0, 1);
-   * const p2 = new Point3D(3, 4, 0);
-   * console.log(Point3D.distanceSq(p1, p2)); // 26
+   * const v1 = new Vector3D(0, 0, 1);
+   * const v2 = new Vector3D(3, 4, 0);
+   * console.log(Vector3D.distanceSq(v1, v2)); // 26
    */
   static distanceSq(a, b) {
     return (
@@ -200,55 +200,55 @@ class Point3D {
   }
 
   /**
-   * 克隆该点
-   * @returns {Point3D} Point3D 实例
+   * 克隆该向量
+   * @returns {Vector3D} Vector3D 实例
    * @example
-   * let p1 = new Point3D(10, 20, 30);
-   * let p2 = p1.clonePoint();
-   * p1.x = 0;
-   * console.log(p1.toString()); // Point3D(0, 20, 30)
-   * console.log(p2.toString()); // Point3D(10, 20, 30)
+   * let v1 = new Vector3D(10, 20, 30);
+   * let v2 = v1.clone();
+   * v1.x = 0;
+   * console.log(v1.toString()); // Vector3D(0, 20, 30)
+   * console.log(v2.toString()); // Vector3D(10, 20, 30)
    */
-  clonePoint() {
-    return new Point3D(this.x, this.y, this.z);
+  clone() {
+    return new Vector3D(this.x, this.y, this.z);
   }
 
   /**
-   * 两点相加
-   * @param {Point3D} other - 另一个点
-   * @returns {Point3D} 两点相加的结果
+   * 两向量相加
+   * @param {Vector3D} other - 另一个向量
+   * @returns {Vector3D} 两向量相加的结果
    * @example
-   * const p1 = new Point3D(1, 2, 3);
-   * const p2 = new Point3D(4, 5, 6);
-   * const p3 = p1.add(p2);
-   * console.log(p3.toString()); // Point3D(5, 7, 9)
+   * const v1 = new Vector3D(1, 2, 3);
+   * const v2 = new Vector3D(4, 5, 6);
+   * const v3 = v1.add(v2);
+   * console.log(v3.toString()); // Vector3D(5, 7, 9)
    */
   add(other) {
-    return new Point3D(this.x + other.x, this.y + other.y, this.z + other.z);
+    return new Vector3D(this.x + other.x, this.y + other.y, this.z + other.z);
   }
 
   /**
-   * 两点相减
-   * @param {Point3D} other - 另一个点
-   * @returns {Point3D} 两点相减的结果
+   * 两向量相减
+   * @param {Vector3D} other - 另一个向量
+   * @returns {Vector3D} 两向量相减的结果
    * @example
-   * const p1 = new Point3D(4, 5, 6);
-   * const p2 = new Point3D(1, 2, 3);
-   * const p3 = p1.sub(p2);
-   * console.log(p3.toString()); // Point3D(3, 3, 3)
+   * const v1 = new Vector3D(4, 5, 6);
+   * const v2 = new Vector3D(1, 2, 3);
+   * const v3 = v1.sub(v2);
+   * console.log(v3.toString()); // Vector3D(3, 3, 3)
    */
   sub(other) {
-    return new Point3D(this.x - other.x, this.y - other.y, this.z - other.z);
+    return new Vector3D(this.x - other.x, this.y - other.y, this.z - other.z);
   }
 
   /**
-   * 两点相点乘
-   * @param {Point3D} other - 另一个点
-   * @returns {number} 两点相点乘的结果
+   * 两向量相点乘
+   * @param {Vector3D} other - 另一个向量
+   * @returns {number} 两向量相点乘的结果
    * @example
-   * const p1 = new Point3D(1, 2, 3);
-   * const p2 = new Point3D(4, 5, 6);
-   * const dot = p1.dotMul(p2);
+   * const v1 = new Vector3D(1, 2, 3);
+   * const v2 = new Vector3D(4, 5, 6);
+   * const dot = v1.dotMul(v2);
    * console.log(dot); // 32
    */
   dotMul(other) {
@@ -256,17 +256,17 @@ class Point3D {
   }
 
   /**
-   * 两点相叉乘
-   * @param {Point3D} other - 另一个点
-   * @returns {Point3D} 两点相叉乘的结果
+   * 两向量相叉乘
+   * @param {Vector3D} other - 另一个向量
+   * @returns {Vector3D} 两向量相叉乘的结果
    * @example
-   * const p1 = new Point3D(1, 2, 3);
-   * const p2 = new Point3D(4, 5, 6);
-   * const cross = p1.crossMul(p2);
-   * console.log(cross.toString()); // Point3D(-3, 6, -3)
+   * const v1 = new Vector3D(1, 2, 3);
+   * const v2 = new Vector3D(4, 5, 6);
+   * const cross = v1.crossMul(v2);
+   * console.log(cross.toString()); // Vector3D(-3, 6, -3)
    */
   crossMul(other) {
-    return new Point3D(
+    return new Vector3D(
       this.y * other.z - this.z * other.y,
       this.z * other.x - this.x * other.z,
       this.x * other.y - this.y * other.x
@@ -457,12 +457,12 @@ class Matrix3D {
    * @returns {Matrix3D} Matrix3D 实例
    * @example
    * let m1 = new Matrix3D(1, 0, 0, 0, 1, 0, 0, 0, 1);
-   * let m2 = m1.clonePoint();
+   * let m2 = m1.clone();
    * m1.a11 = 0;
    * console.log(m1.toString()); // Matrix3D[[0, 0, 0], [0, 1, 0], [0, 0, 1]]
    * console.log(m2.toString()); // Matrix3D[[1, 0, 0], [0, 1, 0], [0, 0, 1]]
    */
-  cloneMatrix() {
+  clone() {
     return new Matrix3D(
       this.a11,
       this.a12,
@@ -547,15 +547,15 @@ class Matrix3D {
 
   /**
    * 使用此矩阵变换一个三维点
-   * @param {Point3D} point - 被变换的点
-   * @returns {Point3D} 变换后的点
+   * @param {Vector3D} point - 被变换的点
+   * @returns {Vector3D} 变换后的点
    * @example
    * const matrix = new Matrix3D(1, 0, 0, 0, 1, 0, 10, 20, 1);
-   * const point = new Point3D(5, 5, 1);
-   * const transformedPoint = matrix.applyToPoint(point);
-   * console.log(transformedPoint.toString()); // Point3D(15, 25, 1)
+   * const point = new Vector3D(5, 5, 1);
+   * const transformedPoint = matrix.applyToVector(point);
+   * console.log(transformedPoint.toString()); // Vector3D(15, 25, 1)
    */
-  applyToPoint(point) {
+  applyToVector(point) {
     return point.applyTransform(this);
   }
 
@@ -729,5 +729,5 @@ class Matrix3D {
 
 export {
   Matrix3D,
-  Point3D,
+  Vector3D,
 };

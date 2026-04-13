@@ -5,7 +5,7 @@
  */
 
 import { PolygonObject } from "../../objects/graph/polygon.js";
-import { Point } from "../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 import { ObjectCreatorTool } from "./obj-creator.js";
 import { Controller } from "../controller/controller.js";
 import { VertexController } from "../controller/vertex-controller.js";
@@ -81,7 +81,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
 
   /**
    * 上一个顶点位置
-   * @type {Point}
+   * @type {Vector}
    */
   lastPoint;
 
@@ -90,7 +90,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   }
 
   /**
-   * @param {Point} position - 对象位置
+   * @param {Vector} position - 对象位置
    * @param {number} id - 对象 id
    * @param {number} pageId - 页 id
    */
@@ -100,7 +100,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
 
   /**
    * @description 用户按下设备时，添加一个新的顶点，并新增一个控制点。
-   * @param {Point} point - 用户按下设备时的位置
+   * @param {Vector} point - 用户按下设备时的位置
    * @param {Object} option - 选项
    */
   start(point, option) {
@@ -112,11 +112,11 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   /**
    * @description 用户移动设备时，更新当前顶点位置和控制点位置。
    * 如果当前位置与当前顶点位置相同，则不进行任何操作。
-   * @param {Point} point - 用户松开设备时的位置
+   * @param {Vector} point - 用户松开设备时的位置
    * @param {Object} option - 选项
    */
   move(point, option) {
-    if (!Point.nearlyEq(this.lastPoint, point)) {
+    if (!Vector.nearlyEq(this.lastPoint, point)) {
       this.lastPoint = point;
       this.obj.changePoint(this.count - 1, point);
     }
@@ -125,11 +125,11 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   /**
    * @description 用户松开设备时，当前顶点的位置就被确定下来了。
    * 如果当前位置与当前顶点位置相同，则不进行任何操作。
-   * @param {Point} point - 用户松开设备时的位置
+   * @param {Vector} point - 用户松开设备时的位置
    * @param {Object} option - 选项
    */
   end(point, option) {
-    if (!Point.nearlyEq(this.lastPoint, point)) {
+    if (!Vector.nearlyEq(this.lastPoint, point)) {
       this.lastPoint = point;
       this.obj.changePoint(this.count - 1, point);
     }

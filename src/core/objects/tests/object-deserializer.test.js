@@ -2,14 +2,14 @@ import { deserialize } from "../object-deserializer.js";
 import { PolygonObject } from "../graph/polygon.js";
 import { TextObject } from "../one-dim/text.js";
 import { StrokeObject } from "../stroke/stroke.js";
-import { Matrix, Point } from "../../../utils/math.js";
+import { Matrix, Vector } from "../../../utils/math.js";
 
 describe("object deserializer", () => {
   test("应能还原 PolygonObject", () => {
-    const polygon = new PolygonObject(new Point(3, 4), 12, 5, [
-      new Point(0, 0),
-      new Point(10, 0),
-      new Point(0, 20),
+    const polygon = new PolygonObject(new Vector(3, 4), 12, 5, [
+      new Vector(0, 0),
+      new Vector(10, 0),
+      new Vector(0, 20),
     ]);
     polygon.setTransform(new Matrix(0, 1, -1, 0));
     polygon.color = "#ff8800";
@@ -22,7 +22,7 @@ describe("object deserializer", () => {
   });
 
   test("应能还原 TextObject", () => {
-    const text = new TextObject(new Point(8, 13), 2, 7);
+    const text = new TextObject(new Vector(8, 13), 2, 7);
     text.setTransform(new Matrix(1, 0.2, 0, 1));
     text.setText("hello whiteboard");
     text.setTextProperty({
@@ -40,8 +40,8 @@ describe("object deserializer", () => {
   });
 
   test("应能还原 StrokeObject", () => {
-    const stroke = new StrokeObject(new Point(1, 2), 9, 11);
-    stroke.setPoints([new Point(0, 0), new Point(5, 2), new Point(7, 8)]);
+    const stroke = new StrokeObject(new Vector(1, 2), 9, 11);
+    stroke.setPoints([new Vector(0, 0), new Vector(5, 2), new Vector(7, 8)]);
     stroke.setTransform(new Matrix(2, 0, 0, 2));
     stroke.color = "#00aaee";
 

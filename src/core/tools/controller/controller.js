@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Point } from "../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 
 /**
  * 控制杆基类
@@ -24,7 +24,7 @@ import { Point } from "../../../utils/math.js";
 class Controller {
   /**
    * 控制杆位置
-   * @type {Point}
+   * @type {Vector}
    */
   position;
 
@@ -36,14 +36,14 @@ class Controller {
 
   /**
    * @constructor
-   * @param {Point} position - 控制杆位置
+   * @param {Vector} position - 控制杆位置
    */
   constructor(position) {
     this.position = position;
   }
 
   /**
-   * @param {Point} position
+   * @param {Vector} position
    */
   setPosition(position) {
     this.position = position;
@@ -52,7 +52,7 @@ class Controller {
 
   /**
    * 拖动事件的回调函数，当用户拖动控制杆时调用该函数，并传入新的位置。
-   * @type {(newPosition: Point) => void}
+   * @type {(newPosition: Vector) => void}
    */
   onDrag;
 
@@ -102,7 +102,7 @@ class Controller {
       const newY = e.clientY - offsetY;
       this.handle.style.left = `${newX}px`;
       this.handle.style.top = `${newY}px`;
-      this.setPosition(new Point(newX, newY));
+      this.setPosition(new Vector(newX, newY));
     });
 
     document.addEventListener("mouseup", () => {

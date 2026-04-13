@@ -5,7 +5,7 @@
  */
 
 import { GraphObject } from "./graph.js";
-import { Matrix, Point } from "../../../utils/math.js";
+import { Matrix, Vector } from "../../../utils/math.js";
 import {
   calculateConvexHull,
   ropeNailIntersect,
@@ -23,10 +23,10 @@ import { RectangleRange } from "../../range/rectangle.js";
 class PolygonObject extends GraphObject {
   /**
    * 创建一个新的多边形对象
-   * @param {Point} p - 多边形逻辑左上角的绝对位置
+   * @param {Vector} p - 多边形逻辑左上角的绝对位置
    * @param {number} id - 对象 id
    * @param {number} pageId - 对象所在页的 id
-   * @param {Point[]} points - 多边形各顶点相对其左上角的相对位置
+   * @param {Vector[]} points - 多边形各顶点相对其左上角的相对位置
    * @constructor
    */
   constructor(p, id, pageId, points) {
@@ -38,7 +38,7 @@ class PolygonObject extends GraphObject {
 
   /**
    * 多边形对象的顶点集
-   * @type {Point[]}
+   * @type {Vector[]}
    * @description
    * 每一个点在变换前，相对 position 的位置数组，属于基础数据。
    * 外界不应直接修改它，应使用 setPoints 方法。
@@ -48,12 +48,12 @@ class PolygonObject extends GraphObject {
   /**
    * 设置对象的顶点集
    * @description 设置新的顶点集时，会自动更新变换后的顶点集和凸包。
-   * @param {Point[]} points - 新的顶点集
+   * @param {Vector[]} points - 新的顶点集
    */
   setPoints(points) {
     this.points = points;
     this.transformedPoints = points.map((p) =>
-      Point.mulMatrix(this.transform, p),
+      Vector.mulMatrix(this.transform, p),
     );
     this.calculateConvexHull();
     this.calculateRectangle();
@@ -62,7 +62,7 @@ class PolygonObject extends GraphObject {
   /**
    * 修改指定索引的顶点
    * @param {number} index - 要修改的顶点索引
-   * @param {Point} points - 新的顶点坐标
+   * @param {Vector} points - 新的顶点坐标
    */
   changePoint(index, points) {
     // 修改指定索引的顶点，并更新变换后的顶点集和凸包。
@@ -70,19 +70,19 @@ class PolygonObject extends GraphObject {
       throw new RangeError("Index out of bounds");
     }
     this.points[index] = points;
-    this.transformedPoints[index] = Point.mulMatrix(this.transform, points);
+    this.transformedPoints[index] = Vector.mulMatrix(this.transform, points);
     this.calculateConvexHull();
     this.calculateRectangle();
   }
 
   /**
    * 在末尾添加一个新的顶点
-   * @param {Point} point - 新的顶点坐标
+   * @param {Vector} point - 新的顶点坐标
    */
   appendPoint(point) {
     // 在末尾添加一个新的顶点，并更新变换后的顶点集和凸包。
     this.points.push(point);
-    this.transformedPoints.push(Point.mulMatrix(this.transform, point));
+    this.transformedPoints.push(Vector.mulMatrix(this.transform, point));
     this.calculateConvexHull();
     this.calculateRectangle();
   }
@@ -105,7 +105,7 @@ class PolygonObject extends GraphObject {
 
   /**
    * 多边形对象经变换的顶点
-   * @type {Point[]}
+   * @type {Vector[]}
    * @description 每一个点在变换后，相对 position 的位置数组，属于富数据。
    */
   transformedPoints = [];
@@ -116,7 +116,7 @@ class PolygonObject extends GraphObject {
    */
   setTransform(trans) {
     this.transform = trans;
-    this.transformedPoints = this.points.map((p) => Point.mulMatrix(trans, p));
+    this.transformedPoints = this.points.map((p) => Vector.mulMatrix(trans, p));
     this.calculateRectangle();
   }
 
@@ -157,7 +157,7 @@ class PolygonObject extends GraphObject {
   }
 
   /**
-   * @param {Point} p - 要检测的点
+   * @param {Vector} p - 要检测的点
    * @description 判断原则：若将该多边形用 canvas 绘制出来，点 p 是否会落在填充区域内或边界上。
    * @returns {boolean} 点是否在多边形内
    */
@@ -188,10 +188,10 @@ class PolygonObject extends GraphObject {
       throw new TypeError("Invalid type for PolygonObject parsing");
     }
     let obj = new PolygonObject(
-      Point.parse(data.position),
+      Vector.parse(data.position),
       data.id,
       data.pageId,
-      data.points.map((p) => Point.parse(p)),
+      data.points.map((p) => Vector.parse(p)),
     );
     obj.setTransform(Matrix.parse(data.transform));
     obj.color = data.color;

@@ -16,6 +16,6 @@ PolygonObject 类是白板上的多边形对象类，是图形的一种，由多
 
 |名称|描述|类型|
 |:--|:--|:--|
-|`points`|多边形对象的顶点集|`Point[]`|
-|`transformedPoints`|经变换后多边形对象的顶点集|`Point[]`|
+|`points`|多边形对象的顶点集|`Vector[]`|
+|`transformedPoints`|经变换后多边形对象的顶点集|`Vector[]`|
 |`color`|多边形对象的颜色|`string`|

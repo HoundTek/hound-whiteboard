@@ -1,21 +1,21 @@
-import { Point, Matrix } from "../math.js";
+import { Vector, Matrix } from "../math.js";
 
-describe("Point Class", () => {
+describe("Vector Class", () => {
   describe("构造函数", () => {
     test("应能正确创建点", () => {
-      const p = new Point(3, 4);
+      const p = new Vector(3, 4);
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
     });
 
     test("应该接受负数", () => {
-      const p = new Point(-5, -10);
+      const p = new Vector(-5, -10);
       expect(p.x).toBe(-5);
       expect(p.y).toBe(-10);
     });
 
     test("应该接受小数", () => {
-      const p = new Point(3.5, 4.2);
+      const p = new Vector(3.5, 4.2);
       expect(p.x).toBe(3.5);
       expect(p.y).toBe(4.2);
     });
@@ -23,13 +23,13 @@ describe("Point Class", () => {
 
   describe("坐标访问和修改", () => {
     test("getter 应能正确返回坐标", () => {
-      const p = new Point(10, 20);
+      const p = new Vector(10, 20);
       expect(p.x).toBe(10);
       expect(p.y).toBe(20);
     });
 
     test("setter 应能正确修改坐标", () => {
-      const p = new Point(1, 2);
+      const p = new Vector(1, 2);
       p.x = 5;
       p.y = 10;
       expect(p.x).toBe(5);
@@ -39,69 +39,69 @@ describe("Point Class", () => {
 
   describe("distanceTo", () => {
     test("应能正确计算距离", () => {
-      const p1 = new Point(0, 0);
-      const p2 = new Point(3, 4);
-      expect(Point.distanceTo(p1, p2)).toBe(5);
+      const p1 = new Vector(0, 0);
+      const p2 = new Vector(3, 4);
+      expect(Vector.distanceTo(p1, p2)).toBe(5);
     });
 
     test("应能计算到自己的距离为 0", () => {
-      const p1 = new Point(5, 5);
-      const p2 = new Point(5, 5);
-      expect(Point.distanceTo(p1, p2)).toBe(0);
+      const p1 = new Vector(5, 5);
+      const p2 = new Vector(5, 5);
+      expect(Vector.distanceTo(p1, p2)).toBe(0);
     });
 
     test("应能正确处理负坐标", () => {
-      const p1 = new Point(-3, -4);
-      const p2 = new Point(0, 0);
-      expect(Point.distanceTo(p1, p2)).toBe(5);
+      const p1 = new Vector(-3, -4);
+      const p2 = new Vector(0, 0);
+      expect(Vector.distanceTo(p1, p2)).toBe(5);
     });
 
     test("distanceSq 应能正确计算距离的平方", () => {
-      const p1 = new Point(0, 1);
-      const p2 = new Point(3, 4);
-      expect(Point.distanceSq(p1, p2)).toBe(18);
+      const p1 = new Vector(0, 1);
+      const p2 = new Vector(3, 4);
+      expect(Vector.distanceSq(p1, p2)).toBe(18);
     });
   });
 
   describe("dotMul", () => {
     test("应能正确计算点乘", () => {
-      const p1 = new Point(1, 2);
-      const p2 = new Point(-2, 3);
+      const p1 = new Vector(1, 2);
+      const p2 = new Vector(-2, 3);
       expect(p1.dotMul(p2)).toBe(4);
     });
   });
 
   describe("nearlyEq", () => {
     test("应能正确判断两点是否在精度范围内相等", () => {
-      const p1 = new Point(5, 10);
-      const p2 = new Point(5.0001, 10);
-      expect(Point.nearlyEq(p1, p2, 0.0001)).toBe(true);
-      expect(Point.nearlyEq(p1, p2, 0.0002)).toBe(true);
-      expect(Point.nearlyEq(p1, p2, 0.00005)).toBe(false);
+      const p1 = new Vector(5, 10);
+      const p2 = new Vector(5.0001, 10);
+      expect(Vector.nearlyEq(p1, p2, 0.0001)).toBe(true);
+      expect(Vector.nearlyEq(p1, p2, 0.0002)).toBe(true);
+      expect(Vector.nearlyEq(p1, p2, 0.00005)).toBe(false);
     });
 
     test("应能正确处理精度为零的情况", () => {
-      const p1 = new Point(5, 10);
-      const p2 = new Point(5, 10);
-      const p3 = new Point(5.00001, 10);
+      const p1 = new Vector(5, 10);
+      const p2 = new Vector(5, 10);
+      const p3 = new Vector(5.00001, 10);
       expect(p1).toEqual(p2);
-      expect(Point.nearlyEq(p1, p2, 0)).toBe(true);
-      expect(Point.nearlyEq(p1, p3, 0)).toBe(false);
+      expect(Vector.nearlyEq(p1, p2, 0)).toBe(true);
+      expect(Vector.nearlyEq(p1, p3, 0)).toBe(false);
     });
 
     test("应能正确处理精度为负的情况", () => {
-      const p1 = new Point(5, 10);
-      const p2 = new Point(5.0001, 10);
-      expect(Point.nearlyEq(p1, p2, -0.0001)).toBe(true);
-      expect(Point.nearlyEq(p1, p2, -0.0002)).toBe(true);
-      expect(Point.nearlyEq(p1, p2, -0.00005)).toBe(false);
+      const p1 = new Vector(5, 10);
+      const p2 = new Vector(5.0001, 10);
+      expect(Vector.nearlyEq(p1, p2, -0.0001)).toBe(true);
+      expect(Vector.nearlyEq(p1, p2, -0.0002)).toBe(true);
+      expect(Vector.nearlyEq(p1, p2, -0.00005)).toBe(false);
     });
   });
 
-  describe("clonePoint", () => {
+  describe("clone", () => {
     test("应能创建独立的副本", () => {
-      const p1 = new Point(1, 2);
-      const p2 = p1.clonePoint();
+      const p1 = new Vector(1, 2);
+      const p2 = p1.clone();
 
       expect(p2.x).toBe(1);
       expect(p2.y).toBe(2);
@@ -114,24 +114,24 @@ describe("Point Class", () => {
 
   describe("add", () => {
     test("应能正确计算两点之和", () => {
-      const p1 = new Point(1, 2);
-      const p2 = new Point(3, 4);
+      const p1 = new Vector(1, 2);
+      const p2 = new Vector(3, 4);
       const p3 = p1.add(p2);
       expect(p3.x).toBe(4);
       expect(p3.y).toBe(6);
     });
 
     test("不应该修改原点", () => {
-      const p1 = new Point(1, 2);
-      const p2 = new Point(3, 4);
+      const p1 = new Vector(1, 2);
+      const p2 = new Vector(3, 4);
       p1.add(p2);
       expect(p1.x).toBe(1);
       expect(p1.y).toBe(2);
     });
 
     test("应能正确处理负数", () => {
-      const p1 = new Point(5, 10);
-      const p2 = new Point(-2, -3);
+      const p1 = new Vector(5, 10);
+      const p2 = new Vector(-2, -3);
       const p3 = p1.add(p2);
       expect(p3.x).toBe(3);
       expect(p3.y).toBe(7);
@@ -140,24 +140,24 @@ describe("Point Class", () => {
 
   describe("sub", () => {
     test("应能正确计算两点之差", () => {
-      const p1 = new Point(5, 8);
-      const p2 = new Point(2, 3);
+      const p1 = new Vector(5, 8);
+      const p2 = new Vector(2, 3);
       const p3 = p1.sub(p2);
       expect(p3.x).toBe(3);
       expect(p3.y).toBe(5);
     });
 
     test("不应该修改原点", () => {
-      const p1 = new Point(5, 8);
-      const p2 = new Point(2, 3);
+      const p1 = new Vector(5, 8);
+      const p2 = new Vector(2, 3);
       p1.sub(p2);
       expect(p1.x).toBe(5);
       expect(p1.y).toBe(8);
     });
 
     test("应能正确处理负结果", () => {
-      const p1 = new Point(1, 2);
-      const p2 = new Point(5, 8);
+      const p1 = new Vector(1, 2);
+      const p2 = new Vector(5, 8);
       const p3 = p1.sub(p2);
       expect(p3.x).toBe(-4);
       expect(p3.y).toBe(-6);
@@ -166,20 +166,20 @@ describe("Point Class", () => {
 
   describe("serialize", () => {
     test("应能返回正确的 JSON 对象", () => {
-      const p = new Point(3, 4);
+      const p = new Vector(3, 4);
       const json = p.serialize();
       expect(json).toEqual({ x: 3, y: 4 });
     });
 
     test("应能返回独立的对象", () => {
-      const p = new Point(5, 10);
+      const p = new Vector(5, 10);
       const json = p.serialize();
       json.x = 100;
       expect(p.x).toBe(5); // 原点不应被修改
     });
 
     test("应能正确处理小数", () => {
-      const p = new Point(3.14, 2.71);
+      const p = new Vector(3.14, 2.71);
       const json = p.serialize();
       expect(json.x).toBe(3.14);
       expect(json.y).toBe(2.71);
@@ -188,61 +188,61 @@ describe("Point Class", () => {
 
   describe("serializeToArray", () => {
     test("应能返回正确的数组", () => {
-      const p = new Point(3, 4);
+      const p = new Vector(3, 4);
       const arr = p.serializeToArray();
       expect(arr).toEqual([3, 4]);
     });
 
     test("应能返回独立的数组", () => {
-      const p = new Point(5, 10);
+      const p = new Vector(5, 10);
       const arr = p.serializeToArray();
       arr[0] = 100;
       expect(p.x).toBe(5); // 原点不应被修改
     });
   });
 
-  describe("Point.parse", () => {
+  describe("Vector.parse", () => {
     test("应能从 JSON 对象创建点", () => {
-      const p = Point.parse({ x: 3, y: 4 });
+      const p = Vector.parse({ x: 3, y: 4 });
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
     });
 
     test("应能正确处理小数", () => {
-      const p = Point.parse({ x: 3.14, y: 2.71 });
+      const p = Vector.parse({ x: 3.14, y: 2.71 });
       expect(p.x).toBe(3.14);
       expect(p.y).toBe(2.71);
     });
   });
 
-  describe("Point.parseFromArray", () => {
+  describe("Vector.parseFromArray", () => {
     test("应能从数组创建点", () => {
-      const p = Point.parseFromArray([3, 4]);
+      const p = Vector.parseFromArray([3, 4]);
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
     });
 
     test("应该只使用前两个元素", () => {
-      const p = Point.parseFromArray([1, 2, 3, 4, 5]);
+      const p = Vector.parseFromArray([1, 2, 3, 4, 5]);
       expect(p.x).toBe(1);
       expect(p.y).toBe(2);
     });
 
     test("应该在数组长度不足时抛出错误", () => {
-      expect(() => Point.parseFromArray([1])).toThrow();
-      expect(() => Point.parseFromArray([])).toThrow();
+      expect(() => Vector.parseFromArray([1])).toThrow();
+      expect(() => Vector.parseFromArray([])).toThrow();
     });
   });
 
   describe("toString", () => {
     test("应能返回正确的字符串表示", () => {
-      const p = new Point(3, 4);
-      expect(p.toString()).toBe("Point(3, 4)");
+      const p = new Vector(3, 4);
+      expect(p.toString()).toBe("Vector(3, 4)");
     });
 
     test("应能正确处理小数", () => {
-      const p = new Point(3.5, 4.2);
-      expect(p.toString()).toBe("Point(3.5, 4.2)");
+      const p = new Vector(3.5, 4.2);
+      expect(p.toString()).toBe("Vector(3.5, 4.2)");
     });
   });
 });
@@ -312,10 +312,10 @@ describe("Matrix Class", () => {
     });
   });
 
-  describe("cloneMatrix", () => {
+  describe("clone", () => {
     test("应该创建独立的副本", () => {
       const m1 = new Matrix(1, 2, 3, 4);
-      const m2 = m1.cloneMatrix();
+      const m2 = m1.clone();
 
       expect(m2.a).toBe(1);
       expect(m2.b).toBe(2);
@@ -897,11 +897,11 @@ describe("Matrix Class", () => {
     });
   });
 
-  describe("applyToPoint", () => {
+  describe("applyToVector", () => {
     test("应能正确将矩阵应用到点上", () => {
       const m = new Matrix(2, 0, 0, 3);
-      const p = new Point(1, 2);
-      const result = m.applyToPoint(p);
+      const p = new Vector(1, 2);
+      const result = m.applyToVector(p);
       // [[2, 0], [0, 3]] * [1, 2] = [2 * 1 + 0 * 2, 0 * 1 + 3 * 2] = [2, 6]
       expect(result.x).toBe(2);
       expect(result.y).toBe(6);
@@ -909,8 +909,8 @@ describe("Matrix Class", () => {
 
     test("单位矩阵应用后点不变", () => {
       const identity = Matrix.identity();
-      const p = new Point(5, 7);
-      const result = identity.applyToPoint(p);
+      const p = new Vector(5, 7);
+      const result = identity.applyToVector(p);
       expect(result.x).toBe(5);
       expect(result.y).toBe(7);
     });
@@ -918,26 +918,26 @@ describe("Matrix Class", () => {
     test("应能正确处理旋转矩阵", () => {
       // 90度旋转矩阵: [[0, -1], [1, 0]]
       const m = new Matrix(0, 1, -1, 0);
-      const p = new Point(1, 0);
-      const result = m.applyToPoint(p);
+      const p = new Vector(1, 0);
+      const result = m.applyToVector(p);
       expect(result.x).toBeCloseTo(0);
       expect(result.y).toBeCloseTo(1);
     });
 
     test("应修改原始点", () => {
       const m = new Matrix(2, 0, 0, 3);
-      const p = new Point(1, 2);
-      m.applyToPoint(p);
+      const p = new Vector(1, 2);
+      m.applyToVector(p);
       expect(p.x).toBe(2);
       expect(p.y).toBe(6);
     });
   });
 });
 
-describe("Matrix and Point", () => {
+describe("Matrix and Vector", () => {
   describe("applyTransform", () => {
     test("应能正确应用矩阵变换", () => {
-      const p = new Point(1, 2);
+      const p = new Vector(1, 2);
       const m = new Matrix(2, 0, 0, 3);
       const result = p.applyTransform(m);
       // [[2, 0], [0, 3]] * [1, 2] = [2 * 1 + 0 * 2, 0 * 1 + 3 * 2] = [2, 6]
@@ -946,7 +946,7 @@ describe("Matrix and Point", () => {
     });
 
     test("单位矩阵应用后点不变", () => {
-      const p = new Point(5, 7);
+      const p = new Vector(5, 7);
       const identity = Matrix.identity();
       const result = p.applyTransform(identity);
       expect(result.x).toBe(5);
@@ -954,7 +954,7 @@ describe("Matrix and Point", () => {
     });
 
     test("应能正确处理缩放变换", () => {
-      const p = new Point(3, 4);
+      const p = new Vector(3, 4);
       const scale = Matrix.identity().scale(2);
       p.applyTransform(scale);
       expect(p.x).toBe(6);
@@ -964,14 +964,14 @@ describe("Matrix and Point", () => {
     test("应能正确处理旋转变换", () => {
       // 90 度旋转矩阵: [[0, -1], [1, 0]]
       const rotate90 = new Matrix(0, 1, -1, 0);
-      const p = new Point(1, 0);
+      const p = new Vector(1, 0);
       p.applyTransform(rotate90);
       expect(p.x).toBeCloseTo(0);
       expect(p.y).toBeCloseTo(1);
     });
 
     test("应能正确处理复合变换", () => {
-      const p = new Point(1, 1);
+      const p = new Vector(1, 1);
       const m1 = new Matrix(2, 0, 0, 2); // 缩放 2 倍
       const m2 = new Matrix(1, 0, 1, 1); // 剪切变换
 
@@ -987,7 +987,7 @@ describe("Matrix and Point", () => {
     });
 
     test("应能正确处理负数", () => {
-      const p = new Point(2, 3);
+      const p = new Vector(2, 3);
       const m = new Matrix(-1, 0, 0, -1);
       p.applyTransform(m);
       expect(p.x).toBe(-2);
@@ -995,11 +995,11 @@ describe("Matrix and Point", () => {
     });
   });
 
-  describe("Point.mulMatrix", () => {
+  describe("Vector.mulMatrix", () => {
     test("不应修改原始点", () => {
-      const p = new Point(1, 2);
+      const p = new Vector(1, 2);
       const m = new Matrix(2, 0, 0, 3);
-      Point.mulMatrix(m, p);
+      Vector.mulMatrix(m, p);
       expect(p.x).toBe(1);
       expect(p.y).toBe(2);
     });

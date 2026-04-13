@@ -8,7 +8,7 @@
  */
 
 import { GraphObject } from "./graph.js";
-import { Matrix, Point } from "../../../utils/math.js";
+import { Matrix, Vector } from "../../../utils/math.js";
 import { Matrix3D } from "../../../utils/math3d.js";
 
 /**

@@ -5,7 +5,7 @@
  */
 
 import { PolygonObject } from "../../objects/graph/polygon.js";
-import { Point } from "../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 import { ObjectModifierTool } from "./obj-modifier.js";
 
 /**
@@ -55,20 +55,20 @@ class PolygonModifierTool extends ObjectModifierTool {
 
   /**
    * 在指定位置创建一个新的多边形对象
-   * @param {Point} point - 多边形对象的位置
+   * @param {Vector} point - 多边形对象的位置
    * @param {number} id - 对象 id
    * @param {number} pageId - 对象所在页的 id
    * @returns {PolygonObject} 创建的多边形对象实例
    * @description 创建新的多边形对象时，初始时只包含一个顶点，后续通过 addPoint 方法添加更多顶点。
    */
   create(point, id, pageId) {
-    this.obj = new PolygonObject(point, id, pageId, [new Point(0, 0)]);
+    this.obj = new PolygonObject(point, id, pageId, [new Vector(0, 0)]);
     return this.obj;
   }
 
   /**
    * 添加一个新的点到多边形对象
-   * @param {Point} point - 添加的点
+   * @param {Vector} point - 添加的点
    */
   addPoint(point) {
     if (!this.obj) return;
@@ -94,7 +94,7 @@ class PolygonModifierTool extends ObjectModifierTool {
   /**
    * 移动多边形对象中的一个点到新位置
    * @param {number} oldPointIndex - 旧点的索引
-   * @param {Point} newPoint - 新点的位置
+   * @param {Vector} newPoint - 新点的位置
    */
   movePoint(oldPointIndex, newPoint) {
     if (!this.obj) return;
@@ -108,7 +108,7 @@ class PolygonModifierTool extends ObjectModifierTool {
   /**
    * 在多边形对象中的指定位置后插入一个新点
    * @param {number} lastPointIndex - 插入点的索引，-1 表示插入到开头
-   * @param {Point} point - 插入的点
+   * @param {Vector} point - 插入的点
    */
   insertPoint(lastPointIndex, point) {
     if (!this.obj) return;

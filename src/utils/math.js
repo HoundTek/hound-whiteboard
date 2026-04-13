@@ -2,35 +2,35 @@
  * @file 二维数学模块
  * @description
  * 提供二维平面上点和矩阵的表示与操作功能，包括:
- * - 二维点 Point
+ * - 二维点 Vector
  * - 2x2 矩阵 Matrix
  * @module math
  * @author Zhou Chenyu
  */
 
 /**
- * 二维点
+ * 二维向量
  * @class
- * @description 表示二维平面上的一个点，包含 X 和 Y 坐标，支持矩阵变换
+ * @description 表示二维的向量，包含 X 和 Y 坐标，支持矩阵变换
  * @author Zhou Chenyu
  */
-class Point {
+class Vector {
   /**
-   * 点的横坐标
+   * 向量的横坐标
    * @type {number}
    */
   x;
 
   /**
-   * 点的纵坐标
+   * 向量的纵坐标
    * @type {number}
    */
   y;
 
   /**
    * @constructor
-   * @param {number} x - 点的横坐标
-   * @param {number} y - 点的纵坐标
+   * @param {number} x - 向量的横坐标
+   * @param {number} y - 向量的纵坐标
    */
   constructor(x, y) {
     this.x = x;
@@ -41,8 +41,8 @@ class Point {
    * 将此对象序列化为普通 JSON 对象
    * @returns {{x: number, y: number}} 包含 x 和 y 坐标的对象
    * @example
-   * const point = new Point(10, 20);
-   * console.log(point.serialize()); // { x: 10, y: 20 }
+   * const vec = new Vector(10, 20);
+   * console.log(vec.serialize()); // { x: 10, y: 20 }
    */
   serialize() {
     return { x: this.x, y: this.y };
@@ -52,8 +52,8 @@ class Point {
    * 将此对象序列化为数组对象
    * @returns {number[]} 包含 x 和 y 坐标的数组
    * @example
-   * const point = new Point(10, 20);
-   * console.log(point.serializeToArray()); // [10, 20]
+   * const vec = new Vector(10, 20);
+   * console.log(vec.serializeToArray()); // [10, 20]
    */
   serializeToArray() {
     return [this.x, this.y];
@@ -63,87 +63,87 @@ class Point {
    * 将此对象序列化为字符串
    * @returns {String}
    * @example
-   * const point = new Point(10, 20);
-   * console.log(point.toString()); // Point(10, 20)
+   * const vec = new Vector(10, 20);
+   * console.log(vec.toString()); // Vector(10, 20)
    */
   toString() {
-    return `Point(${this.x}, ${this.y})`;
+    return `Vector(${this.x}, ${this.y})`;
   }
 
   /**
-   * 将序列化的对象转化为 Point 实例
-   * @param {{x: number, y: number}} point - 包含 x 和 y 坐标的对象
-   * @returns {Point} Point 实例
+   * 将序列化的对象转化为 Vector 实例
+   * @param {{x: number, y: number}} vec - 包含 x 和 y 坐标的对象
+   * @returns {Vector} Vector 实例
    * @static
    * @example
-   * const point = Point.parse({ x: 10, y: 20 }); // Point(10, 20)
+   * const vec = Vector.parse({ x: 10, y: 20 }); // Vector(10, 20)
    */
-  static parse(point) {
-    return new Point(point.x, point.y);
+  static parse(vec) {
+    return new Vector(vec.x, vec.y);
   }
 
   /**
-   * 将序列化成数组的对象转化为 Point 实例
+   * 将序列化成数组的对象转化为 Vector 实例
    * @param {number[]} arr - 一个长度为 2 的数组，分别表示其横坐标和纵坐标
-   * @returns {Point} Point 实例
+   * @returns {Vector} Vector 实例
    * @static
    * @throws {RangeError} 当 `arr` 的长度小于 2 时
    * @example
-   * const point = Point.parseFromArray([10, 20]); // Point(10, 20)
+   * const vec = Vector.parseFromArray([10, 20]); // Vector(10, 20)
    */
   static parseFromArray(arr) {
     if (arr.length < 2) {
       throw new RangeError("Array must have at least 2 elements");
     }
-    return new Point(arr[0], arr[1]);
+    return new Vector(arr[0], arr[1]);
   }
 
   /**
    * 应用变换矩阵
-   * @description 此方法会修改当前点的坐标
+   * @description 此方法会修改当前向量
    * @param {Matrix} matrix - 要应用的变换矩阵
-   * @returns {Point} 返回自己以支持链式调用
+   * @returns {Vector} 返回自己以支持链式调用
    * @example
-   * const point = new Point(1, 0);
+   * const vec = new Vector(1, 0);
    * const rotationMatrix = new Matrix([[0, -1], [1, 0]]); // 90度旋转
-   * point.applyTransform(rotationMatrix); // point 现在是 (0, 1)
+   * vec.applyTransform(rotationMatrix); // vec 现在是 (0, 1)
    */
   applyTransform(matrix) {
-    let p = Point.mulMatrix(matrix, this);
+    let p = Vector.mulMatrix(matrix, this);
     this.x = p.x;
     this.y = p.y;
     return this;
   }
 
   /**
-   * 将矩阵与点相乘
-   * @description 执行矩阵-向量乘法，返回新的 Point 实例而非修改传入点
+   * 将矩阵与向量相乘
+   * @description 执行矩阵-向量乘法，返回新的 Vector 实例而非修改传入向量
    * @param {Matrix} m - 2x2 变换矩阵
-   * @param {Point} p - 要变换的点
-   * @returns {Point} 变换后的新点
+   * @param {Vector} v - 要变换的向量
+   * @returns {Vector} 变换后的新向量
    * @static
    * @example
-   * const point = new Point(1, 0);
+   * const vec = new Vector(1, 0);
    * const rotationMatrix = new Matrix([[0, -1], [1, 0]]); // 90度旋转
-   * console.log(Point.mulMatrix(rotationMatrix, point).toString()); // point 仍是 (1, 0)，但输出 Point(0, 1)
+   * console.log(Vector.mulMatrix(rotationMatrix, vec).toString()); // vec 仍是 (1, 0)，但输出 Vector(0, 1)
    */
-  static mulMatrix(m, p) {
-    return new Point(m.a * p.x + m.c * p.y, m.b * p.x + m.d * p.y);
+  static mulMatrix(m, v) {
+    return new Vector(m.a * v.x + m.c * v.y, m.b * v.x + m.d * v.y);
   }
 
   /**
-   * 判断两点是否在精度范围内相等
-   * @param {Point} a - 第一个点
-   * @param {Point} b - 第二个点
+   * 判断两个向量是否在精度范围内相等
+   * @param {Vector} a - 第一个向量
+   * @param {Vector} b - 第二个向量
    * @param {number} [eps = 1e-10] - 允许的误差范围，留空为 1e-10
-   * @returns {boolean} 如果两个点在误差范围内相等则返回 true，否则返回 false
+   * @returns {boolean} 如果两个向量在误差范围内相等则返回 true，否则返回 false
    * @static
    * @example
-   * const p1 = new Point(1, 2);
-   * const p2 = new Point(1.05, 2);
-   * console.log(Point.nearlyEq(p1, p1)); // true
-   * console.log(Point.nearlyEq(p1, p2, 0.01)); // false
-   * console.log(Point.nearlyEq(p1, p2, 0.1)); // true
+   * const v1 = new Vector(1, 2);
+   * const v2 = new Vector(1.05, 2);
+   * console.log(Vector.nearlyEq(v1, v1)); // true
+   * console.log(Vector.nearlyEq(v1, v2, 0.01)); // false
+   * console.log(Vector.nearlyEq(v1, v2, 0.1)); // true
    */
   static nearlyEq(a, b, eps = 1e-10) {
     return (
@@ -153,86 +153,147 @@ class Point {
   }
 
   /**
-   * 计算两点之间的距离
-   * @param {Point} a - 第一个点
-   * @param {Point} b - 第二个点
-   * @returns {number} 两点之间的距离
+   * 计算两向量相减的模长
+   * @param {Vector} a - 第一个向量
+   * @param {Vector} b - 第二个向量
+   * @returns {number} 两向量相减的模长
    * @static
    * @example
-   * const p1 = new Point(0, 0);
-   * const p2 = new Point(3, 4);
-   * console.log(Point.distanceTo(p1, p2)); // 5
+   * const v1 = new Vector(0, 0);
+   * const v2 = new Vector(3, 4);
+   * console.log(Vector.distanceTo(v1, v2)); // 5
    */
   static distanceTo(a, b) {
-    return Math.sqrt(Point.distanceSq(a, b));
+    return Math.sqrt(Vector.distanceSq(a, b));
   }
 
   /**
-   * 计算两点之间距离的平方
-   * @param {Point} a - 第一个点
-   * @param {Point} b - 第二个点
-   * @returns {number} 两点之间距离的平方
+   * 计算两向量相减的模长的平方
+   * @param {Vector} a - 第一个向量
+   * @param {Vector} b - 第二个向量
+   * @returns {number} 两向量相减的模长的平方
    * @static
    * @example
-   * const p1 = new Point(1, 0)
-   * const p2 = new Point(3, 4)
-   * console.log(Point.distanceSq(p1, p2)); // 20
+   * const v1 = new Vector(1, 0)
+   * const v2 = new Vector(3, 4)
+   * console.log(Vector.distanceSq(v1, v2)); // 20
    */
   static distanceSq(a, b) {
     return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
   }
 
   /**
-   * 克隆该点
-   * @returns {Point} Point 实例
+   * 克隆该向量
+   * @returns {Vector} Vector 实例
    * @example
-   * let p1 = new Point(1, 0);
-   * let p2 = p1.clonePoint();
-   * p2.x = 0;
-   * console.log(p1.toString()); // Point(1, 0)
-   * console.log(p2.toString()); // Point(0, 0)
+   * let v1 = new Vector(1, 0);
+   * let v2 = v1.clone();
+   * v2.x = 0;
+   * console.log(v1.toString()); // Vector(1, 0)
+   * console.log(v2.toString()); // Vector(0, 0)
    */
-  clonePoint() {
-    return new Point(this.x, this.y);
+  clone() {
+    return new Vector(this.x, this.y);
   }
 
   /**
-   * 两点相加
-   * @param {Point} other - 另一个点
-   * @returns {Point} 两点相加的结果
+   * 两向量相加
+   * @param {Vector} other - 另一个向量
+   * @returns {Vector} 两向量相加的结果
    * @example
-   * const p1 = new Point(5, 10);
-   * const p2 = new Point(-2, -3);
-   * console.log(p1.add(p2).toString()) // Point(3, 7)
+   * const v1 = new Vector(5, 10);
+   * const v2 = new Vector(-2, -3);
+   * console.log(v1.add(v2).toString()) // Vector(3, 7)
    */
   add(other) {
-    return new Point(this.x + other.x, this.y + other.y);
+    return new Vector(this.x + other.x, this.y + other.y);
   }
 
   /**
-   * 两点相减
-   * @param {Point} other - 另一个点，被减点
-   * @returns {Point} 两点相减的结果
+   * 两向量相减
+   * @param {Vector} other - 另一个向量，被减向量
+   * @returns {Vector} 两向量相减的结果
    * @example
-   * const p1 = new Point(5, 10);
-   * const p2 = new Point(-2, -3);
-   * console.log(p1.sub(p2).toString()) // Point(7, 13)
+   * const v1 = new Vector(5, 10);
+   * const v2 = new Vector(-2, -3);
+   * console.log(v1.sub(v2).toString()) // Vector(7, 13)
    */
   sub(other) {
-    return new Point(this.x - other.x, this.y - other.y);
+    return new Vector(this.x - other.x, this.y - other.y);
   }
 
   /**
-   * 两点相点乘
-   * @param {Point} other - 另一个点
-   * @returns {number} 两点相点乘的结果
+   * 两向量点乘
+   * @param {Vector} other - 另一个向量
+   * @returns {number} 两向量点乘的结果
    * @example
-   * const p1 = new Point(5, 10);
-   * const p2 = new Point(-2, -3);
-   * console.log(p1.dotMul(p2)) // -40
+   * const v1 = new Vector(5, 10);
+   * const v2 = new Vector(-2, -3);
+   * console.log(v1.dotMul(v2)) // -40
    */
   dotMul(other) {
     return this.x * other.x + this.y * other.y;
+  }
+
+  /**
+   * 计算向量的模长
+   * @returns {number} 向量的模长
+   * @example
+   * const vec = new Vector(3, 4);
+   * console.log(vec.length()); // 5
+   */
+  length() {
+    return Math.sqrt(this.lengthSq());
+  }
+
+  /**
+   * 计算向量的模长的平方
+   * @returns {number} 向量的模长的平方
+   * @example
+   * const vec = new Vector(3, 4);
+   * console.log(vec.lengthSq()); // 25
+   */
+  lengthSq() {
+    return this.x * this.x + this.y * this.y;
+  }
+
+  /**
+   * 缩放向量（向量数乘）
+   * @param {number} factor - 缩放因子（数乘的倍数）
+   * @returns {Vector} 缩放（数乘）后的向量
+   * @example
+   * const vec = new Vector(3, 4);
+   * console.log(vec.scale(2).toString()); // Vector(6, 8)
+   */
+  scale(factor) {
+    return new Vector(this.x * factor, this.y * factor);
+  }
+
+  /**
+   * 旋转向量
+   * @param {number} radian - 旋转角度（弧度制）
+   * @returns {Vector} 旋转后的向量
+   * @example
+   * const vec = new Vector(1, 0);
+   * console.log(vec.rotate(Math.PI / 2).toString()); // Vector(0, 1)
+   */
+  rotate(radian) {
+    return Matrix.identity().rotate(radian).mulVector(this);
+  }
+
+  /**
+   * 将向量归一化为单位向量
+   * @returns {Vector} 归一化后的单位向量
+   * @example
+   * const vec = new Vector(3, 4);
+   * console.log(vec.normalize().toString()); // Vector(0.6, 0.8)
+   */
+  normalize() {
+    const len = this.length();
+    if (len === 0) {
+      return new Vector(0, 0);
+    }
+    return this.clone().scale(1 / len);
   }
 }
 
@@ -365,12 +426,12 @@ class Matrix {
    * @returns {Matrix} Matrix 实例
    * @example
    * let m1 = new Matrix(1, 0, 0, 1);
-   * let m2 = m1.clonePoint();
+   * let m2 = m1.clone();
    * m1.a = 0;
    * console.log(m1.toString()); // Matrix[[0, 0], [0, 1]]
    * console.log(m2.toString()); // Matrix[[1, 0], [0, 1]]
    */
-  cloneMatrix() {
+  clone() {
     return new Matrix(this.a, this.b, this.c, this.d);
   }
 
@@ -426,16 +487,16 @@ class Matrix {
   /**
    * 将该变换矩阵应用到某点
    * @description 此方法会修改传入点的坐标
-   * @param {Point} point - 要应用该矩阵的点
-   * @returns {Point} 返回传入点以支持链式调用
+   * @param {Vector} point - 要应用该矩阵的点
+   * @returns {Vector} 返回传入点以支持链式调用
    * @example
    * const m = new Matrix(2, 0, 0, 3);
-   * const p = new Point(1, 2);
-   * const r = m.applyToPoint(p);
-   * console.log(p.toString()); // Point(2, 6)
-   * console.log(r.toString()); // Point(2, 6)
+   * const v = new Vector(1, 2);
+   * const r = m.applyToVector(v);
+   * console.log(v.toString()); // Vector(2, 6)
+   * console.log(r.toString()); // Vector(2, 6)
    */
-  applyToPoint(point) {
+  applyToVector(point) {
     return point.applyTransform(this);
   }
 
@@ -453,7 +514,7 @@ class Matrix {
       this.a + other.a,
       this.b + other.b,
       this.c + other.c,
-      this.d + other.d
+      this.d + other.d,
     );
   }
 
@@ -471,42 +532,56 @@ class Matrix {
       this.a - other.a,
       this.b - other.b,
       this.c - other.c,
-      this.d - other.d
+      this.d - other.d,
     );
   }
 
   /**
-   * 两矩阵相乘
+   * 矩阵-矩阵相乘
    * @param {Matrix} other - 另一个矩阵
-   * @returns {Matrix} 两矩阵相乘的结果
+   * @returns {Matrix} 相乘的结果
    * @example
    * const m1 = new Matrix(1, 2, 3, 4);
    * const m2 = new Matrix(5, 6, 7, 8);
-   * console.log(p1.mul(p2).toString()) // Matrix[[23, 31], [34, 46]]
+   * const vec = new Vector(1, 2);
+   * console.log(m1.mul(m2).toString()) // Matrix[[23, 31], [34, 46]]
    */
   mul(other) {
     return new Matrix(
       this.a * other.a + this.c * other.b,
       this.b * other.a + this.d * other.b,
       this.a * other.c + this.c * other.d,
-      this.b * other.c + this.d * other.d
+      this.b * other.c + this.d * other.d,
     );
   }
 
   /**
+   * 矩阵-向量相乘
+   * @param {Vector} vec - 要相乘的向量
+   * @returns {Vector} 相乘的结果
+   * @example
+   * const m = new Matrix(1, 2, 3, 4);
+   * const v = new Vector(1, 2);
+   * console.log(m.mulVector(v).toString()) // Vector(5, 11)
+   */
+  mulVector(vec) {
+    return Vector.mulMatrix(this, vec);
+  }
+
+  /**
    * 矩阵缩放（数乘）
-   * @param {number} scale - 要放大的倍数
+   * @param {number} factor - 缩放因子（数乘的倍数）
    * @returns {Matrix} 矩阵缩放的结果
    * @example
    * const m1 = new Matrix(1, 2, 3, 4);
    * console.log(p1.scale(2).toString()) // Matrix[[2, 6], [4, 8]]
    */
-  scale(scale) {
+  scale(factor) {
     return new Matrix(
-      this.a * scale,
-      this.b * scale,
-      this.c * scale,
-      this.d * scale
+      this.a * factor,
+      this.b * factor,
+      this.c * factor,
+      this.d * factor,
     );
   }
 
@@ -524,8 +599,8 @@ class Matrix {
         Math.cos(radian),
         Math.sin(radian),
         -Math.sin(radian),
-        Math.cos(radian)
-      )
+        Math.cos(radian),
+      ),
     );
   }
 
@@ -577,9 +652,46 @@ class Matrix {
       Math.abs(a.d - b.d) <= Math.abs(eps)
     );
   }
+
+  /**
+   * 奇异值分解（SVD）
+   * @returns {{u: Matrix, s: Matrix, v: Matrix}} 包含 U、S、V 矩阵的对象
+   * @example
+   * const mat = new Matrix(1, 2, 3, 4);
+   * const { u, s, v } = mat.svd();
+   * console.log(u.toString()); // Matrix[[0.4045, -0.9145], [0.9145, 0.4045]]
+   * console.log(s.toString()); // Matrix[[5.4649, 0], [0, 0.3659]]
+   * console.log(v.toString()); // Matrix[[0.5760, 0.8174], [0.8174, -0.5760]]
+   */
+  svd() {
+    // 由于这是一个 2x2 矩阵，我们可以直接使用特征值分解来计算 SVD
+    const ATA = new Matrix(
+      this.a * this.a + this.b * this.b,
+      this.a * this.c + this.b * this.d,
+      this.a * this.c + this.b * this.d,
+      this.c * this.c + this.d * this.d,
+    );
+    const { U: v, S: s } = ATA.eig();
+    const S = new Matrix(Math.sqrt(s.a), 0, 0, Math.sqrt(s.d));
+    const U = new Matrix(
+      (this.a * v.a + this.c * v.c) / S.a,
+      (this.b * v.a + this.d * v.c) / S.a,
+      (this.a * v.b + this.c * v.d) / S.d,
+      (this.b * v.b + this.d * v.d) / S.d,
+    );
+    return { u: U, s: S, v: v };
+  }
+
+  /**
+   * 矩阵转置
+   * @returns {Matrix} 矩阵转置的结果
+   * @example
+   * const m1 = new Matrix(1, 2, 3, 4);
+   * console.log(m1.transpose().toString()) // Matrix[[1, 3], [2, 4]]
+   */
+  transpose() {
+    return new Matrix(this.a, this.c, this.b, this.d);
+  }
 }
 
-export {
-  Point,
-  Matrix,
-};
+export { Vector, Matrix };

@@ -1,23 +1,23 @@
-import { Point3D, Matrix3D } from "../math3d.js";
+import { Vector3D, Matrix3D } from "../math3d.js";
 
-describe("Point3D Class", () => {
+describe("Vector3D Class", () => {
   describe("构造函数", () => {
     test("应能正确创建点", () => {
-      const p = new Point3D(3, 4, 5);
+      const p = new Vector3D(3, 4, 5);
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
       expect(p.z).toBe(5);
     });
 
     test("应该接受负数", () => {
-      const p = new Point3D(-5, -10, -15);
+      const p = new Vector3D(-5, -10, -15);
       expect(p.x).toBe(-5);
       expect(p.y).toBe(-10);
       expect(p.z).toBe(-15);
     });
 
     test("应该接受小数", () => {
-      const p = new Point3D(3.5, 4.2, 5.1);
+      const p = new Vector3D(3.5, 4.2, 5.1);
       expect(p.x).toBe(3.5);
       expect(p.y).toBe(4.2);
       expect(p.z).toBe(5.1);
@@ -26,13 +26,13 @@ describe("Point3D Class", () => {
 
   describe("serialize", () => {
     test("应能返回正确的 JSON 对象", () => {
-      const p = new Point3D(3, 4, 5);
+      const p = new Vector3D(3, 4, 5);
       const json = p.serialize();
       expect(json).toEqual({ x: 3, y: 4, z: 5 });
     });
 
     test("应能返回独立的对象", () => {
-      const p = new Point3D(5, 10, 15);
+      const p = new Vector3D(5, 10, 15);
       const json = p.serialize();
       json.x = 100;
       expect(p.x).toBe(5); // 原点不应被修改
@@ -41,7 +41,7 @@ describe("Point3D Class", () => {
 
   describe("serializeToArray", () => {
     test("应能返回正确的数组", () => {
-      const p = new Point3D(3, 4, 5);
+      const p = new Vector3D(3, 4, 5);
       const arr = p.serializeToArray();
       expect(arr).toEqual([3, 4, 5]);
     });
@@ -49,60 +49,60 @@ describe("Point3D Class", () => {
 
   describe("toString", () => {
     test("应能返回正确的字符串表示", () => {
-      const p = new Point3D(3, 4, 5);
-      expect(p.toString()).toBe("Point3D(3, 4, 5)");
+      const p = new Vector3D(3, 4, 5);
+      expect(p.toString()).toBe("Vector3D(3, 4, 5)");
     });
   });
 
-  describe("Point3D.parse", () => {
+  describe("Vector3D.parse", () => {
     test("应能从 JSON 对象创建点", () => {
-      const p = Point3D.parse({ x: 3, y: 4, z: 5 });
+      const p = Vector3D.parse({ x: 3, y: 4, z: 5 });
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
       expect(p.z).toBe(5);
     });
   });
 
-  describe("Point3D.parseFromArray", () => {
+  describe("Vector3D.parseFromArray", () => {
     test("应能从数组创建点", () => {
-      const p = Point3D.parseFromArray([3, 4, 5]);
+      const p = Vector3D.parseFromArray([3, 4, 5]);
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
       expect(p.z).toBe(5);
     });
 
     test("应该在数组长度不足时抛出错误", () => {
-      expect(() => Point3D.parseFromArray([1, 2])).toThrow();
+      expect(() => Vector3D.parseFromArray([1, 2])).toThrow();
     });
   });
 
   describe("distanceTo", () => {
     test("应能正确计算距离", () => {
-      const p1 = new Point3D(0, 0, 0);
-      const p2 = new Point3D(1, 2, 2);
-      expect(Point3D.distanceTo(p1, p2)).toBe(3); // sqrt(1+4+4) = 3
+      const p1 = new Vector3D(0, 0, 0);
+      const p2 = new Vector3D(1, 2, 2);
+      expect(Vector3D.distanceTo(p1, p2)).toBe(3); // sqrt(1+4+4) = 3
     });
 
     test("distanceSq 应能正确计算距离的平方", () => {
-      const p1 = new Point3D(0, 0, 0);
-      const p2 = new Point3D(1, 2, 2);
-      expect(Point3D.distanceSq(p1, p2)).toBe(9);
+      const p1 = new Vector3D(0, 0, 0);
+      const p2 = new Vector3D(1, 2, 2);
+      expect(Vector3D.distanceSq(p1, p2)).toBe(9);
     });
   });
 
   describe("nearlyEq", () => {
     test("应能正确判断两点是否在精度范围内相等", () => {
-      const p1 = new Point3D(5, 10, 15);
-      const p2 = new Point3D(5.0001, 10, 15);
-      expect(Point3D.nearlyEq(p1, p2, 0.0001)).toBe(true);
-      expect(Point3D.nearlyEq(p1, p2, 0.00005)).toBe(false);
+      const p1 = new Vector3D(5, 10, 15);
+      const p2 = new Vector3D(5.0001, 10, 15);
+      expect(Vector3D.nearlyEq(p1, p2, 0.0001)).toBe(true);
+      expect(Vector3D.nearlyEq(p1, p2, 0.00005)).toBe(false);
     });
   });
 
-  describe("clonePoint", () => {
+  describe("clone", () => {
     test("应能创建独立的副本", () => {
-      const p1 = new Point3D(1, 2, 3);
-      const p2 = p1.clonePoint();
+      const p1 = new Vector3D(1, 2, 3);
+      const p2 = p1.clone();
 
       expect(p2.x).toBe(1);
       expect(p2.y).toBe(2);
@@ -116,8 +116,8 @@ describe("Point3D Class", () => {
 
   describe("add", () => {
     test("应能正确计算两点之和", () => {
-      const p1 = new Point3D(1, 2, 3);
-      const p2 = new Point3D(4, 5, 6);
+      const p1 = new Vector3D(1, 2, 3);
+      const p2 = new Vector3D(4, 5, 6);
       const p3 = p1.add(p2);
       expect(p3.x).toBe(5);
       expect(p3.y).toBe(7);
@@ -127,8 +127,8 @@ describe("Point3D Class", () => {
 
   describe("sub", () => {
     test("应能正确计算两点之差", () => {
-      const p1 = new Point3D(4, 5, 6);
-      const p2 = new Point3D(1, 2, 3);
+      const p1 = new Vector3D(4, 5, 6);
+      const p2 = new Vector3D(1, 2, 3);
       const p3 = p1.sub(p2);
       expect(p3.x).toBe(3);
       expect(p3.y).toBe(3);
@@ -138,8 +138,8 @@ describe("Point3D Class", () => {
 
   describe("dotMul", () => {
     test("应能正确计算点乘", () => {
-      const p1 = new Point3D(1, 2, 3);
-      const p2 = new Point3D(4, 5, 6);
+      const p1 = new Vector3D(1, 2, 3);
+      const p2 = new Vector3D(4, 5, 6);
       // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
       expect(p1.dotMul(p2)).toBe(32);
     });
@@ -147,8 +147,8 @@ describe("Point3D Class", () => {
 
   describe("crossMul", () => {
     test("应能正确计算叉乘", () => {
-      const p1 = new Point3D(1, 0, 0);
-      const p2 = new Point3D(0, 1, 0);
+      const p1 = new Vector3D(1, 0, 0);
+      const p2 = new Vector3D(0, 1, 0);
       const p3 = p1.crossMul(p2);
       // i x j = k
       expect(p3.x).toBe(0);
@@ -157,8 +157,8 @@ describe("Point3D Class", () => {
     });
 
     test("反向叉乘应得到相反向量", () => {
-      const p1 = new Point3D(1, 0, 0);
-      const p2 = new Point3D(0, 1, 0);
+      const p1 = new Vector3D(1, 0, 0);
+      const p2 = new Vector3D(0, 1, 0);
       const p3 = p2.crossMul(p1);
       // j x i = -k
       expect(p3.x).toBe(0);
@@ -218,10 +218,10 @@ describe("Matrix3D Class", () => {
     });
   });
 
-  describe("cloneMatrix", () => {
+  describe("clone", () => {
     test("应该创建独立的副本", () => {
       const m1 = new Matrix3D(1, 2, 3, 4, 5, 6, 7, 8, 9);
-      const m2 = m1.cloneMatrix();
+      const m2 = m1.clone();
 
       expect(m2.a11).toBe(1);
       m2.a11 = 10;
@@ -385,11 +385,11 @@ describe("Matrix3D Class", () => {
     });
   });
 
-  describe("applyToPoint", () => {
+  describe("applyToVector", () => {
     test("应能正确将矩阵应用到点上", () => {
       const m = Matrix3D.identity();
-      const p = new Point3D(1, 2, 3);
-      const result = m.applyToPoint(p);
+      const p = new Vector3D(1, 2, 3);
+      const result = m.applyToVector(p);
       expect(result.x).toBe(1);
       expect(result.y).toBe(2);
       expect(result.z).toBe(3);
@@ -397,8 +397,8 @@ describe("Matrix3D Class", () => {
 
     test("应修改原始点", () => {
       const m = Matrix3D.identity().scale(2);
-      const p = new Point3D(1, 1, 1);
-      m.applyToPoint(p);
+      const p = new Vector3D(1, 1, 1);
+      m.applyToVector(p);
       expect(p.x).toBe(2);
       expect(p.y).toBe(2);
       expect(p.z).toBe(2);
@@ -406,10 +406,10 @@ describe("Matrix3D Class", () => {
   });
 });
 
-describe("Matrix3D and Point3D", () => {
+describe("Matrix3D and Vector3D", () => {
   describe("applyTransform", () => {
     test("应能正确应用矩阵变换", () => {
-      const p = new Point3D(1, 2, 3);
+      const p = new Vector3D(1, 2, 3);
       const m = Matrix3D.identity().scale(2);
       p.applyTransform(m);
       expect(p.x).toBe(2);
@@ -418,11 +418,11 @@ describe("Matrix3D and Point3D", () => {
     });
   });
 
-  describe("Point3D.mulMatrix", () => {
+  describe("Vector3D.mulMatrix", () => {
     test("不应修改原始点", () => {
-      const p = new Point3D(1, 2, 3);
+      const p = new Vector3D(1, 2, 3);
       const m = Matrix3D.identity().scale(2);
-      const p2 = Point3D.mulMatrix(m, p);
+      const p2 = Vector3D.mulMatrix(m, p);
       
       expect(p.x).toBe(1);
       expect(p2.x).toBe(2);

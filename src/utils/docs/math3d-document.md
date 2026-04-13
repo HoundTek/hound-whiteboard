@@ -4,14 +4,14 @@
 
 ## 模块职责
 
-`math3d.js` 提供三维点与三维矩阵的基础数学能力，主要面向未来 3D 图形对象或三维变换扩展。
+`math3d.js` 提供三维向量与三维矩阵的基础数学能力，主要面向未来 3D 图形对象或三维变换扩展。
 
 核心类型为：
 
-- `Point3D`
+- `Vector3D`
 - `Matrix3D`
 
-## Point3D
+## Vector3D
 
 ### 字段
 
@@ -24,7 +24,7 @@
 ### 主要能力
 
 - 序列化、反序列化
-- 三维点加减、点乘、叉乘
+- 三维向量加减、点乘、叉乘
 - 距离与距离平方
 - 通过 `Matrix3D` 进行变换
 - 近似相等判断
@@ -35,18 +35,18 @@
 |:--|:--|:--|
 | `serialize()` | 序列化为对象 | `void -> Object` |
 | `serializeToArray()` | 序列化为数组 | `void -> number[]` |
-| `applyTransform(matrix)` | 原地应用矩阵变换 | `Matrix3D -> Point3D` |
-| `clonePoint()` | 克隆点 | `void -> Point3D` |
-| `add(other)` | 点加法 | `Point3D -> Point3D` |
-| `sub(other)` | 点减法 | `Point3D -> Point3D` |
-| `dotMul(other)` | 点乘 | `Point3D -> number` |
-| `crossMul(other)` | 叉乘 | `Point3D -> Point3D` |
-| `Point3D.parse(obj)` | 从对象构造点 | `Object -> Point3D` |
-| `Point3D.parseFromArray(arr)` | 从数组构造点 | `number[] -> Point3D` |
-| `Point3D.mulMatrix(m, p)` | 计算矩阵与点乘积 | `Matrix3D -> Point3D -> Point3D` |
-| `Point3D.nearlyEq(a, b, eps)` | 判断两点近似相等 | `Point3D -> Point3D -> number -> boolean` |
-| `Point3D.distanceTo(a, b)` | 计算距离 | `Point3D -> Point3D -> number` |
-| `Point3D.distanceSq(a, b)` | 计算距离平方 | `Point3D -> Point3D -> number` |
+| `applyTransform(matrix)` | 原地应用矩阵变换 | `Matrix3D -> Vector3D` |
+| `clonePoint()` | 克隆点 | `void -> Vector3D` |
+| `add(other)` | 向量加法 | `Vector3D -> Vector3D` |
+| `sub(other)` | 向量减法 | `Vector3D -> Vector3D` |
+| `dotMul(other)` | 向量点乘 | `Vector3D -> number` |
+| `crossMul(other)` | 向量叉乘 | `Vector3D -> Vector3D` |
+| `Vector3D.parse(obj)` | 从对象构造向量 | `Object -> Vector3D` |
+| `Vector3D.parseFromArray(arr)` | 从数组构造向量 | `number[] -> Vector3D` |
+| `Vector3D.mulMatrix(m, p)` | 计算矩阵与向量乘积 | `Matrix3D -> Vector3D -> Vector3D` |
+| `Vector3D.nearlyEq(a, b, eps)` | 判断两向量近似相等 | `Vector3D -> Vector3D -> number -> boolean` |
+| `Vector3D.distanceTo(a, b)` | 计算差的模长 | `Vector3D -> Vector3D -> number` |
+| `Vector3D.distanceSq(a, b)` | 计算差的模长的平方 | `Vector3D -> Vector3D -> number` |
 
 ## Matrix3D
 
@@ -79,7 +79,7 @@ $$
 | `cloneMatrix()` | 克隆矩阵 | `void -> Matrix3D` |
 | `get(x, y)` | 读取矩阵元素 | `number -> number -> number` |
 | `getFromArr(arr)` | 用数组读取矩阵元素 | `number[] -> number` |
-| `applyToPoint(point)` | 对三维点应用矩阵 | `Point3D -> Point3D` |
+| `applyToVector(point)` | 对三维点应用矩阵 | `Vector3D -> Vector3D` |
 | `add(other)` | 矩阵加法 | `Matrix3D -> Matrix3D` |
 | `sub(other)` | 矩阵减法 | `Matrix3D -> Matrix3D` |
 | `mul(other)` | 矩阵乘法 | `Matrix3D -> Matrix3D` |

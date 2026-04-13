@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Point } from "../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 import { Controller } from "./controller.js";
 
 /**

@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Matrix, Point } from "../../utils/math.js";
+import { Matrix, Vector } from "../../utils/math.js";
 
 /**
  * 矩形范围类
@@ -48,10 +48,10 @@ class RectangleRange {
    * @returns {RectangleRange} 变换后的矩形范围
    */
   mulMatrix(matrix) {
-    const topLeft = Point.mulMatrix(matrix, { x: this.minX, y: this.minY });
-    const topRight = Point.mulMatrix(matrix, { x: this.maxX, y: this.minY });
-    const bottomLeft = Point.mulMatrix(matrix, { x: this.minX, y: this.maxY });
-    const bottomRight = Point.mulMatrix(matrix, { x: this.maxX, y: this.maxY });
+    const topLeft = Vector.mulMatrix(matrix, { x: this.minX, y: this.minY });
+    const topRight = Vector.mulMatrix(matrix, { x: this.maxX, y: this.minY });
+    const bottomLeft = Vector.mulMatrix(matrix, { x: this.minX, y: this.maxY });
+    const bottomRight = Vector.mulMatrix(matrix, { x: this.maxX, y: this.maxY });
     return RectangleRange.calculate([
       topLeft,
       topRight,
@@ -62,7 +62,7 @@ class RectangleRange {
 
   /**
    * 计算一组点的矩形范围
-   * @param {Point[]} points - 要计算范围的点集
+   * @param {Vector[]} points - 要计算范围的点集
    * @returns {RectangleRange} 矩形范围
    */
   static calculate(points) {

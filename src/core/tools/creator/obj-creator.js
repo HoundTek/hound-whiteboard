@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Point } from "../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { Controller } from "../controller/controller.js";
 import { Tool } from "../tool.js";
@@ -64,7 +64,7 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 创建新的对象实例
-   * @param {Point} position - 新对象的位置
+   * @param {Vector} position - 新对象的位置
    * @param {number} id - 新对象的 id
    * @param {number} pageId - 新对象所在的页 id
    * @description 在用户使用该工具创建新对象（而不是编辑正在创建的对象）时调用此方法以生成新的对象实例

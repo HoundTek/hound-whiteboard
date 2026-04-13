@@ -1,11 +1,11 @@
-import { Point } from "../../utils/math.js";
+import { Vector } from "../../utils/math.js";
 
 /**
  * 计算点集的凸包
  * @description
  * 使用 Graham 扫描算法计算给定点集的凸包。
- * @param {Point[]} points
- * @returns {Point[]}
+ * @param {Vector[]} points
+ * @returns {Vector[]}
  */
 function calculateConvexHull(points) {
   if (!points || points.length < 3) {
@@ -51,9 +51,9 @@ function calculateConvexHull(points) {
 /**
  * 在一个曲线里插点
  *
- * @param {Point[]} points - 要往里插点的曲线
+ * @param {Vector[]} points - 要往里插点的曲线
  * @param {number} [countInside=1] - 要往两点间插几个点
- * @returns {Point[]} 插点后的新曲线
+ * @returns {Vector[]} 插点后的新曲线
  * @description
  * 这个函数的目的是在给定的点集（通常是一个多边形或曲线）之间插入新的点，以使曲线更平滑。
  * 插入的点是通过 Catmull-Rom Spline 插值计算得出的，这是一种常用的平滑插值方法，可以生成自然的曲线。
@@ -89,7 +89,7 @@ function insertPoints(points, countInside = 1) {
           (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t * t +
           (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t * t * t);
 
-      result.push(new Point(x, y));
+      result.push(new Vector(x, y));
     }
     result.push(p2);
   }
@@ -102,8 +102,8 @@ function insertPoints(points, countInside = 1) {
  * 这个函数用于判断在一个闭合的曲线（绳子）中，某个点（钉子）被缠绕了多少圈。
  * 如果点在曲线的顶点上或边界上，则返回 NaN，表示无法确定缠绕情况。
  * 顺时针缠绕计数为正，逆时针缠绕计数为负。
- * @param {Point[]} rope - 绳子
- * @param {Point} nail - 钉子
+ * @param {Vector[]} rope - 绳子
+ * @param {Vector} nail - 钉子
  */
 function ropeNailIntersect(rope, nail) {
   function check(first, second) {

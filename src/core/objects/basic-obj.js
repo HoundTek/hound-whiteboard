@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Matrix, Point } from "../../utils/math.js";
+import { Matrix, Vector } from "../../utils/math.js";
 import { RectangleRange } from "../range/rectangle.js";
 
 /**
@@ -32,7 +32,7 @@ class BasicObject {
 
   /**
    * 对象的位置
-   * @type {Point}
+   * @type {Vector}
    * @description 对象在画布上的位置坐标。
    */
   position;
@@ -70,7 +70,7 @@ class BasicObject {
 
   /**
    * 对象的凸包
-   * @type {Point[]}
+   * @type {Vector[]}
    * @description 用于更迅速的碰撞检测，存储凸包的顶点坐标。
    */
   convexHull;
@@ -90,7 +90,7 @@ class BasicObject {
 
   /**
    * 判断某点是否在对象内
-   * @param {Point} p - 要检测的点
+   * @param {Vector} p - 要检测的点
    * @returns {boolean} 点是否在对象内
    * @description 基类使用矩形边界进行检测，子类可重写此方法以实现更精确的检测逻辑。
    */
@@ -123,7 +123,7 @@ class BasicObject {
 
   /**
    * 创建一个新的基础对象
-   * @param {Point} p - 对象的初始位置
+   * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
    * @param {number} pageId - 对象所在页的 id
    * @constructor

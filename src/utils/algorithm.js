@@ -7,6 +7,7 @@
  */
 
 import { randomInt } from "crypto";
+import { Matrix, Vector } from "./math.js";
 
 /**
  * 不重复的随机数池
@@ -155,153 +156,105 @@ class RandomNumberPool {
 /**
  * 获取二指操作的变换矩阵
  *
- * @bug 这个算法其实有点问题，计算 a b c d 是对的，但是 e 和 f 是错的
- *
- * @param {number} x1 原始点一的横坐标
- * @param {number} y1 原始点一的纵坐标
- * @param {number} x2 原始点二的横坐标
- * @param {number} y2 原始点二的纵坐标
- * @param {number} x1q 变换后的点一的横坐标
- * @param {number} y1q 变换后的点一的纵坐标
- * @param {number} x2q 变换后的点二的横坐标
- * @param {number} y2q 变换后的点二的纵坐标
- * @param {number} aq 原矩阵的 a
- * @param {number} bq 原矩阵的 b
- * @param {number} cq 原矩阵的 c
- * @param {number} dq 原矩阵的 d
- * @param {number} eq 原矩阵的 e
- * @param {number} fq 原矩阵的 f
- * @returns {Object} a, b, c, d, e, f, 为 ctx.transform() 的参数
+ * @param {Vector} originPoint1 - 原始点一
+ * @param {Vector} originPoint2 - 原始点二
+ * @param {Vector} transformedPoint1 - 变换后的点一
+ * @param {Vector} transformedPoint2 - 变换后的点二
+ * @param {Vector} originCenter - 一开始的变换中心点
+ * @returns {{mat: Matrix, vec: Vector}} mat 是旋转缩放矩阵，vec 是平移向量
+ * @description 通过两个点的变换来计算出一个仿射变换矩阵，适用于双指操作的情况。
+ * 该函数假设变换是由旋转、缩放和平移组成的（两基垂直），并且两个点之间的相对位置关系保持不变。
  */
 function getDualFingerResult(
-  x1,
-  y1,
-  x2,
-  y2,
-  x1q,
-  y1q,
-  x2q,
-  y2q,
-  aq,
-  bq,
-  cq,
-  dq,
-  eq,
-  fq
+  originPoint1,
+  originPoint2,
+  transformedPoint1,
+  transformedPoint2,
+  originCenter,
 ) {
-  // 计算矩阵 A = [[a c][b d]] 使 A * [[x1 - x2][y1 - y2]] = [[x1q - x2q][y1q - y2q]]
-  let delta = (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
-  let a = ((x1 - x2) * (x1q - x2q) + (y1 - y2) * (y1q - y2q)) / delta;
-  let b = ((x1 - x2) * (y1q - y2q) - (y1 - y2) * (x1q - x2q)) / delta;
-  let c = -b;
-  let d = a;
-  // [[ap cp][bp dp]] 是对其中单个向量而言的变换矩阵
-  let deltap = aq * dq - bq * cq;
-  let ap = (dq * (aq * a + cq * b) - bq * (aq * c + cq * d)) / deltap;
-  let bp = (dq * (bq * a + dq * b) - bq * (bq * c + dq * d)) / deltap;
-  let cp = (aq * (aq * c + cq * d) - cq * (aq * a + cq * b)) / deltap;
-  let dp = (aq * (bq * c + dq * d) - cq * (bq * a + dq * b)) / deltap;
-  // [[x2][y2]] 仅经过缩放和旋转时所得到的点为 [[x2p][y2p]]
-  let x2p = ap * (x2 - eq) + cp * (y2 - fq) + eq;
-  let y2p = bp * (x2 - eq) + dp * (y2 - fq) + fq;
-  // dx 和 dy 是相对于屏幕的绝对坐标系而言的
-  let dx = x2q - x2p;
-  let dy = y2q - y2p;
-  // e 和 f 是相对于上一个变换的坐标系而言的
-  let e = (dq * dx - cq * dy) / (dq * aq - cq * bq);
-  let f = (bq * dx - aq * dy) / (bq * cq - aq * dq);
-  // 返回矩阵 [[a c e][b d f][0 0 1]] 中的 a, b, c, d, e, f
-  return {
-    a: a,
-    b: b,
-    c: c,
-    d: d,
-    e: e,
-    f: f,
-  };
+  const oVec = originPoint1.sub(originPoint2);
+  const tVec = transformedPoint1.sub(transformedPoint2);
+  const oDist = oVec.length();
+  const tDist = tVec.length();
+  if (oDist === 0 || tDist === 0) {
+    return { mat: Matrix.identity(), vec: transformedPoint1.sub(originPoint1) };
+  }
+  const scale = tDist / oDist;
+  const angle = Math.atan2(tVec.y, tVec.x) - Math.atan2(oVec.y, oVec.x);
+  const mat = Matrix.identity().rotate(angle).scale(scale);
+  const vec = transformedPoint1
+    .sub(mat.multiply(originPoint1.sub(originCenter)))
+    .sub(originCenter);
+  return { mat, vec };
 }
 
 /**
  * 获取三指操作的变换矩阵
  *
- * @bug 这个算法其实有点问题，计算 a b c d 是对的，但是 e 和 f 是错的
- *
- * @param {number} x1 原始点一的横坐标
- * @param {number} y1 原始点一的纵坐标
- * @param {number} x2 原始点二的横坐标
- * @param {number} y2 原始点二的纵坐标
- * @param {number} x3 原始点三的横坐标
- * @param {number} y3 原始点三的纵坐标
- * @param {number} x1q 变换后的点一的横坐标
- * @param {number} y1q 变换后的点一的纵坐标
- * @param {number} x2q 变换后的点二的横坐标
- * @param {number} y2q 变换后的点二的纵坐标
- * @param {number} x3q 变换后的点三的横坐标
- * @param {number} y3q 变换后的点三的纵坐标
- * @param {number} aq 原矩阵的 a
- * @param {number} bq 原矩阵的 b
- * @param {number} cq 原矩阵的 c
- * @param {number} dq 原矩阵的 d
- * @param {number} eq 原矩阵的 e
- * @param {number} fq 原矩阵的 f
- * @returns {Object} a, b, c, d, e, f, 为 ctx.transform() 的参数
+ * @param {Vector} originPoint1 - 原始点一
+ * @param {Vector} originPoint2 - 原始点二
+ * @param {Vector} originPoint3 - 原始点三
+ * @param {Vector} transformedPoint1 - 变换后的点一
+ * @param {Vector} transformedPoint2 - 变换后的点二
+ * @param {Vector} transformedPoint3 - 变换后的点三
+ * @param {Vector} originCenter - 一开始的变换中心点
+ * @returns {{mat: Matrix, vec: Vector}} mat 是旋转缩放矩阵，vec 是平移向量
+ * @description 通过三个点的变换来计算出一个仿射变换矩阵，适用于三指操作的情况。
+ * 该函数可以处理更复杂的变换，包括非等比缩放和任意旋转。
  */
 function getTriFingerResult(
-  x1,
-  y1,
-  x2,
-  y2,
-  x3,
-  y3,
-  x1q,
-  y1q,
-  x2q,
-  y2q,
-  x3q,
-  y3q,
-  aq,
-  bq,
-  cq,
-  dq,
-  eq,
-  fq
+  originPoint1,
+  originPoint2,
+  originPoint3,
+  transformedPoint1,
+  transformedPoint2,
+  transformedPoint3,
+  originCenter,
 ) {
-  // 计算矩阵 A = [[a c][b d]] 使：
-  // A * [[x1 - x2][y1 - y2]] = [[x1q - x2q][y1q - y2q]]
-  // A * [[x1 - x3][y1 - y3]] = [[x1q - x3q][y1q - y3q]]
-  let delta = (x1 - x2) * (y1 - y3) - (x1 - x3) * (y1 - y2);
-  let a = ((x1q - x2q) * (y1 - y3) - (x1q - x3q) * (y1 - y2)) / delta;
-  let b = ((x1q - x2q) * (x1 - x3) - (x1q - x3q) * (x1 - x2)) / delta;
-  let c = ((y1q - y2q) * (y1 - y3) - (y1q - y3q) * (y1 - y2)) / -delta;
-  let d = ((y1q - y2q) * (x1 - x3) - (y1q - y3q) * (x1 - x2)) / -delta;
-  // [[ap cp][bp dp]] 是对其中单个向量而言的变换矩阵
-  let deltaq = aq * dq - bq * cq;
-  let ap = (dq * (aq * a + cq * b) - bq * (aq * c + cq * d)) / deltaq;
-  let bp = (dq * (bq * a + dq * b) - bq * (bq * c + dq * d)) / deltaq;
-  let cp = (aq * (aq * c + cq * d) - cq * (aq * a + cq * b)) / deltaq;
-  let dp = (aq * (bq * c + dq * d) - cq * (bq * a + dq * b)) / deltaq;
-  // [[x2][y2]] 仅经过缩放和旋转时所得到的点为 [[x2p][y2p]]
-  let x2p = ap * (x2 - eq) + cp * (y2 - fq) + eq;
-  let y2p = bp * (x2 - eq) + dp * (y2 - fq) + fq;
-  // dx 和 dy 是相对于屏幕的绝对坐标系而言的
-  let dx = x2q - x2p;
-  let dy = y2q - y2p;
-  // e 和 f 是相对于上一个变换的坐标系而言的
-  let e = (dq * dx - cq * dy) / (dq * aq - cq * bq);
-  let f = (bq * dx - aq * dy) / (bq * cq - aq * dq);
-  // 返回矩阵 [[a c e][b d f][0 0 1]] 中的 a, b, c, d, e, f
-  return {
-    a: a,
-    b: b,
-    c: c,
-    d: d,
-    e: e,
-    f: f,
-  };
+  // 思路：通过三个点的变换来计算出一个仿射变换矩阵。
+  // 首先计算出原始点和变换后点的质心，然后将点平移到以质心为中心的坐标系中。
+  // 接着计算出原始点和变换后点的协方差矩阵，并通过奇异值分解来得到旋转矩阵。
+  // 最后计算出缩放因子，并组合成最终的仿射变换矩阵。
+  const oCentroid = originPoint1
+    .add(originPoint2)
+    .add(originPoint3)
+    .scale(1 / 3);
+  const tCentroid = transformedPoint1
+    .add(transformedPoint2)
+    .add(transformedPoint3)
+    .scale(1 / 3);
+  const oMat = [
+    originPoint1.sub(oCentroid),
+    originPoint2.sub(oCentroid),
+    originPoint3.sub(oCentroid),
+  ];
+  const tMat = [
+    transformedPoint1.sub(tCentroid),
+    transformedPoint2.sub(tCentroid),
+    transformedPoint3.sub(tCentroid),
+  ];
+  const covMat = [
+    [0, 0],
+    [0, 0],
+  ];
+  for (let i = 0; i < 3; i++) {
+    covMat[0][0] += oMat[i].x * tMat[i].x;
+    covMat[0][1] += oMat[i].x * tMat[i].y;
+    covMat[1][0] += oMat[i].y * tMat[i].x;
+    covMat[1][1] += oMat[i].y * tMat[i].y;
+  }
+  const { u, v } = Matrix.parseFromArray(covMat).svd();
+  const rotMat = v.mul(u.transpose());
+  const oDist = Math.sqrt(
+    oMat.reduce((sum, vec) => sum + vec.x * vec.x + vec.y * vec.y, 0) / 3,
+  );
+  const tDist = Math.sqrt(
+    tMat.reduce((sum, vec) => sum + vec.x * vec.x + vec.y * vec.y, 0) / 3,
+  );
+  const scale = tDist / oDist;
+  const mat = rotMat.scale(scale);
+  const vec = tCentroid.sub(mat.mulVector(oCentroid)).sub(originCenter);
+  return { mat, vec };
 }
 
-export {
-  getDualFingerResult,
-  getTriFingerResult,
-  RandomNumberPool,
-};
+export { RandomNumberPool };

@@ -1,5 +1,5 @@
 import { PolygonObject } from "../polygon.js";
-import { Point, Matrix } from "../../../../utils/math.js";
+import { Vector, Matrix } from "../../../../utils/math.js";
 
 describe("PolygonObject", () => {
   describe("构造与属性修改", () => {
@@ -8,9 +8,9 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
         { x: 0, y: 1 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
 
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
       expect(polygon.points).toEqual(points);
     });
 
@@ -19,15 +19,15 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
         { x: 0, y: 1 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, initialPoints);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
 
       const newPoints = [
         { x: 0, y: 0 },
         { x: 2, y: 0 },
         { x: 0, y: 2 },
         { x: 1, y: 1 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
       polygon.setPoints(newPoints);
 
       expect(polygon.points).toEqual(newPoints);
@@ -38,8 +38,8 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
         { x: 0, y: 1 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
 
       const mat = Matrix.identity().scale(2, 2);
       polygon.setTransform(mat);
@@ -52,13 +52,13 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
         { x: 0, y: 1 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
 
       const mat = Matrix.identity().rotate(Math.PI / 2);
       polygon.setTransform(mat);
       const expectedTransformedPoints = points.map((p) =>
-        Point.mulMatrix(mat, p)
+        Vector.mulMatrix(mat, p)
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
@@ -76,8 +76,8 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
         { x: 0, y: 1 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, initialPoints);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
 
       const mat = Matrix.identity().rotate(Math.PI / 4);
       polygon.setTransform(mat);
@@ -86,16 +86,16 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 2, y: 0 },
         { x: 0, y: 2 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
       polygon.setPoints(newPoints);
 
       const expectedTransformedPoints = newPoints.map((p) =>
-        Point.mulMatrix(mat, p)
+        Vector.mulMatrix(mat, p)
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
         expect(
-          Point.nearlyEq(
+          Vector.nearlyEq(
             polygon.transformedPoints[i],
             expectedTransformedPoints[i]
           )
@@ -110,8 +110,8 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
         { x: 0, y: 1 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, initialPoints);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
 
       const newPoints = [
         { x: 0, y: 0 },
@@ -137,7 +137,7 @@ describe("PolygonObject", () => {
         { x: 1, y: 2 },
         { x: 0, y: 2 },
         { x: 2, y: 1 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
 
       // Powered by Graham scan algorithm
       polygon.setPoints(newPoints);
@@ -151,7 +151,7 @@ describe("PolygonObject", () => {
         { x: 1.7, y: 1.8 },
         { x: 1, y: 2 },
         { x: 0, y: 2 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
 
       expect(polygon.convexHull).toEqual(expectedConvexHull);
     });
@@ -160,13 +160,13 @@ describe("PolygonObject", () => {
       const points = [
         { x: 0, y: 0 },
         { x: 1, y: 0 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
 
       const newPoints = [
         { x: 0, y: 0 },
         { x: 2, y: 0 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
       polygon.setPoints(newPoints);
 
       expect(polygon.points).toEqual(newPoints);
@@ -181,13 +181,13 @@ describe("PolygonObject", () => {
         { x: 4, y: 0 },
         { x: 4, y: 4 },
         { x: 0, y: 4 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
 
-      const insidePoint = Point.parse({ x: 2, y: 2 });
-      const outsidePoint = Point.parse({ x: 5, y: 5 });
-      const edgePoint = Point.parse({ x: 4, y: 2 });
-      const vertexPoint = Point.parse({ x: 0, y: 0 });
+      const insidePoint = Vector.parse({ x: 2, y: 2 });
+      const outsidePoint = Vector.parse({ x: 5, y: 5 });
+      const edgePoint = Vector.parse({ x: 4, y: 2 });
+      const vertexPoint = Vector.parse({ x: 0, y: 0 });
 
       expect(polygon.isPointIntersect(insidePoint)).toBe(true);
       expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
@@ -212,14 +212,14 @@ describe("PolygonObject", () => {
         { x: 0, y: 6 },
         { x: 6, y: 6 },
         { x: 6, y: 0 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
 
       const insidePoints = Array.from({ length: 6 }, (_, i) =>
         Array.from({ length: 6 }, (_, j) => {
           if (i === 0 && j === 0) return null;
           if (i === 1 && j === 0) return null;
-          return Point.parse({ x: i + 0.5, y: j + 0.5 });
+          return Vector.parse({ x: i + 0.5, y: j + 0.5 });
         })
       )
         .flat()
@@ -229,10 +229,10 @@ describe("PolygonObject", () => {
         expect(polygon.isPointIntersect(p)).toBe(true);
       }
 
-      expect(polygon.isPointIntersect(Point.parse({ x: 0.5, y: 0.5 }))).toBe(
+      expect(polygon.isPointIntersect(Vector.parse({ x: 0.5, y: 0.5 }))).toBe(
         false
       );
-      expect(polygon.isPointIntersect(Point.parse({ x: 1.5, y: 0.5 }))).toBe(
+      expect(polygon.isPointIntersect(Vector.parse({ x: 1.5, y: 0.5 }))).toBe(
         false
       );
     });
@@ -243,19 +243,19 @@ describe("PolygonObject", () => {
         { x: 4, y: 0 },
         { x: 4, y: 4 },
         { x: 0, y: 4 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, initialPoints);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
 
       const newPoints = [
         { x: 1, y: 1 },
         { x: 5, y: 1 },
         { x: 5, y: 5 },
         { x: 1, y: 5 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
       polygon.setPoints(newPoints);
 
-      const insidePoint = Point.parse({ x: 3, y: 3 });
-      const outsidePoint = Point.parse({ x: 0, y: 0 });
+      const insidePoint = Vector.parse({ x: 3, y: 3 });
+      const outsidePoint = Vector.parse({ x: 0, y: 0 });
 
       expect(polygon.isPointIntersect(insidePoint)).toBe(true);
       expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
@@ -267,14 +267,14 @@ describe("PolygonObject", () => {
         { x: 4, y: 0 },
         { x: 4, y: 4 },
         { x: 0, y: 4 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(0, 0), 1, 1, points);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
 
       const rotation = Matrix.identity().rotate(Math.PI / 4);
       polygon.setTransform(rotation);
 
-      const insidePoint = Point.parse({ x: -1, y: 1 });
-      const outsidePoint = Point.parse({ x: 5, y: 5 });
+      const insidePoint = Vector.parse({ x: -1, y: 1 });
+      const outsidePoint = Vector.parse({ x: 5, y: 5 });
 
       expect(polygon.isPointIntersect(insidePoint)).toBe(true);
       expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
@@ -286,11 +286,11 @@ describe("PolygonObject", () => {
         { x: 4, y: 0 },
         { x: 4, y: 4 },
         { x: 0, y: 4 },
-      ].map((p) => Point.parse(p));
-      const polygon = new PolygonObject(new Point(10, 10), 1, 1, points);
+      ].map((p) => Vector.parse(p));
+      const polygon = new PolygonObject(new Vector(10, 10), 1, 1, points);
 
-      const insidePoint = Point.parse({ x: 12, y: 12 });
-      const outsidePoint = Point.parse({ x: 5, y: 5 });
+      const insidePoint = Vector.parse({ x: 12, y: 12 });
+      const outsidePoint = Vector.parse({ x: 5, y: 5 });
 
       expect(polygon.isPointIntersect(insidePoint)).toBe(true);
       expect(polygon.isPointIntersect(outsidePoint)).toBe(false);

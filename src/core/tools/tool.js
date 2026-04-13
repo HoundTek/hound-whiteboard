@@ -54,7 +54,7 @@ class Tool {
 
   /**
    * 开始使用工具
-   * @param {Point} point - 工具在开始使用时的位置
+   * @param {Vector} point - 工具在开始使用时的位置
    * @param {Object} option - 选项
    * @description 对应用户开始使用工具的操作，例如用户按下鼠标或触摸屏幕时调用此方法
    * @abstract
@@ -65,7 +65,7 @@ class Tool {
 
   /**
    * 结束使用工具
-   * @param {Point} point - 工具在结束使用时的位置
+   * @param {Vector} point - 工具在结束使用时的位置
    * @param {Object} option - 选项
    * @description 对应用户结束使用工具的操作，例如用户松开鼠标或触摸屏幕时调用此方法
    * @abstract
@@ -76,7 +76,7 @@ class Tool {
 
   /**
    * 移动工具
-   * @param {Point} point - 工具在移动时的位置
+   * @param {Vector} point - 工具在移动时的位置
    * @param {Object} option - 选项
    * @description 对应用户移动工具的操作，例如用户拖动鼠标或触摸屏幕时调用此方法
    * @abstract

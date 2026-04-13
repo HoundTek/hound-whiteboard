@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Matrix, Point } from "../../../utils/math.js";
+import { Matrix, Vector } from "../../../utils/math.js";
 import { RectangleRange } from "../../range/rectangle.js";
 import {
   calculateConvexHull,
@@ -33,7 +33,7 @@ class StrokeObject extends BasicObject {
 
   /**
    * 内点曲线
-   * @type {Point[]}
+   * @type {Vector[]}
    * @description
    * 笔画的内点曲线。笔画沿着这些点绘制。
    *
@@ -43,7 +43,7 @@ class StrokeObject extends BasicObject {
 
   /**
    * 平滑和变换后的内点曲线
-   * @type {Point[]}
+   * @type {Vector[]}
    * @description
    * 经过平滑处理和变换后的内点曲线。这个属性是根据原始内点曲线（points）通过应用当前的变换矩阵计算得出的。
    *
@@ -59,7 +59,7 @@ class StrokeObject extends BasicObject {
 
   calculateRichDatas() {
     this.transformedPoints = this.points.map((p) =>
-      Point.mulMatrix(this.transform, p),
+      Vector.mulMatrix(this.transform, p),
     );
     // 将其平滑（插点或删点）
     let scale = Math.sqrt(this.transform.det());
@@ -140,12 +140,12 @@ class StrokeObject extends BasicObject {
     }
 
     const obj = new StrokeObject(
-      Point.parse(data.position),
+      Vector.parse(data.position),
       data.id,
       data.pageId,
     );
 
-    obj.setPoints((data.points ?? []).map((point) => Point.parse(point)));
+    obj.setPoints((data.points ?? []).map((point) => Vector.parse(point)));
     obj.setTransform(Matrix.parse(data.transform));
     obj.color = data.color ?? obj.color;
     return obj;

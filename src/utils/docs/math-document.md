@@ -6,12 +6,12 @@
 
 `math.js` 提供二维几何与线性代数基础设施，核心类型为：
 
-- `Point`：二维点
+- `Vector`：二维向量
 - `Matrix`：二维线性变换矩阵
 
 这是整个白板几何系统的基础模块，对象位置、顶点编辑、碰撞判断和变换都依赖它。
 
-## Point
+## Vector
 
 ### 字段
 
@@ -34,17 +34,22 @@
 |:--|:--|:--|
 | `serialize()` | 序列化为对象 | `void -> {x, y}` |
 | `serializeToArray()` | 序列化为数组 | `void -> number[]` |
-| `applyTransform(matrix)` | 原地应用矩阵变换 | `Matrix -> Point` |
-| `clonePoint()` | 克隆点 | `void -> Point` |
-| `add(other)` | 点加法 | `Point -> Point` |
-| `sub(other)` | 点减法 | `Point -> Point` |
-| `dotMul(other)` | 点乘 | `Point -> number` |
-| `Point.parse(obj)` | 从对象构造点 | `Object -> Point` |
-| `Point.parseFromArray(arr)` | 从数组构造点 | `number[] -> Point` |
-| `Point.mulMatrix(m, p)` | 计算矩阵与点乘积 | `Matrix -> Point -> Point` |
-| `Point.nearlyEq(a, b, eps)` | 判断两点近似相等 | `Point -> Point -> number -> boolean` |
-| `Point.distanceTo(a, b)` | 计算距离 | `Point -> Point -> number` |
-| `Point.distanceSq(a, b)` | 计算距离平方 | `Point -> Point -> number` |
+| `applyTransform(matrix)` | 原地应用矩阵变换 | `Matrix -> Vector` |
+| `clonePoint()` | 克隆点 | `void -> Vector` |
+| `add(other)` | 向量加法 | `Vector -> Vector` |
+| `sub(other)` | 向量减法 | `Vector -> Vector` |
+| `dotMul(other)` | 向量点乘 | `Vector -> number` |
+| `scale(factor)` | 缩放向量（数乘） | `number -> Vector` |
+| `rotate(radian)` | 旋转向量 | `number -> Vector` |
+| `normalize()` | 将向量归一化为单位向量 | `void -> Vector` |
+| `length()` | 计算向量的模长 | `void -> number` |
+| `lengthSq()` | 计算向量的模长的平方 | `void -> number` |
+| `Vector.parse(obj)` | 从对象构造向量 | `Object -> Vector` |
+| `Vector.parseFromArray(arr)` | 从数组构造向量 | `number[] -> Vector` |
+| `Vector.mulMatrix(m, p)` | 计算矩阵与点乘积 | `Matrix -> Vector -> Vector` |
+| `Vector.nearlyEq(a, b, eps)` | 判断两向量近似相等 | `Vector -> Vector -> number -> boolean` |
+| `Vector.distanceTo(a, b)` | 计算两向量相减的模长 | `Vector -> Vector -> number` |
+| `Vector.distanceSq(a, b)` | 计算两向量相减的模长的平方 | `Vector -> Vector -> number` |
 
 ## Matrix
 
@@ -73,7 +78,7 @@ $$
 - 矩阵加减乘与数乘
 - 旋转矩阵组合
 - 行列式与逆矩阵计算
-- 作用于二维点
+- 作用于二维向量
 - 近似相等判断
 
 ### 主要方法
@@ -82,17 +87,20 @@ $$
 |:--|:--|:--|
 | `serialize()` | 序列化为对象 | `void -> Object` |
 | `serializeToArray()` | 序列化为二维数组 | `void -> number[][]` |
-| `cloneMatrix()` | 克隆矩阵 | `void -> Matrix` |
+| `clone()` | 克隆矩阵 | `void -> Matrix` |
 | `get(x, y)` | 读取矩阵元素 | `number -> number -> number` |
 | `getFromArr(arr)` | 用数组读取矩阵元素 | `number[] -> number` |
-| `applyToPoint(point)` | 对点应用矩阵 | `Point -> Point` |
+| `applyToVector(point)` | 对点应用矩阵 | `Vector -> Vector` |
 | `add(other)` | 矩阵加法 | `Matrix -> Matrix` |
 | `sub(other)` | 矩阵减法 | `Matrix -> Matrix` |
 | `mul(other)` | 矩阵乘法 | `Matrix -> Matrix` |
-| `scale(scale)` | 数乘 | `number -> Matrix` |
+| `mulVector(vector)` | 矩阵与向量相乘 | `Vector -> Vector` |
+| `scale(scale)` | 矩阵数乘 | `number -> Matrix` |
 | `rotate(radian)` | 右乘旋转矩阵 | `number -> Matrix` |
 | `det()` | 行列式 | `void -> number` |
 | `inv()` | 逆矩阵 | `void -> Matrix` |
+| `svd()` | 奇异值分解 | `void -> {Matrix, Matrix, Matrix}` |
+| `transpose()` | 矩阵转置 | `void -> Matrix` |
 | `Matrix.identity()` | 单位矩阵 | `void -> Matrix` |
 | `Matrix.parse(obj)` | 从对象构造矩阵 | `Object -> Matrix` |
 | `Matrix.parseFromArray(arr)` | 从数组构造矩阵 | `number[][] -> Matrix` |
@@ -106,5 +114,5 @@ $$
 
 ## 注意事项
 
-- `applyTransform()` 和 `applyToPoint()` 会修改点对象本身。
+- `applyTransform()` 和 `applyToVector()` 会修改向量对象本身。
 - `inv()` 在矩阵不可逆时会抛出异常。

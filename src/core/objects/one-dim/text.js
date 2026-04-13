@@ -5,7 +5,7 @@
  */
 
 import { OneDimensionObject } from "./one-dim-obj.js";
-import { Point, Matrix } from "../../../utils/math.js";
+import { Vector, Matrix } from "../../../utils/math.js";
 
 /**
  * 文本对象类
@@ -16,7 +16,7 @@ import { Point, Matrix } from "../../../utils/math.js";
 class TextObject extends OneDimensionObject {
   /**
    * 创建一个新的文本对象
-   * @param {Point} p - 文本左上角的绝对位置
+   * @param {Vector} p - 文本左上角的绝对位置
    * @param {number} id - 对象 id
    * @param {number} pageId - 对象所在页的 id
    * @constructor
@@ -168,7 +168,7 @@ class TextObject extends OneDimensionObject {
     }
 
     let obj = new TextObject(
-      Point.parse(data.position),
+      Vector.parse(data.position),
       data.id,
       data.pageId
     );

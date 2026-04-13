@@ -5,7 +5,7 @@
  */
 
 import { BasicObject } from "./basic-obj.js";
-import { Point } from "../../utils/math.js";
+import { Vector } from "../../utils/math.js";
 
 /**
  * 对象容器类
@@ -32,7 +32,7 @@ class Container extends BasicObject {
 
   /**
    * 创建一个新的容器对象
-   * @param {Point} p - 容器的位置
+   * @param {Vector} p - 容器的位置
    * @param {number} id - 对象 id
    * @param {number} pageId - 对象所在页的 id
    * @constructor

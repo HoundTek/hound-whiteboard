@@ -1,4 +1,4 @@
-import { Point } from "../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 import { calculateConvexHull, ropeNailIntersect } from "../math-algorithm.js";
 
 describe("math-algorithm", () => {
@@ -28,7 +28,7 @@ describe("math-algorithm", () => {
         { x: 1, y: 2 },
         { x: 0, y: 2 },
         { x: 2, y: 1 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
 
       // Powered by Graham scan algorithm
       const convexHull = calculateConvexHull(polygon);
@@ -42,7 +42,7 @@ describe("math-algorithm", () => {
         { x: 1.7, y: 1.8 },
         { x: 1, y: 2 },
         { x: 0, y: 2 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
 
       expect(convexHull).toEqual(expectedConvexHull);
     });
@@ -51,7 +51,7 @@ describe("math-algorithm", () => {
       const polygon = [
         { x: 0, y: 0 },
         { x: 2, y: 0 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
       const convexHull = calculateConvexHull(polygon);
 
       expect(convexHull).toEqual(polygon);
@@ -65,12 +65,12 @@ describe("math-algorithm", () => {
         { x: 4, y: 0 },
         { x: 4, y: 4 },
         { x: 0, y: 4 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
 
-      const insidePoint = Point.parse({ x: 2, y: 2 });
-      const outsidePoint = Point.parse({ x: 5, y: 5 });
-      const edgePoint = Point.parse({ x: 4, y: 2 });
-      const vertexPoint = Point.parse({ x: 0, y: 0 });
+      const insidePoint = Vector.parse({ x: 2, y: 2 });
+      const outsidePoint = Vector.parse({ x: 5, y: 5 });
+      const edgePoint = Vector.parse({ x: 4, y: 2 });
+      const vertexPoint = Vector.parse({ x: 0, y: 0 });
 
       expect(ropeNailIntersect(rope, insidePoint)).toBe(1);
       expect(ropeNailIntersect(rope, outsidePoint)).toBe(0);
@@ -95,7 +95,7 @@ describe("math-algorithm", () => {
         { x: 0, y: 6 },
         { x: 6, y: 6 },
         { x: 6, y: 0 },
-      ].map((p) => Point.parse(p));
+      ].map((p) => Vector.parse(p));
     });
   });
 });
