@@ -11,6 +11,7 @@
 - [math3d-document.md](./docs/math3d-document.md)
 - [io-document.md](./filesys/docs/io-document.md)
 - [io-for-renderer.md](./filesys/docs/io-for-renderer.md)
+- [io-file-granularity.md](./filesys/docs/io-file-granularity.md)
 - [chain-document.md](./docs/chain-document.md)
 
 ## 模块分组
@@ -26,3 +27,4 @@
 - 若处理页缓冲区、遍历队列等场景，优先阅读 [queue-document.md](./docs/queue-document.md) 与 [deque-document.md](./docs/deque-document.md)。
 - 若处理白板文件结构、目录读写与随机文件名，优先阅读 [io-document.md](./filesys/docs/io-document.md)。
 - 若处理渲染进程内的文件访问、IPC 桥接或批量 I/O，优先阅读 [io-for-renderer.md](./filesys/docs/io-for-renderer.md)。
+- 若优化文件存储结构以获得最佳 I/O 性能（如确定单个文件大小和数量），优先阅读 [io-file-granularity.md](./filesys/docs/io-file-granularity.md)。
