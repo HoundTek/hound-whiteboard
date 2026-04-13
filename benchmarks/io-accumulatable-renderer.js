@@ -6,11 +6,11 @@
 import {
   Directory as AccumulatableDirectory,
   File as AccumulatableFile,
-} from "../src/utils/accumulatable-io.js";
+} from "../src/utils/filesys/accumulatable-io.js";
 import {
   Directory as RendererDirectory,
   File as RendererFile,
-} from "../src/utils/renderer-io.js";
+} from "../src/utils/filesys/renderer-io.js";
 
 const LARGE_DIRECTORY_FILE_COUNT = 400;
 const LARGE_JSON_ITEM_COUNT = 2000;

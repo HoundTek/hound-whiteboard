@@ -5,7 +5,7 @@
  */
 
 import { Deque } from "../../utils/deque.js";
-import { Directory } from "../../utils/io.js";
+import { Directory } from "../../utils/filesys/io.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";

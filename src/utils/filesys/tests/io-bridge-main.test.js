@@ -5,7 +5,7 @@ import path from "path";
 import {
   handleIOBridgeBatchRequest,
   handleIOBridgeRequest,
-} from "../../io-bridge-main.js";
+} from "../../../io-bridge-main.js";
 
 function toDirectoryPayload(dirPath) {
   const parsed = path.parse(dirPath);

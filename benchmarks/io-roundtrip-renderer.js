@@ -3,7 +3,7 @@
  * @module benchmarks/io-roundtrip-renderer
  */
 
-import { Directory, File } from "../src/utils/renderer-io.js";
+import { Directory, File } from "../src/utils/filesys/renderer-io.js";
 
 const LARGE_DIRECTORY_FILE_COUNT = 400;
 const LARGE_JSON_ITEM_COUNT = 2000;

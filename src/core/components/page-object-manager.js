@@ -6,7 +6,7 @@
 
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { BasicObject } from "../objects/basic-obj.js";
-import { Directory, File } from "../../utils/io.js";
+import { Directory, File } from "../../utils/filesys/io.js";
 
 /**
  * 页静态对象管理器

@@ -813,7 +813,7 @@ class File {
   }
 }
 
-import { RandomNumberPool } from "../utils/algorithm.js";
+import { RandomNumberPool } from "../algorithm.js";
 
 /**
  * 不重复的随机文件名池

@@ -1,6 +1,6 @@
 # io 文档
 
-本文档提供 `src/utils/io.js` 的概述。
+本文档提供 `src/utils/filesys/io.js` 的概述。
 
 ## 模块职责
 

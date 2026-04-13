@@ -1,4 +1,4 @@
-import { Directory, File } from "./utils/io.js";
+import { Directory, File } from "./utils/filesys/io.js";
 import {
   IO_BRIDGE_BATCH_CHANNEL,
   IO_BRIDGE_CHANNEL,

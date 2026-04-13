@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import os from "os";
 
-import { Directory } from "../../../utils/io.js";
+import { Directory } from "../../../utils/filesys/io.js";
 import { BoardManager } from "../board-manager.js";
 import { PageManager } from "../page-manager.js";
 

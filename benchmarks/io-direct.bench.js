@@ -7,7 +7,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
-import { Directory } from "../src/utils/io.js";
+import { Directory } from "../src/utils/filesys/io.js";
 
 const ITERATIONS = 2000;
 const SCENARIO_ITERATIONS = 200;

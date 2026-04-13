@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { File, Directory } from "../../utils/io.js";
+import { File, Directory } from "../../utils/filesys/io.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { PageObjectManager } from "./page-object-manager.js";
 

@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 import { app, BrowserWindow, ipcMain } from "electron";
 
 import { registerIOBridge } from "../src/io-bridge-main.js";
-import { Directory } from "../src/utils/io.js";
+import { Directory } from "../src/utils/filesys/io.js";
 
 const ITERATIONS = 1000;
 const LARGE_DIRECTORY_FILE_COUNT = 400;

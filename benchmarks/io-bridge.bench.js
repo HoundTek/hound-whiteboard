@@ -8,7 +8,7 @@ import os from "os";
 import path from "path";
 import Benchmark from "benchmark";
 
-import { Directory, File } from "../src/utils/io.js";
+import { Directory, File } from "../src/utils/filesys/io.js";
 import { handleIOBridgeRequest } from "../src/io-bridge-main.js";
 
 const suite = new Benchmark.Suite("IO Bridge Benchmarks");
@@ -55,7 +55,7 @@ globalThis.__houndIOBridge = {
   },
 };
 
-const { Directory: RendererDirectory, File: RendererFile } = await import("../src/utils/renderer-io.js");
+const { Directory: RendererDirectory, File: RendererFile } = await import("../src/utils/filesys/renderer-io.js");
 
 suite.add("Direct File#cat", function () {
   const fixture = createFixture();
