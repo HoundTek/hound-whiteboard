@@ -5,6 +5,7 @@
  */
 
 import { Device } from "../devices/device.js";
+import { PageLoadManager } from "./page-load-manager.js";
 
 /**
  * 显示器组件

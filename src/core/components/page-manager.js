@@ -4,7 +4,6 @@
  * @author Zhou Chenyu
  */
 
-import { File, Directory } from "../../utils/filesys/io.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { PageObjectManager } from "./page-object-manager.js";
 
@@ -100,21 +99,21 @@ class PageManager {
   /**
    * 完整加载该页
    * @description
-   * @param {Directory} root - 白板根目录
+   * @param {string} boardRootPath - 白板根目录
    * @todo
-   * @returns {boolean} 是否成功
+   * @returns {Promise<boolean>} 是否成功
    */
-  loadFull(root) {
+  async loadFull(boardRootPath) {
     // 已完整加载
     if (this.isLoad && !this.isTempLoad) return false;
 
     // 未加载，升级为临时加载
-    if (!this.isLoad) this.loadTemp(root);
+    if (!this.isLoad) await this.loadTemp(boardRootPath);
     this.isTempLoad = false;
 
     // 升级为完整加载，加载对象
     // [todo] 加载 Objects
-    this.objectManager.loadObjects(root);
+    await this.objectManager.loadObjects(boardRootPath);
     return true;
   }
 
@@ -151,10 +150,10 @@ class PageManager {
 
   /**
    * 临时加载该页
-   * @param {Directory} root - 白板根目录
-   * @returns {boolean} 是否成功
+   * @param {string} boardRootPath - 白板根目录
+   * @returns {Promise<boolean>} 是否成功
    */
-  loadTemp(root) {
+  async loadTemp(boardRootPath) {
     if (this.isLoad) {
       // 已加载，不管是完整加载还是临时加载，都不能重复加载
       return false;
@@ -164,7 +163,7 @@ class PageManager {
     if (!this.objectManager) {
       this.objectManager = new PageObjectManager(this.id);
     }
-    this.objectManager.loadTierGraph(root);
+    await this.objectManager.loadTierGraph(boardRootPath);
     return true;
   }
 }

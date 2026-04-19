@@ -6,7 +6,8 @@
 
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { BasicObject } from "../objects/basic-obj.js";
-import { Directory, File } from "../../utils/filesys/io.js";
+import { deserialize } from "../objects/object-deserializer.js";
+import { boardFileOperateBridge } from "./file-operate-bridge-renderer.js";
 
 /**
  * 页静态对象管理器
@@ -61,81 +62,107 @@ class PageObjectManager {
 
   /**
    * 加载层叠图
-   * @param {Directory} root - 白板根目录
-   * @returns {boolean} 是否成功加载
+   * @param {string} boardRootPath - 白板根目录
+   * @returns {Promise<void>} 加载完成
    * @description
-   * 加载成功的条件是该页未被加载过且层叠图文件存在。
-   * 加载成功后，页状态变为已加载且临时加载。
    * 该方法只加载层叠图，不加载对象实例。
-   * @todo
    * @throws {Error} 如果文件不存在
    */
-  loadTierGraph(root) {
-    const tierGraphFile = this.resolveTierGraphFile(root);
-    if (tierGraphFile.exist()) {
-      this.staticGraph = DirectedGraph.parse(tierGraphFile.catJSON());
-    } else {
-      throw new Error(`file ${tierGraphFile.toUrl()} does not exist.`);
-    }
+  async loadTierGraph(boardRootPath) {
+    // 通过专用 IPC 从主进程读取层叠图数据。
+    const graphData = await boardFileOperateBridge.loadTierGraph(
+      boardRootPath,
+      this.id,
+    );
+    // 渲染侧只负责把 plain object 转回 DirectedGraph。
+    this.staticGraph = DirectedGraph.parse(graphData);
   }
 
   /**
    * 保存层叠图
-   * @param {Directory} root - 白板根目录
-   * @todo
+   * @param {string} boardRootPath - 白板根目录
+   * @returns {Promise<void>} 保存完成
    */
-  saveTierGraph(root) {
-    const tierGraphFile = this.resolveTierGraphFile(root);
-    tierGraphFile
-      .rmWhenExist()
-      .init()
-      .write(JSON.stringify(this.staticGraph.toArray()));
+  async saveTierGraph(boardRootPath) {
+    // 统一以数组结构落盘，避免传输复杂实例对象。
+    await boardFileOperateBridge.saveTierGraph(
+      boardRootPath,
+      this.id,
+      this.staticGraph.toArray(),
+    );
   }
 
   /**
    * 卸载层叠图
-   * @todo
+   * @description 仅释放层叠图，保留对象映射。
    */
   unloadTierGraph() {
-    this.staticGraph = null;
+    this.staticGraph = new DirectedGraph();
   }
 
   /**
    * 加载该页的所有对象
-   * @param {Directory} root - 白板根目录
-   * @todo
+   * @param {string} boardRootPath - 白板根目录
+   * @returns {Promise<void>} 加载完成
    */
-  loadObjects(root) {
-    const objectsDir = this.resolveObjectsDirectory(root);
-    if (objectsDir) {
-      const objectFiles = objectsDir
-        .lsFile()
-        .filter((file) => file.extension === "json");
-      for (const file of objectFiles) {
-        const obj = BasicObject.parse(file.catJSON());
-        this.pageObjects.set(obj.id, obj);
-      }
+  async loadObjects(boardRootPath) {
+    // 先清空旧映射，确保和磁盘状态一致。
+    this.pageObjects.clear();
+
+    const objectDataList = await boardFileOperateBridge.loadPageObjects(
+      boardRootPath,
+      this.id,
+    );
+
+    // 使用统一反序列化入口恢复具体对象类型。
+    for (const objectData of objectDataList) {
+      const obj = deserialize(objectData);
+      this.pageObjects.set(obj.id, obj);
     }
   }
 
   /**
    * 保存该页的所有对象
-   * @param {Directory} root - 白板根目录
-   * @todo
+   * @param {string} boardRootPath - 白板根目录
+   * @returns {Promise<void>} 保存完成
    */
-  saveObjects(root) {}
+  async saveObjects(boardRootPath) {
+    /**
+     * 当前页对象的可序列化快照。
+     * @type {object[]}
+     */
+    const serializedObjects = Array.from(this.pageObjects.values()).map(
+      (obj) => {
+        if (obj && typeof obj.serialize === "function") {
+          return obj.serialize();
+        }
+        return obj;
+      },
+    );
+
+    await boardFileOperateBridge.savePageObjects(
+      boardRootPath,
+      this.id,
+      serializedObjects,
+    );
+  }
 
   /**
    * 卸载该页的所有对象
-   * @todo
+   * @description 释放对象实例映射。
    */
-  unloadObjects() {}
+  unloadObjects() {
+    this.pageObjects.clear();
+  }
 
   /**
-   * 卸载该页的所有对象
-   * @todo
+   * 卸载该页全部数据
+   * @description 统一释放层叠图与对象映射。
    */
-  unload() {}
+  unload() {
+    this.unloadObjects();
+    this.unloadTierGraph();
+  }
 
   /**
    * 解析页对象目录

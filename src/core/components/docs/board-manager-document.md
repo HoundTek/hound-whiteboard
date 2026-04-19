@@ -39,6 +39,8 @@
 
 ## 加载流程 `load(directory)`
 
+说明：当前 `load(directory)` 已通过 components 专用 IPC 文件桥接读取白板快照，接口语义为异步。
+
 当前实现流程：
 
 1. 读取并校验 `meta.json` 与 `config.json`
@@ -116,6 +118,8 @@
 
 ## 创建流程 `create(directory, boardInfo)`
 
+说明：当前 `create(directory, boardInfo)` 已通过 components 专用 IPC 文件桥接执行目录创建与元信息写入，接口语义为异步。
+
 当前行为：
 
 - 初始化并尝试加载目标目录
@@ -130,6 +134,8 @@
 ## 页面与对象操作
 
 ### `appendPage()`
+
+说明：当前 `appendPage()` 会通过 IPC 创建页目录与对象目录，接口语义为异步。
 
 - 使用 `pageCounterPool` 生成页 id
 - 维护页链与页顺序
@@ -147,10 +153,10 @@
 
 | 名称 | 描述 | 类型 |
 |:--|:--|:--|
-| `load(directory)` | 加载白板 | `Directory -> BoardManager` |
-| `appendPage()` | 追加新页 | `void -> PageManager` |
+| `load(directory)` | 加载白板 | `Directory -> Promise<BoardManager>` |
+| `appendPage()` | 追加新页 | `void -> Promise<PageManager>` |
 | `addObject(obj, pageId)` | 向指定页添加对象 | `BasicObject -> number -> void` |
-| `create(directory, boardInfo)` | 创建白板（静态） | `Directory -> Object -> BoardManager` |
+| `create(directory, boardInfo)` | 创建白板（静态） | `Directory -> Object -> Promise<BoardManager>` |
 
 ## 设计约束
 

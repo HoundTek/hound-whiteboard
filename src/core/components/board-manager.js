@@ -19,6 +19,7 @@ import {
 } from "./page-load-manager.js";
 import { PageManager } from "./page-manager.js";
 import { PageObjectManager } from "./page-object-manager.js";
+import { boardFileOperateBridge } from "./file-operate-bridge-renderer.js";
 
 /**
  * 白板管理器
@@ -155,19 +156,12 @@ class BoardManager {
   /**
    * 添加新页
    * @todo
-   * @returns {PageManager}
+   * @returns {Promise<PageManager>}
    */
-  appendPage(templateId) {
+  async appendPage(templateId) {
     let page = new PageManager(this.pageCounterPool.generate());
 
-    // 创建页文件夹和必要文件
-    const pageDirectory = this.root.cd("pages").cd(page.id.toString());
-    pageDirectory.rmWhenExist().make();
-    this.root
-      .cd("objects")
-      .cd("page" + page.id.toString())
-      .rmWhenExist()
-      .make();
+    await boardFileOperateBridge.createPageStorage(this.root.getPath(), page.id);
 
     // [todo] 初始化页内容（如模板等）
     // [todo] 模板现在还没有实现，先不管 templateId 参数
@@ -181,7 +175,7 @@ class BoardManager {
       PageManager.connectTwoPage(lastPage, page);
     }
     this.pageOrder.push(page.id);
-    this.#persistPageConnection();
+    await this.#persistPageConnection();
 
     // [todo] 加入 Undotree
     return page;
@@ -191,20 +185,21 @@ class BoardManager {
    * 加载白板
    * @description 加载白板的 meta、config 以及页等信息
    * @param {Directory} directory - 白板根目录
-   * @return {BoardManager} 返回自身以支持链式调用
+   * @return {Promise<BoardManager>} 返回自身以支持链式调用
    * @throws {Error} 如果目录不合法或文件损坏
    * @todo
    */
-  load(directory) {
+  async load(directory) {
     this.root = directory;
+    const snapshot = await boardFileOperateBridge.loadBoardSnapshot(
+      this.root.getPath(),
+      boardMeta,
+    );
+    const meta = snapshot.meta;
+    const config = snapshot.config;
+    const connection = snapshot.connection;
+    const trace = snapshot.trace;
 
-    // 检查是否是合法的白板文件
-    const metaFile = this.root.peek("meta", "json");
-    if (!metaFile.exist()) {
-      console.warn("meta.json does not exist.");
-      throw new Error("Not a board file.");
-    }
-    const meta = metaFile.catJSON();
     if (meta.type !== boardMeta.type) {
       console.warn(
         `Not a board file. Expected type ${boardMeta.type}, got ${meta.type}.`,
@@ -217,29 +212,14 @@ class BoardManager {
       );
     }
 
-    // 加载 config
-    const configFile = this.root.peek("config", "json");
-    if (!configFile.exist()) {
-      console.warn("config.json does not exist.");
-      throw new Error("Corrupted board file.");
-    }
-    const config = configFile.catJSON();
-
     this.width = config.width;
     this.height = config.height;
 
     // [todo] 加载其它 meta 和 config 相关的东西
 
     // 加载页顺序信息
-    const connectionFile = this.root.cd("pages").peek("connection", "json");
-    if (!connectionFile.exist()) {
-      console.warn("pages/connection.json does not exist.");
-      throw new Error("Corrupted board file.");
-    } else {
-      const connection = connectionFile.catJSON();
-      this.pageOrder = connection.order;
-      this.pageCounterPool = new CounterPool(connection.count);
-    }
+    this.pageOrder = connection.order;
+    this.pageCounterPool = new CounterPool(connection.count);
 
     this.pageLoadManager.resetBuffer();
     this.pageLoadOwners.clear();
@@ -256,25 +236,7 @@ class BoardManager {
       previousPage = currentPage;
     }
 
-    const traceFile = this.root.peek("trace", "json");
-    let trace;
     // [FIXME] 应该由 Monitor 设备来决定加载哪一页
-    if (!traceFile.exist()) {
-      console.log("trace.json does not exist.");
-      // 默认加载第一页
-      trace = {
-        onPage: this.pageOrder[0],
-        offset: 0,
-      };
-    } else {
-      trace = traceFile.catJSON();
-      if (!trace.onPage) {
-        trace.onPage = this.pageOrder[0];
-      }
-      if (trace.offset === undefined) {
-        trace.offset = 0;
-      }
-    }
 
     // 检查 trace 中的页是否合法
     const currentPage = this.pageMap.get(trace.onPage);
@@ -284,7 +246,7 @@ class BoardManager {
 
     // 初始化缓冲区并加载当前页
     this.pageLoadManager.resetCurrentPage(currentPage);
-    this.#loadPage(
+    await this.#loadPage(
       currentPage,
       PAGE_LOAD_STRATEGIES.FULL,
       false,
@@ -323,37 +285,22 @@ class BoardManager {
    *
    * @static
    * @author Zhou Chenyu
-   * @returns {BoardManager}
+   * @returns {Promise<BoardManager>}
    * @todo
    */
-  static create(directory, boardInfo) {
+  static async create(directory, boardInfo) {
     const manager = new BoardManager();
     manager.directory = directory;
     manager.root = directory;
-    directory.rmWhenExist().make();
-    directory.peek("meta", "json").writeJSON(boardMeta);
-    directory.peek("config", "json").writeJSON({
+    await boardFileOperateBridge.createBoardRoot(directory.getPath(), boardMeta, {
       width: boardInfo.width,
       height: boardInfo.height,
     });
-    directory.cd("devices").make();
-    directory.cd("history").make();
-    directory.cd("objects").make();
-    directory.cd("pages").make();
-    directory.cd("templates").make();
 
     // [todo] 创建文件结构
     // 创建页
-    const firstPage = manager.appendPage(boardInfo.templateID);
-    directory
-      .cd("pages")
-      .peek("connection", "json")
-      .writeJSON({
-        count: 1,
-        order: [firstPage.id],
-        size: 1,
-      });
-    directory.peek("trace", "json").writeJSON({
+    const firstPage = await manager.appendPage(boardInfo.templateID);
+    await boardFileOperateBridge.writeTrace(directory.getPath(), {
       onPage: firstPage.id,
       offset: 0,
     });
@@ -383,14 +330,20 @@ class BoardManager {
     this.pageLoadEventBus.on(
       PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD,
       ({ requesterId, page, strategy, alreadyBuffered }) => {
-        this.#loadPage(page, strategy, alreadyBuffered, requesterId);
+        this.#loadPage(page, strategy, alreadyBuffered, requesterId).catch(
+          (error) => {
+            console.error("Failed to load page via IPC bridge:", error);
+          },
+        );
       },
     );
 
     this.pageLoadEventBus.on(
       PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD,
       ({ requesterId, page }) => {
-        this.#unloadPage(page, requesterId);
+        this.#unloadPage(page, requesterId).catch((error) => {
+          console.error("Failed to unload page:", error);
+        });
       },
     );
   }
@@ -401,10 +354,10 @@ class BoardManager {
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
    * @param {number | string} requesterId - 发起加载请求的 PLM id
-   * @returns {boolean} 是否成功加载
+   * @returns {Promise<boolean>} 是否成功加载
    * @private
    */
-  #loadPage(page, strategy, alreadyBuffered, requesterId) {
+  async #loadPage(page, strategy, alreadyBuffered, requesterId) {
     if (!page || requesterId === undefined) return false;
 
     const effectiveStrategy = this.#registerPageLoadRequest(
@@ -413,10 +366,10 @@ class BoardManager {
       strategy,
     );
 
-    const pageDirectory = this.#resolvePageDirectory(page.id);
+    const boardRootPath = this.root.getPath();
 
     if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      const changed = page.loadFull(pageDirectory);
+      const changed = await page.loadFull(boardRootPath);
       return changed;
     }
 
@@ -424,17 +377,17 @@ class BoardManager {
       return false;
     }
 
-    return page.loadTemp(pageDirectory);
+    return page.loadTemp(boardRootPath);
   }
 
   /**
    * 卸载页
    * @param {PageManager} page - 要卸载的页
    * @param {number | string} requesterId - 发起卸载请求的 PLM id
-   * @returns {boolean} 是否成功卸载
+   * @returns {Promise<boolean>} 是否成功卸载
    * @private
    */
-  #unloadPage(page, requesterId) {
+  async #unloadPage(page, requesterId) {
     if (!page || requesterId === undefined) return false;
 
     const removedStrategy = this.#unregisterPageLoadRequest(page.id, requesterId);
@@ -472,9 +425,9 @@ class BoardManager {
    * 持久化页连接信息
    * @private
    */
-  #persistPageConnection() {
+  async #persistPageConnection() {
     if (!this.root) return;
-    this.root.cd("pages").peek("connection", "json").writeJSON({
+    await boardFileOperateBridge.writePageConnection(this.root.getPath(), {
       count: this.pageCounterPool.counter,
       order: this.pageOrder,
       size: this.pageOrder.length,

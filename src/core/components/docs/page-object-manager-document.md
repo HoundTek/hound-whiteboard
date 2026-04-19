@@ -29,16 +29,16 @@
 
 ## 层叠图接口
 
-### `loadTierGraph(file)`
+### `loadTierGraph(boardRootPath)`
 
-从文件反序列化静态图：
+通过 components 专用 IPC 桥从主进程读取层叠图并反序列化：
 
 - 输入结构由 `DirectedGraph.parse(...)` 处理
 - 当前实现会直接替换 `staticGraph`
 
-### `saveTierGraph(file)`
+### `saveTierGraph(boardRootPath)`
 
-用于持久化静态图，当前为 `todo`。
+通过专用 IPC 桥持久化静态图。
 
 ### `unloadTierGraph()`
 
@@ -46,20 +46,20 @@
 
 ## 对象读写接口
 
-- `loadObjects(directory)`：加载本页对象（`todo`）
-- `saveObjects(directory)`：保存本页对象（`todo`）
-- `unloadObjects()`：释放对象实例（`todo`）
-- `unload()`：统一卸载（`todo`）
+- `loadObjects(boardRootPath)`：通过专用 IPC 桥加载本页对象
+- `saveObjects(boardRootPath)`：通过专用 IPC 桥保存本页对象
+- `unloadObjects()`：释放对象实例
+- `unload()`：统一卸载层叠图与对象实例
 
 ## API
 
 | 名称 | 描述 | 类型 |
 |:--|:--|:--|
-| `loadTierGraph(file)` | 加载页层叠图 | `File -> void` |
-| `saveTierGraph(file)` | 保存页层叠图 | `File -> void` |
+| `loadTierGraph(boardRootPath)` | 加载页层叠图 | `string -> Promise<void>` |
+| `saveTierGraph(boardRootPath)` | 保存页层叠图 | `string -> Promise<void>` |
 | `unloadTierGraph()` | 卸载页层叠图 | `void -> void` |
-| `loadObjects(directory)` | 加载页对象 | `Directory -> void` |
-| `saveObjects(directory)` | 保存页对象 | `Directory -> void` |
+| `loadObjects(boardRootPath)` | 加载页对象 | `string -> Promise<void>` |
+| `saveObjects(boardRootPath)` | 保存页对象 | `string -> Promise<void>` |
 | `unloadObjects()` | 卸载页对象 | `void -> void` |
 | `unload()` | 卸载本页全部数据 | `void -> void` |
 
@@ -71,5 +71,5 @@
 
 ## 实现状态
 
-- 已实现：数据结构定义、层叠图加载与卸载。
-- 待完善：图保存、对象读写、统一卸载流程。
+- 已实现：数据结构定义、层叠图加载/保存、对象读写、统一卸载入口。
+- 待完善：对象增量落盘策略与更细粒度错误恢复。

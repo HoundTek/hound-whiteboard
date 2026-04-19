@@ -3,6 +3,9 @@ import {
   IO_BRIDGE_BATCH_CHANNEL,
   IO_BRIDGE_CHANNEL,
 } from "./io-bridge-common.js";
+import {
+  CORE_FILE_OPERATE_CHANNEL,
+} from "./core/components/file-operate-bridge-common.js";
 
 /**
  * 预加载层暴露给渲染进程的 I/O 桥接对象。
@@ -28,12 +31,20 @@ const ioBridge = {
   },
 };
 
+const coreFileOperateBridge = {
+  call(request) {
+    return ipcRenderer.invoke(CORE_FILE_OPERATE_CHANNEL, request);
+  },
+};
+
 /**
  * 在预加载上下文中注入 I/O 桥接对象。
  * 在启用上下文隔离时通过 contextBridge 暴露；否则直接挂到全局对象。
  */
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld("__houndIOBridge", ioBridge);
+  contextBridge.exposeInMainWorld("__houndCoreFileOps", coreFileOperateBridge);
 } else {
   globalThis.__houndIOBridge = ioBridge;
+  globalThis.__houndCoreFileOps = coreFileOperateBridge;
 }

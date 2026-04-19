@@ -29,11 +29,11 @@
 
 ## 加载模型
 
-### 临时加载 `loadTemp(directory)`
+### 临时加载 `loadTemp(boardRootPath)`
 
 临时加载只加载层叠关系（tier graph），不加载全部对象内容。用于活动对象跨页拾取等场景，减少内存占用。
 
-### 完整加载 `load(directory)`
+### 完整加载 `loadFull(boardRootPath)`
 
 当前流程：
 
@@ -82,8 +82,8 @@
 |:--|:--|:--|
 | `connectTwoPage(first, second)` | 连接两页 | `PageManager -> PageManager -> void` |
 | `addObject(obj, below, above)` | 按上下关系加入对象 | `number -> number[] -> number[] -> void` |
-| `loadFull(directory)` | 完整加载页面 | `Directory -> boolean` |
-| `loadTemp(directory)` | 临时加载页面 | `Directory -> boolean` |
+| `loadFull(boardRootPath)` | 完整加载页面 | `string -> Promise<boolean>` |
+| `loadTemp(boardRootPath)` | 临时加载页面 | `string -> Promise<boolean>` |
 | `downgradeToTemp()` | 从完整加载降级为临时加载 | `void -> boolean` |
 | `unload()` | 完整卸载页面 | `void -> void` |
 | `unloadTemp()` | 临时卸载页面 | `void -> boolean` |

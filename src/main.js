@@ -2,6 +2,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { registerIOBridge } from "./io-bridge-main.js";
+import { registerCoreFileOperateBridge } from "./core/components/file-operate-bridge-main.js";
 
 let window;
 const __filename = fileURLToPath(import.meta.url);
@@ -9,6 +10,7 @@ const __dirname = path.dirname(__filename);
 
 app.whenReady().then(() => {
   registerIOBridge(ipcMain);
+  registerCoreFileOperateBridge(ipcMain);
 
   window = new BrowserWindow({
     webPreferences: {
@@ -17,10 +19,10 @@ app.whenReady().then(() => {
       contextIsolation: false,
       nodeIntegrationInSubFrames: true
     },
-    fullscreen: true,
-    autoHideMenuBar: true,
-    frame: false,
-    transparent: true
+    fullscreen: false,
+    autoHideMenuBar: false,
+    frame: true,
+    transparent: false
   });
 
   window.loadFile(path.join(__dirname, "templates/whiteboard.html"));
