@@ -26,17 +26,6 @@ async function callCoreFileOperate(action, payload) {
 
 /**
  * Board/Page 相关文件操作桥。
- * @type {{
- *   createBoardRoot: function(string, object, object): Promise<boolean>,
- *   createPageStorage: function(string, number): Promise<boolean>,
- *   writePageConnection: function(string, object): Promise<boolean>,
- *   writeTrace: function(string, object): Promise<boolean>,
- *   loadBoardSnapshot: function(string, object): Promise<object>,
- *   loadTierGraph: function(string, number): Promise<any>,
- *   saveTierGraph: function(string, number, any[]): Promise<boolean>,
- *   loadPageObjects: function(string, number): Promise<object[]>,
- *   savePageObjects: function(string, number, object[]): Promise<boolean>,
- * }}
  */
 const boardFileOperateBridge = {
   /**

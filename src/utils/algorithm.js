@@ -6,8 +6,20 @@
  * - 计算双指和三指操作的矩阵
  */
 
-import { randomInt } from "crypto";
 import { Matrix, Vector } from "./math.js";
+
+/**
+ * 生成 [min, max) 范围内的密码学安全随机整数（浏览器兼容）
+ * @param {number} min - 包含
+ * @param {number} max - 不包含
+ * @returns {number}
+ */
+function randomInt(min, max) {
+  const range = max - min;
+  const buf = new Uint32Array(1);
+  globalThis.crypto.getRandomValues(buf);
+  return min + (buf[0] % range);
+}
 
 /**
  * 不重复的随机数池

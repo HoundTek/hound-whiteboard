@@ -1,11 +1,28 @@
-import { jest } from "@jest/globals";
-
-jest.unstable_mockModule("crypto", () => ({
-  randomInt: jest.fn(),
-}));
-
 const { RandomNumberPool } = await import("../algorithm.js");
-const { randomInt } = await import("crypto");
+
+/**
+ * 让 globalThis.crypto.getRandomValues 依次返回指定的 uint32 值队列。
+ * randomInt(min, max) 的实现为 min + (buf[0] % (max - min))，
+ * 因此对于 MIN=114514, MAX+1=114517, range=3：
+ *   目标 114514 → buf[0] = 0
+ *   目标 114515 → buf[0] = 1
+ *   目标 114516 → buf[0] = 2
+ */
+function mockGetRandomValues(...values) {
+  const queue = [...values];
+  const original = globalThis.crypto.getRandomValues.bind(globalThis.crypto);
+  globalThis.crypto = {
+    ...globalThis.crypto,
+    getRandomValues: (buf) => {
+      if (queue.length > 0) {
+        buf[0] = queue.shift();
+      } else {
+        original(buf);
+      }
+      return buf;
+    },
+  };
+}
 
 describe("RandomNumberPool", () => {
   const MIN = 114514;
@@ -14,8 +31,6 @@ describe("RandomNumberPool", () => {
 
   beforeEach(() => {
     pool = new RandomNumberPool(MIN, MAX);
-    // 在每个测试前清除 mock
-    randomInt.mockClear();
   });
 
   test("构造函数应正确初始化 min, max, length 和 pool", () => {
@@ -39,10 +54,7 @@ describe("RandomNumberPool", () => {
   })
 
   test("generate 应返回范围内唯一的随机数", () => {
-    randomInt
-      .mockReturnValueOnce(114514)
-      .mockReturnValueOnce(114515)
-      .mockReturnValueOnce(114516);
+    mockGetRandomValues(0, 1, 2); // 0%3+114514=114514, 1%3+114514=114515, 2%3+114514=114516
 
     const rnum1 = pool.generate();
     expect(rnum1).toBe(114514);
@@ -125,7 +137,7 @@ describe("RandomNumberPool", () => {
 
   test("rename 应删除旧数字并生成一个新数字", () => {
     pool.add(114514);
-    randomInt.mockReturnValueOnce(114515); // 要生成的新数字
+    mockGetRandomValues(1); // 1%3+114514=114515
 
     const newNum = pool.rename(114514);
     expect(newNum).toBe(114515);

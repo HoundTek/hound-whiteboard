@@ -1,26 +1,37 @@
 /**
- * @descrpition 用对象包了一个 number
+ * 计数器池
+ *
+ * @author Zhou Chenyu
  */
 class CounterPool {
+  /**
+   * 计数器
+   * @type {number}
+   */
   counter;
 
   /**
-   * 
-   * @param {number} [count = 0] 
+   * @constructor
+   * @param {number} [count = 0] - 初始计数值
    */
   constructor(count = 0) {
     this.counter = count;
   }
 
   /**
-   * @param {number} count
-   * @returns {CounterPool}
+   * 初始化计数器池
+   * @param {number} [count = 0] - 初始计数值
+   * @returns {CounterPool} 返回自身以支持链式调用
    */
-  init(count) {
+  init(count = 0) {
     this.counter = count;
     return this;
   }
 
+  /**
+   * 生成下一个数字
+   * @returns {number}
+   */
   generate() {
     this.counter++;
     return this.counter;

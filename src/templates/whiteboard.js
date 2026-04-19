@@ -5,6 +5,7 @@ import { CounterPool } from "../core/utils/counter-pool.js";
 import { insertPoints } from "../core/utils/math-algorithm.js";
 import { StrokeCreatorTool } from "../core/tools/creator/stroke.js";
 import { Monitor } from "../core/components/monitor.js";
+import { BoardManager } from "../core/components/board-manager.js";
 
 const monitor = new Monitor();
 
@@ -15,16 +16,7 @@ monitor.canvas.height = 600;
 document.getElementById("app-foreground-layer").appendChild(monitor.canvas);
 monitor.canvas.id = "canvas";
 
-// 设置 canvas 的内部分辨率，使其与 CSS 尺寸匹配
-// 这样可以避免内容被拉伸
-const board = {
-  width: 800,
-  height: 600,
-};
-
 const ctx = monitor.canvas.getContext("2d");
-
-console.log(board);
 
 let tool = new PolygonCreatorTool();
 let pool = new CounterPool();

@@ -5,7 +5,6 @@
  */
 
 import { Deque } from "../../utils/deque.js";
-import { Directory } from "../../utils/filesys/io.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
@@ -28,6 +27,11 @@ import { boardFileOperateBridge } from "./file-operate-bridge-renderer.js";
  * @author Zhou Chenyu
  */
 class BoardManager {
+  /**
+   * 页缓冲区上限
+   * @description 已加载的页不超过 4 页（包含临时加载和完整加载）。
+   * @type {number}
+   */
   static PAGE_BUFFER_LIMIT = 4;
 
   /**
@@ -91,9 +95,9 @@ class BoardManager {
 
   /**
    * 白板的文件路径
-   * @type {Directory}
+   * @type {string}
    */
-  root;
+  rootPath;
 
   /**
    * 页 id 池
@@ -161,7 +165,7 @@ class BoardManager {
   async appendPage(templateId) {
     let page = new PageManager(this.pageCounterPool.generate());
 
-    await boardFileOperateBridge.createPageStorage(this.root.getPath(), page.id);
+    await boardFileOperateBridge.createPageStorage(this.rootPath, page.id);
 
     // [todo] 初始化页内容（如模板等）
     // [todo] 模板现在还没有实现，先不管 templateId 参数
@@ -184,15 +188,15 @@ class BoardManager {
   /**
    * 加载白板
    * @description 加载白板的 meta、config 以及页等信息
-   * @param {Directory} directory - 白板根目录
+   * @param {string} directory - 白板根目录
    * @return {Promise<BoardManager>} 返回自身以支持链式调用
    * @throws {Error} 如果目录不合法或文件损坏
    * @todo
    */
   async load(directory) {
-    this.root = directory;
+    this.rootPath = directory;
     const snapshot = await boardFileOperateBridge.loadBoardSnapshot(
-      this.root.getPath(),
+      this.rootPath,
       boardMeta,
     );
     const meta = snapshot.meta;
@@ -291,8 +295,8 @@ class BoardManager {
   static async create(directory, boardInfo) {
     const manager = new BoardManager();
     manager.directory = directory;
-    manager.root = directory;
-    await boardFileOperateBridge.createBoardRoot(directory.getPath(), boardMeta, {
+    manager.rootPath = directory;
+    await boardFileOperateBridge.createBoardRoot(directory, boardMeta, {
       width: boardInfo.width,
       height: boardInfo.height,
     });
@@ -366,7 +370,7 @@ class BoardManager {
       strategy,
     );
 
-    const boardRootPath = this.root.getPath();
+    const boardRootPath = this.rootPath;
 
     if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
       const changed = await page.loadFull(boardRootPath);
@@ -406,28 +410,15 @@ class BoardManager {
     return page.isTempLoad ? page.unloadTemp() : page.unload();
   }
 
-  /**
-   * 解析页目录
-   * @param {number} pageId - 页 id
-   * @returns {Directory} 页目录
-   * @private
-   */
-  #resolvePageDirectory(pageId) {
-    const pagesDirectory = this.root.cd("pages");
-    const nestedDirectory = pagesDirectory.cd(pageId.toString());
-    if (nestedDirectory.exist()) {
-      return nestedDirectory;
-    }
-    return pagesDirectory;
-  }
+  
 
   /**
    * 持久化页连接信息
    * @private
    */
   async #persistPageConnection() {
-    if (!this.root) return;
-    await boardFileOperateBridge.writePageConnection(this.root.getPath(), {
+    if (!this.rootPath) return;
+    await boardFileOperateBridge.writePageConnection(this.rootPath, {
       count: this.pageCounterPool.counter,
       order: this.pageOrder,
       size: this.pageOrder.length,

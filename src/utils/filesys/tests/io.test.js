@@ -1,14 +1,26 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { jest } from "@jest/globals";
-
-jest.unstable_mockModule("crypto", () => ({
-  randomInt: jest.fn(),
-}));
 
 const { Directory, File, FilenameRandomPool } = await import("../io.js");
-const { randomInt } = await import("crypto");
+
+/**
+ * 让下一次 getRandomValues 返回指定的 uint32 值
+ */
+function mockNextRandomInt(value) {
+  globalThis.crypto = {
+    ...globalThis.crypto,
+    getRandomValues: (buf) => {
+      buf[0] = value;
+      return buf;
+    },
+  };
+}
+
+function restoreCrypto() {
+  // Node.js 内置 globalThis.crypto，重新赋回即可
+  globalThis.crypto = globalThis.crypto;
+}
 
 describe("io", () => {
   let rootPath;
@@ -17,7 +29,6 @@ describe("io", () => {
   beforeEach(() => {
     rootPath = fs.mkdtempSync(path.join(os.tmpdir(), "hound-io-"));
     rootDir = Directory.parse(rootPath);
-    randomInt.mockReset();
   });
 
   afterEach(() => {
@@ -83,7 +94,7 @@ describe("io", () => {
     rootDir.cd("7").make();
     rootDir.cd("9").make();
     rootDir.cd("misc").make();
-    randomInt.mockReturnValueOnce(8);
+    mockNextRandomInt(7); // buf[0] % range + min = 7 % 1145141919810 + 1 = 8
 
     const pool = new FilenameRandomPool(rootDir, "Directory");
     const generatedDir = pool.generate();
@@ -97,7 +108,7 @@ describe("io", () => {
   test("FilenameRandomPool 应识别现有文件并支持重命名与删除", () => {
     rootDir.peek("12", "txt").write("occupied");
     rootDir.peek("note", "txt").write("ignored");
-    randomInt.mockReturnValueOnce(13);
+    mockNextRandomInt(12); // buf[0] % range + min = 12 % 1145141919810 + 1 = 13
 
     const pool = new FilenameRandomPool(rootDir, "txt");
     const renamedFile = pool.rename("12");
