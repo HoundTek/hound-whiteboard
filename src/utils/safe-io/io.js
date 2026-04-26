@@ -477,7 +477,7 @@ class File {
   }
 }
 
-const { RandomNumberPool } = require("../utils/algorithm");
+const { RandomNumberPool } = require("../algorithm");
 
 /**
  * 不重复的随机文件名池

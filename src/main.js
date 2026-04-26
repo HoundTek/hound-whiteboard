@@ -11,7 +11,7 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const url = require("url");
-const { Directory, File } = require("./utils/io");
+const { Directory, File } = require("./utils/safe-io/io");
 
 /**
  * ### 窗口类
