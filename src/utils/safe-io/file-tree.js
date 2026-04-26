@@ -295,6 +295,49 @@ const cp = (src) => (dest) =>
   );
 
 /**
+ * 读取文件内容（cat）
+ *
+ * 支持读取文本文件，返回字符串内容。
+ *
+ * @param {Option} fileEntry - 文件对象 Option（必须是 File 类型）
+ * @returns {Option<string>} 文件内容的 Option（读取失败返回 None）
+ */
+const cat = (fileEntry) =>
+  getPath(fileEntry).flatMap((filePath) => {
+    try {
+      const content = fs.readFileSync(filePath, "utf8");
+      return Some(content);
+    } catch (e) {
+      console.error("cat error:", e);
+      return None();
+    }
+  });
+
+/**
+ * 写入内容到文件（write）
+ *
+ * 如果文件不存在会自动创建，父目录不存在时会自动递归创建。
+ *
+ * @param {Option} fileEntry - 文件对象 Option（必须是 File 类型）
+ * @param {string} content - 要写入的文件内容
+ * @returns {Option} 写入成功后返回 fileEntry 的 Option
+ */
+const write = (fileEntry) => (content) =>
+  getPath(fileEntry).flatMap((filePath) => {
+    try {
+      // 确保父目录存在
+      const dirPath = path.dirname(filePath);
+      fs.mkdirSync(dirPath, { recursive: true });
+
+      fs.writeFileSync(filePath, content, "utf8");
+      return Some(fileEntry);
+    } catch (e) {
+      console.error("write error:", e);
+      return None();
+    }
+  });
+
+/**
  * 压缩文件或目录为 zip（柯里化）
  *
  * 支持压缩整个目录（推荐）或单个文件。
@@ -308,11 +351,9 @@ const zip = (sourceEntry) => (zipFilePath) =>
       const zip = new AdmZip();
       const sourcePath = getDirPathUnsafe(validSource);
 
-      // 如果是目录，使用 addLocalFolder（推荐方式）
       if (validSource.__type === "dir-base" || validSource.type === "dir") {
         zip.addLocalFolder(sourcePath);
       } else {
-        // 单个文件
         zip.addLocalFile(sourcePath);
       }
 
@@ -454,7 +495,7 @@ const DataPath = () => {
 
     const dataDir = fs.existsSync(portableData)
       ? portableData
-      : path.join(app.getPath("appData"), "YourAppName", "data");
+      : path.join(app.getPath("appData"), "hound-whiteboard", "data");
 
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
@@ -484,6 +525,8 @@ export {
   make,
   rm,
   cp,
+  cat,      // 新增：读取文件内容
+  write,    // 新增：写入文件内容
   zip,
   unzip,
   ls,
