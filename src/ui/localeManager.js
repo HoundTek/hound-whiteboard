@@ -1,177 +1,174 @@
-/**
- * @file 语言管理器
- * @description 管理多语言支持，提供翻译功能
- * @module localeManager
- */
-
-/**
- * @typedef {Object} LocaleTranslations
- * @property {Object} [tabs] - 标签页翻译
- * @property {Object} [pages] - 页面翻译
- * @property {Object} [buttons] - 按钮翻译
- */
-
-/**
- * @typedef {Object} Locale
- * @property {string} id - 语言ID（如zh-CN）
- * @property {string} name - 语言名称
- * @property {string} nativeName - 本地名称
- * @property {LocaleTranslations} translations - 翻译表
- */
-
-/**
- * 语言管理器类
- * @class
- */
 class LocaleManager {
-  /**
-   * 创建语言管理器实例
-   */
   constructor() {
     /**
-     * 已加载的语言列表
-     * @type {Object.<string, Locale>}
+     * 已加载语言缓存
+     * @type {Record<string, any>}
      */
     this.locales = {};
-    
+
     /**
      * 当前语言
-     * @type {Locale|null}
+     * @type {any|null}
      */
     this.currentLocale = null;
-    
+
     /**
-     * 用户数据路径
+     * 当前语言ID
      * @type {string}
      */
-    this.userDataPath = '';
-    
-    // 尝试获取Electron用户数据路径
-    if (typeof window.electron !== 'undefined' && window.electron.app) {
-      this.userDataPath = window.electron.app.getUserDataPath();
-    } else {
-      // 开发环境使用实际appdata路径
-      this.userDataPath = 'C:\\Users\\Frank\\AppData\\Roaming\\hound-whiteboard';
-    }
+    this.currentLocaleId = "zh-CN";
+
+    /**
+     * 是否已初始化
+     */
+    this.initialized = false;
   }
 
+  // ==============================
+  // 🌐 初始化
+  // ==============================
+
   /**
-   * 加载语言包
-   * @async
-   * @param {string} localeId - 语言ID
-   * @returns {Promise<Locale>} 语言对象
-   * @throws {Error} 语言包不存在
+   * 初始化语言（必须由 preload 或 app 主动调用）
+   * @param {string} localeId
+   */
+  async init(localeId = "zh-CN") {
+    this.currentLocaleId = localeId;
+    const locale = await this.loadLocale(localeId);
+
+    this.currentLocale = locale;
+    this.initialized = true;
+
+    return locale;
+  }
+
+  // ==============================
+  // 📦 语言加载（唯一 IO 入口）
+  // ==============================
+
+  /**
+   * ⚠️ 关键点：
+   * 这里只允许走 preload 提供的安全 FS API
    */
   async loadLocale(localeId) {
     try {
-      const localePath = `${this.userDataPath}/data/locales/${localeId}.json`;
-      
-      // 优先通过fileUtils加载（IPC）
-      if (window.fileUtils) {
-        try {
-          const locale = await window.fileUtils.readJSON(localePath);
-          this.locales[localeId] = locale;
-          this.currentLocale = locale;
-          return locale;
-        } catch (error) {
-          console.warn('Error loading locale via fileUtils, falling back:', error);
-        }
+      if (!window?.safeIO?.fs) {
+        throw new Error("safeIO.fs not available");
       }
-      
-      // 回退到fetch
-      if (this.userDataPath !== './') {
-        try {
-          const response = await fetch(localePath);
-          if (response.ok) {
-            const locale = await response.json();
-            this.locales[localeId] = locale;
-            this.currentLocale = locale;
-            return locale;
-          }
-        } catch (error) {
-          console.warn('Error loading locale from appdata, falling back to local:', error);
-        }
+
+      const baseToken = window.__LOCALE_TOKEN__;
+
+      if (!baseToken) {
+        throw new Error("missing locale capability token");
       }
-      
-      // 回退到本地语言目录
-      const response = await fetch(`./locales/${localeId}.json`);
-      if (!response.ok) {
-        throw new Error(`Locale ${localeId} not found`);
-      }
-      const locale = await response.json();
+
+      // 统一路径由 main/control layer 决定
+      const pathToken = {
+        ...baseToken,
+        meta: {
+          type: "locale",
+          localeId,
+        },
+      };
+
+      const content = await window.safeIO.fs.read(pathToken);
+
+      const locale = JSON.parse(content);
+
       this.locales[localeId] = locale;
-      this.currentLocale = locale;
+
       return locale;
-    } catch (error) {
-      console.error('Error loading locale:', error);
-      // 回退到默认语言
-      if (localeId !== 'zh-CN') {
-        return this.loadLocale('zh-CN');
+    } catch (e) {
+      console.error("[LocaleManager] loadLocale failed:", e);
+
+      if (localeId !== "zh-CN") {
+        return this.loadLocale("zh-CN");
       }
-      throw error;
+
+      throw e;
     }
   }
 
+  // ==============================
+  // 🌍 翻译核心
+  // ==============================
+
   /**
-   * 获取翻译文本
-   * @param {string} keyPath - 键路径（如'tabs.start'）
-   * @param {Object} [params={}] - 替换参数
-   * @returns {string} 翻译文本
-   * 
-   * @example
-   * // 基本用法
-   * localeManager.t('tabs.start'); // '开始'
-   * 
-   * // 带参数
-   * localeManager.t('greeting.hello', { name: '张三' }); // '你好，张三'
+   * 翻译函数
+   * @param {string} keyPath
+   * @param {Object} params
    */
   t(keyPath, params = {}) {
     if (!this.currentLocale) {
-      console.warn('No locale loaded');
+      console.warn("[i18n] locale not initialized");
       return keyPath;
     }
 
-    const keys = keyPath.split('.');
+    const keys = keyPath.split(".");
     let value = this.currentLocale.translations;
 
     for (const key of keys) {
-      if (value && typeof value === 'object' && key in value) {
-        value = value[key];
-      } else {
-        console.warn(`Translation not found for key: ${keyPath}`);
+      if (!value || typeof value !== "object" || !(key in value)) {
+        console.warn(`[i18n] missing key: ${keyPath}`);
         return keyPath;
       }
+      value = value[key];
     }
 
-    // 替换参数
-    if (typeof value === 'string' && Object.keys(params).length > 0) {
-      return value.replace(/\{\{(\w+)\}\}/g, (match, param) => {
-        return params[param] !== undefined ? params[param] : match;
-      });
+    if (typeof value !== "string") {
+      return keyPath;
+    }
+
+    // 参数替换
+    if (params && Object.keys(params).length > 0) {
+      return value.replace(/\{\{(\w+)\}\}/g, (_, k) =>
+        params[k] !== undefined ? params[k] : `{{${k}}}`
+      );
     }
 
     return value;
   }
 
-  /**
-   * 获取当前语言
-   * @returns {Locale|null} 当前语言对象
-   */
+  // ==============================
+  // 🌐 状态查询
+  // ==============================
+
   getCurrentLocale() {
     return this.currentLocale;
   }
 
-  /**
-   * 获取所有已加载语言
-   * @returns {Locale[]} 语言数组
-   */
+  getCurrentLocaleId() {
+    return this.currentLocaleId;
+  }
+
   getAvailableLocales() {
     return Object.values(this.locales);
   }
+
+  isInitialized() {
+    return this.initialized;
+  }
+
+  // ==============================
+  // 🔁 切换语言
+  // ==============================
+
+  async switchLocale(localeId) {
+    if (localeId === this.currentLocaleId) return this.currentLocale;
+
+    const locale = await this.loadLocale(localeId);
+
+    this.currentLocale = locale;
+    this.currentLocaleId = localeId;
+
+    return locale;
+  }
 }
 
-/**
- * 语言管理器单例
- * @type {LocaleManager}
- */
+// ==============================
+// 🌉 单例导出
+// ==============================
+
 window.localeManager = new LocaleManager();
+
+export default window.localeManager;

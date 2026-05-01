@@ -11,7 +11,10 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const url = require("url");
-const { Directory, File } = require("./utils/safe-io/io");
+import fs from "fs";
+import registerHandlers from "./utils/safe-io/ipc/handlers.js";
+import startGC from "./utils/safe-io/auth/registry.js";
+const { electron } = require("process");
 
 /**
  * ### 窗口类
@@ -45,7 +48,7 @@ class Window {
       },
       icon: path.join(
         __dirname,
-        "../data/themes/icons/hound-whiteboard/assets/add.svg",
+        "../data/themes/icons/HoundWhiteboard/assets/add.svg",
       ),
       title: "Hound Whiteboard",
     });
@@ -87,182 +90,34 @@ ipcMain.on('config-changed', (event, data) => {
   });
 });
 
-/**
- * @typedef {Object} FileOperationParams
- * @property {string} [filePath] - 文件路径
- * @property {string} [dirPath] - 目录路径
- * @property {string} [path] - 目标路径
- * @property {string} [content] - 文件内容
- * @property {Object} [content] - JSON内容
- * @property {boolean} [isFile] - 是否为文件
- * @property {string} [source] - 源路径
- * @property {string} [dest] - 目标路径
- */
-
-/**
- * @typedef {Object} FileOperationResult
- * @property {boolean} success - 操作是否成功
- * @property {*} [data] - 返回数据（成功时）
- * @property {string} [error] - 错误信息（失败时）
- */
-
-/**
- * IPC处理器：通用文件操作通道
- * @param {Electron.IpcMainInvokeEvent} event - IPC事件对象
- * @param {Object} request - 请求对象
- * @param {string} request.action - 操作类型
- * @param {FileOperationParams} request.params - 操作参数
- * @returns {Promise<FileOperationResult>} 操作结果
- * 
- * @example
- * // 支持的操作类型：
- * // - readFile: 读取文件内容
- * // - readJSON: 读取JSON文件
- * // - writeFile: 写入文件
- * // - writeJSON: 写入JSON文件
- * // - exist: 检查文件或目录是否存在
- * // - mkdir: 创建目录
- * // - ls: 列出目录内容
- * // - lsDir: 列出子目录
- * // - lsFile: 列出文件
- * // - delete: 删除文件或目录
- * // - copy: 复制文件或目录
- * // - move: 移动文件或目录
- */
-ipcMain.handle('file-operation', async (event, { action, params }) => {
-  try {
-    let result;
-    
-    switch (action) {
-      case 'readFile': {
-        const { filePath } = params;
-        const file = File.parse(filePath);
-        result = { success: true, data: file.cat() };
-        break;
-      }
-      
-      case 'readJSON': {
-        const { filePath } = params;
-        const file = File.parse(filePath);
-        result = { success: true, data: file.catJSON() };
-        break;
-      }
-      
-      case 'writeFile': {
-        const { filePath, content } = params;
-        const file = File.parse(filePath);
-        file.write(content);
-        result = { success: true };
-        break;
-      }
-      
-      case 'writeJSON': {
-        const { filePath, content } = params;
-        const file = File.parse(filePath);
-        file.writeJSON(content);
-        result = { success: true };
-        break;
-      }
-      
-      case 'exist': {
-        const { path: targetPath } = params;
-        const isFile = params.isFile;
-        if (isFile) {
-          const file = File.parse(targetPath);
-          result = { success: true, data: file.exist() };
-        } else {
-          const dir = Directory.parse(targetPath);
-          result = { success: true, data: dir.exist() };
-        }
-        break;
-      }
-      
-      case 'mkdir': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        dir.make();
-        result = { success: true };
-        break;
-      }
-      
-      case 'ls': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        result = { success: true, data: dir.ls() };
-        break;
-      }
-      
-      case 'lsDir': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        const dirs = dir.lsDir().map(d => d.getPath());
-        result = { success: true, data: dirs };
-        break;
-      }
-      
-      case 'lsFile': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        const files = dir.lsFile().map(f => f.getPath());
-        result = { success: true, data: files };
-        break;
-      }
-      
-      case 'delete': {
-        const { path: targetPath } = params;
-        const isFile = params.isFile;
-        if (isFile) {
-          const file = File.parse(targetPath);
-          file.rm();
-        } else {
-          const dir = Directory.parse(targetPath);
-          dir.rm();
-        }
-        result = { success: true };
-        break;
-      }
-      
-      case 'copy': {
-        const { source, dest, isFile } = params;
-        if (isFile) {
-          const sourceFile = File.parse(source);
-          const destFile = File.parse(dest);
-          sourceFile.cp(destFile);
-        } else {
-          const sourceDir = Directory.parse(source);
-          const destDir = Directory.parse(dest);
-          sourceDir.cp(destDir);
-        }
-        result = { success: true };
-        break;
-      }
-      
-      case 'move': {
-        const { source, dest, isFile } = params;
-        if (isFile) {
-          const sourceFile = File.parse(source);
-          const destFile = File.parse(dest);
-          sourceFile.mv(destFile);
-        } else {
-          const sourceDir = Directory.parse(source);
-          const destDir = Directory.parse(dest);
-          sourceDir.mv(destDir);
-        }
-        result = { success: true };
-        break;
-      }
-      
-      default:
-        result = { success: false, error: `Unknown action: ${action}` };
-    }
-    
-    return result;
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
 app.whenReady().then(() => {
+
+  // =========================
+  // 🔐 SAFE-IO BOOTSTRAP
+  // =========================
+
+  // 1. 注册 IPC handlers（核心）
+  registerHandlers();
+
+  // 2. 启动 GC（capability cleanup）
+  startGC();
+
+  // 注册允许访问的根目录（示例）
+  // registerRoot("/Users/your-app/data");
+  // registerRoot("/Users/your-app/workspace");
+
+  // 3. 获取 data 目录 (应用安装目录中存在的 data 目录?? AppData/Roaming/HoundWhiteboard/data)
+  const installDir = app.getPath("exe") ?? electron.getAppPath();
+  const appDataDir = app.getPath("appData") ?? electron.getAppDataPath();
+  const dataDir = fs.existsSync(path.join(installDir, "data"))
+                    ? path.join(installDir, "data")
+                    : path.join(appDataDir, "HoundWhiteboard", "data");
+  
+  // 4. 注册 data 目录
+  registerRoot(dataDir);
+
+  // =========================
+
   // 检查是否有另一个应用实例在运行
   const gotTheLock = app.requestSingleInstanceLock();
   if (!gotTheLock) {

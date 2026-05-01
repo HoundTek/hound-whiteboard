@@ -1,185 +1,150 @@
 /**
- * @file 用户管理器
- * @description 管理用户配置和设置，支持多用户
+ * @file 用户管理器（重构版）
+ * @description 纯状态层 + capability API 调用层（无IO权限）
  * @module userManager
  */
 
 /**
  * @typedef {Object} UserSettings
- * @property {string} [theme] - 主题ID
- * @property {string} [iconPack] - 图标包ID
- * @property {string} [locale] - 语言ID
+ * @property {string} [theme]
+ * @property {string} [iconPack]
+ * @property {string} [locale]
  */
 
 /**
  * @typedef {Object} User
- * @property {string} id - 用户ID
- * @property {string} name - 用户名
- * @property {string} type - 用户类型（local）
- * @property {UserSettings} settings - 用户设置
- * @property {string} lastLoginAt - 最后登录时间
+ * @property {string} id
+ * @property {string} name
+ * @property {string} type
+ * @property {UserSettings} settings
+ * @property {string} lastLoginAt
  */
 
-/**
- * 用户管理器类
- * @class
- */
 class UserManager {
-  /**
-   * 创建用户管理器实例
-   */
-  constructor() {
+  constructor(api) {
     /**
-     * 已加载的用户列表
+     * safeIO capability API
+     * @type {any}
+     */
+    this.api = api;
+
+    /**
+     * cache users
      * @type {Object.<string, User>}
      */
     this.users = {};
-    
+
     /**
-     * 当前用户
+     * current user
      * @type {User|null}
      */
     this.currentUser = null;
-    
-    /**
-     * 用户数据路径
-     * @type {string}
-     */
-    this.userDataPath = '';
-    
-    // 尝试获取Electron用户数据路径
-    if (typeof window.electron !== 'undefined' && window.electron.app) {
-      this.userDataPath = window.electron.app.getUserDataPath();
-    } else {
-      // 开发环境使用实际appdata路径
-      this.userDataPath = 'C:\\Users\\Frank\\AppData\\Roaming\\hound-whiteboard';
-    }
   }
 
+  // ==============================
+  // 👤 load user (capability only)
+  // ==============================
+
   /**
-   * 加载用户配置
-   * @async
-   * @param {string} userId - 用户ID
-   * @returns {Promise<User>} 用户对象
-   * @throws {Error} 用户不存在
+   * 加载用户（通过 IPC capability）
+   * @param {string} userId
+   * @returns {Promise<User>}
    */
   async loadUser(userId) {
-    try {
-      const profilePath = `${this.userDataPath}/data/users/${userId}/profile.json`;
-      
-      // 优先通过fileUtils加载（IPC）
-      if (window.fileUtils) {
-        try {
-          const user = await window.fileUtils.readJSON(profilePath);
-          this.users[userId] = user;
-          this.currentUser = user;
-          return user;
-        } catch (error) {
-          console.warn('Error loading user via fileUtils, falling back:', error);
-        }
-      }
-      
-      // 回退到fetch
-      if (this.userDataPath !== './') {
-        try {
-          const response = await fetch(profilePath);
-          if (response.ok) {
-            const user = await response.json();
-            this.users[userId] = user;
-            this.currentUser = user;
-            return user;
-          }
-        } catch (error) {
-          console.warn('Error loading user from appdata, falling back to local:', error);
-        }
-      }
-      
-      // 回退到本地用户目录
-      const response = await fetch(`./users/${userId}/profile.json`);
-      if (!response.ok) {
-        throw new Error(`User ${userId} not found`);
-      }
-      const user = await response.json();
-      this.users[userId] = user;
-      this.currentUser = user;
-      return user;
-    } catch (error) {
-      console.error('Error loading user:', error);
-      // 回退到默认用户
-      if (userId !== 'default') {
-        return this.loadUser('default');
-      }
-      throw error;
+    if (!this.api?.user?.load) {
+      throw new Error("User API not available");
     }
+
+    const user = await this.api.user.load(userId);
+
+    this.users[userId] = user;
+    this.currentUser = user;
+
+    return user;
   }
 
-  /**
-   * 获取用户设置
-   * @param {string} key - 设置键名
-   * @returns {*} 设置值
-   */
+  // ==============================
+  // ⚙️ get setting (pure logic)
+  // ==============================
+
   getSetting(key) {
-    if (this.currentUser && this.currentUser.settings) {
-      return this.currentUser.settings[key];
-    }
-    return null;
+    return this.currentUser?.settings?.[key] ?? null;
   }
 
+  // ==============================
+  // ⚙️ set setting (capability write)
+  // ==============================
+
   /**
-   * 设置用户配置并保存到文件
-   * @async
-   * @param {string} key - 设置键名
-   * @param {*} value - 设置值
-   * @returns {Promise<boolean>} 是否成功
+   * 修改用户设置（会写回后端）
    */
   async setSetting(key, value) {
-    if (this.currentUser) {
-      this.currentUser.settings[key] = value;
-      
-      // 通过fileUtils保存到文件
-      if (window.fileUtils) {
-        try {
-          const userId = this.currentUser.id || 'default';
-          const profilePath = `${this.userDataPath}/data/users/${userId}/profile.json`;
-          await window.fileUtils.writeJSON(profilePath, this.currentUser);
-        } catch (error) {
-          console.error('Error saving user settings:', error);
-        }
-      }
-      
-      return true;
+    if (!this.currentUser) return false;
+
+    const updated = {
+      ...this.currentUser,
+      settings: {
+        ...this.currentUser.settings,
+        [key]: value,
+      },
+    };
+
+    this.currentUser = updated;
+    this.users[updated.id] = updated;
+
+    if (!this.api?.user?.save) {
+      throw new Error("User save API not available");
     }
-    return false;
+
+    await this.api.user.save(updated.id, updated);
+
+    return true;
   }
 
-  /**
-   * 获取当前用户
-   * @returns {User|null} 当前用户对象
-   */
+  // ==============================
+  // 👤 current user
+  // ==============================
+
   getCurrentUser() {
     return this.currentUser;
   }
 
-  /**
-   * 获取所有已加载用户
-   * @returns {User[]} 用户数组
-   */
-  getAllUsers() {
-    return Object.values(this.users);
+  // ==============================
+  // 📦 list users (optional capability)
+  // ==============================
+
+  async getAllUsers() {
+    if (!this.api?.user?.list) {
+      return Object.values(this.users);
+    }
+
+    const users = await this.api.user.list();
+    return users;
   }
 
-  /**
-   * 更新最后登录时间
-   */
-  updateLastLogin() {
-    if (this.currentUser) {
-      this.currentUser.lastLoginAt = new Date().toISOString();
+  // ==============================
+  // ⏱ update login time
+  // ==============================
+
+  async updateLastLogin() {
+    if (!this.currentUser) return;
+
+    const updated = {
+      ...this.currentUser,
+      lastLoginAt: new Date().toISOString(),
+    };
+
+    this.currentUser = updated;
+    this.users[updated.id] = updated;
+
+    if (this.api?.user?.save) {
+      await this.api.user.save(updated.id, updated);
     }
   }
 }
 
 /**
- * 用户管理器单例
- * @type {UserManager}
+ * factory（推荐）
+ * @param {object} api safeIO bridge
  */
-window.userManager = new UserManager();
+export const createUserManager = (api) => new UserManager(api);
