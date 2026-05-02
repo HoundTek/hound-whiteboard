@@ -2,18 +2,18 @@ import { jest } from "@jest/globals";
 import os from "os";
 
 import { Directory } from "../../../utils/filesys/io.js";
-import { BoardManager } from "../board-manager.js";
-import { PageManager } from "../page-manager.js";
+import { Board } from "../board.js";
+import { Page } from "../page.js";
 
-describe("BoardManager 页加载", () => {
+describe("Board 页加载", () => {
   function createBoard() {
-    const board = new BoardManager();
-    const page1 = new PageManager(1);
-    const page2 = new PageManager(2);
-    const page3 = new PageManager(3);
+    const board = new Board();
+    const page1 = new Page(1);
+    const page2 = new Page(2);
+    const page3 = new Page(3);
 
-    PageManager.connectTwoPage(page1, page2);
-    PageManager.connectTwoPage(page2, page3);
+    Page.connectTwoPage(page1, page2);
+    Page.connectTwoPage(page2, page3);
 
     for (const page of [page1, page2, page3]) {
       page.loadFull = jest.fn(function loadFull() {
@@ -43,7 +43,7 @@ describe("BoardManager 页加载", () => {
       });
     }
 
-    board.root = new Directory(os.tmpdir(), "houndwhiteboard-board-manager-test");
+    board.root = new Directory(os.tmpdir(), "houndwhiteboard-board-test");
     board.directory = board.root;
     board.pageMap = new Map([
       [1, page1],
@@ -55,7 +55,7 @@ describe("BoardManager 页加载", () => {
     return { board, page1, page2, page3 };
   }
 
-  test("PageLoadManager 的临时加载请求应由 BoardManager 执行", () => {
+  test("PageLoader 的临时加载请求应由 Board 执行", () => {
     const { board, page1, page2 } = createBoard();
 
     board.pageLoadManager.resetCurrentPage(page1);

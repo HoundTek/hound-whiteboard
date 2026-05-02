@@ -87,13 +87,13 @@ graph TD
   B["显示器组件(monitor)"]
   C["设备(devices)"]
   D["工具(tools)"]
-  E["白板(BM)"]
+  E["白板(Board)"]
   A-->|inputter|C
   C-->|outputter|A
   A<-->|screen|B
   C-->|Mount|B
   B-->|getter api|C
-  B<-->|BM api|E
+  B<-->|Board api|E
   C-->|action api|D
   D-->|getter api|C
   E<-->|BO api|D

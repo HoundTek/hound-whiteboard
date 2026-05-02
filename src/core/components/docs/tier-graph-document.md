@@ -121,8 +121,8 @@
 ### API
 
 |名称|描述|类型|
-|:--|:--|:--|
-|`pickup(startFrom)`|获取以指定对象集合为起点的子图|`Set<{id: number, page: PageManager}> -> DirectedGraph`|
+|---|---|---|
+|`pickup(startFrom)`|获取以指定对象集合为起点的子图|`Set<{id: number, page: Page}> -> DirectedGraph`|
 |`insertLayerUnder(layerNow, layerAbove)`|将某层插入到另一层之下|`Layer -> Layer \| Undefined -> void`|
 |`insertLayerUnderById(layerNow, LayerAboveId)`|将某层插入到另一层之下，其中另一层用 id 表示|`Layer -> number \| undefined -> void`|
 |`insertLayerToTop(layerNow)`|将某层插至顶层|`Layer -> void`|

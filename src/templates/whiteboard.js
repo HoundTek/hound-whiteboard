@@ -5,7 +5,7 @@ import { CounterPool } from "../core/utils/counter-pool.js";
 import { insertPoints } from "../core/utils/math-algorithm.js";
 import { StrokeCreatorTool } from "../core/tools/creator/stroke.js";
 import { Monitor } from "../core/components/monitor.js";
-import { BoardManager } from "../core/components/board-manager.js";
+import { Board } from "../core/components/board.js";
 
 const monitor = new Monitor();
 

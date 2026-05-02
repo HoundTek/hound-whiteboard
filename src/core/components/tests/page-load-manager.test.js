@@ -1,26 +1,26 @@
 import { jest } from "@jest/globals";
 import {
-  PageLoadManager,
+  PageLoader,
   PAGE_LOAD_MANAGER_EVENTS,
-} from "../page-load-manager.js";
-import { PageManager } from "../page-manager.js";
+} from "../page-loader.js";
+import { Page } from "../page.js";
 import { EventBus } from "../../utils/event-bus.js";
 
-describe("PageLoadManager", () => {
+describe("PageLoader", () => {
   function createPages() {
-    const page1 = new PageManager(1);
-    const page2 = new PageManager(2);
-    const page3 = new PageManager(3);
+    const page1 = new Page(1);
+    const page2 = new Page(2);
+    const page3 = new Page(3);
 
-    PageManager.connectTwoPage(page1, page2);
-    PageManager.connectTwoPage(page2, page3);
+    Page.connectTwoPage(page1, page2);
+    Page.connectTwoPage(page2, page3);
 
     return { page1, page2, page3 };
   }
 
   test("forceMoveCurrentRightTempLoad 应该请求加载并移动当前页", () => {
     const bus = new EventBus();
-    const loader = new PageLoadManager(3, bus);
+    const loader = new PageLoader(3, bus);
     const { page1, page2 } = createPages();
     const loadHandler = jest.fn();
 
@@ -44,7 +44,7 @@ describe("PageLoadManager", () => {
 
   test("expandBufferRightFullLoad 应该在不移动当前页的情况下扩展缓冲区", () => {
     const bus = new EventBus();
-    const loader = new PageLoadManager(3, bus);
+    const loader = new PageLoader(3, bus);
     const { page1, page2 } = createPages();
     const loadHandler = jest.fn();
 
@@ -67,7 +67,7 @@ describe("PageLoadManager", () => {
 
   test("缓冲区超限时应淘汰反方向页并发出卸载请求", () => {
     const bus = new EventBus();
-    const loader = new PageLoadManager(2, bus);
+    const loader = new PageLoader(2, bus);
     const { page1, page2, page3 } = createPages();
     const unloadHandler = jest.fn();
 
@@ -89,7 +89,7 @@ describe("PageLoadManager", () => {
 
   test("shrinkBufferRight 应该移除右边界，但不能移除当前页", () => {
     const bus = new EventBus();
-    const loader = new PageLoadManager(3, bus);
+    const loader = new PageLoader(3, bus);
     const { page1, page2, page3 } = createPages();
     const unloadHandler = jest.fn();
 
@@ -114,7 +114,7 @@ describe("PageLoadManager", () => {
 
   test("shrinkBufferLeft 在当前页位于左边界时不应收缩", () => {
     const bus = new EventBus();
-    const loader = new PageLoadManager(3, bus);
+    const loader = new PageLoader(3, bus);
     const { page1, page2 } = createPages();
     const unloadHandler = jest.fn();
 

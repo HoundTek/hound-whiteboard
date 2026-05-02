@@ -5,7 +5,7 @@
  */
 
 import { Device } from "../devices/device.js";
-import { PageLoadManager } from "./page-load-manager.js";
+import { PageLoader } from "./page-loader.js";
 
 /**
  * 显示器组件
@@ -29,7 +29,7 @@ class Monitor {
 
   /**
    * 页加载缓冲区管理器
-   * @type {PageLoadManager}
+   * @type {PageLoader}
    */
   pageLoadManager;
 

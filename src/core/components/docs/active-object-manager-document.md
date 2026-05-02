@@ -61,18 +61,18 @@
 
 ## 跨页拾取与临时加载
 
-`pickup` 支持跨页遍历对象图；`PageLoadManager` 在遍历过程中负责：
+`pickup` 支持跨页遍历对象图；`PageLoader` 在遍历过程中负责：
 
 - 控制临时加载页数量上限（默认 4）
 - 左右翻页时按需加载/卸载页层叠图
 
-当前 `PageLoadManager` 的文件加载路径仍是占位 `todo`，但接口已固定。
+当前 `PageLoader` 的文件加载路径仍是占位 `todo`，但接口已固定。
 
 ## API
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
-| `choose(startFrom)` | 将对象集加入活动对象系统并分层 | `Set<{id: number, page: PageManager}> -> void` |
+|---|---|---|
+| `choose(startFrom)` | 将对象集加入活动对象系统并分层 | `Set<{id: number, page: Page}> -> void` |
 | `remove(objs)` | 取消选择对象 | `Set<number> -> void` |
 | `liftup(objs)` | 将对象置顶 | `Set<number> -> void` |
 | `tidyup()` | 清理动态图中的无效层和空层 | `void -> void` |
@@ -85,6 +85,6 @@
 ## 相关文档
 
 - [tier-graph-document.md](./tier-graph-document.md)
-- [page-manager-document.md](./page-manager-document.md)
+- [page-document.md](./page-document.md)
 - [page-object-manager-document.md](./page-object-manager-document.md)
-- [page-load-manager-document.md](./page-load-manager-document.md)
+- [page-loader-document.md](./page-loader-document.md)

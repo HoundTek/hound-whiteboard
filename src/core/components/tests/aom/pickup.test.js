@@ -1,12 +1,12 @@
 import { jest } from "@jest/globals";
-import { MockPageLoadManager } from "./page-load-manager.mock.js";
+import { MockPageLoader } from "./page-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
-import { PageManager } from "../../page-manager.js";
+import { Page } from "../../page.js";
 import { PageObjectManager } from "../../page-object-manager.js";
 import { onePageData, twoPageData, multiPageData } from "./data.js";
 
-jest.unstable_mockModule("../../page-load-manager.js", () => ({
-  PageLoadManager: MockPageLoadManager,
+jest.unstable_mockModule("../../page-loader.js", () => ({
+  PageLoader: MockPageLoader,
 }));
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
@@ -19,7 +19,7 @@ describe("ActiveObjectManager/pickup", () => {
   });
 
   function createPage(id) {
-    const page = new PageManager(id);
+    const page = new Page(id);
     page.isLoad = true;
     page.isTempLoad = false;
     return page;

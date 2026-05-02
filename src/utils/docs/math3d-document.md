@@ -16,7 +16,7 @@
 ### 字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `x` | X 坐标 | `number` |
 | `y` | Y 坐标 | `number` |
 | `z` | Z 坐标 | `number` |
@@ -32,7 +32,7 @@
 ### 主要方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `serialize()` | 序列化为对象 | `void -> Object` |
 | `serializeToArray()` | 序列化为数组 | `void -> number[]` |
 | `applyTransform(matrix)` | 原地应用矩阵变换 | `Matrix3D -> Vector3D` |
@@ -73,7 +73,7 @@ $$
 ### 主要方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `serialize()` | 序列化为对象 | `void -> Object` |
 | `serializeToArray()` | 序列化为二维数组 | `void -> number[][]` |
 | `cloneMatrix()` | 克隆矩阵 | `void -> Matrix3D` |

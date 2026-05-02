@@ -8,9 +8,15 @@ import { RandomNumberPool } from "../../utils/algorithm.js";
 import { Deque } from "../../utils/deque.js";
 import { Queue } from "../../utils/queue.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
-import { PageManager } from "./page-manager.js";
-import { PageLoadManager } from "./page-load-manager.js";
+import { Page } from "./page.js";
+import { PageLoader } from "./page-loader.js";
 
+/**
+ * 层类
+ * @description 每一层包含一些活动对象和一些非活动对象，层与层之间有顺序关系。
+ * @class
+ * @author Zhou Chenyu
+ */
 class Layer {
   /**
    * 层 id
@@ -30,6 +36,10 @@ class Layer {
    */
   inactiveGraph;
 
+  /**
+   * @constructor
+   * @param {number} id - 层 id
+   */
   constructor(id) {
     this.id = id;
     this.activeObjects = new Set();
@@ -95,7 +105,7 @@ class ActiveObjectManager {
   /**
    * 获取以指定对象集合为起点的子图
    * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
-   * @param {Set<{id: number, page: PageManager}>} startFrom - 作为起点的对象 id 和其所在页实例的集合
+   * @param {Set<{id: number, page: Page}>} startFrom - 作为起点的对象 id 和其所在页实例的集合
    * @returns {DirectedGraph}
    */
   pickup(startFrom) {
@@ -104,14 +114,14 @@ class ActiveObjectManager {
 
     /**
      * @param {number} obj - 要拾取的对象 id
-     * @param {PageManager} pge - 该对象所在的页
+     * @param {Page} pge - 该对象所在的页
      */
     function pickupSingle(obj, pge) {
       if (visit.has(obj)) return;
       visit.add(obj);
       graph.addNodeUnsafe(obj);
 
-      let pageLoader = new PageLoadManager();
+      let pageLoader = new PageLoader();
       // 初始化页加载器，预加载当前页
       pageLoader.resetCurrentPage(pge);
 
@@ -184,7 +194,7 @@ class ActiveObjectManager {
   }
 
   /**
-   * @param {Set<{id: number, page: PageManager}>} startFrom - 要选择的活动对象 id 和其所在页实例的集合
+   * @param {Set<{id: number, page: Page}>} startFrom - 要选择的活动对象 id 和其所在页实例的集合
    */
   choose(startFrom) {
     // 提取出这些对象所构成的子图

@@ -4,7 +4,7 @@
 
 ## 1. components/
 
-### 1.1 BoardManager
+### 1.1 Board
 
 目标职责：
 
@@ -14,11 +14,11 @@
 
 当前状态：
 
-- 字段与主要流程框架已在 `src/core/components/board-manager.js` 建立。
+- 字段与主要流程框架已在 `src/core/components/board.js` 建立。
 - `load()` 已覆盖 meta/config/page-order/trace 的基础读取与邻近页加载策略。
 - 仍有明显 `todo`：创建文件结构、完整页加载、历史状态回放、设备相关联动。
 
-### 1.2 PageManager
+### 1.2 Page
 
 目标职责：
 

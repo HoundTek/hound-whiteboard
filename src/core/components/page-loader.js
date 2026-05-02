@@ -1,17 +1,17 @@
 /**
- * @file 页面加载管理器
- * @module page-load-manager
+ * @file 页面加载器
+ * @module page-loader
  * @author Zhou Chenyu
  */
 
 import { Deque } from "../../utils/deque.js";
-import { PageManager } from "./page-manager.js";
+import { Page } from "./page.js";
 import { EventBus } from "../utils/event-bus.js";
 
 const PAGE_LOAD_MANAGER_EVENTS = Object.freeze({
-  REQUEST_LOAD: "page-load-manager:request-load",
-  REQUEST_UNLOAD: "page-load-manager:request-unload",
-  BUFFER_UPDATED: "page-load-manager:buffer-updated",
+  REQUEST_LOAD: "page-loader:request-load",
+  REQUEST_UNLOAD: "page-loader:request-unload",
+  BUFFER_UPDATED: "page-loader:buffer-updated",
 });
 
 const PAGE_LOAD_STRATEGIES = Object.freeze({
@@ -22,16 +22,16 @@ const PAGE_LOAD_STRATEGIES = Object.freeze({
 let pageLoadManagerIdCounter = 0;
 
 /**
- * 页面加载管理器
+ * 页面加载器
  * @class
  * @description
  * 管理当前已加载的页。
- * 需要注意的是 PageLoadManager 无法直接加载页，
- * 它需要给 BoardManager 发出加载页的请求，
- * 由 BoardManager 来调用 PageManager 的加载方法。
+ * 需要注意的是 PageLoader 无法直接加载页，
+ * 它需要给 Board 发出加载页的请求，
+ * 由 Board 来调用 Page 的加载方法。
  * @author Zhou Chenyu
  */
-class PageLoadManager {
+class PageLoader {
   /**
    * 在该管理器中已加载的页
    * @description 页数不超过 `pagesLoadedLimit` 页，为页实例引用的双端队列。
@@ -41,7 +41,7 @@ class PageLoadManager {
 
   /**
    * 当前页引用
-   * @type {PageManager}
+   * @type {Page}
    */
   pageNow;
 
@@ -193,8 +193,8 @@ class PageLoadManager {
 
   /**
    * 重置当前页
-   * @param {PageManager} page - 页实例
-   * @returns {PageManager | undefined} 重置后的当前页实例，若参数无效，则为 undefined
+   * @param {Page} page - 页实例
+   * @returns {Page | undefined} 重置后的当前页实例，若参数无效，则为 undefined
    * @description
    * 该方法会清空当前缓冲区并把参数页设为当前页。
    * 如果参数页不在当前板中，则不进行任何操作。
@@ -223,7 +223,7 @@ class PageLoadManager {
 
   /**
    * 当前页缓冲区快照
-   * @returns {PageManager[]}
+   * @returns {Page[]}
    */
   getLoadedPages() {
     return this.pagesLoaded.toArray();
@@ -352,7 +352,7 @@ class PageLoadManager {
 
   /**
    * 把页加载到缓冲区中
-   * @param {PageManager} page - 要加载的页
+   * @param {Page} page - 要加载的页
    * @param {"right" | "left"} direction - 加载方向
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {"force-move" | "expand-buffer"} source - 加载来源
@@ -413,9 +413,9 @@ class PageLoadManager {
 
   /**
    * 获取指定页的邻居页
-   * @param {PageManager} page - 当前页
+   * @param {Page} page - 当前页
    * @param {"right" | "left"} direction - 方向
-   * @returns {PageManager | undefined} 邻居页
+   * @returns {Page | undefined} 邻居页
    * @private
    */
   #getNeighbor(page, direction) {
@@ -425,7 +425,7 @@ class PageLoadManager {
 
   /**
    * 发出加载请求
-   * @param {PageManager} page - 要加载的页
+   * @param {Page} page - 要加载的页
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {"right" | "left"} direction - 加载方向
    * @param {"force-move" | "expand-buffer"} source - 加载来源
@@ -445,7 +445,7 @@ class PageLoadManager {
 
   /**
    * 发出卸载请求
-   * @param {PageManager} page - 要卸载的页
+   * @param {Page} page - 要卸载的页
    * @param {"buffer-limit"} source - 卸载来源
    * @private
    */
@@ -474,7 +474,7 @@ class PageLoadManager {
 }
 
 export {
-  PageLoadManager,
+  PageLoader,
   PAGE_LOAD_MANAGER_EVENTS,
   PAGE_LOAD_STRATEGIES,
 };

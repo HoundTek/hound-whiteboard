@@ -1,4 +1,4 @@
-class MockPageLoadManager {
+class MockPageLoader {
   constructor(limit = 0) {
     this.pagesLoadedLimit = limit;
     this.pagesLoaded = [];
@@ -59,5 +59,5 @@ class MockPageLoadManager {
 }
 
 export {
-  MockPageLoadManager,
+  MockPageLoader,
 };

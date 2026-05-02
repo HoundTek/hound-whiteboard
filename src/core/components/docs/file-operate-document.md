@@ -13,13 +13,13 @@
 
 当前涉及文件操作的组件：
 
-- `BoardManager`
+- `Board`
 - `PageObjectManager`
-- `PageManager`（通过 `PageObjectManager` 间接触发）
+- `Page`（通过 `PageObjectManager` 间接触发）
 
 ## 白板目录结构约定
 
-根据当前 `BoardManager.create(...)` 的实现，白板根目录至少包含：
+根据当前 `Board.create(...)` 的实现，白板根目录至少包含：
 
 - `meta.json`
 - `config.json`
@@ -58,11 +58,11 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 - `load-page-objects`
 - `save-page-objects`
 
-## BoardManager 文件操作
+## Board 文件操作
 
 ### 1. 新建白板
 
-对应 API：`BoardManager.create(directory, boardInfo)`
+对应 API：`Board.create(directory, boardInfo)`
 
 主要行为：
 
@@ -183,9 +183,9 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 - `unloadObjects()`：清理内存中的 `pageObjects`
 - `unload()`：统一清理层叠图与对象映射
 
-## PageManager 与文件操作关系
+## Page 与文件操作关系
 
-`PageManager` 本身不直接操作磁盘路径，它通过 `PageObjectManager` 间接触发文件 I/O。
+`Page` 本身不直接操作磁盘路径，它通过 `PageObjectManager` 间接触发文件 I/O。
 
 关键行为：
 

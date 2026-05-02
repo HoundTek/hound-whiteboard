@@ -18,7 +18,7 @@
 ### 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `min` | 最小值 | `number` |
 | `max` | 最大值 | `number` |
 | `length` | 当前已占用数字个数 | `number` |
@@ -27,7 +27,7 @@
 ### 主要方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `initFromArray(arr)` | 用数组初始化池内容 | `number[] -> void` |
 | `add(num)` | 向池中加入指定数字 | `number -> boolean` |
 | `include(num)` | 查询数字是否在池中 | `number -> boolean` |

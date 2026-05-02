@@ -19,13 +19,13 @@
 ### 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `paths` | 目录路径分段数组，兼容不同平台路径分隔符 | `string[]` |
 
 ### 常用方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `getPath()` | 获取绝对路径 | `void -> string` |
 | `cd(pathStr)` | 进入子目录 | `string -> Directory` |
 | `father()` | 获取父目录 | `void -> Directory` |
@@ -47,7 +47,7 @@
 ### 静态方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `Directory.getHideResult(dir)` | 获取隐藏后目录名 | `Directory -> Directory` |
 | `Directory.getUnHideResult(dir)` | 获取取消隐藏后的目录名 | `Directory -> Directory` |
 | `Directory.parse(pathStr)` | 由路径解析目录对象 | `string -> Directory` |
@@ -59,7 +59,7 @@
 ### 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `dir` | 所在目录对象 | `Directory` |
 | `name` | 文件名（不含扩展名） | `string` |
 | `extension` | 扩展名 | `string` |
@@ -67,7 +67,7 @@
 ### 常用方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `getPath()` | 获取绝对路径 | `void -> string` |
 | `unPeek()` | 获取所在目录 | `void -> Directory` |
 | `cat()` | 读取文件文本 | `void -> string` |
@@ -91,7 +91,7 @@
 ### 静态方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `File.getHideResult(file)` | 获取隐藏后文件名 | `File -> File` |
 | `File.getUnHideResult(file)` | 获取取消隐藏后文件名 | `File -> File` |
 | `File.parse(pathStr)` | 由路径解析文件对象 | `string -> File` |
@@ -103,7 +103,7 @@
 ### 主要字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `dir` | 目标目录 | `Directory` |
 | `type` | `Directory` 或文件扩展名 | `string` |
 | `pool` | 内部随机数池 | `RandomNumberPool` |
@@ -111,7 +111,7 @@
 ### 主要方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `add(ID)` | 将指定 id 放入池中 | `string -> boolean` |
 | `include(ID)` | 查询 id 是否存在 | `string -> boolean` |
 | `isFull()` | 判断池是否已满 | `void -> boolean` |

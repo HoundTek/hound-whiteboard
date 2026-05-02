@@ -18,14 +18,14 @@
 ### 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `blockFile` | 对应的块文件对象 | `File` |
 | `entries` | 块内条目映射（`fileId -> entry`） | `Map<string, entry>` |
 
 ### 常用方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `load()` | 从磁盘加载块内容 | `void -> FileBlock` |
 | `flush()` | 将内存状态写回磁盘 | `void -> FileBlock` |
 | `listFiles()` | 获取块内全部条目 | `void -> entry[]` |
@@ -46,7 +46,7 @@
 ### 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `blockDir` | 块目录 | `Directory` |
 | `minBlockSize` | 块最小目标大小 | `number` |
 | `maxBlockSize` | 块最大目标大小 | `number` |
@@ -59,7 +59,7 @@
 ### 常用方法
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `load()` | 扫描目录并重建索引 | `void -> UnorderedBlockAllocator` |
 | `listBlocks()` | 查看块统计信息 | `void -> blockInfo[]` |
 | `listBlocksByRemainingSpace(order)` | 按剩余空间排序块 | `string -> blockInfo[]` |
@@ -81,7 +81,7 @@
 `allocateForWrite(sizeHint)` 返回分配结果对象：
 
 | 字段 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `blockId` | 目标块 ID | `string` |
 | `block` | 目标块实例 | `FileBlock` |
 | `created` | 是否新建块 | `boolean` |

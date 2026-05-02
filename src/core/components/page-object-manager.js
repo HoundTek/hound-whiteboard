@@ -7,7 +7,7 @@
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { deserialize } from "../objects/object-deserializer.js";
-import { boardFileOperateBridge } from "./file-operate-bridge-renderer.js";
+import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 
 /**
  * 页静态对象管理器

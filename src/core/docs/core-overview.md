@@ -21,14 +21,14 @@
 应用启动后，主进程会初始化：
 
 - 设置管理器
-- 白板管理器（主进程版本）
+- 白板类（主进程版本）
 - 模板管理器
 
 随后创建主菜单窗口，并挂载 IPC 通道。
 
 ### 2.2 新建/打开白板
 
-主进程侧 `board-manager` 负责：
+主进程侧 `board` 负责：
 
 - 创建 `.hwb` 结构（meta/config/pages/templates 等）
 - 打开 `.hwb`（解压到临时目录）
@@ -38,7 +38,7 @@
 
 ### 2.3 Core 介入点
 
-Core 层中的 `BoardManager`（`src/core/components/board-manager.js`）是领域管理器，目标负责：
+Core 层中的 `Board`（`src/core/components/board.js`）是领域管理器，目标负责：
 
 - 页生命周期与加载策略
 - 对象增删改与层叠关系

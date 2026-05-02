@@ -6,27 +6,27 @@ components 目录下的模块用于管理白板运行时状态，负责把对象
 
 ## 组件列表
 
-- `BoardManager`：白板级管理器，负责加载白板、维护页映射与页顺序、持有全局活动对象管理器与历史树。
-- `PageManager`：单页管理器，负责页链关系、页加载/卸载流程。
+- `Board`：白板级管理器，负责加载白板、维护页映射与页顺序、持有全局活动对象管理器与历史树。
+- `Page`：页面类，负责页链关系、页加载/卸载流程。
 - `PageObjectManager`：页对象管理器，负责静态层叠图与页对象映射。
 - `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
-- `PageLoadManager`：页缓冲区与当前页位置管理器，定义在 `page-load-manager.js`。
+- `PageLoader`：页缓冲区与当前页位置管理器，定义在 `page-loader.js`。
 
 ## 组件关系图
 
 ```mermaid
 graph LR
-  BM["BoardManager"]
-  PM["PageManager"]
+  Board["Board"]
+  PM["Page"]
   POM["PageObjectManager"]
   AOM["ActiveObjectManager"]
-  PLM["PageLoadManager"]
+  PLM["PageLoader"]
   UT["UndoTree"]
 
-  BM --> PM
+  Board --> PM
   PM --> POM
-  BM --> AOM
-  BM --> UT
+  Board --> AOM
+  Board --> UT
   AOM --> PLM
   PLM --> PM
 ```
@@ -35,7 +35,7 @@ graph LR
 
 ### 白板级与页级分治
 
-`BoardManager` 管白板级元信息与页列表，`PageManager` 管单页状态，`PageObjectManager` 管页内对象与层叠图。
+`Board` 管白板级元信息与页列表，`Page` 管单页状态，`PageObjectManager` 管页内对象与层叠图。
 
 这种拆分让“翻页/加载策略”和“对象关系维护”相互解耦。
 
@@ -48,12 +48,12 @@ graph LR
 ## 与其它目录的关系
 
 - 与 `src/core/objects/`：对象实例由页对象管理器持有。
-- 与 `src/core/hit/`：白板管理器持有 `UndoTree`，用于后续历史记录与回放。
+- 与 `src/core/hit/`：白板类持有 `UndoTree`，用于后续历史记录与回放。
 - 与 `src/core/tools/`：工具操作会驱动活动对象选择与页对象变更。
 - 与 `src/core/utils/`：大量依赖 `DirectedGraph`、队列/双端队列、计数池等基础结构。
 
 ## 当前实现状态
 
 - `ActiveObjectManager` 算法实现相对完整，已具备拾取、分层、置顶、清理等核心逻辑。
-- `BoardManager`、`PageManager`、`PageObjectManager` 已有骨架和关键字段，但仍存在较多 `todo`。
+- `Board`、`Page`、`PageObjectManager` 已有骨架和关键字段，但仍存在较多 `todo`。
 - 文档建议按“先补齐页加载与对象落盘，再串联工具与历史”的顺序推进。

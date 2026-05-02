@@ -1,10 +1,10 @@
-# 页面加载管理器文档
+# 页面加载器文档
 
-本文档提供 `PageLoadManager` 的概述。
+本文档提供 `PageLoader` 的概述。
 
-`PageLoadManager` 用于管理“当前缓冲区内已加载的页”，它不直接执行页加载，而是负责维护加载窗口、当前页位置与缓冲区扩展方向。
+`PageLoader` 用于管理“当前缓冲区内已加载的页”，它不直接执行页加载，而是负责维护加载窗口、当前页位置与缓冲区扩展方向。
 
-## 页面加载管理器职责
+## 页面加载器职责
 
 - 维护当前缓冲区中的页集合
 - 记录当前页引用 `pageNow`
@@ -17,24 +17,24 @@
 
 需要特别注意：
 
-- `PageLoadManager` 不拥有白板级状态
-- `PageLoadManager` 不直接读取文件或调用页加载逻辑
+- `PageLoader` 不拥有白板级状态
+- `PageLoader` 不直接读取文件或调用页加载逻辑
 - 它只负责“提出应加载/应卸载哪些页”的调度意图
-- 真正的加载动作应由 `BoardManager` 协调，再调用 `PageManager` 的加载方法
+- 真正的加载动作应由 `Board` 协调，再调用 `Page` 的加载方法
 
 因此它更接近“页缓冲区控制器”，而不是“页内容加载器”。
 
 ## 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `pagesLoaded` | 当前缓冲区中的页双端队列 | `Deque` |
-| `pageNow` | 当前页引用 | `PageManager` |
+| `pageNow` | 当前页引用 | `Page` |
 | `pagesLoadedLimit` | 缓冲区页数上限，`0` 表示不限制 | `number` |
 
 ## 缓冲区模型
 
-`PageLoadManager` 维护一个按页顺序排列的缓冲区。
+`PageLoader` 维护一个按页顺序排列的缓冲区。
 
 这个缓冲区通常包含：
 
@@ -118,16 +118,16 @@
 
 ## 事件协作
 
-`PageLoadManager` 自身不执行加载，而是通过事件总线把意图发送给 `BoardManager`。
+`PageLoader` 自身不执行加载，而是通过事件总线把意图发送给 `Board`。
 
 - 加载事件会携带请求来源 `requesterId`
 - 卸载事件也会携带请求来源 `requesterId`
-- 这样 `BoardManager` 可以在多个 `PageLoadManager` 同时存在时正确维护页的引用计数
+- 这样 `Board` 可以在多个 `PageLoader` 同时存在时正确维护页的引用计数
 
 ## API
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `moveCurrentRight()` | 当前页在缓冲区中右移 | `void -> void` |
 | `moveCurrentLeft()` | 当前页在缓冲区中左移 | `void -> void` |
 | `expandBufferRightTempLoad()` | 向右扩展缓冲区并临时加载 | `void -> void` |
@@ -141,8 +141,8 @@
 
 ## 与其它组件的关系
 
-- 与 [board-manager-document.md](./board-manager-document.md)：由白板管理器协调其策略结果落地。
-- 与 [page-manager-document.md](./page-manager-document.md)：缓冲区中的元素是 `PageManager` 实例。
+- 与 [board-document.md](./board-document.md)：由白板类协调其策略结果落地。
+- 与 [page-document.md](./page-document.md)：缓冲区中的元素是 `Page` 实例。
 - 与 [active-object-document.md](./active-object-document.md)：活动对象跨页访问会依赖页缓冲区策略。
 
 ## 实现状态
@@ -152,4 +152,4 @@
 
 ## 备注
 
-当前仓库里曾出现过把页加载辅助逻辑内嵌在其它管理器中的实现思路；现在单独拆出 `page-load-manager.js` 后，职责边界更清晰，也更适合后续让 `BoardManager` 统一调度页加载策略。
+当前仓库里曾出现过把页加载辅助逻辑内嵌在其它管理器中的实现思路；现在单独拆出 `page-loader.js` 后，职责边界更清晰，也更适合后续让 `Board` 统一调度页加载策略。

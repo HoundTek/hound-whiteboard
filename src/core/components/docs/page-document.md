@@ -1,10 +1,10 @@
-# 页面管理器文档
+# 页面类文档
 
-本文档提供 `PageManager` 的概述。
+本文档提供 `Page` 的概述。
 
-`PageManager` 是单页生命周期管理单元，负责维护页链关系，并协调本页对象管理器的加载与卸载。
+`Page` 是单页生命周期管理单元，负责维护页链关系，并协调本页对象管理器的加载与卸载。
 
-## 页面管理器职责
+## 页面类职责
 
 - 管理页对象管理器 `objectManager`
 - 维护页链：`prevPage` 与 `nextPage`
@@ -13,11 +13,11 @@
 ## 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `id` | 页 id | `number` |
 | `objectManager` | 页对象管理器 | `PageObjectManager` |
-| `nextPage` | 后一页 | `PageManager \| undefined` |
-| `prevPage` | 前一页 | `PageManager \| undefined` |
+| `nextPage` | 后一页 | `Page \| undefined` |
+| `prevPage` | 前一页 | `Page \| undefined` |
 | `isLoad` | 是否已加载 | `boolean` |
 | `isTempLoad` | 是否为临时加载 | `boolean` |
 
@@ -79,8 +79,8 @@
 ## API
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
-| `connectTwoPage(first, second)` | 连接两页 | `PageManager -> PageManager -> void` |
+|---|---|---|
+| `connectTwoPage(first, second)` | 连接两页 | `Page -> Page -> void` |
 | `addObject(obj, below, above)` | 按上下关系加入对象 | `number -> number[] -> number[] -> void` |
 | `loadFull(boardRootPath)` | 完整加载页面 | `string -> Promise<boolean>` |
 | `loadTemp(boardRootPath)` | 临时加载页面 | `string -> Promise<boolean>` |
@@ -96,5 +96,5 @@
 ## 相关文档
 
 - [page-object-manager-document.md](./page-object-manager-document.md)
-- [board-manager-document.md](./board-manager-document.md)
+- [board-document.md](./board-document.md)
 - [tier-graph-document.md](./tier-graph-document.md)

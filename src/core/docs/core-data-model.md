@@ -18,9 +18,9 @@
 
 ### 2.1 白板级
 
-`BoardManager` 持有：
+`Board` 持有：
 
-- `pageMap`: 页 id -> `PageManager`
+- `pageMap`: 页 id -> `Page`
 - `pageOrder`: 页顺序
 - `loadedPages`: 当前已加载页队列（上限策略）
 - `activeObjectManager`: 活动对象层管理
@@ -28,7 +28,7 @@
 
 ### 2.2 页级
 
-`PageManager` 持有：
+`Page` 持有：
 
 - 双向链接：`prevPage` / `nextPage`
 - `objectManager`（`PageObjectManager`）

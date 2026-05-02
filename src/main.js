@@ -2,7 +2,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { registerIOBridge } from "./io-bridge-main.js";
-import { registerCoreFileOperateBridge } from "./core/components/file-operate-bridge-main.js";
+import { registerCoreFileOperateBridge } from "./core/bridges/file-operate-bridge-main.js";
 
 let window;
 const __filename = fileURLToPath(import.meta.url);

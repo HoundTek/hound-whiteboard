@@ -1,6 +1,9 @@
 /**
- * 页面管理器
- * @module page-manager
+ * 页面组件
+ * @description
+ * 页面组件负责管理每一页的对象和层级关系，以及页与页之间的连接关系。
+ * 每一页对应一个页面类实例。
+ * @module page
  * @author Zhou Chenyu
  */
 
@@ -8,12 +11,12 @@ import { BasicObject } from "../objects/basic-obj.js";
 import { PageObjectManager } from "./page-object-manager.js";
 
 /**
- * 页管理器
+ * 页面类
  * @class
- * @description 管理一页
+ * @description 每一页对应一个页面类实例。
  * @author Zhou Chenyu
  */
-class PageManager {
+class Page {
   /**
    * 页面上的对象管理
    * @description 包括页对象和层级关系
@@ -23,13 +26,13 @@ class PageManager {
 
   /**
    * 后一页
-   * @type {PageManager | undefined}
+   * @type {Page | undefined}
    */
   nextPage;
 
   /**
    * 前一页
-   * @type {PageManager | undefined}
+   * @type {Page | undefined}
    */
   prevPage;
 
@@ -69,8 +72,8 @@ class PageManager {
 
   /**
    * 连接两页
-   * @param {PageManager | undefined} first 前一页
-   * @param {PageManager | undefined} second 后一页
+   * @param {Page | undefined} first 前一页
+   * @param {Page | undefined} second 后一页
    */
   static connectTwoPage(first, second) {
     if (first) first.nextPage = second;
@@ -169,5 +172,5 @@ class PageManager {
 }
 
 export {
-  PageManager,
+  Page,
 };

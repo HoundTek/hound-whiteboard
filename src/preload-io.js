@@ -5,7 +5,7 @@ import {
 } from "./io-bridge-common.js";
 import {
   CORE_FILE_OPERATE_CHANNEL,
-} from "./core/components/file-operate-bridge-common.js";
+} from "./core/bridges/file-operate-bridge-common.js";
 
 /**
  * 预加载层暴露给渲染进程的 I/O 桥接对象。

@@ -1,6 +1,9 @@
 /**
- * 白板管理器
- *
+ * 白板组件
+ * @description
+ * Board 类是白板在面向对象设计中的抽象核心，负责管理页、对象、历史等信息，
+ * 并提供相关初级接口供工具和设备调用。一个 Board 实例对应一个白板管辖。
+ * @module board
  * @author Zhou Chenyu
  */
 
@@ -12,21 +15,21 @@ import { EventBus } from "../utils/event-bus.js";
 import { UndoTree } from "../hit/undo-tree-core.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import {
-  PageLoadManager,
+  PageLoader,
   PAGE_LOAD_MANAGER_EVENTS,
   PAGE_LOAD_STRATEGIES,
-} from "./page-load-manager.js";
-import { PageManager } from "./page-manager.js";
+} from "./page-loader.js";
+import { Page } from "./page.js";
 import { PageObjectManager } from "./page-object-manager.js";
-import { boardFileOperateBridge } from "./file-operate-bridge-renderer.js";
+import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 
 /**
- * 白板管理器
- * @description 一个白板只能被一个白板管理器实例管辖
+ * 白板类
+ * @description 一个白板实例就对应了一个白板管辖。
  * @class
  * @author Zhou Chenyu
  */
-class BoardManager {
+class Board {
   /**
    * 页缓冲区上限
    * @description 已加载的页不超过 4 页（包含临时加载和完整加载）。
@@ -50,7 +53,7 @@ class BoardManager {
   /**
    * 页 id -> 页实例映射
    * @description 拥有页实例的所有权
-   * @type {Map<number, PageManager>}
+   * @type {Map<number, Page>}
    */
   pageMap;
 
@@ -119,8 +122,8 @@ class BoardManager {
 
   /**
    * 页缓冲区控制器
-   * @type {PageLoadManager}
-   * @todo 这个应该是由 Monitor 设备来创建和持有的，BoardManager 只负责调用它提供的接口来加载和卸载页
+   * @type {PageLoader}
+   * @todo 这个应该是由 Monitor 设备来创建和持有的，Board 只负责调用它提供的接口来加载和卸载页
    */
   pageLoadManager;
 
@@ -148,22 +151,22 @@ class BoardManager {
   }
 
   /**
-   * 创建绑定到当前 BoardManager 的页加载管理器
+   * 创建绑定到当前 Board 的页加载管理器
    * @param {number} [limit] - 缓冲区上限
    * @param {number | string} [requesterId] - 请求方 id
-   * @returns {PageLoadManager}
+   * @returns {PageLoader}
    */
-  createPageLoadManager(limit = BoardManager.PAGE_BUFFER_LIMIT, requesterId) {
-    return new PageLoadManager(limit, this.pageLoadEventBus, requesterId);
+  createPageLoadManager(limit = Board.PAGE_BUFFER_LIMIT, requesterId) {
+    return new PageLoader(limit, this.pageLoadEventBus, requesterId);
   }
 
   /**
    * 添加新页
    * @todo
-   * @returns {Promise<PageManager>}
+   * @returns {Promise<Page>}
    */
   async appendPage(templateId) {
-    let page = new PageManager(this.pageCounterPool.generate());
+    let page = new Page(this.pageCounterPool.generate());
 
     await boardFileOperateBridge.createPageStorage(this.rootPath, page.id);
 
@@ -176,7 +179,7 @@ class BoardManager {
       let lastPage = this.pageMap.get(
         this.pageOrder[this.pageOrder.length - 1],
       );
-      PageManager.connectTwoPage(lastPage, page);
+      Page.connectTwoPage(lastPage, page);
     }
     this.pageOrder.push(page.id);
     await this.#persistPageConnection();
@@ -189,7 +192,7 @@ class BoardManager {
    * 加载白板
    * @description 加载白板的 meta、config 以及页等信息
    * @param {string} directory - 白板根目录
-   * @return {Promise<BoardManager>} 返回自身以支持链式调用
+   * @return {Promise<Board>} 返回自身以支持链式调用
    * @throws {Error} 如果目录不合法或文件损坏
    * @todo
    */
@@ -234,8 +237,8 @@ class BoardManager {
     this.pageMap = new Map();
     let previousPage = null;
     for (const pageId of this.pageOrder) {
-      const currentPage = new PageManager(pageId);
-      PageManager.connectTwoPage(previousPage, currentPage);
+      const currentPage = new Page(pageId);
+      Page.connectTwoPage(previousPage, currentPage);
       this.pageMap.set(pageId, currentPage);
       previousPage = currentPage;
     }
@@ -289,11 +292,11 @@ class BoardManager {
    *
    * @static
    * @author Zhou Chenyu
-   * @returns {Promise<BoardManager>}
+   * @returns {Promise<Board>}
    * @todo
    */
   static async create(directory, boardInfo) {
-    const manager = new BoardManager();
+    const manager = new Board();
     manager.directory = directory;
     manager.rootPath = directory;
     await boardFileOperateBridge.createBoardRoot(directory, boardMeta, {
@@ -354,7 +357,7 @@ class BoardManager {
 
   /**
    * 加载页
-   * @param {PageManager} page - 要加载的页
+   * @param {Page} page - 要加载的页
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
    * @param {number | string} requesterId - 发起加载请求的 PLM id
@@ -386,7 +389,7 @@ class BoardManager {
 
   /**
    * 卸载页
-   * @param {PageManager} page - 要卸载的页
+   * @param {Page} page - 要卸载的页
    * @param {number | string} requesterId - 发起卸载请求的 PLM id
    * @returns {Promise<boolean>} 是否成功卸载
    * @private
@@ -537,5 +540,5 @@ const boardMeta = {
 };
 
 export {
-  BoardManager,
+  Board,
 };

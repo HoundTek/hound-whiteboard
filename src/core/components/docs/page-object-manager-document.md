@@ -19,7 +19,7 @@
 ## 核心字段
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `staticGraph` | 页静态层叠图 | `DirectedGraph` |
 | `coverLeftPage` | 向左跨页对象集合 | `Set<number>` |
 | `coverRightPage` | 向右跨页对象集合 | `Set<number>` |
@@ -54,7 +54,7 @@
 ## API
 
 | 名称 | 描述 | 类型 |
-|:--|:--|:--|
+|---|---|---|
 | `loadTierGraph(boardRootPath)` | 加载页层叠图 | `string -> Promise<void>` |
 | `saveTierGraph(boardRootPath)` | 保存页层叠图 | `string -> Promise<void>` |
 | `unloadTierGraph()` | 卸载页层叠图 | `void -> void` |
@@ -65,7 +65,7 @@
 
 ## 与其它组件的关系
 
-- 被 [page-manager-document.md](./page-manager-document.md) 持有并调度。
+- 被 [page-document.md](./page-document.md) 持有并调度。
 - 其静态图被 [active-object-document.md](./active-object-document.md) 的跨页拾取逻辑读取。
 - 底层依赖 `src/core/utils/directed-graph.js`。
 
