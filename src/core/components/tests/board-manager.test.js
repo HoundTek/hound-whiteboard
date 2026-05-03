@@ -99,7 +99,7 @@ describe("Board 页加载", () => {
 
   test("多个 PLM 共用一页时，单个卸载请求不应真正卸载该页", () => {
     const { board, page1, page2 } = createBoard();
-    const pageLoadManager2 = board.createPageLoadManager(2, "plm-2");
+    const pageLoadManager2 = board.createPageLoader(2, "plm-2");
 
     board.pageLoadManager.resetCurrentPage(page1);
     pageLoadManager2.resetCurrentPage(page1);
@@ -126,7 +126,7 @@ describe("Board 页加载", () => {
 
   test("完整加载持有者释放后，若仍有临时持有者，应降级为临时加载", () => {
     const { board, page1, page2 } = createBoard();
-    const pageLoadManager2 = board.createPageLoadManager(2, "plm-2");
+    const pageLoadManager2 = board.createPageLoader(2, "plm-2");
 
     board.pageLoadManager.resetCurrentPage(page1);
     pageLoadManager2.resetCurrentPage(page1);

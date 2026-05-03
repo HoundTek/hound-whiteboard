@@ -14,6 +14,7 @@ import { DirectedGraph } from "../utils/directed-graph.js";
 import { EventBus } from "../utils/event-bus.js";
 import { UndoTree } from "../hit/undo-tree-core.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
+import { Monitor } from "./monitor.js";
 import {
   PageLoader,
   PAGE_LOAD_MANAGER_EVENTS,
@@ -145,19 +146,36 @@ class Board {
     this.pageCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
     this.pageLoadEventBus = new EventBus();
-    this.pageLoadManager = this.createPageLoadManager();
+    this.pageLoadManager = this.createPageLoader();
     this.loadedPages = this.pageLoadManager.pagesLoaded;
     this.#bindPageLoadEvents();
   }
 
   /**
-   * 创建绑定到当前 Board 的页加载管理器
+   * 创建绑定到当前 Board 的页加载器
    * @param {number} [limit] - 缓冲区上限
    * @param {number | string} [requesterId] - 请求方 id
    * @returns {PageLoader}
    */
-  createPageLoadManager(limit = Board.PAGE_BUFFER_LIMIT, requesterId) {
+  createPageLoader(limit = Board.PAGE_BUFFER_LIMIT, requesterId) {
     return new PageLoader(limit, this.pageLoadEventBus, requesterId);
+  }
+
+  /**
+   * 创建绑定到当前 Board 的显示器
+   * @param {HTMLElement} rootElement - 显示器的根元素
+   * @param {{ width: number, height: number }} options - 显示器尺寸选项
+   * @returns {Monitor}
+   */
+  createMonitor(rootElement, { width, height }) {
+    const monitorCanvas = document.createElement("canvas");
+    rootElement.appendChild(monitorCanvas);
+    const monitor = new Monitor(monitorCanvas, this, {
+      width: width ?? this.pageWidth,
+      height: height ?? this.pageHeight,
+    });
+    // [todo] 监听 Monitor 的视口变化事件以更新 Board 的 origin 和 zoom
+    return monitor;
   }
 
   /**
@@ -317,6 +335,7 @@ class Board {
 
   /**
    * 添加对象到指定页
+   * @todo
    * @param {BasicObject} obj - 要添加的对象
    * @param {number} pageId - 要添加到的页 id
    */
@@ -397,7 +416,10 @@ class Board {
   async #unloadPage(page, requesterId) {
     if (!page || requesterId === undefined) return false;
 
-    const removedStrategy = this.#unregisterPageLoadRequest(page.id, requesterId);
+    const removedStrategy = this.#unregisterPageLoadRequest(
+      page.id,
+      requesterId,
+    );
     if (!removedStrategy) return false;
 
     if (this.pageFullyLoadedCount.has(page.id)) {
@@ -412,8 +434,6 @@ class Board {
     if (!page.isLoad) return false;
     return page.isTempLoad ? page.unloadTemp() : page.unload();
   }
-
-  
 
   /**
    * 持久化页连接信息
@@ -454,9 +474,9 @@ class Board {
   }
 
   /**
-   * 记录某个 PLM 对某页的加载持有关系
+   * 记录某个页klfakkdk对某页的加载持有关系
    * @param {number} pageId - 页 id
-   * @param {number | string} requesterId - PLM id
+   * @param {number | string} requesterId - 页加载器 id
    * @param {"temp" | "full"} strategy - 加载策略
    * @returns {"temp" | "full"} 生效后的策略
    * @private
@@ -539,6 +559,4 @@ const boardMeta = {
   version: "0.1.0",
 };
 
-export {
-  Board,
-};
+export { Board };
