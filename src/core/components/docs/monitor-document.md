@@ -13,3 +13,5 @@
 设备树是由各不同状态的设备挂载到显示器组件上后形成的树形结构，它可以将状态显化并封存在树上的节点中。在 Core-UI Interface 中，事件的接收者是 Board，但可以通过节点定位将信息分发到各节点中。
 
 设备树的例子详见设备文档中[设备的状态压缩](../../devices/docs/device-document.md#设备的状态压缩)部分。
+
+当前设备树的数据结构与路由规则见[设备树文档](../../devices/docs/devices-tree-document.md)。

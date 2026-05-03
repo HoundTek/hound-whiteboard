@@ -22,16 +22,22 @@ class StrokeCreatorTool extends ObjectCreatorTool {
     this.obj = new StrokeObject(p, id, pageId);
   }
 
-  start(point, option) {
-    this.obj.setPoints(this.obj.points.concat([point]));
+  beginObjectCreation(interaction) {
+    this.obj.setPoints(this.obj.points.concat([interaction.position]));
   }
 
-  move(point, option) {
-    this.obj.setPoints(this.obj.points.concat([point]));
+  updateObjectCreation(interaction) {
+    this.obj.setPoints(this.obj.points.concat([interaction.position]));
   }
 
-  end(point, option) {
-    this.obj.setPoints(this.obj.points.concat([point]));
+  completeObjectCreation(interaction) {
+    if (interaction.position) {
+      this.obj.setPoints(this.obj.points.concat([interaction.position]));
+    }
+  }
+
+  reset() {
+    this.obj = null;
   }
 }
 

@@ -9,6 +9,12 @@ import { BasicObject } from "../../objects/basic-obj.js";
 import { Controller } from "../controller/controller.js";
 import { Tool } from "../tool.js";
 
+const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
+  POSITION: "position",
+  END: "end",
+  CANCEL: "cancel",
+});
+
 /**
  * 对象创建工具基类
  * @class
@@ -27,6 +33,7 @@ class ObjectCreatorTool extends Tool {
    */
   constructor() {
     super();
+    this.isCreatingGestureActive = false;
   }
 
   /**
@@ -56,10 +63,148 @@ class ObjectCreatorTool extends Tool {
   obj;
 
   /**
+   * 当前创建手势是否仍在持续
+   * @type {boolean}
+   */
+  isCreatingGestureActive;
+
+  /**
+   * 将信号上下文中的坐标规整为 Vector。
+   * @param {*} value - 原始值
+   * @returns {Vector|null} 规整后的向量
+   */
+  static normalizeVector(value) {
+    if (!value) return null;
+    if (value instanceof Vector) return value;
+    if (typeof value.x === "number" && typeof value.y === "number") {
+      return new Vector(value.x, value.y);
+    }
+    return null;
+  }
+
+  /**
+   * 从信号包中提取交互上下文。
+   * @param {{to: string, signals: Array<{type: string, context?: Object}>}} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {Object} 交互上下文
+   */
+  buildInteractionContext(signalPacket, deviceContext = {}) {
+    const signals = signalPacket.signals;
+    const positionSignal = signals.find(
+      (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+    );
+    const position = ObjectCreatorTool.normalizeVector(
+      positionSignal?.context?.value ?? positionSignal?.context?.position,
+    );
+    return {
+      signalPacket,
+      deviceContext,
+      signals,
+      position,
+      isEnded: signals.some(
+        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.END,
+      ),
+      isCancelled: signals.some(
+        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.CANCEL,
+      ),
+      objectId:
+        positionSignal?.context?.objectId ??
+        deviceContext.objectId ??
+        deviceContext.allocateObjectId?.(),
+      pageId:
+        positionSignal?.context?.pageId ??
+        deviceContext.pageId ??
+        deviceContext.resolvePageId?.(signalPacket),
+    };
+  }
+
+  /**
+   * 处理一个完整信号包。
+   * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {Array<{to: string, signals: Array<Object>}>} 输出信号包列表
+   */
+  process(signalPacket, deviceContext = {}) {
+    const normalizedPacket = Tool.normalizeSignalPacket(signalPacket);
+    const interaction = this.buildInteractionContext(
+      normalizedPacket,
+      deviceContext,
+    );
+
+    if (interaction.isCancelled) {
+      this.cancelObjectCreation(interaction);
+      this.isCreatingGestureActive = false;
+      return [];
+    }
+
+    if (!interaction.position) {
+      if (interaction.isEnded && this.isCreatingGestureActive) {
+        this.completeObjectCreation(interaction);
+        this.isCreatingGestureActive = false;
+      }
+      return [];
+    }
+
+    if (!this.obj) {
+      if (interaction.objectId == null || interaction.pageId == null) {
+        return [];
+      }
+      this.create(interaction.position, interaction.objectId, interaction.pageId);
+    }
+
+    if (!this.isCreatingGestureActive) {
+      this.beginObjectCreation(interaction);
+      this.isCreatingGestureActive = true;
+    } else {
+      this.updateObjectCreation(interaction);
+    }
+
+    if (interaction.isEnded) {
+      this.completeObjectCreation(interaction);
+      this.isCreatingGestureActive = false;
+    }
+
+    return [];
+  }
+
+  /**
    * @returns {Controller[]} 控制点列表
    */
   getControllers() {
     throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 开始一次对象创建手势。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  beginObjectCreation(interaction) {
+    throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 更新一次对象创建手势。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  updateObjectCreation(interaction) {
+    throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 完成一次对象创建手势。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  completeObjectCreation(interaction) {
+    return undefined;
+  }
+
+  /**
+   * 取消当前对象创建。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  cancelObjectCreation(interaction) {
+    this.reset();
+    return undefined;
   }
 
   /**
@@ -77,4 +222,5 @@ class ObjectCreatorTool extends Tool {
 
 export {
   ObjectCreatorTool,
+  OBJECT_CREATOR_SIGNAL_TYPES,
 };

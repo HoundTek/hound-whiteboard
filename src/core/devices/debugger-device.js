@@ -19,8 +19,11 @@ class DebuggerDevice extends Device {
    */
   name = "Debugger Device";
 
-  constructor() {
-    super();
+  constructor(options = {}) {
+    super({
+      ...options,
+      name: options.name ?? "Debugger Device",
+    });
   }
 }
 

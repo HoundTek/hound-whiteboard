@@ -99,45 +99,50 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   }
 
   /**
-   * @description 用户按下设备时，添加一个新的顶点，并新增一个控制点。
-   * @param {Vector} point - 用户按下设备时的位置
-   * @param {Object} option - 选项
+   * @description 创建手势开始时，添加一个新的顶点。
+   * @param {Object} interaction - 当前交互上下文
    */
-  start(point, option) {
-    this.obj.appendPoint(point);
-    this.lastPoint = point;
+  beginObjectCreation(interaction) {
+    this.obj.appendPoint(interaction.position);
+    this.lastPoint = interaction.position;
     this.count++;
   }
 
   /**
-   * @description 用户移动设备时，更新当前顶点位置和控制点位置。
-   * 如果当前位置与当前顶点位置相同，则不进行任何操作。
-   * @param {Vector} point - 用户松开设备时的位置
-   * @param {Object} option - 选项
+   * @description 创建手势更新时，修改当前顶点位置。
+   * @param {Object} interaction - 当前交互上下文
    */
-  move(point, option) {
-    if (!Vector.nearlyEq(this.lastPoint, point)) {
-      this.lastPoint = point;
-      this.obj.changePoint(this.count - 1, point);
+  updateObjectCreation(interaction) {
+    if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
+      this.lastPoint = interaction.position;
+      this.obj.changePoint(this.count - 1, interaction.position);
     }
   }
 
   /**
-   * @description 用户松开设备时，当前顶点的位置就被确定下来了。
-   * 如果当前位置与当前顶点位置相同，则不进行任何操作。
-   * @param {Vector} point - 用户松开设备时的位置
-   * @param {Object} option - 选项
+   * @description 创建手势结束时，固定当前顶点并追加控制点。
+   * @param {Object} interaction - 当前交互上下文
    */
-  end(point, option) {
-    if (!Vector.nearlyEq(this.lastPoint, point)) {
-      this.lastPoint = point;
-      this.obj.changePoint(this.count - 1, point);
+  completeObjectCreation(interaction) {
+    if (
+      interaction.position &&
+      !Vector.nearlyEq(this.lastPoint, interaction.position)
+    ) {
+      this.lastPoint = interaction.position;
+      this.obj.changePoint(this.count - 1, interaction.position);
     }
-    let controller = new VertexController(point);
+    const controller = new VertexController(this.lastPoint);
     controller.onDrag = (newPosition) => {
       this.obj.changePoint(this.count - 1, newPosition);
     };
     this.vertixControllers.push(controller);
+  }
+
+  reset() {
+    this.obj = null;
+    this.vertixControllers = [];
+    this.count = 0;
+    this.lastPoint = null;
   }
 }
 

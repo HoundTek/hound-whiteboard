@@ -23,6 +23,39 @@ class Tool {
   constructor() {}
 
   /**
+    * 将输入信号包规整为统一结构。
+   * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包
+   * @returns {{to: string, signals: Array<Object>}} 规整后的信号包
+   */
+  static normalizeSignalPacket(signalPacket = {}) {
+    return {
+      to: signalPacket.to ?? "",
+      signals: Array.isArray(signalPacket.signals) ? signalPacket.signals : [],
+    };
+  }
+
+  /**
+   * 构造单个信号。
+   * @param {string} type - 信号类型
+   * @param {Object} [context={}] - 信号上下文
+   * @returns {{type: string, context: Object}} 信号对象
+   */
+  static createSignal(type, context = {}) {
+    return { type, context };
+  }
+
+  /**
+   * 规整工具处理后的结果。
+   * @param {{to?: string, signals?: Array<Object>}|Array<{to?: string, signals?: Array<Object>}>} result - 工具处理结果
+   * @returns {Array<{to: string, signals: Array<Object>}>} 规整后的信号包列表
+   */
+  static normalizeProcessResult(result) {
+    if (result === undefined || result === null) return [];
+    const packets = Array.isArray(result) ? result : [result];
+    return packets.map((packet) => Tool.normalizeSignalPacket(packet));
+  }
+
+  /**
    * 解析序列化的工具数据以创建工具实例
    * @returns {Tool} 创建的工具实例
    * @throws {Error} 基类未实现此方法
@@ -44,44 +77,22 @@ class Tool {
   }
 
   /**
+   * 处理一个完整信号包。
+   * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {Array<{to: string, signals: Array<Object>}>|{to: string, signals: Array<Object>}|null} 输出信号包
+   * @abstract
+   */
+  process(signalPacket, deviceContext) {
+    throw new Error("Method not implemented.");
+  }
+
+  /**
    * 重置工具状态
    * @throws {Error} 基类未实现此方法
    * @abstract
    */
   reset() {
-    throw new Error("Method not implemented.");
-  }
-
-  /**
-   * 开始使用工具
-   * @param {Vector} point - 工具在开始使用时的位置
-   * @param {Object} option - 选项
-   * @description 对应用户开始使用工具的操作，例如用户按下鼠标或触摸屏幕时调用此方法
-   * @abstract
-   */
-  start(point, option) {
-    throw new Error("Method not implemented.");
-  }
-
-  /**
-   * 结束使用工具
-   * @param {Vector} point - 工具在结束使用时的位置
-   * @param {Object} option - 选项
-   * @description 对应用户结束使用工具的操作，例如用户松开鼠标或触摸屏幕时调用此方法
-   * @abstract
-   */
-  end(point, option) {
-    throw new Error("Method not implemented.");
-  }
-
-  /**
-   * 移动工具
-   * @param {Vector} point - 工具在移动时的位置
-   * @param {Object} option - 选项
-   * @description 对应用户移动工具的操作，例如用户拖动鼠标或触摸屏幕时调用此方法
-   * @abstract
-   */
-  move(point, option) {
     throw new Error("Method not implemented.");
   }
 }
