@@ -4,6 +4,43 @@
  * @author Zhou Chenyu
  */
 
+import { SignalPacket } from "./signal.js";
+
+/**
+ * 设备树处理器上下文
+ * @typedef {Object} DevicesTreeRouteContext
+ * @property {DevicesTreeNode} [node] - 当前正在处理的节点
+ * @property {DevicesTree} [tree] - 所属设备树
+ * @property {string} [path] - 当前节点路径
+ * @property {number} [depth] - 当前分发深度
+ */
+
+/**
+ * 设备树处理器输出
+ * @typedef {SignalPacket|Object|Array<SignalPacket|Object>|null|undefined} DevicesTreeProcessorResult
+ */
+
+/**
+ * 设备树节点处理器
+ * @callback DevicesTreeProcessor
+ * @param {SignalPacket} signalPacket - 已规整的输入信号包
+ * @param {DevicesTreeRouteContext} routeContext - 当前路由上下文
+ * @returns {DevicesTreeProcessorResult}
+ */
+
+/**
+ * 设备子树节点定义
+ * @typedef {Object} DeviceNodeDefinition
+ * @property {string} [path] - 相对设备根路径
+ * @property {DevicesTreeProcessor|null} [processor] - 挂载到该节点的处理器
+ */
+
+/**
+ * 设备子树定义
+ * @typedef {Object} DeviceDefinition
+ * @property {() => DeviceNodeDefinition[]} defineNodes - 返回整棵设备子树的节点定义
+ */
+
 /**
  * 设备树节点
  * @class
@@ -30,7 +67,7 @@ class DevicesTreeNode {
 
   /**
    * 节点处理器
-   * @type {Function|null}
+    * @type {DevicesTreeProcessor|null}
    */
   processor;
 
@@ -38,7 +75,7 @@ class DevicesTreeNode {
    * @constructor
    * @param {string} name
    * @param {DevicesTreeNode|null} parent
-   * @param {Function|null} processor
+    * @param {DevicesTreeProcessor|null} processor
    */
   constructor(name, parent = null, processor = null) {
     this.name = name;
@@ -68,7 +105,7 @@ class DevicesTreeNode {
 
   /**
    * 设置节点处理器
-   * @param {Function|null} processor - 节点处理器
+    * @param {DevicesTreeProcessor|null} processor - 节点处理器
    * @returns {DevicesTreeNode} 当前节点
    */
   setProcessor(processor) {
@@ -78,7 +115,7 @@ class DevicesTreeNode {
 
   /**
    * 获取节点处理器
-   * @returns {Function|null} 节点处理器
+    * @returns {DevicesTreeProcessor|null} 节点处理器
    */
   getProcessor() {
     if (typeof this.processor === "function") {
@@ -89,12 +126,12 @@ class DevicesTreeNode {
 
   /**
    * 处理当前节点收到的信号包
-   * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包
-   * @param {Object} routeContext - 路由上下文
-   * @returns {Array<{to: string, signals: Array<Object>}>} 输出信号包列表
+    * @param {SignalPacket|Object} signalPacket - 输入信号包
+    * @param {DevicesTreeRouteContext} routeContext - 路由上下文
+    * @returns {SignalPacket[]} 输出信号包列表
    */
   process(signalPacket, routeContext = {}) {
-    const normalizedPacket = DevicesTree.normalizeSignalPacket(signalPacket);
+    const normalizedPacket = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const processor = this.getProcessor();
     if (!processor) {
       return [normalizedPacket];
@@ -150,26 +187,12 @@ class DevicesTree {
   }
 
   /**
-   * 规整信号包
-   * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包
-   * @returns {{to: string, signals: Array<Object>}} 规整后的信号包
-   */
-  static normalizeSignalPacket(signalPacket = {}) {
-    return {
-      to: signalPacket.to ?? "/",
-      signals: Array.isArray(signalPacket.signals) ? signalPacket.signals : [],
-    };
-  }
-
-  /**
    * 规整处理结果
-   * @param {{to?: string, signals?: Array<Object>}|Array<{to?: string, signals?: Array<Object>}>|null} result - 处理结果
-   * @returns {Array<{to: string, signals: Array<Object>}>} 规整后的结果
+    * @param {SignalPacket|Object|Array<SignalPacket|Object>|null} result - 处理结果
+    * @returns {SignalPacket[]} 规整后的结果
    */
   static normalizeProcessResult(result) {
-    if (result === undefined || result === null) return [];
-    const packets = Array.isArray(result) ? result : [result];
-    return packets.map((packet) => DevicesTree.normalizeSignalPacket(packet));
+    return SignalPacket.normalizeResult(result, { defaultTo: "/" });
   }
 
   /**
@@ -207,7 +230,7 @@ class DevicesTree {
   /**
    * 挂载节点处理器
    * @param {string} path - 节点路径
-   * @param {Function|null} processor - 节点处理器
+    * @param {DevicesTreeProcessor|null} processor - 节点处理器
    * @returns {DevicesTreeNode} 挂载后的节点
    */
   mount(path, processor = null) {
@@ -219,7 +242,7 @@ class DevicesTree {
   /**
    * 挂载一棵设备子树
    * @param {string} rootPath - 设备根路径
-   * @param {{defineNodes?: Function}} deviceDefinition - 设备子树定义
+    * @param {DeviceDefinition} deviceDefinition - 设备子树定义
    * @returns {DevicesTreeNode[]} 挂载后的节点列表
    */
   mountDevice(rootPath, deviceDefinition) {
@@ -272,12 +295,12 @@ class DevicesTree {
 
   /**
    * 向目标节点分发信号包
-   * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包
-   * @param {Object} routeContext - 路由上下文
-   * @returns {Array<{to: string, signals: Array<Object>}>} 终止在树中的信号包
+    * @param {SignalPacket|Object} signalPacket - 输入信号包
+    * @param {DevicesTreeRouteContext} routeContext - 路由上下文
+    * @returns {SignalPacket[]} 终止在树中的信号包
    */
   dispatch(signalPacket, routeContext = {}) {
-    const normalizedPacket = DevicesTree.normalizeSignalPacket(signalPacket);
+    const normalizedPacket = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const depth = routeContext.depth ?? 0;
     if (depth > this.maxDispatchDepth) {
       throw new RangeError("DevicesTree dispatch depth exceeded limit");
@@ -299,7 +322,7 @@ class DevicesTree {
     }
 
     return normalizedNextPackets.flatMap((packet) => {
-      const nextPacket = DevicesTree.normalizeSignalPacket(packet);
+      const nextPacket = SignalPacket.from(packet, { defaultTo: "/" });
       if (!nextPacket.to || nextPacket.to === targetNode.path) {
         return [nextPacket];
       }

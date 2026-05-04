@@ -1,27 +1,27 @@
-import { StrokeCreatorTool } from "../creator/stroke.js";
-import { PolygonCreatorTool } from "../creator/polygon.js";
-import { Vector } from "../../../utils/math.js";
+import { StrokeCreatorTool } from "../stroke.js";
+import { PolygonCreatorTool } from "../polygon.js";
+import { Vector } from "../../../../utils/math.js";
 
 describe("ObjectCreatorTool", () => {
   test("StrokeCreatorTool 应消费 position/end 信号并累计点列", () => {
     const tool = new StrokeCreatorTool();
     const deviceContext = { objectId: 100, pageId: 2 };
 
-    tool.process(
+    expect(tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
-    );
-    tool.process(
+    )).toBeUndefined();
+    expect(tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
-    );
-    tool.process(
+    )).toBeUndefined();
+    expect(tool.process(
       {
         to: "/monitor/stroke",
         signals: [
@@ -30,7 +30,7 @@ describe("ObjectCreatorTool", () => {
         ],
       },
       deviceContext,
-    );
+    )).toBeUndefined();
 
     expect(tool.obj.id).toBe(100);
     expect(tool.obj.pageId).toBe(2);
@@ -45,17 +45,17 @@ describe("ObjectCreatorTool", () => {
   test("cancel 信号应重置正在创建的对象", () => {
     const tool = new StrokeCreatorTool();
 
-    tool.process(
+    expect(tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       { objectId: 1, pageId: 1 },
-    );
-    tool.process({
+    )).toBeUndefined();
+    expect(tool.process({
       to: "/monitor/stroke",
       signals: [{ type: "cancel", context: {} }],
-    });
+    })).toBeUndefined();
 
     expect(tool.obj).toBeNull();
   });
@@ -64,21 +64,21 @@ describe("ObjectCreatorTool", () => {
     const tool = new PolygonCreatorTool();
     const deviceContext = { objectId: 10, pageId: 1 };
 
-    tool.process(
+    expect(tool.process(
       {
         to: "/monitor/polygon",
         signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
       },
       deviceContext,
-    );
-    tool.process(
+    )).toBeUndefined();
+    expect(tool.process(
       {
         to: "/monitor/polygon",
         signals: [{ type: "position", context: { value: new Vector(8, 9) } }],
       },
       deviceContext,
-    );
-    tool.process(
+    )).toBeUndefined();
+    expect(tool.process(
       {
         to: "/monitor/polygon",
         signals: [
@@ -87,7 +87,7 @@ describe("ObjectCreatorTool", () => {
         ],
       },
       deviceContext,
-    );
+    )).toBeUndefined();
 
     expect(tool.obj.points.map((point) => point.serialize())).toEqual([
       { x: 10, y: 12 },

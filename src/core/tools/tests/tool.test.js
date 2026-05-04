@@ -1,57 +1,53 @@
 import { Tool } from "../tool.js";
+import { SignalPacket } from "../../devices/signal.js";
 
 describe("Tool", () => {
-  test("normalizeSignalPacket 应规整缺省字段", () => {
-    expect(Tool.normalizeSignalPacket()).toEqual({
+  test("SignalPacket.from 应规整工具侧缺省字段", () => {
+    expect(SignalPacket.from()).toBeInstanceOf(SignalPacket);
+    expect(SignalPacket.from()).toEqual({
       to: "",
       signals: [],
     });
 
-    expect(Tool.normalizeSignalPacket({ to: "/monitor" })).toEqual({
+    expect(SignalPacket.from({ to: "/monitor" })).toBeInstanceOf(SignalPacket);
+    expect(SignalPacket.from({ to: "/monitor" })).toEqual({
       to: "/monitor",
       signals: [],
     });
   });
 
-  test("createSignal 应构造标准信号对象", () => {
-    expect(Tool.createSignal("pressure", { value: 0.5 })).toEqual({
-      type: "pressure",
-      context: { value: 0.5 },
-    });
-  });
+  test("createProcessor 应把输入规整后交给工具消费", () => {
+    class TestTool extends Tool {
+      calls = [];
 
-  test("normalizeProcessResult 应规整单个或多个信号包", () => {
-    expect(
-      Tool.normalizeProcessResult({
-        to: "/monitor/device",
-        signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
-      }),
-    ).toEqual([
-      {
-        to: "/monitor/device",
-        signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
-      },
-    ]);
+      process(signalPacket, deviceContext) {
+        this.calls.push({ signalPacket, deviceContext });
+      }
 
-    expect(
-      Tool.normalizeProcessResult([
-        {
-          to: "/a",
-          signals: [{ type: "end", context: {} }],
-        },
-        {
-          to: "/b",
-          signals: [{ type: "cancel", context: {} }],
-        },
-      ]),
-    ).toEqual([
+      reset() {
+        this.calls = [];
+      }
+    }
+
+    const tool = new TestTool();
+    const processor = tool.createProcessor({ board: "board-context" });
+
+    const result = processor(
+      { signals: [{ type: "pressure", context: { value: 0.5 } }] },
+      { path: "/monitor/s-pen/pen" },
+    );
+
+    expect(result).toBeUndefined();
+    expect(tool.calls).toEqual([
       {
-        to: "/a",
-        signals: [{ type: "end", context: {} }],
-      },
-      {
-        to: "/b",
-        signals: [{ type: "cancel", context: {} }],
+        signalPacket: {
+          to: "",
+          signals: [{ type: "pressure", context: { value: 0.5 } }],
+        },
+        deviceContext: {
+          board: "board-context",
+          path: "/monitor/s-pen/pen",
+        },
       },
     ]);
   });

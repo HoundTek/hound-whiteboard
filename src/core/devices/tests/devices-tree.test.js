@@ -1,4 +1,5 @@
 import { DevicesTree } from "../devices-tree.js";
+import { SignalPacket } from "../signal.js";
 
 describe("DevicesTree", () => {
   test("应能按路径挂载并查询节点", () => {
@@ -16,31 +17,38 @@ describe("DevicesTree", () => {
     const tree = new DevicesTree();
     const trace = [];
 
+    // 此处以一个简单的 S Pen 为例
     tree.mount("/monitor/s-pen", (packet, context) => {
       const isButtonPressed = packet.signals.some(
         (signal) => signal.type === "button" && signal.context?.value === true,
       );
       trace.push(["root", context.path, isButtonPressed]);
-      return [{
-        to: isButtonPressed ? "/monitor/s-pen/eraser" : "/monitor/s-pen/pen",
-        signals: packet.signals,
-      }];
+      return [
+        {
+          to: isButtonPressed ? "/monitor/s-pen/eraser" : "/monitor/s-pen/pen",
+          signals: packet.signals,
+        },
+      ];
     });
 
     tree.mount("/monitor/s-pen/pen", (packet, context) => {
       trace.push(["pen", context.path, packet.signals[0].type]);
-      return [{
-        to: context.path,
-        signals: [{ type: "draw", context: { from: context.path } }],
-      }];
+      return [
+        {
+          to: context.path,
+          signals: [{ type: "draw", context: { from: context.path } }],
+        },
+      ];
     });
 
     tree.mount("/monitor/s-pen/eraser", (packet, context) => {
       trace.push(["eraser", context.path, packet.signals[0].type]);
-      return [{
-        to: context.path,
-        signals: [{ type: "erase", context: { from: context.path } }],
-      }];
+      return [
+        {
+          to: context.path,
+          signals: [{ type: "erase", context: { from: context.path } }],
+        },
+      ];
     });
 
     const packets = tree.dispatch({
@@ -61,26 +69,23 @@ describe("DevicesTree", () => {
   });
 
   test("mountDevice 应按设备定义挂载整棵子树", () => {
-    const normalizeSignalPacket = (signalPacket = {}) => ({
-      to: signalPacket.to ?? "/",
-      signals: Array.isArray(signalPacket.signals) ? signalPacket.signals : [],
-    });
-
-    const normalizeProcessResult = (result) => {
-      if (result === undefined || result === null) return [];
-      const packets = Array.isArray(result) ? result : [result];
-      return packets.map((packet) => normalizeSignalPacket(packet));
-    };
-
-    const createNodeProcessor = (nodePath) => (signalPacket, routeContext = {}) =>
-      normalizeProcessResult(
-        processNodePacket(nodePath, normalizeSignalPacket(signalPacket), routeContext),
-      );
+    const createNodeProcessor =
+      (nodePath) =>
+      (signalPacket, routeContext = {}) =>
+        SignalPacket.normalizeResult(
+          processNodePacket(
+            nodePath,
+            SignalPacket.from(signalPacket, { defaultTo: "/" }),
+            routeContext,
+          ),
+          { defaultTo: "/" },
+        );
 
     const processNodePacket = (nodePath, packet) => {
       if (nodePath === "") {
         const isButtonPressed = packet.signals.some(
-          (signal) => signal.type === "button" && signal.context?.value === true,
+          (signal) =>
+            signal.type === "button" && signal.context?.value === true,
         );
         return {
           to: isButtonPressed ? "/monitor/s-pen/eraser" : "/monitor/s-pen/pen",
@@ -90,7 +95,12 @@ describe("DevicesTree", () => {
 
       return {
         to: `/monitor/s-pen/${nodePath}`,
-        signals: [{ type: nodePath === "pen" ? "draw" : "erase", context: { from: nodePath } }],
+        signals: [
+          {
+            type: nodePath === "pen" ? "draw" : "erase",
+            context: { from: nodePath },
+          },
+        ],
       };
     };
 
@@ -113,7 +123,10 @@ describe("DevicesTree", () => {
       "/monitor/s-pen/pen",
       "/monitor/s-pen/eraser",
     ]);
-    expect(typeof tree.getNode("/monitor/s-pen/pen")?.processor).toBe("function");
+
+    expect(typeof tree.getNode("/monitor/s-pen/pen")?.processor).toBe(
+      "function",
+    );
 
     expect(
       tree.dispatch({
@@ -131,7 +144,9 @@ describe("DevicesTree", () => {
   test("节点只应持有 processor", () => {
     const tree = new DevicesTree();
 
-    const processor = () => [{ to: "/monitor/node", signals: [{ type: "node" }] }];
+    const processor = () => [
+      { to: "/monitor/node", signals: [{ type: "node" }] },
+    ];
     const node = tree.mount("/monitor/node", processor);
 
     const packets = tree.dispatch({

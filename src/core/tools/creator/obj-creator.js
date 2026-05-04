@@ -6,6 +6,7 @@
 
 import { Vector } from "../../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
+import { SignalPacket } from "../../devices/signal.js";
 import { Controller } from "../controller/controller.js";
 import { Tool } from "../tool.js";
 
@@ -84,7 +85,7 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 从信号包中提取交互上下文。
-   * @param {{to: string, signals: Array<{type: string, context?: Object}>}} signalPacket - 输入信号包
+    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
    * @returns {Object} 交互上下文
    */
@@ -120,12 +121,12 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 处理一个完整信号包。
-   * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包
+    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
-   * @returns {Array<{to: string, signals: Array<Object>}>} 输出信号包列表
+    * @returns {void}
    */
   process(signalPacket, deviceContext = {}) {
-    const normalizedPacket = Tool.normalizeSignalPacket(signalPacket);
+    const normalizedPacket = SignalPacket.from(signalPacket);
     const interaction = this.buildInteractionContext(
       normalizedPacket,
       deviceContext,
@@ -134,7 +135,7 @@ class ObjectCreatorTool extends Tool {
     if (interaction.isCancelled) {
       this.cancelObjectCreation(interaction);
       this.isCreatingGestureActive = false;
-      return [];
+      return;
     }
 
     if (!interaction.position) {
@@ -142,12 +143,12 @@ class ObjectCreatorTool extends Tool {
         this.completeObjectCreation(interaction);
         this.isCreatingGestureActive = false;
       }
-      return [];
+      return;
     }
 
     if (!this.obj) {
       if (interaction.objectId == null || interaction.pageId == null) {
-        return [];
+        return;
       }
       this.create(interaction.position, interaction.objectId, interaction.pageId);
     }
@@ -163,8 +164,6 @@ class ObjectCreatorTool extends Tool {
       this.completeObjectCreation(interaction);
       this.isCreatingGestureActive = false;
     }
-
-    return [];
   }
 
   /**
