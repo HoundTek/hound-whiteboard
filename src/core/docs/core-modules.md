@@ -124,10 +124,9 @@
 
 ## 5. devices/
 
-- `Device` 现在表示设备子树定义，而不是单个节点对象。
 - `DevicesTree` 负责保存节点层级，并按路径把信号包送到节点处理器。
 - `DevicesTreeNode` 只表示信号处理单元，本身只挂 `processor`。
-- `DebuggerDevice` 仍是调试占位实现。
+- 设备子树定义目前是普通对象协议，核心入口是 `defineNodes()`。
 
 当前状态：
 

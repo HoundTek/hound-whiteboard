@@ -126,7 +126,7 @@ class Board {
    * @type {PageLoader}
    * @todo 这个应该是由 Monitor 设备来创建和持有的，Board 只负责调用它提供的接口来加载和卸载页
    */
-  pageLoadManager;
+  pageLoader;
 
   /**
    * 每页由哪些 PLM 持有以及持有策略
@@ -146,8 +146,8 @@ class Board {
     this.pageCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
     this.pageLoadEventBus = new EventBus();
-    this.pageLoadManager = this.createPageLoader();
-    this.loadedPages = this.pageLoadManager.pagesLoaded;
+    this.pageLoader = this.createPageLoader();
+    this.loadedPages = this.pageLoader.pagesLoaded;
     this.#bindPageLoadEvents();
   }
 
@@ -246,7 +246,7 @@ class Board {
     this.pageOrder = connection.order;
     this.pageCounterPool = new CounterPool(connection.count);
 
-    this.pageLoadManager.resetBuffer();
+    this.pageLoader.resetBuffer();
     this.pageLoadOwners.clear();
     this.pageTemporaryLoadedCount.clear();
     this.pageFullyLoadedCount.clear();
@@ -270,20 +270,20 @@ class Board {
     }
 
     // 初始化缓冲区并加载当前页
-    this.pageLoadManager.resetCurrentPage(currentPage);
+    this.pageLoader.resetCurrentPage(currentPage);
     await this.#loadPage(
       currentPage,
       PAGE_LOAD_STRATEGIES.FULL,
       false,
-      this.pageLoadManager.requesterId,
+      this.pageLoader.requesterId,
     );
 
     if (currentPage.prevPage) {
-      this.pageLoadManager.expandBufferLeftFullLoad();
+      this.pageLoader.expandBufferLeftFullLoad();
     }
 
     if (currentPage.nextPage) {
-      this.pageLoadManager.expandBufferRightFullLoad();
+      this.pageLoader.expandBufferRightFullLoad();
     }
 
     if (
@@ -291,7 +291,7 @@ class Board {
       currentPage.nextPage &&
       currentPage.nextPage.nextPage
     ) {
-      this.pageLoadManager.expandBufferRightFullLoad();
+      this.pageLoader.expandBufferRightFullLoad();
     }
 
     // [todo] 加载上次打开的历史，如工具、设备等

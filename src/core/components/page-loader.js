@@ -19,7 +19,7 @@ const PAGE_LOAD_STRATEGIES = Object.freeze({
   FULL: "full",
 });
 
-let pageLoadManagerIdCounter = 0;
+let pageLoaderIdCounter = 0;
 
 /**
  * 页面加载器
@@ -71,7 +71,7 @@ class PageLoader {
   constructor(
     limit = 0,
     eventBus = new EventBus(),
-    requesterId = ++pageLoadManagerIdCounter,
+    requesterId = ++pageLoaderIdCounter,
   ) {
     this.pagesLoadedLimit = limit;
     this.pagesLoaded = new Deque();

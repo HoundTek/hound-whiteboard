@@ -58,8 +58,8 @@ describe("Board 页加载", () => {
   test("PageLoader 的临时加载请求应由 Board 执行", () => {
     const { board, page1, page2 } = createBoard();
 
-    board.pageLoadManager.resetCurrentPage(page1);
-    board.pageLoadManager.expandBufferRightTempLoad();
+    board.pageLoader.resetCurrentPage(page1);
+    board.pageLoader.expandBufferRightTempLoad();
 
     expect(page2.loadTemp).toHaveBeenCalledTimes(1);
     expect(board.pageTemporaryLoadedCount.get(2)).toBe(1);
@@ -69,54 +69,54 @@ describe("Board 页加载", () => {
   test("完整加载升级应把页从临时加载计数迁移到完整加载计数", () => {
     const { board, page1, page2 } = createBoard();
 
-    board.pageLoadManager.resetCurrentPage(page1);
-    board.pageLoadManager.expandBufferRightTempLoad();
-    board.pageLoadManager.forceMoveCurrentRightFullLoad();
+    board.pageLoader.resetCurrentPage(page1);
+    board.pageLoader.expandBufferRightTempLoad();
+    board.pageLoader.forceMoveCurrentRightFullLoad();
 
     expect(page2.loadTemp).toHaveBeenCalledTimes(1);
     expect(page2.loadFull).toHaveBeenCalledTimes(1);
     expect(board.pageTemporaryLoadedCount.has(2)).toBe(false);
     expect(board.pageFullyLoadedCount.get(2)).toBe(1);
-    expect(board.pageLoadManager.pageNow).toBe(page2);
+    expect(board.pageLoader.pageNow).toBe(page2);
   });
 
   test("缓冲区淘汰时应调用对应页的卸载方法", () => {
     const { board, page1, page2, page3 } = createBoard();
 
-    board.pageLoadManager.pagesLoadedLimit = 2;
-    board.pageLoadManager.resetCurrentPage(page2);
+    board.pageLoader.pagesLoadedLimit = 2;
+    board.pageLoader.resetCurrentPage(page2);
     page2.isLoad = true;
     page2.isTempLoad = false;
     board.pageFullyLoadedCount.set(2, 1);
 
-    board.pageLoadManager.expandBufferRightTempLoad();
-    board.pageLoadManager.forceMoveCurrentLeftFullLoad();
+    board.pageLoader.expandBufferRightTempLoad();
+    board.pageLoader.forceMoveCurrentLeftFullLoad();
 
     expect(page3.unloadTemp).toHaveBeenCalledTimes(1);
     expect(board.loadedPages.toArray()).toEqual([page1, page2]);
     expect(board.pageTemporaryLoadedCount.has(3)).toBe(false);
   });
 
-  test("多个 PLM 共用一页时，单个卸载请求不应真正卸载该页", () => {
+  test("多个 PageLoader 共用一页时，单个卸载请求不应真正卸载该页", () => {
     const { board, page1, page2 } = createBoard();
-    const pageLoadManager2 = board.createPageLoader(2, "plm-2");
+    const pageLoader2 = board.createPageLoader(2, "plm-2");
 
-    board.pageLoadManager.resetCurrentPage(page1);
-    pageLoadManager2.resetCurrentPage(page1);
+    board.pageLoader.resetCurrentPage(page1);
+    pageLoader2.resetCurrentPage(page1);
 
-    board.pageLoadManager.expandBufferRightTempLoad();
-    pageLoadManager2.expandBufferRightTempLoad();
+    board.pageLoader.expandBufferRightTempLoad();
+    pageLoader2.expandBufferRightTempLoad();
 
     expect(board.pageTemporaryLoadedCount.get(2)).toBe(2);
 
-    const firstShrink = board.pageLoadManager.shrinkBufferRight();
+    const firstShrink = board.pageLoader.shrinkBufferRight();
 
     expect(firstShrink).toBe(true);
     expect(board.pageTemporaryLoadedCount.get(2)).toBe(1);
     expect(page2.unloadTemp).not.toHaveBeenCalled();
     expect(page2.isLoad).toBe(true);
 
-    const secondShrink = pageLoadManager2.shrinkBufferRight();
+    const secondShrink = pageLoader2.shrinkBufferRight();
 
     expect(secondShrink).toBe(true);
     expect(page2.unloadTemp).toHaveBeenCalledTimes(1);
@@ -126,19 +126,19 @@ describe("Board 页加载", () => {
 
   test("完整加载持有者释放后，若仍有临时持有者，应降级为临时加载", () => {
     const { board, page1, page2 } = createBoard();
-    const pageLoadManager2 = board.createPageLoader(2, "plm-2");
+    const pageLoader2 = board.createPageLoader(2, "plm-2");
 
-    board.pageLoadManager.resetCurrentPage(page1);
-    pageLoadManager2.resetCurrentPage(page1);
+    board.pageLoader.resetCurrentPage(page1);
+    pageLoader2.resetCurrentPage(page1);
 
-    board.pageLoadManager.expandBufferRightFullLoad();
-    pageLoadManager2.expandBufferRightTempLoad();
+    board.pageLoader.expandBufferRightFullLoad();
+    pageLoader2.expandBufferRightTempLoad();
 
     expect(board.pageFullyLoadedCount.get(2)).toBe(1);
     expect(board.pageTemporaryLoadedCount.get(2)).toBe(1);
     expect(page2.isTempLoad).toBe(false);
 
-    const shrunk = board.pageLoadManager.shrinkBufferRight();
+    const shrunk = board.pageLoader.shrinkBufferRight();
 
     expect(shrunk).toBe(true);
     expect(page2.downgradeToTemp).toHaveBeenCalledTimes(1);

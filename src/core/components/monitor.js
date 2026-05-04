@@ -4,7 +4,6 @@
  * @author Zhou Chenyu
  */
 
-import { Device } from "../devices/device.js";
 import { Board } from "../components/board.js";
 import { PageLoader } from "./page-loader.js";
 import { CounterPool } from "../utils/counter-pool.js";
