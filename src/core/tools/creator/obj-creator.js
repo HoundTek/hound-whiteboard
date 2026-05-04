@@ -9,8 +9,21 @@ import { BasicObject } from "../../objects/basic-obj.js";
 import { SignalPacket } from "../../devices/signal.js";
 import { Tool } from "../tool.js";
 
+/**
+ * 对象创建工具相关信号类型常量
+ * @readonly
+ * @enum {string}
+ * @description
+ * 定义对象创建工具处理的信号类型，包括位置更新、手势结束/取消、对象结束/取消等。
+ * 这些信号类型用于工具在处理输入时识别不同的交互阶段和事件。
+ * @author Zhou Chenyu
+ */
 const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
   POSITION: "position",
+  GESTURE_END: "end",
+  GESTURE_CANCEL: "cancel",
+  OBJECT_END: "object-end",
+  OBJECT_CANCEL: "object-cancel",
   END: "end",
   CANCEL: "cancel",
 });
@@ -84,7 +97,7 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 从信号包中提取交互上下文。
-    * @param {SignalPacket} signalPacket - 输入信号包
+   * @param {SignalPacket} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
    * @returns {Object} 交互上下文
    */
@@ -101,11 +114,17 @@ class ObjectCreatorTool extends Tool {
       deviceContext,
       signals,
       position,
-      isEnded: signals.some(
-        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.END,
+      isGestureEnded: signals.some(
+        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.GESTURE_END,
       ),
-      isCancelled: signals.some(
-        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.CANCEL,
+      isGestureCancelled: signals.some(
+        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.GESTURE_CANCEL,
+      ),
+      isObjectEnded: signals.some(
+        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END,
+      ),
+      isObjectCancelled: signals.some(
+        (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_CANCEL,
       ),
       objectId:
         positionSignal?.context?.objectId ??
@@ -119,81 +138,81 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 处理一个完整信号包。
-    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
-    * @returns {void}
+   * 确保当前交互已拥有对象实例。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {boolean} 是否已拥有对象实例
    */
-  process(signalPacket, deviceContext = {}) {
-    const normalizedPacket = SignalPacket.from(signalPacket);
-    const interaction = this.buildInteractionContext(
-      normalizedPacket,
-      deviceContext,
-    );
-
-    if (interaction.isCancelled) {
-      this.cancelObjectCreation(interaction);
-      this.isCreatingGestureActive = false;
-      return;
-    }
-
-    if (!interaction.position) {
-      if (interaction.isEnded && this.isCreatingGestureActive) {
-        this.completeObjectCreation(interaction);
-        this.isCreatingGestureActive = false;
-      }
-      return;
-    }
-
+  ensureObject(interaction) {
     if (!this.obj) {
       if (interaction.objectId == null || interaction.pageId == null) {
-        return;
+        return false;
       }
-      this.create(interaction.position, interaction.objectId, interaction.pageId);
+      this.create(
+        interaction.position,
+        interaction.objectId,
+        interaction.pageId,
+      );
     }
 
-    if (!this.isCreatingGestureActive) {
-      this.beginObjectCreation(interaction);
-      this.isCreatingGestureActive = true;
-    } else {
-      this.updateObjectCreation(interaction);
-    }
-
-    if (interaction.isEnded) {
-      this.completeObjectCreation(interaction);
-      this.isCreatingGestureActive = false;
-    }
+    return true;
   }
 
   /**
-   * 开始一次对象创建手势。
-   * @param {Object} interaction - 当前交互上下文
+   * 处理一个完整信号包。
+   * @param {SignalPacket} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {void}
+   * @abstract
    */
-  beginObjectCreation(interaction) {
+  process(signalPacket, deviceContext = {}) {
     throw new Error("Method not implemented.");
   }
 
   /**
-   * 更新一次对象创建手势。
+   * 开始一次创建手势。
    * @param {Object} interaction - 当前交互上下文
    */
-  updateObjectCreation(interaction) {
+  beginCreationGesture(interaction) {
     throw new Error("Method not implemented.");
   }
 
   /**
-   * 完成一次对象创建手势。
+   * 更新一次创建手势。
    * @param {Object} interaction - 当前交互上下文
    */
-  completeObjectCreation(interaction) {
+  updateCreationGesture(interaction) {
+    throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 完成一次创建手势。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  completeCreationGesture(interaction) {
     return undefined;
   }
 
   /**
-   * 取消当前对象创建。
+   * 取消当前创建手势。
    * @param {Object} interaction - 当前交互上下文
    */
-  cancelObjectCreation(interaction) {
+  cancelCreationGesture(interaction) {
+    return undefined;
+  }
+
+  /**
+   * 完成整个对象创建。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  completeCreatedObject(interaction) {
+    return undefined;
+  }
+
+  /**
+   * 取消整个对象创建。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  cancelCreatedObject(interaction) {
     this.reset();
     return undefined;
   }
@@ -211,7 +230,139 @@ class ObjectCreatorTool extends Tool {
   }
 }
 
+/**
+ * 单手势对象创建工具
+ * @class
+ * @abstract
+ * @extends ObjectCreatorTool
+ * @description
+ * 一次对象创建只对应一个手势。手势结束即对象结束，手势取消即对象取消。
+ */
+class SingleGestureObjectCreatorTool extends ObjectCreatorTool {
+  /**
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {void}
+   */
+  process(signalPacket, deviceContext = {}) {
+    const normalizedPacket = SignalPacket.from(signalPacket);
+    const interaction = this.buildInteractionContext(
+      normalizedPacket,
+      deviceContext,
+    );
+
+    if (interaction.isGestureCancelled) {
+      this.cancelCreationGesture(interaction);
+      this.cancelCreatedObject(interaction);
+      this.isCreatingGestureActive = false;
+      return;
+    }
+
+    if (!interaction.position) {
+      if (interaction.isGestureEnded && this.isCreatingGestureActive) {
+        this.completeCreationGesture(interaction);
+        this.completeCreatedObject(interaction);
+        this.isCreatingGestureActive = false;
+      }
+      return;
+    }
+
+    if (!this.ensureObject(interaction)) {
+      return;
+    }
+
+    if (!this.isCreatingGestureActive) {
+      this.beginCreationGesture(interaction);
+      this.isCreatingGestureActive = true;
+    } else {
+      this.updateCreationGesture(interaction);
+    }
+
+    if (interaction.isGestureEnded) {
+      this.completeCreationGesture(interaction);
+      this.completeCreatedObject(interaction);
+      this.isCreatingGestureActive = false;
+    }
+  }
+}
+
+/**
+ * 多手势对象创建工具
+ * @class
+ * @abstract
+ * @extends ObjectCreatorTool
+ * @description
+ * 一个对象由多个手势逐步完成。`end/cancel` 仅作用于当前手势，
+ * `object-end/object-cancel` 才作用于整个对象。
+ */
+class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
+  /**
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {void}
+   */
+  process(signalPacket, deviceContext = {}) {
+    const normalizedPacket = SignalPacket.from(signalPacket);
+    const interaction = this.buildInteractionContext(
+      normalizedPacket,
+      deviceContext,
+    );
+
+    if (interaction.isObjectCancelled) {
+      if (this.isCreatingGestureActive) {
+        this.cancelCreationGesture(interaction);
+      }
+      this.cancelCreatedObject(interaction);
+      this.isCreatingGestureActive = false;
+      return;
+    }
+
+    if (interaction.isGestureCancelled) {
+      if (this.isCreatingGestureActive) {
+        this.cancelCreationGesture(interaction);
+        this.isCreatingGestureActive = false;
+      }
+      return;
+    }
+
+    if (interaction.isObjectEnded) {
+      if (this.isCreatingGestureActive) {
+        this.completeCreationGesture(interaction);
+        this.isCreatingGestureActive = false;
+      }
+      this.completeCreatedObject(interaction);
+      return;
+    }
+
+    if (!interaction.position) {
+      if (interaction.isGestureEnded && this.isCreatingGestureActive) {
+        this.completeCreationGesture(interaction);
+        this.isCreatingGestureActive = false;
+      }
+      return;
+    }
+
+    if (!this.ensureObject(interaction)) {
+      return;
+    }
+
+    if (!this.isCreatingGestureActive) {
+      this.beginCreationGesture(interaction);
+      this.isCreatingGestureActive = true;
+    } else {
+      this.updateCreationGesture(interaction);
+    }
+
+    if (interaction.isGestureEnded) {
+      this.completeCreationGesture(interaction);
+      this.isCreatingGestureActive = false;
+    }
+  }
+}
+
 export {
   ObjectCreatorTool,
+  SingleGestureObjectCreatorTool,
+  MultiGestureObjectCreatorTool,
   OBJECT_CREATOR_SIGNAL_TYPES,
 };

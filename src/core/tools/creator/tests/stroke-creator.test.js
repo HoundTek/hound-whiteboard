@@ -40,14 +40,43 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj.id).toBe(100);
-
     expect(tool.obj.pageId).toBe(2);
-
     expect(tool.obj.points.map((point) => point.serialize())).toEqual([
       { x: 1, y: 2 },
       { x: 2, y: 3 },
       { x: 3, y: 4 },
       { x: 3, y: 4 },
+    ]);
+  });
+
+  test("单 end 信号应能被正确处理", () => {
+    const tool = new StrokeCreatorTool();
+    const deviceContext = { objectId: 101, pageId: 3 };
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/stroke",
+          signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/stroke",
+          signals: [{ type: "end", context: {} }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(tool.obj.id).toBe(101);
+    expect(tool.obj.pageId).toBe(3);
+    expect(tool.obj.points.map((point) => point.serialize())).toEqual([
+      { x: 5, y: 6 },
     ]);
   });
 

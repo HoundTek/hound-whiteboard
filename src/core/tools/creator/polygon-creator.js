@@ -6,7 +6,7 @@
 
 import { PolygonObject } from "../../objects/graph/polygon.js";
 import { Vector } from "../../../utils/math.js";
-import { ObjectCreatorTool } from "./obj-creator.js";
+import { MultiGestureObjectCreatorTool } from "./obj-creator.js";
 
 /**
  * 多边形创建工具类
@@ -21,7 +21,7 @@ import { ObjectCreatorTool } from "./obj-creator.js";
  * 当用户完成绘制后，可以通过点击菜单中的完成按钮来结束绘制过程。（todo）
  * @author Zhou Chenyu
  */
-class PolygonCreatorTool extends ObjectCreatorTool {
+class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   /**
    * @constructor
    */
@@ -89,7 +89,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @description 创建手势开始时，添加一个新的顶点。
    * @param {Object} interaction - 当前交互上下文
    */
-  beginObjectCreation(interaction) {
+  beginCreationGesture(interaction) {
     this.obj.appendPoint(interaction.position);
     this.lastPoint = interaction.position;
     this.count++;
@@ -99,7 +99,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @description 创建手势更新时，修改当前顶点位置。
    * @param {Object} interaction - 当前交互上下文
    */
-  updateObjectCreation(interaction) {
+  updateCreationGesture(interaction) {
     if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
       this.lastPoint = interaction.position;
       this.obj.changePoint(this.count - 1, interaction.position);
@@ -110,7 +110,7 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @description 创建手势结束时，固定当前顶点并追加控制点。
    * @param {Object} interaction - 当前交互上下文
    */
-  completeObjectCreation(interaction) {
+  completeCreationGesture(interaction) {
     if (
       interaction.position &&
       !Vector.nearlyEq(this.lastPoint, interaction.position)
@@ -118,6 +118,12 @@ class PolygonCreatorTool extends ObjectCreatorTool {
       this.lastPoint = interaction.position;
       this.obj.changePoint(this.count - 1, interaction.position);
     }
+
+    this.lastPoint = null;
+  }
+
+  cancelCreationGesture(interaction) {
+    return undefined;
   }
 
   reset() {

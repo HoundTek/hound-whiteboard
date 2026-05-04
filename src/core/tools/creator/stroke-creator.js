@@ -5,9 +5,9 @@
  */
 
 import { StrokeObject } from "../../objects/stroke/stroke.js";
-import { ObjectCreatorTool } from "./obj-creator.js";
+import { SingleGestureObjectCreatorTool } from "./obj-creator.js";
 
-class StrokeCreatorTool extends ObjectCreatorTool {
+class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   /**
    * 当前正在创建的笔画对象
    * @type {StrokeObject}
@@ -22,15 +22,15 @@ class StrokeCreatorTool extends ObjectCreatorTool {
     this.obj = new StrokeObject(p, id, pageId);
   }
 
-  beginObjectCreation(interaction) {
+  beginCreationGesture(interaction) {
     this.obj.setPoints(this.obj.points.concat([interaction.position]));
   }
 
-  updateObjectCreation(interaction) {
+  updateCreationGesture(interaction) {
     this.obj.setPoints(this.obj.points.concat([interaction.position]));
   }
 
-  completeObjectCreation(interaction) {
+  completeCreationGesture(interaction) {
     if (interaction.position) {
       this.obj.setPoints(this.obj.points.concat([interaction.position]));
     }
