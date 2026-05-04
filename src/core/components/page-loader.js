@@ -58,7 +58,7 @@ class PageLoader {
   eventBus;
 
   /**
-   * 当前 PLM 在事件总线中的请求方 id
+   * 当前 PageLoader 在事件总线中的请求方 id
    * @type {number | string}
    */
   requesterId;

@@ -122,17 +122,22 @@ class Board {
   pageLoadEventBus;
 
   /**
-   * 页缓冲区控制器
-   * @type {PageLoader}
-   * @todo 这个应该是由 Monitor 设备来创建和持有的，Board 只负责调用它提供的接口来加载和卸载页
-   */
-  pageLoader;
-
-  /**
    * 每页由哪些 PLM 持有以及持有策略
    * @type {Map<number, Map<number | string, "temp" | "full">>}
    */
   pageLoadOwners;
+
+  /**
+   * 显示器列表
+   * @type {Map<string, Monitor>}
+   */
+  monitors;
+
+  /**
+   * 信道事件总线
+   * @type {EventBus}
+   */
+  signalsEventBus;
 
   constructor() {
     this.undoTree = new UndoTree();
@@ -142,12 +147,11 @@ class Board {
     this.pageTemporaryLoadedCount = new Map();
     this.pageFullyLoadedCount = new Map();
     this.pageLoadOwners = new Map();
-    this.loadedPages = new Deque();
     this.pageCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
     this.pageLoadEventBus = new EventBus();
-    this.pageLoader = this.createPageLoader();
-    this.loadedPages = this.pageLoader.pagesLoaded;
+    this.monitors = new Map();
+    this.signalsEventBus = new EventBus();
     this.#bindPageLoadEvents();
   }
 
@@ -165,16 +169,23 @@ class Board {
    * 创建绑定到当前 Board 的显示器
    * @param {HTMLElement} rootElement - 显示器的根元素
    * @param {{ width: number, height: number }} options - 显示器尺寸选项
+   * @param {string} monitorId - 显示器 id
    * @returns {Monitor}
    */
-  createMonitor(rootElement, { width, height }) {
+  createMonitor(rootElement, { width, height }, monitorId) {
     const monitorCanvas = document.createElement("canvas");
     rootElement.appendChild(monitorCanvas);
-    const monitor = new Monitor(monitorCanvas, this, {
-      width: width ?? this.pageWidth,
-      height: height ?? this.pageHeight,
-    });
+    const monitor = new Monitor(
+      monitorCanvas,
+      this,
+      {
+        width: width ?? this.pageWidth,
+        height: height ?? this.pageHeight,
+      },
+      monitorId,
+    );
     // [todo] 监听 Monitor 的视口变化事件以更新 Board 的 origin 和 zoom
+    this.monitors.set(monitorId, monitor);
     return monitor;
   }
 
@@ -209,13 +220,13 @@ class Board {
   /**
    * 加载白板
    * @description 加载白板的 meta、config 以及页等信息
-   * @param {string} directory - 白板根目录
+   * @param {string} rootPath - 白板根目录
    * @return {Promise<Board>} 返回自身以支持链式调用
    * @throws {Error} 如果目录不合法或文件损坏
    * @todo
    */
-  async load(directory) {
-    this.rootPath = directory;
+  async load(rootPath) {
+    this.rootPath = rootPath;
     const snapshot = await boardFileOperateBridge.loadBoardSnapshot(
       this.rootPath,
       boardMeta,
@@ -246,7 +257,6 @@ class Board {
     this.pageOrder = connection.order;
     this.pageCounterPool = new CounterPool(connection.count);
 
-    this.pageLoader.resetBuffer();
     this.pageLoadOwners.clear();
     this.pageTemporaryLoadedCount.clear();
     this.pageFullyLoadedCount.clear();
@@ -269,31 +279,6 @@ class Board {
       throw new Error(`Trace page ${trace.onPage} does not exist.`);
     }
 
-    // 初始化缓冲区并加载当前页
-    this.pageLoader.resetCurrentPage(currentPage);
-    await this.#loadPage(
-      currentPage,
-      PAGE_LOAD_STRATEGIES.FULL,
-      false,
-      this.pageLoader.requesterId,
-    );
-
-    if (currentPage.prevPage) {
-      this.pageLoader.expandBufferLeftFullLoad();
-    }
-
-    if (currentPage.nextPage) {
-      this.pageLoader.expandBufferRightFullLoad();
-    }
-
-    if (
-      trace.offset !== 0 &&
-      currentPage.nextPage &&
-      currentPage.nextPage.nextPage
-    ) {
-      this.pageLoader.expandBufferRightFullLoad();
-    }
-
     // [todo] 加载上次打开的历史，如工具、设备等
 
     return this;
@@ -302,7 +287,7 @@ class Board {
   /**
    * 创建新白板
    *
-   * @param {Directory} directory - 白板根目录
+   * @param {Directory} rootPath - 白板根目录
    * @param {Object} boardInfo - 白板信息
    * @param {string} boardInfo.templateID - 要应用的模板ID
    * @param {number} boardInfo.width - 白板的宽度
@@ -313,24 +298,23 @@ class Board {
    * @returns {Promise<Board>}
    * @todo
    */
-  static async create(directory, boardInfo) {
-    const manager = new Board();
-    manager.directory = directory;
-    manager.rootPath = directory;
-    await boardFileOperateBridge.createBoardRoot(directory, boardMeta, {
+  static async create(rootPath, boardInfo) {
+    const board = new Board();
+    board.rootPath = rootPath;
+    await boardFileOperateBridge.createBoardRoot(rootPath, boardMeta, {
       width: boardInfo.width,
       height: boardInfo.height,
     });
 
     // [todo] 创建文件结构
     // 创建页
-    const firstPage = await manager.appendPage(boardInfo.templateID);
-    await boardFileOperateBridge.writeTrace(directory.getPath(), {
+    const firstPage = await board.appendPage(boardInfo.templateID);
+    await boardFileOperateBridge.writeTrace(rootPath.getPath(), {
       onPage: firstPage.id,
       offset: 0,
     });
 
-    return manager;
+    return board;
   }
 
   /**

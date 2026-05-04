@@ -223,7 +223,10 @@ class DevicesTree {
    * @returns {DevicesTreeNode[]} 挂载后的节点列表
    */
   mountDevice(rootPath, deviceDefinition) {
-    if (!deviceDefinition || typeof deviceDefinition.defineNodes !== "function") {
+    if (
+      !deviceDefinition ||
+      typeof deviceDefinition.defineNodes !== "function"
+    ) {
       throw new TypeError("Device definition must provide defineNodes().");
     }
 
@@ -235,7 +238,9 @@ class DevicesTree {
     const normalizedRootSegments = DevicesTree.normalizePath(rootPath);
     const mountedNodes = [];
     for (const nodeDefinition of nodes) {
-      const relativeSegments = DevicesTree.normalizePath(nodeDefinition.path ?? "");
+      const relativeSegments = DevicesTree.normalizePath(
+        nodeDefinition.path ?? "",
+      );
       const absolutePath = `/${normalizedRootSegments
         .concat(relativeSegments)
         .join("/")}`.replace(/\/+/g, "/");
@@ -264,6 +269,7 @@ class DevicesTree {
     if (!parentNode) return false;
     return parentNode.children.delete(name);
   }
+
   /**
    * 向目标节点分发信号包
    * @param {{to?: string, signals?: Array<Object>}} signalPacket - 输入信号包

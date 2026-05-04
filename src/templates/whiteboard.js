@@ -12,10 +12,14 @@ board.pageWidth = 800;
 board.pageHeight = 600;
 
 const foregroundLayer = document.getElementById("app-foreground-layer");
-const monitor = board.createMonitor(foregroundLayer, {
-  width: 800,
-  height: 600,
-});
+const monitor = board.createMonitor(
+  foregroundLayer,
+  {
+    width: 800,
+    height: 600,
+  },
+  "monitor",
+);
 monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
 

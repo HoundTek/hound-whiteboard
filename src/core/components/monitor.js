@@ -8,6 +8,7 @@ import { Board } from "../components/board.js";
 import { PageLoader } from "./page-loader.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { Vector } from "../../utils/math.js";
+import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
 
 /**
  * 显示器组件
@@ -36,6 +37,18 @@ class Monitor {
   pageLoader;
 
   /**
+   * 显示器 id
+   * @type {string}
+   */
+  monitorId;
+
+  /**
+   * 设备树
+   * @type {DevicesTree}
+   */
+  devicesTree;
+
+  /**
    * canvas 左上角对应的世界坐标（可为负数）
    * @description 翻页、平移、缩放后需整体更新此字段。
    * 初始值使第一页在 canvas 中居中：
@@ -56,12 +69,14 @@ class Monitor {
    * @param {HTMLCanvasElement} canvas - 画布元素
    * @param {Board} board - 白板管理器
    * @param {{ width: number, height: number }} options - 画布尺寸选项
+   * @param {string} monitorId - 显示器 id
    */
-  constructor(canvas, board, { width, height }) {
+  constructor(canvas, board, { width, height }, monitorId) {
     this.canvas = canvas;
     this.board = board;
-    this.pageLoader = new PageLoader();
+    this.pageLoader = this.board.createPageLoader();
     this.zoom = 1;
+    this.monitorId = monitorId;
     const rect = canvas?.getBoundingClientRect();
     const canvasWidth = rect?.width ?? 0;
     const canvasHeight = rect?.height ?? 0;
@@ -72,7 +87,9 @@ class Monitor {
     );
     this.canvas.width = width;
     this.canvas.height = height;
-    this.canvas.id = "canvas";
+    this.canvas.id = `monitor-canvas-${monitorId}`;
+
+    this.devicesTree = new DevicesTree();
   }
 
   /**
