@@ -4,7 +4,7 @@
 
 ## 工具的定义
 
-工具是设备与白板交互的媒介。不同的工具使设备在操作白板时会有不同的行为。当前实现中，设备可维护一个工具链；输入信号会按链顺序流过各工具。比如你可以将选择工具、笔工具（每个笔刷都是一个工具）等绘图工具绑定到手指、鼠标等绘图设备上。
+工具是设备与白板交互的媒介。不同的工具使设备在操作白板时会有不同的行为。比如你可以将选择工具、笔工具（每个笔刷都是一个工具）等绘图工具绑定到笔、鼠标等绘图设备上。
 
 ## 工具的信号接口
 
@@ -15,7 +15,7 @@
 	to: String,
 	signals: Array<{
 		type: String,
-		context: Object,
+		context: *,
 	}>
 }
 ```
@@ -26,11 +26,11 @@
 
 ```javascript
 [
-	{ type: "position", context: { value: vector } },
-	{ type: "pressure", context: { value: 0.7 } },
-	{ type: "tilt", context: { value: 32 } },
-	{ type: "end", context: {} },
-]
+  { type: "position", context: { x: 1, y: 2} },
+  { type: "pressure", context: 0.7 },
+  { type: "tilt", context: 32 },
+  { type: "end", context: {} },
+];
 ```
 
 这里的 `type` 只是信号名，不预设固定枚举；`context` 则承载该信号所需的数据。除了 `position + Vector`、`tilt + number`、`rotate + number`、`pressure + number` 这类常见组合外，还可以有 `end`、`cancel` 以及任何后续扩展信号。
@@ -73,13 +73,12 @@
 
 白板工具可以给白板加页、删页、更改页面位置等。白板工具较为特殊，因为它是直接跟白板（而不是对象）打交道的。它通常依赖 Monitor / Board 提供的上下文来执行变更。
 
-## 工具链的职责分层
+## 工具的职责分层
 
 - Device 负责采集现实输入并编码为信号。
-- Tool 负责消费、过滤、扩写或变换信号。
+- 设备树节点负责按状态消费、过滤、扩写或转发信号。
+- Tool 负责其中一类可复用的处理逻辑，但不再是设备内部的默认链路。
 - Board / Object 等 Core 组件负责真正的数据写入。
-
-因此，工具层的职责不再是“直接接 DOM 事件”，而是“处理来自设备树节点的逻辑信号”。
 
 ## 工具的持久化
 

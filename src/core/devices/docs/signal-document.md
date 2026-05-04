@@ -9,7 +9,7 @@
   to: String
   signals: Array<{
     type: String
-    context: Object
+    context: *
   }>
 }
 ```
@@ -32,10 +32,10 @@
 
 当前设计中常见信号包括：
 
-- `position`：位置类信号，`context.value` 一般为 `Vector`。
-- `pressure`：压力类信号，`context.value` 一般为 `number`。
-- `tilt`：倾角类信号，`context.value` 一般为 `number`。
-- `rotate`：旋转类信号，`context.value` 一般为 `number`。
+- `position`：位置类信号，`context` 一般为 `Vector`，即 `{x: number, y: number}`。
+- `pressure`：压力类信号，`context` 一般为 `number`。
+- `tilt`：倾角类信号，`context` 一般为 `number`。
+- `rotate`：旋转类信号，`context` 一般为 `number`。
 - `end`：当前交互结束。
 - `cancel`：当前交互取消。
 
