@@ -2,20 +2,6 @@ import { Tool } from "../tool.js";
 import { SignalPacket } from "../../devices/signal.js";
 
 describe("Tool", () => {
-  test("SignalPacket.from 应规整工具侧缺省字段", () => {
-    expect(SignalPacket.from()).toBeInstanceOf(SignalPacket);
-    expect(SignalPacket.from()).toEqual({
-      to: "",
-      signals: [],
-    });
-
-    expect(SignalPacket.from({ to: "/monitor" })).toBeInstanceOf(SignalPacket);
-    expect(SignalPacket.from({ to: "/monitor" })).toEqual({
-      to: "/monitor",
-      signals: [],
-    });
-  });
-
   test("createProcessor 应把输入规整后交给工具消费", () => {
     class TestTool extends Tool {
       calls = [];

@@ -1,14 +1,12 @@
 /**
  * 多边形创建工具
- * @module core/tools/creator/polygon
+ * @module core/tools/creator/polygon-creator
  * @author Zhou Chenyu
  */
 
 import { PolygonObject } from "../../objects/graph/polygon.js";
 import { Vector } from "../../../utils/math.js";
 import { ObjectCreatorTool } from "./obj-creator.js";
-import { Controller } from "../controller/controller.js";
-import { VertexController } from "../controller/vertex-controller.js";
 
 /**
  * 多边形创建工具类
@@ -29,7 +27,6 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    */
   constructor() {
     super();
-    this.vertixControllers = [];
     this.count = 0;
     this.lastPoint = null;
   }
@@ -68,12 +65,6 @@ class PolygonCreatorTool extends ObjectCreatorTool {
   obj;
 
   /**
-   * 当前对象的控制点
-   * @type {Controller[]}
-   */
-  vertixControllers;
-
-  /**
    * 当前顶点数量
    * @type {number}
    */
@@ -84,10 +75,6 @@ class PolygonCreatorTool extends ObjectCreatorTool {
    * @type {Vector}
    */
   lastPoint;
-
-  getControllers() {
-    return this.vertixControllers;
-  }
 
   /**
    * @param {Vector} position - 对象位置
@@ -131,16 +118,10 @@ class PolygonCreatorTool extends ObjectCreatorTool {
       this.lastPoint = interaction.position;
       this.obj.changePoint(this.count - 1, interaction.position);
     }
-    const controller = new VertexController(this.lastPoint);
-    controller.onDrag = (newPosition) => {
-      this.obj.changePoint(this.count - 1, newPosition);
-    };
-    this.vertixControllers.push(controller);
   }
 
   reset() {
     this.obj = null;
-    this.vertixControllers = [];
     this.count = 0;
     this.lastPoint = null;
   }

@@ -7,7 +7,6 @@
 import { Vector } from "../../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { SignalPacket } from "../../devices/signal.js";
-import { Controller } from "../controller/controller.js";
 import { Tool } from "../tool.js";
 
 const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
@@ -164,13 +163,6 @@ class ObjectCreatorTool extends Tool {
       this.completeObjectCreation(interaction);
       this.isCreatingGestureActive = false;
     }
-  }
-
-  /**
-   * @returns {Controller[]} 控制点列表
-   */
-  getControllers() {
-    throw new Error("Method not implemented.");
   }
 
   /**

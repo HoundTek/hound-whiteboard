@@ -46,9 +46,9 @@ class Tool {
   }
 
   /**
-   * 创建一个可直接挂载到设备树节点上的处理器。
-   * @param {Object} [toolContext={}] - 工具固定上下文
-    * @returns {import("../devices/devices-tree.js").DevicesTreeProcessor}
+   * 创建一个可直接挂载到设备树节点上的处理器
+   * @param {Object} [toolContext = {}] - 工具固定上下文
+   * @returns {import("../devices/devices-tree.js").DevicesTreeProcessor}
    */
   createProcessor(toolContext = {}) {
     return (signalPacket, routeContext = {}) => {
@@ -61,7 +61,7 @@ class Tool {
 
   /**
    * 处理一个完整信号包
-    * @param {SignalPacket} signalPacket - 输入信号包
+   * @param {SignalPacket} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
    * @returns {void}
    * @abstract

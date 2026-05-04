@@ -97,7 +97,7 @@
 
 ### 3.2 当前代码状态
 
-- 基类 `Tool`、创建工具基类 `ObjectCreatorTool`、控制杆基类 `Controller` 已具备。
+- 基类 `Tool`、创建工具基类 `ObjectCreatorTool` 已具备。
 - 已有可用子类：
   - `StrokeCreatorTool`
   - `PolygonCreatorTool`

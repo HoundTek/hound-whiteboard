@@ -1,6 +1,6 @@
 /**
  * 笔画创建工具
- * @module core/tools/creator/stroke
+ * @module core/tools/creator/stroke-creator
  * @author Zhou Chenyu
  */
 

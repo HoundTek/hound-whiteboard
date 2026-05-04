@@ -181,23 +181,3 @@ body {
   z-index: -1;
   background-color: pink;
 }
-
-.controller-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  cursor: pointer;
-  background: red;
-  border: 1px solid pink;
-}
-
-.vertex-controller-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  cursor: pointer;
-  background: white;
-  border: 1px solid black;
-}

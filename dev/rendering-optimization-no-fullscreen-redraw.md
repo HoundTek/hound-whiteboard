@@ -22,7 +22,6 @@
 - 工具层已经在高频更新对象（可接入调度器）
   - `src/core/tools/creator/polygon.js`
   - `src/core/tools/creator/stroke.js`
-  - `src/core/tools/controller/controller.js`
 - 页面结构已有多层容器（可扩展为多 canvas）
   - `src/templates/whiteboard/whiteboard.html`
 
@@ -146,7 +145,7 @@ function flush() {
 
 1. 改造 `whiteboard.html`，补齐多 canvas 层  
 2. 在 whiteboard 入口新增 `RenderScheduler`（RAF + dirty queue）  
-3. 接入 `polygon/stroke/controller` 的 move/drag 事件，只提交脏区  
+3. 接入 `polygon/stroke` 的 move/drag 事件，只提交脏区  
 4. 增加对象边界扩展（padding）策略，消除拖影  
 5. 补充性能测试（大笔迹、快速拖动、多对象叠层）
 
