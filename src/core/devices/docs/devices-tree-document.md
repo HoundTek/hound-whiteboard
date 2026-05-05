@@ -81,6 +81,8 @@
 - 如何通过 `mountDevice()` 展开设备子树定义。
 - 一次 `dispatch()` 在根节点与叶子节点之间如何递归路由并终止。
 
+这里的 `DevicesTree` 示例主要用于说明底层路由模型。业务侧在真实代码里应优先从 `Monitor` 进入，通过 `monitor.mountDevice(path, deviceDefinition)` 挂载设备；`Monitor` 会自动补上当前 `monitorId`，再转交给底层设备树。
+
 ## 当前实现边界
 
 当前 DevicesTree 实现提供：

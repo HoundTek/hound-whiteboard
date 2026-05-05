@@ -12,7 +12,7 @@
 
 ## 直接挂载节点
 
-最直接的写法是分别挂载三个节点处理器：
+最直接的写法是分别挂载三个节点处理器（不建议）：
 
 ```javascript
 const tree = new DevicesTree();
@@ -52,49 +52,46 @@ tree.mount("/monitor/s-pen/eraser", (packet, context) => [
 
 ## 用设备子树定义挂载
 
-同一个例子也可以先写成设备子树定义，再统一挂载：
+上面这种写法虽然直接，但没有把这三个节点的关系表达出来。更合理的做法是把它们放在一个设备子树定义里，再通过 `mountDevice()` 一次性挂载：
 
 ```javascript
-const createNodeProcessor =
-  (nodePath) =>
-  (signalPacket, routeContext = {}) =>
-    SignalPacket.normalizeResult(
-      processNodePacket(
-        nodePath,
-        SignalPacket.from(signalPacket, { defaultTo: "/" }),
-        routeContext,
-      ),
-      { defaultTo: "/" },
-    );
-
-const processNodePacket = (nodePath, packet) => {
-  if (nodePath === "") {
-    const isButtonPressed = packet.signals.some(
-      (signal) => signal.type === "button" && signal.context?.value === true,
-    );
-    return {
-      to: isButtonPressed ? "/monitor/s-pen/eraser" : "/monitor/s-pen/pen",
-      signals: packet.signals,
-    };
-  }
-
-  return {
-    to: `/monitor/s-pen/${nodePath}`,
-    signals: [
-      {
-        type: nodePath === "pen" ? "draw" : "erase",
-        context: { from: nodePath },
-      },
-    ],
-  };
-};
-
 const deviceDefinition = {
   defineNodes() {
     return [
-      { path: "", processor: createNodeProcessor("") },
-      { path: "/pen", processor: createNodeProcessor("pen") },
-      { path: "/eraser", processor: createNodeProcessor("eraser") },
+      {
+        path: "",
+        processor(packet) {
+          const isButtonPressed = packet.signals.some(
+            (signal) =>
+              signal.type === "button" && signal.context?.value === true,
+          );
+
+          return {
+            to: isButtonPressed
+              ? "/monitor/s-pen/eraser"
+              : "/monitor/s-pen/pen",
+            signals: packet.signals,
+          };
+        },
+      },
+      {
+        path: "/pen",
+        processor(packet, context) {
+          return {
+            to: context.path,
+            signals: [{ type: "draw", context: { from: context.path } }],
+          };
+        },
+      },
+      {
+        path: "/eraser",
+        processor(packet, context) {
+          return {
+            to: context.path,
+            signals: [{ type: "erase", context: { from: context.path } }],
+          };
+        },
+      },
     ];
   },
 };
@@ -102,11 +99,33 @@ const deviceDefinition = {
 tree.mountDevice("/monitor/s-pen", deviceDefinition);
 ```
 
+可以把它理解成下面三步：
+
+1. `defineNodes()` 先列出这台设备有哪些节点。
+2. 每个节点只写“自己的相对路径”和“自己的处理器”。
+3. `tree.mountDevice("/monitor/s-pen", ...)` 再把这些相对路径统一展开成绝对路径。
+
+展开后，实际挂到树上的节点仍然是这三个：
+
+- `""` 变成 `/monitor/s-pen`
+- `/pen` 变成 `/monitor/s-pen/pen`
+- `/eraser` 变成 `/monitor/s-pen/eraser`
+
+所以这段代码和上一节的区别，只是“把三次 `tree.mount()` 收拢成一次 `tree.mountDevice()`”。
+
 这段示例对应当前 `mountDevice()` 的真实用法：
 
 - 设备定义对象只负责返回节点列表。
 - 每个节点只声明相对路径和对应的 `processor`。
 - 设备树负责把这些相对路径展开到 `/monitor/s-pen` 之下。
+
+注：上面这段保留 `tree.mountDevice()`，是为了把底层展开逻辑写完整。业务侧在真实代码里应优先从 `Monitor` 进入，等价写法会是：
+
+```javascript
+monitor.mountDevice("/s-pen", deviceDefinition);
+```
+
+此时 `Monitor` 会自动补上当前 `monitorId`，再转交给 `devicesTree.mountDevice()`；因此业务代码只需要书写相对于当前 monitor 根节点的路径。
 
 ## 路由结果
 

@@ -1,11 +1,12 @@
 import { Matrix, Vector } from "../utils/math.js";
 import { TextObject } from "../core/objects/one-dim/text.js";
-import { PolygonCreatorTool } from "../core/tools/creator/polygon.js";
+import { PolygonCreatorTool } from "../core/tools/creator/polygon-creator.js";
 import { CounterPool } from "../core/utils/counter-pool.js";
 import { insertPoints } from "../core/utils/math-algorithm.js";
-import { StrokeCreatorTool } from "../core/tools/creator/stroke.js";
+import { StrokeCreatorTool } from "../core/tools/creator/stroke-creator.js";
 import { Monitor } from "../core/components/monitor.js";
 import { Board } from "../core/components/board.js";
+import { createDebuggerDevice } from "../core/devices/debugger-device.js";
 
 const board = new Board();
 board.pageWidth = 800;
@@ -23,4 +24,23 @@ const monitor = board.createMonitor(
 monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
 
-const ctx = monitor.canvas.getContext("2d");
+monitor.mountDevice(
+  "/debugger",
+  createDebuggerDevice({
+    onRecord(entry) {
+      console.log("Debugger Device Record:", entry);
+    },
+  }),
+);
+
+board.signalsEventBus.emit("input", {
+  to: "/monitor/debugger",
+  signals: [
+    {
+      type: "greeting",
+      context: {
+        value: "Hello, Debugger Device!",
+      },
+    },
+  ],
+});

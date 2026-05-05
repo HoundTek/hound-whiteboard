@@ -153,6 +153,7 @@ class Board {
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
     this.#bindPageLoadEvents();
+    this.#bindSignalsEventBus();
   }
 
   /**
@@ -330,6 +331,21 @@ class Board {
       throw new Error("Page not exist.");
     }
     page.addObject(obj);
+  }
+
+  /**
+   * 绑定信道相关事件
+   * @private
+   */
+  #bindSignalsEventBus() {
+    this.signalsEventBus.on("input", ({ to, signals }) => {
+      // 获取信号的目标 Monitor（如果有的话），并把信号送到 Monitor
+      const monitorId = to.split("/")[1];
+      const monitor = this.monitors.get(monitorId);
+      if (monitor) {
+        monitor.devicesTree.dispatch({ to, signals });
+      }
+    });
   }
 
   /**

@@ -149,6 +149,23 @@ class Monitor {
 
     return { pageId: pages[pageIndex], x: pageLocalX, y: pageLocalY };
   }
+
+  /**
+   * 挂载设备到显示器的设备树
+   *
+   * @param {string} path - 设备路径（相对于显示器根节点，可带或不带前导 /）
+    * @param {import("../devices/devices-tree.js").DeviceDefinition} deviceDefinition - 设备定义
+   * @returns {DevicesTreeNode[]} 挂载后的设备树节点列表
+   */
+  mountDevice(path, deviceDefinition) {
+    const fullPathSegments = [this.monitorId].concat(
+      DevicesTree.normalizePath(path),
+    );
+    return this.devicesTree.mountDevice(
+      `/${fullPathSegments.join("/")}`,
+      deviceDefinition,
+    );
+  }
 }
 
 export { Monitor };

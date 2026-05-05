@@ -39,6 +39,7 @@ import { SignalPacket } from "./signal.js";
  * 设备子树定义
  * @typedef {Object} DeviceDefinition
  * @property {() => DeviceNodeDefinition[]} defineNodes - 返回整棵设备子树的节点定义
+ * @description DevicesTree 只消费这个最小协议；业务侧通常应通过 Monitor.mountDevice() 挂载。
  */
 
 /**
@@ -241,7 +242,7 @@ class DevicesTree {
 
   /**
    * 挂载一棵设备子树
-   * @param {string} rootPath - 设备根路径
+    * @param {string} rootPath - 设备根路径（通常已包含 monitorId）
     * @param {DeviceDefinition} deviceDefinition - 设备子树定义
    * @returns {DevicesTreeNode[]} 挂载后的节点列表
    */

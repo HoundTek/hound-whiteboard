@@ -127,12 +127,14 @@
 - `DevicesTree` 负责保存节点层级，并按路径把信号包送到节点处理器。
 - `DevicesTreeNode` 只表示信号处理单元，本身只挂 `processor`。
 - 设备子树定义目前是普通对象协议，核心入口是 `defineNodes()`。
+- 业务侧挂载设备时应优先从 `Monitor` 的 `mountDevice()` 进入，再由 `Monitor` 转交给底层 `DevicesTree`。
+- 输入从 Board 到 Monitor、再到 DevicesTree 与工具节点的完整链路，见 `core-input-flow.md`。
 
 当前状态：
 
 - 节点级 `processor` 路由模型已经建立。
 - 设备子树定义可展开并挂载到设备树。
-- Core 内部信号通过成员函数和节点处理器传递。
+- Core 内部信号通过节点处理器递归传递；处理器可来自闭包、工厂函数或对象方法。
 - 跨 Core-UI Interface 的信号边界已经在文档层明确。
 
 ## 6. utils/ 与 range/

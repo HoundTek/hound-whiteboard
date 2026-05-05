@@ -141,6 +141,57 @@ describe("DevicesTree", () => {
     ]);
   });
 
+  test("mountDevice 应规整设备根路径和节点相对路径", () => {
+    const tree = new DevicesTree();
+    const deviceDefinition = {
+      defineNodes() {
+        return [
+          {
+            path: "",
+            processor(packet) {
+              return {
+                to: "/monitor/debugger/report",
+                signals: packet.signals,
+              };
+            },
+          },
+          {
+            path: "report/",
+            processor(packet, context) {
+              return {
+                to: context.path,
+                signals: [{ type: "report", context: { from: context.path } }],
+              };
+            },
+          },
+        ];
+      },
+    };
+
+    const mountedNodes = tree.mountDevice("monitor/debugger/", deviceDefinition);
+
+    expect(mountedNodes.map((node) => node.path)).toEqual([
+      "/monitor/debugger",
+      "/monitor/debugger/report",
+    ]);
+    expect(
+      tree.dispatch({
+        to: "/monitor/debugger",
+        signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/debugger/report",
+        signals: [
+          {
+            type: "report",
+            context: { from: "/monitor/debugger/report" },
+          },
+        ],
+      },
+    ]);
+  });
+
   test("节点只应持有 processor", () => {
     const tree = new DevicesTree();
 
