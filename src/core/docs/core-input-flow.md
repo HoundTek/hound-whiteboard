@@ -116,6 +116,67 @@ monitor.mountDevice("/debugger", debuggerDevice);
 - Core 到 UI 输出信号的标准化消费层
 - 更明确的设备生命周期钩子
 
+## 最小闭环样板
+
+当前最小可工作的纵向样板可以压缩成下面这条链路：
+
+1. UI 或测试代码向 `board.signalsEventBus.emit("input", packet)` 发射一个输入包
+2. `Board` 根据 `packet.to` 中的 `monitorId` 找到目标 `Monitor`
+3. `Monitor` 上已经通过 `mountDevice()` 挂好一个设备子树
+4. 设备根节点只做一件事：把包改写到某个工具节点
+5. 工具节点通过 `tool.createProcessor({ board, monitor })` 消费该包
+6. Tool 修改 `Board` 或其它 Core 状态
+
+对应的最小结构可以写成：
+
+```javascript
+monitor.mountDevice("/sample-device", {
+  defineNodes() {
+    return [
+      {
+        path: "",
+        processor(packet, context) {
+          return {
+            to: `${context.path}/tool`.replace(/\/+/g, "/"),
+            signals: packet.signals,
+          };
+        },
+      },
+      {
+        path: "/tool",
+        processor: tool.createProcessor({ board, monitor }),
+      },
+    ];
+  },
+});
+```
+
+这个样板的意义不在功能复杂，而在于它把当前系统的四层接口一次性串起来了：
+
+- 输入包格式
+- Monitor 挂载入口
+- DevicesTree 路由语义
+- Tool 消费接口
+
+只要这条最小闭环保持稳定，后续新增设备或工具都应优先复用它，而不是重新发明接线方式。
+
+## 阶段性稳定接口
+
+当前建议视为阶段性稳定、不要轻易改动的接口有：
+
+- `SignalPacket` 的最小结构：`{ to, signals }`
+- `DeviceDefinition` 的最小协议：`defineNodes()`
+- 业务侧设备挂载入口：`monitor.mountDevice(path, deviceDefinition)`
+- 设备树递归终止语义：结果包停在当前节点路径上时终止
+- Tool 接口：`process(signalPacket, deviceContext)` + `createProcessor(toolContext)`
+- 多指输入的区分方式：同一包内允许多条 `position`，并通过 `touchId`/`pointerId` 区分
+
+相对地，下面这些目前仍不应视为稳定协议：
+
+- `Board.signalsEventBus.emit("input")` 的返回值
+- 设备定义对象上的扩展字段（如 `name`、`meta`、生命周期钩子）
+- Core -> UI 输出信号的消费层实现
+
 ## 相关文档
 
 - 设备定义与状态模型：`../devices/docs/device-document.md`
@@ -123,3 +184,5 @@ monitor.mountDevice("/debugger", debuggerDevice);
 - 设备树示例：`../devices/docs/devices-tree-example.md`
 - 信号包说明：`../devices/docs/signal-document.md`
 - 工具职责：`../tools/tool-document.md`
+- 输入编码标准：`./core-input-encoding.md`
+- 阶段性稳定接口：`./core-stable-interfaces.md`

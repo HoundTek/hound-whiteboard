@@ -129,6 +129,8 @@
 - 设备子树定义目前是普通对象协议，核心入口是 `defineNodes()`。
 - 业务侧挂载设备时应优先从 `Monitor` 的 `mountDevice()` 进入，再由 `Monitor` 转交给底层 `DevicesTree`。
 - 输入从 Board 到 Monitor、再到 DevicesTree 与工具节点的完整链路，见 `core-input-flow.md`。
+- DOM/Pointer/Touch 到 `SignalPacket` 的编码约定，见 `core-input-encoding.md`。
+- 当前建议冻结的阶段性稳定接口，见 `core-stable-interfaces.md`。
 
 当前状态：
 

@@ -42,6 +42,34 @@
 - Tool 的职责是读取整包信号，结合上下文，直接执行白板修改、对象修改或状态更新。
 - Tool 默认不负责把信号继续向下传输；设备树内部的转发由设备节点处理器承担。
 
+## 工具节点最小接口
+
+当前代码里，一个工具若要挂到设备树节点上，最小接口只有两层：
+
+1. 工具对象实现 `process(signalPacket, deviceContext)`
+2. 通过 `createProcessor(toolContext)` 把它包装成设备树节点处理器
+
+也就是说，设备树真正消费的不是“工具类”本身，而是 `createProcessor()` 返回的节点处理器。
+
+当前 `deviceContext` 可稳定假设的字段主要有：
+
+- `path`：当前工具节点的绝对路径
+- `node`：当前设备树节点
+- `tree`：所属 `DevicesTree`
+- `depth`：当前分发深度
+
+如果业务侧在 `createProcessor(toolContext)` 中额外注入了上下文，则还可稳定获得：
+
+- `board`：当前白板
+- `monitor`：当前 Monitor
+- 其它业务层主动注入的固定上下文
+
+推荐约束如下：
+
+- Tool 默认只消费信号，不承担设备树继续路由的职责
+- Tool 的 `process()` 可以返回 `void`
+- 若某个处理单元需要继续改写 `to` 并向下转发，它更适合作为设备节点处理器，而不是 Tool
+
 ## 工具的类别
 
 ### 对象创建工具
