@@ -178,6 +178,7 @@ body {
   left: 0;
   width: 800px;
   height: 600px;
-  z-index: -1;
+  z-index: 1;
+  pointer-events: auto;
   background-color: pink;
 }

@@ -1,6 +1,6 @@
 # Core 输入编码标准
 
-本文档约束 HoundWhiteboard 当前阶段如何把 DOM / Pointer / Touch 等现实输入编码成 Core 可消费的 `SignalPacket`。
+本文档约束 HoundWhiteboard 当前阶段在进入 Core 之前，外部输入应如何被规整成 Core 可消费的 `SignalPacket`。
 
 ## 目标
 
@@ -56,6 +56,72 @@
 - `cancel`
   - `context`: 取消当前交互所需的附加信息
 
+当前鼠标实现还额外约定了几项常用字段：
+
+- `context.button`: 当前事件对应的按钮
+- `context.buttons`: 当前按钮位掩码
+- `context.domEvent`: 原始 DOM 事件名
+- `context.ctrlKey / shiftKey / altKey / metaKey`: 当前修饰键状态
+
+这些字段目前主要用于鼠标设备在设备层判断“当前是在悬停还是在主键拖动”。
+
+## 键盘输入约定
+
+对于会进入键盘设备子树的输入，当前建议直接按 DOM 键盘事件规整：
+
+- `keydown`
+  - `context.code`: 键位编码，如 `KeyW`、`Space`
+  - `context.key`: 字符或键名，如 `w`、` `、`ArrowUp`
+  - `context.repeat`: 是否为长按重复触发
+  - `context.ctrlKey / shiftKey / altKey / metaKey`: 当前修饰键状态
+- `keyup`
+  - 字段同 `keydown`
+- `cancel`
+  - 表示当前键盘交互被宿主强制中断，如 Monitor 失焦
+
+一个最小示例如下：
+
+```javascript
+{
+  to: "/monitor/keyboard",
+  signals: [
+    {
+      type: "keydown",
+      context: {
+        code: "Space",
+        key: " ",
+        repeat: false,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+        metaKey: false,
+      },
+    },
+  ],
+}
+```
+
+这里的重点不是“所有键盘事件都进 Core”，而是“只有已经确定属于某个 Monitor 设备语义的键盘输入，才进入 Core”。
+
+## 哪些键盘输入应进入设备树
+
+当前建议只有两类键盘输入编码为键盘设备信号：
+
+- 该输入直接操作某个 Monitor，如缩放、平移视角、翻页浏览
+- 该输入最终会被某个工具消费，如用户绑定的 `WASD`、按住空格绘制、按键触发临时工具
+
+是否“最终会被工具消费”，应在宿主绑定层就已经明确；Core 不负责替你判断一个按键原本是不是快捷键。
+
+## 哪些键盘输入不应进入设备树
+
+下面这些输入不应编码为键盘设备信号：
+
+- `Command+S` / `Ctrl+S` 这类宿主级保存快捷键
+- 切换工具、打开 UndoTree、打开面板这类应用级命令快捷键
+- 与 Monitor 操作和工具消费无关的全局热键
+
+这些输入可以直接在宿主 UI 层处理，不需要先绕到 Core 的设备树里再转回来。
+
 ## 多点输入约定
 
 对于触摸屏这类多点输入，同一个 `signals` 数组里允许出现多条同类型信号。
@@ -92,10 +158,14 @@
 
 约束重点只有一个：同一包里的多个触点必须能被稳定区分。
 
-## DOM 事件到信号的映射建议
+## 宿主输入到信号的映射建议
 
 当前建议的映射方向如下：
 
+- `mousedown` -> `position`
+- `mousemove` -> `position`
+- `mouseup` -> `position + end`
+- `mouseleave` -> `cancel`
 - `pointermove` / `touchmove` -> `position`
 - `pointerdown` / `touchstart` -> 首个 `position`，必要时附加 `pressure`
 - `pointerup` / `touchend` -> `end`
@@ -105,12 +175,17 @@
 
 例如：
 
+- 一个 MouseEvent 可以编码成一条 `position`，并通过 `buttons` 表示当前是否仍按着主键
+- 一个 `mouseup` 可以编码成同一包内的 `position + end`
 - 一个 PointerEvent 同时有位置与压力，就可以编码成同一个包内的两条信号
 - 一次 TouchEvent 含多个 changedTouches，就可以编码成同一个包内的多条 `position` / `end` / `cancel`
+- 一次键盘事件通常只需要编码成一条 `keydown`、`keyup` 或 `cancel`
+
+这里的“映射建议”只描述进入 Core 前的包形状，不要求这层逻辑一定实现为 Core 内部模块。当前 `whiteboard.js` 中的鼠标 demo 就是直接在模板层临时绑定 DOM 事件后再发射 `SignalPacket`。
 
 ## Monitor 归属
 
-输入编码层必须在进入 Core 前决定目标 Monitor。
+宿主侧输入绑定逻辑必须在进入 Core 前决定目标 Monitor。
 
 也就是说，编码层需要先知道：
 
@@ -124,8 +199,8 @@
 下面这些目前仍保留实现自由度：
 
 - `context` 里除 `value` / `touchId` / `pointerId` 外的扩展字段
-- DOM 事件与设备路径之间的具体映射表
-- 是否在编码层先做坐标转换
-- 是否在编码层附加调试字段
+- 宿主事件与设备路径之间的具体映射表
+- 是否在进入 Core 前先做坐标转换
+- 是否在宿主侧附加调试字段
 
 但无论如何变化，都不应破坏上面的最小输出格式。

@@ -6,6 +6,10 @@
 
 import { SignalPacket } from "./signal.js";
 
+/**
+ * 触摸屏设备输出信号类型。
+ * @type {{CONTACTS: string}}
+ */
 const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
   CONTACTS: "touch-contacts",
 });
@@ -24,9 +28,19 @@ function createTouchscreenDevice(options = {}) {
     typeof options.onUpdate === "function" ? options.onUpdate : null;
   let lastChangedTouchIds = [];
 
+  /**
+   * 将节点处理结果规整为信号包数组。
+   * @param {any} result - 原始处理结果
+   * @returns {SignalPacket[]}
+   */
   const normalizeProcessorResult = (result) =>
     SignalPacket.normalizeResult(result, { defaultTo: "/" });
 
+  /**
+   * 复制位置值，避免把可变对象直接暴露到设备外部。
+   * @param {any} position - 原始位置值
+   * @returns {any}
+   */
   const clonePosition = (position) => {
     if (position && typeof position === "object") {
       return Array.isArray(position) ? [...position] : { ...position };
@@ -34,23 +48,42 @@ function createTouchscreenDevice(options = {}) {
     return position;
   };
 
+  /**
+   * 从信号中解析触点 id。
+   * @param {{context?: Object}} signal - 输入信号
+   * @returns {string|null}
+   */
   const getTouchId = (signal) => {
     const context = signal?.context ?? {};
     const touchId = context.touchId ?? context.pointerId ?? context.contactId;
     return touchId === undefined || touchId === null ? null : String(touchId);
   };
 
+  /**
+   * 从信号中读取位置值。
+   * @param {{context?: Object}} signal - 输入信号
+   * @returns {any}
+   */
   const getSignalPosition = (signal) => {
     const context = signal?.context ?? {};
     return context.value ?? context.position ?? null;
   };
 
+  /**
+   * 获取当前活动触点列表。
+   * @returns {Array<{touchId: string, position: any}>}
+   */
   const getActiveTouches = () =>
     Array.from(activeTouches.entries()).map(([touchId, position]) => ({
       touchId,
       position: clonePosition(position),
     }));
 
+  /**
+   * 根据输入包更新当前活动触点集合。
+   * @param {SignalPacket} packet - 当前信号包
+   * @returns {void}
+   */
   const updateTouches = (packet) => {
     const changedTouchIds = [];
 
@@ -80,6 +113,11 @@ function createTouchscreenDevice(options = {}) {
     });
   };
 
+  /**
+   * 为指定节点创建可挂载的处理器。
+   * @param {string} nodePath - 设备内相对节点路径
+   * @returns {import("./devices-tree.js").DevicesTreeProcessor}
+   */
   const createNodeProcessor =
     (nodePath) =>
     (signalPacket, routeContext = {}) =>
@@ -91,6 +129,13 @@ function createTouchscreenDevice(options = {}) {
         ),
       );
 
+  /**
+   * 处理触摸屏设备子树中的单个节点。
+   * @param {string} nodePath - 当前节点路径
+   * @param {SignalPacket} packet - 当前信号包
+   * @param {{path?: string}} [routeContext={}] - 当前路由上下文
+   * @returns {SignalPacket|Object}
+   */
   const processNodePacket = (nodePath, packet, routeContext = {}) => {
     if (nodePath === "") {
       updateTouches(packet);
@@ -121,13 +166,25 @@ function createTouchscreenDevice(options = {}) {
   };
 
   return {
+    /**
+     * 清空当前活动触点状态。
+     * @returns {void}
+     */
     clearTouches() {
       activeTouches.clear();
       lastChangedTouchIds = [];
     },
 
+    /**
+     * 获取当前活动触点列表。
+     * @returns {Array<{touchId: string, position: any}>}
+     */
     getActiveTouches,
 
+    /**
+     * 定义触摸屏设备子树节点。
+     * @returns {Array<{path: string, processor: import("./devices-tree.js").DevicesTreeProcessor}>}
+     */
     defineNodes() {
       return [
         { path: "", processor: createNodeProcessor("") },
