@@ -1,45 +1,41 @@
+/**
+ * # Preload Script (默认/后备版本)
+ * ## 说明
+ * 此文件为默认preload，用于初始窗口或权限未知时
+ * 实际生产环境中，窗口会使用SecurityManager动态生成的preload
+ */
+
 const { contextBridge, ipcRenderer } = require("electron");
 
 // ==============================
-// 🔐 allowed IPC channels
+// 🔐 默认允许的IPC通道（最小权限）
 // ==============================
-
 const ALLOWED_CHANNELS = new Set([
-  // fs
-  "fs:read",
-  "fs:write",
-  "fs:exists",
-  "fs:delete",
-  "fs:ls",
-  "fs:mkdir",
-  "fs:zip",
-  "fs:unzip",
-  "fs:hide",
-  "fs:unhide",
-
-  // cap
+  // 安全管理
   "cap:revoke",
-
-  // user
+  
+  // 窗口管理
+  "window:create",
+  "window:close",
+  
+  // 存储授权
+  "storage:authorize-save",
+  "storage:authorize-plugin",
+  "storage:authorize-resource",
+  "storage:get-directories",
+  
+  // 基础用户操作
   "user:load",
-  "user:save",
   "user:list",
-
-  // locale
-  "locale:load",
-
-  // theme
+  
+  // 基础主题和国际化
   "theme:load",
-  "theme:apply",
-
-  // icon
-  "icon:load",
+  "locale:load",
 ]);
 
 // ==============================
 // 🧠 invoke wrapper
 // ==============================
-
 const invoke = (channel, ...args) => {
   if (!ALLOWED_CHANNELS.has(channel)) {
     throw new Error(`[safe-io] blocked channel: ${channel}`);
@@ -50,7 +46,6 @@ const invoke = (channel, ...args) => {
 // ==============================
 // 🔑 token guard
 // ==============================
-
 const assertToken = (token) => {
   if (!token || typeof token !== "object") {
     throw new Error("invalid token");
@@ -61,144 +56,66 @@ const assertToken = (token) => {
 };
 
 // ==============================
-// 📦 FS API
+// 📦 API定义（最小权限集）
 // ==============================
-
-const fs = {
-  read: (token) => {
-    assertToken(token);
-    return invoke("fs:read", token);
+const api = {
+  // 权限控制
+  cap: {
+    revoke: (tokenId) => invoke("cap:revoke", tokenId),
   },
-
-  write: (token, content) => {
-    assertToken(token);
-    return invoke("fs:write", token, content);
+  
+  // 窗口管理
+  window: {
+    create: (config) => invoke("window:create", config),
+    close: (windowId) => invoke("window:close", windowId),
   },
-
-  exists: (token) => {
-    assertToken(token);
-    return invoke("fs:exists", token);
+  
+  // 存储授权
+  storage: {
+    authorizeSave: (saveName) => invoke("storage:authorize-save", saveName),
+    authorizePlugin: (pluginId) => invoke("storage:authorize-plugin", pluginId),
+    authorizeResource: (resourcePackId) => invoke("storage:authorize-resource", resourcePackId),
+    getDirectories: () => invoke("storage:get-directories"),
   },
-
-  delete: (token) => {
-    assertToken(token);
-    return invoke("fs:delete", token);
+  
+  // 用户（只读）
+  user: {
+    load: (userId, token) => {
+      assertToken(token);
+      return invoke("user:load", userId, token);
+    },
+    list: (token) => {
+      assertToken(token);
+      return invoke("user:list", token);
+    },
   },
-
-  ls: (token, options) => {
-    assertToken(token);
-    return invoke("fs:ls", token, options);
+  
+  // 主题（只读）
+  theme: {
+    load: (themeId, token) => {
+      assertToken(token);
+      return invoke("theme:load", themeId, token);
+    },
   },
-
-  mkdir: (token) => {
-    assertToken(token);
-    return invoke("fs:mkdir", token);
-  },
-
-  zip: (token, outPath) => {
-    assertToken(token);
-    return invoke("fs:zip", token, outPath);
-  },
-
-  unzip: (token, outDir) => {
-    assertToken(token);
-    return invoke("fs:unzip", token, outDir);
-  },
-};
-
-// ==============================
-// 👁 hide API
-// ==============================
-
-const hide = {
-  hide: (token) => {
-    assertToken(token);
-    return invoke("fs:hide", token);
-  },
-
-  unhide: (token) => {
-    assertToken(token);
-    return invoke("fs:unhide", token);
-  },
-};
-
-// ==============================
-// 🔐 capability control
-// ==============================
-
-const cap = {
-  revoke: (tokenId) => invoke("cap:revoke", tokenId),
-};
-
-// ==============================
-// 👤 user API (NEW)
-// ==============================
-
-const user = {
-  load: (userId, token) => {
-    assertToken(token);
-    return invoke("user:load", userId, token);
-  },
-
-  save: (userId, data, token) => {
-    assertToken(token);
-    return invoke("user:save", userId, data, token);
-  },
-
-  list: (token) => {
-    assertToken(token);
-    return invoke("user:list", token);
-  },
-};
-
-// ==============================
-// 🌐 locale / i18n API (NEW)
-// ==============================
-
-const locale = {
-  load: (localeId, token) => {
-    assertToken(token);
-    return invoke("locale:load", localeId, token);
-  },
-};
-
-// ==============================
-// 🎨 theme API (NEW)
-// ==============================
-
-const theme = {
-  load: (themeId, token) => {
-    assertToken(token);
-    return invoke("theme:load", themeId, token);
-  },
-
-  apply: (themeId, token) => {
-    assertToken(token);
-    return invoke("theme:apply", themeId, token);
-  },
-};
-
-// ==============================
-// 🎨 icon API (NEW)
-// ==============================
-
-const icon = {
-  load: (iconPackId, token) => {
-    assertToken(token);
-    return invoke("icon:load", iconPackId, token);
+  
+  // 国际化（只读）
+  locale: {
+    load: (localeId, token) => {
+      assertToken(token);
+      return invoke("locale:load", localeId, token);
+    },
   },
 };
 
 // ==============================
 // 🌉 expose safe API
 // ==============================
+contextBridge.exposeInMainWorld("safeIO", api);
 
-contextBridge.exposeInMainWorld("safeIO", {
-  fs,
-  hide,
-  cap,
-  user,
-  locale,
-  theme,
-  icon,
+// ==============================
+// 📢 安全事件监听
+// ==============================
+ipcRenderer.on("security:init", (event, data) => {
+  // 接收安全初始化信息
+  console.log("[safe-io] Security initialized:", data);
 });

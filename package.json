@@ -5,6 +5,7 @@
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
+    "start:simple": "electron . --main=main-simple.js",
     "build-win": "electron-packager . --out=dist/win/ --platform=win32",
     "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
   },
