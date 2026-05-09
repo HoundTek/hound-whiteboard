@@ -32,6 +32,7 @@ monitor.canvas.tabIndex = 0;
 
 class MouseTraceTool extends Tool {
   isDrawing = false;
+  lastPoint = null;
 
   process(signalPacket, deviceContext = {}) {
     const monitorContext = deviceContext.monitor;
@@ -53,27 +54,32 @@ class MouseTraceTool extends Tool {
       const canvasY = position.y - rect.top;
 
       if (!this.isDrawing) {
-        ctx.beginPath();
-        ctx.moveTo(canvasX, canvasY);
         this.isDrawing = true;
+        this.lastPoint = { x: canvasX, y: canvasY };
       } else {
+        ctx.beginPath();
+        ctx.moveTo(this.lastPoint.x, this.lastPoint.y);
         ctx.lineTo(canvasX, canvasY);
-      }
 
-      ctx.strokeStyle = "#c0392b";
-      ctx.lineWidth = 2;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke();
+        ctx.strokeStyle = "#c0392b";
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+
+        this.lastPoint = { x: canvasX, y: canvasY };
+      }
     }
 
     if (hasEnd || hasCancel) {
       this.isDrawing = false;
+      this.lastPoint = null;
     }
   }
 
   reset() {
     this.isDrawing = false;
+    this.lastPoint = null;
   }
 }
 
