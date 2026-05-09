@@ -1,20 +1,52 @@
+/**
+ * @fileoverview Safe FS Runtime - 文件系统安全操作封装
+ * @module safe-io/runtime/fs
+ *
+ * @description
+ * 提供安全的文件系统操作，包括：
+ * - 路径穿越防护
+ * - 符号链接边界检查
+ * - 文件大小限制
+ * - 路径深度限制
+ *
+ * 设计原则：
+ * - 不做权限判断（由上层处理）
+ * - 不处理 DSL entry
+ * - 不参与 capability
+ * - 只处理 resolved path
+ * - 所有错误吞掉并返回安全值
+ *
+ * @author safe-io Team
+ * @version 3.0
+ */
+
 import fs from "fs";
 import path from "path";
 import { Hide } from "./hide.js";
 
-// ==============================
-// 🧠 INTERNAL HELPERS
-// ==============================
+/**
+ * @typedef {Object} SymlinkInfo
+ * @property {string} realPath - 真实路径
+ * @property {boolean} isSymlink - 是否为符号链接
+ * @property {boolean} isInBoundary - 是否在安全边界内
+ */
+
+/**
+ * 路径安全检查结果
+ * @typedef {Object|null} SafeResolveResult
+ * @property {string|null} 解析后的路径，null表示不安全
+ */
 
 /**
  * 防止路径穿越攻击
+ * @param {string} p - 路径
+ * @returns {SafeResolveResult} 安全路径或null
  */
 const safeResolve = (p) => {
   if (typeof p !== "string") return null;
 
   const normalized = path.normalize(p);
 
-  // 禁止路径穿越
   if (normalized.includes("..")) return null;
 
   return normalized;
@@ -22,6 +54,8 @@ const safeResolve = (p) => {
 
 /**
  * 确保目录存在
+ * @param {string} p - 文件路径
+ * @returns {void}
  */
 const ensureDir = (p) => {
   const dir = path.dirname(p);
@@ -31,13 +65,16 @@ const ensureDir = (p) => {
 };
 
 /**
- * safe wrapper
+ * 安全执行包装器
+ * @param {Function} fn - 要执行的函数
+ * @param {*} fallback - 失败时的返回值
+ * @param {string} [label="FS"] - 日志标签
+ * @returns {*} 执行结果或fallback
  */
 const safe = (fn, fallback = null, label = "FS") => {
   try {
     return fn();
   } catch (e) {
-    // 生产环境隐藏详细错误信息
     console.error(`[${label}] Error occurred`);
     return fallback;
   }
@@ -47,36 +84,32 @@ const safe = (fn, fallback = null, label = "FS") => {
  * 符号链接安全检查
  * @param {string} p - 要检查的路径
  * @param {string} [boundary] - 可选的安全边界路径
- * @returns {Object|null} { realPath, isSymlink, isInBoundary } 或 null（如果不安全）
+ * @returns {SymlinkInfo|null} 符号链接信息或null（不安全）
  */
 const checkSymlink = (p, boundary = null) => {
   try {
-    // 使用 lstat 获取原始文件信息（不跟随符号链接）
     const stat = fs.lstatSync(p);
-    
+
     if (stat.isSymbolicLink()) {
-      // 符号链接：解析真实路径
       const realPath = fs.realpathSync(p);
-      
-      // 检查真实路径是否在安全边界内
+
       let isInBoundary = true;
       if (boundary) {
         const absBoundary = path.resolve(boundary);
         const absRealPath = path.resolve(realPath);
         isInBoundary = absRealPath === absBoundary || absRealPath.startsWith(absBoundary + path.sep);
       }
-      
+
       return { realPath, isSymlink: true, isInBoundary };
     }
-    
-    // 非符号链接：检查是否在边界内（如果提供了边界）
+
     let isInBoundary = true;
     if (boundary) {
       const absBoundary = path.resolve(boundary);
       const absPath = path.resolve(p);
       isInBoundary = absPath === absBoundary || absPath.startsWith(absBoundary + path.sep);
     }
-    
+
     return { realPath: p, isSymlink: false, isInBoundary };
   } catch {
     return null;
@@ -85,32 +118,29 @@ const checkSymlink = (p, boundary = null) => {
 
 /**
  * 递归检查目录树中的符号链接
- * 防止目录遍历攻击
  * @param {string} dirPath - 目录路径
  * @param {string} [boundary] - 安全边界
- * @returns {boolean} - 如果目录树安全返回 true
+ * @returns {boolean} 目录树是否安全
  */
 const checkDirectorySymlinks = (dirPath, boundary = null) => {
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-    
+
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
-      
-      // 检查当前条目
+
       const symlinkInfo = checkSymlink(fullPath, boundary);
       if (!symlinkInfo || !symlinkInfo.isInBoundary) {
         return false;
       }
-      
-      // 如果是目录，递归检查
+
       if (entry.isDirectory() && !entry.isSymbolicLink()) {
         if (!checkDirectorySymlinks(fullPath, boundary)) {
           return false;
         }
       }
     }
-    
+
     return true;
   } catch {
     return false;
@@ -118,7 +148,10 @@ const checkDirectorySymlinks = (dirPath, boundary = null) => {
 };
 
 /**
- * 路径深度限制检查
+ * 检查路径深度
+ * @param {string} p - 路径
+ * @param {number} [maxDepth=20] - 最大深度
+ * @returns {boolean} 是否在限制内
  */
 const checkPathDepth = (p, maxDepth = 20) => {
   const parts = p.split(path.sep).filter(Boolean);
@@ -126,7 +159,10 @@ const checkPathDepth = (p, maxDepth = 20) => {
 };
 
 /**
- * 文件大小限制检查
+ * 检查文件大小
+ * @param {string} p - 文件路径
+ * @param {number} [maxSize=100*1024*1024] - 最大大小（默认100MB）
+ * @returns {boolean} 是否在限制内
  */
 const checkFileSize = (p, maxSize = 100 * 1024 * 1024) => {
   try {
@@ -137,38 +173,38 @@ const checkFileSize = (p, maxSize = 100 * 1024 * 1024) => {
   }
 };
 
-// ==============================
-// 📁 SAFE FS CORE LAYER
-// ==============================
-
+/**
+ * Safe FS API
+ * @namespace FS
+ */
 export const FS = {
-  // ============================
-  // 📖 READ
-  // ============================
+  /**
+   * 读取文件
+   * @param {string} p - 文件路径
+   * @param {string} [encoding="utf8"] - 编码
+   * @param {string} [boundary] - 安全边界
+   * @returns {string|null} 文件内容或null
+   */
   read: (p, encoding = "utf8", boundary = null) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return null;
 
-      // 符号链接检查（带边界验证）
       const symlinkInfo = checkSymlink(sp, boundary);
       if (!symlinkInfo) {
         console.error("[FS.read] Symlink check failed");
         return null;
       }
-      
-      // 检查真实路径是否在安全边界内
+
       if (!symlinkInfo.isInBoundary) {
         console.error("[FS.read] Path outside security boundary");
         return null;
       }
-      
-      // 使用真实路径
+
       const realPath = symlinkInfo.realPath;
 
       if (!fs.existsSync(realPath)) return null;
 
-      // 文件大小限制（100MB）
       if (!checkFileSize(realPath)) {
         console.error("[FS.read] File size exceeds limit");
         return null;
@@ -177,34 +213,35 @@ export const FS = {
       return fs.readFileSync(realPath, encoding);
     }, null, "FS.read"),
 
-  // ============================
-  // ✍ WRITE
-  // ============================
+  /**
+   * 写入文件
+   * @param {string} p - 文件路径
+   * @param {string} content - 内容
+   * @param {string} [encoding="utf8"] - 编码
+   * @param {string} [boundary] - 安全边界
+   * @returns {boolean} 是否成功
+   */
   write: (p, content, encoding = "utf8", boundary = null) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return false;
 
-      // 路径深度限制
       if (!checkPathDepth(sp)) {
         console.error("[FS.write] Path depth exceeds limit");
         return false;
       }
 
-      // 符号链接检查 - 写入时禁止覆盖符号链接目标
       const symlinkInfo = checkSymlink(sp, boundary);
       if (!symlinkInfo) {
         console.error("[FS.write] Symlink check failed");
         return false;
       }
-      
-      // 检查是否在安全边界内
+
       if (!symlinkInfo.isInBoundary) {
         console.error("[FS.write] Path outside security boundary");
         return false;
       }
 
-      // 禁止写入符号链接
       if (symlinkInfo.isSymlink) {
         console.error("[FS.write] Cannot write to symlink");
         return false;
@@ -212,7 +249,6 @@ export const FS = {
 
       ensureDir(sp);
 
-      // 内容大小限制（100MB）
       const contentSize = Buffer.byteLength(content, encoding);
       if (contentSize > 100 * 1024 * 1024) {
         console.error("[FS.write] Content size exceeds limit");
@@ -223,28 +259,28 @@ export const FS = {
       return true;
     }, false, "FS.write"),
 
-  // ============================
-  // ❌ REMOVE
-  // ============================
+  /**
+   * 删除文件或目录
+   * @param {string} p - 路径
+   * @param {string} [boundary] - 安全边界
+   * @returns {boolean} 是否成功
+   */
   rm: (p, boundary = null) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return false;
 
-      // 符号链接检查
       const symlinkInfo = checkSymlink(sp, boundary);
       if (!symlinkInfo) {
         console.error("[FS.rm] Symlink check failed");
         return false;
       }
-      
-      // 检查是否在安全边界内
+
       if (!symlinkInfo.isInBoundary) {
         console.error("[FS.rm] Path outside security boundary");
         return false;
       }
 
-      // 删除时只删除符号链接本身，不跟随
       if (symlinkInfo.isSymlink) {
         fs.unlinkSync(sp);
         return true;
@@ -257,19 +293,20 @@ export const FS = {
       return true;
     }, false, "FS.rm"),
 
-  // ============================
-  // 📂 EXISTS
-  // ============================
+  /**
+   * 检查文件是否存在
+   * @param {string} p - 路径
+   * @param {string} [boundary] - 安全边界
+   * @returns {boolean} 是否存在
+   */
   exists: (p, boundary = null) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return false;
 
-      // 符号链接检查（带边界验证）
       const symlinkInfo = checkSymlink(sp, boundary);
       if (!symlinkInfo) return false;
-      
-      // 检查是否在安全边界内
+
       if (!symlinkInfo.isInBoundary) {
         console.error("[FS.exists] Path outside security boundary");
         return false;
@@ -278,19 +315,20 @@ export const FS = {
       return fs.existsSync(symlinkInfo.realPath);
     }, false, "FS.exists"),
 
-  // ============================
-  // 📃 LIST DIRECTORY
-  // ============================
+  /**
+   * 列出目录内容
+   * @param {string} p - 目录路径
+   * @param {string} [boundary] - 安全边界
+   * @returns {Array<{name: string, isDir: boolean, isFile: boolean, isSymlink: boolean, hidden: boolean}>} 目录条目
+   */
   ls: (p, boundary = null) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return [];
 
-      // 符号链接检查（带边界验证）
       const symlinkInfo = checkSymlink(sp, boundary);
       if (!symlinkInfo) return [];
-      
-      // 检查是否在安全边界内
+
       if (!symlinkInfo.isInBoundary) {
         console.error("[FS.ls] Path outside security boundary");
         return [];
@@ -308,19 +346,20 @@ export const FS = {
         }));
     }, [], "FS.ls"),
 
-  // ============================
-  // 📦 STAT
-  // ============================
+  /**
+   * 获取文件状态
+   * @param {string} p - 路径
+   * @param {string} [boundary] - 安全边界
+   * @returns {Object|null} 文件状态信息
+   */
   stat: (p, boundary = null) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return null;
 
-      // 符号链接检查（带边界验证）
       const symlinkInfo = checkSymlink(sp, boundary);
       if (!symlinkInfo) return null;
-      
-      // 检查是否在安全边界内
+
       if (!symlinkInfo.isInBoundary) {
         console.error("[FS.stat] Path outside security boundary");
         return null;
@@ -334,9 +373,13 @@ export const FS = {
       };
     }, null, "FS.stat"),
 
-  // ============================
-  // 🔁 COPY
-  // ============================
+  /**
+   * 复制文件或目录
+   * @param {string} src - 源路径
+   * @param {string} dest - 目标路径
+   * @param {string} [boundary] - 安全边界
+   * @returns {boolean} 是否成功
+   */
   cp: (src, dest, boundary = null) =>
     safe(() => {
       const s = safeResolve(src);
@@ -344,48 +387,46 @@ export const FS = {
 
       if (!s || !d) return false;
 
-      // 符号链接检查 - 复制时解析符号链接
       const srcSymlink = checkSymlink(s, boundary);
       if (!srcSymlink) {
         console.error("[FS.cp] Source symlink check failed");
         return false;
       }
-      
-      // 检查源路径是否在安全边界内
+
       if (!srcSymlink.isInBoundary) {
         console.error("[FS.cp] Source path outside security boundary");
         return false;
       }
 
-      // 目标路径检查
       const destSymlink = checkSymlink(d, boundary);
       if (!destSymlink) {
         console.error("[FS.cp] Destination symlink check failed");
         return false;
       }
-      
-      // 检查目标路径是否在安全边界内
+
       if (!destSymlink.isInBoundary) {
         console.error("[FS.cp] Destination path outside security boundary");
         return false;
       }
 
-      // 禁止复制到符号链接
       if (destSymlink.isSymlink) {
         console.error("[FS.cp] Cannot copy to symlink");
         return false;
       }
 
-      // 确保目标目录存在
       ensureDir(d);
 
       fs.cpSync(srcSymlink.realPath, d, { recursive: true, force: true });
       return true;
     }, false, "FS.cp"),
 
-  // ============================
-  // 🔁 MOVE
-  // ============================
+  /**
+   * 移动文件或目录
+   * @param {string} src - 源路径
+   * @param {string} dest - 目标路径
+   * @param {string} [boundary] - 安全边界
+   * @returns {boolean} 是否成功
+   */
   mv: (src, dest, boundary = null) =>
     safe(() => {
       const s = safeResolve(src);
@@ -393,14 +434,12 @@ export const FS = {
 
       if (!s || !d) return false;
 
-      // 符号链接检查
       const srcSymlink = checkSymlink(s, boundary);
       if (!srcSymlink) {
         console.error("[FS.mv] Source symlink check failed");
         return false;
       }
-      
-      // 检查源路径是否在安全边界内
+
       if (!srcSymlink.isInBoundary) {
         console.error("[FS.mv] Source path outside security boundary");
         return false;
@@ -411,20 +450,17 @@ export const FS = {
         console.error("[FS.mv] Destination symlink check failed");
         return false;
       }
-      
-      // 检查目标路径是否在安全边界内
+
       if (!destSymlink.isInBoundary) {
         console.error("[FS.mv] Destination path outside security boundary");
         return false;
       }
 
-      // 禁止移动到符号链接
       if (destSymlink.isSymlink) {
         console.error("[FS.mv] Cannot move to symlink");
         return false;
       }
 
-      // 确保目标目录存在
       ensureDir(d);
 
       fs.cpSync(srcSymlink.realPath, d, { recursive: true, force: true });
@@ -433,15 +469,16 @@ export const FS = {
       return true;
     }, false, "FS.mv"),
 
-  // ============================
-  // 👁 HIDE LAYER (external capability)
-  // ============================
+  /**
+   * 隐藏文件
+   * @param {string} p - 路径
+   * @returns {boolean} 是否成功
+   */
   hide: (p) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return false;
 
-      // 符号链接检查
       const symlinkInfo = checkSymlink(sp);
       if (!symlinkInfo) return false;
 
@@ -449,12 +486,16 @@ export const FS = {
       return true;
     }, false, "FS.hide"),
 
+  /**
+   * 取消隐藏文件
+   * @param {string} p - 路径
+   * @returns {boolean} 是否成功
+   */
   unhide: (p) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return false;
 
-      // 符号链接检查
       const symlinkInfo = checkSymlink(sp);
       if (!symlinkInfo) return false;
 
@@ -462,44 +503,31 @@ export const FS = {
       return true;
     }, false, "FS.unhide"),
 
+  /**
+   * 检查文件是否隐藏
+   * @param {string} p - 路径
+   * @returns {boolean} 是否隐藏
+   */
   isHidden: (p) =>
     safe(() => {
       const sp = safeResolve(p);
       if (!sp) return false;
 
-      // 符号链接检查
       const symlinkInfo = checkSymlink(sp);
       if (!symlinkInfo) return false;
 
       return Hide.isHidden(symlinkInfo.realPath);
     }, false, "FS.isHidden"),
 
-  // ============================
-  // 🔐 NEW: Security Helpers
-  // ============================
-  
-  /**
-   * 检查路径是否安全（无符号链接穿越）
-   */
-  isPathSafe: (p) => {
-    const sp = safeResolve(p);
-    if (!sp) return false;
-
-    const symlinkInfo = checkSymlink(sp);
-    if (!symlinkInfo) return false;
-
-    // 可以添加更多安全检查
-    return true;
-  },
-
   /**
    * 获取真实路径（解析符号链接）
+   * @param {string} p - 路径
+   * @returns {string|null} 真实路径或null
    */
-  realPath: (p) => {
-    const sp = safeResolve(p);
-    if (!sp) return null;
-
-    const symlinkInfo = checkSymlink(sp);
-    return symlinkInfo ? symlinkInfo.realPath : null;
-  },
+  realPath: (p) =>
+    safe(() => {
+      const sp = safeResolve(p);
+      if (!sp) return null;
+      return fs.realpathSync(sp);
+    }, null, "FS.realPath"),
 };

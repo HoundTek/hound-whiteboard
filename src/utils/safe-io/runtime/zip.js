@@ -1,12 +1,23 @@
+/**
+ * @fileoverview ZIP Runtime - ZIP压缩文件操作封装
+ * @module safe-io/runtime/zip
+ *
+ * @description
+ * 提供ZIP压缩/解压能力，纯runtime层无安全逻辑。
+ * 所有错误都会被捕获并返回安全值。
+ *
+ * @author safe-io Team
+ * @version 3.0
+ */
+
 import AdmZip from "adm-zip";
 import fs from "fs";
 import path from "path";
 
 /**
- * runtime/zip.js
- * ----------------
- * 纯 ZIP runtime 层
+ * @fileoverview Pure ZIP runtime layer
  *
+ * @description
  * 设计原则：
  * - 不做权限判断
  * - 不接 entry / DSL
@@ -14,10 +25,6 @@ import path from "path";
  * - 只处理 resolved path
  * - 所有错误吞掉并返回安全值
  */
-
-// ==============================
-// 🧰 internal helpers
-// ==============================
 
 const safe = (fn, fallback) => {
   try {
@@ -35,15 +42,18 @@ const ensureDir = (p) => {
   }
 };
 
-// ==============================
-// 📦 ZIP API
-// ==============================
-
+/**
+ * @namespace Zip
+ * @description ZIP压缩操作命名空间
+ */
 export const Zip = {
 
-  // ------------------------------
-  // 📥 create zip from folder
-  // ------------------------------
+  /**
+   * 从文件夹创建ZIP压缩包
+   * @param {string} sourcePath - 源文件夹路径
+   * @param {string} outputZipPath - 输出ZIP文件路径
+   * @returns {boolean} 是否成功
+   */
   fromFolder: (sourcePath, outputZipPath) => {
     return safe(() => {
       const zip = new AdmZip();
@@ -63,9 +73,12 @@ export const Zip = {
     }, false);
   },
 
-  // ------------------------------
-  // 📤 extract zip to folder
-  // ------------------------------
+  /**
+   * 解压ZIP到目标文件夹
+   * @param {string} zipPath - ZIP文件路径
+   * @param {string} targetDir - 目标目录路径
+   * @returns {boolean} 是否成功
+   */
   extractTo: (zipPath, targetDir) => {
     return safe(() => {
       if (!fs.existsSync(zipPath)) return false;
@@ -80,9 +93,11 @@ export const Zip = {
     }, false);
   },
 
-  // ------------------------------
-  // 📄 list zip entries
-  // ------------------------------
+  /**
+   * 列出ZIP包内的条目
+   * @param {string} zipPath - ZIP文件路径
+   * @returns {Array<{name: string, size: number, compressedSize: number, isDirectory: boolean}>} 条目列表
+   */
   list: (zipPath) => {
     return safe(() => {
       if (!fs.existsSync(zipPath)) return [];
@@ -98,9 +113,13 @@ export const Zip = {
     }, []);
   },
 
-  // ------------------------------
-  // ➕ add file into existing zip
-  // ------------------------------
+  /**
+   * 向现有ZIP包添加文件
+   * @param {string} zipPath - ZIP文件路径
+   * @param {string} filePath - 要添加的文件路径
+   * @param {string} [entryName] - 条目名称（默认为文件名）
+   * @returns {boolean} 是否成功
+   */
   addFile: (zipPath, filePath, entryName = null) => {
     return safe(() => {
       if (!fs.existsSync(zipPath)) return false;
@@ -118,9 +137,11 @@ export const Zip = {
     }, false);
   },
 
-  // ------------------------------
-  // 🧪 create empty zip
-  // ------------------------------
+  /**
+   * 创建空ZIP包
+   * @param {string} zipPath - 要创建的ZIP文件路径
+   * @returns {boolean} 是否成功
+   */
   createEmpty: (zipPath) => {
     return safe(() => {
       const zip = new AdmZip();

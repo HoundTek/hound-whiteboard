@@ -1,10 +1,12 @@
 /**
- * # 安全存储模块
- * ## 核心功能
- * - 存档文件管理（创建、读取、保存、删除）
- * - 插件管理（安装、加载、卸载）
- * - 资源包管理（加载、应用）
- * - 统一的安全访问控制
+ * @fileoverview Safe Storage Module - 存档、插件与资源包管理
+ * @module safe-io/storage
+ *
+ * @description
+ * 提供统一的安全存储管理，包括：
+ * - SaveManager: 存档文件管理（创建、读取、保存、删除）
+ * - PluginManager: 插件管理（安装、加载、卸载）
+ * - ResourcePackManager: 资源包管理（加载、应用）
  */
 
 import fs from "fs";
@@ -12,9 +14,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { registerRoot } from "../auth/authorize.js";
 
-// ==============================
-// 📂 存储类型定义
-// ==============================
+/** @constant {Object} STORAGE_TYPES - 存储类型枚举 */
 const STORAGE_TYPES = {
   SAVE_DATA: "save_data",
   PLUGINS: "plugins",
@@ -23,15 +23,89 @@ const STORAGE_TYPES = {
   LOGS: "logs",
 };
 
-// ==============================
-// 📦 存档管理
-// ==============================
+/**
+ * @typedef {Object} SaveData
+ * @property {string} id - 存档ID
+ * @property {string} name - 存档名称
+ * @property {Object} data - 存档数据
+ * @property {number} createdAt - 创建时间戳
+ * @property {number} modifiedAt - 修改时间戳
+ * @property {string} version - 版本号
+ */
+
+/**
+ * @typedef {Object} SaveResult
+ * @property {boolean} success - 是否成功
+ * @property {string} [saveId] - 存档ID
+ * @property {string} [path] - 存档路径
+ * @property {SaveData} [data] - 存档数据
+ * @property {string} [error] - 错误信息
+ */
+
+/**
+ * @typedef {Object} PluginManifest
+ * @property {string} id - 插件ID
+ * @property {string} name - 插件名称
+ * @property {string} version - 版本号
+ * @property {string} [description] - 描述
+ * @property {string} [author] - 作者
+ */
+
+/**
+ * @typedef {Object} Plugin
+ * @property {string} id - 插件ID
+ * @property {PluginManifest} manifest - 插件清单
+ * @property {string} path - 插件路径
+ * @property {boolean} loaded - 是否已加载
+ */
+
+/**
+ * @typedef {Object} PluginResult
+ * @property {boolean} success - 是否成功
+ * @property {string} [pluginId] - 插件ID
+ * @property {PluginManifest} [manifest] - 插件清单
+ * @property {Plugin} [plugin] - 插件对象
+ * @property {string} [error] - 错误信息
+ */
+
+/**
+ * @typedef {Object} ResourcePackManifest
+ * @property {string} id - 资源包ID
+ * @property {string} name - 资源包名称
+ * @property {string} version - 版本号
+ * @property {string} [description] - 描述
+ */
+
+/**
+ * @typedef {Object} ResourcePack
+ * @property {string} id - 资源包ID
+ * @property {ResourcePackManifest} manifest - 资源包清单
+ * @property {string} path - 资源包路径
+ * @property {boolean} active - 是否激活
+ */
+
+/**
+ * @typedef {Object} ResourcePackResult
+ * @property {boolean} success - 是否成功
+ * @property {string} [packId] - 资源包ID
+ * @property {ResourcePackManifest} [manifest] - 资源包清单
+ * @property {string} [error] - 错误信息
+ */
+
+/**
+ * 存档管理器
+ */
 class SaveManager {
+  /**
+   * @param {string} baseDir - 存档基础目录
+   */
   constructor(baseDir) {
+    /** @type {string} */
     this.baseDir = baseDir;
     this.ensureDirectory();
   }
 
+  /** 确保目录存在 */
   ensureDirectory() {
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });
@@ -42,14 +116,15 @@ class SaveManager {
   /**
    * 创建新存档
    * @param {string} name - 存档名称
-   * @param {Object} data - 存档数据
-   * @returns {Object} { success, saveId, path }
+   * @param {Object} [data={}] - 存档数据
+   * @returns {SaveResult}
    */
   create(name, data = {}) {
     const saveId = `${name}_${Date.now()}`;
     const savePath = path.join(this.baseDir, `${saveId}.json`);
-    
+
     try {
+      /** @type {SaveData} */
       const saveData = {
         id: saveId,
         name,
@@ -58,47 +133,34 @@ class SaveManager {
         modifiedAt: Date.now(),
         version: "1.0.0",
       };
-      
+
       fs.writeFileSync(savePath, JSON.stringify(saveData, null, 2));
-      
-      return {
-        success: true,
-        saveId,
-        path: savePath,
-      };
+
+      return { success: true, saveId, path: savePath };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 读取存档
    * @param {string} saveId - 存档ID
-   * @returns {Object} { success, data }
+   * @returns {SaveResult & {data?: SaveData}}
    */
   read(saveId) {
     const savePath = path.join(this.baseDir, `${saveId}.json`);
-    
+
     try {
       if (!fs.existsSync(savePath)) {
         return { success: false, error: "存档不存在" };
       }
-      
+
       const content = fs.readFileSync(savePath, "utf-8");
       const saveData = JSON.parse(content);
-      
-      return {
-        success: true,
-        data: saveData,
-      };
+
+      return { success: true, data: saveData };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
@@ -106,60 +168,54 @@ class SaveManager {
    * 更新存档
    * @param {string} saveId - 存档ID
    * @param {Object} data - 更新的数据
-   * @returns {Object} { success }
+   * @returns {SaveResult}
    */
   update(saveId, data) {
     const savePath = path.join(this.baseDir, `${saveId}.json`);
-    
+
     try {
       if (!fs.existsSync(savePath)) {
         return { success: false, error: "存档不存在" };
       }
-      
+
       const content = fs.readFileSync(savePath, "utf-8");
       const saveData = JSON.parse(content);
-      
+
       saveData.data = { ...saveData.data, ...data };
       saveData.modifiedAt = Date.now();
-      
+
       fs.writeFileSync(savePath, JSON.stringify(saveData, null, 2));
-      
+
       return { success: true };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 删除存档
    * @param {string} saveId - 存档ID
-   * @returns {Object} { success }
+   * @returns {SaveResult}
    */
   delete(saveId) {
     const savePath = path.join(this.baseDir, `${saveId}.json`);
-    
+
     try {
       if (!fs.existsSync(savePath)) {
         return { success: false, error: "存档不存在" };
       }
-      
+
       fs.unlinkSync(savePath);
-      
+
       return { success: true };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 列出所有存档
-   * @returns {Object} { success, saves }
+   * @returns {SaveResult & {saves?: Array}}
    */
   list() {
     try {
@@ -170,7 +226,7 @@ class SaveManager {
           const saveId = file.replace(".json", "");
           const savePath = path.join(this.baseDir, file);
           const stats = fs.statSync(savePath);
-          
+
           return {
             id: saveId,
             name: saveId.split("_")[0],
@@ -180,16 +236,10 @@ class SaveManager {
           };
         })
         .sort((a, b) => b.modifiedAt - a.modifiedAt);
-      
-      return {
-        success: true,
-        saves,
-      };
+
+      return { success: true, saves };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
@@ -204,16 +254,22 @@ class SaveManager {
   }
 }
 
-// ==============================
-// 🔌 插件管理
-// ==============================
+/**
+ * 插件管理器
+ */
 class PluginManager {
+  /**
+   * @param {string} baseDir - 插件基础目录
+   */
   constructor(baseDir) {
+    /** @type {string} */
     this.baseDir = baseDir;
-    this.plugins = new Map(); // 缓存已加载的插件
+    /** @type {Map<string, Plugin>} */
+    this.plugins = new Map();
     this.ensureDirectory();
   }
 
+  /** 确保目录存在 */
   ensureDirectory() {
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });
@@ -222,148 +278,121 @@ class PluginManager {
   }
 
   /**
-   * 安装插件（从目录加载）
+   * 安装插件
    * @param {string} pluginDir - 插件目录
-   * @returns {Object} { success, pluginId, manifest }
+   * @returns {PluginResult}
    */
   install(pluginDir) {
     try {
       const manifestPath = path.join(pluginDir, "manifest.json");
-      
+
       if (!fs.existsSync(manifestPath)) {
         return { success: false, error: "插件缺少manifest.json" };
       }
-      
+
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
       const pluginId = manifest.id || path.basename(pluginDir);
-      
-      // 检查插件是否已安装
+
       const targetDir = path.join(this.baseDir, pluginId);
       if (fs.existsSync(targetDir)) {
         return { success: false, error: "插件已安装" };
       }
-      
-      // 复制插件文件
+
       this.copyDirectory(pluginDir, targetDir);
-      
-      // 注册插件
+
       this.plugins.set(pluginId, {
         id: pluginId,
         manifest,
         path: targetDir,
         loaded: false,
       });
-      
-      return {
-        success: true,
-        pluginId,
-        manifest,
-      };
+
+      return { success: true, pluginId, manifest };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 加载插件
    * @param {string} pluginId - 插件ID
-   * @returns {Object} { success, plugin }
+   * @returns {PluginResult}
    */
   load(pluginId) {
     try {
-      const plugin = this.plugins.get(pluginId);
-      
+      let plugin = this.plugins.get(pluginId);
+
       if (!plugin) {
-        // 尝试从磁盘加载
         const pluginDir = path.join(this.baseDir, pluginId);
         if (!fs.existsSync(pluginDir)) {
           return { success: false, error: "插件不存在" };
         }
-        
+
         const manifestPath = path.join(pluginDir, "manifest.json");
         const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
-        
-        const pluginData = {
+
+        plugin = {
           id: pluginId,
           manifest,
           path: pluginDir,
           loaded: false,
         };
-        
-        this.plugins.set(pluginId, pluginData);
-        plugin = pluginData;
+
+        this.plugins.set(pluginId, plugin);
       }
-      
-      if (plugin.loaded) {
-        return { success: true, plugin };
+
+      if (!plugin.loaded) {
+        plugin.loaded = true;
       }
-      
-      // 标记为已加载
-      plugin.loaded = true;
-      
-      return {
-        success: true,
-        plugin,
-      };
+
+      return { success: true, plugin };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 卸载插件
    * @param {string} pluginId - 插件ID
-   * @returns {Object} { success }
+   * @returns {PluginResult}
    */
   uninstall(pluginId) {
     try {
       const pluginDir = path.join(this.baseDir, pluginId);
-      
+
       if (!fs.existsSync(pluginDir)) {
         return { success: false, error: "插件不存在" };
       }
-      
-      // 删除插件目录
+
       this.deleteDirectory(pluginDir);
-      
-      // 从缓存移除
       this.plugins.delete(pluginId);
-      
+
       return { success: true };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 列出所有插件
-   * @returns {Object} { success, plugins }
+   * @returns {PluginResult & {plugins?: Array}}
    */
   list() {
     try {
       const pluginDirs = fs.readdirSync(this.baseDir, { withFileTypes: true })
         .filter(dirent => dirent.isDirectory())
         .map(dirent => dirent.name);
-      
+
       const plugins = [];
-      
+
       for (const pluginId of pluginDirs) {
         const pluginDir = path.join(this.baseDir, pluginId);
         const manifestPath = path.join(pluginDir, "manifest.json");
-        
+
         if (fs.existsSync(manifestPath)) {
           const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
           const cached = this.plugins.get(pluginId);
-          
+
           plugins.push({
             id: pluginId,
             name: manifest.name || pluginId,
@@ -374,16 +403,10 @@ class PluginManager {
           });
         }
       }
-      
-      return {
-        success: true,
-        plugins,
-      };
+
+      return { success: true, plugins };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
@@ -398,18 +421,22 @@ class PluginManager {
     return fs.existsSync(fullPath) ? fullPath : null;
   }
 
-  // 辅助方法
+  /**
+   * 复制目录
+   * @param {string} src - 源路径
+   * @param {string} dest - 目标路径
+   */
   copyDirectory(src, dest) {
     if (!fs.existsSync(dest)) {
       fs.mkdirSync(dest, { recursive: true });
     }
-    
+
     const entries = fs.readdirSync(src, { withFileTypes: true });
-    
+
     for (const entry of entries) {
       const srcPath = path.join(src, entry.name);
       const destPath = path.join(dest, entry.name);
-      
+
       if (entry.isDirectory()) {
         this.copyDirectory(srcPath, destPath);
       } else {
@@ -418,34 +445,45 @@ class PluginManager {
     }
   }
 
+  /**
+   * 删除目录
+   * @param {string} dir - 目录路径
+   */
   deleteDirectory(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
-    
+
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
-      
+
       if (entry.isDirectory()) {
         this.deleteDirectory(entryPath);
       } else {
         fs.unlinkSync(entryPath);
       }
     }
-    
+
     fs.rmdirSync(dir);
   }
 }
 
-// ==============================
-// 🎨 资源包管理
-// ==============================
+/**
+ * 资源包管理器
+ */
 class ResourcePackManager {
+  /**
+   * @param {string} baseDir - 资源包基础目录
+   */
   constructor(baseDir) {
+    /** @type {string} */
     this.baseDir = baseDir;
+    /** @type {Map<string, ResourcePack>} */
     this.resourcePacks = new Map();
+    /** @type {string|null} */
     this.activePack = null;
     this.ensureDirectory();
   }
 
+  /** 确保目录存在 */
   ensureDirectory() {
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });
@@ -455,162 +493,138 @@ class ResourcePackManager {
 
   /**
    * 安装资源包
-   * @param {string} packPath - 资源包路径（目录或zip）
-   * @returns {Object} { success, packId, manifest }
+   * @param {string} packPath - 资源包路径
+   * @returns {ResourcePackResult}
    */
   install(packPath) {
     try {
-      // 检查是目录还是zip
       const stats = fs.statSync(packPath);
       let unpackedDir = packPath;
-      
+
       if (!stats.isDirectory()) {
-        // 解压zip
         unpackedDir = path.join(this.baseDir, `temp_${randomUUID()}`);
         fs.mkdirSync(unpackedDir, { recursive: true });
-        // 这里应该调用unzip工具，简化处理假设是目录
         return { success: false, error: "暂不支持zip格式" };
       }
-      
+
       const manifestPath = path.join(unpackedDir, "manifest.json");
       if (!fs.existsSync(manifestPath)) {
         return { success: false, error: "资源包缺少manifest.json" };
       }
-      
+
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
       const packId = manifest.id || `resource_${Date.now()}`;
-      
+
       const targetDir = path.join(this.baseDir, packId);
       if (fs.existsSync(targetDir)) {
-        // 删除旧版本
         this.deleteDirectory(targetDir);
       }
-      
-      // 移动/复制文件
+
       fs.renameSync(unpackedDir, targetDir);
-      
+
       this.resourcePacks.set(packId, {
         id: packId,
         manifest,
         path: targetDir,
         active: false,
       });
-      
-      return {
-        success: true,
-        packId,
-        manifest,
-      };
+
+      return { success: true, packId, manifest };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 应用资源包
    * @param {string} packId - 资源包ID
-   * @returns {Object} { success }
+   * @returns {ResourcePackResult}
    */
   apply(packId) {
     try {
-      const pack = this.resourcePacks.get(packId);
-      
+      let pack = this.resourcePacks.get(packId);
+
       if (!pack) {
-        // 尝试从磁盘加载
         const packDir = path.join(this.baseDir, packId);
         if (!fs.existsSync(packDir)) {
           return { success: false, error: "资源包不存在" };
         }
-        
+
         const manifestPath = path.join(packDir, "manifest.json");
         const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
-        
-        const packData = {
+
+        pack = {
           id: packId,
           manifest,
           path: packDir,
           active: false,
         };
-        
-        this.resourcePacks.set(packId, packData);
-        pack = packData;
+
+        this.resourcePacks.set(packId, pack);
       }
-      
-      // 取消之前激活的资源包
+
       if (this.activePack) {
         const prevPack = this.resourcePacks.get(this.activePack);
         if (prevPack) {
           prevPack.active = false;
         }
       }
-      
-      // 激活新资源包
+
       pack.active = true;
       this.activePack = packId;
-      
+
       return { success: true };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 卸载资源包
    * @param {string} packId - 资源包ID
-   * @returns {Object} { success }
+   * @returns {ResourcePackResult}
    */
   uninstall(packId) {
     try {
       const packDir = path.join(this.baseDir, packId);
-      
+
       if (!fs.existsSync(packDir)) {
         return { success: false, error: "资源包不存在" };
       }
-      
-      // 如果是当前激活的资源包，取消激活
+
       if (this.activePack === packId) {
         this.activePack = null;
       }
-      
-      // 删除目录
+
       this.deleteDirectory(packDir);
       this.resourcePacks.delete(packId);
-      
+
       return { success: true };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
   /**
    * 列出所有资源包
-   * @returns {Object} { success, packs }
+   * @returns {ResourcePackResult & {packs?: Array}}
    */
   list() {
     try {
       const packDirs = fs.readdirSync(this.baseDir, { withFileTypes: true })
         .filter(dirent => dirent.isDirectory())
         .map(dirent => dirent.name);
-      
+
       const packs = [];
-      
+
       for (const packId of packDirs) {
         const packDir = path.join(this.baseDir, packId);
         const manifestPath = path.join(packDir, "manifest.json");
-        
+
         if (fs.existsSync(manifestPath)) {
           const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
           const cached = this.resourcePacks.get(packId);
-          
+
           packs.push({
             id: packId,
             name: manifest.name || packId,
@@ -620,16 +634,10 @@ class ResourcePackManager {
           });
         }
       }
-      
-      return {
-        success: true,
-        packs,
-      };
+
+      return { success: true, packs };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 
@@ -639,7 +647,6 @@ class ResourcePackManager {
    * @returns {string|null}
    */
   getResourcePath(resourcePath) {
-    // 优先从激活的资源包查找
     if (this.activePack) {
       const packDir = path.join(this.baseDir, this.activePack);
       const fullPath = path.join(packDir, resourcePath);
@@ -647,44 +654,50 @@ class ResourcePackManager {
         return fullPath;
       }
     }
-    
-    // 在所有资源包中查找
+
     for (const [packId, pack] of this.resourcePacks) {
       const fullPath = path.join(pack.path, resourcePath);
       if (fs.existsSync(fullPath)) {
         return fullPath;
       }
     }
-    
+
     return null;
   }
 
-  // 辅助方法
+  /**
+   * 删除目录
+   * @param {string} dir - 目录路径
+   */
   deleteDirectory(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
-    
+
     for (const entry of entries) {
       const entryPath = path.join(dir, entry.name);
-      
+
       if (entry.isDirectory()) {
         this.deleteDirectory(entryPath);
       } else {
         fs.unlinkSync(entryPath);
       }
     }
-    
+
     fs.rmdirSync(dir);
   }
 }
 
-// ==============================
-// 🧠 存储管理器（统一入口）
-// ==============================
+/**
+ * 统一存储管理器
+ */
 class SecureStorageManager {
+  /**
+   * @param {string} appDataPath - 应用数据路径
+   */
   constructor(appDataPath) {
+    /** @type {string} */
     this.baseDir = path.join(appDataPath, "HoundWhiteboard");
-    
-    // 创建子目录
+
+    /** @type {Object.<string, string>} */
     this.dirs = {
       saves: path.join(this.baseDir, "saves"),
       plugins: path.join(this.baseDir, "plugins"),
@@ -692,13 +705,14 @@ class SecureStorageManager {
       cache: path.join(this.baseDir, "cache"),
       logs: path.join(this.baseDir, "logs"),
     };
-    
-    // 初始化管理器
+
+    /** @type {SaveManager} */
     this.saveManager = new SaveManager(this.dirs.saves);
+    /** @type {PluginManager} */
     this.pluginManager = new PluginManager(this.dirs.plugins);
+    /** @type {ResourcePackManager} */
     this.resourcePackManager = new ResourcePackManager(this.dirs.resources);
-    
-    // 确保缓存和日志目录存在
+
     Object.values(this.dirs).forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -722,12 +736,11 @@ class SecureStorageManager {
    */
   authorizeSave(saveName) {
     const savePath = path.join(this.dirs.saves, `${saveName}.json`);
-    // 返回授权信息
     return {
       type: "save",
       path: savePath,
       permissions: ["read", "write", "delete"],
-      expiresAt: Date.now() + 3600000, // 1小时后过期
+      expiresAt: Date.now() + 3600000,
     };
   }
 
@@ -775,7 +788,10 @@ class SecureStorageManager {
   }
 }
 
-// ==============================
-// 📦 导出
-// ==============================
-export { SecureStorageManager, SaveManager, PluginManager, ResourcePackManager, STORAGE_TYPES };
+export {
+  SecureStorageManager,
+  SaveManager,
+  PluginManager,
+  ResourcePackManager,
+  STORAGE_TYPES
+};

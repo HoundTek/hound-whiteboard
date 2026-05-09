@@ -1,31 +1,33 @@
 /**
- * # Path Detector（路径检测器）
- * 
- * ## 核心职责
- * - 检测应用数据目录
- * - 支持 Portable（便携）模式和 Standard（常规）模式
- * - 提供统一的目录路径管理
- * 
+ * @fileoverview Path Detector - 应用数据目录检测与模式判断
+ * @module safe-io/core/path-detector
+ *
+ * @description
+ * 检测应用数据目录路径，支持 Portable（便携）模式和 Standard（常规）模式。
+ *
  * ## 运行模式
- * 
- * ### Portable（便携）模式
- * - 条件：可执行文件目录下存在 `data/` 目录
- * - 数据目录：`{exeDir}/data/`
- * - 用途：适合 U 盘携带、绿色版分发
- * 
- * ### Standard（常规）模式
- * - 条件：可执行文件目录下不存在 `data/` 目录
- * - 数据目录：`{appData}/HoundWhiteboard/data/`
- * - 用途：常规安装运行
+ * - **Portable（便携）模式**: 可执行文件目录下存在 `data/` 目录，数据存储在 `{exeDir}/data/`
+ * - **Standard（常规）模式**: 使用系统 appdata 目录，数据存储在 `{appData}/HoundWhiteboard/data/`
  */
 
 import { app } from "electron";
 import fs from "fs";
 import path from "path";
 
-// ==============================
-// 🎯 目录检测核心逻辑
-// ==============================
+/**
+ * @typedef {Object} DirectoryPaths
+ * @property {string} APP_DATA - 系统应用数据目录
+ * @property {string} EXE - 可执行文件路径
+ * @property {string} USER_DATA - 用户数据目录
+ * @property {string} DOCUMENTS - 文档目录
+ * @property {string} APP_ROOT - 应用数据根目录
+ * @property {string} SAVE_DATA - 存档文件目录
+ * @property {string} PLUGINS - 插件目录
+ * @property {string} RESOURCE_PACKS - 资源包目录
+ * @property {string} CACHE - 缓存目录
+ * @property {string} LOGS - 日志目录
+ * @property {string} PRELOADS - 动态preload脚本目录
+ */
 
 /**
  * 检测并返回应用数据根目录
@@ -35,14 +37,12 @@ export function detectAppRoot() {
   const exePath = app.getPath("exe") || process.execPath;
   const installDir = path.dirname(exePath);
   const localDataDir = path.join(installDir, "data");
-  
-  // 检查可执行文件目录下是否存在 data/ 目录（便携模式）
+
   if (fs.existsSync(localDataDir)) {
     console.log(`[PathDetector] Portable mode detected. Using local data directory: ${localDataDir}`);
     return localDataDir;
   }
-  
-  // 否则使用系统 appdata 目录（常规模式）
+
   const appDataDir = path.join(app.getPath("appData"), "HoundWhiteboard", "data");
   console.log(`[PathDetector] Standard mode. Using appdata directory: ${appDataDir}`);
   return appDataDir;
@@ -50,37 +50,33 @@ export function detectAppRoot() {
 
 /**
  * 获取所有标准目录路径
- * @returns {Object} 包含所有目录路径的对象
+ * @returns {DirectoryPaths} 包含所有目录路径的对象
  */
 export function getDirectories() {
   const appRoot = detectAppRoot();
-  
+
   return {
-    // 基础路径
     APP_DATA: app.getPath("appData"),
     EXE: app.getPath("exe") || process.execPath,
     USER_DATA: app.getPath("userData"),
     DOCUMENTS: app.getPath("documents"),
     APP_ROOT: appRoot,
-    
-    // 安全存储目录
-    SAVE_DATA: path.join(appRoot, "saves"),        // 存档文件目录
-    PLUGINS: path.join(appRoot, "plugins"),        // 插件目录
-    RESOURCE_PACKS: path.join(appRoot, "resources"), // 资源包目录
-    CACHE: path.join(appRoot, "cache"),            // 缓存目录
-    LOGS: path.join(appRoot, "logs"),              // 日志目录
-    PRELOADS: path.join(appRoot, "preloads"),      // 动态preload脚本目录
+    SAVE_DATA: path.join(appRoot, "saves"),
+    PLUGINS: path.join(appRoot, "plugins"),
+    RESOURCE_PACKS: path.join(appRoot, "resources"),
+    CACHE: path.join(appRoot, "cache"),
+    LOGS: path.join(appRoot, "logs"),
+    PRELOADS: path.join(appRoot, "preloads"),
   };
 }
 
 /**
  * 确保所有目录存在
- * @param {Object} dirs - 目录对象（可选，默认使用 getDirectories()）
+ * @param {DirectoryPaths} [dirs] - 目录对象，默认使用 getDirectories()
  */
 export function ensureDirectories(dirs = getDirectories()) {
-  // 确保所有安全存储目录存在
   const secureDirKeys = ["SAVE_DATA", "PLUGINS", "RESOURCE_PACKS", "CACHE", "LOGS", "PRELOADS"];
-  
+
   secureDirKeys.forEach(key => {
     const dir = dirs[key];
     if (dir && !fs.existsSync(dir)) {
@@ -98,13 +94,10 @@ export function getRuntimeMode() {
   const exePath = app.getPath("exe") || process.execPath;
   const installDir = path.dirname(exePath);
   const localDataDir = path.join(installDir, "data");
-  
+
   return fs.existsSync(localDataDir) ? "portable" : "standard";
 }
 
-// ==============================
-// 📦 导出
-// ==============================
 export default {
   detectAppRoot,
   getDirectories,

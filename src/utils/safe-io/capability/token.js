@@ -1,29 +1,53 @@
-import { randomUUID } from "crypto";
-import { sign } from "../crypto/sign.js";
-import { Permission, combinePermissions } from "../auth/permission.js";
-
 /**
- * safe-io capability token
- * ------------------------
+ * @fileoverview Capability Token - Token创建与签名
+ * @module safe-io/capability/token
+ *
+ * @description
  * 目标：
  * - 防伪造（signature）
  * - 防篡改（canonical payload）
  * - 防重放（timestamp + nonce）
  * - IPC 安全传输单位
  * - 支持 bitmask 权限格式
+ *
+ * @author safe-io Team
+ * @version 3.0
  */
 
-// ==============================
-// 🧠 canonical payload builder
-// ==============================
+import { randomUUID } from "crypto";
+import { sign } from "../crypto/sign.js";
+import { Permission, combinePermissions } from "../auth/permission.js";
 
-const buildPayload = ({
-  id,
-  root,
-  permissions,
-  timestamp,
-  nonce,
-}) => ({
+/**
+ * @typedef {Object} TokenPayload
+ * @property {string} id - Token唯一ID
+ * @property {string} root - 根路径
+ * @property {number} permissions - 权限位掩码
+ * @property {number} timestamp - 创建时间戳
+ * @property {string} nonce - 随机nonce
+ */
+
+/**
+ * @typedef {Object} Token
+ * @property {string} id - Token唯一ID
+ * @property {string} root - 根路径
+ * @property {number} permissions - 权限位掩码
+ * @property {number} timestamp - 创建时间戳
+ * @property {string} nonce - 随机nonce
+ * @property {string} signature - 签名
+ */
+
+/**
+ * 构建Token payload对象
+ * @param {Object} params - 参数对象
+ * @param {string} params.id - Token ID
+ * @param {string} params.root - 根路径
+ * @param {number} params.permissions - 权限位掩码
+ * @param {number} params.timestamp - 时间戳
+ * @param {string} params.nonce - Nonce
+ * @returns {TokenPayload} Token payload
+ */
+const buildPayload = ({ id, root, permissions, timestamp, nonce }) => ({
   id,
   root,
   permissions,
@@ -31,14 +55,10 @@ const buildPayload = ({
   nonce,
 });
 
-// ==============================
-// 🧠 权限格式转换
-// ==============================
-
 /**
  * 将对象格式权限转换为 bitmask
- * @param {Object} permissionsObj - { read: true, write: false, ... }
- * @returns {number} - bitmask 权限值
+ * @param {Object} permissionsObj - 权限对象
+ * @returns {number} bitmask权限值
  */
 const permissionsObjToBitmask = (permissionsObj) => {
   if (!permissionsObj || typeof permissionsObj !== "object") {
@@ -59,9 +79,9 @@ const permissionsObjToBitmask = (permissionsObj) => {
 };
 
 /**
- * 检测权限格式并返回标准化的 bitmask
- * @param {Object|number} permissions - 对象格式或 bitmask
- * @returns {number} - 标准化的 bitmask
+ * 规范化权限格式为bitmask
+ * @param {Object|number} permissions - 权限对象或bitmask
+ * @returns {number} 标准化的bitmask
  */
 const normalizePermissions = (permissions) => {
   if (typeof permissions === "number") {
@@ -70,23 +90,22 @@ const normalizePermissions = (permissions) => {
   return permissionsObjToBitmask(permissions);
 };
 
-// ==============================
-// 🔐 create capability token
-// ==============================
-
+/**
+ * 创建capability token
+ * @param {Object} handle - FileHandle对象
+ * @returns {Token} Token对象
+ */
 export const createToken = (handle) => {
-  // 将权限转换为 bitmask 格式
   const bitmaskPermissions = normalizePermissions(handle.permissions);
 
   const payload = buildPayload({
     id: randomUUID(),
     root: handle.path,
-    permissions: bitmaskPermissions, // 使用 bitmask
+    permissions: bitmaskPermissions,
     timestamp: Date.now(),
     nonce: randomUUID(),
   });
 
-  // ⚠️ 必须使用 canonical stringify（顺序稳定）
   const canonical = JSON.stringify(
     payload,
     Object.keys(payload).sort()
@@ -99,27 +118,25 @@ export const createToken = (handle) => {
     signature,
 
     /**
-     * 重新生成 canonical string（用于 verify）
+     * 重新生成canonical string
+     * @returns {string} canonical JSON string
      */
     canonical: () =>
       JSON.stringify(payload, Object.keys(payload).sort()),
 
     /**
-     * 获取原始权限对象（方便调试）
+     * 获取原始权限对象
+     * @returns {Object} 原始权限对象
      */
     originalPermissions: handle.permissions,
   });
 };
 
-// ==============================
-// 🧪 辅助函数：创建预设权限 token
-// ==============================
-
 /**
- * 使用预设权限创建 token
+ * 使用预设权限创建token
  * @param {string} path - 文件路径
- * @param {string} preset - 预设权限名称：'READ_ONLY', 'READ_WRITE', 'FULL'
- * @returns {Object} - token 对象
+ * @param {string} [preset='READ_ONLY'] - 预设权限名称
+ * @returns {Token} Token对象
  */
 export const createTokenWithPreset = (path, preset = "READ_ONLY") => {
   let bitmask = 0;

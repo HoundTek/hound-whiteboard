@@ -1,10 +1,16 @@
 /**
- * # Security Manager
- * ## 核心职责
+ * @fileoverview Security Manager - 窗口级安全上下文与动态Preload管理
+ * @module safe-io/security/manager
+ *
+ * @description
+ * 核心职责：
  * - 窗口级安全上下文管理
  * - 动态Preload脚本生成
  * - 权限策略管理
  * - Token生命周期管理
+ *
+ * @author safe-io Team
+ * @version 3.0
  */
 
 import fs from "fs";
@@ -13,9 +19,21 @@ import { randomUUID } from "crypto";
 import { app } from "electron";
 import { createTokenWithPreset } from "../capability/token.js";
 
-// ==============================
-// 🔐 权限策略定义
-// ==============================
+/**
+ * @typedef {Object} PermissionPreset
+ * @property {string[]} fs - 文件系统权限列表
+ * @property {string[]} hide - 隐藏文件权限列表
+ * @property {string[]} zip - 压缩操作权限列表
+ * @property {string[]} user - 用户数据权限列表
+ * @property {string[]} locale - 本地化权限列表
+ * @property {string[]} theme - 主题权限列表
+ * @property {string[]} icon - 图标权限列表
+ */
+
+/**
+ * 权限预设配置表
+ * @type {Object.<string, PermissionPreset>}
+ */
 const PERMISSION_PRESETS = {
   READ_ONLY: {
     fs: ["read", "exists", "ls"],
@@ -64,9 +82,10 @@ const PERMISSION_PRESETS = {
   },
 };
 
-// ==============================
-// 📝 Preload模板
-// ==============================
+/**
+ * Preload脚本模板
+ * @type {string}
+ */
 const PRELOAD_TEMPLATE = (permissions, windowId) => `
 const { contextBridge, ipcRenderer } = require("electron");
 
@@ -102,9 +121,11 @@ ${generateStorageAPI()}
 contextBridge.exposeInMainWorld("safeIO", api);
 `;
 
-// ==============================
-// 🔧 辅助函数
-// ==============================
+/**
+ * 根据权限配置获取允许的IPC通道列表
+ * @param {PermissionPreset} permissions - 权限配置
+ * @returns {string[]} 允许的通道名称数组
+ */
 function getAllowedChannels(permissions) {
   const channels = [];
   
@@ -252,16 +273,36 @@ api.window = {
 `;
 }
 
-// ==============================
-// 🎯 Security Manager 类
-// ==============================
+/**
+ * 安全上下文信息
+ * @typedef {Object} SecurityContext
+ * @property {string} id - 上下文唯一ID
+ * @property {string} windowId - 关联的窗口ID
+ * @property {string} preset - 权限预设名称
+ * @property {PermissionPreset} permissions - 权限配置
+ * @property {Object} token - 认证令牌
+ * @property {string} tokenId - 令牌ID
+ * @property {string|null} bindFile - 绑定的文件路径
+ * @property {number} createdAt - 创建时间戳
+ */
+
+/**
+ * SecurityManager - 窗口级安全上下文管理器
+ * @class
+ */
 class SecurityManager {
+  /**
+   * 构造函数
+   * @constructor
+   */
   constructor() {
+    /** @type {Map<string, SecurityContext>} 上下文存储 */
     this.contexts = new Map();
+    /** @type {Map<string, {path: string, generatedAt: number, preset: string}>} preload缓存 */
     this.preloadCache = new Map();
+    /** @type {string} preload脚本存储目录 */
     this.preloadDir = path.join(app.getPath("userData"), "preloads");
-    
-    // 确保preload目录存在
+
     if (!fs.existsSync(this.preloadDir)) {
       fs.mkdirSync(this.preloadDir, { recursive: true });
     }
@@ -269,11 +310,11 @@ class SecurityManager {
 
   /**
    * 创建安全上下文
-   * @param {Object} options
-   * @param {string} options.windowId
-   * @param {string} options.preset - 权限预设名称
-   * @param {string} [options.bindFile]
-   * @returns {Object} securityContext
+   * @param {Object} options - 选项
+   * @param {string} options.windowId - 窗口ID
+   * @param {string} [options.preset='READ_ONLY'] - 权限预设名称
+   * @param {string} [options.bindFile] - 绑定的文件路径
+   * @returns {SecurityContext} 安全上下文
    */
   createContext(options) {
     const { windowId, preset = "READ_ONLY", bindFile } = options;
@@ -304,7 +345,8 @@ class SecurityManager {
 
   /**
    * 销毁安全上下文
-   * @param {string} windowId
+   * @param {string} windowId - 窗口ID
+   * @returns {void}
    */
   destroyContext(windowId) {
     const context = this.contexts.get(windowId);
@@ -324,8 +366,8 @@ class SecurityManager {
 
   /**
    * 获取安全上下文
-   * @param {string} windowId
-   * @returns {Object|null}
+   * @param {string} windowId - 窗口ID
+   * @returns {SecurityContext|null} 安全上下文或null
    */
   getContext(windowId) {
     return this.contexts.get(windowId) || null;
@@ -333,8 +375,8 @@ class SecurityManager {
 
   /**
    * 生成动态preload脚本
-   * @param {string} windowId
-   * @param {Object} securityContext
+   * @param {string} windowId - 窗口ID
+   * @param {SecurityContext} securityContext - 安全上下文
    * @returns {string} preload文件路径
    */
   generatePreload(windowId, securityContext) {
@@ -363,8 +405,8 @@ class SecurityManager {
 
   /**
    * 获取preload文件路径
-   * @param {string} windowId
-   * @returns {string}
+   * @param {string} windowId - 窗口ID
+   * @returns {string} preload文件路径
    */
   getPreloadPath(windowId) {
     const sanitizedId = windowId.replace(/[^a-zA-Z0-9\-]/g, "_");
@@ -373,9 +415,9 @@ class SecurityManager {
 
   /**
    * 更新窗口权限
-   * @param {string} windowId
-   * @param {string} newPreset
-   * @returns {boolean}
+   * @param {string} windowId - 窗口ID
+   * @param {string} newPreset - 新的权限预设
+   * @returns {boolean} 是否更新成功
    */
   updatePermissions(windowId, newPreset) {
     const context = this.contexts.get(windowId);
@@ -393,7 +435,7 @@ class SecurityManager {
 
   /**
    * 获取所有上下文摘要
-   * @returns {Array}
+   * @returns {Array<{windowId: string, preset: string, createdAt: number, bindFile: string|null}>} 上下文摘要列表
    */
   getContextsSummary() {
     const summaries = [];

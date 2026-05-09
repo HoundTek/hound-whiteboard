@@ -1,14 +1,52 @@
+/**
+ * @fileoverview FileHandle - Capability Handle与审计日志
+ * @module safe-io/capability/handle
+ *
+ * @description
+ * 提供：
+ * - FileHandle 工厂函数
+ * - 审计日志系统
+ * - 动态权限管理
+ * - 符号链接边界检查
+ *
+ * @author safe-io Team
+ * @version 3.0
+ */
+
 import { FS } from "../runtime/fs.js";
 import { Hide } from "../runtime/hide.js";
 import { Zip } from "../runtime/zip.js";
 
-// ==============================
-// 🔐 AUDIT LOG
-// ==============================
+/**
+ * 审计日志条目
+ * @typedef {Object} AuditEntry
+ * @property {number} timestamp - 时间戳
+ * @property {string} action - 操作类型
+ * @property {string} path - 文件路径
+ * @property {boolean} success - 是否成功
+ * @property {Object} [details] - 附加详情
+ */
 
-const auditLog = [];
+/**
+ * 全局审计日志
+ * @type {AuditEntry[]}
+ */
+export const auditLog = [];
+
+/**
+ * 最大审计日志条目数
+ * @type {number}
+ */
 const MAX_AUDIT_ENTRIES = 1000;
 
+/**
+ * 记录审计日志
+ * @param {string} action - 操作类型
+ * @param {string} path - 文件路径
+ * @param {boolean} success - 是否成功
+ * @param {Object} [details] - 附加详情
+ * @returns {void}
+ */
 export const logAudit = (action, path, success, details = {}) => {
   const entry = {
     timestamp: Date.now(),
@@ -17,39 +55,34 @@ export const logAudit = (action, path, success, details = {}) => {
     success,
     ...details,
   };
-  
+
   auditLog.push(entry);
-  
-  // 限制日志大小
+
   if (auditLog.length > MAX_AUDIT_ENTRIES) {
     auditLog.shift();
   }
-  
-  // 可以发送到远程日志服务
-  // console.debug("[safe-io] Audit:", entry);
 };
-
-// ==============================
-// 🔐 SECURITY BOUNDARY CHECK
-// ==============================
 
 /**
  * 检查路径是否在授权边界内
- * 防止符号链接穿越到授权范围之外
+ * @param {string} resolvedPath - 解析后的路径
+ * @param {string} realPath - 真实路径
+ * @returns {boolean} 是否在边界内
  */
 const isPathInBoundary = (resolvedPath, realPath) => {
   if (!resolvedPath || !realPath) return false;
-  
-  // 真实路径必须以授权路径开头或相等
   return realPath === resolvedPath || realPath.startsWith(resolvedPath + "/");
 };
 
-// ==============================
-// 🔐 PERMISSION MANAGER
-// ==============================
-
+/**
+ * 权限管理器
+ * @namespace PermissionManager
+ */
 export const PermissionManager = {
-  // 权限定义
+  /**
+   * 权限名称定义
+   * @type {Object}
+   */
   PERMISSIONS: {
     READ: "read",
     WRITE: "write",
@@ -59,7 +92,10 @@ export const PermissionManager = {
     ZIP: "zip",
   },
 
-  // 默认权限
+  /**
+   * 默认权限配置
+   * @type {Object}
+   */
   DEFAULT: {
     read: true,
     write: false,
@@ -69,7 +105,10 @@ export const PermissionManager = {
     zip: true,
   },
 
-  // 权限组合
+  /**
+   * 权限预设配置
+   * @type {Object}
+   */
   PRESETS: {
     READ_ONLY: {
       read: true,
@@ -97,29 +136,46 @@ export const PermissionManager = {
     },
   },
 
-  // 验证权限
+  /**
+   * 验证权限
+   * @param {Object} permissions - 权限对象
+   * @param {string} required - 需要的权限
+   * @returns {boolean} 是否有权限
+   */
   check: (permissions, required) => {
     if (!permissions) return false;
     return permissions[required] === true;
   },
 
-  // 合并权限
+  /**
+   * 合并权限
+   * @param {Object} base - 基础权限
+   * @param {Object} overrides - 覆盖权限
+   * @returns {Object} 合并后的权限
+   */
   merge: (base, overrides) => {
     return { ...base, ...overrides };
   },
 
-  // 克隆权限
+  /**
+   * 克隆权限
+   * @param {Object} permissions - 权限对象
+   * @returns {Object} 克隆后的权限
+   */
   clone: (permissions) => {
     return { ...permissions };
   },
 };
 
-// ==============================
-// 🔐 FILE HANDLE
-// ==============================
-
+/**
+ * FileHandle 工厂函数
+ * @param {string} resolvedPath - 解析后的文件路径
+ * @param {Object} [permissions={}] - 权限配置
+ * @returns {Object} FileHandle对象
+ */
 export const FileHandle = (resolvedPath, permissions = {}) => {
   let revoked = false;
+  /** @type {AuditEntry[]} */
   const auditHistory = [];
 
   const perm = PermissionManager.merge(
@@ -127,10 +183,13 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
     permissions
   );
 
-  // ==========================
-  // 📝 Instance-level audit logger
-  // ==========================
-
+  /**
+   * 记录到实例历史
+   * @param {string} action - 操作类型
+   * @param {boolean} success - 是否成功
+   * @param {Object} [details] - 附加详情
+   * @returns {void}
+   */
   const logToHistory = (action, success, details = {}) => {
     const entry = {
       timestamp: Date.now(),
@@ -140,23 +199,17 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       ...details,
     };
     auditHistory.push(entry);
-    
-    // 限制实例历史大小
+
     if (auditHistory.length > 100) {
       auditHistory.shift();
     }
   };
 
-  // ==========================
-  // 🔒 revoke control
-  // ==========================
-
-  const revoke = () => {
-    revoked = true;
-    logAudit("revoke", resolvedPath, true);
-    logToHistory("revoke", true);
-  };
-
+  /**
+   * 撤销检查
+   * @returns {void}
+   * @throws {Error} handle已撤销
+   */
   const check = () => {
     if (revoked) {
       const reason = "handle revoked";
@@ -166,10 +219,11 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
     }
   };
 
-  // ==========================
-  // 🔐 Symlink boundary check
-  // ==========================
-
+  /**
+   * 符号链接边界检查
+   * @param {string} pathToCheck - 要检查的路径
+   * @returns {boolean} 是否安全
+   */
   const checkSymlinkBoundary = (pathToCheck) => {
     const realPath = FS.realPath(pathToCheck);
     if (!realPath) {
@@ -178,9 +232,10 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
     return isPathInBoundary(resolvedPath, realPath);
   };
 
-  // ==========================
-  // 📖 read
-  // ==========================
+  /**
+   * 读取文件
+   * @returns {string|null} 文件内容
+   */
   const read = () => {
     check();
     if (!PermissionManager.check(perm, "read")) {
@@ -189,24 +244,25 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("read", false, { reason });
       return null;
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("read", resolvedPath, false, { reason });
       logToHistory("read", false, { reason });
       return null;
     }
-    
+
     const result = FS.read(resolvedPath);
     logAudit("read", resolvedPath, result !== null);
     logToHistory("read", result !== null);
     return result;
   };
 
-  // ==========================
-  // ✍ write
-  // ==========================
+  /**
+   * 写入文件
+   * @param {string} content - 文件内容
+   * @returns {boolean} 是否成功
+   */
   const write = (content) => {
     check();
     if (!PermissionManager.check(perm, "write")) {
@@ -215,24 +271,24 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("write", false, { reason });
       return false;
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("write", resolvedPath, false, { reason });
       logToHistory("write", false, { reason });
       return false;
     }
-    
+
     const result = FS.write(resolvedPath, content);
     logAudit("write", resolvedPath, result);
     logToHistory("write", result);
     return result;
   };
 
-  // ==========================
-  // ❌ rm
-  // ==========================
+  /**
+   * 删除文件
+   * @returns {boolean} 是否成功
+   */
   const rm = () => {
     check();
     if (!PermissionManager.check(perm, "rm")) {
@@ -241,24 +297,24 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("rm", false, { reason });
       return false;
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("rm", resolvedPath, false, { reason });
       logToHistory("rm", false, { reason });
       return false;
     }
-    
+
     const result = FS.rm(resolvedPath);
     logAudit("rm", resolvedPath, result);
     logToHistory("rm", result);
     return result;
   };
 
-  // ==========================
-  // 📂 ls
-  // ==========================
+  /**
+   * 列出目录
+   * @returns {Array} 目录条目
+   */
   const ls = () => {
     check();
     if (!PermissionManager.check(perm, "ls")) {
@@ -267,24 +323,24 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("ls", false, { reason });
       return [];
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("ls", resolvedPath, false, { reason });
       logToHistory("ls", false, { reason });
       return [];
     }
-    
+
     const result = FS.ls(resolvedPath);
     logAudit("ls", resolvedPath, true);
     logToHistory("ls", true);
     return result;
   };
 
-  // ==========================
-  // 👁 hide
-  // ==========================
+  /**
+   * 隐藏文件
+   * @returns {boolean} 是否成功
+   */
   const hide = () => {
     check();
     if (!PermissionManager.check(perm, "hide")) {
@@ -293,21 +349,24 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("hide", false, { reason });
       return false;
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("hide", resolvedPath, false, { reason });
       logToHistory("hide", false, { reason });
       return false;
     }
-    
+
     const result = Hide.hide(resolvedPath);
     logAudit("hide", resolvedPath, result);
     logToHistory("hide", result);
     return result;
   };
 
+  /**
+   * 取消隐藏
+   * @returns {boolean} 是否成功
+   */
   const unhide = () => {
     check();
     if (!PermissionManager.check(perm, "hide")) {
@@ -316,24 +375,25 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("unhide", false, { reason });
       return false;
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("unhide", resolvedPath, false, { reason });
       logToHistory("unhide", false, { reason });
       return false;
     }
-    
+
     const result = Hide.unhide(resolvedPath);
     logAudit("unhide", resolvedPath, result);
     logToHistory("unhide", result);
     return result;
   };
 
-  // ==========================
-  // 📦 zip
-  // ==========================
+  /**
+   * 压缩文件/目录
+   * @param {string} out - 输出路径
+   * @returns {boolean} 是否成功
+   */
   const zip = (out) => {
     check();
     if (!PermissionManager.check(perm, "zip")) {
@@ -342,21 +402,25 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("zip", false, { reason });
       return false;
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("zip", resolvedPath, false, { reason });
       logToHistory("zip", false, { reason });
       return false;
     }
-    
+
     const result = Zip.fromFolder(resolvedPath, out);
     logAudit("zip", resolvedPath, result, { output: out });
     logToHistory("zip", result, { output: out });
     return result;
   };
 
+  /**
+   * 解压缩
+   * @param {string} target - 目标目录
+   * @returns {boolean} 是否成功
+   */
   const unzipTo = (target) => {
     check();
     if (!PermissionManager.check(perm, "zip")) {
@@ -365,24 +429,24 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       logToHistory("unzipTo", false, { reason });
       return false;
     }
-    
-    // 符号链接边界检查
+
     if (!checkSymlinkBoundary(resolvedPath)) {
       const reason = "symlink boundary violation";
       logAudit("unzipTo", resolvedPath, false, { reason });
       logToHistory("unzipTo", false, { reason });
       return false;
     }
-    
+
     const result = Zip.extractTo(resolvedPath, target);
     logAudit("unzipTo", resolvedPath, result, { target });
     logToHistory("unzipTo", result, { target });
     return result;
   };
 
-  // ==========================
-  // 📌 metadata
-  // ==========================
+  /**
+   * 检查文件是否存在
+   * @returns {boolean} 是否存在
+   */
   const exists = () => {
     check();
     const result = FS.exists(resolvedPath);
@@ -391,15 +455,16 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
     return result;
   };
 
-  // ==========================
-  // 🔐 NEW: Dynamic Permission Management
-  // ==========================
-
+  /**
+   * 更新权限
+   * @param {Object} newPermissions - 新权限
+   * @returns {boolean} 是否成功
+   */
   const updatePermissions = (newPermissions) => {
     check();
     const oldPermissions = { ...perm };
     Object.assign(perm, newPermissions);
-    
+
     logAudit("update_permissions", resolvedPath, true, {
       old: oldPermissions,
       new: { ...perm },
@@ -408,10 +473,15 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       old: oldPermissions,
       new: { ...perm },
     });
-    
+
     return true;
   };
 
+  /**
+   * 授予权限
+   * @param {string} permission - 权限名称
+   * @returns {boolean} 是否成功
+   */
   const grantPermission = (permission) => {
     check();
     if (PermissionManager.PERMISSIONS[permission.toUpperCase()]) {
@@ -423,6 +493,11 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
     return false;
   };
 
+  /**
+   * 撤销权限
+   * @param {string} permission - 权限名称
+   * @returns {boolean} 是否成功
+   */
   const revokePermission = (permission) => {
     check();
     if (PermissionManager.PERMISSIONS[permission.toUpperCase()]) {
@@ -434,23 +509,23 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
     return false;
   };
 
-  // ==========================
-  // 🔐 NEW: Audit & Monitoring
-  // ==========================
-
+  /**
+   * 获取审计历史
+   * @returns {AuditEntry[]} 审计历史副本
+   */
   const getAuditHistory = () => {
     check();
     return [...auditHistory];
   };
 
+  /**
+   * 获取全局审计日志副本
+   * @returns {AuditEntry[]} 审计日志副本
+   */
   const getAuditLog = () => {
-    // 返回全局审计日志的副本
     return [...auditLog];
   };
 
-  // ==========================
-  // 🔐 public API
-  // ==========================
   return Object.freeze({
     path: resolvedPath,
     permissions: Object.freeze({ ...perm }),
@@ -468,21 +543,13 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
 
     exists,
 
-    // 🔥 NEW: Permission Management
     revoke,
     isRevoked: () => revoked,
     updatePermissions,
     grantPermission,
     revokePermission,
 
-    // 🔥 NEW: Audit
     getAuditHistory,
     getAuditLog,
   });
 };
-
-// ==============================
-// 🔐 EXPORTS
-// ==============================
-
-export { auditLog };
