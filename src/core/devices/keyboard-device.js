@@ -6,6 +6,12 @@
 
 import { SignalPacket } from "./signal.js";
 
+const KEYBOARD_DEVICE_SIGNAL_TYPES = {
+  TRIGGER: "trigger",
+  RELEASE: "release",
+  CANCEL: "cancel",
+};
+
 /**
  * 创建一棵键盘设备子树。
  * @param {{
@@ -14,7 +20,6 @@ import { SignalPacket } from "./signal.js";
  *   keyupProcessor?: import("./devices-tree.js").DevicesTreeProcessor,
  *   repeatProcessor?: import("./devices-tree.js").DevicesTreeProcessor,
  *   cancelProcessor?: import("./devices-tree.js").DevicesTreeProcessor,
- *   keyProcessors?: Record<string, import("./devices-tree.js").DevicesTreeProcessor>,
  * }} [options={}] - 键盘设备选项
  * @returns {import("./devices-tree.js").DeviceDefinition & {
  *   resetState: () => void,
@@ -46,21 +51,12 @@ function createKeyboardDevice(options = {}) {
   let lastEvent = null;
 
   /**
-   * 已配置的按键专属处理器表。
-   * @type {Record<string, import("./devices-tree.js").DevicesTreeProcessor>}
-   */
-  const keyProcessors =
-    options.keyProcessors && typeof options.keyProcessors === "object"
-      ? options.keyProcessors
-      : {};
-
-  /**
    * 将节点处理结果规整为信号包数组。
    * @param {any} result - 原始处理结果
    * @returns {SignalPacket[]}
    */
   const normalizeProcessorResult = (result) =>
-    SignalPacket.normalizeResult(result, { defaultTo: "/" });
+    SignalPacket.normalizeResult(result);
 
   /**
    * 将原始键位编码规整为字符串或 null。
@@ -76,6 +72,47 @@ function createKeyboardDevice(options = {}) {
    * @returns {string}
    */
   const encodeKeyPathSegment = (code) => encodeURIComponent(String(code));
+
+  /**
+   * 将原始键盘信号改写为工具消费信号。
+   * @param {{type?: string, context?: Object}} signal - 当前原始信号
+   * @returns {Object|null}
+   */
+  const rewriteSignalForTool = (signal) => {
+    const descriptor = getSignalDescriptor(signal);
+
+    if (descriptor.type === "keydown" && !descriptor.repeat) {
+      return {
+        type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        context: {
+          ...signal.context,
+          sourceType: descriptor.type,
+        },
+      };
+    }
+
+    if (descriptor.type === "keyup" || descriptor.type === "end") {
+      return {
+        type: KEYBOARD_DEVICE_SIGNAL_TYPES.RELEASE,
+        context: {
+          ...signal.context,
+          sourceType: descriptor.type,
+        },
+      };
+    }
+
+    if (descriptor.type === "cancel") {
+      return {
+        type: KEYBOARD_DEVICE_SIGNAL_TYPES.CANCEL,
+        context: {
+          ...signal.context,
+          sourceType: descriptor.type,
+        },
+      };
+    }
+
+    return null;
+  };
 
   /**
    * 复制激活键状态，避免把内部可变对象直接暴露出去。
@@ -167,7 +204,9 @@ function createKeyboardDevice(options = {}) {
    * }}
    */
   const getState = () => ({
-    activeKeys: Array.from(activeKeys.values()).map((state) => cloneKeyState(state)),
+    activeKeys: Array.from(activeKeys.values()).map((state) =>
+      cloneKeyState(state),
+    ),
     lastEvent: lastEvent
       ? {
           type: lastEvent.type,
@@ -214,35 +253,49 @@ function createKeyboardDevice(options = {}) {
    * @param {{path?: string}} [routeContext={}] - 当前路由上下文
    * @returns {Array<{to: string, signals: Array<Object>}>>}
    */
-  const resolveRouteTargets = (packet, routeContext = {}) => {
-    const targets = new Set();
+  const resolveRouteTargets = (packet) => {
+    const generalTargets = new Set();
+    const codeTargets = new Map();
 
     for (const signal of packet.signals) {
       const descriptor = getSignalDescriptor(signal);
 
-      targets.add("event");
+      generalTargets.add("event");
 
       if (descriptor.type === "keydown") {
-        targets.add(descriptor.repeat ? "repeat" : "keydown");
+        generalTargets.add(descriptor.repeat ? "repeat" : "keydown");
       }
 
       if (descriptor.type === "keyup" || descriptor.type === "end") {
-        targets.add("keyup");
+        generalTargets.add("keyup");
       }
 
       if (descriptor.type === "cancel") {
-        targets.add("cancel");
+        generalTargets.add("cancel");
       }
 
-      if (descriptor.code && keyProcessors[descriptor.code]) {
-        targets.add(`code/${encodeKeyPathSegment(descriptor.code)}`);
+      if (descriptor.code) {
+        const toolSignal = rewriteSignalForTool(signal);
+        if (toolSignal) {
+          const codePath = `code/${encodeKeyPathSegment(descriptor.code)}`;
+          if (!codeTargets.has(codePath)) {
+            codeTargets.set(codePath, []);
+          }
+          codeTargets.get(codePath).push(toolSignal);
+        }
       }
     }
 
-    return Array.from(targets).map((childPath) => ({
-      to: `${routeContext.path}/${childPath}`.replace(/\/+/g, "/"),
-      signals: packet.signals,
-    }));
+    return [
+      ...Array.from(generalTargets).map((childPath) => ({
+        to: childPath,
+        signals: packet.signals,
+      })),
+      ...Array.from(codeTargets.entries()).map(([childPath, signals]) => ({
+        to: childPath,
+        signals,
+      })),
+    ];
   };
 
   /**
@@ -304,12 +357,6 @@ function createKeyboardDevice(options = {}) {
         : packet;
     }
 
-    if (nodePath.startsWith("code/")) {
-      const code = decodeURIComponent(nodePath.slice("code/".length));
-      const processor = keyProcessors[code];
-      return typeof processor === "function" ? processor(packet, routeContext) : packet;
-    }
-
     return packet;
   };
 
@@ -351,7 +398,7 @@ function createKeyboardDevice(options = {}) {
 
     /**
      * 定义键盘设备子树节点。
-     * @returns {Array<{path: string, processor: import("./devices-tree.js").DevicesTreeProcessor}>}
+     * @returns {Array<{path: string, defaultPath?: string, processor: import("./devices-tree.js").DevicesTreeProcessor|null}>}
      */
     defineNodes() {
       return [
@@ -361,13 +408,9 @@ function createKeyboardDevice(options = {}) {
         { path: "/keyup", processor: createNodeProcessor("keyup") },
         { path: "/repeat", processor: createNodeProcessor("repeat") },
         { path: "/cancel", processor: createNodeProcessor("cancel") },
-        ...Object.keys(keyProcessors).map((code) => ({
-          path: `/code/${encodeKeyPathSegment(code)}`,
-          processor: createNodeProcessor(`code/${encodeKeyPathSegment(code)}`),
-        })),
       ];
     },
   };
 }
 
-export { createKeyboardDevice };
+export { KEYBOARD_DEVICE_SIGNAL_TYPES, createKeyboardDevice };

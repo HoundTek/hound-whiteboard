@@ -25,7 +25,7 @@
 ```javascript
 const deviceDefinition = {
   defineNodes() {
-    return [{ path: "", processor }];
+    return [{ path: "", processor, defaultPath: "tool" }];
   },
 };
 ```
@@ -33,6 +33,7 @@ const deviceDefinition = {
 约束：
 
 - `DevicesTree` 当前只消费 `defineNodes()`
+- 节点定义可通过 `defaultPath` 声明默认下游
 - 其它字段都应视为定义对象扩展信息
 
 ### 3. Monitor 是业务侧设备挂载入口
@@ -45,26 +46,43 @@ monitor.mountDevice(path, deviceDefinition);
 
 而不是直接操作 `devicesTree.mountDevice()`。
 
-### 4. DevicesTree 的终止语义
+### 4. 工具的运行时挂载入口
+
+业务代码应优先调用：
+
+```javascript
+board.signalsEventBus.emit("mount", { to, tool });
+board.signalsEventBus.emit("umount", { to });
+```
+
+约束：
+
+- `mount` 会沿当前已有的 `defaultPath` 走到末端，再追加一个新的 `/tool` 节点
+- `umount` 会沿当前已有的 `defaultPath` 走到末端，并尝试删除最后一个工具节点
+- 工具不应在 `createKeyboardDevice()`、`createMouseDevice()` 这类设备工厂调用时静态注入
+
+### 5. DevicesTree 的终止语义
 
 当前递归分发规则中，若节点处理结果包的 `to` 停在当前节点路径上，则路由在此终止。
 
+若处理结果没有显式写 `to`，则设备树会优先检查当前节点的 `defaultPath` 是否已有真实下游；只有该下游节点存在时才会继续分发。相对路径会以当前节点位置为基准解析。
+
 这是设备节点和工具节点能稳定协作的基础语义。
 
-### 5. Tool 的最小接口
+### 6. Tool 的最小接口
 
 工具最小接口为：
 
 - `process(signalPacket, deviceContext)`
 - `createProcessor(toolContext)`
 
-其中 `createProcessor()` 把 Tool 包装成设备树节点处理器；Tool 默认消费信号，不承担继续改写路由的职责。
+其中 `createProcessor()` 把 Tool 包装成独立工具节点上的处理器；Tool 默认消费信号，不承担继续改写路由的职责。
 
-### 6. 多指输入区分方式
+### 7. 多指输入区分方式
 
 同一个 `signals` 数组里允许出现多条 `position` 等同类型信号；多触点输入应通过 `touchId`、`pointerId` 等字段区分来源。
 
-### 7. 鼠标设备的当前路由约定
+### 8. 鼠标设备的当前路由约定
 
 当前鼠标设备采用多通道路由，而不是单选路由。一个输入包可以同时落到多个子节点：
 

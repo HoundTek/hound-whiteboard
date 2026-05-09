@@ -7,8 +7,9 @@
 我们希望表达这样一个设备：
 
 - `/monitor/s-pen` 是根节点，根据按钮状态决定把包送到 `pen` 或 `eraser`。
-- `/monitor/s-pen/pen` 消费输入，并产出绘画结果。
-- `/monitor/s-pen/eraser` 消费输入，并产出擦除结果。
+- `/monitor/s-pen/pen` 是设备语义节点，默认继续把包送到自己的工具节点。
+- `/monitor/s-pen/pen/tool` 消费输入，并产出绘画结果。
+- `/monitor/s-pen/eraser/tool` 消费输入，并产出擦除结果。
 
 ## 直接挂载节点
 
@@ -17,27 +18,29 @@
 ```javascript
 const tree = new DevicesTree();
 
-tree.mount("/monitor/s-pen", (packet, context) => {
+tree.mount("/monitor/s-pen", (packet) => {
   const isButtonPressed = packet.signals.some(
     (signal) => signal.type === "button" && signal.context?.value === true,
   );
 
   return [
     {
-      to: isButtonPressed ? "/monitor/s-pen/eraser" : "/monitor/s-pen/pen",
+      to: isButtonPressed ? "eraser" : "pen",
       signals: packet.signals,
     },
   ];
 });
 
-tree.mount("/monitor/s-pen/pen", (packet, context) => [
+tree.mount("/monitor/s-pen/pen", null, { defaultPath: "tool" });
+tree.mount("/monitor/s-pen/pen/tool", (packet, context) => [
   {
     to: context.path,
     signals: [{ type: "draw", context: { from: context.path } }],
   },
 ]);
 
-tree.mount("/monitor/s-pen/eraser", (packet, context) => [
+tree.mount("/monitor/s-pen/eraser", null, { defaultPath: "tool" });
+tree.mount("/monitor/s-pen/eraser/tool", (packet, context) => [
   {
     to: context.path,
     signals: [{ type: "erase", context: { from: context.path } }],
@@ -47,8 +50,9 @@ tree.mount("/monitor/s-pen/eraser", (packet, context) => [
 
 这里有两个关键点：
 
-- 根节点并不直接修改白板，它只负责根据当前状态改写 `to`，把包继续送到合适的子节点。
-- `pen` 和 `eraser` 节点把 `to` 设为当前节点路径，表示路由在这里终止，结果包直接返回给设备树调用方。
+- 根节点并不直接修改白板，它只负责根据当前状态改写 `to`，把包继续送到合适的相对子节点。
+- `pen` 和 `eraser` 节点本身不直接消费，而是通过 `defaultPath` 把包继续送到自己的 `/tool` 子节点。
+- 叶子工具节点把 `to` 设为当前节点路径，表示路由在这里终止，结果包直接返回给设备树调用方。
 
 ## 用设备子树定义挂载
 
@@ -67,15 +71,17 @@ const deviceDefinition = {
           );
 
           return {
-            to: isButtonPressed
-              ? "/monitor/s-pen/eraser"
-              : "/monitor/s-pen/pen",
+            to: isButtonPressed ? "eraser" : "pen",
             signals: packet.signals,
           };
         },
       },
       {
         path: "/pen",
+        defaultPath: "tool",
+      },
+      {
+        path: "/pen/tool",
         processor(packet, context) {
           return {
             to: context.path,
@@ -85,6 +91,10 @@ const deviceDefinition = {
       },
       {
         path: "/eraser",
+        defaultPath: "tool",
+      },
+      {
+        path: "/eraser/tool",
         processor(packet, context) {
           return {
             to: context.path,
@@ -116,7 +126,7 @@ tree.mountDevice("/monitor/s-pen", deviceDefinition);
 这段示例对应当前 `mountDevice()` 的真实用法：
 
 - 设备定义对象只负责返回节点列表。
-- 每个节点只声明相对路径和对应的 `processor`。
+- 每个节点只声明相对路径、对应的 `processor`，以及可选的 `defaultPath`。
 - 设备树负责把这些相对路径展开到 `/monitor/s-pen` 之下。
 
 注：上面这段保留 `tree.mountDevice()`，是为了把底层展开逻辑写完整。业务侧在真实代码里应优先从 `Monitor` 进入，等价写法会是：
@@ -141,23 +151,26 @@ tree.dispatch({
 那么路由过程是：
 
 1. 包先到 `/monitor/s-pen`。
-2. 根节点检查按钮状态，决定把包转发到 `/monitor/s-pen/pen`。
-3. `pen` 节点产出一个 `draw` 结果包，并把 `to` 保持为当前路径。
-4. 因为结果包不再指向其它节点，设备树停止递归，并返回该结果。
+2. 根节点检查按钮状态，决定把包转发到相对路径 `pen`。
+3. 设备树把相对路径解析为 `/monitor/s-pen/pen`。
+4. `pen` 节点没有显式处理器，于是设备树沿它的 `defaultPath` 把包继续送到 `/monitor/s-pen/pen/tool`。
+5. `tool` 节点产出一个 `draw` 结果包，并把 `to` 保持为当前路径。
+6. 因为结果包不再指向其它节点，设备树停止递归，并返回该结果。
 
 最终结果类似于：
 
 ```javascript
 [
   {
-    to: "/monitor/s-pen/pen",
-    signals: [{ type: "draw", context: { from: "/monitor/s-pen/pen" } }],
+    to: "/monitor/s-pen/pen/tool",
+    signals: [{ type: "draw", context: { from: "/monitor/s-pen/pen/tool" } }],
   },
 ];
 ```
 
 这个示例体现了当前设备树模型的三个核心点：
 
-- 节点既可以做局部判断，也可以改写路由目标。
+- 节点既可以做局部判断，也可以用相对路径改写路由目标。
+- 通道节点可以通过 `defaultPath` 把输入继续送到独立工具节点。
 - 设备不是单个对象，而是一组节点之间的协作关系。
 - 设备树只负责树上的递归分发，具体业务语义由节点处理器承担。

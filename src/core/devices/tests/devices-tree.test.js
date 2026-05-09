@@ -192,6 +192,41 @@ describe("DevicesTree", () => {
     ]);
   });
 
+  test("节点应能按默认路径继续向相对位置的子节点转发信号", () => {
+    const tree = new DevicesTree();
+
+    tree.mount("/monitor/s-pen", null, { defaultPath: "pen" });
+    tree.mount("/monitor/s-pen/pen", (packet) => ({ signals: packet.signals }), {
+      defaultPath: "tool",
+    });
+    tree.mount("/monitor/s-pen/pen/tool", (packet, context) => ({
+      to: context.path,
+      signals: [
+        {
+          type: "draw",
+          context: { from: context.path },
+        },
+      ],
+    }));
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/s-pen",
+        signals: [{ type: "position", context: { value: { x: 2, y: 4 } } }],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/s-pen/pen/tool",
+        signals: [
+          {
+            type: "draw",
+            context: { from: "/monitor/s-pen/pen/tool" },
+          },
+        ],
+      },
+    ]);
+  });
+
   test("节点只应持有 processor", () => {
     const tree = new DevicesTree();
 
@@ -223,5 +258,38 @@ describe("DevicesTree", () => {
     expect(tree.unmount("/monitor/stylus")).toBe(true);
     expect(tree.getNode("/monitor/stylus")).toBeNull();
     expect(tree.getNode("/monitor/stylus/tip")).toBeNull();
+  });
+
+  test("mountTool 应沿默认路径在末端追加工具节点", () => {
+    const tree = new DevicesTree();
+    const processor = () => undefined;
+
+    tree.mount("/monitor/s-pen", null, { defaultPath: "pen" });
+    tree.mount("/monitor/s-pen/pen", null, { defaultPath: "tool" });
+
+    const toolNode = tree.mountTool("/monitor/s-pen", {
+      createProcessor() {
+        return processor;
+      },
+    });
+
+    expect(toolNode.path).toBe("/monitor/s-pen/pen/tool");
+    expect(tree.getNode("/monitor/s-pen/pen/tool")?.processor).toBe(processor);
+  });
+
+  test("unmountTool 应删除末端最后一个工具节点", () => {
+    const tree = new DevicesTree();
+
+    tree.mount("/monitor/s-pen", null, { defaultPath: "pen" });
+    tree.mount("/monitor/s-pen/pen", null, { defaultPath: "tool" });
+    tree.mountTool("/monitor/s-pen", {
+      createProcessor() {
+        return () => undefined;
+      },
+    });
+
+    expect(tree.unmountTool("/monitor/s-pen")).toBe(true);
+    expect(tree.getNode("/monitor/s-pen/pen/tool")).toBeNull();
+    expect(tree.unmountTool("/monitor/s-pen")).toBe(false);
   });
 });

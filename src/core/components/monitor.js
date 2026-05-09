@@ -9,6 +9,7 @@ import { PageLoader } from "./page-loader.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { Vector } from "../../utils/math.js";
 import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
+import { joinPath } from "../utils/path.js";
 
 /**
  * 显示器组件
@@ -158,13 +159,32 @@ class Monitor {
    * @returns {DevicesTreeNode[]} 挂载后的设备树节点列表
    */
   mountDevice(path, deviceDefinition) {
-    const fullPathSegments = [this.monitorId].concat(
-      DevicesTree.normalizePath(path),
-    );
     return this.devicesTree.mountDevice(
-      `/${fullPathSegments.join("/")}`,
+      joinPath(this.monitorId, path),
       deviceDefinition,
     );
+  }
+
+  /**
+   * 在显示器设备树中运行时挂载工具。
+   * @param {string} path - 挂载锚点路径（相对于显示器根）
+   * @param {import("../tools/tool.js").Tool} tool - 要挂载的工具
+   * @returns {DevicesTreeNode}
+   */
+  mountTool(path, tool) {
+    return this.devicesTree.mountTool(joinPath(this.monitorId, path), tool, {
+      board: this.board,
+      monitor: this,
+    });
+  }
+
+  /**
+   * 在显示器设备树中运行时卸载末端工具。
+   * @param {string} path - 卸载锚点路径（相对于显示器根）
+   * @returns {boolean}
+   */
+  unmountTool(path) {
+    return this.devicesTree.unmountTool(joinPath(this.monitorId, path));
   }
 }
 

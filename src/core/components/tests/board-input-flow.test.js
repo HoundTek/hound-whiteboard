@@ -50,12 +50,7 @@ describe("Board input flow", () => {
         return [
           {
             path: "",
-            processor(packet, context) {
-              return {
-                to: `${context.path}/tool`.replace(/\/+/g, "/"),
-                signals: packet.signals,
-              };
-            },
+            defaultPath: "tool",
           },
           {
             path: "/tool",
@@ -94,5 +89,60 @@ describe("Board input flow", () => {
         signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
       }),
     ).not.toThrow();
+  });
+
+  test("mount 与 umount 事件应在运行时挂载和卸载工具节点", () => {
+    class CollectingTool extends Tool {
+      calls = [];
+
+      process(signalPacket, deviceContext) {
+        this.calls.push({ signalPacket, deviceContext });
+      }
+
+      reset() {
+        this.calls = [];
+      }
+    }
+
+    const board = new Board();
+    const monitor = createMonitor(board, "main");
+    const tool = new CollectingTool();
+
+    monitor.mountDevice("/sample-device", {
+      defineNodes() {
+        return [{ path: "", defaultPath: "tool" }];
+      },
+    });
+
+    const mountResults = board.signalsEventBus.emit("mount", {
+      to: "/main/sample-device",
+      tool,
+    });
+
+    expect(mountResults).toHaveLength(1);
+    expect(
+      monitor.devicesTree.getNode("/main/sample-device/tool"),
+    ).not.toBeNull();
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/sample-device",
+      signals: [{ type: "position", context: { value: { x: 3, y: 4 } } }],
+    });
+
+    expect(tool.calls).toHaveLength(1);
+    expect(tool.calls[0].deviceContext).toEqual(
+      expect.objectContaining({
+        board,
+        monitor,
+        path: "/main/sample-device/tool",
+      }),
+    );
+
+    const umountResults = board.signalsEventBus.emit("umount", {
+      to: "/main/sample-device",
+    });
+
+    expect(umountResults).toEqual([true]);
+    expect(monitor.devicesTree.getNode("/main/sample-device/tool")).toBeNull();
   });
 });

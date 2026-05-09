@@ -5,6 +5,7 @@
  */
 
 import { SignalPacket } from "./signal.js";
+import { joinPath } from "../utils/path.js";
 
 /**
  * 调试设备输出信号类型。
@@ -34,7 +35,7 @@ function createDebuggerDevice(options = {}) {
    * @returns {SignalPacket[]}
    */
   const normalizeProcessorResult = (result) =>
-    SignalPacket.normalizeResult(result, { defaultTo: "/" });
+    SignalPacket.normalizeResult(result);
 
   /**
    * 创建一条调试历史记录。
@@ -78,7 +79,7 @@ function createDebuggerDevice(options = {}) {
       onRecord?.(entry);
 
       return {
-        to: `${routeContext.path}/report`.replace(/\/+/g, "/"),
+        to: joinPath(routeContext.path ?? "/", "report"),
         signals: packet.signals,
       };
     }

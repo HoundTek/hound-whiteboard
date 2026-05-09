@@ -5,6 +5,7 @@
  */
 
 import { SignalPacket } from "./signal.js";
+import { joinPath } from "../utils/path.js";
 
 /**
  * 触摸屏设备输出信号类型。
@@ -34,7 +35,7 @@ function createTouchscreenDevice(options = {}) {
    * @returns {SignalPacket[]}
    */
   const normalizeProcessorResult = (result) =>
-    SignalPacket.normalizeResult(result, { defaultTo: "/" });
+    SignalPacket.normalizeResult(result);
 
   /**
    * 复制位置值，避免把可变对象直接暴露到设备外部。
@@ -140,7 +141,7 @@ function createTouchscreenDevice(options = {}) {
     if (nodePath === "") {
       updateTouches(packet);
       return {
-        to: `${routeContext.path}/contacts`.replace(/\/+/g, "/"),
+        to: joinPath(routeContext.path ?? "/", "contacts"),
         signals: packet.signals,
       };
     }

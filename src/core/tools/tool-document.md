@@ -20,7 +20,7 @@
 }
 ```
 
-每个工具都实现统一的 `process(signalPacket, deviceContext)` 入口。它一次接收一个完整信号包，而不是逐个吃信号。若工具要直接挂到设备树节点上，则使用 `createProcessor()` 生成节点处理器；该处理器内部会通过 `SignalPacket.from()` 先把输入规整为统一类实例。
+每个工具都实现统一的 `process(signalPacket, deviceContext)` 入口。它一次接收一个完整信号包，而不是逐个吃信号。若工具要挂到设备树上，则通常作为某个设备通道节点下面的独立 `/tool` 节点存在，并由上层通过 `mount` 事件在运行时追加；节点处理器仍由 `createProcessor()` 生成，该处理器内部会通过 `SignalPacket.from()` 先把输入规整为统一类实例。
 
 `signals` 中的信号类型可以彼此不同。比如同一个包内可以同时出现：
 
@@ -39,6 +39,7 @@
 
 - Tool 不再直接假设输入来源是鼠标、触摸或笔。
 - Tool 不再依赖固定的 `start / move / end` 生命周期兼容层。
+- Tool 不应依赖具体硬件键位或按钮编号；这类原始输入应先由设备节点改写成语义化信号。
 - Tool 的职责是读取整包信号，结合上下文，直接执行白板修改、对象修改或状态更新。
 - Tool 默认不负责把信号继续向下传输；设备树内部的转发由设备节点处理器承担。
 
@@ -49,7 +50,12 @@
 1. 工具对象实现 `process(signalPacket, deviceContext)`
 2. 通过 `createProcessor(toolContext)` 把它包装成设备树节点处理器
 
-也就是说，设备树真正消费的不是“工具类”本身，而是 `createProcessor()` 返回的节点处理器。
+工具的挂载入口通过事件总线实现：
+
+1. `board.signalsEventBus.emit("mount", { to, tool })`
+2. `board.signalsEventBus.emit("umount", { to })`
+
+也就是说，设备树真正挂在工具节点上的不是“工具类”本身，而是 `createProcessor()` 返回的节点处理器。
 
 当前 `deviceContext` 可稳定假设的字段主要有：
 
@@ -105,7 +111,7 @@
 ## 工具的职责分层
 
 - Device 负责定义设备子树，并把现实输入编码为信号包。
-- 设备树节点负责按路径和状态路由信号；其中末端节点可以直接挂工具处理器。
+- 设备树节点负责按路径和状态路由信号；设备通道节点通常通过 `defaultPath` 把信号继续送到独立的工具节点。
 - Tool 负责消费信号，并调用 Board / Object / ActiveObjectManager 等核心模块完成修改。
 - Board / Object 等 Core 组件负责保存最终状态，Tool 不再承担信号转发职责。
 

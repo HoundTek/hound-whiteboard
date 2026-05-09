@@ -127,9 +127,10 @@ monitor.mountDevice("/debugger", debuggerDevice);
 1. UI 或测试代码向 `board.signalsEventBus.emit("input", packet)` 发射一个输入包
 2. `Board` 根据 `packet.to` 中的 `monitorId` 找到目标 `Monitor`
 3. `Monitor` 上已经通过 `mountDevice()` 挂好一个设备子树
-4. 设备根节点只做一件事：把包改写到某个工具节点
-5. 工具节点通过 `tool.createProcessor({ board, monitor })` 消费该包
-6. Tool 修改 `Board` 或其它 Core 状态
+4. 上层若需要工具消费，会先通过 `mount` 事件把工具挂到目标锚点下
+5. 设备节点按相对路径和默认路径把包继续送往下游节点；若默认下游当前不存在，则信号停在当前设备语义节点
+6. 工具节点通过 `tool.createProcessor({ board, monitor })` 消费该包
+7. Tool 修改 `Board` 或其它 Core 状态
 
 对应的最小结构可以写成：
 
@@ -139,19 +140,15 @@ monitor.mountDevice("/sample-device", {
     return [
       {
         path: "",
-        processor(packet, context) {
-          return {
-            to: `${context.path}/tool`.replace(/\/+/g, "/"),
-            signals: packet.signals,
-          };
-        },
-      },
-      {
-        path: "/tool",
-        processor: tool.createProcessor({ board, monitor }),
+        defaultPath: "tool",
       },
     ];
   },
+});
+
+board.signalsEventBus.emit("mount", {
+  to: `/${monitor.monitorId}/sample-device`,
+  tool,
 });
 ```
 
@@ -171,6 +168,8 @@ monitor.mountDevice("/sample-device", {
 - `SignalPacket` 的最小结构：`{ to, signals }`
 - `DeviceDefinition` 的最小协议：`defineNodes()`
 - 业务侧设备挂载入口：`monitor.mountDevice(path, deviceDefinition)`
+- 业务侧工具挂载入口：`board.signalsEventBus.emit("mount" | "umount", ...)`
+- 设备树的相对路径与 `defaultPath` 路由语义
 - 设备树递归终止语义：结果包停在当前节点路径上时终止
 - Tool 接口：`process(signalPacket, deviceContext)` + `createProcessor(toolContext)`
 - 多指输入的区分方式：同一包内允许多条 `position`，并通过 `touchId`/`pointerId` 区分

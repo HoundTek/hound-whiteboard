@@ -8,7 +8,10 @@ import { Monitor } from "../core/components/monitor.js";
 import { Board } from "../core/components/board.js";
 import { Tool } from "../core/tools/tool.js";
 import { createMouseDevice } from "../core/devices/mouse-device.js";
-import { createKeyboardDevice } from "../core/devices/keyboard-device.js";
+import {
+  KEYBOARD_DEVICE_SIGNAL_TYPES,
+  createKeyboardDevice,
+} from "../core/devices/keyboard-device.js";
 
 const board = new Board();
 board.pageWidth = 800;
@@ -84,10 +87,7 @@ class RandomCircleTool extends Tool {
     if (!ctx || !canvas) return;
 
     const shouldDraw = signalPacket.signals.some(
-      (signal) =>
-        signal.type === "keydown" &&
-        signal?.context?.code === "Space" &&
-        !signal?.context?.repeat,
+      (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
     );
     if (!shouldDraw) return;
 
@@ -112,19 +112,23 @@ const randomCircleTool = new RandomCircleTool();
 
 monitor.mountDevice(
   "/mouse",
-  createMouseDevice({
-    primaryProcessor: mouseTraceTool.createProcessor({ board, monitor }),
-  }),
+  createMouseDevice(),
 );
 
 monitor.mountDevice(
   "/keyboard",
-  createKeyboardDevice({
-    keyProcessors: {
-      Space: randomCircleTool.createProcessor({ board, monitor }),
-    },
-  }),
+  createKeyboardDevice(),
 );
+
+board.signalsEventBus.emit("mount", {
+  to: `/${monitor.monitorId}/mouse/primary`,
+  tool: mouseTraceTool,
+});
+
+board.signalsEventBus.emit("mount", {
+  to: `/${monitor.monitorId}/keyboard/code/Space`,
+  tool: randomCircleTool,
+});
 
 const emitMousePacket = (event) => {
   const baseContext = {

@@ -1,5 +1,6 @@
 import { DevicesTree } from "../devices-tree.js";
 import { createMouseDevice } from "../mouse-device.js";
+import { Tool } from "../../tools/tool.js";
 
 describe("mouse-device", () => {
   test("普通移动应路由到 pointer 节点", () => {
@@ -266,28 +267,31 @@ describe("mouse-device", () => {
 
   test("可同时把同一包交给多个注入处理器", () => {
     const tree = new DevicesTree();
-    const mouseDevice = createMouseDevice({
-      pointerProcessor(packet, context) {
-        return {
+    const mouseDevice = createMouseDevice();
+    class MappingTool extends Tool {
+      constructor(type) {
+        super();
+        this.type = type;
+      }
+
+      process(signalPacket, deviceContext) {
+        this.lastCall = { signalPacket, deviceContext };
+      }
+
+      createProcessor() {
+        return (packet, context) => ({
           to: context.path,
-          signals: [{ type: "pointer-handled", context: { from: context.path } }],
-        };
-      },
-      primaryProcessor(packet, context) {
-        return {
-          to: context.path,
-          signals: [{ type: "primary-handled", context: { from: context.path } }],
-        };
-      },
-      wheelProcessor(packet, context) {
-        return {
-          to: context.path,
-          signals: [{ type: "wheel-handled", context: { from: context.path } }],
-        };
-      },
-    });
+          signals: [{ type: this.type, context: { from: context.path } }],
+        });
+      }
+
+      reset() {}
+    }
 
     tree.mountDevice("/monitor/mouse", mouseDevice);
+    tree.mountTool("/monitor/mouse/pointer", new MappingTool("pointer-handled"));
+    tree.mountTool("/monitor/mouse/primary", new MappingTool("primary-handled"));
+    tree.mountTool("/monitor/mouse/wheel", new MappingTool("wheel-handled"));
 
     expect(
       tree.dispatch({
@@ -305,29 +309,29 @@ describe("mouse-device", () => {
       }),
     ).toEqual([
       {
-        to: "/monitor/mouse/pointer",
+        to: "/monitor/mouse/pointer/tool",
         signals: [
           {
             type: "pointer-handled",
-            context: { from: "/monitor/mouse/pointer" },
+            context: { from: "/monitor/mouse/pointer/tool" },
           },
         ],
       },
       {
-        to: "/monitor/mouse/wheel",
+        to: "/monitor/mouse/wheel/tool",
         signals: [
           {
             type: "wheel-handled",
-            context: { from: "/monitor/mouse/wheel" },
+            context: { from: "/monitor/mouse/wheel/tool" },
           },
         ],
       },
       {
-        to: "/monitor/mouse/primary",
+        to: "/monitor/mouse/primary/tool",
         signals: [
           {
             type: "primary-handled",
-            context: { from: "/monitor/mouse/primary" },
+            context: { from: "/monitor/mouse/primary/tool" },
           },
         ],
       },

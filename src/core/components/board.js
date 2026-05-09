@@ -346,6 +346,23 @@ class Board {
         monitor.devicesTree.dispatch({ to, signals });
       }
     });
+
+    this.signalsEventBus.on("mount", ({ to, tool }) => {
+      const monitorId = to?.split("/")[1];
+      const monitor = this.monitors.get(monitorId);
+      if (!monitor) return false;
+      return monitor.devicesTree.mountTool(to, tool, {
+        board: this,
+        monitor,
+      });
+    });
+
+    this.signalsEventBus.on("umount", ({ to }) => {
+      const monitorId = to?.split("/")[1];
+      const monitor = this.monitors.get(monitorId);
+      if (!monitor) return false;
+      return monitor.devicesTree.unmountTool(to);
+    });
   }
 
   /**

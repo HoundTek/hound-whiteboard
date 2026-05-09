@@ -1,24 +1,30 @@
 import { DevicesTree } from "../devices-tree.js";
-import { createKeyboardDevice } from "../keyboard-device.js";
+import {
+  KEYBOARD_DEVICE_SIGNAL_TYPES,
+  createKeyboardDevice,
+} from "../keyboard-device.js";
+import { Tool } from "../../tools/tool.js";
 
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
     const tree = new DevicesTree();
-    const keyboardDevice = createKeyboardDevice({
-      keyProcessors: {
-        Space: (packet, context) => ({
-          to: context.path,
-          signals: [
-            {
-              type: "space-handled",
-              context: { from: context.path },
-            },
-          ],
-        }),
-      },
-    });
+    const keyboardDevice = createKeyboardDevice();
+    class CollectingTool extends Tool {
+      calls = [];
+
+      process(signalPacket, deviceContext) {
+        this.calls.push({ signalPacket, deviceContext });
+      }
+
+      reset() {
+        this.calls = [];
+      }
+    }
+
+    const tool = new CollectingTool();
 
     const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
+    tree.mountTool("/monitor/keyboard/code/Space", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/keyboard",
@@ -27,7 +33,6 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/keyup",
       "/monitor/keyboard/repeat",
       "/monitor/keyboard/cancel",
-      "/monitor/keyboard/code/Space",
     ]);
 
     const packets = tree.dispatch({
@@ -107,16 +112,32 @@ describe("keyboard-device", () => {
           },
         ],
       },
-      {
-        to: "/monitor/keyboard/code/Space",
+    ]);
+
+    expect(tool.calls).toHaveLength(1);
+    expect(tool.calls[0]).toEqual({
+      signalPacket: {
+        to: "/monitor/keyboard/code/Space/tool",
         signals: [
           {
-            type: "space-handled",
-            context: { from: "/monitor/keyboard/code/Space" },
+            type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+            context: {
+              code: "Space",
+              key: " ",
+              repeat: false,
+              ctrlKey: false,
+              shiftKey: false,
+              altKey: false,
+              metaKey: false,
+              sourceType: "keydown",
+            },
           },
         ],
       },
-    ]);
+      deviceContext: expect.objectContaining({
+        path: "/monitor/keyboard/code/Space/tool",
+      }),
+    });
   });
 
   test("重复按键应路由到 repeat，并保留当前激活键", () => {
@@ -225,6 +246,20 @@ describe("keyboard-device", () => {
           {
             type: "keyup",
             context: { code: "KeyW", key: "w", repeat: false },
+          },
+        ],
+      },
+      {
+        to: "/monitor/keyboard/code/KeyW",
+        signals: [
+          {
+            type: KEYBOARD_DEVICE_SIGNAL_TYPES.RELEASE,
+            context: {
+              code: "KeyW",
+              key: "w",
+              repeat: false,
+              sourceType: "keyup",
+            },
           },
         ],
       },

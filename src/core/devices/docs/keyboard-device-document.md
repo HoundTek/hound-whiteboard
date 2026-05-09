@@ -32,12 +32,21 @@
 - `/keyup`：抬起事件
 - `/repeat`：长按重复事件
 - `/cancel`：宿主强制中断当前键盘交互，如 Monitor 失焦
-- `/code/<KeyCode>`：按键专属节点，只在调用方为该键位配置了处理器时展开
+- `/code/<KeyCode>`：按键专属挂载锚点，会接收该键位改写后的设备语义信号
+- `/code/<KeyCode>/tool`：该键位下通过运行时 `mount` 事件追加的独立工具节点
 
 这种结构把“通用键盘语义”和“具体绑定键位”拆开了：
 
 - 前者适合 Monitor 级操作，如统一处理视口导航键
-- 后者适合工具级消费，如只监听 `Space` 或 `KeyW`
+- 后者先把原始按键事件改写成工具语义，再交给工具节点消费
+
+当前键盘设备会在根节点把原始键盘信号改写为更稳定的工具信号，并路由到对应的 `/code/<KeyCode>` 挂载锚点：
+
+- 首次 `keydown` 改写为 `trigger`
+- `keyup` / `end` 改写为 `release`
+- `cancel` 改写为 `cancel`
+
+因此，工具通常不应再直接判断具体键位，也不应再假设自己接收到的是原始 `keydown`。
 
 ## 状态模型
 
@@ -77,22 +86,24 @@
 ## 最小使用方式
 
 ```javascript
-const keyboardDevice = createKeyboardDevice({
-  keyProcessors: {
-    Space: tool.createProcessor({ board, monitor }),
-  },
-});
+const keyboardDevice = createKeyboardDevice();
 
 monitor.mountDevice("/keyboard", keyboardDevice);
+
+board.signalsEventBus.emit("mount", {
+  to: `/${monitor.monitorId}/keyboard/code/Space`,
+  tool,
+});
 ```
 
-此时宿主只需把目标 Monitor 的 `keydown` / `keyup` 事件编码后发到 `/${monitorId}/keyboard`，设备树就会把 `Space` 继续送到 `/code/Space`，再交给工具消费。
+此时宿主只需把目标 Monitor 的 `keydown` / `keyup` 事件编码后发到 `/${monitorId}/keyboard`，设备树就会把 `Space` 改写为 `trigger` / `release` / `cancel`，并送到 `/code/Space`。如果之前已经通过 `mount` 事件在该锚点下追加了工具节点，信号就会继续落到 `/code/Space/tool` 交给工具消费。
 
 ## 设计约束
 
 - 键盘设备不负责定义应用级快捷键系统
 - 键盘设备不负责决定一个按键是否应该被某个工具消费
-- 用户绑定关系应由更上层模块维护，键盘设备只负责状态更新与树上路由
+- 键盘设备负责把原始按键信号改写为稳定的设备语义，再交给工具节点
+- 用户绑定关系与工具挂载关系应由更上层模块通过 `mount` / `umount` 事件维护，键盘设备只负责状态更新与树上路由
 
 这样可以保持设备层与应用命令层解耦。
 

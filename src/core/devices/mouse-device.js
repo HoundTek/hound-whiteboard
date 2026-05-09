@@ -51,7 +51,7 @@ function createMouseDevice(options = {}) {
    * @returns {SignalPacket[]}
    */
   const normalizeProcessorResult = (result) =>
-    SignalPacket.normalizeResult(result, { defaultTo: "/" });
+    SignalPacket.normalizeResult(result);
 
   /**
    * 鼠标按钮位掩码表。
@@ -202,7 +202,7 @@ function createMouseDevice(options = {}) {
     }
 
     return Array.from(new Set(targets)).map((childPath) => ({
-      to: `${routeContext.path}/${childPath}`.replace(/\/+/g, "/"),
+      to: childPath,
       signals: packet.signals,
     }));
   };
@@ -242,31 +242,31 @@ function createMouseDevice(options = {}) {
     if (nodePath === "pointer") {
       return typeof options.pointerProcessor === "function"
         ? options.pointerProcessor(packet, routeContext)
-        : packet;
+        : { signals: packet.signals };
     }
 
     if (nodePath === "primary") {
       return typeof options.primaryProcessor === "function"
         ? options.primaryProcessor(packet, routeContext)
-        : packet;
+        : { signals: packet.signals };
     }
 
     if (nodePath === "secondary") {
       return typeof options.secondaryProcessor === "function"
         ? options.secondaryProcessor(packet, routeContext)
-        : packet;
+        : { signals: packet.signals };
     }
 
     if (nodePath === "auxiliary") {
       return typeof options.auxiliaryProcessor === "function"
         ? options.auxiliaryProcessor(packet, routeContext)
-        : packet;
+        : { signals: packet.signals };
     }
 
     if (nodePath === "wheel") {
       return typeof options.wheelProcessor === "function"
         ? options.wheelProcessor(packet, routeContext)
-        : packet;
+        : { signals: packet.signals };
     }
 
     return packet;
@@ -299,16 +299,28 @@ function createMouseDevice(options = {}) {
 
     /**
      * 定义鼠标设备子树节点。
-     * @returns {Array<{path: string, processor: import("./devices-tree.js").DevicesTreeProcessor}>}
+     * @returns {Array<{path: string, defaultPath?: string, processor: import("./devices-tree.js").DevicesTreeProcessor|null}>}
      */
     defineNodes() {
+      const channelNodes = [
+        "pointer",
+        "primary",
+        "secondary",
+        "auxiliary",
+        "wheel",
+      ];
+
       return [
         { path: "", processor: createNodeProcessor("") },
-        { path: "/pointer", processor: createNodeProcessor("pointer") },
-        { path: "/primary", processor: createNodeProcessor("primary") },
-        { path: "/secondary", processor: createNodeProcessor("secondary") },
-        { path: "/auxiliary", processor: createNodeProcessor("auxiliary") },
-        { path: "/wheel", processor: createNodeProcessor("wheel") },
+        ...channelNodes.flatMap((channel) => {
+          return [
+            {
+              path: `/${channel}`,
+              processor: createNodeProcessor(channel),
+              defaultPath: "tool",
+            },
+          ];
+        }),
       ];
     },
   };
