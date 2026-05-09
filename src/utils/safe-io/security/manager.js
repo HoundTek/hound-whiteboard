@@ -119,6 +119,13 @@ ${generateCapAPI()}
 ${generateStorageAPI()}
 
 contextBridge.exposeInMainWorld("safeIO", api);
+
+// 安全事件监听
+ipcRenderer.on("security:init", (event, data) => {
+  console.log("[safe-io] Security initialized:", data);
+  const securityEvent = new CustomEvent("security:init", { detail: data });
+  window.dispatchEvent(securityEvent);
+});
 `;
 
 /**

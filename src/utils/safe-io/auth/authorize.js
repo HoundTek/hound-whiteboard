@@ -162,22 +162,6 @@ const isValidName = (name) => {
 };
 
 /**
- * 验证路径名称是否合法
- * @param {string} name - 路径名称
- * @returns {boolean} 是否合法
- */
-const isValidName = (name) => {
-  if (typeof name !== "string") return false;
-  if (name.length === 0 || name.length > 255) return false;
-
-  if (name === "." || name === "..") return false;
-  if (name.endsWith(".")) return false;
-
-  const invalidChars = ["/", "\\", ":", "*", "?", "\"", "<", ">", "|", "\0"];
-  return !invalidChars.some(c => name.includes(c));
-};
-
-/**
  * 安全边界检查 - 验证路径是否在授权根目录内
  * @param {string} resolvedPath - 解析后的路径
  * @returns {boolean} 是否在授权边界内

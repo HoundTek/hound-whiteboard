@@ -116,6 +116,8 @@ contextBridge.exposeInMainWorld("safeIO", api);
 // 📢 安全事件监听
 // ==============================
 ipcRenderer.on("security:init", (event, data) => {
-  // 接收安全初始化信息
   console.log("[safe-io] Security initialized:", data);
+  // 创建并分发自定义事件到渲染进程
+  const securityEvent = new CustomEvent("security:init", { detail: data });
+  window.dispatchEvent(securityEvent);
 });

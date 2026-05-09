@@ -79,8 +79,8 @@ class WindowManager {
     const win = new BrowserWindow({
       width: 800,
       height: 600,
-      minWidth: 400,
-      minHeight: 300,
+      minWidth: 0,
+      minHeight: 0,
       show: false,
       autoHideMenuBar: true,
       webPreferences: {
