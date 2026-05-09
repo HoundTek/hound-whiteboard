@@ -1,35 +1,82 @@
 /**
- * # 主进程（React支持）
- * ## 功能
- * - 传递文件IO副作用
- * - 窗口管理
- * - 程序坞
- * ## 特征
+ * # 主进程（安全架构重构版）
+ * ## 核心功能
+ * - 安全文件IO（存档、插件、资源包）
+ * - 窗口级权限隔离
+ * - 动态preload生成
+ * - 多窗口实例管理
+ * ## 安全特性
  * - 单例应用模式
- * - 多窗口实例，共享进程
+ * - 进程间隔离
+ * - Capability-based安全模型
+ * - 自动资源清理
  */
-const { app, BrowserWindow, ipcMain } = require("electron");
-const path = require("path");
-const url = require("url");
-const { Directory, File } = require("./utils/safe-io/io");
 
-/**
- * ### 窗口类
- * 窗口对象和窗口状态
- * #### 窗口状态
- * - 无文件窗口
- * - 绑定文件窗口
- * - 全屏窗口
- **/
-class Window {
-  constructor(config) {
-    this.isBindFile = config.isBindFile;
-    this.isFullScreen = config.isFullScreen;
-    if (this.isBindFile) {
-      this.bindFile = config.bindFile;
+import { app, BrowserWindow, ipcMain, session } from "electron";
+import path from "path";
+import { fileURLToPath } from "url";
+import { format as urlFormat } from "url";
+import fs from "fs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ==============================
+// 🔐 安全模块导入
+// ==============================
+import { registerHandlers, setWindowManager } from "./utils/safe-io/ipc/handlers.js";
+import { startGC, register, revoke } from "./utils/safe-io/auth/registry.js";
+import { registerRoot, authorize, getAuthorizedRoots } from "./utils/safe-io/auth/authorize.js";
+import { createTokenWithPreset } from "./utils/safe-io/capability/token.js";
+import { SecurityManager } from "./utils/safe-io/security/manager.js";
+
+// ==============================
+// 📂 目录结构定义
+// ==============================
+import { getDirectories, ensureDirectories } from "./utils/safe-io/core/path-detector.js";
+
+let DIRS = null;
+
+// ==============================
+// 🖼️ 窗口管理器
+// ==============================
+class WindowManager {
+  constructor() {
+    this.windows = new Map();
+    this.windowIdCounter = 0;
+    this.securityManager = new SecurityManager();
+  }
+
+  /**
+   * 创建新窗口
+   * @param {Object} config - 窗口配置
+   * @param {boolean} config.isBindFile - 是否绑定文件
+   * @param {boolean} config.isFullScreen - 是否全屏
+   * @param {string} [config.bindFile] - 绑定的文件路径
+   * @param {string} [config.permissionPreset] - 权限预设
+   */
+  createWindow(config = {}) {
+    console.log("[WindowManager] Creating window with config:", config);
+    const windowId = `window-${++this.windowIdCounter}`;
+
+    const securityContext = this.securityManager.createContext({
+      windowId,
+      preset: config.permissionPreset || "READ_ONLY",
+      bindFile: config.bindFile,
+    });
+    console.log("[WindowManager] Security context created for window:", windowId);
+
+    const preloadPath = this.securityManager.generatePreload(windowId, securityContext);
+    console.log("[WindowManager] Preload path:", preloadPath);
+
+    if (!fs.existsSync(preloadPath)) {
+      console.error("[WindowManager] Preload file does not exist:", preloadPath);
     }
-    // 创建浏览器窗口
-    this.win = new BrowserWindow({
+
+    const uiPath = path.join(__dirname, "ui", "index.html");
+    console.log("[WindowManager] UI path:", uiPath);
+    console.log("[WindowManager] UI file exists:", fs.existsSync(uiPath));
+
+    const win = new BrowserWindow({
       width: 800,
       height: 600,
       minWidth: 400,
@@ -41,249 +88,133 @@ class Window {
         contextIsolation: true,
         enableRemoteModule: false,
         sandbox: true,
-        preload: path.join(__dirname, 'preload.js'),
+        preload: preloadPath,
+        session: session.fromPartition(`persist:${windowId}`),
       },
-      icon: path.join(
-        __dirname,
-        "../data/themes/icons/hound-whiteboard/assets/add.svg",
-      ),
       title: "Hound Whiteboard",
     });
+    console.log("[WindowManager] BrowserWindow created");
 
-    // 加载应用界面
-    // 使用 file:// 协议加载本地文件
-    const startUrl = url.format({
-      pathname: path.join(__dirname, "ui", "index.html"),
+    const startUrl = urlFormat({
+      pathname: uiPath,
       protocol: "file:",
       slashes: true,
     });
+    console.log("[WindowManager] Loading URL:", startUrl);
 
-    this.win.loadURL(startUrl);
-
-    this.win.once("ready-to-show", () => {
-      // 显示窗口（避免白屏）
-      this.win.show();
-      // 打开开发者工具（开发时使用）
-      // this.win.webContents.openDevTools();
+    win.loadURL(startUrl).then(() => {
+      console.log("[WindowManager] URL loaded successfully");
+    }).catch((err) => {
+      console.error("[WindowManager] Failed to load URL:", err);
     });
 
-    // 窗口关闭时触发
-    this.win.on("closed", () => {
-      this.win = null;
+    win.once("ready-to-show", () => {
+      console.log("[WindowManager] Window ready to show");
+      win.show();
+    });
+
+    win.on("closed", () => {
+      console.log("[WindowManager] Window closed:", windowId);
+      this.securityManager.destroyContext(windowId);
+      this.windows.delete(windowId);
+      revoke(securityContext.tokenId);
+    });
+
+    this.windows.set(windowId, {
+      win,
+      config,
+      securityContext,
+    });
+
+    win.webContents.on("did-finish-load", () => {
+      win.webContents.send("security:init", {
+        token: securityContext.token,
+        windowId,
+        permissions: securityContext.permissions,
+      });
+    });
+
+    return windowId;
+  }
+
+  /**
+   * 获取窗口
+   * @param {string} windowId - 窗口ID
+   */
+  getWindow(windowId) {
+    return this.windows.get(windowId);
+  }
+
+  /**
+   * 广播消息到所有窗口
+   * @param {string} channel - 通道名
+   * @param {*} data - 数据
+   * @param {string} [excludeId] - 排除的窗口ID
+   */
+  broadcast(channel, data, excludeId = null) {
+    this.windows.forEach((entry, id) => {
+      if (id !== excludeId && entry.win) {
+        entry.win.webContents.send(channel, data);
+      }
     });
   }
 }
 
-// 声明窗口列表
-let windows = [];
+// ==============================
+// 🚀 应用启动
+// ==============================
+let windowManager = null;
 
-// IPC: 配置变更广播
-ipcMain.on('config-changed', (event, data) => {
-  // 广播到所有窗口（除了发送者）
-  windows.forEach(window => {
-    if (window.win && window.win.webContents && window.win.webContents !== event.sender) {
-      window.win.webContents.send('config-updated', data);
-    }
-  });
-});
-
-/**
- * @typedef {Object} FileOperationParams
- * @property {string} [filePath] - 文件路径
- * @property {string} [dirPath] - 目录路径
- * @property {string} [path] - 目标路径
- * @property {string} [content] - 文件内容
- * @property {Object} [content] - JSON内容
- * @property {boolean} [isFile] - 是否为文件
- * @property {string} [source] - 源路径
- * @property {string} [dest] - 目标路径
- */
-
-/**
- * @typedef {Object} FileOperationResult
- * @property {boolean} success - 操作是否成功
- * @property {*} [data] - 返回数据（成功时）
- * @property {string} [error] - 错误信息（失败时）
- */
-
-/**
- * IPC处理器：通用文件操作通道
- * @param {Electron.IpcMainInvokeEvent} event - IPC事件对象
- * @param {Object} request - 请求对象
- * @param {string} request.action - 操作类型
- * @param {FileOperationParams} request.params - 操作参数
- * @returns {Promise<FileOperationResult>} 操作结果
- * 
- * @example
- * // 支持的操作类型：
- * // - readFile: 读取文件内容
- * // - readJSON: 读取JSON文件
- * // - writeFile: 写入文件
- * // - writeJSON: 写入JSON文件
- * // - exist: 检查文件或目录是否存在
- * // - mkdir: 创建目录
- * // - ls: 列出目录内容
- * // - lsDir: 列出子目录
- * // - lsFile: 列出文件
- * // - delete: 删除文件或目录
- * // - copy: 复制文件或目录
- * // - move: 移动文件或目录
- */
-ipcMain.handle('file-operation', async (event, { action, params }) => {
-  try {
-    let result;
-    
-    switch (action) {
-      case 'readFile': {
-        const { filePath } = params;
-        const file = File.parse(filePath);
-        result = { success: true, data: file.cat() };
-        break;
-      }
-      
-      case 'readJSON': {
-        const { filePath } = params;
-        const file = File.parse(filePath);
-        result = { success: true, data: file.catJSON() };
-        break;
-      }
-      
-      case 'writeFile': {
-        const { filePath, content } = params;
-        const file = File.parse(filePath);
-        file.write(content);
-        result = { success: true };
-        break;
-      }
-      
-      case 'writeJSON': {
-        const { filePath, content } = params;
-        const file = File.parse(filePath);
-        file.writeJSON(content);
-        result = { success: true };
-        break;
-      }
-      
-      case 'exist': {
-        const { path: targetPath } = params;
-        const isFile = params.isFile;
-        if (isFile) {
-          const file = File.parse(targetPath);
-          result = { success: true, data: file.exist() };
-        } else {
-          const dir = Directory.parse(targetPath);
-          result = { success: true, data: dir.exist() };
-        }
-        break;
-      }
-      
-      case 'mkdir': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        dir.make();
-        result = { success: true };
-        break;
-      }
-      
-      case 'ls': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        result = { success: true, data: dir.ls() };
-        break;
-      }
-      
-      case 'lsDir': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        const dirs = dir.lsDir().map(d => d.getPath());
-        result = { success: true, data: dirs };
-        break;
-      }
-      
-      case 'lsFile': {
-        const { dirPath } = params;
-        const dir = Directory.parse(dirPath);
-        const files = dir.lsFile().map(f => f.getPath());
-        result = { success: true, data: files };
-        break;
-      }
-      
-      case 'delete': {
-        const { path: targetPath } = params;
-        const isFile = params.isFile;
-        if (isFile) {
-          const file = File.parse(targetPath);
-          file.rm();
-        } else {
-          const dir = Directory.parse(targetPath);
-          dir.rm();
-        }
-        result = { success: true };
-        break;
-      }
-      
-      case 'copy': {
-        const { source, dest, isFile } = params;
-        if (isFile) {
-          const sourceFile = File.parse(source);
-          const destFile = File.parse(dest);
-          sourceFile.cp(destFile);
-        } else {
-          const sourceDir = Directory.parse(source);
-          const destDir = Directory.parse(dest);
-          sourceDir.cp(destDir);
-        }
-        result = { success: true };
-        break;
-      }
-      
-      case 'move': {
-        const { source, dest, isFile } = params;
-        if (isFile) {
-          const sourceFile = File.parse(source);
-          const destFile = File.parse(dest);
-          sourceFile.mv(destFile);
-        } else {
-          const sourceDir = Directory.parse(source);
-          const destDir = Directory.parse(dest);
-          sourceDir.mv(destDir);
-        }
-        result = { success: true };
-        break;
-      }
-      
-      default:
-        result = { success: false, error: `Unknown action: ${action}` };
-    }
-    
-    return result;
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
+// =========================
+// 🔒 单例检查
+// =========================
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
 
 app.whenReady().then(() => {
-  // 检查是否有另一个应用实例在运行
-  const gotTheLock = app.requestSingleInstanceLock();
-  if (!gotTheLock) {
-    app.quit();
-    return;
-  }
+  console.log("[Main] App is ready, starting initialization...");
 
-  // 创建窗口
-  createWindow({
+  DIRS = getDirectories();
+  ensureDirectories(DIRS);
+  console.log("[Main] Directories initialized:", DIRS.APP_ROOT);
+
+  global.SECURE_DIRS = {
+    SAVE_DATA: DIRS.SAVE_DATA,
+    PLUGINS: DIRS.PLUGINS,
+    RESOURCE_PACKS: DIRS.RESOURCE_PACKS,
+    CACHE: DIRS.CACHE,
+    LOGS: DIRS.LOGS,
+    PRELOADS: DIRS.PRELOADS,
+  };
+
+  windowManager = new WindowManager();
+  setWindowManager(windowManager);
+  registerHandlers();
+
+  windowManager.createWindow({
     isBindFile: false,
     isFullScreen: false,
-  });
-  // 当另一个实例试图启动应用程序时，执行此回调
-  app.on("second-instance", (event, commandLine, workingDirectory) => {
-    createWindow({
-      isBindFile: false,
-      isFullScreen: false,
-    });
+    permissionPreset: "READ_WRITE",
   });
 });
 
-function createWindow(config) {
-  windows.push(new Window(config));
-}
+// ==============================
+// 📡 IPC 事件处理
+// ==============================
+
+ipcMain.on("config-changed", (event, data) => {
+  const senderId = event.sender?.id?.toString();
+  windowManager?.broadcast("config-updated", data, senderId);
+});
+
+// ==============================
+// 🧹 应用退出清理
+// ==============================
+app.on("will-quit", () => {
+  console.log("[Main] Application quitting...");
+});
+
+// 全局实例引用（主进程内部使用）
+global.windowManager = windowManager;

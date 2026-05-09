@@ -1,79 +1,121 @@
 /**
- * @file Electron预加载脚本
- * @description 通过contextBridge向渲染进程暴露IPC通信接口，提供安全的进程间通信能力
- * @module preload
+ * # Preload Script (默认/后备版本)
+ * ## 说明
+ * 此文件为默认preload，用于初始窗口或权限未知时
+ * 实际生产环境中，窗口会使用SecurityManager动态生成的preload
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer } = require("electron");
 
-/**
- * @typedef {Object} ElectronAPI
- * @property {function(ConfigChangeData): void} sendConfigChange - 发送配置变更到主进程
- * @property {function(function(ConfigUpdateData): void): void} onConfigUpdate - 监听来自主进程的配置更新
- * @property {function(): void} removeConfigUpdateListener - 移除配置更新监听器
- * @property {function(string, Object): Promise<FileOperationResult>} fileOperation - 统一文件操作通道
- */
-
-/**
- * @typedef {Object} ConfigChangeData
- * @property {string} type - 配置类型（theme、iconPack、locale）
- * @property {string} value - 配置值
- */
-
-/**
- * @typedef {Object} ConfigUpdateData
- * @property {string} type - 配置类型
- * @property {string} value - 配置值
- */
-
-/**
- * @typedef {Object} FileOperationResult
- * @property {boolean} success - 操作是否成功
- * @property {*} [data] - 返回数据（成功时）
- * @property {string} [error] - 错误信息（失败时）
- */
-
-/**
- * 暴露给渲染进程的Electron API
- * @type {ElectronAPI}
- */
-contextBridge.exposeInMainWorld('electronAPI', {
-  /**
-   * 发送配置变更到主进程，广播到其他窗口
-   * @param {ConfigChangeData} data - 配置变更数据
-   * @returns {void}
-   */
-  sendConfigChange: (data) => {
-    ipcRenderer.send('config-changed', data);
-  },
+// ==============================
+// 🔐 默认允许的IPC通道（最小权限）
+// ==============================
+const ALLOWED_CHANNELS = new Set([
+  // 安全管理
+  "cap:revoke",
   
-  /**
-   * 监听来自主进程的配置更新
-   * @param {function(ConfigUpdateData): void} callback - 回调函数
-   * @returns {void}
-   */
-  onConfigUpdate: (callback) => {
-    ipcRenderer.on('config-updated', (event, data) => {
-      callback(data);
-    });
-  },
+  // 窗口管理
+  "window:create",
+  "window:close",
   
-  /**
-   * 移除所有配置更新监听器
-   * @returns {void}
-   */
-  removeConfigUpdateListener: () => {
-    ipcRenderer.removeAllListeners('config-updated');
-  },
+  // 存储授权
+  "storage:authorize-save",
+  "storage:authorize-plugin",
+  "storage:authorize-resource",
+  "storage:get-directories",
   
-  /**
-   * 通过IPC执行文件操作
-   * @async
-   * @param {string} action - 操作类型（readFile、readJSON、writeFile、writeJSON、exist、mkdir、ls、lsDir、lsFile、delete、copy、move）
-   * @param {Object} params - 操作参数
-   * @returns {Promise<FileOperationResult>} 操作结果
-   */
-  fileOperation: async (action, params) => {
-    return await ipcRenderer.invoke('file-operation', { action, params });
+  // 基础用户操作
+  "user:load",
+  "user:list",
+  
+  // 基础主题和国际化
+  "theme:load",
+  "locale:load",
+]);
+
+// ==============================
+// 🧠 invoke wrapper
+// ==============================
+const invoke = (channel, ...args) => {
+  if (!ALLOWED_CHANNELS.has(channel)) {
+    throw new Error(`[safe-io] blocked channel: ${channel}`);
   }
+  return ipcRenderer.invoke(channel, ...args);
+};
+
+// ==============================
+// 🔑 token guard
+// ==============================
+const assertToken = (token) => {
+  if (!token || typeof token !== "object") {
+    throw new Error("invalid token");
+  }
+  if (!token.id || !token.signature) {
+    throw new Error("invalid token structure");
+  }
+};
+
+// ==============================
+// 📦 API定义（最小权限集）
+// ==============================
+const api = {
+  // 权限控制
+  cap: {
+    revoke: (tokenId) => invoke("cap:revoke", tokenId),
+  },
+  
+  // 窗口管理
+  window: {
+    create: (config) => invoke("window:create", config),
+    close: (windowId) => invoke("window:close", windowId),
+  },
+  
+  // 存储授权
+  storage: {
+    authorizeSave: (saveName) => invoke("storage:authorize-save", saveName),
+    authorizePlugin: (pluginId) => invoke("storage:authorize-plugin", pluginId),
+    authorizeResource: (resourcePackId) => invoke("storage:authorize-resource", resourcePackId),
+    getDirectories: () => invoke("storage:get-directories"),
+  },
+  
+  // 用户（只读）
+  user: {
+    load: (userId, token) => {
+      assertToken(token);
+      return invoke("user:load", userId, token);
+    },
+    list: (token) => {
+      assertToken(token);
+      return invoke("user:list", token);
+    },
+  },
+  
+  // 主题（只读）
+  theme: {
+    load: (themeId, token) => {
+      assertToken(token);
+      return invoke("theme:load", themeId, token);
+    },
+  },
+  
+  // 国际化（只读）
+  locale: {
+    load: (localeId, token) => {
+      assertToken(token);
+      return invoke("locale:load", localeId, token);
+    },
+  },
+};
+
+// ==============================
+// 🌉 expose safe API
+// ==============================
+contextBridge.exposeInMainWorld("safeIO", api);
+
+// ==============================
+// 📢 安全事件监听
+// ==============================
+ipcRenderer.on("security:init", (event, data) => {
+  // 接收安全初始化信息
+  console.log("[safe-io] Security initialized:", data);
 });
