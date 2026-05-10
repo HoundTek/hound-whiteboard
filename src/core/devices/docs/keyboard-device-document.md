@@ -35,6 +35,16 @@
 - `/code/<KeyCode>`：按键专属挂载锚点，会接收该键位改写后的设备语义信号
 - `/code/<KeyCode>/tool`：该键位下通过运行时 `mount` 事件追加的独立工具节点
 
+若通过 `nodeConfigs` 为某些键位声明了绑定，这些 `/code/<KeyCode>` 节点就不再只是“挂工具的锚点”，还可以继续把信号改写并转发到别的公共节点。
+
+更一般地说，现在应优先把它理解成 `DevicesTreeNode` 的通用节点配置：只要是这棵设备子树里的节点，无论是 `/event`、`/keydown`、`/cancel` 还是 `/code/<KeyCode>`，都可以声明自己的 `rewritePacket` 或 `processor`。
+
+这里的职责边界是：
+
+- 键盘设备只负责产出节点定义
+- `DevicesTreeNode` 负责执行节点级 `rewritePacket` 与 `processor`
+- `nodeConfigs` 是设备侧声明节点行为的唯一配置入口
+
 这种结构把“通用键盘语义”和“具体绑定键位”拆开了：
 
 - 前者适合 Monitor 级操作，如统一处理视口导航键
@@ -47,6 +57,93 @@
 - `cancel` 改写为 `cancel`
 
 因此，工具通常不应再直接判断具体键位，也不应再假设自己接收到的是原始 `keydown`。
+
+## 聚合模式
+
+键盘设备现在正式支持一种“按键节点改写后汇流”的模式：
+
+- 某个按键先在自己的 `/code/<KeyCode>` 节点上把信号改写成设备语义信号
+- 然后该节点把结果继续转发到一个公共锚点
+- 公共锚点下只挂一个工具节点，用来统一消费这批聚合后的信号
+
+这适合 `WASD`、方向键、数字热键组这类“多个键都在驱动同一工具”的场景。
+
+例如：
+
+- `KeyW` 把 `trigger` 改写为 `position: {x: 0, y: -1}`，再转发到 `../../move`
+- `KeyA` 把 `trigger` 改写为 `position: {x: -1, y: 0}`，再转发到 `../../move`
+- `KeyS`、`KeyD` 同理
+- 最终 `/move/tool` 只需要消费统一的 `position` 信号，而不需要知道具体是哪一个键发来的
+
+对应配置形态如下：
+
+```javascript
+const keyboardDevice = createKeyboardDevice({
+  nodeConfigs: {
+    "/code/KeyW": {
+      rewritePacket(packet) {
+        const signals = packet.signals
+          .filter((signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER)
+          .map(() => ({
+            type: "position",
+            context: {
+              value: { x: 0, y: -1 },
+              code: "KeyW",
+            },
+          }));
+
+        return signals.length === 0 ? [] : { to: "../../move", signals };
+      },
+    },
+  },
+});
+
+monitor.mountDevice("/keyboard", keyboardDevice);
+
+board.signalsEventBus.emit("mount", {
+  to: `/${monitor.monitorId}/keyboard/move`,
+  tool,
+});
+```
+
+这里的重点是：
+
+- 具体键位节点负责“把键盘事件翻译成工具真正关心的语义”
+- 公共节点负责“给同一类工具提供稳定的接入点”
+- 工具不再关心 `KeyW`、`KeyA` 这些具体键位，只关心 `position` 这类统一信号
+
+无论是 `/code/<KeyCode>` 还是别的节点，都统一通过 `nodeConfigs` 声明，因为它直接映射到通用 `DevicesTreeNode` 配置。
+
+`nodeConfigs` 负责的是设备挂载时的初始节点配置。若设备已经挂到树上，后续要动态修改某个键位节点，更通用的做法是走事件总线，例如：
+
+```javascript
+board.signalsEventBus.emit("configure", {
+  to: `/${monitor.monitorId}/keyboard/code/KeyW`,
+  options: {
+    rewritePacket(packet) {
+      const signals = packet.signals
+        .filter((signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER)
+        .map(() => ({
+          type: "position",
+          context: {
+            value: { x: 0, y: -1 },
+            code: "KeyW",
+          },
+        }));
+
+      return signals.length === 0 ? [] : { to: "../../move", signals };
+    },
+  },
+});
+```
+
+也就是说，`nodeConfigs` 是“初始声明”，而动态改写应通过 `configure` 事件落到已经挂载的 `DevicesTreeNode` 上。
+
+当前 `configure` 的清空语义也已经固定：
+
+- `defaultPath: null` 或空串表示取消默认下游
+- `rewritePacket: null` 表示移除节点改写器
+- `processor: null` 表示移除节点处理器
 
 ## 状态模型
 

@@ -85,6 +85,27 @@ class MouseTraceTool extends Tool {
 
 const mouseTraceTool = new MouseTraceTool();
 
+const WASD_ROUTE_PRESETS = [
+  {
+    name: "standard",
+    map: {
+      KeyW: { x: 0, y: -1 },
+      KeyA: { x: -1, y: 0 },
+      KeyS: { x: 0, y: 1 },
+      KeyD: { x: 1, y: 0 },
+    },
+  },
+  {
+    name: "rotated-clockwise",
+    map: {
+      KeyW: { x: 1, y: 0 },
+      KeyA: { x: 0, y: -1 },
+      KeyS: { x: -1, y: 0 },
+      KeyD: { x: 0, y: 1 },
+    },
+  },
+];
+
 class RandomCircleTool extends Tool {
   process(signalPacket, deviceContext = {}) {
     const monitorContext = deviceContext.monitor;
@@ -98,8 +119,10 @@ class RandomCircleTool extends Tool {
     if (!shouldDraw) return;
 
     const radius = 12 + Math.random() * 48;
-    const centerX = radius + Math.random() * Math.max(canvas.width - radius * 2, 0);
-    const centerY = radius + Math.random() * Math.max(canvas.height - radius * 2, 0);
+    const centerX =
+      radius + Math.random() * Math.max(canvas.width - radius * 2, 0);
+    const centerY =
+      radius + Math.random() * Math.max(canvas.height - radius * 2, 0);
     const hue = Math.floor(Math.random() * 360);
 
     ctx.beginPath();
@@ -116,15 +139,88 @@ class RandomCircleTool extends Tool {
 
 const randomCircleTool = new RandomCircleTool();
 
-monitor.mountDevice(
-  "/mouse",
-  createMouseDevice(),
-);
+class WasdCoordinateTool extends Tool {
+  position = { x: 0, y: 0 };
 
-monitor.mountDevice(
-  "/keyboard",
-  createKeyboardDevice(),
-);
+  process(signalPacket) {
+    const movementSignals = signalPacket.signals.filter(
+      (signal) => signal.type === "position",
+    );
+    if (movementSignals.length === 0) return;
+
+    for (const signal of movementSignals) {
+      const delta = signal?.context?.value;
+      if (!delta) continue;
+
+      this.position = {
+        x: this.position.x + (delta.x ?? 0),
+        y: this.position.y + (delta.y ?? 0),
+      };
+    }
+
+    console.log("WASD cursor:", this.position);
+  }
+
+  reset() {
+    this.position = { x: 0, y: 0 };
+  }
+}
+
+const wasdCoordinateTool = new WasdCoordinateTool();
+const keyboardDevice = createKeyboardDevice();
+let wasdRoutePresetIndex = 0;
+
+const buildWasdNodeConfig = (code, vector) => ({
+  rewritePacket(packet) {
+    const movementSignals = packet.signals
+      .filter((signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER)
+      .map((signal) => ({
+        type: "position",
+        context: {
+          value: { ...vector },
+          code,
+          key: signal?.context?.key,
+          sourceType: signal.type,
+        },
+      }));
+
+    if (movementSignals.length === 0) {
+      return [];
+    }
+
+    return {
+      to: "../../move",
+      signals: movementSignals,
+    };
+  },
+});
+
+const applyWasdRoutePreset = (presetIndex) => {
+  const normalizedIndex =
+    ((presetIndex % WASD_ROUTE_PRESETS.length) + WASD_ROUTE_PRESETS.length) %
+    WASD_ROUTE_PRESETS.length;
+  const preset = WASD_ROUTE_PRESETS[normalizedIndex];
+
+  for (const [code, vector] of Object.entries(preset.map)) {
+    board.signalsEventBus.emit("configure", {
+      to: `/${monitor.monitorId}/keyboard/code/${code}`,
+      options: buildWasdNodeConfig(code, vector),
+    });
+  }
+
+  wasdRoutePresetIndex = normalizedIndex;
+  console.log(`WASD mapping preset: ${preset.name}`);
+};
+
+const toggleWasdRoutePreset = () => {
+  applyWasdRoutePreset(wasdRoutePresetIndex + 1);
+};
+
+monitor.mountDevice("/mouse", createMouseDevice());
+
+monitor.mountDevice("/keyboard", keyboardDevice);
+
+applyWasdRoutePreset(wasdRoutePresetIndex);
 
 board.signalsEventBus.emit("mount", {
   to: `/${monitor.monitorId}/mouse/primary`,
@@ -134,6 +230,11 @@ board.signalsEventBus.emit("mount", {
 board.signalsEventBus.emit("mount", {
   to: `/${monitor.monitorId}/keyboard/code/Space`,
   tool: randomCircleTool,
+});
+
+board.signalsEventBus.emit("mount", {
+  to: `/${monitor.monitorId}/keyboard/move`,
+  tool: wasdCoordinateTool,
 });
 
 const emitMousePacket = (event) => {
@@ -192,8 +293,22 @@ monitor.canvas.addEventListener("mousemove", emitMousePacket);
 window.addEventListener("mouseup", emitMousePacket);
 monitor.canvas.addEventListener("mouseleave", emitMousePacket);
 
+const keyboardInputCodes = new Set([
+  "Space",
+  "KeyW",
+  "KeyA",
+  "KeyS",
+  "KeyD",
+]);
+
 const emitKeyboardPacket = (event) => {
-  if (event.code !== "Space") return;
+  if (event.type === "keydown" && event.code === "KeyR" && !event.repeat) {
+    event.preventDefault();
+    toggleWasdRoutePreset();
+    return;
+  }
+
+  if (!keyboardInputCodes.has(event.code)) return;
 
   event.preventDefault();
   board.signalsEventBus.emit("input", {

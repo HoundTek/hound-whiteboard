@@ -239,37 +239,30 @@ function createMouseDevice(options = {}) {
       );
     }
 
-    if (nodePath === "pointer") {
-      return typeof options.pointerProcessor === "function"
-        ? options.pointerProcessor(packet, routeContext)
-        : { signals: packet.signals };
-    }
-
-    if (nodePath === "primary") {
-      return typeof options.primaryProcessor === "function"
-        ? options.primaryProcessor(packet, routeContext)
-        : { signals: packet.signals };
-    }
-
-    if (nodePath === "secondary") {
-      return typeof options.secondaryProcessor === "function"
-        ? options.secondaryProcessor(packet, routeContext)
-        : { signals: packet.signals };
-    }
-
-    if (nodePath === "auxiliary") {
-      return typeof options.auxiliaryProcessor === "function"
-        ? options.auxiliaryProcessor(packet, routeContext)
-        : { signals: packet.signals };
-    }
-
-    if (nodePath === "wheel") {
-      return typeof options.wheelProcessor === "function"
-        ? options.wheelProcessor(packet, routeContext)
-        : { signals: packet.signals };
-    }
-
     return packet;
+  };
+
+  const channelProcessors = {
+    pointer:
+      typeof options.pointerProcessor === "function"
+        ? options.pointerProcessor
+        : null,
+    primary:
+      typeof options.primaryProcessor === "function"
+        ? options.primaryProcessor
+        : null,
+    secondary:
+      typeof options.secondaryProcessor === "function"
+        ? options.secondaryProcessor
+        : null,
+    auxiliary:
+      typeof options.auxiliaryProcessor === "function"
+        ? options.auxiliaryProcessor
+        : null,
+    wheel:
+      typeof options.wheelProcessor === "function"
+        ? options.wheelProcessor
+        : null,
   };
 
   return {
@@ -316,7 +309,7 @@ function createMouseDevice(options = {}) {
           return [
             {
               path: `/${channel}`,
-              processor: createNodeProcessor(channel),
+              processor: channelProcessors[channel],
               defaultPath: "tool",
             },
           ];

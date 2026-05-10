@@ -16,6 +16,8 @@
 
 业务侧挂载设备时，应优先通过 `monitor.mountDevice(path, deviceDefinition)` 进入。这个便捷入口会自动补上当前 `monitorId`，再转交给底层 `devicesTree.mountDevice(rootPath, deviceDefinition)`。
 
+若设备已经挂载，业务侧应通过 `board.signalsEventBus.emit("configure", { to, options })` 动态更新某个设备节点的 `rewritePacket`、`processor` 或 `defaultPath`。
+
 它的作用有两点：
 
 - 把设备状态显化并封存在节点中。

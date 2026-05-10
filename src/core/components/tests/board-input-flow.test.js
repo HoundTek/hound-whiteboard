@@ -1,6 +1,10 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { Tool } from "../../tools/tool.js";
+import {
+  KEYBOARD_DEVICE_SIGNAL_TYPES,
+  createKeyboardDevice,
+} from "../../devices/keyboard-device.js";
 
 describe("Board input flow", () => {
   function createCanvas() {
@@ -144,5 +148,78 @@ describe("Board input flow", () => {
 
     expect(umountResults).toEqual([true]);
     expect(monitor.devicesTree.getNode("/main/sample-device/tool")).toBeNull();
+  });
+
+  test("configure 事件应在运行时更新设备节点配置", () => {
+    const board = new Board();
+    const monitor = createMonitor(board, "main");
+    const keyboardDevice = createKeyboardDevice({
+      nodeConfigs: {
+        "/code/KeyW": {
+          rewritePacket(packet) {
+            const signals = packet.signals
+              .filter(
+                (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+              )
+              .map(() => ({
+                type: "position",
+                context: { value: { x: 0, y: -1 }, code: "KeyW" },
+              }));
+
+            return signals.length === 0 ? [] : { to: "../../move", signals };
+          },
+        },
+      },
+    });
+
+    monitor.mountDevice("/keyboard", keyboardDevice);
+    monitor.devicesTree.mount("/main/keyboard/move", (packet, context) => ({
+      to: context.path,
+      signals: packet.signals,
+    }));
+    monitor.devicesTree.mount("/main/keyboard/strafe", (packet, context) => ({
+      to: context.path,
+      signals: packet.signals,
+    }));
+
+    const configureResults = board.signalsEventBus.emit("configure", {
+      to: "/main/keyboard/code/KeyW",
+      options: {
+        rewritePacket(packet) {
+          const signals = packet.signals
+            .filter(
+              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+            )
+            .map(() => ({
+              type: "position",
+              context: { value: { x: 1, y: 0 }, code: "KeyW" },
+            }));
+
+          return signals.length === 0 ? [] : { to: "../../strafe", signals };
+        },
+      },
+    });
+
+    expect(configureResults).toHaveLength(1);
+    expect(configureResults[0]).toEqual(
+      expect.objectContaining({ path: "/main/keyboard/code/KeyW" }),
+    );
+
+    expect(
+      monitor.devicesTree.dispatch({
+        to: "/main/keyboard/code/KeyW",
+        signals: [{ type: "trigger", context: { code: "KeyW" } }],
+      }),
+    ).toEqual([
+      {
+        to: "/main/keyboard/strafe",
+        signals: [
+          {
+            type: "position",
+            context: { value: { x: 1, y: 0 }, code: "KeyW" },
+          },
+        ],
+      },
+    ]);
   });
 });

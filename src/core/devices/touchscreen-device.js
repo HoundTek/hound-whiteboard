@@ -5,7 +5,6 @@
  */
 
 import { SignalPacket } from "./signal.js";
-import { joinPath } from "../utils/path.js";
 
 /**
  * 触摸屏设备输出信号类型。
@@ -114,56 +113,30 @@ function createTouchscreenDevice(options = {}) {
     });
   };
 
-  /**
-   * 为指定节点创建可挂载的处理器。
-   * @param {string} nodePath - 设备内相对节点路径
-   * @returns {import("./devices-tree.js").DevicesTreeProcessor}
-   */
-  const createNodeProcessor =
-    (nodePath) =>
-    (signalPacket, routeContext = {}) =>
-      normalizeProcessorResult(
-        processNodePacket(
-          nodePath,
-          SignalPacket.from(signalPacket, { defaultTo: "/" }),
-          routeContext,
-        ),
-      );
+  const rootProcessor = (signalPacket) => {
+    const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
+    updateTouches(packet);
+    return normalizeProcessorResult({
+      signals: packet.signals,
+    });
+  };
 
-  /**
-   * 处理触摸屏设备子树中的单个节点。
-   * @param {string} nodePath - 当前节点路径
-   * @param {SignalPacket} packet - 当前信号包
-   * @param {{path?: string}} [routeContext={}] - 当前路由上下文
-   * @returns {SignalPacket|Object}
-   */
-  const processNodePacket = (nodePath, packet, routeContext = {}) => {
-    if (nodePath === "") {
-      updateTouches(packet);
-      return {
-        to: joinPath(routeContext.path ?? "/", "contacts"),
-        signals: packet.signals,
-      };
-    }
-
-    if (nodePath === "contacts") {
-      const contacts = getActiveTouches();
-      return {
-        to: routeContext.path,
-        signals: [
-          {
-            type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
-            context: {
-              contacts,
-              changedTouchIds: [...lastChangedTouchIds],
-              activeTouchIds: contacts.map((contact) => contact.touchId),
-            },
+  const contactsPacketRewriter = (signalPacket, routeContext = {}) => {
+    const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
+    const contacts = getActiveTouches();
+    return {
+      to: routeContext.path,
+      signals: [
+        {
+          type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
+          context: {
+            contacts,
+            changedTouchIds: [...lastChangedTouchIds],
+            activeTouchIds: contacts.map((contact) => contact.touchId),
           },
-        ],
-      };
-    }
-
-    return packet;
+        },
+      ],
+    };
   };
 
   return {
@@ -188,8 +161,12 @@ function createTouchscreenDevice(options = {}) {
      */
     defineNodes() {
       return [
-        { path: "", processor: createNodeProcessor("") },
-        { path: "/contacts", processor: createNodeProcessor("contacts") },
+        {
+          path: "",
+          processor: rootProcessor,
+          defaultPath: "contacts",
+        },
+        { path: "/contacts", rewritePacket: contactsPacketRewriter },
       ];
     },
   };

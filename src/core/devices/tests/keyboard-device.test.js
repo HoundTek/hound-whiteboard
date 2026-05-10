@@ -284,4 +284,145 @@ describe("keyboard-device", () => {
 
     expect(keyboardDevice.getState().activeKeys).toEqual([]);
   });
+
+  test("可在按键节点把信号改写为 position 并汇流到公共工具节点", () => {
+    const tree = new DevicesTree();
+    const keyboardDevice = createKeyboardDevice({
+      nodeConfigs: {
+        "/code/KeyW": {
+          rewritePacket(packet) {
+            const signals = packet.signals
+              .filter(
+                (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+              )
+              .map((signal) => ({
+                type: "position",
+                context: {
+                  value: { x: 0, y: -1 },
+                  code: "KeyW",
+                  sourceType: signal.type,
+                },
+              }));
+            return signals.length === 0 ? [] : { to: "../../move", signals };
+          },
+        },
+        "/code/KeyD": {
+          rewritePacket(packet) {
+            const signals = packet.signals
+              .filter(
+                (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+              )
+              .map((signal) => ({
+                type: "position",
+                context: {
+                  value: { x: 1, y: 0 },
+                  code: "KeyD",
+                  sourceType: signal.type,
+                },
+              }));
+            return signals.length === 0 ? [] : { to: "../../move", signals };
+          },
+        },
+      },
+    });
+
+    class CollectingTool extends Tool {
+      calls = [];
+
+      process(signalPacket, deviceContext) {
+        this.calls.push({ signalPacket, deviceContext });
+      }
+
+      reset() {
+        this.calls = [];
+      }
+    }
+
+    const tool = new CollectingTool();
+
+    const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
+    tree.mountTool("/monitor/keyboard/move", tool);
+
+    expect(mountedNodes.map((node) => node.path)).toEqual([
+      "/monitor/keyboard",
+      "/monitor/keyboard/event",
+      "/monitor/keyboard/keydown",
+      "/monitor/keyboard/keyup",
+      "/monitor/keyboard/repeat",
+      "/monitor/keyboard/cancel",
+      "/monitor/keyboard/code/KeyW",
+      "/monitor/keyboard/code/KeyD",
+    ]);
+
+    const packets = tree.dispatch({
+      to: "/monitor/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: { code: "KeyW", key: "w", repeat: false },
+        },
+        {
+          type: "keydown",
+          context: { code: "KeyD", key: "d", repeat: false },
+        },
+      ],
+    });
+
+    expect(packets).toEqual([
+      {
+        to: "/monitor/keyboard/event",
+        signals: [
+          {
+            type: "keydown",
+            context: { code: "KeyW", key: "w", repeat: false },
+          },
+          {
+            type: "keydown",
+            context: { code: "KeyD", key: "d", repeat: false },
+          },
+        ],
+      },
+      {
+        to: "/monitor/keyboard/keydown",
+        signals: [
+          {
+            type: "keydown",
+            context: { code: "KeyW", key: "w", repeat: false },
+          },
+          {
+            type: "keydown",
+            context: { code: "KeyD", key: "d", repeat: false },
+          },
+        ],
+      },
+    ]);
+
+    expect(tool.calls).toHaveLength(2);
+    expect(tool.calls[0].signalPacket).toEqual({
+      to: "/monitor/keyboard/move/tool",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: { x: 0, y: -1 },
+            code: "KeyW",
+            sourceType: "trigger",
+          },
+        },
+      ],
+    });
+    expect(tool.calls[1].signalPacket).toEqual({
+      to: "/monitor/keyboard/move/tool",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: { x: 1, y: 0 },
+            code: "KeyD",
+            sourceType: "trigger",
+          },
+        },
+      ],
+    });
+  });
 });

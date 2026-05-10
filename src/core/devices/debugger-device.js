@@ -5,7 +5,6 @@
  */
 
 import { SignalPacket } from "./signal.js";
-import { joinPath } from "../utils/path.js";
 
 /**
  * 调试设备输出信号类型。
@@ -49,61 +48,35 @@ function createDebuggerDevice(options = {}) {
     packet: new SignalPacket(packet.to, [...packet.signals]),
   });
 
-  /**
-   * 为指定节点创建可挂载的处理器。
-   * @param {string} nodePath - 设备内相对节点路径
-   * @returns {import("./devices-tree.js").DevicesTreeProcessor}
-   */
-  const createNodeProcessor =
-    (nodePath) =>
-    (signalPacket, routeContext = {}) =>
-      normalizeProcessorResult(
-        processNodePacket(
-          nodePath,
-          SignalPacket.from(signalPacket, { defaultTo: "/" }),
-          routeContext,
-        ),
-      );
+  const rootProcessor = (signalPacket, routeContext = {}) => {
+    const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
+    const entry = createHistoryEntry(packet, routeContext);
+    history.push(entry);
+    onRecord?.(entry);
 
-  /**
-   * 处理设备子树中的单个节点。
-   * @param {string} nodePath - 当前节点路径
-   * @param {SignalPacket} packet - 当前信号包
-   * @param {{path?: string}} [routeContext={}] - 当前路由上下文
-   * @returns {SignalPacket|Object}
-   */
-  const processNodePacket = (nodePath, packet, routeContext = {}) => {
-    if (nodePath === "") {
-      const entry = createHistoryEntry(packet, routeContext);
-      history.push(entry);
-      onRecord?.(entry);
+    return normalizeProcessorResult({
+      signals: packet.signals,
+    });
+  };
 
-      return {
-        to: joinPath(routeContext.path ?? "/", "report"),
-        signals: packet.signals,
-      };
-    }
-
-    if (nodePath === "report") {
-      const lastEntry = history[history.length - 1] ?? null;
-      return {
-        to: routeContext.path,
-        signals: [
-          {
-            type: DEBUGGER_DEVICE_SIGNAL_TYPES.REPORT,
-            context: {
-              index: lastEntry?.index ?? -1,
-              receivedAt: lastEntry?.receivedAt ?? routeContext.path,
-              originalTo: lastEntry?.packet?.to ?? packet.to,
-              signalCount:
-                lastEntry?.packet?.signals?.length ?? packet.signals.length,
-            },
+  const reportPacketRewriter = (signalPacket, routeContext = {}) => {
+    const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
+    const lastEntry = history[history.length - 1] ?? null;
+    return {
+      to: routeContext.path,
+      signals: [
+        {
+          type: DEBUGGER_DEVICE_SIGNAL_TYPES.REPORT,
+          context: {
+            index: lastEntry?.index ?? -1,
+            receivedAt: lastEntry?.receivedAt ?? routeContext.path,
+            originalTo: lastEntry?.packet?.to ?? packet.to,
+            signalCount:
+              lastEntry?.packet?.signals?.length ?? packet.signals.length,
           },
-        ],
-      };
-    }
-
-    return packet;
+        },
+      ],
+    };
   };
 
   return {
@@ -131,8 +104,8 @@ function createDebuggerDevice(options = {}) {
      */
     defineNodes() {
       return [
-        { path: "", processor: createNodeProcessor("") },
-        { path: "/report", processor: createNodeProcessor("report") },
+        { path: "", processor: rootProcessor, defaultPath: "report" },
+        { path: "/report", rewritePacket: reportPacketRewriter },
       ];
     },
   };

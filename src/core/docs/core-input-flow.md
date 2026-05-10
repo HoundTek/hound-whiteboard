@@ -70,12 +70,25 @@ monitor.mountDevice("/debugger", debuggerDevice);
 2. 执行该节点的 `processor`
 3. 根据处理结果中的新 `to`，决定是否继续递归转发
 
-节点处理器可能做的事情包括：
+节点处理器或节点通用配置可能做的事情包括：
 
 - 根据当前状态改写 `to`
 - 把输入信号转换为更具体的业务信号
 - 在当前节点终止路由，并把结果包返回
 - 直接调用工具逻辑，消费该包
+
+当前 `DevicesTreeNode` 已支持一组通用节点配置：
+
+- `processor`：节点显式处理器
+- `rewritePacket`：对进入当前节点的整包输入做改写
+
+因此，设备定义不必为某一类设备单独发明“节点绑定层”；更推荐直接在节点定义上声明这些能力。
+
+其中边界应这样理解：
+
+- `rewritePacket` 适合键盘方向键这类“整包过滤后再翻译”
+- `rewritePacket` 也适合触摸 contacts、调试 report 这类“整包汇总后再输出”
+- `processor` 仍适合需要维护设备内部状态或做复杂分流的节点
 
 如果处理后的结果包仍然指向别的节点，设备树会继续递归；如果结果包停在当前节点路径上，递归就终止。
 
@@ -100,6 +113,8 @@ monitor.mountDevice("/debugger", debuggerDevice);
 - `pageWidth` / `pageHeight`：解释页尺寸
 
 这也是为什么设备之间不能直接互调，却仍然可以通过 Monitor 间接共享视口语义。
+
+对于键盘设备，当前还支持一个常见的聚合流向：根节点先把原始按键事件送到 `/code/<KeyCode>`，具体键位节点再通过通用 `rewritePacket` 把它改写成统一的业务信号，并在返回包中显式写入目标路径，例如 `/move` 这类公共锚点，随后再交给一个共享工具节点消费。
 
 ## 当前边界
 
@@ -128,9 +143,10 @@ monitor.mountDevice("/debugger", debuggerDevice);
 2. `Board` 根据 `packet.to` 中的 `monitorId` 找到目标 `Monitor`
 3. `Monitor` 上已经通过 `mountDevice()` 挂好一个设备子树
 4. 上层若需要工具消费，会先通过 `mount` 事件把工具挂到目标锚点下
-5. 设备节点按相对路径和默认路径把包继续送往下游节点；若默认下游当前不存在，则信号停在当前设备语义节点
-6. 工具节点通过 `tool.createProcessor({ board, monitor })` 消费该包
-7. Tool 修改 `Board` 或其它 Core 状态
+5. 若上层需要运行时改写某个设备节点，还可以通过 `configure` 事件更新该节点配置
+6. 设备节点按相对路径和默认路径把包继续送往下游节点；若默认下游当前不存在，则信号停在当前设备语义节点
+7. 工具节点通过 `tool.createProcessor({ board, monitor })` 消费该包
+8. Tool 修改 `Board` 或其它 Core 状态
 
 对应的最小结构可以写成：
 
@@ -150,6 +166,13 @@ board.signalsEventBus.emit("mount", {
   to: `/${monitor.monitorId}/sample-device`,
   tool,
 });
+
+board.signalsEventBus.emit("configure", {
+  to: `/${monitor.monitorId}/sample-device`,
+  options: {
+    defaultPath: "tool",
+  },
+});
 ```
 
 这个样板的意义不在功能复杂，而在于它把当前系统的四层接口一次性串起来了：
@@ -168,7 +191,8 @@ board.signalsEventBus.emit("mount", {
 - `SignalPacket` 的最小结构：`{ to, signals }`
 - `DeviceDefinition` 的最小协议：`defineNodes()`
 - 业务侧设备挂载入口：`monitor.mountDevice(path, deviceDefinition)`
-- 业务侧工具挂载入口：`board.signalsEventBus.emit("mount" | "umount", ...)`
+- 业务侧运行时设备树入口：`board.signalsEventBus.emit("mount" | "umount" | "configure", ...)`
+- `configure` 事件的清空语义：`defaultPath` 传 `null` 或空串表示清空，`processor`/`rewritePacket` 传 `null` 表示清空
 - 设备树的相对路径与 `defaultPath` 路由语义
 - 设备树递归终止语义：结果包停在当前节点路径上时终止
 - Tool 接口：`process(signalPacket, deviceContext)` + `createProcessor(toolContext)`

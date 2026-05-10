@@ -249,6 +249,375 @@ describe("DevicesTree", () => {
     expect(Object.prototype.hasOwnProperty.call(node, "device")).toBe(false);
   });
 
+  test("节点可在无显式处理器时按整包改写并转发到公共节点", () => {
+    const tree = new DevicesTree();
+
+    tree.mount("/monitor/keyboard/code/KeyW", null, {
+      rewritePacket(packet) {
+        const signals = packet.signals
+          .filter((signal) => signal.type === "trigger")
+          .map(() => ({
+            type: "position",
+            context: {
+              value: { x: 0, y: -1 },
+              code: "KeyW",
+            },
+          }));
+        return signals.length === 0 ? [] : { to: "../../move", signals };
+      },
+    });
+
+    tree.mount("/monitor/keyboard/move", (packet, context) => ({
+      to: context.path,
+      signals: packet.signals,
+    }));
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/keyboard/code/KeyW",
+        signals: [
+          {
+            type: "trigger",
+            context: { code: "KeyW", key: "w" },
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/keyboard/move",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: { x: 0, y: -1 },
+              code: "KeyW",
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("mountDevice 应支持节点定义上的 rewritePacket", () => {
+    const tree = new DevicesTree();
+    const deviceDefinition = {
+      defineNodes() {
+        return [
+          {
+            path: "/code/KeyD",
+            rewritePacket(packet) {
+              const signals = packet.signals
+                .filter((signal) => signal.type === "trigger")
+                .map(() => ({
+                  type: "position",
+                  context: {
+                    value: { x: 1, y: 0 },
+                    code: "KeyD",
+                  },
+                }));
+
+              return signals.length === 0 ? [] : { to: "../../move", signals };
+            },
+          },
+          {
+            path: "/move",
+            processor(packet, context) {
+              return {
+                to: context.path,
+                signals: packet.signals,
+              };
+            },
+          },
+        ];
+      },
+    };
+
+    tree.mountDevice("/monitor/keyboard", deviceDefinition);
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/keyboard/code/KeyD",
+        signals: [
+          {
+            type: "trigger",
+            context: { code: "KeyD", key: "d" },
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/keyboard/move",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: { x: 1, y: 0 },
+              code: "KeyD",
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("节点可在无显式处理器时按整包改写输出", () => {
+    const tree = new DevicesTree();
+
+    tree.mount("/monitor/debugger/report", null, {
+      rewritePacket(packet, context) {
+        return {
+          to: context.path,
+          signals: [
+            {
+              type: "summary",
+              context: { count: packet.signals.length },
+            },
+          ],
+        };
+      },
+    });
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/debugger/report",
+        signals: [
+          { type: "position", context: { value: { x: 1, y: 2 } } },
+          { type: "pressure", context: { value: 0.5 } },
+        ],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/debugger/report",
+        signals: [
+          {
+            type: "summary",
+            context: { count: 2 },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("configureNode 应支持设备节点在挂载后动态改写 rewritePacket", () => {
+    const tree = new DevicesTree();
+    const deviceDefinition = {
+      defineNodes() {
+        return [
+          {
+            path: "/code/KeyW",
+            rewritePacket(packet) {
+              const signals = packet.signals
+                .filter((signal) => signal.type === "trigger")
+                .map(() => ({
+                  type: "position",
+                  context: {
+                    value: { x: 0, y: -1 },
+                    code: "KeyW",
+                  },
+                }));
+
+              return signals.length === 0 ? [] : { to: "../../move", signals };
+            },
+          },
+          {
+            path: "/move",
+            processor(packet, context) {
+              return {
+                to: context.path,
+                signals: packet.signals,
+              };
+            },
+          },
+          {
+            path: "/strafe",
+            processor(packet, context) {
+              return {
+                to: context.path,
+                signals: packet.signals,
+              };
+            },
+          },
+        ];
+      },
+    };
+
+    tree.mountDevice("/monitor/keyboard", deviceDefinition);
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/keyboard/code/KeyW",
+        signals: [{ type: "trigger", context: { code: "KeyW" } }],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/keyboard/move",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: { x: 0, y: -1 },
+              code: "KeyW",
+            },
+          },
+        ],
+      },
+    ]);
+
+    tree.configureNode("/monitor/keyboard/code/KeyW", {
+      rewritePacket(packet) {
+        const signals = packet.signals
+          .filter((signal) => signal.type === "trigger")
+          .map(() => ({
+            type: "position",
+            context: {
+              value: { x: -1, y: 0 },
+              code: "KeyW",
+            },
+          }));
+
+        return signals.length === 0 ? [] : { to: "../../strafe", signals };
+      },
+    });
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/keyboard/code/KeyW",
+        signals: [{ type: "trigger", context: { code: "KeyW" } }],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/keyboard/strafe",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: { x: -1, y: 0 },
+              code: "KeyW",
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
+  test("configureNode 传入 null 或空串时应清空已有节点配置", () => {
+    const tree = new DevicesTree();
+
+    tree.mount("/monitor/keyboard/code/KeyW", null, {
+      defaultPath: "tool",
+      rewritePacket(packet) {
+        const signals = packet.signals
+          .filter((signal) => signal.type === "trigger")
+          .map(() => ({
+            type: "position",
+            context: { value: { x: 0, y: -1 }, code: "KeyW" },
+          }));
+
+        return signals.length === 0 ? [] : { to: "../../move", signals };
+      },
+    });
+
+    tree.mount("/monitor/keyboard/code/KeyW/tool", (packet, context) => ({
+      to: context.path,
+      signals: [
+        {
+          type: "tool-result",
+          context: { count: packet.signals.length },
+        },
+      ],
+    }));
+    tree.mount("/monitor/keyboard/move", (packet, context) => ({
+      to: context.path,
+      signals: packet.signals,
+    }));
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/keyboard/code/KeyW",
+        signals: [{ type: "trigger", context: { code: "KeyW" } }],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/keyboard/move",
+        signals: [
+          {
+            type: "position",
+            context: { value: { x: 0, y: -1 }, code: "KeyW" },
+          },
+        ],
+      },
+    ]);
+
+    tree.configureNode("/monitor/keyboard/code/KeyW", {
+      defaultPath: null,
+      rewritePacket: null,
+      processor: null,
+    });
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/keyboard/code/KeyW",
+        signals: [{ type: "trigger", context: { code: "KeyW" } }],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/keyboard/code/KeyW",
+        signals: [{ type: "trigger", context: { code: "KeyW" } }],
+      },
+    ]);
+  });
+
+  test("节点存在 processor 时应优先使用 processor 而非 rewritePacket", () => {
+    const tree = new DevicesTree();
+
+    tree.mount("/monitor/keyboard/code/KeyS", (packet, context) => ({
+      to: context.path,
+      signals: [
+        {
+          type: "processor-result",
+          context: { from: context.path, count: packet.signals.length },
+        },
+      ],
+    }), {
+      rewritePacket() {
+        return {
+          to: "../../move",
+          signals: [
+            {
+              type: "position",
+              context: { value: { x: 0, y: 1 } },
+            },
+          ],
+        };
+      },
+    });
+
+    expect(
+      tree.dispatch({
+        to: "/monitor/keyboard/code/KeyS",
+        signals: [
+          {
+            type: "trigger",
+            context: { code: "KeyS", key: "s" },
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        to: "/monitor/keyboard/code/KeyS",
+        signals: [
+          {
+            type: "processor-result",
+            context: {
+              from: "/monitor/keyboard/code/KeyS",
+              count: 1,
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
   test("unmount 应移除整个子节点", () => {
     const tree = new DevicesTree();
 

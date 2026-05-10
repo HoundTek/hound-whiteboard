@@ -25,6 +25,13 @@ import { PageObjectManager } from "./page-object-manager.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 
 /**
+ * Board 运行时节点配置事件载荷。
+ * @typedef {Object} BoardConfigureEventPayload
+ * @property {string} to - 目标设备树节点绝对路径，必须包含 monitorId
+ * @property {import("../devices/devices-tree.js").DevicesTreeNodeConfig} options - 要更新到节点上的配置片段；`defaultPath` 传 `null` 或空串表示清空，`processor`/`rewritePacket` 传 `null` 表示清空
+ */
+
+/**
  * 白板类
  * @description 一个白板实例就对应了一个白板管辖。
  * @class
@@ -338,8 +345,8 @@ class Board {
    * @private
    */
   #bindSignalsEventBus() {
+    // input 事件负责将信号送往对应节点
     this.signalsEventBus.on("input", ({ to, signals }) => {
-      // 获取信号的目标 Monitor（如果有的话），并把信号送到 Monitor
       const monitorId = to.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (monitor) {
@@ -347,6 +354,7 @@ class Board {
       }
     });
 
+    // mount 事件负责挂载工具到设备树
     this.signalsEventBus.on("mount", ({ to, tool }) => {
       const monitorId = to?.split("/")[1];
       const monitor = this.monitors.get(monitorId);
@@ -357,11 +365,20 @@ class Board {
       });
     });
 
+    // umount 事件负责从设备树卸载工具
     this.signalsEventBus.on("umount", ({ to }) => {
       const monitorId = to?.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (!monitor) return false;
       return monitor.devicesTree.unmountTool(to);
+    });
+
+    // configure 事件负责更新设备树节点配置
+    this.signalsEventBus.on("configure", ({ to, options }) => {
+      const monitorId = to?.split("/")[1];
+      const monitor = this.monitors.get(monitorId);
+      if (!monitor) return false;
+      return monitor.devicesTree.configureNode(to, options ?? {});
     });
   }
 

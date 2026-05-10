@@ -20,6 +20,7 @@
 - `children`：子节点表。
 - `processor`：直接挂在节点上的处理函数。
 - `defaultPath`：当前节点默认往下游继续传递时使用的相对路径。
+- `rewritePacket`：节点在无显式处理器时对整包输入做改写的函数。
 
 节点路径采用类 Unix 形式，如 `/monitor/s-pen/pen`。
 
@@ -56,6 +57,18 @@
 7. 若目标不存在，或节点上没有处理器，则该包直接作为未消费结果返回。
 
 这说明设备树既负责“送达”，也负责承载节点上的局部处理。
+
+当前节点处理优先级如下：
+
+- 若存在 `processor`，优先执行 `processor`
+- 否则，若存在 `rewritePacket`，对整包输入做改写
+- 若上述能力都不存在，则原样返回当前输入包
+
+这意味着：
+
+- `rewritePacket` 适合把整包输入汇总成一条或少量输出信号
+- `rewritePacket` 也适合把多条输入过滤或翻译后，再整包返回新的设备语义
+- `processor` 仍保留给需要副作用、状态更新或复杂包级分流的节点
 
 ## 设备子树
 
@@ -94,9 +107,16 @@
 - 路径归一化。
 - 基于相对位置的路径解析。
 - 节点挂载、查询、卸载。
+- 运行时节点配置更新，可通过 `configureNode(path, options)` 修改已挂载节点。
 - 基于 `to` 的递归分发。
 - 基于 `defaultPath` 的默认下游转发。
 - 最大转发深度保护，防止节点间错误循环。
+
+`configureNode(path, options)` 当前约定如下：
+
+- `defaultPath: null` 或 `defaultPath: ""` 表示清空默认下游路径
+- `rewritePacket: null` 表示清空整包改写器
+- `processor: null` 表示清空节点处理器
 
 当前 DevicesTree 还没有做：
 

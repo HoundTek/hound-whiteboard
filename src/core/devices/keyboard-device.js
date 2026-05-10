@@ -5,6 +5,7 @@
  */
 
 import { SignalPacket } from "./signal.js";
+import { joinPath } from "../utils/path.js";
 
 const KEYBOARD_DEVICE_SIGNAL_TYPES = {
   TRIGGER: "trigger",
@@ -20,6 +21,10 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
  *   keyupProcessor?: import("./devices-tree.js").DevicesTreeProcessor,
  *   repeatProcessor?: import("./devices-tree.js").DevicesTreeProcessor,
  *   cancelProcessor?: import("./devices-tree.js").DevicesTreeProcessor,
+ *   nodeConfigs?: Record<string, {
+ *     rewritePacket?: import("./devices-tree.js").DevicesTreePacketRewriter,
+ *     processor?: import("./devices-tree.js").DevicesTreeProcessor,
+ *   }>,
  * }} [options={}] - 键盘设备选项
  * @returns {import("./devices-tree.js").DeviceDefinition & {
  *   resetState: () => void,
@@ -50,6 +55,11 @@ function createKeyboardDevice(options = {}) {
   const activeKeys = new Map();
   let lastEvent = null;
 
+  const rawNodeConfigs =
+    options.nodeConfigs && typeof options.nodeConfigs === "object"
+      ? options.nodeConfigs
+      : {};
+
   /**
    * 将节点处理结果规整为信号包数组。
    * @param {any} result - 原始处理结果
@@ -74,11 +84,21 @@ function createKeyboardDevice(options = {}) {
   const encodeKeyPathSegment = (code) => encodeURIComponent(String(code));
 
   /**
+   * 规整设备内部节点路径 key。
+   * @param {string} nodePath - 原始节点路径
+   * @returns {string}
+   */
+  const normalizeNodePathKey = (nodePath = "") => {
+    if (!nodePath || nodePath === "/") return "";
+    return joinPath(nodePath).slice(1);
+  };
+
+  /**
    * 将原始键盘信号改写为工具消费信号。
    * @param {{type?: string, context?: Object}} signal - 当前原始信号
    * @returns {Object|null}
    */
-  const rewriteSignalForTool = (signal) => {
+  const rewriteToolSignal = (signal) => {
     const descriptor = getSignalDescriptor(signal);
 
     if (descriptor.type === "keydown" && !descriptor.repeat) {
@@ -250,7 +270,6 @@ function createKeyboardDevice(options = {}) {
   /**
    * 解析当前输入包应继续路由到哪些子节点。
    * @param {SignalPacket} packet - 当前信号包
-   * @param {{path?: string}} [routeContext={}] - 当前路由上下文
    * @returns {Array<{to: string, signals: Array<Object>}>>}
    */
   const resolveRouteTargets = (packet) => {
@@ -275,7 +294,7 @@ function createKeyboardDevice(options = {}) {
       }
 
       if (descriptor.code) {
-        const toolSignal = rewriteSignalForTool(signal);
+        const toolSignal = rewriteToolSignal(signal);
         if (toolSignal) {
           const codePath = `code/${encodeKeyPathSegment(descriptor.code)}`;
           if (!codeTargets.has(codePath)) {
@@ -327,38 +346,67 @@ function createKeyboardDevice(options = {}) {
       return resolveRouteTargets(packet, routeContext);
     }
 
-    if (nodePath === "event") {
-      return typeof options.eventProcessor === "function"
-        ? options.eventProcessor(packet, routeContext)
-        : packet;
-    }
-
-    if (nodePath === "keydown") {
-      return typeof options.keydownProcessor === "function"
-        ? options.keydownProcessor(packet, routeContext)
-        : packet;
-    }
-
-    if (nodePath === "keyup") {
-      return typeof options.keyupProcessor === "function"
-        ? options.keyupProcessor(packet, routeContext)
-        : packet;
-    }
-
-    if (nodePath === "repeat") {
-      return typeof options.repeatProcessor === "function"
-        ? options.repeatProcessor(packet, routeContext)
-        : packet;
-    }
-
-    if (nodePath === "cancel") {
-      return typeof options.cancelProcessor === "function"
-        ? options.cancelProcessor(packet, routeContext)
-        : packet;
-    }
-
     return packet;
   };
+
+  const builtInNodeDefinitions = [
+    { path: "", processor: createNodeProcessor("") },
+    {
+      path: "/event",
+      processor:
+        typeof options.eventProcessor === "function"
+          ? options.eventProcessor
+          : null,
+    },
+    {
+      path: "/keydown",
+      processor:
+        typeof options.keydownProcessor === "function"
+          ? options.keydownProcessor
+          : null,
+    },
+    {
+      path: "/keyup",
+      processor:
+        typeof options.keyupProcessor === "function"
+          ? options.keyupProcessor
+          : null,
+    },
+    {
+      path: "/repeat",
+      processor:
+        typeof options.repeatProcessor === "function"
+          ? options.repeatProcessor
+          : null,
+    },
+    {
+      path: "/cancel",
+      processor:
+        typeof options.cancelProcessor === "function"
+          ? options.cancelProcessor
+          : null,
+    },
+  ];
+
+  const customNodeDefinitions = Object.entries(rawNodeConfigs).map(
+    ([nodePath, config]) => ({
+      path: normalizeNodePathKey(nodePath)
+        ? joinPath(normalizeNodePathKey(nodePath))
+        : "",
+      rewritePacket: config?.rewritePacket ?? null,
+      processor:
+        typeof config?.processor === "function" ? config.processor : null,
+    }),
+  );
+
+  const mergedNodeDefinitions = new Map();
+
+  for (const nodeDefinition of [
+    ...builtInNodeDefinitions,
+    ...customNodeDefinitions,
+  ]) {
+    mergedNodeDefinitions.set(nodeDefinition.path, nodeDefinition);
+  }
 
   return {
     /**
@@ -398,17 +446,10 @@ function createKeyboardDevice(options = {}) {
 
     /**
      * 定义键盘设备子树节点。
-     * @returns {Array<{path: string, defaultPath?: string, processor: import("./devices-tree.js").DevicesTreeProcessor|null}>}
+     * @returns {Array<import("./devices-tree.js").DeviceNodeDefinition>}
      */
     defineNodes() {
-      return [
-        { path: "", processor: createNodeProcessor("") },
-        { path: "/event", processor: createNodeProcessor("event") },
-        { path: "/keydown", processor: createNodeProcessor("keydown") },
-        { path: "/keyup", processor: createNodeProcessor("keyup") },
-        { path: "/repeat", processor: createNodeProcessor("repeat") },
-        { path: "/cancel", processor: createNodeProcessor("cancel") },
-      ];
+      return Array.from(mergedNodeDefinitions.values());
     },
   };
 }

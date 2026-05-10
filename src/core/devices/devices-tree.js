@@ -37,10 +37,27 @@ import { SignalPacket } from "./signal.js";
  */
 
 /**
+ * 设备树节点整包改写器
+ * @callback DevicesTreePacketRewriter
+ * @param {SignalPacket} signalPacket - 已规整的输入信号包
+ * @param {DevicesTreeRouteContext} routeContext - 当前路由上下文
+ * @returns {DevicesTreeProcessorResult}
+ */
+
+/**
+ * 设备树节点配置
+ * @typedef {Object} DevicesTreeNodeConfig
+ * @property {string|null} [defaultPath] - 当前节点的默认下游路径，可为相对路径；传 `null` 或空串表示清空
+ * @property {DevicesTreePacketRewriter|null} [rewritePacket] - 当前节点的整包改写器；传 `null` 表示清空
+ * @property {DevicesTreeProcessor|null} [processor] - 挂载到该节点的处理器；传 `null` 表示清空
+ */
+
+/**
  * 设备子树节点定义
  * @typedef {Object} DeviceNodeDefinition
  * @property {string} [path] - 相对设备根路径
  * @property {string} [defaultPath] - 当前节点的默认下游路径，可为相对路径
+ * @property {DevicesTreePacketRewriter|null} [rewritePacket] - 当前节点的整包改写器
  * @property {DevicesTreeProcessor|null} [processor] - 挂载到该节点的处理器
  */
 
@@ -88,18 +105,33 @@ class DevicesTreeNode {
   defaultPath;
 
   /**
+   * 节点的整包改写器
+   * @type {DevicesTreePacketRewriter|null}
+   */
+  rewritePacket;
+
+  /**
    * @constructor
    * @param {string} name
    * @param {DevicesTreeNode|null} parent
    * @param {DevicesTreeProcessor|null} processor
    * @param {string} defaultPath
+   * @param {DevicesTreePacketRewriter|null} rewritePacket
    */
-  constructor(name, parent = null, processor = null, defaultPath = "") {
+  constructor(
+    name,
+    parent = null,
+    processor = null,
+    defaultPath = "",
+    rewritePacket = null,
+  ) {
     this.name = name;
     this.parent = parent;
     this.children = new Map();
     this.processor = processor;
     this.defaultPath = typeof defaultPath === "string" ? defaultPath : "";
+    this.rewritePacket =
+      typeof rewritePacket === "function" ? rewritePacket : null;
   }
 
   /**
@@ -142,6 +174,28 @@ class DevicesTreeNode {
   }
 
   /**
+   * 设置节点整包改写器。
+   * @param {DevicesTreePacketRewriter|null} rewritePacket - 节点整包改写器
+   * @returns {DevicesTreeNode} 当前节点
+   */
+  setRewritePacket(rewritePacket) {
+    this.rewritePacket =
+      typeof rewritePacket === "function" ? rewritePacket : null;
+    return this;
+  }
+
+  /**
+   * 获取节点整包改写器。
+   * @returns {DevicesTreePacketRewriter|null}
+   */
+  getRewritePacket() {
+    if (typeof this.rewritePacket === "function") {
+      return this.rewritePacket;
+    }
+    return null;
+  }
+
+  /**
    * 获取节点默认下游路径
    * @returns {string}
    */
@@ -170,22 +224,30 @@ class DevicesTreeNode {
     const normalizedPacket = SignalPacket.from(signalPacket, {
       defaultTo: "/",
     });
+    const baseContext = {
+      ...routeContext,
+      node: this,
+      path: this.path,
+      defaultPath: this.getDefaultPath(),
+      resolvedDefaultPath: this.getDefaultPath()
+        ? DevicesTree.resolvePath(this.path, this.getDefaultPath())
+        : this.path,
+    };
     const processor = this.getProcessor();
-    if (!processor) {
-      return [new SignalPacket("", normalizedPacket.signals)];
+    if (processor) {
+      return DevicesTree.normalizeProcessResult(
+        processor(normalizedPacket, baseContext),
+      );
     }
 
-    return DevicesTree.normalizeProcessResult(
-      processor(normalizedPacket, {
-        ...routeContext,
-        node: this,
-        path: this.path,
-        defaultPath: this.getDefaultPath(),
-        resolvedDefaultPath: this.getDefaultPath()
-          ? DevicesTree.resolvePath(this.path, this.getDefaultPath())
-          : this.path,
-      }),
-    );
+    const rewritePacket = this.getRewritePacket();
+    if (rewritePacket) {
+      return DevicesTree.normalizeProcessResult(
+        rewritePacket(normalizedPacket, baseContext),
+      );
+    }
+
+    return [new SignalPacket("", normalizedPacket.signals)];
   }
 }
 
@@ -279,13 +341,38 @@ class DevicesTree {
    * 挂载节点处理器
    * @param {string} path - 节点路径
    * @param {DevicesTreeProcessor|null} processor - 节点处理器
-   * @param {{defaultPath?: string}} [options={}] - 节点挂载选项
+   * @param {DevicesTreeNodeConfig} [options={}] - 节点挂载选项
    * @returns {DevicesTreeNode} 挂载后的节点
    */
   mount(path, processor = null, options = {}) {
     const node = this.ensureNode(path);
     node.setProcessor(processor);
     node.setDefaultPath(options.defaultPath ?? "");
+    node.setRewritePacket(options.rewritePacket ?? null);
+    return node;
+  }
+
+  /**
+   * 运行时更新某个节点的配置。
+   * @param {string} path - 节点路径
+   * @param {DevicesTreeNodeConfig} [options={}] - 节点配置变更
+   * @returns {DevicesTreeNode} 更新后的节点
+   */
+  configureNode(path, options = {}) {
+    const node = this.ensureNode(path);
+
+    if (Object.prototype.hasOwnProperty.call(options, "processor")) {
+      node.setProcessor(options.processor ?? null);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(options, "defaultPath")) {
+      node.setDefaultPath(options.defaultPath ?? "");
+    }
+
+    if (Object.prototype.hasOwnProperty.call(options, "rewritePacket")) {
+      node.setRewritePacket(options.rewritePacket ?? null);
+    }
+
     return node;
   }
 
@@ -381,7 +468,10 @@ class DevicesTree {
         this.mount(
           absolutePath === "" ? "/" : absolutePath,
           nodeDefinition.processor ?? null,
-          { defaultPath: nodeDefinition.defaultPath ?? "" },
+          {
+            defaultPath: nodeDefinition.defaultPath ?? "",
+            rewritePacket: nodeDefinition.rewritePacket ?? null,
+          },
         ),
       );
     }
