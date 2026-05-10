@@ -426,6 +426,9 @@ class SecurityManager {
     // 更新预设和权限
     context.preset = newPreset;
     context.permissions = PERMISSION_PRESETS[newPreset] || PERMISSION_PRESETS.READ_ONLY;
+
+    // 失效旧缓存，确保重新生成的 preload 反映最新权限。
+    this.preloadCache.delete(windowId);
     
     // 重新生成preload
     this.generatePreload(windowId, context);

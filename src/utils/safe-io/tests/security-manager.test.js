@@ -73,4 +73,20 @@ describe("safe-io 安全管理器", () => {
     expect(manager.getContext("editor")).toBeNull();
     expect(fs.existsSync(preloadPath)).toBe(false);
   });
+
+  test("updatePermissions 会刷新 preload 内容中的允许通道", () => {
+    const context = manager.createContext({ windowId: "permissions-window", preset: "READ_ONLY" });
+    const preloadPath = manager.generatePreload("permissions-window", context);
+    const beforeContent = fs.readFileSync(preloadPath, "utf8");
+
+    expect(beforeContent).not.toContain("fs:delete");
+    expect(beforeContent).not.toContain("fs:write");
+
+    expect(manager.updatePermissions("permissions-window", "FULL")).toBe(true);
+
+    const afterContent = fs.readFileSync(preloadPath, "utf8");
+
+    expect(afterContent).toContain("fs:delete");
+    expect(afterContent).toContain("fs:write");
+  });
 });
