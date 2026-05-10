@@ -7,7 +7,7 @@
     "start": "electron .",
     "start:simple": "electron . --main=main-simple.js",
     "build-win": "electron-packager . --out=dist/win/ --platform=win32",
-    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests"
+    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage --experimental-vm-modules' jest --passWithNoTests"
   },
   "author": "Frank Steven",
   "license": "MIT",

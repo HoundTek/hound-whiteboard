@@ -149,30 +149,14 @@ const resolveEntry = (base, entry) => {
 const isValidName = (name) => {
   if (typeof name !== "string") return false;
   if (name.length === 0 || name.length > 255) return false;
-  
+
   // 禁止路径穿越
   if (name === "." || name === "..") return false;
-  
+
   // 禁止末尾点号（Windows限制）
   if (name.endsWith(".")) return false;
-  
+
   // 禁止非法字符
-  const invalidChars = ["/", "\\", ":", "*", "?", "\"", "<", ">", "|", "\0"];
-  return !invalidChars.some(c => name.includes(c));
-};
-
-/**
- * 验证路径名称是否合法
- * @param {string} name - 路径名称
- * @returns {boolean} 是否合法
- */
-const isValidName = (name) => {
-  if (typeof name !== "string") return false;
-  if (name.length === 0 || name.length > 255) return false;
-
-  if (name === "." || name === "..") return false;
-  if (name.endsWith(".")) return false;
-
   const invalidChars = ["/", "\\", ":", "*", "?", "\"", "<", ">", "|", "\0"];
   return !invalidChars.some(c => name.includes(c));
 };

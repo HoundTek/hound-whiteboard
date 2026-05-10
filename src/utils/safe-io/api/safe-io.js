@@ -36,7 +36,8 @@ const open = (base, entry, permissions) => {
     return null;
   }
 
-  const handle = handleOption[0];
+  const authorized = handleOption.unwrap();
+  const handle = authorized.handle;
 
   if (permissions) {
     return handle;

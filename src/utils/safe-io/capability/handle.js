@@ -229,7 +229,9 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
     if (!realPath) {
       return false;
     }
-    return isPathInBoundary(resolvedPath, realPath);
+
+    const canonicalResolvedPath = FS.realPath(resolvedPath) || resolvedPath;
+    return isPathInBoundary(canonicalResolvedPath, realPath);
   };
 
   /**
@@ -507,6 +509,21 @@ export const FileHandle = (resolvedPath, permissions = {}) => {
       return true;
     }
     return false;
+  };
+
+  /**
+   * 撤销当前 handle
+   * @returns {boolean} 是否成功
+   */
+  const revoke = () => {
+    if (revoked) {
+      return true;
+    }
+
+    revoked = true;
+    logAudit("revoke", resolvedPath, true);
+    logToHistory("revoke", true);
+    return true;
   };
 
   /**
