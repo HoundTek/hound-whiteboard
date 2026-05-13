@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Matrix, Vector } from "../../utils/math.js";
+import { Matrix, Vector } from "../utils/math.js";
 
 /**
  * 矩形范围类

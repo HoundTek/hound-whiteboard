@@ -1,5 +1,5 @@
 import { PolygonCreatorTool } from "../polygon-creator.js";
-import { Vector } from "../../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 import { OBJECT_CREATOR_SIGNAL_TYPES } from "../obj-creator.js";
 
 describe("PolygonCreatorTool", () => {

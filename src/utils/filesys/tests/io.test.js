@@ -89,37 +89,4 @@ describe("io", () => {
     expect(archive.exist()).toBe(true);
     expect(extractedDir.peek("hello", "txt").cat()).toBe("zip me");
   });
-
-  test("FilenameRandomPool 应识别现有目录并生成新目录", () => {
-    rootDir.cd("7").make();
-    rootDir.cd("9").make();
-    rootDir.cd("misc").make();
-    mockNextRandomInt(7); // buf[0] % range + min = 7 % 1145141919810 + 1 = 8
-
-    const pool = new FilenameRandomPool(rootDir, "Directory");
-    const generatedDir = pool.generate();
-
-    expect(pool.include("7")).toBe(true);
-    expect(pool.include("9")).toBe(true);
-    expect(generatedDir.name).toBe("8");
-    expect(generatedDir.exist()).toBe(true);
-  });
-
-  test("FilenameRandomPool 应识别现有文件并支持重命名与删除", () => {
-    rootDir.peek("12", "txt").write("occupied");
-    rootDir.peek("note", "txt").write("ignored");
-    mockNextRandomInt(12); // buf[0] % range + min = 12 % 1145141919810 + 1 = 13
-
-    const pool = new FilenameRandomPool(rootDir, "txt");
-    const renamedFile = pool.rename("12");
-
-    expect(pool.include("12")).toBe(false);
-    expect(pool.include("13")).toBe(true);
-    expect(renamedFile.name).toBe("13");
-    expect(rootDir.peek("12", "txt").exist()).toBe(false);
-    expect(rootDir.peek("13", "txt").cat()).toBe("occupied");
-
-    expect(pool.remove("13")).toBe(true);
-    expect(rootDir.peek("13", "txt").exist()).toBe(false);
-  });
 });

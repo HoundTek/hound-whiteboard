@@ -1,4 +1,10 @@
-import { Vector } from "../../utils/math.js";
+/**
+ * 数学算法
+ * @module core/utils/math-algorithm
+ * @author Zhou Chenyu
+ */
+
+import { Vector } from "./math.js";
 
 /**
  * 计算点集的凸包
@@ -147,8 +153,114 @@ function ropeNailIntersect(rope, nail) {
   return count;
 }
 
+/**
+ * 获取二指操作的变换矩阵
+ *
+ * @param {Vector} originPoint1 - 原始点一
+ * @param {Vector} originPoint2 - 原始点二
+ * @param {Vector} transformedPoint1 - 变换后的点一
+ * @param {Vector} transformedPoint2 - 变换后的点二
+ * @param {Vector} originCenter - 一开始的变换中心点
+ * @returns {{mat: Matrix, vec: Vector}} mat 是旋转缩放矩阵，vec 是平移向量
+ * @description 通过两个点的变换来计算出一个仿射变换矩阵，适用于双指操作的情况。
+ * 该函数假设变换是由旋转、缩放和平移组成的（两基垂直），并且两个点之间的相对位置关系保持不变。
+ */
+function getDualFingerResult(
+  originPoint1,
+  originPoint2,
+  transformedPoint1,
+  transformedPoint2,
+  originCenter,
+) {
+  const oVec = originPoint1.sub(originPoint2);
+  const tVec = transformedPoint1.sub(transformedPoint2);
+  const oDist = oVec.length();
+  const tDist = tVec.length();
+  if (oDist === 0 || tDist === 0) {
+    return { mat: Matrix.identity(), vec: transformedPoint1.sub(originPoint1) };
+  }
+  const scale = tDist / oDist;
+  const angle = Math.atan2(tVec.y, tVec.x) - Math.atan2(oVec.y, oVec.x);
+  const mat = Matrix.identity().rotate(angle).scale(scale);
+  const vec = transformedPoint1
+    .sub(mat.multiply(originPoint1.sub(originCenter)))
+    .sub(originCenter);
+  return { mat, vec };
+}
+
+/**
+ * 获取三指操作的变换矩阵
+ *
+ * @param {Vector} originPoint1 - 原始点一
+ * @param {Vector} originPoint2 - 原始点二
+ * @param {Vector} originPoint3 - 原始点三
+ * @param {Vector} transformedPoint1 - 变换后的点一
+ * @param {Vector} transformedPoint2 - 变换后的点二
+ * @param {Vector} transformedPoint3 - 变换后的点三
+ * @param {Vector} originCenter - 一开始的变换中心点
+ * @returns {{mat: Matrix, vec: Vector}} mat 是旋转缩放矩阵，vec 是平移向量
+ * @description 通过三个点的变换来计算出一个仿射变换矩阵，适用于三指操作的情况。
+ * 该函数可以处理更复杂的变换，包括非等比缩放和任意旋转。
+ */
+function getTriFingerResult(
+  originPoint1,
+  originPoint2,
+  originPoint3,
+  transformedPoint1,
+  transformedPoint2,
+  transformedPoint3,
+  originCenter,
+) {
+  // 思路：通过三个点的变换来计算出一个仿射变换矩阵。
+  // 首先计算出原始点和变换后点的质心，然后将点平移到以质心为中心的坐标系中。
+  // 接着计算出原始点和变换后点的协方差矩阵，并通过奇异值分解来得到旋转矩阵。
+  // 最后计算出缩放因子，并组合成最终的仿射变换矩阵。
+  const oCentroid = originPoint1
+    .add(originPoint2)
+    .add(originPoint3)
+    .scale(1 / 3);
+  const tCentroid = transformedPoint1
+    .add(transformedPoint2)
+    .add(transformedPoint3)
+    .scale(1 / 3);
+  const oMat = [
+    originPoint1.sub(oCentroid),
+    originPoint2.sub(oCentroid),
+    originPoint3.sub(oCentroid),
+  ];
+  const tMat = [
+    transformedPoint1.sub(tCentroid),
+    transformedPoint2.sub(tCentroid),
+    transformedPoint3.sub(tCentroid),
+  ];
+  const covMat = [
+    [0, 0],
+    [0, 0],
+  ];
+  for (let i = 0; i < 3; i++) {
+    covMat[0][0] += oMat[i].x * tMat[i].x;
+    covMat[0][1] += oMat[i].x * tMat[i].y;
+    covMat[1][0] += oMat[i].y * tMat[i].x;
+    covMat[1][1] += oMat[i].y * tMat[i].y;
+  }
+  const { u, v } = Matrix.parseFromArray(covMat).svd();
+  const rotMat = v.mul(u.transpose());
+  const oDist = Math.sqrt(
+    oMat.reduce((sum, vec) => sum + vec.x * vec.x + vec.y * vec.y, 0) / 3,
+  );
+  const tDist = Math.sqrt(
+    tMat.reduce((sum, vec) => sum + vec.x * vec.x + vec.y * vec.y, 0) / 3,
+  );
+  const scale = tDist / oDist;
+  const mat = rotMat.scale(scale);
+  const vec = tCentroid.sub(mat.mulVector(oCentroid)).sub(originCenter);
+  return { mat, vec };
+}
+
 export {
   calculateConvexHull,
   insertPoints,
   ropeNailIntersect,
+  getDualFingerResult,
+  getTriFingerResult,
 };

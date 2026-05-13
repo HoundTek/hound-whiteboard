@@ -1,6 +1,6 @@
 # queue 文档
 
-本文档提供 `src/utils/queue.js` 的概述。
+本文档提供 `src/core/utils/queue.js` 的概述。
 
 ## 模块职责
 
@@ -52,3 +52,9 @@
 ## 在仓库中的典型用途
 
 例如活动对象分层逻辑会用它做 BFS，按入度为 `0` 的节点开始逐层传播层号。
+
+## 相关文档
+
+- [utils-document.md](./utils-document.md)
+- [deque-document.md](./deque-document.md)
+- [directed-graph-document.md](./directed-graph-document.md)

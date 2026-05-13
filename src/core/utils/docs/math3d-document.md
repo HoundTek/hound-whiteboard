@@ -1,6 +1,6 @@
 # math3d 文档
 
-本文档提供 `src/utils/math3d.js` 的概述。
+本文档提供 `src/core/utils/math3d.js` 的概述。
 
 ## 模块职责
 
@@ -96,8 +96,14 @@ $$
 - 当前 `get(x, y)` 的实现尚未完整覆盖全部 `3 x 3` 下标组合，因此若需要高频随机访问矩阵元素，建议先确认实现状态。
 - `inv()` 在矩阵不可逆时会抛出异常。
 
-## 适用场景
+## 在仓库中的典型用途
 
 - 三维图元的基础变换
 - 3D 对象的点与矩阵存储
 - 未来三维几何扩展的底层数学支持
+
+## 相关文档
+
+- [utils-document.md](./utils-document.md)
+- [math-document.md](./math-document.md)
+- [math-algorithm-document.md](./math-algorithm-document.md)

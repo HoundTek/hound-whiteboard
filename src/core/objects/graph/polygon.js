@@ -5,7 +5,7 @@
  */
 
 import { GraphObject } from "./graph.js";
-import { Matrix, Vector } from "../../../utils/math.js";
+import { Matrix, Vector } from "../../utils/math.js";
 import {
   calculateConvexHull,
   ropeNailIntersect,

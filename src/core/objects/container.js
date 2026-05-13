@@ -5,7 +5,7 @@
  */
 
 import { BasicObject } from "./basic-obj.js";
-import { Vector } from "../../utils/math.js";
+import { Vector } from "../utils/math.js";
 
 /**
  * 对象容器类

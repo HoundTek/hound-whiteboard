@@ -7,7 +7,7 @@
 import { Board } from "../components/board.js";
 import { PageLoader } from "./page-loader.js";
 import { CounterPool } from "../utils/counter-pool.js";
-import { Vector } from "../../utils/math.js";
+import { Vector } from "../utils/math.js";
 import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
 import { joinPath } from "../utils/path.js";
 

@@ -1,11 +1,12 @@
 /**
- * @file 双端队列
- * @module deque
+ * 双端队列
+ * @module core/utils/deque
  * @author Zhou Chenyu
  */
 
 /**
  * 双端队列
+ * @class
  * @author Zhou Chenyu
  */
 class Deque {

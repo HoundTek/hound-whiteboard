@@ -1,6 +1,6 @@
 /**
- * @file Core 事件总线
- * @module event-bus
+ * Core 事件总线
+ * @module core/utils/event-bus
  * @author Zhou Chenyu
  */
 

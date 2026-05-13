@@ -4,7 +4,7 @@
  */
 
 import Benchmark from "benchmark";
-import { Chain } from "../src/utils/chain.js";
+import { Chain } from "../src/core/utils/chain.js";
 
 const suite = new Benchmark.Suite("Chain Benchmarks");
 

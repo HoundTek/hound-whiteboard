@@ -2,7 +2,7 @@ import { deserialize } from "../object-deserializer.js";
 import { PolygonObject } from "../graph/polygon.js";
 import { TextObject } from "../one-dim/text.js";
 import { StrokeObject } from "../stroke/stroke.js";
-import { Matrix, Vector } from "../../../utils/math.js";
+import { Matrix, Vector } from "../../utils/math.js";
 
 describe("object deserializer", () => {
   test("应能还原 PolygonObject", () => {

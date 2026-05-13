@@ -4,7 +4,7 @@
  */
 
 import Benchmark from "benchmark";
-import { Queue } from "../src/utils/queue.js";
+import { Queue } from "../src/core/utils/queue.js";
 
 const suite = new Benchmark.Suite("Queue Benchmarks");
 

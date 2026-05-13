@@ -1,6 +1,6 @@
 # deque 文档
 
-本文档提供 `src/utils/deque.js` 的概述。
+本文档提供 `src/core/utils/deque.js` 的概述。
 
 ## 模块职责
 
@@ -55,8 +55,13 @@
 - `peekFront()`、`peekBack()`、`popFront()`、`popBack()` 在空队列时会抛出 `RangeError`。
 - `toArray()` 会按照逻辑顺序导出，不受循环数组存储位置影响。
 
-## 典型用途
+## 在仓库中的典型用途
 
 - 在 `PageLoader` 之类场景中维护左右缓冲页
 - 维护最近访问记录
 - 支持双向淘汰策略的缓存队列
+
+## 相关文档
+
+- [utils-document.md](./utils-document.md)
+- [queue-document.md](./queue-document.md)

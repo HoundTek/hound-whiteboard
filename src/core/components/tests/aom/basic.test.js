@@ -1,4 +1,4 @@
-import { RandomNumberPool } from "../../../../utils/algorithm.js";
+import { RandomNumberPool } from "../../../utils/random.js";
 import { ActiveObjectManager } from "../../active-object-manager.js";
 
 describe("ActiveObjectManager/basic", () => {

@@ -1,5 +1,5 @@
 import { PolygonObject } from "../polygon.js";
-import { Vector, Matrix } from "../../../../utils/math.js";
+import { Vector, Matrix } from "../../../utils/math.js";
 
 describe("PolygonObject", () => {
   describe("构造与属性修改", () => {

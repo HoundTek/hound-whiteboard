@@ -5,7 +5,7 @@
  */
 
 import { OneDimensionObject } from "./one-dim-obj.js";
-import { Vector, Matrix } from "../../../utils/math.js";
+import { Vector, Matrix } from "../../utils/math.js";
 
 /**
  * 文本对象类

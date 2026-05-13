@@ -1,6 +1,6 @@
 /**
- * @file 有向图模块
- * @module directed-graph
+ * 有向图
+ * @module core/utils/directed-graph
  * @author Zhou Chenyu
  */
 

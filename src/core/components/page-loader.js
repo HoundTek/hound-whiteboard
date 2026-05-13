@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Deque } from "../../utils/deque.js";
+import { Deque } from "../utils/deque.js";
 import { Page } from "./page.js";
 import { EventBus } from "../utils/event-bus.js";
 

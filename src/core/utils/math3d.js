@@ -1,10 +1,10 @@
 /**
- * @file 三维数学模块
+ * 三维数学模块
  * @description
  * 提供三维空间中点和矩阵的表示与操作功能，包括:
  * - 三维点 Vector3D
  * - 3x3 矩阵 Matrix3D
- * @module math3d
+ * @module core/utils/math3d
  * @author Zhou Chenyu
  */
 

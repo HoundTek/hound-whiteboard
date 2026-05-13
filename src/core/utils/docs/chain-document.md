@@ -1,6 +1,6 @@
 # chain 文档
 
-本文档提供 `src/utils/chain.js` 的概述。
+本文档提供 `src/core/utils/chain.js` 的概述。
 
 ## 模块职责
 
@@ -51,8 +51,14 @@
 - `removeAt`、`getAt` 在索引越界或链表为空时会抛出 `RangeError`。
 - `indexOf` 按严格相等 `===` 查找值。
 
-## 适用场景
+## 在仓库中的典型用途
 
 - 简单顺序容器
 - 需要显式头尾节点的结构原型
 - 对数组随机访问要求不高、但希望练习链表语义的地方
+
+## 相关文档
+
+- [utils-document.md](./utils-document.md)
+- [queue-document.md](./queue-document.md)
+- [deque-document.md](./deque-document.md)

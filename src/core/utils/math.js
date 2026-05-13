@@ -1,10 +1,10 @@
 /**
- * @file 二维数学模块
+ * 二维数学模块
  * @description
  * 提供二维平面上点和矩阵的表示与操作功能，包括:
  * - 二维点 Vector
  * - 2x2 矩阵 Matrix
- * @module math
+ * @module core/utils/math
  * @author Zhou Chenyu
  */
 

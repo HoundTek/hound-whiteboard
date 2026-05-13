@@ -1,11 +1,12 @@
 /**
- * @file 队列
- * @module queue
+ * 队列
+ * @module core/utils/queue
  * @author Zhou Chenyu
  */
 
 /**
  * 队列
+ * @class
  * @author Zhou Chenyu
  */
 class Queue {

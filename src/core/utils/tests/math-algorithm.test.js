@@ -1,4 +1,4 @@
-import { Vector } from "../../../utils/math.js";
+import { Vector } from "../math.js";
 import { calculateConvexHull, ropeNailIntersect } from "../math-algorithm.js";
 
 describe("math-algorithm", () => {

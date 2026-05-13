@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Vector } from "../../../utils/math.js";
+import { Vector } from "../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { SignalPacket } from "../../devices/signal.js";
 import { Tool } from "../tool.js";

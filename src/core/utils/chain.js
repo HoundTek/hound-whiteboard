@@ -1,11 +1,13 @@
 /**
- * @file 链表
- * @module chain
+ * 链表
+ * @module core/utils/chain
  * @author Zhou Chenyu
  */
 
 /**
  * 链表节点
+ * @class
+ * @author Zhou Chenyu
  */
 class Node {
   /**

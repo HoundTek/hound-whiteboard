@@ -1,6 +1,12 @@
 /**
  * 计数器池
- *
+ * @module core/utils/counter-pool
+ * @author Zhou Chenyu
+ */
+
+/**
+ * 计数器池
+ * @class
  * @author Zhou Chenyu
  */
 class CounterPool {

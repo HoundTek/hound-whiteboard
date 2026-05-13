@@ -1,5 +1,5 @@
 import { StrokeCreatorTool } from "../stroke-creator.js";
-import { Vector } from "../../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 
 describe("StrokeCreatorTool", () => {
   test("StrokeCreatorTool 应消费 position/end 信号并累计点列", () => {

@@ -1,6 +1,6 @@
 # math 文档
 
-本文档提供 `src/utils/math.js` 的概述。
+本文档提供 `src/core/utils/math.js` 的概述。
 
 ## 模块职责
 
@@ -106,7 +106,7 @@ $$
 | `Matrix.parseFromArray(arr)` | 从数组构造矩阵 | `number[][] -> Matrix` |
 | `Matrix.nearlyEq(a, b, eps)` | 近似相等判断 | `Matrix -> Matrix -> number -> boolean` |
 
-## 适用场景
+## 在仓库中的典型用途
 
 - 对象局部坐标与世界坐标转换
 - 旋转、缩放等线性变换
@@ -116,3 +116,9 @@ $$
 
 - `applyTransform()` 和 `applyToVector()` 会修改向量对象本身。
 - `inv()` 在矩阵不可逆时会抛出异常。
+
+## 相关文档
+
+- [utils-document.md](./utils-document.md)
+- [math-algorithm-document.md](./math-algorithm-document.md)
+- [math3d-document.md](./math3d-document.md)

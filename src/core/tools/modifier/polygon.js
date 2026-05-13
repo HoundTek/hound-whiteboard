@@ -5,7 +5,7 @@
  */
 
 import { PolygonObject } from "../../objects/graph/polygon.js";
-import { Vector } from "../../../utils/math.js";
+import { Vector } from "../../utils/math.js";
 import { ObjectModifierTool } from "./obj-modifier.js";
 
 /**

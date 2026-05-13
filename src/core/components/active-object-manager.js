@@ -4,9 +4,9 @@
  * @author Zhou Chenyu
  */
 
-import { RandomNumberPool } from "../../utils/algorithm.js";
-import { Deque } from "../../utils/deque.js";
-import { Queue } from "../../utils/queue.js";
+import { RandomNumberPool } from "../utils/random.js";
+import { Deque } from "../utils/deque.js";
+import { Queue } from "../utils/queue.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { Page } from "./page.js";
 import { PageLoader } from "./page-loader.js";
