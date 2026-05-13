@@ -6,8 +6,8 @@ class MockPageLoader {
   }
 
   moveCurrentRight() {
-    if (!this.pageNow || !this.pageNow.nextPage) return;
-    this.pageNow = this.pageNow.nextPage;
+    if (!this.pageNow || !this.pageNow.rightPage) return;
+    this.pageNow = this.pageNow.rightPage;
   }
 
   forceMoveCurrentRightTempLoad() {
@@ -19,9 +19,13 @@ class MockPageLoader {
   }
 
   moveCurrentLeft() {
-    if (!this.pageNow || !this.pageNow.prevPage) return;
-    this.pageNow = this.pageNow.prevPage;
+    if (!this.pageNow || !this.pageNow.leftPage) return;
+    this.pageNow = this.pageNow.leftPage;
   }
+
+  moveCurrentUp() {}
+
+  moveCurrentDown() {}
 
   forceMoveCurrentLeftTempLoad() {
     this.moveCurrentLeft();
@@ -45,6 +49,38 @@ class MockPageLoader {
 
   expandBufferLeftFullLoad() {
     this.moveCurrentLeft();
+  }
+
+  expandBufferUpTempLoad() {
+    this.moveCurrentUp();
+  }
+
+  expandBufferUpFullLoad() {
+    this.moveCurrentUp();
+  }
+
+  expandBufferDownTempLoad() {
+    this.moveCurrentDown();
+  }
+
+  expandBufferDownFullLoad() {
+    this.moveCurrentDown();
+  }
+
+  shrinkBufferRight() {
+    return false;
+  }
+
+  shrinkBufferLeft() {
+    return false;
+  }
+
+  shrinkBufferUp() {
+    return false;
+  }
+
+  shrinkBufferDown() {
+    return false;
   }
 
   resetCurrentPage(page) {

@@ -1,16 +1,13 @@
 import { jest } from "@jest/globals";
-import {
-  PageLoader,
-  PAGE_LOAD_MANAGER_EVENTS,
-} from "../page-loader.js";
+import { PageLoader, PAGE_LOAD_MANAGER_EVENTS } from "../page-loader.js";
 import { Page } from "../page.js";
 import { EventBus } from "../../utils/event-bus.js";
 
 describe("PageLoader", () => {
   function createPages() {
-    const page1 = new Page(1);
-    const page2 = new Page(2);
-    const page3 = new Page(3);
+    const page1 = new Page(1, 0, 0);
+    const page2 = new Page(2, 1, 0);
+    const page3 = new Page(3, 2, 0);
 
     Page.connectTwoPage(page1, page2);
     Page.connectTwoPage(page2, page3);
@@ -128,5 +125,79 @@ describe("PageLoader", () => {
     expect(shrunk).toBe(false);
     expect(loader.getLoadedPages()).toEqual([page1, page2]);
     expect(unloadHandler).not.toHaveBeenCalled();
+  });
+
+  test("forceMoveCurrentUpTempLoad 应该支持二维邻页导航", () => {
+    const bus = new EventBus();
+    const page1 = new Page(1);
+    const pageUp = new Page(4);
+    const loadHandler = jest.fn();
+    const loader = new PageLoader(3, bus, undefined, (page, direction) => {
+      if (page === page1 && direction === "up") return pageUp;
+      if (page === pageUp && direction === "down") return page1;
+      return undefined;
+    });
+
+    bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
+
+    loader.resetCurrentPage(page1);
+    const changed = loader.forceMoveCurrentUpTempLoad();
+
+    expect(changed).toBe(true);
+    expect(loader.pageNow).toBe(pageUp);
+    expect(loader.getLoadedPages()).toEqual([pageUp, page1]);
+    expect(loadHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: pageUp,
+        strategy: "temp",
+        source: "force-move",
+        alreadyBuffered: false,
+      }),
+    );
+  });
+
+  test("二维缓冲区向右扩展时应加载整条右边界", () => {
+    const bus = new EventBus();
+    const page1 = new Page(1, 0, 0);
+    const pageUp = new Page(4, 0, 1);
+    const pageRight = new Page(2, 1, 0);
+    const pageUpRight = new Page(3, 1, 1);
+    const loadHandler = jest.fn();
+    const pages = new Map([
+      ["0,0", page1],
+      ["0,1", pageUp],
+      ["1,0", pageRight],
+      ["1,1", pageUpRight],
+    ]);
+    const loader = new PageLoader(0, bus, undefined, (page, direction) => {
+      const delta = {
+        right: [1, 0],
+        left: [-1, 0],
+        up: [0, 1],
+        down: [0, -1],
+      }[direction];
+      if (!delta) return undefined;
+      return pages.get(`${page.x + delta[0]},${page.y + delta[1]}`);
+    });
+
+    bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
+
+    loader.resetCurrentPage(page1);
+    loader.expandBufferUpTempLoad();
+    const expanded = loader.expandBufferRightTempLoad();
+
+    expect(expanded).toBe(true);
+    expect(loader.getLoadedPages()).toEqual([
+      pageUp,
+      pageUpRight,
+      page1,
+      pageRight,
+    ]);
+    expect(loadHandler).toHaveBeenCalledWith(
+      expect.objectContaining({ page: pageRight, direction: "right" }),
+    );
+    expect(loadHandler).toHaveBeenCalledWith(
+      expect.objectContaining({ page: pageUpRight, direction: "right" }),
+    );
   });
 });

@@ -66,6 +66,12 @@ class Board {
   pageMap;
 
   /**
+   * 板上已有页 id 集合
+   * @type {Set<number>}
+   */
+  pageIds;
+
+  /**
    * 页顺序（使用 id）
    * @type {number[]}
    */
@@ -150,6 +156,7 @@ class Board {
     this.undoTree = new UndoTree();
     this.activeObjectManager = new ActiveObjectManager();
     this.pageMap = new Map();
+    this.pageIds = new Set();
     this.pageOrder = [];
     this.pageTemporaryLoadedCount = new Map();
     this.pageFullyLoadedCount = new Map();
@@ -170,14 +177,138 @@ class Board {
    * @returns {PageLoader}
    */
   createPageLoader(limit = Board.PAGE_BUFFER_LIMIT, requesterId) {
-    return new PageLoader(limit, this.pageLoadEventBus, requesterId);
+    return new PageLoader(
+      limit,
+      this.pageLoadEventBus,
+      requesterId,
+      (page, direction) => this.getNeighborPage(page, direction),
+    );
   }
 
   /**
-   * 创建绑定到当前 Board 的显示器
-   * @param {HTMLElement} rootElement - 显示器的根元素
-   * @param {{ width: number, height: number }} options - 显示器尺寸选项
-   * @param {string} monitorId - 显示器 id
+   * 判断页 id 是否存在于当前白板
+   * @param {number} pageId - 页 id
+   * @returns {boolean}
+   */
+  hasPageId(pageId) {
+    return (
+      this.pageMap.has(pageId) ||
+      this.pageIds.has(pageId) ||
+      this.pageOrder.includes(pageId)
+    );
+  }
+
+  /**
+   * 判断指定坐标是否存在页
+   * @param {number} x - 页二维坐标 x
+   * @param {number} y - 页二维坐标 y
+   * @returns {boolean}
+   */
+  hasPageAtCoordinate(x, y) {
+    return this.hasPageId(Page.coordinateToId(x, y));
+  }
+
+  /**
+   * 按 id 获取页实例，不存在时惰性创建
+   * @param {number} pageId - 页 id
+   * @returns {Page | undefined}
+   */
+  getPageById(pageId) {
+    if (!this.hasPageId(pageId)) return undefined;
+    let page = this.pageMap.get(pageId);
+    if (!page) {
+      const coordinate = Page.idToCoordinate(pageId);
+      page = new Page(pageId, coordinate.x, coordinate.y);
+      this.pageMap.set(pageId, page);
+    }
+
+    this.#syncPageNeighborRefs(page);
+    return page;
+  }
+
+  /**
+   * 按坐标获取页实例，不存在时惰性创建
+   * @param {number} x - 页二维坐标 x
+   * @param {number} y - 页二维坐标 y
+   * @returns {Page | undefined}
+   */
+  getPageByCoordinate(x, y) {
+    const pageId = Page.coordinateToId(x, y);
+    return this.getPageById(pageId);
+  }
+
+  /**
+   * 获取页的左右邻页
+   * @param {Page} page - 当前页
+   * @param {"right" | "left" | "up" | "down"} direction - 方向
+   * @returns {Page | undefined}
+   */
+  getNeighborPage(page, direction) {
+    if (!page) return undefined;
+
+    const delta = {
+      right: { x: 1, y: 0 },
+      left: { x: -1, y: 0 },
+      up: { x: 0, y: 1 },
+      down: { x: 0, y: -1 },
+    }[direction];
+    if (!delta) return undefined;
+
+    return this.getPageByCoordinate(page.x + delta.x, page.y + delta.y);
+  }
+
+  /**
+   * 获取指定坐标附近已存在的页并惰性实例化
+   * @param {number} x - 中心页 x
+   * @param {number} y - 中心页 y
+   * @param {number} [radius = 1] - 邻域半径
+   * @returns {Page[]}
+   */
+  getPagesAroundCoordinate(x, y, radius = 1) {
+    const pages = [];
+
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        const page = this.getPageByCoordinate(x + offsetX, y + offsetY);
+        if (page) {
+          pages.push(page);
+        }
+      }
+    }
+
+    return pages;
+  }
+
+  /**
+   * 同步页的四向邻页引用
+   * @param {Page} page - 页实例
+   * @private
+   */
+  #syncPageNeighborRefs(page) {
+    if (!page) return;
+
+    const directions = [
+      ["right", 1, 0],
+      ["left", -1, 0],
+      ["up", 0, 1],
+      ["down", 0, -1],
+    ];
+
+    for (const [direction, deltaX, deltaY] of directions) {
+      const neighborId = Page.coordinateToId(page.x + deltaX, page.y + deltaY);
+      if (!this.hasPageId(neighborId)) continue;
+
+      const neighbor = this.pageMap.get(neighborId);
+      if (!neighbor) continue;
+      Page.connectTwoPage(page, neighbor, direction);
+    }
+  }
+
+  /**
+   * 创建绑定到当前 Board 的 Monitor
+   * @param {HTMLElement} rootElement - Monitor 的根元素
+   * @param {{ width: number, height: number }} options - Monitor 尺寸选项
+   * @param {string} monitorId - Monitor id
    * @returns {Monitor}
    */
   createMonitor(rootElement, { width, height }, monitorId) {
@@ -203,7 +334,9 @@ class Board {
    * @returns {Promise<Page>}
    */
   async appendPage(templateId) {
-    let page = new Page(this.pageCounterPool.generate());
+    const pageId = this.pageCounterPool.generate();
+    const coordinate = Page.idToCoordinate(pageId);
+    let page = new Page(pageId, coordinate.x, coordinate.y);
 
     await boardFileOperateBridge.createPageStorage(this.rootPath, page.id);
 
@@ -212,12 +345,7 @@ class Board {
 
     // 加入页映射和链表
     this.pageMap.set(page.id, page);
-    if (this.pageOrder.length > 0) {
-      let lastPage = this.pageMap.get(
-        this.pageOrder[this.pageOrder.length - 1],
-      );
-      Page.connectTwoPage(lastPage, page);
-    }
+    this.pageIds.add(page.id);
     this.pageOrder.push(page.id);
     await this.#persistPageConnection();
 
@@ -262,30 +390,26 @@ class Board {
     // [todo] 加载其它 meta 和 config 相关的东西
 
     // 加载页顺序信息
-    this.pageOrder = connection.order;
+    this.pageOrder = Array.isArray(connection.order)
+      ? [...connection.order]
+      : [];
+    this.pageIds = new Set(this.pageOrder);
     this.pageCounterPool = new CounterPool(connection.count);
 
     this.pageLoadOwners.clear();
     this.pageTemporaryLoadedCount.clear();
     this.pageFullyLoadedCount.clear();
 
-    // 构建页链表和页映射
     this.pageMap = new Map();
-    let previousPage = null;
-    for (const pageId of this.pageOrder) {
-      const currentPage = new Page(pageId);
-      Page.connectTwoPage(previousPage, currentPage);
-      this.pageMap.set(pageId, currentPage);
-      previousPage = currentPage;
-    }
 
     // [FIXME] 应该由 Monitor 设备来决定加载哪一页
 
     // 检查 trace 中的页是否合法
-    const currentPage = this.pageMap.get(trace.onPage);
+    const currentPage = this.getPageById(trace.onPage);
     if (!currentPage) {
       throw new Error(`Trace page ${trace.onPage} does not exist.`);
     }
+    this.getPagesAroundCoordinate(currentPage.x, currentPage.y);
 
     // [todo] 加载上次打开的历史，如工具、设备等
 
@@ -332,7 +456,7 @@ class Board {
    * @param {number} pageId - 要添加到的页 id
    */
   addObject(obj, pageId) {
-    const page = this.pageMap.get(pageId);
+    const page = this.getPageById(pageId);
     if (!page) {
       console.warn(`Page ${pageId} does not exist.`);
       throw new Error("Page not exist.");

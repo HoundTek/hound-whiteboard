@@ -2,30 +2,38 @@
 
 本文档提供 `Page` 的概述。
 
-`Page` 是单页生命周期管理单元，负责维护页链关系，并协调本页对象管理器的加载与卸载。
+`Page` 是单页生命周期管理单元，负责维护页的二维位置、唯一 id，以及协调本页对象管理器的加载与卸载。
 
 ## 页面类职责
 
 - 管理页对象管理器 `objectManager`
-- 维护页链：`prevPage` 与 `nextPage`
+- 维护页的二维坐标：`x` 与 `y`
+- 维护页唯一标识：`id`
 - 提供完整加载、临时加载、卸载、临时卸载接口
 
 ## 核心字段
 
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `id` | 页 id | `number` |
-| `objectManager` | 页对象管理器 | `PageObjectManager` |
-| `nextPage` | 后一页 | `Page \| undefined` |
-| `prevPage` | 前一页 | `Page \| undefined` |
-| `isLoad` | 是否已加载 | `boolean` |
-| `isTempLoad` | 是否为临时加载 | `boolean` |
+| 名称            | 描述           | 类型                |
+| --------------- | -------------- | ------------------- |
+| `id`            | 页唯一标识     | `number`            |
+| `x`             | 页二维坐标 x   | `number`            |
+| `y`             | 页二维坐标 y   | `number`            |
+| `objectManager` | 页对象管理器   | `PageObjectManager` |
+| `isLoad`        | 是否已加载     | `boolean`           |
+| `isTempLoad`    | 是否为临时加载 | `boolean`           |
 
-## 页链逻辑
+## 页坐标与 id
 
-通过静态方法 `connectTwoPage(first, second)` 连接两页。该方法通过修改两页的 `nextPage` 和 `prevPage` 来实现页连接，类似于链表。
+当前页以二维坐标为主定位方式，`id` 只是唯一标识。当前实现仍提供坐标与 id 的双向换算：
 
-页链用于翻页、跨页拾取和邻页预加载。
+- `Page.idToCoordinate(id)`：将正整数页 id 换算为二维坐标
+- `Page.coordinateToId(x, y)`：将二维坐标换算为页 id
+
+其中：
+
+- `1` 对应原点 `(0, 0)`
+- 后续 id 按回字形向外扩展
+- 同一个坐标只对应唯一一个页 id
 
 ## 加载模型
 
@@ -53,8 +61,8 @@
 
 ### 卸载 `unload()` / `unloadTemp()`
 
-- `unload()`：计划完整释放页资源（当前保留 `todo`）。
-- `unloadTemp()`：仅允许临时加载状态下调用，卸载层叠图。
+- `unload()`：释放页对象管理器与当前内容引用。
+- `unloadTemp()`：仅允许临时加载状态下调用，当前实现复用完整卸载路径。
 
 ## 对象加入接口
 
@@ -78,20 +86,21 @@
 
 ## API
 
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `connectTwoPage(first, second)` | 连接两页 | `Page -> Page -> void` |
-| `addObject(obj, below, above)` | 按上下关系加入对象 | `number -> number[] -> number[] -> void` |
-| `loadFull(boardRootPath)` | 完整加载页面 | `string -> Promise<boolean>` |
-| `loadTemp(boardRootPath)` | 临时加载页面 | `string -> Promise<boolean>` |
-| `downgradeToTemp()` | 从完整加载降级为临时加载 | `void -> boolean` |
-| `unload()` | 完整卸载页面 | `void -> void` |
-| `unloadTemp()` | 临时卸载页面 | `void -> boolean` |
+| 名称                           | 描述                     | 类型                                     |
+| ------------------------------ | ------------------------ | ---------------------------------------- |
+| `idToCoordinate(id)`           | id 转二维坐标            | `number -> { x: number, y: number }`     |
+| `coordinateToId(x, y)`         | 二维坐标转 id            | `number -> number -> number`             |
+| `addObject(obj, below, above)` | 按上下关系加入对象       | `number -> number[] -> number[] -> void` |
+| `loadFull(boardRootPath)`      | 完整加载页面             | `string -> Promise<boolean>`             |
+| `loadTemp(boardRootPath)`      | 临时加载页面             | `string -> Promise<boolean>`             |
+| `downgradeToTemp()`            | 从完整加载降级为临时加载 | `void -> boolean`                        |
+| `unload()`                     | 完整卸载页面             | `void -> void`                           |
+| `unloadTemp()`                 | 临时卸载页面             | `void -> boolean`                        |
 
 ## 实现状态
 
-- 已实现：页链结构、临时加载与临时卸载接口、完整加载到临时加载的降级入口、静态图基础加边。
-- 待完善：对象完整加载/保存、完整卸载细节、自动相交分析。
+- 已实现：二维坐标与 id 的双向换算、按需实例化的页实体、临时加载与临时卸载接口、完整加载到临时加载的降级入口、静态图基础加边。
+- 待完善：对象完整加载/保存、完整卸载细节、自动相交分析、更高层的二维导航策略。
 
 ## 相关文档
 

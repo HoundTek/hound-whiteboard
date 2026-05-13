@@ -1,4 +1,5 @@
 import { Monitor } from "../monitor.js";
+import { Vector } from "../../utils/math.js";
 import {
   createDebuggerDevice,
   DEBUGGER_DEVICE_SIGNAL_TYPES,
@@ -17,7 +18,14 @@ describe("Monitor", () => {
     const board = {
       width: 800,
       height: 600,
-      pageOrder: [1],
+      getPageByCoordinate(x, y) {
+        const coordinates = new Map([
+          ["0,0", { id: 1, x: 0, y: 0 }],
+          ["1,0", { id: 2, x: 1, y: 0 }],
+          ["1,1", { id: 3, x: 1, y: 1 }],
+        ]);
+        return coordinates.get(`${x},${y}`);
+      },
       createPageLoader() {
         return {};
       },
@@ -68,5 +76,26 @@ describe("Monitor", () => {
       "/beta/debugger",
       "/beta/debugger/report",
     ]);
+  });
+
+  test("screenToPage 应按二维页坐标映射命中对应页", () => {
+    const monitor = createMonitor("gamma");
+
+    expect(monitor.screenToPage(new Vector(400, 300))).toEqual({
+      pageId: 1,
+      x: 400,
+      y: 300,
+    });
+    expect(monitor.screenToPage(new Vector(1200, 300))).toEqual({
+      pageId: 2,
+      x: 400,
+      y: 300,
+    });
+    expect(monitor.screenToPage(new Vector(1200, 900))).toEqual({
+      pageId: 3,
+      x: 400,
+      y: 300,
+    });
+    expect(monitor.screenToPage(new Vector(-400, 300))).toBeNull();
   });
 });

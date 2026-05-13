@@ -4,7 +4,6 @@
  * @author Zhou Chenyu
  */
 
-import { Deque } from "../utils/deque.js";
 import { Page } from "./page.js";
 import { EventBus } from "../utils/event-bus.js";
 
@@ -25,7 +24,7 @@ let pageLoaderIdCounter = 0;
  * 页面加载器
  * @class
  * @description
- * 管理当前已加载的页。
+ * 管理当前已加载的页网格缓冲区。
  * 需要注意的是 PageLoader 无法直接加载页，
  * 它需要给 Board 发出加载页的请求，
  * 由 Board 来调用 Page 的加载方法。
@@ -34,14 +33,14 @@ let pageLoaderIdCounter = 0;
 class PageLoader {
   /**
    * 在该管理器中已加载的页
-   * @description 页数不超过 `pagesLoadedLimit` 页，为页实例引用的双端队列。
-   * @type {Deque}
+   * @description 以页坐标为键保存当前缓冲区中的页实例。
+   * @type {Map<string, Page>}
    */
   pagesLoaded;
 
   /**
    * 当前页引用
-   * @type {Page}
+   * @type {Page | undefined}
    */
   pageNow;
 
@@ -64,159 +63,162 @@ class PageLoader {
   requesterId;
 
   /**
+   * 邻页解析器
+   * @type {(page: Page, direction: "right" | "left" | "up" | "down") => Page | undefined}
+   */
+  resolveNeighbor;
+
+  /**
+   * 当前缓冲区边界
+   * @type {{ minX: number, maxX: number, minY: number, maxY: number } | undefined}
+   */
+  bufferBounds;
+
+  /**
    * @param {number} [limit = 0] - 可以加载的页数上限
    * @param {EventBus} [eventBus] - 页加载事件总线
    * @param {number | string} [requesterId] - 请求方 id
+   * @param {(page: Page, direction: "right" | "left" | "up" | "down") => Page | undefined} [resolveNeighbor] - 邻页解析器
    */
   constructor(
     limit = 0,
     eventBus = new EventBus(),
     requesterId = ++pageLoaderIdCounter,
+    resolveNeighbor = (page, direction) => {
+      const neighborField = {
+        right: "rightPage",
+        left: "leftPage",
+        up: "upPage",
+        down: "downPage",
+      }[direction];
+      return neighborField ? page?.[neighborField] : undefined;
+    },
   ) {
     this.pagesLoadedLimit = limit;
-    this.pagesLoaded = new Deque();
+    this.pagesLoaded = new Map();
     this.eventBus = eventBus;
     this.requesterId = requesterId;
+    this.resolveNeighbor = resolveNeighbor;
+    this.bufferBounds = undefined;
   }
 
-  /**
-   * 向右移动当前页在缓冲区内的位置
-   * @description 如果当前页右边在缓冲区中没有页了，则不进行任何操作。
-   * @returns {boolean} 是否成功移动
-   */
   moveCurrentRight() {
     return this.#moveCurrent("right");
   }
 
-  /**
-   * 强制向右移动当前页在缓冲区内的位置
-   * @description
-   * 如果当前页右边在缓冲区中没有页了，则缓冲区会尝试加载右页。
-   * 加载策略为临时加载。
-   * @returns {boolean} 是否成功移动
-   */
   forceMoveCurrentRightTempLoad() {
     return this.#forceMoveCurrent("right", PAGE_LOAD_STRATEGIES.TEMP);
   }
 
-  /**
-   * 强制向右移动当前页在缓冲区内的位置
-   * @description
-   * 如果当前页右边在缓冲区中没有页了，则缓冲区会尝试加载右页。
-   * 加载策略为完整加载。
-   * @returns {boolean} 是否成功移动
-   */
   forceMoveCurrentRightFullLoad() {
     return this.#forceMoveCurrent("right", PAGE_LOAD_STRATEGIES.FULL);
   }
 
-  /**
-   * 向左移动当前页在缓冲区内的位置
-   * @description 如果当前页左边在缓冲区中没有页了，则不进行任何操作。
-   * @returns {boolean} 是否成功移动
-   */
   moveCurrentLeft() {
     return this.#moveCurrent("left");
   }
 
-  /**
-   * 强制向左移动当前页在缓冲区内的位置
-   * @description
-   * 如果当前页左边在缓冲区中没有页了，则缓冲区会尝试加载左页。
-   * 加载策略为临时加载。
-   * @returns {boolean} 是否成功移动
-   */
   forceMoveCurrentLeftTempLoad() {
     return this.#forceMoveCurrent("left", PAGE_LOAD_STRATEGIES.TEMP);
   }
 
-  /**
-   * 强制向左移动当前页在缓冲区内的位置
-   * @description
-   * 如果当前页左边在缓冲区中没有页了，则缓冲区会尝试加载左页。
-   * 加载策略为完整加载。
-   * @returns {boolean} 是否成功移动
-   */
   forceMoveCurrentLeftFullLoad() {
     return this.#forceMoveCurrent("left", PAGE_LOAD_STRATEGIES.FULL);
   }
 
-  /**
-   * 向右扩展缓冲区，加载策略为临时加载
-   * @returns {boolean} 是否成功扩展
-   */
+  moveCurrentUp() {
+    return this.#moveCurrent("up");
+  }
+
+  forceMoveCurrentUpTempLoad() {
+    return this.#forceMoveCurrent("up", PAGE_LOAD_STRATEGIES.TEMP);
+  }
+
+  forceMoveCurrentUpFullLoad() {
+    return this.#forceMoveCurrent("up", PAGE_LOAD_STRATEGIES.FULL);
+  }
+
+  moveCurrentDown() {
+    return this.#moveCurrent("down");
+  }
+
+  forceMoveCurrentDownTempLoad() {
+    return this.#forceMoveCurrent("down", PAGE_LOAD_STRATEGIES.TEMP);
+  }
+
+  forceMoveCurrentDownFullLoad() {
+    return this.#forceMoveCurrent("down", PAGE_LOAD_STRATEGIES.FULL);
+  }
+
   expandBufferRightTempLoad() {
     return this.#expandBuffer("right", PAGE_LOAD_STRATEGIES.TEMP);
   }
 
-  /**
-   * 向右扩展缓冲区，加载策略为完整加载
-   * @returns {boolean} 是否成功扩展
-   */
   expandBufferRightFullLoad() {
     return this.#expandBuffer("right", PAGE_LOAD_STRATEGIES.FULL);
   }
 
-  /**
-   * 向左扩展缓冲区，加载策略为临时加载
-   * @returns {boolean} 是否成功扩展
-   */
   expandBufferLeftTempLoad() {
     return this.#expandBuffer("left", PAGE_LOAD_STRATEGIES.TEMP);
   }
 
-  /**
-   * 向左扩展缓冲区，加载策略为完整加载
-   * @returns {boolean} 是否成功扩展
-   */
   expandBufferLeftFullLoad() {
     return this.#expandBuffer("left", PAGE_LOAD_STRATEGIES.FULL);
   }
 
-  /**
-   * 从右侧收缩缓冲区
-   * @description 如果当前页已经是右界，则不进行任何操作。
-   * @returns {boolean} 是否成功收缩
-   */
+  expandBufferUpTempLoad() {
+    return this.#expandBuffer("up", PAGE_LOAD_STRATEGIES.TEMP);
+  }
+
+  expandBufferUpFullLoad() {
+    return this.#expandBuffer("up", PAGE_LOAD_STRATEGIES.FULL);
+  }
+
+  expandBufferDownTempLoad() {
+    return this.#expandBuffer("down", PAGE_LOAD_STRATEGIES.TEMP);
+  }
+
+  expandBufferDownFullLoad() {
+    return this.#expandBuffer("down", PAGE_LOAD_STRATEGIES.FULL);
+  }
+
   shrinkBufferRight() {
     return this.#shrinkBuffer("right");
   }
 
-  /**
-   * 从左侧收缩缓冲区
-   * @description 如果当前页已经是左界，则不进行任何操作。
-   * @returns {boolean} 是否成功收缩
-   */
   shrinkBufferLeft() {
     return this.#shrinkBuffer("left");
+  }
+
+  shrinkBufferUp() {
+    return this.#shrinkBuffer("up");
+  }
+
+  shrinkBufferDown() {
+    return this.#shrinkBuffer("down");
   }
 
   /**
    * 重置当前页
    * @param {Page} page - 页实例
-   * @returns {Page | undefined} 重置后的当前页实例，若参数无效，则为 undefined
-   * @description
-   * 该方法会清空当前缓冲区并把参数页设为当前页。
-   * 如果参数页不在当前板中，则不进行任何操作。
+   * @returns {Page | undefined} 重置后的当前页实例
    */
   resetCurrentPage(page) {
     this.pagesLoaded.clear();
+    this.bufferBounds = undefined;
     this.pageNow = page;
-    if (page) this.pagesLoaded.pushBack(page);
+    if (page) this.#insertPage(page);
     this.#emitBufferUpdated("reset", "none");
     return this.pageNow;
   }
 
-  /**
-   * 重置缓冲区
-   * @description 该方法会清空当前缓冲区并把当前页设为 undefined。
-   */
   resetBuffer() {
-    const pages = this.pagesLoaded.toArray();
+    const pages = this.getLoadedPages();
     for (const page of pages) {
       this.#emitUnloadRequest(page, "reset");
     }
     this.pagesLoaded.clear();
+    this.bufferBounds = undefined;
     this.pageNow = undefined;
     this.#emitBufferUpdated("reset", "none");
   }
@@ -226,7 +228,10 @@ class PageLoader {
    * @returns {Page[]}
    */
   getLoadedPages() {
-    return this.pagesLoaded.toArray();
+    return [...this.pagesLoaded.values()].sort((left, right) => {
+      if (left.y !== right.y) return right.y - left.y;
+      return left.x - right.x;
+    });
   }
 
   /**
@@ -234,22 +239,28 @@ class PageLoader {
    * @returns {number}
    */
   get pagesLoadedCount() {
-    return this.pagesLoaded.count();
+    return this.pagesLoaded.size;
+  }
+
+  /**
+   * 当前页网格边界快照
+   * @returns {{ minX: number, maxX: number, minY: number, maxY: number } | undefined}
+   */
+  getBufferBounds() {
+    if (!this.bufferBounds) return undefined;
+    return { ...this.bufferBounds };
   }
 
   /**
    * 尝试移动当前页在缓冲区内的位置
-   * @param {"right" | "left"} direction - 移动方向
+   * @param {"right" | "left" | "up" | "down"} direction - 移动方向
    * @returns {boolean} 是否成功移动
-   * @description
-   * 该方法会尝试把当前页向指定方向移动一页。
-   * 如果当前页在指定方向上没有页了，或者指定方向的页不在缓冲区中，则不进行任何操作。
    * @private
    */
   #moveCurrent(direction) {
     if (!this.pageNow) return false;
     const targetPage = this.#getNeighbor(this.pageNow, direction);
-    if (!targetPage || !this.pagesLoaded.includes(targetPage)) {
+    if (!targetPage || !this.#hasPage(targetPage)) {
       return false;
     }
 
@@ -260,14 +271,9 @@ class PageLoader {
 
   /**
    * 强制移动当前页在缓冲区内的位置
-   * @param {"right" | "left"} direction - 移动方向
+   * @param {"right" | "left" | "up" | "down"} direction - 移动方向
    * @param {"temp" | "full"} strategy - 加载策略
    * @returns {boolean} 是否成功移动
-   * @description
-   * 该方法会尝试把当前页向指定方向移动一页。
-   * 如果当前页在指定方向上没有页了，则缓冲区会尝试加载指定方向的页。
-   * 如果加载成功了，那么当前页会被移动到指定方向的页。
-   * 否则不进行任何操作。
    * @private
    */
   #forceMoveCurrent(direction, strategy) {
@@ -275,9 +281,14 @@ class PageLoader {
     const targetPage = this.#getNeighbor(this.pageNow, direction);
     if (!targetPage) return false;
 
-    if (!this.pagesLoaded.includes(targetPage)) {
+    if (!this.#hasPage(targetPage)) {
       this.pageNow = targetPage;
-      this.#appendPageToBuffer(targetPage, direction, strategy, "force-move");
+      this.#appendPagesToBuffer(
+        [targetPage],
+        direction,
+        strategy,
+        "force-move",
+      );
     } else {
       if (strategy === PAGE_LOAD_STRATEGIES.FULL) {
         this.#emitLoadRequest(
@@ -297,78 +308,76 @@ class PageLoader {
 
   /**
    * 扩展缓冲区
-   * @param {"right" | "left"} direction - 扩展方向
+   * @param {"right" | "left" | "up" | "down"} direction - 扩展方向
    * @param {"temp" | "full"} strategy - 加载策略
    * @returns {boolean} 是否成功扩展
-   * @description
-   * 该方法会尝试把指定方向的页加载到缓冲区中。
-   * 如果指定方向的页已经在缓冲区中了，或者没有页了，则不进行任何操作。
-   * 否则会把指定方向的页加载到缓冲区中。
    * @private
    */
   #expandBuffer(direction, strategy) {
-    if (this.pagesLoaded.empty()) return false;
+    if (this.pagesLoadedCount === 0) return false;
 
-    const edgePage =
-      direction === "right"
-        ? this.pagesLoaded.peekBack()
-        : this.pagesLoaded.peekFront();
-    const targetPage = this.#getNeighbor(edgePage, direction);
-    if (!targetPage || this.pagesLoaded.includes(targetPage)) {
-      return false;
+    const edgePages = this.#getEdgePages(direction);
+    const targetPages = [];
+    const seen = new Set();
+    for (const edgePage of edgePages) {
+      const targetPage = this.#getNeighbor(edgePage, direction);
+      if (!targetPage || this.#hasPage(targetPage)) continue;
+
+      const key = this.#getPageKey(targetPage);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targetPages.push(targetPage);
     }
 
-    this.#appendPageToBuffer(targetPage, direction, strategy, "expand-buffer");
+    if (targetPages.length === 0) return false;
+
+    this.#appendPagesToBuffer(
+      targetPages,
+      direction,
+      strategy,
+      "expand-buffer",
+    );
     this.#emitBufferUpdated("expand", direction);
     return true;
   }
 
   /**
    * 收缩缓冲区边界
-   * @param {"right" | "left"} direction - 收缩方向
+   * @param {"right" | "left" | "up" | "down"} direction - 收缩方向
    * @returns {boolean} 是否成功收缩
    * @private
    */
   #shrinkBuffer(direction) {
-    if (this.pagesLoaded.empty()) return false;
+    if (this.pagesLoadedCount === 0) return false;
 
-    const boundaryPage =
-      direction === "right"
-        ? this.pagesLoaded.peekBack()
-        : this.pagesLoaded.peekFront();
-
-    if (!boundaryPage || boundaryPage === this.pageNow) {
+    const boundaryPages = this.#getEdgePages(direction);
+    if (
+      boundaryPages.length === 0 ||
+      boundaryPages.some((page) => page === this.pageNow)
+    ) {
       return false;
     }
 
-    const removed =
-      direction === "right"
-        ? this.pagesLoaded.popBack()
-        : this.pagesLoaded.popFront();
-    this.#emitUnloadRequest(removed, "shrink-buffer");
+    for (const page of boundaryPages) {
+      this.#removePage(page);
+      this.#emitUnloadRequest(page, "shrink-buffer");
+    }
     this.#emitBufferUpdated("shrink", direction);
     return true;
   }
 
   /**
    * 把页加载到缓冲区中
-   * @param {Page} page - 要加载的页
-   * @param {"right" | "left"} direction - 加载方向
+   * @param {Page[]} pages - 要加载的页
+   * @param {"right" | "left" | "up" | "down"} direction - 加载方向
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {"force-move" | "expand-buffer"} source - 加载来源
-   * @description
-   * 该方法会把页加载到缓冲区中，并根据加载结果更新缓冲区状态。
-   * 如果加载成功了，那么页会被添加到缓冲区的指定方向上。
-   * 否则不进行任何操作。
    * @private
    */
-  #appendPageToBuffer(page, direction, strategy, source) {
-    this.#emitLoadRequest(page, strategy, direction, source, false);
-
-    if (direction === "right") {
-      this.pagesLoaded.pushBack(page);
-    } else {
-      this.pagesLoaded.pushFront(page);
+  #appendPagesToBuffer(pages, direction, strategy, source) {
+    for (const page of pages) {
+      this.#emitLoadRequest(page, strategy, direction, source, false);
+      this.#insertPage(page);
     }
 
     this.#trimBuffer(direction);
@@ -376,58 +385,165 @@ class PageLoader {
 
   /**
    * 修剪缓冲区
-   * @param {"right" | "left"} direction - 修剪方向
-   * @description
-   * 该方法会根据 `pagesLoadedLimit` 的设置修剪缓冲区。
-   * 如果缓冲区中的页数超过了 `pagesLoadedLimit`，则会从指定方向上移除页，直到页数不超过 `pagesLoadedLimit`。
-   * 被移除的页会被发出卸载请求。
+   * @param {"right" | "left" | "up" | "down"} direction - 修剪方向
    * @private
    */
   #trimBuffer(direction) {
     if (this.pagesLoadedLimit === 0) return;
 
-    while (this.pagesLoaded.count() > this.pagesLoadedLimit) {
-      const removeFromFront = direction === "right";
-      const headPage = this.pagesLoaded.peekFront();
-      const tailPage = this.pagesLoaded.peekBack();
-      let removed;
+    const oppositeDirection = {
+      right: "left",
+      left: "right",
+      up: "down",
+      down: "up",
+    }[direction];
 
-      if (removeFromFront) {
-        removed =
-          headPage === this.pageNow
-            ? this.pagesLoaded.popBack()
-            : this.pagesLoaded.popFront();
-      } else {
-        removed =
-          tailPage === this.pageNow
-            ? this.pagesLoaded.popFront()
-            : this.pagesLoaded.popBack();
+    while (this.pagesLoadedCount > this.pagesLoadedLimit) {
+      let pagesToRemove = this.#getEdgePages(oppositeDirection).filter(
+        (page) => page !== this.pageNow,
+      );
+
+      if (pagesToRemove.length === 0) {
+        pagesToRemove = this.#getEdgePages(direction).filter(
+          (page) => page !== this.pageNow,
+        );
       }
 
-      if (removed === this.pageNow) {
+      if (pagesToRemove.length === 0) {
         throw new Error("Current page can not be trimmed from buffer.");
       }
-      this.#emitUnloadRequest(removed, "buffer-limit");
+
+      for (const page of pagesToRemove) {
+        this.#removePage(page);
+        this.#emitUnloadRequest(page, "buffer-limit");
+      }
     }
   }
 
   /**
    * 获取指定页的邻居页
    * @param {Page} page - 当前页
-   * @param {"right" | "left"} direction - 方向
+   * @param {"right" | "left" | "up" | "down"} direction - 方向
    * @returns {Page | undefined} 邻居页
    * @private
    */
   #getNeighbor(page, direction) {
     if (!page) return undefined;
-    return direction === "right" ? page.nextPage : page.prevPage;
+    return this.resolveNeighbor(page, direction);
+  }
+
+  /**
+   * 获取指定方向的边界页
+   * @param {"right" | "left" | "up" | "down"} direction - 方向
+   * @returns {Page[]}
+   * @private
+   */
+  #getEdgePages(direction) {
+    if (!this.bufferBounds) return [];
+
+    const edgePages = [];
+    for (const page of this.pagesLoaded.values()) {
+      if (
+        (direction === "left" && page.x === this.bufferBounds.minX) ||
+        (direction === "right" && page.x === this.bufferBounds.maxX) ||
+        (direction === "down" && page.y === this.bufferBounds.minY) ||
+        (direction === "up" && page.y === this.bufferBounds.maxY)
+      ) {
+        edgePages.push(page);
+      }
+    }
+
+    return edgePages.sort((left, right) => {
+      if (direction === "left" || direction === "right") {
+        return right.y - left.y;
+      }
+      return left.x - right.x;
+    });
+  }
+
+  /**
+   * 判断某页是否已在缓冲区中
+   * @param {Page} page - 页实例
+   * @returns {boolean}
+   * @private
+   */
+  #hasPage(page) {
+    return this.pagesLoaded.has(this.#getPageKey(page));
+  }
+
+  /**
+   * 插入页到缓冲区
+   * @param {Page} page - 页实例
+   * @private
+   */
+  #insertPage(page) {
+    this.pagesLoaded.set(this.#getPageKey(page), page);
+
+    if (!this.bufferBounds) {
+      this.bufferBounds = {
+        minX: page.x,
+        maxX: page.x,
+        minY: page.y,
+        maxY: page.y,
+      };
+      return;
+    }
+
+    this.bufferBounds.minX = Math.min(this.bufferBounds.minX, page.x);
+    this.bufferBounds.maxX = Math.max(this.bufferBounds.maxX, page.x);
+    this.bufferBounds.minY = Math.min(this.bufferBounds.minY, page.y);
+    this.bufferBounds.maxY = Math.max(this.bufferBounds.maxY, page.y);
+  }
+
+  /**
+   * 从缓冲区移除页
+   * @param {Page} page - 页实例
+   * @private
+   */
+  #removePage(page) {
+    this.pagesLoaded.delete(this.#getPageKey(page));
+    this.#recalculateBufferBounds();
+  }
+
+  /**
+   * 重算缓冲区边界
+   * @private
+   */
+  #recalculateBufferBounds() {
+    const pages = [...this.pagesLoaded.values()];
+    if (pages.length === 0) {
+      this.bufferBounds = undefined;
+      return;
+    }
+
+    let minX = pages[0].x;
+    let maxX = pages[0].x;
+    let minY = pages[0].y;
+    let maxY = pages[0].y;
+    for (const page of pages) {
+      minX = Math.min(minX, page.x);
+      maxX = Math.max(maxX, page.x);
+      minY = Math.min(minY, page.y);
+      maxY = Math.max(maxY, page.y);
+    }
+    this.bufferBounds = { minX, maxX, minY, maxY };
+  }
+
+  /**
+   * 生成页坐标键
+   * @param {Page} page - 页实例
+   * @returns {string}
+   * @private
+   */
+  #getPageKey(page) {
+    return `${page.x},${page.y}`;
   }
 
   /**
    * 发出加载请求
    * @param {Page} page - 要加载的页
    * @param {"temp" | "full"} strategy - 加载策略
-   * @param {"right" | "left"} direction - 加载方向
+   * @param {"right" | "left" | "up" | "down"} direction - 加载方向
    * @param {"force-move" | "expand-buffer"} source - 加载来源
    * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
    * @private
@@ -446,7 +562,7 @@ class PageLoader {
   /**
    * 发出卸载请求
    * @param {Page} page - 要卸载的页
-   * @param {"buffer-limit"} source - 卸载来源
+   * @param {"buffer-limit" | "shrink-buffer" | "reset"} source - 卸载来源
    * @private
    */
   #emitUnloadRequest(page, source) {
@@ -459,8 +575,8 @@ class PageLoader {
 
   /**
    * 发出缓冲区更新事件
-   * @param {"expand" | "shrink"} action - 更新动作
-   * @param {"right" | "left"} direction - 更新方向
+   * @param {"expand" | "shrink" | "move" | "reset"} action - 更新动作
+   * @param {"right" | "left" | "up" | "down" | "none"} direction - 更新方向
    * @private
    */
   #emitBufferUpdated(action, direction) {
@@ -468,13 +584,10 @@ class PageLoader {
       action,
       direction,
       pageNow: this.pageNow,
-      pagesLoaded: this.pagesLoaded.toArray(),
+      pagesLoaded: this.getLoadedPages(),
+      bufferBounds: this.getBufferBounds(),
     });
   }
 }
 
-export {
-  PageLoader,
-  PAGE_LOAD_MANAGER_EVENTS,
-  PAGE_LOAD_STRATEGIES,
-};
+export { PageLoader, PAGE_LOAD_MANAGER_EVENTS, PAGE_LOAD_STRATEGIES };

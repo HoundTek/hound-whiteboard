@@ -26,8 +26,8 @@ describe("ActiveObjectManager/pickup", () => {
   }
 
   function pageConnect(pageA, pageB) {
-    pageA.nextPage = pageB;
-    pageB.prevPage = pageA;
+    pageA.rightPage = pageB;
+    pageB.leftPage = pageA;
   }
 
   describe("选取无跨页对象的子图", () => {

@@ -1,7 +1,7 @@
 /**
  * 页面组件
  * @description
- * 页面组件负责管理每一页的对象和层级关系，以及页与页之间的连接关系。
+ * 页面组件负责管理每一页的对象和层级关系，以及页的位置与唯一标识。
  * 每一页对应一个页面类实例。
  * @module page
  * @author Zhou Chenyu
@@ -25,22 +25,52 @@ class Page {
   objectManager;
 
   /**
-   * 后一页
-   * @type {Page | undefined}
+   * 页内容
+   * @type {PageObjectManager | undefined}
    */
-  nextPage;
+  content;
 
   /**
-   * 前一页
-   * @type {Page | undefined}
-   */
-  prevPage;
-
-  /**
-   * 页 id
+   * 页唯一标识
    * @type {number}
    */
   id;
+
+  /**
+   * 页二维坐标 x
+   * @type {number}
+   */
+  x;
+
+  /**
+   * 页二维坐标 y
+   * @type {number}
+   */
+  y;
+
+  /**
+   * 左页引用
+   * @type {Page | undefined}
+   */
+  leftPage;
+
+  /**
+   * 右页引用
+   * @type {Page | undefined}
+   */
+  rightPage;
+
+  /**
+   * 上页引用
+   * @type {Page | undefined}
+   */
+  upPage;
+
+  /**
+   * 下页引用
+   * @type {Page | undefined}
+   */
+  downPage;
 
   /**
    * 页是否已被加载到内存中
@@ -60,24 +90,126 @@ class Page {
   /**
    *
    * @param {number} pageId - 页 id
+   * @param {number} [x] - 页二维坐标 x
+   * @param {number} [y] - 页二维坐标 y
    */
-  constructor(pageId) {
+  constructor(pageId, x, y) {
+    const coordinate =
+      x === undefined || y === undefined
+        ? Page.idToCoordinate(pageId)
+        : { x, y };
     this.objectManager = undefined;
-    this.nextPage = undefined;
-    this.prevPage = undefined;
+    this.content = undefined;
     this.id = pageId;
+    this.x = coordinate.x;
+    this.y = coordinate.y;
+    this.leftPage = undefined;
+    this.rightPage = undefined;
+    this.upPage = undefined;
+    this.downPage = undefined;
     this.isLoad = false;
     this.isTempLoad = false;
   }
 
   /**
-   * 连接两页
-   * @param {Page | undefined} first 前一页
-   * @param {Page | undefined} second 后一页
+   * 回字形 id 转二维坐标
+   * @param {number} pageId - 页 id
+   * @returns {{x: number, y: number}}
    */
-  static connectTwoPage(first, second) {
-    if (first) first.nextPage = second;
-    if (second) second.prevPage = first;
+  static idToCoordinate(pageId) {
+    if (!Number.isInteger(pageId) || pageId <= 0) {
+      throw new Error("Invalid page id.");
+    }
+
+    if (pageId === 1) {
+      return { x: 0, y: 0 };
+    }
+
+    const radius = Math.ceil((Math.sqrt(pageId) - 1) / 2);
+    const maxId = (2 * radius + 1) ** 2;
+    const diff = maxId - pageId;
+    const edgeLength = radius * 2;
+
+    if (diff < edgeLength) {
+      return { x: radius - diff, y: -radius };
+    }
+    if (diff < edgeLength * 2) {
+      return {
+        x: -radius,
+        y: -radius + (diff - edgeLength),
+      };
+    }
+    if (diff < edgeLength * 3) {
+      return {
+        x: -radius + (diff - edgeLength * 2),
+        y: radius,
+      };
+    }
+    return {
+      x: radius,
+      y: radius - (diff - edgeLength * 3),
+    };
+  }
+
+  /**
+   * 二维坐标转回字形 id
+   * @param {number} x - 页二维坐标 x
+   * @param {number} y - 页二维坐标 y
+   * @returns {number}
+   */
+  static coordinateToId(x, y) {
+    if (!Number.isInteger(x) || !Number.isInteger(y)) {
+      throw new Error("Invalid page coordinate.");
+    }
+
+    const radius = Math.max(Math.abs(x), Math.abs(y));
+    if (radius === 0) {
+      return 1;
+    }
+
+    const maxId = (2 * radius + 1) ** 2;
+    let diff = 0;
+
+    if (y === -radius) {
+      diff = radius - x;
+    } else if (x === -radius) {
+      diff = radius * 2 + (y + radius);
+    } else if (y === radius) {
+      diff = radius * 4 + (x + radius);
+    } else if (x === radius) {
+      diff = radius * 6 + (radius - y);
+    } else {
+      throw new Error("Coordinate is not on a valid spiral ring.");
+    }
+
+    return maxId - diff;
+  }
+
+  /**
+   * 连接两页
+   * @param {Page | undefined} first - 第一页
+   * @param {Page | undefined} second - 第二页
+   * @param {"right" | "left" | "up" | "down"} [direction = "right"] - second 相对 first 的方向，默认左右相邻
+   * @description
+   * 该方法会在 first 和 second 之间建立双向连接。
+   * 仅更新页之间的引用关系，不会判断或修改页的二维坐标或 id。
+   */
+  static connectTwoPage(first, second, direction = "right") {
+    if (!first || !second) return;
+
+    const directions = {
+      right: ["rightPage", "leftPage"],
+      left: ["leftPage", "rightPage"],
+      up: ["upPage", "downPage"],
+      down: ["downPage", "upPage"],
+    };
+    const pair = directions[direction];
+    if (!pair) {
+      throw new Error("Invalid page connection direction.");
+    }
+
+    first[pair[0]] = second;
+    second[pair[1]] = first;
   }
 
   /**
@@ -113,6 +245,7 @@ class Page {
     // 未加载，升级为临时加载
     if (!this.isLoad) await this.loadTemp(boardRootPath);
     this.isTempLoad = false;
+    this.content = this.objectManager;
 
     // 升级为完整加载，加载对象
     // [todo] 加载 Objects
@@ -130,9 +263,21 @@ class Page {
   unload() {
     if (this.objectManager) this.objectManager.unload();
     this.objectManager = undefined;
+    this.content = undefined;
     this.isLoad = false;
     this.isTempLoad = false;
     return true;
+  }
+
+  /**
+   * 卸载临时加载页
+   * @returns {boolean} 是否成功卸载
+   */
+  unloadTemp() {
+    if (!this.isLoad || !this.isTempLoad) {
+      return false;
+    }
+    return this.unload();
   }
 
   /**
@@ -166,11 +311,10 @@ class Page {
     if (!this.objectManager) {
       this.objectManager = new PageObjectManager(this.id);
     }
+    this.content = this.objectManager;
     await this.objectManager.loadTierGraph(boardRootPath);
     return true;
   }
 }
 
-export {
-  Page,
-};
+export { Page };

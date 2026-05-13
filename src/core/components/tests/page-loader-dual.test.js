@@ -9,12 +9,9 @@ import { Page } from "../page.js";
 describe("Multiple PageLoader", () => {
   function createBoardHarness() {
     const board = new Board();
-    const page1 = new Page(1);
-    const page2 = new Page(2);
-    const page3 = new Page(3);
-
-    Page.connectTwoPage(page1, page2);
-    Page.connectTwoPage(page2, page3);
+    const page1 = new Page(6);
+    const page2 = new Page(1);
+    const page3 = new Page(2);
 
     for (const page of [page1, page2, page3]) {
       page.loadFull = jest.fn(function loadFull() {
@@ -46,11 +43,12 @@ describe("Multiple PageLoader", () => {
 
     board.rootPath = path.join(os.tmpdir(), "houndwhiteboard-board-test");
     board.pageMap = new Map([
-      [1, page1],
-      [2, page2],
-      [3, page3],
+      [6, page1],
+      [1, page2],
+      [2, page3],
     ]);
-    board.pageOrder = [1, 2, 3];
+    board.pageIds = new Set([6, 1, 2]);
+    board.pageOrder = [6, 1, 2];
     const pageLoader = board.createPageLoader();
 
     return { board, pageLoader, page1, page2, page3 };
@@ -63,7 +61,7 @@ describe("Multiple PageLoader", () => {
     pageLoader.expandBufferRightTempLoad();
 
     expect(page2.loadTemp).toHaveBeenCalledTimes(1);
-    expect(board.pageTemporaryLoadedCount.get(2)).toBe(1);
+    expect(board.pageTemporaryLoadedCount.get(1)).toBe(1);
     expect(pageLoader.getLoadedPages()).toEqual([page1, page2]);
   });
 
@@ -76,8 +74,8 @@ describe("Multiple PageLoader", () => {
 
     expect(page2.loadTemp).toHaveBeenCalledTimes(1);
     expect(page2.loadFull).toHaveBeenCalledTimes(1);
-    expect(board.pageTemporaryLoadedCount.has(2)).toBe(false);
-    expect(board.pageFullyLoadedCount.get(2)).toBe(1);
+    expect(board.pageTemporaryLoadedCount.has(1)).toBe(false);
+    expect(board.pageFullyLoadedCount.get(1)).toBe(1);
     expect(pageLoader.pageNow).toBe(page2);
   });
 
@@ -88,14 +86,14 @@ describe("Multiple PageLoader", () => {
     pageLoader.resetCurrentPage(page2);
     page2.isLoad = true;
     page2.isTempLoad = false;
-    board.pageFullyLoadedCount.set(2, 1);
+    board.pageFullyLoadedCount.set(1, 1);
 
     pageLoader.expandBufferRightTempLoad();
     pageLoader.forceMoveCurrentLeftFullLoad();
 
     expect(page3.unloadTemp).toHaveBeenCalledTimes(1);
     expect(pageLoader.getLoadedPages()).toEqual([page1, page2]);
-    expect(board.pageTemporaryLoadedCount.has(3)).toBe(false);
+    expect(board.pageTemporaryLoadedCount.has(2)).toBe(false);
   });
 
   test("多个 PageLoader 共用一页时，单个卸载请求不应真正卸载该页", () => {
@@ -108,12 +106,12 @@ describe("Multiple PageLoader", () => {
     pageLoader.expandBufferRightTempLoad();
     pageLoader2.expandBufferRightTempLoad();
 
-    expect(board.pageTemporaryLoadedCount.get(2)).toBe(2);
+    expect(board.pageTemporaryLoadedCount.get(1)).toBe(2);
 
     const firstShrink = pageLoader.shrinkBufferRight();
 
     expect(firstShrink).toBe(true);
-    expect(board.pageTemporaryLoadedCount.get(2)).toBe(1);
+    expect(board.pageTemporaryLoadedCount.get(1)).toBe(1);
     expect(page2.unloadTemp).not.toHaveBeenCalled();
     expect(page2.isLoad).toBe(true);
 
@@ -121,7 +119,7 @@ describe("Multiple PageLoader", () => {
 
     expect(secondShrink).toBe(true);
     expect(page2.unloadTemp).toHaveBeenCalledTimes(1);
-    expect(board.pageTemporaryLoadedCount.has(2)).toBe(false);
+    expect(board.pageTemporaryLoadedCount.has(1)).toBe(false);
     expect(page2.isLoad).toBe(false);
   });
 
@@ -135,8 +133,8 @@ describe("Multiple PageLoader", () => {
     pageLoader.expandBufferRightFullLoad();
     pageLoader2.expandBufferRightTempLoad();
 
-    expect(board.pageFullyLoadedCount.get(2)).toBe(1);
-    expect(board.pageTemporaryLoadedCount.get(2)).toBe(1);
+    expect(board.pageFullyLoadedCount.get(1)).toBe(1);
+    expect(board.pageTemporaryLoadedCount.get(1)).toBe(1);
     expect(page2.isTempLoad).toBe(false);
 
     const shrunk = pageLoader.shrinkBufferRight();
@@ -145,8 +143,8 @@ describe("Multiple PageLoader", () => {
     expect(page2.downgradeToTemp).toHaveBeenCalledTimes(1);
     expect(page2.unload).not.toHaveBeenCalled();
     expect(page2.unloadTemp).not.toHaveBeenCalled();
-    expect(board.pageFullyLoadedCount.has(2)).toBe(false);
-    expect(board.pageTemporaryLoadedCount.get(2)).toBe(1);
+    expect(board.pageFullyLoadedCount.has(1)).toBe(false);
+    expect(board.pageTemporaryLoadedCount.get(1)).toBe(1);
     expect(page2.isLoad).toBe(true);
     expect(page2.isTempLoad).toBe(true);
   });

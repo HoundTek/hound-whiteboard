@@ -136,19 +136,15 @@ class Monitor {
     const pageHeight = this.pageHeight;
     if (pageWidth <= 0 || pageHeight <= 0) return null;
 
-    // 由世界 X 确定落在哪一页（页 n 占 [(n-1)*pageWidth, n*pageWidth)，0-indexed）
-    const pageIndex = Math.floor(worldX / pageWidth);
-    const pages = this.board.pageOrder;
-    if (!pages || pageIndex < 0 || pageIndex >= pages.length) return null;
+    const pageX = Math.floor(worldX / pageWidth);
+    const pageY = Math.floor(worldY / pageHeight);
+    const page = this.board.getPageByCoordinate?.(pageX, pageY);
+    if (!page) return null;
 
-    // 页内坐标（X 由 floor 除法保证在 [0, pageWidth)，无需额外检查）
-    const pageLocalX = worldX - pageIndex * pageWidth;
-    const pageLocalY = worldY;
+    const pageLocalX = worldX - pageX * pageWidth;
+    const pageLocalY = worldY - pageY * pageHeight;
 
-    // 纵向边界检查
-    if (pageLocalY < 0 || pageLocalY >= pageHeight) return null;
-
-    return { pageId: pages[pageIndex], x: pageLocalX, y: pageLocalY };
+    return { pageId: page.id, x: pageLocalX, y: pageLocalY };
   }
 
   /**
