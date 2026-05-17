@@ -19,7 +19,14 @@ describe("ActiveObjectManager/pickup", () => {
   });
 
   function createPage(id) {
-    const page = new Page(id);
+    const page = Page.fromId(id);
+    page.isLoad = true;
+    page.isTempLoad = false;
+    return page;
+  }
+
+  function createPageAt(x, y) {
+    const page = Page.fromCoordinate(x, y);
     page.isLoad = true;
     page.isTempLoad = false;
     return page;
@@ -28,6 +35,16 @@ describe("ActiveObjectManager/pickup", () => {
   function pageConnect(pageA, pageB) {
     pageA.rightPage = pageB;
     pageB.leftPage = pageA;
+  }
+
+  function setObjectCoverage(pages, objectIds) {
+    const pageIds = pages.map((page) => page.id);
+
+    for (const page of pages) {
+      for (const objectId of objectIds) {
+        page.objectManager.setObjectCoverPages(objectId, pageIds);
+      }
+    }
   }
 
   describe("选取无跨页对象的子图", () => {
@@ -107,8 +124,7 @@ describe("ActiveObjectManager/pickup", () => {
       page1.objectManager.staticGraph = DirectedGraph.parse(twoPageData[0]);
       page2.objectManager.staticGraph = DirectedGraph.parse(twoPageData[1]);
 
-      page1.objectManager.coverRightPage = new Set([15, 17, 18]);
-      page2.objectManager.coverLeftPage = new Set([15, 17, 18]);
+      setObjectCoverage([page1, page2], [15, 17, 18]);
     });
 
     test("应能选取单对象为起点且含跨页对象的子图", () => {
@@ -165,24 +181,24 @@ describe("ActiveObjectManager/pickup", () => {
   });
 
   describe("选取含多页的跨页对象链的子图", () => {
-    let page1 = createPage(1);
-    let page2 = createPage(2);
-    let page3 = createPage(3);
-    let page4 = createPage(4);
-    let page5 = createPage(5);
+    let page1 = createPageAt(0, 0);
+    let page2 = createPageAt(1, 0);
+    let page3 = createPageAt(2, 0);
+    let page4 = createPageAt(3, 0);
+    let page5 = createPageAt(4, 0);
 
     beforeEach(() => {
-      page1 = createPage(1);
-      page2 = createPage(2);
-      page3 = createPage(3);
-      page4 = createPage(4);
-      page5 = createPage(5);
+      page1 = createPageAt(0, 0);
+      page2 = createPageAt(1, 0);
+      page3 = createPageAt(2, 0);
+      page4 = createPageAt(3, 0);
+      page5 = createPageAt(4, 0);
 
-      page1.objectManager = new PageObjectManager(1);
-      page2.objectManager = new PageObjectManager(2);
-      page3.objectManager = new PageObjectManager(3);
-      page4.objectManager = new PageObjectManager(4);
-      page5.objectManager = new PageObjectManager(5);
+      page1.objectManager = new PageObjectManager(page1.id);
+      page2.objectManager = new PageObjectManager(page2.id);
+      page3.objectManager = new PageObjectManager(page3.id);
+      page4.objectManager = new PageObjectManager(page4.id);
+      page5.objectManager = new PageObjectManager(page5.id);
 
       page1.objectManager.staticGraph = DirectedGraph.parse(multiPageData[0]);
       page2.objectManager.staticGraph = DirectedGraph.parse(multiPageData[1]);
@@ -190,14 +206,10 @@ describe("ActiveObjectManager/pickup", () => {
       page4.objectManager.staticGraph = DirectedGraph.parse(multiPageData[3]);
       page5.objectManager.staticGraph = DirectedGraph.parse(multiPageData[4]);
 
-      page1.objectManager.coverRightPage = new Set([3, 18]);
-      page2.objectManager.coverLeftPage = new Set([3, 18]);
-      page2.objectManager.coverRightPage = new Set([5, 16]);
-      page3.objectManager.coverLeftPage = new Set([5, 16]);
-      page3.objectManager.coverRightPage = new Set([7, 14]);
-      page4.objectManager.coverLeftPage = new Set([7, 14]);
-      page4.objectManager.coverRightPage = new Set([9, 12]);
-      page5.objectManager.coverLeftPage = new Set([9, 12]);
+      setObjectCoverage([page1, page2], [3, 18]);
+      setObjectCoverage([page2, page3], [5, 16]);
+      setObjectCoverage([page3, page4], [7, 14]);
+      setObjectCoverage([page4, page5], [9, 12]);
 
       pageConnect(page1, page2);
       pageConnect(page2, page3);
@@ -206,14 +218,14 @@ describe("ActiveObjectManager/pickup", () => {
     });
 
     test("应能选取多对象为起点且含多页跨页对象链的子图", () => {
-      const pickup2n19 = aom.pickup(
+      const pickup6n19 = aom.pickup(
         new Set([
           { id: 6, page: page3 },
           { id: 19, page: page1 },
         ]),
       );
 
-      const expected2n19 = DirectedGraph.parse([
+      const expected6n19 = DirectedGraph.parse([
         [6, [7]],
         [7, [8]],
         [8, [9]],
@@ -231,7 +243,9 @@ describe("ActiveObjectManager/pickup", () => {
         [20, []],
       ]);
 
-      expect(pickup2n19.equals(expected2n19)).toBe(true);
+      console.log(pickup6n19.toString());
+
+      expect(pickup6n19.equals(expected6n19)).toBe(true);
     });
   });
 

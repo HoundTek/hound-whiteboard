@@ -2,14 +2,15 @@
 
 本文档提供 `Page` 的概述。
 
-`Page` 是单页生命周期管理单元，负责维护页的二维位置、唯一 id，以及协调本页对象管理器的加载与卸载。
+`Page` 是单页生命周期管理单元，负责维护页 id、由 id 推导出的二维坐标，以及协调本页对象管理器的加载与卸载。
 
 ## 页面类职责
 
 - 管理页对象管理器 `objectManager`
-- 维护页的二维坐标：`x` 与 `y`
 - 维护页唯一标识：`id`
+- 维护由 `id` 推导出的二维坐标：`x` 与 `y`
 - 提供完整加载、临时加载、卸载、临时卸载接口
+- 提供页身份合法性校验接口
 
 ## 核心字段
 
@@ -22,18 +23,21 @@
 | `isLoad`        | 是否已加载     | `boolean`           |
 | `isTempLoad`    | 是否为临时加载 | `boolean`           |
 
-## 页坐标与 id
+## 页 id 与坐标
 
-当前页以二维坐标为主定位方式，`id` 只是唯一标识。当前实现仍提供坐标与 id 的双向换算：
+当前实现以页 id 作为页实体的主描述。二维坐标是由 id 推导出来的空间属性：
 
 - `Page.idToCoordinate(id)`：将正整数页 id 换算为二维坐标
 - `Page.coordinateToId(x, y)`：将二维坐标换算为页 id
+- `Page.isValidPageIdentity(id, x, y)`：判断页 id 与坐标是否匹配
+- `page.isValid()`：判断页实例自身是否合法
 
 其中：
 
 - `1` 对应原点 `(0, 0)`
 - 后续 id 按回字形向外扩展
 - 同一个坐标只对应唯一一个页 id
+- 同一个页 id 也只对应唯一一组坐标
 
 ## 加载模型
 
@@ -86,16 +90,17 @@
 
 ## API
 
-| 名称                           | 描述                     | 类型                                     |
-| ------------------------------ | ------------------------ | ---------------------------------------- |
-| `idToCoordinate(id)`           | id 转二维坐标            | `number -> { x: number, y: number }`     |
-| `coordinateToId(x, y)`         | 二维坐标转 id            | `number -> number -> number`             |
-| `addObject(obj, below, above)` | 按上下关系加入对象       | `number -> number[] -> number[] -> void` |
-| `loadFull(boardRootPath)`      | 完整加载页面             | `string -> Promise<boolean>`             |
-| `loadTemp(boardRootPath)`      | 临时加载页面             | `string -> Promise<boolean>`             |
-| `downgradeToTemp()`            | 从完整加载降级为临时加载 | `void -> boolean`                        |
-| `unload()`                     | 完整卸载页面             | `void -> void`                           |
-| `unloadTemp()`                 | 临时卸载页面             | `void -> boolean`                        |
+| 名称                            | 描述                     | 类型                                     |
+| ------------------------------- | ------------------------ | ---------------------------------------- |
+| `idToCoordinate(id)`            | id 转二维坐标            | `number -> { x: number, y: number }`     |
+| `coordinateToId(x, y)`          | 二维坐标转 id            | `number -> number -> number`             |
+| `isValidPageIdentity(id, x, y)` | 判断页 id 与坐标是否匹配 | `number -> number -> number -> boolean`  |
+| `addObject(obj, below, above)`  | 按上下关系加入对象       | `number -> number[] -> number[] -> void` |
+| `loadFull(boardRootPath)`       | 完整加载页面             | `string -> Promise<boolean>`             |
+| `loadTemp(boardRootPath)`       | 临时加载页面             | `string -> Promise<boolean>`             |
+| `downgradeToTemp()`             | 从完整加载降级为临时加载 | `void -> boolean`                        |
+| `unload()`                      | 完整卸载页面             | `void -> void`                           |
+| `unloadTemp()`                  | 临时卸载页面             | `void -> boolean`                        |
 
 ## 实现状态
 

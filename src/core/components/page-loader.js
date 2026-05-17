@@ -33,8 +33,8 @@ let pageLoaderIdCounter = 0;
 class PageLoader {
   /**
    * 在该管理器中已加载的页
-   * @description 以页坐标为键保存当前缓冲区中的页实例。
-   * @type {Map<string, Page>}
+   * @description 以页 id 为键保存当前缓冲区中的页实例。
+   * @type {Map<number, Page>}
    */
   pagesLoaded;
 
@@ -536,7 +536,8 @@ class PageLoader {
    * @private
    */
   #getPageKey(page) {
-    return `${page.x},${page.y}`;
+    page.assertValid();
+    return page.id;
   }
 
   /**

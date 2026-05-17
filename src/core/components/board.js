@@ -217,8 +217,7 @@ class Board {
     if (!this.hasPageId(pageId)) return undefined;
     let page = this.pageMap.get(pageId);
     if (!page) {
-      const coordinate = Page.idToCoordinate(pageId);
-      page = new Page(pageId, coordinate.x, coordinate.y);
+      page = Page.fromId(pageId);
       this.pageMap.set(pageId, page);
     }
 
@@ -329,31 +328,6 @@ class Board {
   }
 
   /**
-   * 添加新页
-   * @todo
-   * @returns {Promise<Page>}
-   */
-  async appendPage(templateId) {
-    const pageId = this.pageCounterPool.generate();
-    const coordinate = Page.idToCoordinate(pageId);
-    let page = new Page(pageId, coordinate.x, coordinate.y);
-
-    await boardFileOperateBridge.createPageStorage(this.rootPath, page.id);
-
-    // [todo] 初始化页内容（如模板等）
-    // [todo] 模板现在还没有实现，先不管 templateId 参数
-
-    // 加入页映射和链表
-    this.pageMap.set(page.id, page);
-    this.pageIds.add(page.id);
-    this.pageOrder.push(page.id);
-    await this.#persistPageConnection();
-
-    // [todo] 加入 Undotree
-    return page;
-  }
-
-  /**
    * 加载白板
    * @description 加载白板的 meta、config 以及页等信息
    * @param {string} rootPath - 白板根目录
@@ -439,12 +413,6 @@ class Board {
     });
 
     // [todo] 创建文件结构
-    // 创建页
-    const firstPage = await board.appendPage(boardInfo.templateID);
-    await boardFileOperateBridge.writeTrace(rootPath.getPath(), {
-      onPage: firstPage.id,
-      offset: 0,
-    });
 
     return board;
   }

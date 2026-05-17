@@ -173,7 +173,8 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 行为：
 
 - 通过 `loadPageObjects(...)` 读取 `{root}/objects/page{pageId}/` 下对象 JSON
-- 渲染侧逐个 `BasicObject.parse(...)` 并写入 `pageObjects`
+- 渲染侧逐个反序列化对象 JSON 并写入 `pageObjects`
+- 单个对象 JSON 以 `ownerPageId` 描述对象归属页 id
 
 ### 4. 未完成项
 
@@ -182,6 +183,11 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 - `saveObjects(boardRootPath)`：通过 `savePageObjects(...)` 回写该页对象
 - `unloadObjects()`：清理内存中的 `pageObjects`
 - `unload()`：统一清理层叠图与对象映射
+
+其中对象持久化协议遵循：
+
+- 页目录与页层叠图路径使用页 id
+- 对象 JSON 内部使用 `ownerPageId` 表示对象归属页 id
 
 ## Page 与文件操作关系
 

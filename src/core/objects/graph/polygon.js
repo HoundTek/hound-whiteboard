@@ -25,12 +25,12 @@ class PolygonObject extends GraphObject {
    * 创建一个新的多边形对象
    * @param {Vector} p - 多边形逻辑左上角的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerPageId - 对象归属页的 id
    * @param {Vector[]} points - 多边形各顶点相对其左上角的相对位置
    * @constructor
    */
-  constructor(p, id, pageId, points) {
-    super(p, id, pageId);
+  constructor(p, id, ownerPageId, points) {
+    super(p, id, ownerPageId);
     if (points) {
       this.setPoints(points);
     }
@@ -178,7 +178,7 @@ class PolygonObject extends GraphObject {
     return {
       ...super.serialize(),
       type: "PolygonObject",
-      points: this.points.map(p => p.serialize()),
+      points: this.points.map((p) => p.serialize()),
       color: this.color,
     };
   }
@@ -190,7 +190,7 @@ class PolygonObject extends GraphObject {
     let obj = new PolygonObject(
       Vector.parse(data.position),
       data.id,
-      data.pageId,
+      data.ownerPageId,
       data.points.map((p) => Vector.parse(p)),
     );
     obj.setTransform(Matrix.parse(data.transform));
@@ -199,6 +199,4 @@ class PolygonObject extends GraphObject {
   }
 }
 
-export {
-  PolygonObject,
-};
+export { PolygonObject };

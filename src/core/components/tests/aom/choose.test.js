@@ -16,7 +16,7 @@ describe("ActiveObjectManager/choose", () => {
   let page = createPage(1);
 
   function createPage(id) {
-    const page = new Page(id);
+    const page = Page.fromId(id);
     page.isLoad = true;
     page.isTempLoad = false;
     return page;

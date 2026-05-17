@@ -10,6 +10,7 @@ import { Queue } from "../utils/queue.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { Page } from "./page.js";
 import { PageLoader } from "./page-loader.js";
+import { PageObjectManager } from "./page-object-manager.js";
 
 /**
  * 层类
@@ -126,13 +127,40 @@ class ActiveObjectManager {
       pageLoader.resetCurrentPage(pge);
 
       /**
+       * 将页加载器移动到指定坐标
+       * @param {number} targetX - 目标页坐标 x
+       * @param {number} targetY - 目标页坐标 y
+       * @returns {boolean}
+       */
+      function movePageLoaderTo(targetX, targetY) {
+        while (pageLoader.pageNow && pageLoader.pageNow.x < targetX) {
+          if (!pageLoader.forceMoveCurrentRightTempLoad()) return false;
+        }
+        while (pageLoader.pageNow && pageLoader.pageNow.x > targetX) {
+          if (!pageLoader.forceMoveCurrentLeftTempLoad()) return false;
+        }
+        while (pageLoader.pageNow && pageLoader.pageNow.y < targetY) {
+          if (!pageLoader.forceMoveCurrentUpTempLoad()) return false;
+        }
+        while (pageLoader.pageNow && pageLoader.pageNow.y > targetY) {
+          if (!pageLoader.forceMoveCurrentDownTempLoad()) return false;
+        }
+
+        return (
+          pageLoader.pageNow?.x === targetX && pageLoader.pageNow?.y === targetY
+        );
+      }
+
+      /**
        * DFS 遍历
        * @description 由于我们的图是薄薄的一层水，所以此处 DFS 不必担心栈溢出的问题。
        * @param {number} node - 对象 id
        */
       function dfs(node) {
+        const pageNow = pageLoader.pageNow;
+        if (!pageNow?.objectManager) return;
         const neighbors =
-          pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
+          pageNow.objectManager.staticGraph.neighborsUnsafe(node);
 
         // 该页对象
         if (neighbors) {
@@ -146,31 +174,23 @@ class ActiveObjectManager {
           }
         }
 
-        // 跨左页
-        if (pageLoader.pageNow.objectManager.coverLeftPage.has(node)) {
-          pageLoader.forceMoveCurrentLeftTempLoad();
-          const neighborsLeft =
-            pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
-          if (neighborsLeft) {
-            for (const next of neighborsLeft) {
-              if (!visit.has(next)) {
-                visit.add(next);
-                graph.addNodeUnsafe(next);
-                dfs(next);
-              }
-              graph.addEdgeUnsafe(node, next);
-            }
-          }
-          pageLoader.forceMoveCurrentRightTempLoad();
-        }
+        const currentPageId = pageNow.id;
+        const coveredPages = pageNow.objectManager.getObjectCoverPages(node);
+        for (const pageId of coveredPages) {
+          if (pageId === currentPageId) continue;
 
-        // 跨右页
-        if (pageLoader.pageNow.objectManager.coverRightPage.has(node)) {
-          pageLoader.forceMoveCurrentRightTempLoad();
-          const neighborsRight =
+          const originalX = pageLoader.pageNow.x;
+          const originalY = pageLoader.pageNow.y;
+          const { x: targetX, y: targetY } = Page.idToCoordinate(pageId);
+          if (!movePageLoaderTo(targetX, targetY)) {
+            movePageLoaderTo(originalX, originalY);
+            continue;
+          }
+
+          const neighborsOnTarget =
             pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
-          if (neighborsRight) {
-            for (const next of neighborsRight) {
+          if (neighborsOnTarget) {
+            for (const next of neighborsOnTarget) {
               if (!visit.has(next)) {
                 visit.add(next);
                 graph.addNodeUnsafe(next);
@@ -179,7 +199,8 @@ class ActiveObjectManager {
               graph.addEdgeUnsafe(node, next);
             }
           }
-          pageLoader.forceMoveCurrentLeftTempLoad();
+
+          movePageLoaderTo(originalX, originalY);
         }
       } // function dfs ends here
 
@@ -490,7 +511,4 @@ class ActiveObjectManager {
   }
 }
 
-export {
-  ActiveObjectManager,
-  Layer,
-};
+export { ActiveObjectManager, Layer };

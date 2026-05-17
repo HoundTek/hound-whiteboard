@@ -8,63 +8,85 @@ class MockPageLoader {
   moveCurrentRight() {
     if (!this.pageNow || !this.pageNow.rightPage) return;
     this.pageNow = this.pageNow.rightPage;
+    return true;
   }
 
   forceMoveCurrentRightTempLoad() {
-    this.moveCurrentRight();
+    return this.moveCurrentRight();
   }
 
   forceMoveCurrentRightFullLoad() {
-    this.moveCurrentRight();
+    return this.moveCurrentRight();
   }
 
   moveCurrentLeft() {
     if (!this.pageNow || !this.pageNow.leftPage) return;
     this.pageNow = this.pageNow.leftPage;
+    return true;
   }
 
-  moveCurrentUp() {}
+  moveCurrentUp() {
+    return false;
+  }
 
-  moveCurrentDown() {}
+  moveCurrentDown() {
+    return false;
+  }
 
   forceMoveCurrentLeftTempLoad() {
-    this.moveCurrentLeft();
+    return this.moveCurrentLeft();
   }
 
   forceMoveCurrentLeftFullLoad() {
-    this.moveCurrentLeft();
+    return this.moveCurrentLeft();
+  }
+
+  forceMoveCurrentUpTempLoad() {
+    return this.moveCurrentUp();
+  }
+
+  forceMoveCurrentUpFullLoad() {
+    return this.moveCurrentUp();
+  }
+
+  forceMoveCurrentDownTempLoad() {
+    return this.moveCurrentDown();
+  }
+
+  forceMoveCurrentDownFullLoad() {
+    return this.moveCurrentDown();
   }
 
   expandBufferRightTempLoad() {
-    this.moveCurrentRight();
+    return this.moveCurrentRight();
   }
 
   expandBufferRightFullLoad() {
-    this.moveCurrentRight();
+    return this.moveCurrentRight();
   }
 
   expandBufferLeftTempLoad() {
-    this.moveCurrentLeft();
+    return this.moveCurrentLeft();
   }
 
   expandBufferLeftFullLoad() {
-    this.moveCurrentLeft();
+    return this.moveCurrentLeft();
   }
 
   expandBufferUpTempLoad() {
-    this.moveCurrentUp();
+    return this.moveCurrentUp();
   }
 
   expandBufferUpFullLoad() {
-    this.moveCurrentUp();
+    return this.moveCurrentUp();
   }
 
   expandBufferDownTempLoad() {
-    this.moveCurrentDown();
+    return this.moveCurrentDown();
   }
 
   expandBufferDownFullLoad() {
-    this.moveCurrentDown();
+    return this.moveCurrentDown();
   }
 
   shrinkBufferRight() {
@@ -94,6 +116,4 @@ class MockPageLoader {
   }
 }
 
-export {
-  MockPageLoader,
-};
+export { MockPageLoader };

@@ -18,11 +18,11 @@ class TextObject extends OneDimensionObject {
    * 创建一个新的文本对象
    * @param {Vector} p - 文本左上角的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerPageId - 对象归属页的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerPageId) {
+    super(p, id, ownerPageId);
   }
 
   /**
@@ -103,7 +103,7 @@ class TextObject extends OneDimensionObject {
       0,
       0,
       this.ihatLength,
-      this.textProperty.size * 1.2 * this.dividedText.length
+      this.textProperty.size * 1.2 * this.dividedText.length,
     );
   }
 
@@ -132,7 +132,7 @@ class TextObject extends OneDimensionObject {
       this.transform.c,
       this.transform.d,
       this.position.x,
-      this.position.y
+      this.position.y,
     );
     ctx.fillStyle = this.textProperty.color;
     ctx.font = `${this.textProperty.size}px ${this.textProperty.font}`;
@@ -146,7 +146,7 @@ class TextObject extends OneDimensionObject {
         this.rectangle.a,
         this.rectangle.b,
         this.rectangle.c,
-        this.rectangle.d
+        this.rectangle.d,
       );
     }
     ctx.restore();
@@ -170,7 +170,7 @@ class TextObject extends OneDimensionObject {
     let obj = new TextObject(
       Vector.parse(data.position),
       data.id,
-      data.pageId
+      data.ownerPageId,
     );
     obj.setTransform(Matrix.parse(data.transform));
     obj.setText(data.text);
@@ -180,6 +180,4 @@ class TextObject extends OneDimensionObject {
   }
 }
 
-export {
-  TextObject,
-};
+export { TextObject };

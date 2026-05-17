@@ -9,9 +9,9 @@ import { Page } from "../page.js";
 describe("Multiple PageLoader", () => {
   function createBoardHarness() {
     const board = new Board();
-    const page1 = new Page(6);
-    const page2 = new Page(1);
-    const page3 = new Page(2);
+    const page1 = Page.fromId(6);
+    const page2 = Page.fromId(1);
+    const page3 = Page.fromId(2);
 
     for (const page of [page1, page2, page3]) {
       page.loadFull = jest.fn(function loadFull() {

@@ -5,9 +5,9 @@ import { EventBus } from "../../utils/event-bus.js";
 
 describe("PageLoader", () => {
   function createPages() {
-    const page1 = new Page(1, 0, 0);
-    const page2 = new Page(2, 1, 0);
-    const page3 = new Page(3, 2, 0);
+    const page1 = Page.fromCoordinate(0, 0);
+    const page2 = Page.fromCoordinate(1, 0);
+    const page3 = Page.fromCoordinate(2, 0);
 
     Page.connectTwoPage(page1, page2);
     Page.connectTwoPage(page2, page3);
@@ -29,6 +29,8 @@ describe("PageLoader", () => {
     expect(changed).toBe(true);
     expect(loader.pageNow).toBe(page2);
     expect(loader.getLoadedPages()).toEqual([page1, page2]);
+    expect(loader.pagesLoaded.has(page1.id)).toBe(true);
+    expect(loader.pagesLoaded.has(page2.id)).toBe(true);
     expect(loadHandler).toHaveBeenCalledWith(
       expect.objectContaining({
         page: page2,
@@ -129,8 +131,8 @@ describe("PageLoader", () => {
 
   test("forceMoveCurrentUpTempLoad 应该支持二维邻页导航", () => {
     const bus = new EventBus();
-    const page1 = new Page(1);
-    const pageUp = new Page(4);
+    const page1 = Page.fromId(1);
+    const pageUp = Page.fromId(4);
     const loadHandler = jest.fn();
     const loader = new PageLoader(3, bus, undefined, (page, direction) => {
       if (page === page1 && direction === "up") return pageUp;
@@ -158,10 +160,10 @@ describe("PageLoader", () => {
 
   test("二维缓冲区向右扩展时应加载整条右边界", () => {
     const bus = new EventBus();
-    const page1 = new Page(1, 0, 0);
-    const pageUp = new Page(4, 0, 1);
-    const pageRight = new Page(2, 1, 0);
-    const pageUpRight = new Page(3, 1, 1);
+    const page1 = Page.fromCoordinate(0, 0);
+    const pageUp = Page.fromCoordinate(0, 1);
+    const pageRight = Page.fromCoordinate(1, 0);
+    const pageUpRight = Page.fromCoordinate(1, 1);
     const loadHandler = jest.fn();
     const pages = new Map([
       ["0,0", page1],

@@ -88,16 +88,12 @@ class Page {
   isTempLoad;
 
   /**
-   *
+   * 创建页面实例
+   * @constructor
    * @param {number} pageId - 页 id
-   * @param {number} [x] - 页二维坐标 x
-   * @param {number} [y] - 页二维坐标 y
    */
-  constructor(pageId, x, y) {
-    const coordinate =
-      x === undefined || y === undefined
-        ? Page.idToCoordinate(pageId)
-        : { x, y };
+  constructor(pageId) {
+    const coordinate = Page.idToCoordinate(pageId);
     this.objectManager = undefined;
     this.content = undefined;
     this.id = pageId;
@@ -112,9 +108,29 @@ class Page {
   }
 
   /**
+   * 通过页 id 创建页面实例
+   * @param {number} pageId - 页 id
+   * @returns {Page}
+   */
+  static fromId(pageId) {
+    return new Page(pageId);
+  }
+
+  /**
+   * 通过二维坐标创建页面实例
+   * @param {number} x - 页二维坐标 x
+   * @param {number} y - 页二维坐标 y
+   * @returns {Page}
+   */
+  static fromCoordinate(x, y) {
+    const pageId = Page.coordinateToId(x, y);
+    return new Page(pageId);
+  }
+
+  /**
    * 回字形 id 转二维坐标
    * @param {number} pageId - 页 id
-   * @returns {{x: number, y: number}}
+   * @returns {{x: number, y: number}} 页二维坐标
    */
   static idToCoordinate(pageId) {
     if (!Number.isInteger(pageId) || pageId <= 0) {
@@ -183,6 +199,45 @@ class Page {
     }
 
     return maxId - diff;
+  }
+
+  /**
+   * 判断页 id 与二维坐标是否匹配
+   * @param {number} pageId - 页 id
+   * @param {number} x - 页二维坐标 x
+   * @param {number} y - 页二维坐标 y
+   * @returns {boolean}
+   */
+  static isValidPageIdentity(pageId, x, y) {
+    if (
+      !Number.isInteger(pageId) ||
+      pageId <= 0 ||
+      !Number.isInteger(x) ||
+      !Number.isInteger(y)
+    ) {
+      return false;
+    }
+
+    const coordinate = Page.idToCoordinate(pageId);
+    return coordinate.x === x && coordinate.y === y;
+  }
+
+  /**
+   * 判断当前页是否合法
+   * @returns {boolean}
+   */
+  isValid() {
+    return Page.isValidPageIdentity(this.id, this.x, this.y);
+  }
+
+  /**
+   * 断言当前页合法
+   * @throws {Error} 若当前页不合法，则抛出错误
+   */
+  assertValid() {
+    if (!this.isValid()) {
+      throw new Error("Invalid page identity.");
+    }
   }
 
   /**

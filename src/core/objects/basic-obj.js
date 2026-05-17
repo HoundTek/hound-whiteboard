@@ -25,10 +25,22 @@ class BasicObject {
   id;
 
   /**
-   * 对象所在的页 id
+   * 对象归属页 id
    * @type {number}
    */
-  pageId;
+  ownerPageId;
+
+  /**
+   * 对象所在页 id 的兼容访问别名
+   * @type {number}
+   */
+  get pageId() {
+    return this.ownerPageId;
+  }
+
+  set pageId(pageId) {
+    this.ownerPageId = pageId;
+  }
 
   /**
    * 对象的位置
@@ -125,13 +137,13 @@ class BasicObject {
    * 创建一个新的基础对象
    * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerPageId - 对象归属页的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
+  constructor(p, id, ownerPageId) {
     this.position = p;
     this.id = id;
-    this.pageId = pageId;
+    this.ownerPageId = ownerPageId;
   }
 
   /**
@@ -172,10 +184,10 @@ class BasicObject {
   serialize() {
     return {
       id: this.id,
-      pageId: this.pageId,
+      ownerPageId: this.ownerPageId,
       position: this.position.serialize(),
       transform: this.transform.serialize(),
-    }
+    };
   }
 
   /**
@@ -192,6 +204,4 @@ class BasicObject {
   }
 }
 
-export {
-  BasicObject,
-};
+export { BasicObject };

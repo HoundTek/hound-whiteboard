@@ -20,6 +20,17 @@ describe("Board page grid", () => {
     }
   });
 
+  test("Page 应能判断 id 与坐标是否匹配", () => {
+    const validPage = Page.fromId(3);
+    const invalidPage = Page.fromId(3);
+    invalidPage.id = -1; // 强制设置非法 id
+
+    expect(Page.isValidPageIdentity(3, 1, 1)).toBe(true);
+    expect(Page.isValidPageIdentity(3, 2, 0)).toBe(false);
+    expect(validPage.isValid()).toBe(true);
+    expect(invalidPage.isValid()).toBe(false);
+  });
+
   test("Board 应按需实例化当前页与其周围页", () => {
     const board = new Board();
     board.pageOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9];

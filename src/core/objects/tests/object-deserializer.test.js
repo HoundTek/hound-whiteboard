@@ -18,6 +18,8 @@ describe("object deserializer", () => {
     const restored = deserialize(serialized);
 
     expect(restored).toBeInstanceOf(PolygonObject);
+    expect(serialized.ownerPageId).toBe(5);
+    expect(serialized.pageId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });
 
@@ -36,6 +38,8 @@ describe("object deserializer", () => {
     const restored = deserialize(JSON.stringify(serialized));
 
     expect(restored).toBeInstanceOf(TextObject);
+    expect(serialized.ownerPageId).toBe(7);
+    expect(serialized.pageId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });
 
@@ -49,7 +53,28 @@ describe("object deserializer", () => {
     const restored = deserialize(serialized);
 
     expect(restored).toBeInstanceOf(StrokeObject);
+    expect(serialized.ownerPageId).toBe(11);
+    expect(serialized.pageId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
+  });
+
+  test("应能兼容旧的 pageId 字段反序列化", () => {
+    const restored = deserialize({
+      type: "StrokeObject",
+      id: 9,
+      pageId: 11,
+      position: { x: 1, y: 2 },
+      transform: { a: 2, b: 0, c: 0, d: 2 },
+      points: [
+        { x: 0, y: 0 },
+        { x: 5, y: 2 },
+      ],
+      color: "#00aaee",
+    });
+
+    expect(restored).toBeInstanceOf(StrokeObject);
+    expect(restored.ownerPageId).toBe(11);
+    expect(restored.serialize().ownerPageId).toBe(11);
   });
 
   test("未知类型应抛出错误", () => {

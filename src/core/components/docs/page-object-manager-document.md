@@ -18,14 +18,22 @@
 
 ## 核心字段
 
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `staticGraph` | 页静态层叠图 | `DirectedGraph` |
-| `coverLeftPage` | 向左跨页对象集合 | `Set<number>` |
-| `coverRightPage` | 向右跨页对象集合 | `Set<number>` |
-| `pageObjects` | 页对象映射 | `Map<number, BasicObject>` |
+| 名称               | 描述               | 类型                       |
+| ------------------ | ------------------ | -------------------------- |
+| `staticGraph`      | 页静态层叠图       | `DirectedGraph`            |
+| `objectCoverPages` | 对象覆盖页 id 索引 | `Map<number, Set<number>>` |
+| `pageObjects`      | 页对象映射         | `Map<number, BasicObject>` |
 
-其中 `coverLeftPage` 和 `coverRightPage` 用于标记对象是否与邻页存在关联，以支持跨页拾取。
+其中：
+
+- `staticGraph` 记录本页可见的对象层叠关系
+- `objectCoverPages` 记录“某对象覆盖到哪些页 id”
+- `pageObjects` 保存本页拥有所有权的对象实例
+
+对象持久化时，页描述也统一使用页 id：
+
+- 页自身通过 `pageId` 决定目录与层叠图文件位置
+- 对象 JSON 内通过 `ownerPageId` 表示该对象归属哪一页
 
 ## 层叠图接口
 
@@ -53,15 +61,17 @@
 
 ## API
 
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `loadTierGraph(boardRootPath)` | 加载页层叠图 | `string -> Promise<void>` |
-| `saveTierGraph(boardRootPath)` | 保存页层叠图 | `string -> Promise<void>` |
-| `unloadTierGraph()` | 卸载页层叠图 | `void -> void` |
-| `loadObjects(boardRootPath)` | 加载页对象 | `string -> Promise<void>` |
-| `saveObjects(boardRootPath)` | 保存页对象 | `string -> Promise<void>` |
-| `unloadObjects()` | 卸载页对象 | `void -> void` |
-| `unload()` | 卸载本页全部数据 | `void -> void` |
+| 名称                                     | 描述                   | 类型                                 |
+| ---------------------------------------- | ---------------------- | ------------------------------------ |
+| `setObjectCoverPages(objectId, pageIds)` | 设置对象覆盖页 id 集合 | `number -> Iterable<number> -> void` |
+| `getObjectCoverPages(objectId)`          | 获取对象覆盖页 id 集合 | `number -> Set<number>`              |
+| `loadTierGraph(boardRootPath)`           | 加载页层叠图           | `string -> Promise<void>`            |
+| `saveTierGraph(boardRootPath)`           | 保存页层叠图           | `string -> Promise<void>`            |
+| `unloadTierGraph()`                      | 卸载页层叠图           | `void -> void`                       |
+| `loadObjects(boardRootPath)`             | 加载页对象             | `string -> Promise<void>`            |
+| `saveObjects(boardRootPath)`             | 保存页对象             | `string -> Promise<void>`            |
+| `unloadObjects()`                        | 卸载页对象             | `void -> void`                       |
+| `unload()`                               | 卸载本页全部数据       | `void -> void`                       |
 
 ## 与其它组件的关系
 
@@ -71,5 +81,5 @@
 
 ## 实现状态
 
-- 已实现：数据结构定义、层叠图加载/保存、对象读写、统一卸载入口。
+- 已实现：数据结构定义、按页 id 的对象覆盖索引、层叠图加载/保存、对象读写、统一卸载入口。
 - 待完善：对象增量落盘策略与更细粒度错误恢复。

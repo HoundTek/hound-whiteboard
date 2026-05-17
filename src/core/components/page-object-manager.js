@@ -8,6 +8,7 @@ import { DirectedGraph } from "../utils/directed-graph.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { deserialize } from "../objects/object-deserializer.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
+import { Page } from "./page.js";
 
 /**
  * 页静态对象管理器
@@ -24,18 +25,11 @@ class PageObjectManager {
   staticGraph;
 
   /**
-   * 向左跨页对象集合
-   * @type {Set<number>}
-   * @description 包含在该页的、向跨左页的对象，可以不属于该页。
+   * 对象覆盖页集合索引
+   * @description 对象 id -> 覆盖到的页 id 集合。
+   * @type {Map<number, Set<number>>}
    */
-  coverLeftPage;
-
-  /**
-   * 向右跨页对象集合
-   * @type {Set<number>}
-   * @description 包含在该页的、向跨右页的对象，可以不属于该页。
-   */
-  coverRightPage;
+  objectCoverPages;
 
   /**
    * 该页的对象映射
@@ -55,9 +49,34 @@ class PageObjectManager {
   constructor(pageId) {
     this.id = pageId;
     this.staticGraph = new DirectedGraph();
-    this.coverLeftPage = new Set();
-    this.coverRightPage = new Set();
+    this.objectCoverPages = new Map();
     this.pageObjects = new Map();
+  }
+
+  /**
+   * 设置对象覆盖页集合
+   * @param {number} objectId - 对象 id
+   * @param {Iterable<number>} pageIds - 覆盖页 id 集合
+   */
+  setObjectCoverPages(objectId, pageIds) {
+    const normalizedPageIds = new Set();
+    for (const pageId of pageIds) {
+      if (!Number.isInteger(pageId) || pageId <= 0) {
+        throw new Error("Invalid covered page id.");
+      }
+
+      normalizedPageIds.add(pageId);
+    }
+    this.objectCoverPages.set(objectId, normalizedPageIds);
+  }
+
+  /**
+   * 获取对象覆盖页集合
+   * @param {number} objectId - 对象 id
+   * @returns {Set<number>}
+   */
+  getObjectCoverPages(objectId) {
+    return new Set(this.objectCoverPages.get(objectId) || []);
   }
 
   /**
@@ -76,6 +95,7 @@ class PageObjectManager {
     );
     // 渲染侧只负责把 plain object 转回 DirectedGraph。
     this.staticGraph = DirectedGraph.parse(graphData);
+    this.objectCoverPages.clear();
   }
 
   /**
@@ -98,6 +118,7 @@ class PageObjectManager {
    */
   unloadTierGraph() {
     this.staticGraph = new DirectedGraph();
+    this.objectCoverPages.clear();
   }
 
   /**
@@ -187,6 +208,4 @@ class PageObjectManager {
   }
 }
 
-export {
-  PageObjectManager,
-};
+export { PageObjectManager };
