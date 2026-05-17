@@ -15,8 +15,8 @@ import { BasicObject } from "../basic-obj.js";
  * @author Zhou Chenyu
  */
 class GraphObject extends BasicObject {
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerPageId) {
+    super(p, id, ownerPageId);
   }
 
   static isDirected = true;
@@ -24,6 +24,4 @@ class GraphObject extends BasicObject {
   static isErasable = false;
 }
 
-export {
-  GraphObject,
-};
+export { GraphObject };

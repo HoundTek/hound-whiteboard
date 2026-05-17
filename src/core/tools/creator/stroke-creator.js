@@ -18,8 +18,8 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     super();
   }
 
-  create(p, id, pageId) {
-    this.obj = new StrokeObject(p, id, pageId);
+  create(p, id, ownerPageId) {
+    this.obj = new StrokeObject(p, id, ownerPageId);
   }
 
   beginCreationGesture(interaction) {
@@ -41,6 +41,4 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   }
 }
 
-export {
-  StrokeCreatorTool,
-};
+export { StrokeCreatorTool };

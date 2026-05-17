@@ -34,11 +34,11 @@ class Container extends BasicObject {
    * 创建一个新的容器对象
    * @param {Vector} p - 容器的位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerPageId - 对象归属页的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerPageId) {
+    super(p, id, ownerPageId);
   }
 }
 
@@ -90,7 +90,4 @@ class ContainerMode {
   static SHRINK = new ContainerMode("SHRINK");
 }
 
-export {
-  Container,
-  ContainerMode,
-};
+export { Container, ContainerMode };

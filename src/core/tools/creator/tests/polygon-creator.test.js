@@ -5,7 +5,7 @@ import { OBJECT_CREATOR_SIGNAL_TYPES } from "../obj-creator.js";
 describe("PolygonCreatorTool", () => {
   test("PolygonCreatorTool 应在同一手势内更新当前顶点，并在 end 时固化", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { objectId: 10, pageId: 1 };
+    const deviceContext = { objectId: 10, ownerPageId: 1 };
 
     expect(
       tool.process(
@@ -49,7 +49,7 @@ describe("PolygonCreatorTool", () => {
 
   test("cancel 信号应重置当前手势", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { objectId: 10, pageId: 1 };
+    const deviceContext = { objectId: 10, ownerPageId: 1 };
 
     expect(
       tool.process(
@@ -85,7 +85,7 @@ describe("PolygonCreatorTool", () => {
 
   test("object-cancel 信号应取消整个多边形对象", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { objectId: 10, pageId: 1 };
+    const deviceContext = { objectId: 10, ownerPageId: 1 };
 
     expect(
       tool.process(
@@ -117,7 +117,7 @@ describe("PolygonCreatorTool", () => {
 
   test("object-end 信号应固化整个多边形对象", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { objectId: 10, pageId: 1 };
+    const deviceContext = { objectId: 10, ownerPageId: 1 };
 
     expect(
       tool.process(

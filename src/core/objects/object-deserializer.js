@@ -28,25 +28,11 @@ const parserRegistry = new Map([
  * @throws {SyntaxError} 如果输入是无效的 JSON 字符串
  */
 function normalizeSerializedObject(data) {
-  let normalizedData = data;
   if (typeof data === "string") {
-    normalizedData = JSON.parse(data);
+    return JSON.parse(data);
   }
 
-  if (
-    normalizedData &&
-    typeof normalizedData === "object" &&
-    !Array.isArray(normalizedData) &&
-    normalizedData.ownerPageId == null &&
-    normalizedData.pageId != null
-  ) {
-    return {
-      ...normalizedData,
-      ownerPageId: normalizedData.pageId,
-    };
-  }
-
-  return normalizedData;
+  return data;
 }
 
 /**

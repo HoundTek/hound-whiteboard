@@ -25,14 +25,12 @@ class OneDimensionObject extends Container {
    * 创建一个新的一维对象
    * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerPageId - 对象归属页的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerPageId) {
+    super(p, id, ownerPageId);
   }
 }
 
-export {
-  OneDimensionObject,
-};
+export { OneDimensionObject };

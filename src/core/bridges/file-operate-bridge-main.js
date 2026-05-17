@@ -55,11 +55,7 @@ function handleCreatePageStorage(payload) {
   }
 
   directory.cd("pages").cd(pageId.toString()).rmWhenExist().make();
-  directory
-    .cd("objects")
-    .cd(`page${pageId.toString()}`)
-    .rmWhenExist()
-    .make();
+  directory.cd("objects").cd(`page${pageId.toString()}`).rmWhenExist().make();
 
   return true;
 }
@@ -195,6 +191,59 @@ function handleSaveTierGraph(payload) {
 }
 
 /**
+ * 解析对象覆盖页索引文件位置
+ * @param {Directory} directory - 白板根目录
+ * @param {number} pageId - 页 id
+ * @returns {File}
+ */
+function resolvePageObjectCoverIndexFile(directory, pageId) {
+  return directory
+    .cd("pages")
+    .peek(`${pageId.toString()}-object-cover`, "json");
+}
+
+/**
+ * 读取指定页的对象覆盖页索引
+ * @param {{rootPath: string, pageId: number}} payload - 请求参数
+ * @returns {any[]}
+ */
+function handleLoadPageObjectCoverIndex(payload) {
+  const directory = getRootDirectory(payload?.rootPath);
+  const pageId = payload?.pageId;
+  if (!Number.isInteger(pageId)) {
+    throw new Error("Invalid page id.");
+  }
+
+  const coverIndexFile = resolvePageObjectCoverIndexFile(directory, pageId);
+  if (!coverIndexFile.exist()) {
+    return [];
+  }
+
+  return coverIndexFile.catJSON();
+}
+
+/**
+ * 保存指定页的对象覆盖页索引
+ * @param {{rootPath: string, pageId: number, coverIndexData: any[]}} payload - 请求参数
+ * @returns {boolean}
+ */
+function handleSavePageObjectCoverIndex(payload) {
+  const directory = getRootDirectory(payload?.rootPath);
+  const pageId = payload?.pageId;
+  const coverIndexData = payload?.coverIndexData;
+  if (!Number.isInteger(pageId) || !Array.isArray(coverIndexData)) {
+    throw new Error("Invalid save page object cover index payload.");
+  }
+
+  resolvePageObjectCoverIndexFile(directory, pageId)
+    .rmWhenExist()
+    .init()
+    .write(JSON.stringify(coverIndexData));
+
+  return true;
+}
+
+/**
  * 读取指定页所有对象 JSON
  * @param {{rootPath: string, pageId: number}} payload - 请求参数
  * @returns {object[]}
@@ -279,6 +328,10 @@ function handleCoreFileOperateRequest(_event, request) {
       return handleLoadTierGraph(payload);
     case CORE_FILE_OPERATE_ACTIONS.SAVE_TIER_GRAPH:
       return handleSaveTierGraph(payload);
+    case CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECT_COVER_INDEX:
+      return handleLoadPageObjectCoverIndex(payload);
+    case CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECT_COVER_INDEX:
+      return handleSavePageObjectCoverIndex(payload);
     case CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECTS:
       return handleLoadPageObjects(payload);
     case CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECTS:
@@ -296,7 +349,4 @@ function registerCoreFileOperateBridge(ipcMain) {
   ipcMain.handle(CORE_FILE_OPERATE_CHANNEL, handleCoreFileOperateRequest);
 }
 
-export {
-  handleCoreFileOperateRequest,
-  registerCoreFileOperateBridge,
-};
+export { handleCoreFileOperateRequest, registerCoreFileOperateBridge };

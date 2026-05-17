@@ -162,7 +162,21 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 - 通过 `saveTierGraph(...)` 写回 `{root}/pages/{pageId}.json`
 - 写入内容为 `staticGraph.toArray()`
 
-### 3. 对象读取
+### 3. 对象覆盖页索引读写
+
+对应 API：`loadTierGraph(boardRootPath)` / `saveTierGraph(boardRootPath)`
+
+路径：
+
+- `{root}/pages/{pageId}-object-cover.json`
+
+行为：
+
+- 通过 `loadPageObjectCoverIndex(...)` 读取当前页对象覆盖页索引
+- 通过 `savePageObjectCoverIndex(...)` 写回对象覆盖页索引
+- 文件内容为 `Array<[objectId, number[]]>`，表示对象 id 到覆盖页 id 集合的映射
+
+### 4. 对象读取
 
 对应 API：`loadObjects(boardRootPath)`
 
@@ -176,7 +190,7 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 - 渲染侧逐个反序列化对象 JSON 并写入 `pageObjects`
 - 单个对象 JSON 以 `ownerPageId` 描述对象归属页 id
 
-### 4. 未完成项
+### 5. 未完成项
 
 当前已实现：
 
@@ -188,6 +202,7 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 
 - 页目录与页层叠图路径使用页 id
 - 对象 JSON 内部使用 `ownerPageId` 表示对象归属页 id
+- 对象覆盖页索引使用独立页级文件保存
 
 ## Page 与文件操作关系
 

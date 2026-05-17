@@ -9,7 +9,9 @@ describe("file-operate-bridge-main", () => {
   let tempRoot;
 
   beforeEach(() => {
-    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hound-core-file-bridge-"));
+    tempRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "hound-core-file-bridge-"),
+    );
   });
 
   afterEach(() => {
@@ -74,9 +76,9 @@ describe("file-operate-bridge-main", () => {
 
     expect(fs.existsSync(path.join(boardRoot, "pages", "1"))).toBe(true);
     expect(fs.existsSync(path.join(boardRoot, "objects", "page1"))).toBe(true);
-    expect(fs.existsSync(path.join(boardRoot, "pages", "connection.json"))).toBe(
-      true,
-    );
+    expect(
+      fs.existsSync(path.join(boardRoot, "pages", "connection.json")),
+    ).toBe(true);
     expect(fs.existsSync(path.join(boardRoot, "trace.json"))).toBe(true);
   });
 
@@ -144,6 +146,43 @@ describe("file-operate-bridge-main", () => {
     });
 
     expect(loadedGraph).toEqual(graphData);
+  });
+
+  test("应能保存并读取页对象覆盖索引", () => {
+    const boardRoot = path.join(tempRoot, "board");
+
+    handleCoreFileOperateRequest(null, {
+      action: CORE_FILE_OPERATE_ACTIONS.CREATE_BOARD_ROOT,
+      payload: {
+        rootPath: boardRoot,
+        boardMeta: { type: "board", version: "0.1.0" },
+        config: { width: 800, height: 600 },
+      },
+    });
+
+    const coverIndexData = [
+      [15, [1, 2]],
+      [18, [1, 2, 3]],
+    ];
+
+    handleCoreFileOperateRequest(null, {
+      action: CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECT_COVER_INDEX,
+      payload: {
+        rootPath: boardRoot,
+        pageId: 1,
+        coverIndexData,
+      },
+    });
+
+    const loadedCoverIndex = handleCoreFileOperateRequest(null, {
+      action: CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECT_COVER_INDEX,
+      payload: {
+        rootPath: boardRoot,
+        pageId: 1,
+      },
+    });
+
+    expect(loadedCoverIndex).toEqual(coverIndexData);
   });
 
   test("应能读取页对象 JSON 列表", () => {

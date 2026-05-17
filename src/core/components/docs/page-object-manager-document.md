@@ -34,6 +34,7 @@
 
 - 页自身通过 `pageId` 决定目录与层叠图文件位置
 - 对象 JSON 内通过 `ownerPageId` 表示该对象归属哪一页
+- 对象覆盖页索引通过独立文件 `{root}/pages/{pageId}-object-cover.json` 保存
 
 ## 层叠图接口
 
@@ -42,11 +43,12 @@
 通过 components 专用 IPC 桥从主进程读取层叠图并反序列化：
 
 - 输入结构由 `DirectedGraph.parse(...)` 处理
-- 当前实现会直接替换 `staticGraph`
+- 同时读取独立的对象覆盖页索引文件
+- 当前实现会直接替换 `staticGraph` 与 `objectCoverPages`
 
 ### `saveTierGraph(boardRootPath)`
 
-通过专用 IPC 桥持久化静态图。
+通过专用 IPC 桥持久化静态图与对象覆盖页索引。
 
 ### `unloadTierGraph()`
 
@@ -65,6 +67,7 @@
 | ---------------------------------------- | ---------------------- | ------------------------------------ |
 | `setObjectCoverPages(objectId, pageIds)` | 设置对象覆盖页 id 集合 | `number -> Iterable<number> -> void` |
 | `getObjectCoverPages(objectId)`          | 获取对象覆盖页 id 集合 | `number -> Set<number>`              |
+| `serializeObjectCoverPages()`            | 序列化对象覆盖页索引   | `void -> Array<[number, number[]]>`  |
 | `loadTierGraph(boardRootPath)`           | 加载页层叠图           | `string -> Promise<void>`            |
 | `saveTierGraph(boardRootPath)`           | 保存页层叠图           | `string -> Promise<void>`            |
 | `unloadTierGraph()`                      | 卸载页层叠图           | `void -> void`                       |

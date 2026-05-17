@@ -4,7 +4,7 @@ import { Vector } from "../../../utils/math.js";
 describe("StrokeCreatorTool", () => {
   test("StrokeCreatorTool 应消费 position/end 信号并累计点列", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { objectId: 100, pageId: 2 };
+    const deviceContext = { objectId: 100, ownerPageId: 2 };
 
     expect(
       tool.process(
@@ -40,7 +40,7 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj.id).toBe(100);
-    expect(tool.obj.pageId).toBe(2);
+    expect(tool.obj.ownerPageId).toBe(2);
     expect(tool.obj.points.map((point) => point.serialize())).toEqual([
       { x: 1, y: 2 },
       { x: 2, y: 3 },
@@ -51,7 +51,7 @@ describe("StrokeCreatorTool", () => {
 
   test("单 end 信号应能被正确处理", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { objectId: 101, pageId: 3 };
+    const deviceContext = { objectId: 101, ownerPageId: 3 };
 
     expect(
       tool.process(
@@ -74,7 +74,7 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj.id).toBe(101);
-    expect(tool.obj.pageId).toBe(3);
+    expect(tool.obj.ownerPageId).toBe(3);
     expect(tool.obj.points.map((point) => point.serialize())).toEqual([
       { x: 5, y: 6 },
     ]);
@@ -89,7 +89,7 @@ describe("StrokeCreatorTool", () => {
           to: "/monitor/stroke",
           signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
         },
-        { objectId: 1, pageId: 1 },
+        { objectId: 1, ownerPageId: 1 },
       ),
     ).toBeUndefined();
 

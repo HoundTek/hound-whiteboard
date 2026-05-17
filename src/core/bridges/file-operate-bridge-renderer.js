@@ -127,6 +127,40 @@ const boardFileOperateBridge = {
   },
 
   /**
+   * 加载指定页的对象覆盖页索引
+   * @param {string} rootPath - 白板根目录路径
+   * @param {number} pageId - 页 id
+   * @returns {Promise<any[]>} 覆盖索引数据
+   */
+  loadPageObjectCoverIndex(rootPath, pageId) {
+    return callCoreFileOperate(
+      CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECT_COVER_INDEX,
+      {
+        rootPath,
+        pageId,
+      },
+    );
+  },
+
+  /**
+   * 保存指定页的对象覆盖页索引
+   * @param {string} rootPath - 白板根目录路径
+   * @param {number} pageId - 页 id
+   * @param {any[]} coverIndexData - 覆盖索引数据
+   * @returns {Promise<boolean>} 是否成功保存
+   */
+  savePageObjectCoverIndex(rootPath, pageId, coverIndexData) {
+    return callCoreFileOperate(
+      CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECT_COVER_INDEX,
+      {
+        rootPath,
+        pageId,
+        coverIndexData,
+      },
+    );
+  },
+
+  /**
    * 加载指定页的所有对象 JSON
    * @param {string} rootPath - 白板根目录路径
    * @param {number} pageId - 页 id

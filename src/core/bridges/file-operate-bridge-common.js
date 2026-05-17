@@ -14,6 +14,8 @@ const CORE_FILE_OPERATE_CHANNEL = "houndwhiteboard:core-file-operate";
  *   LOAD_BOARD_SNAPSHOT: string,
  *   LOAD_TIER_GRAPH: string,
  *   SAVE_TIER_GRAPH: string,
+ *   LOAD_PAGE_OBJECT_COVER_INDEX: string,
+ *   SAVE_PAGE_OBJECT_COVER_INDEX: string,
  *   LOAD_PAGE_OBJECTS: string,
  *   SAVE_PAGE_OBJECTS: string,
  * }}
@@ -26,11 +28,10 @@ const CORE_FILE_OPERATE_ACTIONS = {
   LOAD_BOARD_SNAPSHOT: "load-board-snapshot",
   LOAD_TIER_GRAPH: "load-tier-graph",
   SAVE_TIER_GRAPH: "save-tier-graph",
+  LOAD_PAGE_OBJECT_COVER_INDEX: "load-page-object-cover-index",
+  SAVE_PAGE_OBJECT_COVER_INDEX: "save-page-object-cover-index",
   LOAD_PAGE_OBJECTS: "load-page-objects",
   SAVE_PAGE_OBJECTS: "save-page-objects",
 };
 
-export {
-  CORE_FILE_OPERATE_ACTIONS,
-  CORE_FILE_OPERATE_CHANNEL,
-};
+export { CORE_FILE_OPERATE_ACTIONS, CORE_FILE_OPERATE_CHANNEL };

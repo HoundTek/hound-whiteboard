@@ -8,8 +8,6 @@ import { DirectedGraph } from "../utils/directed-graph.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { deserialize } from "../objects/object-deserializer.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
-import { Page } from "./page.js";
-
 /**
  * 页静态对象管理器
  * @class
@@ -80,6 +78,39 @@ class PageObjectManager {
   }
 
   /**
+   * 将对象覆盖页索引序列化为可持久化结构
+   * @returns {Array<[number, number[]]>}
+   */
+  serializeObjectCoverPages() {
+    return Array.from(this.objectCoverPages.entries())
+      .map(([objectId, pageIds]) => [
+        objectId,
+        Array.from(pageIds).sort((left, right) => left - right),
+      ])
+      .sort((left, right) => left[0] - right[0]);
+  }
+
+  /**
+   * 从可持久化结构恢复对象覆盖页索引
+   * @param {Array<[number, number[]]>} coverIndexData - 覆盖索引数据
+   */
+  loadObjectCoverPagesFromData(coverIndexData) {
+    this.objectCoverPages.clear();
+    for (const entry of coverIndexData || []) {
+      if (!Array.isArray(entry) || entry.length !== 2) {
+        throw new Error("Invalid object cover index entry.");
+      }
+
+      const [objectId, pageIds] = entry;
+      if (!Number.isInteger(objectId)) {
+        throw new Error("Invalid object id in cover index.");
+      }
+
+      this.setObjectCoverPages(objectId, pageIds || []);
+    }
+  }
+
+  /**
    * 加载层叠图
    * @param {string} boardRootPath - 白板根目录
    * @returns {Promise<void>} 加载完成
@@ -93,9 +124,14 @@ class PageObjectManager {
       boardRootPath,
       this.id,
     );
+    const coverIndexData =
+      await boardFileOperateBridge.loadPageObjectCoverIndex(
+        boardRootPath,
+        this.id,
+      );
     // 渲染侧只负责把 plain object 转回 DirectedGraph。
     this.staticGraph = DirectedGraph.parse(graphData);
-    this.objectCoverPages.clear();
+    this.loadObjectCoverPagesFromData(coverIndexData);
   }
 
   /**
@@ -109,6 +145,11 @@ class PageObjectManager {
       boardRootPath,
       this.id,
       this.staticGraph.toArray(),
+    );
+    await boardFileOperateBridge.savePageObjectCoverIndex(
+      boardRootPath,
+      this.id,
+      this.serializeObjectCoverPages(),
     );
   }
 

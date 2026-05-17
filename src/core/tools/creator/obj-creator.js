@@ -130,10 +130,10 @@ class ObjectCreatorTool extends Tool {
         positionSignal?.context?.objectId ??
         deviceContext.objectId ??
         deviceContext.allocateObjectId?.(),
-      pageId:
-        positionSignal?.context?.pageId ??
-        deviceContext.pageId ??
-        deviceContext.resolvePageId?.(signalPacket),
+      ownerPageId:
+        positionSignal?.context?.ownerPageId ??
+        deviceContext.ownerPageId ??
+        deviceContext.resolveOwnerPageId?.(signalPacket),
     };
   }
 
@@ -144,13 +144,13 @@ class ObjectCreatorTool extends Tool {
    */
   ensureObject(interaction) {
     if (!this.obj) {
-      if (interaction.objectId == null || interaction.pageId == null) {
+      if (interaction.objectId == null || interaction.ownerPageId == null) {
         return false;
       }
       this.create(
         interaction.position,
         interaction.objectId,
-        interaction.pageId,
+        interaction.ownerPageId,
       );
     }
 
@@ -225,7 +225,7 @@ class ObjectCreatorTool extends Tool {
    * @description 在用户使用该工具创建新对象（而不是编辑正在创建的对象）时调用此方法以生成新的对象实例
    * @abstract
    */
-  create(position, id, pageId) {
+  create(position, id, ownerPageId) {
     throw new Error("Method not implemented.");
   }
 }
