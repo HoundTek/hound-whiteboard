@@ -18,4 +18,22 @@ describe("PathRange", () => {
     expect(intersectsRanges(crossingPath, rectangle)).toBe(true);
     expect(intersectsRanges(rectangle, separatedPath)).toBe(false);
   });
+
+  test("路径之间共享线段点时也应判定相交", () => {
+    const rising = new PathRange([
+      new Vector(0, 0),
+      new Vector(2, 2),
+    ]);
+    const falling = new PathRange([
+      new Vector(0, 2),
+      new Vector(2, 0),
+    ]);
+    const separated = new PathRange([
+      new Vector(3, 0),
+      new Vector(4, 1),
+    ]);
+
+    expect(intersectsRanges(rising, falling)).toBe(true);
+    expect(intersectsRanges(rising, separated)).toBe(false);
+  });
 });

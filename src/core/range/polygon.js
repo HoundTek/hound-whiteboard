@@ -17,13 +17,14 @@ import { Range } from "./range.js";
  */
 class PolygonRange extends Range {
   /**
+   * 多边形点列
    * @type {Array<Vector>}
    */
   points;
 
   /**
    * @constructor
-   * @param {Array<Vector>} points - 多边形的顶点列表
+   * @param {Array<Vector>} points - 多边形点列
    */
   constructor(points) {
     super();
@@ -31,6 +32,8 @@ class PolygonRange extends Range {
   }
 
   /**
+   * 对多边形范围做仿射变换
+   * @description 返回一个新多边形实例，原点列不会被原地修改。
    * @param {Matrix} matrix - 用于变换的矩阵
    * @returns {PolygonRange} 变换后的多边形范围
    */

@@ -1,5 +1,7 @@
 import { Matrix, Vector } from "../../utils/math.js";
+import { intersectsRanges } from "../geometry.js";
 import { PolygonRange } from "../polygon.js";
+import { PathRange } from "../path.js";
 import { RectangleRange } from "../rectangle.js";
 
 describe("PolygonRange", () => {
@@ -28,5 +30,25 @@ describe("PolygonRange", () => {
       { x: -1, y: 0 },
       { x: 0, y: 0 },
     ]);
+  });
+
+  test("应支持与路径范围的相交判断", () => {
+    const polygon = new PolygonRange([
+      new Vector(0, 0),
+      new Vector(4, 0),
+      new Vector(4, 4),
+      new Vector(0, 4),
+    ]);
+    const crossingPath = new PathRange([
+      new Vector(-1, 2),
+      new Vector(5, 2),
+    ]);
+    const separatedPath = new PathRange([
+      new Vector(5, 5),
+      new Vector(7, 5),
+    ]);
+
+    expect(intersectsRanges(polygon, crossingPath)).toBe(true);
+    expect(intersectsRanges(polygon, separatedPath)).toBe(false);
   });
 });

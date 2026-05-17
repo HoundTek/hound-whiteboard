@@ -16,27 +16,35 @@ import { Range } from "./range.js";
  */
 class RectangleRange extends Range {
   /**
+   * 矩形左边界
    * @type {number}
    */
   minX;
 
   /**
+   * 矩形上边界
    * @type {number}
    */
   minY;
 
   /**
+   * 矩形右边界
    * @type {number}
    */
   maxX;
 
   /**
+   * 矩形下边界
    * @type {number}
    */
   maxY;
 
   /**
    * @constructor
+   * @param {number} minX - 左边界
+   * @param {number} minY - 上边界
+   * @param {number} maxX - 右边界
+   * @param {number} maxY - 下边界
    */
   constructor(minX, minY, maxX, maxY) {
     super();
@@ -49,7 +57,7 @@ class RectangleRange extends Range {
   /**
    * 对矩形范围进行矩阵变换，返回变换后的矩形范围
    * @description
-   * 该方法通过将矩形的四个顶点进行矩阵变换，然后计算变换后顶点的最小外接矩形来实现对矩形范围的变换。
+   * 该方法通过将矩形的四个角点进行矩阵变换，再计算变换后角点的包围盒来实现矩形范围变换。
    * 这种方法可以处理任意的线性变换，包括旋转、缩放、倾斜等，确保变换后的范围仍然是一个矩形。
    * @param {Matrix} matrix - 用于变换的矩阵
    * @returns {RectangleRange} 变换后的矩形范围

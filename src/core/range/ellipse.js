@@ -59,6 +59,8 @@ class EllipseRange extends Range {
   }
 
   /**
+   * 对椭圆范围做仿射变换。
+   * @description 会同时变换中心点与两条半轴向量，并返回一个新椭圆实例。
    * @param {Matrix} matrix - 用于变换的矩阵
    * @returns {EllipseRange} 变换后的椭圆范围
    */

@@ -17,11 +17,13 @@ import { Range } from "./range.js";
  */
 class PathRange extends Range {
   /**
+   * 路径点列。
    * @type {Array<Vector>}
    */
   points;
 
   /**
+   * 路径是否闭合。
    * @type {boolean}
    */
   closed;
@@ -38,6 +40,8 @@ class PathRange extends Range {
   }
 
   /**
+   * 对路径范围做仿射变换。
+   * @description 返回一个新路径实例，并保留闭合状态。
    * @param {Matrix} matrix - 用于变换的矩阵
    * @returns {PathRange} 变换后的路径范围
    */

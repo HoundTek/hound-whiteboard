@@ -17,13 +17,14 @@ import { Range } from "./range.js";
  */
 class RopeRange extends Range {
   /**
+   * 绳子点列
    * @type {Array<Vector>}
    */
   points;
 
   /**
    * @constructor
-   * @param {Array<Vector>} points - 绳子的顶点列表
+   * @param {Array<Vector>} points - 绳子点列
    */
   constructor(points) {
     super();
@@ -31,6 +32,8 @@ class RopeRange extends Range {
   }
 
   /**
+   * 对绳子范围做仿射变换。
+   * @description 返回一个新绳子实例，原点列不会被原地修改。
    * @param {Matrix} matrix - 用于变换的矩阵
    * @returns {RopeRange} 变换后的绳子范围
    */
