@@ -3,9 +3,11 @@ import os from "os";
 import path from "path";
 
 import { DirectedGraph } from "../../utils/directed-graph.js";
+import { Vector } from "../../utils/math.js";
 import { handleCoreFileOperateRequest } from "../../bridges/file-operate-bridge-main.js";
 import { CORE_FILE_OPERATE_ACTIONS } from "../../bridges/file-operate-bridge-common.js";
 import { PageObjectManager } from "../page-object-manager.js";
+import { StrokeObject } from "../../objects/stroke/stroke.js";
 
 describe("PageObjectManager", () => {
   let tempRoot;
@@ -62,5 +64,31 @@ describe("PageObjectManager", () => {
       [15, [1, 2]],
       [18, [1, 2, 3]],
     ]);
+  });
+
+  test("应基于对象 range 精确计算覆盖页，而不是仅按 bounding box 粗算", () => {
+    const pageObjectManager = new PageObjectManager(1);
+    const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
+    stroke.setPathPoints([
+      new Vector(1, 1),
+      new Vector(19, 1),
+      new Vector(19, 19),
+    ]);
+
+    const coveredPages = pageObjectManager.syncObjectCoverPagesForObject(
+      stroke,
+      10,
+      10,
+    );
+
+    expect(
+      Array.from(coveredPages).sort((left, right) => left - right),
+    ).toEqual([1, 2, 3]);
+
+    expect(pageObjectManager.getObjectCoverPages(15)).toEqual(
+      new Set([1, 2, 3]),
+    );
+
+    expect(pageObjectManager.getObjectCoverPages(15).has(4)).toBe(false);
   });
 });

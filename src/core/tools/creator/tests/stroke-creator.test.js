@@ -1,5 +1,6 @@
 import { StrokeCreatorTool } from "../stroke-creator.js";
 import { Vector } from "../../../utils/math.js";
+import { jest } from "@jest/globals";
 
 describe("StrokeCreatorTool", () => {
   test("StrokeCreatorTool 应消费 position/end 信号并累计点列", () => {
@@ -101,5 +102,28 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj).toBeNull();
+  });
+
+  test("创建完成后应将对象交给 board.addObject", () => {
+    const tool = new StrokeCreatorTool();
+    const board = { addObject: jest.fn() };
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      { objectId: 5, ownerPageId: 1, board },
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "end", context: {} }],
+      },
+      { objectId: 5, ownerPageId: 1, board },
+    );
+
+    expect(board.addObject).toHaveBeenCalledWith(tool.obj, 1);
   });
 });

@@ -37,6 +37,11 @@ describe("ActiveObjectManager/pickup", () => {
     pageB.leftPage = pageA;
   }
 
+  function verticalPageConnect(lowerPage, upperPage) {
+    lowerPage.upPage = upperPage;
+    upperPage.downPage = lowerPage;
+  }
+
   function setObjectCoverage(pages, objectIds) {
     const pageIds = pages.map((page) => page.id);
 
@@ -250,12 +255,120 @@ describe("ActiveObjectManager/pickup", () => {
   });
 
   describe("特殊情况与边界条件", () => {
+    test("应能在二维页中先横向后纵向移动，并在回到原页后继续遍历其它覆盖页", () => {
+      const centerPage = createPageAt(0, 0);
+      const rightPage = createPageAt(1, 0);
+      const upPage = createPageAt(0, 1);
+      const rightUpPage = createPageAt(1, 1);
+
+      centerPage.objectManager = new PageObjectManager(centerPage.id);
+      rightPage.objectManager = new PageObjectManager(rightPage.id);
+      upPage.objectManager = new PageObjectManager(upPage.id);
+      rightUpPage.objectManager = new PageObjectManager(rightUpPage.id);
+
+      centerPage.objectManager.staticGraph = DirectedGraph.parse([
+        [100, [101]],
+        [101, []],
+      ]);
+      rightPage.objectManager.staticGraph = DirectedGraph.parse([]);
+      upPage.objectManager.staticGraph = DirectedGraph.parse([
+        [100, [103]],
+        [103, []],
+      ]);
+      rightUpPage.objectManager.staticGraph = DirectedGraph.parse([
+        [100, [104]],
+        [104, []],
+      ]);
+
+      setObjectCoverage([centerPage, upPage, rightUpPage], [100]);
+
+      pageConnect(centerPage, rightPage);
+      verticalPageConnect(centerPage, upPage);
+      verticalPageConnect(rightPage, rightUpPage);
+
+      const pickup = aom.pickup(new Set([{ id: 100, page: centerPage }]));
+      const expected = DirectedGraph.parse([
+        [100, [101, 103, 104]],
+        [101, []],
+        [103, []],
+        [104, []],
+      ]);
+
+      expect(pickup.equals(expected)).toBe(true);
+    });
+
+    test("应能在二维页中向左下方向移动到覆盖页", () => {
+      const centerPage = createPageAt(0, 0);
+      const upperPage = createPageAt(0, 1);
+      const startPage = createPageAt(1, 1);
+
+      centerPage.objectManager = new PageObjectManager(centerPage.id);
+      upperPage.objectManager = new PageObjectManager(upperPage.id);
+      startPage.objectManager = new PageObjectManager(startPage.id);
+
+      centerPage.objectManager.staticGraph = DirectedGraph.parse([
+        [200, [201]],
+        [201, []],
+      ]);
+      upperPage.objectManager.staticGraph = DirectedGraph.parse([]);
+      startPage.objectManager.staticGraph = DirectedGraph.parse([
+        [200, [202]],
+        [202, []],
+      ]);
+
+      setObjectCoverage([startPage, centerPage], [200]);
+
+      pageConnect(upperPage, startPage);
+      verticalPageConnect(centerPage, upperPage);
+
+      const pickup = aom.pickup(new Set([{ id: 200, page: startPage }]));
+      const expected = DirectedGraph.parse([
+        [200, [201, 202]],
+        [201, []],
+        [202, []],
+      ]);
+
+      expect(pickup.equals(expected)).toBe(true);
+    });
+
     test("应能选取空集的子图", () => {
       const pickupEmpty = aom.pickup(new Set());
 
       const expectedEmpty = DirectedGraph.parse([]);
 
       expect(pickupEmpty.equals(expectedEmpty)).toBe(true);
+    });
+
+    test("当某个二维覆盖页不可达时，应跳过该页并继续处理其它可达覆盖页", () => {
+      const centerPage = createPageAt(0, 0);
+      const upPage = createPageAt(0, 1);
+      const unreachablePage = createPageAt(1, 1);
+
+      centerPage.objectManager = new PageObjectManager(centerPage.id);
+      upPage.objectManager = new PageObjectManager(upPage.id);
+      unreachablePage.objectManager = new PageObjectManager(unreachablePage.id);
+
+      centerPage.objectManager.staticGraph = DirectedGraph.parse([[300, []]]);
+      upPage.objectManager.staticGraph = DirectedGraph.parse([
+        [300, [302]],
+        [302, []],
+      ]);
+      unreachablePage.objectManager.staticGraph = DirectedGraph.parse([
+        [300, [301]],
+        [301, []],
+      ]);
+
+      setObjectCoverage([centerPage, upPage, unreachablePage], [300]);
+
+      verticalPageConnect(centerPage, upPage);
+
+      const pickup = aom.pickup(new Set([{ id: 300, page: centerPage }]));
+      const expected = DirectedGraph.parse([
+        [300, [302]],
+        [302, []],
+      ]);
+
+      expect(pickup.equals(expected)).toBe(true);
     });
   });
 });

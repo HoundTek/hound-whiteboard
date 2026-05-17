@@ -36,6 +36,13 @@
 - 对象 JSON 内通过 `ownerPageId` 表示该对象归属哪一页
 - 对象覆盖页索引通过独立文件 `{root}/pages/{pageId}-object-cover.json` 保存
 
+当前实现已经可以基于对象自身的 `Range` 计算覆盖页：
+
+- 先取对象主判定范围 `obj.getRange()`
+- 再叠加对象位置得到世界坐标范围
+- 然后与候选页矩形逐一做 range 相交判断
+- 最终得到精确的覆盖页 id 集合
+
 ## 层叠图接口
 
 ### `loadTierGraph(boardRootPath)`
@@ -63,18 +70,20 @@
 
 ## API
 
-| 名称                                     | 描述                   | 类型                                 |
-| ---------------------------------------- | ---------------------- | ------------------------------------ |
-| `setObjectCoverPages(objectId, pageIds)` | 设置对象覆盖页 id 集合 | `number -> Iterable<number> -> void` |
-| `getObjectCoverPages(objectId)`          | 获取对象覆盖页 id 集合 | `number -> Set<number>`              |
-| `serializeObjectCoverPages()`            | 序列化对象覆盖页索引   | `void -> Array<[number, number[]]>`  |
-| `loadTierGraph(boardRootPath)`           | 加载页层叠图           | `string -> Promise<void>`            |
-| `saveTierGraph(boardRootPath)`           | 保存页层叠图           | `string -> Promise<void>`            |
-| `unloadTierGraph()`                      | 卸载页层叠图           | `void -> void`                       |
-| `loadObjects(boardRootPath)`             | 加载页对象             | `string -> Promise<void>`            |
-| `saveObjects(boardRootPath)`             | 保存页对象             | `string -> Promise<void>`            |
-| `unloadObjects()`                        | 卸载页对象             | `void -> void`                       |
-| `unload()`                               | 卸载本页全部数据       | `void -> void`                       |
+| 名称                                                        | 描述                           | 类型                                             |
+| ----------------------------------------------------------- | ------------------------------ | ------------------------------------------------ |
+| `setObjectCoverPages(objectId, pageIds)`                    | 设置对象覆盖页 id 集合         | `number -> Iterable<number> -> void`             |
+| `getObjectCoverPages(objectId)`                             | 获取对象覆盖页 id 集合         | `number -> Set<number>`                          |
+| `serializeObjectCoverPages()`                               | 序列化对象覆盖页索引           | `void -> Array<[number, number[]]>`              |
+| `syncObjectCoverPagesForObject(obj, pageWidth, pageHeight)` | 基于对象 range 重算覆盖页      | `BasicObject -> number -> number -> Set<number>` |
+| `syncAllObjectCoverPages(pageWidth, pageHeight)`            | 重建当前页全部对象的覆盖页索引 | `number -> number -> Map<number, Set<number>>`   |
+| `loadTierGraph(boardRootPath)`                              | 加载页层叠图                   | `string -> Promise<void>`                        |
+| `saveTierGraph(boardRootPath)`                              | 保存页层叠图                   | `string -> Promise<void>`                        |
+| `unloadTierGraph()`                                         | 卸载页层叠图                   | `void -> void`                                   |
+| `loadObjects(boardRootPath)`                                | 加载页对象                     | `string -> Promise<void>`                        |
+| `saveObjects(boardRootPath)`                                | 保存页对象                     | `string -> Promise<void>`                        |
+| `unloadObjects()`                                           | 卸载页对象                     | `void -> void`                                   |
+| `unload()`                                                  | 卸载本页全部数据               | `void -> void`                                   |
 
 ## 与其它组件的关系
 

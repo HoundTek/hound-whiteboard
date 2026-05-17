@@ -419,17 +419,28 @@ class Board {
 
   /**
    * 添加对象到指定页
-   * @todo
    * @param {BasicObject} obj - 要添加的对象
-   * @param {number} pageId - 要添加到的页 id
+   * @param {number} [pageId = obj.ownerPageId] - 要添加到的归属页 id
    */
-  addObject(obj, pageId) {
+  addObject(obj, pageId = obj?.ownerPageId) {
+    if (!(obj instanceof BasicObject)) {
+      throw new TypeError("Invalid object instance.");
+    }
     const page = this.getPageById(pageId);
     if (!page) {
       console.warn(`Page ${pageId} does not exist.`);
       throw new Error("Page not exist.");
     }
+
     page.addObject(obj);
+
+    if (page.objectManager && this.width > 0 && this.height > 0) {
+      page.objectManager.syncObjectCoverPagesForObject(
+        obj,
+        this.width,
+        this.height,
+      );
+    }
   }
 
   /**

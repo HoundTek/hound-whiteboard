@@ -1,5 +1,7 @@
 import { Board } from "../board.js";
 import { Page } from "../page.js";
+import { StrokeObject } from "../../objects/stroke/stroke.js";
+import { Vector } from "../../utils/math.js";
 
 describe("Board page grid", () => {
   test("Page 的回字形 id 与二维坐标应可双向转换", () => {
@@ -67,6 +69,30 @@ describe("Board page grid", () => {
     );
     expect(board.getNeighborPage(center, "down")).toEqual(
       expect.objectContaining({ id: 8, x: 0, y: -1 }),
+    );
+  });
+
+  test("Board.addObject 应将对象加入归属页并同步覆盖页索引", () => {
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.pageOrder = [1];
+    board.pageIds = new Set(board.pageOrder);
+
+    const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
+    stroke.setPathPoints([
+      new Vector(1, 1),
+      new Vector(19, 1),
+      new Vector(19, 19),
+    ]);
+
+    board.addObject(stroke);
+
+    const ownerPage = board.getPageById(1);
+    expect(ownerPage.objectManager.pageObjects.get(15)).toBe(stroke);
+    expect(ownerPage.objectManager.staticGraph.hasNode(15)).toBe(true);
+    expect(ownerPage.objectManager.getObjectCoverPages(15)).toEqual(
+      new Set([1, 2, 3]),
     );
   });
 });

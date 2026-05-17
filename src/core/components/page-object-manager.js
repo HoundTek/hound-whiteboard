@@ -8,6 +8,9 @@ import { DirectedGraph } from "../utils/directed-graph.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { deserialize } from "../objects/object-deserializer.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
+import { intersectsRanges, RectangleRange } from "../range/index.js";
+import { Page } from "./page.js";
+
 /**
  * 页静态对象管理器
  * @class
@@ -75,6 +78,113 @@ class PageObjectManager {
    */
   getObjectCoverPages(objectId) {
     return new Set(this.objectCoverPages.get(objectId) || []);
+  }
+
+  /**
+   * 创建指定页坐标对应的页范围
+   * @param {number} pageX - 页坐标 x
+   * @param {number} pageY - 页坐标 y
+   * @param {number} pageWidth - 页宽
+   * @param {number} pageHeight - 页高
+   * @returns {RectangleRange}
+   */
+  static createPageRange(pageX, pageY, pageWidth, pageHeight) {
+    return new RectangleRange(
+      pageX * pageWidth,
+      pageY * pageHeight,
+      (pageX + 1) * pageWidth,
+      (pageY + 1) * pageHeight,
+    );
+  }
+
+  /**
+   * 计算一个世界坐标范围覆盖到的页 id 集合
+   * @param {import("../range/range.js").Range} worldRange - 世界坐标范围
+   * @param {number} pageWidth - 页宽
+   * @param {number} pageHeight - 页高
+   * @param {{approximationSegments?: number}} [options] - range 几何计算参数
+   * @returns {Set<number>}
+   */
+  static calculateCoveredPageIdsForRange(
+    worldRange,
+    pageWidth,
+    pageHeight,
+    options = {},
+  ) {
+    if (!(worldRange instanceof Object) || worldRange == null) {
+      throw new Error("Invalid world range.");
+    }
+    if (pageWidth <= 0 || pageHeight <= 0) {
+      throw new Error("Invalid page size.");
+    }
+
+    const worldBoundingBox = RectangleRange.from(worldRange);
+    const minPageX = Math.floor(worldBoundingBox.minX / pageWidth);
+    const maxPageX = Math.floor(worldBoundingBox.maxX / pageWidth);
+    const minPageY = Math.floor(worldBoundingBox.minY / pageHeight);
+    const maxPageY = Math.floor(worldBoundingBox.maxY / pageHeight);
+
+    const pageIds = new Set();
+    for (let pageY = minPageY; pageY <= maxPageY; pageY++) {
+      for (let pageX = minPageX; pageX <= maxPageX; pageX++) {
+        const pageRange = PageObjectManager.createPageRange(
+          pageX,
+          pageY,
+          pageWidth,
+          pageHeight,
+        );
+        if (!intersectsRanges(worldRange, pageRange, options)) {
+          continue;
+        }
+        pageIds.add(Page.coordinateToId(pageX, pageY));
+      }
+    }
+
+    return pageIds;
+  }
+
+  /**
+   * 根据对象 range 重新计算其覆盖页集合并写入索引
+   * @param {BasicObject} obj - 对象实例
+   * @param {number} pageWidth - 页宽
+   * @param {number} pageHeight - 页高
+   * @param {{approximationSegments?: number}} [options] - range 几何计算参数
+   * @returns {Set<number>}
+   */
+  syncObjectCoverPagesForObject(obj, pageWidth, pageHeight, options = {}) {
+    if (!(obj instanceof BasicObject)) {
+      throw new Error("Invalid object instance.");
+    }
+
+    const worldRange = obj.getRange().withPosition(obj.position);
+    const pageIds = PageObjectManager.calculateCoveredPageIdsForRange(
+      worldRange,
+      pageWidth,
+      pageHeight,
+      options,
+    );
+
+    if (pageIds.size === 0) {
+      pageIds.add(obj.ownerPageId);
+    }
+
+    this.setObjectCoverPages(obj.id, pageIds);
+    return pageIds;
+  }
+
+  /**
+   * 根据当前页对象映射重建所有对象覆盖页索引
+   * @param {number} pageWidth - 页宽
+   * @param {number} pageHeight - 页高
+   * @param {{approximationSegments?: number}} [options] - range 几何计算参数
+   * @returns {Map<number, Set<number>>}
+   */
+  syncAllObjectCoverPages(pageWidth, pageHeight, options = {}) {
+    this.objectCoverPages.clear();
+    for (const obj of this.pageObjects.values()) {
+      this.syncObjectCoverPagesForObject(obj, pageWidth, pageHeight, options);
+    }
+    return new Map(this.objectCoverPages);
   }
 
   /**

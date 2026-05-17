@@ -205,6 +205,11 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreatedObject(interaction) {
+    if (!this.obj) return undefined;
+    interaction?.deviceContext?.board?.addObject?.(
+      this.obj,
+      this.obj.ownerPageId,
+    );
     return undefined;
   }
 
@@ -221,7 +226,7 @@ class ObjectCreatorTool extends Tool {
    * 创建新的对象实例
    * @param {Vector} position - 新对象的位置
    * @param {number} id - 新对象的 id
-   * @param {number} pageId - 新对象所在的页 id
+   * @param {number} ownerPageId - 新对象归属页 id
    * @description 在用户使用该工具创建新对象（而不是编辑正在创建的对象）时调用此方法以生成新的对象实例
    * @abstract
    */

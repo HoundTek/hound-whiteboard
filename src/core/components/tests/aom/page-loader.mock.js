@@ -26,11 +26,15 @@ class MockPageLoader {
   }
 
   moveCurrentUp() {
-    return false;
+    if (!this.pageNow || !this.pageNow.upPage) return;
+    this.pageNow = this.pageNow.upPage;
+    return true;
   }
 
   moveCurrentDown() {
-    return false;
+    if (!this.pageNow || !this.pageNow.downPage) return;
+    this.pageNow = this.pageNow.downPage;
+    return true;
   }
 
   forceMoveCurrentLeftTempLoad() {

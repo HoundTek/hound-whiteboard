@@ -270,19 +270,36 @@ class Page {
   /**
    * 添加对象并更新层叠图
    *
-   * @param {number} obj - 要添加的对象
-   * @param {number[]} below - 应在该对象之下的对象
-   * @param {number[]} above - 应在该对象之上的对象
+   * @param {BasicObject | number} obj - 要添加的对象或对象 id
+   * @param {number[]} [below = []] - 应在该对象之下的对象
+   * @param {number[]} [above = []] - 应在该对象之上的对象
    */
-  addObject(obj, below, above) {
+  addObject(obj, below = [], above = []) {
+    if (!this.objectManager) {
+      this.objectManager = new PageObjectManager(this.id);
+      if (this.content === undefined) {
+        this.content = this.objectManager;
+      }
+    }
+
     const graph = this.objectManager.staticGraph;
+    const objectId = obj instanceof BasicObject ? obj.id : obj;
+
+    if (obj instanceof BasicObject) {
+      this.objectManager.pageObjects.set(obj.id, obj);
+    }
+
+    if (!graph.hasNode(objectId)) {
+      graph.addNodeUnsafe(objectId);
+    }
+
     for (const from of below) {
       if (!graph.hasNode(from)) continue; // 在其它页，不管
-      graph.addEdgeUnsafe(from, obj);
+      graph.addEdgeUnsafe(from, objectId);
     }
     for (const to of above) {
       if (!graph.hasNode(to)) continue; // 在其它页，不管
-      graph.addEdgeUnsafe(obj, to);
+      graph.addEdgeUnsafe(objectId, to);
     }
   }
 
