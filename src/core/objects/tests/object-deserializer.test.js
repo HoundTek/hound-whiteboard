@@ -45,7 +45,7 @@ describe("object deserializer", () => {
 
   test("应能还原 StrokeObject", () => {
     const stroke = new StrokeObject(new Vector(1, 2), 9, 11);
-    stroke.setPoints([new Vector(0, 0), new Vector(5, 2), new Vector(7, 8)]);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(5, 2), new Vector(7, 8)]);
     stroke.setTransform(new Matrix(2, 0, 0, 2));
     stroke.color = "#00aaee";
 

@@ -45,7 +45,8 @@
 
 - `id`、`pageId`
 - `position`、`transform`
-- `rectangle`、`convexHull`
+- `boundingBox`、`convexHullRange`
+- `getRange()` 暴露的主判定范围
 
 典型派生：
 
@@ -53,6 +54,14 @@
 - `PolygonObject`（不可擦、有向）
 - `TextObject`
 - `Container` 与一/二维对象层
+
+当前对象级范围语义：
+
+- `PolygonObject`：`localPolygonRange` / `worldPolygonRange`
+- `StrokeObject`：`localPathRange` / `worldPathRange`
+- `TextObject`：`localTextRange` / `worldTextRange`
+
+这些字段代表对象的局部几何、世界几何与主判定范围，不再把普通点数组当成核心富数据结构。
 
 ## 3. 层级关系模型
 

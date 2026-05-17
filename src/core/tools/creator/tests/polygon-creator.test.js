@@ -40,7 +40,7 @@ describe("PolygonCreatorTool", () => {
       ),
     ).toBeUndefined();
 
-    expect(tool.obj.points.map((point) => point.serialize())).toEqual([
+    expect(tool.obj.localPolygonRange.points.map((point) => point.serialize())).toEqual([
       { x: 10, y: 12 },
     ]);
     expect(tool.count).toBe(1);
@@ -76,7 +76,7 @@ describe("PolygonCreatorTool", () => {
       ),
     ).toBeUndefined();
 
-    expect(tool.obj.points.map((point) => point.serialize())).toEqual([
+    expect(tool.obj.localPolygonRange.points.map((point) => point.serialize())).toEqual([
       { x: 5, y: 5 },
     ]);
     expect(tool.count).toBe(1);
@@ -142,7 +142,7 @@ describe("PolygonCreatorTool", () => {
       ),
     ).toBeUndefined();
 
-    expect(tool.obj.points.map((point) => point.serialize())).toEqual([
+    expect(tool.obj.localPolygonRange.points.map((point) => point.serialize())).toEqual([
       { x: 5, y: 5 },
     ]);
     expect(tool.count).toBe(1);

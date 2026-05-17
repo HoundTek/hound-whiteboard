@@ -3,7 +3,7 @@
  * @description
  * 多边形对象 PolygonObject
  * 表示白板上的多边形对象类。
- * @module board/graph/graph3d
+ * @module core/objects/graph/graph3d
  * @author Zhou Chenyu
  */
 

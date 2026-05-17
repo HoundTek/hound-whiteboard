@@ -23,16 +23,22 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   beginCreationGesture(interaction) {
-    this.obj.setPoints(this.obj.points.concat([interaction.position]));
+    this.obj.setPathPoints(
+      this.obj.localPathRange.points.concat([interaction.position]),
+    );
   }
 
   updateCreationGesture(interaction) {
-    this.obj.setPoints(this.obj.points.concat([interaction.position]));
+    this.obj.setPathPoints(
+      this.obj.localPathRange.points.concat([interaction.position]),
+    );
   }
 
   completeCreationGesture(interaction) {
     if (interaction.position) {
-      this.obj.setPoints(this.obj.points.concat([interaction.position]));
+      this.obj.setPathPoints(
+        this.obj.localPathRange.points.concat([interaction.position]),
+      );
     }
   }
 

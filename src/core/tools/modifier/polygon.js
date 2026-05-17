@@ -72,10 +72,9 @@ class PolygonModifierTool extends ObjectModifierTool {
    */
   addPoint(point) {
     if (!this.obj) return;
-    // 这里会导致 UB，但是没关系，因为会 setPoints
-    let points = this.obj.points;
+    let points = [...this.obj.localPolygonRange.points];
     points.push(point);
-    this.obj.setPoints(points);
+    this.obj.setPolygonPoints(points);
   }
 
   /**
@@ -84,10 +83,11 @@ class PolygonModifierTool extends ObjectModifierTool {
    */
   removePoint(pointIndex) {
     if (!this.obj) return;
-    if (this.obj.points.length <= 3) return;
-    if (pointIndex < 0 || pointIndex >= this.obj.points.length) return;
-    this.obj.setPoints(
-      this.obj.points.filter((_, index) => index !== pointIndex)
+    if (this.obj.localPolygonRange.points.length <= 3) return;
+    if (pointIndex < 0 || pointIndex >= this.obj.localPolygonRange.points.length)
+      return;
+    this.obj.setPolygonPoints(
+      this.obj.localPolygonRange.points.filter((_, index) => index !== pointIndex)
     );
   }
 
@@ -98,11 +98,10 @@ class PolygonModifierTool extends ObjectModifierTool {
    */
   movePoint(oldPointIndex, newPoint) {
     if (!this.obj) return;
-    // 这里会导致 UB，但是没关系，因为会 setPoints
-    let points = this.obj.points;
+    let points = [...this.obj.localPolygonRange.points];
     if (oldPointIndex < 0 || oldPointIndex >= points.length) return;
     points[oldPointIndex] = newPoint;
-    this.obj.setPoints(points);
+    this.obj.setPolygonPoints(points);
   }
 
   /**
@@ -112,11 +111,10 @@ class PolygonModifierTool extends ObjectModifierTool {
    */
   insertPoint(lastPointIndex, point) {
     if (!this.obj) return;
-    // 这里会导致 UB，但是没关系，因为会 setPoints
-    let points = this.obj.points;
+    let points = [...this.obj.localPolygonRange.points];
     if (lastPointIndex < -1 || lastPointIndex >= points.length) return;
     points.splice(lastPointIndex + 1, 0, point);
-    this.obj.setPoints(points);
+    this.obj.setPolygonPoints(points);
   }
 
   cut(startPointIndex, endPointIndex) {
@@ -124,18 +122,19 @@ class PolygonModifierTool extends ObjectModifierTool {
     if (
       startPointIndex < 0 ||
       endPointIndex < 0 ||
-      endPointIndex >= this.obj.points.length ||
-      startPointIndex >= this.obj.points.length ||
+      endPointIndex >= this.obj.localPolygonRange.points.length ||
+      startPointIndex >= this.obj.localPolygonRange.points.length ||
       (startPointIndex <= endPointIndex &&
         endPointIndex - startPointIndex + 1 < 3) ||
       (startPointIndex > endPointIndex &&
-        this.obj.points.length - (startPointIndex - endPointIndex - 1) < 3)
+        this.obj.localPolygonRange.points.length -
+          (startPointIndex - endPointIndex - 1) <
+          3)
     ) {
       return;
     }
 
-    // 这里会导致 UB，但是没关系，因为会 setPoints
-    let points = this.obj.points;
+    let points = this.obj.localPolygonRange.points;
     if (startPointIndex < endPointIndex) {
       points = points.filter(
         (_, index) => startPointIndex <= index && index <= endPointIndex
@@ -146,7 +145,7 @@ class PolygonModifierTool extends ObjectModifierTool {
       );
     }
 
-    this.obj.setPoints(points);
+    this.obj.setPolygonPoints(points);
   }
 
   reset() {

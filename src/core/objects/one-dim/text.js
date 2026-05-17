@@ -1,11 +1,12 @@
 /**
  * @file 文本对象定义
- * @module board/text
+ * @module core/objects/one-dim/text
  * @author Zhou Chenyu
  */
 
 import { OneDimensionObject } from "./one-dim-obj.js";
 import { Vector, Matrix } from "../../utils/math.js";
+import { PolygonRange, RectangleRange } from "../../range/index.js";
 
 /**
  * 文本对象类
@@ -14,6 +15,18 @@ import { Vector, Matrix } from "../../utils/math.js";
  * @author Zhou Chenyu
  */
 class TextObject extends OneDimensionObject {
+  syncRanges() {
+    if (this.localTextRange.points.length === 0) {
+      this.worldTextRange = new PolygonRange([]);
+      this.boundingBox = new RectangleRange(0, 0, 0, 0);
+      this.convexHullRange = new PolygonRange([]);
+      return;
+    }
+    this.worldTextRange = this.localTextRange.transform(this.transform);
+    this.boundingBox = RectangleRange.from(this.worldTextRange);
+    this.calculateConvexHull();
+  }
+
   /**
    * 创建一个新的文本对象
    * @param {Vector} p - 文本左上角的绝对位置
@@ -29,8 +42,20 @@ class TextObject extends OneDimensionObject {
    * @description 文本对象的凸包就是其矩形边界。
    */
   calculateConvexHull() {
-    this.convexHull = this.rectangle;
+    this.convexHullRange = PolygonRange.from(this.localTextRange);
   }
+
+  /**
+   * 文本主判定范围
+   * @type {PolygonRange}
+   */
+  localTextRange = new PolygonRange([]);
+
+  /**
+   * 变换后的文本主判定范围
+   * @type {PolygonRange}
+   */
+  worldTextRange = new PolygonRange([]);
 
   textProperty = {
     /**
@@ -99,12 +124,14 @@ class TextObject extends OneDimensionObject {
    */
   divideText(ctx) {
     this.dividedText = [this.text];
-    this.rectangle = new Matrix(
-      0,
-      0,
-      this.ihatLength,
-      this.textProperty.size * 1.2 * this.dividedText.length,
-    );
+    const height = this.textProperty.size * 1.2 * this.dividedText.length;
+    this.localTextRange = new PolygonRange([
+      new Vector(0, 0),
+      new Vector(this.ihatLength, 0),
+      new Vector(this.ihatLength, height),
+      new Vector(0, height),
+    ]);
+    this.syncRanges();
   }
 
   /**
@@ -118,6 +145,15 @@ class TextObject extends OneDimensionObject {
   setIhatLength(length, ctx) {
     this.ihatLength = length;
     this.divideText(ctx);
+  }
+
+  setTransform(trans) {
+    this.transform = trans;
+    this.syncRanges();
+  }
+
+  getRange() {
+    return this.worldTextRange;
   }
 
   /**
@@ -137,16 +173,17 @@ class TextObject extends OneDimensionObject {
     ctx.fillStyle = this.textProperty.color;
     ctx.font = `${this.textProperty.size}px ${this.textProperty.font}`;
     ctx.globalCompositeOperation = "source-over";
+    const rectangle = RectangleRange.from(this.localTextRange);
     if (this.dividedText) {
       this.dividedText.forEach((line, index) => {
         ctx.fillText(line, 0, (index + 1 / 1.2) * this.textProperty.size * 1.2);
       });
       ctx.strokeStyle = this.textProperty.color;
       ctx.strokeRect(
-        this.rectangle.a,
-        this.rectangle.b,
-        this.rectangle.c,
-        this.rectangle.d,
+        rectangle.minX,
+        rectangle.minY,
+        rectangle.maxX - rectangle.minX,
+        rectangle.maxY - rectangle.minY,
       );
     }
     ctx.restore();

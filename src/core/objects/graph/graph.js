@@ -1,6 +1,6 @@
 /**
  * @file 图形对象定义
- * @module board/graph/graph
+ * @module core/objects/graph/graph
  * @author Zhou Chenyu
  */
 

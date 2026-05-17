@@ -1,6 +1,6 @@
 /**
  * @file 对象容器定义
- * @module board/container
+ * @module core/objects/container
  * @author Zhou Chenyu
  */
 

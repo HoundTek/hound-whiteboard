@@ -10,6 +10,4 @@ import { Container } from "../container.js";
  */
 class TwoDimensionObject extends Container {}
 
-export {
-  TwoDimensionObject,
-};
+export { TwoDimensionObject };

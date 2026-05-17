@@ -11,7 +11,7 @@ describe("PolygonObject", () => {
       ].map((p) => Vector.parse(p));
 
       const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
-      expect(polygon.points).toEqual(points);
+      expect(polygon.localPolygonRange.points).toEqual(points);
     });
 
     test("应能正确修改顶点", () => {
@@ -28,9 +28,9 @@ describe("PolygonObject", () => {
         { x: 0, y: 2 },
         { x: 1, y: 1 },
       ].map((p) => Vector.parse(p));
-      polygon.setPoints(newPoints);
+      polygon.setPolygonPoints(newPoints);
 
-      expect(polygon.points).toEqual(newPoints);
+      expect(polygon.localPolygonRange.points).toEqual(newPoints);
     });
 
     test("应能正确修改变换矩阵", () => {
@@ -62,10 +62,10 @@ describe("PolygonObject", () => {
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
-        expect(polygon.transformedPoints[i].x).toBeCloseTo(
+        expect(polygon.worldPolygonRange.points[i].x).toBeCloseTo(
           expectedTransformedPoints[i].x
         );
-        expect(polygon.transformedPoints[i].y).toBeCloseTo(
+        expect(polygon.worldPolygonRange.points[i].y).toBeCloseTo(
           expectedTransformedPoints[i].y
         );
       }
@@ -87,7 +87,7 @@ describe("PolygonObject", () => {
         { x: 2, y: 0 },
         { x: 0, y: 2 },
       ].map((p) => Vector.parse(p));
-      polygon.setPoints(newPoints);
+      polygon.setPolygonPoints(newPoints);
 
       const expectedTransformedPoints = newPoints.map((p) =>
         Vector.mulMatrix(mat, p)
@@ -96,7 +96,7 @@ describe("PolygonObject", () => {
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
         expect(
           Vector.nearlyEq(
-            polygon.transformedPoints[i],
+            polygon.worldPolygonRange.points[i],
             expectedTransformedPoints[i]
           )
         ).toBe(true);
@@ -140,7 +140,7 @@ describe("PolygonObject", () => {
       ].map((p) => Vector.parse(p));
 
       // Powered by Graham scan algorithm
-      polygon.setPoints(newPoints);
+      polygon.setPolygonPoints(newPoints);
 
       // Powered by Geogebra & eyes
       const expectedConvexHull = [
@@ -153,7 +153,7 @@ describe("PolygonObject", () => {
         { x: 0, y: 2 },
       ].map((p) => Vector.parse(p));
 
-      expect(polygon.convexHull).toEqual(expectedConvexHull);
+      expect(polygon.convexHullRange.points).toEqual(expectedConvexHull);
     });
 
     test("当顶点少于3个时，凸包应等于顶点本身", () => {
@@ -167,133 +167,10 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 2, y: 0 },
       ].map((p) => Vector.parse(p));
-      polygon.setPoints(newPoints);
+      polygon.setPolygonPoints(newPoints);
 
-      expect(polygon.points).toEqual(newPoints);
-      expect(polygon.convexHull).toEqual(newPoints);
-    });
-  });
-
-  describe("点相交检测", () => {
-    test("应正确判断点是否在多边形内", () => {
-      const points = [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 4 },
-        { x: 0, y: 4 },
-      ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
-
-      const insidePoint = Vector.parse({ x: 2, y: 2 });
-      const outsidePoint = Vector.parse({ x: 5, y: 5 });
-      const edgePoint = Vector.parse({ x: 4, y: 2 });
-      const vertexPoint = Vector.parse({ x: 0, y: 0 });
-
-      expect(polygon.isPointIntersect(insidePoint)).toBe(true);
-      expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
-      expect(polygon.isPointIntersect(edgePoint)).toBe(true);
-      expect(polygon.isPointIntersect(vertexPoint)).toBe(true);
-    });
-
-    test("应正确判断点是否在复杂多边形内", () => {
-      // 五角星外面加个框
-      const points = [
-        { x: 2, y: 0 },
-        { x: 2, y: 5 },
-        { x: 4, y: 5 },
-        { x: 4, y: 2 },
-        { x: 1, y: 2 },
-        { x: 1, y: 4 },
-        { x: 5, y: 4 },
-        { x: 5, y: 3 },
-        { x: 3, y: 3 },
-        { x: 3, y: 1 },
-        { x: 0, y: 1 },
-        { x: 0, y: 6 },
-        { x: 6, y: 6 },
-        { x: 6, y: 0 },
-      ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
-
-      const insidePoints = Array.from({ length: 6 }, (_, i) =>
-        Array.from({ length: 6 }, (_, j) => {
-          if (i === 0 && j === 0) return null;
-          if (i === 1 && j === 0) return null;
-          return Vector.parse({ x: i + 0.5, y: j + 0.5 });
-        })
-      )
-        .flat()
-        .filter((p) => p !== null);
-
-      for (let p of insidePoints) {
-        expect(polygon.isPointIntersect(p)).toBe(true);
-      }
-
-      expect(polygon.isPointIntersect(Vector.parse({ x: 0.5, y: 0.5 }))).toBe(
-        false
-      );
-      expect(polygon.isPointIntersect(Vector.parse({ x: 1.5, y: 0.5 }))).toBe(
-        false
-      );
-    });
-
-    test("应正确处理顶点更新后的多边形的点相交检测", () => {
-      const initialPoints = [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 4 },
-        { x: 0, y: 4 },
-      ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
-
-      const newPoints = [
-        { x: 1, y: 1 },
-        { x: 5, y: 1 },
-        { x: 5, y: 5 },
-        { x: 1, y: 5 },
-      ].map((p) => Vector.parse(p));
-      polygon.setPoints(newPoints);
-
-      const insidePoint = Vector.parse({ x: 3, y: 3 });
-      const outsidePoint = Vector.parse({ x: 0, y: 0 });
-
-      expect(polygon.isPointIntersect(insidePoint)).toBe(true);
-      expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
-    });
-
-    test("应正确处理变换后的多边形的点相交检测", () => {
-      const points = [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 4 },
-        { x: 0, y: 4 },
-      ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
-
-      const rotation = Matrix.identity().rotate(Math.PI / 4);
-      polygon.setTransform(rotation);
-
-      const insidePoint = Vector.parse({ x: -1, y: 1 });
-      const outsidePoint = Vector.parse({ x: 5, y: 5 });
-
-      expect(polygon.isPointIntersect(insidePoint)).toBe(true);
-      expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
-    });
-
-    test("应正确处理位置移动后的多边形的点相交检测", () => {
-      const points = [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 4 },
-        { x: 0, y: 4 },
-      ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(10, 10), 1, 1, points);
-
-      const insidePoint = Vector.parse({ x: 12, y: 12 });
-      const outsidePoint = Vector.parse({ x: 5, y: 5 });
-
-      expect(polygon.isPointIntersect(insidePoint)).toBe(true);
-      expect(polygon.isPointIntersect(outsidePoint)).toBe(false);
+      expect(polygon.localPolygonRange.points).toEqual(newPoints);
+      expect(polygon.convexHullRange.points).toEqual(newPoints);
     });
   });
 });

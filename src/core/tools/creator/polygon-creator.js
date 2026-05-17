@@ -90,7 +90,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   beginCreationGesture(interaction) {
-    this.obj.appendPoint(interaction.position);
+    this.obj.appendPolygonPoint(interaction.position);
     this.lastPoint = interaction.position;
     this.count++;
   }
@@ -102,7 +102,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   updateCreationGesture(interaction) {
     if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
       this.lastPoint = interaction.position;
-      this.obj.changePoint(this.count - 1, interaction.position);
+      this.obj.replacePolygonPoint(this.count - 1, interaction.position);
     }
   }
 
@@ -116,7 +116,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
       !Vector.nearlyEq(this.lastPoint, interaction.position)
     ) {
       this.lastPoint = interaction.position;
-      this.obj.changePoint(this.count - 1, interaction.position);
+      this.obj.replacePolygonPoint(this.count - 1, interaction.position);
     }
 
     this.lastPoint = null;

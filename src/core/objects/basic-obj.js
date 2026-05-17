@@ -1,11 +1,11 @@
 /**
  * 白板对象基类
- * @module basic-classes
+ * @module core/objects/basic-obj
  * @author Zhou Chenyu
  */
 
 import { Matrix, Vector } from "../utils/math.js";
-import { RectangleRange } from "../range/rectangle.js";
+import { PolygonRange, RectangleRange, Range } from "../range/index.js";
 
 /**
  * 白板对象基类
@@ -31,18 +31,6 @@ class BasicObject {
   ownerPageId;
 
   /**
-   * 对象所在页 id 的兼容访问别名
-   * @type {number}
-   */
-  get pageId() {
-    return this.ownerPageId;
-  }
-
-  set pageId(pageId) {
-    this.ownerPageId = pageId;
-  }
-
-  /**
    * 对象的位置
    * @type {Vector}
    * @description 对象在画布上的位置坐标。
@@ -65,55 +53,37 @@ class BasicObject {
    * @description 存储对象的边界矩形，用于碰撞检测和选择。
    * 边界矩形是相对于变换后的坐标而言的。
    */
-  rectangle;
+  boundingBox;
 
   /**
    * 计算对象的边界矩形
    * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
    */
   calculateRectangle() {
-    this.rectangle = new RectangleRange(
-      this.position.x,
-      this.position.y,
-      this.position.x,
-      this.position.y,
-    );
+    this.boundingBox = new RectangleRange(0, 0, 0, 0);
   }
 
   /**
    * 对象的凸包
-   * @type {Vector[]}
+   * @type {PolygonRange}
    * @description 用于更迅速的碰撞检测，存储凸包的顶点坐标。
    */
-  convexHull;
+  convexHullRange;
 
   /**
    * 计算对象的凸包
    * @description 统一 API，子类可重写此方法以计算对象的凸包。默认是矩形边界。
    */
   calculateConvexHull() {
-    this.convexHull = [
-      { x: this.rectangle.minX, y: this.rectangle.minY },
-      { x: this.rectangle.maxX, y: this.rectangle.minY },
-      { x: this.rectangle.maxX, y: this.rectangle.maxY },
-      { x: this.rectangle.minX, y: this.rectangle.maxY },
-    ];
+    this.convexHullRange = PolygonRange.from(this.boundingBox);
   }
 
   /**
-   * 判断某点是否在对象内
-   * @param {Vector} p - 要检测的点
-   * @returns {boolean} 点是否在对象内
-   * @description 基类使用矩形边界进行检测，子类可重写此方法以实现更精确的检测逻辑。
+   * 获取对象的主判定范围
+   * @returns {Range} 主判定范围
    */
-  isPointIntersect(p) {
-    p = p.sub(this.position); // 将点 p 转换到对象的局部坐标系
-    return (
-      this.rectangle.minX <= p.x &&
-      p.x <= this.rectangle.maxX &&
-      this.rectangle.minY <= p.y &&
-      p.y <= this.rectangle.maxY
-    );
+  getRange() {
+    return this.boundingBox;
   }
 
   /**
