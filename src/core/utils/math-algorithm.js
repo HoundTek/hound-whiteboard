@@ -13,7 +13,7 @@ import { Vector } from "./math.js";
  * @param {Vector[]} points
  * @returns {Vector[]}
  */
-function calculateConvexHull(points) {
+function calcConvexHull(points) {
   if (!points || points.length < 3) {
     return points ? [...points] : [];
   }
@@ -258,7 +258,7 @@ function getTriFingerResult(
 }
 
 export {
-  calculateConvexHull,
+  calcConvexHull,
   insertPoints,
   ropeNailIntersect,
   getDualFingerResult,

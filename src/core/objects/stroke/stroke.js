@@ -7,7 +7,7 @@
 import { Matrix, Vector } from "../../utils/math.js";
 import { RectangleRange } from "../../range/rectangle.js";
 import {
-  calculateConvexHull,
+  calcConvexHull,
   insertPoints,
 } from "../../utils/math-algorithm.js";
 import { BasicObject } from "../basic-obj.js";
@@ -72,8 +72,8 @@ class StrokeObject extends BasicObject {
       // [todo] 删点
     }
     this.calculateConvexHull();
-    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
-      this.transform,
+    this.rectangle = RectangleRange.from(
+      this.convexHull.map((p) => Vector.mulMatrix(this.transform, p)),
     );
   }
 
@@ -90,7 +90,7 @@ class StrokeObject extends BasicObject {
   convexHull = [];
 
   calculateConvexHull() {
-    this.convexHull = calculateConvexHull(this.points);
+    this.convexHull = calcConvexHull(this.points);
   }
 
   /**

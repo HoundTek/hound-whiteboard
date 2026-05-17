@@ -1,8 +1,8 @@
 import { Vector } from "../math.js";
-import { calculateConvexHull, ropeNailIntersect } from "../math-algorithm.js";
+import { calcConvexHull, ropeNailIntersect } from "../math-algorithm.js";
 
 describe("math-algorithm", () => {
-  describe("calculateConvexHull", () => {
+  describe("calcConvexHull", () => {
     test("应正确计算凸包", () => {
       const polygon = [
         { x: 0, y: 0 },
@@ -31,7 +31,7 @@ describe("math-algorithm", () => {
       ].map((p) => Vector.parse(p));
 
       // Powered by Graham scan algorithm
-      const convexHull = calculateConvexHull(polygon);
+      const convexHull = calcConvexHull(polygon);
 
       // Powered by Geogebra & eyes
       const expectedConvexHull = [
@@ -52,7 +52,7 @@ describe("math-algorithm", () => {
         { x: 0, y: 0 },
         { x: 2, y: 0 },
       ].map((p) => Vector.parse(p));
-      const convexHull = calculateConvexHull(polygon);
+      const convexHull = calcConvexHull(polygon);
 
       expect(convexHull).toEqual(polygon);
     });

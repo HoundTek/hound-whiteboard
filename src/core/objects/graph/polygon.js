@@ -7,7 +7,7 @@
 import { GraphObject } from "./graph.js";
 import { Matrix, Vector } from "../../utils/math.js";
 import {
-  calculateConvexHull,
+  calcConvexHull,
   ropeNailIntersect,
 } from "../../utils/math-algorithm.js";
 import { RectangleRange } from "../../range/rectangle.js";
@@ -87,12 +87,9 @@ class PolygonObject extends GraphObject {
     this.calculateRectangle();
   }
 
-  /**
-   * @description 计算多边形对象的矩形范围。是在凸包的基础上进行计算的变换后的矩形范围。
-   */
   calculateRectangle() {
-    this.rectangle = RectangleRange.calculate(this.convexHull).mulMatrix(
-      this.transform,
+    this.rectangle = RectangleRange.from(
+      this.convexHull.map((p) => Vector.mulMatrix(this.transform, p)),
     );
   }
 
@@ -100,7 +97,7 @@ class PolygonObject extends GraphObject {
    * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。
    */
   calculateConvexHull() {
-    this.convexHull = calculateConvexHull(this.points);
+    this.convexHull = calcConvexHull(this.points);
   }
 
   /**

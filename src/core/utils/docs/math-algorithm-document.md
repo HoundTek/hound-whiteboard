@@ -12,7 +12,7 @@
 
 | 名称 | 描述 | 类型 |
 |---|---|---|
-| `calculateConvexHull(points)` | 计算点集凸包 | `Vector[] -> Vector[]` |
+| `calcConvexHull(points)` | 计算点集凸包 | `Vector[] -> Vector[]` |
 | `insertPoints(points, countInside = 1)` | 对折线做 Catmull-Rom 插点 | `Vector[] -> number -> Vector[]` |
 | `ropeNailIntersect(rope, nail)` | 计算闭合曲线对点的缠绕圈数 | `Vector[] -> Vector -> number` |
 | `getDualFingerResult(originPoint1, originPoint2, transformedPoint1, transformedPoint2, originCenter)` | 估算双指缩放旋转和平移结果 | `Vector -> Vector -> Vector -> Vector -> Vector -> {mat, vec}` |
@@ -22,7 +22,7 @@
 
 ### 凸包计算
 
-`calculateConvexHull()` 使用 Graham 扫描思想，先按坐标排序，再分别构造上下壳。
+`calcConvexHull()` 使用 Graham 扫描思想，先按坐标排序，再分别构造上下壳。
 
 当点数不足 3 个时，函数直接返回输入拷贝，不强行构造凸包。
 
