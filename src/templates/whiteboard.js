@@ -1,4 +1,4 @@
-import { Matrix, Vector } from "../utils/math.js";
+import { Matrix, Vector } from "../core/utils/math.js";
 import { TextObject } from "../core/objects/one-dim/text.js";
 import { PolygonCreatorTool } from "../core/tools/creator/polygon-creator.js";
 import { CounterPool } from "../core/utils/counter-pool.js";
