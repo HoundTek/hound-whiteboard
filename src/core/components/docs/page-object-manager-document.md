@@ -43,6 +43,14 @@
 - 然后与候选页矩形逐一做 range 相交判断
 - 最终得到精确的覆盖页 id 集合
 
+这份索引不是只给持久化层使用。当前 `ActiveObjectManager.pickup(...)` 会直接读取 `objectCoverPages` 来决定跨哪些页继续拾取，所以它既是页级缓存索引，也是运行时行为索引。
+
+因此这里有一条关键约束：
+
+- 对象创建完成后，应立即为该对象建立覆盖页索引。
+- 对象几何范围发生变化后，应刷新该对象的覆盖页索引。
+- 如果运行时索引落后于对象真实几何，AOM 的跨页拾取和分层都会读取到旧覆盖范围。
+
 ## 层叠图接口
 
 ### `loadTierGraph(boardRootPath)`
@@ -88,10 +96,11 @@
 ## 与其它组件的关系
 
 - 被 [page-document.md](./page-document.md) 持有并调度。
-- 其静态图被 [active-object-document.md](./active-object-document.md) 的跨页拾取逻辑读取。
+- 其静态图与 `objectCoverPages` 都会被 [active-object-manager-document.md](./active-object-manager-document.md) 的跨页拾取逻辑读取。
 - 底层依赖 `src/core/utils/directed-graph.js`。
 
 ## 实现状态
 
-- 已实现：数据结构定义、按页 id 的对象覆盖索引、层叠图加载/保存、对象读写、统一卸载入口。
-- 待完善：对象增量落盘策略与更细粒度错误恢复。
+- 已实现：数据结构定义、按页 id 的对象覆盖索引、层叠图加载/保存、对象读写、统一卸载入口、基于 `Range` 的精确覆盖页计算。
+- 已接线：对象创建完成后可建立 owner page 上的对象记录与覆盖页索引。
+- 待完善：对象修改/删除/归属页迁移路径上的覆盖页索引自动刷新，以及对象增量落盘策略与更细粒度错误恢复。

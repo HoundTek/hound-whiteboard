@@ -370,5 +370,61 @@ describe("ActiveObjectManager/pickup", () => {
 
       expect(pickup.equals(expected)).toBe(true);
     });
+
+    test("覆盖页集合更新后，应按新的二维覆盖页索引拾取而不是沿用旧结果", () => {
+      const centerPage = createPageAt(0, 0);
+      const rightPage = createPageAt(1, 0);
+      const upPage = createPageAt(0, 1);
+
+      centerPage.objectManager = new PageObjectManager(centerPage.id);
+      rightPage.objectManager = new PageObjectManager(rightPage.id);
+      upPage.objectManager = new PageObjectManager(upPage.id);
+
+      centerPage.objectManager.staticGraph = DirectedGraph.parse([[400, []]]);
+      rightPage.objectManager.staticGraph = DirectedGraph.parse([
+        [400, [401]],
+        [401, []],
+      ]);
+      upPage.objectManager.staticGraph = DirectedGraph.parse([
+        [400, [402]],
+        [402, []],
+      ]);
+
+      pageConnect(centerPage, rightPage);
+      verticalPageConnect(centerPage, upPage);
+
+      setObjectCoverage([centerPage, rightPage], [400]);
+
+      const pickupBeforeMove = aom.pickup(
+        new Set([{ id: 400, page: centerPage }]),
+      );
+      expect(
+        pickupBeforeMove.equals(
+          DirectedGraph.parse([
+            [400, [401]],
+            [401, []],
+          ]),
+        ),
+      ).toBe(true);
+
+      centerPage.objectManager.setObjectCoverPages(400, [
+        centerPage.id,
+        upPage.id,
+      ]);
+      upPage.objectManager.setObjectCoverPages(400, [centerPage.id, upPage.id]);
+      rightPage.objectManager.setObjectCoverPages(400, [centerPage.id]);
+
+      const pickupAfterMove = aom.pickup(
+        new Set([{ id: 400, page: centerPage }]),
+      );
+      expect(
+        pickupAfterMove.equals(
+          DirectedGraph.parse([
+            [400, [402]],
+            [402, []],
+          ]),
+        ),
+      ).toBe(true);
+    });
   });
 });
