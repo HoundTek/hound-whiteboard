@@ -120,46 +120,25 @@ class ActiveObjectManager {
   }
 
   /**
-   * 解析输入中的对象 id
-   * @param {BasicObject | {id?: number} | number} input
-   * @returns {number | undefined}
+   * 断言输入是有效对象实例
+   * @param {*} obj - 候选对象
+   * @returns {BasicObject}
    */
-  resolveObjectId(input) {
-    if (Number.isInteger(input)) return input;
-    if (Number.isInteger(input?.id)) return input.id;
-    return undefined;
-  }
-
-  /**
-   * 将输入归一化为对象实例或兼容对象
-   * @param {BasicObject | {id?: number, ownerPageId?: number, page?: Page} | number} input
-   * @returns {BasicObject | {id: number, ownerPageId?: number, page?: Page} | undefined}
-   */
-  normalizeObjectInput(input) {
-    if (input instanceof BasicObject) {
-      return input;
+  requireObjectInstance(obj) {
+    if (!(obj instanceof BasicObject)) {
+      throw new TypeError(
+        "ActiveObjectManager only accepts BasicObject instances.",
+      );
     }
-
-    if (Number.isInteger(input)) {
-      return this.activeObjectIndex.get(input);
-    }
-
-    if (Number.isInteger(input?.id)) {
-      return {
-        ...input,
-        ownerPageId: input.ownerPageId ?? input.page?.id,
-      };
-    }
-
-    return undefined;
+    return obj;
   }
 
   /**
    * 注册活动对象实例
-   * @param {BasicObject | {id: number}} obj - 要注册的对象实例或兼容对象
+   * @param {BasicObject} obj - 要注册的对象实例
    */
   registerActiveObject(obj) {
-    if (!obj || !Number.isInteger(obj.id)) return;
+    this.requireObjectInstance(obj);
     const previous = this.activeObjectIndex.get(obj.id);
     if (previous) {
       this.activeObjects.delete(previous);
@@ -188,13 +167,11 @@ class ActiveObjectManager {
 
   /**
    * 解析对象起始页
-   * @param {BasicObject | {id: number, ownerPageId?: number, page?: Page}} obj
+   * @param {BasicObject} obj
    * @returns {Page | undefined}
    */
   resolveObjectPage(obj) {
-    if (obj?.page instanceof Page) {
-      return obj.page;
-    }
+    this.requireObjectInstance(obj);
 
     if (Number.isInteger(obj?.ownerPageId) && this.board) {
       return this.board.getPageById(obj.ownerPageId);
@@ -363,7 +340,7 @@ class ActiveObjectManager {
   /**
    * 获取以指定对象集合为起点的子图
    * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
-   * @param {Set<BasicObject | {id: number, ownerPageId?: number, page?: Page}>} startFrom - 作为起点的对象集合
+   * @param {Iterable<BasicObject>} startFrom - 作为起点的对象集合
    * @returns {DirectedGraph}
    */
   pickup(startFrom) {
@@ -465,11 +442,10 @@ class ActiveObjectManager {
     }; // function pickupSingle ends here
 
     for (const entry of startFrom) {
-      const obj = this.normalizeObjectInput(entry);
-      const objectId = this.resolveObjectId(obj);
+      const obj = this.requireObjectInstance(entry);
       const page = this.resolveObjectPage(obj);
-      if (!Number.isInteger(objectId) || !page) continue;
-      pickupSingle(objectId, page);
+      if (!page) continue;
+      pickupSingle(obj.id, page);
     }
 
     return graph;
@@ -477,23 +453,17 @@ class ActiveObjectManager {
 
   /**
    * 选取非活动对象并加入活动对象管理器
-   * @param {Set<BasicObject | {id: number, ownerPageId?: number, page?: Page}>} startFrom - 要选择的对象集合
+   * @param {Iterable<BasicObject>} startFrom - 要选择的对象集合
    */
   choose(startFrom) {
     // 提取出这些对象所构成的子图
     let graph = this.pickup(startFrom);
     const activeEntries = Array.from(startFrom, (item) =>
-      this.normalizeObjectInput(item),
+      this.requireObjectInstance(item),
     );
-    let objs = new Set(
-      activeEntries
-        .map((item) => this.resolveObjectId(item))
-        .filter(Number.isInteger),
-    );
+    let objs = new Set(activeEntries.map((item) => item.id));
     const activeEntryMap = new Map(
-      activeEntries
-        .filter((item) => Number.isInteger(this.resolveObjectId(item)))
-        .map((item) => [this.resolveObjectId(item), item]),
+      activeEntries.map((item) => [item.id, item]),
     );
     startFrom = null; // 释放内存
 
@@ -596,7 +566,7 @@ class ActiveObjectManager {
         // 新活动对象在这个位置绝对不可能是重复对象
         newLayer.activeObjects.add(node);
         this.onLayer.set(node, newLayer);
-        this.registerActiveObject(activeEntryMap.get(node) || { id: node });
+        this.registerActiveObject(activeEntryMap.get(node));
       } else {
         if (!duplicates.has(node)) {
           // 必须是非重复对象才能加入此处
@@ -641,16 +611,15 @@ class ActiveObjectManager {
 
   /**
    * 向活动对象管理器中加入不在白板上的对象
-   * @param {Set<BasicObject>} objects - 新添加对象集合
+   * @param {Iterable<BasicObject>} objects - 新添加对象集合
    */
   add(objects) {
     const objectEntries = Array.from(objects || [], (item) =>
-      this.normalizeObjectInput(item),
-    ).filter(Boolean);
+      this.requireObjectInstance(item),
+    );
 
     const newObjectEntries = objectEntries.filter((item) => {
-      const objectId = this.resolveObjectId(item);
-      return Number.isInteger(objectId) && !this.activeObjectIndex.has(objectId);
+      return !this.activeObjectIndex.has(item.id);
     });
 
     if (newObjectEntries.length === 0) {
@@ -659,11 +628,9 @@ class ActiveObjectManager {
 
     const newLayer = new Layer(this.layerPool.generate());
     for (const objectEntry of newObjectEntries) {
-      const objectId = this.resolveObjectId(objectEntry);
-      if (!Number.isInteger(objectId)) continue;
       this.registerActiveObject(objectEntry);
-      this.onLayer.set(objectId, newLayer);
-      newLayer.activeObjects.add(objectId);
+      this.onLayer.set(objectEntry.id, newLayer);
+      newLayer.activeObjects.add(objectEntry.id);
     }
 
     this.insertLayerToTop(newLayer);
@@ -701,7 +668,7 @@ class ActiveObjectManager {
 
   /**
    * 置顶选择对象
-   * @param {Set<BasicObject | {id: number} | number>} objects
+   * @param {Iterable<BasicObject>} objects
    */
   liftup(objects) {
     /**
@@ -710,8 +677,8 @@ class ActiveObjectManager {
      */
     let newLayers = new Map();
     for (const entry of objects) {
-      const objId = this.resolveObjectId(entry);
-      if (!Number.isInteger(objId)) continue;
+      const obj = this.requireObjectInstance(entry);
+      const objId = obj.id;
       let layerIndex;
       if (this.activeObjectIndex.has(objId)) {
         let oldLayer = this.onLayer.get(objId);
@@ -743,25 +710,15 @@ class ActiveObjectManager {
 
   /**
    * 应用活动对象并取消选择
-   * @param {Set<BasicObject | {id: number} | number>} objects
+   * @param {Iterable<BasicObject>} objects
    */
   apply(objects) {
     const normalizedObjects = Array.from(objects, (item) =>
-      this.normalizeObjectInput(item),
-    )
-      .map((item) => {
-        if (item instanceof BasicObject) return item;
-        const objectId = this.resolveObjectId(item);
-        return Number.isInteger(objectId)
-          ? this.activeObjectIndex.get(objectId) || item
-          : undefined;
-      })
-      .filter(Boolean);
+      this.requireObjectInstance(item),
+    );
 
     const canCommitToBoard = Boolean(this.board);
-    const activeBasicObjects = normalizedObjects.filter(
-      (item) => item instanceof BasicObject,
-    );
+    const activeBasicObjects = normalizedObjects;
 
     if (canCommitToBoard && activeBasicObjects.length > 0) {
       const applyingObjectIds = new Set(
@@ -808,21 +765,13 @@ class ActiveObjectManager {
     }
 
     for (const entry of normalizedObjects) {
-      const objId = this.resolveObjectId(entry);
-      if (!Number.isInteger(objId) || !this.activeObjectIndex.has(objId)) {
+      const objId = entry.id;
+      if (!this.activeObjectIndex.has(objId)) {
         continue;
       }
       this.unregisterActiveObject(objId);
     }
     this.tidyup();
-  }
-
-  /**
-   * 兼容旧接口：取消选择对象
-   * @param {Set<BasicObject | {id: number} | number>} objects
-   */
-  remove(objects) {
-    this.apply(objects);
   }
 
   /**

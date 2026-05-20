@@ -1,6 +1,7 @@
 import { jest } from "@jest/globals";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Vector } from "../../../utils/math.js";
+import { BasicObject } from "../../../objects/basic-obj.js";
 import { ActiveObjectManager } from "../../active-object-manager.js";
 import { Board } from "../../board.js";
 import { Page } from "../../page.js";
@@ -28,7 +29,9 @@ describe("ActiveObjectManager/apply", () => {
     };
     const aom = new ActiveObjectManager(board);
 
-    const pickup8 = aom.pickup(new Set([{ id: 8, ownerPageId: 1 }]));
+    const pickup8 = aom.pickup(
+      new Set([new BasicObject(new Vector(0, 0), 8, 1)]),
+    );
     const expected8 = DirectedGraph.parse([
       [8, [4, 5]],
       [4, [2]],

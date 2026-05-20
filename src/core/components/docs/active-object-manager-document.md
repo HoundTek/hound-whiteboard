@@ -79,11 +79,10 @@
 
 这里的关键点是：`choose` 本身不负责判断对象跨越了哪些页。它完全依赖 `pickup` 产出的子图，而 `pickup` 又完全依赖各页 `PageObjectManager.objectCoverPages` 中的当前索引。
 
-当前接口已经从“对象 id + Page 实例”转向“对象实例优先”：
+当前接口已经收敛为“对象实例驱动”：
 
-- 调用方应优先传入 `BasicObject` 实例集合。
-- AOM 会通过对象自身的 `ownerPageId` 去向白板解析起始页。
-- 旧式 `page` 直传仍可兼容，但不再是主语义。
+- 调用方传入 `BasicObject` 实例集合。
+- AOM 通过对象自身的 `ownerPageId` 去向白板解析起始页。
 
 ### 提交并取消选择 `apply(objects)`
 
@@ -95,8 +94,6 @@
 - 按覆盖页把对象重新写回相关 `PageObjectManager`。
 - 根据活动层顺序和对象相交关系，生成应回写到静态图的 `below/above` 关系。
 - 清除活动对象实例索引，并清理动态图。
-
-兼容层中仍保留 `remove(objects)`，但它现在只是 `apply(objects)` 的别名。
 
 ### 置顶 `liftup(objs)`
 
@@ -116,7 +113,7 @@
 
 - 起点优先是对象实例集合；AOM 会先取对象 id，再通过对象自身的 `ownerPageId` 解析起始页。
 - 当 AOM 被挂在 `Board` 上时，会优先使用 `Board.createPageLoader()`，因此跨页拾取会自动接入白板页加载事件总线。
-- 对某个节点是否跨页，不看方向字段，不看旧式 left/right spill，而是读取 `page.objectManager.getObjectCoverPages(node)`。
+- 对某个节点是否跨页，读取 `page.objectManager.getObjectCoverPages(node)`。
 - 覆盖页用页 id 描述，再通过 `Page.idToCoordinate(pageId)` 转成二维坐标。
 - `PageLoader` 会在二维坐标系中按需移动：先处理 x 方向，再处理 y 方向；因此同一次拾取中可以出现右上、左下这类组合路径。
 - 读取某个覆盖页完成后，`pickup` 会把 `PageLoader` 移回原页，再继续处理剩余覆盖页，避免把 DFS 的后续搜索留在错误页上下文里。
@@ -130,15 +127,14 @@
 
 ## API
 
-| 名称                | 描述                                           | 类型                                      |
-| ------------------- | ---------------------------------------------- | ----------------------------------------- |
-| `add(objects)`      | 将白板外新对象加入动态图顶层                   | `Iterable<BasicObject> -> Layer`          |
-| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖页范围内提取子图 | `Iterable<BasicObject> -> DirectedGraph`  |
-| `choose(startFrom)` | 将对象集加入活动对象系统并分层                 | `Iterable<BasicObject> -> void`           |
-| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构   | `Iterable<BasicObject> -> void`           |
-| `remove(objects)`   | `apply(objects)` 的兼容别名                    | `Iterable<BasicObject \| number> -> void` |
-| `liftup(objs)`      | 将对象置顶                                     | `Iterable<BasicObject \| number> -> void` |
-| `tidyup()`          | 清理动态图中的无效层和空层                     | `void -> void`                            |
+| 名称                | 描述                                           | 类型                                     |
+| ------------------- | ---------------------------------------------- | ---------------------------------------- |
+| `add(objects)`      | 将白板外新对象加入动态图顶层                   | `Iterable<BasicObject> -> Layer`         |
+| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖页范围内提取子图 | `Iterable<BasicObject> -> DirectedGraph` |
+| `choose(startFrom)` | 将对象集加入活动对象系统并分层                 | `Iterable<BasicObject> -> void`          |
+| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构   | `Iterable<BasicObject> -> void`          |
+| `liftup(objs)`      | 将对象置顶                                     | `Iterable<BasicObject> -> void`          |
+| `tidyup()`          | 清理动态图中的无效层和空层                     | `void -> void`                           |
 
 ## 实现状态
 

@@ -3,6 +3,8 @@ import { MockPageLoader } from "./page-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Page } from "../../page.js";
 import { PageObjectManager } from "../../page-object-manager.js";
+import { BasicObject } from "../../../objects/basic-obj.js";
+import { Vector } from "../../../utils/math.js";
 import { onePageData, twoPageData, multiPageData } from "./data.js";
 
 jest.unstable_mockModule("../../page-loader.js", () => ({
@@ -32,6 +34,18 @@ describe("ActiveObjectManager/pickup", () => {
     return page;
   }
 
+  function createObject(id, pageId) {
+    return new BasicObject(new Vector(0, 0), id, pageId);
+  }
+
+  function createBoard(...pages) {
+    const pageMap = new Map(pages.map((page) => [page.id, page]));
+    return {
+      createPageLoader: () => new MockPageLoader(),
+      getPageById: (pageId) => pageMap.get(pageId),
+    };
+  }
+
   function pageConnect(pageA, pageB) {
     pageA.rightPage = pageB;
     pageB.leftPage = pageA;
@@ -59,10 +73,11 @@ describe("ActiveObjectManager/pickup", () => {
       page = createPage(1);
       page.objectManager = new PageObjectManager(1);
       page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
+      aom = new ActiveObjectManager(createBoard(page));
     });
 
     test("应能选取单对象为起点且无跨页对象的子图", () => {
-      const pickup8 = aom.pickup(new Set([{ id: 8, page: page }]));
+      const pickup8 = aom.pickup(new Set([createObject(8, page.id)]));
 
       const expected8 = DirectedGraph.parse([
         [8, [4, 5]],
@@ -75,7 +90,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       expect(pickup8.equals(expected8)).toBe(true);
 
-      const pickup11 = aom.pickup(new Set([{ id: 11, page: page }]));
+      const pickup11 = aom.pickup(new Set([createObject(11, page.id)]));
 
       const expected11 = DirectedGraph.parse([
         [11, [7]],
@@ -91,8 +106,8 @@ describe("ActiveObjectManager/pickup", () => {
     test("应能选取多对象为起点且无跨页对象的子图", () => {
       const pickup8n15 = aom.pickup(
         new Set([
-          { id: 8, page: page },
-          { id: 15, page: page },
+          createObject(8, page.id),
+          createObject(15, page.id),
         ]),
       );
 
@@ -120,6 +135,7 @@ describe("ActiveObjectManager/pickup", () => {
     beforeEach(() => {
       page1 = createPage(1);
       page2 = createPage(2);
+      aom = new ActiveObjectManager(createBoard(page1, page2));
 
       pageConnect(page1, page2);
 
@@ -133,7 +149,7 @@ describe("ActiveObjectManager/pickup", () => {
     });
 
     test("应能选取单对象为起点且含跨页对象的子图", () => {
-      const pickup18 = aom.pickup(new Set([{ id: 18, page: page2 }]));
+      const pickup18 = aom.pickup(new Set([createObject(18, page2.id)]));
 
       const expected18 = DirectedGraph.parse([
         [18, [6]],
@@ -144,7 +160,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       expect(pickup18.equals(expected18)).toBe(true);
 
-      const pickup15 = aom.pickup(new Set([{ id: 15, page: page1 }]));
+      const pickup15 = aom.pickup(new Set([createObject(15, page1.id)]));
 
       const expected15 = DirectedGraph.parse([
         [15, [10, 16]],
@@ -163,8 +179,8 @@ describe("ActiveObjectManager/pickup", () => {
     test("应能选取多对象为起点且含跨页对象的子图", () => {
       const pickup8n10 = aom.pickup(
         new Set([
-          { id: 8, page: page1 },
-          { id: 10, page: page1 },
+          createObject(8, page1.id),
+          createObject(10, page1.id),
         ]),
       );
 
@@ -198,6 +214,7 @@ describe("ActiveObjectManager/pickup", () => {
       page3 = createPageAt(2, 0);
       page4 = createPageAt(3, 0);
       page5 = createPageAt(4, 0);
+      aom = new ActiveObjectManager(createBoard(page1, page2, page3, page4, page5));
 
       page1.objectManager = new PageObjectManager(page1.id);
       page2.objectManager = new PageObjectManager(page2.id);
@@ -225,8 +242,8 @@ describe("ActiveObjectManager/pickup", () => {
     test("应能选取多对象为起点且含多页跨页对象链的子图", () => {
       const pickup6n19 = aom.pickup(
         new Set([
-          { id: 6, page: page3 },
-          { id: 19, page: page1 },
+          createObject(6, page3.id),
+          createObject(19, page1.id),
         ]),
       );
 
@@ -248,8 +265,6 @@ describe("ActiveObjectManager/pickup", () => {
         [20, []],
       ]);
 
-      console.log(pickup6n19.toString());
-
       expect(pickup6n19.equals(expected6n19)).toBe(true);
     });
   });
@@ -260,6 +275,9 @@ describe("ActiveObjectManager/pickup", () => {
       const rightPage = createPageAt(1, 0);
       const upPage = createPageAt(0, 1);
       const rightUpPage = createPageAt(1, 1);
+      aom = new ActiveObjectManager(
+        createBoard(centerPage, rightPage, upPage, rightUpPage),
+      );
 
       centerPage.objectManager = new PageObjectManager(centerPage.id);
       rightPage.objectManager = new PageObjectManager(rightPage.id);
@@ -286,7 +304,7 @@ describe("ActiveObjectManager/pickup", () => {
       verticalPageConnect(centerPage, upPage);
       verticalPageConnect(rightPage, rightUpPage);
 
-      const pickup = aom.pickup(new Set([{ id: 100, page: centerPage }]));
+      const pickup = aom.pickup(new Set([createObject(100, centerPage.id)]));
       const expected = DirectedGraph.parse([
         [100, [101, 103, 104]],
         [101, []],
@@ -301,6 +319,7 @@ describe("ActiveObjectManager/pickup", () => {
       const centerPage = createPageAt(0, 0);
       const upperPage = createPageAt(0, 1);
       const startPage = createPageAt(1, 1);
+      aom = new ActiveObjectManager(createBoard(centerPage, upperPage, startPage));
 
       centerPage.objectManager = new PageObjectManager(centerPage.id);
       upperPage.objectManager = new PageObjectManager(upperPage.id);
@@ -321,7 +340,7 @@ describe("ActiveObjectManager/pickup", () => {
       pageConnect(upperPage, startPage);
       verticalPageConnect(centerPage, upperPage);
 
-      const pickup = aom.pickup(new Set([{ id: 200, page: startPage }]));
+      const pickup = aom.pickup(new Set([createObject(200, startPage.id)]));
       const expected = DirectedGraph.parse([
         [200, [201, 202]],
         [201, []],
@@ -343,6 +362,9 @@ describe("ActiveObjectManager/pickup", () => {
       const centerPage = createPageAt(0, 0);
       const upPage = createPageAt(0, 1);
       const unreachablePage = createPageAt(1, 1);
+      aom = new ActiveObjectManager(
+        createBoard(centerPage, upPage, unreachablePage),
+      );
 
       centerPage.objectManager = new PageObjectManager(centerPage.id);
       upPage.objectManager = new PageObjectManager(upPage.id);
@@ -362,7 +384,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       verticalPageConnect(centerPage, upPage);
 
-      const pickup = aom.pickup(new Set([{ id: 300, page: centerPage }]));
+      const pickup = aom.pickup(new Set([createObject(300, centerPage.id)]));
       const expected = DirectedGraph.parse([
         [300, [302]],
         [302, []],
@@ -375,6 +397,7 @@ describe("ActiveObjectManager/pickup", () => {
       const centerPage = createPageAt(0, 0);
       const rightPage = createPageAt(1, 0);
       const upPage = createPageAt(0, 1);
+      aom = new ActiveObjectManager(createBoard(centerPage, rightPage, upPage));
 
       centerPage.objectManager = new PageObjectManager(centerPage.id);
       rightPage.objectManager = new PageObjectManager(rightPage.id);
@@ -396,7 +419,7 @@ describe("ActiveObjectManager/pickup", () => {
       setObjectCoverage([centerPage, rightPage], [400]);
 
       const pickupBeforeMove = aom.pickup(
-        new Set([{ id: 400, page: centerPage }]),
+        new Set([createObject(400, centerPage.id)]),
       );
       expect(
         pickupBeforeMove.equals(
@@ -415,7 +438,7 @@ describe("ActiveObjectManager/pickup", () => {
       rightPage.objectManager.setObjectCoverPages(400, [centerPage.id]);
 
       const pickupAfterMove = aom.pickup(
-        new Set([{ id: 400, page: centerPage }]),
+        new Set([createObject(400, centerPage.id)]),
       );
       expect(
         pickupAfterMove.equals(

@@ -3,6 +3,8 @@ import { MockPageLoader } from "./page-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Page } from "../../page.js";
 import { PageObjectManager } from "../../page-object-manager.js";
+import { BasicObject } from "../../../objects/basic-obj.js";
+import { Vector } from "../../../utils/math.js";
 import { onePageData } from "./data.js";
 
 jest.unstable_mockModule("../../page-loader.js", () => ({
@@ -29,6 +31,18 @@ describe("ActiveObjectManager/choose", () => {
     return page;
   }
 
+  function createObject(id, pageId) {
+    return new BasicObject(new Vector(0, 0), id, pageId);
+  }
+
+  function createBoard(...pages) {
+    const pageMap = new Map(pages.map((page) => [page.id, page]));
+    return {
+      createPageLoader: () => new MockPageLoader(),
+      getPageById: (pageId) => pageMap.get(pageId),
+    };
+  }
+
   function pageConnect(pageA, pageB) {
     pageA.rightPage = pageB;
     pageB.leftPage = pageA;
@@ -50,10 +64,10 @@ describe("ActiveObjectManager/choose", () => {
   }
 
   beforeEach(() => {
-    aom = new ActiveObjectManager();
     page = createPage(1);
     page.objectManager = new PageObjectManager(1);
     page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
+    aom = new ActiveObjectManager(createBoard(page));
 
     // 将 RandomNumberPool Mock 一下
     let idCounter = 0;
@@ -65,7 +79,7 @@ describe("ActiveObjectManager/choose", () => {
 
   describe("单次选择对象", () => {
     test("应正确选择单个对象", () => {
-      aom.choose(new Set([{ id: 12, page: page }]));
+      aom.choose(new Set([createObject(12, page.id)]));
 
       const expectedActiveSet = new Set([12]);
       const expectedInactiveGraph = DirectedGraph.parse([
@@ -88,9 +102,9 @@ describe("ActiveObjectManager/choose", () => {
     test("应正确选择多个对象", () => {
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 8, page: page },
+          createObject(12, page.id),
+          createObject(13, page.id),
+          createObject(8, page.id),
         ]),
       );
 
@@ -122,15 +136,19 @@ describe("ActiveObjectManager/choose", () => {
 
   describe("多次选择对象", () => {
     test("应正确在已有选择的对象上再次选择单个对象", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object8 = createObject(8, page.id);
+      const object5 = createObject(5, page.id);
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 8, page: page },
+          object12,
+          object13,
+          object8,
         ]),
       );
 
-      aom.choose(new Set([{ id: 5, page: page }]));
+      aom.choose(new Set([object5]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set([8]), new Set([5])];
       const expectedInactiveGraph = [
@@ -157,11 +175,15 @@ describe("ActiveObjectManager/choose", () => {
     });
 
     test("应正确在已有选择的对象间再次选择单个对象", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object5 = createObject(5, page.id);
+      const object8 = createObject(8, page.id);
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 5, page: page },
+          object12,
+          object13,
+          object5,
         ]),
       );
 
@@ -189,7 +211,7 @@ describe("ActiveObjectManager/choose", () => {
         ).toBe(true);
       }
 
-      aom.choose(new Set([{ id: 8, page: page }]));
+      aom.choose(new Set([object8]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set([8]), new Set([5])];
       const expectedInactiveGraph = [
@@ -222,6 +244,9 @@ describe("ActiveObjectManager/choose", () => {
       const rightPage = createPageAt(1, 0);
       const upPage = createPageAt(0, 1);
       const rightUpPage = createPageAt(1, 1);
+      aom = new ActiveObjectManager(
+        createBoard(centerPage, rightPage, upPage, rightUpPage),
+      );
 
       centerPage.objectManager = new PageObjectManager(centerPage.id);
       rightPage.objectManager = new PageObjectManager(rightPage.id);
@@ -249,7 +274,7 @@ describe("ActiveObjectManager/choose", () => {
       verticalPageConnect(centerPage, upPage);
       verticalPageConnect(rightPage, rightUpPage);
 
-      aom.choose(new Set([{ id: 100, page: centerPage }]));
+      aom.choose(new Set([createObject(100, centerPage.id)]));
 
       expect(aom.layerOrder.length).toBe(1);
       expect(aom.layerOrder[0].activeObjects).toEqual(new Set([100]));

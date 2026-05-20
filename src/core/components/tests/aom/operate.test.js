@@ -3,6 +3,8 @@ import { MockPageLoader } from "./page-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Page } from "../../page.js";
 import { PageObjectManager } from "../../page-object-manager.js";
+import { StrokeObject } from "../../../objects/stroke/stroke.js";
+import { Vector } from "../../../utils/math.js";
 import { onePageData } from "./data.js";
 
 jest.unstable_mockModule("../../page-loader.js", () => ({
@@ -22,25 +24,44 @@ describe("ActiveObjectManager/operate", () => {
     return page;
   }
 
+  function createObject(id, pageId) {
+    const object = new StrokeObject(new Vector(0, 0), id, pageId);
+    object.setPathPoints([new Vector(1, 1), new Vector(2, 2)]);
+    return object;
+  }
+
+  function createBoard(...pages) {
+    const pageMap = new Map(pages.map((page) => [page.id, page]));
+    return {
+      width: 10,
+      height: 10,
+      createPageLoader: () => new MockPageLoader(),
+      getPageById: (pageId) => pageMap.get(pageId),
+    };
+  }
+
   beforeEach(() => {
-    aom = new ActiveObjectManager();
     page = createPage(1);
     page.objectManager = new PageObjectManager(1);
     page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
+    aom = new ActiveObjectManager(createBoard(page));
   });
 
   describe("置顶选择对象", () => {
     test("应正确置顶选择对象", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object5 = createObject(5, page.id);
       // 选 12, 13, 5
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 5, page: page },
+          object12,
+          object13,
+          object5,
         ]),
       );
       // 置顶 5
-      aom.liftup(new Set([5]));
+      aom.liftup(new Set([object5]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set(), new Set([5])];
       const expectedInactiveGraph = [
@@ -69,16 +90,19 @@ describe("ActiveObjectManager/operate", () => {
     });
 
     test("应正确置顶多个对象", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object5 = createObject(5, page.id);
       // 选 12, 13, 5
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 5, page: page },
+          object12,
+          object13,
+          object5,
         ]),
       );
       // 置顶 5, 13
-      aom.liftup(new Set([5, 13]));
+      aom.liftup(new Set([object5, object13]));
 
       const expectedActiveSet = [
         new Set([12]),
@@ -115,16 +139,19 @@ describe("ActiveObjectManager/operate", () => {
 
   describe("取消选择对象", () => {
     test("应正确取消选择单个对象", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object5 = createObject(5, page.id);
       // 选 12, 13, 5
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 5, page: page },
+          object12,
+          object13,
+          object5,
         ]),
       );
       // 取消选择 5
-      aom.remove(new Set([5]));
+      aom.apply(new Set([object5]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set()];
       const expectedInactiveGraph = [
@@ -152,16 +179,19 @@ describe("ActiveObjectManager/operate", () => {
     });
 
     test("应正确取消选择多个对象 #1", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object5 = createObject(5, page.id);
       // 选 12, 13, 5
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 5, page: page },
+          object12,
+          object13,
+          object5,
         ]),
       );
       // 取消选择 5, 13
-      aom.remove(new Set([5, 13]));
+      aom.apply(new Set([object5, object13]));
 
       const expectedActiveSet = [new Set([12]), new Set()];
       const expectedInactiveGraph = [
@@ -189,16 +219,19 @@ describe("ActiveObjectManager/operate", () => {
     });
 
     test("应正确取消选择多个对象 #2", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object5 = createObject(5, page.id);
       // 选 12, 13, 5
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 5, page: page },
+          object12,
+          object13,
+          object5,
         ]),
       );
       // 取消选择 12, 13
-      aom.remove(new Set([12, 13]));
+      aom.apply(new Set([object12, object13]));
 
       const expectedActiveSet = [new Set([5])];
       const expectedInactiveGraph = [
@@ -221,18 +254,23 @@ describe("ActiveObjectManager/operate", () => {
 
   describe("清理动态图", () => {
     test("应能正确去除空层", () => {
+      const object12 = createObject(12, page.id);
+      const object7 = createObject(7, page.id);
+      const object8 = createObject(8, page.id);
+      const object4 = createObject(4, page.id);
+      const object5 = createObject(5, page.id);
       // 选 12, 7, 8, 4, 5
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 7, page: page },
-          { id: 8, page: page },
-          { id: 4, page: page },
-          { id: 5, page: page },
+          object12,
+          object7,
+          object8,
+          object4,
+          object5,
         ]),
       );
       // 置顶 7, 8
-      aom.liftup(new Set([7, 8]));
+      aom.liftup(new Set([object7, object8]));
       const expectedActiveSet = [
         new Set([12]),
         new Set([4, 5]),
@@ -258,16 +296,19 @@ describe("ActiveObjectManager/operate", () => {
     });
 
     test("应能正确去除不能被活动对象到达的层", () => {
+      const object12 = createObject(12, page.id);
+      const object13 = createObject(13, page.id);
+      const object5 = createObject(5, page.id);
       // 选 12, 13, 5
       aom.choose(
         new Set([
-          { id: 12, page: page },
-          { id: 13, page: page },
-          { id: 5, page: page },
+          object12,
+          object13,
+          object5,
         ]),
       );
       // 置顶 12, 13
-      aom.liftup(new Set([12, 13]));
+      aom.liftup(new Set([object12, object13]));
 
       const expectedActiveSet = [new Set([5]), new Set([12, 13])];
       const expectedInactiveGraph = [
