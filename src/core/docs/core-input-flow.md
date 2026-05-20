@@ -110,29 +110,30 @@ monitor.mountDevice("/debugger", debuggerDevice);
 
 - `screenToWorld()`：把屏幕坐标转换到世界坐标
 - `screenToPage()`：把屏幕坐标转换到页空间
+- `worldToPage()`：把世界坐标转换到页空间
 - `origin` / `zoom`：解释当前视口
 - `pageWidth` / `pageHeight`：解释页尺寸
 
 这也是为什么设备之间不能直接互调，却仍然可以通过 Monitor 间接共享视口语义。
 
-在当前实现里，挂到设备树末端的工具通过 `createProcessor()` 默认会拿到三类与 creator 链路直接相关的上下文能力：
+在当前实现里，挂到设备树末端的工具通过 `createProcessor()` 默认会拿到两类与 creator 链路直接相关的上下文能力：
 
-- `resolvePosition(packet)`：默认调用 `screenToWorld()`，把位置信号规整为世界坐标
-- `resolveOwnerPageId(packet)`：默认调用 `screenToPage()`，把位置信号映射到归属页 id
+- `resolveOwnerPageId(position)`：默认调用 `worldToPage()`，把世界坐标映射到归属页 id
 - `allocateObjectId()`：默认转发到 `Board.allocateObjectId()`
 
 因此，一条对象创建链路当前的默认输入规整顺序是：
 
-1. 原始屏幕坐标进入 `SignalPacket`
-2. Tool 上下文把它规整成世界坐标 `position`
-3. 同一位置再被映射为 `ownerPageId`
-4. `Board` 分配新的 `objectId`
-5. 创建工具基于世界坐标创建对象，并按对象类型写入局部几何
+1. UI / 宿主侧先把原始屏幕坐标转换成世界坐标
+2. 世界坐标进入 `SignalPacket`
+3. creator 工具直接消费该世界坐标 `position`
+4. 同一位置再被映射为 `ownerPageId`
+5. `Board` 分配新的 `objectId`
+6. 创建工具基于世界坐标创建对象，并按对象类型写入局部几何
 
 这里要特别区分三层坐标语义：
 
-- 屏幕坐标：来自 DOM / Pointer / Mouse 事件
-- 世界坐标：输入链对 Tool 暴露的统一位置语义
+- 屏幕坐标：来自 DOM / Pointer / Mouse 事件，进入 Core 前应先完成换算
+- 世界坐标：输入链对 Tool 暴露的统一位置语义，也是位置类信号进入 Core 时的默认语义
 - 对象局部坐标：对象内部保存的几何数据，通常相对 `obj.position`
 
 对于键盘设备，当前还支持一个常见的聚合流向：根节点先把原始按键事件送到 `/code/<KeyCode>`，具体键位节点再通过通用 `rewritePacket` 把它改写成统一的业务信号，并在返回包中显式写入目标路径，例如 `/move` 这类公共锚点，随后再交给一个共享工具节点消费。
@@ -169,7 +170,7 @@ monitor.mountDevice("/debugger", debuggerDevice);
 7. 工具节点通过 `tool.createProcessor({ board, monitor })` 消费该包
 8. Tool 修改 `Board` 或其它 Core 状态
 
-对于对象创建工具，第 7 步里默认还包含：对象 id 申请、归属页解析、以及屏幕坐标到世界坐标的规整。
+对于对象创建工具，第 7 步里默认还包含：对象 id 申请，以及基于当前世界坐标的归属页解析。
 
 对应的最小结构可以写成：
 

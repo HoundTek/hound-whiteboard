@@ -112,7 +112,7 @@
 - `Board.signalsEventBus` 分发到目标 `Monitor`
 - `DevicesTree` 路由到末端工具节点
 - creator 工具默认从 `Board` 申请 `objectId`
-- creator 工具默认从 `Monitor` 解析世界坐标与 `ownerPageId`
+- creator 工具直接消费输入包中的世界坐标，并默认从 `Monitor` 解析 `ownerPageId`
 - 新对象先进入 `ActiveObjectManager.add()`，完成后再通过 `apply()` 回写白板
 
 ## 4. hit/

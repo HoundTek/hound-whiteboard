@@ -238,8 +238,13 @@ board.signalsEventBus.emit("mount", {
 });
 
 const emitMousePacket = (event) => {
+  const worldPosition = monitor.screenToWorld(
+    new Vector(event.clientX, event.clientY),
+  );
+  if (!worldPosition) return;
+
   const baseContext = {
-    value: { x: event.clientX, y: event.clientY },
+    value: worldPosition,
     button: event.button,
     buttons: event.buttons,
     domEvent: event.type,

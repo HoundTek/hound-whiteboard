@@ -163,7 +163,8 @@ describe("Board input flow", () => {
           rewritePacket(packet) {
             const signals = packet.signals
               .filter(
-                (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+                (signal) =>
+                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
               )
               .map(() => ({
                 type: "position",
@@ -246,7 +247,7 @@ describe("Board input flow", () => {
         {
           type: "position",
           context: {
-            value: new Vector(10, 20),
+            value: new Vector(105, 60),
             buttons: 1,
             button: 0,
           },
@@ -260,7 +261,7 @@ describe("Board input flow", () => {
         {
           type: "position",
           context: {
-            value: new Vector(20, 30),
+            value: new Vector(110, 65),
             buttons: 1,
             button: 0,
           },
@@ -287,7 +288,9 @@ describe("Board input flow", () => {
     expect(board.objectCounterPool.counter).toBe(1);
     expect(ownerPage.objectManager.pageObjects.get(tool.obj.id)).toBe(tool.obj);
     expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
-    expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
+    expect(
+      tool.obj.localPathRange.points.map((point) => point.serialize()),
+    ).toEqual([
       { x: 0, y: 0 },
       { x: 5, y: 5 },
     ]);
@@ -312,7 +315,7 @@ describe("Board input flow", () => {
         {
           type: "position",
           context: {
-            value: new Vector(50, 60),
+            value: new Vector(125, 80),
           },
         },
         {
@@ -338,8 +341,8 @@ describe("Board input flow", () => {
     expect(board.objectCounterPool.counter).toBe(1);
     expect(ownerPage.objectManager.pageObjects.get(tool.obj.id)).toBe(tool.obj);
     expect(tool.obj.position.serialize()).toEqual({ x: 125, y: 80 });
-    expect(tool.obj.localPolygonRange.points.map((point) => point.serialize())).toEqual([
-      { x: 0, y: 0 },
-    ]);
+    expect(
+      tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+    ).toEqual([{ x: 0, y: 0 }]);
   });
 });

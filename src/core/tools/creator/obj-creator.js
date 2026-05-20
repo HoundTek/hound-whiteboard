@@ -128,13 +128,11 @@ class ObjectCreatorTool extends Tool {
       isObjectCancelled: signals.some(
         (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_CANCEL,
       ),
-      objectId:
-        positionSignal?.context?.objectId ??
-        deviceContext.objectId,
+      objectId: positionSignal?.context?.objectId ?? deviceContext.objectId,
       ownerPageId:
         positionSignal?.context?.ownerPageId ??
         deviceContext.ownerPageId ??
-        deviceContext.resolveOwnerPageId?.(signalPacket),
+        deviceContext.resolveOwnerPageId?.(position, signalPacket),
     };
   }
 
@@ -146,7 +144,8 @@ class ObjectCreatorTool extends Tool {
   ensureObject(interaction) {
     if (!this.obj) {
       const objectId =
-        interaction.objectId ?? interaction?.deviceContext?.allocateObjectId?.();
+        interaction.objectId ??
+        interaction?.deviceContext?.allocateObjectId?.();
       if (interaction.objectId == null || interaction.ownerPageId == null) {
         if (objectId == null || interaction.ownerPageId == null) {
           return false;

@@ -85,6 +85,12 @@ describe("Monitor", () => {
       new Vector(400, 300),
     );
 
+    expect(monitor.worldToPage(new Vector(400, 300))).toEqual({
+      pageId: 1,
+      x: 400,
+      y: 300,
+    });
+
     expect(monitor.screenToPage(new Vector(400, 300))).toEqual({
       pageId: 1,
       x: 400,

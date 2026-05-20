@@ -73,10 +73,11 @@
 当前默认注入、并已被 creator 链路实际使用的上下文能力还有：
 
 - `allocateObjectId()`：默认转发到 `Board.allocateObjectId()`，用于申请新的对象 id
-- `resolveOwnerPageId(packet)`：默认通过 `Monitor.screenToPage()` 从位置信号解析对象归属页
-- `resolvePosition(packet)`：默认通过 `Monitor.screenToWorld()` 把屏幕坐标规整为世界坐标
+- `resolveOwnerPageId(position)`：默认通过 `Monitor.worldToPage()` 从世界坐标解析对象归属页
 
-这意味着当前工具链中，`position` 的推荐语义已经收敛为“世界坐标 / 全局坐标”，而不是页内坐标或屏幕坐标。
+这意味着当前工具链中，`position` 的输入语义已经固定为“世界坐标 / 全局坐标”，而不是页内坐标或屏幕坐标。
+
+对应的坐标规整不再发生在 `createProcessor()` 里。发往 `Board.signalsEventBus` 的位置类信号，应当在进入 Core 之前就已经完成“屏幕坐标 -> 世界坐标”的换算。
 
 对象若自身维护局部几何数据，则应在工具内部把世界坐标转换成相对 `obj.position` 的局部坐标再写入对象。当前 `StrokeCreatorTool` 与 `PolygonCreatorTool` 都遵循这一约束。
 
@@ -117,7 +118,7 @@
 - Device 负责定义设备子树，并把现实输入编码为信号包。
 - 设备树节点负责按路径和状态路由信号；设备通道节点通常通过 `defaultPath` 把信号继续送到独立的工具节点。
 - Tool 负责消费信号，并调用 Board / Object / ActiveObjectManager 等核心模块完成修改。
-- Monitor 负责提供视口语义：屏幕坐标可先被规整为世界坐标，再由工具决定是否转换为对象局部坐标。
+- Monitor 负责提供视口语义与坐标映射辅助；若需要从屏幕坐标换算到世界坐标，应在信号进入 Core 之前完成。
 - Board / Object 等 Core 组件负责保存最终状态，Tool 不再承担信号转发职责。
 
 ## 工具的持久化

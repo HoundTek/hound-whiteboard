@@ -128,6 +128,29 @@ class Monitor {
   }
 
   /**
+   * 将世界坐标映射到页空间坐标
+   * @param {Vector} worldPos - 世界坐标
+   * @returns {{ pageId: number, x: number, y: number } | null}
+   */
+  worldToPage(worldPos) {
+    if (!this.board || !worldPos) return null;
+
+    const pageWidth = this.pageWidth;
+    const pageHeight = this.pageHeight;
+    if (pageWidth <= 0 || pageHeight <= 0) return null;
+
+    const pageX = Math.floor(worldPos.x / pageWidth);
+    const pageY = Math.floor(worldPos.y / pageHeight);
+    const page = this.board.getPageByCoordinate?.(pageX, pageY);
+    if (!page) return null;
+
+    const pageLocalX = worldPos.x - pageX * pageWidth;
+    const pageLocalY = worldPos.y - pageY * pageHeight;
+
+    return { pageId: page.id, x: pageLocalX, y: pageLocalY };
+  }
+
+  /**
    * 将屏幕坐标映射到页空间坐标
    *
    * @description
@@ -141,22 +164,7 @@ class Monitor {
     if (!this.canvas || !this.board) return null;
     const worldPos = this.screenToWorld(screenPos);
     if (!worldPos) return null;
-    const worldX = worldPos.x;
-    const worldY = worldPos.y;
-
-    const pageWidth = this.pageWidth;
-    const pageHeight = this.pageHeight;
-    if (pageWidth <= 0 || pageHeight <= 0) return null;
-
-    const pageX = Math.floor(worldX / pageWidth);
-    const pageY = Math.floor(worldY / pageHeight);
-    const page = this.board.getPageByCoordinate?.(pageX, pageY);
-    if (!page) return null;
-
-    const pageLocalX = worldX - pageX * pageWidth;
-    const pageLocalY = worldY - pageY * pageHeight;
-
-    return { pageId: page.id, x: pageLocalX, y: pageLocalY };
+    return this.worldToPage(worldPos);
   }
 
   /**

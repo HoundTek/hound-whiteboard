@@ -54,40 +54,11 @@ class Tool {
     return (signalPacket, routeContext = {}) => {
       const board = routeContext.board ?? toolContext.board;
       const monitor = routeContext.monitor ?? toolContext.monitor;
-      const resolvePosition =
-        routeContext.resolvePosition ??
-        toolContext.resolvePosition ??
-        (typeof monitor?.screenToWorld === "function"
-          ? (packet) => {
-              const normalizedPacket = SignalPacket.from(packet);
-              const positionSignal = normalizedPacket.signals.find(
-                (signal) => signal.type === "position",
-              );
-              const position =
-                positionSignal?.context?.value ??
-                positionSignal?.context?.position;
-              if (
-                !position ||
-                typeof position.x !== "number" ||
-                typeof position.y !== "number"
-              ) {
-                return undefined;
-              }
-              return monitor.screenToWorld(position) ?? undefined;
-            }
-          : undefined);
       const resolveOwnerPageId =
         routeContext.resolveOwnerPageId ??
         toolContext.resolveOwnerPageId ??
-        (typeof monitor?.screenToPage === "function"
-          ? (packet) => {
-              const normalizedPacket = SignalPacket.from(packet);
-              const positionSignal = normalizedPacket.signals.find(
-                (signal) => signal.type === "position",
-              );
-              const position =
-                positionSignal?.context?.value ??
-                positionSignal?.context?.position;
+        (typeof monitor?.worldToPage === "function"
+          ? (position) => {
               if (
                 !position ||
                 typeof position.x !== "number" ||
@@ -95,7 +66,7 @@ class Tool {
               ) {
                 return undefined;
               }
-              return monitor.screenToPage(position)?.pageId;
+              return monitor.worldToPage(position)?.pageId;
             }
           : undefined);
       this.process(SignalPacket.from(signalPacket), {
@@ -105,7 +76,6 @@ class Tool {
           routeContext.allocateObjectId ??
           toolContext.allocateObjectId ??
           board?.allocateObjectId?.bind(board),
-        resolvePosition,
         resolveOwnerPageId,
       });
     };

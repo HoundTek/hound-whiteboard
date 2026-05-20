@@ -83,7 +83,7 @@ describe("Tool", () => {
 
     const tool = new TestTool();
     const monitor = {
-      screenToPage(position) {
+      worldToPage(position) {
         if (position.x === 10 && position.y === 20) {
           return { pageId: 3, x: 10, y: 20 };
         }
@@ -99,12 +99,13 @@ describe("Tool", () => {
 
     expect(
       tool.calls[0].deviceContext.resolveOwnerPageId({
-        signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }],
+        x: 10,
+        y: 20,
       }),
     ).toBe(3);
   });
 
-  test("createProcessor 应默认暴露来自 Monitor 的 resolvePosition", () => {
+  test("createProcessor 不再默认暴露坐标转换能力", () => {
     class TestTool extends Tool {
       calls = [];
 
@@ -118,23 +119,14 @@ describe("Tool", () => {
     }
 
     const tool = new TestTool();
-    const monitor = {
-      screenToWorld(position) {
-        return { x: position.x + 100, y: position.y + 50 };
-      },
-    };
-    const processor = tool.createProcessor({ monitor });
+    const processor = tool.createProcessor({});
 
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
       { path: "/monitor/s-pen/pen" },
     );
 
-    expect(
-      tool.calls[0].deviceContext.resolvePosition({
-        signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }],
-      }),
-    ).toEqual({ x: 110, y: 70 });
+    expect(tool.calls[0].deviceContext.resolvePosition).toBeUndefined();
   });
 
   test("基类 process 仍为抽象方法", () => {
