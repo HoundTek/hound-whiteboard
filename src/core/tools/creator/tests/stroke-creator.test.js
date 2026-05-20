@@ -1,5 +1,7 @@
 import { StrokeCreatorTool } from "../stroke-creator.js";
 import { Vector } from "../../../utils/math.js";
+import { Board } from "../../../components/board.js";
+import { PageObjectManager } from "../../../components/page-object-manager.js";
 import { jest } from "@jest/globals";
 
 describe("StrokeCreatorTool", () => {
@@ -42,11 +44,12 @@ describe("StrokeCreatorTool", () => {
 
     expect(tool.obj.id).toBe(100);
     expect(tool.obj.ownerPageId).toBe(2);
+    expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
     expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
-      { x: 1, y: 2 },
-      { x: 2, y: 3 },
-      { x: 3, y: 4 },
-      { x: 3, y: 4 },
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+      { x: 2, y: 2 },
     ]);
   });
 
@@ -76,13 +79,17 @@ describe("StrokeCreatorTool", () => {
 
     expect(tool.obj.id).toBe(101);
     expect(tool.obj.ownerPageId).toBe(3);
+    expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 6 });
     expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
-      { x: 5, y: 6 },
+      { x: 0, y: 0 },
     ]);
   });
 
-  test("cancel 信号应重置正在创建的对象", () => {
+  test("cancel 信号应重置正在创建的对象并撤销 AOM 注册", () => {
     const tool = new StrokeCreatorTool();
+    const board = {
+      activeObjectManager: { discard: jest.fn() },
+    };
 
     expect(
       tool.process(
@@ -90,23 +97,31 @@ describe("StrokeCreatorTool", () => {
           to: "/monitor/stroke",
           signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
         },
-        { objectId: 1, ownerPageId: 1 },
+        { objectId: 1, ownerPageId: 1, board },
       ),
     ).toBeUndefined();
+
+    const activeObject = tool.obj;
 
     expect(
       tool.process({
         to: "/monitor/stroke",
         signals: [{ type: "cancel", context: {} }],
-      }),
+      }, { board }),
     ).toBeUndefined();
 
+    expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
+      new Set([activeObject]),
+    );
     expect(tool.obj).toBeNull();
   });
 
-  test("创建完成后应将对象交给 board.addObject", () => {
+  test("创建完成后应将对象交给 activeObjectManager.apply", () => {
     const tool = new StrokeCreatorTool();
-    const board = { addObject: jest.fn() };
+    const board = {
+      addObject: jest.fn(),
+      activeObjectManager: { apply: jest.fn() },
+    };
 
     tool.process(
       {
@@ -116,6 +131,8 @@ describe("StrokeCreatorTool", () => {
       { objectId: 5, ownerPageId: 1, board },
     );
 
+    const createdObject = tool.obj;
+
     tool.process(
       {
         to: "/monitor/stroke",
@@ -124,7 +141,10 @@ describe("StrokeCreatorTool", () => {
       { objectId: 5, ownerPageId: 1, board },
     );
 
-    expect(board.addObject).toHaveBeenCalledWith(tool.obj, 1);
+    expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
+      new Set([createdObject]),
+    );
+    expect(board.addObject).not.toHaveBeenCalled();
   });
 
   test("首次创建对象时应注册到 activeObjectManager.add", () => {
@@ -144,5 +164,67 @@ describe("StrokeCreatorTool", () => {
     expect(board.activeObjectManager.add).toHaveBeenCalledWith(
       new Set([tool.obj]),
     );
+  });
+
+  test("真实 Board 上创建完成后应经由 AOM.apply 落回归属页", () => {
+    const tool = new StrokeCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.pageOrder = [1];
+    board.pageIds = new Set(board.pageOrder);
+    board.getPageById(1).objectManager = new PageObjectManager(1);
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      { objectId: 21, ownerPageId: 1, board },
+    );
+
+    const createdObject = tool.obj;
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "end", context: {} }],
+      },
+      { objectId: 21, ownerPageId: 1, board },
+    );
+
+    const ownerPage = board.getPageById(1);
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(ownerPage.objectManager.pageObjects.get(21)).toBe(createdObject);
+  });
+
+  test("真实 Board 上取消创建后不应写回页静态结构", () => {
+    const tool = new StrokeCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.pageOrder = [1];
+    board.pageIds = new Set(board.pageOrder);
+    board.getPageById(1).objectManager = new PageObjectManager(1);
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      { objectId: 22, ownerPageId: 1, board },
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "cancel", context: {} }],
+      },
+      { objectId: 22, ownerPageId: 1, board },
+    );
+
+    const ownerPage = board.getPageById(1);
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(ownerPage.objectManager.pageObjects.has(22)).toBe(false);
   });
 });

@@ -775,6 +775,25 @@ class ActiveObjectManager {
   }
 
   /**
+   * 取消活动对象而不提交回白板
+   * @param {Iterable<BasicObject>} objects
+   */
+  discard(objects) {
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+
+    for (const entry of normalizedObjects) {
+      if (!this.activeObjectIndex.has(entry.id)) {
+        continue;
+      }
+      this.unregisterActiveObject(entry.id);
+    }
+
+    this.tidyup();
+  }
+
+  /**
    * 将某层插入到另一层之下
    * @description 欲插入的那一层的实例应该不存在于 `layerOrder` 中。
    * @param {Layer} layerNow - 要插入的层

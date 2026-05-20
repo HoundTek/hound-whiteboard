@@ -86,11 +86,20 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   }
 
   /**
+   * 将世界坐标转换为对象局部坐标
+   * @param {Vector} position
+   * @returns {Vector}
+   */
+  toLocalPoint(position) {
+    return position.sub(this.obj.position);
+  }
+
+  /**
    * @description 创建手势开始时，添加一个新的顶点。
    * @param {Object} interaction - 当前交互上下文
    */
   beginCreationGesture(interaction) {
-    this.obj.appendPolygonPoint(interaction.position);
+    this.obj.appendPolygonPoint(this.toLocalPoint(interaction.position));
     this.lastPoint = interaction.position;
     this.count++;
   }
@@ -102,7 +111,10 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   updateCreationGesture(interaction) {
     if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
       this.lastPoint = interaction.position;
-      this.obj.replacePolygonPoint(this.count - 1, interaction.position);
+      this.obj.replacePolygonPoint(
+        this.count - 1,
+        this.toLocalPoint(interaction.position),
+      );
     }
   }
 
@@ -116,7 +128,10 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
       !Vector.nearlyEq(this.lastPoint, interaction.position)
     ) {
       this.lastPoint = interaction.position;
-      this.obj.replacePolygonPoint(this.count - 1, interaction.position);
+      this.obj.replacePolygonPoint(
+        this.count - 1,
+        this.toLocalPoint(interaction.position),
+      );
     }
 
     this.lastPoint = null;

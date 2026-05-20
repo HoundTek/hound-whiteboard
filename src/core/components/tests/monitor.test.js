@@ -81,6 +81,10 @@ describe("Monitor", () => {
   test("screenToPage 应按二维页坐标映射命中对应页", () => {
     const monitor = createMonitor("gamma");
 
+    expect(monitor.screenToWorld(new Vector(400, 300))).toEqual(
+      new Vector(400, 300),
+    );
+
     expect(monitor.screenToPage(new Vector(400, 300))).toEqual({
       pageId: 1,
       x: 400,

@@ -101,11 +101,19 @@
 - 已有可用子类：
   - `StrokeCreatorTool`
   - `PolygonCreatorTool`
-  - `PolygonModifierTool`
 - 仍未完整：
   - chooser/eraser/board 工具大多为空或仅占位
   - 多个工具文档为空，尚未与实现同速更新
-  - 工具与设备子树之间的完整消费链还未完全接通
+  - 其它工具族仍在裁剪与补线中
+
+当前已接通的一条核心纵向链路是：
+
+- 设备输入进入 `SignalPacket`
+- `Board.signalsEventBus` 分发到目标 `Monitor`
+- `DevicesTree` 路由到末端工具节点
+- creator 工具默认从 `Board` 申请 `objectId`
+- creator 工具默认从 `Monitor` 解析世界坐标与 `ownerPageId`
+- 新对象先进入 `ActiveObjectManager.add()`，完成后再通过 `apply()` 回写白板
 
 ## 4. hit/
 

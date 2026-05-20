@@ -110,6 +110,24 @@ class Monitor {
   }
 
   /**
+   * 将屏幕坐标映射到世界坐标
+   * @param {Vector} screenPos - 屏幕坐标（clientX/clientY）
+   * @returns {Vector | null}
+   */
+  screenToWorld(screenPos) {
+    if (!this.canvas || !screenPos) return null;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const canvasX = screenPos.x - rect.left;
+    const canvasY = screenPos.y - rect.top;
+
+    return new Vector(
+      canvasX / this.zoom + this.origin.x,
+      canvasY / this.zoom + this.origin.y,
+    );
+  }
+
+  /**
    * 将屏幕坐标映射到页空间坐标
    *
    * @description
@@ -121,16 +139,10 @@ class Monitor {
    */
   screenToPage(screenPos) {
     if (!this.canvas || !this.board) return null;
-
-    const rect = this.canvas.getBoundingClientRect();
-
-    // 屏幕坐标 → 画布本地坐标
-    const canvasX = screenPos.x - rect.left;
-    const canvasY = screenPos.y - rect.top;
-
-    // 画布本地坐标 → 世界坐标
-    const worldX = canvasX / this.zoom + this.origin.x;
-    const worldY = canvasY / this.zoom + this.origin.y;
+    const worldPos = this.screenToWorld(screenPos);
+    if (!worldPos) return null;
+    const worldX = worldPos.x;
+    const worldY = worldPos.y;
 
     const pageWidth = this.pageWidth;
     const pageHeight = this.pageHeight;

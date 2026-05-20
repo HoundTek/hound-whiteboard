@@ -186,6 +186,14 @@ class Board {
   }
 
   /**
+   * 申请新的对象 id
+   * @returns {number}
+   */
+  allocateObjectId() {
+    return this.objectCounterPool.generate();
+  }
+
+  /**
    * 判断页 id 是否存在于当前白板
    * @param {number} pageId - 页 id
    * @returns {boolean}

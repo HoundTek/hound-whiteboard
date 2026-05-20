@@ -106,9 +106,11 @@ class ObjectCreatorTool extends Tool {
     const positionSignal = signals.find(
       (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
     );
-    const position = ObjectCreatorTool.normalizeVector(
-      positionSignal?.context?.value ?? positionSignal?.context?.position,
-    );
+    const position =
+      deviceContext.resolvePosition?.(signalPacket) ??
+      ObjectCreatorTool.normalizeVector(
+        positionSignal?.context?.value ?? positionSignal?.context?.position,
+      );
     return {
       signalPacket,
       deviceContext,
@@ -128,8 +130,7 @@ class ObjectCreatorTool extends Tool {
       ),
       objectId:
         positionSignal?.context?.objectId ??
-        deviceContext.objectId ??
-        deviceContext.allocateObjectId?.(),
+        deviceContext.objectId,
       ownerPageId:
         positionSignal?.context?.ownerPageId ??
         deviceContext.ownerPageId ??
@@ -144,14 +145,15 @@ class ObjectCreatorTool extends Tool {
    */
   ensureObject(interaction) {
     if (!this.obj) {
+      const objectId =
+        interaction.objectId ?? interaction?.deviceContext?.allocateObjectId?.();
       if (interaction.objectId == null || interaction.ownerPageId == null) {
-        return false;
+        if (objectId == null || interaction.ownerPageId == null) {
+          return false;
+        }
       }
-      this.create(
-        interaction.position,
-        interaction.objectId,
-        interaction.ownerPageId,
-      );
+      interaction.objectId = objectId;
+      this.create(interaction.position, objectId, interaction.ownerPageId);
       interaction?.deviceContext?.board?.activeObjectManager?.add?.(
         new Set([this.obj]),
       );
@@ -209,10 +211,12 @@ class ObjectCreatorTool extends Tool {
    */
   completeCreatedObject(interaction) {
     if (!this.obj) return undefined;
-    interaction?.deviceContext?.board?.addObject?.(
-      this.obj,
-      this.obj.ownerPageId,
-    );
+    const board = interaction?.deviceContext?.board;
+    if (board?.activeObjectManager?.apply) {
+      board.activeObjectManager.apply(new Set([this.obj]));
+      return undefined;
+    }
+    board?.addObject?.(this.obj, this.obj.ownerPageId);
     return undefined;
   }
 
@@ -221,6 +225,14 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   cancelCreatedObject(interaction) {
+    const board = interaction?.deviceContext?.board;
+    if (this.obj) {
+      if (board?.activeObjectManager?.discard) {
+        board.activeObjectManager.discard(new Set([this.obj]));
+      } else if (board?.activeObjectManager?.unregisterActiveObject) {
+        board.activeObjectManager.unregisterActiveObject(this.obj.id);
+      }
+    }
     this.reset();
     return undefined;
   }

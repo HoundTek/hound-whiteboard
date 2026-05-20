@@ -1,6 +1,10 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { Tool } from "../../tools/tool.js";
+import { Vector } from "../../utils/math.js";
+import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
+import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
+import { createMouseDevice } from "../../devices/mouse-device.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
@@ -220,6 +224,122 @@ describe("Board input flow", () => {
           },
         ],
       },
+    ]);
+  });
+
+  test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", () => {
+    const board = new Board();
+    const monitor = createMonitor(board, "main");
+    const tool = new StrokeCreatorTool();
+    monitor.origin = new Vector(100, 50);
+    monitor.zoom = 2;
+
+    monitor.mountDevice("/mouse", createMouseDevice());
+    board.signalsEventBus.emit("mount", {
+      to: "/main/mouse/primary",
+      tool,
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: new Vector(10, 20),
+            buttons: 1,
+            button: 0,
+          },
+        },
+      ],
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: new Vector(20, 30),
+            buttons: 1,
+            button: 0,
+          },
+        },
+      ],
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "end",
+          context: {
+            buttons: 0,
+            button: 0,
+          },
+        },
+      ],
+    });
+
+    const ownerPage = board.getPageById(1);
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(tool.obj.id).toBe(1);
+    expect(board.objectCounterPool.counter).toBe(1);
+    expect(ownerPage.objectManager.pageObjects.get(tool.obj.id)).toBe(tool.obj);
+    expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
+    expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
+      { x: 0, y: 0 },
+      { x: 5, y: 5 },
+    ]);
+  });
+
+  test("挂载后的 PolygonCreatorTool 应可经由输入链路完成 object-end 提交", () => {
+    const board = new Board();
+    const monitor = createMonitor(board, "main");
+    const tool = new PolygonCreatorTool();
+    monitor.origin = new Vector(100, 50);
+    monitor.zoom = 2;
+
+    monitor.mountDevice("/mouse", createMouseDevice());
+    board.signalsEventBus.emit("mount", {
+      to: "/main/mouse/primary",
+      tool,
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse/primary",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: new Vector(50, 60),
+          },
+        },
+        {
+          type: "end",
+          context: {},
+        },
+      ],
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse/primary",
+      signals: [
+        {
+          type: "object-end",
+          context: {},
+        },
+      ],
+    });
+
+    const ownerPage = board.getPageById(1);
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(tool.obj.id).toBe(1);
+    expect(board.objectCounterPool.counter).toBe(1);
+    expect(ownerPage.objectManager.pageObjects.get(tool.obj.id)).toBe(tool.obj);
+    expect(tool.obj.position.serialize()).toEqual({ x: 125, y: 80 });
+    expect(tool.obj.localPolygonRange.points.map((point) => point.serialize())).toEqual([
+      { x: 0, y: 0 },
     ]);
   });
 });
