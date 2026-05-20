@@ -212,6 +212,9 @@ class PageLoader {
     return this.pageNow;
   }
 
+  /**
+   * 重置缓冲区
+   */
   resetBuffer() {
     const pages = this.getLoadedPages();
     for (const page of pages) {

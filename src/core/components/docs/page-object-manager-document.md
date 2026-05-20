@@ -49,6 +49,7 @@
 
 - 对象创建完成后，应立即为该对象建立覆盖页索引。
 - 对象几何范围发生变化后，应刷新该对象的覆盖页索引。
+- 活动对象经 `ActiveObjectManager.apply(...)` 提交回白板时，应把对象节点、静态关系和覆盖页索引一起写回相关页。
 - 如果运行时索引落后于对象真实几何，AOM 的跨页拾取和分层都会读取到旧覆盖范围。
 
 ## 层叠图接口
@@ -97,10 +98,11 @@
 
 - 被 [page-document.md](./page-document.md) 持有并调度。
 - 其静态图与 `objectCoverPages` 都会被 [active-object-manager-document.md](./active-object-manager-document.md) 的跨页拾取逻辑读取。
+- 当活动对象提交回白板时，AOM 会把对象重新写回相关 `PageObjectManager`。
 - 底层依赖 `src/core/utils/directed-graph.js`。
 
 ## 实现状态
 
 - 已实现：数据结构定义、按页 id 的对象覆盖索引、层叠图加载/保存、对象读写、统一卸载入口、基于 `Range` 的精确覆盖页计算。
-- 已接线：对象创建完成后可建立 owner page 上的对象记录与覆盖页索引。
+- 已接线：对象创建完成后可建立 owner page 上的对象记录与覆盖页索引；AOM `apply()` 可将活动对象重新写回相关页。
 - 待完善：对象修改/删除/归属页迁移路径上的覆盖页索引自动刷新，以及对象增量落盘策略与更细粒度错误恢复。

@@ -11,6 +11,8 @@ import { DirectedGraph } from "../utils/directed-graph.js";
 import { Page } from "./page.js";
 import { PageLoader } from "./page-loader.js";
 import { PageObjectManager } from "./page-object-manager.js";
+import { BasicObject } from "../objects/basic-obj.js";
+import { intersectsRanges } from "../range/index.js";
 
 /**
  * 层类
@@ -91,22 +93,277 @@ class ActiveObjectManager {
 
   /**
    * 当前所有活动对象 id 集合
-   * @type {Set<number>}
+   * @type {Set<BasicObject>}
    */
   activeObjects;
 
-  constructor() {
+  /**
+   * 活动对象 id 到实例的索引
+   * @type {Map<number, BasicObject>}
+   */
+  activeObjectIndex;
+
+  /**
+   * 所属白板
+   * @type {import("./board.js").Board | undefined}
+   */
+  board;
+
+  constructor(board) {
+    this.board = board;
     this.layerPool = new RandomNumberPool(1, 10000000);
     this.layerOrder = [];
     this.onLayer = new Map();
     this.layerIndex = new Map();
     this.activeObjects = new Set();
+    this.activeObjectIndex = new Map();
+  }
+
+  /**
+   * 解析输入中的对象 id
+   * @param {BasicObject | {id?: number} | number} input
+   * @returns {number | undefined}
+   */
+  resolveObjectId(input) {
+    if (Number.isInteger(input)) return input;
+    if (Number.isInteger(input?.id)) return input.id;
+    return undefined;
+  }
+
+  /**
+   * 将输入归一化为对象实例或兼容对象
+   * @param {BasicObject | {id?: number, ownerPageId?: number, page?: Page} | number} input
+   * @returns {BasicObject | {id: number, ownerPageId?: number, page?: Page} | undefined}
+   */
+  normalizeObjectInput(input) {
+    if (input instanceof BasicObject) {
+      return input;
+    }
+
+    if (Number.isInteger(input)) {
+      return this.activeObjectIndex.get(input);
+    }
+
+    if (Number.isInteger(input?.id)) {
+      return {
+        ...input,
+        ownerPageId: input.ownerPageId ?? input.page?.id,
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 注册活动对象实例
+   * @param {BasicObject | {id: number}} obj - 要注册的对象实例或兼容对象
+   */
+  registerActiveObject(obj) {
+    if (!obj || !Number.isInteger(obj.id)) return;
+    const previous = this.activeObjectIndex.get(obj.id);
+    if (previous) {
+      this.activeObjects.delete(previous);
+    }
+    this.activeObjectIndex.set(obj.id, obj);
+    this.activeObjects.add(obj);
+  }
+
+  /**
+   * 取消注册活动对象实例
+   * @param {number} objectId - 要取消注册的对象 id
+   */
+  unregisterActiveObject(objectId) {
+    const activeObject = this.activeObjectIndex.get(objectId);
+    if (activeObject) {
+      this.activeObjects.delete(activeObject);
+      this.activeObjectIndex.delete(objectId);
+    }
+
+    const layer = this.onLayer.get(objectId);
+    if (layer) {
+      layer.activeObjects.delete(objectId);
+    }
+    this.onLayer.delete(objectId);
+  }
+
+  /**
+   * 解析对象起始页
+   * @param {BasicObject | {id: number, ownerPageId?: number, page?: Page}} obj
+   * @returns {Page | undefined}
+   */
+  resolveObjectPage(obj) {
+    if (obj?.page instanceof Page) {
+      return obj.page;
+    }
+
+    if (Number.isInteger(obj?.ownerPageId) && this.board) {
+      return this.board.getPageById(obj.ownerPageId);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 创建与白板页加载事件总线绑定的页加载器
+   * @returns {PageLoader}
+   */
+  createPageLoader() {
+    if (this.board?.createPageLoader) {
+      return this.board.createPageLoader(undefined, `aom-${Date.now()}`);
+    }
+    return new PageLoader();
+  }
+
+  /**
+   * 获取对象世界坐标范围
+   * @param {BasicObject} obj
+   * @returns {import("../range/range.js").Range | undefined}
+   */
+  getObjectWorldRange(obj) {
+    if (!(obj instanceof BasicObject)) return undefined;
+    if (!obj.position || typeof obj.getRange !== "function") return undefined;
+    return obj.getRange().withPosition(obj.position);
+  }
+
+  /**
+   * 在当前白板中查找对象实例
+   * @param {number} objectId
+   * @param {Iterable<number>} [candidatePageIds = []]
+   * @returns {BasicObject | undefined}
+   */
+  findBoardObjectInstance(objectId, candidatePageIds = []) {
+    const activeObject = this.activeObjectIndex.get(objectId);
+    if (activeObject instanceof BasicObject) {
+      return activeObject;
+    }
+
+    if (!this.board) return undefined;
+
+    const pageIdsToSearch = new Set(candidatePageIds);
+    for (const pageId of candidatePageIds) {
+      const page = this.board.getPageById(pageId);
+      const coverPages =
+        page?.objectManager?.getObjectCoverPages(objectId) || [];
+      for (const coveredPageId of coverPages) {
+        pageIdsToSearch.add(coveredPageId);
+      }
+    }
+
+    for (const pageId of pageIdsToSearch) {
+      const page = this.board.getPageById(pageId);
+      const objectInstance = page?.objectManager?.pageObjects?.get(objectId);
+      if (objectInstance instanceof BasicObject) {
+        return objectInstance;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 判断两个对象是否相交
+   * @param {BasicObject} left
+   * @param {BasicObject} right
+   * @returns {boolean}
+   */
+  intersectsObjects(left, right) {
+    const leftRange = this.getObjectWorldRange(left);
+    const rightRange = this.getObjectWorldRange(right);
+    if (!leftRange || !rightRange) return false;
+    return intersectsRanges(leftRange, rightRange);
+  }
+
+  /**
+   * 计算对象覆盖页集合
+   * @param {BasicObject} obj
+   * @returns {Set<number>}
+   */
+  calculateCoveredPageIds(obj) {
+    if (!(obj instanceof BasicObject) || !this.board) {
+      return new Set(
+        Number.isInteger(obj?.ownerPageId) ? [obj.ownerPageId] : [],
+      );
+    }
+
+    const worldRange = this.getObjectWorldRange(obj);
+    if (!worldRange || this.board.width <= 0 || this.board.height <= 0) {
+      return new Set([obj.ownerPageId]);
+    }
+
+    const pageIds = PageObjectManager.calculateCoveredPageIdsForRange(
+      worldRange,
+      this.board.width,
+      this.board.height,
+    );
+
+    if (pageIds.size === 0) {
+      pageIds.add(obj.ownerPageId);
+    }
+    return pageIds;
+  }
+
+  /**
+   * 计算对象在静态图中的上下关系
+   * @param {BasicObject} obj - 要计算的对象实例
+   * @param {Set<number>} coveredPageIds - 该对象的覆盖页集合
+   * @param {Set<number>} applyingObjectIds - 正在被提交的对象 id 集合
+   * @returns {{below: Set<number>, above: Set<number>}}
+   */
+  calculateStaticRelations(obj, coveredPageIds, applyingObjectIds) {
+    const relation = {
+      below: new Set(),
+      above: new Set(),
+    };
+    const currentLayer = this.onLayer.get(obj.id);
+    const currentLayerIndex = currentLayer
+      ? this.layerIndex.get(currentLayer.id)
+      : undefined;
+
+    if (currentLayerIndex === undefined) {
+      return relation;
+    }
+
+    for (let index = 0; index < this.layerOrder.length; index++) {
+      const layer = this.layerOrder[index];
+
+      for (const nodeId of layer.inactiveGraph.getNodes()) {
+        const candidate = this.findBoardObjectInstance(nodeId, coveredPageIds);
+        if (!(candidate instanceof BasicObject)) continue;
+        if (!this.intersectsObjects(obj, candidate)) continue;
+
+        if (index < currentLayerIndex) {
+          relation.below.add(nodeId);
+        } else if (index > currentLayerIndex) {
+          relation.above.add(nodeId);
+        }
+      }
+    }
+
+    for (const otherObjectId of applyingObjectIds) {
+      if (otherObjectId === obj.id) continue;
+      const otherObject = this.activeObjectIndex.get(otherObjectId);
+      if (!(otherObject instanceof BasicObject)) continue;
+      if (!this.intersectsObjects(obj, otherObject)) continue;
+
+      const otherLayer = this.onLayer.get(otherObjectId);
+      if (!otherLayer) continue;
+      const otherLayerIndex = this.layerIndex.get(otherLayer.id);
+      if (otherLayerIndex === undefined) continue;
+
+      if (otherLayerIndex < currentLayerIndex) {
+        relation.below.add(otherObjectId);
+      } else if (otherLayerIndex > currentLayerIndex) {
+        relation.above.add(otherObjectId);
+      }
+    }
+
+    return relation;
   }
 
   /**
    * 获取以指定对象集合为起点的子图
    * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
-   * @param {Set<{id: number, page: Page}>} startFrom - 作为起点的对象 id 和其所在页实例的集合
+   * @param {Set<BasicObject | {id: number, ownerPageId?: number, page?: Page}>} startFrom - 作为起点的对象集合
    * @returns {DirectedGraph}
    */
   pickup(startFrom) {
@@ -117,12 +374,12 @@ class ActiveObjectManager {
      * @param {number} obj - 要拾取的对象 id
      * @param {Page} pge - 该对象所在的页
      */
-    function pickupSingle(obj, pge) {
+    const pickupSingle = (obj, pge) => {
       if (visit.has(obj)) return;
       visit.add(obj);
       graph.addNodeUnsafe(obj);
 
-      let pageLoader = new PageLoader();
+      let pageLoader = this.createPageLoader();
       // 初始化页加载器，预加载当前页
       pageLoader.resetCurrentPage(pge);
 
@@ -205,25 +462,39 @@ class ActiveObjectManager {
       } // function dfs ends here
 
       dfs(obj);
-    } // function pickupSingle ends here
+    }; // function pickupSingle ends here
 
-    for (const { id: obj, page: pge } of startFrom) {
-      pickupSingle(obj, pge);
+    for (const entry of startFrom) {
+      const obj = this.normalizeObjectInput(entry);
+      const objectId = this.resolveObjectId(obj);
+      const page = this.resolveObjectPage(obj);
+      if (!Number.isInteger(objectId) || !page) continue;
+      pickupSingle(objectId, page);
     }
 
     return graph;
   }
 
   /**
-   * @param {Set<{id: number, page: Page}>} startFrom - 要选择的活动对象 id 和其所在页实例的集合
+   * 选取非活动对象并加入活动对象管理器
+   * @param {Set<BasicObject | {id: number, ownerPageId?: number, page?: Page}>} startFrom - 要选择的对象集合
    */
   choose(startFrom) {
     // 提取出这些对象所构成的子图
     let graph = this.pickup(startFrom);
-    let objs = new Set(); // 只要对象 id
-    for (const { id } of startFrom) {
-      objs.add(id);
-    }
+    const activeEntries = Array.from(startFrom, (item) =>
+      this.normalizeObjectInput(item),
+    );
+    let objs = new Set(
+      activeEntries
+        .map((item) => this.resolveObjectId(item))
+        .filter(Number.isInteger),
+    );
+    const activeEntryMap = new Map(
+      activeEntries
+        .filter((item) => Number.isInteger(this.resolveObjectId(item)))
+        .map((item) => [this.resolveObjectId(item), item]),
+    );
     startFrom = null; // 释放内存
 
     // 获取对象所在层
@@ -279,7 +550,7 @@ class ActiveObjectManager {
     let duplicates = new Set();
     for (const node of graph.getNodes()) {
       let layerIdx = layerIndex.get(node);
-      if (this.activeObjects.has(node)) {
+      if (this.activeObjectIndex.has(node)) {
         // 它是以前就有的活动对象
         // 此时该层应在其之下
         if (underWhich[layerIdx]) {
@@ -325,7 +596,7 @@ class ActiveObjectManager {
         // 新活动对象在这个位置绝对不可能是重复对象
         newLayer.activeObjects.add(node);
         this.onLayer.set(node, newLayer);
-        this.activeObjects.add(node);
+        this.registerActiveObject(activeEntryMap.get(node) || { id: node });
       } else {
         if (!duplicates.has(node)) {
           // 必须是非重复对象才能加入此处
@@ -369,6 +640,37 @@ class ActiveObjectManager {
   }
 
   /**
+   * 向活动对象管理器中加入不在白板上的对象
+   * @param {Set<BasicObject>} objects - 新添加对象集合
+   */
+  add(objects) {
+    const objectEntries = Array.from(objects || [], (item) =>
+      this.normalizeObjectInput(item),
+    ).filter(Boolean);
+
+    const newObjectEntries = objectEntries.filter((item) => {
+      const objectId = this.resolveObjectId(item);
+      return Number.isInteger(objectId) && !this.activeObjectIndex.has(objectId);
+    });
+
+    if (newObjectEntries.length === 0) {
+      return undefined;
+    }
+
+    const newLayer = new Layer(this.layerPool.generate());
+    for (const objectEntry of newObjectEntries) {
+      const objectId = this.resolveObjectId(objectEntry);
+      if (!Number.isInteger(objectId)) continue;
+      this.registerActiveObject(objectEntry);
+      this.onLayer.set(objectId, newLayer);
+      newLayer.activeObjects.add(objectId);
+    }
+
+    this.insertLayerToTop(newLayer);
+    return newLayer;
+  }
+
+  /**
    * 清理动态图
    */
   tidyup() {
@@ -399,24 +701,26 @@ class ActiveObjectManager {
 
   /**
    * 置顶选择对象
-   * @param {Set<number>} objs
+   * @param {Set<BasicObject | {id: number} | number>} objects
    */
-  liftup(objs) {
+  liftup(objects) {
     /**
      * @description 层索引 -> 新层实例
      * @type {Map<number, Layer>}
      */
     let newLayers = new Map();
-    for (const obj of objs) {
+    for (const entry of objects) {
+      const objId = this.resolveObjectId(entry);
+      if (!Number.isInteger(objId)) continue;
       let layerIndex;
-      if (this.activeObjects.has(obj)) {
-        let oldLayer = this.onLayer.get(obj);
+      if (this.activeObjectIndex.has(objId)) {
+        let oldLayer = this.onLayer.get(objId);
         layerIndex = this.layerIndex.get(oldLayer.id);
         if (!newLayers.has(layerIndex)) {
           newLayers.set(layerIndex, new Layer(this.layerPool.generate()));
         }
         // 将对象从旧层移除
-        oldLayer.activeObjects.delete(obj);
+        oldLayer.activeObjects.delete(objId);
       } else {
         layerIndex = this.layerOrder.length;
         if (!newLayers.has(layerIndex)) {
@@ -426,8 +730,8 @@ class ActiveObjectManager {
 
       // 将对象加入新层
       let newLayer = newLayers.get(layerIndex);
-      this.onLayer.set(obj, newLayer);
-      newLayer.activeObjects.add(obj);
+      this.onLayer.set(objId, newLayer);
+      newLayer.activeObjects.add(objId);
     }
     this.tidyup();
     Array.from(newLayers.entries())
@@ -438,17 +742,87 @@ class ActiveObjectManager {
   }
 
   /**
-   * 取消选择对象
-   * @param {Set<number>} objs
+   * 应用活动对象并取消选择
+   * @param {Set<BasicObject | {id: number} | number>} objects
    */
-  remove(objs) {
-    for (const obj of objs) {
-      if (!this.activeObjects.has(obj)) continue;
-      this.activeObjects.delete(obj);
-      let layer = this.onLayer.get(obj);
-      layer.activeObjects.delete(obj);
+  apply(objects) {
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.normalizeObjectInput(item),
+    )
+      .map((item) => {
+        if (item instanceof BasicObject) return item;
+        const objectId = this.resolveObjectId(item);
+        return Number.isInteger(objectId)
+          ? this.activeObjectIndex.get(objectId) || item
+          : undefined;
+      })
+      .filter(Boolean);
+
+    const canCommitToBoard = Boolean(this.board);
+    const activeBasicObjects = normalizedObjects.filter(
+      (item) => item instanceof BasicObject,
+    );
+
+    if (canCommitToBoard && activeBasicObjects.length > 0) {
+      const applyingObjectIds = new Set(
+        activeBasicObjects.map((item) => item.id),
+      );
+      const applyContexts = activeBasicObjects
+        .map((obj) => {
+          const ownerPage = this.resolveObjectPage(obj);
+          if (!ownerPage) return undefined;
+          return {
+            obj,
+            ownerPage,
+            coveredPageIds: this.calculateCoveredPageIds(obj),
+          };
+        })
+        .filter(Boolean);
+
+      for (const { obj, ownerPage, coveredPageIds } of applyContexts) {
+        for (const pageId of coveredPageIds) {
+          const page = this.board.getPageById(pageId);
+          if (!page) continue;
+          page.addObject(pageId === ownerPage.id ? obj : obj.id);
+          page.objectManager.setObjectCoverPages(obj.id, coveredPageIds);
+        }
+      }
+
+      for (const { obj, ownerPage, coveredPageIds } of applyContexts) {
+        const { below, above } = this.calculateStaticRelations(
+          obj,
+          coveredPageIds,
+          applyingObjectIds,
+        );
+        for (const pageId of coveredPageIds) {
+          const page = this.board.getPageById(pageId);
+          if (!page) continue;
+          page.addObject(
+            pageId === ownerPage.id ? obj : obj.id,
+            [...below],
+            [...above],
+          );
+          page.objectManager.setObjectCoverPages(obj.id, coveredPageIds);
+        }
+      }
+    }
+
+    for (const entry of normalizedObjects) {
+      const objId = this.resolveObjectId(entry);
+      if (!Number.isInteger(objId) || !this.activeObjectIndex.has(objId)) {
+        continue;
+      }
+      this.unregisterActiveObject(objId);
     }
     this.tidyup();
+  }
+
+  /**
+   * 兼容旧接口：取消选择对象
+   * @param {Set<BasicObject | {id: number} | number>} objects
+   */
+  remove(objects) {
+    this.apply(objects);
   }
 
   /**

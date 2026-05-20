@@ -152,6 +152,9 @@ class ObjectCreatorTool extends Tool {
         interaction.objectId,
         interaction.ownerPageId,
       );
+      interaction?.deviceContext?.board?.activeObjectManager?.add?.(
+        new Set([this.obj]),
+      );
     }
 
     return true;

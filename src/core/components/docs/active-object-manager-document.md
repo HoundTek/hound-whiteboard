@@ -23,7 +23,7 @@
 `Layer` 用于表示动态状态图中的一层，包含：
 
 - `id`：层编号
-- `activeObjects`：本层活动对象集合
+- `activeObjects`：本层活动对象 id 集合
 - `inactiveGraph`：本层非活动对象子图
 
 ### ActiveObjectManager
@@ -34,9 +34,39 @@
 - `layerOrder`：层顺序数组
 - `layerIndex`：层 id 到索引映射
 - `onLayer`：对象 id 到其所在层映射
-- `activeObjects`：当前活动对象 id 集合
+- `activeObjects`：当前活动对象实例集合
+- `activeObjectIndex`：活动对象 id 到实例的索引
+
+这里有一个明确分工：
+
+- 活动对象在 AOM 顶层以实例管理，便于后续提交时直接读取对象几何、归属页和覆盖范围。
+- 层和页静态图中的非活动对象仍以 id 管理，避免把整页对象实例都搬进动态图结构里。
 
 ## 主要流程
+
+### 加入白板外对象 `add(objects)`
+
+`add` 用于把“尚未写入白板页静态结构”的新对象注册进 AOM。
+
+典型场景是对象创建刚开始时：
+
+- creator 首次真正创建出对象实例。
+- 此时对象还不应直接写回页静态图。
+- AOM 先把它加入动态图顶层，使它在创建过程里成为活动对象。
+
+当前实现中，`add` 会：
+
+- 注册对象实例到 `activeObjects` 和 `activeObjectIndex`。
+- 为这些新对象创建一个新的顶层活动层。
+- 将对象 id 记入该层的 `activeObjects`。
+
+它不负责：
+
+- 立即写回页静态图。
+- 立即生成静态图上下关系。
+- 立即保存对象覆盖页索引到磁盘。
+
+这些动作会在后续 `apply(objects)` 中统一完成。
 
 ### 选择对象 `choose(startFrom)`
 
@@ -49,9 +79,24 @@
 
 这里的关键点是：`choose` 本身不负责判断对象跨越了哪些页。它完全依赖 `pickup` 产出的子图，而 `pickup` 又完全依赖各页 `PageObjectManager.objectCoverPages` 中的当前索引。
 
-### 取消选择 `remove(objs)`
+当前接口已经从“对象 id + Page 实例”转向“对象实例优先”：
 
-将对象从 `activeObjects` 和对应层的 `activeObjects` 中删除，然后执行 `tidyup()` 清理空层。
+- 调用方应优先传入 `BasicObject` 实例集合。
+- AOM 会通过对象自身的 `ownerPageId` 去向白板解析起始页。
+- 旧式 `page` 直传仍可兼容，但不再是主语义。
+
+### 提交并取消选择 `apply(objects)`
+
+`apply` 是当前 AOM 的关键提交动作。它不再只是把对象从活动集合里删掉，而是会把活动对象重新写回白板页级结构。
+
+当前实现中，`apply` 会做几件事：
+
+- 计算活动对象当前覆盖到的页 id 集合。
+- 按覆盖页把对象重新写回相关 `PageObjectManager`。
+- 根据活动层顺序和对象相交关系，生成应回写到静态图的 `below/above` 关系。
+- 清除活动对象实例索引，并清理动态图。
+
+兼容层中仍保留 `remove(objects)`，但它现在只是 `apply(objects)` 的别名。
 
 ### 置顶 `liftup(objs)`
 
@@ -69,7 +114,8 @@
 
 在当前实现中，它的跨页行为有几个约束：
 
-- 起点是 `Set<{id, page}>`，因此 AOM 始终从“对象 id + 当前所在页实例”开始，而不是只靠对象 id 全局检索。
+- 起点优先是对象实例集合；AOM 会先取对象 id，再通过对象自身的 `ownerPageId` 解析起始页。
+- 当 AOM 被挂在 `Board` 上时，会优先使用 `Board.createPageLoader()`，因此跨页拾取会自动接入白板页加载事件总线。
 - 对某个节点是否跨页，不看方向字段，不看旧式 left/right spill，而是读取 `page.objectManager.getObjectCoverPages(node)`。
 - 覆盖页用页 id 描述，再通过 `Page.idToCoordinate(pageId)` 转成二维坐标。
 - `PageLoader` 会在二维坐标系中按需移动：先处理 x 方向，再处理 y 方向；因此同一次拾取中可以出现右上、左下这类组合路径。
@@ -84,19 +130,21 @@
 
 ## API
 
-| 名称                | 描述                                           | 类型                                             |
-| ------------------- | ---------------------------------------------- | ------------------------------------------------ |
-| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖页范围内提取子图 | `Set<{id: number, page: Page}> -> DirectedGraph` |
-| `choose(startFrom)` | 将对象集加入活动对象系统并分层                 | `Set<{id: number, page: Page}> -> void`          |
-| `remove(objs)`      | 取消选择对象                                   | `Set<number> -> void`                            |
-| `liftup(objs)`      | 将对象置顶                                     | `Set<number> -> void`                            |
-| `tidyup()`          | 清理动态图中的无效层和空层                     | `void -> void`                                   |
+| 名称                | 描述                                           | 类型                                      |
+| ------------------- | ---------------------------------------------- | ----------------------------------------- |
+| `add(objects)`      | 将白板外新对象加入动态图顶层                   | `Iterable<BasicObject> -> Layer`          |
+| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖页范围内提取子图 | `Iterable<BasicObject> -> DirectedGraph`  |
+| `choose(startFrom)` | 将对象集加入活动对象系统并分层                 | `Iterable<BasicObject> -> void`           |
+| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构   | `Iterable<BasicObject> -> void`           |
+| `remove(objects)`   | `apply(objects)` 的兼容别名                    | `Iterable<BasicObject \| number> -> void` |
+| `liftup(objs)`      | 将对象置顶                                     | `Iterable<BasicObject \| number> -> void` |
+| `tidyup()`          | 清理动态图中的无效层和空层                     | `void -> void`                            |
 
 ## 实现状态
 
-- 已实现：核心分层逻辑、层插入与顺序比较、取消选择、置顶、清理、基于二维覆盖页索引的跨页拾取。
-- 已验证：二维页下的右上/左下组合移动、不可达覆盖页跳过、覆盖页索引更新后 `pickup` 与 `choose` 读取新结果。
-- 待完善：修改工具链在对象几何变化后自动刷新覆盖页索引，以及跨页高频移动时的性能优化。
+- 已实现：核心分层逻辑、层插入与顺序比较、白板外对象 `add()`、置顶、清理、基于二维覆盖页索引的跨页拾取、基于对象实例的活动对象索引、`apply()` 提交回写。
+- 已验证：二维页下的右上/左下组合移动、不可达覆盖页跳过、覆盖页索引更新后 `pickup` 与 `choose` 读取新结果、`pickup` 通过 `Board.createPageLoader()` 接入白板页加载链、`add()` 将新对象注册进动态图顶层、`apply()` 回写页对象和覆盖页索引。
+- 待完善：修改工具链在对象几何变化后自动触发 `apply` 或等价索引刷新路径，以及跨页高频移动时的性能优化。
 
 ## 相关文档
 

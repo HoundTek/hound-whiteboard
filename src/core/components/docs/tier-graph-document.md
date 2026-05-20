@@ -47,7 +47,9 @@
 
 在向白板中添加对象 $\mathbf{a}$ 的开始，即开始画这一笔时，将其添加到动态图中，并连接所有的 $T \in t(\mathcal{D}) \to A$。
 
-在向白板中添加对象的结尾，即这一笔画完松手时，应先算出与之相交的对象集 $\mathbb{C}$，再连接所有的 $C \in \mathbb{A} \to A$ 
+在当前实现里，这一步由 `ActiveObjectManager.add(objects)` 表达。它的职责是把“白板外、尚未落入页静态图”的新对象注册到动态图顶层。
+
+在向白板中添加对象的结尾，即这一笔画完松手时，应先算出与之相交的对象集 $\mathbb{C}$，再连接所有的 $C \in \mathbb{A} \to A$
 
 再在静态图中添加对应的从与之相交的对象到新对象的边，最后将其从动态图中删去。
 
@@ -103,10 +105,18 @@
 
 在白板上选择单个对象是在白板上选择多个对象的特殊情况。
 
-### 取消选择对象
+### 提交活动对象
 
-1. 直接将要取消选择的对象从图中删去
-2. 清理状态图
+当前实现不再把“取消选择”理解成单纯从动态图里删除对象，而是显式区分提交动作 `apply(objects)`。
+
+`apply(objects)` 的基本流程是：
+
+1. 取出要提交的活动对象实例。
+2. 计算它们与白板对象的相交关系。
+3. 结合动态图层顺序，确定这些对象在静态图中的上下关系。
+4. 计算对象覆盖到的页。
+5. 将对象及其覆盖页索引写回对应 `PageObjectManager`。
+6. 将这些对象从动态图中删去并清理状态图。
 
 ### 置顶选择的对象
 
@@ -120,18 +130,26 @@
 
 ### API
 
-|名称|描述|类型|
-|---|---|---|
-|`pickup(startFrom)`|获取以指定对象集合为起点的子图|`Set<{id: number, page: Page}> -> DirectedGraph`|
-|`insertLayerUnder(layerNow, layerAbove)`|将某层插入到另一层之下|`Layer -> Layer \| Undefined -> void`|
-|`insertLayerUnderById(layerNow, LayerAboveId)`|将某层插入到另一层之下，其中另一层用 id 表示|`Layer -> number \| undefined -> void`|
-|`insertLayerToTop(layerNow)`|将某层插至顶层|`Layer -> void`|
-|`compareLayerOrderById(layer1, layer2)`|比较两层的层次顺序，其中两层都用 id 表示|`number \| undefined -> number \| undefined -> number`|
-|`compareLayerOrder(layer1, layer2)`|比较两层的层次顺序|`Layer -> Layer -> number`|
+| 名称                                           | 描述                                         | 类型                                                   |
+| ---------------------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
+| `pickup(startFrom)`                            | 获取以指定对象集合为起点的子图               | `Iterable<BasicObject> -> DirectedGraph`               |
+| `apply(objects)`                               | 将活动对象按当前动态层关系提交回静态图       | `Iterable<BasicObject> -> void`                        |
+| `insertLayerUnder(layerNow, layerAbove)`       | 将某层插入到另一层之下                       | `Layer -> Layer \| Undefined -> void`                  |
+| `insertLayerUnderById(layerNow, LayerAboveId)` | 将某层插入到另一层之下，其中另一层用 id 表示 | `Layer -> number \| undefined -> void`                 |
+| `insertLayerToTop(layerNow)`                   | 将某层插至顶层                               | `Layer -> void`                                        |
+| `compareLayerOrderById(layer1, layer2)`        | 比较两层的层次顺序，其中两层都用 id 表示     | `number \| undefined -> number \| undefined -> number` |
+| `compareLayerOrder(layer1, layer2)`            | 比较两层的层次顺序                           | `Layer -> Layer -> number`                             |
 
 ## 层叠图示例
 
-下面将以几个示例来演示层叠图的工作方式
+下面将以几个示例来演示层叠图的工作方式。
+
+先统一说明一下示例中的图示约定：
+
+- 静态图用一整张图表示，动态图用多个子图表示。
+- 被选择的对象用红色表示。
+- 图中不显示对象的层级关系以外的边。
+- 单人意味着只有一个工具在操作，多人意味着有多个工具在操作，单对象或多对象指的是选择的对象数量。
 
 ### 示例一: 单人单对象
 

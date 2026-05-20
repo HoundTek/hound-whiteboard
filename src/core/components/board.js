@@ -154,7 +154,6 @@ class Board {
 
   constructor() {
     this.undoTree = new UndoTree();
-    this.activeObjectManager = new ActiveObjectManager();
     this.pageMap = new Map();
     this.pageIds = new Set();
     this.pageOrder = [];
@@ -166,6 +165,7 @@ class Board {
     this.pageLoadEventBus = new EventBus();
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
+    this.activeObjectManager = new ActiveObjectManager(this);
     this.#bindPageLoadEvents();
     this.#bindSignalsEventBus();
   }

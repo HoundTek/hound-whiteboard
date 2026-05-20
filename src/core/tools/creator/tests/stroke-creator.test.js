@@ -126,4 +126,23 @@ describe("StrokeCreatorTool", () => {
 
     expect(board.addObject).toHaveBeenCalledWith(tool.obj, 1);
   });
+
+  test("首次创建对象时应注册到 activeObjectManager.add", () => {
+    const tool = new StrokeCreatorTool();
+    const board = {
+      activeObjectManager: { add: jest.fn() },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      { objectId: 9, ownerPageId: 1, board },
+    );
+
+    expect(board.activeObjectManager.add).toHaveBeenCalledWith(
+      new Set([tool.obj]),
+    );
+  });
 });
