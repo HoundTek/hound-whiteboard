@@ -6,7 +6,7 @@ components 目录下的模块用于管理白板运行时状态，负责把对象
 
 ## 组件列表
 
-- `Board`：白板级管理器，负责加载白板、维护页映射与页顺序、持有全局活动对象管理器与历史树。
+- `Board`：白板级管理器，负责维护页实例所有权与加载状态、持有全局活动对象管理器与历史树。
 - `Page`：页面类，负责页链关系、页加载/卸载流程。
 - `PageObjectManager`：页对象管理器，负责静态层叠图与页对象映射。
 - `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
@@ -35,7 +35,7 @@ graph LR
 
 ### 白板级与页级分治
 
-`Board` 管白板级元信息与页列表，`Page` 管单页状态，`PageObjectManager` 管页内对象与层叠图。
+`Board` 管白板级元信息与页实例加载状态，`Page` 管单页状态，`PageObjectManager` 管页内对象与层叠图。
 
 这种拆分让“翻页/加载策略”和“对象关系维护”相互解耦。
 
@@ -55,5 +55,5 @@ graph LR
 ## 当前实现状态
 
 - `ActiveObjectManager` 算法实现相对完整，已具备拾取、分层、置顶、清理等核心逻辑。
-- `Board`、`Page`、`PageObjectManager` 已有骨架和关键字段，但仍存在较多 `todo`。
+- `Board`、`Page`、`PageObjectManager` 已有骨架和关键字段；其中 `Board` 已收口到以 `pageLoaded` 为核心的页实例所有权模型，但仍存在较多 `todo`。
 - 文档建议按“先补齐页加载与对象落盘，再串联工具与历史”的顺序推进。

@@ -18,14 +18,6 @@ describe("Monitor", () => {
     const board = {
       width: 800,
       height: 600,
-      getPageByCoordinate(x, y) {
-        const coordinates = new Map([
-          ["0,0", { id: 1, x: 0, y: 0 }],
-          ["1,0", { id: 2, x: 1, y: 0 }],
-          ["1,1", { id: 3, x: 1, y: 1 }],
-        ]);
-        return coordinates.get(`${x},${y}`);
-      },
       createPageLoader() {
         return {};
       },
@@ -96,16 +88,32 @@ describe("Monitor", () => {
       x: 400,
       y: 300,
     });
-    expect(monitor.screenToPage(new Vector(1200, 300))).toEqual({
+
+    expect(monitor.screenToPage(new Vector(1000, 300))).toEqual({
       pageId: 2,
-      x: 400,
+      x: 200,
       y: 300,
     });
-    expect(monitor.screenToPage(new Vector(1200, 900))).toEqual({
+
+    expect(monitor.screenToPage(new Vector(1200, 750))).toEqual({
       pageId: 3,
       x: 400,
-      y: 300,
+      y: 150,
     });
-    expect(monitor.screenToPage(new Vector(-400, 300))).toBeNull();
+
+    expect(monitor.screenToPage(new Vector(-200, 150))).toEqual({
+      pageId: 6,
+      x: 600,
+      y: 150,
+    });
+
+    monitor.zoom = 2;
+    monitor.origin = new Vector(100, 50);
+
+    expect(monitor.screenToPage(new Vector(400, 250))).toEqual({
+      pageId: 1,
+      x: 300,
+      y: 175,
+    });
   });
 });

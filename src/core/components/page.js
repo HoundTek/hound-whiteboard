@@ -25,12 +25,6 @@ class Page {
   objectManager;
 
   /**
-   * 页内容
-   * @type {PageObjectManager | undefined}
-   */
-  content;
-
-  /**
    * 页唯一标识
    * @type {number}
    */
@@ -95,7 +89,6 @@ class Page {
   constructor(pageId) {
     const coordinate = Page.idToCoordinate(pageId);
     this.objectManager = undefined;
-    this.content = undefined;
     this.id = pageId;
     this.x = coordinate.x;
     this.y = coordinate.y;
@@ -277,9 +270,6 @@ class Page {
   addObject(obj, below = [], above = []) {
     if (!this.objectManager) {
       this.objectManager = new PageObjectManager(this.id);
-      if (this.content === undefined) {
-        this.content = this.objectManager;
-      }
     }
 
     const graph = this.objectManager.staticGraph;
@@ -317,7 +307,6 @@ class Page {
     // 未加载，升级为临时加载
     if (!this.isLoad) await this.loadTemp(boardRootPath);
     this.isTempLoad = false;
-    this.content = this.objectManager;
 
     // 升级为完整加载，加载对象
     // [todo] 加载 Objects
@@ -335,7 +324,6 @@ class Page {
   unload() {
     if (this.objectManager) this.objectManager.unload();
     this.objectManager = undefined;
-    this.content = undefined;
     this.isLoad = false;
     this.isTempLoad = false;
     return true;
@@ -383,7 +371,6 @@ class Page {
     if (!this.objectManager) {
       this.objectManager = new PageObjectManager(this.id);
     }
-    this.content = this.objectManager;
     await this.objectManager.loadTierGraph(boardRootPath);
     return true;
   }

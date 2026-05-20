@@ -6,7 +6,7 @@
 
 ## 术语约定
 
-- **白板级状态**：作用域覆盖整个白板实例的状态，如页顺序、当前打开位置、活动对象管理器、历史树等。
+- **白板级状态**：作用域覆盖整个白板实例的状态，如页实例所有权、当前打开位置、活动对象管理器、历史树等。
 - **页级状态**：只属于某一页的状态，如页对象映射、页层叠图、页加载状态。
 - **缓冲区**：当前为了交互性能而预先保留在内存中的页集合，通常包含当前页与其邻页。
 - **当前页**：当前用户视角所在的页，或当前主要交互目标页。
@@ -18,24 +18,22 @@
 ## 白板类职责
 
 - 维护白板基础信息（宽、高、根目录）
-- 维护页映射、页顺序与已加载页队列
+- 维护页实例所有权与单页加载状态落地
 - 管理全局活动对象管理器 `ActiveObjectManager`
 - 管理历史树 `UndoTree`
 - 提供白板加载、创建与对象写入接口
 
 ## 核心字段
 
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `undoTree` | 时间回溯树 | `UndoTree` |
-| `activeObjectManager` | 活动对象管理器 | `ActiveObjectManager` |
-| `pageMap` | 页 id 到页实例映射 | `Map<number, Page>` |
-| `pageOrder` | 页顺序数组 | `number[]` |
-| `loadedPages` | 已加载页队列 | `Deque` |
-| `width`/`height` | 白板尺寸 | `number` |
-| `root` | 白板根目录 | `Directory` |
-| `pageCounterPool` | 页 id 池 | `CounterPool` |
-| `objectCounterPool` | 对象 id 池 | `CounterPool` |
+| 名称                  | 描述                   | 类型                                                                      |
+| --------------------- | ---------------------- | ------------------------------------------------------------------------- |
+| `undoTree`            | 时间回溯树             | `UndoTree`                                                                |
+| `activeObjectManager` | 活动对象管理器         | `ActiveObjectManager`                                                     |
+| `pageLoaded`          | 页 id 到页加载状态映射 | `Map<number, { page, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
+| `width`/`height`      | 白板尺寸               | `number`                                                                  |
+| `root`                | 白板根目录             | `Directory`                                                               |
+| `pageCounterPool`     | 页 id 池               | `CounterPool`                                                             |
+| `objectCounterPool`   | 对象 id 池             | `CounterPool`                                                             |
 
 ## 加载流程 `load(directory)`
 
@@ -44,10 +42,9 @@
 当前实现流程：
 
 1. 读取并校验 `meta.json` 与 `config.json`
-2. 读取 `pages/connection.json`，恢复 `pageOrder` 与页 id 池
-3. 基于 `pageOrder` 构建页链和 `pageMap`
-4. 读取 `trace.json`（若缺失则默认第一页）
-5. 加载当前页及相邻页到 `loadedPages`
+2. 读取 `pages/connection.json`，恢复文件格式中的页组织快照与页计数信息
+3. 读取 `trace.json`（若缺失则默认坐标为 `{ x: 0, y: 0 }` 的页）
+4. 准备当前页实例，后续实际缓冲区预取交由 `PageLoader` 决定
 
 该流程已经可作为白板运行时初始化骨架。
 
@@ -59,20 +56,26 @@
 
 #### `Board` 负责的事
 
-- 持有白板的完整页集合与页顺序
-- 判断当前交互场景需要什么加载策略
-- 决定应加载哪些页、应卸载哪些页
+- 持有页实例所有权
+- 接收 `PageLoader` 的单页加载/卸载请求并落地执行
 - 调用 `Page.loadFull(...)`、`Page.loadTemp(...)`、`Page.unload()`、`Page.unloadTemp()`、`Page.downgradeToTemp()` 等方法执行实际加载
-- 维护白板级的 `loadedPages`、当前打开位置、恢复状态等信息
 - 维护“某页被哪些 `PageLoader` 以何种策略持有”的引用关系
 
 #### `PageLoader` 负责的事
 
 - 表达缓冲区窗口及其变化方向
 - 记录当前页引用
+- 提供区域缓冲区初始化接口
 - 提供“向左/向右移动当前页”“向左/向右扩展缓冲区”“向左/向右收缩缓冲区”的接口
 - 提供临时加载与完整加载两种策略入口
-- 为 `Board` 提供一个更稳定的页缓冲区控制抽象
+- 为上层提供更稳定的页缓冲区控制抽象
+
+### 缓冲区初始化的推荐方式
+
+- 业务侧若需要以某页或某一区域作为起点建立新的缓冲范围，推荐通过自己持有的 `PageLoader.init...` 接口完成。
+- `PageLoader` 是区域页加载器，更适合表达“以哪些页为起点重建缓冲区”，而不是提供通用页查询 API。
+- `Board` 不应承担邻域预取或缓冲区组织职责，因此不再提供 `getPagesAroundCoordinate(...)` 这类接口。
+- `Board.getPageById(...)`、`Board.getPageByCoordinate(...)` 更适合作为白板内部的单页实例访问点，而不是业务层的缓冲区入口。
 
 ### 多个 `PageLoader` 并存时的规则
 
@@ -116,48 +119,6 @@
 
 这些都超出了 `PageLoader` 的职责范围。而且还会同时存在多个 `PageLoader` 互相打架的情况。因此执行权必须保留在 `Board`。
 
-## 创建流程 `create(directory, boardInfo)`
-
-说明：当前 `create(directory, boardInfo)` 已通过 components 专用 IPC 文件桥接执行目录创建与元信息写入，接口语义为异步。
-
-当前行为：
-
-- 初始化并尝试加载目标目录
-- 写入白板元信息（`meta`、`config`）
-- 创建/重建 `pages` 目录
-
-后续计划（`todo`）：
-
-- 创建完整文件结构
-- 初始化第一页与模板
-
-## 页面与对象操作
-
-### `appendPage()`
-
-说明：当前 `appendPage()` 会通过 IPC 创建页目录与对象目录，接口语义为异步。
-
-- 使用 `pageCounterPool` 生成页 id
-- 维护页链与页顺序
-- 返回新页实例
-
-当前仍待补：页文件创建、模板初始化、历史树记录。
-
-### `addObject(obj, pageId)`
-
-- 找到目标页
-- 委托页面类写入对象
-- 页不存在时抛错
-
-## API
-
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `load(directory)` | 加载白板 | `Directory -> Promise<Board>` |
-| `appendPage()` | 追加新页 | `void -> Promise<Page>` |
-| `addObject(obj, pageId)` | 向指定页添加对象 | `BasicObject -> number -> void` |
-| `create(directory, boardInfo)` | 创建白板（静态） | `Directory -> Object -> Promise<Board>` |
-
 ## 设计约束
 
 - 页实例所有权归 `Board`。
@@ -168,7 +129,7 @@
 
 ## 实现状态
 
-- 已实现：白板读取校验、页链恢复、邻页加载骨架、活动对象管理器/历史树挂载、多 `PageLoader` 引用计数与完整页降级。
+- 已实现：白板读取校验、单页实例管理骨架、活动对象管理器/历史树挂载、多 `PageLoader` 引用计数与完整页降级。
 - 待完善：完整新建流程、对象计数池初始化、历史与设备状态恢复、页与对象全链路落盘。
 
 ## 相关文档

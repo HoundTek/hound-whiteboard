@@ -25,7 +25,6 @@ describe("Board input flow", () => {
   function createMonitor(board, monitorId = "monitor") {
     board.width = 800;
     board.height = 600;
-    board.pageOrder = [1];
     const monitor = new Monitor(
       createCanvas(),
       board,

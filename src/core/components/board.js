@@ -7,7 +7,6 @@
  * @author Zhou Chenyu
  */
 
-import { Deque } from "../utils/deque.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
@@ -21,8 +20,15 @@ import {
   PAGE_LOAD_STRATEGIES,
 } from "./page-loader.js";
 import { Page } from "./page.js";
-import { PageObjectManager } from "./page-object-manager.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
+
+/**
+ * @typedef {Object} BoardPageLoadedState
+ * @property {Page} page - 当前页实例
+ * @property {number} tempLoadedCount - 临时加载计数
+ * @property {number} fullLoadedCount - 完整加载计数
+ * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 PageLoader 当前持有策略
+ */
 
 /**
  * Board 运行时节点配置事件载荷。
@@ -39,13 +45,6 @@ import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.
  */
 class Board {
   /**
-   * 页缓冲区上限
-   * @description 已加载的页不超过 4 页（包含临时加载和完整加载）。
-   * @type {number}
-   */
-  static PAGE_BUFFER_LIMIT = 4;
-
-  /**
    * 时间回溯树
    * @type {UndoTree}
    */
@@ -59,44 +58,10 @@ class Board {
   activeObjectManager;
 
   /**
-   * 页 id -> 页实例映射
-   * @description 拥有页实例的所有权
-   * @type {Map<number, Page>}
+    * 当前已知页的统一加载状态
+    * @type {Map<number, BoardPageLoadedState>}
    */
-  pageMap;
-
-  /**
-   * 板上已有页 id 集合
-   * @type {Set<number>}
-   */
-  pageIds;
-
-  /**
-   * 页顺序（使用 id）
-   * @type {number[]}
-   */
-  pageOrder;
-
-  /**
-   * 某页被临时加载的次数
-   * @description 仅当页被临时加载时才增加
-   * @type {Map<number, number>}
-   */
-  pageTemporaryLoadedCount;
-
-  /**
-   * 某页被完整加载的次数
-   * @description 仅当页被完整加载时才增加
-   * @type {Map<number, number>}
-   */
-  pageFullyLoadedCount;
-
-  /**
-   * 已加载的页
-   * @description 已加载的页不超过 4 页
-   * @type {Deque}
-   */
-  loadedPages;
+    pageLoaded;
 
   /**
    * 白板的高度
@@ -135,12 +100,6 @@ class Board {
   pageLoadEventBus;
 
   /**
-   * 每页由哪些 PLM 持有以及持有策略
-   * @type {Map<number, Map<number | string, "temp" | "full">>}
-   */
-  pageLoadOwners;
-
-  /**
    * 显示器列表
    * @type {Map<string, Monitor>}
    */
@@ -154,12 +113,7 @@ class Board {
 
   constructor() {
     this.undoTree = new UndoTree();
-    this.pageMap = new Map();
-    this.pageIds = new Set();
-    this.pageOrder = [];
-    this.pageTemporaryLoadedCount = new Map();
-    this.pageFullyLoadedCount = new Map();
-    this.pageLoadOwners = new Map();
+    this.pageLoaded = new Map();
     this.pageCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
     this.pageLoadEventBus = new EventBus();
@@ -172,11 +126,11 @@ class Board {
 
   /**
    * 创建绑定到当前 Board 的页加载器
-   * @param {number} [limit] - 缓冲区上限
+   * @param {number} [limit = 0] - 缓冲区上限，为 0 则不限制
    * @param {number | string} [requesterId] - 请求方 id
    * @returns {PageLoader}
    */
-  createPageLoader(limit = Board.PAGE_BUFFER_LIMIT, requesterId) {
+  createPageLoader(limit = 0, requesterId) {
     return new PageLoader(
       limit,
       this.pageLoadEventBus,
@@ -194,40 +148,13 @@ class Board {
   }
 
   /**
-   * 判断页 id 是否存在于当前白板
-   * @param {number} pageId - 页 id
-   * @returns {boolean}
-   */
-  hasPageId(pageId) {
-    return (
-      this.pageMap.has(pageId) ||
-      this.pageIds.has(pageId) ||
-      this.pageOrder.includes(pageId)
-    );
-  }
-
-  /**
-   * 判断指定坐标是否存在页
-   * @param {number} x - 页二维坐标 x
-   * @param {number} y - 页二维坐标 y
-   * @returns {boolean}
-   */
-  hasPageAtCoordinate(x, y) {
-    return this.hasPageId(Page.coordinateToId(x, y));
-  }
-
-  /**
    * 按 id 获取页实例，不存在时惰性创建
    * @param {number} pageId - 页 id
    * @returns {Page | undefined}
    */
   getPageById(pageId) {
-    if (!this.hasPageId(pageId)) return undefined;
-    let page = this.pageMap.get(pageId);
-    if (!page) {
-      page = Page.fromId(pageId);
-      this.pageMap.set(pageId, page);
-    }
+    const pageState = this.#getOrCreatePageLoadedState(pageId);
+    const page = pageState.page;
 
     this.#syncPageNeighborRefs(page);
     return page;
@@ -265,28 +192,6 @@ class Board {
   }
 
   /**
-   * 获取指定坐标附近已存在的页并惰性实例化
-   * @param {number} x - 中心页 x
-   * @param {number} y - 中心页 y
-   * @param {number} [radius = 1] - 邻域半径
-   * @returns {Page[]}
-   */
-  getPagesAroundCoordinate(x, y, radius = 1) {
-    const pages = [];
-
-    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
-      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-        const page = this.getPageByCoordinate(x + offsetX, y + offsetY);
-        if (page) {
-          pages.push(page);
-        }
-      }
-    }
-
-    return pages;
-  }
-
-  /**
    * 同步页的四向邻页引用
    * @param {Page} page - 页实例
    * @private
@@ -303,12 +208,30 @@ class Board {
 
     for (const [direction, deltaX, deltaY] of directions) {
       const neighborId = Page.coordinateToId(page.x + deltaX, page.y + deltaY);
-      if (!this.hasPageId(neighborId)) continue;
 
-      const neighbor = this.pageMap.get(neighborId);
+      const neighbor = this.pageLoaded.get(neighborId)?.page;
       if (!neighbor) continue;
       Page.connectTwoPage(page, neighbor, direction);
     }
+  }
+
+  /**
+   * 获取或创建页加载状态。
+   * @param {number} pageId - 页 id
+   * @returns {BoardPageLoadedState}
+   * @private
+   */
+  #getOrCreatePageLoadedState(pageId) {
+    if (!this.pageLoaded.has(pageId)) {
+      this.pageLoaded.set(pageId, {
+        page: Page.fromId(pageId),
+        tempLoadedCount: 0,
+        fullLoadedCount: 0,
+        loaderStrategy: new Map(),
+      });
+    }
+
+    return this.pageLoaded.get(pageId);
   }
 
   /**
@@ -333,96 +256,6 @@ class Board {
     // [todo] 监听 Monitor 的视口变化事件以更新 Board 的 origin 和 zoom
     this.monitors.set(monitorId, monitor);
     return monitor;
-  }
-
-  /**
-   * 加载白板
-   * @description 加载白板的 meta、config 以及页等信息
-   * @param {string} rootPath - 白板根目录
-   * @return {Promise<Board>} 返回自身以支持链式调用
-   * @throws {Error} 如果目录不合法或文件损坏
-   * @todo
-   */
-  async load(rootPath) {
-    this.rootPath = rootPath;
-    const snapshot = await boardFileOperateBridge.loadBoardSnapshot(
-      this.rootPath,
-      boardMeta,
-    );
-    const meta = snapshot.meta;
-    const config = snapshot.config;
-    const connection = snapshot.connection;
-    const trace = snapshot.trace;
-
-    if (meta.type !== boardMeta.type) {
-      console.warn(
-        `Not a board file. Expected type ${boardMeta.type}, got ${meta.type}.`,
-      );
-      throw new Error("Not a board file.");
-    }
-    if (meta.version !== boardMeta.version) {
-      console.warn(
-        `Board version mismatch. Expected ${boardMeta.version}, got ${meta.version}.`,
-      );
-    }
-
-    this.width = config.width;
-    this.height = config.height;
-
-    // [todo] 加载其它 meta 和 config 相关的东西
-
-    // 加载页顺序信息
-    this.pageOrder = Array.isArray(connection.order)
-      ? [...connection.order]
-      : [];
-    this.pageIds = new Set(this.pageOrder);
-    this.pageCounterPool = new CounterPool(connection.count);
-
-    this.pageLoadOwners.clear();
-    this.pageTemporaryLoadedCount.clear();
-    this.pageFullyLoadedCount.clear();
-
-    this.pageMap = new Map();
-
-    // [FIXME] 应该由 Monitor 设备来决定加载哪一页
-
-    // 检查 trace 中的页是否合法
-    const currentPage = this.getPageById(trace.onPage);
-    if (!currentPage) {
-      throw new Error(`Trace page ${trace.onPage} does not exist.`);
-    }
-    this.getPagesAroundCoordinate(currentPage.x, currentPage.y);
-
-    // [todo] 加载上次打开的历史，如工具、设备等
-
-    return this;
-  }
-
-  /**
-   * 创建新白板
-   *
-   * @param {Directory} rootPath - 白板根目录
-   * @param {Object} boardInfo - 白板信息
-   * @param {string} boardInfo.templateID - 要应用的模板ID
-   * @param {number} boardInfo.width - 白板的宽度
-   * @param {number} boardInfo.height - 白板的高度
-   *
-   * @static
-   * @author Zhou Chenyu
-   * @returns {Promise<Board>}
-   * @todo
-   */
-  static async create(rootPath, boardInfo) {
-    const board = new Board();
-    board.rootPath = rootPath;
-    await boardFileOperateBridge.createBoardRoot(rootPath, boardMeta, {
-      width: boardInfo.width,
-      height: boardInfo.height,
-    });
-
-    // [todo] 创建文件结构
-
-    return board;
   }
 
   /**
@@ -567,11 +400,15 @@ class Board {
     );
     if (!removedStrategy) return false;
 
-    if (this.pageFullyLoadedCount.has(page.id)) {
+    const pageState = this.pageLoaded.get(page.id);
+    const fullLoadedCount = pageState?.fullLoadedCount ?? 0;
+    const tempLoadedCount = pageState?.tempLoadedCount ?? 0;
+
+    if (fullLoadedCount > 0) {
       return false;
     }
 
-    if (this.pageTemporaryLoadedCount.has(page.id)) {
+    if (tempLoadedCount > 0) {
       if (!page.isLoad) return false;
       return page.isTempLoad ? false : page.downgradeToTemp();
     }
@@ -588,34 +425,7 @@ class Board {
     if (!this.rootPath) return;
     await boardFileOperateBridge.writePageConnection(this.rootPath, {
       count: this.pageCounterPool.counter,
-      order: this.pageOrder,
-      size: this.pageOrder.length,
     });
-  }
-
-  /**
-   * 增加页加载计数
-   * @param {Map<number, number>} map - 页加载计数映射
-   * @param {number} pageId - 页 id
-   * @private
-   */
-  #increasePageLoadCount(map, pageId) {
-    map.set(pageId, (map.get(pageId) || 0) + 1);
-  }
-
-  /**
-   * 减少页加载计数
-   * @param {Map<number, number>} map - 页加载计数映射
-   * @param {number} pageId - 页 id
-   * @private
-   */
-  #decreasePageLoadCount(map, pageId) {
-    const count = map.get(pageId) || 0;
-    if (count <= 1) {
-      map.delete(pageId);
-      return;
-    }
-    map.set(pageId, count - 1);
   }
 
   /**
@@ -627,12 +437,8 @@ class Board {
    * @private
    */
   #registerPageLoadRequest(pageId, requesterId, strategy) {
-    if (!this.pageLoadOwners.has(pageId)) {
-      this.pageLoadOwners.set(pageId, new Map());
-    }
-
-    const owners = this.pageLoadOwners.get(pageId);
-    const previousStrategy = owners.get(requesterId);
+    const pageState = this.#getOrCreatePageLoadedState(pageId);
+    const previousStrategy = pageState.loaderStrategy.get(requesterId);
     const effectiveStrategy =
       previousStrategy === PAGE_LOAD_STRATEGIES.FULL
         ? PAGE_LOAD_STRATEGIES.FULL
@@ -643,16 +449,16 @@ class Board {
     }
 
     if (previousStrategy === PAGE_LOAD_STRATEGIES.TEMP) {
-      this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+      pageState.tempLoadedCount = Math.max(0, pageState.tempLoadedCount - 1);
     } else if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      this.#decreasePageLoadCount(this.pageFullyLoadedCount, pageId);
+      pageState.fullLoadedCount = Math.max(0, pageState.fullLoadedCount - 1);
     }
 
-    owners.set(requesterId, effectiveStrategy);
+    pageState.loaderStrategy.set(requesterId, effectiveStrategy);
     if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      this.#increasePageLoadCount(this.pageFullyLoadedCount, pageId);
+      pageState.fullLoadedCount += 1;
     } else {
-      this.#increasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+      pageState.tempLoadedCount += 1;
     }
     return effectiveStrategy;
   }
@@ -665,21 +471,18 @@ class Board {
    * @private
    */
   #unregisterPageLoadRequest(pageId, requesterId) {
-    if (!this.pageLoadOwners.has(pageId)) return undefined;
+    const pageState = this.pageLoaded.get(pageId);
+    if (!pageState) return undefined;
 
-    const owners = this.pageLoadOwners.get(pageId);
-    const previousStrategy = owners.get(requesterId);
+    const previousStrategy = pageState.loaderStrategy.get(requesterId);
     if (!previousStrategy) return undefined;
 
-    owners.delete(requesterId);
-    if (owners.size === 0) {
-      this.pageLoadOwners.delete(pageId);
-    }
+    pageState.loaderStrategy.delete(requesterId);
 
     if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      this.#decreasePageLoadCount(this.pageFullyLoadedCount, pageId);
+      pageState.fullLoadedCount = Math.max(0, pageState.fullLoadedCount - 1);
     } else {
-      this.#decreasePageLoadCount(this.pageTemporaryLoadedCount, pageId);
+      pageState.tempLoadedCount = Math.max(0, pageState.tempLoadedCount - 1);
     }
 
     return previousStrategy;
@@ -692,10 +495,9 @@ class Board {
    * @private
    */
   #getPageLoadCount(pageId) {
-    return (
-      (this.pageTemporaryLoadedCount.get(pageId) || 0) +
-      (this.pageFullyLoadedCount.get(pageId) || 0)
-    );
+    const pageState = this.pageLoaded.get(pageId);
+    if (!pageState) return 0;
+    return pageState.tempLoadedCount + pageState.fullLoadedCount;
   }
 }
 

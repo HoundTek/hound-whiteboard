@@ -10,6 +10,7 @@ import { CounterPool } from "../utils/counter-pool.js";
 import { Vector } from "../utils/math.js";
 import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
 import { joinPath } from "../utils/path.js";
+import { Page } from "./page.js";
 
 /**
  * 显示器组件
@@ -141,13 +142,12 @@ class Monitor {
 
     const pageX = Math.floor(worldPos.x / pageWidth);
     const pageY = Math.floor(worldPos.y / pageHeight);
-    const page = this.board.getPageByCoordinate?.(pageX, pageY);
-    if (!page) return null;
+    const pageId = Page.coordinateToId(pageX, pageY);
 
     const pageLocalX = worldPos.x - pageX * pageWidth;
     const pageLocalY = worldPos.y - pageY * pageHeight;
 
-    return { pageId: page.id, x: pageLocalX, y: pageLocalY };
+    return { pageId: pageId, x: pageLocalX, y: pageLocalY };
   }
 
   /**
@@ -171,7 +171,7 @@ class Monitor {
    * 挂载设备到显示器的设备树
    *
    * @param {string} path - 设备路径（相对于显示器根节点，可带或不带前导 /）
-    * @param {import("../devices/devices-tree.js").DeviceDefinition} deviceDefinition - 设备定义
+   * @param {import("../devices/devices-tree.js").DeviceDefinition} deviceDefinition - 设备定义
    * @returns {DevicesTreeNode[]} 挂载后的设备树节点列表
    */
   mountDevice(path, deviceDefinition) {

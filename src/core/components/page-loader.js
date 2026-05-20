@@ -199,13 +199,12 @@ class PageLoader {
   }
 
   /**
-   * 重置当前页
+   * 以指定页初始化缓冲区
    * @param {Page} page - 页实例
-   * @returns {Page | undefined} 重置后的当前页实例
+   * @returns {Page | undefined} 初始化后的当前页实例
    */
-  resetCurrentPage(page) {
-    this.pagesLoaded.clear();
-    this.bufferBounds = undefined;
+  initPage(page) {
+    this.#resetBufferState();
     this.pageNow = page;
     if (page) this.#insertPage(page);
     this.#emitBufferUpdated("reset", "none");
@@ -220,10 +219,18 @@ class PageLoader {
     for (const page of pages) {
       this.#emitUnloadRequest(page, "reset");
     }
+    this.#resetBufferState();
+    this.#emitBufferUpdated("reset", "none");
+  }
+
+  /**
+   * 清空当前缓冲区状态，不发出加载或卸载事件。
+   * @private
+   */
+  #resetBufferState() {
     this.pagesLoaded.clear();
     this.bufferBounds = undefined;
     this.pageNow = undefined;
-    this.#emitBufferUpdated("reset", "none");
   }
 
   /**
@@ -252,6 +259,55 @@ class PageLoader {
   getBufferBounds() {
     if (!this.bufferBounds) return undefined;
     return { ...this.bufferBounds };
+  }
+
+  /**
+   * 以指定页 id 初始化缓冲区。
+   * @param {number} pageId - 页 id
+   * @returns {Page | undefined}
+   */
+  initPageById(pageId) {
+    if (!Number.isInteger(pageId) || pageId <= 0) return undefined;
+    return this.initPage(Page.fromId(pageId));
+  }
+
+  /**
+   * 以指定坐标页初始化缓冲区。
+   * @param {number} x - 页二维坐标 x
+   * @param {number} y - 页二维坐标 y
+   * @returns {Page | undefined}
+   */
+  initPageByCoordinate(x, y) {
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return undefined;
+    return this.initPage(Page.fromCoordinate(x, y));
+  }
+
+  /**
+   * 以指定坐标邻域初始化缓冲区。
+   * @param {number} x - 中心页 x
+   * @param {number} y - 中心页 y
+   * @param {number} [radius = 1] - 邻域半径
+   * @returns {Page[]}
+   */
+  initPagesAroundCoordinate(x, y, radius = 1) {
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return [];
+
+    this.#resetBufferState();
+    const pages = [];
+
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        const page = Page.fromCoordinate(x + offsetX, y + offsetY);
+        this.#insertPage(page);
+        if (offsetX === 0 && offsetY === 0) {
+          this.pageNow = page;
+        }
+        pages.push(page);
+      }
+    }
+
+    this.#emitBufferUpdated("reset", "none");
+    return pages;
   }
 
   /**
@@ -481,6 +537,7 @@ class PageLoader {
    */
   #insertPage(page) {
     this.pagesLoaded.set(this.#getPageKey(page), page);
+    this.#syncLoadedNeighborRefs(page);
 
     if (!this.bufferBounds) {
       this.bufferBounds = {
@@ -496,6 +553,29 @@ class PageLoader {
     this.bufferBounds.maxX = Math.max(this.bufferBounds.maxX, page.x);
     this.bufferBounds.minY = Math.min(this.bufferBounds.minY, page.y);
     this.bufferBounds.maxY = Math.max(this.bufferBounds.maxY, page.y);
+  }
+
+  /**
+   * 仅在当前 PageLoader 已持有的页实例之间同步四向邻接引用。
+   * @param {Page} page - 页实例
+   * @private
+   */
+  #syncLoadedNeighborRefs(page) {
+    if (!page) return;
+
+    const directions = [
+      ["right", 1, 0],
+      ["left", -1, 0],
+      ["up", 0, 1],
+      ["down", 0, -1],
+    ];
+
+    for (const [direction, deltaX, deltaY] of directions) {
+      const neighborId = Page.coordinateToId(page.x + deltaX, page.y + deltaY);
+      const neighbor = this.pagesLoaded.get(neighborId);
+      if (!neighbor) continue;
+      Page.connectTwoPage(page, neighbor, direction);
+    }
   }
 
   /**

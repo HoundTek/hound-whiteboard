@@ -33,28 +33,22 @@ describe("Board page grid", () => {
     expect(invalidPage.isValid()).toBe(false);
   });
 
-  test("Board 应按需实例化当前页与其周围页", () => {
+  test("PageLoader 应按区域初始化缓冲范围", () => {
     const board = new Board();
-    board.pageOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-    board.pageIds = new Set(board.pageOrder);
+    const pageLoader = board.createPageLoader();
 
-    const currentPage = board.getPageById(1);
-    const neighborhood = board.getPagesAroundCoordinate(
-      currentPage.x,
-      currentPage.y,
-    );
+    const neighborhood = pageLoader.initPagesAroundCoordinate(0, 0);
+    const currentPage = pageLoader.pageNow;
 
     expect(currentPage).toEqual(expect.objectContaining({ id: 1, x: 0, y: 0 }));
     expect(
       neighborhood.map((page) => page.id).sort((left, right) => left - right),
     ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(board.pageMap.size).toBe(9);
+    expect(pageLoader.pagesLoadedCount).toBe(9);
   });
 
   test("Board 的左右邻页应基于二维坐标解析", () => {
     const board = new Board();
-    board.pageOrder = [1, 2, 4, 6, 8];
-    board.pageIds = new Set(board.pageOrder);
 
     const center = board.getPageById(1);
 
@@ -76,8 +70,6 @@ describe("Board page grid", () => {
     const board = new Board();
     board.width = 10;
     board.height = 10;
-    board.pageOrder = [1];
-    board.pageIds = new Set(board.pageOrder);
 
     const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
     stroke.setPathPoints([

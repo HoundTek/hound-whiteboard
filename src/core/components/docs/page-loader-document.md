@@ -10,9 +10,10 @@
 - 维护当前缓冲区的二维边界
 - 记录当前页引用 `pageNow`
 - 限制缓冲区最大页数 `pagesLoadedLimit`
+- 提供 `init...` 风格的缓冲区初始化接口
 - 提供上下左右移动当前页位置的接口
 - 提供向上下左右扩展与收缩缓冲区的接口
-- 提供重置当前页和重置缓冲区的接口
+- 提供重置缓冲区的接口
 
 ## 设计边界
 
@@ -23,6 +24,12 @@
 - 它只负责“提出应加载/应卸载哪些页”的调度意图
 - 真正的加载动作应由 `Board` 协调，再调用 `Page` 的加载方法
 - 当前邻页如何解析，也由 `Board` 决定；`PageLoader` 只消费页之间的空间邻接关系
+
+推荐约定：
+
+- 若调用方需要“以某页或某一区域为起点重建缓冲区”，优先通过 `PageLoader.init...` 完成。
+- `PageLoader` 不适合作为通用页查询服务，因此不再提供 `getPageById(...)`、`getPageByCoordinate(...)`、`getPagesAroundCoordinate(...)` 这类接口。
+- `Board` 更适合作为单页加载/卸载的执行端，而不是业务层的页查询入口。
 
 因此它更接近“页缓冲区控制器”，而不是“页内容加载器”。
 
@@ -136,11 +143,25 @@
 
 若该边界上包含当前页，则不执行操作。
 
+### 初始化接口
+
+#### `initPage(page)`
+
+清空当前缓冲区，并以指定页作为新的当前页。
+
+#### `initPageById(pageId)`
+
+清空当前缓冲区，并以指定页 id 对应的页作为新的当前页。
+
+#### `initPageByCoordinate(x, y)`
+
+清空当前缓冲区，并以指定坐标对应的页作为新的当前页。
+
+#### `initPagesAroundCoordinate(x, y, radius)`
+
+清空当前缓冲区，以中心页为当前页，并用其周围的二维邻域重建新的初始缓冲范围。
+
 ### 重置接口
-
-#### `resetCurrentPage(page)`
-
-将当前页重置为指定页。该操作通常意味着后续应重新构建缓冲区。
 
 #### `resetBuffer()`
 
@@ -175,8 +196,11 @@
 | `shrinkBufferLeft()`          | 从左边界收缩缓冲区       | `void -> boolean` |
 | `shrinkBufferUp()`            | 从上边界收缩缓冲区       | `void -> boolean` |
 | `shrinkBufferDown()`          | 从下边界收缩缓冲区       | `void -> boolean` |
-| `resetCurrentPage(page)`      | 重置当前页               | `Page -> void`    |
+| `initPage(page)`              | 以指定页初始化缓冲区     | `Page -> void`    |
 | `resetBuffer()`               | 重置缓冲区               | `void -> void`    |
+| `initPageById(pageId)`        | 以指定页 id 初始化缓冲区 | `number -> Page`  |
+| `initPageByCoordinate(x, y)`  | 以指定坐标初始化缓冲区   | `number -> number -> Page` |
+| `initPagesAroundCoordinate(...)` | 以指定邻域初始化缓冲区 | `number -> number -> number -> Page[]` |
 
 ## 与其它组件的关系
 
@@ -186,5 +210,5 @@
 
 ## 实现状态
 
-- 已实现：二维网格缓冲区、四向移动、四向扩缩、事件请求接口、请求方标识，以及由 `Board` 注入的邻页解析能力。
+- 已实现：二维网格缓冲区、`init...` 初始化接口、四向移动、四向扩缩、事件请求接口、请求方标识，以及由 `Board` 注入的邻页解析能力。
 - 待完善：更高层交互状态联动，以及围绕当前页自动维护更复杂的预取策略。

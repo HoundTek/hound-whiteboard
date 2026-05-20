@@ -32,9 +32,14 @@
 
 核心运行数据主要在：
 
-- `pages/connection.json`：页顺序与页计数
+- `pages/connection.json`：文件格式层的页组织快照；当前桥接层仍按 `count/order/size` 读写
 - `pages/{pageId}.json`：页层叠图（tier graph）
 - `objects/page{pageId}/*.json`：页对象数据
+
+需要区分：
+
+- `connection.json` 是磁盘格式的一部分。
+- `Board` 运行时已不再以 `pageMap/pageOrder/loadedPages` 作为主状态，而是统一到 `pageLoaded`。
 
 ## IPC 过桥约定（Renderer Core -> Main）
 
@@ -86,7 +91,7 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 
 - 通过 `createPageStorage(...)` 重建该页目录：`{root}/pages/{pageId}`
 - 通过 `createPageStorage(...)` 重建该页对象目录：`{root}/objects/page{pageId}`
-- 更新内存中的 `pageMap/pageOrder`
+- 更新白板文件格式所需的页连接信息
 - 通过 `#persistPageConnection()` 写入 `pages/connection.json`
 
 ### 3. 加载白板
@@ -96,7 +101,7 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 主要行为：
 
 - 通过 `loadBoardSnapshot(...)` 一次获取 `meta/config/connection/trace`
-- 渲染侧恢复 `width/height/pageOrder/pageCounterPool`
+- 渲染侧恢复 `width/height/pageCounterPool`，并根据 `trace.onPage` 或 `connection.order[0]` 选定初始页
 - `trace` 缺失时由主进程桥接层回退到 `connection.order[0]`
 
 失败行为：
@@ -115,8 +120,10 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 写入字段：
 
 - `count`（页计数池）
-- `order`（页顺序）
-- `size`（页数量）
+- `order`（文件格式中的页组织顺序）
+- `size`（文件格式中的页数量）
+
+说明：这些字段属于磁盘快照，不代表 `Board` 运行时一定保留同名字段。
 
 ### 5. 页目录解析
 

@@ -23,7 +23,7 @@ describe("PageLoader", () => {
 
     bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
 
-    loader.resetCurrentPage(page1);
+    loader.initPage(page1);
     const changed = loader.forceMoveCurrentRightTempLoad();
 
     expect(changed).toBe(true);
@@ -49,7 +49,7 @@ describe("PageLoader", () => {
 
     bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
 
-    loader.resetCurrentPage(page1);
+    loader.initPage(page1);
     const expanded = loader.expandBufferRightFullLoad();
 
     expect(expanded).toBe(true);
@@ -72,7 +72,7 @@ describe("PageLoader", () => {
 
     bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
 
-    loader.resetCurrentPage(page2);
+    loader.initPage(page2);
     loader.expandBufferRightTempLoad();
     loader.forceMoveCurrentLeftFullLoad();
 
@@ -94,7 +94,7 @@ describe("PageLoader", () => {
 
     bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
 
-    loader.resetCurrentPage(page1);
+    loader.initPage(page1);
     loader.expandBufferRightTempLoad();
     loader.expandBufferRightTempLoad();
 
@@ -119,7 +119,7 @@ describe("PageLoader", () => {
 
     bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
 
-    loader.resetCurrentPage(page1);
+    loader.initPage(page1);
     loader.expandBufferRightTempLoad();
 
     const shrunk = loader.shrinkBufferLeft();
@@ -142,7 +142,7 @@ describe("PageLoader", () => {
 
     bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
 
-    loader.resetCurrentPage(page1);
+    loader.initPage(page1);
     const changed = loader.forceMoveCurrentUpTempLoad();
 
     expect(changed).toBe(true);
@@ -184,7 +184,7 @@ describe("PageLoader", () => {
 
     bus.on(PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
 
-    loader.resetCurrentPage(page1);
+    loader.initPage(page1);
     loader.expandBufferUpTempLoad();
     const expanded = loader.expandBufferRightTempLoad();
 
@@ -201,5 +201,19 @@ describe("PageLoader", () => {
     expect(loadHandler).toHaveBeenCalledWith(
       expect.objectContaining({ page: pageUpRight, direction: "right" }),
     );
+  });
+
+  test("initPagesAroundCoordinate 应清空旧缓冲区并按区域重建", () => {
+    const bus = new EventBus();
+    const loader = new PageLoader(0, bus);
+
+    loader.initPage(Page.fromCoordinate(5, 5));
+    const pages = loader.initPagesAroundCoordinate(0, 0, 1);
+
+    expect(loader.pageNow).toEqual(expect.objectContaining({ id: 1, x: 0, y: 0 }));
+    expect(loader.pagesLoadedCount).toBe(9);
+    expect(
+      pages.map((page) => page.id).sort((left, right) => left - right),
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 });

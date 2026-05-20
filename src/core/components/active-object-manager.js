@@ -358,7 +358,7 @@ class ActiveObjectManager {
 
       let pageLoader = this.createPageLoader();
       // 初始化页加载器，预加载当前页
-      pageLoader.resetCurrentPage(pge);
+      pageLoader.initPage(pge);
 
       /**
        * 将页加载器移动到指定坐标

@@ -20,11 +20,14 @@
 
 `Board` 持有：
 
-- `pageMap`: 页 id -> `Page`
-- `pageOrder`: 页顺序
-- `loadedPages`: 当前已加载页队列（上限策略）
+- `pageLoaded`: 页 id -> `{ page, tempLoadedCount, fullLoadedCount, loaderStrategy }`
 - `activeObjectManager`: 活动对象层管理
 - `undoTree`: 历史树
+
+补充说明：
+
+- `pages/connection.json` 中的 `count/order/size` 属于白板文件格式快照，不等同于 `Board` 的运行时字段。
+- 运行时的页实例所有权由 `pageLoaded` 统一持有；页缓冲区移动与扩缩由 `PageLoader` 表达。
 
 ### 2.2 页级
 

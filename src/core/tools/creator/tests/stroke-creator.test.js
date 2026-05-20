@@ -171,8 +171,6 @@ describe("StrokeCreatorTool", () => {
     const board = new Board();
     board.width = 10;
     board.height = 10;
-    board.pageOrder = [1];
-    board.pageIds = new Set(board.pageOrder);
     board.getPageById(1).objectManager = new PageObjectManager(1);
 
     tool.process(
@@ -203,8 +201,6 @@ describe("StrokeCreatorTool", () => {
     const board = new Board();
     board.width = 10;
     board.height = 10;
-    board.pageOrder = [1];
-    board.pageIds = new Set(board.pageOrder);
     board.getPageById(1).objectManager = new PageObjectManager(1);
 
     tool.process(

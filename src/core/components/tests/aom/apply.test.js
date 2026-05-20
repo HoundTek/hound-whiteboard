@@ -67,8 +67,6 @@ describe("ActiveObjectManager/apply", () => {
     const board = new Board();
     board.width = 10;
     board.height = 10;
-    board.pageOrder = [1, 2];
-    board.pageIds = new Set(board.pageOrder);
 
     const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
     stroke.setPathPoints([
@@ -99,8 +97,6 @@ describe("ActiveObjectManager/apply", () => {
     const board = new Board();
     board.width = 10;
     board.height = 10;
-    board.pageOrder = [1];
-    board.pageIds = new Set(board.pageOrder);
 
     const lower = new StrokeObject(new Vector(0, 0), 21, 1);
     lower.setPathPoints([new Vector(1, 1), new Vector(8, 8)]);

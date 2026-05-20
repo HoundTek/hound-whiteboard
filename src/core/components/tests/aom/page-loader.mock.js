@@ -109,7 +109,7 @@ class MockPageLoader {
     return false;
   }
 
-  resetCurrentPage(page) {
+  initPage(page) {
     this.pageNow = page;
     this.pagesLoaded = page ? [page] : [];
   }
