@@ -10,42 +10,37 @@ const RANGE_BOUNDS_EPSILON = 1e-8;
 
 /**
  * 获取范围的包围盒。
- * @description 优先直接复用矩形范围上的 minX、minY、maxX、maxY 字段，否则回退到通用包围盒计算。
+ * @description 优先直接复用矩形范围上的 left、top、width、height 字段，否则回退到通用包围盒计算，并统一返回 `RectangleRange`。
  * @param {object} range - 要计算包围盒的范围对象
  * @param {{approximationSegments?: number}} [options] - 点列近似参数
- * @returns {{minX: number, minY: number, maxX: number, maxY: number}} 范围的包围盒
+ * @returns {import('./rectangle.js').RectangleRange} 范围的包围盒
  */
 function getRangeBounds(range, options = {}) {
   if (
-    Number.isFinite(range?.minX) &&
-    Number.isFinite(range?.minY) &&
-    Number.isFinite(range?.maxX) &&
-    Number.isFinite(range?.maxY)
+    Number.isFinite(range?.left) &&
+    Number.isFinite(range?.top) &&
+    Number.isFinite(range?.width) &&
+    Number.isFinite(range?.height)
   ) {
-    return {
-      minX: range.minX,
-      minY: range.minY,
-      maxX: range.maxX,
-      maxY: range.maxY,
-    };
+    return range;
   }
   return computeBounds(range, options);
 }
 
 /**
  * 判断两个包围盒是否可能重叠。
- * @description 只要两个轴对齐包围盒存在公共部分或边界接触，就返回 true。
- * @param {{minX: number, minY: number, maxX: number, maxY: number}} leftBounds - 左侧包围盒
- * @param {{minX: number, minY: number, maxX: number, maxY: number}} rightBounds - 右侧包围盒
+ * @description 只要两个 `RectangleRange` 包围盒存在公共部分或边界接触，就返回 true。
+ * @param {import('./rectangle.js').RectangleRange} leftBounds - 左侧包围盒
+ * @param {import('./rectangle.js').RectangleRange} rightBounds - 右侧包围盒
  * @param {number} [eps=RANGE_BOUNDS_EPSILON] - 浮点误差容忍值
  * @returns {boolean} 是否重叠
  */
 function boundsIntersect(leftBounds, rightBounds, eps = RANGE_BOUNDS_EPSILON) {
   return !(
-    leftBounds.maxX < rightBounds.minX - eps ||
-    rightBounds.maxX < leftBounds.minX - eps ||
-    leftBounds.maxY < rightBounds.minY - eps ||
-    rightBounds.maxY < leftBounds.minY - eps
+    leftBounds.right < rightBounds.left - eps ||
+    rightBounds.right < leftBounds.left - eps ||
+    leftBounds.bottom < rightBounds.top - eps ||
+    rightBounds.bottom < leftBounds.top - eps
   );
 }
 

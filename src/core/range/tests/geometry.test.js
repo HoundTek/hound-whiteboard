@@ -24,7 +24,7 @@ const overlappingFactories = {
 };
 
 const separatedFactories = {
-  rectangle: () => new RectangleRange(10, 10, 14, 14),
+  rectangle: () => new RectangleRange(10, 10, 4, 4),
   polygon: () => new PolygonRange(squarePoints(10, 10)),
   rope: () => new RopeRange(squarePoints(10, 10)),
   ellipse: () => new EllipseRange(new Vector(12, 12), 2, 1.5),

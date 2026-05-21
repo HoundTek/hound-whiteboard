@@ -133,11 +133,11 @@ class EllipseRange extends Range {
     if (range instanceof EllipseRange) {
       return new EllipseRange(range.center, range.axisX, range.axisY);
     }
-    const { minX, minY, maxX, maxY } = computeBounds(range);
+    const bounds = computeBounds(range);
     return new EllipseRange(
-      new Vector((minX + maxX) / 2, (minY + maxY) / 2),
-      (maxX - minX) / 2,
-      (maxY - minY) / 2,
+      new Vector(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2),
+      bounds.width / 2,
+      bounds.height / 2,
     );
   }
 }

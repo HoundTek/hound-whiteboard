@@ -92,8 +92,8 @@ class PageObjectManager {
     return new RectangleRange(
       pageX * pageWidth,
       pageY * pageHeight,
-      (pageX + 1) * pageWidth,
-      (pageY + 1) * pageHeight,
+      pageWidth,
+      pageHeight,
     );
   }
 
@@ -119,10 +119,14 @@ class PageObjectManager {
     }
 
     const worldBoundingBox = RectangleRange.from(worldRange);
-    const minPageX = Math.floor(worldBoundingBox.minX / pageWidth);
-    const maxPageX = Math.floor(worldBoundingBox.maxX / pageWidth);
-    const minPageY = Math.floor(worldBoundingBox.minY / pageHeight);
-    const maxPageY = Math.floor(worldBoundingBox.maxY / pageHeight);
+    const minPageX = Math.floor(worldBoundingBox.left / pageWidth);
+    const maxPageX = Math.floor(
+      (worldBoundingBox.left + worldBoundingBox.width) / pageWidth,
+    );
+    const minPageY = Math.floor(worldBoundingBox.top / pageHeight);
+    const maxPageY = Math.floor(
+      (worldBoundingBox.top + worldBoundingBox.height) / pageHeight,
+    );
 
     const pageIds = new Set();
     for (let pageY = minPageY; pageY <= maxPageY; pageY++) {

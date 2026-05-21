@@ -170,4 +170,4 @@
 ### 6.3 其他
 
 - `CounterPool`：对象/页面 id 递增池
-- `RectangleRange`：矩形范围抽象与矩阵变换
+- `RectangleRange`：矩形范围抽象，以及 range 子系统中的统一包围盒表示

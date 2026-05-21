@@ -6,7 +6,7 @@ import { RectangleRange } from "../rectangle.js";
 
 describe("PolygonRange", () => {
   test("from 应可从 RectangleRange 生成点列", () => {
-    const polygon = PolygonRange.from(new RectangleRange(0, 1, 4, 5));
+    const polygon = PolygonRange.from(new RectangleRange(0, 1, 4, 4));
 
     expect(polygon.points).toHaveLength(4);
     expect(polygon.points.map((point) => point.serialize())).toEqual([

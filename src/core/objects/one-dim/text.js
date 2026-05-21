@@ -180,10 +180,10 @@ class TextObject extends OneDimensionObject {
       });
       ctx.strokeStyle = this.textProperty.color;
       ctx.strokeRect(
-        rectangle.minX,
-        rectangle.minY,
-        rectangle.maxX - rectangle.minX,
-        rectangle.maxY - rectangle.minY,
+        rectangle.left,
+        rectangle.top,
+        rectangle.width,
+        rectangle.height,
       );
     }
     ctx.restore();

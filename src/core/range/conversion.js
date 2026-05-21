@@ -6,6 +6,7 @@
 
 import { Vector } from "../utils/math.js";
 import { Range } from "./range.js";
+import { RectangleRange } from "./rectangle.js";
 
 const DEFAULT_APPROXIMATION_SEGMENTS = 32;
 
@@ -56,10 +57,10 @@ function collectPoints(source, options = {}) {
 
 /**
  * 计算输入点列或范围的包围盒。
- * @description 返回最小轴对齐包围盒，用于矩形构造和快速排除。
+ * @description 返回最小轴对齐包围盒对应的 `RectangleRange`，用于矩形构造和快速排除。
  * @param {Range|Array<Vector|{x: number, y: number}>} source - 范围或点列
  * @param {{approximationSegments?: number}} [options] - 点列近似参数
- * @returns {{minX: number, minY: number, maxX: number, maxY: number}} 包围盒
+ * @returns {RectangleRange} 包围盒矩形范围
  * @throws {RangeError} 当输入不包含任何点时抛出异常
  */
 function computeBounds(source, options = {}) {
@@ -77,7 +78,7 @@ function computeBounds(source, options = {}) {
     if (point.x > maxX) maxX = point.x;
     if (point.y > maxY) maxY = point.y;
   }
-  return { minX, minY, maxX, maxY };
+  return new RectangleRange(minX, minY, maxX - minX, maxY - minY);
 }
 
 /**

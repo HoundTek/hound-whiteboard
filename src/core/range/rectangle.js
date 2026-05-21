@@ -19,39 +19,55 @@ class RectangleRange extends Range {
    * 矩形左边界
    * @type {number}
    */
-  minX;
+  left;
 
   /**
    * 矩形上边界
    * @type {number}
    */
-  minY;
+  top;
+
+  /**
+   * 矩形宽度
+   * @type {number}
+   */
+  width;
+
+  /**
+   * 矩形高度
+   * @type {number}
+   */
+  height;
 
   /**
    * 矩形右边界
    * @type {number}
    */
-  maxX;
+  get right() {
+    return this.left + this.width;
+  }
 
   /**
    * 矩形下边界
    * @type {number}
    */
-  maxY;
+  get bottom() {
+    return this.top + this.height;
+  }
 
   /**
    * @constructor
-   * @param {number} minX - 左边界
-   * @param {number} minY - 上边界
-   * @param {number} maxX - 右边界
-   * @param {number} maxY - 下边界
+   * @param {number} left - 左边界
+   * @param {number} top - 上边界
+   * @param {number} width - 矩形宽度
+   * @param {number} height - 矩形高度
    */
-  constructor(minX, minY, maxX, maxY) {
+  constructor(left, top, width, height) {
     super();
-    this.minX = minX;
-    this.minY = minY;
-    this.maxX = maxX;
-    this.maxY = maxY;
+    this.left = left;
+    this.top = top;
+    this.width = width;
+    this.height = height;
   }
 
   /**
@@ -63,10 +79,10 @@ class RectangleRange extends Range {
    * @returns {RectangleRange} 变换后的矩形范围
    */
   transform(matrix) {
-    const topLeft = Vector.mulMatrix(matrix, { x: this.minX, y: this.minY });
-    const topRight = Vector.mulMatrix(matrix, { x: this.maxX, y: this.minY });
-    const btmLeft = Vector.mulMatrix(matrix, { x: this.minX, y: this.maxY });
-    const btmRight = Vector.mulMatrix(matrix, { x: this.maxX, y: this.maxY });
+    const topLeft = Vector.mulMatrix(matrix, { x: this.left, y: this.top });
+    const topRight = Vector.mulMatrix(matrix, { x: this.right, y: this.top });
+    const btmLeft = Vector.mulMatrix(matrix, { x: this.left, y: this.bottom });
+    const btmRight = Vector.mulMatrix(matrix, { x: this.right, y: this.bottom });
     return RectangleRange.from([topLeft, topRight, btmLeft, btmRight]);
   }
 
@@ -77,10 +93,10 @@ class RectangleRange extends Range {
    */
   withPosition(position) {
     return new RectangleRange(
-      this.minX + position.x,
-      this.minY + position.y,
-      this.maxX + position.x,
-      this.maxY + position.y,
+      this.left + position.x,
+      this.top + position.y,
+      this.width,
+      this.height,
     );
   }
 
@@ -90,10 +106,10 @@ class RectangleRange extends Range {
    */
   toPoints() {
     return [
-      new Vector(this.minX, this.minY),
-      new Vector(this.maxX, this.minY),
-      new Vector(this.maxX, this.maxY),
-      new Vector(this.minX, this.maxY),
+      new Vector(this.left, this.top),
+      new Vector(this.right, this.top),
+      new Vector(this.right, this.bottom),
+      new Vector(this.left, this.bottom),
     ];
   }
 
@@ -105,10 +121,10 @@ class RectangleRange extends Range {
   containsPoint(point) {
     const target = clonePoint(point);
     return (
-      target.x >= this.minX - 1e-8 &&
-      target.x <= this.maxX + 1e-8 &&
-      target.y >= this.minY - 1e-8 &&
-      target.y <= this.maxY + 1e-8
+      target.x >= this.left - 1e-8 &&
+      target.x <= this.right + 1e-8 &&
+      target.y >= this.top - 1e-8 &&
+      target.y <= this.bottom + 1e-8
     );
   }
 
@@ -119,10 +135,9 @@ class RectangleRange extends Range {
    */
   static from(range) {
     if (range instanceof RectangleRange) {
-      return new RectangleRange(range.minX, range.minY, range.maxX, range.maxY);
+      return new RectangleRange(range.left, range.top, range.width, range.height);
     }
-    const { minX, minY, maxX, maxY } = computeBounds(range);
-    return new RectangleRange(minX, minY, maxX, maxY);
+    return computeBounds(range);
   }
 }
 

@@ -92,8 +92,8 @@ describe("EllipseRange", () => {
 
   test("退化椭圆应回退到边界线段判定", () => {
     const degenerate = new EllipseRange(new Vector(0, 0), 3, 0);
-    const rectangle = new RectangleRange(2, -1, 4, 1);
-    const separated = new RectangleRange(4.5, -1, 6, 1);
+    const rectangle = new RectangleRange(2, -1, 2, 2);
+    const separated = new RectangleRange(4.5, -1, 1.5, 2);
 
     expect(intersectsRanges(degenerate, rectangle)).toBe(true);
     expect(intersectsRanges(degenerate, separated)).toBe(false);

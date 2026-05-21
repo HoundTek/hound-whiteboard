@@ -14,7 +14,8 @@
 
 - 点列：范围按顺序展开后的二维点序列，也是 `toPoints()` 的统一输出形式。对 `PolygonRange`、`RopeRange`、`PathRange` 都统一使用“点列”，不再混用“顶点列表”。
 - 边界线段：由点列中相邻两点构成的线段；若范围闭合，还包括末点到首点的闭合线段。
-- 包围盒：点列或范围在坐标轴对齐意义下的最小包围盒。文档与注释里统一使用“包围盒”，不再混用“最小外接矩形”。
+- 包围盒：点列或范围在坐标轴对齐意义下的最小包围盒。在 `range` 子系统里，包围盒统一表示为 `RectangleRange`。文档与注释里统一使用“包围盒”，不再混用“最小外接矩形”。
+- 矩形参数：`RectangleRange` 统一由 `left`、`top`、`width`、`height` 四个量确定；右边界与下边界由派生值 `left + width`、`top + height` 得到。
 - 面积范围：具有内部区域的范围类型，当前包括 `RectangleRange`、`PolygonRange`、`RopeRange`、`EllipseRange`。
 - 路径范围：只由边界线段构成、不默认携带内部区域的范围类型，当前对应 `PathRange`。
 - 公共部分：两个范围共享的任意几何部分，可以是面积、边界线段或边界点；`intersectsRanges()` 以是否存在公共部分作为相交定义。
@@ -31,9 +32,9 @@
 - `rope.js`：绳子范围。
 - `ellipse.js`：椭圆范围。
 - `path.js`：路径范围。
-- `conversion.js`：范围到点列、点列到包围盒等转换算法。
+- `conversion.js`：范围到点列、点列到 `RectangleRange` 包围盒等转换算法。
 - `geometry.js`：点在线段、多边形包含、范围相交等几何算法。
-- `bounds.js`：包围盒计算与包围盒快速排除的共享辅助函数。
+- `bounds.js`：`RectangleRange` 包围盒的统一获取与快速排除共享辅助函数。
 - `intersections.js`：15 组范围类型组合的相交特化算法，作为内部实现文件使用。
 
 ## 职责边界
@@ -64,7 +65,7 @@
 
 - 把外部点对象规整成 `Vector`。
 - 把 `Range` 或点列统一成可遍历点列。
-- 从点列生成包围盒。
+- 从点列生成 `RectangleRange` 包围盒。
 - 提供曲线近似的默认分段数。
 
 这层不关心几何关系真假，只关心“如何把数据转成统一表示”。
@@ -121,7 +122,7 @@
 - 子类实现自己的 `containsPoint()`。
 - 通用相交由 `geometry.intersectsRanges()` 负责，但内部会按具体 range 类型分派到特化算法。
 - 这些特化算法集中放在内部文件 `intersections.js` 中，不通过 `index.js` 暴露。
-- 包围盒快速排除的共享实现集中放在内部文件 `bounds.js` 中，供 `geometry.js` 与 `intersections.js` 复用。
+- 包围盒快速排除的共享实现集中放在内部文件 `bounds.js` 中，供 `geometry.js` 与 `intersections.js` 复用；`computeBounds()` 与 `getRangeBounds()` 都统一返回 `RectangleRange`。
 
 ### 5. `PolygonRange` 与 `RopeRange` 的区域语义不同
 
@@ -144,7 +145,7 @@
 ## 当前状态
 
 - 已实现矩形、多边形、绳子、椭圆、路径五类范围。
-- 已实现点列转换、包围盒计算、点包含、线段相交、范围相交等算法。
+- 已实现点列转换、`RectangleRange` 包围盒计算、点包含、线段相交、范围相交等算法。
 - 在 `index.js` 里统一导出所有范围类型和算法入口。
 
 ## 后续建议
