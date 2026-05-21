@@ -12,6 +12,7 @@ import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
 } from "../core/devices/keyboard-device.js";
+import { CircleObject } from "../core/objects/graph/circle.js";
 
 const board = new Board();
 board.chunkWidth = 800;
@@ -125,13 +126,9 @@ class RandomCircleTool extends Tool {
       radius + Math.random() * Math.max(canvas.height - radius * 2, 0);
     const hue = Math.floor(Math.random() * 360);
 
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${hue}, 75%, 60%, 0.22)`;
-    ctx.strokeStyle = `hsl(${hue}, 70%, 42%)`;
-    ctx.lineWidth = 3;
-    ctx.fill();
-    ctx.stroke();
+    const circle = new CircleObject(new Vector(centerX, centerY), 0, 0, radius);
+    circle.color = `hsl(${hue}, 70%, 42%)`;
+    circle.render(ctx);
   }
 
   reset() {}

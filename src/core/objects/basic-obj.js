@@ -65,7 +65,7 @@ class BasicObject {
 
   /**
    * 对象的凸包
-   * @type {PolygonRange}
+   * @type {Range}
    * @description 用于更迅速的碰撞检测，存储凸包的顶点坐标。
    */
   convexHullRange;
