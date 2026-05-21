@@ -363,7 +363,7 @@ class Board {
    * @param {Chunk} chunk - 要加载的区块
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
-   * @param {number | string} requesterId - 发起加载请求的 PLM id
+   * @param {number | string} requesterId - 请求方 id
    * @returns {Promise<boolean>} 是否成功加载
    * @private
    */
@@ -393,7 +393,7 @@ class Board {
   /**
    * 卸载区块
    * @param {Chunk} chunk - 要卸载的区块
-   * @param {number | string} requesterId - 发起卸载请求的 PLM id
+   * @param {number | string} requesterId - 请求方 id
    * @returns {Promise<boolean>} 是否成功卸载
    * @private
    */
@@ -423,6 +423,12 @@ class Board {
     return chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
   }
 
+  /**
+   * 卸载区块（强制）
+   * @param {Chunk} chunk - 要卸载的区块
+   * @returns {boolean} 是否成功卸载
+   * @private
+   */
   #unloadRootChunk(chunk) {
     if (!chunk) return false;
 
@@ -454,9 +460,9 @@ class Board {
   }
 
   /**
-   * 记录某个区块klfakkdk对某区块的加载持有关系
+   * 记录某个区块加载器对某区块的加载持有关系
    * @param {number} chunkId - 区块 id
-   * @param {number | string} requesterId - 区块加载器 id
+   * @param {number | string} requesterId - 请求方 id
    * @param {"temp" | "full"} strategy - 加载策略
    * @returns {"temp" | "full"} 生效后的策略
    * @private
@@ -489,9 +495,9 @@ class Board {
   }
 
   /**
-   * 取消某个 PLM 对某区块的加载持有关系
+   * 取消某个区域加载器对某区块的加载持有关系
    * @param {number} chunkId - 区块 id
-   * @param {number | string} requesterId - PLM id
+   * @param {number | string} requesterId - 请求方 id
    * @returns {"temp" | "full" | undefined} 被移除的策略
    * @private
    */
@@ -517,9 +523,8 @@ class Board {
    * 获取某区块当前总持有数
    * @param {number} chunkId - 区块 id
    * @returns {number}
-   * @private
    */
-  #getChunkLoadCount(chunkId) {
+  getChunkLoadCount(chunkId) {
     const chunkState = this.chunkLoaded.get(chunkId);
     if (!chunkState) return 0;
     return chunkState.tempLoadedCount + chunkState.fullLoadedCount;
