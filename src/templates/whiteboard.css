@@ -171,14 +171,32 @@ body {
   height: 100%;
 }
 
-#monitor-canvas-monitor {
-  display: block;
+.monitor-root {
   position: fixed;
   top: 0;
   left: 0;
-  width: 800px;
-  height: 600px;
+}
+
+.monitor-layer {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.monitor-layer-base {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.monitor-layer-live {
   z-index: 1;
   pointer-events: auto;
   background-color: pink;
+}
+
+.monitor-layer-ui {
+  z-index: 2;
+  pointer-events: none;
 }

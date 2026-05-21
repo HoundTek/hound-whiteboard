@@ -312,6 +312,21 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - 第一阶段仍可保留较粗的刷新策略。
 - 只在 apply(objects)、分区块切换、缩放平移稳定点等低频时机更新。
 
+## 当前代码进度
+
+截至当前版本，渲染链路已经先落下了最小骨架：
+
+- `Board.createMonitor()` 已创建 monitor-root、`baseCanvas`、`liveCanvas`、`uiCanvas`。
+- `Monitor` 已持有多层画布引用，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
+- `RenderScheduler` 已挂在 `Monitor` 下，支持多次 invalidate 合并到单次 flush。
+- `LiveRenderer` 已挂在 `Monitor` 下，可按 `ActiveObjectManager.layerOrder` 顺序读取活动对象并重绘到 `liveCanvas`。
+
+当前还没有完成的部分是：
+
+- 工具链或 AOM 状态变更自动触发 `renderScheduler.invalidate(...)`
+- `LiveRenderer` 的 dirty rect 局部刷新
+- `baseCanvas` 与 `uiCanvas` 的专用渲染器
+
 ### 关键流程
 
 #### 流程一：创建新对象

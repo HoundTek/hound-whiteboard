@@ -5,7 +5,6 @@
  */
 
 import { RandomNumberPool } from "../utils/random.js";
-import { Deque } from "../utils/deque.js";
 import { Queue } from "../utils/queue.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { Chunk } from "./chunk.js";
@@ -367,21 +366,34 @@ class ActiveObjectManager {
        * @returns {boolean}
        */
       function moveChunkBlockLoaderTo(targetX, targetY) {
-        while (chunkBlockLoader.chunkNow && chunkBlockLoader.chunkNow.x < targetX) {
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.x < targetX
+        ) {
           if (!chunkBlockLoader.forceMoveCurrentRightTempLoad()) return false;
         }
-        while (chunkBlockLoader.chunkNow && chunkBlockLoader.chunkNow.x > targetX) {
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.x > targetX
+        ) {
           if (!chunkBlockLoader.forceMoveCurrentLeftTempLoad()) return false;
         }
-        while (chunkBlockLoader.chunkNow && chunkBlockLoader.chunkNow.y < targetY) {
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.y < targetY
+        ) {
           if (!chunkBlockLoader.forceMoveCurrentUpTempLoad()) return false;
         }
-        while (chunkBlockLoader.chunkNow && chunkBlockLoader.chunkNow.y > targetY) {
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.y > targetY
+        ) {
           if (!chunkBlockLoader.forceMoveCurrentDownTempLoad()) return false;
         }
 
         return (
-          chunkBlockLoader.chunkNow?.x === targetX && chunkBlockLoader.chunkNow?.y === targetY
+          chunkBlockLoader.chunkNow?.x === targetX &&
+          chunkBlockLoader.chunkNow?.y === targetY
         );
       }
 
@@ -422,7 +434,9 @@ class ActiveObjectManager {
           }
 
           const neighborsOnTarget =
-            chunkBlockLoader.chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
+            chunkBlockLoader.chunkNow.objectManager.staticGraph.neighborsUnsafe(
+              node,
+            );
           if (neighborsOnTarget) {
             for (const next of neighborsOnTarget) {
               if (!visit.has(next)) {

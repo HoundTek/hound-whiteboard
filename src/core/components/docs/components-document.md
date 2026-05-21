@@ -12,26 +12,36 @@ components 目录下的模块用于管理白板运行时状态，负责把对象
 - `ChunkObjectManager`：区块对象管理器，负责静态层叠图与区块对象映射。
 - `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
 - `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
+- `Monitor`：显示器组件，负责视口坐标变换、设备树挂载，以及多层渲染画布的承载。
+- `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。
+- `LiveRenderer`：活动层渲染器，负责把 AOM 当前活动对象按层顺序绘制到 `liveCanvas`。
 
 ## 组件关系图
 
 ```mermaid
 graph LR
-  Board["Board"]
-  PM["Chunk"]
+  B["Board"]
+  C["Chunk"]
   CL["ChunkLoader"]
-  POM["ChunkObjectManager"]
+  COM["ChunkObjectManager"]
   AOM["ActiveObjectManager"]
-  PLM["ChunkBlockLoader"]
+  CBL["ChunkBlockLoader"]
+  M["Monitor"]
+  RS["RenderScheduler"]
+  LR["LiveRenderer"]
   UT["UndoTree"]
 
-  Board --> CL
-  CL --> PM
-  PM --> POM
-  Board --> AOM
-  Board --> UT
-  PLM --> CL
-  AOM --> PLM
+  B --> CL
+  CL --> C
+  C --> COM
+  B --> AOM
+  B --> M
+  B --> UT
+  CBL --> CL
+  AOM --> CBL
+  M --> RS
+  M --> LR
+  LR --> AOM
 ```
 
 ## 关键设计点
@@ -58,6 +68,16 @@ graph LR
 
 层叠图细节见 [tier-graph-document.md](./tier-graph-document.md)。
 
+### 视口层承接交互态渲染
+
+当前渲染职责开始向 `Monitor` 视口层收敛。
+
+- `Monitor` 承载 `baseCanvas`、`liveCanvas`、`uiCanvas` 三层画布。
+- `RenderScheduler` 负责把多次 invalidate 合并到单次 flush。
+- `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`。
+
+这让活动对象的语义仍留在 AOM，而把“何时画、画到哪一层”收口到 Monitor 一侧。
+
 ## 与其它目录的关系
 
 - 与 `src/core/objects/`：对象实例由区块对象管理器持有。
@@ -68,5 +88,8 @@ graph LR
 ## 当前实现状态
 
 - `ActiveObjectManager` 算法实现相对完整，已具备拾取、分层、置顶、清理等核心逻辑。
+- `Monitor` 已收口到多层画布骨架，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
+- `RenderScheduler` 与 `LiveRenderer` 已接入 `Monitor`，当前可以按 AOM 层顺序整层刷新活动对象。
 - `Board`、`Chunk`、`ChunkObjectManager` 已有骨架和关键字段；其中 `Board` 已收口到“根 `ChunkLoader` 持有区块对象 + `chunkLoaded` 维护加载状态”的模型，但仍存在较多 `todo`。
-- 文档建议按“先补齐区块加载与对象落盘，再串联工具与历史”的顺序推进。
+- 当前活动层渲染仍是“清空 liveCanvas 后整层重绘”的最小实现，尚未进入 dirty rect 局部刷新。
+- 文档建议按“先补齐视口层渲染链路，再推进 dirty rect 与静态层缓存”的顺序继续推进。

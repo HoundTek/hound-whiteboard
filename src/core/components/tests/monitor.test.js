@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
 import { Vector } from "../../utils/math.js";
 import {
@@ -115,5 +116,55 @@ describe("Monitor", () => {
       x: 300,
       y: 175,
     });
+  });
+
+  test("attachRenderLayers 应保留 liveCanvas 为兼容入口并同步层尺寸", () => {
+    const monitor = createMonitor("delta");
+    const baseCanvas = { width: 0, height: 0, getContext: () => ({}) };
+    const liveCanvas = {
+      width: 320,
+      height: 240,
+      getBoundingClientRect() {
+        return { left: 0, top: 0, width: 320, height: 240 };
+      },
+      getContext: () => ({}),
+    };
+    const uiCanvas = { width: 0, height: 0, getContext: () => ({}) };
+    const rootElement = {};
+
+    monitor.attachRenderLayers({
+      rootElement,
+      baseCanvas,
+      liveCanvas,
+      uiCanvas,
+    });
+
+    expect(monitor.rootElement).toBe(rootElement);
+    expect(monitor.canvas).toBe(liveCanvas);
+    expect(monitor.liveCanvas).toBe(liveCanvas);
+    expect(monitor.baseCanvas).toBe(baseCanvas);
+    expect(monitor.uiCanvas).toBe(uiCanvas);
+    expect(baseCanvas.width).toBe(320);
+    expect(baseCanvas.height).toBe(240);
+    expect(uiCanvas.width).toBe(320);
+    expect(uiCanvas.height).toBe(240);
+    expect(monitor.getContext("base")).toEqual({});
+    expect(monitor.getContext("live")).toEqual({});
+    expect(monitor.getContext("ui")).toEqual({});
+    expect(monitor.renderScheduler).toBeDefined();
+    expect(monitor.liveRenderer).toBeDefined();
+  });
+
+  test("renderScheduler.flush 应调用 liveRenderer.flush", () => {
+    const monitor = createMonitor("epsilon");
+    const flushSpy = jest
+      .spyOn(monitor.liveRenderer, "flush")
+      .mockImplementation(() => []);
+
+    monitor.renderScheduler.invalidate({ type: "dirty" });
+    monitor.renderScheduler.flush();
+
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    flushSpy.mockRestore();
   });
 });

@@ -11,6 +11,8 @@ import { Vector } from "../utils/math.js";
 import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
 import { joinPath } from "../utils/path.js";
 import { Chunk } from "./chunk.js";
+import { RenderScheduler } from "./render-scheduler.js";
+import { LiveRenderer } from "./live-renderer.js";
 
 /**
  * 显示器组件
@@ -20,11 +22,35 @@ import { Chunk } from "./chunk.js";
  */
 class Monitor {
   /**
+   * 显示器组件的根元素
+   * @type {HTMLElement | null}
+   */
+  rootElement;
+
+  /**
    * 显示器组件的画布
    * @type {HTMLCanvasElement}
    * @todo 现在还没有转移到 React，所以用原生 html。
    */
   canvas;
+
+  /**
+   * 静态内容画布
+   * @type {HTMLCanvasElement | null}
+   */
+  baseCanvas;
+
+  /**
+   * 活动内容画布
+   * @type {HTMLCanvasElement}
+   */
+  liveCanvas;
+
+  /**
+   * UI 覆盖层画布
+   * @type {HTMLCanvasElement | null}
+   */
+  uiCanvas;
 
   /**
    * 白板，用于查询区块顺序与区块尺寸
@@ -51,6 +77,18 @@ class Monitor {
   devicesTree;
 
   /**
+   * 当前显示器的渲染调度器
+   * @type {RenderScheduler}
+   */
+  renderScheduler;
+
+  /**
+   * 活动层渲染器
+   * @type {LiveRenderer}
+   */
+  liveRenderer;
+
+  /**
    * canvas 左上角对应的世界坐标（可为负数）
    * @description 翻区块、平移、缩放后需整体更新此字段。
    * 初始值使第一区块在 canvas 中居中：
@@ -74,6 +112,10 @@ class Monitor {
    * @param {string} monitorId - 显示器 id
    */
   constructor(canvas, board, { width, height }, monitorId) {
+    this.rootElement = null;
+    this.baseCanvas = null;
+    this.liveCanvas = canvas;
+    this.uiCanvas = null;
     this.canvas = canvas;
     this.board = board;
     this.chunkBlockLoader = this.board.createChunkBlockLoader();
@@ -87,11 +129,74 @@ class Monitor {
       this.chunkWidth / 2 - canvasWidth / (2 * this.zoom),
       this.chunkHeight / 2 - canvasHeight / (2 * this.zoom),
     );
-    this.canvas.width = width;
-    this.canvas.height = height;
+    this.resizeRenderLayers(width, height);
     this.canvas.id = `monitor-canvas-${monitorId}`;
 
     this.devicesTree = new DevicesTree();
+    this.renderScheduler = new RenderScheduler();
+    this.liveRenderer = new LiveRenderer(this, this.board?.activeObjectManager);
+    this.renderScheduler.setFlushHandler(() => this.liveRenderer.flush());
+  }
+
+  /**
+   * 绑定显示器的多层渲染画布
+   * @param {{
+   *   rootElement?: HTMLElement | null,
+   *   baseCanvas?: HTMLCanvasElement | null,
+   *   liveCanvas?: HTMLCanvasElement,
+   *   uiCanvas?: HTMLCanvasElement | null,
+   * }} renderLayers - 渲染层集合
+   */
+  attachRenderLayers({ rootElement, baseCanvas, liveCanvas, uiCanvas } = {}) {
+    if (rootElement !== undefined) {
+      this.rootElement = rootElement ?? null;
+    }
+
+    if (baseCanvas !== undefined) {
+      this.baseCanvas = baseCanvas ?? null;
+    }
+
+    if (liveCanvas) {
+      this.liveCanvas = liveCanvas;
+      this.canvas = liveCanvas;
+    }
+
+    if (uiCanvas !== undefined) {
+      this.uiCanvas = uiCanvas ?? null;
+    }
+
+    this.resizeRenderLayers(this.canvas?.width, this.canvas?.height);
+  }
+
+  /**
+   * 调整所有渲染层尺寸
+   * @param {number} width - 画布宽度
+   * @param {number} height - 画布高度
+   */
+  resizeRenderLayers(width, height) {
+    const canvases = [this.baseCanvas, this.liveCanvas, this.uiCanvas].filter(
+      Boolean,
+    );
+
+    for (const layerCanvas of canvases) {
+      layerCanvas.width = width;
+      layerCanvas.height = height;
+    }
+  }
+
+  /**
+   * 获取指定渲染层的 2D 上下文
+   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
+   * @returns {CanvasRenderingContext2D | null}
+   */
+  getContext(layer = "live") {
+    const layerCanvas = {
+      base: this.baseCanvas,
+      live: this.liveCanvas,
+      ui: this.uiCanvas,
+    }[layer];
+
+    return layerCanvas?.getContext?.("2d") ?? null;
   }
 
   /**
