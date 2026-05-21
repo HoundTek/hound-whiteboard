@@ -68,7 +68,7 @@ describe("Tool", () => {
     expect(tool.calls[0].deviceContext.allocateObjectId()).toBe(7);
   });
 
-  test("createProcessor 应默认暴露来自 Monitor 的 resolveOwnerPageId", () => {
+  test("createProcessor 应默认暴露来自 Monitor 的 resolveOwnerChunkId", () => {
     class TestTool extends Tool {
       calls = [];
 
@@ -83,9 +83,9 @@ describe("Tool", () => {
 
     const tool = new TestTool();
     const monitor = {
-      worldToPage(position) {
+      worldToChunk(position) {
         if (position.x === 10 && position.y === 20) {
-          return { pageId: 3, x: 10, y: 20 };
+          return { chunkId: 3, x: 10, y: 20 };
         }
         return null;
       },
@@ -98,7 +98,7 @@ describe("Tool", () => {
     );
 
     expect(
-      tool.calls[0].deviceContext.resolveOwnerPageId({
+      tool.calls[0].deviceContext.resolveOwnerChunkId({
         x: 10,
         y: 20,
       }),

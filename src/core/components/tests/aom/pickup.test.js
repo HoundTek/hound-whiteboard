@@ -1,14 +1,14 @@
 import { jest } from "@jest/globals";
-import { MockPageLoader } from "./page-loader.mock.js";
+import { MockChunkLoader } from "./chunk-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
-import { Page } from "../../page.js";
-import { PageObjectManager } from "../../page-object-manager.js";
+import { Chunk } from "../../chunk.js";
+import { ChunkObjectManager } from "../../chunk-object-manager.js";
 import { BasicObject } from "../../../objects/basic-obj.js";
 import { Vector } from "../../../utils/math.js";
-import { onePageData, twoPageData, multiPageData } from "./data.js";
+import { oneChunkData, twoChunkData, multiChunkData } from "./data.js";
 
-jest.unstable_mockModule("../../page-loader.js", () => ({
-  PageLoader: MockPageLoader,
+jest.unstable_mockModule("../../chunk-loader.js", () => ({
+  ChunkLoader: MockChunkLoader,
 }));
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
@@ -20,64 +20,64 @@ describe("ActiveObjectManager/pickup", () => {
     aom = new ActiveObjectManager();
   });
 
-  function createPage(id) {
-    const page = Page.fromId(id);
-    page.isLoad = true;
-    page.isTempLoad = false;
-    return page;
+  function createChunk(id) {
+    const chunk = Chunk.fromId(id);
+    chunk.isLoad = true;
+    chunk.isTempLoad = false;
+    return chunk;
   }
 
-  function createPageAt(x, y) {
-    const page = Page.fromCoordinate(x, y);
-    page.isLoad = true;
-    page.isTempLoad = false;
-    return page;
+  function createChunkAt(x, y) {
+    const chunk = Chunk.fromCoordinate(x, y);
+    chunk.isLoad = true;
+    chunk.isTempLoad = false;
+    return chunk;
   }
 
-  function createObject(id, pageId) {
-    return new BasicObject(new Vector(0, 0), id, pageId);
+  function createObject(id, chunkId) {
+    return new BasicObject(new Vector(0, 0), id, chunkId);
   }
 
-  function createBoard(...pages) {
-    const pageMap = new Map(pages.map((page) => [page.id, page]));
+  function createBoard(...chunks) {
+    const chunkMap = new Map(chunks.map((chunk) => [chunk.id, chunk]));
     return {
-      createPageLoader: () => new MockPageLoader(),
-      getPageById: (pageId) => pageMap.get(pageId),
+      createChunkLoader: () => new MockChunkLoader(),
+      getChunkById: (chunkId) => chunkMap.get(chunkId),
     };
   }
 
-  function pageConnect(pageA, pageB) {
-    pageA.rightPage = pageB;
-    pageB.leftPage = pageA;
+  function chunkConnect(chunkA, chunkB) {
+    chunkA.rightChunk = chunkB;
+    chunkB.leftChunk = chunkA;
   }
 
-  function verticalPageConnect(lowerPage, upperPage) {
-    lowerPage.upPage = upperPage;
-    upperPage.downPage = lowerPage;
+  function verticalChunkConnect(lowerChunk, upperChunk) {
+    lowerChunk.upChunk = upperChunk;
+    upperChunk.downChunk = lowerChunk;
   }
 
-  function setObjectCoverage(pages, objectIds) {
-    const pageIds = pages.map((page) => page.id);
+  function setObjectCoverage(chunks, objectIds) {
+    const chunkIds = chunks.map((chunk) => chunk.id);
 
-    for (const page of pages) {
+    for (const chunk of chunks) {
       for (const objectId of objectIds) {
-        page.objectManager.setObjectCoverPages(objectId, pageIds);
+        chunk.objectManager.setObjectCoverChunks(objectId, chunkIds);
       }
     }
   }
 
-  describe("选取无跨页对象的子图", () => {
-    let page = createPage(1);
+  describe("选取无跨区块对象的子图", () => {
+    let chunk = createChunk(1);
 
     beforeEach(() => {
-      page = createPage(1);
-      page.objectManager = new PageObjectManager(1);
-      page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
-      aom = new ActiveObjectManager(createBoard(page));
+      chunk = createChunk(1);
+      chunk.objectManager = new ChunkObjectManager(1);
+      chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
+      aom = new ActiveObjectManager(createBoard(chunk));
     });
 
-    test("应能选取单对象为起点且无跨页对象的子图", () => {
-      const pickup8 = aom.pickup(new Set([createObject(8, page.id)]));
+    test("应能选取单对象为起点且无跨区块对象的子图", () => {
+      const pickup8 = aom.pickup(new Set([createObject(8, chunk.id)]));
 
       const expected8 = DirectedGraph.parse([
         [8, [4, 5]],
@@ -90,7 +90,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       expect(pickup8.equals(expected8)).toBe(true);
 
-      const pickup11 = aom.pickup(new Set([createObject(11, page.id)]));
+      const pickup11 = aom.pickup(new Set([createObject(11, chunk.id)]));
 
       const expected11 = DirectedGraph.parse([
         [11, [7]],
@@ -103,11 +103,11 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup11.equals(expected11)).toBe(true);
     });
 
-    test("应能选取多对象为起点且无跨页对象的子图", () => {
+    test("应能选取多对象为起点且无跨区块对象的子图", () => {
       const pickup8n15 = aom.pickup(
         new Set([
-          createObject(8, page.id),
-          createObject(15, page.id),
+          createObject(8, chunk.id),
+          createObject(15, chunk.id),
         ]),
       );
 
@@ -128,28 +128,28 @@ describe("ActiveObjectManager/pickup", () => {
     });
   });
 
-  describe("选取含跨页对象的子图", () => {
-    let page1 = createPage(1);
-    let page2 = createPage(2);
+  describe("选取含跨区块对象的子图", () => {
+    let chunk1 = createChunk(1);
+    let chunk2 = createChunk(2);
 
     beforeEach(() => {
-      page1 = createPage(1);
-      page2 = createPage(2);
-      aom = new ActiveObjectManager(createBoard(page1, page2));
+      chunk1 = createChunk(1);
+      chunk2 = createChunk(2);
+      aom = new ActiveObjectManager(createBoard(chunk1, chunk2));
 
-      pageConnect(page1, page2);
+      chunkConnect(chunk1, chunk2);
 
-      page1.objectManager = new PageObjectManager(1);
-      page2.objectManager = new PageObjectManager(2);
+      chunk1.objectManager = new ChunkObjectManager(1);
+      chunk2.objectManager = new ChunkObjectManager(2);
 
-      page1.objectManager.staticGraph = DirectedGraph.parse(twoPageData[0]);
-      page2.objectManager.staticGraph = DirectedGraph.parse(twoPageData[1]);
+      chunk1.objectManager.staticGraph = DirectedGraph.parse(twoChunkData[0]);
+      chunk2.objectManager.staticGraph = DirectedGraph.parse(twoChunkData[1]);
 
-      setObjectCoverage([page1, page2], [15, 17, 18]);
+      setObjectCoverage([chunk1, chunk2], [15, 17, 18]);
     });
 
-    test("应能选取单对象为起点且含跨页对象的子图", () => {
-      const pickup18 = aom.pickup(new Set([createObject(18, page2.id)]));
+    test("应能选取单对象为起点且含跨区块对象的子图", () => {
+      const pickup18 = aom.pickup(new Set([createObject(18, chunk2.id)]));
 
       const expected18 = DirectedGraph.parse([
         [18, [6]],
@@ -160,7 +160,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       expect(pickup18.equals(expected18)).toBe(true);
 
-      const pickup15 = aom.pickup(new Set([createObject(15, page1.id)]));
+      const pickup15 = aom.pickup(new Set([createObject(15, chunk1.id)]));
 
       const expected15 = DirectedGraph.parse([
         [15, [10, 16]],
@@ -176,11 +176,11 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup15.equals(expected15)).toBe(true);
     });
 
-    test("应能选取多对象为起点且含跨页对象的子图", () => {
+    test("应能选取多对象为起点且含跨区块对象的子图", () => {
       const pickup8n10 = aom.pickup(
         new Set([
-          createObject(8, page1.id),
-          createObject(10, page1.id),
+          createObject(8, chunk1.id),
+          createObject(10, chunk1.id),
         ]),
       );
 
@@ -201,49 +201,49 @@ describe("ActiveObjectManager/pickup", () => {
     });
   });
 
-  describe("选取含多页的跨页对象链的子图", () => {
-    let page1 = createPageAt(0, 0);
-    let page2 = createPageAt(1, 0);
-    let page3 = createPageAt(2, 0);
-    let page4 = createPageAt(3, 0);
-    let page5 = createPageAt(4, 0);
+  describe("选取含多区块的跨区块对象链的子图", () => {
+    let chunk1 = createChunkAt(0, 0);
+    let chunk2 = createChunkAt(1, 0);
+    let chunk3 = createChunkAt(2, 0);
+    let chunk4 = createChunkAt(3, 0);
+    let chunk5 = createChunkAt(4, 0);
 
     beforeEach(() => {
-      page1 = createPageAt(0, 0);
-      page2 = createPageAt(1, 0);
-      page3 = createPageAt(2, 0);
-      page4 = createPageAt(3, 0);
-      page5 = createPageAt(4, 0);
-      aom = new ActiveObjectManager(createBoard(page1, page2, page3, page4, page5));
+      chunk1 = createChunkAt(0, 0);
+      chunk2 = createChunkAt(1, 0);
+      chunk3 = createChunkAt(2, 0);
+      chunk4 = createChunkAt(3, 0);
+      chunk5 = createChunkAt(4, 0);
+      aom = new ActiveObjectManager(createBoard(chunk1, chunk2, chunk3, chunk4, chunk5));
 
-      page1.objectManager = new PageObjectManager(page1.id);
-      page2.objectManager = new PageObjectManager(page2.id);
-      page3.objectManager = new PageObjectManager(page3.id);
-      page4.objectManager = new PageObjectManager(page4.id);
-      page5.objectManager = new PageObjectManager(page5.id);
+      chunk1.objectManager = new ChunkObjectManager(chunk1.id);
+      chunk2.objectManager = new ChunkObjectManager(chunk2.id);
+      chunk3.objectManager = new ChunkObjectManager(chunk3.id);
+      chunk4.objectManager = new ChunkObjectManager(chunk4.id);
+      chunk5.objectManager = new ChunkObjectManager(chunk5.id);
 
-      page1.objectManager.staticGraph = DirectedGraph.parse(multiPageData[0]);
-      page2.objectManager.staticGraph = DirectedGraph.parse(multiPageData[1]);
-      page3.objectManager.staticGraph = DirectedGraph.parse(multiPageData[2]);
-      page4.objectManager.staticGraph = DirectedGraph.parse(multiPageData[3]);
-      page5.objectManager.staticGraph = DirectedGraph.parse(multiPageData[4]);
+      chunk1.objectManager.staticGraph = DirectedGraph.parse(multiChunkData[0]);
+      chunk2.objectManager.staticGraph = DirectedGraph.parse(multiChunkData[1]);
+      chunk3.objectManager.staticGraph = DirectedGraph.parse(multiChunkData[2]);
+      chunk4.objectManager.staticGraph = DirectedGraph.parse(multiChunkData[3]);
+      chunk5.objectManager.staticGraph = DirectedGraph.parse(multiChunkData[4]);
 
-      setObjectCoverage([page1, page2], [3, 18]);
-      setObjectCoverage([page2, page3], [5, 16]);
-      setObjectCoverage([page3, page4], [7, 14]);
-      setObjectCoverage([page4, page5], [9, 12]);
+      setObjectCoverage([chunk1, chunk2], [3, 18]);
+      setObjectCoverage([chunk2, chunk3], [5, 16]);
+      setObjectCoverage([chunk3, chunk4], [7, 14]);
+      setObjectCoverage([chunk4, chunk5], [9, 12]);
 
-      pageConnect(page1, page2);
-      pageConnect(page2, page3);
-      pageConnect(page3, page4);
-      pageConnect(page4, page5);
+      chunkConnect(chunk1, chunk2);
+      chunkConnect(chunk2, chunk3);
+      chunkConnect(chunk3, chunk4);
+      chunkConnect(chunk4, chunk5);
     });
 
-    test("应能选取多对象为起点且含多页跨页对象链的子图", () => {
+    test("应能选取多对象为起点且含多区块跨区块对象链的子图", () => {
       const pickup6n19 = aom.pickup(
         new Set([
-          createObject(6, page3.id),
-          createObject(19, page1.id),
+          createObject(6, chunk3.id),
+          createObject(19, chunk1.id),
         ]),
       );
 
@@ -270,41 +270,41 @@ describe("ActiveObjectManager/pickup", () => {
   });
 
   describe("特殊情况与边界条件", () => {
-    test("应能在二维页中先横向后纵向移动，并在回到原页后继续遍历其它覆盖页", () => {
-      const centerPage = createPageAt(0, 0);
-      const rightPage = createPageAt(1, 0);
-      const upPage = createPageAt(0, 1);
-      const rightUpPage = createPageAt(1, 1);
+    test("应能在二维区块中先横向后纵向移动，并在回到原区块后继续遍历其它覆盖区块", () => {
+      const centerChunk = createChunkAt(0, 0);
+      const rightChunk = createChunkAt(1, 0);
+      const upChunk = createChunkAt(0, 1);
+      const rightUpChunk = createChunkAt(1, 1);
       aom = new ActiveObjectManager(
-        createBoard(centerPage, rightPage, upPage, rightUpPage),
+        createBoard(centerChunk, rightChunk, upChunk, rightUpChunk),
       );
 
-      centerPage.objectManager = new PageObjectManager(centerPage.id);
-      rightPage.objectManager = new PageObjectManager(rightPage.id);
-      upPage.objectManager = new PageObjectManager(upPage.id);
-      rightUpPage.objectManager = new PageObjectManager(rightUpPage.id);
+      centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
+      rightChunk.objectManager = new ChunkObjectManager(rightChunk.id);
+      upChunk.objectManager = new ChunkObjectManager(upChunk.id);
+      rightUpChunk.objectManager = new ChunkObjectManager(rightUpChunk.id);
 
-      centerPage.objectManager.staticGraph = DirectedGraph.parse([
+      centerChunk.objectManager.staticGraph = DirectedGraph.parse([
         [100, [101]],
         [101, []],
       ]);
-      rightPage.objectManager.staticGraph = DirectedGraph.parse([]);
-      upPage.objectManager.staticGraph = DirectedGraph.parse([
+      rightChunk.objectManager.staticGraph = DirectedGraph.parse([]);
+      upChunk.objectManager.staticGraph = DirectedGraph.parse([
         [100, [103]],
         [103, []],
       ]);
-      rightUpPage.objectManager.staticGraph = DirectedGraph.parse([
+      rightUpChunk.objectManager.staticGraph = DirectedGraph.parse([
         [100, [104]],
         [104, []],
       ]);
 
-      setObjectCoverage([centerPage, upPage, rightUpPage], [100]);
+      setObjectCoverage([centerChunk, upChunk, rightUpChunk], [100]);
 
-      pageConnect(centerPage, rightPage);
-      verticalPageConnect(centerPage, upPage);
-      verticalPageConnect(rightPage, rightUpPage);
+      chunkConnect(centerChunk, rightChunk);
+      verticalChunkConnect(centerChunk, upChunk);
+      verticalChunkConnect(rightChunk, rightUpChunk);
 
-      const pickup = aom.pickup(new Set([createObject(100, centerPage.id)]));
+      const pickup = aom.pickup(new Set([createObject(100, centerChunk.id)]));
       const expected = DirectedGraph.parse([
         [100, [101, 103, 104]],
         [101, []],
@@ -315,32 +315,32 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup.equals(expected)).toBe(true);
     });
 
-    test("应能在二维页中向左下方向移动到覆盖页", () => {
-      const centerPage = createPageAt(0, 0);
-      const upperPage = createPageAt(0, 1);
-      const startPage = createPageAt(1, 1);
-      aom = new ActiveObjectManager(createBoard(centerPage, upperPage, startPage));
+    test("应能在二维区块中向左下方向移动到覆盖区块", () => {
+      const centerChunk = createChunkAt(0, 0);
+      const upperChunk = createChunkAt(0, 1);
+      const startChunk = createChunkAt(1, 1);
+      aom = new ActiveObjectManager(createBoard(centerChunk, upperChunk, startChunk));
 
-      centerPage.objectManager = new PageObjectManager(centerPage.id);
-      upperPage.objectManager = new PageObjectManager(upperPage.id);
-      startPage.objectManager = new PageObjectManager(startPage.id);
+      centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
+      upperChunk.objectManager = new ChunkObjectManager(upperChunk.id);
+      startChunk.objectManager = new ChunkObjectManager(startChunk.id);
 
-      centerPage.objectManager.staticGraph = DirectedGraph.parse([
+      centerChunk.objectManager.staticGraph = DirectedGraph.parse([
         [200, [201]],
         [201, []],
       ]);
-      upperPage.objectManager.staticGraph = DirectedGraph.parse([]);
-      startPage.objectManager.staticGraph = DirectedGraph.parse([
+      upperChunk.objectManager.staticGraph = DirectedGraph.parse([]);
+      startChunk.objectManager.staticGraph = DirectedGraph.parse([
         [200, [202]],
         [202, []],
       ]);
 
-      setObjectCoverage([startPage, centerPage], [200]);
+      setObjectCoverage([startChunk, centerChunk], [200]);
 
-      pageConnect(upperPage, startPage);
-      verticalPageConnect(centerPage, upperPage);
+      chunkConnect(upperChunk, startChunk);
+      verticalChunkConnect(centerChunk, upperChunk);
 
-      const pickup = aom.pickup(new Set([createObject(200, startPage.id)]));
+      const pickup = aom.pickup(new Set([createObject(200, startChunk.id)]));
       const expected = DirectedGraph.parse([
         [200, [201, 202]],
         [201, []],
@@ -358,33 +358,33 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickupEmpty.equals(expectedEmpty)).toBe(true);
     });
 
-    test("当某个二维覆盖页不可达时，应跳过该页并继续处理其它可达覆盖页", () => {
-      const centerPage = createPageAt(0, 0);
-      const upPage = createPageAt(0, 1);
-      const unreachablePage = createPageAt(1, 1);
+    test("当某个二维覆盖区块不可达时，应跳过该区块并继续处理其它可达覆盖区块", () => {
+      const centerChunk = createChunkAt(0, 0);
+      const upChunk = createChunkAt(0, 1);
+      const unreachableChunk = createChunkAt(1, 1);
       aom = new ActiveObjectManager(
-        createBoard(centerPage, upPage, unreachablePage),
+        createBoard(centerChunk, upChunk, unreachableChunk),
       );
 
-      centerPage.objectManager = new PageObjectManager(centerPage.id);
-      upPage.objectManager = new PageObjectManager(upPage.id);
-      unreachablePage.objectManager = new PageObjectManager(unreachablePage.id);
+      centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
+      upChunk.objectManager = new ChunkObjectManager(upChunk.id);
+      unreachableChunk.objectManager = new ChunkObjectManager(unreachableChunk.id);
 
-      centerPage.objectManager.staticGraph = DirectedGraph.parse([[300, []]]);
-      upPage.objectManager.staticGraph = DirectedGraph.parse([
+      centerChunk.objectManager.staticGraph = DirectedGraph.parse([[300, []]]);
+      upChunk.objectManager.staticGraph = DirectedGraph.parse([
         [300, [302]],
         [302, []],
       ]);
-      unreachablePage.objectManager.staticGraph = DirectedGraph.parse([
+      unreachableChunk.objectManager.staticGraph = DirectedGraph.parse([
         [300, [301]],
         [301, []],
       ]);
 
-      setObjectCoverage([centerPage, upPage, unreachablePage], [300]);
+      setObjectCoverage([centerChunk, upChunk, unreachableChunk], [300]);
 
-      verticalPageConnect(centerPage, upPage);
+      verticalChunkConnect(centerChunk, upChunk);
 
-      const pickup = aom.pickup(new Set([createObject(300, centerPage.id)]));
+      const pickup = aom.pickup(new Set([createObject(300, centerChunk.id)]));
       const expected = DirectedGraph.parse([
         [300, [302]],
         [302, []],
@@ -393,33 +393,33 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup.equals(expected)).toBe(true);
     });
 
-    test("覆盖页集合更新后，应按新的二维覆盖页索引拾取而不是沿用旧结果", () => {
-      const centerPage = createPageAt(0, 0);
-      const rightPage = createPageAt(1, 0);
-      const upPage = createPageAt(0, 1);
-      aom = new ActiveObjectManager(createBoard(centerPage, rightPage, upPage));
+    test("覆盖区块集合更新后，应按新的二维覆盖区块索引拾取而不是沿用旧结果", () => {
+      const centerChunk = createChunkAt(0, 0);
+      const rightChunk = createChunkAt(1, 0);
+      const upChunk = createChunkAt(0, 1);
+      aom = new ActiveObjectManager(createBoard(centerChunk, rightChunk, upChunk));
 
-      centerPage.objectManager = new PageObjectManager(centerPage.id);
-      rightPage.objectManager = new PageObjectManager(rightPage.id);
-      upPage.objectManager = new PageObjectManager(upPage.id);
+      centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
+      rightChunk.objectManager = new ChunkObjectManager(rightChunk.id);
+      upChunk.objectManager = new ChunkObjectManager(upChunk.id);
 
-      centerPage.objectManager.staticGraph = DirectedGraph.parse([[400, []]]);
-      rightPage.objectManager.staticGraph = DirectedGraph.parse([
+      centerChunk.objectManager.staticGraph = DirectedGraph.parse([[400, []]]);
+      rightChunk.objectManager.staticGraph = DirectedGraph.parse([
         [400, [401]],
         [401, []],
       ]);
-      upPage.objectManager.staticGraph = DirectedGraph.parse([
+      upChunk.objectManager.staticGraph = DirectedGraph.parse([
         [400, [402]],
         [402, []],
       ]);
 
-      pageConnect(centerPage, rightPage);
-      verticalPageConnect(centerPage, upPage);
+      chunkConnect(centerChunk, rightChunk);
+      verticalChunkConnect(centerChunk, upChunk);
 
-      setObjectCoverage([centerPage, rightPage], [400]);
+      setObjectCoverage([centerChunk, rightChunk], [400]);
 
       const pickupBeforeMove = aom.pickup(
-        new Set([createObject(400, centerPage.id)]),
+        new Set([createObject(400, centerChunk.id)]),
       );
       expect(
         pickupBeforeMove.equals(
@@ -430,15 +430,15 @@ describe("ActiveObjectManager/pickup", () => {
         ),
       ).toBe(true);
 
-      centerPage.objectManager.setObjectCoverPages(400, [
-        centerPage.id,
-        upPage.id,
+      centerChunk.objectManager.setObjectCoverChunks(400, [
+        centerChunk.id,
+        upChunk.id,
       ]);
-      upPage.objectManager.setObjectCoverPages(400, [centerPage.id, upPage.id]);
-      rightPage.objectManager.setObjectCoverPages(400, [centerPage.id]);
+      upChunk.objectManager.setObjectCoverChunks(400, [centerChunk.id, upChunk.id]);
+      rightChunk.objectManager.setObjectCoverChunks(400, [centerChunk.id]);
 
       const pickupAfterMove = aom.pickup(
-        new Set([createObject(400, centerPage.id)]),
+        new Set([createObject(400, centerChunk.id)]),
       );
       expect(
         pickupAfterMove.equals(

@@ -25,7 +25,7 @@ async function callCoreFileOperate(action, payload) {
 }
 
 /**
- * Board/Page 相关文件操作桥。
+ * Board/Chunk 相关文件操作桥。
  */
 const boardFileOperateBridge = {
   /**
@@ -44,27 +44,27 @@ const boardFileOperateBridge = {
   },
 
   /**
-   * 创建页存储文件
+   * 创建区块存储文件
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    * @returns {Promise<boolean>} 是否成功创建
    */
-  createPageStorage(rootPath, pageId) {
-    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.CREATE_PAGE_STORAGE, {
+  createChunkStorage(rootPath, chunkId) {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.CREATE_CHUNK_STORAGE, {
       rootPath,
-      pageId,
+      chunkId,
     });
   },
 
   /**
-   * 写入页连接信息
+   * 写入区块连接信息
    * @param {string} rootPath - 白板根目录路径
-   * @param {object} connection - 页连接信息
+   * @param {object} connection - 区块连接信息
    * @returns {Promise<boolean>} 是否成功写入
    */
-  writePageConnection(rootPath, connection) {
+  writeChunkConnection(rootPath, connection) {
     return callCoreFileOperate(
-      CORE_FILE_OPERATE_ACTIONS.WRITE_PAGE_CONNECTION,
+      CORE_FILE_OPERATE_ACTIONS.WRITE_CHUNK_CONNECTION,
       {
         rootPath,
         connection,
@@ -99,92 +99,92 @@ const boardFileOperateBridge = {
   },
 
   /**
-   * 加载指定页的层叠图
+   * 加载指定区块的层叠图
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    * @returns {Promise<any>} 层叠图数据
    */
-  loadTierGraph(rootPath, pageId) {
+  loadTierGraph(rootPath, chunkId) {
     return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.LOAD_TIER_GRAPH, {
       rootPath,
-      pageId,
+      chunkId,
     });
   },
 
   /**
-   * 保存指定页的层叠图
+   * 保存指定区块的层叠图
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    * @param {any[]} graphData - 层叠图数据
    * @returns {Promise<boolean>} 是否成功保存
    */
-  saveTierGraph(rootPath, pageId, graphData) {
+  saveTierGraph(rootPath, chunkId, graphData) {
     return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.SAVE_TIER_GRAPH, {
       rootPath,
-      pageId,
+      chunkId,
       graphData,
     });
   },
 
   /**
-   * 加载指定页的对象覆盖页索引
+   * 加载指定区块的对象覆盖区块索引
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    * @returns {Promise<any[]>} 覆盖索引数据
    */
-  loadPageObjectCoverIndex(rootPath, pageId) {
+  loadChunkObjectCoverIndex(rootPath, chunkId) {
     return callCoreFileOperate(
-      CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECT_COVER_INDEX,
+      CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECT_COVER_INDEX,
       {
         rootPath,
-        pageId,
+        chunkId,
       },
     );
   },
 
   /**
-   * 保存指定页的对象覆盖页索引
+   * 保存指定区块的对象覆盖区块索引
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    * @param {any[]} coverIndexData - 覆盖索引数据
    * @returns {Promise<boolean>} 是否成功保存
    */
-  savePageObjectCoverIndex(rootPath, pageId, coverIndexData) {
+  saveChunkObjectCoverIndex(rootPath, chunkId, coverIndexData) {
     return callCoreFileOperate(
-      CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECT_COVER_INDEX,
+      CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECT_COVER_INDEX,
       {
         rootPath,
-        pageId,
+        chunkId,
         coverIndexData,
       },
     );
   },
 
   /**
-   * 加载指定页的所有对象 JSON
+   * 加载指定区块的所有对象 JSON
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    * @returns {Promise<object[]>} 对象数组
    */
-  loadPageObjects(rootPath, pageId) {
-    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECTS, {
+  loadChunkObjects(rootPath, chunkId) {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECTS, {
       rootPath,
-      pageId,
+      chunkId,
     });
   },
 
   /**
-   * 保存指定页的所有对象 JSON
+   * 保存指定区块的所有对象 JSON
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    * @param {object[]} objects - 对象数组
    * @returns {Promise<boolean>} 是否成功保存
    */
-  savePageObjects(rootPath, pageId, objects) {
+  saveChunkObjects(rootPath, chunkId, objects) {
     // 此处要求 objects 是可序列化的 plain object 数组。
-    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECTS, {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECTS, {
       rootPath,
-      pageId,
+      chunkId,
       objects,
     });
   },

@@ -12,7 +12,7 @@ import { Tool } from "../tool.js";
  * @abstract
  * @extends Tool
  * @description
- * 白板工具直接作用于白板结构本身，如翻页、插页、删页、调整页面顺序等。
+ * 白板工具直接作用于白板结构本身，如翻区块等。
  * 这类工具通常不直接编辑对象，而是通过 Monitor / Board 上下文改变全局状态。
  */
 class BoardTool extends Tool {

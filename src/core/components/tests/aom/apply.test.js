@@ -4,28 +4,28 @@ import { Vector } from "../../../utils/math.js";
 import { BasicObject } from "../../../objects/basic-obj.js";
 import { ActiveObjectManager } from "../../active-object-manager.js";
 import { Board } from "../../board.js";
-import { Page } from "../../page.js";
-import { PageObjectManager } from "../../page-object-manager.js";
+import { Chunk } from "../../chunk.js";
+import { ChunkObjectManager } from "../../chunk-object-manager.js";
 import { StrokeObject } from "../../../objects/stroke/stroke.js";
-import { MockPageLoader } from "./page-loader.mock.js";
-import { onePageData } from "./data.js";
+import { MockChunkLoader } from "./chunk-loader.mock.js";
+import { oneChunkData } from "./data.js";
 
 describe("ActiveObjectManager/apply", () => {
-  function createPage(id) {
-    const page = Page.fromId(id);
-    page.isLoad = true;
-    page.isTempLoad = false;
-    return page;
+  function createChunk(id) {
+    const chunk = Chunk.fromId(id);
+    chunk.isLoad = true;
+    chunk.isTempLoad = false;
+    return chunk;
   }
 
-  test("pickup 应优先使用 Board.createPageLoader 且不再要求 Page 入参", () => {
-    const page = createPage(1);
-    page.objectManager = new PageObjectManager(1);
-    page.objectManager.staticGraph = DirectedGraph.parse(onePageData);
+  test("pickup 应优先使用 Board.createChunkLoader 且不再要求 Chunk 入参", () => {
+    const chunk = createChunk(1);
+    chunk.objectManager = new ChunkObjectManager(1);
+    chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
 
     const board = {
-      createPageLoader: jest.fn(() => new MockPageLoader()),
-      getPageById: jest.fn((pageId) => (pageId === 1 ? page : undefined)),
+      createChunkLoader: jest.fn(() => new MockChunkLoader()),
+      getChunkById: jest.fn((chunkId) => (chunkId === 1 ? chunk : undefined)),
     };
     const aom = new ActiveObjectManager(board);
 
@@ -41,7 +41,7 @@ describe("ActiveObjectManager/apply", () => {
       [1, []],
     ]);
 
-    expect(board.createPageLoader).toHaveBeenCalled();
+    expect(board.createChunkLoader).toHaveBeenCalled();
     expect(pickup8.equals(expected8)).toBe(true);
   });
 
@@ -63,7 +63,7 @@ describe("ActiveObjectManager/apply", () => {
     expect(aom.onLayer.get(31)).toBe(secondLayer);
   });
 
-  test("apply 应将活动对象写回 PageObjectManager 并同步覆盖页索引", () => {
+  test("apply 应将活动对象写回 ChunkObjectManager 并同步覆盖区块索引", () => {
     const board = new Board();
     board.width = 10;
     board.height = 10;
@@ -78,19 +78,19 @@ describe("ActiveObjectManager/apply", () => {
     board.activeObjectManager.choose(new Set([stroke]));
     board.activeObjectManager.apply(new Set([stroke]));
 
-    const ownerPage = board.getPageById(1);
-    const coveredPage = board.getPageById(2);
+    const ownerChunk = board.getChunkById(1);
+    const coveredChunk = board.getChunkById(2);
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerPage.objectManager.pageObjects.get(15)).toBe(stroke);
-    expect(ownerPage.objectManager.getObjectCoverPages(15)).toEqual(
+    expect(ownerChunk.objectManager.chunkObjects.get(15)).toBe(stroke);
+    expect(ownerChunk.objectManager.getObjectCoverChunks(15)).toEqual(
       new Set([1, 2, 3]),
     );
-    expect(coveredPage.objectManager.getObjectCoverPages(15)).toEqual(
+    expect(coveredChunk.objectManager.getObjectCoverChunks(15)).toEqual(
       new Set([1, 2, 3]),
     );
-    expect(ownerPage.objectManager.staticGraph.hasNode(15)).toBe(true);
-    expect(coveredPage.objectManager.staticGraph.hasNode(15)).toBe(true);
+    expect(ownerChunk.objectManager.staticGraph.hasNode(15)).toBe(true);
+    expect(coveredChunk.objectManager.staticGraph.hasNode(15)).toBe(true);
   });
 
   test("apply 应根据活动层顺序为相交对象写回静态图上下关系", () => {
@@ -108,9 +108,9 @@ describe("ActiveObjectManager/apply", () => {
     board.activeObjectManager.choose(new Set([upper]));
     board.activeObjectManager.apply(new Set([lower, upper]));
 
-    const ownerPage = board.getPageById(1);
-    expect(ownerPage.objectManager.staticGraph.hasNode(21)).toBe(true);
-    expect(ownerPage.objectManager.staticGraph.hasNode(22)).toBe(true);
-    expect(ownerPage.objectManager.staticGraph.hasEdge(21, 22)).toBe(true);
+    const ownerChunk = board.getChunkById(1);
+    expect(ownerChunk.objectManager.staticGraph.hasNode(21)).toBe(true);
+    expect(ownerChunk.objectManager.staticGraph.hasNode(22)).toBe(true);
+    expect(ownerChunk.objectManager.staticGraph.hasEdge(21, 22)).toBe(true);
   });
 });

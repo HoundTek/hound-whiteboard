@@ -14,8 +14,8 @@ import {
 } from "../core/devices/keyboard-device.js";
 
 const board = new Board();
-board.pageWidth = 800;
-board.pageHeight = 600;
+board.chunkWidth = 800;
+board.chunkHeight = 600;
 
 const foregroundLayer = document.getElementById("app-foreground-layer");
 const monitor = board.createMonitor(

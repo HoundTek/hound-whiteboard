@@ -7,7 +7,7 @@
 依据 `src/core/docs/file-document.md` 与当前代码，可将 `.hwb` 理解为：
 
 1. 白板元数据与配置（`meta.json`、`config.json`）
-2. 页面组织（`pages/connection.json` 与页文件）
+2. 区块组织（`chunks/connection.json` 与区块文件）
 3. 对象数据（`objects/`）
 4. 历史数据（`history/trash`、`history/edition`、`history/hit`）
 5. 打开轨迹（`trace.json`）
@@ -20,33 +20,33 @@
 
 `Board` 持有：
 
-- `pageLoaded`: 页 id -> `{ page, tempLoadedCount, fullLoadedCount, loaderStrategy }`
+- `chunkLoaded`: 区块 id -> `{ chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }`
 - `activeObjectManager`: 活动对象层管理
 - `undoTree`: 历史树
 
 补充说明：
 
-- `pages/connection.json` 中的 `count/order/size` 属于白板文件格式快照，不等同于 `Board` 的运行时字段。
-- 运行时的页实例所有权由 `pageLoaded` 统一持有；页缓冲区移动与扩缩由 `PageLoader` 表达。
+- `chunks/connection.json` 中的 `count/order/size` 属于白板文件格式快照，不等同于 `Board` 的运行时字段。
+- 运行时的区块实例所有权由 `chunkLoaded` 统一持有；区块缓冲区移动与扩缩由 `ChunkLoader` 表达。
 
-### 2.2 页级
+### 2.2 区块级
 
-`Page` 持有：
+`Chunk` 持有：
 
-- 双向链接：`prevPage` / `nextPage`
-- `objectManager`（`PageObjectManager`）
+- 双向链接：`prevChunk` / `nextChunk`
+- `objectManager`（`ChunkObjectManager`）
 
-`PageObjectManager` 持有：
+`ChunkObjectManager` 持有：
 
-- `staticGraph`: 页内对象层叠图（有向图）
-- `pageObjects`: 对象实例映射
-- `coverLeftPage` / `coverRightPage`: 跨页对象线索
+- `staticGraph`: 区块内对象层叠图（有向图）
+- `chunkObjects`: 对象实例映射
+- `coverLeftChunk` / `coverRightChunk`: 跨区块对象线索
 
 ### 2.3 对象级
 
 `BasicObject` 的统一字段：
 
-- `id`、`pageId`
+- `id`、`chunkId`
 - `position`、`transform`
 - `boundingBox`、`convexHullRange`
 - `getRange()` 暴露的主判定范围
@@ -94,7 +94,7 @@
 
 设计上区分：
 
-- 原子操作（对象/页面增删改）
+- 原子操作（对象/区块增删改）
 - 分子操作（原子组合）
 - 树状历史（支持回到已撤销分支）
 
@@ -119,8 +119,8 @@
    - 基础对象抽象
 2. 已有算法但待联调
    - 活动对象分层管理
-   - 页加载器与跨页访问策略
+   - 区块加载器与跨区块访问策略
 3. 设计先行、实现待补
    - Undo Tree 细节
    - 工具消费链完整闭环
-   - 页对象持久化全链路
+   - 区块对象持久化全链路

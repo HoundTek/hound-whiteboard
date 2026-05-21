@@ -58,19 +58,19 @@ Monitor 当前还承担一层很关键的视口坐标规整职责。
 它至少暴露两种坐标映射能力：
 
 - `screenToWorld()`：屏幕坐标到世界坐标
-- `screenToPage()`：屏幕坐标到页空间与页 id
-- `worldToPage()`：世界坐标到页空间与页 id
+- `screenToChunk()`：屏幕坐标到区块空间与区块 id
+- `worldToChunk()`：世界坐标到区块空间与区块 id
 
 这两者的分工是：
 
 - Core 外围若还持有屏幕坐标，可先通过 `screenToWorld()` 规整成世界坐标
 - Tool 消费输入时，默认位置语义直接使用世界坐标
-- 当工具需要知道对象应归属哪一页时，再通过 `worldToPage()` 取 `pageId`
+- 当工具需要知道对象应归属哪一区块时，再通过 `worldToChunk()` 取 `chunkId`
 
 也就是说，当前 creator 链路里：
 
 - `position` 默认是世界坐标
-- `ownerPageId` 默认来自 `worldToPage()`
-- 页内局部几何是否需要额外换算，由具体对象工具自己负责
+- `ownerChunkId` 默认来自 `worldToChunk()`
+- 区块内局部几何是否需要额外换算，由具体对象工具自己负责
 
 这使 Monitor 成为“屏幕视口”与“白板世界”之间的稳定边界；但这种换算现在应尽量发生在信号进入 Core 之前，而不是散落在工具包装层里各自实现。

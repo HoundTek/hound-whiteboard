@@ -25,10 +25,10 @@ class BasicObject {
   id;
 
   /**
-   * 对象归属页 id
+   * 对象归属区块 id
    * @type {number}
    */
-  ownerPageId;
+  ownerChunkId;
 
   /**
    * 对象的位置
@@ -107,13 +107,13 @@ class BasicObject {
    * 创建一个新的基础对象
    * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} ownerPageId - 对象归属页的 id
+   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, ownerPageId) {
+  constructor(p, id, ownerChunkId) {
     this.position = p;
     this.id = id;
-    this.ownerPageId = ownerPageId;
+    this.ownerChunkId = ownerChunkId;
   }
 
   /**
@@ -154,7 +154,7 @@ class BasicObject {
   serialize() {
     return {
       id: this.id,
-      ownerPageId: this.ownerPageId,
+      ownerChunkId: this.ownerChunkId,
       position: this.position.serialize(),
       transform: this.transform.serialize(),
     };

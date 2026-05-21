@@ -1,142 +1,142 @@
 /**
- * 页面组件
+ * 区块组件
  * @description
- * 页面组件负责管理每一页的对象和层级关系，以及页的位置与唯一标识。
- * 每一页对应一个页面类实例。
- * @module page
+ * 区块组件负责管理每一区块的对象和层级关系，以及区块的位置与唯一标识。
+ * 每一区块对应一个区块类实例。
+ * @module chunk
  * @author Zhou Chenyu
  */
 
 import { BasicObject } from "../objects/basic-obj.js";
-import { PageObjectManager } from "./page-object-manager.js";
+import { ChunkObjectManager } from "./chunk-object-manager.js";
 
 /**
- * 页面类
+ * 区块类
  * @class
- * @description 每一页对应一个页面类实例。
+ * @description 每一区块对应一个区块类实例。
  * @author Zhou Chenyu
  */
-class Page {
+class Chunk {
   /**
-   * 页面上的对象管理
-   * @description 包括页对象和层级关系
-   * @type {PageObjectManager}
+   * 区块上的对象管理
+   * @description 包括区块对象和层级关系
+   * @type {ChunkObjectManager}
    */
   objectManager;
 
   /**
-   * 页唯一标识
+   * 区块唯一标识
    * @type {number}
    */
   id;
 
   /**
-   * 页二维坐标 x
+   * 区块二维坐标 x
    * @type {number}
    */
   x;
 
   /**
-   * 页二维坐标 y
+   * 区块二维坐标 y
    * @type {number}
    */
   y;
 
   /**
-   * 左页引用
-   * @type {Page | undefined}
+   * 左区块引用
+   * @type {Chunk | undefined}
    */
-  leftPage;
+  leftChunk;
 
   /**
-   * 右页引用
-   * @type {Page | undefined}
+   * 右区块引用
+   * @type {Chunk | undefined}
    */
-  rightPage;
+  rightChunk;
 
   /**
-   * 上页引用
-   * @type {Page | undefined}
+   * 上区块引用
+   * @type {Chunk | undefined}
    */
-  upPage;
+  upChunk;
 
   /**
-   * 下页引用
-   * @type {Page | undefined}
+   * 下区块引用
+   * @type {Chunk | undefined}
    */
-  downPage;
+  downChunk;
 
   /**
-   * 页是否已被加载到内存中
+   * 区块是否已被加载到内存中
    * @type {boolean}
    */
   isLoad;
 
   /**
-   * 页是否是临时被加载
+   * 区块是否是临时被加载
    * @description
    * 若是临时被加载，那么它应只加载对象层叠关系。
-   * 若不是临时被加载，那它还会加载页上所有对象。
+   * 若不是临时被加载，那它还会加载区块上所有对象。
    * @type {boolean}
    */
   isTempLoad;
 
   /**
-   * 创建页面实例
+   * 创建区块实例
    * @constructor
-   * @param {number} pageId - 页 id
+   * @param {number} chunkId - 区块 id
    */
-  constructor(pageId) {
-    const coordinate = Page.idToCoordinate(pageId);
+  constructor(chunkId) {
+    const coordinate = Chunk.idToCoordinate(chunkId);
     this.objectManager = undefined;
-    this.id = pageId;
+    this.id = chunkId;
     this.x = coordinate.x;
     this.y = coordinate.y;
-    this.leftPage = undefined;
-    this.rightPage = undefined;
-    this.upPage = undefined;
-    this.downPage = undefined;
+    this.leftChunk = undefined;
+    this.rightChunk = undefined;
+    this.upChunk = undefined;
+    this.downChunk = undefined;
     this.isLoad = false;
     this.isTempLoad = false;
   }
 
   /**
-   * 通过页 id 创建页面实例
-   * @param {number} pageId - 页 id
-   * @returns {Page}
+   * 通过区块 id 创建区块实例
+   * @param {number} chunkId - 区块 id
+   * @returns {Chunk}
    */
-  static fromId(pageId) {
-    return new Page(pageId);
+  static fromId(chunkId) {
+    return new Chunk(chunkId);
   }
 
   /**
-   * 通过二维坐标创建页面实例
-   * @param {number} x - 页二维坐标 x
-   * @param {number} y - 页二维坐标 y
-   * @returns {Page}
+   * 通过二维坐标创建区块实例
+   * @param {number} x - 区块二维坐标 x
+   * @param {number} y - 区块二维坐标 y
+   * @returns {Chunk}
    */
   static fromCoordinate(x, y) {
-    const pageId = Page.coordinateToId(x, y);
-    return new Page(pageId);
+    const chunkId = Chunk.coordinateToId(x, y);
+    return new Chunk(chunkId);
   }
 
   /**
    * 回字形 id 转二维坐标
-   * @param {number} pageId - 页 id
-   * @returns {{x: number, y: number}} 页二维坐标
+   * @param {number} chunkId - 区块 id
+   * @returns {{x: number, y: number}} 区块二维坐标
    */
-  static idToCoordinate(pageId) {
-    if (!Number.isInteger(pageId) || pageId <= 0) {
-      throw new Error("Invalid page id.");
+  static idToCoordinate(chunkId) {
+    if (!Number.isInteger(chunkId) || chunkId <= 0) {
+      throw new Error("Invalid chunk id.");
     }
 
-    if (pageId === 1) {
+    if (chunkId === 1) {
       return { x: 0, y: 0 };
     }
 
-    const radius = Math.ceil((Math.sqrt(pageId) - 1) / 2);
+    const radius = Math.ceil((Math.sqrt(chunkId) - 1) / 2);
     const maxId = (2 * radius + 1) ** 2;
-    const diff = maxId - pageId;
+    const diff = maxId - chunkId;
     const edgeLength = radius * 2;
 
     if (diff < edgeLength) {
@@ -162,13 +162,13 @@ class Page {
 
   /**
    * 二维坐标转回字形 id
-   * @param {number} x - 页二维坐标 x
-   * @param {number} y - 页二维坐标 y
+   * @param {number} x - 区块二维坐标 x
+   * @param {number} y - 区块二维坐标 y
    * @returns {number}
    */
   static coordinateToId(x, y) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) {
-      throw new Error("Invalid page coordinate.");
+      throw new Error("Invalid chunk coordinate.");
     }
 
     const radius = Math.max(Math.abs(x), Math.abs(y));
@@ -195,65 +195,65 @@ class Page {
   }
 
   /**
-   * 判断页 id 与二维坐标是否匹配
-   * @param {number} pageId - 页 id
-   * @param {number} x - 页二维坐标 x
-   * @param {number} y - 页二维坐标 y
+   * 判断区块 id 与二维坐标是否匹配
+   * @param {number} chunkId - 区块 id
+   * @param {number} x - 区块二维坐标 x
+   * @param {number} y - 区块二维坐标 y
    * @returns {boolean}
    */
-  static isValidPageIdentity(pageId, x, y) {
+  static isValidChunkIdentity(chunkId, x, y) {
     if (
-      !Number.isInteger(pageId) ||
-      pageId <= 0 ||
+      !Number.isInteger(chunkId) ||
+      chunkId <= 0 ||
       !Number.isInteger(x) ||
       !Number.isInteger(y)
     ) {
       return false;
     }
 
-    const coordinate = Page.idToCoordinate(pageId);
+    const coordinate = Chunk.idToCoordinate(chunkId);
     return coordinate.x === x && coordinate.y === y;
   }
 
   /**
-   * 判断当前页是否合法
+   * 判断当前区块是否合法
    * @returns {boolean}
    */
   isValid() {
-    return Page.isValidPageIdentity(this.id, this.x, this.y);
+    return Chunk.isValidChunkIdentity(this.id, this.x, this.y);
   }
 
   /**
-   * 断言当前页合法
-   * @throws {Error} 若当前页不合法，则抛出错误
+   * 断言当前区块合法
+   * @throws {Error} 若当前区块不合法，则抛出错误
    */
   assertValid() {
     if (!this.isValid()) {
-      throw new Error("Invalid page identity.");
+      throw new Error("Invalid chunk identity.");
     }
   }
 
   /**
-   * 连接两页
-   * @param {Page | undefined} first - 第一页
-   * @param {Page | undefined} second - 第二页
+   * 连接两区块
+   * @param {Chunk | undefined} first - 第一区块
+   * @param {Chunk | undefined} second - 第二区块
    * @param {"right" | "left" | "up" | "down"} [direction = "right"] - second 相对 first 的方向，默认左右相邻
    * @description
    * 该方法会在 first 和 second 之间建立双向连接。
-   * 仅更新页之间的引用关系，不会判断或修改页的二维坐标或 id。
+   * 仅更新区块之间的引用关系，不会判断或修改区块的二维坐标或 id。
    */
-  static connectTwoPage(first, second, direction = "right") {
+  static connectTwoChunk(first, second, direction = "right") {
     if (!first || !second) return;
 
     const directions = {
-      right: ["rightPage", "leftPage"],
-      left: ["leftPage", "rightPage"],
-      up: ["upPage", "downPage"],
-      down: ["downPage", "upPage"],
+      right: ["rightChunk", "leftChunk"],
+      left: ["leftChunk", "rightChunk"],
+      up: ["upChunk", "downChunk"],
+      down: ["downChunk", "upChunk"],
     };
     const pair = directions[direction];
     if (!pair) {
-      throw new Error("Invalid page connection direction.");
+      throw new Error("Invalid chunk connection direction.");
     }
 
     first[pair[0]] = second;
@@ -269,14 +269,14 @@ class Page {
    */
   addObject(obj, below = [], above = []) {
     if (!this.objectManager) {
-      this.objectManager = new PageObjectManager(this.id);
+      this.objectManager = new ChunkObjectManager(this.id);
     }
 
     const graph = this.objectManager.staticGraph;
     const objectId = obj instanceof BasicObject ? obj.id : obj;
 
     if (obj instanceof BasicObject) {
-      this.objectManager.pageObjects.set(obj.id, obj);
+      this.objectManager.chunkObjects.set(obj.id, obj);
     }
 
     if (!graph.hasNode(objectId)) {
@@ -284,17 +284,17 @@ class Page {
     }
 
     for (const from of below) {
-      if (!graph.hasNode(from)) continue; // 在其它页，不管
+      if (!graph.hasNode(from)) continue; // 在其它区块，不管
       graph.addEdgeUnsafe(from, objectId);
     }
     for (const to of above) {
-      if (!graph.hasNode(to)) continue; // 在其它页，不管
+      if (!graph.hasNode(to)) continue; // 在其它区块，不管
       graph.addEdgeUnsafe(objectId, to);
     }
   }
 
   /**
-   * 完整加载该页
+   * 完整加载该区块
    * @description
    * @param {string} boardRootPath - 白板根目录
    * @todo
@@ -315,11 +315,11 @@ class Page {
   }
 
   /**
-   * 完整卸载该页
+   * 完整卸载该区块
    * @returns {boolean} 是否成功卸载
    * @description
-   * 该方法会把该页变成未加载状态。
-   * 无论该页之前是完整加载还是临时加载，调用后都会变成未加载状态。
+   * 该方法会把该区块变成未加载状态。
+   * 无论该区块之前是完整加载还是临时加载，调用后都会变成未加载状态。
    */
   unload() {
     if (this.objectManager) this.objectManager.unload();
@@ -330,7 +330,7 @@ class Page {
   }
 
   /**
-   * 卸载临时加载页
+   * 卸载临时加载区块
    * @returns {boolean} 是否成功卸载
    */
   unloadTemp() {
@@ -345,7 +345,7 @@ class Page {
    * @returns {boolean} 是否成功降级
    * @description
    * 该方法会保留层叠图，只卸载完整加载阶段持有的对象内容。
-   * 若当前页不是完整加载状态，则不进行任何操作。
+   * 若当前区块不是完整加载状态，则不进行任何操作。
    */
   downgradeToTemp() {
     if (!this.isLoad || this.isTempLoad) {
@@ -357,7 +357,7 @@ class Page {
   }
 
   /**
-   * 临时加载该页
+   * 临时加载该区块
    * @param {string} boardRootPath - 白板根目录
    * @returns {Promise<boolean>} 是否成功
    */
@@ -369,11 +369,11 @@ class Page {
     this.isLoad = true;
     this.isTempLoad = true;
     if (!this.objectManager) {
-      this.objectManager = new PageObjectManager(this.id);
+      this.objectManager = new ChunkObjectManager(this.id);
     }
     await this.objectManager.loadTierGraph(boardRootPath);
     return true;
   }
 }
 
-export { Page };
+export { Chunk };

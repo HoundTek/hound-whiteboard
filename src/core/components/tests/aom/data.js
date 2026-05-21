@@ -12,7 +12,7 @@
  * 11  12  13  14  15
  * ```
  */
-const onePageData = [
+const oneChunkData = [
   [1, []],
   [2, [1]],
   [3, [1]],
@@ -43,13 +43,13 @@ const onePageData = [
  * ↑ ↖ ↑ ↖ ↑ ↖ ↑ ↖ ↑
  * 11  12  13  14  15
  * ```
- * 1 ~ 15 归属于 page1，16 ~ 18 归属于 page2。
- * 跨页的边有 18 -> 6, 15 -> 16, 10 -> 17。
- * 其中，跨页对象有 15, 17, 18。
- * 所以 1 ~ 15, 17, 18 会在 page1 的静态图中出现。即单独的 page1 还会渲染出 17, 18。
- * 而 15, 16 ~ 18 会在 page2 的静态图中出现。即单独的 page2 还会渲染出 15。
+ * 1 ~ 15 归属于 chunk1，16 ~ 18 归属于 chunk2。
+ * 跨区块的边有 18 -> 6, 15 -> 16, 10 -> 17。
+ * 其中，跨区块对象有 15, 17, 18。
+ * 所以 1 ~ 15, 17, 18 会在 chunk1 的静态图中出现。即单独的 chunk1 还会渲染出 17, 18。
+ * 而 15, 16 ~ 18 会在 chunk2 的静态图中出现。即单独的 chunk2 还会渲染出 15。
  */
-const twoPageData = [
+const twoChunkData = [
   [
     [1, []],
     [2, [1]],
@@ -80,21 +80,21 @@ const twoPageData = [
 /**
  * @description
  * ```text
- *    page1  |  page2  |  page3  |  page4  | page5
+ *    chunk1  |  chunk2  |  chunk3  |  chunk4  | chunk5
  * 1 →  2 →  3 →  4 →  5 →  6 →  7 →  8 →  9 → 10
  *           |         |         |         |   ↓
  *20 ← 19 ← 18 ← 17 ← 16 ← 15 ← 14 ← 13 ← 12 ← 11
  * ```
- * 归属页如下：
- * - page1: 1, 2, 19, 20
- * - page2: 3, 4, 17, 18
- * - page3: 5, 6, 15, 16
- * - page4: 7, 8, 13, 14
- * - page5: 9, 10, 11, 12
+ * 归属区块如下：
+ * - chunk1: 1, 2, 19, 20
+ * - chunk2: 3, 4, 17, 18
+ * - chunk3: 5, 6, 15, 16
+ * - chunk4: 7, 8, 13, 14
+ * - chunk5: 9, 10, 11, 12
  *
- * 跨页对象有：3, 5, 7, 9, 12, 14, 16, 18
+ * 跨区块对象有：3, 5, 7, 9, 12, 14, 16, 18
  */
-const multiPageData = [
+const multiChunkData = [
   [
     [1, [2]],
     [2, [3]],
@@ -132,7 +132,7 @@ const multiPageData = [
 ];
 
 export {
-  onePageData,
-  twoPageData,
-  multiPageData,
+  oneChunkData,
+  twoChunkData,
+  multiChunkData,
 };

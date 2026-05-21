@@ -15,12 +15,12 @@ describe("renderer-io", () => {
 
   test("Directory 应保留本地路径计算能力", () => {
     const root = new Directory("/tmp", "demo");
-    const child = root.cd("pages");
+    const child = root.cd("chunks");
     const file = child.peek("note", "txt");
 
     expect(root.getPath()).toBe("/tmp/demo");
-    expect(child.getPath()).toBe("/tmp/demo/pages");
-    expect(file.getPath()).toBe("/tmp/demo/pages/note.txt");
+    expect(child.getPath()).toBe("/tmp/demo/chunks");
+    expect(file.getPath()).toBe("/tmp/demo/chunks/note.txt");
   });
 
   test("Directory.lsFile 应通过 bridge 调用并恢复为 File 实例", async () => {

@@ -5,12 +5,12 @@
  */
 
 import { Board } from "../components/board.js";
-import { PageLoader } from "./page-loader.js";
+import { ChunkLoader } from "./chunk-loader.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { Vector } from "../utils/math.js";
 import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
 import { joinPath } from "../utils/path.js";
-import { Page } from "./page.js";
+import { Chunk } from "./chunk.js";
 
 /**
  * 显示器组件
@@ -27,16 +27,16 @@ class Monitor {
   canvas;
 
   /**
-   * 白板，用于查询页顺序与页面尺寸
+   * 白板，用于查询区块顺序与区块尺寸
    * @type {Board}
    */
   board;
 
   /**
-   * 页加载器，用于按需加载页面内容
-   * @type {PageLoader}
+   * 区块加载器，用于按需加载区块内容
+   * @type {ChunkLoader}
    */
-  pageLoader;
+  chunkLoader;
 
   /**
    * 显示器 id
@@ -52,10 +52,10 @@ class Monitor {
 
   /**
    * canvas 左上角对应的世界坐标（可为负数）
-   * @description 翻页、平移、缩放后需整体更新此字段。
-   * 初始值使第一页在 canvas 中居中：
-   *   origin.x = pageWidth/2 - canvasWidth/(2×zoom)
-   *   origin.y = pageHeight/2 - canvasHeight/(2×zoom)
+   * @description 翻区块、平移、缩放后需整体更新此字段。
+   * 初始值使第一区块在 canvas 中居中：
+   *   origin.x = chunkWidth/2 - canvasWidth/(2×zoom)
+   *   origin.y = chunkHeight/2 - canvasHeight/(2×zoom)
    * @type {Vector}
    */
   origin;
@@ -76,16 +76,16 @@ class Monitor {
   constructor(canvas, board, { width, height }, monitorId) {
     this.canvas = canvas;
     this.board = board;
-    this.pageLoader = this.board.createPageLoader();
+    this.chunkLoader = this.board.createChunkLoader();
     this.zoom = 1;
     this.monitorId = monitorId;
     const rect = canvas?.getBoundingClientRect();
     const canvasWidth = rect?.width ?? 0;
     const canvasHeight = rect?.height ?? 0;
-    // 初始 origin 使第一页居中显示。若 canvas 尚未布局，调用方应在布局后重新计算
+    // 初始 origin 使第一区块居中显示。若 canvas 尚未布局，调用方应在布局后重新计算
     this.origin = new Vector(
-      this.pageWidth / 2 - canvasWidth / (2 * this.zoom),
-      this.pageHeight / 2 - canvasHeight / (2 * this.zoom),
+      this.chunkWidth / 2 - canvasWidth / (2 * this.zoom),
+      this.chunkHeight / 2 - canvasHeight / (2 * this.zoom),
     );
     this.canvas.width = width;
     this.canvas.height = height;
@@ -95,18 +95,18 @@ class Monitor {
   }
 
   /**
-   * 当前页宽（取自 board）
+   * 当前区块宽（取自 board）
    * @type {number}
    */
-  get pageWidth() {
+  get chunkWidth() {
     return this.board?.width ?? 0;
   }
 
   /**
-   * 当前页高（取自 board）
+   * 当前区块高（取自 board）
    * @type {number}
    */
-  get pageHeight() {
+  get chunkHeight() {
     return this.board?.height ?? 0;
   }
 
@@ -129,42 +129,42 @@ class Monitor {
   }
 
   /**
-   * 将世界坐标映射到页空间坐标
+   * 将世界坐标映射到区块空间坐标
    * @param {Vector} worldPos - 世界坐标
-   * @returns {{ pageId: number, x: number, y: number } | null}
+   * @returns {{ chunkId: number, x: number, y: number } | null}
    */
-  worldToPage(worldPos) {
+  worldToChunk(worldPos) {
     if (!this.board || !worldPos) return null;
 
-    const pageWidth = this.pageWidth;
-    const pageHeight = this.pageHeight;
-    if (pageWidth <= 0 || pageHeight <= 0) return null;
+    const chunkWidth = this.chunkWidth;
+    const chunkHeight = this.chunkHeight;
+    if (chunkWidth <= 0 || chunkHeight <= 0) return null;
 
-    const pageX = Math.floor(worldPos.x / pageWidth);
-    const pageY = Math.floor(worldPos.y / pageHeight);
-    const pageId = Page.coordinateToId(pageX, pageY);
+    const chunkX = Math.floor(worldPos.x / chunkWidth);
+    const chunkY = Math.floor(worldPos.y / chunkHeight);
+    const chunkId = Chunk.coordinateToId(chunkX, chunkY);
 
-    const pageLocalX = worldPos.x - pageX * pageWidth;
-    const pageLocalY = worldPos.y - pageY * pageHeight;
+    const chunkLocalX = worldPos.x - chunkX * chunkWidth;
+    const chunkLocalY = worldPos.y - chunkY * chunkHeight;
 
-    return { pageId: pageId, x: pageLocalX, y: pageLocalY };
+    return { chunkId: chunkId, x: chunkLocalX, y: chunkLocalY };
   }
 
   /**
-   * 将屏幕坐标映射到页空间坐标
+   * 将屏幕坐标映射到区块空间坐标
    *
    * @description
-   * 由 Monitor 提供给 DeviceContext，封装了 origin、zoom 与页面尺寸。
-   * 页横向排列、无页间空隙；触点超出所有页的纵向范围时返回 null，Signal 管道自动短路。
+   * 由 Monitor 提供给 DeviceContext，封装了 origin、zoom 与区块尺寸。
+   * 区块横向排列、无区块间空隙；触点超出所有区块的纵向范围时返回 null，Signal 管道自动短路。
    *
    * @param {Vector} screenPos - 屏幕坐标（clientX/clientY）
-   * @returns {{ pageId: number, x: number, y: number } | null}
+   * @returns {{ chunkId: number, x: number, y: number } | null}
    */
-  screenToPage(screenPos) {
+  screenToChunk(screenPos) {
     if (!this.canvas || !this.board) return null;
     const worldPos = this.screenToWorld(screenPos);
     if (!worldPos) return null;
-    return this.worldToPage(worldPos);
+    return this.worldToChunk(worldPos);
   }
 
   /**

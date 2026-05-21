@@ -109,16 +109,16 @@ monitor.mountDevice("/debugger", debuggerDevice);
 设备节点或工具在处理输入时，往往需要 Monitor 提供的上下文能力，比如：
 
 - `screenToWorld()`：把屏幕坐标转换到世界坐标
-- `screenToPage()`：把屏幕坐标转换到页空间
-- `worldToPage()`：把世界坐标转换到页空间
+- `screenToChunk()`：把屏幕坐标转换到区块空间
+- `worldToChunk()`：把世界坐标转换到区块空间
 - `origin` / `zoom`：解释当前视口
-- `pageWidth` / `pageHeight`：解释页尺寸
+- `chunkWidth` / `chunkHeight`：解释区块尺寸
 
 这也是为什么设备之间不能直接互调，却仍然可以通过 Monitor 间接共享视口语义。
 
 在当前实现里，挂到设备树末端的工具通过 `createProcessor()` 默认会拿到两类与 creator 链路直接相关的上下文能力：
 
-- `resolveOwnerPageId(position)`：默认调用 `worldToPage()`，把世界坐标映射到归属页 id
+- `resolveOwnerChunkId(position)`：默认调用 `worldToChunk()`，把世界坐标映射到归属区块 id
 - `allocateObjectId()`：默认转发到 `Board.allocateObjectId()`
 
 因此，一条对象创建链路当前的默认输入规整顺序是：
@@ -126,7 +126,7 @@ monitor.mountDevice("/debugger", debuggerDevice);
 1. UI / 宿主侧先把原始屏幕坐标转换成世界坐标
 2. 世界坐标进入 `SignalPacket`
 3. creator 工具直接消费该世界坐标 `position`
-4. 同一位置再被映射为 `ownerPageId`
+4. 同一位置再被映射为 `ownerChunkId`
 5. `Board` 分配新的 `objectId`
 6. 创建工具基于世界坐标创建对象，并按对象类型写入局部几何
 
@@ -170,7 +170,7 @@ monitor.mountDevice("/debugger", debuggerDevice);
 7. 工具节点通过 `tool.createProcessor({ board, monitor })` 消费该包
 8. Tool 修改 `Board` 或其它 Core 状态
 
-对于对象创建工具，第 7 步里默认还包含：对象 id 申请，以及基于当前世界坐标的归属页解析。
+对于对象创建工具，第 7 步里默认还包含：对象 id 申请，以及基于当前世界坐标的归属区块解析。
 
 对应的最小结构可以写成：
 

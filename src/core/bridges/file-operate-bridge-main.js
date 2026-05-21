@@ -36,49 +36,49 @@ function handleCreateBoardRoot(payload) {
   directory.cd("devices").make();
   directory.cd("history").make();
   directory.cd("objects").make();
-  directory.cd("pages").make();
+  directory.cd("chunks").make();
   directory.cd("templates").make();
 
   return true;
 }
 
 /**
- * 创建指定页的文件存储目录
- * @param {{rootPath: string, pageId: number}} payload - 请求参数
+ * 创建指定区块的文件存储目录
+ * @param {{rootPath: string, chunkId: number}} payload - 请求参数
  * @returns {boolean}
  */
-function handleCreatePageStorage(payload) {
+function handleCreateChunkStorage(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const pageId = payload?.pageId;
-  if (!Number.isInteger(pageId)) {
-    throw new Error("Invalid page id.");
+  const chunkId = payload?.chunkId;
+  if (!Number.isInteger(chunkId)) {
+    throw new Error("Invalid chunk id.");
   }
 
-  directory.cd("pages").cd(pageId.toString()).rmWhenExist().make();
-  directory.cd("objects").cd(`page${pageId.toString()}`).rmWhenExist().make();
+  directory.cd("chunks").cd(chunkId.toString()).rmWhenExist().make();
+  directory.cd("objects").cd(`chunk${chunkId.toString()}`).rmWhenExist().make();
 
   return true;
 }
 
 /**
- * 写入页连接信息
+ * 写入区块连接信息
  * @param {{rootPath: string, connection: {count:number, order:number[], size:number}}} payload - 请求参数
  * @returns {boolean}
  */
-function handleWritePageConnection(payload) {
+function handleWriteChunkConnection(payload) {
   const directory = getRootDirectory(payload?.rootPath);
   const connection = payload?.connection;
   if (!connection || !Array.isArray(connection.order)) {
-    throw new Error("Invalid page connection payload.");
+    throw new Error("Invalid chunk connection payload.");
   }
 
-  directory.cd("pages").peek("connection", "json").writeJSON(connection);
+  directory.cd("chunks").peek("connection", "json").writeJSON(connection);
   return true;
 }
 
 /**
  * 写入白板打开轨迹
- * @param {{rootPath: string, trace: {onPage:number, offset:number}}} payload - 请求参数
+ * @param {{rootPath: string, trace: {onChunk:number, offset:number}}} payload - 请求参数
  * @returns {boolean}
  */
 function handleWriteTrace(payload) {
@@ -116,7 +116,7 @@ function handleLoadBoardSnapshot(payload) {
   }
   const config = configFile.catJSON();
 
-  const connectionFile = directory.cd("pages").peek("connection", "json");
+  const connectionFile = directory.cd("chunks").peek("connection", "json");
   if (!connectionFile.exist()) {
     throw new Error("Corrupted board file.");
   }
@@ -126,13 +126,13 @@ function handleLoadBoardSnapshot(payload) {
   let trace;
   if (!traceFile.exist()) {
     trace = {
-      onPage: connection.order?.[0],
+      onChunk: connection.order?.[0],
       offset: 0,
     };
   } else {
     trace = traceFile.catJSON();
-    if (!trace.onPage) {
-      trace.onPage = connection.order?.[0];
+    if (!trace.onChunk) {
+      trace.onChunk = connection.order?.[0];
     }
     if (trace.offset === undefined) {
       trace.offset = 0;
@@ -148,18 +148,18 @@ function handleLoadBoardSnapshot(payload) {
 }
 
 /**
- * 读取指定页的层叠图文件
- * @param {{rootPath: string, pageId: number}} payload - 请求参数
+ * 读取指定区块的层叠图文件
+ * @param {{rootPath: string, chunkId: number}} payload - 请求参数
  * @returns {any}
  */
 function handleLoadTierGraph(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const pageId = payload?.pageId;
-  if (!Number.isInteger(pageId)) {
-    throw new Error("Invalid page id.");
+  const chunkId = payload?.chunkId;
+  if (!Number.isInteger(chunkId)) {
+    throw new Error("Invalid chunk id.");
   }
 
-  const tierGraphFile = directory.cd("pages").peek(pageId.toString(), "json");
+  const tierGraphFile = directory.cd("chunks").peek(chunkId.toString(), "json");
   if (!tierGraphFile.exist()) {
     throw new Error(`file ${tierGraphFile.getPath()} does not exist.`);
   }
@@ -168,21 +168,21 @@ function handleLoadTierGraph(payload) {
 }
 
 /**
- * 保存指定页的层叠图文件
- * @param {{rootPath: string, pageId: number, graphData: any[]}} payload - 请求参数
+ * 保存指定区块的层叠图文件
+ * @param {{rootPath: string, chunkId: number, graphData: any[]}} payload - 请求参数
  * @returns {boolean}
  */
 function handleSaveTierGraph(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const pageId = payload?.pageId;
+  const chunkId = payload?.chunkId;
   const graphData = payload?.graphData;
-  if (!Number.isInteger(pageId) || !Array.isArray(graphData)) {
+  if (!Number.isInteger(chunkId) || !Array.isArray(graphData)) {
     throw new Error("Invalid save tier graph payload.");
   }
 
   directory
-    .cd("pages")
-    .peek(pageId.toString(), "json")
+    .cd("chunks")
+    .peek(chunkId.toString(), "json")
     .rmWhenExist()
     .init()
     .write(JSON.stringify(graphData));
@@ -191,30 +191,30 @@ function handleSaveTierGraph(payload) {
 }
 
 /**
- * 解析对象覆盖页索引文件位置
+ * 解析对象覆盖区块索引文件位置
  * @param {Directory} directory - 白板根目录
- * @param {number} pageId - 页 id
+ * @param {number} chunkId - 区块 id
  * @returns {File}
  */
-function resolvePageObjectCoverIndexFile(directory, pageId) {
+function resolveChunkObjectCoverIndexFile(directory, chunkId) {
   return directory
-    .cd("pages")
-    .peek(`${pageId.toString()}-object-cover`, "json");
+    .cd("chunks")
+    .peek(`${chunkId.toString()}-object-cover`, "json");
 }
 
 /**
- * 读取指定页的对象覆盖页索引
- * @param {{rootPath: string, pageId: number}} payload - 请求参数
+ * 读取指定区块的对象覆盖区块索引
+ * @param {{rootPath: string, chunkId: number}} payload - 请求参数
  * @returns {any[]}
  */
-function handleLoadPageObjectCoverIndex(payload) {
+function handleLoadChunkObjectCoverIndex(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const pageId = payload?.pageId;
-  if (!Number.isInteger(pageId)) {
-    throw new Error("Invalid page id.");
+  const chunkId = payload?.chunkId;
+  if (!Number.isInteger(chunkId)) {
+    throw new Error("Invalid chunk id.");
   }
 
-  const coverIndexFile = resolvePageObjectCoverIndexFile(directory, pageId);
+  const coverIndexFile = resolveChunkObjectCoverIndexFile(directory, chunkId);
   if (!coverIndexFile.exist()) {
     return [];
   }
@@ -223,19 +223,19 @@ function handleLoadPageObjectCoverIndex(payload) {
 }
 
 /**
- * 保存指定页的对象覆盖页索引
- * @param {{rootPath: string, pageId: number, coverIndexData: any[]}} payload - 请求参数
+ * 保存指定区块的对象覆盖区块索引
+ * @param {{rootPath: string, chunkId: number, coverIndexData: any[]}} payload - 请求参数
  * @returns {boolean}
  */
-function handleSavePageObjectCoverIndex(payload) {
+function handleSaveChunkObjectCoverIndex(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const pageId = payload?.pageId;
+  const chunkId = payload?.chunkId;
   const coverIndexData = payload?.coverIndexData;
-  if (!Number.isInteger(pageId) || !Array.isArray(coverIndexData)) {
-    throw new Error("Invalid save page object cover index payload.");
+  if (!Number.isInteger(chunkId) || !Array.isArray(coverIndexData)) {
+    throw new Error("Invalid save chunk object cover index payload.");
   }
 
-  resolvePageObjectCoverIndexFile(directory, pageId)
+  resolveChunkObjectCoverIndexFile(directory, chunkId)
     .rmWhenExist()
     .init()
     .write(JSON.stringify(coverIndexData));
@@ -244,18 +244,18 @@ function handleSavePageObjectCoverIndex(payload) {
 }
 
 /**
- * 读取指定页所有对象 JSON
- * @param {{rootPath: string, pageId: number}} payload - 请求参数
+ * 读取指定区块所有对象 JSON
+ * @param {{rootPath: string, chunkId: number}} payload - 请求参数
  * @returns {object[]}
  */
-function handleLoadPageObjects(payload) {
+function handleLoadChunkObjects(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const pageId = payload?.pageId;
-  if (!Number.isInteger(pageId)) {
-    throw new Error("Invalid page id.");
+  const chunkId = payload?.chunkId;
+  if (!Number.isInteger(chunkId)) {
+    throw new Error("Invalid chunk id.");
   }
 
-  const objectsDir = directory.cd("objects").cd(`page${pageId.toString()}`);
+  const objectsDir = directory.cd("objects").cd(`chunk${chunkId.toString()}`);
   if (!objectsDir.exist()) {
     return [];
   }
@@ -267,22 +267,22 @@ function handleLoadPageObjects(payload) {
 }
 
 /**
- * 保存指定页全部对象 JSON
+ * 保存指定区块全部对象 JSON
  * @description
- * 保存时会先删除该页目录下已有的 json 文件，再按对象 id 写入，
+ * 保存时会先删除该区块目录下已有的 json 文件，再按对象 id 写入，
  * 以确保磁盘状态和内存态一致。
- * @param {{rootPath: string, pageId: number, objects: object[]}} payload - 请求参数
+ * @param {{rootPath: string, chunkId: number, objects: object[]}} payload - 请求参数
  * @returns {boolean}
  */
-function handleSavePageObjects(payload) {
+function handleSaveChunkObjects(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const pageId = payload?.pageId;
+  const chunkId = payload?.chunkId;
   const objects = payload?.objects;
-  if (!Number.isInteger(pageId) || !Array.isArray(objects)) {
-    throw new Error("Invalid save page objects payload.");
+  if (!Number.isInteger(chunkId) || !Array.isArray(objects)) {
+    throw new Error("Invalid save chunk objects payload.");
   }
 
-  const objectsDir = directory.cd("objects").cd(`page${pageId.toString()}`);
+  const objectsDir = directory.cd("objects").cd(`chunk${chunkId.toString()}`);
   objectsDir.existOrMake();
 
   // 先清理旧的对象文件，避免遗留脏数据
@@ -316,10 +316,10 @@ function handleCoreFileOperateRequest(_event, request) {
   switch (action) {
     case CORE_FILE_OPERATE_ACTIONS.CREATE_BOARD_ROOT:
       return handleCreateBoardRoot(payload);
-    case CORE_FILE_OPERATE_ACTIONS.CREATE_PAGE_STORAGE:
-      return handleCreatePageStorage(payload);
-    case CORE_FILE_OPERATE_ACTIONS.WRITE_PAGE_CONNECTION:
-      return handleWritePageConnection(payload);
+    case CORE_FILE_OPERATE_ACTIONS.CREATE_CHUNK_STORAGE:
+      return handleCreateChunkStorage(payload);
+    case CORE_FILE_OPERATE_ACTIONS.WRITE_CHUNK_CONNECTION:
+      return handleWriteChunkConnection(payload);
     case CORE_FILE_OPERATE_ACTIONS.WRITE_TRACE:
       return handleWriteTrace(payload);
     case CORE_FILE_OPERATE_ACTIONS.LOAD_BOARD_SNAPSHOT:
@@ -328,14 +328,14 @@ function handleCoreFileOperateRequest(_event, request) {
       return handleLoadTierGraph(payload);
     case CORE_FILE_OPERATE_ACTIONS.SAVE_TIER_GRAPH:
       return handleSaveTierGraph(payload);
-    case CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECT_COVER_INDEX:
-      return handleLoadPageObjectCoverIndex(payload);
-    case CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECT_COVER_INDEX:
-      return handleSavePageObjectCoverIndex(payload);
-    case CORE_FILE_OPERATE_ACTIONS.LOAD_PAGE_OBJECTS:
-      return handleLoadPageObjects(payload);
-    case CORE_FILE_OPERATE_ACTIONS.SAVE_PAGE_OBJECTS:
-      return handleSavePageObjects(payload);
+    case CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECT_COVER_INDEX:
+      return handleLoadChunkObjectCoverIndex(payload);
+    case CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECT_COVER_INDEX:
+      return handleSaveChunkObjectCoverIndex(payload);
+    case CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECTS:
+      return handleLoadChunkObjects(payload);
+    case CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECTS:
+      return handleSaveChunkObjects(payload);
     default:
       throw new Error(`Unsupported core file operate action: ${action}`);
   }

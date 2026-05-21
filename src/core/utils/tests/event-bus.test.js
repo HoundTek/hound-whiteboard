@@ -6,16 +6,16 @@ describe("EventBus", () => {
     const bus = new EventBus();
     const result = [];
 
-    bus.on("page", (payload) => {
-      result.push(["first", payload.pageId]);
+    bus.on("chunk", (payload) => {
+      result.push(["first", payload.chunkId]);
       return "first";
     });
-    bus.on("page", (payload) => {
-      result.push(["second", payload.pageId]);
+    bus.on("chunk", (payload) => {
+      result.push(["second", payload.chunkId]);
       return "second";
     });
 
-    const returned = bus.emit("page", { pageId: 3 });
+    const returned = bus.emit("chunk", { chunkId: 3 });
 
     expect(result).toEqual([
       ["first", 3],
@@ -28,9 +28,9 @@ describe("EventBus", () => {
     const bus = new EventBus();
     const handler = jest.fn();
 
-    bus.on("page", handler);
-    expect(bus.off("page", handler)).toBe(true);
-    bus.emit("page", { pageId: 1 });
+    bus.on("chunk", handler);
+    expect(bus.off("chunk", handler)).toBe(true);
+    bus.emit("chunk", { chunkId: 1 });
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -39,26 +39,26 @@ describe("EventBus", () => {
     const bus = new EventBus();
     const handler = jest.fn();
 
-    bus.once("page", handler);
-    bus.emit("page", { pageId: 1 });
-    bus.emit("page", { pageId: 2 });
+    bus.once("chunk", handler);
+    bus.emit("chunk", { chunkId: 1 });
+    bus.emit("chunk", { chunkId: 2 });
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({ pageId: 1 });
+    expect(handler).toHaveBeenCalledWith({ chunkId: 1 });
   });
 
   test("clear 应该支持清空指定事件和全部事件", () => {
     const bus = new EventBus();
-    const pageHandler = jest.fn();
+    const chunkHandler = jest.fn();
     const boardHandler = jest.fn();
 
-    bus.on("page", pageHandler);
+    bus.on("chunk", chunkHandler);
     bus.on("board", boardHandler);
-    bus.clear("page");
-    bus.emit("page", {});
+    bus.clear("chunk");
+    bus.emit("chunk", {});
     bus.emit("board", {});
 
-    expect(pageHandler).not.toHaveBeenCalled();
+    expect(chunkHandler).not.toHaveBeenCalled();
     expect(boardHandler).toHaveBeenCalledTimes(1);
 
     bus.clear();

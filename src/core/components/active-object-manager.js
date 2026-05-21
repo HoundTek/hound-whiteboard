@@ -8,9 +8,9 @@ import { RandomNumberPool } from "../utils/random.js";
 import { Deque } from "../utils/deque.js";
 import { Queue } from "../utils/queue.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
-import { Page } from "./page.js";
-import { PageLoader } from "./page-loader.js";
-import { PageObjectManager } from "./page-object-manager.js";
+import { Chunk } from "./chunk.js";
+import { ChunkLoader } from "./chunk-loader.js";
+import { ChunkObjectManager } from "./chunk-object-manager.js";
 import { BasicObject } from "../objects/basic-obj.js";
 import { intersectsRanges } from "../range/index.js";
 
@@ -166,29 +166,29 @@ class ActiveObjectManager {
   }
 
   /**
-   * 解析对象起始页
+   * 解析对象起始区块
    * @param {BasicObject} obj
-   * @returns {Page | undefined}
+   * @returns {Chunk | undefined}
    */
-  resolveObjectPage(obj) {
+  resolveObjectChunk(obj) {
     this.requireObjectInstance(obj);
 
-    if (Number.isInteger(obj?.ownerPageId) && this.board) {
-      return this.board.getPageById(obj.ownerPageId);
+    if (Number.isInteger(obj?.ownerChunkId) && this.board) {
+      return this.board.getChunkById(obj.ownerChunkId);
     }
 
     return undefined;
   }
 
   /**
-   * 创建与白板页加载事件总线绑定的页加载器
-   * @returns {PageLoader}
+   * 创建与白板区块加载事件总线绑定的区块加载器
+   * @returns {ChunkLoader}
    */
-  createPageLoader() {
-    if (this.board?.createPageLoader) {
-      return this.board.createPageLoader(undefined, `aom-${Date.now()}`);
+  createChunkLoader() {
+    if (this.board?.createChunkLoader) {
+      return this.board.createChunkLoader(undefined, `aom-${Date.now()}`);
     }
-    return new PageLoader();
+    return new ChunkLoader();
   }
 
   /**
@@ -205,10 +205,10 @@ class ActiveObjectManager {
   /**
    * 在当前白板中查找对象实例
    * @param {number} objectId
-   * @param {Iterable<number>} [candidatePageIds = []]
+   * @param {Iterable<number>} [candidateChunkIds = []]
    * @returns {BasicObject | undefined}
    */
-  findBoardObjectInstance(objectId, candidatePageIds = []) {
+  findBoardObjectInstance(objectId, candidateChunkIds = []) {
     const activeObject = this.activeObjectIndex.get(objectId);
     if (activeObject instanceof BasicObject) {
       return activeObject;
@@ -216,19 +216,19 @@ class ActiveObjectManager {
 
     if (!this.board) return undefined;
 
-    const pageIdsToSearch = new Set(candidatePageIds);
-    for (const pageId of candidatePageIds) {
-      const page = this.board.getPageById(pageId);
-      const coverPages =
-        page?.objectManager?.getObjectCoverPages(objectId) || [];
-      for (const coveredPageId of coverPages) {
-        pageIdsToSearch.add(coveredPageId);
+    const chunkIdsToSearch = new Set(candidateChunkIds);
+    for (const chunkId of candidateChunkIds) {
+      const chunk = this.board.getChunkById(chunkId);
+      const coverChunks =
+        chunk?.objectManager?.getObjectCoverChunks(objectId) || [];
+      for (const coveredChunkId of coverChunks) {
+        chunkIdsToSearch.add(coveredChunkId);
       }
     }
 
-    for (const pageId of pageIdsToSearch) {
-      const page = this.board.getPageById(pageId);
-      const objectInstance = page?.objectManager?.pageObjects?.get(objectId);
+    for (const chunkId of chunkIdsToSearch) {
+      const chunk = this.board.getChunkById(chunkId);
+      const objectInstance = chunk?.objectManager?.chunkObjects?.get(objectId);
       if (objectInstance instanceof BasicObject) {
         return objectInstance;
       }
@@ -251,42 +251,42 @@ class ActiveObjectManager {
   }
 
   /**
-   * 计算对象覆盖页集合
+   * 计算对象覆盖区块集合
    * @param {BasicObject} obj
    * @returns {Set<number>}
    */
-  calculateCoveredPageIds(obj) {
+  calculateCoveredChunkIds(obj) {
     if (!(obj instanceof BasicObject) || !this.board) {
       return new Set(
-        Number.isInteger(obj?.ownerPageId) ? [obj.ownerPageId] : [],
+        Number.isInteger(obj?.ownerChunkId) ? [obj.ownerChunkId] : [],
       );
     }
 
     const worldRange = this.getObjectWorldRange(obj);
     if (!worldRange || this.board.width <= 0 || this.board.height <= 0) {
-      return new Set([obj.ownerPageId]);
+      return new Set([obj.ownerChunkId]);
     }
 
-    const pageIds = PageObjectManager.calculateCoveredPageIdsForRange(
+    const chunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
       worldRange,
       this.board.width,
       this.board.height,
     );
 
-    if (pageIds.size === 0) {
-      pageIds.add(obj.ownerPageId);
+    if (chunkIds.size === 0) {
+      chunkIds.add(obj.ownerChunkId);
     }
-    return pageIds;
+    return chunkIds;
   }
 
   /**
    * 计算对象在静态图中的上下关系
    * @param {BasicObject} obj - 要计算的对象实例
-   * @param {Set<number>} coveredPageIds - 该对象的覆盖页集合
+   * @param {Set<number>} coveredChunkIds - 该对象的覆盖区块集合
    * @param {Set<number>} applyingObjectIds - 正在被提交的对象 id 集合
    * @returns {{below: Set<number>, above: Set<number>}}
    */
-  calculateStaticRelations(obj, coveredPageIds, applyingObjectIds) {
+  calculateStaticRelations(obj, coveredChunkIds, applyingObjectIds) {
     const relation = {
       below: new Set(),
       above: new Set(),
@@ -304,7 +304,7 @@ class ActiveObjectManager {
       const layer = this.layerOrder[index];
 
       for (const nodeId of layer.inactiveGraph.getNodes()) {
-        const candidate = this.findBoardObjectInstance(nodeId, coveredPageIds);
+        const candidate = this.findBoardObjectInstance(nodeId, coveredChunkIds);
         if (!(candidate instanceof BasicObject)) continue;
         if (!this.intersectsObjects(obj, candidate)) continue;
 
@@ -339,7 +339,7 @@ class ActiveObjectManager {
 
   /**
    * 获取以指定对象集合为起点的子图
-   * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
+   * @description 内部使用 BFS 来遍历图，跨区块对象（尤其是反复横跳的）会造成较大的性能损失
    * @param {Iterable<BasicObject>} startFrom - 作为起点的对象集合
    * @returns {DirectedGraph}
    */
@@ -349,39 +349,39 @@ class ActiveObjectManager {
 
     /**
      * @param {number} obj - 要拾取的对象 id
-     * @param {Page} pge - 该对象所在的页
+     * @param {Chunk} chunk - 该对象所在的区块
      */
-    const pickupSingle = (obj, pge) => {
+    const pickupSingle = (obj, chunk) => {
       if (visit.has(obj)) return;
       visit.add(obj);
       graph.addNodeUnsafe(obj);
 
-      let pageLoader = this.createPageLoader();
-      // 初始化页加载器，预加载当前页
-      pageLoader.initPage(pge);
+      let chunkLoader = this.createChunkLoader();
+      // 初始化区块加载器，预加载当前区块
+      chunkLoader.initChunk(chunk);
 
       /**
-       * 将页加载器移动到指定坐标
-       * @param {number} targetX - 目标页坐标 x
-       * @param {number} targetY - 目标页坐标 y
+       * 将区块加载器移动到指定坐标
+       * @param {number} targetX - 目标区块坐标 x
+       * @param {number} targetY - 目标区块坐标 y
        * @returns {boolean}
        */
-      function movePageLoaderTo(targetX, targetY) {
-        while (pageLoader.pageNow && pageLoader.pageNow.x < targetX) {
-          if (!pageLoader.forceMoveCurrentRightTempLoad()) return false;
+      function moveChunkLoaderTo(targetX, targetY) {
+        while (chunkLoader.chunkNow && chunkLoader.chunkNow.x < targetX) {
+          if (!chunkLoader.forceMoveCurrentRightTempLoad()) return false;
         }
-        while (pageLoader.pageNow && pageLoader.pageNow.x > targetX) {
-          if (!pageLoader.forceMoveCurrentLeftTempLoad()) return false;
+        while (chunkLoader.chunkNow && chunkLoader.chunkNow.x > targetX) {
+          if (!chunkLoader.forceMoveCurrentLeftTempLoad()) return false;
         }
-        while (pageLoader.pageNow && pageLoader.pageNow.y < targetY) {
-          if (!pageLoader.forceMoveCurrentUpTempLoad()) return false;
+        while (chunkLoader.chunkNow && chunkLoader.chunkNow.y < targetY) {
+          if (!chunkLoader.forceMoveCurrentUpTempLoad()) return false;
         }
-        while (pageLoader.pageNow && pageLoader.pageNow.y > targetY) {
-          if (!pageLoader.forceMoveCurrentDownTempLoad()) return false;
+        while (chunkLoader.chunkNow && chunkLoader.chunkNow.y > targetY) {
+          if (!chunkLoader.forceMoveCurrentDownTempLoad()) return false;
         }
 
         return (
-          pageLoader.pageNow?.x === targetX && pageLoader.pageNow?.y === targetY
+          chunkLoader.chunkNow?.x === targetX && chunkLoader.chunkNow?.y === targetY
         );
       }
 
@@ -391,12 +391,12 @@ class ActiveObjectManager {
        * @param {number} node - 对象 id
        */
       function dfs(node) {
-        const pageNow = pageLoader.pageNow;
-        if (!pageNow?.objectManager) return;
+        const chunkNow = chunkLoader.chunkNow;
+        if (!chunkNow?.objectManager) return;
         const neighbors =
-          pageNow.objectManager.staticGraph.neighborsUnsafe(node);
+          chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
 
-        // 该页对象
+        // 该区块对象
         if (neighbors) {
           for (const next of neighbors) {
             if (!visit.has(next)) {
@@ -408,21 +408,21 @@ class ActiveObjectManager {
           }
         }
 
-        const currentPageId = pageNow.id;
-        const coveredPages = pageNow.objectManager.getObjectCoverPages(node);
-        for (const pageId of coveredPages) {
-          if (pageId === currentPageId) continue;
+        const currentChunkId = chunkNow.id;
+        const coveredChunks = chunkNow.objectManager.getObjectCoverChunks(node);
+        for (const chunkId of coveredChunks) {
+          if (chunkId === currentChunkId) continue;
 
-          const originalX = pageLoader.pageNow.x;
-          const originalY = pageLoader.pageNow.y;
-          const { x: targetX, y: targetY } = Page.idToCoordinate(pageId);
-          if (!movePageLoaderTo(targetX, targetY)) {
-            movePageLoaderTo(originalX, originalY);
+          const originalX = chunkLoader.chunkNow.x;
+          const originalY = chunkLoader.chunkNow.y;
+          const { x: targetX, y: targetY } = Chunk.idToCoordinate(chunkId);
+          if (!moveChunkLoaderTo(targetX, targetY)) {
+            moveChunkLoaderTo(originalX, originalY);
             continue;
           }
 
           const neighborsOnTarget =
-            pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
+            chunkLoader.chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
           if (neighborsOnTarget) {
             for (const next of neighborsOnTarget) {
               if (!visit.has(next)) {
@@ -434,7 +434,7 @@ class ActiveObjectManager {
             }
           }
 
-          movePageLoaderTo(originalX, originalY);
+          moveChunkLoaderTo(originalX, originalY);
         }
       } // function dfs ends here
 
@@ -443,9 +443,9 @@ class ActiveObjectManager {
 
     for (const entry of startFrom) {
       const obj = this.requireObjectInstance(entry);
-      const page = this.resolveObjectPage(obj);
-      if (!page) continue;
-      pickupSingle(obj.id, page);
+      const chunk = this.resolveObjectChunk(obj);
+      if (!chunk) continue;
+      pickupSingle(obj.id, chunk);
     }
 
     return graph;
@@ -726,40 +726,40 @@ class ActiveObjectManager {
       );
       const applyContexts = activeBasicObjects
         .map((obj) => {
-          const ownerPage = this.resolveObjectPage(obj);
-          if (!ownerPage) return undefined;
+          const ownerChunk = this.resolveObjectChunk(obj);
+          if (!ownerChunk) return undefined;
           return {
             obj,
-            ownerPage,
-            coveredPageIds: this.calculateCoveredPageIds(obj),
+            ownerChunk,
+            coveredChunkIds: this.calculateCoveredChunkIds(obj),
           };
         })
         .filter(Boolean);
 
-      for (const { obj, ownerPage, coveredPageIds } of applyContexts) {
-        for (const pageId of coveredPageIds) {
-          const page = this.board.getPageById(pageId);
-          if (!page) continue;
-          page.addObject(pageId === ownerPage.id ? obj : obj.id);
-          page.objectManager.setObjectCoverPages(obj.id, coveredPageIds);
+      for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
+        for (const chunkId of coveredChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          if (!chunk) continue;
+          chunk.addObject(chunkId === ownerChunk.id ? obj : obj.id);
+          chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
         }
       }
 
-      for (const { obj, ownerPage, coveredPageIds } of applyContexts) {
+      for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
         const { below, above } = this.calculateStaticRelations(
           obj,
-          coveredPageIds,
+          coveredChunkIds,
           applyingObjectIds,
         );
-        for (const pageId of coveredPageIds) {
-          const page = this.board.getPageById(pageId);
-          if (!page) continue;
-          page.addObject(
-            pageId === ownerPage.id ? obj : obj.id,
+        for (const chunkId of coveredChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          if (!chunk) continue;
+          chunk.addObject(
+            chunkId === ownerChunk.id ? obj : obj.id,
             [...below],
             [...above],
           );
-          page.objectManager.setObjectCoverPages(obj.id, coveredPageIds);
+          chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
         }
       }
     }

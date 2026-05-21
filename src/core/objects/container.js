@@ -34,11 +34,11 @@ class Container extends BasicObject {
    * 创建一个新的容器对象
    * @param {Vector} p - 容器的位置
    * @param {number} id - 对象 id
-   * @param {number} ownerPageId - 对象归属页的 id
+   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, ownerPageId) {
-    super(p, id, ownerPageId);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId);
   }
 }
 

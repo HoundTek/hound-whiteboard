@@ -18,8 +18,8 @@ describe("object deserializer", () => {
     const restored = deserialize(serialized);
 
     expect(restored).toBeInstanceOf(PolygonObject);
-    expect(serialized.ownerPageId).toBe(5);
-    expect(serialized.pageId).toBeUndefined();
+    expect(serialized.ownerChunkId).toBe(5);
+    expect(serialized.chunkId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });
 
@@ -38,8 +38,8 @@ describe("object deserializer", () => {
     const restored = deserialize(JSON.stringify(serialized));
 
     expect(restored).toBeInstanceOf(TextObject);
-    expect(serialized.ownerPageId).toBe(7);
-    expect(serialized.pageId).toBeUndefined();
+    expect(serialized.ownerChunkId).toBe(7);
+    expect(serialized.chunkId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });
 
@@ -53,8 +53,8 @@ describe("object deserializer", () => {
     const restored = deserialize(serialized);
 
     expect(restored).toBeInstanceOf(StrokeObject);
-    expect(serialized.ownerPageId).toBe(11);
-    expect(serialized.pageId).toBeUndefined();
+    expect(serialized.ownerChunkId).toBe(11);
+    expect(serialized.chunkId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });
 

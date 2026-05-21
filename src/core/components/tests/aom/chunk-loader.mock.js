@@ -1,13 +1,13 @@
-class MockPageLoader {
+class MockChunkLoader {
   constructor(limit = 0) {
-    this.pagesLoadedLimit = limit;
-    this.pagesLoaded = [];
-    this.pageNow = undefined;
+    this.chunksLoadedLimit = limit;
+    this.chunksLoaded = [];
+    this.chunkNow = undefined;
   }
 
   moveCurrentRight() {
-    if (!this.pageNow || !this.pageNow.rightPage) return;
-    this.pageNow = this.pageNow.rightPage;
+    if (!this.chunkNow || !this.chunkNow.rightChunk) return;
+    this.chunkNow = this.chunkNow.rightChunk;
     return true;
   }
 
@@ -20,20 +20,20 @@ class MockPageLoader {
   }
 
   moveCurrentLeft() {
-    if (!this.pageNow || !this.pageNow.leftPage) return;
-    this.pageNow = this.pageNow.leftPage;
+    if (!this.chunkNow || !this.chunkNow.leftChunk) return;
+    this.chunkNow = this.chunkNow.leftChunk;
     return true;
   }
 
   moveCurrentUp() {
-    if (!this.pageNow || !this.pageNow.upPage) return;
-    this.pageNow = this.pageNow.upPage;
+    if (!this.chunkNow || !this.chunkNow.upChunk) return;
+    this.chunkNow = this.chunkNow.upChunk;
     return true;
   }
 
   moveCurrentDown() {
-    if (!this.pageNow || !this.pageNow.downPage) return;
-    this.pageNow = this.pageNow.downPage;
+    if (!this.chunkNow || !this.chunkNow.downChunk) return;
+    this.chunkNow = this.chunkNow.downChunk;
     return true;
   }
 
@@ -109,15 +109,15 @@ class MockPageLoader {
     return false;
   }
 
-  initPage(page) {
-    this.pageNow = page;
-    this.pagesLoaded = page ? [page] : [];
+  initChunk(chunk) {
+    this.chunkNow = chunk;
+    this.chunksLoaded = chunk ? [chunk] : [];
   }
 
   resetBuffer() {
-    this.pagesLoaded = [];
-    this.pageNow = undefined;
+    this.chunksLoaded = [];
+    this.chunkNow = undefined;
   }
 }
 
-export { MockPageLoader };
+export { MockChunkLoader };

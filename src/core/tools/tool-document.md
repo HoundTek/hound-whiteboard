@@ -73,9 +73,9 @@
 当前默认注入、并已被 creator 链路实际使用的上下文能力还有：
 
 - `allocateObjectId()`：默认转发到 `Board.allocateObjectId()`，用于申请新的对象 id
-- `resolveOwnerPageId(position)`：默认通过 `Monitor.worldToPage()` 从世界坐标解析对象归属页
+- `resolveOwnerChunkId(position)`：默认通过 `Monitor.worldToChunk()` 从世界坐标解析对象归属区块
 
-这意味着当前工具链中，`position` 的输入语义已经固定为“世界坐标 / 全局坐标”，而不是页内坐标或屏幕坐标。
+这意味着当前工具链中，`position` 的输入语义已经固定为“世界坐标 / 全局坐标”，而不是区块内坐标或屏幕坐标。
 
 对应的坐标规整不再发生在 `createProcessor()` 里。发往 `Board.signalsEventBus` 的位置类信号，应当在进入 Core 之前就已经完成“屏幕坐标 -> 世界坐标”的换算。
 
@@ -111,7 +111,7 @@
 
 白板工具是用于改变白板状态的工具，适用于白板而不是对象。
 
-白板工具可以给白板加页、删页、更改页面位置等。白板工具较为特殊，因为它是直接跟白板（而不是对象）打交道的。它通常依赖 Monitor / Board 提供的上下文来执行变更。
+白板工具可以给白板加区块、删区块、更改区块位置等。白板工具较为特殊，因为它是直接跟白板（而不是对象）打交道的。它通常依赖 Monitor / Board 提供的上下文来执行变更。
 
 ## 工具的职责分层
 

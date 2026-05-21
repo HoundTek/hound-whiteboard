@@ -20,8 +20,8 @@ import { BasicObject } from "../basic-obj.js";
  * @author Zhou Chenyu
  */
 class StrokeObject extends BasicObject {
-  constructor(p, id, ownerPageId) {
-    super(p, id, ownerPageId);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId);
   }
 
   static isDirected = false;
@@ -144,7 +144,7 @@ class StrokeObject extends BasicObject {
     const obj = new StrokeObject(
       Vector.parse(data.position),
       data.id,
-      data.ownerPageId,
+      data.ownerChunkId,
     );
 
     obj.setPathPoints((data.points ?? []).map((point) => Vector.parse(point)));

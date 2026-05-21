@@ -15,12 +15,12 @@ describe("accumulatable-io", () => {
 
   test("应保留本地路径计算能力", () => {
     const root = new Directory("/tmp", "demo");
-    const child = root.cd("pages");
+    const child = root.cd("chunks");
     const file = child.peek("note", "txt");
 
     expect(root.getPath()).toBe("/tmp/demo");
-    expect(child.getPath()).toBe("/tmp/demo/pages");
-    expect(file.getPath()).toBe("/tmp/demo/pages/note.txt");
+    expect(child.getPath()).toBe("/tmp/demo/chunks");
+    expect(file.getPath()).toBe("/tmp/demo/chunks/note.txt");
   });
 
   test("flushAll 应批量发送并释放全部积压操作", async () => {

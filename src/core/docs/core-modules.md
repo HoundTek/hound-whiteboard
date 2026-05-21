@@ -8,40 +8,40 @@
 
 目标职责：
 
-- 管理白板级状态（宽高、根目录、页实例所有权与加载状态）
-- 管理分页加载与对象写入
+- 管理白板级状态（宽高、根目录、块实例所有权与加载状态）
+- 管理块加载与对象写入
 - 管理 `UndoTree` 与 `ActiveObjectManager`
 
 当前状态：
 
 - 字段与主要流程框架已在 `src/core/components/board.js` 建立。
-- 运行时页状态已统一到 `pageLoaded`。
-- 仍有明显 `todo`：创建文件结构、完整页加载、历史状态回放、设备相关联动。
+- 运行时区块状态已统一到 `chunkLoaded`。
+- 仍有明显 `todo`：创建文件结构、完整区块加载、历史状态回放、设备相关联动。
 
-### 1.2 Page
+### 1.2 Chunk
 
 目标职责：
 
-- 管理单页对象
-- 维护四向页链
+- 管理单区块对象
+- 维护四向区块链
 - 提供完整加载/临时加载/卸载
 
 当前状态：
 
-- 基本字段和页连接逻辑已存在。
+- 基本字段和区块连接逻辑已存在。
 - 临时加载 (`loadTemp`) 可加载层叠图。
 - 完整对象加载、落盘、卸载清理仍待完成。
 
-### 1.3 PageObjectManager
+### 1.3 ChunkObjectManager
 
 目标职责：
 
-- 管理页级静态对象图（层叠关系）
-- 管理页内对象映射与跨页覆盖集合
+- 管理区块级静态对象图（层叠关系）
+- 管理区块内对象映射与跨区块覆盖集合
 
 当前状态：
 
-- `staticGraph`、`coverLeftPage`、`coverRightPage`、`pageObjects` 数据结构已定义。
+- `staticGraph`、`coverLeftChunk`、`coverRightChunk`、`chunkObjects` 数据结构已定义。
 - `loadTierGraph()` 能解析图结构。
 - 对象读写与图落盘方法仍为空。
 
@@ -57,10 +57,10 @@
 
 - 是 Core 中实现最完整的复杂模块之一。
 - 已包含：
-  - 子图拾取（含跨页访问）
+  - 子图拾取（含跨区块访问）
   - 选择分层逻辑（按路径活动点数分层）
   - 层插入、层顺序比较、置顶与清理
-- 仍有待打磨：页加载器与真实文件路径联动、性能优化、边界处理测试补全。
+- 仍有待打磨：区块加载器与真实文件路径联动、性能优化、边界处理测试补全。
 
 ## 2. objects/
 
@@ -112,7 +112,7 @@
 - `Board.signalsEventBus` 分发到目标 `Monitor`
 - `DevicesTree` 路由到末端工具节点
 - creator 工具默认从 `Board` 申请 `objectId`
-- creator 工具直接消费输入包中的世界坐标，并默认从 `Monitor` 解析 `ownerPageId`
+- creator 工具直接消费输入包中的世界坐标，并默认从 `Monitor` 解析 `ownerChunkId`
 - 新对象先进入 `ActiveObjectManager.add()`，完成后再通过 `apply()` 回写白板
 
 ## 4. hit/
@@ -169,5 +169,5 @@
 
 ### 6.3 其他
 
-- `CounterPool`：对象/页面 id 递增池
+- `CounterPool`：对象 id 递增池
 - `RectangleRange`：矩形范围抽象，以及 range 子系统中的统一包围盒表示

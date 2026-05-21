@@ -199,8 +199,8 @@ class Directory {
    * @description 该方法不会检查子目录是否存在，仅返回一个新的目录实例。
    * @example
    * const dir = new Directory("/tmp/demo");
-   * const child = dir.cd("pages");
-   * console.log(child.getPath()); // "/tmp/demo/pages"
+   * const child = dir.cd("chunks");
+   * console.log(child.getPath()); // "/tmp/demo/chunks"
    */
   cd(pathStr) {
     return new Directory(this.getPath(), pathStr);
@@ -210,7 +210,7 @@ class Directory {
    * 获取当前目录的父目录实例
    * @returns {Directory} 父目录实例，如果是根目录则返回null
    * @example
-   * const dir = new Directory("/tmp/demo/pages");
+   * const dir = new Directory("/tmp/demo/chunks");
    * console.log(dir.father().getPath()); // "/tmp/demo"
    */
   father() {
@@ -237,7 +237,7 @@ class Directory {
    * @returns {boolean} 子目录是否存在
    * @example
    * const dir = new Directory("/tmp/demo");
-   * console.log(dir.existDir("pages"));
+   * console.log(dir.existDir("chunks"));
    */
   existDir(dirName) {
     return this.cd(dirName).exist();

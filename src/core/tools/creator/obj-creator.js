@@ -129,10 +129,10 @@ class ObjectCreatorTool extends Tool {
         (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_CANCEL,
       ),
       objectId: positionSignal?.context?.objectId ?? deviceContext.objectId,
-      ownerPageId:
-        positionSignal?.context?.ownerPageId ??
-        deviceContext.ownerPageId ??
-        deviceContext.resolveOwnerPageId?.(position, signalPacket),
+      ownerChunkId:
+        positionSignal?.context?.ownerChunkId ??
+        deviceContext.ownerChunkId ??
+        deviceContext.resolveOwnerChunkId?.(position, signalPacket),
     };
   }
 
@@ -146,13 +146,13 @@ class ObjectCreatorTool extends Tool {
       const objectId =
         interaction.objectId ??
         interaction?.deviceContext?.allocateObjectId?.();
-      if (interaction.objectId == null || interaction.ownerPageId == null) {
-        if (objectId == null || interaction.ownerPageId == null) {
+      if (interaction.objectId == null || interaction.ownerChunkId == null) {
+        if (objectId == null || interaction.ownerChunkId == null) {
           return false;
         }
       }
       interaction.objectId = objectId;
-      this.create(interaction.position, objectId, interaction.ownerPageId);
+      this.create(interaction.position, objectId, interaction.ownerChunkId);
       interaction?.deviceContext?.board?.activeObjectManager?.add?.(
         new Set([this.obj]),
       );
@@ -215,7 +215,7 @@ class ObjectCreatorTool extends Tool {
       board.activeObjectManager.apply(new Set([this.obj]));
       return undefined;
     }
-    board?.addObject?.(this.obj, this.obj.ownerPageId);
+    board?.addObject?.(this.obj, this.obj.ownerChunkId);
     return undefined;
   }
 
@@ -240,11 +240,11 @@ class ObjectCreatorTool extends Tool {
    * 创建新的对象实例
    * @param {Vector} position - 新对象的位置
    * @param {number} id - 新对象的 id
-   * @param {number} ownerPageId - 新对象归属页 id
+   * @param {number} ownerChunkId - 新对象归属区块 id
    * @description 在用户使用该工具创建新对象（而不是编辑正在创建的对象）时调用此方法以生成新的对象实例
    * @abstract
    */
-  create(position, id, ownerPageId) {
+  create(position, id, ownerChunkId) {
     throw new Error("Method not implemented.");
   }
 }

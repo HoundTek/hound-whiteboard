@@ -1,7 +1,7 @@
 /**
  * 白板组件
  * @description
- * Board 类是白板在面向对象设计中的抽象核心，负责管理页、对象、历史等信息，
+ * Board 类是白板在面向对象设计中的抽象核心，负责管理区块、对象、历史等信息，
  * 并提供相关初级接口供工具和设备调用。一个 Board 实例对应一个白板管辖。
  * @module board
  * @author Zhou Chenyu
@@ -15,19 +15,19 @@ import { UndoTree } from "../hit/undo-tree-core.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import { Monitor } from "./monitor.js";
 import {
-  PageLoader,
-  PAGE_LOAD_MANAGER_EVENTS,
-  PAGE_LOAD_STRATEGIES,
-} from "./page-loader.js";
-import { Page } from "./page.js";
+  ChunkLoader,
+  CHUNK_LOAD_MANAGER_EVENTS,
+  CHUNK_LOAD_STRATEGIES,
+} from "./chunk-loader.js";
+import { Chunk } from "./chunk.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 
 /**
- * @typedef {Object} BoardPageLoadedState
- * @property {Page} page - 当前页实例
+ * @typedef {Object} BoardChunkLoadedState
+ * @property {Chunk} chunk - 当前区块实例
  * @property {number} tempLoadedCount - 临时加载计数
  * @property {number} fullLoadedCount - 完整加载计数
- * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 PageLoader 当前持有策略
+ * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 ChunkLoader 当前持有策略
  */
 
 /**
@@ -58,10 +58,10 @@ class Board {
   activeObjectManager;
 
   /**
-    * 当前已知页的统一加载状态
-    * @type {Map<number, BoardPageLoadedState>}
+    * 当前已知区块的统一加载状态
+    * @type {Map<number, BoardChunkLoadedState>}
    */
-    pageLoaded;
+    chunkLoaded;
 
   /**
    * 白板的高度
@@ -82,10 +82,10 @@ class Board {
   rootPath;
 
   /**
-   * 页 id 池
+   * 区块 id 池
    * @type {CounterPool}
    */
-  pageCounterPool;
+  chunkCounterPool;
 
   /**
    * 对象 id 池
@@ -94,10 +94,10 @@ class Board {
   objectCounterPool;
 
   /**
-   * 页加载事件总线
+   * 区块加载事件总线
    * @type {EventBus}
    */
-  pageLoadEventBus;
+  chunkLoadEventBus;
 
   /**
    * 显示器列表
@@ -113,29 +113,29 @@ class Board {
 
   constructor() {
     this.undoTree = new UndoTree();
-    this.pageLoaded = new Map();
-    this.pageCounterPool = new CounterPool();
+    this.chunkLoaded = new Map();
+    this.chunkCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
-    this.pageLoadEventBus = new EventBus();
+    this.chunkLoadEventBus = new EventBus();
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
     this.activeObjectManager = new ActiveObjectManager(this);
-    this.#bindPageLoadEvents();
+    this.#bindChunkLoadEvents();
     this.#bindSignalsEventBus();
   }
 
   /**
-   * 创建绑定到当前 Board 的页加载器
+   * 创建绑定到当前 Board 的区块加载器
    * @param {number} [limit = 0] - 缓冲区上限，为 0 则不限制
    * @param {number | string} [requesterId] - 请求方 id
-   * @returns {PageLoader}
+   * @returns {ChunkLoader}
    */
-  createPageLoader(limit = 0, requesterId) {
-    return new PageLoader(
+  createChunkLoader(limit = 0, requesterId) {
+    return new ChunkLoader(
       limit,
-      this.pageLoadEventBus,
+      this.chunkLoadEventBus,
       requesterId,
-      (page, direction) => this.getNeighborPage(page, direction),
+      (chunk, direction) => this.getNeighborChunk(chunk, direction),
     );
   }
 
@@ -148,37 +148,37 @@ class Board {
   }
 
   /**
-   * 按 id 获取页实例，不存在时惰性创建
-   * @param {number} pageId - 页 id
-   * @returns {Page | undefined}
+   * 按 id 获取区块实例，不存在时惰性创建
+   * @param {number} chunkId - 区块 id
+   * @returns {Chunk | undefined}
    */
-  getPageById(pageId) {
-    const pageState = this.#getOrCreatePageLoadedState(pageId);
-    const page = pageState.page;
+  getChunkById(chunkId) {
+    const chunkState = this.#getOrCreateChunkLoadedState(chunkId);
+    const chunk = chunkState.chunk;
 
-    this.#syncPageNeighborRefs(page);
-    return page;
+    this.#syncChunkNeighborRefs(chunk);
+    return chunk;
   }
 
   /**
-   * 按坐标获取页实例，不存在时惰性创建
-   * @param {number} x - 页二维坐标 x
-   * @param {number} y - 页二维坐标 y
-   * @returns {Page | undefined}
+   * 按坐标获取区块实例，不存在时惰性创建
+   * @param {number} x - 区块二维坐标 x
+   * @param {number} y - 区块二维坐标 y
+   * @returns {Chunk | undefined}
    */
-  getPageByCoordinate(x, y) {
-    const pageId = Page.coordinateToId(x, y);
-    return this.getPageById(pageId);
+  getChunkByCoordinate(x, y) {
+    const chunkId = Chunk.coordinateToId(x, y);
+    return this.getChunkById(chunkId);
   }
 
   /**
-   * 获取页的左右邻页
-   * @param {Page} page - 当前页
+   * 获取区块的左右邻区块
+   * @param {Chunk} chunk - 当前区块
    * @param {"right" | "left" | "up" | "down"} direction - 方向
-   * @returns {Page | undefined}
+   * @returns {Chunk | undefined}
    */
-  getNeighborPage(page, direction) {
-    if (!page) return undefined;
+  getNeighborChunk(chunk, direction) {
+    if (!chunk) return undefined;
 
     const delta = {
       right: { x: 1, y: 0 },
@@ -188,16 +188,16 @@ class Board {
     }[direction];
     if (!delta) return undefined;
 
-    return this.getPageByCoordinate(page.x + delta.x, page.y + delta.y);
+    return this.getChunkByCoordinate(chunk.x + delta.x, chunk.y + delta.y);
   }
 
   /**
-   * 同步页的四向邻页引用
-   * @param {Page} page - 页实例
+   * 同步区块的四向邻区块引用
+   * @param {Chunk} chunk - 区块实例
    * @private
    */
-  #syncPageNeighborRefs(page) {
-    if (!page) return;
+  #syncChunkNeighborRefs(chunk) {
+    if (!chunk) return;
 
     const directions = [
       ["right", 1, 0],
@@ -207,31 +207,31 @@ class Board {
     ];
 
     for (const [direction, deltaX, deltaY] of directions) {
-      const neighborId = Page.coordinateToId(page.x + deltaX, page.y + deltaY);
+      const neighborId = Chunk.coordinateToId(chunk.x + deltaX, chunk.y + deltaY);
 
-      const neighbor = this.pageLoaded.get(neighborId)?.page;
+      const neighbor = this.chunkLoaded.get(neighborId)?.chunk;
       if (!neighbor) continue;
-      Page.connectTwoPage(page, neighbor, direction);
+      Chunk.connectTwoChunk(chunk, neighbor, direction);
     }
   }
 
   /**
-   * 获取或创建页加载状态。
-   * @param {number} pageId - 页 id
-   * @returns {BoardPageLoadedState}
+   * 获取或创建区块加载状态。
+   * @param {number} chunkId - 区块 id
+   * @returns {BoardChunkLoadedState}
    * @private
    */
-  #getOrCreatePageLoadedState(pageId) {
-    if (!this.pageLoaded.has(pageId)) {
-      this.pageLoaded.set(pageId, {
-        page: Page.fromId(pageId),
+  #getOrCreateChunkLoadedState(chunkId) {
+    if (!this.chunkLoaded.has(chunkId)) {
+      this.chunkLoaded.set(chunkId, {
+        chunk: Chunk.fromId(chunkId),
         tempLoadedCount: 0,
         fullLoadedCount: 0,
         loaderStrategy: new Map(),
       });
     }
 
-    return this.pageLoaded.get(pageId);
+    return this.chunkLoaded.get(chunkId);
   }
 
   /**
@@ -248,8 +248,8 @@ class Board {
       monitorCanvas,
       this,
       {
-        width: width ?? this.pageWidth,
-        height: height ?? this.pageHeight,
+        width: width ?? this.chunkWidth,
+        height: height ?? this.chunkHeight,
       },
       monitorId,
     );
@@ -259,24 +259,24 @@ class Board {
   }
 
   /**
-   * 添加对象到指定页
+   * 添加对象到指定区块
    * @param {BasicObject} obj - 要添加的对象
-   * @param {number} [pageId = obj.ownerPageId] - 要添加到的归属页 id
+   * @param {number} [chunkId = obj.ownerChunkId] - 要添加到的归属区块 id
    */
-  addObject(obj, pageId = obj?.ownerPageId) {
+  addObject(obj, chunkId = obj?.ownerChunkId) {
     if (!(obj instanceof BasicObject)) {
       throw new TypeError("Invalid object instance.");
     }
-    const page = this.getPageById(pageId);
-    if (!page) {
-      console.warn(`Page ${pageId} does not exist.`);
-      throw new Error("Page not exist.");
+    const chunk = this.getChunkById(chunkId);
+    if (!chunk) {
+      console.warn(`Chunk ${chunkId} does not exist.`);
+      throw new Error("Chunk not exist.");
     }
 
-    page.addObject(obj);
+    chunk.addObject(obj);
 
-    if (page.objectManager && this.width > 0 && this.height > 0) {
-      page.objectManager.syncObjectCoverPagesForObject(
+    if (chunk.objectManager && this.width > 0 && this.height > 0) {
+      chunk.objectManager.syncObjectCoverChunksForObject(
         obj,
         this.width,
         this.height,
@@ -327,177 +327,177 @@ class Board {
   }
 
   /**
-   * 绑定页加载相关事件
+   * 绑定区块加载相关事件
    * @private
    */
-  #bindPageLoadEvents() {
-    this.pageLoadEventBus.on(
-      PAGE_LOAD_MANAGER_EVENTS.REQUEST_LOAD,
-      ({ requesterId, page, strategy, alreadyBuffered }) => {
-        this.#loadPage(page, strategy, alreadyBuffered, requesterId).catch(
+  #bindChunkLoadEvents() {
+    this.chunkLoadEventBus.on(
+      CHUNK_LOAD_MANAGER_EVENTS.REQUEST_LOAD,
+      ({ requesterId, chunk, strategy, alreadyBuffered }) => {
+        this.#loadChunk(chunk, strategy, alreadyBuffered, requesterId).catch(
           (error) => {
-            console.error("Failed to load page via IPC bridge:", error);
+            console.error("Failed to load chunk via IPC bridge:", error);
           },
         );
       },
     );
 
-    this.pageLoadEventBus.on(
-      PAGE_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD,
-      ({ requesterId, page }) => {
-        this.#unloadPage(page, requesterId).catch((error) => {
-          console.error("Failed to unload page:", error);
+    this.chunkLoadEventBus.on(
+      CHUNK_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD,
+      ({ requesterId, chunk }) => {
+        this.#unloadChunk(chunk, requesterId).catch((error) => {
+          console.error("Failed to unload chunk:", error);
         });
       },
     );
   }
 
   /**
-   * 加载页
-   * @param {Page} page - 要加载的页
+   * 加载区块
+   * @param {Chunk} chunk - 要加载的区块
    * @param {"temp" | "full"} strategy - 加载策略
    * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
    * @param {number | string} requesterId - 发起加载请求的 PLM id
    * @returns {Promise<boolean>} 是否成功加载
    * @private
    */
-  async #loadPage(page, strategy, alreadyBuffered, requesterId) {
-    if (!page || requesterId === undefined) return false;
+  async #loadChunk(chunk, strategy, alreadyBuffered, requesterId) {
+    if (!chunk || requesterId === undefined) return false;
 
-    const effectiveStrategy = this.#registerPageLoadRequest(
-      page.id,
+    const effectiveStrategy = this.#registerChunkLoadRequest(
+      chunk.id,
       requesterId,
       strategy,
     );
 
     const boardRootPath = this.rootPath;
 
-    if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      const changed = await page.loadFull(boardRootPath);
+    if (effectiveStrategy === CHUNK_LOAD_STRATEGIES.FULL) {
+      const changed = await chunk.loadFull(boardRootPath);
       return changed;
     }
 
-    if (page.isLoad && !page.isTempLoad) {
+    if (chunk.isLoad && !chunk.isTempLoad) {
       return false;
     }
 
-    return page.loadTemp(boardRootPath);
+    return chunk.loadTemp(boardRootPath);
   }
 
   /**
-   * 卸载页
-   * @param {Page} page - 要卸载的页
+   * 卸载区块
+   * @param {Chunk} chunk - 要卸载的区块
    * @param {number | string} requesterId - 发起卸载请求的 PLM id
    * @returns {Promise<boolean>} 是否成功卸载
    * @private
    */
-  async #unloadPage(page, requesterId) {
-    if (!page || requesterId === undefined) return false;
+  async #unloadChunk(chunk, requesterId) {
+    if (!chunk || requesterId === undefined) return false;
 
-    const removedStrategy = this.#unregisterPageLoadRequest(
-      page.id,
+    const removedStrategy = this.#unregisterChunkLoadRequest(
+      chunk.id,
       requesterId,
     );
     if (!removedStrategy) return false;
 
-    const pageState = this.pageLoaded.get(page.id);
-    const fullLoadedCount = pageState?.fullLoadedCount ?? 0;
-    const tempLoadedCount = pageState?.tempLoadedCount ?? 0;
+    const chunkState = this.chunkLoaded.get(chunk.id);
+    const fullLoadedCount = chunkState?.fullLoadedCount ?? 0;
+    const tempLoadedCount = chunkState?.tempLoadedCount ?? 0;
 
     if (fullLoadedCount > 0) {
       return false;
     }
 
     if (tempLoadedCount > 0) {
-      if (!page.isLoad) return false;
-      return page.isTempLoad ? false : page.downgradeToTemp();
+      if (!chunk.isLoad) return false;
+      return chunk.isTempLoad ? false : chunk.downgradeToTemp();
     }
 
-    if (!page.isLoad) return false;
-    return page.isTempLoad ? page.unloadTemp() : page.unload();
+    if (!chunk.isLoad) return false;
+    return chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
   }
 
   /**
-   * 持久化页连接信息
+   * 持久化区块连接信息
    * @private
    */
-  async #persistPageConnection() {
+  async #persistChunkConnection() {
     if (!this.rootPath) return;
-    await boardFileOperateBridge.writePageConnection(this.rootPath, {
-      count: this.pageCounterPool.counter,
+    await boardFileOperateBridge.writeChunkConnection(this.rootPath, {
+      count: this.chunkCounterPool.counter,
     });
   }
 
   /**
-   * 记录某个页klfakkdk对某页的加载持有关系
-   * @param {number} pageId - 页 id
-   * @param {number | string} requesterId - 页加载器 id
+   * 记录某个区块klfakkdk对某区块的加载持有关系
+   * @param {number} chunkId - 区块 id
+   * @param {number | string} requesterId - 区块加载器 id
    * @param {"temp" | "full"} strategy - 加载策略
    * @returns {"temp" | "full"} 生效后的策略
    * @private
    */
-  #registerPageLoadRequest(pageId, requesterId, strategy) {
-    const pageState = this.#getOrCreatePageLoadedState(pageId);
-    const previousStrategy = pageState.loaderStrategy.get(requesterId);
+  #registerChunkLoadRequest(chunkId, requesterId, strategy) {
+    const chunkState = this.#getOrCreateChunkLoadedState(chunkId);
+    const previousStrategy = chunkState.loaderStrategy.get(requesterId);
     const effectiveStrategy =
-      previousStrategy === PAGE_LOAD_STRATEGIES.FULL
-        ? PAGE_LOAD_STRATEGIES.FULL
+      previousStrategy === CHUNK_LOAD_STRATEGIES.FULL
+        ? CHUNK_LOAD_STRATEGIES.FULL
         : strategy;
 
     if (previousStrategy === effectiveStrategy) {
       return effectiveStrategy;
     }
 
-    if (previousStrategy === PAGE_LOAD_STRATEGIES.TEMP) {
-      pageState.tempLoadedCount = Math.max(0, pageState.tempLoadedCount - 1);
-    } else if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      pageState.fullLoadedCount = Math.max(0, pageState.fullLoadedCount - 1);
+    if (previousStrategy === CHUNK_LOAD_STRATEGIES.TEMP) {
+      chunkState.tempLoadedCount = Math.max(0, chunkState.tempLoadedCount - 1);
+    } else if (previousStrategy === CHUNK_LOAD_STRATEGIES.FULL) {
+      chunkState.fullLoadedCount = Math.max(0, chunkState.fullLoadedCount - 1);
     }
 
-    pageState.loaderStrategy.set(requesterId, effectiveStrategy);
-    if (effectiveStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      pageState.fullLoadedCount += 1;
+    chunkState.loaderStrategy.set(requesterId, effectiveStrategy);
+    if (effectiveStrategy === CHUNK_LOAD_STRATEGIES.FULL) {
+      chunkState.fullLoadedCount += 1;
     } else {
-      pageState.tempLoadedCount += 1;
+      chunkState.tempLoadedCount += 1;
     }
     return effectiveStrategy;
   }
 
   /**
-   * 取消某个 PLM 对某页的加载持有关系
-   * @param {number} pageId - 页 id
+   * 取消某个 PLM 对某区块的加载持有关系
+   * @param {number} chunkId - 区块 id
    * @param {number | string} requesterId - PLM id
    * @returns {"temp" | "full" | undefined} 被移除的策略
    * @private
    */
-  #unregisterPageLoadRequest(pageId, requesterId) {
-    const pageState = this.pageLoaded.get(pageId);
-    if (!pageState) return undefined;
+  #unregisterChunkLoadRequest(chunkId, requesterId) {
+    const chunkState = this.chunkLoaded.get(chunkId);
+    if (!chunkState) return undefined;
 
-    const previousStrategy = pageState.loaderStrategy.get(requesterId);
+    const previousStrategy = chunkState.loaderStrategy.get(requesterId);
     if (!previousStrategy) return undefined;
 
-    pageState.loaderStrategy.delete(requesterId);
+    chunkState.loaderStrategy.delete(requesterId);
 
-    if (previousStrategy === PAGE_LOAD_STRATEGIES.FULL) {
-      pageState.fullLoadedCount = Math.max(0, pageState.fullLoadedCount - 1);
+    if (previousStrategy === CHUNK_LOAD_STRATEGIES.FULL) {
+      chunkState.fullLoadedCount = Math.max(0, chunkState.fullLoadedCount - 1);
     } else {
-      pageState.tempLoadedCount = Math.max(0, pageState.tempLoadedCount - 1);
+      chunkState.tempLoadedCount = Math.max(0, chunkState.tempLoadedCount - 1);
     }
 
     return previousStrategy;
   }
 
   /**
-   * 获取某页当前总持有数
-   * @param {number} pageId - 页 id
+   * 获取某区块当前总持有数
+   * @param {number} chunkId - 区块 id
    * @returns {number}
    * @private
    */
-  #getPageLoadCount(pageId) {
-    const pageState = this.pageLoaded.get(pageId);
-    if (!pageState) return 0;
-    return pageState.tempLoadedCount + pageState.fullLoadedCount;
+  #getChunkLoadCount(chunkId) {
+    const chunkState = this.chunkLoaded.get(chunkId);
+    if (!chunkState) return 0;
+    return chunkState.tempLoadedCount + chunkState.fullLoadedCount;
   }
 }
 

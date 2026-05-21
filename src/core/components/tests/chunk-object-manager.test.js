@@ -6,16 +6,16 @@ import { DirectedGraph } from "../../utils/directed-graph.js";
 import { Vector } from "../../utils/math.js";
 import { handleCoreFileOperateRequest } from "../../bridges/file-operate-bridge-main.js";
 import { CORE_FILE_OPERATE_ACTIONS } from "../../bridges/file-operate-bridge-common.js";
-import { PageObjectManager } from "../page-object-manager.js";
+import { ChunkObjectManager } from "../chunk-object-manager.js";
 import { StrokeObject } from "../../objects/stroke/stroke.js";
 
-describe("PageObjectManager", () => {
+describe("ChunkObjectManager", () => {
   let tempRoot;
   let originalBridge;
 
   beforeEach(() => {
     tempRoot = fs.mkdtempSync(
-      path.join(os.tmpdir(), "hound-page-object-manager-"),
+      path.join(os.tmpdir(), "hound-chunk-object-manager-"),
     );
     originalBridge = globalThis.__houndCoreFileOps;
     globalThis.__houndCoreFileOps = {
@@ -33,7 +33,7 @@ describe("PageObjectManager", () => {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  test("应随层叠图一起持久化对象覆盖页索引", async () => {
+  test("应随层叠图一起持久化对象覆盖区块索引", async () => {
     const boardRoot = path.join(tempRoot, "board");
     handleCoreFileOperateRequest(null, {
       action: CORE_FILE_OPERATE_ACTIONS.CREATE_BOARD_ROOT,
@@ -44,30 +44,30 @@ describe("PageObjectManager", () => {
       },
     });
 
-    const pageObjectManager = new PageObjectManager(1);
-    pageObjectManager.staticGraph = DirectedGraph.parse([
+    const chunkObjectManager = new ChunkObjectManager(1);
+    chunkObjectManager.staticGraph = DirectedGraph.parse([
       [15, [18]],
       [18, []],
     ]);
-    pageObjectManager.setObjectCoverPages(15, [1, 2]);
-    pageObjectManager.setObjectCoverPages(18, [1, 2, 3]);
+    chunkObjectManager.setObjectCoverChunks(15, [1, 2]);
+    chunkObjectManager.setObjectCoverChunks(18, [1, 2, 3]);
 
-    await pageObjectManager.saveTierGraph(boardRoot);
+    await chunkObjectManager.saveTierGraph(boardRoot);
 
-    const restoredManager = new PageObjectManager(1);
+    const restoredManager = new ChunkObjectManager(1);
     await restoredManager.loadTierGraph(boardRoot);
 
     expect(
-      restoredManager.staticGraph.equals(pageObjectManager.staticGraph),
+      restoredManager.staticGraph.equals(chunkObjectManager.staticGraph),
     ).toBe(true);
-    expect(restoredManager.serializeObjectCoverPages()).toEqual([
+    expect(restoredManager.serializeObjectCoverChunks()).toEqual([
       [15, [1, 2]],
       [18, [1, 2, 3]],
     ]);
   });
 
-  test("应基于对象 range 精确计算覆盖页，而不是仅按 bounding box 粗算", () => {
-    const pageObjectManager = new PageObjectManager(1);
+  test("应基于对象 range 精确计算覆盖区块，而不是仅按 bounding box 粗算", () => {
+    const chunkObjectManager = new ChunkObjectManager(1);
     const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
     stroke.setPathPoints([
       new Vector(1, 1),
@@ -75,20 +75,20 @@ describe("PageObjectManager", () => {
       new Vector(19, 19),
     ]);
 
-    const coveredPages = pageObjectManager.syncObjectCoverPagesForObject(
+    const coveredChunks = chunkObjectManager.syncObjectCoverChunksForObject(
       stroke,
       10,
       10,
     );
 
     expect(
-      Array.from(coveredPages).sort((left, right) => left - right),
+      Array.from(coveredChunks).sort((left, right) => left - right),
     ).toEqual([1, 2, 3]);
 
-    expect(pageObjectManager.getObjectCoverPages(15)).toEqual(
+    expect(chunkObjectManager.getObjectCoverChunks(15)).toEqual(
       new Set([1, 2, 3]),
     );
 
-    expect(pageObjectManager.getObjectCoverPages(15).has(4)).toBe(false);
+    expect(chunkObjectManager.getObjectCoverChunks(15).has(4)).toBe(false);
   });
 });

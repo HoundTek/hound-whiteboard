@@ -1,13 +1,13 @@
 import { StrokeCreatorTool } from "../stroke-creator.js";
 import { Vector } from "../../../utils/math.js";
 import { Board } from "../../../components/board.js";
-import { PageObjectManager } from "../../../components/page-object-manager.js";
+import { ChunkObjectManager } from "../../../components/chunk-object-manager.js";
 import { jest } from "@jest/globals";
 
 describe("StrokeCreatorTool", () => {
   test("StrokeCreatorTool 应消费 position/end 信号并累计点列", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { objectId: 100, ownerPageId: 2 };
+    const deviceContext = { objectId: 100, ownerChunkId: 2 };
 
     expect(
       tool.process(
@@ -43,7 +43,7 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj.id).toBe(100);
-    expect(tool.obj.ownerPageId).toBe(2);
+    expect(tool.obj.ownerChunkId).toBe(2);
     expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
     expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
       { x: 0, y: 0 },
@@ -55,7 +55,7 @@ describe("StrokeCreatorTool", () => {
 
   test("单 end 信号应能被正确处理", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { objectId: 101, ownerPageId: 3 };
+    const deviceContext = { objectId: 101, ownerChunkId: 3 };
 
     expect(
       tool.process(
@@ -78,7 +78,7 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj.id).toBe(101);
-    expect(tool.obj.ownerPageId).toBe(3);
+    expect(tool.obj.ownerChunkId).toBe(3);
     expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 6 });
     expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
       { x: 0, y: 0 },
@@ -97,7 +97,7 @@ describe("StrokeCreatorTool", () => {
           to: "/monitor/stroke",
           signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
         },
-        { objectId: 1, ownerPageId: 1, board },
+        { objectId: 1, ownerChunkId: 1, board },
       ),
     ).toBeUndefined();
 
@@ -128,7 +128,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { objectId: 5, ownerPageId: 1, board },
+      { objectId: 5, ownerChunkId: 1, board },
     );
 
     const createdObject = tool.obj;
@@ -138,7 +138,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { objectId: 5, ownerPageId: 1, board },
+      { objectId: 5, ownerChunkId: 1, board },
     );
 
     expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
@@ -158,7 +158,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { objectId: 9, ownerPageId: 1, board },
+      { objectId: 9, ownerChunkId: 1, board },
     );
 
     expect(board.activeObjectManager.add).toHaveBeenCalledWith(
@@ -166,19 +166,19 @@ describe("StrokeCreatorTool", () => {
     );
   });
 
-  test("真实 Board 上创建完成后应经由 AOM.apply 落回归属页", () => {
+  test("真实 Board 上创建完成后应经由 AOM.apply 落回归属区块", () => {
     const tool = new StrokeCreatorTool();
     const board = new Board();
     board.width = 10;
     board.height = 10;
-    board.getPageById(1).objectManager = new PageObjectManager(1);
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { objectId: 21, ownerPageId: 1, board },
+      { objectId: 21, ownerChunkId: 1, board },
     );
 
     const createdObject = tool.obj;
@@ -188,27 +188,27 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { objectId: 21, ownerPageId: 1, board },
+      { objectId: 21, ownerChunkId: 1, board },
     );
 
-    const ownerPage = board.getPageById(1);
+    const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerPage.objectManager.pageObjects.get(21)).toBe(createdObject);
+    expect(ownerChunk.objectManager.chunkObjects.get(21)).toBe(createdObject);
   });
 
-  test("真实 Board 上取消创建后不应写回页静态结构", () => {
+  test("真实 Board 上取消创建后不应写回区块静态结构", () => {
     const tool = new StrokeCreatorTool();
     const board = new Board();
     board.width = 10;
     board.height = 10;
-    board.getPageById(1).objectManager = new PageObjectManager(1);
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { objectId: 22, ownerPageId: 1, board },
+      { objectId: 22, ownerChunkId: 1, board },
     );
 
     tool.process(
@@ -216,11 +216,11 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
-      { objectId: 22, ownerPageId: 1, board },
+      { objectId: 22, ownerChunkId: 1, board },
     );
 
-    const ownerPage = board.getPageById(1);
+    const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerPage.objectManager.pageObjects.has(22)).toBe(false);
+    expect(ownerChunk.objectManager.chunkObjects.has(22)).toBe(false);
   });
 });

@@ -18,7 +18,7 @@ describe("Monitor", () => {
     const board = {
       width: 800,
       height: 600,
-      createPageLoader() {
+      createChunkLoader() {
         return {};
       },
     };
@@ -70,39 +70,39 @@ describe("Monitor", () => {
     ]);
   });
 
-  test("screenToPage 应按二维页坐标映射命中对应页", () => {
+  test("screenToChunk 应按二维区块坐标映射命中对应区块", () => {
     const monitor = createMonitor("gamma");
 
     expect(monitor.screenToWorld(new Vector(400, 300))).toEqual(
       new Vector(400, 300),
     );
 
-    expect(monitor.worldToPage(new Vector(400, 300))).toEqual({
-      pageId: 1,
+    expect(monitor.worldToChunk(new Vector(400, 300))).toEqual({
+      chunkId: 1,
       x: 400,
       y: 300,
     });
 
-    expect(monitor.screenToPage(new Vector(400, 300))).toEqual({
-      pageId: 1,
+    expect(monitor.screenToChunk(new Vector(400, 300))).toEqual({
+      chunkId: 1,
       x: 400,
       y: 300,
     });
 
-    expect(monitor.screenToPage(new Vector(1000, 300))).toEqual({
-      pageId: 2,
+    expect(monitor.screenToChunk(new Vector(1000, 300))).toEqual({
+      chunkId: 2,
       x: 200,
       y: 300,
     });
 
-    expect(monitor.screenToPage(new Vector(1200, 750))).toEqual({
-      pageId: 3,
+    expect(monitor.screenToChunk(new Vector(1200, 750))).toEqual({
+      chunkId: 3,
       x: 400,
       y: 150,
     });
 
-    expect(monitor.screenToPage(new Vector(-200, 150))).toEqual({
-      pageId: 6,
+    expect(monitor.screenToChunk(new Vector(-200, 150))).toEqual({
+      chunkId: 6,
       x: 600,
       y: 150,
     });
@@ -110,8 +110,8 @@ describe("Monitor", () => {
     monitor.zoom = 2;
     monitor.origin = new Vector(100, 50);
 
-    expect(monitor.screenToPage(new Vector(400, 250))).toEqual({
-      pageId: 1,
+    expect(monitor.screenToChunk(new Vector(400, 250))).toEqual({
+      chunkId: 1,
       x: 300,
       y: 175,
     });

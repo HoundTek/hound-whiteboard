@@ -79,10 +79,10 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   /**
    * @param {Vector} position - 对象位置
    * @param {number} id - 对象 id
-   * @param {number} ownerPageId - 对象归属页 id
+   * @param {number} ownerChunkId - 对象归属区块 id
    */
-  create(position, id, ownerPageId) {
-    this.obj = new PolygonObject(position, id, ownerPageId);
+  create(position, id, ownerChunkId) {
+    this.obj = new PolygonObject(position, id, ownerChunkId);
   }
 
   /**

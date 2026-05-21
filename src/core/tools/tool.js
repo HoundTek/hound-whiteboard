@@ -54,10 +54,10 @@ class Tool {
     return (signalPacket, routeContext = {}) => {
       const board = routeContext.board ?? toolContext.board;
       const monitor = routeContext.monitor ?? toolContext.monitor;
-      const resolveOwnerPageId =
-        routeContext.resolveOwnerPageId ??
-        toolContext.resolveOwnerPageId ??
-        (typeof monitor?.worldToPage === "function"
+      const resolveOwnerChunkId =
+        routeContext.resolveOwnerChunkId ??
+        toolContext.resolveOwnerChunkId ??
+        (typeof monitor?.worldToChunk === "function"
           ? (position) => {
               if (
                 !position ||
@@ -66,7 +66,7 @@ class Tool {
               ) {
                 return undefined;
               }
-              return monitor.worldToPage(position)?.pageId;
+              return monitor.worldToChunk(position)?.chunkId;
             }
           : undefined);
       this.process(SignalPacket.from(signalPacket), {
@@ -76,7 +76,7 @@ class Tool {
           routeContext.allocateObjectId ??
           toolContext.allocateObjectId ??
           board?.allocateObjectId?.bind(board),
-        resolveOwnerPageId,
+        resolveOwnerChunkId,
       });
     };
   }
