@@ -285,7 +285,9 @@ describe("Board input flow", () => {
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     expect(tool.obj.id).toBe(1);
     expect(board.objectCounterPool.counter).toBe(1);
-    expect(ownerChunk.objectManager.chunkObjects.get(tool.obj.id)).toBe(tool.obj);
+    expect(ownerChunk.objectManager.chunkObjects.get(tool.obj.id)).toBe(
+      tool.obj,
+    );
     expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
     expect(
       tool.obj.localPathRange.points.map((point) => point.serialize()),
@@ -338,7 +340,9 @@ describe("Board input flow", () => {
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     expect(tool.obj.id).toBe(1);
     expect(board.objectCounterPool.counter).toBe(1);
-    expect(ownerChunk.objectManager.chunkObjects.get(tool.obj.id)).toBe(tool.obj);
+    expect(ownerChunk.objectManager.chunkObjects.get(tool.obj.id)).toBe(
+      tool.obj,
+    );
     expect(tool.obj.position.serialize()).toEqual({ x: 125, y: 80 });
     expect(
       tool.obj.localPolygonRange.points.map((point) => point.serialize()),

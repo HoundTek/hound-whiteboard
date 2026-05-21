@@ -5,13 +5,8 @@
  */
 
 import { Chunk } from "./chunk.js";
+import { CHUNK_LOAD_EVENTS, ChunkLoader } from "./chunk-loader.js";
 import { EventBus } from "../utils/event-bus.js";
-
-const CHUNK_LOAD_MANAGER_EVENTS = Object.freeze({
-  REQUEST_LOAD: "chunk-block-loader:request-load",
-  REQUEST_UNLOAD: "chunk-block-loader:request-unload",
-  BUFFER_UPDATED: "chunk-block-loader:buffer-updated",
-});
 
 const CHUNK_LOAD_STRATEGIES = Object.freeze({
   TEMP: "temp",
@@ -24,19 +19,29 @@ let chunkBlockLoaderIdCounter = 0;
  * 区块加载器
  * @class
  * @description
- * 管理当前已加载的区块网格缓冲区。
+ * `ChunkBlockLoader` 是 `ChunkLoader` 的包装器，用于表达连续矩形范围的区块缓冲区。
+ * 它内部仍通过 `ChunkLoader` 持有区块对象，自己只负责维护当前区块、矩形边界，以及缓冲区扩缩与移动意图。
  * 需要注意的是 ChunkBlockLoader 无法直接加载区块，
- * 它需要给 Board 发出加载区块的请求，
+ * 它只能通过内部 ChunkLoader 间接发出加载区块的请求，
  * 由 Board 来调用 Chunk 的加载方法。
  * @author Zhou Chenyu
  */
 class ChunkBlockLoader {
   /**
+   * 被包装的通用区块加载器。
+   * @description 实际的区块对象持有、按 id/坐标访问与卸载都委托给该 `ChunkLoader`。
+   * @type {ChunkLoader}
+   */
+  chunkLoader;
+
+  /**
    * 在该管理器中已加载的区块
    * @description 以区块 id 为键保存当前缓冲区中的区块实例。
    * @type {Map<number, Chunk>}
    */
-  chunksLoaded;
+  get chunksLoaded() {
+    return this.chunkLoader.chunksLoaded;
+  }
 
   /**
    * 当前区块引用
@@ -51,18 +56,6 @@ class ChunkBlockLoader {
   chunksLoadedLimit = 0;
 
   /**
-   * 事件总线
-   * @type {EventBus}
-   */
-  eventBus;
-
-  /**
-  * 当前 ChunkBlockLoader 在事件总线中的请求方 id
-   * @type {number | string}
-   */
-  requesterId;
-
-  /**
    * 邻区块解析器
    * @type {(chunk: Chunk, direction: "right" | "left" | "up" | "down") => Chunk | undefined}
    */
@@ -75,10 +68,20 @@ class ChunkBlockLoader {
   bufferBounds;
 
   /**
+   * 区块原始邻接快照。
+   * @description
+   * `ChunkLoader` 纳管区块时会刷新当前持有集合内部的邻接引用，
+   * 这里保留区块进入缓冲区前的邻接快照，供默认邻区块解析回退使用。
+   * @type {WeakMap<Chunk, { right?: Chunk, left?: Chunk, up?: Chunk, down?: Chunk }>}
+   */
+  neighborSnapshot;
+
+  /**
    * @param {number} [limit = 0] - 可以加载的区块数上限
-   * @param {EventBus} [eventBus] - 区块加载事件总线
-   * @param {number | string} [requesterId] - 请求方 id
+   * @param {EventBus} [eventBus] - 用于配置内部 `ChunkLoader` 的区块加载事件总线
+   * @param {number | string} [requesterId] - 用于配置内部 `ChunkLoader` 的请求方 id
    * @param {(chunk: Chunk, direction: "right" | "left" | "up" | "down") => Chunk | undefined} [resolveNeighbor] - 邻区块解析器
+   * @param {ChunkLoader} [chunkLoader] - 被包装的通用区块加载器
    */
   constructor(
     limit = 0,
@@ -93,13 +96,16 @@ class ChunkBlockLoader {
       }[direction];
       return neighborField ? chunk?.[neighborField] : undefined;
     },
+    chunkLoader = new ChunkLoader(),
   ) {
     this.chunksLoadedLimit = limit;
-    this.chunksLoaded = new Map();
-    this.eventBus = eventBus;
-    this.requesterId = requesterId;
+    this.chunkLoader = chunkLoader.configureEventContext({
+      eventBus,
+      requesterId,
+    });
     this.resolveNeighbor = resolveNeighbor;
     this.bufferBounds = undefined;
+    this.neighborSnapshot = new WeakMap();
   }
 
   moveCurrentRight() {
@@ -217,7 +223,7 @@ class ChunkBlockLoader {
   resetBuffer() {
     const chunks = this.getLoadedChunks();
     for (const chunk of chunks) {
-      this.#emitUnloadRequest(chunk, "reset");
+      this.chunkLoader.emitUnloadRequest(chunk, { source: "reset" });
     }
     this.#resetBufferState();
     this.#emitBufferUpdated("reset", "none");
@@ -228,9 +234,10 @@ class ChunkBlockLoader {
    * @private
    */
   #resetBufferState() {
-    this.chunksLoaded.clear();
+    this.chunkLoader.reset();
     this.bufferBounds = undefined;
     this.chunkNow = undefined;
+    this.neighborSnapshot = new WeakMap();
   }
 
   /**
@@ -238,7 +245,7 @@ class ChunkBlockLoader {
    * @returns {Chunk[]}
    */
   getLoadedChunks() {
-    return [...this.chunksLoaded.values()].sort((left, right) => {
+    return this.chunkLoader.getLoadedChunks().sort((left, right) => {
       if (left.y !== right.y) return right.y - left.y;
       return left.x - right.x;
     });
@@ -246,6 +253,7 @@ class ChunkBlockLoader {
 
   /**
    * 当前区块缓冲区区块数
+   * @description 该值来自内部 `ChunkLoader` 的持有区块数，而不是单独维护的计数器。
    * @returns {number}
    */
   get chunksLoadedCount() {
@@ -268,7 +276,7 @@ class ChunkBlockLoader {
    */
   initChunkById(chunkId) {
     if (!Number.isInteger(chunkId) || chunkId <= 0) return undefined;
-    return this.initChunk(Chunk.fromId(chunkId));
+    return this.initChunk(this.chunkLoader.getChunkById(chunkId));
   }
 
   /**
@@ -279,7 +287,7 @@ class ChunkBlockLoader {
    */
   initChunkByCoordinate(x, y) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) return undefined;
-    return this.initChunk(Chunk.fromCoordinate(x, y));
+    return this.initChunk(this.chunkLoader.getChunkByCoordinate(x, y));
   }
 
   /**
@@ -297,7 +305,10 @@ class ChunkBlockLoader {
 
     for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
       for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-        const chunk = Chunk.fromCoordinate(x + offsetX, y + offsetY);
+        const chunk = this.chunkLoader.getChunkByCoordinate(
+          x + offsetX,
+          y + offsetY,
+        );
         this.#insertChunk(chunk);
         if (offsetX === 0 && offsetY === 0) {
           this.chunkNow = chunk;
@@ -350,13 +361,12 @@ class ChunkBlockLoader {
       );
     } else {
       if (strategy === CHUNK_LOAD_STRATEGIES.FULL) {
-        this.#emitLoadRequest(
-          targetChunk,
+        this.chunkLoader.emitLoadRequest(targetChunk, {
           strategy,
           direction,
-          "force-move",
-          true,
-        );
+          source: "force-move",
+          alreadyBuffered: true,
+        });
       }
       this.chunkNow = targetChunk;
     }
@@ -382,7 +392,7 @@ class ChunkBlockLoader {
       const targetChunk = this.#getNeighbor(edgeChunk, direction);
       if (!targetChunk || this.#hasChunk(targetChunk)) continue;
 
-      const key = this.#getChunkKey(targetChunk);
+      const key = targetChunk.id;
       if (seen.has(key)) continue;
       seen.add(key);
       targetChunks.push(targetChunk);
@@ -419,7 +429,7 @@ class ChunkBlockLoader {
 
     for (const chunk of boundaryChunks) {
       this.#removeChunk(chunk);
-      this.#emitUnloadRequest(chunk, "shrink-buffer");
+      this.chunkLoader.emitUnloadRequest(chunk, { source: "shrink-buffer" });
     }
     this.#emitBufferUpdated("shrink", direction);
     return true;
@@ -435,7 +445,12 @@ class ChunkBlockLoader {
    */
   #appendChunksToBuffer(chunks, direction, strategy, source) {
     for (const chunk of chunks) {
-      this.#emitLoadRequest(chunk, strategy, direction, source, false);
+      this.chunkLoader.emitLoadRequest(chunk, {
+        strategy,
+        direction,
+        source,
+        alreadyBuffered: false,
+      });
       this.#insertChunk(chunk);
     }
 
@@ -474,7 +489,7 @@ class ChunkBlockLoader {
 
       for (const chunk of chunksToRemove) {
         this.#removeChunk(chunk);
-        this.#emitUnloadRequest(chunk, "buffer-limit");
+        this.chunkLoader.emitUnloadRequest(chunk, { source: "buffer-limit" });
       }
     }
   }
@@ -488,7 +503,11 @@ class ChunkBlockLoader {
    */
   #getNeighbor(chunk, direction) {
     if (!chunk) return undefined;
-    return this.resolveNeighbor(chunk, direction);
+    const resolvedNeighbor = this.resolveNeighbor(chunk, direction);
+    if (resolvedNeighbor) return resolvedNeighbor;
+
+    const snapshot = this.neighborSnapshot.get(chunk);
+    return snapshot?.[direction];
   }
 
   /**
@@ -527,7 +546,7 @@ class ChunkBlockLoader {
    * @private
    */
   #hasChunk(chunk) {
-    return this.chunksLoaded.has(this.#getChunkKey(chunk));
+    return this.chunkLoader.hasChunk(chunk);
   }
 
   /**
@@ -536,8 +555,16 @@ class ChunkBlockLoader {
    * @private
    */
   #insertChunk(chunk) {
-    this.chunksLoaded.set(this.#getChunkKey(chunk), chunk);
-    this.#syncLoadedNeighborRefs(chunk);
+    if (!this.neighborSnapshot.has(chunk)) {
+      this.neighborSnapshot.set(chunk, {
+        right: chunk.rightChunk,
+        left: chunk.leftChunk,
+        up: chunk.upChunk,
+        down: chunk.downChunk,
+      });
+    }
+
+    this.chunkLoader.trackChunk(chunk);
 
     if (!this.bufferBounds) {
       this.bufferBounds = {
@@ -556,35 +583,12 @@ class ChunkBlockLoader {
   }
 
   /**
-  * 仅在当前 ChunkBlockLoader 已持有的区块实例之间同步四向邻接引用。
-   * @param {Chunk} chunk - 区块实例
-   * @private
-   */
-  #syncLoadedNeighborRefs(chunk) {
-    if (!chunk) return;
-
-    const directions = [
-      ["right", 1, 0],
-      ["left", -1, 0],
-      ["up", 0, 1],
-      ["down", 0, -1],
-    ];
-
-    for (const [direction, deltaX, deltaY] of directions) {
-      const neighborId = Chunk.coordinateToId(chunk.x + deltaX, chunk.y + deltaY);
-      const neighbor = this.chunksLoaded.get(neighborId);
-      if (!neighbor) continue;
-      Chunk.connectTwoChunk(chunk, neighbor, direction);
-    }
-  }
-
-  /**
    * 从缓冲区移除区块
    * @param {Chunk} chunk - 区块实例
    * @private
    */
   #removeChunk(chunk) {
-    this.chunksLoaded.delete(this.#getChunkKey(chunk));
+    this.chunkLoader.untrackChunkById(chunk.id);
     this.#recalculateBufferBounds();
   }
 
@@ -613,58 +617,13 @@ class ChunkBlockLoader {
   }
 
   /**
-   * 生成区块坐标键
-   * @param {Chunk} chunk - 区块实例
-   * @returns {string}
-   * @private
-   */
-  #getChunkKey(chunk) {
-    chunk.assertValid();
-    return chunk.id;
-  }
-
-  /**
-   * 发出加载请求
-   * @param {Chunk} chunk - 要加载的区块
-   * @param {"temp" | "full"} strategy - 加载策略
-   * @param {"right" | "left" | "up" | "down"} direction - 加载方向
-   * @param {"force-move" | "expand-buffer"} source - 加载来源
-   * @param {boolean} alreadyBuffered - 是否已经在缓冲区中
-   * @private
-   */
-  #emitLoadRequest(chunk, strategy, direction, source, alreadyBuffered) {
-    this.eventBus.emit(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_LOAD, {
-      requesterId: this.requesterId,
-      chunk,
-      strategy,
-      direction,
-      source,
-      alreadyBuffered,
-    });
-  }
-
-  /**
-   * 发出卸载请求
-   * @param {Chunk} chunk - 要卸载的区块
-   * @param {"buffer-limit" | "shrink-buffer" | "reset"} source - 卸载来源
-   * @private
-   */
-  #emitUnloadRequest(chunk, source) {
-    this.eventBus.emit(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, {
-      requesterId: this.requesterId,
-      chunk,
-      source,
-    });
-  }
-
-  /**
    * 发出缓冲区更新事件
    * @param {"expand" | "shrink" | "move" | "reset"} action - 更新动作
    * @param {"right" | "left" | "up" | "down" | "none"} direction - 更新方向
    * @private
    */
   #emitBufferUpdated(action, direction) {
-    this.eventBus.emit(CHUNK_LOAD_MANAGER_EVENTS.BUFFER_UPDATED, {
+    this.chunkLoader.emitBufferUpdated({
       action,
       direction,
       chunkNow: this.chunkNow,
@@ -674,8 +633,4 @@ class ChunkBlockLoader {
   }
 }
 
-export {
-  ChunkBlockLoader,
-  CHUNK_LOAD_MANAGER_EVENTS,
-  CHUNK_LOAD_STRATEGIES,
-};
+export { ChunkBlockLoader, CHUNK_LOAD_EVENTS, CHUNK_LOAD_STRATEGIES };

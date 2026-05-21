@@ -1,0 +1,142 @@
+# 区块加载器文档
+
+本文档提供 `ChunkLoader` 的概述。
+
+`ChunkLoader` 是区块对象的持有者。它负责缓存区块实例，并提供按区块 id 或二维坐标访问、卸载与清空的统一入口。
+
+## 模块定位
+
+`ChunkLoader` 解决的是“谁持有区块对象”这个问题，而不是“当前视口需要一个什么形状的缓冲区”。
+
+因此它的职责边界是：
+
+- 持有当前 loader 作用域中的区块实例
+- 负责按区块 id 与二维坐标解析区块实例
+- 负责卸载与清空当前持有集合
+- 只同步当前持有集合内部的四向邻接引用
+- 负责对外发送区块加载、区块卸载与缓冲区更新事件
+
+它不负责：
+
+- 表达“当前区块”
+- 维护连续矩形缓冲区边界
+- 决定完整加载还是临时加载
+- 决定具体的连续矩形缓冲区如何扩缩
+
+如果需要表达“连续矩形范围的区块缓冲区”，应由 `ChunkBlockLoader` 在其上层做包装。
+
+## 核心职责
+
+- 管理区块实例映射 `chunksLoaded`
+- 提供 `getChunkById(chunkId)`
+- 提供 `getChunkByCoordinate(x, y)`
+- 提供 `unloadChunkById(chunkId)`
+- 提供 `unloadChunkByCoordinate(x, y)`
+- 提供 `clear()` 与 `reset()`
+
+## 核心字段
+
+| 名称 | 描述 | 类型 |
+| --- | --- | --- |
+| `chunksLoaded` | 当前 loader 持有的区块实例映射 | `Map<number, Chunk>` |
+| `resolveChunkById` | 缓存未命中时的区块解析器 | `(chunkId) => Chunk \| undefined` |
+| `unloadChunk` | 区块移除前的卸载钩子 | `(chunk) => boolean \| void` |
+| `eventBus` | 区块加载相关事件总线 | `EventBus \| undefined` |
+| `requesterId` | 当前 loader 在事件总线中的请求方 id | `number \| string \| undefined` |
+
+## 访问模型
+
+### `getChunkById(chunkId)`
+
+按区块 id 获取区块实例。
+
+当前流程：
+
+1. 若当前已持有该区块，直接返回缓存实例
+2. 若未持有，优先调用 `resolveChunkById(chunkId)`
+3. 若未提供解析器，则退回到 `Chunk.fromId(chunkId)`
+4. 将结果纳入当前 `ChunkLoader` 持有范围
+5. 同步当前持有集合内部的四向邻接引用
+
+### `getChunkByCoordinate(x, y)`
+
+先将二维坐标转换为区块 id，再复用 `getChunkById(...)`。
+
+这保证了：
+
+- 同一 loader 中，同一坐标和同一 id 最终会命中同一个区块实例
+- 区块实例复用策略由 loader 自身统一管理
+
+## 卸载模型
+
+### `unloadChunkById(chunkId)` / `unloadChunkByCoordinate(x, y)`
+
+卸载当前 loader 持有的某个区块。
+
+若配置了 `unloadChunk(chunk)` 钩子，则会在真正从 `chunksLoaded` 中移除前先调用它：
+
+- 返回 `false` 表示拒绝卸载
+- 返回其它值表示允许继续移除
+
+### `clear()`
+
+遍历当前持有的全部区块，逐个调用卸载流程。
+
+它适合“需要真实执行卸载”的场景。
+
+### `reset()`
+
+只清空当前持有关系，不触发 `unloadChunk` 钩子。
+
+它适合被 `ChunkBlockLoader` 这类包装器在自定义事件时序中使用。
+
+## 与 `ChunkBlockLoader` 的关系
+
+二者关系可以概括为：
+
+- `ChunkLoader` 持有区块对象
+- `ChunkBlockLoader` 包装 `ChunkLoader`
+- `ChunkBlockLoader` 只负责连续矩形范围、当前区块与缓冲区扩缩逻辑
+
+也就是说：
+
+- `ChunkLoader` 决定“当前这组区块对象由谁持有”
+- `ChunkLoader` 负责把加载、卸载、缓冲区更新这类事件真正发到事件总线
+- `ChunkBlockLoader` 决定“这组区块对象是否构成一个连续矩形范围，以及如何移动这个范围”
+
+## 与 `Board` 的关系
+
+当前实现中：
+
+- `Board` 自己持有一个根 `ChunkLoader`
+- `Board.getChunkById(...)` 与 `Board.getChunkByCoordinate(...)` 都委托给根 `ChunkLoader`
+- `Board.getChunkLoader()` 用于暴露该根 loader
+- `Board.createChunkBlockLoader()` 会创建新的 `ChunkBlockLoader`，并为其注入独立的 `ChunkLoader`
+
+这意味着 `Board` 负责白板级区块实例所有权，而每个 `ChunkBlockLoader` 负责自己的矩形缓冲区视角。
+
+## API
+
+| 名称 | 描述 | 类型 |
+| --- | --- | --- |
+| `getChunkById(chunkId)` | 按区块 id 获取区块 | `number -> Chunk \| undefined` |
+| `getChunkByCoordinate(x, y)` | 按二维坐标获取区块 | `number -> number -> Chunk \| undefined` |
+| `unloadChunkById(chunkId)` | 按区块 id 卸载区块 | `number -> boolean` |
+| `unloadChunkByCoordinate(x, y)` | 按坐标卸载区块 | `number -> number -> boolean` |
+| `clear()` | 卸载并清空当前持有集合 | `void -> boolean` |
+| `reset()` | 只重置持有集合，不触发卸载钩子 | `void -> void` |
+| `emitLoadRequest(...)` | 发出区块加载请求 | `Chunk -> Object -> boolean` |
+| `emitUnloadRequest(...)` | 发出区块卸载请求 | `Chunk -> Object -> boolean` |
+| `emitBufferUpdated(...)` | 发出缓冲区更新事件 | `Object -> boolean` |
+
+## 实现状态
+
+- 已实现：区块实例持有、按 id/坐标获取、按 id/坐标卸载、清空持有集合、持有集合内部邻接同步，以及区块加载相关事件发射。
+- 已接线：`Board` 根区块加载器委托、`ChunkBlockLoader` 内部组合 `ChunkLoader`。
+- 待完善：更细粒度的生命周期统计、不同 loader 之间的区块共享策略，以及更完整的错误恢复路径。
+
+## 相关文档
+
+- [chunk-block-loader-document.md](./chunk-block-loader-document.md)
+- [board-document.md](./board-document.md)
+- [components-document.md](./components-document.md)

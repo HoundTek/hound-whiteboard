@@ -1,6 +1,7 @@
 import { jest } from "@jest/globals";
-import { ChunkBlockLoader, CHUNK_LOAD_MANAGER_EVENTS } from "../chunk-block-loader.js";
+import { ChunkBlockLoader } from "../chunk-block-loader.js";
 import { Chunk } from "../chunk.js";
+import { ChunkLoader, CHUNK_LOAD_EVENTS } from "../chunk-loader.js";
 import { EventBus } from "../../utils/event-bus.js";
 
 describe("ChunkBlockLoader", () => {
@@ -21,7 +22,7 @@ describe("ChunkBlockLoader", () => {
     const { chunk1, chunk2 } = createChunks();
     const loadHandler = jest.fn();
 
-    bus.on(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
+    bus.on(CHUNK_LOAD_EVENTS.REQUEST_LOAD, loadHandler);
 
     loader.initChunk(chunk1);
     const changed = loader.forceMoveCurrentRightTempLoad();
@@ -47,7 +48,7 @@ describe("ChunkBlockLoader", () => {
     const { chunk1, chunk2 } = createChunks();
     const loadHandler = jest.fn();
 
-    bus.on(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
+    bus.on(CHUNK_LOAD_EVENTS.REQUEST_LOAD, loadHandler);
 
     loader.initChunk(chunk1);
     const expanded = loader.expandBufferRightFullLoad();
@@ -70,7 +71,7 @@ describe("ChunkBlockLoader", () => {
     const { chunk1, chunk2, chunk3 } = createChunks();
     const unloadHandler = jest.fn();
 
-    bus.on(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
+    bus.on(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, unloadHandler);
 
     loader.initChunk(chunk2);
     loader.expandBufferRightTempLoad();
@@ -92,7 +93,7 @@ describe("ChunkBlockLoader", () => {
     const { chunk1, chunk2, chunk3 } = createChunks();
     const unloadHandler = jest.fn();
 
-    bus.on(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
+    bus.on(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, unloadHandler);
 
     loader.initChunk(chunk1);
     loader.expandBufferRightTempLoad();
@@ -117,7 +118,7 @@ describe("ChunkBlockLoader", () => {
     const { chunk1, chunk2 } = createChunks();
     const unloadHandler = jest.fn();
 
-    bus.on(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD, unloadHandler);
+    bus.on(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, unloadHandler);
 
     loader.initChunk(chunk1);
     loader.expandBufferRightTempLoad();
@@ -140,7 +141,7 @@ describe("ChunkBlockLoader", () => {
       return undefined;
     });
 
-    bus.on(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
+    bus.on(CHUNK_LOAD_EVENTS.REQUEST_LOAD, loadHandler);
 
     loader.initChunk(chunk1);
     const changed = loader.forceMoveCurrentUpTempLoad();
@@ -182,7 +183,7 @@ describe("ChunkBlockLoader", () => {
       return chunks.get(`${chunk.x + delta[0]},${chunk.y + delta[1]}`);
     });
 
-    bus.on(CHUNK_LOAD_MANAGER_EVENTS.REQUEST_LOAD, loadHandler);
+    bus.on(CHUNK_LOAD_EVENTS.REQUEST_LOAD, loadHandler);
 
     loader.initChunk(chunk1);
     loader.expandBufferUpTempLoad();
@@ -200,6 +201,38 @@ describe("ChunkBlockLoader", () => {
     );
     expect(loadHandler).toHaveBeenCalledWith(
       expect.objectContaining({ chunk: chunkUpRight, direction: "right" }),
+    );
+  });
+
+  test("ChunkBlockLoader 应通过内部 ChunkLoader 间接发送加载事件", () => {
+    const bus = new EventBus();
+    const chunkLoader = new ChunkLoader();
+    const emitLoadRequestSpy = jest.spyOn(chunkLoader, "emitLoadRequest");
+    const chunk1 = Chunk.fromCoordinate(0, 0);
+    const chunk2 = Chunk.fromCoordinate(1, 0);
+    const loader = new ChunkBlockLoader(
+      3,
+      bus,
+      "wrapped-loader",
+      (chunk, direction) => {
+        if (chunk === chunk1 && direction === "right") return chunk2;
+        if (chunk === chunk2 && direction === "left") return chunk1;
+        return undefined;
+      },
+      chunkLoader,
+    );
+
+    loader.initChunk(chunk1);
+    loader.expandBufferRightTempLoad();
+
+    expect(emitLoadRequestSpy).toHaveBeenCalledWith(
+      chunk2,
+      expect.objectContaining({
+        strategy: "temp",
+        direction: "right",
+        source: "expand-buffer",
+        alreadyBuffered: false,
+      }),
     );
   });
 

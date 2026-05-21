@@ -21,13 +21,14 @@
 `Board` 持有：
 
 - `chunkLoaded`: 区块 id -> `{ chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }`
+- `rootChunkLoader`: 白板根区块加载器
 - `activeObjectManager`: 活动对象层管理
 - `undoTree`: 历史树
 
 补充说明：
 
 - `chunks/connection.json` 中的 `count/order/size` 属于白板文件格式快照，不等同于 `Board` 的运行时字段。
-- 运行时的区块实例所有权由 `chunkLoaded` 统一持有；区块缓冲区移动与扩缩由 `ChunkBlockLoader` 表达。
+- 运行时的区块实例所有权由根 `ChunkLoader` 持有；`chunkLoaded` 负责记录加载状态；连续矩形范围的区块缓冲区移动与扩缩由 `ChunkBlockLoader` 表达。
 
 ### 2.2 区块级
 

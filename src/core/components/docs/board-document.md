@@ -18,7 +18,8 @@
 ## 白板类职责
 
 - 维护白板基础信息（宽、高、根目录）
-- 维护区块实例所有权与单区块加载状态落地
+- 通过根 `ChunkLoader` 维护区块实例所有权
+- 维护单区块加载状态落地
 - 管理全局活动对象管理器 `ActiveObjectManager`
 - 管理历史树 `UndoTree`
 - 提供白板加载、创建与对象写入接口
@@ -30,6 +31,7 @@
 | `undoTree`            | 时间回溯树             | `UndoTree`                                                                |
 | `activeObjectManager` | 活动对象管理器         | `ActiveObjectManager`                                                     |
 | `chunkLoaded`          | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
+| `rootChunkLoader`     | 白板根区块加载器         | `ChunkLoader`                                                              |
 | `width`/`height`      | 白板尺寸               | `number`                                                                  |
 | `root`                | 白板根目录             | `Directory`                                                               |
 | `chunkCounterPool`     | 区块 id 池               | `CounterPool`                                                             |
@@ -48,6 +50,38 @@
 
 该流程已经可作为白板运行时初始化骨架。
 
+## 与 `ChunkLoader` 的关系
+
+当前实现中，`Board` 自己持有一个根 `ChunkLoader`。
+
+这意味着：
+
+- `Board` 是白板级区块实例所有权的上层入口
+- 根 `ChunkLoader` 是具体的区块对象持有者
+- 根 `ChunkLoader` 也是区块加载事件的直接发送者
+- `Board.getChunkById(...)` 与 `Board.getChunkByCoordinate(...)` 都委托给根 `ChunkLoader`
+- `Board.getChunkLoader()` 用于显式暴露这个根 loader
+
+这样做的目的，是把“区块对象由谁持有”与“当前要维护一个什么形状的缓冲区”拆开。
+
+因此这里有一个稳定边界：
+
+- `ChunkLoader` 负责持有区块对象
+- `ChunkBlockLoader` 负责包装 `ChunkLoader` 并表达连续矩形范围
+
+## 对外区块访问接口
+
+当前 `Board` 暴露三类区块访问入口：
+
+- `getChunkById(chunkId)`：通过根 `ChunkLoader` 按 id 获取区块
+- `getChunkByCoordinate(x, y)`：通过根 `ChunkLoader` 按二维坐标获取区块
+- `getChunkLoader()`：直接获取根 `ChunkLoader`
+
+推荐约定：
+
+- 若业务只需要访问或卸载某个具体区块，优先使用根 `ChunkLoader` 及其包装入口
+- 若业务需要维护一个连续矩形范围的缓冲区，使用 `ChunkBlockLoader`
+
 ## 与 `ChunkBlockLoader` 的协作协议
 
 `Board` 与 `ChunkBlockLoader` 的关系应理解为“一个负责白板级决策与落地，一个负责缓冲区状态表达与移动意图”。
@@ -56,18 +90,20 @@
 
 #### `Board` 负责的事
 
-- 持有区块实例所有权
+- 通过根 `ChunkLoader` 持有区块实例所有权
 - 接收 `ChunkBlockLoader` 的单区块加载/卸载请求并落地执行
 - 调用 `Chunk.loadFull(...)`、`Chunk.loadTemp(...)`、`Chunk.unload()`、`Chunk.unloadTemp()`、`Chunk.downgradeToTemp()` 等方法执行实际加载
 - 维护“某区块被哪些 `ChunkBlockLoader` 以何种策略持有”的引用关系
 
 #### `ChunkBlockLoader` 负责的事
 
+- 包装一个独立的 `ChunkLoader`
 - 表达缓冲区窗口及其变化方向
 - 记录当前区块引用
 - 提供区域缓冲区初始化接口
 - 提供“向左/向右移动当前区块”“向左/向右扩展缓冲区”“向左/向右收缩缓冲区”的接口
 - 提供临时加载与完整加载两种策略入口
+- 通过内部 `ChunkLoader` 间接发送加载、卸载和缓冲区更新事件
 - 为上层提供更稳定的区块缓冲区控制抽象
 
 ### 缓冲区初始化的推荐方式
@@ -75,7 +111,7 @@
 - 业务侧若需要以某区块或某一区域作为起点建立新的缓冲范围，推荐通过自己持有的 `ChunkBlockLoader.init...` 接口完成。
 - `ChunkBlockLoader` 是区域区块加载器，更适合表达“以哪些区块为起点重建缓冲区”，而不是提供通用区块查询 API。
 - `Board` 不应承担邻域预取或缓冲区组织职责，因此不再提供 `getChunksAroundCoordinate(...)` 这类接口。
-- `Board.getChunkById(...)`、`Board.getChunkByCoordinate(...)` 更适合作为白板内部的单区块实例访问点，而不是业务层的缓冲区入口。
+- `Board.getChunkById(...)`、`Board.getChunkByCoordinate(...)` 与 `Board.getChunkLoader()` 更适合作为白板级单区块访问入口，而不是业务层的矩形缓冲区入口。
 
 ### 多个 `ChunkBlockLoader` 并存时的规则
 
@@ -121,20 +157,23 @@
 
 ## 设计约束
 
-- 区块实例所有权归 `Board`。
+- 白板级区块实例所有权通过根 `ChunkLoader` 归 `Board` 管辖。
 - 活动对象关系不直接写入区块静态图，应通过活动对象管理器管理动态关系。
 - 设备、工具、历史等高级状态最终应在白板加载阶段统一恢复。
+- `ChunkLoader` 是区块对象持有者。
 - `ChunkBlockLoader` 只表达缓冲区控制意图，不直接执行区块加载。
+- `ChunkBlockLoader` 只负责连续矩形范围，不负责区块对象的最终持有。
 - 区块加载策略的最终裁决权与执行权归 `Board`。
 
 ## 实现状态
 
-- 已实现：白板读取校验、单区块实例管理骨架、活动对象管理器/历史树挂载、多 `ChunkBlockLoader` 引用计数与完整区块降级。
+- 已实现：白板读取校验、根 `ChunkLoader` 区块持有、单区块实例管理骨架、活动对象管理器/历史树挂载、多 `ChunkBlockLoader` 引用计数与完整区块降级。
 - 待完善：完整新建流程、对象计数池初始化、历史与设备状态恢复、区块与对象全链路落盘。
 
 ## 相关文档
 
 - [components-document.md](./components-document.md)
+- [chunk-loader-document.md](./chunk-loader-document.md)
 - [chunk-block-loader-document.md](./chunk-block-loader-document.md)
 - [chunk-document.md](./chunk-document.md)
 - [active-object-document.md](./active-object-document.md)

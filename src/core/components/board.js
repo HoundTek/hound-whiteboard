@@ -16,9 +16,9 @@ import { ActiveObjectManager } from "./active-object-manager.js";
 import { Monitor } from "./monitor.js";
 import {
   ChunkBlockLoader,
-  CHUNK_LOAD_MANAGER_EVENTS,
   CHUNK_LOAD_STRATEGIES,
 } from "./chunk-block-loader.js";
+import { CHUNK_LOAD_EVENTS, ChunkLoader } from "./chunk-loader.js";
 import { Chunk } from "./chunk.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 
@@ -58,10 +58,10 @@ class Board {
   activeObjectManager;
 
   /**
-    * 当前已知区块的统一加载状态
-    * @type {Map<number, BoardChunkLoadedState>}
+   * 当前已知区块的统一加载状态
+   * @type {Map<number, BoardChunkLoadedState>}
    */
-    chunkLoaded;
+  chunkLoaded;
 
   /**
    * 白板的高度
@@ -111,6 +111,15 @@ class Board {
    */
   signalsEventBus;
 
+  /**
+   * 根区块加载器。
+   * @description
+   * `Board` 通过根 `ChunkLoader` 持有白板级区块实例所有权。
+   * `Board.getChunkById(...)`、`Board.getChunkByCoordinate(...)` 与 `Board.getChunkLoader()` 都委托到该实例。
+   * @type {ChunkLoader}
+   */
+  rootChunkLoader;
+
   constructor() {
     this.undoTree = new UndoTree();
     this.chunkLoaded = new Map();
@@ -119,6 +128,13 @@ class Board {
     this.chunkLoadEventBus = new EventBus();
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
+    this.rootChunkLoader = new ChunkLoader({
+      resolveChunkById: (chunkId) =>
+        this.#getOrCreateChunkLoadedState(chunkId).chunk,
+      unloadChunk: (chunk) => this.#unloadRootChunk(chunk),
+      eventBus: this.chunkLoadEventBus,
+      requesterId: "board-root",
+    });
     this.activeObjectManager = new ActiveObjectManager(this);
     this.#bindChunkLoadEvents();
     this.#bindSignalsEventBus();
@@ -126,6 +142,9 @@ class Board {
 
   /**
    * 创建绑定到当前 Board 的区块加载器
+   * @description
+   * 这里创建的是矩形缓冲区包装器 `ChunkBlockLoader`。
+   * 它内部会再持有一个独立的 `ChunkLoader`，用于保存本缓冲区视角下的区块对象集合。
    * @param {number} [limit = 0] - 缓冲区上限，为 0 则不限制
    * @param {number | string} [requesterId] - 请求方 id
    * @returns {ChunkBlockLoader}
@@ -136,7 +155,21 @@ class Board {
       this.chunkLoadEventBus,
       requesterId,
       (chunk, direction) => this.getNeighborChunk(chunk, direction),
+      new ChunkLoader({
+        resolveChunkById: (chunkId) =>
+          this.rootChunkLoader.getChunkById(chunkId),
+        eventBus: this.chunkLoadEventBus,
+        requesterId,
+      }),
     );
+  }
+
+  /**
+   * 获取白板根区块加载器。
+   * @returns {ChunkLoader}
+   */
+  getChunkLoader() {
+    return this.rootChunkLoader;
   }
 
   /**
@@ -149,26 +182,23 @@ class Board {
 
   /**
    * 按 id 获取区块实例，不存在时惰性创建
+   * @description 当前实现委托给 `Board` 持有的根 `ChunkLoader`。
    * @param {number} chunkId - 区块 id
    * @returns {Chunk | undefined}
    */
   getChunkById(chunkId) {
-    const chunkState = this.#getOrCreateChunkLoadedState(chunkId);
-    const chunk = chunkState.chunk;
-
-    this.#syncChunkNeighborRefs(chunk);
-    return chunk;
+    return this.rootChunkLoader.getChunkById(chunkId);
   }
 
   /**
    * 按坐标获取区块实例，不存在时惰性创建
+   * @description 当前实现委托给 `Board` 持有的根 `ChunkLoader`。
    * @param {number} x - 区块二维坐标 x
    * @param {number} y - 区块二维坐标 y
    * @returns {Chunk | undefined}
    */
   getChunkByCoordinate(x, y) {
-    const chunkId = Chunk.coordinateToId(x, y);
-    return this.getChunkById(chunkId);
+    return this.rootChunkLoader.getChunkByCoordinate(x, y);
   }
 
   /**
@@ -189,30 +219,6 @@ class Board {
     if (!delta) return undefined;
 
     return this.getChunkByCoordinate(chunk.x + delta.x, chunk.y + delta.y);
-  }
-
-  /**
-   * 同步区块的四向邻区块引用
-   * @param {Chunk} chunk - 区块实例
-   * @private
-   */
-  #syncChunkNeighborRefs(chunk) {
-    if (!chunk) return;
-
-    const directions = [
-      ["right", 1, 0],
-      ["left", -1, 0],
-      ["up", 0, 1],
-      ["down", 0, -1],
-    ];
-
-    for (const [direction, deltaX, deltaY] of directions) {
-      const neighborId = Chunk.coordinateToId(chunk.x + deltaX, chunk.y + deltaY);
-
-      const neighbor = this.chunkLoaded.get(neighborId)?.chunk;
-      if (!neighbor) continue;
-      Chunk.connectTwoChunk(chunk, neighbor, direction);
-    }
   }
 
   /**
@@ -332,7 +338,7 @@ class Board {
    */
   #bindChunkLoadEvents() {
     this.chunkLoadEventBus.on(
-      CHUNK_LOAD_MANAGER_EVENTS.REQUEST_LOAD,
+      CHUNK_LOAD_EVENTS.REQUEST_LOAD,
       ({ requesterId, chunk, strategy, alreadyBuffered }) => {
         this.#loadChunk(chunk, strategy, alreadyBuffered, requesterId).catch(
           (error) => {
@@ -343,7 +349,7 @@ class Board {
     );
 
     this.chunkLoadEventBus.on(
-      CHUNK_LOAD_MANAGER_EVENTS.REQUEST_UNLOAD,
+      CHUNK_LOAD_EVENTS.REQUEST_UNLOAD,
       ({ requesterId, chunk }) => {
         this.#unloadChunk(chunk, requesterId).catch((error) => {
           console.error("Failed to unload chunk:", error);
@@ -415,6 +421,25 @@ class Board {
 
     if (!chunk.isLoad) return false;
     return chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
+  }
+
+  #unloadRootChunk(chunk) {
+    if (!chunk) return false;
+
+    const chunkState = this.chunkLoaded.get(chunk.id);
+    const fullLoadedCount = chunkState?.fullLoadedCount ?? 0;
+    const tempLoadedCount = chunkState?.tempLoadedCount ?? 0;
+    if (fullLoadedCount > 0 || tempLoadedCount > 0) {
+      return false;
+    }
+
+    if (chunk.isLoad) {
+      const unloaded = chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
+      if (unloaded === false) return false;
+    }
+
+    this.chunkLoaded.delete(chunk.id);
+    return true;
   }
 
   /**
