@@ -1,6 +1,6 @@
 /**
  * @file 区块加载器
- * @module chunk-loader
+ * @module core/components/chunk-block-loader
  * @author Zhou Chenyu
  */
 
@@ -8,9 +8,9 @@ import { Chunk } from "./chunk.js";
 import { EventBus } from "../utils/event-bus.js";
 
 const CHUNK_LOAD_MANAGER_EVENTS = Object.freeze({
-  REQUEST_LOAD: "chunk-loader:request-load",
-  REQUEST_UNLOAD: "chunk-loader:request-unload",
-  BUFFER_UPDATED: "chunk-loader:buffer-updated",
+  REQUEST_LOAD: "chunk-block-loader:request-load",
+  REQUEST_UNLOAD: "chunk-block-loader:request-unload",
+  BUFFER_UPDATED: "chunk-block-loader:buffer-updated",
 });
 
 const CHUNK_LOAD_STRATEGIES = Object.freeze({
@@ -18,19 +18,19 @@ const CHUNK_LOAD_STRATEGIES = Object.freeze({
   FULL: "full",
 });
 
-let chunkLoaderIdCounter = 0;
+let chunkBlockLoaderIdCounter = 0;
 
 /**
  * 区块加载器
  * @class
  * @description
  * 管理当前已加载的区块网格缓冲区。
- * 需要注意的是 ChunkLoader 无法直接加载区块，
+ * 需要注意的是 ChunkBlockLoader 无法直接加载区块，
  * 它需要给 Board 发出加载区块的请求，
  * 由 Board 来调用 Chunk 的加载方法。
  * @author Zhou Chenyu
  */
-class ChunkLoader {
+class ChunkBlockLoader {
   /**
    * 在该管理器中已加载的区块
    * @description 以区块 id 为键保存当前缓冲区中的区块实例。
@@ -57,7 +57,7 @@ class ChunkLoader {
   eventBus;
 
   /**
-   * 当前 ChunkLoader 在事件总线中的请求方 id
+  * 当前 ChunkBlockLoader 在事件总线中的请求方 id
    * @type {number | string}
    */
   requesterId;
@@ -83,7 +83,7 @@ class ChunkLoader {
   constructor(
     limit = 0,
     eventBus = new EventBus(),
-    requesterId = ++chunkLoaderIdCounter,
+    requesterId = ++chunkBlockLoaderIdCounter,
     resolveNeighbor = (chunk, direction) => {
       const neighborField = {
         right: "rightChunk",
@@ -556,7 +556,7 @@ class ChunkLoader {
   }
 
   /**
-   * 仅在当前 ChunkLoader 已持有的区块实例之间同步四向邻接引用。
+  * 仅在当前 ChunkBlockLoader 已持有的区块实例之间同步四向邻接引用。
    * @param {Chunk} chunk - 区块实例
    * @private
    */
@@ -674,4 +674,8 @@ class ChunkLoader {
   }
 }
 
-export { ChunkLoader, CHUNK_LOAD_MANAGER_EVENTS, CHUNK_LOAD_STRATEGIES };
+export {
+  ChunkBlockLoader,
+  CHUNK_LOAD_MANAGER_EVENTS,
+  CHUNK_LOAD_STRATEGIES,
+};

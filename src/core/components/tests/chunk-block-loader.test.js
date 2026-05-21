@@ -1,9 +1,9 @@
 import { jest } from "@jest/globals";
-import { ChunkLoader, CHUNK_LOAD_MANAGER_EVENTS } from "../chunk-loader.js";
+import { ChunkBlockLoader, CHUNK_LOAD_MANAGER_EVENTS } from "../chunk-block-loader.js";
 import { Chunk } from "../chunk.js";
 import { EventBus } from "../../utils/event-bus.js";
 
-describe("ChunkLoader", () => {
+describe("ChunkBlockLoader", () => {
   function createChunks() {
     const chunk1 = Chunk.fromCoordinate(0, 0);
     const chunk2 = Chunk.fromCoordinate(1, 0);
@@ -17,7 +17,7 @@ describe("ChunkLoader", () => {
 
   test("forceMoveCurrentRightTempLoad 应该请求加载并移动当前区块", () => {
     const bus = new EventBus();
-    const loader = new ChunkLoader(3, bus);
+    const loader = new ChunkBlockLoader(3, bus);
     const { chunk1, chunk2 } = createChunks();
     const loadHandler = jest.fn();
 
@@ -43,7 +43,7 @@ describe("ChunkLoader", () => {
 
   test("expandBufferRightFullLoad 应该在不移动当前区块的情况下扩展缓冲区", () => {
     const bus = new EventBus();
-    const loader = new ChunkLoader(3, bus);
+    const loader = new ChunkBlockLoader(3, bus);
     const { chunk1, chunk2 } = createChunks();
     const loadHandler = jest.fn();
 
@@ -66,7 +66,7 @@ describe("ChunkLoader", () => {
 
   test("缓冲区超限时应淘汰反方向区块并发出卸载请求", () => {
     const bus = new EventBus();
-    const loader = new ChunkLoader(2, bus);
+    const loader = new ChunkBlockLoader(2, bus);
     const { chunk1, chunk2, chunk3 } = createChunks();
     const unloadHandler = jest.fn();
 
@@ -88,7 +88,7 @@ describe("ChunkLoader", () => {
 
   test("shrinkBufferRight 应该移除右边界，但不能移除当前区块", () => {
     const bus = new EventBus();
-    const loader = new ChunkLoader(3, bus);
+    const loader = new ChunkBlockLoader(3, bus);
     const { chunk1, chunk2, chunk3 } = createChunks();
     const unloadHandler = jest.fn();
 
@@ -113,7 +113,7 @@ describe("ChunkLoader", () => {
 
   test("shrinkBufferLeft 在当前区块位于左边界时不应收缩", () => {
     const bus = new EventBus();
-    const loader = new ChunkLoader(3, bus);
+    const loader = new ChunkBlockLoader(3, bus);
     const { chunk1, chunk2 } = createChunks();
     const unloadHandler = jest.fn();
 
@@ -134,7 +134,7 @@ describe("ChunkLoader", () => {
     const chunk1 = Chunk.fromId(1);
     const chunkUp = Chunk.fromId(4);
     const loadHandler = jest.fn();
-    const loader = new ChunkLoader(3, bus, undefined, (chunk, direction) => {
+    const loader = new ChunkBlockLoader(3, bus, undefined, (chunk, direction) => {
       if (chunk === chunk1 && direction === "up") return chunkUp;
       if (chunk === chunkUp && direction === "down") return chunk1;
       return undefined;
@@ -171,7 +171,7 @@ describe("ChunkLoader", () => {
       ["1,0", chunkRight],
       ["1,1", chunkUpRight],
     ]);
-    const loader = new ChunkLoader(0, bus, undefined, (chunk, direction) => {
+    const loader = new ChunkBlockLoader(0, bus, undefined, (chunk, direction) => {
       const delta = {
         right: [1, 0],
         left: [-1, 0],
@@ -205,7 +205,7 @@ describe("ChunkLoader", () => {
 
   test("initChunksAroundCoordinate 应清空旧缓冲区并按区域重建", () => {
     const bus = new EventBus();
-    const loader = new ChunkLoader(0, bus);
+    const loader = new ChunkBlockLoader(0, bus);
 
     loader.initChunk(Chunk.fromCoordinate(5, 5));
     const chunks = loader.initChunksAroundCoordinate(0, 0, 1);

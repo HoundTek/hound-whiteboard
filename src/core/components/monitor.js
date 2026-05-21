@@ -5,7 +5,7 @@
  */
 
 import { Board } from "../components/board.js";
-import { ChunkLoader } from "./chunk-loader.js";
+import { ChunkBlockLoader } from "./chunk-block-loader.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { Vector } from "../utils/math.js";
 import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
@@ -34,9 +34,9 @@ class Monitor {
 
   /**
    * 区块加载器，用于按需加载区块内容
-   * @type {ChunkLoader}
+  * @type {ChunkBlockLoader}
    */
-  chunkLoader;
+  chunkBlockLoader;
 
   /**
    * 显示器 id
@@ -76,7 +76,7 @@ class Monitor {
   constructor(canvas, board, { width, height }, monitorId) {
     this.canvas = canvas;
     this.board = board;
-    this.chunkLoader = this.board.createChunkLoader();
+    this.chunkBlockLoader = this.board.createChunkBlockLoader();
     this.zoom = 1;
     this.monitorId = monitorId;
     const rect = canvas?.getBoundingClientRect();

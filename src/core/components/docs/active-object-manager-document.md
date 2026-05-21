@@ -112,11 +112,11 @@
 在当前实现中，它的跨区块行为有几个约束：
 
 - 起点优先是对象实例集合；AOM 会先取对象 id，再通过对象自身的 `ownerChunkId` 解析起始区块。
-- 当 AOM 被挂在 `Board` 上时，会优先使用 `Board.createChunkLoader()`，因此跨区块拾取会自动接入白板区块加载事件总线。
+- 当 AOM 被挂在 `Board` 上时，会优先使用 `Board.createChunkBlockLoader()`，因此跨区块拾取会自动接入白板区块加载事件总线。
 - 对某个节点是否跨区块，读取 `chunk.objectManager.getObjectCoverChunks(node)`。
 - 覆盖区块用区块 id 描述，再通过 `Chunk.idToCoordinate(chunkId)` 转成二维坐标。
-- `ChunkLoader` 会在二维坐标系中按需移动：先处理 x 方向，再处理 y 方向；因此同一次拾取中可以出现右上、左下这类组合路径。
-- 读取某个覆盖区块完成后，`pickup` 会把 `ChunkLoader` 移回原区块，再继续处理剩余覆盖区块，避免把 DFS 的后续搜索留在错误区块上下文里。
+- `ChunkBlockLoader` 会在二维坐标系中按需移动：先处理 x 方向，再处理 y 方向；因此同一次拾取中可以出现右上、左下这类组合路径。
+- 读取某个覆盖区块完成后，`pickup` 会把 `ChunkBlockLoader` 移回原区块，再继续处理剩余覆盖区块，避免把 DFS 的后续搜索留在错误区块上下文里。
 - 如果某个覆盖区块当前不可达，`pickup` 会跳过该区块，继续处理其它覆盖区块，不会让整次拾取失败。
 
 这意味着：
@@ -139,7 +139,7 @@
 ## 实现状态
 
 - 已实现：核心分层逻辑、层插入与顺序比较、白板外对象 `add()`、置顶、清理、基于二维覆盖区块索引的跨区块拾取、基于对象实例的活动对象索引、`apply()` 提交回写。
-- 已验证：二维区块下的右上/左下组合移动、不可达覆盖区块跳过、覆盖区块索引更新后 `pickup` 与 `choose` 读取新结果、`pickup` 通过 `Board.createChunkLoader()` 接入白板区块加载链、`add()` 将新对象注册进动态图顶层、`apply()` 回写区块对象和覆盖区块索引。
+- 已验证：二维区块下的右上/左下组合移动、不可达覆盖区块跳过、覆盖区块索引更新后 `pickup` 与 `choose` 读取新结果、`pickup` 通过 `Board.createChunkBlockLoader()` 接入白板区块加载链、`add()` 将新对象注册进动态图顶层、`apply()` 回写区块对象和覆盖区块索引。
 - 待完善：修改工具链在对象几何变化后自动触发 `apply` 或等价索引刷新路径，以及跨区块高频移动时的性能优化。
 
 ## 相关文档
@@ -147,4 +147,4 @@
 - [tier-graph-document.md](./tier-graph-document.md)
 - [chunk-document.md](./chunk-document.md)
 - [chunk-object-manager-document.md](./chunk-object-manager-document.md)
-- [chunk-loader-document.md](./chunk-loader-document.md)
+- [chunk-block-loader-document.md](./chunk-block-loader-document.md)

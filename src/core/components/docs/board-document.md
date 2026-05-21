@@ -44,24 +44,24 @@
 1. 读取并校验 `meta.json` 与 `config.json`
 2. 读取 `chunks/connection.json`，恢复文件格式中的区块组织快照与区块计数信息
 3. 读取 `trace.json`（若缺失则默认坐标为 `{ x: 0, y: 0 }` 的区块）
-4. 准备当前区块实例，后续实际缓冲区预取交由 `ChunkLoader` 决定
+4. 准备当前区块实例，后续实际缓冲区预取交由 `ChunkBlockLoader` 决定
 
 该流程已经可作为白板运行时初始化骨架。
 
-## 与 `ChunkLoader` 的协作协议
+## 与 `ChunkBlockLoader` 的协作协议
 
-`Board` 与 `ChunkLoader` 的关系应理解为“一个负责白板级决策与落地，一个负责缓冲区状态表达与移动意图”。
+`Board` 与 `ChunkBlockLoader` 的关系应理解为“一个负责白板级决策与落地，一个负责缓冲区状态表达与移动意图”。
 
 ### 职责划分
 
 #### `Board` 负责的事
 
 - 持有区块实例所有权
-- 接收 `ChunkLoader` 的单区块加载/卸载请求并落地执行
+- 接收 `ChunkBlockLoader` 的单区块加载/卸载请求并落地执行
 - 调用 `Chunk.loadFull(...)`、`Chunk.loadTemp(...)`、`Chunk.unload()`、`Chunk.unloadTemp()`、`Chunk.downgradeToTemp()` 等方法执行实际加载
-- 维护“某区块被哪些 `ChunkLoader` 以何种策略持有”的引用关系
+- 维护“某区块被哪些 `ChunkBlockLoader` 以何种策略持有”的引用关系
 
-#### `ChunkLoader` 负责的事
+#### `ChunkBlockLoader` 负责的事
 
 - 表达缓冲区窗口及其变化方向
 - 记录当前区块引用
@@ -72,15 +72,15 @@
 
 ### 缓冲区初始化的推荐方式
 
-- 业务侧若需要以某区块或某一区域作为起点建立新的缓冲范围，推荐通过自己持有的 `ChunkLoader.init...` 接口完成。
-- `ChunkLoader` 是区域区块加载器，更适合表达“以哪些区块为起点重建缓冲区”，而不是提供通用区块查询 API。
+- 业务侧若需要以某区块或某一区域作为起点建立新的缓冲范围，推荐通过自己持有的 `ChunkBlockLoader.init...` 接口完成。
+- `ChunkBlockLoader` 是区域区块加载器，更适合表达“以哪些区块为起点重建缓冲区”，而不是提供通用区块查询 API。
 - `Board` 不应承担邻域预取或缓冲区组织职责，因此不再提供 `getChunksAroundCoordinate(...)` 这类接口。
 - `Board.getChunkById(...)`、`Board.getChunkByCoordinate(...)` 更适合作为白板内部的单区块实例访问点，而不是业务层的缓冲区入口。
 
-### 多个 `ChunkLoader` 并存时的规则
+### 多个 `ChunkBlockLoader` 并存时的规则
 
-- 同一个 `Board` 可以挂接多个 `ChunkLoader`
-- 某区块只要仍被任意一个 `ChunkLoader` 持有，就不能真正卸载
+- 同一个 `Board` 可以挂接多个 `ChunkBlockLoader`
+- 某区块只要仍被任意一个 `ChunkBlockLoader` 持有，就不能真正卸载
 - 若某区块的完整加载持有者清零，但仍有临时加载持有者，则该区块应从完整加载降级为临时加载
 - 只有当完整加载持有者和临时加载持有者都清零时，该区块才会真正卸载
 
@@ -89,7 +89,7 @@
 #### 场景一：用户翻到右区块
 
 1. `Board` 判断当前操作属于正常浏览/编辑翻区块。
-2. `Board` 驱动 `ChunkLoader` 将当前区块向右移动，或向右扩展缓冲区。
+2. `Board` 驱动 `ChunkBlockLoader` 将当前区块向右移动，或向右扩展缓冲区。
 3. `Board` 决定右侧新区块应采用完整加载。
 4. `Board` 调用对应 `Chunk` 的完整加载接口。
 5. 若超过缓冲区限制，由 `Board` 决定卸载缓冲区另一端的区块。
@@ -97,13 +97,13 @@
 #### 场景二：活动对象跨区块访问
 
 1. `Board` 判断当前操作只需要层叠关系而不需要完整对象内容。
-2. `Board` 驱动 `ChunkLoader` 向目标方向扩展缓冲区。
+2. `Board` 驱动 `ChunkBlockLoader` 向目标方向扩展缓冲区。
 3. `Board` 采用临时加载策略加载目标区块。
 4. 操作结束后，`Board` 决定是否回收临时区块。
 
 #### 场景三：完整区块回收但仍需保留层叠图
 
-1. 一个 `ChunkLoader` 请求完整加载某区块，另一个 `ChunkLoader` 只请求该区块的临时加载。
+1. 一个 `ChunkBlockLoader` 请求完整加载某区块，另一个 `ChunkBlockLoader` 只请求该区块的临时加载。
 2. 完整加载持有者释放该区块后，`Board` 检查到仍存在临时加载持有者。
 3. `Board` 不直接卸载该区块，而是调用 `Chunk.downgradeToTemp()`。
 4. 该区块保留层叠图，等待最后一个临时持有者释放后再真正卸载。
@@ -117,25 +117,25 @@
 - 工具与设备恢复逻辑
 - 历史状态与对象一致性
 
-这些都超出了 `ChunkLoader` 的职责范围。而且还会同时存在多个 `ChunkLoader` 互相打架的情况。因此执行权必须保留在 `Board`。
+这些都超出了 `ChunkBlockLoader` 的职责范围。而且还会同时存在多个 `ChunkBlockLoader` 互相打架的情况。因此执行权必须保留在 `Board`。
 
 ## 设计约束
 
 - 区块实例所有权归 `Board`。
 - 活动对象关系不直接写入区块静态图，应通过活动对象管理器管理动态关系。
 - 设备、工具、历史等高级状态最终应在白板加载阶段统一恢复。
-- `ChunkLoader` 只表达缓冲区控制意图，不直接执行区块加载。
+- `ChunkBlockLoader` 只表达缓冲区控制意图，不直接执行区块加载。
 - 区块加载策略的最终裁决权与执行权归 `Board`。
 
 ## 实现状态
 
-- 已实现：白板读取校验、单区块实例管理骨架、活动对象管理器/历史树挂载、多 `ChunkLoader` 引用计数与完整区块降级。
+- 已实现：白板读取校验、单区块实例管理骨架、活动对象管理器/历史树挂载、多 `ChunkBlockLoader` 引用计数与完整区块降级。
 - 待完善：完整新建流程、对象计数池初始化、历史与设备状态恢复、区块与对象全链路落盘。
 
 ## 相关文档
 
 - [components-document.md](./components-document.md)
-- [chunk-loader-document.md](./chunk-loader-document.md)
+- [chunk-block-loader-document.md](./chunk-block-loader-document.md)
 - [chunk-document.md](./chunk-document.md)
 - [active-object-document.md](./active-object-document.md)
 - [tier-graph-document.md](./tier-graph-document.md)

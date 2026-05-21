@@ -1,4 +1,4 @@
-class MockChunkLoader {
+class MockChunkBlockLoader {
   constructor(limit = 0) {
     this.chunksLoadedLimit = limit;
     this.chunksLoaded = [];
@@ -120,4 +120,4 @@ class MockChunkLoader {
   }
 }
 
-export { MockChunkLoader };
+export { MockChunkBlockLoader };

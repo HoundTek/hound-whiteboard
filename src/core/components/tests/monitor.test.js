@@ -18,7 +18,7 @@ describe("Monitor", () => {
     const board = {
       width: 800,
       height: 600,
-      createChunkLoader() {
+      createChunkBlockLoader() {
         return {};
       },
     };

@@ -15,10 +15,10 @@ import { UndoTree } from "../hit/undo-tree-core.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import { Monitor } from "./monitor.js";
 import {
-  ChunkLoader,
+  ChunkBlockLoader,
   CHUNK_LOAD_MANAGER_EVENTS,
   CHUNK_LOAD_STRATEGIES,
-} from "./chunk-loader.js";
+} from "./chunk-block-loader.js";
 import { Chunk } from "./chunk.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 
@@ -27,7 +27,7 @@ import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.
  * @property {Chunk} chunk - 当前区块实例
  * @property {number} tempLoadedCount - 临时加载计数
  * @property {number} fullLoadedCount - 完整加载计数
- * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 ChunkLoader 当前持有策略
+ * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 ChunkBlockLoader 当前持有策略
  */
 
 /**
@@ -128,10 +128,10 @@ class Board {
    * 创建绑定到当前 Board 的区块加载器
    * @param {number} [limit = 0] - 缓冲区上限，为 0 则不限制
    * @param {number | string} [requesterId] - 请求方 id
-   * @returns {ChunkLoader}
+   * @returns {ChunkBlockLoader}
    */
-  createChunkLoader(limit = 0, requesterId) {
-    return new ChunkLoader(
+  createChunkBlockLoader(limit = 0, requesterId) {
+    return new ChunkBlockLoader(
       limit,
       this.chunkLoadEventBus,
       requesterId,

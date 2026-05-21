@@ -1,8 +1,8 @@
 # 区块加载器文档
 
-本文档提供 `ChunkLoader` 的概述。
+本文档提供 `ChunkBlockLoader` 的概述。
 
-`ChunkLoader` 用于管理“当前缓冲区内已加载的区块网格”，它不直接执行区块加载，而是负责维护加载窗口、当前区块位置与网格边界。
+`ChunkBlockLoader` 用于管理“当前缓冲区内已加载的区块网格”，它不直接执行区块加载，而是负责维护加载窗口、当前区块位置与网格边界。
 
 ## 区块加载器职责
 
@@ -19,16 +19,16 @@
 
 需要特别注意：
 
-- `ChunkLoader` 不拥有白板级状态
-- `ChunkLoader` 不直接读取文件或调用区块加载逻辑
+- `ChunkBlockLoader` 不拥有白板级状态
+- `ChunkBlockLoader` 不直接读取文件或调用区块加载逻辑
 - 它只负责“提出应加载/应卸载哪些区块”的调度意图
 - 真正的加载动作应由 `Board` 协调，再调用 `Chunk` 的加载方法
-- 当前邻区块如何解析，也由 `Board` 决定；`ChunkLoader` 只消费区块之间的空间邻接关系
+- 当前邻区块如何解析，也由 `Board` 决定；`ChunkBlockLoader` 只消费区块之间的空间邻接关系
 
 推荐约定：
 
-- 若调用方需要“以某区块或某一区域为起点重建缓冲区”，优先通过 `ChunkLoader.init...` 完成。
-- `ChunkLoader` 不适合作为通用区块查询服务，因此不再提供 `getChunkById(...)`、`getChunkByCoordinate(...)`、`getChunksAroundCoordinate(...)` 这类接口。
+- 若调用方需要“以某区块或某一区域为起点重建缓冲区”，优先通过 `ChunkBlockLoader.init...` 完成。
+- `ChunkBlockLoader` 不适合作为通用区块查询服务，因此不再提供 `getChunkById(...)`、`getChunkByCoordinate(...)`、`getChunksAroundCoordinate(...)` 这类接口。
 - `Board` 更适合作为单区块加载/卸载的执行端，而不是业务层的区块查询入口。
 
 因此它更接近“区块缓冲区控制器”，而不是“区块内容加载器”。
@@ -44,7 +44,7 @@
 
 ## 缓冲区模型
 
-`ChunkLoader` 维护一个二维网格缓冲区。
+`ChunkBlockLoader` 维护一个二维网格缓冲区。
 
 缓冲区内部以区块 id 建立索引，并用区块坐标计算边界与邻接：
 
@@ -169,12 +169,12 @@
 
 ## 事件协作
 
-`ChunkLoader` 自身不执行加载，而是通过事件总线把意图发送给 `Board`。
+`ChunkBlockLoader` 自身不执行加载，而是通过事件总线把意图发送给 `Board`。
 
 - 加载事件会携带请求来源 `requesterId`
 - 卸载事件也会携带请求来源 `requesterId`
-- 这样 `Board` 可以在多个 `ChunkLoader` 同时存在时正确维护区块的引用计数
-- `Board` 也会把“如何从当前区块解析上下左右邻区块”的逻辑注入给 `ChunkLoader`
+- 这样 `Board` 可以在多个 `ChunkBlockLoader` 同时存在时正确维护区块的引用计数
+- `Board` 也会把“如何从当前区块解析上下左右邻区块”的逻辑注入给 `ChunkBlockLoader`
 
 ## API
 

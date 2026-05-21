@@ -6,7 +6,7 @@ import { Directory } from "../../../utils/filesys/io.js";
 import { Board } from "../board.js";
 import { Chunk } from "../chunk.js";
 
-describe("Multiple ChunkLoader", () => {
+describe("Multiple ChunkBlockLoader", () => {
   function getChunkLoadState(board, chunkId) {
     return board.chunkLoaded.get(chunkId);
   }
@@ -54,73 +54,73 @@ describe("Multiple ChunkLoader", () => {
         loaderStrategy: new Map(),
       });
     }
-    const chunkLoader = board.createChunkLoader();
+    const chunkBlockLoader = board.createChunkBlockLoader();
 
-    return { board, chunkLoader, chunk1, chunk2, chunk3 };
+    return { board, chunkBlockLoader, chunk1, chunk2, chunk3 };
   }
 
-  test("ChunkLoader 的临时加载请求应由 Board 执行", () => {
-    const { board, chunkLoader, chunk1, chunk2 } = createBoardHarness();
+  test("ChunkBlockLoader 的临时加载请求应由 Board 执行", () => {
+    const { board, chunkBlockLoader, chunk1, chunk2 } = createBoardHarness();
 
-    chunkLoader.initChunk(chunk1);
-    chunkLoader.expandBufferRightTempLoad();
+    chunkBlockLoader.initChunk(chunk1);
+    chunkBlockLoader.expandBufferRightTempLoad();
 
     expect(chunk2.loadTemp).toHaveBeenCalledTimes(1);
     expect(getChunkLoadState(board, 1).tempLoadedCount).toBe(1);
-    expect(chunkLoader.getLoadedChunks()).toEqual([chunk1, chunk2]);
+    expect(chunkBlockLoader.getLoadedChunks()).toEqual([chunk1, chunk2]);
   });
 
   test("完整加载升级应把区块从临时加载计数迁移到完整加载计数", () => {
-    const { board, chunkLoader, chunk1, chunk2 } = createBoardHarness();
+    const { board, chunkBlockLoader, chunk1, chunk2 } = createBoardHarness();
 
-    chunkLoader.initChunk(chunk1);
-    chunkLoader.expandBufferRightTempLoad();
-    chunkLoader.forceMoveCurrentRightFullLoad();
+    chunkBlockLoader.initChunk(chunk1);
+    chunkBlockLoader.expandBufferRightTempLoad();
+    chunkBlockLoader.forceMoveCurrentRightFullLoad();
 
     expect(chunk2.loadTemp).toHaveBeenCalledTimes(1);
     expect(chunk2.loadFull).toHaveBeenCalledTimes(1);
     expect(getChunkLoadState(board, 1).tempLoadedCount).toBe(0);
     expect(getChunkLoadState(board, 1).fullLoadedCount).toBe(1);
-    expect(chunkLoader.chunkNow).toBe(chunk2);
+    expect(chunkBlockLoader.chunkNow).toBe(chunk2);
   });
 
   test("缓冲区淘汰时应调用对应区块的卸载方法", () => {
-    const { board, chunkLoader, chunk1, chunk2, chunk3 } = createBoardHarness();
+    const { board, chunkBlockLoader, chunk1, chunk2, chunk3 } = createBoardHarness();
 
-    chunkLoader.chunksLoadedLimit = 2;
-    chunkLoader.initChunk(chunk2);
+    chunkBlockLoader.chunksLoadedLimit = 2;
+    chunkBlockLoader.initChunk(chunk2);
     chunk2.isLoad = true;
     chunk2.isTempLoad = false;
     getChunkLoadState(board, 1).fullLoadedCount = 1;
 
-    chunkLoader.expandBufferRightTempLoad();
-    chunkLoader.forceMoveCurrentLeftFullLoad();
+    chunkBlockLoader.expandBufferRightTempLoad();
+    chunkBlockLoader.forceMoveCurrentLeftFullLoad();
 
     expect(chunk3.unloadTemp).toHaveBeenCalledTimes(1);
-    expect(chunkLoader.getLoadedChunks()).toEqual([chunk1, chunk2]);
+    expect(chunkBlockLoader.getLoadedChunks()).toEqual([chunk1, chunk2]);
     expect(getChunkLoadState(board, 2).tempLoadedCount).toBe(0);
   });
 
-  test("多个 ChunkLoader 共用一区块时，单个卸载请求不应真正卸载该区块", () => {
-    const { board, chunkLoader, chunk1, chunk2 } = createBoardHarness();
-    const chunkLoader2 = board.createChunkLoader(2, "plm-2");
+  test("多个 ChunkBlockLoader 共用一区块时，单个卸载请求不应真正卸载该区块", () => {
+    const { board, chunkBlockLoader, chunk1, chunk2 } = createBoardHarness();
+    const chunkBlockLoader2 = board.createChunkBlockLoader(2, "plm-2");
 
-    chunkLoader.initChunk(chunk1);
-    chunkLoader2.initChunk(chunk1);
+    chunkBlockLoader.initChunk(chunk1);
+    chunkBlockLoader2.initChunk(chunk1);
 
-    chunkLoader.expandBufferRightTempLoad();
-    chunkLoader2.expandBufferRightTempLoad();
+    chunkBlockLoader.expandBufferRightTempLoad();
+    chunkBlockLoader2.expandBufferRightTempLoad();
 
     expect(getChunkLoadState(board, 1).tempLoadedCount).toBe(2);
 
-    const firstShrink = chunkLoader.shrinkBufferRight();
+    const firstShrink = chunkBlockLoader.shrinkBufferRight();
 
     expect(firstShrink).toBe(true);
     expect(getChunkLoadState(board, 1).tempLoadedCount).toBe(1);
     expect(chunk2.unloadTemp).not.toHaveBeenCalled();
     expect(chunk2.isLoad).toBe(true);
 
-    const secondShrink = chunkLoader2.shrinkBufferRight();
+    const secondShrink = chunkBlockLoader2.shrinkBufferRight();
 
     expect(secondShrink).toBe(true);
     expect(chunk2.unloadTemp).toHaveBeenCalledTimes(1);
@@ -129,20 +129,20 @@ describe("Multiple ChunkLoader", () => {
   });
 
   test("完整加载持有者释放后，若仍有临时持有者，应降级为临时加载", () => {
-    const { board, chunkLoader, chunk1, chunk2 } = createBoardHarness();
-    const chunkLoader2 = board.createChunkLoader(2, "plm-2");
+    const { board, chunkBlockLoader, chunk1, chunk2 } = createBoardHarness();
+    const chunkBlockLoader2 = board.createChunkBlockLoader(2, "plm-2");
 
-    chunkLoader.initChunk(chunk1);
-    chunkLoader2.initChunk(chunk1);
+    chunkBlockLoader.initChunk(chunk1);
+    chunkBlockLoader2.initChunk(chunk1);
 
-    chunkLoader.expandBufferRightFullLoad();
-    chunkLoader2.expandBufferRightTempLoad();
+    chunkBlockLoader.expandBufferRightFullLoad();
+    chunkBlockLoader2.expandBufferRightTempLoad();
 
     expect(getChunkLoadState(board, 1).fullLoadedCount).toBe(1);
     expect(getChunkLoadState(board, 1).tempLoadedCount).toBe(1);
     expect(chunk2.isTempLoad).toBe(false);
 
-    const shrunk = chunkLoader.shrinkBufferRight();
+    const shrunk = chunkBlockLoader.shrinkBufferRight();
 
     expect(shrunk).toBe(true);
     expect(chunk2.downgradeToTemp).toHaveBeenCalledTimes(1);

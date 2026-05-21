@@ -7,7 +7,7 @@ import { Board } from "../../board.js";
 import { Chunk } from "../../chunk.js";
 import { ChunkObjectManager } from "../../chunk-object-manager.js";
 import { StrokeObject } from "../../../objects/stroke/stroke.js";
-import { MockChunkLoader } from "./chunk-loader.mock.js";
+import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
 import { oneChunkData } from "./data.js";
 
 describe("ActiveObjectManager/apply", () => {
@@ -18,13 +18,13 @@ describe("ActiveObjectManager/apply", () => {
     return chunk;
   }
 
-  test("pickup 应优先使用 Board.createChunkLoader 且不再要求 Chunk 入参", () => {
+  test("pickup 应优先使用 Board.createChunkBlockLoader 且不再要求 Chunk 入参", () => {
     const chunk = createChunk(1);
     chunk.objectManager = new ChunkObjectManager(1);
     chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
 
     const board = {
-      createChunkLoader: jest.fn(() => new MockChunkLoader()),
+      createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
       getChunkById: jest.fn((chunkId) => (chunkId === 1 ? chunk : undefined)),
     };
     const aom = new ActiveObjectManager(board);
@@ -41,7 +41,7 @@ describe("ActiveObjectManager/apply", () => {
       [1, []],
     ]);
 
-    expect(board.createChunkLoader).toHaveBeenCalled();
+    expect(board.createChunkBlockLoader).toHaveBeenCalled();
     expect(pickup8.equals(expected8)).toBe(true);
   });
 

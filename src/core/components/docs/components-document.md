@@ -10,7 +10,7 @@ components 目录下的模块用于管理白板运行时状态，负责把对象
 - `Chunk`：区块类，负责区块链关系、区块加载/卸载流程。
 - `ChunkObjectManager`：区块对象管理器，负责静态层叠图与区块对象映射。
 - `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
-- `ChunkLoader`：区块缓冲区与当前区块位置管理器，定义在 `chunk-loader.js`。
+- `ChunkBlockLoader`：区块缓冲区与当前区块位置管理器，定义在 `chunk-block-loader.js`。
 
 ## 组件关系图
 
@@ -20,7 +20,7 @@ graph LR
   PM["Chunk"]
   POM["ChunkObjectManager"]
   AOM["ActiveObjectManager"]
-  PLM["ChunkLoader"]
+  PLM["ChunkBlockLoader"]
   UT["UndoTree"]
 
   Board --> PM

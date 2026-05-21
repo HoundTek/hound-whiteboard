@@ -21,9 +21,9 @@
 
 `DirectedGraph` 同时维护正向和反向邻接表：
 
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `adjList` | 正向邻接表，记录节点的后继 | `Map<*, Set<*>>` |
+| 名称       | 描述                       | 类型             |
+| ---------- | -------------------------- | ---------------- |
+| `adjList`  | 正向邻接表，记录节点的后继 | `Map<*, Set<*>>` |
 | `adjListR` | 反向邻接表，记录节点的前驱 | `Map<*, Set<*>>` |
 
 这种双表结构让“查后继”和“查前驱”都保持直接访问，也让入度和出度统计不需要重新遍历整张图。
@@ -32,43 +32,43 @@
 
 ### 节点与边维护
 
-| 名称 | 描述 |
-|---|---|
-| `hasNode(node)` | 判断节点是否存在 |
-| `hasEdge(from, to)` | 判断边是否存在 |
-| `addNodeUnsafe(node)` / `addNode(node)` | 添加节点 |
-| `addEdgeUnsafe(from, to)` / `addEdge(from, to)` | 添加边 |
-| `deleteEdgeUnsafe(from, to)` / `deleteEdge(from, to)` | 删除边 |
-| `changeNodeNameUnsafe(oldNode, newNode)` / `changeNodeName(oldNode, newNode)` | 重命名节点 |
-| `deleteAllEdgesOfNodeUnsafe(node)` / `deleteAllEdgesOfNode(node)` | 清空节点关联边 |
-| `deleteNodeUnsafe(node)` / `deleteNode(node)` | 删除节点及其关联边 |
+| 名称                                                                          | 描述               |
+| ----------------------------------------------------------------------------- | ------------------ |
+| `hasNode(node)`                                                               | 判断节点是否存在   |
+| `hasEdge(from, to)`                                                           | 判断边是否存在     |
+| `addNodeUnsafe(node)` / `addNode(node)`                                       | 添加节点           |
+| `addEdgeUnsafe(from, to)` / `addEdge(from, to)`                               | 添加边             |
+| `deleteEdgeUnsafe(from, to)` / `deleteEdge(from, to)`                         | 删除边             |
+| `changeNodeNameUnsafe(oldNode, newNode)` / `changeNodeName(oldNode, newNode)` | 重命名节点         |
+| `deleteAllEdgesOfNodeUnsafe(node)` / `deleteAllEdgesOfNode(node)`             | 清空节点关联边     |
+| `deleteNodeUnsafe(node)` / `deleteNode(node)`                                 | 删除节点及其关联边 |
 
 ### 查询能力
 
-| 名称 | 描述 |
-|---|---|
-| `neighborsUnsafe(node)` / `neighbors(node)` | 查询后继节点集合 |
-| `predecessorsUnsafe(node)` / `predecessors(node)` | 查询前驱节点集合 |
-| `getInDegreeUnsafe(node)` / `getInDegree(node)` | 查询入度 |
-| `getOutDegreeUnsafe(node)` / `getOutDegree(node)` | 查询出度 |
-| `getInDegreeMap()` | 获取所有节点入度映射 |
-| `getOutDegreeMap()` | 获取所有节点出度映射 |
-| `getNoIncomingNodes()` | 获取所有入度为 0 的节点 |
-| `getNoOutgoingNodes()` | 获取所有出度为 0 的节点 |
-| `getNodes()` | 获取全部节点 |
-| `size` | 当前节点数量 |
-| `isEmpty()` | 判断图是否为空 |
-| `isDAG()` | 判断图是否为 DAG |
+| 名称                                              | 描述                    |
+| ------------------------------------------------- | ----------------------- |
+| `neighborsUnsafe(node)` / `neighbors(node)`       | 查询后继节点集合        |
+| `predecessorsUnsafe(node)` / `predecessors(node)` | 查询前驱节点集合        |
+| `getInDegreeUnsafe(node)` / `getInDegree(node)`   | 查询入度                |
+| `getOutDegreeUnsafe(node)` / `getOutDegree(node)` | 查询出度                |
+| `getInDegreeMap()`                                | 获取所有节点入度映射    |
+| `getOutDegreeMap()`                               | 获取所有节点出度映射    |
+| `getNoIncomingNodes()`                            | 获取所有入度为 0 的节点 |
+| `getNoOutgoingNodes()`                            | 获取所有出度为 0 的节点 |
+| `getNodes()`                                      | 获取全部节点            |
+| `size`                                            | 当前节点数量            |
+| `isEmpty()`                                       | 判断图是否为空          |
+| `isDAG()`                                         | 判断图是否为 DAG        |
 
 ### 序列化与比较
 
-| 名称 | 描述 |
-|---|---|
-| `clear()` | 清空图 |
-| `toArray()` | 导出为邻接表数组 |
-| `toString()` | 导出调试字符串 |
-| `equals(otherGraph)` | 比较两张图是否结构相等 |
-| `DirectedGraph.parse(arr)` | 从邻接表数组构造实例 |
+| 名称                       | 描述                   |
+| -------------------------- | ---------------------- |
+| `clear()`                  | 清空图                 |
+| `toArray()`                | 导出为邻接表数组       |
+| `toString()`               | 导出调试字符串         |
+| `equals(otherGraph)`       | 比较两张图是否结构相等 |
+| `DirectedGraph.parse(arr)` | 从邻接表数组构造实例   |
 
 ## 设计约束
 

@@ -55,12 +55,6 @@
 - `peekFront()`、`peekBack()`、`popFront()`、`popBack()` 在空队列时会抛出 `RangeError`。
 - `toArray()` 会按照逻辑顺序导出，不受循环数组存储位置影响。
 
-## 在仓库中的典型用途
-
-- 在 `ChunkLoader` 之类场景中维护左右缓冲区块
-- 维护最近访问记录
-- 支持双向淘汰策略的缓存队列
-
 ## 相关文档
 
 - [utils-document.md](./utils-document.md)

@@ -10,13 +10,13 @@
 
 ## API
 
-| 名称 | 描述 | 类型 |
-|---|---|---|
-| `calcConvexHull(points)` | 计算点集凸包 | `Vector[] -> Vector[]` |
-| `insertPoints(points, countInside = 1)` | 对折线做 Catmull-Rom 插点 | `Vector[] -> number -> Vector[]` |
-| `ropeNailIntersect(rope, nail)` | 计算闭合曲线对点的缠绕圈数 | `Vector[] -> Vector -> number` |
-| `getDualFingerResult(originPoint1, originPoint2, transformedPoint1, transformedPoint2, originCenter)` | 估算双指缩放旋转和平移结果 | `Vector -> Vector -> Vector -> Vector -> Vector -> {mat, vec}` |
-| `getTriFingerResult(originPoint1, originPoint2, originPoint3, transformedPoint1, transformedPoint2, transformedPoint3, originCenter)` | 估算三指仿射变换结果 | `Vector -> Vector -> Vector -> Vector -> Vector -> Vector -> Vector -> {mat, vec}` |
+| 名称                                                                                                                                  | 描述                       | 类型                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
+| `calcConvexHull(points)`                                                                                                              | 计算点集凸包               | `Vector[] -> Vector[]`                                                             |
+| `insertPoints(points, countInside = 1)`                                                                                               | 对折线做 Catmull-Rom 插点  | `Vector[] -> number -> Vector[]`                                                   |
+| `ropeNailIntersect(rope, nail)`                                                                                                       | 计算闭合曲线对点的缠绕圈数 | `Vector[] -> Vector -> number`                                                     |
+| `getDualFingerResult(originPoint1, originPoint2, transformedPoint1, transformedPoint2, originCenter)`                                 | 估算双指缩放旋转和平移结果 | `Vector -> Vector -> Vector -> Vector -> Vector -> {mat, vec}`                     |
+| `getTriFingerResult(originPoint1, originPoint2, originPoint3, transformedPoint1, transformedPoint2, transformedPoint3, originCenter)` | 估算三指仿射变换结果       | `Vector -> Vector -> Vector -> Vector -> Vector -> Vector -> Vector -> {mat, vec}` |
 
 ## 关键设计点
 

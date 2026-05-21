@@ -27,13 +27,13 @@
 补充说明：
 
 - `chunks/connection.json` 中的 `count/order/size` 属于白板文件格式快照，不等同于 `Board` 的运行时字段。
-- 运行时的区块实例所有权由 `chunkLoaded` 统一持有；区块缓冲区移动与扩缩由 `ChunkLoader` 表达。
+- 运行时的区块实例所有权由 `chunkLoaded` 统一持有；区块缓冲区移动与扩缩由 `ChunkBlockLoader` 表达。
 
 ### 2.2 区块级
 
 `Chunk` 持有：
 
-- 双向链接：`prevChunk` / `nextChunk`
+- 四向链接：`leftChunk` / `rightChunk` / `upChunk` / `downChunk`
 - `objectManager`（`ChunkObjectManager`）
 
 `ChunkObjectManager` 持有：
