@@ -80,24 +80,24 @@ class Monitor {
   devicesTree;
 
   /**
-    * 当前显示器的静态层渲染调度器
-    * @type {RenderScheduler}
-    */
-    baseRenderScheduler;
+   * 当前显示器的静态层渲染调度器
+   * @type {RenderScheduler}
+   */
+  baseRenderScheduler;
 
-    /**
+  /**
    * 当前显示器的渲染调度器
    * @type {RenderScheduler}
    */
   renderScheduler;
 
   /**
-    * 静态层渲染器
-    * @type {BaseRenderer}
-    */
-    baseRenderer;
+   * 静态层渲染器
+   * @type {BaseRenderer}
+   */
+  baseRenderer;
 
-    /**
+  /**
    * 活动层渲染器
    * @type {LiveRenderer}
    */
@@ -182,7 +182,8 @@ class Monitor {
       origin: this.origin,
       zoom: this.zoom,
     };
-    this._origin = value instanceof Vector ? value : new Vector(value.x, value.y);
+    this._origin =
+      value instanceof Vector ? value : new Vector(value.x, value.y);
     this.requestViewportBaseRender(previousChunks, previousViewportState);
   }
 
@@ -272,7 +273,12 @@ class Monitor {
   getViewportWorldRect(origin = this.origin, zoom = this.zoom) {
     const viewportWidth = (this.canvas?.width ?? 0) / zoom;
     const viewportHeight = (this.canvas?.height ?? 0) / zoom;
-    return new RectangleRange(origin.x, origin.y, viewportWidth, viewportHeight);
+    return new RectangleRange(
+      origin.x,
+      origin.y,
+      viewportWidth,
+      viewportHeight,
+    );
   }
 
   /**
@@ -324,12 +330,16 @@ class Monitor {
     const chunkLoader = this.chunkBlockLoader?.chunkLoader;
     if (!chunkLoader || chunkLoader.__baseRenderHookBound) return;
 
-    const originalEmitBufferUpdated = chunkLoader.emitBufferUpdated.bind(chunkLoader);
+    const originalEmitBufferUpdated =
+      chunkLoader.emitBufferUpdated.bind(chunkLoader);
     this.baseBufferedChunks = this.chunkBlockLoader?.getLoadedChunks?.() ?? [];
 
     chunkLoader.emitBufferUpdated = (payload = {}) => {
       const previousChunks = this.baseBufferedChunks;
-      const currentChunks = payload.chunksLoaded ?? this.chunkBlockLoader?.getLoadedChunks?.() ?? [];
+      const currentChunks =
+        payload.chunksLoaded ??
+        this.chunkBlockLoader?.getLoadedChunks?.() ??
+        [];
       this.baseBufferedChunks = [...currentChunks];
       this.baseRenderer?.invalidateChunks?.(currentChunks, previousChunks);
       return originalEmitBufferUpdated(payload);

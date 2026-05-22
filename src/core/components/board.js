@@ -8,6 +8,7 @@
  */
 
 import { BasicObject } from "../objects/basic-obj.js";
+import { deserialize } from "../objects/object-deserializer.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { EventBus } from "../utils/event-bus.js";
@@ -28,6 +29,12 @@ import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.
  * @property {number} tempLoadedCount - 临时加载计数
  * @property {number} fullLoadedCount - 完整加载计数
  * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 ChunkBlockLoader 当前持有策略
+ */
+
+/**
+ * @typedef {Object} BoardObjectLoadedState
+ * @property {BasicObject} obj - 对象实例
+ * @property {number} loadedCount - 当前对象被完整加载持有的总计数
  */
 
 /**
@@ -62,6 +69,12 @@ class Board {
    * @type {Map<number, BoardChunkLoadedState>}
    */
   chunkLoaded;
+
+  /**
+   * 白板级对象实例注册表
+   * @type {Map<number, BoardObjectLoadedState>}
+   */
+  objectLoaded;
 
   /**
    * 白板的高度
@@ -123,6 +136,7 @@ class Board {
   constructor() {
     this.undoTree = new UndoTree();
     this.chunkLoaded = new Map();
+    this.objectLoaded = new Map();
     this.chunkCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
     this.chunkLoadEventBus = new EventBus();
@@ -181,6 +195,184 @@ class Board {
   }
 
   /**
+   * 获取对象加载状态条目
+   * @param {number} objectId - 对象 id
+   * @returns {BoardObjectLoadedState | undefined}
+   */
+  getObjectEntry(objectId) {
+    return this.objectLoaded.get(objectId);
+  }
+
+  /**
+   * 获取对象实例
+   * @param {number} objectId - 对象 id
+   * @returns {BasicObject | undefined}
+   */
+  getObjectById(objectId) {
+    return this.objectLoaded.get(objectId)?.obj;
+  }
+
+  /**
+   * 获取对象当前完整加载计数
+   * @param {number} objectId - 对象 id
+   * @returns {number}
+   */
+  getObjectLoadCount(objectId) {
+    return this.objectLoaded.get(objectId)?.loadedCount ?? 0;
+  }
+
+  /**
+   * 注册对象实例到白板级对象表
+   * @param {BasicObject} obj - 对象实例
+   * @param {{ coveredChunkIds?: Iterable<number> }} [options = {}] - 额外选项
+   * @returns {BasicObject}
+   */
+  registerObjectInstance(obj, options = {}) {
+    if (!(obj instanceof BasicObject)) {
+      throw new TypeError("Invalid object instance.");
+    }
+
+    const coveredChunkIds = new Set(options.coveredChunkIds ?? []);
+    const loadedCount =
+      coveredChunkIds.size > 0
+        ? this.#countFullLoadReferences(coveredChunkIds)
+        : this.getObjectLoadCount(obj.id);
+
+    this.objectLoaded.set(obj.id, {
+      obj,
+      loadedCount,
+    });
+
+    return obj;
+  }
+
+  /**
+   * 获取对象覆盖区块集合
+   * @param {number} objectId - 对象 id
+   * @param {Iterable<number>} [candidateChunkIds = []] - 候选区块 id
+   * @returns {Set<number>}
+   */
+  getObjectCoverChunks(objectId, candidateChunkIds = []) {
+    const chunkIdsToSearch = new Set(candidateChunkIds);
+
+    for (const chunkId of candidateChunkIds) {
+      const chunk = this.getChunkById(chunkId);
+      const coveredChunkIds =
+        chunk?.objectManager?.getObjectCoverChunks?.(objectId);
+      for (const coveredChunkId of coveredChunkIds ?? []) {
+        chunkIdsToSearch.add(coveredChunkId);
+      }
+    }
+
+    for (const chunkId of chunkIdsToSearch) {
+      const chunk = this.getChunkById(chunkId);
+      const coveredChunkIds =
+        chunk?.objectManager?.getObjectCoverChunks?.(objectId);
+      if (coveredChunkIds?.size > 0) {
+        return new Set(coveredChunkIds);
+      }
+    }
+
+    return new Set();
+  }
+
+  /**
+   * 按区块加载对象实例到白板级对象表
+   * @param {Chunk | number} chunkOrId - 区块实例或区块 id
+   * @param {string} [boardRootPath = this.rootPath] - 白板根路径
+   * @returns {Promise<Map<number, BasicObject>>}
+   */
+  async loadChunkObjectEntries(chunkOrId, boardRootPath = this.rootPath) {
+    const chunk =
+      typeof chunkOrId === "number" ? this.getChunkById(chunkOrId) : chunkOrId;
+    const loadedObjects = new Map();
+
+    if (!chunk || !boardRootPath) return loadedObjects;
+
+    const objectDataList = await boardFileOperateBridge.loadChunkObjects(
+      boardRootPath,
+      chunk.id,
+    );
+
+    for (const objectData of objectDataList ?? []) {
+      const obj = deserialize(objectData);
+      const coveredChunkIds = this.getObjectCoverChunks(obj.id, [chunk.id]);
+      this.registerObjectInstance(obj, { coveredChunkIds });
+      loadedObjects.set(obj.id, obj);
+    }
+
+    return loadedObjects;
+  }
+
+  /**
+   * 保存指定区块归属的对象
+   * @param {Chunk | number} chunkOrId - 区块实例或区块 id
+   * @param {string} [boardRootPath = this.rootPath] - 白板根路径
+   * @returns {Promise<void>}
+   */
+  async saveChunkObjectEntries(chunkOrId, boardRootPath = this.rootPath) {
+    const chunk =
+      typeof chunkOrId === "number" ? this.getChunkById(chunkOrId) : chunkOrId;
+    if (!chunk || !boardRootPath) return;
+
+    const serializedObjects = Array.from(this.objectLoaded.values())
+      .map((entry) => entry.obj)
+      .filter((obj) => obj?.ownerChunkId === chunk.id)
+      .map((obj) =>
+        obj && typeof obj.serialize === "function" ? obj.serialize() : obj,
+      );
+
+    await boardFileOperateBridge.saveChunkObjects(
+      boardRootPath,
+      chunk.id,
+      serializedObjects,
+    );
+  }
+
+  /**
+   * 根据区块当前加载状态同步其对象 loadedCount，并清理失活对象
+   * @param {Chunk | number} chunkOrId - 区块实例或区块 id
+   * @returns {Promise<void>}
+   */
+  async syncChunkObjectEntries(chunkOrId) {
+    const chunk =
+      typeof chunkOrId === "number" ? this.getChunkById(chunkOrId) : chunkOrId;
+    if (!chunk?.objectManager?.staticGraph) return;
+
+    for (const objectId of chunk.objectManager.staticGraph.getNodes()) {
+      await this.#syncObjectEntryForChunk(chunk, objectId);
+    }
+  }
+
+  /**
+   * 卸载指定区块相关的对象实例
+   * @param {Chunk | number} chunkOrId - 区块实例或区块 id
+   * @returns {void}
+   */
+  unloadChunkObjectEntries(chunkOrId) {
+    const chunk =
+      typeof chunkOrId === "number" ? this.getChunkById(chunkOrId) : chunkOrId;
+    if (!chunk?.objectManager?.staticGraph) return;
+
+    for (const objectId of chunk.objectManager.staticGraph.getNodes()) {
+      const entry = this.objectLoaded.get(objectId);
+      if (!entry) continue;
+
+      const coveredChunkIds = this.getObjectCoverChunks(objectId, [chunk.id]);
+      const effectiveChunkIds =
+        coveredChunkIds.size > 0 ? coveredChunkIds : new Set([chunk.id]);
+      entry.loadedCount = this.#countFullLoadReferences(effectiveChunkIds);
+
+      if (
+        entry.loadedCount <= 0 &&
+        !this.activeObjectManager?.activeObjectIndex?.has?.(objectId)
+      ) {
+        this.objectLoaded.delete(objectId);
+      }
+    }
+  }
+
+  /**
    * 按 id 获取区块实例，不存在时惰性创建
    * @description 当前实现委托给 `Board` 持有的根 `ChunkLoader`。
    * @param {number} chunkId - 区块 id
@@ -229,8 +421,10 @@ class Board {
    */
   #getOrCreateChunkLoadedState(chunkId) {
     if (!this.chunkLoaded.has(chunkId)) {
+      const chunk = Chunk.fromId(chunkId);
+      chunk.board = this;
       this.chunkLoaded.set(chunkId, {
-        chunk: Chunk.fromId(chunkId),
+        chunk,
         tempLoadedCount: 0,
         fullLoadedCount: 0,
         loaderStrategy: new Map(),
@@ -309,13 +503,16 @@ class Board {
 
     chunk.addObject(obj);
 
+    let coveredChunkIds = new Set([chunk.id]);
     if (chunk.objectManager && this.width > 0 && this.height > 0) {
-      chunk.objectManager.syncObjectCoverChunksForObject(
+      coveredChunkIds = chunk.objectManager.syncObjectCoverChunksForObject(
         obj,
         this.width,
         this.height,
       );
     }
+
+    this.registerObjectInstance(obj, { coveredChunkIds });
   }
 
   /**
@@ -398,16 +595,21 @@ class Board {
   async #loadChunk(chunk, strategy, alreadyBuffered, requesterId) {
     if (!chunk || requesterId === undefined) return false;
 
-    const effectiveStrategy = this.#registerChunkLoadRequest(
-      chunk.id,
-      requesterId,
-      strategy,
-    );
+    const { previousStrategy, effectiveStrategy } =
+      this.#registerChunkLoadRequest(chunk.id, requesterId, strategy);
 
     const boardRootPath = this.rootPath;
+    const shouldSyncChunkObjects =
+      (chunk?.objectManager?.staticGraph?.getNodes?.()?.length ?? 0) > 0;
 
     if (effectiveStrategy === CHUNK_LOAD_STRATEGIES.FULL) {
       const changed = await chunk.loadFull(boardRootPath);
+      if (
+        previousStrategy !== CHUNK_LOAD_STRATEGIES.FULL &&
+        shouldSyncChunkObjects
+      ) {
+        await this.syncChunkObjectEntries(chunk);
+      }
       return changed;
     }
 
@@ -434,6 +636,16 @@ class Board {
     );
     if (!removedStrategy) return false;
 
+    const shouldSyncChunkObjects =
+      (chunk?.objectManager?.staticGraph?.getNodes?.()?.length ?? 0) > 0;
+
+    if (
+      removedStrategy === CHUNK_LOAD_STRATEGIES.FULL &&
+      shouldSyncChunkObjects
+    ) {
+      await this.syncChunkObjectEntries(chunk);
+    }
+
     const chunkState = this.chunkLoaded.get(chunk.id);
     const fullLoadedCount = chunkState?.fullLoadedCount ?? 0;
     const tempLoadedCount = chunkState?.tempLoadedCount ?? 0;
@@ -448,7 +660,9 @@ class Board {
     }
 
     if (!chunk.isLoad) return false;
-    return chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
+    const unloaded = chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
+    this.unloadChunkObjectEntries(chunk);
+    return unloaded;
   }
 
   /**
@@ -470,6 +684,7 @@ class Board {
     if (chunk.isLoad) {
       const unloaded = chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
       if (unloaded === false) return false;
+      this.unloadChunkObjectEntries(chunk);
     }
 
     this.chunkLoaded.delete(chunk.id);
@@ -504,7 +719,10 @@ class Board {
         : strategy;
 
     if (previousStrategy === effectiveStrategy) {
-      return effectiveStrategy;
+      return {
+        previousStrategy,
+        effectiveStrategy,
+      };
     }
 
     if (previousStrategy === CHUNK_LOAD_STRATEGIES.TEMP) {
@@ -519,7 +737,10 @@ class Board {
     } else {
       chunkState.tempLoadedCount += 1;
     }
-    return effectiveStrategy;
+    return {
+      previousStrategy,
+      effectiveStrategy,
+    };
   }
 
   /**
@@ -556,6 +777,77 @@ class Board {
     const chunkState = this.chunkLoaded.get(chunkId);
     if (!chunkState) return 0;
     return chunkState.tempLoadedCount + chunkState.fullLoadedCount;
+  }
+
+  /**
+   * 计算指定覆盖区块集合的完整加载引用数
+   * @param {Iterable<number>} chunkIds - 覆盖区块集合
+   * @returns {number}
+   * @private
+   */
+  #countFullLoadReferences(chunkIds) {
+    let loadedCount = 0;
+
+    for (const chunkId of chunkIds) {
+      const chunkState = this.chunkLoaded.get(chunkId);
+      loadedCount += chunkState?.fullLoadedCount ?? 0;
+    }
+
+    return loadedCount;
+  }
+
+  /**
+   * 确保对象实例已加载到 Board 级注册表
+   * @param {number} objectId - 对象 id
+   * @param {Iterable<number>} candidateChunkIds - 候选区块 id
+   * @returns {Promise<BasicObject | undefined>}
+   * @private
+   */
+  async #ensureObjectInstanceLoaded(objectId, candidateChunkIds) {
+    const existingObject = this.getObjectById(objectId);
+    if (existingObject instanceof BasicObject) {
+      return existingObject;
+    }
+
+    for (const chunkId of candidateChunkIds) {
+      await this.loadChunkObjectEntries(chunkId);
+      const hydratedObject = this.getObjectById(objectId);
+      if (hydratedObject instanceof BasicObject) {
+        return hydratedObject;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 同步区块内单个对象的 loadedCount 与实例状态
+   * @param {Chunk} chunk - 区块实例
+   * @param {number} objectId - 对象 id
+   * @returns {Promise<void>}
+   * @private
+   */
+  async #syncObjectEntryForChunk(chunk, objectId) {
+    const coveredChunkIds = this.getObjectCoverChunks(objectId, [chunk.id]);
+    const effectiveChunkIds =
+      coveredChunkIds.size > 0 ? coveredChunkIds : new Set([chunk.id]);
+    const loadedCount = this.#countFullLoadReferences(effectiveChunkIds);
+
+    if (loadedCount > 0) {
+      await this.#ensureObjectInstanceLoaded(objectId, effectiveChunkIds);
+    }
+
+    const entry = this.objectLoaded.get(objectId);
+    if (!entry) return;
+
+    entry.loadedCount = loadedCount;
+
+    if (
+      entry.loadedCount <= 0 &&
+      !this.activeObjectManager?.activeObjectIndex?.has?.(objectId)
+    ) {
+      this.objectLoaded.delete(objectId);
+    }
   }
 }
 

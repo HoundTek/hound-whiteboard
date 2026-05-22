@@ -6,7 +6,6 @@
 
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { BasicObject } from "../objects/basic-obj.js";
-import { deserialize } from "../objects/object-deserializer.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 import { intersectsRanges, RectangleRange } from "../range/index.js";
 import { Chunk } from "./chunk.js";
@@ -33,13 +32,10 @@ class ChunkObjectManager {
   objectCoverChunks;
 
   /**
-   * 该区块的对象映射
-   * @description
-   * 从对象 id 映射到对象实例。
-   * 只包含该区块内的对象，拥有对象实例的所有权。
-   * @type {Map<number, BasicObject>}
+   * 所属白板
+   * @type {import("./board.js").Board | undefined}
    */
-  chunkObjects;
+  board;
 
   /**
    * 区块 id
@@ -47,11 +43,28 @@ class ChunkObjectManager {
    */
   id;
 
-  constructor(chunkId) {
+  constructor(chunkId, board) {
     this.id = chunkId;
+    this.board = board;
     this.staticGraph = new DirectedGraph();
     this.objectCoverChunks = new Map();
-    this.chunkObjects = new Map();
+  }
+
+  /**
+   * 绑定白板实例
+   * @param {import("./board.js").Board} board - 白板实例
+   */
+  setBoard(board) {
+    this.board = board;
+  }
+
+  /**
+   * 通过 Board 间接获取对象实例
+   * @param {number} objectId - 对象 id
+   * @returns {BasicObject | undefined}
+   */
+  getObject(objectId) {
+    return this.board?.getObjectById?.(objectId);
   }
 
   /**
@@ -185,8 +198,15 @@ class ChunkObjectManager {
    */
   syncAllObjectCoverChunks(chunkWidth, chunkHeight, options = {}) {
     this.objectCoverChunks.clear();
-    for (const obj of this.chunkObjects.values()) {
-      this.syncObjectCoverChunksForObject(obj, chunkWidth, chunkHeight, options);
+    for (const objectId of this.staticGraph.getNodes()) {
+      const obj = this.getObject(objectId);
+      if (!(obj instanceof BasicObject)) continue;
+      this.syncObjectCoverChunksForObject(
+        obj,
+        chunkWidth,
+        chunkHeight,
+        options,
+      );
     }
     return new Map(this.objectCoverChunks);
   }
@@ -282,19 +302,7 @@ class ChunkObjectManager {
    * @returns {Promise<void>} 加载完成
    */
   async loadObjects(boardRootPath) {
-    // 先清空旧映射，确保和磁盘状态一致。
-    this.chunkObjects.clear();
-
-    const objectDataList = await boardFileOperateBridge.loadChunkObjects(
-      boardRootPath,
-      this.id,
-    );
-
-    // 使用统一反序列化入口恢复具体对象类型。
-    for (const objectData of objectDataList) {
-      const obj = deserialize(objectData);
-      this.chunkObjects.set(obj.id, obj);
-    }
+    await this.board?.loadChunkObjectEntries?.(this.id, boardRootPath);
   }
 
   /**
@@ -303,24 +311,7 @@ class ChunkObjectManager {
    * @returns {Promise<void>} 保存完成
    */
   async saveObjects(boardRootPath) {
-    /**
-     * 当前区块对象的可序列化快照。
-     * @type {object[]}
-     */
-    const serializedObjects = Array.from(this.chunkObjects.values()).map(
-      (obj) => {
-        if (obj && typeof obj.serialize === "function") {
-          return obj.serialize();
-        }
-        return obj;
-      },
-    );
-
-    await boardFileOperateBridge.saveChunkObjects(
-      boardRootPath,
-      this.id,
-      serializedObjects,
-    );
+    await this.board?.saveChunkObjectEntries?.(this.id, boardRootPath);
   }
 
   /**
@@ -328,7 +319,7 @@ class ChunkObjectManager {
    * @description 释放对象实例映射。
    */
   unloadObjects() {
-    this.chunkObjects.clear();
+    this.board?.unloadChunkObjectEntries?.(this.id);
   }
 
   /**

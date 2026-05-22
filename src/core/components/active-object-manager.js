@@ -271,6 +271,11 @@ class ActiveObjectManager {
 
     if (!this.board) return undefined;
 
+    const loadedObject = this.board.getObjectById?.(objectId);
+    if (loadedObject instanceof BasicObject) {
+      return loadedObject;
+    }
+
     const chunkIdsToSearch = new Set(candidateChunkIds);
     for (const chunkId of candidateChunkIds) {
       const chunk = this.board.getChunkById(chunkId);
@@ -283,7 +288,7 @@ class ActiveObjectManager {
 
     for (const chunkId of chunkIdsToSearch) {
       const chunk = this.board.getChunkById(chunkId);
-      const objectInstance = chunk?.objectManager?.chunkObjects?.get(objectId);
+      const objectInstance = chunk?.objectManager?.getObject?.(objectId);
       if (objectInstance instanceof BasicObject) {
         return objectInstance;
       }
@@ -802,9 +807,9 @@ class ActiveObjectManager {
         .map((obj) => {
           const ownerChunk = this.resolveObjectChunk(obj);
           if (!ownerChunk) return undefined;
-          const previousCoveredChunkIds = ownerChunk.objectManager?.getObjectCoverChunks?.(
-            obj.id,
-          ) ?? new Set([ownerChunk.id]);
+          const previousCoveredChunkIds =
+            ownerChunk.objectManager?.getObjectCoverChunks?.(obj.id) ??
+            new Set([ownerChunk.id]);
           for (const chunkId of previousCoveredChunkIds) {
             affectedChunkIds.add(chunkId);
           }

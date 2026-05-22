@@ -40,14 +40,22 @@
 `ChunkObjectManager` 持有：
 
 - `staticGraph`: 区块内对象层叠图（有向图）
-- `chunkObjects`: 对象实例映射
-- `coverLeftChunk` / `coverRightChunk`: 跨区块对象线索
+- `objectCoverChunks`: 对象覆盖区块索引
+
+`Board` 持有：
+
+- `objectLoaded`: 对象实例注册表，结构为 `Map<number, { obj, loadedCount }>`
+
+其中：
+
+- `loadedCount` 只统计对象覆盖区块上的完整加载持有数
+- `loadedCount === 0` 不必然立刻删除对象；若对象仍在活动层，实例仍会保留在 `Board.objectLoaded` 中
 
 ### 2.3 对象级
 
 `BasicObject` 的统一字段：
 
-- `id`、`chunkId`
+- `id`、`ownerChunkId`
 - `position`、`transform`
 - `boundingBox`、`convexHullRange`
 - `getRange()` 暴露的主判定范围

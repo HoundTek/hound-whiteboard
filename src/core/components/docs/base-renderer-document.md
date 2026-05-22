@@ -11,7 +11,7 @@
 `BaseRenderer` 当前处在一条更偏“提交后显示”的链路中：
 
 - `ActiveObjectManager.apply(objects)` 负责把活动对象写回区块静态结构
-- `ChunkObjectManager` 负责维护静态对象映射与 `staticGraph`
+- `ChunkObjectManager` 负责维护静态图与对象覆盖区块索引，`Board` 负责持有对象实例
 - `Monitor.chunkBlockLoader` 负责回答“当前视口缓冲区里有哪些区块”
 - `BaseRenderer` 负责回答“这些已加载区块里的静态对象，如何画到 `baseCanvas` 上”
 

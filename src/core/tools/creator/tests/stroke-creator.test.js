@@ -45,7 +45,9 @@ describe("StrokeCreatorTool", () => {
     expect(tool.obj.id).toBe(100);
     expect(tool.obj.ownerChunkId).toBe(2);
     expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
+    expect(
+      tool.obj.localPathRange.points.map((point) => point.serialize()),
+    ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -80,9 +82,9 @@ describe("StrokeCreatorTool", () => {
     expect(tool.obj.id).toBe(101);
     expect(tool.obj.ownerChunkId).toBe(3);
     expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 6 });
-    expect(tool.obj.localPathRange.points.map((point) => point.serialize())).toEqual([
-      { x: 0, y: 0 },
-    ]);
+    expect(
+      tool.obj.localPathRange.points.map((point) => point.serialize()),
+    ).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("cancel 信号应重置正在创建的对象并撤销 AOM 注册", () => {
@@ -104,10 +106,13 @@ describe("StrokeCreatorTool", () => {
     const activeObject = tool.obj;
 
     expect(
-      tool.process({
-        to: "/monitor/stroke",
-        signals: [{ type: "cancel", context: {} }],
-      }, { board }),
+      tool.process(
+        {
+          to: "/monitor/stroke",
+          signals: [{ type: "cancel", context: {} }],
+        },
+        { board },
+      ),
     ).toBeUndefined();
 
     expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
@@ -229,7 +234,7 @@ describe("StrokeCreatorTool", () => {
 
     const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.chunkObjects.get(21)).toBe(createdObject);
+    expect(ownerChunk.objectManager.getObject(21)).toBe(createdObject);
   });
 
   test("真实 Board 上取消创建后不应写回区块静态结构", () => {
@@ -257,6 +262,6 @@ describe("StrokeCreatorTool", () => {
 
     const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.chunkObjects.has(22)).toBe(false);
+    expect(ownerChunk.objectManager.getObject(22)).toBeUndefined();
   });
 });

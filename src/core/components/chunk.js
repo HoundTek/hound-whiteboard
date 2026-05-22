@@ -18,6 +18,12 @@ import { ChunkObjectManager } from "./chunk-object-manager.js";
  */
 class Chunk {
   /**
+   * 所属白板
+   * @type {import("./board.js").Board | undefined}
+   */
+  board;
+
+  /**
    * 区块上的对象管理
    * @description 包括区块对象和层级关系
    * @type {ChunkObjectManager}
@@ -88,6 +94,7 @@ class Chunk {
    */
   constructor(chunkId) {
     const coordinate = Chunk.idToCoordinate(chunkId);
+    this.board = undefined;
     this.objectManager = undefined;
     this.id = chunkId;
     this.x = coordinate.x;
@@ -269,14 +276,16 @@ class Chunk {
    */
   addObject(obj, below = [], above = []) {
     if (!this.objectManager) {
-      this.objectManager = new ChunkObjectManager(this.id);
+      this.objectManager = new ChunkObjectManager(this.id, this.board);
+    } else if (!this.objectManager.board && this.board) {
+      this.objectManager.setBoard(this.board);
     }
 
     const graph = this.objectManager.staticGraph;
     const objectId = obj instanceof BasicObject ? obj.id : obj;
 
     if (obj instanceof BasicObject) {
-      this.objectManager.chunkObjects.set(obj.id, obj);
+      this.board?.registerObjectInstance?.(obj);
     }
 
     if (!graph.hasNode(objectId)) {
@@ -307,10 +316,6 @@ class Chunk {
     // 未加载，升级为临时加载
     if (!this.isLoad) await this.loadTemp(boardRootPath);
     this.isTempLoad = false;
-
-    // 升级为完整加载，加载对象
-    // [todo] 加载 Objects
-    await this.objectManager.loadObjects(boardRootPath);
     return true;
   }
 
@@ -351,7 +356,6 @@ class Chunk {
     if (!this.isLoad || this.isTempLoad) {
       return false;
     }
-    if (this.objectManager) this.objectManager.unloadObjects();
     this.isTempLoad = true;
     return true;
   }
@@ -369,7 +373,9 @@ class Chunk {
     this.isLoad = true;
     this.isTempLoad = true;
     if (!this.objectManager) {
-      this.objectManager = new ChunkObjectManager(this.id);
+      this.objectManager = new ChunkObjectManager(this.id, this.board);
+    } else if (!this.objectManager.board && this.board) {
+      this.objectManager.setBoard(this.board);
     }
     await this.objectManager.loadTierGraph(boardRootPath);
     return true;

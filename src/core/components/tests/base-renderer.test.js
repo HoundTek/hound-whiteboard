@@ -8,6 +8,23 @@ import { ChunkObjectManager } from "../chunk-object-manager.js";
 import { RectangleRange } from "../../range/index.js";
 
 describe("BaseRenderer", () => {
+  function createBoardWithObjects(objects = []) {
+    const objectMap = new Map(
+      objects.map((objectInstance) => [objectInstance.id, objectInstance]),
+    );
+
+    return {
+      getObjectById(objectId) {
+        return objectMap.get(objectId);
+      },
+      activeObjectManager: {
+        findBoardObjectInstance(objectId) {
+          return objectMap.get(objectId);
+        },
+      },
+    };
+  }
+
   function createContext(calls) {
     return {
       save() {
@@ -58,8 +75,6 @@ describe("BaseRenderer", () => {
 
     const chunk = Chunk.fromId(1);
     chunk.objectManager = new ChunkObjectManager(1);
-    chunk.objectManager.chunkObjects.set(11, lower);
-    chunk.objectManager.chunkObjects.set(12, upper);
     chunk.objectManager.staticGraph = DirectedGraph.parse([
       [11, [12]],
       [12, []],
@@ -69,13 +84,7 @@ describe("BaseRenderer", () => {
       origin: new Vector(0, 0),
       zoom: 1,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return chunk.objectManager.chunkObjects.get(objectId);
-          },
-        },
-      },
+      board: createBoardWithObjects([lower, upper]),
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
@@ -102,7 +111,6 @@ describe("BaseRenderer", () => {
 
     const leftChunk = Chunk.fromId(1);
     leftChunk.objectManager = new ChunkObjectManager(1);
-    leftChunk.objectManager.chunkObjects.set(41, lower);
     leftChunk.objectManager.staticGraph = DirectedGraph.parse([
       [41, [42]],
       [42, []],
@@ -110,25 +118,13 @@ describe("BaseRenderer", () => {
 
     const rightChunk = Chunk.fromId(2);
     rightChunk.objectManager = new ChunkObjectManager(2);
-    rightChunk.objectManager.chunkObjects.set(42, upper);
     rightChunk.objectManager.staticGraph = DirectedGraph.parse([[42, []]]);
-
-    const objectMap = new Map([
-      [41, lower],
-      [42, upper],
-    ]);
 
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return objectMap.get(objectId);
-          },
-        },
-      },
+      board: createBoardWithObjects([lower, upper]),
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
@@ -151,7 +147,6 @@ describe("BaseRenderer", () => {
 
     const ownerChunk = Chunk.fromId(1);
     ownerChunk.objectManager = new ChunkObjectManager(1);
-    ownerChunk.objectManager.chunkObjects.set(21, object);
     ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[21, []]]);
 
     const coveredChunk = Chunk.fromId(2);
@@ -162,13 +157,7 @@ describe("BaseRenderer", () => {
       origin: new Vector(0, 0),
       zoom: 1,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return objectId === 21 ? object : undefined;
-          },
-        },
-      },
+      board: createBoardWithObjects([object]),
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
@@ -191,7 +180,6 @@ describe("BaseRenderer", () => {
 
     const ownerChunk = Chunk.fromId(1);
     ownerChunk.objectManager = new ChunkObjectManager(1);
-    ownerChunk.objectManager.chunkObjects.set(51, object);
     ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[51, []]]);
 
     const coveredChunk = Chunk.fromId(2);
@@ -202,13 +190,7 @@ describe("BaseRenderer", () => {
       origin: new Vector(0, 0),
       zoom: 1,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return objectId === 51 ? object : undefined;
-          },
-        },
-      },
+      board: createBoardWithObjects([object]),
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
@@ -222,9 +204,9 @@ describe("BaseRenderer", () => {
     const renderer = new BaseRenderer(monitor);
 
     expect(renderer.render()).toEqual([object]);
-    expect(
-      calls.filter((entry) => entry[0] === "moveTo"),
-    ).toEqual([["moveTo", 0, 0]]);
+    expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
+      ["moveTo", 0, 0],
+    ]);
   });
 
   test("render(dirtyRects) 应只清理并重绘命中脏区的静态对象", () => {
@@ -236,8 +218,6 @@ describe("BaseRenderer", () => {
 
     const chunk = Chunk.fromId(1);
     chunk.objectManager = new ChunkObjectManager(1);
-    chunk.objectManager.chunkObjects.set(31, leftObject);
-    chunk.objectManager.chunkObjects.set(32, rightObject);
     chunk.objectManager.staticGraph = DirectedGraph.parse([
       [31, []],
       [32, []],
@@ -249,13 +229,7 @@ describe("BaseRenderer", () => {
       chunkWidth: 800,
       chunkHeight: 600,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return chunk.objectManager.chunkObjects.get(objectId);
-          },
-        },
-      },
+      board: createBoardWithObjects([leftObject, rightObject]),
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
       },
@@ -274,9 +248,9 @@ describe("BaseRenderer", () => {
     renderer.render([new RectangleRange(-1, -1, 20, 20)]);
 
     expect(calls).toContainEqual(["clearRect", -1, -1, 20, 20]);
-    expect(
-      calls.filter((entry) => entry[0] === "moveTo"),
-    ).toEqual([["moveTo", 0, 0]]);
+    expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
+      ["moveTo", 0, 0],
+    ]);
   });
 
   test("多区块局部重绘时也应保持全局静态图拓扑序", () => {
@@ -288,7 +262,6 @@ describe("BaseRenderer", () => {
 
     const leftChunk = Chunk.fromId(1);
     leftChunk.objectManager = new ChunkObjectManager(1);
-    leftChunk.objectManager.chunkObjects.set(61, lower);
     leftChunk.objectManager.staticGraph = DirectedGraph.parse([
       [61, [62]],
       [62, []],
@@ -296,13 +269,7 @@ describe("BaseRenderer", () => {
 
     const rightChunk = Chunk.fromId(2);
     rightChunk.objectManager = new ChunkObjectManager(2);
-    rightChunk.objectManager.chunkObjects.set(62, upper);
     rightChunk.objectManager.staticGraph = DirectedGraph.parse([[62, []]]);
-
-    const objectMap = new Map([
-      [61, lower],
-      [62, upper],
-    ]);
 
     const monitor = {
       origin: new Vector(0, 0),
@@ -310,13 +277,7 @@ describe("BaseRenderer", () => {
       chunkWidth: 800,
       chunkHeight: 600,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return objectMap.get(objectId);
-          },
-        },
-      },
+      board: createBoardWithObjects([lower, upper]),
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
       },
@@ -335,9 +296,7 @@ describe("BaseRenderer", () => {
     renderer.render([new RectangleRange(-2, -2, 20, 10)]);
 
     expect(calls).toContainEqual(["clearRect", -2, -2, 20, 10]);
-    expect(
-      calls.filter((entry) => entry[0] === "moveTo"),
-    ).toEqual([
+    expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
       ["moveTo", 0, 0],
       ["moveTo", 0, 2],
     ]);
@@ -354,7 +313,6 @@ describe("BaseRenderer", () => {
 
     const chunk1 = Chunk.fromId(1);
     chunk1.objectManager = new ChunkObjectManager(1);
-    chunk1.objectManager.chunkObjects.set(71, first);
     chunk1.objectManager.staticGraph = DirectedGraph.parse([
       [71, [72]],
       [72, []],
@@ -362,7 +320,6 @@ describe("BaseRenderer", () => {
 
     const chunk2 = Chunk.fromId(2);
     chunk2.objectManager = new ChunkObjectManager(2);
-    chunk2.objectManager.chunkObjects.set(72, second);
     chunk2.objectManager.staticGraph = DirectedGraph.parse([
       [72, [73]],
       [73, []],
@@ -370,26 +327,13 @@ describe("BaseRenderer", () => {
 
     const chunk3 = Chunk.fromId(3);
     chunk3.objectManager = new ChunkObjectManager(3);
-    chunk3.objectManager.chunkObjects.set(73, third);
     chunk3.objectManager.staticGraph = DirectedGraph.parse([[73, []]]);
-
-    const objectMap = new Map([
-      [71, first],
-      [72, second],
-      [73, third],
-    ]);
 
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return objectMap.get(objectId);
-          },
-        },
-      },
+      board: createBoardWithObjects([first, second, third]),
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
@@ -403,9 +347,7 @@ describe("BaseRenderer", () => {
     const renderer = new BaseRenderer(monitor);
 
     expect(renderer.render()).toEqual([first, second, third]);
-    expect(
-      calls.filter((entry) => entry[0] === "moveTo"),
-    ).toEqual([
+    expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
       ["moveTo", 0, 0],
       ["moveTo", 0, 1],
       ["moveTo", 0, 2],
@@ -423,7 +365,6 @@ describe("BaseRenderer", () => {
 
     const chunk1 = Chunk.fromId(1);
     chunk1.objectManager = new ChunkObjectManager(1);
-    chunk1.objectManager.chunkObjects.set(81, first);
     chunk1.objectManager.staticGraph = DirectedGraph.parse([
       [81, [82]],
       [82, []],
@@ -431,7 +372,6 @@ describe("BaseRenderer", () => {
 
     const chunk2 = Chunk.fromId(2);
     chunk2.objectManager = new ChunkObjectManager(2);
-    chunk2.objectManager.chunkObjects.set(82, second);
     chunk2.objectManager.staticGraph = DirectedGraph.parse([
       [81, [83]],
       [83, []],
@@ -439,29 +379,16 @@ describe("BaseRenderer", () => {
 
     const chunk3 = Chunk.fromId(3);
     chunk3.objectManager = new ChunkObjectManager(3);
-    chunk3.objectManager.chunkObjects.set(83, third);
     chunk3.objectManager.staticGraph = DirectedGraph.parse([
       [82, [83]],
       [83, []],
-    ]);
-
-    const objectMap = new Map([
-      [81, first],
-      [82, second],
-      [83, third],
     ]);
 
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
       baseCanvas: { width: 320, height: 240 },
-      board: {
-        activeObjectManager: {
-          findBoardObjectInstance(objectId) {
-            return objectMap.get(objectId);
-          },
-        },
-      },
+      board: createBoardWithObjects([first, second, third]),
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
@@ -475,9 +402,7 @@ describe("BaseRenderer", () => {
     const renderer = new BaseRenderer(monitor);
 
     expect(renderer.render()).toEqual([first, second, third]);
-    expect(
-      calls.filter((entry) => entry[0] === "moveTo"),
-    ).toEqual([
+    expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
       ["moveTo", 0, 0],
       ["moveTo", 0, 1],
       ["moveTo", 0, 2],

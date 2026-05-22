@@ -82,7 +82,7 @@ describe("ActiveObjectManager/apply", () => {
     const coveredChunk = board.getChunkById(2);
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.chunkObjects.get(15)).toBe(stroke);
+    expect(ownerChunk.objectManager.getObject(15)).toBe(stroke);
     expect(ownerChunk.objectManager.getObjectCoverChunks(15)).toEqual(
       new Set([1, 2, 3]),
     );
@@ -151,10 +151,9 @@ describe("ActiveObjectManager/apply", () => {
     aom.apply(new Set([stroke]));
 
     expect(monitor.baseRenderer.invalidateChunks).toHaveBeenCalledTimes(1);
-    expect(invalidatedChunks.map((chunk) => chunk.id).sort((a, b) => a - b)).toEqual([
-      1,
-      2,
-    ]);
+    expect(
+      invalidatedChunks.map((chunk) => chunk.id).sort((a, b) => a - b),
+    ).toEqual([1, 2]);
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
       stroke,
     ]);

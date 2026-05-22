@@ -4,6 +4,8 @@ import { Chunk } from "../chunk.js";
 import { CHUNK_LOAD_EVENTS } from "../chunk-loader.js";
 import { StrokeObject } from "../../objects/stroke/stroke.js";
 import { Vector } from "../../utils/math.js";
+import { ChunkObjectManager } from "../chunk-object-manager.js";
+import { boardFileOperateBridge } from "../../bridges/file-operate-bridge-renderer.js";
 
 describe("Board chunk grid", () => {
   test("Chunk 的回字形 id 与二维坐标应可双向转换", () => {
@@ -42,7 +44,9 @@ describe("Board chunk grid", () => {
     const neighborhood = chunkBlockLoader.initChunksAroundCoordinate(0, 0);
     const currentChunk = chunkBlockLoader.chunkNow;
 
-    expect(currentChunk).toEqual(expect.objectContaining({ id: 1, x: 0, y: 0 }));
+    expect(currentChunk).toEqual(
+      expect.objectContaining({ id: 1, x: 0, y: 0 }),
+    );
     expect(
       neighborhood.map((chunk) => chunk.id).sort((left, right) => left - right),
     ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -97,22 +101,25 @@ describe("Board chunk grid", () => {
         return true;
       });
 
-    const results = board.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_LOAD, {
-      requesterId: "board-root",
-      chunk,
-      strategy: "full",
-      direction: "right",
-      source: "test",
-      alreadyBuffered: false,
-    });
+    const results = board.chunkLoadEventBus.emit(
+      CHUNK_LOAD_EVENTS.REQUEST_LOAD,
+      {
+        requesterId: "board-root",
+        chunk,
+        strategy: "full",
+        direction: "right",
+        source: "test",
+        alreadyBuffered: false,
+      },
+    );
 
     expect(results).toHaveLength(1);
     await results[0];
     expect(loadFullSpy).toHaveBeenCalledWith(board.rootPath);
     expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount).toBe(1);
-    expect(board.chunkLoaded.get(chunk.id)?.loaderStrategy.get("board-root")).toBe(
-      "full",
-    );
+    expect(
+      board.chunkLoaded.get(chunk.id)?.loaderStrategy.get("board-root"),
+    ).toBe("full");
   });
 
   test("Board 应响应根 ChunkLoader 直接发出的卸载请求", async () => {
@@ -142,9 +149,9 @@ describe("Board chunk grid", () => {
     await results[0];
     expect(unloadSpy).toHaveBeenCalledTimes(1);
     expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount ?? 0).toBe(0);
-    expect(board.chunkLoaded.get(chunk.id)?.loaderStrategy.has("board-root")).toBe(
-      false,
-    );
+    expect(
+      board.chunkLoaded.get(chunk.id)?.loaderStrategy.has("board-root"),
+    ).toBe(false);
   });
 
   test("Board.addObject 应将对象加入归属区块并同步覆盖区块索引", () => {
@@ -162,10 +169,72 @@ describe("Board chunk grid", () => {
     board.addObject(stroke);
 
     const ownerChunk = board.getChunkById(1);
-    expect(ownerChunk.objectManager.chunkObjects.get(15)).toBe(stroke);
+    expect(ownerChunk.objectManager.getObject(15)).toBe(stroke);
     expect(ownerChunk.objectManager.staticGraph.hasNode(15)).toBe(true);
     expect(ownerChunk.objectManager.getObjectCoverChunks(15)).toEqual(
       new Set([1, 2, 3]),
     );
+  });
+
+  test("Board.loadChunkObjectEntries 应通过桥接加载对象并写入 Board 注册表", async () => {
+    const board = new Board();
+    board.rootPath = "/tmp/hwb-board-test";
+
+    const ownerChunk = board.getChunkById(1);
+    ownerChunk.objectManager = new ChunkObjectManager(ownerChunk.id, board);
+    ownerChunk.objectManager.staticGraph.addNodeUnsafe(201);
+    ownerChunk.objectManager.setObjectCoverChunks(201, [1]);
+
+    board.chunkLoaded.set(1, {
+      chunk: ownerChunk,
+      tempLoadedCount: 0,
+      fullLoadedCount: 1,
+      loaderStrategy: new Map([["test-monitor", "full"]]),
+    });
+
+    const stroke = new StrokeObject(new Vector(10, 20), 201, 1);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
+
+    const loadChunkObjectsSpy = jest
+      .spyOn(boardFileOperateBridge, "loadChunkObjects")
+      .mockResolvedValue([stroke.serialize()]);
+
+    const loadedEntries = await board.loadChunkObjectEntries(ownerChunk);
+
+    expect(loadChunkObjectsSpy).toHaveBeenCalledWith(board.rootPath, 1);
+    expect(loadedEntries.get(201)).toBeInstanceOf(StrokeObject);
+    expect(board.getObjectById(201)).toBeInstanceOf(StrokeObject);
+    expect(ownerChunk.objectManager.getObject(201)).toBe(
+      board.getObjectById(201),
+    );
+    expect(board.getObjectLoadCount(201)).toBe(1);
+
+    loadChunkObjectsSpy.mockRestore();
+  });
+
+  test("Board.saveChunkObjectEntries 应只保存归属到该区块的对象", async () => {
+    const board = new Board();
+    board.rootPath = "/tmp/hwb-board-test";
+
+    const ownerObject = new StrokeObject(new Vector(10, 20), 301, 1);
+    ownerObject.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
+
+    const foreignObject = new StrokeObject(new Vector(20, 30), 302, 2);
+    foreignObject.setPathPoints([new Vector(0, 0), new Vector(3, 3)]);
+
+    board.registerObjectInstance(ownerObject, { coveredChunkIds: [1] });
+    board.registerObjectInstance(foreignObject, { coveredChunkIds: [2] });
+
+    const saveChunkObjectsSpy = jest
+      .spyOn(boardFileOperateBridge, "saveChunkObjects")
+      .mockResolvedValue(true);
+
+    await board.saveChunkObjectEntries(1);
+
+    expect(saveChunkObjectsSpy).toHaveBeenCalledWith(board.rootPath, 1, [
+      ownerObject.serialize(),
+    ]);
+
+    saveChunkObjectsSpy.mockRestore();
   });
 });

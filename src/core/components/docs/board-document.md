@@ -7,7 +7,7 @@
 ## 术语约定
 
 - **白板级状态**：作用域覆盖整个白板实例的状态，如区块实例所有权、当前打开位置、活动对象管理器、历史树等。
-- **区块级状态**：只属于某一区块的状态，如区块对象映射、区块层叠图、区块加载状态。
+- **区块级状态**：只属于某一区块的状态，如区块层叠图、对象覆盖区块索引、区块加载状态。
 - **缓冲区**：当前为了交互性能而预先保留在内存中的区块集合，通常包含当前区块与其邻区块。
 - **当前区块**：当前用户视角所在的区块，或当前主要交互目标区块。
 - **临时加载**：只加载区块关系数据或轻量数据，不加载全部对象内容的加载方式。
@@ -20,22 +20,24 @@
 - 维护白板基础信息（宽、高、根目录）
 - 通过根 `ChunkLoader` 维护区块实例所有权
 - 维护单区块加载状态落地
+- 维护白板级对象实例注册表与对象加载计数
 - 管理全局活动对象管理器 `ActiveObjectManager`
 - 管理历史树 `UndoTree`
 - 提供白板加载、创建与对象写入接口
 
 ## 核心字段
 
-| 名称                  | 描述                   | 类型                                                                      |
-| --------------------- | ---------------------- | ------------------------------------------------------------------------- |
-| `undoTree`            | 时间回溯树             | `UndoTree`                                                                |
-| `activeObjectManager` | 活动对象管理器         | `ActiveObjectManager`                                                     |
-| `chunkLoaded`          | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
-| `rootChunkLoader`     | 白板根区块加载器         | `ChunkLoader`                                                              |
-| `width`/`height`      | 白板尺寸               | `number`                                                                  |
-| `root`                | 白板根目录             | `Directory`                                                               |
-| `chunkCounterPool`     | 区块 id 池               | `CounterPool`                                                             |
-| `objectCounterPool`   | 对象 id 池             | `CounterPool`                                                             |
+| 名称                  | 描述                       | 类型                                                                       |
+| --------------------- | -------------------------- | -------------------------------------------------------------------------- |
+| `undoTree`            | 时间回溯树                 | `UndoTree`                                                                 |
+| `activeObjectManager` | 活动对象管理器             | `ActiveObjectManager`                                                      |
+| `chunkLoaded`         | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
+| `objectLoaded`        | 对象 id 到对象加载状态映射 | `Map<number, { obj, loadedCount }>`                                        |
+| `rootChunkLoader`     | 白板根区块加载器           | `ChunkLoader`                                                              |
+| `width`/`height`      | 白板尺寸                   | `number`                                                                   |
+| `root`                | 白板根目录                 | `Directory`                                                                |
+| `chunkCounterPool`    | 区块 id 池                 | `CounterPool`                                                              |
+| `objectCounterPool`   | 对象 id 池                 | `CounterPool`                                                              |
 
 ## 加载流程 `load(directory)`
 
@@ -49,6 +51,41 @@
 4. 准备当前区块实例，后续实际缓冲区预取交由 `ChunkBlockLoader` 决定
 
 该流程已经可作为白板运行时初始化骨架。
+
+## 对象加载模型
+
+当前对象实例的运行时所有权已经从 `ChunkObjectManager` 上移到 `Board`。
+
+现在的边界是：
+
+- `Board` 持有 `objectLoaded: Map<number, { obj, loadedCount }>`
+- `ChunkObjectManager` 只持有 `staticGraph` 和 `objectCoverChunks`
+- 任何需要对象实例的调用方，都应优先通过 `Board.getObjectById(...)` 或 `ChunkObjectManager.getObject(...)` 间接获取
+
+这里的 `loadedCount` 语义，和区块本身的 loader count 不同。
+
+- 区块的 `tempLoadedCount/fullLoadedCount` 只表示“这个区块被多少加载器以何种策略持有”
+- 对象的 `loadedCount` 表示“该对象覆盖到的所有区块中，当前被完整加载持有的次数总和”
+
+例如：
+
+- 对象 `o1` 覆盖区块 `c1` 和 `c2`
+- `m1` 完整加载 `c1`
+- `m2` 完整加载 `c1` 和 `c2`
+
+那么 `o1.loadedCount = 3`
+
+也就是：
+
+- `c1` 上的完整加载持有贡献 `2`
+- `c2` 上的完整加载持有贡献 `1`
+
+`Board` 当前按“对象覆盖区块集合上的 `fullLoadedCount` 求和”来维护这个值。
+
+当对象的 `loadedCount` 降为 `0` 时：
+
+- 若该对象当前不在活动层里，`Board` 会把它从 `objectLoaded` 注册表中回收
+- 若该对象仍在活动层里，则继续保留实例，等待活动态结束后再由后续同步路径决定是否回收
 
 ## 与 `ChunkLoader` 的关系
 
@@ -167,7 +204,7 @@
 
 ## 实现状态
 
-- 已实现：白板读取校验、根 `ChunkLoader` 区块持有、单区块实例管理骨架、活动对象管理器/历史树挂载、多 `ChunkBlockLoader` 引用计数与完整区块降级。
+- 已实现：白板读取校验、根 `ChunkLoader` 区块持有、单区块实例管理骨架、白板级对象注册表、对象 `loadedCount` 维护、活动对象管理器/历史树挂载、多 `ChunkBlockLoader` 引用计数与完整区块降级。
 - 待完善：完整新建流程、对象计数池初始化、历史与设备状态恢复、区块与对象全链路落盘。
 
 ## 相关文档

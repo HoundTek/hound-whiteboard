@@ -93,7 +93,7 @@ class BaseRenderer {
       this.monitor?.board?.activeObjectManager?.findBoardObjectInstance?.(
         objectId,
         [chunk?.id],
-      ) ?? chunk?.objectManager?.chunkObjects?.get?.(objectId);
+      ) ?? this.monitor?.board?.getObjectById?.(objectId);
 
     return objectInstance instanceof BasicObject ? objectInstance : undefined;
   }
@@ -105,9 +105,9 @@ class BaseRenderer {
    */
   getObjectWorldRect(objectInstance) {
     try {
-      const worldRange = objectInstance?.getRange?.()?.withPosition?.(
-        objectInstance.position,
-      );
+      const worldRange = objectInstance
+        ?.getRange?.()
+        ?.withPosition?.(objectInstance.position);
       if (!worldRange) return undefined;
       return RectangleRange.from(worldRange);
     } catch {
@@ -151,10 +151,7 @@ class BaseRenderer {
       this.monitor?.board?.activeObjectManager?.findBoardObjectInstance?.(
         objectId,
         candidateChunkIds,
-      ) ??
-      loadedChunks.find((chunk) =>
-        chunk?.objectManager?.chunkObjects?.has?.(objectId),
-      )?.objectManager?.chunkObjects?.get?.(objectId);
+      ) ?? this.monitor?.board?.getObjectById?.(objectId);
 
     return objectInstance instanceof BasicObject ? objectInstance : undefined;
   }

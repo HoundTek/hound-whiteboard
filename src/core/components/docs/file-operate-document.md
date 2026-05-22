@@ -185,7 +185,7 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 
 ### 4. 对象读取
 
-对应 API：`loadObjects(boardRootPath)`
+对应 API：`Board.loadChunkObjectEntries(chunkId)` / `ChunkObjectManager.loadObjects(boardRootPath)`
 
 路径：
 
@@ -194,16 +194,16 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 行为：
 
 - 通过 `loadChunkObjects(...)` 读取 `{root}/objects/chunk{chunkId}/` 下对象 JSON
-- 渲染侧逐个反序列化对象 JSON 并写入 `chunkObjects`
+- 渲染侧逐个反序列化对象 JSON，并写入 `Board.objectLoaded`
 - 单个对象 JSON 以 `ownerChunkId` 描述对象归属区块 id
 
 ### 5. 未完成项
 
 当前已实现：
 
-- `saveObjects(boardRootPath)`：通过 `saveChunkObjects(...)` 回写该区块对象
-- `unloadObjects()`：清理内存中的 `chunkObjects`
-- `unload()`：统一清理层叠图与对象映射
+- `Board.saveChunkObjectEntries(chunkId)`：通过 `saveChunkObjects(...)` 只回写 `ownerChunkId === chunkId` 的对象
+- `unloadObjects()`：通知 `Board` 清理该区块相关对象实例
+- `unload()`：统一清理层叠图与对象索引
 
 其中对象持久化协议遵循：
 
@@ -213,12 +213,12 @@ Core 运行在渲染进程，因此 components 的关键文件操作通过专用
 
 ## Chunk 与文件操作关系
 
-`Chunk` 本身不直接操作磁盘路径，它通过 `ChunkObjectManager` 间接触发文件 I/O。
+`Chunk` 本身不直接操作磁盘路径，它通过 `Board` 和 `ChunkObjectManager` 间接触发文件 I/O。
 
 关键行为：
 
 - `loadTemp(root)`：触发 `objectManager.loadTierGraph(root)`
-- `loadFull(root)`：在临时加载基础上触发 `objectManager.loadObjects(root)`
+- `loadFull(root)`：在临时加载基础上切换为完整加载；对象实例的实际加载由 `Board` 负责
 
 区块加载策略（临时/完整）会直接影响真实文件读取量。
 

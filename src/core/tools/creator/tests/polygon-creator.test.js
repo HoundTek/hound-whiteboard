@@ -279,6 +279,6 @@ describe("PolygonCreatorTool", () => {
 
     const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.chunkObjects.get(23)).toBe(createdObject);
+    expect(ownerChunk.objectManager.getObject(23)).toBe(createdObject);
   });
 });

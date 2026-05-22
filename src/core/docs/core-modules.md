@@ -37,13 +37,13 @@
 目标职责：
 
 - 管理区块级静态对象图（层叠关系）
-- 管理区块内对象映射与跨区块覆盖集合
+- 管理对象覆盖区块索引，并通过 Board 间接解析对象实例
 
 当前状态：
 
-- `staticGraph`、`coverLeftChunk`、`coverRightChunk`、`chunkObjects` 数据结构已定义。
+- `staticGraph` 与 `objectCoverChunks` 数据结构已定义，对象实例所有权已上移到 `Board.objectLoaded`。
 - `loadTierGraph()` 能解析图结构。
-- 对象读写与图落盘方法仍为空。
+- 对象读写已改为经 `Board` 统一调度，图落盘与覆盖索引落盘已接通。
 
 ### 1.4 ActiveObjectManager
 

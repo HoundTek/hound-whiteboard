@@ -2,33 +2,34 @@
 
 本文档提供 `ChunkObjectManager` 的概述。
 
-`ChunkObjectManager` 负责管理单区块内对象数据与对象层叠关系（静态图），是区块级数据读写与层关系维护的核心组件。
+`ChunkObjectManager` 负责管理单区块内的静态图与对象覆盖区块索引，是区块级关系数据维护的核心组件。
 
 ## 何为区块对象管理
 
-区块对象管理包含两部分：
+现阶段职责为：
 
-1. 本区块对象实例映射（拥有对象实例所有权）
-2. 本区块对象层叠关系图（仅存对象 id 关系）
+1. 本区块对象层叠关系图（仅存对象 id 关系）
+2. 本区块对象覆盖区块索引
+3. 通过 `Board` 间接解析对象实例
 
-这两部分相互配合：
+这三部分相互配合：
 
 - 图决定对象间遮挡/上下文关系
-- 对象映射决定对象本身内容（几何、样式、渲染属性）
+- 对象实例本身由 `Board.objectLoaded` 决定其运行时内容（几何、样式、渲染属性）
 
 ## 核心字段
 
-| 名称               | 描述               | 类型                       |
-| ------------------ | ------------------ | -------------------------- |
-| `staticGraph`      | 区块静态层叠图       | `DirectedGraph`            |
+| 名称                | 描述                 | 类型                       |
+| ------------------- | -------------------- | -------------------------- | ---------- |
+| `staticGraph`       | 区块静态层叠图       | `DirectedGraph`            |
 | `objectCoverChunks` | 对象覆盖区块 id 索引 | `Map<number, Set<number>>` |
-| `chunkObjects`      | 区块对象映射         | `Map<number, BasicObject>` |
+| `board`             | 所属白板引用         | `Board                     | undefined` |
 
 其中：
 
 - `staticGraph` 记录本区块可见的对象层叠关系
 - `objectCoverChunks` 记录“某对象覆盖到哪些区块 id”
-- `chunkObjects` 保存本区块拥有所有权的对象实例
+- 对象实例本身不再由区块持有，而是通过 `board.getObjectById(...)` 间接获取
 
 对象持久化时，区块描述也统一使用区块 id：
 
@@ -72,27 +73,29 @@
 
 ## 对象读写接口
 
-- `loadObjects(boardRootPath)`：通过专用 IPC 桥加载本区块对象
-- `saveObjects(boardRootPath)`：通过专用 IPC 桥保存本区块对象
-- `unloadObjects()`：释放对象实例
-- `unload()`：统一卸载层叠图与对象实例
+- `getObject(objectId)`：通过 `Board` 间接获取对象实例
+- `loadObjects(boardRootPath)`：委托 `Board` 加载该区块归属对象
+- `saveObjects(boardRootPath)`：委托 `Board` 保存该区块归属对象
+- `unloadObjects()`：通知 `Board` 清理该区块相关对象实例
+- `unload()`：统一卸载层叠图与对象索引
 
 ## API
 
-| 名称                                                        | 描述                           | 类型                                             |
-| ----------------------------------------------------------- | ------------------------------ | ------------------------------------------------ |
-| `setObjectCoverChunks(objectId, chunkIds)`                    | 设置对象覆盖区块 id 集合         | `number -> Iterable<number> -> void`             |
-| `getObjectCoverChunks(objectId)`                             | 获取对象覆盖区块 id 集合         | `number -> Set<number>`                          |
-| `serializeObjectCoverChunks()`                               | 序列化对象覆盖区块索引           | `void -> Array<[number, number[]]>`              |
-| `syncObjectCoverChunksForObject(obj, chunkWidth, chunkHeight)` | 基于对象 range 重算覆盖区块      | `BasicObject -> number -> number -> Set<number>` |
+| 名称                                                           | 描述                               | 类型                                             |
+| -------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | ---------- |
+| `setObjectCoverChunks(objectId, chunkIds)`                     | 设置对象覆盖区块 id 集合           | `number -> Iterable<number> -> void`             |
+| `getObjectCoverChunks(objectId)`                               | 获取对象覆盖区块 id 集合           | `number -> Set<number>`                          |
+| `serializeObjectCoverChunks()`                                 | 序列化对象覆盖区块索引             | `void -> Array<[number, number[]]>`              |
+| `syncObjectCoverChunksForObject(obj, chunkWidth, chunkHeight)` | 基于对象 range 重算覆盖区块        | `BasicObject -> number -> number -> Set<number>` |
 | `syncAllObjectCoverChunks(chunkWidth, chunkHeight)`            | 重建当前区块全部对象的覆盖区块索引 | `number -> number -> Map<number, Set<number>>`   |
-| `loadTierGraph(boardRootPath)`                              | 加载区块层叠图                   | `string -> Promise<void>`                        |
-| `saveTierGraph(boardRootPath)`                              | 保存区块层叠图                   | `string -> Promise<void>`                        |
-| `unloadTierGraph()`                                         | 卸载区块层叠图                   | `void -> void`                                   |
-| `loadObjects(boardRootPath)`                                | 加载区块对象                     | `string -> Promise<void>`                        |
-| `saveObjects(boardRootPath)`                                | 保存区块对象                     | `string -> Promise<void>`                        |
-| `unloadObjects()`                                           | 卸载区块对象                     | `void -> void`                                   |
-| `unload()`                                                  | 卸载本区块全部数据               | `void -> void`                                   |
+| `loadTierGraph(boardRootPath)`                                 | 加载区块层叠图                     | `string -> Promise<void>`                        |
+| `saveTierGraph(boardRootPath)`                                 | 保存区块层叠图                     | `string -> Promise<void>`                        |
+| `unloadTierGraph()`                                            | 卸载区块层叠图                     | `void -> void`                                   |
+| `getObject(objectId)`                                          | 间接获取对象实例                   | `number -> BasicObject \\                        | undefined` |
+| `loadObjects(boardRootPath)`                                   | 加载区块对象                       | `string -> Promise<void>`                        |
+| `saveObjects(boardRootPath)`                                   | 保存区块对象                       | `string -> Promise<void>`                        |
+| `unloadObjects()`                                              | 卸载区块对象                       | `void -> void`                                   |
+| `unload()`                                                     | 卸载本区块全部数据                 | `void -> void`                                   |
 
 ## 与其它组件的关系
 
@@ -103,6 +106,6 @@
 
 ## 实现状态
 
-- 已实现：数据结构定义、按区块 id 的对象覆盖索引、层叠图加载/保存、对象读写、统一卸载入口、基于 `Range` 的精确覆盖区块计算。
-- 已接线：对象创建完成后可建立 owner chunk 上的对象记录与覆盖区块索引；AOM `apply()` 可将活动对象重新写回相关区块。
+- 已实现：数据结构定义、按区块 id 的对象覆盖索引、层叠图加载/保存、经 `Board` 间接读取对象、统一卸载入口、基于 `Range` 的精确覆盖区块计算。
+- 已接线：对象创建完成后可建立 owner chunk 上的对象节点与覆盖区块索引；AOM `apply()` 可将活动对象重新写回相关区块；对象实例的加载、保存与回收由 `Board` 统一调度。
 - 待完善：对象修改/删除/归属区块迁移路径上的覆盖区块索引自动刷新，以及对象增量落盘策略与更细粒度错误恢复。
