@@ -5,6 +5,7 @@
  */
 
 import { BasicObject } from "../objects/basic-obj.js";
+import { RectangleRange } from "../range/rectangle.js";
 import { Monitor } from "./monitor.js";
 import { ActiveObjectManager, Layer } from "./active-object-manager.js";
 
@@ -28,12 +29,20 @@ class LiveRenderer {
   activeObjectManager;
 
   /**
+   * 上一帧的 drawable 条目缓存
+   * @description 用于在对象移动或变形后同时拿到旧屏幕范围与新屏幕范围，避免 liveCanvas 残影。
+   * @type {Array<{ objectId: number, object: BasicObject, screenRect?: RectangleRange }>}
+   */
+  previousDrawableEntries;
+
+  /**
    * @param {Monitor} monitor - 目标显示器
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
    */
   constructor(monitor, activeObjectManager) {
     this.monitor = monitor;
     this.activeObjectManager = activeObjectManager;
+    this.previousDrawableEntries = [];
   }
 
   /**
@@ -42,6 +51,29 @@ class LiveRenderer {
    */
   setActiveObjectManager(activeObjectManager) {
     this.activeObjectManager = activeObjectManager;
+  }
+
+  /**
+   * 按对象 id 序列解析并收集可绘制对象
+   * @param {Iterable<number>} objectIds - 对象 id 序列
+   * @param {(objectId: number) => BasicObject | undefined} resolveObject - 对象解析器
+   * @param {Set<number>} seenObjectIds - 已收集对象 id
+   * @returns {BasicObject[]}
+   */
+  collectDrawablesByObjectIds(objectIds, resolveObject, seenObjectIds) {
+    const drawables = [];
+
+    for (const objectId of objectIds ?? []) {
+      if (seenObjectIds.has(objectId)) continue;
+
+      const objectInstance = resolveObject?.(objectId);
+      if (!(objectInstance instanceof BasicObject)) continue;
+
+      drawables.push(objectInstance);
+      seenObjectIds.add(objectId);
+    }
+
+    return drawables;
   }
 
   /**
@@ -55,37 +87,11 @@ class LiveRenderer {
     const aom = this.activeObjectManager;
     if (!graph || !aom) return [];
 
-    const drawables = [];
-    const inDegreeMap = graph.getInDegreeMap();
-    const queue = [];
-
-    for (const [node, inDegree] of inDegreeMap.entries()) {
-      if (inDegree === 0) {
-        queue.push(node);
-      }
-    }
-
-    while (queue.length > 0) {
-      const objectId = queue.shift();
-      const objectInstance = aom.findBoardObjectInstance?.(objectId);
-      if (
-        objectInstance instanceof BasicObject &&
-        !seenObjectIds.has(objectId)
-      ) {
-        drawables.push(objectInstance);
-        seenObjectIds.add(objectId);
-      }
-
-      for (const neighbor of graph.neighborsUnsafe(objectId) ?? []) {
-        const nextInDegree = (inDegreeMap.get(neighbor) ?? 0) - 1;
-        inDegreeMap.set(neighbor, nextInDegree);
-        if (nextInDegree === 0) {
-          queue.push(neighbor);
-        }
-      }
-    }
-
-    return drawables;
+    return this.collectDrawablesByObjectIds(
+      graph.getTopologicalOrder(),
+      (objectId) => aom.findBoardObjectInstance?.(objectId),
+      seenObjectIds,
+    );
   }
 
   /**
@@ -98,13 +104,41 @@ class LiveRenderer {
     const aom = this.activeObjectManager;
     if (!aom) return [];
 
+    return this.collectDrawablesByObjectIds(
+      layer?.activeObjects,
+      (objectId) => aom.activeObjectIndex?.get?.(objectId),
+      seenObjectIds,
+    );
+  }
+
+  /**
+   * 收集某层的可绘制对象
+   * @param {Layer} layer - 当前层
+   * @param {Set<number>} seenObjectIds - 已收集对象 id
+   * @returns {BasicObject[]}
+   */
+  collectLayerDrawables(layer, seenObjectIds) {
+    return [
+      ...this.collectInactiveLayerDrawables(layer, seenObjectIds),
+      ...this.collectActiveLayerDrawables(layer, seenObjectIds),
+    ];
+  }
+
+  /**
+   * 收集未落入 layerOrder 的活动对象
+   * @param {Set<number>} seenObjectIds - 已收集对象 id
+   * @returns {BasicObject[]}
+   */
+  collectFallbackActiveDrawables(seenObjectIds) {
+    const aom = this.activeObjectManager;
+    if (!aom) return [];
+
     const drawables = [];
-    for (const objectId of layer?.activeObjects ?? []) {
-      const objectInstance = aom.activeObjectIndex?.get?.(objectId);
+    for (const objectInstance of aom.activeObjects ?? []) {
       if (!(objectInstance instanceof BasicObject)) continue;
-      if (seenObjectIds.has(objectId)) continue;
+      if (seenObjectIds.has(objectInstance.id)) continue;
       drawables.push(objectInstance);
-      seenObjectIds.add(objectId);
+      seenObjectIds.add(objectInstance.id);
     }
 
     return drawables;
@@ -122,19 +156,178 @@ class LiveRenderer {
     const seenObjectIds = new Set();
 
     for (const layer of aom.layerOrder ?? []) {
-      drawables.push(
-        ...this.collectInactiveLayerDrawables(layer, seenObjectIds),
-      );
-      drawables.push(...this.collectActiveLayerDrawables(layer, seenObjectIds));
+      drawables.push(...this.collectLayerDrawables(layer, seenObjectIds));
     }
 
-    for (const objectInstance of aom.activeObjects ?? []) {
-      if (!(objectInstance instanceof BasicObject)) continue;
-      if (seenObjectIds.has(objectInstance.id)) continue;
-      drawables.push(objectInstance);
-    }
+    drawables.push(...this.collectFallbackActiveDrawables(seenObjectIds));
 
     return drawables;
+  }
+
+  /**
+   * 获取对象的世界矩形范围
+   * @param {BasicObject} objectInstance - 对象实例
+   * @returns {RectangleRange | undefined}
+   */
+  getObjectWorldRect(objectInstance) {
+    try {
+      const worldRange =
+        this.activeObjectManager?.getObjectWorldRange?.(objectInstance) ??
+        objectInstance?.getRange?.()?.withPosition?.(objectInstance.position);
+      if (!worldRange) return undefined;
+      return RectangleRange.from(worldRange);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 获取对象的屏幕矩形范围
+   * @param {BasicObject} objectInstance - 对象实例
+   * @returns {RectangleRange | undefined}
+   */
+  getObjectScreenRect(objectInstance) {
+    const worldRect = this.getObjectWorldRect(objectInstance);
+    if (!worldRect) return undefined;
+    return this.monitor?.worldRectToScreenRect?.(worldRect);
+  }
+
+  /**
+   * 规范化屏幕矩形
+   * @param {RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} rect - 原始矩形
+   * @returns {RectangleRange | undefined}
+   */
+  normalizeScreenRect(rect) {
+    if (!rect) return undefined;
+    if (rect instanceof RectangleRange) {
+      return RectangleRange.from(rect);
+    }
+
+    const left = rect.left ?? 0;
+    const top = rect.top ?? 0;
+    const right = rect.right ?? left + (rect.width ?? 0);
+    const bottom = rect.bottom ?? top + (rect.height ?? 0);
+    const width = rect.width ?? right - left;
+    const height = rect.height ?? bottom - top;
+
+    return new RectangleRange(left, top, width, height);
+  }
+
+  /**
+   * 创建 drawable 条目
+   * @param {BasicObject[]} drawables - 对象实例集合
+   * @returns {Array<{ objectId: number, object: BasicObject, screenRect?: RectangleRange }>}
+   */
+  createDrawableEntries(drawables) {
+    return drawables.map((objectInstance) => ({
+      objectId: objectInstance.id,
+      object: objectInstance,
+      screenRect: this.getObjectScreenRect(objectInstance),
+    }));
+  }
+
+  /**
+   * 按对象 id 索引 drawable 条目
+   * @param {Array<{ objectId: number, object: BasicObject, screenRect?: RectangleRange }>} entries - drawable 条目
+   * @returns {Map<number, { objectId: number, object: BasicObject, screenRect?: RectangleRange }>}
+   */
+  indexDrawableEntries(entries) {
+    return new Map(entries.map((entry) => [entry.objectId, entry]));
+  }
+
+  /**
+   * 收集待处理脏区
+   * @param {Array<{ screenRect?: RectangleRange }>} currentEntries - 当前 drawable 条目
+   * @param {Array<{ screenRect?: RectangleRange }>} [previousEntries = []] - 上一帧 drawable 条目
+   * @param {Array<RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }>} [dirtyRects] - 外部传入脏区
+   * @returns {RectangleRange[]}
+   */
+  collectDirtyRects(currentEntries, previousEntries = [], dirtyRects) {
+    if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
+      return dirtyRects
+        .map((rect) => this.normalizeScreenRect(rect))
+        .filter(Boolean);
+    }
+
+    return [...previousEntries, ...currentEntries]
+      .map((entry) => this.normalizeScreenRect(entry?.screenRect))
+      .filter(Boolean);
+  }
+
+  /**
+   * 判断对象条目是否与任一脏区相交
+   * @param {{ screenRect?: RectangleRange }} entry - drawable 条目
+   * @param {RectangleRange[]} dirtyRects - 脏区集合
+   * @returns {boolean}
+   */
+  intersectsDirtyRects(entry, dirtyRects) {
+    const rect = entry?.screenRect;
+    if (!rect) return dirtyRects.length === 0;
+
+    return dirtyRects.some((dirtyRect) => {
+      return !(
+        rect.right <= dirtyRect.left ||
+        rect.left >= dirtyRect.right ||
+        rect.bottom <= dirtyRect.top ||
+        rect.top >= dirtyRect.bottom
+      );
+    });
+  }
+
+  /**
+   * 清理脏区
+   * @param {RectangleRange[]} dirtyRects - 脏区集合
+   */
+  clearDirtyRects(dirtyRects) {
+    const ctx = this.monitor?.getContext?.("live");
+    if (!ctx) return;
+
+    for (const dirtyRect of dirtyRects) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(
+        dirtyRect.left,
+        dirtyRect.top,
+        dirtyRect.width,
+        dirtyRect.height,
+      );
+      ctx.restore();
+    }
+  }
+
+  /**
+   * 失效指定对象对应的屏幕脏区
+   * @description 同时失效对象当前范围与上一帧范围，确保对象位移或几何变化时旧像素也会被清理。
+   * @param {Iterable<BasicObject>} [objects = []] - 待刷新的对象集合
+   */
+  invalidateObjects(objects = []) {
+    const previousEntryIndex = this.indexDrawableEntries(
+      this.previousDrawableEntries,
+    );
+    const dirtyRects = Array.from(objects).flatMap((objectInstance) => {
+      const rects = [];
+      const currentRect = this.getObjectScreenRect(objectInstance);
+      const previousRect = previousEntryIndex.get(
+        objectInstance.id,
+      )?.screenRect;
+
+      if (currentRect) rects.push(currentRect);
+      if (previousRect) rects.push(previousRect);
+
+      return rects;
+    });
+
+    const targetDirtyRects =
+      dirtyRects.length > 0
+        ? dirtyRects
+        : this.collectDirtyRects(
+            this.createDrawableEntries(this.collectActiveDrawables()),
+            this.previousDrawableEntries,
+          );
+
+    for (const dirtyRect of targetDirtyRects) {
+      this.monitor?.renderScheduler?.invalidate?.(dirtyRect);
+    }
   }
 
   /**
@@ -190,30 +383,53 @@ class LiveRenderer {
 
   /**
    * 渲染当前所有活动对象
-   * @returns {BasicObject[]}
+   * @description 显式传入 dirtyRects 时只清理并重绘脏区命中的对象；无参调用保持全量清屏重绘语义。
+   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
+   * @returns {BasicObject[]} 当前渲染的对象集合
    */
-  render() {
+  render(dirtyRects) {
     const ctx = this.monitor?.getContext?.("live");
     if (!ctx) return [];
 
     const drawables = this.collectActiveDrawables();
+    const drawableEntries = this.createDrawableEntries(drawables);
     const viewportContext = this.createViewportContext(ctx);
+    const hasExplicitDirtyRects =
+      Array.isArray(dirtyRects) && dirtyRects.length > 0;
+    const effectiveDirtyRects = hasExplicitDirtyRects
+      ? this.collectDirtyRects(
+          drawableEntries,
+          this.previousDrawableEntries,
+          dirtyRects,
+        )
+      : [];
 
-    this.clear();
-    for (const drawable of drawables) {
-      if (typeof drawable.render !== "function") continue;
-      drawable.render(viewportContext);
+    if (hasExplicitDirtyRects) {
+      this.clearDirtyRects(effectiveDirtyRects);
+    } else {
+      this.clear();
     }
+
+    for (const entry of drawableEntries) {
+      if (hasExplicitDirtyRects) {
+        if (!this.intersectsDirtyRects(entry, effectiveDirtyRects)) continue;
+      }
+      if (typeof entry.object.render !== "function") continue;
+      entry.object.render(viewportContext);
+    }
+
+    this.previousDrawableEntries = drawableEntries;
 
     return drawables;
   }
 
   /**
    * 刷新入口
-   * @returns {BasicObject[]}
+   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
+   * @returns {BasicObject[]} 当前渲染的对象集合
    */
-  flush() {
-    return this.render();
+  flush(dirtyRects) {
+    return this.render(dirtyRects);
   }
 }
 

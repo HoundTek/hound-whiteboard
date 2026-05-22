@@ -13,6 +13,7 @@ import { joinPath } from "../utils/path.js";
 import { Chunk } from "./chunk.js";
 import { RenderScheduler } from "./render-scheduler.js";
 import { LiveRenderer } from "./live-renderer.js";
+import { RectangleRange } from "../range/rectangle.js";
 
 /**
  * 显示器组件
@@ -60,7 +61,7 @@ class Monitor {
 
   /**
    * 区块加载器，用于按需加载区块内容
-  * @type {ChunkBlockLoader}
+   * @type {ChunkBlockLoader}
    */
   chunkBlockLoader;
 
@@ -135,7 +136,9 @@ class Monitor {
     this.devicesTree = new DevicesTree();
     this.renderScheduler = new RenderScheduler();
     this.liveRenderer = new LiveRenderer(this, this.board?.activeObjectManager);
-    this.renderScheduler.setFlushHandler(() => this.liveRenderer.flush());
+    this.renderScheduler.setFlushHandler((dirtyRects) =>
+      this.liveRenderer.flush(dirtyRects),
+    );
   }
 
   /**
@@ -197,6 +200,23 @@ class Monitor {
     }[layer];
 
     return layerCanvas?.getContext?.("2d") ?? null;
+  }
+
+  /**
+   * 将世界矩形范围映射到屏幕矩形范围
+   * @param {RectangleRange | { left: number, top: number, width: number, height: number }} rect - 世界矩形
+   * @param {number} [padding = 0] - 额外屏幕像素留白
+   * @returns {RectangleRange | undefined}
+   */
+  worldRectToScreenRect(rect, padding = 0) {
+    if (!rect) return undefined;
+
+    const left = (rect.left - this.origin.x) * this.zoom - padding;
+    const top = (rect.top - this.origin.y) * this.zoom - padding;
+    const width = rect.width * this.zoom + padding * 2;
+    const height = rect.height * this.zoom + padding * 2;
+
+    return new RectangleRange(left, top, width, height);
   }
 
   /**

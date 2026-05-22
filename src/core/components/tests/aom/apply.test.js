@@ -113,4 +113,30 @@ describe("ActiveObjectManager/apply", () => {
     expect(ownerChunk.objectManager.staticGraph.hasNode(22)).toBe(true);
     expect(ownerChunk.objectManager.staticGraph.hasEdge(21, 22)).toBe(true);
   });
+
+  test("apply 应触发 monitor.liveRenderer.invalidateObjects", () => {
+    const monitor = {
+      liveRenderer: {
+        collectActiveDrawables: jest.fn(() => []),
+        invalidateObjects: jest.fn(),
+      },
+      renderScheduler: { invalidate: jest.fn() },
+    };
+    const board = {
+      monitors: new Map([["main", monitor]]),
+      getChunkById: jest.fn(() => undefined),
+    };
+    const aom = new ActiveObjectManager(board);
+    const stroke = new StrokeObject(new Vector(0, 0), 201, 1);
+    stroke.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
+
+    aom.add(new Set([stroke]));
+    monitor.liveRenderer.invalidateObjects.mockClear();
+
+    aom.apply(new Set([stroke]));
+
+    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
+      stroke,
+    ]);
+  });
 });

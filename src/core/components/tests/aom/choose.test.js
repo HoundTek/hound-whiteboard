@@ -78,6 +78,26 @@ describe("ActiveObjectManager/choose", () => {
   });
 
   describe("单次选择对象", () => {
+    test("choose 应触发 monitor.liveRenderer.invalidateObjects", () => {
+      const selected = createObject(12, chunk.id);
+      const monitor = {
+        liveRenderer: {
+          collectActiveDrawables: jest.fn(() => []),
+          invalidateObjects: jest.fn(),
+        },
+        renderScheduler: { invalidate: jest.fn() },
+      };
+      const board = createBoard(chunk);
+      board.monitors = new Map([["main", monitor]]);
+      aom = new ActiveObjectManager(board);
+
+      aom.choose(new Set([selected]));
+
+      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
+        selected,
+      ]);
+    });
+
     test("应正确选择单个对象", () => {
       aom.choose(new Set([createObject(12, chunk.id)]));
 
@@ -140,13 +160,7 @@ describe("ActiveObjectManager/choose", () => {
       const object13 = createObject(13, chunk.id);
       const object8 = createObject(8, chunk.id);
       const object5 = createObject(5, chunk.id);
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object8,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object8]));
 
       aom.choose(new Set([object5]));
 
@@ -179,13 +193,7 @@ describe("ActiveObjectManager/choose", () => {
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       const object8 = createObject(8, chunk.id);
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object5]));
 
       const expectedActiveSet1 = [new Set([12, 13]), new Set([5])];
       const expectedInactiveGraph1 = [

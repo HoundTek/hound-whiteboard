@@ -34,6 +34,11 @@ Monitor 当前不仅是输入与设备树边界，也是视口层渲染边界。
 - `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`
 - Monitor 负责把这两者绑定到具体视口实例上
 
+当前实现里，Monitor 还额外承担两件与活动层局部重绘直接相关的事情：
+
+- 通过 `worldRectToScreenRect()` 把世界空间矩形统一换算为当前视口的屏幕矩形
+- 把 `RenderScheduler.flush(dirtyRects)` 透传到 `LiveRenderer.flush(dirtyRects)`
+
 这意味着“活动对象属于谁”仍由 AOM 决定，而“活动对象如何显示在当前视口里”则由 Monitor 侧负责。
 
 ## 设备树
@@ -103,6 +108,12 @@ Monitor 当前还承担一层很关键的视口坐标规整职责。
 
 ## 当前实现状态
 
-- 已实现：设备树挂载入口、世界坐标与区块坐标换算、多层画布骨架、`RenderScheduler` 挂载、`LiveRenderer` 挂载。
+- 已实现：设备树挂载入口、世界坐标与区块坐标换算、多层画布骨架、`RenderScheduler` 挂载、`LiveRenderer` 挂载、`worldRectToScreenRect()`。
 - 已兼容：旧调用方仍可通过 `monitor.canvas` 访问交互层画布，现阶段它等价于 `liveCanvas`。
-- 待完善：`worldRectToScreenRect()`、DPR 统一处理、`liveCanvas` 的 dirty rect 刷新，以及 `baseCanvas` / `uiCanvas` 的专用渲染器。
+- 已接入：活动层 dirty rect 已可沿 `monitor.renderScheduler -> liveRenderer.flush(dirtyRects)` 这条链路执行。
+- 待完善：DPR 统一处理、dirty rect 合并策略进一步优化，以及 `baseCanvas` / `uiCanvas` 的专用渲染器。
+
+## 相关文档
+
+- [render-scheduler-document.md](./render-scheduler-document.md)
+- [live-renderer-document.md](./live-renderer-document.md)

@@ -250,7 +250,7 @@ describe("DirectedGraph", () => {
         graph.addNode(1);
         graph.addNode(10);
         expect(() => graph.changeNodeName(1, 10)).toThrow(
-          NodeAlreadyExistError
+          NodeAlreadyExistError,
         );
       });
     });
@@ -282,7 +282,7 @@ describe("DirectedGraph", () => {
             .addEdge(1, 2)
             .deleteEdge(1, 2)
             .deleteNode(1)
-            .equals(graph)
+            .equals(graph),
         ).toBe(true);
       });
     });
@@ -504,6 +504,36 @@ describe("DirectedGraph", () => {
   });
 
   describe("图的判断方法", () => {
+    describe("getTopologicalOrder 应返回图的拓扑序", () => {
+      test("当图为 DAG 时应返回满足边方向约束的节点序列", () => {
+        graph = DirectedGraph.parse([
+          [1, [2, 3]],
+          [2, [4]],
+          [3, [4]],
+          [4, []],
+        ]);
+
+        const order = graph.getTopologicalOrder();
+        const indexMap = new Map(order.map((node, index) => [node, index]));
+
+        expect(order).toHaveLength(4);
+        expect(indexMap.get(1)).toBeLessThan(indexMap.get(2));
+        expect(indexMap.get(1)).toBeLessThan(indexMap.get(3));
+        expect(indexMap.get(2)).toBeLessThan(indexMap.get(4));
+        expect(indexMap.get(3)).toBeLessThan(indexMap.get(4));
+      });
+
+      test("当图含环时应只返回可释放的无环前缀", () => {
+        graph = DirectedGraph.parse([
+          [1, [2]],
+          [2, [1]],
+          [3, []],
+        ]);
+
+        expect(graph.getTopologicalOrder()).toEqual([3]);
+      });
+    });
+
     describe("isEmpty 应判断图是否为空", () => {
       test("当图为空时应返回 true", () => {
         expect(graph.isEmpty()).toBe(true);

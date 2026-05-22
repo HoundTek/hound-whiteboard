@@ -147,6 +147,40 @@ class ActiveObjectManager {
   }
 
   /**
+   * 请求所有 monitor 刷新活动层
+   * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
+   */
+  requestLiveRender(objects = []) {
+    const board = this.board;
+    if (!board?.monitors?.values) return;
+
+    const changedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+
+    for (const monitor of board.monitors.values()) {
+      const liveRenderer = monitor?.liveRenderer;
+      if (!liveRenderer) continue;
+
+      const dirtyObjectMap = new Map();
+      for (const objectInstance of changedObjects) {
+        dirtyObjectMap.set(objectInstance.id, objectInstance);
+      }
+      for (const objectInstance of liveRenderer.collectActiveDrawables?.() ??
+        []) {
+        dirtyObjectMap.set(objectInstance.id, objectInstance);
+      }
+
+      if (typeof liveRenderer.invalidateObjects === "function") {
+        liveRenderer.invalidateObjects([...dirtyObjectMap.values()]);
+        continue;
+      }
+
+      monitor?.renderScheduler?.invalidate?.();
+    }
+  }
+
+  /**
    * 取消注册活动对象实例
    * @param {number} objectId - 要取消注册的对象 id
    */
@@ -621,6 +655,8 @@ class ActiveObjectManager {
     for (let i = 0; i < layers.length; i++) {
       this.insertLayerUnderById(layers[i], underWhich[i]);
     }
+
+    this.requestLiveRender(activeEntries);
   }
 
   /**
@@ -648,6 +684,7 @@ class ActiveObjectManager {
     }
 
     this.insertLayerToTop(newLayer);
+    this.requestLiveRender(newObjectEntries);
     return newLayer;
   }
 
@@ -786,6 +823,7 @@ class ActiveObjectManager {
       this.unregisterActiveObject(objId);
     }
     this.tidyup();
+    this.requestLiveRender(normalizedObjects);
   }
 
   /**
@@ -805,6 +843,7 @@ class ActiveObjectManager {
     }
 
     this.tidyup();
+    this.requestLiveRender(normalizedObjects);
   }
 
   /**

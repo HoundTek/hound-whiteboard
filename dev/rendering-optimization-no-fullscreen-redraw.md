@@ -318,14 +318,26 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 
 - `Board.createMonitor()` 已创建 monitor-root、`baseCanvas`、`liveCanvas`、`uiCanvas`。
 - `Monitor` 已持有多层画布引用，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
-- `RenderScheduler` 已挂在 `Monitor` 下，支持多次 invalidate 合并到单次 flush。
+- `Monitor.worldRectToScreenRect()` 已补齐，活动对象现在可以直接从世界范围换算到当前视口屏幕范围。
+- `RenderScheduler` 已挂在 `Monitor` 下，支持多次 invalidate 合并到单次 flush，并把 dirty rect 透传给 `LiveRenderer.flush(...)`。
 - `LiveRenderer` 已挂在 `Monitor` 下，可按 `ActiveObjectManager.layerOrder` 顺序读取活动对象并重绘到 `liveCanvas`。
+- `LiveRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
+- `LiveRenderer.invalidateObjects(objects)` 已支持同时失效对象上一帧范围与当前范围，避免对象移动后旧位置残影。
+- `ActiveObjectManager.add/choose/apply/discard` 已会主动通知各 `Monitor.liveRenderer` 发起活动层刷新。
 
 当前还没有完成的部分是：
 
-- 工具链或 AOM 状态变更自动触发 `renderScheduler.invalidate(...)`
-- `LiveRenderer` 的 dirty rect 局部刷新
 - `baseCanvas` 与 `uiCanvas` 的专用渲染器
+- dirty rect 合并、裁剪与 padding 策略仍较基础，尚未针对复杂笔迹和大范围编辑做更细优化
+- 对象几何变化虽然已经能覆盖前后两帧范围，但还没有进一步抽象成更稳定的“旧几何快照 -> 新几何快照”更新协议
+
+### 设计约束
+
+- `LiveRenderer.render()` 无参调用仍保持全量清屏重绘。
+- 只有在调度器或调用方显式传入 dirty rect 时，`LiveRenderer` 才进入局部清理与局部重绘路径。
+- 这样做是为了保留现有调用方语义，避免把原本依赖“整层重画”的路径静默改成“局部补画”后引入漏清理问题。
+- `invalidateObjects(objects)` 不再只看对象当前位置，而是同时把上一帧范围和当前范围都送入调度器。
+- 这样做是为了保证拖拽、平移、控制点修改这类位移型操作不会在 liveCanvas 上留下旧像素残影。
 
 ### 关键流程
 
@@ -359,18 +371,18 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 建议新增以下类型的方法或等价接口：
 
 ```js
-monitor.ensureRenderLayers()
-monitor.resizeRenderLayers(width, height, dpr)
-monitor.worldRectToScreenRect(range)
+monitor.ensureRenderLayers();
+monitor.resizeRenderLayers(width, height, dpr);
+monitor.worldRectToScreenRect(range);
 
-renderScheduler.invalidate(rect)
-renderScheduler.flush()
+renderScheduler.invalidate(rect);
+renderScheduler.flush();
 
-liveRenderer.renderDirty(rects)
-liveRenderer.collectActiveDrawables()
+liveRenderer.renderDirty(rects);
+liveRenderer.collectActiveDrawables();
 
-baseRenderer.renderChunks(chunkIds)
-baseRenderer.renderRegion(rect)
+baseRenderer.renderChunks(chunkIds);
+baseRenderer.renderRegion(rect);
 ```
 
 这些接口的重点不是名字本身，而是边界：

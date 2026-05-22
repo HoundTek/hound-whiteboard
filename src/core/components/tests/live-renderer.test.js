@@ -2,6 +2,7 @@ import { LiveRenderer } from "../live-renderer.js";
 import { Layer } from "../active-object-manager.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { DirectedGraph } from "../../utils/directed-graph.js";
+import { RectangleRange } from "../../range/rectangle.js";
 import { Vector } from "../../utils/math.js";
 
 describe("LiveRenderer", () => {
@@ -9,6 +10,7 @@ describe("LiveRenderer", () => {
     constructor(id, position, calls) {
       super(position, id, 1);
       this.calls = calls;
+      this.boundingBox = new RectangleRange(0, 0, 10, 10);
     }
 
     render(ctx) {
@@ -180,6 +182,158 @@ describe("LiveRenderer", () => {
     expect(drawables).toEqual([object]);
     expect(calls.filter((entry) => entry.type === "render")).toEqual([
       { type: "render", id: 21 },
+    ]);
+  });
+
+  test("collectDrawablesByObjectIds 应复用解析器并跳过重复或非法对象", () => {
+    const calls = [];
+    const first = new FakeObject(31, new Vector(0, 0), calls);
+    const second = new FakeObject(32, new Vector(5, 5), calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+    const seenObjectIds = new Set([31]);
+    const resolveObject = (objectId) =>
+      new Map([
+        [31, first],
+        [32, second],
+        [33, { id: 33 }],
+      ]).get(objectId);
+
+    const drawables = renderer.collectDrawablesByObjectIds(
+      [31, 32, 33, 32],
+      resolveObject,
+      seenObjectIds,
+    );
+
+    expect(drawables).toEqual([second]);
+    expect(seenObjectIds).toEqual(new Set([31, 32]));
+  });
+
+  test("collectLayerDrawables 应保持同层 inactive 在前、active 在后", () => {
+    const calls = [];
+    const inactive = new FakeObject(41, new Vector(0, 0), calls);
+    const active = new FakeObject(42, new Vector(10, 10), calls);
+    const inactiveGraph = DirectedGraph.parse([[41, []]]);
+    const layer = createLayer(8, [42], inactiveGraph);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+    };
+    const aom = {
+      activeObjectIndex: new Map([[42, active]]),
+      findBoardObjectInstance(objectId) {
+        return new Map([[41, inactive]]).get(objectId);
+      },
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    const drawables = renderer.collectLayerDrawables(layer, new Set());
+
+    expect(drawables).toEqual([inactive, active]);
+  });
+
+  test("render 传入 dirtyRects 时应只清理并重绘命中的对象", () => {
+    const calls = [];
+    const leftObject = new FakeObject(51, new Vector(0, 0), calls);
+    const rightObject = new FakeObject(52, new Vector(100, 0), calls);
+    const ctx = createContext(calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+      worldRectToScreenRect(rect, padding = 0) {
+        return new RectangleRange(
+          rect.left - padding,
+          rect.top - padding,
+          rect.width + padding * 2,
+          rect.height + padding * 2,
+        );
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(9, [51, 52])],
+      activeObjectIndex: new Map([
+        [51, leftObject],
+        [52, rightObject],
+      ]),
+      activeObjects: new Set([leftObject, rightObject]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    const drawables = renderer.render([
+      { left: -2, top: -2, width: 20, height: 20, right: 18, bottom: 18 },
+    ]);
+
+    expect(drawables).toEqual([leftObject, rightObject]);
+    expect(calls.filter((entry) => entry.type === "clearRect")).toEqual([
+      { type: "clearRect", args: [-2, -2, 20, 20] },
+    ]);
+    expect(calls.filter((entry) => entry.type === "render")).toEqual([
+      { type: "render", id: 51 },
+    ]);
+  });
+
+  test("invalidateObjects 应同时失效对象变更前后的屏幕范围", () => {
+    const calls = [];
+    const invalidateCalls = [];
+    const object = new FakeObject(61, new Vector(0, 0), calls);
+    const ctx = createContext(calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+      renderScheduler: {
+        invalidate(rect) {
+          invalidateCalls.push(rect);
+        },
+      },
+      worldRectToScreenRect(rect, padding = 0) {
+        return new RectangleRange(
+          rect.left - padding,
+          rect.top - padding,
+          rect.width + padding * 2,
+          rect.height + padding * 2,
+        );
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(10, [61])],
+      activeObjectIndex: new Map([[61, object]]),
+      activeObjects: new Set([object]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    renderer.render();
+    object.position = new Vector(100, 0);
+
+    renderer.invalidateObjects([object]);
+
+    expect(invalidateCalls).toEqual([
+      new RectangleRange(100, 0, 10, 10),
+      new RectangleRange(0, 0, 10, 10),
     ]);
   });
 });

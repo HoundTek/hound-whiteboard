@@ -75,6 +75,7 @@ graph LR
 - `Monitor` 承载 `baseCanvas`、`liveCanvas`、`uiCanvas` 三层画布。
 - `RenderScheduler` 负责把多次 invalidate 合并到单次 flush。
 - `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`。
+- 活动层的对象驱动刷新、视口矩形换算与 dirty rect 局部重绘，也开始沿这条链路收口。
 
 这让活动对象的语义仍留在 AOM，而把“何时画、画到哪一层”收口到 Monitor 一侧。
 
@@ -89,7 +90,14 @@ graph LR
 
 - `ActiveObjectManager` 算法实现相对完整，已具备拾取、分层、置顶、清理等核心逻辑。
 - `Monitor` 已收口到多层画布骨架，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
-- `RenderScheduler` 与 `LiveRenderer` 已接入 `Monitor`，当前可以按 AOM 层顺序整层刷新活动对象。
+- `RenderScheduler` 与 `LiveRenderer` 已接入 `Monitor`，当前既可走整层重绘，也可走显式 dirty rect 的局部刷新。
 - `Board`、`Chunk`、`ChunkObjectManager` 已有骨架和关键字段；其中 `Board` 已收口到“根 `ChunkLoader` 持有区块对象 + `chunkLoaded` 维护加载状态”的模型，但仍存在较多 `todo`。
-- 当前活动层渲染仍是“清空 liveCanvas 后整层重绘”的最小实现，尚未进入 dirty rect 局部刷新。
-- 文档建议按“先补齐视口层渲染链路，再推进 dirty rect 与静态层缓存”的顺序继续推进。
+- `ActiveObjectManager.add/choose/apply/discard` 已能主动触发活动层刷新，`LiveRenderer.invalidateObjects(...)` 也已覆盖对象前后两帧范围，避免拖拽残影。
+- 当前仍处在“先把活动层链路跑稳，再继续细化脏区合并与静态层缓存”的阶段。
+
+## 相关文档
+
+- [monitor-document.md](./monitor-document.md)
+- [render-scheduler-document.md](./render-scheduler-document.md)
+- [live-renderer-document.md](./live-renderer-document.md)
+- [active-object-manager-document.md](./active-object-manager-document.md)

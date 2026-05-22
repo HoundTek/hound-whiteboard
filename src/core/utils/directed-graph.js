@@ -535,24 +535,23 @@ class DirectedGraph {
   }
 
   /**
-   * 检测图是否为有向无环图 (DAG)
-   * @returns {boolean} 如果图为 DAG，则返回 true，否则返回 false
+   * 获取图的一个拓扑序
+   * @returns {Array<*>} 图的拓扑序；若图含环，则仅返回 Kahn 算法可释放的前缀
    */
-  isDAG() {
-    // 使用 Kahn 算法检测是否有环
-    let inDegreeMap = this.getInDegreeMap();
-    let queue = [];
+  getTopologicalOrder() {
+    const inDegreeMap = this.getInDegreeMap();
+    const queue = [];
+    const orderedNodes = [];
+
     for (const [node, inDegree] of inDegreeMap.entries()) {
       if (inDegree === 0) {
         queue.push(node);
       }
     }
 
-    let visitedCount = 0;
-
     while (queue.length > 0) {
-      let node = queue.shift();
-      visitedCount++;
+      const node = queue.shift();
+      orderedNodes.push(node);
 
       for (const neighbor of this.neighborsUnsafe(node) || []) {
         inDegreeMap.set(neighbor, inDegreeMap.get(neighbor) - 1);
@@ -562,7 +561,15 @@ class DirectedGraph {
       }
     }
 
-    return visitedCount === this.size;
+    return orderedNodes;
+  }
+
+  /**
+   * 检测图是否为有向无环图 (DAG)
+   * @returns {boolean} 如果图为 DAG，则返回 true，否则返回 false
+   */
+  isDAG() {
+    return this.getTopologicalOrder().length === this.size;
   }
 
   /**
