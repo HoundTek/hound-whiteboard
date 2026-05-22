@@ -67,11 +67,18 @@
 这样做的目的是让以下几类矩形共享一套数据语义：
 
 - 对象当前屏幕范围
+- creator 或调用方显式记录的旧几何快照
 - 上一帧缓存中的旧屏幕范围
 - 调度器中的 dirty rect
 - 局部清理时传给 `clearRect()` 的矩形
 
 当前实现仍兼容普通 `{ left, top, width, height }` 风格的输入矩形，但进入 `LiveRenderer` 后会立刻被规范化为 `RectangleRange`。
+
+对象屏幕矩形在换算完成后，还会叠加对象自身的 `getRenderPadding()` 留白。当前这条入口已经接到真实对象上，至少覆盖了：
+
+- `CircleObject` 的描边半宽
+- `StrokeObject` 的圆角端点与默认描边半宽
+- `TextObject` 的文本框描边半宽
 
 ## 局部重绘流程
 
@@ -108,6 +115,7 @@
 它不会只取对象当前位置，而是会同时取：
 
 - 对象当前屏幕范围
+- 对象通过 `captureObjectSnapshot()` 记录的旧几何快照
 - 对象上一帧缓存中的旧屏幕范围
 
 然后把这两类范围一并送给 `RenderScheduler.invalidate(...)`。
@@ -115,8 +123,22 @@
 这样做的直接原因是：
 
 - 拖拽、平移、控制点修改等操作会让对象从旧位置移动到新位置
+- 某些修改可能发生在对象尚未经历上一帧 render 之前
 - 如果只失效新位置，旧位置上的像素不会被清除
-- `previousDrawableEntries` 因而成为局部重绘正确性的必要缓存，而不只是调试信息
+- 因此当前协议同时依赖“显式旧几何快照”和“上一帧 drawable 缓存”两条来源，而不再只押注后一者
+
+### captureObjectSnapshot(objects)
+
+`captureObjectSnapshot()` 是当前旧几何快照协议的显式入口。
+
+它的作用是：
+
+- 在对象几何即将被修改前，先记录对象当前屏幕范围
+- 若同一对象在一次 flush 前连续发生多次修改，则把多次旧范围合并成一个并集矩形
+
+当前高频修改路径里，creator 工具已经会在几何变更前调用这条接口，再在变更后调用 `invalidateObjects()`。
+
+此外，工具侧已经把同一协议沉淀到 `ObjectModifierTool` 基类，后续真实编辑工具只要复用该基类，就可以接入同样的刷新路径；当前仓库里还没有具体 modifier 子类落地到业务流程。
 
 ## 与 RenderScheduler 的关系
 
@@ -132,10 +154,10 @@
 
 ## 当前实现状态
 
-- 已实现：按 `layerOrder` 读取对象、同层 `inactiveGraph` 拓扑序绘制、活动对象回退路径、世界矩形到屏幕矩形换算、显式 dirty rect 局部清理与局部重绘、旧范围与新范围同时失效。
-- 已接入：`Monitor` 已把 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`；`ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`。
+- 已实现：按 `layerOrder` 读取对象、同层 `inactiveGraph` 拓扑序绘制、活动对象回退路径、世界矩形到屏幕矩形换算、显式 dirty rect 局部清理与局部重绘、对象级 `getRenderPadding()`、旧范围与新范围同时失效、显式旧几何快照协议。
+- 已接入：`Monitor` 已把 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`；`ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`；`stroke-creator` 与 `polygon-creator` 这类高频几何修改路径已会在变更前记录快照、变更后请求活动层刷新；`ObjectModifierTool` 已具备统一的几何变更包装钩子。
 - 已兼容：无参 `render()` 仍保持整层重绘语义；传入普通矩形对象时仍会被兼容处理。
-- 待完善：dirty rect 的合并策略仍较基础；复杂笔迹的 padding 策略未统一；`baseCanvas` / `uiCanvas` 的专用渲染器尚未补齐。
+- 待完善：dirty rect 的合并策略仍较基础；对象级 padding 目前只覆盖了少数高频对象，尚未扩展成完整对象族策略；`baseCanvas` / `uiCanvas` 的专用渲染器尚未补齐；真实 modifier 子类尚未接入这套快照协议。
 
 ## 相关文档
 

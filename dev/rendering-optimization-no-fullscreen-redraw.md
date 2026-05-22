@@ -323,6 +323,9 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - `LiveRenderer` 已挂在 `Monitor` 下，可按 `ActiveObjectManager.layerOrder` 顺序读取活动对象并重绘到 `liveCanvas`。
 - `LiveRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
 - `LiveRenderer.invalidateObjects(objects)` 已支持同时失效对象上一帧范围与当前范围，避免对象移动后旧位置残影。
+- `LiveRenderer` 已接入对象级 `getRenderPadding()`，当前至少覆盖 `CircleObject`、`StrokeObject`、`TextObject` 这几类高频对象。
+- `LiveRenderer.captureObjectSnapshot(objects)` 已落地，creator 高频几何修改路径现在会在变更前记录旧几何、变更后请求活动层刷新。
+- `ObjectModifierTool` 已补齐统一的 `beforeGeometryMutation / afterGeometryMutation / withGeometryMutation` 钩子，为后续编辑工具预留同一套快照协议入口。
 - `ActiveObjectManager.add/choose/apply/discard` 已会主动通知各 `Monitor.liveRenderer` 发起活动层刷新。
 
 当前还没有完成的部分是：
@@ -330,6 +333,7 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - `baseCanvas` 与 `uiCanvas` 的专用渲染器
 - dirty rect 合并、裁剪与 padding 策略仍较基础，尚未针对复杂笔迹和大范围编辑做更细优化
 - 对象几何变化虽然已经能覆盖前后两帧范围，但还没有进一步抽象成更稳定的“旧几何快照 -> 新几何快照”更新协议
+- 旧几何快照协议已经有了第一版，creator 高频修改路径已接入，modifier 侧也已沉淀出统一基类钩子；但还没有具体编辑工具子类真正走通这条链路
 
 ### 设计约束
 
@@ -338,6 +342,10 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - 这样做是为了保留现有调用方语义，避免把原本依赖“整层重画”的路径静默改成“局部补画”后引入漏清理问题。
 - `invalidateObjects(objects)` 不再只看对象当前位置，而是同时把上一帧范围和当前范围都送入调度器。
 - 这样做是为了保证拖拽、平移、控制点修改这类位移型操作不会在 liveCanvas 上留下旧像素残影。
+- 对象在几何变更前可以通过 `captureObjectSnapshot(objects)` 显式记录旧范围。
+- 这样做是为了让对象即使尚未经历上一帧 render，也能在下一次失效时保住变更前的屏幕脏区。
+- 对象的屏幕脏区不会只取几何包围盒，还会叠加对象级 `getRenderPadding()`。
+- 这样做是为了把描边、圆角端点、文本框边框这类超出主判定范围的可见像素也纳入局部清理范围。
 
 ### 关键流程
 
@@ -346,8 +354,8 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 1. 工具创建对象实例。
 2. 调用 AOM.add(objects)，对象进入活动层。
 3. 工具在 move 期间只更新对象几何。
-4. 每次几何变化只调用 scheduler.invalidate(dirtyRect)。
-5. LiveRenderer 在下一帧重绘该对象局部区域。
+4. 每次几何变化先记录旧几何快照，再调用 `liveRenderer.invalidateObjects(objects)` 请求局部刷新。
+5. `RenderScheduler` 汇总脏区后，`LiveRenderer` 在下一帧重绘该对象局部区域。
 6. 抬笔后调用 AOM.apply(objects)。
 7. BaseRenderer 在提交完成后重绘受影响区块或受影响区域。
 8. liveCanvas 清除对应对象的残留内容。

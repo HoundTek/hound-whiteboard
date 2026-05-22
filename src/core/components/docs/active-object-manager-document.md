@@ -148,7 +148,8 @@
 - 已实现：核心分层逻辑、层插入与顺序比较、白板外对象 `add()`、置顶、清理、基于二维覆盖区块索引的跨区块拾取、基于对象实例的活动对象索引、`apply()` 提交回写。
 - 已验证：二维区块下的右上/左下组合移动、不可达覆盖区块跳过、覆盖区块索引更新后 `pickup` 与 `choose` 读取新结果、`pickup` 通过 `Board.createChunkBlockLoader()` 接入白板区块加载链、`add()` 将新对象注册进动态图顶层、`apply()` 回写区块对象和覆盖区块索引。
 - 已接入的渲染链路：`Monitor.liveRenderer` 已可直接读取 AOM 当前活动对象集合与层顺序，并将其绘制到 `liveCanvas`。
-- 待完善：修改工具链在对象几何变化后自动触发 `renderScheduler.invalidate(...)`、将活动层刷新从整层重绘推进到 dirty rect，以及跨区块高频移动时的性能优化。
+- 已接入的高频修改路径：creator 工具已会在对象几何变更前记录旧几何快照，并在变更后调用 `monitor.liveRenderer.invalidateObjects(...)` 请求活动层刷新。
+- 待完善：对象级 dirty rect 仍未覆盖完整对象族；跨区块高频移动下的脏区裁剪与性能优化仍待推进。
 
 ## 相关文档
 

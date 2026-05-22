@@ -127,6 +127,10 @@ class StrokeObject extends BasicObject {
     ctx.restore();
   }
 
+  getRenderPadding() {
+    return 0.5;
+  }
+
   serialize() {
     return {
       ...super.serialize(),

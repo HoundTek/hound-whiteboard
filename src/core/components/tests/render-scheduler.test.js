@@ -1,3 +1,4 @@
+import { RectangleRange } from "../../range/rectangle.js";
 import { RenderScheduler } from "../render-scheduler.js";
 
 describe("RenderScheduler", () => {
@@ -43,5 +44,21 @@ describe("RenderScheduler", () => {
 
     expect(result).toBe(1);
     expect(flushed).toEqual([[{ count: 2 }]]);
+  });
+
+  test("默认应合并重叠或相接的矩形脏区", () => {
+    const flushed = [];
+    const scheduler = new RenderScheduler({
+      flushHandler(dirtyRects) {
+        flushed.push(dirtyRects);
+      },
+    });
+
+    scheduler.invalidate(new RectangleRange(0, 0, 10, 10));
+    scheduler.invalidate(new RectangleRange(8, 0, 10, 10));
+    scheduler.invalidate(new RectangleRange(18, 0, 2, 10));
+    scheduler.flush();
+
+    expect(flushed).toEqual([[new RectangleRange(0, 0, 20, 10)]]);
   });
 });

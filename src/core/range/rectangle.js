@@ -129,6 +129,39 @@ class RectangleRange extends Range {
   }
 
   /**
+   * 计算两个矩形的并集包围盒
+   * @param {RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} rect - 待合并矩形
+   * @returns {RectangleRange} 并集包围盒
+   */
+  union(rect) {
+    const target = RectangleRange.fromRectLike(rect);
+    if (!target) {
+      return RectangleRange.from(this);
+    }
+
+    const left = Math.min(this.left, target.left);
+    const top = Math.min(this.top, target.top);
+    const right = Math.max(this.right, target.right);
+    const bottom = Math.max(this.bottom, target.bottom);
+
+    return new RectangleRange(left, top, right - left, bottom - top);
+  }
+
+  /**
+   * 扩张矩形边界
+   * @param {number} padding - 四周扩张量
+   * @returns {RectangleRange} 扩张后的矩形
+   */
+  inflate(padding) {
+    return new RectangleRange(
+      this.left - padding,
+      this.top - padding,
+      this.width + padding * 2,
+      this.height + padding * 2,
+    );
+  }
+
+  /**
    * 计算一组点的矩形范围
    * @param {Range} range - 要计算范围的点集
    * @returns {RectangleRange} 矩形范围
@@ -138,6 +171,39 @@ class RectangleRange extends Range {
       return new RectangleRange(range.left, range.top, range.width, range.height);
     }
     return computeBounds(range);
+  }
+
+  /**
+   * 统一处理矩形样输入
+   * @param {RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} rect - 矩形样输入
+   * @returns {RectangleRange | undefined} 规整后的矩形
+   */
+  static fromRectLike(rect) {
+    if (!rect) return undefined;
+    if (rect instanceof RectangleRange) {
+      return RectangleRange.from(rect);
+    }
+
+    const left = rect.left;
+    const top = rect.top;
+    const width = rect.width;
+    const height = rect.height;
+    const right = rect.right;
+    const bottom = rect.bottom;
+
+    if (!Number.isFinite(left) || !Number.isFinite(top)) {
+      return undefined;
+    }
+
+    if (Number.isFinite(width) && Number.isFinite(height)) {
+      return new RectangleRange(left, top, width, height);
+    }
+
+    if (Number.isFinite(right) && Number.isFinite(bottom)) {
+      return new RectangleRange(left, top, right - left, bottom - top);
+    }
+
+    return undefined;
   }
 }
 

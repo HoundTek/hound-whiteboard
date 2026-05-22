@@ -198,6 +198,52 @@ describe("PolygonCreatorTool", () => {
     expect(board.addObject).not.toHaveBeenCalled();
   });
 
+  test("顶点更新前后应记录旧几何快照并请求活动层刷新", () => {
+    const tool = new PolygonCreatorTool();
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(5, 5) },
+          },
+        ],
+      },
+      { objectId: 31, ownerChunkId: 1, monitor },
+    );
+
+    monitor.liveRenderer.captureObjectSnapshot.mockClear();
+    monitor.liveRenderer.invalidateObjects.mockClear();
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(8, 9) },
+          },
+        ],
+      },
+      { objectId: 31, ownerChunkId: 1, monitor },
+    );
+
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith([
+      tool.obj,
+    ]);
+    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
+      tool.obj,
+    ]);
+  });
+
   test("真实 Board 上 object-end 后应经由 AOM.apply 落回归属区块", () => {
     const tool = new PolygonCreatorTool();
     const board = new Board();

@@ -101,6 +101,24 @@
 
 对象选择工具有多种形状。比如套索工具可以框选任意曲线内的对象（在底层，曲线其实是一个有非常多条边的多边形）；矩形选择工具可以框选一个框形内的对象。特别地，所有的对象选择工具都应支持将点选识别为单选。
 
+### 对象修改工具
+
+对象修改工具是用来编辑已有对象的工具，适用于控制点拖拽、整体平移、缩放、旋转、文本改写等场景。
+
+这类工具当前应优先复用 `ObjectModifierTool` 基类提供的几何刷新钩子：
+
+- `beforeGeometryMutation(modificationContext, objects)`：修改前记录旧几何快照
+- `afterGeometryMutation(modificationContext, objects)`：修改后请求 `LiveRenderer.invalidateObjects(...)`
+- `withGeometryMutation(modificationContext, mutate, objects)`：把一次几何修改包进统一的“快照 -> 变更 -> 失效”流程
+
+这样做的目的，是让对象即使尚未经历上一帧 `render()`，也能保留修改前的屏幕脏区，避免活动层局部重绘留下残影。
+
+当前进度是：
+
+- creator 链路已经把这套协议接到真实业务路径，`stroke-creator` 与 `polygon-creator` 在几何变更前后都会触发快照与失效。
+- modifier 链路目前只把协议沉淀到了 `ObjectModifierTool` 基类，还没有仓库内的具体 modifier 子类接上这套流程。
+- 因此下一步若新增编辑工具，应直接以 `ObjectModifierTool` 为入口，而不是再各自手写一套刷新逻辑。
+
 ### 对象擦除工具
 
 对象擦除工具是用来擦除对象的工具，适用于可擦对象。

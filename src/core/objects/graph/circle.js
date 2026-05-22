@@ -112,6 +112,10 @@ class CircleObject extends GraphObject {
     ctx.restore();
   }
 
+  getRenderPadding() {
+    return 1.5;
+  }
+
   serialize() {
     return {
       ...super.serialize(),

@@ -166,6 +166,42 @@ describe("StrokeCreatorTool", () => {
     );
   });
 
+  test("创建手势更新前后应记录旧几何快照并请求活动层刷新", () => {
+    const tool = new StrokeCreatorTool();
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      { objectId: 30, ownerChunkId: 1, monitor },
+    );
+
+    monitor.liveRenderer.captureObjectSnapshot.mockClear();
+    monitor.liveRenderer.invalidateObjects.mockClear();
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+      },
+      { objectId: 30, ownerChunkId: 1, monitor },
+    );
+
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith([
+      tool.obj,
+    ]);
+    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
+      tool.obj,
+    ]);
+  });
+
   test("真实 Board 上创建完成后应经由 AOM.apply 落回归属区块", () => {
     const tool = new StrokeCreatorTool();
     const board = new Board();

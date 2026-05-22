@@ -1,6 +1,9 @@
 import { LiveRenderer } from "../live-renderer.js";
 import { Layer } from "../active-object-manager.js";
 import { BasicObject } from "../../objects/basic-obj.js";
+import { CircleObject } from "../../objects/graph/circle.js";
+import { TextObject } from "../../objects/one-dim/text.js";
+import { StrokeObject } from "../../objects/stroke/stroke.js";
 import { DirectedGraph } from "../../utils/directed-graph.js";
 import { RectangleRange } from "../../range/rectangle.js";
 import { Vector } from "../../utils/math.js";
@@ -335,5 +338,91 @@ describe("LiveRenderer", () => {
       new RectangleRange(100, 0, 10, 10),
       new RectangleRange(0, 0, 10, 10),
     ]);
+  });
+
+  test("captureObjectSnapshot 应在未经历上一帧 render 时保留旧几何范围", () => {
+    const calls = [];
+    const invalidateCalls = [];
+    const object = new FakeObject(62, new Vector(0, 0), calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+      renderScheduler: {
+        invalidate(rect) {
+          invalidateCalls.push(rect);
+        },
+      },
+      worldRectToScreenRect(rect, padding = 0) {
+        return new RectangleRange(
+          rect.left - padding,
+          rect.top - padding,
+          rect.width + padding * 2,
+          rect.height + padding * 2,
+        );
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(12, [62])],
+      activeObjectIndex: new Map([[62, object]]),
+      activeObjects: new Set([object]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    renderer.captureObjectSnapshot([object]);
+    object.position = new Vector(100, 0);
+    renderer.invalidateObjects([object]);
+
+    expect(invalidateCalls).toEqual([
+      new RectangleRange(100, 0, 10, 10),
+      new RectangleRange(0, 0, 10, 10),
+    ]);
+  });
+
+  test("getObjectScreenRect 应应用对象级渲染 padding", () => {
+    const calls = [];
+    const object = new FakeObject(71, new Vector(0, 0), calls);
+    object.getRenderPadding = () => 2;
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+      worldRectToScreenRect(rect) {
+        return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(11, [71])],
+      activeObjectIndex: new Map([[71, object]]),
+      activeObjects: new Set([object]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    expect(renderer.getObjectScreenRect(object)).toEqual(
+      new RectangleRange(-2, -2, 14, 14),
+    );
+  });
+
+  test("真实对象应提供默认的渲染 padding", () => {
+    const circle = new CircleObject(new Vector(0, 0), 81, 1, 10);
+    const stroke = new StrokeObject(new Vector(0, 0), 82, 1);
+    const text = new TextObject(new Vector(0, 0), 83, 1);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(10, 0)]);
+
+    expect(circle.getRenderPadding()).toBe(1.5);
+    expect(stroke.getRenderPadding()).toBe(0.5);
+    expect(text.getRenderPadding()).toBe(0.5);
   });
 });

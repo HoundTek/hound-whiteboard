@@ -4,6 +4,44 @@
  * @author Zhou Chenyu
  */
 
+import { RectangleRange } from "../range/rectangle.js";
+import { intersectsRanges } from "../range/geometry.js";
+
+/**
+ * 合并重叠或相接的矩形脏区
+ * @param {any[]} dirtyRects - 原始脏区集合
+ * @returns {any[]} 合并后的脏区集合
+ */
+function mergeRectangleDirtyRects(dirtyRects) {
+  const mergedRects = [];
+  const passthroughRects = [];
+
+  for (const rect of dirtyRects) {
+    const normalizedRect = RectangleRange.fromRectLike(rect);
+    if (!normalizedRect) {
+      passthroughRects.push(rect);
+      continue;
+    }
+
+    let candidateRect = normalizedRect;
+    let mergedIndex = 0;
+
+    while (mergedIndex < mergedRects.length) {
+      if (intersectsRanges(mergedRects[mergedIndex], candidateRect)) {
+        candidateRect = mergedRects[mergedIndex].union(candidateRect);
+        mergedRects.splice(mergedIndex, 1);
+        mergedIndex = 0;
+        continue;
+      }
+      mergedIndex++;
+    }
+
+    mergedRects.push(candidateRect);
+  }
+
+  return [...mergedRects, ...passthroughRects];
+}
+
 /**
  * 渲染调度器
  * @description 将多次失效请求合并到单帧 flush 中执行。
@@ -59,7 +97,7 @@ class RenderScheduler {
         }
         return globalThis.setTimeout(() => callback(Date.now()), 16);
       });
-    this.mergeDirtyRects = options.mergeDirtyRects ?? ((dirtyRects) => dirtyRects);
+    this.mergeDirtyRects = options.mergeDirtyRects ?? mergeRectangleDirtyRects;
     this.flushHandler = options.flushHandler ?? (() => {});
   }
 
@@ -109,4 +147,4 @@ class RenderScheduler {
   }
 }
 
-export { RenderScheduler };
+export { RenderScheduler, mergeRectangleDirtyRects };

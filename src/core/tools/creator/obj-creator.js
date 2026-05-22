@@ -181,6 +181,28 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
+   * 在对象几何变更前记录旧快照
+   * @param {Object} interaction - 当前交互上下文
+   */
+  beforeGeometryMutation(interaction) {
+    if (!this.obj) return;
+    interaction?.deviceContext?.monitor?.liveRenderer?.captureObjectSnapshot?.([
+      this.obj,
+    ]);
+  }
+
+  /**
+   * 在对象几何变更后请求活动层刷新
+   * @param {Object} interaction - 当前交互上下文
+   */
+  afterGeometryMutation(interaction) {
+    if (!this.obj) return;
+    interaction?.deviceContext?.monitor?.liveRenderer?.invalidateObjects?.([
+      this.obj,
+    ]);
+  }
+
+  /**
    * 更新一次创建手势。
    * @param {Object} interaction - 当前交互上下文
    */
@@ -291,14 +313,20 @@ class SingleGestureObjectCreatorTool extends ObjectCreatorTool {
     }
 
     if (!this.isCreatingGestureActive) {
+      this.beforeGeometryMutation(interaction);
       this.beginCreationGesture(interaction);
+      this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = true;
     } else {
+      this.beforeGeometryMutation(interaction);
       this.updateCreationGesture(interaction);
+      this.afterGeometryMutation(interaction);
     }
 
     if (interaction.isGestureEnded) {
+      this.beforeGeometryMutation(interaction);
       this.completeCreationGesture(interaction);
+      this.afterGeometryMutation(interaction);
       this.completeCreatedObject(interaction);
       this.isCreatingGestureActive = false;
     }
@@ -346,7 +374,9 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
 
     if (interaction.isObjectEnded) {
       if (this.isCreatingGestureActive) {
+        this.beforeGeometryMutation(interaction);
         this.completeCreationGesture(interaction);
+        this.afterGeometryMutation(interaction);
         this.isCreatingGestureActive = false;
       }
       this.completeCreatedObject(interaction);
@@ -366,14 +396,20 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
     }
 
     if (!this.isCreatingGestureActive) {
+      this.beforeGeometryMutation(interaction);
       this.beginCreationGesture(interaction);
+      this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = true;
     } else {
+      this.beforeGeometryMutation(interaction);
       this.updateCreationGesture(interaction);
+      this.afterGeometryMutation(interaction);
     }
 
     if (interaction.isGestureEnded) {
+      this.beforeGeometryMutation(interaction);
       this.completeCreationGesture(interaction);
+      this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = false;
     }
   }

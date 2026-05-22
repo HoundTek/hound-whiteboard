@@ -87,6 +87,15 @@ class BasicObject {
   }
 
   /**
+   * 获取对象渲染额外留白
+   * @description 返回值单位为对象空间中的长度，供活动层 dirty rect 在换算到屏幕空间后补足描边、端点与抗锯齿留白。
+   * @returns {number} 额外留白
+   */
+  getRenderPadding() {
+    return 0;
+  }
+
+  /**
    * 标识对象是否是有向对象
    * @type {boolean}
    * @static

@@ -36,6 +36,13 @@ class LiveRenderer {
   previousDrawableEntries;
 
   /**
+   * 待刷新的旧几何快照
+   * @description 用于在对象尚未经历上一帧 render 时，仍能显式保留变更前的屏幕范围。
+   * @type {Map<number, RectangleRange>}
+   */
+  objectSnapshotRects;
+
+  /**
    * @param {Monitor} monitor - 目标显示器
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
    */
@@ -43,6 +50,7 @@ class LiveRenderer {
     this.monitor = monitor;
     this.activeObjectManager = activeObjectManager;
     this.previousDrawableEntries = [];
+    this.objectSnapshotRects = new Map();
   }
 
   /**
@@ -182,6 +190,20 @@ class LiveRenderer {
   }
 
   /**
+   * 获取对象的屏幕留白
+   * @param {BasicObject} objectInstance - 对象实例
+   * @returns {number} 屏幕空间留白
+   */
+  getObjectScreenPadding(objectInstance) {
+    const objectPadding = objectInstance?.getRenderPadding?.();
+    if (!Number.isFinite(objectPadding) || objectPadding <= 0) {
+      return 0;
+    }
+
+    return objectPadding * (this.monitor?.zoom ?? 1);
+  }
+
+  /**
    * 获取对象的屏幕矩形范围
    * @param {BasicObject} objectInstance - 对象实例
    * @returns {RectangleRange | undefined}
@@ -189,7 +211,11 @@ class LiveRenderer {
   getObjectScreenRect(objectInstance) {
     const worldRect = this.getObjectWorldRect(objectInstance);
     if (!worldRect) return undefined;
-    return this.monitor?.worldRectToScreenRect?.(worldRect);
+
+    const screenRect = this.monitor?.worldRectToScreenRect?.(worldRect);
+    if (!screenRect) return undefined;
+
+    return screenRect.inflate(this.getObjectScreenPadding(objectInstance));
   }
 
   /**
@@ -233,6 +259,25 @@ class LiveRenderer {
    */
   indexDrawableEntries(entries) {
     return new Map(entries.map((entry) => [entry.objectId, entry]));
+  }
+
+  /**
+   * 记录对象当前几何快照
+   * @param {Iterable<BasicObject>} [objects = []] - 待记录对象集合
+   */
+  captureObjectSnapshot(objects = []) {
+    for (const objectInstance of objects ?? []) {
+      if (!(objectInstance instanceof BasicObject)) continue;
+
+      const currentRect = this.getObjectScreenRect(objectInstance);
+      if (!currentRect) continue;
+
+      const previousSnapshot = this.objectSnapshotRects.get(objectInstance.id);
+      this.objectSnapshotRects.set(
+        objectInstance.id,
+        previousSnapshot ? previousSnapshot.union(currentRect) : currentRect,
+      );
+    }
   }
 
   /**
@@ -307,11 +352,13 @@ class LiveRenderer {
     const dirtyRects = Array.from(objects).flatMap((objectInstance) => {
       const rects = [];
       const currentRect = this.getObjectScreenRect(objectInstance);
+      const snapshotRect = this.objectSnapshotRects.get(objectInstance.id);
       const previousRect = previousEntryIndex.get(
         objectInstance.id,
       )?.screenRect;
 
       if (currentRect) rects.push(currentRect);
+      if (snapshotRect) rects.push(snapshotRect);
       if (previousRect) rects.push(previousRect);
 
       return rects;
@@ -419,6 +466,7 @@ class LiveRenderer {
     }
 
     this.previousDrawableEntries = drawableEntries;
+    this.objectSnapshotRects.clear();
 
     return drawables;
   }

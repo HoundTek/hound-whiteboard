@@ -189,6 +189,10 @@ class TextObject extends OneDimensionObject {
     ctx.restore();
   }
 
+  getRenderPadding() {
+    return 0.5;
+  }
+
   serialize() {
     return {
       type: "TextObject",
