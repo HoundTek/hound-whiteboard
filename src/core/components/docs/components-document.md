@@ -13,6 +13,7 @@ components 目录下的模块用于管理白板运行时状态，负责把对象
 - `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
 - `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
 - `Monitor`：显示器组件，负责视口坐标变换、设备树挂载，以及多层渲染画布的承载。
+- `BaseRenderer`：静态层渲染器，负责把已提交静态对象绘制到 `baseCanvas`。
 - `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。
 - `LiveRenderer`：活动层渲染器，负责把 AOM 当前活动对象按层顺序绘制到 `liveCanvas`。
 
@@ -27,6 +28,7 @@ graph LR
   AOM["ActiveObjectManager"]
   CBL["ChunkBlockLoader"]
   M["Monitor"]
+  BR["BaseRenderer"]
   RS["RenderScheduler"]
   LR["LiveRenderer"]
   UT["UndoTree"]
@@ -39,6 +41,7 @@ graph LR
   B --> UT
   CBL --> CL
   AOM --> CBL
+  M --> BR
   M --> RS
   M --> LR
   LR --> AOM
@@ -73,9 +76,10 @@ graph LR
 当前渲染职责开始向 `Monitor` 视口层收敛。
 
 - `Monitor` 承载 `baseCanvas`、`liveCanvas`、`uiCanvas` 三层画布。
+- `BaseRenderer` 负责把已提交静态对象重绘到 `baseCanvas`，并已支持显式 dirty rect 局部刷新。
 - `RenderScheduler` 负责把多次 invalidate 合并到单次 flush。
 - `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`。
-- 活动层的对象驱动刷新、视口矩形换算与 dirty rect 局部重绘，也开始沿这条链路收口。
+- 活动层和静态层的对象驱动刷新、视口矩形换算与 dirty rect 局部重绘，也开始沿这条链路收口。
 
 这让活动对象的语义仍留在 AOM，而把“何时画、画到哪一层”收口到 Monitor 一侧。
 
@@ -90,14 +94,16 @@ graph LR
 
 - `ActiveObjectManager` 算法实现相对完整，已具备拾取、分层、置顶、清理等核心逻辑。
 - `Monitor` 已收口到多层画布骨架，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
-- `RenderScheduler` 与 `LiveRenderer` 已接入 `Monitor`，当前既可走整层重绘，也可走显式 dirty rect 的局部刷新。
+- `BaseRenderer`、`RenderScheduler` 与 `LiveRenderer` 已接入 `Monitor`；其中 `BaseRenderer` 已支持静态层整层重绘和显式 dirty rect 局部刷新，`LiveRenderer` 也已支持活动层整层重绘和显式 dirty rect 局部刷新。
 - `Board`、`Chunk`、`ChunkObjectManager` 已有骨架和关键字段；其中 `Board` 已收口到“根 `ChunkLoader` 持有区块对象 + `chunkLoaded` 维护加载状态”的模型，但仍存在较多 `todo`。
 - `ActiveObjectManager.add/choose/apply/discard` 已能主动触发活动层刷新，`LiveRenderer.invalidateObjects(...)` 也已覆盖对象前后两帧范围，避免拖拽残影。
-- 当前仍处在“先把活动层链路跑稳，再继续细化脏区合并与静态层缓存”的阶段。
+- `ActiveObjectManager.apply(objects)` 现在会主动请求 base 层整视口刷新；区块缓冲区变化和视口变化也会自动触发 base 层刷新。
+- 当前仍处在“活动层已较稳定、静态层已进入第一版增量刷新，但还要继续往区块级补绘推进”的阶段。
 
 ## 相关文档
 
 - [monitor-document.md](./monitor-document.md)
+- [base-renderer-document.md](./base-renderer-document.md)
 - [render-scheduler-document.md](./render-scheduler-document.md)
 - [live-renderer-document.md](./live-renderer-document.md)
 - [active-object-manager-document.md](./active-object-manager-document.md)

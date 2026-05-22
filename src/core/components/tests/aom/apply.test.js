@@ -115,16 +115,31 @@ describe("ActiveObjectManager/apply", () => {
   });
 
   test("apply 应触发 monitor.liveRenderer.invalidateObjects", () => {
+    const invalidatedChunks = [];
     const monitor = {
+      baseRenderer: {
+        invalidateChunks: jest.fn((chunks) => {
+          invalidatedChunks.push(...chunks);
+        }),
+      },
       liveRenderer: {
         collectActiveDrawables: jest.fn(() => []),
         invalidateObjects: jest.fn(),
       },
       renderScheduler: { invalidate: jest.fn() },
     };
+    const ownerChunk = createChunk(1);
+    ownerChunk.objectManager = new ChunkObjectManager(1);
+    ownerChunk.objectManager.setObjectCoverChunks(201, [1, 2]);
+    const coveredChunk = createChunk(2);
+    coveredChunk.objectManager = new ChunkObjectManager(2);
     const board = {
       monitors: new Map([["main", monitor]]),
-      getChunkById: jest.fn(() => undefined),
+      getChunkById: jest.fn((chunkId) => {
+        if (chunkId === 1) return ownerChunk;
+        if (chunkId === 2) return coveredChunk;
+        return undefined;
+      }),
     };
     const aom = new ActiveObjectManager(board);
     const stroke = new StrokeObject(new Vector(0, 0), 201, 1);
@@ -135,6 +150,11 @@ describe("ActiveObjectManager/apply", () => {
 
     aom.apply(new Set([stroke]));
 
+    expect(monitor.baseRenderer.invalidateChunks).toHaveBeenCalledTimes(1);
+    expect(invalidatedChunks.map((chunk) => chunk.id).sort((a, b) => a - b)).toEqual([
+      1,
+      2,
+    ]);
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
       stroke,
     ]);

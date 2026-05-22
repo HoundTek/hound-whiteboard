@@ -11,6 +11,8 @@ import { Vector } from "../utils/math.js";
 import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
 import { joinPath } from "../utils/path.js";
 import { Chunk } from "./chunk.js";
+import { ChunkObjectManager } from "./chunk-object-manager.js";
+import { BaseRenderer } from "./base-renderer.js";
 import { RenderScheduler } from "./render-scheduler.js";
 import { LiveRenderer } from "./live-renderer.js";
 import { RectangleRange } from "../range/rectangle.js";
@@ -78,12 +80,24 @@ class Monitor {
   devicesTree;
 
   /**
+    * 当前显示器的静态层渲染调度器
+    * @type {RenderScheduler}
+    */
+    baseRenderScheduler;
+
+    /**
    * 当前显示器的渲染调度器
    * @type {RenderScheduler}
    */
   renderScheduler;
 
   /**
+    * 静态层渲染器
+    * @type {BaseRenderer}
+    */
+    baseRenderer;
+
+    /**
    * 活动层渲染器
    * @type {LiveRenderer}
    */
@@ -97,14 +111,20 @@ class Monitor {
    *   origin.y = chunkHeight/2 - canvasHeight/(2×zoom)
    * @type {Vector}
    */
-  origin;
+  _origin;
 
   /**
    * 缩放因子
    * @description 1.0 = 默认比例，>1 = 放大，<1 = 缩小。
    * @type {number}
    */
-  zoom;
+  _zoom;
+
+  /**
+   * 上一次缓冲区区块快照
+   * @type {Chunk[]}
+   */
+  baseBufferedChunks;
 
   /**
    * @param {HTMLCanvasElement} canvas - 画布元素
@@ -120,25 +140,68 @@ class Monitor {
     this.canvas = canvas;
     this.board = board;
     this.chunkBlockLoader = this.board.createChunkBlockLoader();
-    this.zoom = 1;
+    this._zoom = 1;
     this.monitorId = monitorId;
+    this.baseBufferedChunks = [];
     const rect = canvas?.getBoundingClientRect();
     const canvasWidth = rect?.width ?? 0;
     const canvasHeight = rect?.height ?? 0;
     // 初始 origin 使第一区块居中显示。若 canvas 尚未布局，调用方应在布局后重新计算
-    this.origin = new Vector(
-      this.chunkWidth / 2 - canvasWidth / (2 * this.zoom),
-      this.chunkHeight / 2 - canvasHeight / (2 * this.zoom),
+    this._origin = new Vector(
+      this.chunkWidth / 2 - canvasWidth / (2 * this._zoom),
+      this.chunkHeight / 2 - canvasHeight / (2 * this._zoom),
     );
     this.resizeRenderLayers(width, height);
     this.canvas.id = `monitor-canvas-${monitorId}`;
 
     this.devicesTree = new DevicesTree();
+    this.baseRenderScheduler = new RenderScheduler();
     this.renderScheduler = new RenderScheduler();
+    this.baseRenderer = new BaseRenderer(this);
     this.liveRenderer = new LiveRenderer(this, this.board?.activeObjectManager);
+    this.baseRenderScheduler.setFlushHandler((dirtyRects) =>
+      this.baseRenderer.flush(dirtyRects),
+    );
     this.renderScheduler.setFlushHandler((dirtyRects) =>
       this.liveRenderer.flush(dirtyRects),
     );
+    this.bindChunkBlockLoaderRenderHook();
+  }
+
+  /**
+   * 当前视口原点
+   * @type {Vector}
+   */
+  get origin() {
+    return this._origin;
+  }
+
+  set origin(value) {
+    const previousChunks = this.getVisibleChunksForViewport();
+    const previousViewportState = {
+      origin: this.origin,
+      zoom: this.zoom,
+    };
+    this._origin = value instanceof Vector ? value : new Vector(value.x, value.y);
+    this.requestViewportBaseRender(previousChunks, previousViewportState);
+  }
+
+  /**
+   * 当前缩放因子
+   * @type {number}
+   */
+  get zoom() {
+    return this._zoom;
+  }
+
+  set zoom(value) {
+    const previousChunks = this.getVisibleChunksForViewport();
+    const previousViewportState = {
+      origin: this.origin,
+      zoom: this.zoom,
+    };
+    this._zoom = Number.isFinite(value) && value > 0 ? value : 1;
+    this.requestViewportBaseRender(previousChunks, previousViewportState);
   }
 
   /**
@@ -185,6 +248,93 @@ class Monitor {
       layerCanvas.width = width;
       layerCanvas.height = height;
     }
+  }
+
+  /**
+   * 获取当前视口屏幕矩形
+   * @returns {RectangleRange}
+   */
+  getViewportScreenRect() {
+    return new RectangleRange(
+      0,
+      0,
+      this.canvas?.width ?? 0,
+      this.canvas?.height ?? 0,
+    );
+  }
+
+  /**
+   * 获取当前视口对应的世界矩形
+   * @param {Vector} [origin = this.origin] - 视口原点
+   * @param {number} [zoom = this.zoom] - 缩放因子
+   * @returns {RectangleRange}
+   */
+  getViewportWorldRect(origin = this.origin, zoom = this.zoom) {
+    const viewportWidth = (this.canvas?.width ?? 0) / zoom;
+    const viewportHeight = (this.canvas?.height ?? 0) / zoom;
+    return new RectangleRange(origin.x, origin.y, viewportWidth, viewportHeight);
+  }
+
+  /**
+   * 获取当前视口可见区块集合
+   * @param {Vector} [origin = this.origin] - 视口原点
+   * @param {number} [zoom = this.zoom] - 缩放因子
+   * @returns {Chunk[]}
+   */
+  getVisibleChunksForViewport(origin = this.origin, zoom = this.zoom) {
+    if (!this.board || this.chunkWidth <= 0 || this.chunkHeight <= 0) {
+      return [];
+    }
+
+    const viewportWorldRect = this.getViewportWorldRect(origin, zoom);
+    const chunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
+      viewportWorldRect,
+      this.chunkWidth,
+      this.chunkHeight,
+    );
+
+    return [...chunkIds]
+      .map((chunkId) => this.board.getChunkById?.(chunkId))
+      .filter(Boolean);
+  }
+
+  /**
+   * 请求一次视口范围内的静态层重绘
+   * @param {Chunk[]} [previousChunks = []] - 视口变化前可见区块
+   */
+  requestViewportBaseRender(previousChunks = [], previousViewportState = {}) {
+    const currentChunks = this.getVisibleChunksForViewport();
+
+    if (currentChunks.length > 0 || previousChunks.length > 0) {
+      this.baseRenderer?.invalidateChunks?.(currentChunks, previousChunks, {
+        previousViewportState,
+      });
+      return;
+    }
+
+    const viewportRect = this.getViewportScreenRect();
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
+    this.baseRenderScheduler?.invalidate?.(viewportRect);
+  }
+
+  /**
+   * 将当前 chunkBlockLoader 的缓冲区更新接到 baseRenderer
+   */
+  bindChunkBlockLoaderRenderHook() {
+    const chunkLoader = this.chunkBlockLoader?.chunkLoader;
+    if (!chunkLoader || chunkLoader.__baseRenderHookBound) return;
+
+    const originalEmitBufferUpdated = chunkLoader.emitBufferUpdated.bind(chunkLoader);
+    this.baseBufferedChunks = this.chunkBlockLoader?.getLoadedChunks?.() ?? [];
+
+    chunkLoader.emitBufferUpdated = (payload = {}) => {
+      const previousChunks = this.baseBufferedChunks;
+      const currentChunks = payload.chunksLoaded ?? this.chunkBlockLoader?.getLoadedChunks?.() ?? [];
+      this.baseBufferedChunks = [...currentChunks];
+      this.baseRenderer?.invalidateChunks?.(currentChunks, previousChunks);
+      return originalEmitBufferUpdated(payload);
+    };
+    chunkLoader.__baseRenderHookBound = true;
   }
 
   /**

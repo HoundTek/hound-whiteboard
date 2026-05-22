@@ -1,6 +1,8 @@
 import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
 import { Vector } from "../../utils/math.js";
+import { Chunk } from "../chunk.js";
+import { RectangleRange } from "../../range/index.js";
 import {
   createDebuggerDevice,
   DEBUGGER_DEVICE_SIGNAL_TYPES,
@@ -19,8 +21,20 @@ describe("Monitor", () => {
     const board = {
       width: 800,
       height: 600,
+      getChunkById(chunkId) {
+        return Chunk.fromId(chunkId);
+      },
       createChunkBlockLoader() {
-        return {};
+        return {
+          chunkLoader: {
+            emitBufferUpdated() {
+              return true;
+            },
+          },
+          getLoadedChunks() {
+            return [];
+          },
+        };
       },
     };
 
@@ -152,6 +166,7 @@ describe("Monitor", () => {
     expect(monitor.getContext("live")).toEqual({});
     expect(monitor.getContext("ui")).toEqual({});
     expect(monitor.renderScheduler).toBeDefined();
+    expect(monitor.baseRenderer).toBeDefined();
     expect(monitor.liveRenderer).toBeDefined();
   });
 
@@ -166,5 +181,55 @@ describe("Monitor", () => {
 
     expect(flushSpy).toHaveBeenCalledTimes(1);
     flushSpy.mockRestore();
+  });
+
+  test("chunkBlockLoader 缓冲区更新应触发 baseRenderScheduler.invalidate", () => {
+    const monitor = createMonitor("zeta");
+    const invalidateSpy = jest
+      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .mockImplementation(() => false);
+    const chunk = Chunk.fromId(1);
+
+    monitor.chunkBlockLoader.chunkLoader.emitBufferUpdated({
+      action: "expand",
+      direction: "right",
+      chunksLoaded: [chunk],
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+    invalidateSpy.mockRestore();
+  });
+
+  test("设置 origin 或 zoom 应触发 baseRenderScheduler.invalidate", () => {
+    const monitor = createMonitor("eta");
+    const invalidateSpy = jest
+      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .mockImplementation(() => false);
+
+    monitor.zoom = 2;
+    monitor.origin = new Vector(100, 50);
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(800, 0, 800, 600),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 600, 800, 600),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(800, 600, 800, 600),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 1600, 1200),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(-200, -100, 1600, 1200),
+    );
+    expect(invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(6);
+    invalidateSpy.mockRestore();
   });
 });

@@ -25,11 +25,14 @@ Monitor 当前不仅是输入与设备树边界，也是视口层渲染边界。
 - 多层 canvas 的尺寸同步
 - 视口原点 `origin`
 - 缩放比例 `zoom`
+- `BaseRenderer`
 - `RenderScheduler`
 - `LiveRenderer`
 
 当前分工是：
 
+- `BaseRenderer` 负责从当前已加载区块收集静态对象，并重绘到 `baseCanvas`
+- `baseRenderScheduler` 负责把 base 层的多次失效请求合并为单帧 flush
 - `RenderScheduler` 负责把多次 invalidate 合并为单帧 flush
 - `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`
 - Monitor 负责把这两者绑定到具体视口实例上
@@ -38,6 +41,16 @@ Monitor 当前不仅是输入与设备树边界，也是视口层渲染边界。
 
 - 通过 `worldRectToScreenRect()` 把世界空间矩形统一换算为当前视口的屏幕矩形
 - 把 `RenderScheduler.flush(dirtyRects)` 透传到 `LiveRenderer.flush(dirtyRects)`
+
+对于静态层，当前又多了两件事情：
+
+- 把 `baseRenderScheduler.flush(dirtyRects)` 透传到 `BaseRenderer.flush(dirtyRects)`
+- 监听当前 `chunkBlockLoader` 的缓冲区更新，并把旧区块与新区块的矩形转成 base 层脏区
+
+另外，`Monitor` 现在还会把视口变化本身折算成静态层脏区：
+
+- `origin` 变化时，先记录旧视口下可见的区块集合，再用新区块集合与之合并失效
+- `zoom` 变化时，同样会同时保留旧视口和新视口两套区块矩形，避免旧像素残留
 
 这意味着“活动对象属于谁”仍由 AOM 决定，而“活动对象如何显示在当前视口里”则由 Monitor 侧负责。
 
@@ -108,12 +121,13 @@ Monitor 当前还承担一层很关键的视口坐标规整职责。
 
 ## 当前实现状态
 
-- 已实现：设备树挂载入口、世界坐标与区块坐标换算、多层画布骨架、`RenderScheduler` 挂载、`LiveRenderer` 挂载、`worldRectToScreenRect()`。
+- 已实现：设备树挂载入口、世界坐标与区块坐标换算、多层画布骨架、`BaseRenderer` 挂载、`baseRenderScheduler` 挂载、`RenderScheduler` 挂载、`LiveRenderer` 挂载、`worldRectToScreenRect()`。
 - 已兼容：旧调用方仍可通过 `monitor.canvas` 访问交互层画布，现阶段它等价于 `liveCanvas`。
-- 已接入：活动层 dirty rect 已可沿 `monitor.renderScheduler -> liveRenderer.flush(dirtyRects)` 这条链路执行。
-- 待完善：DPR 统一处理、dirty rect 合并策略进一步优化，以及 `baseCanvas` / `uiCanvas` 的专用渲染器。
+- 已接入：活动层 dirty rect 已可沿 `monitor.renderScheduler -> liveRenderer.flush(dirtyRects)` 这条链路执行；静态层 dirty rect 已可沿 `monitor.baseRenderScheduler -> baseRenderer.flush(dirtyRects)` 这条链路执行；区块缓冲区变化与视口变化也会自动触发 base 层刷新，并同时覆盖旧区块与新区块。
+- 待完善：DPR 统一处理、dirty rect 合并策略进一步优化、`baseCanvas` 的区块级增量补绘，以及 `uiCanvas` 的专用渲染器。
 
 ## 相关文档
 
+- [base-renderer-document.md](./base-renderer-document.md)
 - [render-scheduler-document.md](./render-scheduler-document.md)
 - [live-renderer-document.md](./live-renderer-document.md)

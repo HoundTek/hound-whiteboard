@@ -181,6 +181,28 @@ class ActiveObjectManager {
   }
 
   /**
+   * 请求所有 monitor 刷新静态层
+   */
+  requestBaseRender(chunks = []) {
+    const board = this.board;
+    if (!board?.monitors?.values) return;
+
+    const normalizedChunks = Array.from(chunks).filter(Boolean);
+
+    for (const monitor of board.monitors.values()) {
+      if (normalizedChunks.length > 0) {
+        monitor?.baseRenderer?.invalidateChunks?.(normalizedChunks);
+        continue;
+      }
+      if (typeof monitor?.requestViewportBaseRender === "function") {
+        monitor.requestViewportBaseRender();
+        continue;
+      }
+      monitor?.baseRenderer?.flush?.();
+    }
+  }
+
+  /**
    * 取消注册活动对象实例
    * @param {number} objectId - 要取消注册的对象 id
    */
@@ -770,6 +792,7 @@ class ActiveObjectManager {
 
     const canCommitToBoard = Boolean(this.board);
     const activeBasicObjects = normalizedObjects;
+    const affectedChunkIds = new Set();
 
     if (canCommitToBoard && activeBasicObjects.length > 0) {
       const applyingObjectIds = new Set(
@@ -779,10 +802,21 @@ class ActiveObjectManager {
         .map((obj) => {
           const ownerChunk = this.resolveObjectChunk(obj);
           if (!ownerChunk) return undefined;
+          const previousCoveredChunkIds = ownerChunk.objectManager?.getObjectCoverChunks?.(
+            obj.id,
+          ) ?? new Set([ownerChunk.id]);
+          for (const chunkId of previousCoveredChunkIds) {
+            affectedChunkIds.add(chunkId);
+          }
+          const coveredChunkIds = this.calculateCoveredChunkIds(obj);
+          for (const chunkId of coveredChunkIds) {
+            affectedChunkIds.add(chunkId);
+          }
           return {
             obj,
             ownerChunk,
-            coveredChunkIds: this.calculateCoveredChunkIds(obj),
+            previousCoveredChunkIds,
+            coveredChunkIds,
           };
         })
         .filter(Boolean);
@@ -823,6 +857,11 @@ class ActiveObjectManager {
       this.unregisterActiveObject(objId);
     }
     this.tidyup();
+    this.requestBaseRender(
+      [...affectedChunkIds]
+        .map((chunkId) => this.board?.getChunkById?.(chunkId))
+        .filter(Boolean),
+    );
     this.requestLiveRender(normalizedObjects);
   }
 

@@ -318,7 +318,11 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 
 - `Board.createMonitor()` 已创建 monitor-root、`baseCanvas`、`liveCanvas`、`uiCanvas`。
 - `Monitor` 已持有多层画布引用，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
+- `BaseRenderer` 已挂在 `Monitor` 下，可把当前已加载区块的 `staticGraph` 合并成 monitor 级全局静态图，并按全局拓扑序把静态对象重绘到 `baseCanvas`。
+- `BaseRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
+- `BaseRenderer` 的局部重绘不会退化成“按脏区命中的对象临时排序”，而是先沿用全局静态图拓扑序，再过滤命中脏区的对象。
 - `Monitor.worldRectToScreenRect()` 已补齐，活动对象现在可以直接从世界范围换算到当前视口屏幕范围。
+- `Monitor` 已持有 `baseRenderScheduler`，并会在区块缓冲区变化、`origin/zoom` 变化时自动请求 base 层刷新；视口变化时会同时覆盖旧视口与新视口下的可见区块。
 - `RenderScheduler` 已挂在 `Monitor` 下，支持多次 invalidate 合并到单次 flush，并把 dirty rect 透传给 `LiveRenderer.flush(...)`。
 - `LiveRenderer` 已挂在 `Monitor` 下，可按 `ActiveObjectManager.layerOrder` 顺序读取活动对象并重绘到 `liveCanvas`。
 - `LiveRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
@@ -327,10 +331,12 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - `LiveRenderer.captureObjectSnapshot(objects)` 已落地，creator 高频几何修改路径现在会在变更前记录旧几何、变更后请求活动层刷新。
 - `ObjectModifierTool` 已补齐统一的 `beforeGeometryMutation / afterGeometryMutation / withGeometryMutation` 钩子，为后续编辑工具预留同一套快照协议入口。
 - `ActiveObjectManager.add/choose/apply/discard` 已会主动通知各 `Monitor.liveRenderer` 发起活动层刷新。
+- `ActiveObjectManager.apply(objects)` 已会在静态结构写回后主动触发对象旧覆盖区块与新覆盖区块的并集刷新。
 
 当前还没有完成的部分是：
 
-- `baseCanvas` 与 `uiCanvas` 的专用渲染器
+- `uiCanvas` 的专用渲染器
+- `baseCanvas` 现在已经有了第一版 dirty rect 与自动刷新链路，`apply()` 与视口变化也已收窄到区块级失效；但还没有推进到真正的区块补绘和更细粒度缓存
 - dirty rect 合并、裁剪与 padding 策略仍较基础，尚未针对复杂笔迹和大范围编辑做更细优化
 - 对象几何变化虽然已经能覆盖前后两帧范围，但还没有进一步抽象成更稳定的“旧几何快照 -> 新几何快照”更新协议
 - 旧几何快照协议已经有了第一版，creator 高频修改路径已接入，modifier 侧也已沉淀出统一基类钩子；但还没有具体编辑工具子类真正走通这条链路
@@ -357,7 +363,7 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 4. 每次几何变化先记录旧几何快照，再调用 `liveRenderer.invalidateObjects(objects)` 请求局部刷新。
 5. `RenderScheduler` 汇总脏区后，`LiveRenderer` 在下一帧重绘该对象局部区域。
 6. 抬笔后调用 AOM.apply(objects)。
-7. BaseRenderer 在提交完成后重绘受影响区块或受影响区域。
+7. BaseRenderer 在提交完成后按对象旧覆盖区块与新覆盖区块的并集刷新；区块缓冲区变化和视口变化时也按区块矩形增量刷新。
 8. liveCanvas 清除对应对象的残留内容。
 
 #### 流程二：选择并拖拽已有对象
