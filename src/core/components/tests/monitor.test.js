@@ -9,6 +9,27 @@ import {
 } from "../../devices/debugger-device.js";
 
 describe("Monitor", () => {
+  function createContext() {
+    return {
+      save() {},
+      restore() {},
+      setTransform() {},
+      clearRect() {},
+      beginPath() {},
+      moveTo() {},
+      lineTo() {},
+      stroke() {},
+      fill() {},
+      fillRect() {},
+      strokeRect() {},
+      arc() {},
+      fillText() {},
+      measureText() {
+        return { width: 0 };
+      },
+    };
+  }
+
   function createMonitor(monitorId = "monitor") {
     const canvas = {
       width: 0,
@@ -16,6 +37,9 @@ describe("Monitor", () => {
       id: "",
       getBoundingClientRect() {
         return { left: 0, top: 0, width: 800, height: 600 };
+      },
+      getContext() {
+        return createContext();
       },
     };
     const board = {
@@ -134,16 +158,16 @@ describe("Monitor", () => {
 
   test("attachRenderLayers 应保留 liveCanvas 为兼容入口并同步层尺寸", () => {
     const monitor = createMonitor("delta");
-    const baseCanvas = { width: 0, height: 0, getContext: () => ({}) };
+    const baseCanvas = { width: 0, height: 0, getContext: () => createContext() };
     const liveCanvas = {
       width: 320,
       height: 240,
       getBoundingClientRect() {
         return { left: 0, top: 0, width: 320, height: 240 };
       },
-      getContext: () => ({}),
+      getContext: () => createContext(),
     };
-    const uiCanvas = { width: 0, height: 0, getContext: () => ({}) };
+    const uiCanvas = { width: 0, height: 0, getContext: () => createContext() };
     const rootElement = {};
 
     monitor.attachRenderLayers({
@@ -162,9 +186,9 @@ describe("Monitor", () => {
     expect(baseCanvas.height).toBe(240);
     expect(uiCanvas.width).toBe(320);
     expect(uiCanvas.height).toBe(240);
-    expect(monitor.getContext("base")).toEqual({});
-    expect(monitor.getContext("live")).toEqual({});
-    expect(monitor.getContext("ui")).toEqual({});
+    expect(monitor.getContext("base")?.save).toBeDefined();
+    expect(monitor.getContext("live")?.save).toBeDefined();
+    expect(monitor.getContext("ui")?.save).toBeDefined();
     expect(monitor.renderScheduler).toBeDefined();
     expect(monitor.baseRenderer).toBeDefined();
     expect(monitor.liveRenderer).toBeDefined();
@@ -181,6 +205,92 @@ describe("Monitor", () => {
 
     expect(flushSpy).toHaveBeenCalledTimes(1);
     flushSpy.mockRestore();
+  });
+
+  test("base/live 调度器应使用不同的 dirty rect 聚合参数", () => {
+    const monitor = createMonitor("epsilon-merge");
+    const dirtyRects = [
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(20, 0, 10, 10),
+    ];
+
+    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(20, 0, 10, 10),
+    ]);
+    expect(monitor.renderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 30, 10),
+    ]);
+  });
+
+  test("dirty rect 聚合阈值应随 zoom 放大而同步放宽", () => {
+    const monitor = createMonitor("epsilon-zoom-merge");
+    const dirtyRects = [
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(18, 0, 10, 10),
+    ];
+
+    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(18, 0, 10, 10),
+    ]);
+    expect(monitor.renderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 28, 10),
+    ]);
+
+    monitor.zoom = 2;
+
+    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 28, 10),
+    ]);
+    expect(monitor.renderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 28, 10),
+    ]);
+  });
+
+  test("coverage ratio 阈值应随 zoom 提高而变得更严格", () => {
+    const monitor = createMonitor("epsilon-zoom-coverage");
+
+    expect(monitor.getBaseDirtyRectViewportCoverageRatio()).toBeCloseTo(0.92);
+    expect(monitor.getBaseDirtyRectCanonicalCoverageRatio()).toBeCloseTo(0.55);
+    expect(monitor.getLiveDirtyRectViewportCoverageRatio()).toBeCloseTo(0.72);
+
+    monitor.zoom = 2;
+
+    expect(monitor.getBaseDirtyRectViewportCoverageRatio()).toBeCloseTo(0.95);
+    expect(monitor.getBaseDirtyRectCanonicalCoverageRatio()).toBeCloseTo(0.65);
+    expect(monitor.getLiveDirtyRectViewportCoverageRatio()).toBeCloseTo(0.8);
+  });
+
+  test("collectBaseChunkScreenRectsForDirtyRect 应收窄到 dirty rect 真正命中的已加载 chunk 子集", () => {
+    const monitor = createMonitor("epsilon-chunk-subset");
+    const chunk1 = Chunk.fromId(1);
+    const chunk2 = Chunk.fromId(2);
+    monitor.chunkBlockLoader = {
+      getLoadedChunks() {
+        return [chunk1, chunk2];
+      },
+    };
+    monitor.baseRenderer = {
+      getChunkScreenRect(chunk) {
+        const rectMap = new Map([
+          [1, new RectangleRange(0, 0, 800, 600)],
+          [2, new RectangleRange(800, 0, 800, 600)],
+        ]);
+        return rectMap.get(chunk.id);
+      },
+    };
+
+    expect(
+      monitor.collectBaseChunkScreenRectsForDirtyRect(
+        new RectangleRange(10, 10, 100, 100),
+      ),
+    ).toEqual([new RectangleRange(0, 0, 800, 600)]);
+    expect(
+      monitor.collectBaseChunkScreenRectsForDirtyRect(
+        new RectangleRange(810, 10, 100, 100),
+      ),
+    ).toEqual([new RectangleRange(800, 0, 800, 600)]);
   });
 
   test("chunkBlockLoader 缓冲区更新应触发 baseRenderScheduler.invalidate", () => {
@@ -231,5 +341,27 @@ describe("Monitor", () => {
     );
     expect(invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(6);
     invalidateSpy.mockRestore();
+  });
+
+  test("resizeRenderLayers 应在尺寸变化后触发 base/live 补绘请求", () => {
+    const monitor = createMonitor("theta");
+    const baseInvalidateSpy = jest
+      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .mockImplementation(() => false);
+    const liveInvalidateSpy = jest
+      .spyOn(monitor.renderScheduler, "invalidate")
+      .mockImplementation(() => false);
+
+    monitor.resizeRenderLayers(640, 480);
+
+    expect(baseInvalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+    expect(liveInvalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 640, 480),
+    );
+
+    baseInvalidateSpy.mockRestore();
+    liveInvalidateSpy.mockRestore();
   });
 });

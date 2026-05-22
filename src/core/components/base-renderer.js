@@ -8,6 +8,7 @@ import { BasicObject } from "../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange } from "../range/index.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { Monitor } from "./monitor.js";
+import { mergeRectangleDirtyRects } from "./render-scheduler.js";
 
 /**
  * 静态层渲染器
@@ -116,6 +117,36 @@ class BaseRenderer {
   }
 
   /**
+   * 获取对象的屏幕留白
+   * @param {BasicObject} objectInstance - 对象实例
+   * @returns {number} 屏幕空间留白
+   */
+  getObjectScreenPadding(objectInstance) {
+    const objectPadding = objectInstance?.getRenderPadding?.();
+    if (!Number.isFinite(objectPadding) || objectPadding <= 0) {
+      return 0;
+    }
+
+    return objectPadding * (this.monitor?.zoom ?? 1);
+  }
+
+  /**
+   * 将世界矩形换算为带留白的屏幕矩形
+   * @param {RectangleRange | import("../range/range.js").Range | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} worldRect - 世界矩形
+   * @param {number} [padding = 0] - 屏幕空间留白
+   * @returns {RectangleRange | undefined}
+   */
+  getScreenRectForWorldRect(worldRect, padding = 0) {
+    const normalizedWorldRect = RectangleRange.fromRectLike(worldRect);
+    if (!normalizedWorldRect) return undefined;
+
+    const screenRect = this.monitor?.worldRectToScreenRect?.(normalizedWorldRect);
+    if (!screenRect) return undefined;
+
+    return screenRect.inflate(padding);
+  }
+
+  /**
    * 获取对象的屏幕矩形范围
    * @param {BasicObject} objectInstance - 对象实例
    * @returns {RectangleRange | undefined}
@@ -123,7 +154,11 @@ class BaseRenderer {
   getObjectScreenRect(objectInstance) {
     const worldRect = this.getObjectWorldRect(objectInstance);
     if (!worldRect) return undefined;
-    return this.monitor?.worldRectToScreenRect?.(worldRect);
+
+    return this.getScreenRectForWorldRect(
+      worldRect,
+      this.getObjectScreenPadding(objectInstance),
+    );
   }
 
   /**
@@ -159,7 +194,7 @@ class BaseRenderer {
   /**
    * 合并当前已加载区块的静态图
    * @param {Iterable<*>} chunks - 当前已加载区块
-   * @returns {DirectedGraph}
+    * @returns {BasicObject[]}
    */
   mergeStaticGraphs(chunks) {
     const mergedGraph = new DirectedGraph();
@@ -270,6 +305,44 @@ class BaseRenderer {
       );
       ctx.restore();
     }
+  }
+
+  /**
+   * 失效指定对象的静态层屏幕脏区
+   * @param {Iterable<BasicObject>} [objects = []] - 待刷新的对象集合
+   * @param {{ previousWorldRects?: Map<number, RectangleRange> }} [options = {}] - 旧世界范围快照
+   * @returns {RectangleRange[]} 实际提交的脏区
+   */
+  invalidateObjects(objects = [], options = {}) {
+    const previousWorldRects = options.previousWorldRects ?? new Map();
+    const dirtyRects = [];
+
+    for (const objectInstance of objects ?? []) {
+      if (!(objectInstance instanceof BasicObject)) continue;
+
+      const padding = this.getObjectScreenPadding(objectInstance);
+      const currentRect = this.getObjectScreenRect(objectInstance);
+      const previousWorldRect = previousWorldRects.get(objectInstance.id);
+      const previousRect = previousWorldRect
+        ? this.getScreenRectForWorldRect(previousWorldRect, padding)
+        : undefined;
+
+      if (currentRect) dirtyRects.push(currentRect);
+      if (previousRect) dirtyRects.push(previousRect);
+    }
+
+    const mergeDirtyRects =
+      this.monitor?.baseRenderScheduler?.mergeDirtyRects ??
+      mergeRectangleDirtyRects;
+    const mergedDirtyRects = mergeDirtyRects(dirtyRects).filter(
+      (dirtyRect) => dirtyRect instanceof RectangleRange,
+    );
+
+    for (const dirtyRect of mergedDirtyRects) {
+      this.monitor?.baseRenderScheduler?.invalidate?.(dirtyRect);
+    }
+
+    return mergedDirtyRects;
   }
 
   /**

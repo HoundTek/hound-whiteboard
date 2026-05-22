@@ -13,9 +13,12 @@ import { joinPath } from "../utils/path.js";
 import { Chunk } from "./chunk.js";
 import { ChunkObjectManager } from "./chunk-object-manager.js";
 import { BaseRenderer } from "./base-renderer.js";
-import { RenderScheduler } from "./render-scheduler.js";
+import {
+  createRectangleDirtyRectMerger,
+  RenderScheduler,
+} from "./render-scheduler.js";
 import { LiveRenderer } from "./live-renderer.js";
-import { RectangleRange } from "../range/rectangle.js";
+import { intersectsRanges, RectangleRange } from "../range/index.js";
 
 /**
  * 显示器组件
@@ -155,10 +158,14 @@ class Monitor {
     this.canvas.id = `monitor-canvas-${monitorId}`;
 
     this.devicesTree = new DevicesTree();
-    this.baseRenderScheduler = new RenderScheduler();
-    this.renderScheduler = new RenderScheduler();
     this.baseRenderer = new BaseRenderer(this);
     this.liveRenderer = new LiveRenderer(this, this.board?.activeObjectManager);
+    this.baseRenderScheduler = new RenderScheduler({
+      mergeDirtyRects: this.createBaseDirtyRectMerger(),
+    });
+    this.renderScheduler = new RenderScheduler({
+      mergeDirtyRects: this.createLiveDirtyRectMerger(),
+    });
     this.baseRenderScheduler.setFlushHandler((dirtyRects) =>
       this.baseRenderer.flush(dirtyRects),
     );
@@ -241,14 +248,161 @@ class Monitor {
    * @param {number} height - 画布高度
    */
   resizeRenderLayers(width, height) {
+    const nextWidth = Number.isFinite(width) ? width : 0;
+    const nextHeight = Number.isFinite(height) ? height : 0;
     const canvases = [this.baseCanvas, this.liveCanvas, this.uiCanvas].filter(
       Boolean,
     );
+    let resized = false;
 
     for (const layerCanvas of canvases) {
-      layerCanvas.width = width;
-      layerCanvas.height = height;
+      if (
+        layerCanvas.width === nextWidth &&
+        layerCanvas.height === nextHeight
+      ) {
+        continue;
+      }
+
+      layerCanvas.width = nextWidth;
+      layerCanvas.height = nextHeight;
+      resized = true;
     }
+
+    if (resized) {
+      this.requestRenderLayersRefresh();
+    }
+  }
+
+  /**
+   * 在渲染层尺寸变化后请求 base/live 补绘
+   */
+  requestRenderLayersRefresh() {
+    const viewportRect = this.getViewportScreenRect();
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
+
+    this.requestViewportBaseRender();
+    this.renderScheduler?.invalidate?.(viewportRect);
+  }
+
+  /**
+   * 创建静态层脏区聚合器
+   * @returns {(dirtyRects: any[]) => any[]}
+   */
+  createBaseDirtyRectMerger() {
+    return createRectangleDirtyRectMerger({
+      axisNearGap: () => this.getBaseDirtyRectAxisNearGap(),
+      diagonalNearGap: () => this.getBaseDirtyRectDiagonalNearGap(),
+      maxExtraArea: () => this.getBaseDirtyRectMaxExtraArea(),
+      maxGrowthRatio: 1.2,
+      viewportCoverageRatio: () => this.getBaseDirtyRectViewportCoverageRatio(),
+      canonicalRectCoverageRatio: () =>
+        this.getBaseDirtyRectCanonicalCoverageRatio(),
+      getViewportRect: () => this.getViewportScreenRect(),
+      getCanonicalRectsForRect: (dirtyRect) =>
+        this.collectBaseChunkScreenRectsForDirtyRect(dirtyRect),
+    });
+  }
+
+  /**
+   * 创建活动层脏区聚合器
+   * @returns {(dirtyRects: any[]) => any[]}
+   */
+  createLiveDirtyRectMerger() {
+    return createRectangleDirtyRectMerger({
+      axisNearGap: () => this.getLiveDirtyRectAxisNearGap(),
+      diagonalNearGap: () => this.getLiveDirtyRectDiagonalNearGap(),
+      maxExtraArea: () => this.getLiveDirtyRectMaxExtraArea(),
+      maxGrowthRatio: 1.5,
+      viewportCoverageRatio: () => this.getLiveDirtyRectViewportCoverageRatio(),
+      getViewportRect: () => this.getViewportScreenRect(),
+    });
+  }
+
+  /**
+   * 获取用于 dirty rect 聚合的 zoom 缩放因子
+   * @returns {number}
+   */
+  getDirtyRectZoomScale() {
+    const zoom = this.zoom;
+    if (!Number.isFinite(zoom) || zoom <= 0) return 1;
+    return zoom;
+  }
+
+  /**
+   * 获取静态层轴向近邻合并阈值
+   * @returns {number}
+   */
+  getBaseDirtyRectAxisNearGap() {
+    return 6 * this.getDirtyRectZoomScale();
+  }
+
+  /**
+   * 获取静态层对角近邻合并阈值
+   * @returns {number}
+   */
+  getBaseDirtyRectDiagonalNearGap() {
+    return 3 * this.getDirtyRectZoomScale();
+  }
+
+  /**
+   * 获取静态层额外扫描面积阈值
+   * @returns {number}
+   */
+  getBaseDirtyRectMaxExtraArea() {
+    const zoomScale = this.getDirtyRectZoomScale();
+    return 160 * zoomScale * zoomScale;
+  }
+
+  /**
+   * 获取静态层整视口退化阈值
+   * @returns {number}
+   */
+  getBaseDirtyRectViewportCoverageRatio() {
+    const zoomScale = this.getDirtyRectZoomScale();
+    return Math.min(0.98, 0.92 + (zoomScale - 1) * 0.03);
+  }
+
+  /**
+   * 获取静态层整 chunk 退化阈值
+   * @returns {number}
+   */
+  getBaseDirtyRectCanonicalCoverageRatio() {
+    const zoomScale = this.getDirtyRectZoomScale();
+    return Math.min(0.8, 0.55 + (zoomScale - 1) * 0.1);
+  }
+
+  /**
+   * 获取活动层轴向近邻合并阈值
+   * @returns {number}
+   */
+  getLiveDirtyRectAxisNearGap() {
+    return 12 * this.getDirtyRectZoomScale();
+  }
+
+  /**
+   * 获取活动层对角近邻合并阈值
+   * @returns {number}
+   */
+  getLiveDirtyRectDiagonalNearGap() {
+    return 6 * this.getDirtyRectZoomScale();
+  }
+
+  /**
+   * 获取活动层额外扫描面积阈值
+   * @returns {number}
+   */
+  getLiveDirtyRectMaxExtraArea() {
+    const zoomScale = this.getDirtyRectZoomScale();
+    return 384 * zoomScale * zoomScale;
+  }
+
+  /**
+   * 获取活动层整视口退化阈值
+   * @returns {number}
+   */
+  getLiveDirtyRectViewportCoverageRatio() {
+    const zoomScale = this.getDirtyRectZoomScale();
+    return Math.min(0.92, 0.72 + (zoomScale - 1) * 0.08);
   }
 
   /**
@@ -302,6 +456,79 @@ class Monitor {
     return [...chunkIds]
       .map((chunkId) => this.board.getChunkById?.(chunkId))
       .filter(Boolean);
+  }
+
+  /**
+   * 将屏幕矩形换算为世界矩形
+   * @param {RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} rect - 屏幕矩形
+   * @returns {RectangleRange | undefined}
+   */
+  screenRectToWorldRect(rect) {
+    const normalizedRect = RectangleRange.fromRectLike(rect);
+    if (!normalizedRect) return undefined;
+
+    const zoom = this.zoom;
+    if (!Number.isFinite(zoom) || zoom <= 0) return undefined;
+
+    return new RectangleRange(
+      normalizedRect.left / zoom + this.origin.x,
+      normalizedRect.top / zoom + this.origin.y,
+      normalizedRect.width / zoom,
+      normalizedRect.height / zoom,
+    );
+  }
+
+  /**
+   * 收集与指定世界矩形相交的已加载区块
+   * @param {RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} worldRect - 世界矩形
+   * @returns {Chunk[]}
+   */
+  getLoadedChunksForWorldRect(worldRect) {
+    const normalizedWorldRect = RectangleRange.fromRectLike(worldRect);
+    if (
+      !normalizedWorldRect ||
+      !this.board ||
+      this.chunkWidth <= 0 ||
+      this.chunkHeight <= 0
+    ) {
+      return [];
+    }
+
+    const loadedChunkIds = new Set(
+      (this.chunkBlockLoader?.getLoadedChunks?.() ?? [])
+        .map((chunk) => chunk?.id)
+        .filter((chunkId) => Number.isInteger(chunkId)),
+    );
+
+    return [...ChunkObjectManager.calculateCoveredChunkIdsForRange(
+      normalizedWorldRect,
+      this.chunkWidth,
+      this.chunkHeight,
+    )]
+      .filter((chunkId) => loadedChunkIds.has(chunkId))
+      .map((chunkId) => this.board.getChunkById?.(chunkId))
+      .filter(Boolean);
+  }
+
+  /**
+   * 收集与指定脏区相交的真实受影响区块屏幕矩形
+   * @param {RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} dirtyRect - 屏幕脏区
+   * @returns {RectangleRange[]}
+   */
+  collectBaseChunkScreenRectsForDirtyRect(dirtyRect) {
+    const normalizedDirtyRect = RectangleRange.fromRectLike(dirtyRect);
+    if (!normalizedDirtyRect) return [];
+
+    const worldRect = this.screenRectToWorldRect(normalizedDirtyRect);
+    if (!worldRect) return [];
+
+    return this.getLoadedChunksForWorldRect(worldRect)
+      .map((chunk) => this.baseRenderer?.getChunkScreenRect?.(chunk))
+      .filter(
+        (chunkRect) =>
+          chunkRect instanceof RectangleRange &&
+          intersectsRanges(chunkRect, normalizedDirtyRect),
+      );
   }
 
   /**

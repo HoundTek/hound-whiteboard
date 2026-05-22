@@ -253,6 +253,46 @@ describe("BaseRenderer", () => {
     ]);
   });
 
+  test("render(dirtyRects) 应把对象级渲染留白计入静态层局部重绘命中判断", () => {
+    const calls = [];
+    const object = new StrokeObject(new Vector(0, 0), 33, 1);
+    object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
+    object.getRenderPadding = () => 2;
+
+    const chunk = Chunk.fromId(1);
+    chunk.objectManager = new ChunkObjectManager(1);
+    chunk.objectManager.staticGraph = DirectedGraph.parse([[33, []]]);
+
+    const monitor = {
+      origin: new Vector(0, 0),
+      zoom: 2,
+      chunkWidth: 800,
+      chunkHeight: 600,
+      baseCanvas: { width: 320, height: 240 },
+      board: createBoardWithObjects([object]),
+      worldRectToScreenRect(rect) {
+        return RectangleRange.from(rect);
+      },
+      getContext(layer) {
+        return layer === "base" ? createContext(calls) : null;
+      },
+      chunkBlockLoader: {
+        getLoadedChunks() {
+          return [chunk];
+        },
+      },
+    };
+
+    const renderer = new BaseRenderer(monitor);
+
+    renderer.render([new RectangleRange(-4, -4, 1, 1)]);
+
+    expect(calls).toContainEqual(["clearRect", -4, -4, 1, 1]);
+    expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
+      ["moveTo", 0, 0],
+    ]);
+  });
+
   test("多区块局部重绘时也应保持全局静态图拓扑序", () => {
     const calls = [];
     const lower = new StrokeObject(new Vector(0, 0), 61, 1);
@@ -440,6 +480,73 @@ describe("BaseRenderer", () => {
     );
     expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
       new RectangleRange(0, 0, 10, 10),
+    );
+  });
+
+  test("invalidateObjects 应同时失效对象当前范围与旧世界范围", () => {
+    const object = new StrokeObject(new Vector(100, 0), 91, 1);
+    object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
+    const monitor = {
+      origin: new Vector(0, 0),
+      zoom: 1,
+      baseRenderScheduler: {
+        invalidate: jest.fn(),
+      },
+      worldRectToScreenRect(rect) {
+        return RectangleRange.from(rect);
+      },
+    };
+
+    const renderer = new BaseRenderer(monitor);
+    const oldWorldRect = RectangleRange.from(
+      object.getRange().withPosition(new Vector(0, 0)),
+    );
+
+    const dirtyRects = renderer.invalidateObjects([object], {
+      previousWorldRects: new Map([[91, oldWorldRect]]),
+    });
+
+    expect(dirtyRects).toEqual([
+      new RectangleRange(99.5, -0.5, 6, 1),
+      new RectangleRange(-0.5, -0.5, 6, 1),
+    ]);
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+      1,
+      new RectangleRange(99.5, -0.5, 6, 1),
+    );
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+      2,
+      new RectangleRange(-0.5, -0.5, 6, 1),
+    );
+  });
+
+  test("invalidateObjects 应先合并批内重叠脏区再提交给调度器", () => {
+    const object = new StrokeObject(new Vector(1, 0), 92, 1);
+    object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
+    const monitor = {
+      origin: new Vector(0, 0),
+      zoom: 1,
+      baseRenderScheduler: {
+        invalidate: jest.fn(),
+      },
+      worldRectToScreenRect(rect) {
+        return RectangleRange.from(rect);
+      },
+    };
+
+    const renderer = new BaseRenderer(monitor);
+    const oldWorldRect = RectangleRange.from(
+      object.getRange().withPosition(new Vector(0, 0)),
+    );
+
+    const dirtyRects = renderer.invalidateObjects([object], {
+      previousWorldRects: new Map([[92, oldWorldRect]]),
+    });
+
+    expect(dirtyRects).toEqual([new RectangleRange(-0.5, -0.5, 7, 1)]);
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledTimes(1);
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
+      new RectangleRange(-0.5, -0.5, 7, 1),
     );
   });
 });

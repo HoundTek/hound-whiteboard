@@ -11,7 +11,7 @@ import { Chunk } from "./chunk.js";
 import { ChunkBlockLoader } from "./chunk-block-loader.js";
 import { ChunkObjectManager } from "./chunk-object-manager.js";
 import { BasicObject } from "../objects/basic-obj.js";
-import { intersectsRanges } from "../range/index.js";
+import { intersectsRanges, RectangleRange, Range } from "../range/index.js";
 
 /**
  * 层类
@@ -103,6 +103,13 @@ class ActiveObjectManager {
   activeObjectIndex;
 
   /**
+   * 活动对象进入动态图前的世界范围快照
+   * @description 用于在提交回静态层时同时失效旧静态像素与新静态像素。
+   * @type {Map<number, RectangleRange>}
+   */
+  baseObjectSnapshotWorldRanges;
+
+  /**
    * 所属白板
    * @type {import("./board.js").Board | undefined}
    */
@@ -116,6 +123,37 @@ class ActiveObjectManager {
     this.layerIndex = new Map();
     this.activeObjects = new Set();
     this.activeObjectIndex = new Map();
+    this.baseObjectSnapshotWorldRanges = new Map();
+  }
+
+  /**
+   * 记录对象进入活动层前的世界范围快照
+   * @param {Iterable<BasicObject>} [objects = []] - 待记录对象集合
+   */
+  captureBaseObjectSnapshot(objects = []) {
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      if (this.baseObjectSnapshotWorldRanges.has(objectInstance.id)) continue;
+
+      const worldRange = this.getObjectWorldRange(objectInstance);
+      if (!worldRange) continue;
+
+      this.baseObjectSnapshotWorldRanges.set(
+        objectInstance.id,
+        RectangleRange.from(worldRange),
+      );
+    }
+  }
+
+  /**
+   * 清理对象的静态层旧范围快照
+   * @param {Iterable<BasicObject>} [objects = []] - 待清理对象集合
+   */
+  clearBaseObjectSnapshots(objects = []) {
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      this.baseObjectSnapshotWorldRanges.delete(objectInstance.id);
+    }
   }
 
   /**
@@ -203,6 +241,105 @@ class ActiveObjectManager {
   }
 
   /**
+   * 请求所有 monitor 按对象范围刷新静态层
+   * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
+   * @param {Iterable<Chunk>} [fallbackChunks = []] - 无法走对象级失效时的回退区块集合
+   */
+  requestBaseRenderForObjects(objects = [], fallbackChunks = []) {
+    const board = this.board;
+    if (!board?.monitors?.values) return;
+
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+    const normalizedChunks = Array.from(fallbackChunks).filter(Boolean);
+    const previousWorldRects = new Map(this.baseObjectSnapshotWorldRanges);
+
+    for (const monitor of board.monitors.values()) {
+      const dirtyRects = monitor?.baseRenderer?.invalidateObjects?.(
+        normalizedObjects,
+        {
+          previousWorldRects,
+        },
+      );
+
+      if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
+        continue;
+      }
+
+      if (normalizedChunks.length > 0) {
+        monitor?.baseRenderer?.invalidateChunks?.(normalizedChunks);
+        continue;
+      }
+
+      if (typeof monitor?.requestViewportBaseRender === "function") {
+        monitor.requestViewportBaseRender();
+        continue;
+      }
+
+      monitor?.baseRenderer?.flush?.();
+    }
+  }
+
+  /**
+   * 解析静态层对象级失效集合
+   * @param {Iterable<BasicObject>} [objects = []] - 起始对象集合
+   * @param {Array<{ coveredChunkIds: Set<number>, relatedObjectIds?: Iterable<number> }>} [contexts = []] - 关联上下文
+   * @returns {BasicObject[]}
+   */
+  collectBaseInvalidationObjects(objects = [], contexts = []) {
+    const invalidationObjectMap = new Map();
+
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      invalidationObjectMap.set(objectInstance.id, objectInstance);
+    }
+
+    for (const context of contexts ?? []) {
+      const coveredChunkIds = context?.coveredChunkIds ?? new Set();
+      for (const objectId of context?.relatedObjectIds ?? []) {
+        if (invalidationObjectMap.has(objectId)) continue;
+
+        const objectInstance = this.findBoardObjectInstance(
+          objectId,
+          coveredChunkIds,
+        );
+        if (!(objectInstance instanceof BasicObject)) continue;
+
+        invalidationObjectMap.set(objectId, objectInstance);
+      }
+    }
+
+    return [...invalidationObjectMap.values()];
+  }
+
+  /**
+   * 从最终静态图中收集某对象的邻接对象 id
+   * @param {number} objectId - 对象 id
+   * @param {Iterable<number>} [coveredChunkIds = []] - 相关覆盖区块
+   * @returns {Set<number>}
+   */
+  collectStaticGraphNeighborIds(objectId, coveredChunkIds = []) {
+    const relatedObjectIds = new Set();
+
+    for (const chunkId of coveredChunkIds ?? []) {
+      const graph =
+        this.board?.getChunkById?.(chunkId)?.objectManager?.staticGraph;
+      if (!graph?.hasNode?.(objectId)) continue;
+
+      for (const neighborId of graph.neighborsUnsafe?.(objectId) ?? []) {
+        relatedObjectIds.add(neighborId);
+      }
+      for (const predecessorId of graph.predecessorsUnsafe?.(objectId) ?? []) {
+        relatedObjectIds.add(predecessorId);
+      }
+    }
+
+    relatedObjectIds.delete(objectId);
+    return relatedObjectIds;
+  }
+
+  /**
    * 取消注册活动对象实例
    * @param {number} objectId - 要取消注册的对象 id
    */
@@ -249,12 +386,14 @@ class ActiveObjectManager {
   /**
    * 获取对象世界坐标范围
    * @param {BasicObject} obj
-   * @returns {import("../range/range.js").Range | undefined}
+   * @returns {Range | undefined}
    */
   getObjectWorldRange(obj) {
     if (!(obj instanceof BasicObject)) return undefined;
     if (!obj.position || typeof obj.getRange !== "function") return undefined;
-    return obj.getRange().withPosition(obj.position);
+    const range = obj.getRange();
+    if (!range || typeof range.withPosition !== "function") return undefined;
+    return range.withPosition(obj.position);
   }
 
   /**
@@ -540,6 +679,7 @@ class ActiveObjectManager {
     const activeEntryMap = new Map(
       activeEntries.map((item) => [item.id, item]),
     );
+    this.captureBaseObjectSnapshot(activeEntries);
     startFrom = null; // 释放内存
 
     // 获取对象所在层
@@ -778,9 +918,10 @@ class ActiveObjectManager {
       this.onLayer.set(objId, newLayer);
       newLayer.activeObjects.add(objId);
     }
+
     this.tidyup();
     Array.from(newLayers.entries())
-      .sort((a, b) => a[0] - b[0])
+      .sort(([aIndex, aLayer], [bIndex, bLayer]) => aIndex - bIndex)
       .forEach(([layerIndex, newLayer]) => {
         this.insertLayerToTop(newLayer);
       });
@@ -799,6 +940,7 @@ class ActiveObjectManager {
     const activeBasicObjects = normalizedObjects;
     const affectedChunkIds = new Set();
 
+    // 计算出所有受影响的区块 id，以便后续请求静态层渲染时使用
     if (canCommitToBoard && activeBasicObjects.length > 0) {
       const applyingObjectIds = new Set(
         activeBasicObjects.map((item) => item.id),
@@ -826,6 +968,7 @@ class ActiveObjectManager {
         })
         .filter(Boolean);
 
+      // 确保所有对象都被加入区块
       for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
         for (const chunkId of coveredChunkIds) {
           const chunk = this.board.getChunkById(chunkId);
@@ -835,6 +978,7 @@ class ActiveObjectManager {
         }
       }
 
+      // 再计算它们在静态图中的上下关系
       for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
         const { below, above } = this.calculateStaticRelations(
           obj,
@@ -852,8 +996,25 @@ class ActiveObjectManager {
           chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
         }
       }
+
+      // 请求静态层失效时，除了直接受影响的对象外，还应包括它们在静态图中的邻接对象
+      activeBasicObjects.splice(
+        0,
+        activeBasicObjects.length,
+        ...this.collectBaseInvalidationObjects(
+          activeBasicObjects,
+          applyContexts.map(({ obj, coveredChunkIds }) => ({
+            coveredChunkIds,
+            relatedObjectIds: this.collectStaticGraphNeighborIds(
+              obj.id,
+              coveredChunkIds,
+            ),
+          })),
+        ),
+      );
     }
 
+    // 将对象从活动层移除
     for (const entry of normalizedObjects) {
       const objId = entry.id;
       if (!this.activeObjectIndex.has(objId)) {
@@ -862,12 +1023,16 @@ class ActiveObjectManager {
       this.unregisterActiveObject(objId);
     }
     this.tidyup();
-    this.requestBaseRender(
+
+    // 请求静态层渲染
+    this.requestBaseRenderForObjects(
+      activeBasicObjects,
       [...affectedChunkIds]
         .map((chunkId) => this.board?.getChunkById?.(chunkId))
         .filter(Boolean),
     );
     this.requestLiveRender(normalizedObjects);
+    this.clearBaseObjectSnapshots(normalizedObjects);
   }
 
   /**
@@ -888,6 +1053,7 @@ class ActiveObjectManager {
 
     this.tidyup();
     this.requestLiveRender(normalizedObjects);
+    this.clearBaseObjectSnapshots(normalizedObjects);
   }
 
   /**

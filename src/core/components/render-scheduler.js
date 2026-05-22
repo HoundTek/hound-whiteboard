@@ -7,40 +7,247 @@
 import { RectangleRange } from "../range/rectangle.js";
 import { intersectsRanges } from "../range/geometry.js";
 
+const DIRTY_RECT_NEAR_GAP = 8;
+const DIRTY_RECT_DIAGONAL_GAP = 4;
+const DIRTY_RECT_MAX_EXTRA_AREA = 256;
+const DIRTY_RECT_MAX_GROWTH_RATIO = 1.35;
+const DIRTY_RECT_VIEWPORT_COVERAGE_RATIO = 0.75;
+const DIRTY_RECT_CANONICAL_RECT_COVERAGE_RATIO = 0.6;
+
+function getRectangleArea(rect) {
+  return Math.max(0, rect.width) * Math.max(0, rect.height);
+}
+
+function getRectangleIntersectionArea(firstRect, secondRect) {
+  const left = Math.max(firstRect.left, secondRect.left);
+  const top = Math.max(firstRect.top, secondRect.top);
+  const right = Math.min(firstRect.right, secondRect.right);
+  const bottom = Math.min(firstRect.bottom, secondRect.bottom);
+
+  if (right <= left || bottom <= top) {
+    return 0;
+  }
+
+  return (right - left) * (bottom - top);
+}
+
+function getRectangleGap(firstRect, secondRect) {
+  const gapX = Math.max(
+    0,
+    Math.max(firstRect.left, secondRect.left) -
+      Math.min(firstRect.right, secondRect.right),
+  );
+  const gapY = Math.max(
+    0,
+    Math.max(firstRect.top, secondRect.top) -
+      Math.min(firstRect.bottom, secondRect.bottom),
+  );
+
+  return { gapX, gapY };
+}
+
+function shouldMergeNearbyRects(firstRect, secondRect) {
+  if (intersectsRanges(firstRect, secondRect)) {
+    return true;
+  }
+
+  const { gapX, gapY } = getRectangleGap(firstRect, secondRect);
+  const isAxisNearby =
+    (gapX <= DIRTY_RECT_NEAR_GAP && gapY === 0) ||
+    (gapY <= DIRTY_RECT_NEAR_GAP && gapX === 0);
+  const isDiagonalNearby =
+    gapX <= DIRTY_RECT_DIAGONAL_GAP && gapY <= DIRTY_RECT_DIAGONAL_GAP;
+
+  if (!isAxisNearby && !isDiagonalNearby) {
+    return false;
+  }
+
+  const unionRect = firstRect.union(secondRect);
+  const unionArea = getRectangleArea(unionRect);
+  const combinedArea = getRectangleArea(firstRect) + getRectangleArea(secondRect);
+  const extraArea = unionArea - combinedArea;
+
+  if (extraArea <= DIRTY_RECT_MAX_EXTRA_AREA) {
+    return true;
+  }
+
+  if (combinedArea <= 0) {
+    return true;
+  }
+
+  return unionArea / combinedArea <= DIRTY_RECT_MAX_GROWTH_RATIO;
+}
+
+function normalizeRectangleArray(rects = []) {
+  return rects.map((rect) => RectangleRange.fromRectLike(rect)).filter(Boolean);
+}
+
+function resolveOptionValue(optionValue, fallbackValue) {
+  const resolvedValue =
+    typeof optionValue === "function" ? optionValue() : optionValue;
+
+  return resolvedValue ?? fallbackValue;
+}
+
+function dedupeRectangles(rects = []) {
+  const uniqueRects = [];
+  const rectKeys = new Set();
+
+  for (const rect of rects) {
+    const rectKey = `${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
+    if (rectKeys.has(rectKey)) continue;
+    rectKeys.add(rectKey);
+    uniqueRects.push(rect);
+  }
+
+  return uniqueRects;
+}
+
+function createRectangleDirtyRectMerger(options = {}) {
+  const getViewportRect = options.getViewportRect;
+  const getCanonicalRectsForRect = options.getCanonicalRectsForRect;
+
+  function shouldMergeWithOptions(firstRect, secondRect) {
+    const axisNearGap = resolveOptionValue(
+      options.axisNearGap,
+      DIRTY_RECT_NEAR_GAP,
+    );
+    const diagonalNearGap = resolveOptionValue(
+      options.diagonalNearGap,
+      DIRTY_RECT_DIAGONAL_GAP,
+    );
+    const maxExtraArea = resolveOptionValue(
+      options.maxExtraArea,
+      DIRTY_RECT_MAX_EXTRA_AREA,
+    );
+    const maxGrowthRatio = resolveOptionValue(
+      options.maxGrowthRatio,
+      DIRTY_RECT_MAX_GROWTH_RATIO,
+    );
+
+    if (intersectsRanges(firstRect, secondRect)) {
+      return true;
+    }
+
+    const { gapX, gapY } = getRectangleGap(firstRect, secondRect);
+    const isAxisNearby =
+      (gapX <= axisNearGap && gapY === 0) ||
+      (gapY <= axisNearGap && gapX === 0);
+    const isDiagonalNearby =
+      gapX <= diagonalNearGap && gapY <= diagonalNearGap;
+
+    if (!isAxisNearby && !isDiagonalNearby) {
+      return false;
+    }
+
+    const unionRect = firstRect.union(secondRect);
+    const unionArea = getRectangleArea(unionRect);
+    const combinedArea = getRectangleArea(firstRect) + getRectangleArea(secondRect);
+    const extraArea = unionArea - combinedArea;
+
+    if (extraArea <= maxExtraArea) {
+      return true;
+    }
+
+    if (combinedArea <= 0) {
+      return true;
+    }
+
+    return unionArea / combinedArea <= maxGrowthRatio;
+  }
+
+  function mergeNormalizedRectangles(rects = []) {
+    const mergedRects = [];
+
+    for (const rect of rects) {
+      let candidateRect = rect;
+      let mergedIndex = 0;
+
+      while (mergedIndex < mergedRects.length) {
+        if (shouldMergeWithOptions(mergedRects[mergedIndex], candidateRect)) {
+          candidateRect = mergedRects[mergedIndex].union(candidateRect);
+          mergedRects.splice(mergedIndex, 1);
+          mergedIndex = 0;
+          continue;
+        }
+        mergedIndex++;
+      }
+
+      mergedRects.push(candidateRect);
+    }
+
+    return mergedRects;
+  }
+
+  function collapseLargeRect(rect) {
+    const viewportCoverageRatio = resolveOptionValue(
+      options.viewportCoverageRatio,
+      DIRTY_RECT_VIEWPORT_COVERAGE_RATIO,
+    );
+    const canonicalRectCoverageRatio = resolveOptionValue(
+      options.canonicalRectCoverageRatio,
+      DIRTY_RECT_CANONICAL_RECT_COVERAGE_RATIO,
+    );
+    const viewportRect = RectangleRange.fromRectLike(getViewportRect?.());
+    if (viewportRect) {
+      const viewportArea = getRectangleArea(viewportRect);
+      if (
+        viewportArea > 0 &&
+        getRectangleIntersectionArea(rect, viewportRect) / viewportArea >=
+          viewportCoverageRatio
+      ) {
+        return [viewportRect];
+      }
+    }
+
+    const canonicalRects = normalizeRectangleArray(getCanonicalRectsForRect?.(rect));
+    if (canonicalRects.length === 0) {
+      return [rect];
+    }
+
+    const collapsedRects = canonicalRects.filter((canonicalRect) => {
+      const canonicalArea = getRectangleArea(canonicalRect);
+      if (canonicalArea <= 0) return false;
+
+      return (
+        getRectangleIntersectionArea(rect, canonicalRect) / canonicalArea >=
+        canonicalRectCoverageRatio
+      );
+    });
+
+    return collapsedRects.length > 0 ? collapsedRects : [rect];
+  }
+
+  return function mergeConfiguredRectangleDirtyRects(dirtyRects) {
+    const passthroughRects = [];
+    const normalizedRects = [];
+
+    for (const rect of dirtyRects) {
+      const normalizedRect = RectangleRange.fromRectLike(rect);
+      if (!normalizedRect) {
+        passthroughRects.push(rect);
+        continue;
+      }
+
+      normalizedRects.push(normalizedRect);
+    }
+
+    const mergedRects = mergeNormalizedRectangles(normalizedRects);
+    const collapsedRects = dedupeRectangles(
+      mergedRects.flatMap((rect) => collapseLargeRect(rect)),
+    );
+    const finalRects = mergeNormalizedRectangles(collapsedRects);
+
+    return [...finalRects, ...passthroughRects];
+  };
+}
+
 /**
  * 合并重叠或相接的矩形脏区
  * @param {any[]} dirtyRects - 原始脏区集合
  * @returns {any[]} 合并后的脏区集合
  */
-function mergeRectangleDirtyRects(dirtyRects) {
-  const mergedRects = [];
-  const passthroughRects = [];
-
-  for (const rect of dirtyRects) {
-    const normalizedRect = RectangleRange.fromRectLike(rect);
-    if (!normalizedRect) {
-      passthroughRects.push(rect);
-      continue;
-    }
-
-    let candidateRect = normalizedRect;
-    let mergedIndex = 0;
-
-    while (mergedIndex < mergedRects.length) {
-      if (intersectsRanges(mergedRects[mergedIndex], candidateRect)) {
-        candidateRect = mergedRects[mergedIndex].union(candidateRect);
-        mergedRects.splice(mergedIndex, 1);
-        mergedIndex = 0;
-        continue;
-      }
-      mergedIndex++;
-    }
-
-    mergedRects.push(candidateRect);
-  }
-
-  return [...mergedRects, ...passthroughRects];
-}
+const mergeRectangleDirtyRects = createRectangleDirtyRectMerger();
 
 /**
  * 渲染调度器
@@ -147,4 +354,8 @@ class RenderScheduler {
   }
 }
 
-export { RenderScheduler, mergeRectangleDirtyRects };
+export {
+  createRectangleDirtyRectMerger,
+  RenderScheduler,
+  mergeRectangleDirtyRects,
+};

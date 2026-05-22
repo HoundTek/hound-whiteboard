@@ -37,6 +37,19 @@ Monitor 当前不仅是输入与设备树边界，也是视口层渲染边界。
 - `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`
 - Monitor 负责把这两者绑定到具体视口实例上
 
+当前 `Monitor` 还负责给 base/live 两条调度链分别注入不同的 dirty rect 聚合参数：
+
+- live 层更偏向积极合并近邻矩形，并在脏区已接近整视口时直接退化为整视口
+- base 层更偏向保守合并近邻矩形，并在脏区覆盖足够多时优先退化为整 chunk；只有更大范围时才退化为整视口
+- 这两组阈值现在还会跟随 `zoom` 动态变化：缩放越大，允许合并的近邻距离和额外扫描面积阈值也越大，从而让不同缩放比下的聚合行为更一致
+- 同时，整视口 / 整 chunk 的退化阈值也会随 `zoom` 提高而变得更严格，避免高倍缩放时因为屏幕像素放大而过早退化
+
+base 层的整 chunk 退化现在也不再只是看“当前可见 chunk 里有哪些矩形碰到了 dirty rect”。
+
+- `Monitor` 会先把屏幕 dirty rect 反算成世界矩形
+- 再只取这块世界范围真正覆盖到、并且当前已经加载的 chunk 子集
+- 最后才把这些 chunk 的屏幕矩形作为整 chunk 退化候选
+
 当前实现里，Monitor 还额外承担两件与活动层局部重绘直接相关的事情：
 
 - 通过 `worldRectToScreenRect()` 把世界空间矩形统一换算为当前视口的屏幕矩形
@@ -51,6 +64,11 @@ Monitor 当前不仅是输入与设备树边界，也是视口层渲染边界。
 
 - `origin` 变化时，先记录旧视口下可见的区块集合，再用新区块集合与之合并失效
 - `zoom` 变化时，同样会同时保留旧视口和新视口两套区块矩形，避免旧像素残留
+
+渲染层尺寸变化时，`Monitor.resizeRenderLayers(...)` 现在也会立即补一轮重绘请求：
+
+- base 层走 `requestViewportBaseRender()`，重新覆盖当前视口内的静态内容
+- live 层走 `renderScheduler.invalidate(viewportRect)`，避免 canvas 改尺寸后出现“内容已被清空但要等下一次业务事件才回来”的空白帧
 
 这意味着“活动对象属于谁”仍由 AOM 决定，而“活动对象如何显示在当前视口里”则由 Monitor 侧负责。
 

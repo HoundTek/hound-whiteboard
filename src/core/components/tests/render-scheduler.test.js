@@ -1,5 +1,9 @@
 import { RectangleRange } from "../../range/rectangle.js";
-import { RenderScheduler } from "../render-scheduler.js";
+import {
+  createRectangleDirtyRectMerger,
+  RenderScheduler,
+  mergeRectangleDirtyRects,
+} from "../render-scheduler.js";
 
 describe("RenderScheduler", () => {
   test("invalidate 应将多次脏区请求合并到单次调度", () => {
@@ -60,5 +64,54 @@ describe("RenderScheduler", () => {
     scheduler.flush();
 
     expect(flushed).toEqual([[new RectangleRange(0, 0, 20, 10)]]);
+  });
+
+  test("默认应在额外扫描面积可控时合并近邻矩形脏区", () => {
+    const flushed = [];
+    const scheduler = new RenderScheduler({
+      flushHandler(dirtyRects) {
+        flushed.push(dirtyRects);
+      },
+    });
+
+    scheduler.invalidate(new RectangleRange(0, 0, 10, 10));
+    scheduler.invalidate(new RectangleRange(14, 0, 10, 10));
+    scheduler.flush();
+
+    expect(flushed).toEqual([[new RectangleRange(0, 0, 24, 10)]]);
+  });
+
+  test("默认不应把额外扫描面积过大的远距矩形粗暴合并", () => {
+    expect(
+      mergeRectangleDirtyRects([
+        new RectangleRange(0, 0, 10, 10),
+        new RectangleRange(40, 0, 10, 10),
+      ]),
+    ).toEqual([
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(40, 0, 10, 10),
+    ]);
+  });
+
+  test("可配置聚合器应在达到视口覆盖阈值时退化为整视口", () => {
+    const mergeDirtyRects = createRectangleDirtyRectMerger({
+      getViewportRect: () => new RectangleRange(0, 0, 100, 100),
+      viewportCoverageRatio: 0.7,
+    });
+
+    expect(mergeDirtyRects([new RectangleRange(0, 0, 90, 80)])).toEqual([
+      new RectangleRange(0, 0, 100, 100),
+    ]);
+  });
+
+  test("可配置聚合器应在达到 chunk 覆盖阈值时退化为整 chunk", () => {
+    const mergeDirtyRects = createRectangleDirtyRectMerger({
+      getCanonicalRectsForRect: () => [new RectangleRange(0, 0, 50, 50)],
+      canonicalRectCoverageRatio: 0.5,
+    });
+
+    expect(mergeDirtyRects([new RectangleRange(0, 0, 40, 40)])).toEqual([
+      new RectangleRange(0, 0, 50, 50),
+    ]);
   });
 });

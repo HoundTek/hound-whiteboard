@@ -9,6 +9,7 @@ import { ChunkObjectManager } from "../../chunk-object-manager.js";
 import { StrokeObject } from "../../../objects/stroke/stroke.js";
 import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
 import { oneChunkData } from "./data.js";
+import { RectangleRange } from "../../../range/index.js";
 
 describe("ActiveObjectManager/apply", () => {
   function createChunk(id) {
@@ -157,5 +158,97 @@ describe("ActiveObjectManager/apply", () => {
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
       stroke,
     ]);
+  });
+
+  test("apply 应优先按对象旧范围与新范围触发静态层局部失效", () => {
+    const stroke = new StrokeObject(new Vector(0, 0), 301, 1);
+    stroke.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
+
+    const ownerChunk = createChunk(1);
+    ownerChunk.objectManager = new ChunkObjectManager(1);
+    ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[301, []]]);
+    ownerChunk.objectManager.setObjectCoverChunks(301, [1]);
+
+    const monitor = {
+      baseRenderer: {
+        invalidateObjects: jest.fn(() => [new RectangleRange(0, 0, 4, 4)]),
+        invalidateChunks: jest.fn(),
+      },
+      liveRenderer: {
+        collectActiveDrawables: jest.fn(() => []),
+        invalidateObjects: jest.fn(),
+      },
+      renderScheduler: { invalidate: jest.fn() },
+    };
+    const board = {
+      monitors: new Map([["main", monitor]]),
+      getObjectById: jest.fn((objectId) =>
+        objectId === 301 ? stroke : undefined,
+      ),
+      getChunkById: jest.fn((chunkId) => (chunkId === 1 ? ownerChunk : undefined)),
+      createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+    };
+    const aom = new ActiveObjectManager(board);
+
+    aom.choose(new Set([stroke]));
+    stroke.position = new Vector(100, 0);
+
+    aom.apply(new Set([stroke]));
+
+    expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
+    const [, options] = monitor.baseRenderer.invalidateObjects.mock.calls[0];
+    expect(monitor.baseRenderer.invalidateChunks).not.toHaveBeenCalled();
+    expect(options.previousWorldRects.get(301)).toEqual(
+      RectangleRange.from(stroke.getRange().withPosition(new Vector(0, 0))),
+    );
+  });
+
+  test("apply 在层级变化但几何不变时也应把受影响的静态邻接对象纳入局部失效", () => {
+    const lower = new StrokeObject(new Vector(0, 0), 401, 1);
+    lower.setPathPoints([new Vector(1, 1), new Vector(8, 8)]);
+    const upper = new StrokeObject(new Vector(0, 0), 402, 1);
+    upper.setPathPoints([new Vector(2, 2), new Vector(9, 9)]);
+
+    const ownerChunk = createChunk(1);
+    ownerChunk.objectManager = new ChunkObjectManager(1);
+    ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
+      [401, [402]],
+      [402, []],
+    ]);
+    ownerChunk.objectManager.setObjectCoverChunks(401, [1]);
+    ownerChunk.objectManager.setObjectCoverChunks(402, [1]);
+
+    const monitor = {
+      baseRenderer: {
+        invalidateObjects: jest.fn(() => [new RectangleRange(0, 0, 10, 10)]),
+        invalidateChunks: jest.fn(),
+      },
+      liveRenderer: {
+        collectActiveDrawables: jest.fn(() => []),
+        invalidateObjects: jest.fn(),
+      },
+      renderScheduler: { invalidate: jest.fn() },
+    };
+    const objectMap = new Map([
+      [401, lower],
+      [402, upper],
+    ]);
+    const board = {
+      monitors: new Map([["main", monitor]]),
+      getObjectById: jest.fn((objectId) => objectMap.get(objectId)),
+      getChunkById: jest.fn((chunkId) => (chunkId === 1 ? ownerChunk : undefined)),
+      createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+    };
+    const aom = new ActiveObjectManager(board);
+
+    aom.choose(new Set([lower]));
+    aom.liftup(new Set([lower]));
+    aom.apply(new Set([lower]));
+
+    expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
+    const [invalidatedObjects] = monitor.baseRenderer.invalidateObjects.mock.calls[0];
+    expect(
+      invalidatedObjects.map((objectInstance) => objectInstance.id).sort((a, b) => a - b),
+    ).toEqual([401, 402]);
   });
 });
