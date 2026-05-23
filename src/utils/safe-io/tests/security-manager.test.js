@@ -6,6 +6,11 @@ import { jest } from "@jest/globals";
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "safe-io-security-"));
 
 await jest.unstable_mockModule("electron", () => ({
+  default: {
+    app: {
+      getPath: jest.fn(() => userDataDir),
+    },
+  },
   app: {
     getPath: jest.fn(() => userDataDir),
   },
@@ -88,5 +93,28 @@ describe("safe-io 安全管理器", () => {
 
     expect(afterContent).toContain("fs:delete");
     expect(afterContent).toContain("fs:write");
+  });
+
+  test("多个窗口会生成隔离的 preload，并且单窗口更新不会污染其他窗口", () => {
+    const leftContext = manager.createContext({ windowId: "left-window", preset: "READ_ONLY" });
+    const rightContext = manager.createContext({ windowId: "right-window", preset: "FULL" });
+
+    const leftPath = manager.generatePreload("left-window", leftContext);
+    const rightPath = manager.generatePreload("right-window", rightContext);
+    const rightBefore = fs.readFileSync(rightPath, "utf8");
+
+    expect(leftPath).not.toBe(rightPath);
+    expect(fs.readFileSync(leftPath, "utf8")).not.toContain("fs:delete");
+    expect(rightBefore).toContain("fs:delete");
+
+    expect(manager.updatePermissions("left-window", "READ_WRITE")).toBe(true);
+
+    const leftAfter = fs.readFileSync(leftPath, "utf8");
+    const rightAfter = fs.readFileSync(rightPath, "utf8");
+
+    expect(leftAfter).toContain("fs:write");
+    expect(leftAfter).not.toContain("fs:delete");
+    expect(rightAfter).toBe(rightBefore);
+    expect(manager.getContext("right-window").preset).toBe("FULL");
   });
 });

@@ -7,7 +7,10 @@
     "start": "electron .",
     "start:simple": "electron . --main=main-simple.js",
     "build-win": "electron-packager . --out=dist/win/ --platform=win32",
-    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage --experimental-vm-modules' jest --passWithNoTests"
+    "test": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage --experimental-vm-modules' jest --passWithNoTests",
+    "test:safe-io": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage --experimental-vm-modules' jest --runInBand --passWithNoTests --testPathPatterns 'src/utils/safe-io/tests/.*\\.test\\.js'",
+    "test:safe-io:coverage": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage --experimental-vm-modules' jest --runInBand --coverage --passWithNoTests --collectCoverageFrom='src/utils/safe-io/**/*.js' --coveragePathIgnorePatterns='/tests/' --testPathPatterns 'src/utils/safe-io/tests/.*\\.test\\.js'",
+    "test:safe-io:smoke": "NODE_OPTIONS='--localstorage-file=/tmp/jest-localstorage --experimental-vm-modules' jest --runInBand --passWithNoTests src/utils/safe-io/tests/electron-smoke.test.js"
   },
   "author": "Frank Steven",
   "license": "MIT",

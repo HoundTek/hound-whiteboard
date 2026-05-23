@@ -87,7 +87,7 @@ const checkReplay = (token) => {
 /**
  * 清理过期的Nonce
  */
-setInterval(() => {
+const nonceCleanupTimer = setInterval(() => {
   const now = Date.now();
 
   for (const [nonce, time] of nonceTimeMap.entries()) {
@@ -97,6 +97,10 @@ setInterval(() => {
     }
   }
 }, 60_000);
+
+if (typeof nonceCleanupTimer.unref === "function") {
+  nonceCleanupTimer.unref();
+}
 
 /**
  * 验证Token并返回capability context

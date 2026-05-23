@@ -16,8 +16,10 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import { app } from "electron";
+import electron from "electron";
 import { createTokenWithPreset } from "../capability/token.js";
+
+const { app } = electron;
 
 /**
  * @typedef {Object} PermissionPreset
@@ -119,6 +121,13 @@ ${generateCapAPI()}
 ${generateStorageAPI()}
 
 contextBridge.exposeInMainWorld("safeIO", api);
+
+// 安全事件监听
+ipcRenderer.on("security:init", (event, data) => {
+  console.log("[safe-io] Security initialized:", data);
+  const securityEvent = new CustomEvent("security:init", { detail: data });
+  window.dispatchEvent(securityEvent);
+});
 `;
 
 /**

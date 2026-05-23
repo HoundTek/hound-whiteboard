@@ -3,7 +3,9 @@
  * @module safe-io/ipc/handlers
  */
 
-import { ipcMain } from "electron";
+import electron from "electron";
+
+const { ipcMain } = electron;
 
 /** @type {import('../security/manager.js').WindowManager|null} */
 let windowManagerRef = null;

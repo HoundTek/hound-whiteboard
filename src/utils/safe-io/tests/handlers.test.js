@@ -3,6 +3,11 @@ import { jest } from "@jest/globals";
 const handleMock = jest.fn();
 
 await jest.unstable_mockModule("electron", () => ({
+  default: {
+    ipcMain: {
+      handle: handleMock,
+    },
+  },
   ipcMain: {
     handle: handleMock,
   },
