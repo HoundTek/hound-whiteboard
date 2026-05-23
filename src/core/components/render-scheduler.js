@@ -89,6 +89,52 @@ function resolveOptionValue(optionValue, fallbackValue) {
   return resolvedValue ?? fallbackValue;
 }
 
+function resolveMergerThresholds(options = {}) {
+  const groupedThresholds = resolveOptionValue(options.getThresholds, {}) ?? {};
+
+  return {
+    axisNearGap: resolveOptionValue(
+      options.axisNearGap,
+      resolveOptionValue(groupedThresholds.axisNearGap, DIRTY_RECT_NEAR_GAP),
+    ),
+    diagonalNearGap: resolveOptionValue(
+      options.diagonalNearGap,
+      resolveOptionValue(
+        groupedThresholds.diagonalNearGap,
+        DIRTY_RECT_DIAGONAL_GAP,
+      ),
+    ),
+    maxExtraArea: resolveOptionValue(
+      options.maxExtraArea,
+      resolveOptionValue(
+        groupedThresholds.maxExtraArea,
+        DIRTY_RECT_MAX_EXTRA_AREA,
+      ),
+    ),
+    maxGrowthRatio: resolveOptionValue(
+      options.maxGrowthRatio,
+      resolveOptionValue(
+        groupedThresholds.maxGrowthRatio,
+        DIRTY_RECT_MAX_GROWTH_RATIO,
+      ),
+    ),
+    viewportCoverageRatio: resolveOptionValue(
+      options.viewportCoverageRatio,
+      resolveOptionValue(
+        groupedThresholds.viewportCoverageRatio,
+        DIRTY_RECT_VIEWPORT_COVERAGE_RATIO,
+      ),
+    ),
+    canonicalRectCoverageRatio: resolveOptionValue(
+      options.canonicalRectCoverageRatio,
+      resolveOptionValue(
+        groupedThresholds.canonicalRectCoverageRatio,
+        DIRTY_RECT_CANONICAL_RECT_COVERAGE_RATIO,
+      ),
+    ),
+  };
+}
+
 function dedupeRectangles(rects = []) {
   const uniqueRects = [];
   const rectKeys = new Set();
@@ -107,23 +153,13 @@ function createRectangleDirtyRectMerger(options = {}) {
   const getViewportRect = options.getViewportRect;
   const getCanonicalRectsForRect = options.getCanonicalRectsForRect;
 
-  function shouldMergeWithOptions(firstRect, secondRect) {
-    const axisNearGap = resolveOptionValue(
-      options.axisNearGap,
-      DIRTY_RECT_NEAR_GAP,
-    );
-    const diagonalNearGap = resolveOptionValue(
-      options.diagonalNearGap,
-      DIRTY_RECT_DIAGONAL_GAP,
-    );
-    const maxExtraArea = resolveOptionValue(
-      options.maxExtraArea,
-      DIRTY_RECT_MAX_EXTRA_AREA,
-    );
-    const maxGrowthRatio = resolveOptionValue(
-      options.maxGrowthRatio,
-      DIRTY_RECT_MAX_GROWTH_RATIO,
-    );
+  function shouldMergeWithOptions(firstRect, secondRect, thresholds) {
+    const {
+      axisNearGap,
+      diagonalNearGap,
+      maxExtraArea,
+      maxGrowthRatio,
+    } = thresholds;
 
     if (intersectsRanges(firstRect, secondRect)) {
       return true;
@@ -156,7 +192,7 @@ function createRectangleDirtyRectMerger(options = {}) {
     return unionArea / combinedArea <= maxGrowthRatio;
   }
 
-  function mergeNormalizedRectangles(rects = []) {
+  function mergeNormalizedRectangles(rects = [], thresholds) {
     const mergedRects = [];
 
     for (const rect of rects) {
@@ -164,7 +200,13 @@ function createRectangleDirtyRectMerger(options = {}) {
       let mergedIndex = 0;
 
       while (mergedIndex < mergedRects.length) {
-        if (shouldMergeWithOptions(mergedRects[mergedIndex], candidateRect)) {
+        if (
+          shouldMergeWithOptions(
+            mergedRects[mergedIndex],
+            candidateRect,
+            thresholds,
+          )
+        ) {
           candidateRect = mergedRects[mergedIndex].union(candidateRect);
           mergedRects.splice(mergedIndex, 1);
           mergedIndex = 0;
@@ -179,15 +221,8 @@ function createRectangleDirtyRectMerger(options = {}) {
     return mergedRects;
   }
 
-  function collapseLargeRect(rect) {
-    const viewportCoverageRatio = resolveOptionValue(
-      options.viewportCoverageRatio,
-      DIRTY_RECT_VIEWPORT_COVERAGE_RATIO,
-    );
-    const canonicalRectCoverageRatio = resolveOptionValue(
-      options.canonicalRectCoverageRatio,
-      DIRTY_RECT_CANONICAL_RECT_COVERAGE_RATIO,
-    );
+  function collapseLargeRect(rect, thresholds) {
+    const { viewportCoverageRatio, canonicalRectCoverageRatio } = thresholds;
     const viewportRect = RectangleRange.fromRectLike(getViewportRect?.());
     if (viewportRect) {
       const viewportArea = getRectangleArea(viewportRect);
@@ -219,6 +254,7 @@ function createRectangleDirtyRectMerger(options = {}) {
   }
 
   return function mergeConfiguredRectangleDirtyRects(dirtyRects) {
+    const thresholds = resolveMergerThresholds(options);
     const passthroughRects = [];
     const normalizedRects = [];
 
@@ -232,11 +268,11 @@ function createRectangleDirtyRectMerger(options = {}) {
       normalizedRects.push(normalizedRect);
     }
 
-    const mergedRects = mergeNormalizedRectangles(normalizedRects);
+    const mergedRects = mergeNormalizedRectangles(normalizedRects, thresholds);
     const collapsedRects = dedupeRectangles(
-      mergedRects.flatMap((rect) => collapseLargeRect(rect)),
+      mergedRects.flatMap((rect) => collapseLargeRect(rect, thresholds)),
     );
-    const finalRects = mergeNormalizedRectangles(collapsedRects);
+    const finalRects = mergeNormalizedRectangles(collapsedRects, thresholds);
 
     return [...finalRects, ...passthroughRects];
   };

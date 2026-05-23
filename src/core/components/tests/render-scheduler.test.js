@@ -114,4 +114,35 @@ describe("RenderScheduler", () => {
       new RectangleRange(0, 0, 50, 50),
     ]);
   });
+
+  test("可配置聚合器应支持通过 getThresholds 动态提供成组阈值", () => {
+    let axisNearGap = 8;
+    const mergeDirtyRects = createRectangleDirtyRectMerger({
+      getThresholds: () => ({
+        axisNearGap,
+        diagonalNearGap: 4,
+        maxExtraArea: 256,
+        maxGrowthRatio: 1.35,
+      }),
+    });
+
+    expect(
+      mergeDirtyRects([
+        new RectangleRange(0, 0, 10, 10),
+        new RectangleRange(22, 0, 10, 10),
+      ]),
+    ).toEqual([
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(22, 0, 10, 10),
+    ]);
+
+    axisNearGap = 12;
+
+    expect(
+      mergeDirtyRects([
+        new RectangleRange(0, 0, 10, 10),
+        new RectangleRange(22, 0, 10, 10),
+      ]),
+    ).toEqual([new RectangleRange(0, 0, 32, 10)]);
+  });
 });

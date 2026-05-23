@@ -97,6 +97,19 @@
 - 额外扫描面积阈值可随 `zoom^2` 放大
 - `viewportCoverageRatio` 与 `canonicalRectCoverageRatio` 也可随 `zoom` 提高而变得更严格，避免高倍缩放时过早退化为整视口或整 chunk
 
+若宿主不想把这些值逐项散开传入，当前还可以直接提供 `getThresholds()`：
+
+- `getThresholds()` 返回一整组当前阈值
+- 单独传入的字段仍可覆盖 `getThresholds()` 中的同名值
+- 这样可以把 zoom-aware 规则集中到独立策略模块里，再由宿主按帧读取
+
+在更上一层，宿主还可以自己维护一份 per-layer dirty rect policy：
+
+- policy 内统一组织 `getThresholds()`、`getViewportRect()`、`getCanonicalRectsForRect()`
+- `RenderScheduler` 本身不关心 policy 如何生成，它只消费这些回调的返回值
+- 这样 base/live 的差异可以集中在宿主的 policy resolver，而不是散落在 merger 调用点
+- 例如 base policy resolver 可以直接封装“屏幕 dirty rect 到世界矩形，再到 loaded chunk 子集”的候选解析逻辑
+
 这样做的目的，是让高倍缩放和低倍缩放下的 dirty rect 聚合更接近同一份世界空间语义，而不是被固定屏幕像素阈值绑死。
 
 ### flushHandler

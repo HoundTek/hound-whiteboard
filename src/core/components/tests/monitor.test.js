@@ -250,19 +250,85 @@ describe("Monitor", () => {
 
   test("coverage ratio 阈值应随 zoom 提高而变得更严格", () => {
     const monitor = createMonitor("epsilon-zoom-coverage");
+    const baseThresholds = monitor.getDirtyRectThresholds("base");
+    const liveThresholds = monitor.getDirtyRectThresholds("live");
 
-    expect(monitor.getBaseDirtyRectViewportCoverageRatio()).toBeCloseTo(0.92);
-    expect(monitor.getBaseDirtyRectCanonicalCoverageRatio()).toBeCloseTo(0.55);
-    expect(monitor.getLiveDirtyRectViewportCoverageRatio()).toBeCloseTo(0.72);
+    expect(baseThresholds.viewportCoverageRatio).toBeCloseTo(0.92);
+    expect(baseThresholds.canonicalRectCoverageRatio).toBeCloseTo(0.55);
+    expect(liveThresholds.viewportCoverageRatio).toBeCloseTo(0.72);
 
     monitor.zoom = 2;
 
-    expect(monitor.getBaseDirtyRectViewportCoverageRatio()).toBeCloseTo(0.95);
-    expect(monitor.getBaseDirtyRectCanonicalCoverageRatio()).toBeCloseTo(0.65);
-    expect(monitor.getLiveDirtyRectViewportCoverageRatio()).toBeCloseTo(0.8);
+    expect(monitor.getDirtyRectThresholds("base").viewportCoverageRatio).toBeCloseTo(0.95);
+    expect(monitor.getDirtyRectThresholds("base").canonicalRectCoverageRatio).toBeCloseTo(0.65);
+    expect(monitor.getDirtyRectThresholds("live").viewportCoverageRatio).toBeCloseTo(0.8);
   });
 
-  test("collectBaseChunkScreenRectsForDirtyRect 应收窄到 dirty rect 真正命中的已加载 chunk 子集", () => {
+  test("应允许通过替换策略函数调整 dirty rect 聚合阈值", () => {
+    const monitor = createMonitor("epsilon-custom-threshold-strategy");
+    const dirtyRects = [
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(30, 0, 10, 10),
+    ];
+
+    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(30, 0, 10, 10),
+    ]);
+
+    monitor.baseDirtyRectThresholdStrategy = () => ({
+      axisNearGap: 20,
+      diagonalNearGap: 10,
+      maxExtraArea: 400,
+      maxGrowthRatio: 1.5,
+      viewportCoverageRatio: 0.92,
+      canonicalRectCoverageRatio: 0.55,
+    });
+
+    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 40, 10),
+    ]);
+  });
+
+  test("应允许通过替换 policy resolver 调整整组 dirty rect 行为", () => {
+    const monitor = createMonitor("epsilon-custom-policy-resolver");
+    const defaultBasePolicy = monitor.getDirtyRectPolicy("base");
+    const dirtyRects = [
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(22, 0, 10, 10),
+    ];
+
+    expect(monitor.getDirtyRectPolicy("base").getThresholds().axisNearGap).toBe(
+      6,
+    );
+    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 10, 10),
+      new RectangleRange(22, 0, 10, 10),
+    ]);
+
+    monitor.baseDirtyRectPolicyResolver = () => ({
+      getThresholds: () => ({
+        axisNearGap: 12,
+        diagonalNearGap: 6,
+        maxExtraArea: 256,
+        maxGrowthRatio: 1.35,
+        viewportCoverageRatio: 0.92,
+        canonicalRectCoverageRatio: 0.55,
+      }),
+      getViewportRect: () => monitor.getViewportScreenRect(),
+      getCanonicalRectsForRect: (dirtyRect) =>
+        defaultBasePolicy.getCanonicalRectsForRect?.(dirtyRect),
+    });
+
+    expect(monitor.getDirtyRectPolicy("base").getThresholds().axisNearGap).toBe(
+      12,
+    );
+    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+      new RectangleRange(0, 0, 32, 10),
+    ]);
+  });
+
+  test("base policy 应收窄到 dirty rect 真正命中的已加载 chunk 子集", () => {
     const monitor = createMonitor("epsilon-chunk-subset");
     const chunk1 = Chunk.fromId(1);
     const chunk2 = Chunk.fromId(2);
@@ -282,14 +348,14 @@ describe("Monitor", () => {
     };
 
     expect(
-      monitor.collectBaseChunkScreenRectsForDirtyRect(
-        new RectangleRange(10, 10, 100, 100),
-      ),
+      monitor
+        .getDirtyRectPolicy("base")
+        .getCanonicalRectsForRect(new RectangleRange(10, 10, 100, 100)),
     ).toEqual([new RectangleRange(0, 0, 800, 600)]);
     expect(
-      monitor.collectBaseChunkScreenRectsForDirtyRect(
-        new RectangleRange(810, 10, 100, 100),
-      ),
+      monitor
+        .getDirtyRectPolicy("base")
+        .getCanonicalRectsForRect(new RectangleRange(810, 10, 100, 100)),
     ).toEqual([new RectangleRange(800, 0, 800, 600)]);
   });
 

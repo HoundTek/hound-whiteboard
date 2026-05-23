@@ -39,14 +39,27 @@ Monitor 当前不仅是输入与设备树边界，也是视口层渲染边界。
 
 当前 `Monitor` 还负责给 base/live 两条调度链分别注入不同的 dirty rect 聚合参数：
 
+- 默认 zoom-aware 阈值现在已收敛到独立的 dirty rect 策略函数里
+- `Monitor` 现在进一步把每一层的 `dirty rect policy` 收成统一入口
+- policy 内同时包含阈值获取、视口矩形获取，以及 base 层的 canonical chunk 矩形获取
+- `Monitor` 只负责按当前视口状态解析 base/live 两组 policy，并把它们接到调度器
+- base 层里“屏幕 dirty rect -> 世界矩形 -> loaded chunk 子集 -> chunk 屏幕矩形”的换算，也已经下沉到 base policy resolver 中
+
 - live 层更偏向积极合并近邻矩形，并在脏区已接近整视口时直接退化为整视口
 - base 层更偏向保守合并近邻矩形，并在脏区覆盖足够多时优先退化为整 chunk；只有更大范围时才退化为整视口
 - 这两组阈值现在还会跟随 `zoom` 动态变化：缩放越大，允许合并的近邻距离和额外扫描面积阈值也越大，从而让不同缩放比下的聚合行为更一致
 - 同时，整视口 / 整 chunk 的退化阈值也会随 `zoom` 提高而变得更严格，避免高倍缩放时因为屏幕像素放大而过早退化
 
+当前这条 Core 端收口后的后续扩展方向是：
+
+- 把 base/live 的 dirty rect policy 进一步上移到更高层宿主，变成一个“viewport policy manager”，让 Monitor 仅负责 policy 的解析与接线；
+- 把 base/live 的 policy 从“阈值 + canonical rect 候选”升级成更完整的 world-space invalidation policy；
+- 把 base 层的 chunk 候选解析从 policy resolver 再进一步收窄为“chunk render region provider”，让 chunk 屏幕矩形与加载状态的边界更清晰；
+- UI 层的策略属于交互/显示链路范畴，不在 Core 端做。
+
 base 层的整 chunk 退化现在也不再只是看“当前可见 chunk 里有哪些矩形碰到了 dirty rect”。
 
-- `Monitor` 会先把屏幕 dirty rect 反算成世界矩形
+- base policy resolver 会先把屏幕 dirty rect 反算成世界矩形
 - 再只取这块世界范围真正覆盖到、并且当前已经加载的 chunk 子集
 - 最后才把这些 chunk 的屏幕矩形作为整 chunk 退化候选
 

@@ -86,26 +86,12 @@ class MouseTraceTool extends Tool {
 
 const mouseTraceTool = new MouseTraceTool();
 
-const WASD_ROUTE_PRESETS = [
-  {
-    name: "standard",
-    map: {
-      KeyW: { x: 0, y: -1 },
-      KeyA: { x: -1, y: 0 },
-      KeyS: { x: 0, y: 1 },
-      KeyD: { x: 1, y: 0 },
-    },
-  },
-  {
-    name: "rotated-clockwise",
-    map: {
-      KeyW: { x: 1, y: 0 },
-      KeyA: { x: 0, y: -1 },
-      KeyS: { x: -1, y: 0 },
-      KeyD: { x: 0, y: 1 },
-    },
-  },
-];
+const WASD_ROUTE_PRESETS = {
+  KeyW: { x: 0, y: -1 },
+  KeyA: { x: -1, y: 0 },
+  KeyS: { x: 0, y: 1 },
+  KeyD: { x: 1, y: 0 },
+};
 
 class RandomCircleTool extends Tool {
   process(signalPacket, deviceContext = {}) {
@@ -165,7 +151,6 @@ class WasdCoordinateTool extends Tool {
 
 const wasdCoordinateTool = new WasdCoordinateTool();
 const keyboardDevice = createKeyboardDevice();
-let wasdRoutePresetIndex = 0;
 
 const buildWasdNodeConfig = (code, vector) => ({
   rewritePacket(packet) {
@@ -192,32 +177,9 @@ const buildWasdNodeConfig = (code, vector) => ({
   },
 });
 
-const applyWasdRoutePreset = (presetIndex) => {
-  const normalizedIndex =
-    ((presetIndex % WASD_ROUTE_PRESETS.length) + WASD_ROUTE_PRESETS.length) %
-    WASD_ROUTE_PRESETS.length;
-  const preset = WASD_ROUTE_PRESETS[normalizedIndex];
-
-  for (const [code, vector] of Object.entries(preset.map)) {
-    board.signalsEventBus.emit("configure", {
-      to: `/${monitor.monitorId}/keyboard/code/${code}`,
-      options: buildWasdNodeConfig(code, vector),
-    });
-  }
-
-  wasdRoutePresetIndex = normalizedIndex;
-  console.log(`WASD mapping preset: ${preset.name}`);
-};
-
-const toggleWasdRoutePreset = () => {
-  applyWasdRoutePreset(wasdRoutePresetIndex + 1);
-};
-
 monitor.mountDevice("/mouse", createMouseDevice());
 
 monitor.mountDevice("/keyboard", keyboardDevice);
-
-applyWasdRoutePreset(wasdRoutePresetIndex);
 
 board.signalsEventBus.emit("mount", {
   to: `/${monitor.monitorId}/mouse/primary`,
@@ -233,6 +195,13 @@ board.signalsEventBus.emit("mount", {
   to: `/${monitor.monitorId}/keyboard/move`,
   tool: wasdCoordinateTool,
 });
+
+for (const [code, vector] of Object.entries(WASD_ROUTE_PRESETS)) {
+  board.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/${code}`,
+    options: buildWasdNodeConfig(code, vector),
+  });
+}
 
 const emitMousePacket = (event) => {
   const worldPosition = monitor.screenToWorld(
@@ -295,21 +264,9 @@ monitor.canvas.addEventListener("mousemove", emitMousePacket);
 window.addEventListener("mouseup", emitMousePacket);
 monitor.canvas.addEventListener("mouseleave", emitMousePacket);
 
-const keyboardInputCodes = new Set([
-  "Space",
-  "KeyW",
-  "KeyA",
-  "KeyS",
-  "KeyD",
-]);
+const keyboardInputCodes = new Set(["Space", "KeyW", "KeyA", "KeyS", "KeyD"]);
 
 const emitKeyboardPacket = (event) => {
-  if (event.type === "keydown" && event.code === "KeyR" && !event.repeat) {
-    event.preventDefault();
-    toggleWasdRoutePreset();
-    return;
-  }
-
   if (!keyboardInputCodes.has(event.code)) return;
 
   event.preventDefault();

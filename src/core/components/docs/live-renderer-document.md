@@ -157,7 +157,7 @@
 - 已实现：按 `layerOrder` 读取对象、同层 `inactiveGraph` 拓扑序绘制、活动对象回退路径、世界矩形到屏幕矩形换算、显式 dirty rect 局部清理与局部重绘、对象级 `getRenderPadding()`、旧范围与新范围同时失效、显式旧几何快照协议。
 - 已接入：`Monitor` 已把 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`；`ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`；`stroke-creator` 与 `polygon-creator` 这类高频几何修改路径已会在变更前记录快照、变更后请求活动层刷新；`ObjectModifierTool` 已具备统一的几何变更包装钩子。
 - 已兼容：无参 `render()` 仍保持整层重绘语义；传入普通矩形对象时仍会被兼容处理。
-- 待完善：dirty rect 的合并策略仍较基础；对象级 padding 目前只覆盖了少数高频对象，尚未扩展成完整对象族策略；`baseCanvas` / `uiCanvas` 的专用渲染器尚未补齐；真实 modifier 子类尚未接入这套快照协议。
+- 待完善：调度器侧的 dirty rect 合并策略已得到更完整的近邻/退化支持，但对象级 padding 仍需要覆盖更完整的对象族；`baseCanvas` / `uiCanvas` 的专用渲染器尚未补齐；真实 modifier 子类尚未接入这套快照协议。
 
 ## 相关文档
 

@@ -39,6 +39,19 @@
 
 更一般地说，现在应优先把它理解成 `DevicesTreeNode` 的通用节点配置：只要是这棵设备子树里的节点，无论是 `/event`、`/keydown`、`/cancel` 还是 `/code/<KeyCode>`，都可以声明自己的 `rewritePacket` 或 `processor`。
 
+示意图如下：
+
+```mermaid
+graph TD
+  keyboard --> event
+  keyboard --> keydown
+  keyboard --> keyup
+  keyboard --> repeat
+  keyboard --> cancel
+  keyboard --> code
+  code --> Key...
+```
+
 这里的职责边界是：
 
 - 键盘设备只负责产出节点定义
