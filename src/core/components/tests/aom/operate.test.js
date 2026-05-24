@@ -11,7 +11,7 @@ jest.unstable_mockModule("../../chunk-block-loader.js", () => ({
   ChunkBlockLoader: MockChunkBlockLoader,
 }));
 
-const { ActiveObjectManager } = await import("../../active-object-manager.js");
+const { ActiveObjectManager, Layer } = await import("../../active-object-manager.js");
 
 describe("ActiveObjectManager/operate", () => {
   let aom = new ActiveObjectManager();
@@ -327,6 +327,54 @@ describe("ActiveObjectManager/operate", () => {
           aom.layerOrder[i].inactiveGraph.equals(expectedInactiveGraph[i]),
         ).toBe(true);
       }
+    });
+
+    test("应在清理前缀不可达层时移除 stale onLayer 和 layerIndex", () => {
+      const removedLayer = new Layer(1000);
+      removedLayer.inactiveGraph.addNodeUnsafe(1);
+      removedLayer.inactiveGraph.addNodeUnsafe(2);
+      const keptLayer = new Layer(2000);
+      keptLayer.activeObjects.add(3);
+
+      aom.layerOrder = [removedLayer, keptLayer];
+      aom.layerIndex.set(1000, 0);
+      aom.layerIndex.set(2000, 1);
+      aom.onLayer.set(1, removedLayer);
+      aom.onLayer.set(2, removedLayer);
+      aom.onLayer.set(3, keptLayer);
+
+      aom.tidyup();
+
+      expect(aom.layerOrder).toEqual([keptLayer]);
+      expect(aom.onLayer.has(1)).toBe(false);
+      expect(aom.onLayer.has(2)).toBe(false);
+      expect(aom.onLayer.has(3)).toBe(true);
+      expect(aom.layerIndex.size).toBe(1);
+      expect(aom.layerIndex.has(1000)).toBe(false);
+      expect(aom.layerIndex.get(2000)).toBe(0);
+    });
+
+    test("应释放被移除层的 layerPool id", () => {
+      const removedLayerId = aom.layerPool.generate();
+      const removedLayer = new Layer(removedLayerId);
+      const keptLayerId = aom.layerPool.generate();
+      const keptLayer = new Layer(keptLayerId);
+      keptLayer.activeObjects.add(3);
+
+      aom.layerOrder = [removedLayer, keptLayer];
+      aom.layerIndex.set(removedLayerId, 0);
+      aom.layerIndex.set(keptLayerId, 1);
+      aom.onLayer.set(3, keptLayer);
+
+      expect(aom.layerPool.include(removedLayerId)).toBe(true);
+      expect(aom.layerPool.include(keptLayerId)).toBe(true);
+
+      aom.tidyup();
+
+      expect(aom.layerOrder).toEqual([keptLayer]);
+      expect(aom.layerPool.include(removedLayerId)).toBe(false);
+      expect(aom.layerPool.include(keptLayerId)).toBe(true);
+      expect(aom.layerIndex.get(keptLayerId)).toBe(0);
     });
   });
 });

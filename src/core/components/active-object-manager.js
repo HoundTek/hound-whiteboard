@@ -857,28 +857,48 @@ class ActiveObjectManager {
   }
 
   /**
+   * 清理给定层的 `onLayer` 映射和 `layerPool`
+   * @param {Layer} layer - 要清理的层
+   */
+  purgeLayerMappings(layer) {
+    for (const objectId of layer.activeObjects) {
+      this.onLayer.delete(objectId);
+    }
+    for (const objectId of layer.inactiveGraph.getNodes()) {
+      this.onLayer.delete(objectId);
+    }
+    this.layerPool.remove(layer.id);
+  }
+
+  /**
    * 清理动态图
    */
   tidyup() {
+    this.layerIndex.clear();
+
     // 删除无法被访问到的层
     let count = 0;
     for (const layer of this.layerOrder) {
       if (layer.activeObjects.size !== 0) break;
+      this.purgeLayerMappings(layer);
       layer.clear();
       count++;
     }
     this.layerOrder.splice(0, count);
+
     // 删除空层
     for (let i = 0; i < this.layerOrder.length; i++) {
       if (
         this.layerOrder[i].activeObjects.size === 0 &&
         this.layerOrder[i].inactiveGraph.getNodes().length === 0
       ) {
+        this.purgeLayerMappings(this.layerOrder[i]);
         this.layerOrder[i].clear();
         this.layerOrder.splice(i, 1);
         i--;
       }
     }
+
     // 更新 layerIndex
     this.layerOrder.forEach((layer, index) => {
       this.layerIndex.set(layer.id, index);

@@ -299,6 +299,38 @@ describe("Board input flow", () => {
     ]);
   });
 
+  test("挂载后的 StrokeCreatorTool 在绘制中应将对象加入 activeObjectManager 层", () => {
+    const board = new Board();
+    const monitor = createMonitor(board, "main");
+    const tool = new StrokeCreatorTool();
+    monitor.origin = new Vector(100, 50);
+    monitor.zoom = 2;
+
+    monitor.mountDevice("/mouse", createMouseDevice());
+    board.signalsEventBus.emit("mount", {
+      to: "/main/mouse/primary",
+      tool,
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: new Vector(105, 60),
+            buttons: 1,
+            button: 0,
+          },
+        },
+      ],
+    });
+
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+    expect(board.activeObjectManager.layerOrder.length).toBe(1);
+    expect(board.activeObjectManager.layerOrder[0].activeObjects.has(tool.obj.id)).toBe(true);
+  });
+
   test("挂载后的 PolygonCreatorTool 应可经由输入链路完成 object-end 提交", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");

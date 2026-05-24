@@ -121,12 +121,6 @@ class Board {
   configuredPersistenceMode;
 
   /**
-   * 区块 id 池
-   * @type {CounterPool}
-   */
-  chunkCounterPool;
-
-  /**
    * 对象 id 池
    * @type {CounterPool}
    */
@@ -169,7 +163,6 @@ class Board {
     this.undoTree = new UndoTree();
     this.chunkLoaded = new Map();
     this.objectLoaded = new Map();
-    this.chunkCounterPool = new CounterPool();
     this.objectCounterPool = new CounterPool();
     this.chunkLoadEventBus = new EventBus();
     this.monitors = new Map();
@@ -777,18 +770,6 @@ class Board {
 
     this.chunkLoaded.delete(chunk.id);
     return true;
-  }
-
-  /**
-   * 持久化区块连接信息
-   * @private
-   */
-  async #persistChunkConnection() {
-    const boardRootPath = this.resolvePersistenceRootPath();
-    if (!boardRootPath) return;
-    await boardFileOperateBridge.writeChunkConnection(boardRootPath, {
-      count: this.chunkCounterPool.counter,
-    });
   }
 
   /**
