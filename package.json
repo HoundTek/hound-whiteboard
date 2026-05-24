@@ -3,27 +3,25 @@
   "version": "0.0.0",
   "type": "module",
   "description": "A whiteboard app",
-  "main": "./src/main.js",
   "scripts": {
-    "start": "electron .",
+    "dev": "tauri dev",
+    "build": "tauri build",
     "test": "NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests",
     "bench": "node benchmarks/all.bench.js",
     "bench:io": "node benchmarks/io-bridge.bench.js",
     "bench:io:direct": "node benchmarks/io-direct.bench.js",
-    "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js",
-    "bench:io:roundtrip": "electron benchmarks/io-roundtrip.bench.js",
-    "bench:io:accum": "electron benchmarks/io-accumulatable.bench.js"
+    "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js"
   },
   "author": "Frank Steven",
   "license": "MIT",
   "dependencies": {
-    "adm-zip": "0.5",
-    "hidefile": "3",
-    "electron": "39"
+    "@tauri-apps/api": "^2.0.0",
+    "adm-zip": "0.5.17",
+    "hidefile": "3"
   },
   "devDependencies": {
-    "@electron/packager": "19",
-    "jest": "30",
+    "@tauri-apps/cli": "^2.0.0",
+    "jest": "30.4.2",
     "benchmark": "2.1.4"
   },
   "jest": {

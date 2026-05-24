@@ -1,37 +1,26 @@
-import path from "path";
-import { fileURLToPath } from "url";
-import { app, BrowserWindow, ipcMain } from "electron";
-import { registerIOBridge } from "./io-bridge-main.js";
-import { registerCoreFileOperateBridge } from "./core/bridges/file-operate-bridge-main.js";
+import { ioBridge } from "./io-bridge-renderer.js";
 
-let window;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+console.log("[Hound Whiteboard] Main module loaded");
 
-app.whenReady().then(() => {
-  registerIOBridge(ipcMain);
-  registerCoreFileOperateBridge(ipcMain);
+const initializeApp = async () => {
+  try {
+    console.log("[Hound Whiteboard] Initializing application...");
+    
+    window.__HoundIOBridge = ioBridge;
+    
+    console.log("[Hound Whiteboard] Application initialized successfully");
+  } catch (error) {
+    console.error("[Hound Whiteboard] Failed to initialize:", error);
+    throw error;
+  }
+};
 
-  window = new BrowserWindow({
-    webPreferences: {
-      preload: path.join(__dirname, "preload-io.js"),
-      nodeIntegration: true,
-      contextIsolation: false,
-      nodeIntegrationInSubFrames: true
-    },
-    fullscreen: false,
-    autoHideMenuBar: false,
-    frame: true,
-    transparent: false
-  });
+if (typeof window !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeApp);
+  } else {
+    initializeApp();
+  }
+}
 
-  window.loadFile(path.join(__dirname, "templates/whiteboard.html"));
-});
-
-app.on("window-all-closed", () => {
-  setTimeout(() => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      app.quit();
-    }
-  }, 1000);
-});
+export { initializeApp, ioBridge };
