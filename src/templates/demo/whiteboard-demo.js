@@ -10,6 +10,7 @@ import {
   createKeyboardDevice,
 } from "../../core/devices/keyboard-device.js";
 import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
+import { DebuggerTool } from "./debugger-tool.js";
 import { RandomCircleCreatorTool } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
 
@@ -21,11 +22,20 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "KeyA",
   "KeyS",
   "KeyD",
+  "KeyQ",
+  "KeyE",
+  "KeyR",
+  "KeyT",
+  "Digit1",
+  "Digit2",
+  "Digit3",
+  "Digit4",
 ]);
 
 const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
   MOVE: "tools/move",
   RANDOM_CIRCLE: "tools/create-circle",
+  DEBUG: "tools/debug",
 });
 
 const WASD_ROUTE_PRESETS = Object.freeze({
@@ -83,6 +93,30 @@ function buildWasdNodeConfig(code, vector) {
   };
 }
 
+function buildKeyboardDebugNodeConfig(type, context = {}) {
+  return {
+    rewritePacket(packet) {
+      const triggerSignals = packet.signals.filter(
+        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+      );
+
+      if (triggerSignals.length === 0) {
+        return [];
+      }
+
+      return {
+        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.DEBUG}`,
+        signals: [
+          {
+            type,
+            context: { ...context },
+          },
+        ],
+      };
+    },
+  };
+}
+
 function configureWhiteboardDemo(board, monitor, options = {}) {
   const effectiveBoard = board ?? monitor?.board;
   if (!effectiveBoard || !monitor) {
@@ -103,6 +137,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options.randomCircleTool ?? new RandomCircleCreatorTool();
   const wasdCoordinateTool =
     options.wasdCoordinateTool ?? new WasdCoordinateTool();
+  const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
@@ -126,6 +161,10 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
     tool: wasdCoordinateTool,
   });
+  effectiveBoard.signalsEventBus.emit("mount", {
+    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.DEBUG}`,
+    tool: debugTool,
+  });
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Space`,
     options: buildKeyboardTriggerForwardNodeConfig(
@@ -140,6 +179,43 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     });
   }
 
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyQ`,
+    options: buildKeyboardDebugNodeConfig("debug:chunkload"),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyE`,
+    options: buildKeyboardDebugNodeConfig("debug:objectload"),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyR`,
+    options: buildKeyboardDebugNodeConfig("debug:aom"),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyT`,
+    options: buildKeyboardDebugNodeConfig("debug:board"),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/Digit1`,
+    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 1 }),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/Digit2`,
+    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 2 }),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/Digit3`,
+    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 3 }),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/Digit4`,
+    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 4 }),
+  });
+
+  console.log(
+    `[whiteboard-demo] debug keys: Q=chunkload, E=objectload, R=aom, T=board, 1/2/3/4=chunk detail`,
+  );
+
   return {
     keyboardDevice,
     mouseDevice,
@@ -147,6 +223,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     secondaryStrokeTool,
     randomCircleTool,
     wasdCoordinateTool,
+    debugTool,
   };
 }
 

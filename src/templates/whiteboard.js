@@ -133,13 +133,29 @@ monitor.canvas.addEventListener("contextmenu", (event) => {
 
 const keyboardInputCodes = new Set(DEMO_KEYBOARD_INPUT_CODES);
 
+const shouldHandleKeyboardEvent = (event) => {
+  if (event.metaKey || event.ctrlKey) {
+    return false;
+  }
+
+  return keyboardInputCodes.has(event.code);
+};
+
 const emitKeyboardPacket = (event) => {
-  if (!keyboardInputCodes.has(event.code)) return;
+  if (!shouldHandleKeyboardEvent(event)) return;
 
   event.preventDefault();
   if (event.type === "keydown") {
     if (event.code === "Space") {
       logDemoStatus("当前输入", "空格随机圆");
+    } else if (
+      event.code === "KeyQ" ||
+      event.code === "KeyE" ||
+      event.code === "KeyR" ||
+      event.code === "KeyT" ||
+      event.code.startsWith("Digit")
+    ) {
+      logDemoStatus("当前输入", `debug ${event.code}`);
     } else {
       logDemoStatus("当前输入", `WASD ${event.code}`);
     }
@@ -179,3 +195,5 @@ monitor.canvas.addEventListener("keydown", emitKeyboardPacket);
 monitor.canvas.addEventListener("keyup", emitKeyboardPacket);
 monitor.canvas.addEventListener("blur", emitKeyboardCancelPacket);
 window.addEventListener("resize", resizeMonitor);
+
+monitor.canvas.focus();

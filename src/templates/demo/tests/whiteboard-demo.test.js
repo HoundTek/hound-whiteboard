@@ -67,6 +67,14 @@ describe("whiteboard demo", () => {
         },
       ],
     });
+
+    expect(board.activeObjectManager.layerOrder.length).toBe(1);
+    expect(
+      board.activeObjectManager.layerOrder[0].activeObjects.has(
+        primaryStrokeTool.obj.id,
+      ),
+    ).toBe(true);
+
     board.signalsEventBus.emit("input", {
       to: "/main/mouse",
       signals: [
