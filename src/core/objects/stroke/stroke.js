@@ -9,6 +9,13 @@ import { PathRange, PolygonRange, RectangleRange } from "../../range/index.js";
 import { calcConvexHull, insertPoints } from "../../utils/math-algorithm.js";
 import { BasicObject } from "../basic-obj.js";
 
+const DEFAULT_STROKE_PROPERTY = Object.freeze({
+  color: "#000000",
+  width: 1,
+  lineJoin: "round",
+  lineCap: "round",
+});
+
 /**
  * 笔画类
  * @class
@@ -24,9 +31,15 @@ class StrokeObject extends BasicObject {
     super(p, id, ownerChunkId);
   }
 
-  static isDirected = false;
+  property = { ...DEFAULT_STROKE_PROPERTY };
 
-  static isErasable = true;
+  isDirected() {
+    return false;
+  }
+
+  isErasable() {
+    return true;
+  }
 
   /**
    * 内点曲线
@@ -105,19 +118,24 @@ class StrokeObject extends BasicObject {
    * 在擦除笔画时，系统可能会根据这个颜色属性来决定如何处理被擦除部分的视觉效果，例如是否显示擦除痕迹等。
    * 需要注意的是，虽然笔画对象具有颜色属性，但在某些情况下（例如使用特殊的笔刷或工具时），这个属性可能会被忽略或覆盖。
    */
-  color = "#000000";
-
   render(ctx) {
     if (!this.localPathRange || this.localPathRange.points.length === 0) {
       return;
     }
+
+    const strokeWidth = this.property.width;
+    if (!(Number.isFinite(strokeWidth) && strokeWidth > 0)) {
+      return;
+    }
+
     const transformedPoints = this.worldPathRange.points;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-    ctx.strokeStyle = this.color;
+    ctx.strokeStyle = this.property.color;
     ctx.globalCompositeOperation = "source-over";
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
+    ctx.lineWidth = strokeWidth;
+    ctx.lineJoin = this.property.lineJoin ?? DEFAULT_STROKE_PROPERTY.lineJoin;
+    ctx.lineCap = this.property.lineCap ?? DEFAULT_STROKE_PROPERTY.lineCap;
     ctx.beginPath();
     ctx.moveTo(transformedPoints[0].x, transformedPoints[0].y);
     for (let i = 1; i < transformedPoints.length; i++) {
@@ -127,16 +145,11 @@ class StrokeObject extends BasicObject {
     ctx.restore();
   }
 
-  getRenderPadding() {
-    return 0.5;
-  }
-
   serialize() {
     return {
       ...super.serialize(),
       type: "StrokeObject",
       points: this.localPathRange.points.map((point) => point.serialize()),
-      color: this.color,
     };
   }
 
@@ -153,9 +166,12 @@ class StrokeObject extends BasicObject {
 
     obj.setPathPoints((data.points ?? []).map((point) => Vector.parse(point)));
     obj.setTransform(Matrix.parse(data.transform));
-    obj.color = data.color ?? obj.color;
+    obj.setProperty({
+      ...DEFAULT_STROKE_PROPERTY,
+      ...(data.property ?? {}),
+    });
     return obj;
   }
 }
 
-export { StrokeObject };
+export { DEFAULT_STROKE_PROPERTY, StrokeObject };

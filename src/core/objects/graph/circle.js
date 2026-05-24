@@ -9,6 +9,12 @@ import { Matrix, Vector } from "../../utils/math.js";
 import { calcConvexHull } from "../../utils/math-algorithm.js";
 import { EllipseRange, RectangleRange } from "../../range/index.js";
 
+const DEFAULT_CIRCLE_PROPERTY = Object.freeze({
+  fillColor: null,
+  strokeColor: "#000000",
+  strokeWidth: 3,
+});
+
 /**
  * 圆类
  * @class
@@ -41,6 +47,8 @@ class CircleObject extends GraphObject {
    */
   radius = 0;
 
+  property = { ...DEFAULT_CIRCLE_PROPERTY };
+
   /**
    * 设置圆的半径
    * @description 设置新的半径时，会自动更新变换后的顶点集和凸包。
@@ -62,7 +70,11 @@ class CircleObject extends GraphObject {
    * @description 在进行矩阵变换前的凸包。当且仅当 radius 发生变化时才会更新它。
    */
   calculateConvexHull() {
-    this.convexHullRange = new EllipseRange(this.position, this.radius, this.radius);
+    this.convexHullRange = new EllipseRange(
+      new Vector(0, 0),
+      this.radius,
+      this.radius,
+    );
   }
 
   /**
@@ -75,7 +87,11 @@ class CircleObject extends GraphObject {
   }
 
   getRange() {
-    return new EllipseRange(this.position, this.radius, this.radius).transform(this.transform);
+    return new EllipseRange(
+      new Vector(0, 0),
+      this.radius,
+      this.radius,
+    ).transform(this.transform);
   }
 
   /**
@@ -83,8 +99,6 @@ class CircleObject extends GraphObject {
    * @type {string}
    * @default "#000000"
    */
-  color = "#000000";
-
   /**
    *
    * @param {CanvasRenderingContext2D} ctx
@@ -93,6 +107,18 @@ class CircleObject extends GraphObject {
     if (this.radius <= 0) {
       return;
     }
+
+    const strokeWidth = this.property.strokeWidth;
+    const shouldFill = Boolean(this.property.fillColor);
+    const shouldStroke =
+      Boolean(this.property.strokeColor) &&
+      Number.isFinite(strokeWidth) &&
+      strokeWidth > 0;
+
+    if (!shouldFill && !shouldStroke) {
+      return;
+    }
+
     ctx.save();
     ctx.setTransform(
       this.transform.a,
@@ -102,18 +128,22 @@ class CircleObject extends GraphObject {
       this.position.x,
       this.position.y,
     );
-    ctx.fillStyle = this.color;
     ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
     ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-    ctx.strokeStyle = this.color;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.restore();
-  }
 
-  getRenderPadding() {
-    return 1.5;
+    if (shouldFill) {
+      ctx.fillStyle = this.property.fillColor;
+      ctx.fill();
+    }
+
+    if (shouldStroke) {
+      ctx.strokeStyle = this.property.strokeColor;
+      ctx.lineWidth = strokeWidth;
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   serialize() {
@@ -121,7 +151,6 @@ class CircleObject extends GraphObject {
       ...super.serialize(),
       type: "CircleObject",
       radius: this.radius,
-      color: this.color,
     };
   }
 
@@ -136,9 +165,12 @@ class CircleObject extends GraphObject {
       data.radius,
     );
     obj.setTransform(Matrix.parse(data.transform));
-    obj.color = data.color;
+    obj.setProperty({
+      ...DEFAULT_CIRCLE_PROPERTY,
+      ...(data.property ?? {}),
+    });
     return obj;
   }
 }
 
-export { CircleObject };
+export { CircleObject, DEFAULT_CIRCLE_PROPERTY };

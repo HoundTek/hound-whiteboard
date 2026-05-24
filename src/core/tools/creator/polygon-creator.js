@@ -4,7 +4,10 @@
  * @author Zhou Chenyu
  */
 
-import { PolygonObject } from "../../objects/graph/polygon.js";
+import {
+  DEFAULT_POLYGON_PROPERTY,
+  PolygonObject,
+} from "../../objects/graph/polygon.js";
 import { Vector } from "../../utils/math.js";
 import { MultiGestureObjectCreatorTool } from "./obj-creator.js";
 
@@ -23,12 +26,16 @@ import { MultiGestureObjectCreatorTool } from "./obj-creator.js";
  */
 class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   /**
-   * @constructor
+   * @param {{ property?: Partial<typeof DEFAULT_POLYGON_PROPERTY> }} [options={}]
    */
-  constructor() {
+  constructor(options = {}) {
     super();
     this.count = 0;
     this.lastPoint = null;
+    this.property = {
+      ...DEFAULT_POLYGON_PROPERTY,
+      ...(options.property ?? {}),
+    };
   }
 
   /**
@@ -39,7 +46,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @todo
    */
   static parse(toolData) {
-    let tool = new PolygonCreatorTool();
+    let tool = new PolygonCreatorTool({ property: toolData?.property });
     if (!toolData || toolData.type !== "PolygonTool")
       throw new Error("Invalid tool data for PolygonTool.");
     tool.obj = toolData.obj ? PolygonObject.parse(toolData.obj) : null;
@@ -54,6 +61,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   serialize() {
     return {
       type: "PolygonTool",
+      property: { ...(this.property ?? {}) },
       obj: this.obj?.serialize(),
     };
   }
@@ -77,12 +85,19 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   lastPoint;
 
   /**
+   * 新建多边形默认属性
+   * @type {Record<string, any>}
+   */
+  property;
+
+  /**
    * @param {Vector} position - 对象位置
    * @param {number} id - 对象 id
    * @param {number} ownerChunkId - 对象归属区块 id
    */
   create(position, id, ownerChunkId) {
     this.obj = new PolygonObject(position, id, ownerChunkId);
+    this.obj.setProperty(this.property);
   }
 
   /**

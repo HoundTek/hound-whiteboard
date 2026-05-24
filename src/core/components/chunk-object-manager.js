@@ -253,6 +253,10 @@ class ChunkObjectManager {
    * @throws {Error} 如果文件不存在
    */
   async loadTierGraph(boardRootPath) {
+    if (typeof boardRootPath !== "string" || boardRootPath.trim() === "") {
+      return;
+    }
+
     // 通过专用 IPC 从主进程读取层叠图数据。
     const graphData = await boardFileOperateBridge.loadTierGraph(
       boardRootPath,
@@ -274,6 +278,10 @@ class ChunkObjectManager {
    * @returns {Promise<void>} 保存完成
    */
   async saveTierGraph(boardRootPath) {
+    if (typeof boardRootPath !== "string" || boardRootPath.trim() === "") {
+      return;
+    }
+
     // 统一以数组结构落盘，避免传输复杂实例对象。
     await boardFileOperateBridge.saveTierGraph(
       boardRootPath,

@@ -1,29 +1,21 @@
-import { Matrix, Vector } from "../core/utils/math.js";
-import { TextObject } from "../core/objects/one-dim/text.js";
-import { PolygonCreatorTool } from "../core/tools/creator/polygon-creator.js";
-import { CounterPool } from "../core/utils/counter-pool.js";
-import { insertPoints } from "../core/utils/math-algorithm.js";
-import { StrokeCreatorTool } from "../core/tools/creator/stroke-creator.js";
-import { Monitor } from "../core/components/monitor.js";
+import { Vector } from "../core/utils/math.js";
 import { Board } from "../core/components/board.js";
-import { Tool } from "../core/tools/tool.js";
-import { createMouseDevice } from "../core/devices/mouse-device.js";
 import {
-  KEYBOARD_DEVICE_SIGNAL_TYPES,
-  createKeyboardDevice,
-} from "../core/devices/keyboard-device.js";
-import { CircleObject } from "../core/objects/graph/circle.js";
+  configureWhiteboardDemo,
+  DEMO_KEYBOARD_INPUT_CODES,
+} from "./demo/whiteboard-demo.js";
+import { WasdCoordinateTool } from "./demo/wasd-coordinate-tool.js";
 
 const board = new Board();
-board.chunkWidth = 800;
-board.chunkHeight = 600;
+board.width = 800;
+board.height = 600;
 
 const foregroundLayer = document.getElementById("app-foreground-layer");
 const monitor = board.createMonitor(
   foregroundLayer,
   {
-    width: 800,
-    height: 600,
+    width: window.innerWidth,
+    height: window.innerHeight,
   },
   "monitor",
 );
@@ -31,201 +23,72 @@ monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
 monitor.canvas.tabIndex = 0;
 
-class MouseTraceTool extends Tool {
-  isDrawing = false;
-  lastPoint = null;
-
-  process(signalPacket, deviceContext = {}) {
-    const monitorContext = deviceContext.monitor;
-    const ctx = monitorContext?.canvas?.getContext?.("2d");
-    if (!ctx || !monitorContext?.canvas) return;
-
-    const positionSignal = signalPacket.signals.find(
-      (signal) => signal.type === "position",
-    );
-    const position = positionSignal?.context?.value ?? null;
-    const hasEnd = signalPacket.signals.some((signal) => signal.type === "end");
-    const hasCancel = signalPacket.signals.some(
-      (signal) => signal.type === "cancel",
-    );
-
-    if (position) {
-      const rect = monitorContext.canvas.getBoundingClientRect();
-      const canvasX = position.x - rect.left;
-      const canvasY = position.y - rect.top;
-
-      if (!this.isDrawing) {
-        this.isDrawing = true;
-        this.lastPoint = { x: canvasX, y: canvasY };
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(this.lastPoint.x, this.lastPoint.y);
-        ctx.lineTo(canvasX, canvasY);
-
-        ctx.strokeStyle = "#c0392b";
-        ctx.lineWidth = 2;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
-
-        this.lastPoint = { x: canvasX, y: canvasY };
-      }
-    }
-
-    if (hasEnd || hasCancel) {
-      this.isDrawing = false;
-      this.lastPoint = null;
-    }
+const logDemoStatus = (label, payload) => {
+  if (payload === undefined) {
+    console.log(`[whiteboard-demo] ${label}`);
+    return;
   }
 
-  reset() {
-    this.isDrawing = false;
-    this.lastPoint = null;
-  }
-}
-
-const mouseTraceTool = new MouseTraceTool();
-
-const WASD_ROUTE_PRESETS = {
-  KeyW: { x: 0, y: -1 },
-  KeyA: { x: -1, y: 0 },
-  KeyS: { x: 0, y: 1 },
-  KeyD: { x: 1, y: 0 },
+  console.log(`[whiteboard-demo] ${label}`, payload);
 };
 
-class RandomCircleTool extends Tool {
-  process(signalPacket, deviceContext = {}) {
-    const monitorContext = deviceContext.monitor;
-    const canvas = monitorContext?.canvas;
-    const ctx = canvas?.getContext?.("2d");
-    if (!ctx || !canvas) return;
-
-    const shouldDraw = signalPacket.signals.some(
-      (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-    );
-    if (!shouldDraw) return;
-
-    const radius = 12 + Math.random() * 48;
-    const centerX =
-      radius + Math.random() * Math.max(canvas.width - radius * 2, 0);
-    const centerY =
-      radius + Math.random() * Math.max(canvas.height - radius * 2, 0);
-    const hue = Math.floor(Math.random() * 360);
-
-    const circle = new CircleObject(new Vector(centerX, centerY), 0, 0, radius);
-    circle.color = `hsl(${hue}, 70%, 42%)`;
-    circle.render(ctx);
-  }
-
-  reset() {}
-}
-
-const randomCircleTool = new RandomCircleTool();
-
-class WasdCoordinateTool extends Tool {
-  position = { x: 0, y: 0 };
-
-  process(signalPacket) {
-    const movementSignals = signalPacket.signals.filter(
-      (signal) => signal.type === "position",
-    );
-    if (movementSignals.length === 0) return;
-
-    for (const signal of movementSignals) {
-      const delta = signal?.context?.value;
-      if (!delta) continue;
-
-      this.position = {
-        x: this.position.x + (delta.x ?? 0),
-        y: this.position.y + (delta.y ?? 0),
-      };
-    }
-
-    console.log("WASD cursor:", this.position);
-  }
-
-  reset() {
-    this.position = { x: 0, y: 0 };
-  }
-}
-
-const wasdCoordinateTool = new WasdCoordinateTool();
-const keyboardDevice = createKeyboardDevice();
-
-const buildWasdNodeConfig = (code, vector) => ({
-  rewritePacket(packet) {
-    const movementSignals = packet.signals
-      .filter((signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER)
-      .map((signal) => ({
-        type: "position",
-        context: {
-          value: { ...vector },
-          code,
-          key: signal?.context?.key,
-          sourceType: signal.type,
-        },
-      }));
-
-    if (movementSignals.length === 0) {
-      return [];
-    }
-
-    return {
-      to: "../../move",
-      signals: movementSignals,
-    };
+const wasdCoordinateTool = new WasdCoordinateTool({
+  logPosition: false,
+  onPositionChange(position) {
+    logDemoStatus("WASD 坐标", position.serialize());
   },
 });
 
-monitor.mountDevice("/mouse", createMouseDevice());
+logDemoStatus("左键工具", "黑色笔划对象");
+logDemoStatus("右键工具", "红色笔划对象");
+logDemoStatus("空格工具", "随机圆对象");
+logDemoStatus("WASD 初始坐标", { x: 0, y: 0 });
+configureWhiteboardDemo(board, monitor, { wasdCoordinateTool });
 
-monitor.mountDevice("/keyboard", keyboardDevice);
+const resizeMonitor = () => {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  monitor.rootElement.style.width = `${width}px`;
+  monitor.rootElement.style.height = `${height}px`;
+  monitor.resizeRenderLayers(width, height);
+};
 
-board.signalsEventBus.emit("mount", {
-  to: `/${monitor.monitorId}/mouse/primary`,
-  tool: mouseTraceTool,
-});
-
-board.signalsEventBus.emit("mount", {
-  to: `/${monitor.monitorId}/keyboard/code/Space`,
-  tool: randomCircleTool,
-});
-
-board.signalsEventBus.emit("mount", {
-  to: `/${monitor.monitorId}/keyboard/move`,
-  tool: wasdCoordinateTool,
-});
-
-for (const [code, vector] of Object.entries(WASD_ROUTE_PRESETS)) {
-  board.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/${code}`,
-    options: buildWasdNodeConfig(code, vector),
-  });
-}
+resizeMonitor();
 
 const emitMousePacket = (event) => {
-  const worldPosition = monitor.screenToWorld(
-    new Vector(event.clientX, event.clientY),
-  );
-  if (!worldPosition) return;
-
-  const baseContext = {
-    value: worldPosition,
-    button: event.button,
-    buttons: event.buttons,
-    domEvent: event.type,
-    ctrlKey: Boolean(event.ctrlKey),
-    shiftKey: Boolean(event.shiftKey),
-    altKey: Boolean(event.altKey),
-    metaKey: Boolean(event.metaKey),
-  };
   const signals = [];
+
+  if (event.type === "mousedown") {
+    if (event.button === 0) {
+      logDemoStatus("当前输入", "左键黑笔");
+    } else if (event.button === 2) {
+      logDemoStatus("当前输入", "右键红笔");
+    } else {
+      logDemoStatus("当前输入", "鼠标输入");
+    }
+  }
 
   if (
     event.type === "mousedown" ||
     event.type === "mousemove" ||
     event.type === "mouseup"
   ) {
+    const worldPosition = monitor.screenToWorld(
+      new Vector(event.clientX, event.clientY),
+    );
+    if (!worldPosition) return;
+
+    const baseContext = {
+      value: worldPosition,
+      button: event.button,
+      buttons: event.buttons,
+      domEvent: event.type,
+      ctrlKey: Boolean(event.ctrlKey),
+      shiftKey: Boolean(event.shiftKey),
+      altKey: Boolean(event.altKey),
+      metaKey: Boolean(event.metaKey),
+    };
+
     signals.push({ type: "position", context: baseContext });
   }
 
@@ -244,7 +107,6 @@ const emitMousePacket = (event) => {
     signals.push({
       type: "cancel",
       context: {
-        button: event.button,
         buttons: event.buttons,
         domEvent: event.type,
       },
@@ -263,13 +125,24 @@ monitor.canvas.addEventListener("mousedown", emitMousePacket);
 monitor.canvas.addEventListener("mousemove", emitMousePacket);
 window.addEventListener("mouseup", emitMousePacket);
 monitor.canvas.addEventListener("mouseleave", emitMousePacket);
+monitor.canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
 
-const keyboardInputCodes = new Set(["Space", "KeyW", "KeyA", "KeyS", "KeyD"]);
+const keyboardInputCodes = new Set(DEMO_KEYBOARD_INPUT_CODES);
 
 const emitKeyboardPacket = (event) => {
   if (!keyboardInputCodes.has(event.code)) return;
 
   event.preventDefault();
+  if (event.type === "keydown") {
+    if (event.code === "Space") {
+      logDemoStatus("当前输入", "空格随机圆");
+    } else {
+      logDemoStatus("当前输入", `WASD ${event.code}`);
+    }
+  }
+
   board.signalsEventBus.emit("input", {
     to: `/${monitor.monitorId}/keyboard`,
     signals: [
@@ -303,3 +176,4 @@ monitor.canvas.addEventListener("mousedown", () => {
 monitor.canvas.addEventListener("keydown", emitKeyboardPacket);
 monitor.canvas.addEventListener("keyup", emitKeyboardPacket);
 monitor.canvas.addEventListener("blur", emitKeyboardCancelPacket);
+window.addEventListener("resize", resizeMonitor);

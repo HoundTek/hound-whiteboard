@@ -87,6 +87,22 @@ describe("StrokeCreatorTool", () => {
     ).toEqual([{ x: 0, y: 0 }]);
   });
 
+  test("构造参数应允许通过 property 指定新建笔画属性", () => {
+    const tool = new StrokeCreatorTool({
+      property: { color: "#ff0000", width: 4 },
+    });
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
+      },
+      { objectId: 102, ownerChunkId: 3 },
+    );
+
+    expect(tool.obj.property).toMatchObject({ color: "#ff0000", width: 4 });
+  });
+
   test("cancel 信号应重置正在创建的对象并撤销 AOM 注册", () => {
     const tool = new StrokeCreatorTool();
     const board = {
@@ -263,5 +279,57 @@ describe("StrokeCreatorTool", () => {
     const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     expect(ownerChunk.objectManager.getObject(22)).toBeUndefined();
+  });
+
+  test("连续两次创建应生成两个不同笔画对象", () => {
+    const tool = new StrokeCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      { objectId: 31, ownerChunkId: 1, board },
+    );
+
+    const firstObject = tool.obj;
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "end", context: {} }],
+      },
+      { objectId: 31, ownerChunkId: 1, board },
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(4, 5) } }],
+      },
+      { objectId: 32, ownerChunkId: 1, board },
+    );
+
+    const secondObject = tool.obj;
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "end", context: {} }],
+      },
+      { objectId: 32, ownerChunkId: 1, board },
+    );
+
+    const ownerChunk = board.getChunkById(1);
+    expect(firstObject).not.toBe(secondObject);
+    expect(firstObject.id).toBe(31);
+    expect(secondObject.id).toBe(32);
+    expect(ownerChunk.objectManager.getObject(31)).toBe(firstObject);
+    expect(ownerChunk.objectManager.getObject(32)).toBe(secondObject);
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
   });
 });

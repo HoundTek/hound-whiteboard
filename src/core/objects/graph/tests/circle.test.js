@@ -10,11 +10,17 @@ describe("CircleObject", () => {
 
       expect(circle.radius).toBe(5);
       expect(circle.convexHullRange).toBeInstanceOf(EllipseRange);
-      expect(Vector.nearlyEq(circle.convexHullRange.center, new Vector(3, 4))).toBe(true);
-      expect(Vector.nearlyEq(circle.convexHullRange.axisX, new Vector(5, 0))).toBe(true);
-      expect(Vector.nearlyEq(circle.convexHullRange.axisY, new Vector(0, 5))).toBe(true);
-      expect(circle.boundingBox.left).toBeCloseTo(-2);
-      expect(circle.boundingBox.top).toBeCloseTo(-1);
+      expect(
+        Vector.nearlyEq(circle.convexHullRange.center, new Vector(0, 0)),
+      ).toBe(true);
+      expect(
+        Vector.nearlyEq(circle.convexHullRange.axisX, new Vector(5, 0)),
+      ).toBe(true);
+      expect(
+        Vector.nearlyEq(circle.convexHullRange.axisY, new Vector(0, 5)),
+      ).toBe(true);
+      expect(circle.boundingBox.left).toBeCloseTo(-5);
+      expect(circle.boundingBox.top).toBeCloseTo(-5);
       expect(circle.boundingBox.width).toBeCloseTo(10);
       expect(circle.boundingBox.height).toBeCloseTo(10);
     });
@@ -28,11 +34,11 @@ describe("CircleObject", () => {
 
       expect(circle.transform).toEqual(mat);
       expect(range).toBeInstanceOf(EllipseRange);
-      expect(Vector.nearlyEq(range.center, new Vector(4, 9))).toBe(true);
+      expect(Vector.nearlyEq(range.center, new Vector(0, 0))).toBe(true);
       expect(Vector.nearlyEq(range.axisX, new Vector(8, 0))).toBe(true);
       expect(Vector.nearlyEq(range.axisY, new Vector(0, 12))).toBe(true);
-      expect(circle.boundingBox.left).toBeCloseTo(-4);
-      expect(circle.boundingBox.top).toBeCloseTo(-3);
+      expect(circle.boundingBox.left).toBeCloseTo(-8);
+      expect(circle.boundingBox.top).toBeCloseTo(-12);
       expect(circle.boundingBox.width).toBeCloseTo(16);
       expect(circle.boundingBox.height).toBeCloseTo(24);
     });
@@ -41,7 +47,11 @@ describe("CircleObject", () => {
   describe("序列化与解析", () => {
     test("应能正确序列化并解析圆对象", () => {
       const circle = new CircleObject(new Vector(1, 2), 7, 9, 6);
-      circle.color = "#123456";
+      circle.setProperty({
+        strokeColor: "#123456",
+        fillColor: "#abcdef",
+        strokeWidth: 5,
+      });
       circle.setTransform(Matrix.identity().rotate(Math.PI / 6));
 
       const serialized = circle.serialize();
@@ -52,13 +62,17 @@ describe("CircleObject", () => {
         ownerChunkId: 9,
         position: { x: 1, y: 2 },
         transform: circle.transform.serialize(),
+        property: {
+          fillColor: "#abcdef",
+          strokeColor: "#123456",
+          strokeWidth: 5,
+        },
         type: "CircleObject",
         radius: 6,
-        color: "#123456",
       });
       expect(parsed).toBeInstanceOf(CircleObject);
       expect(parsed.radius).toBe(6);
-      expect(parsed.color).toBe("#123456");
+      expect(parsed.property).toEqual(serialized.property);
       expect(Vector.nearlyEq(parsed.position, new Vector(1, 2))).toBe(true);
       expect(parsed.transform).toEqual(circle.transform);
     });

@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -6,6 +7,7 @@ import { DirectedGraph } from "../../utils/directed-graph.js";
 import { Vector } from "../../utils/math.js";
 import { handleCoreFileOperateRequest } from "../../bridges/file-operate-bridge-main.js";
 import { CORE_FILE_OPERATE_ACTIONS } from "../../bridges/file-operate-bridge-common.js";
+import { boardFileOperateBridge } from "../../bridges/file-operate-bridge-renderer.js";
 import { ChunkObjectManager } from "../chunk-object-manager.js";
 import { StrokeObject } from "../../objects/stroke/stroke.js";
 
@@ -64,6 +66,56 @@ describe("ChunkObjectManager", () => {
       [15, [1, 2]],
       [18, [1, 2, 3]],
     ]);
+  });
+
+  test("无 rootPath 时层叠图读写应直接保持内存 no-op", async () => {
+    const chunkObjectManager = new ChunkObjectManager(1);
+    chunkObjectManager.staticGraph = DirectedGraph.parse([
+      [15, [18]],
+      [18, []],
+    ]);
+    chunkObjectManager.setObjectCoverChunks(15, [1, 2]);
+
+    const loadTierGraphSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "loadTierGraph",
+    );
+    const loadCoverIndexSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "loadChunkObjectCoverIndex",
+    );
+    const saveTierGraphSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "saveTierGraph",
+    );
+    const saveCoverIndexSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "saveChunkObjectCoverIndex",
+    );
+
+    await chunkObjectManager.loadTierGraph();
+    await chunkObjectManager.saveTierGraph();
+
+    expect(loadTierGraphSpy).not.toHaveBeenCalled();
+    expect(loadCoverIndexSpy).not.toHaveBeenCalled();
+    expect(saveTierGraphSpy).not.toHaveBeenCalled();
+    expect(saveCoverIndexSpy).not.toHaveBeenCalled();
+    expect(
+      chunkObjectManager.staticGraph.equals(
+        DirectedGraph.parse([
+          [15, [18]],
+          [18, []],
+        ]),
+      ),
+    ).toBe(true);
+    expect(chunkObjectManager.serializeObjectCoverChunks()).toEqual([
+      [15, [1, 2]],
+    ]);
+
+    loadTierGraphSpy.mockRestore();
+    loadCoverIndexSpy.mockRestore();
+    saveTierGraphSpy.mockRestore();
+    saveCoverIndexSpy.mockRestore();
   });
 
   test("应基于对象 range 精确计算覆盖区块，而不是仅按 bounding box 粗算", () => {

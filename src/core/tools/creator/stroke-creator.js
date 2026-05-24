@@ -4,7 +4,10 @@
  * @author Zhou Chenyu
  */
 
-import { StrokeObject } from "../../objects/stroke/stroke.js";
+import {
+  DEFAULT_STROKE_PROPERTY,
+  StrokeObject,
+} from "../../objects/stroke/stroke.js";
 import { SingleGestureObjectCreatorTool } from "./obj-creator.js";
 import { Vector } from "../../utils/math.js";
 
@@ -24,12 +27,26 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
    */
   obj;
 
-  constructor() {
+  /**
+   * 新建笔画默认颜色
+   * @type {Record<string, any>}
+   */
+  property;
+
+  /**
+   * @param {{ property?: Partial<typeof DEFAULT_STROKE_PROPERTY> }} [options={}]
+   */
+  constructor(options = {}) {
     super();
+    this.property = {
+      ...DEFAULT_STROKE_PROPERTY,
+      ...(options.property ?? {}),
+    };
   }
 
   create(p, id, ownerChunkId) {
     this.obj = new StrokeObject(p, id, ownerChunkId);
+    this.obj.setProperty(this.property);
   }
 
   /**
@@ -43,13 +60,17 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
 
   beginCreationGesture(interaction) {
     this.obj.setPathPoints(
-      this.obj.localPathRange.points.concat([this.toLocalPoint(interaction.position)]),
+      this.obj.localPathRange.points.concat([
+        this.toLocalPoint(interaction.position),
+      ]),
     );
   }
 
   updateCreationGesture(interaction) {
     this.obj.setPathPoints(
-      this.obj.localPathRange.points.concat([this.toLocalPoint(interaction.position)]),
+      this.obj.localPathRange.points.concat([
+        this.toLocalPoint(interaction.position),
+      ]),
     );
   }
 

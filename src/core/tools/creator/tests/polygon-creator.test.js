@@ -51,6 +51,30 @@ describe("PolygonCreatorTool", () => {
     expect(tool.lastPoint).toBeNull();
   });
 
+  test("构造参数应允许通过 property 指定新建多边形属性", () => {
+    const tool = new PolygonCreatorTool({
+      property: {
+        fillColor: "#ff0000",
+        strokeColor: "#0000ff",
+        strokeWidth: 3,
+      },
+    });
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
+      },
+      { objectId: 99, ownerChunkId: 1 },
+    );
+
+    expect(tool.obj.property).toMatchObject({
+      fillColor: "#ff0000",
+      strokeColor: "#0000ff",
+      strokeWidth: 3,
+    });
+  });
+
   test("cancel 信号应重置当前手势", () => {
     const tool = new PolygonCreatorTool();
     const deviceContext = { objectId: 10, ownerChunkId: 1 };

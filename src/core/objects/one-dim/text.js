@@ -8,6 +8,13 @@ import { OneDimensionObject } from "./one-dim-obj.js";
 import { Vector, Matrix } from "../../utils/math.js";
 import { PolygonRange, RectangleRange } from "../../range/index.js";
 
+const DEFAULT_TEXT_PROPERTY = Object.freeze({
+  color: "#000000",
+  size: 16,
+  font: "Arial",
+  strokeWidth: 1,
+});
+
 /**
  * 文本对象类
  * @class
@@ -57,44 +64,12 @@ class TextObject extends OneDimensionObject {
    */
   worldTextRange = new PolygonRange([]);
 
-  textProperty = {
-    /**
-     * 文本颜色
-     * @type {string}
-     * @default "#000000"
-     */
-    color: "#000000",
+  property = { ...DEFAULT_TEXT_PROPERTY };
 
-    /**
-     * 字号大小
-     * @type {number}
-     * @default 16
-     */
-    size: 16,
-
-    /**
-     * 字体名称
-     * @type {string}
-     * @default "Arial"
-     */
-    font: "Arial",
-  };
-
-  /**
-   * @param {{color?: string, size?: number, font?: string}} param0 - 文字的属性
-   * @param {CanvasRenderingContext2D} ctx - 画布上下文
-   */
-  setTextProperty({ color, size, font }, ctx) {
-    if (color) {
-      this.textProperty.color = color;
-    }
-    if (size) {
-      this.textProperty.size = size;
-    }
-    if (font) {
-      this.textProperty.font = font;
-    }
+  setProperty(property = {}, ctx) {
+    super.setProperty(property);
     this.divideText(ctx);
+    return this.property;
   }
 
   /**
@@ -124,7 +99,7 @@ class TextObject extends OneDimensionObject {
    */
   divideText(ctx) {
     this.dividedText = [this.text];
-    const height = this.textProperty.size * 1.2 * this.dividedText.length;
+    const height = this.property.size * 1.2 * this.dividedText.length;
     this.localTextRange = new PolygonRange([
       new Vector(0, 0),
       new Vector(this.ihatLength, 0),
@@ -170,27 +145,29 @@ class TextObject extends OneDimensionObject {
       this.position.x,
       this.position.y,
     );
-    ctx.fillStyle = this.textProperty.color;
-    ctx.font = `${this.textProperty.size}px ${this.textProperty.font}`;
+    ctx.fillStyle = this.property.color;
+    ctx.font = `${this.property.size}px ${this.property.font}`;
     ctx.globalCompositeOperation = "source-over";
     const rectangle = RectangleRange.from(this.localTextRange);
     if (this.dividedText) {
       this.dividedText.forEach((line, index) => {
-        ctx.fillText(line, 0, (index + 1 / 1.2) * this.textProperty.size * 1.2);
+        ctx.fillText(line, 0, (index + 1 / 1.2) * this.property.size * 1.2);
       });
-      ctx.strokeStyle = this.textProperty.color;
-      ctx.strokeRect(
-        rectangle.left,
-        rectangle.top,
-        rectangle.width,
-        rectangle.height,
-      );
+      if (
+        Number.isFinite(this.property.strokeWidth) &&
+        this.property.strokeWidth > 0
+      ) {
+        ctx.strokeStyle = this.property.color;
+        ctx.lineWidth = this.property.strokeWidth;
+        ctx.strokeRect(
+          rectangle.left,
+          rectangle.top,
+          rectangle.width,
+          rectangle.height,
+        );
+      }
     }
     ctx.restore();
-  }
-
-  getRenderPadding() {
-    return 0.5;
   }
 
   serialize() {
@@ -198,7 +175,6 @@ class TextObject extends OneDimensionObject {
       type: "TextObject",
       ...super.serialize(),
       text: this.text,
-      textProperty: this.textProperty,
       ihatLength: this.ihatLength,
     };
   }
@@ -214,11 +190,14 @@ class TextObject extends OneDimensionObject {
       data.ownerChunkId,
     );
     obj.setTransform(Matrix.parse(data.transform));
+    obj.setProperty({
+      ...DEFAULT_TEXT_PROPERTY,
+      ...(data.property ?? data.textProperty ?? {}),
+    });
     obj.setText(data.text);
-    obj.setTextProperty(data.textProperty ?? {});
     obj.setIhatLength(data.ihatLength ?? obj.ihatLength);
     return obj;
   }
 }
 
-export { TextObject };
+export { DEFAULT_TEXT_PROPERTY, TextObject };

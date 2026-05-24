@@ -47,6 +47,7 @@ class ObjectCreatorTool extends Tool {
   constructor() {
     super();
     this.isCreatingGestureActive = false;
+    this.isObjectCreationCompleted = false;
   }
 
   /**
@@ -80,6 +81,12 @@ class ObjectCreatorTool extends Tool {
    * @type {boolean}
    */
   isCreatingGestureActive;
+
+  /**
+   * 当前对象是否已经完成提交
+   * @type {boolean}
+   */
+  isObjectCreationCompleted;
 
   /**
    * 将信号上下文中的坐标规整为 Vector。
@@ -142,7 +149,7 @@ class ObjectCreatorTool extends Tool {
    * @returns {boolean} 是否已拥有对象实例
    */
   ensureObject(interaction) {
-    if (!this.obj) {
+    if (!this.obj || this.isObjectCreationCompleted) {
       const objectId =
         interaction.objectId ??
         interaction?.deviceContext?.allocateObjectId?.();
@@ -153,6 +160,7 @@ class ObjectCreatorTool extends Tool {
       }
       interaction.objectId = objectId;
       this.create(interaction.position, objectId, interaction.ownerChunkId);
+      this.isObjectCreationCompleted = false;
       interaction?.deviceContext?.board?.activeObjectManager?.add?.(
         new Set([this.obj]),
       );
@@ -232,12 +240,15 @@ class ObjectCreatorTool extends Tool {
    */
   completeCreatedObject(interaction) {
     if (!this.obj) return undefined;
+    const completedObject = this.obj;
     const board = interaction?.deviceContext?.board;
     if (board?.activeObjectManager?.apply) {
-      board.activeObjectManager.apply(new Set([this.obj]));
+      board.activeObjectManager.apply(new Set([completedObject]));
+      this.isObjectCreationCompleted = true;
       return undefined;
     }
-    board?.addObject?.(this.obj, this.obj.ownerChunkId);
+    board?.addObject?.(completedObject, completedObject.ownerChunkId);
+    this.isObjectCreationCompleted = true;
     return undefined;
   }
 
@@ -255,6 +266,7 @@ class ObjectCreatorTool extends Tool {
       }
     }
     this.reset();
+    this.isObjectCreationCompleted = false;
     return undefined;
   }
 

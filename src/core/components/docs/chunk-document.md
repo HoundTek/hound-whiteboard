@@ -14,14 +14,14 @@
 
 ## 核心字段
 
-| 名称            | 描述           | 类型                |
-| --------------- | -------------- | ------------------- |
-| `id`            | 区块唯一标识     | `number`            |
-| `x`             | 区块二维坐标 x   | `number`            |
-| `y`             | 区块二维坐标 y   | `number`            |
-| `objectManager` | 区块对象管理器   | `ChunkObjectManager` |
-| `isLoad`        | 是否已加载     | `boolean`           |
-| `isTempLoad`    | 是否为临时加载 | `boolean`           |
+| 名称            | 描述           | 类型                 |
+| --------------- | -------------- | -------------------- |
+| `id`            | 区块唯一标识   | `number`             |
+| `x`             | 区块二维坐标 x | `number`             |
+| `y`             | 区块二维坐标 y | `number`             |
+| `objectManager` | 区块对象管理器 | `ChunkObjectManager` |
+| `isLoad`        | 是否已加载     | `boolean`            |
+| `isTempLoad`    | 是否为临时加载 | `boolean`            |
 
 ## 区块 id 与坐标
 
@@ -44,6 +44,8 @@
 ### 临时加载 `loadTemp(boardRootPath)`
 
 临时加载只加载层叠关系（tier graph），不加载全部对象内容。用于活动对象跨区块拾取等场景，减少内存占用。
+
+- 若 `boardRootPath` 为空，则只建立内存中的 `ChunkObjectManager`，不访问文件系统
 
 ### 完整加载 `loadFull(boardRootPath)`
 
@@ -90,17 +92,17 @@
 
 ## API
 
-| 名称                            | 描述                     | 类型                                     |
-| ------------------------------- | ------------------------ | ---------------------------------------- |
-| `idToCoordinate(id)`            | id 转二维坐标            | `number -> { x: number, y: number }`     |
-| `coordinateToId(x, y)`          | 二维坐标转 id            | `number -> number -> number`             |
+| 名称                             | 描述                       | 类型                                     |
+| -------------------------------- | -------------------------- | ---------------------------------------- |
+| `idToCoordinate(id)`             | id 转二维坐标              | `number -> { x: number, y: number }`     |
+| `coordinateToId(x, y)`           | 二维坐标转 id              | `number -> number -> number`             |
 | `isValidChunkIdentity(id, x, y)` | 判断区块 id 与坐标是否匹配 | `number -> number -> number -> boolean`  |
-| `addObject(obj, below, above)`  | 按上下关系加入对象       | `number -> number[] -> number[] -> void` |
-| `loadFull(boardRootPath)`       | 完整加载区块             | `string -> Promise<boolean>`             |
-| `loadTemp(boardRootPath)`       | 临时加载区块             | `string -> Promise<boolean>`             |
-| `downgradeToTemp()`             | 从完整加载降级为临时加载 | `void -> boolean`                        |
-| `unload()`                      | 完整卸载区块             | `void -> void`                           |
-| `unloadTemp()`                  | 临时卸载区块             | `void -> boolean`                        |
+| `addObject(obj, below, above)`   | 按上下关系加入对象         | `number -> number[] -> number[] -> void` |
+| `loadFull(boardRootPath)`        | 完整加载区块               | `string -> Promise<boolean>`             |
+| `loadTemp(boardRootPath)`        | 临时加载区块               | `string -> Promise<boolean>`             |
+| `downgradeToTemp()`              | 从完整加载降级为临时加载   | `void -> boolean`                        |
+| `unload()`                       | 完整卸载区块               | `void -> void`                           |
+| `unloadTemp()`                   | 临时卸载区块               | `void -> boolean`                        |
 
 ## 实现状态
 

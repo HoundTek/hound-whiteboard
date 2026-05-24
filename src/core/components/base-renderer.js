@@ -5,10 +5,30 @@
  */
 
 import { BasicObject } from "../objects/basic-obj.js";
-import { intersectsRanges, RectangleRange } from "../range/index.js";
+import { intersectsRanges, PathRange, RectangleRange } from "../range/index.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { Monitor } from "./monitor.js";
 import { mergeRectangleDirtyRects } from "./render-scheduler.js";
+
+const PATH_RASTERIZATION_SCREEN_PADDING = 1;
+
+function expandRectForClear(rect) {
+  const normalizedRect = RectangleRange.fromRectLike(rect);
+  if (!normalizedRect) return undefined;
+
+  const left = Math.floor(normalizedRect.left);
+  const top = Math.floor(normalizedRect.top);
+  const right = Math.ceil(normalizedRect.right);
+  const bottom = Math.ceil(normalizedRect.bottom);
+
+  return new RectangleRange(left, top, right - left, bottom - top);
+}
+
+function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
+  return dirtyRects
+    .map((dirtyRect) => expandRectForClear(dirtyRect))
+    .filter(Boolean);
+}
 
 /**
  * 静态层渲染器
@@ -123,11 +143,17 @@ class BaseRenderer {
    */
   getObjectScreenPadding(objectInstance) {
     const objectPadding = objectInstance?.getRenderPadding?.();
-    if (!Number.isFinite(objectPadding) || objectPadding <= 0) {
-      return 0;
+    const basePadding =
+      Number.isFinite(objectPadding) && objectPadding > 0
+        ? objectPadding * (this.monitor?.zoom ?? 1)
+        : 0;
+    const objectRange = objectInstance?.getRange?.();
+
+    if (objectRange instanceof PathRange) {
+      return basePadding + PATH_RASTERIZATION_SCREEN_PADDING;
     }
 
-    return objectPadding * (this.monitor?.zoom ?? 1);
+    return basePadding;
   }
 
   /**
@@ -140,7 +166,8 @@ class BaseRenderer {
     const normalizedWorldRect = RectangleRange.fromRectLike(worldRect);
     if (!normalizedWorldRect) return undefined;
 
-    const screenRect = this.monitor?.worldRectToScreenRect?.(normalizedWorldRect);
+    const screenRect =
+      this.monitor?.worldRectToScreenRect?.(normalizedWorldRect);
     if (!screenRect) return undefined;
 
     return screenRect.inflate(padding);
@@ -194,7 +221,7 @@ class BaseRenderer {
   /**
    * 合并当前已加载区块的静态图
    * @param {Iterable<*>} chunks - 当前已加载区块
-    * @returns {BasicObject[]}
+   * @returns {BasicObject[]}
    */
   mergeStaticGraphs(chunks) {
     const mergedGraph = new DirectedGraph();
@@ -287,6 +314,19 @@ class BaseRenderer {
   }
 
   /**
+   * 收集与条目相交的脏区
+   * @param {{ screenRect?: RectangleRange }} entry - drawable 条目
+   * @param {RectangleRange[]} dirtyRects - 脏区集合
+   * @returns {RectangleRange[]} 相交脏区
+   */
+  getEntryDirtyRects(entry, dirtyRects) {
+    const rect = entry?.screenRect;
+    if (!rect) return dirtyRects;
+
+    return dirtyRects.filter((dirtyRect) => intersectsRanges(rect, dirtyRect));
+  }
+
+  /**
    * 清理脏区
    * @param {RectangleRange[]} dirtyRects - 脏区集合
    */
@@ -295,16 +335,53 @@ class BaseRenderer {
     if (!ctx) return;
 
     for (const dirtyRect of dirtyRects) {
+      const clearRect = expandRectForClear(dirtyRect);
+      if (!clearRect) continue;
+
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(
+        clearRect.left,
+        clearRect.top,
+        clearRect.width,
+        clearRect.height,
+      );
+      ctx.restore();
+    }
+  }
+
+  /**
+   * 在指定脏区裁剪下渲染对象
+   * @param {CanvasRenderingContext2D} ctx - 原始 2D 上下文
+   * @param {CanvasRenderingContext2D} viewportContext - 视口上下文
+   * @param {BasicObject} objectInstance - 待绘制对象
+   * @param {RectangleRange[]} dirtyRects - 裁剪脏区
+   */
+  renderObjectWithinDirtyRects(
+    ctx,
+    viewportContext,
+    objectInstance,
+    dirtyRects,
+  ) {
+    if (!Array.isArray(dirtyRects) || dirtyRects.length === 0) {
+      objectInstance.render(viewportContext);
+      return;
+    }
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath();
+    for (const dirtyRect of dirtyRects) {
+      ctx.rect(
         dirtyRect.left,
         dirtyRect.top,
         dirtyRect.width,
         dirtyRect.height,
       );
-      ctx.restore();
     }
+    ctx.clip();
+    objectInstance.render(viewportContext);
+    ctx.restore();
   }
 
   /**
@@ -418,11 +495,15 @@ class BaseRenderer {
           };
         }
 
-        const value = Reflect.get(target, prop, receiver);
+        const value = Reflect.get(target, prop, target);
         if (typeof value === "function") {
           return value.bind(target);
         }
         return value;
+      },
+
+      set(target, prop, value) {
+        return Reflect.set(target, prop, value, target);
       },
     });
   }
@@ -441,7 +522,7 @@ class BaseRenderer {
     const hasExplicitDirtyRects =
       Array.isArray(dirtyRects) && dirtyRects.length > 0;
     const effectiveDirtyRects = hasExplicitDirtyRects
-      ? this.collectDirtyRects(dirtyRects)
+      ? normalizeDirtyRectsForScreenUpdate(this.collectDirtyRects(dirtyRects))
       : [];
 
     if (hasExplicitDirtyRects) {
@@ -455,7 +536,17 @@ class BaseRenderer {
         if (!this.intersectsDirtyRects(entry, effectiveDirtyRects)) continue;
       }
       if (typeof entry.object.render !== "function") continue;
-      entry.object.render(viewportContext);
+
+      const entryDirtyRects = hasExplicitDirtyRects
+        ? this.getEntryDirtyRects(entry, effectiveDirtyRects)
+        : [];
+
+      this.renderObjectWithinDirtyRects(
+        ctx,
+        viewportContext,
+        entry.object,
+        entryDirtyRects,
+      );
     }
 
     return drawables;

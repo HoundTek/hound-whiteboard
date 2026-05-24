@@ -193,7 +193,7 @@ body {
 .monitor-layer-live {
   z-index: 1;
   pointer-events: auto;
-  background-color: pink;
+  background-color: transparent;
 }
 
 .monitor-layer-ui {

@@ -5,6 +5,7 @@ import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
 import { createMouseDevice } from "../../devices/mouse-device.js";
+import { createNoopCanvas } from "../../test-support/noop-canvas.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
@@ -12,14 +13,7 @@ import {
 
 describe("Board input flow", () => {
   function createCanvas() {
-    return {
-      width: 0,
-      height: 0,
-      id: "",
-      getBoundingClientRect() {
-        return { left: 0, top: 0, width: 800, height: 600 };
-      },
-    };
+    return createNoopCanvas({ width: 800, height: 600 });
   }
 
   function createMonitor(board, monitorId = "monitor") {

@@ -12,7 +12,11 @@ describe("object deserializer", () => {
       new Vector(0, 20),
     ]);
     polygon.setTransform(new Matrix(0, 1, -1, 0));
-    polygon.color = "#ff8800";
+    polygon.setProperty({
+      fillColor: "#ff8800",
+      strokeColor: "#224466",
+      strokeWidth: 2,
+    });
 
     const serialized = polygon.serialize();
     const restored = deserialize(serialized);
@@ -27,10 +31,11 @@ describe("object deserializer", () => {
     const text = new TextObject(new Vector(8, 13), 2, 7);
     text.setTransform(new Matrix(1, 0.2, 0, 1));
     text.setText("hello whiteboard");
-    text.setTextProperty({
+    text.setProperty({
       color: "#123456",
       size: 24,
       font: "HarmonyOS Sans",
+      strokeWidth: 2,
     });
     text.setIhatLength(320);
 
@@ -45,9 +50,13 @@ describe("object deserializer", () => {
 
   test("应能还原 StrokeObject", () => {
     const stroke = new StrokeObject(new Vector(1, 2), 9, 11);
-    stroke.setPathPoints([new Vector(0, 0), new Vector(5, 2), new Vector(7, 8)]);
+    stroke.setPathPoints([
+      new Vector(0, 0),
+      new Vector(5, 2),
+      new Vector(7, 8),
+    ]);
     stroke.setTransform(new Matrix(2, 0, 0, 2));
-    stroke.color = "#00aaee";
+    stroke.setProperty({ color: "#00aaee", width: 5 });
 
     const serialized = stroke.serialize();
     const restored = deserialize(serialized);

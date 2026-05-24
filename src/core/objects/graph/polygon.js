@@ -9,6 +9,12 @@ import { Matrix, Vector } from "../../utils/math.js";
 import { calcConvexHull } from "../../utils/math-algorithm.js";
 import { PolygonRange, RectangleRange } from "../../range/index.js";
 
+const DEFAULT_POLYGON_PROPERTY = Object.freeze({
+  fillColor: "#000000",
+  strokeColor: null,
+  strokeWidth: 0,
+});
+
 /**
  * 多边形类
  * @class
@@ -41,6 +47,8 @@ class PolygonObject extends GraphObject {
    * 外界不应直接修改它，应使用 setPolygonPoints 方法。
    */
   localPolygonRange = new PolygonRange([]);
+
+  property = { ...DEFAULT_POLYGON_PROPERTY };
 
   /**
    * 设置对象的顶点集
@@ -118,8 +126,6 @@ class PolygonObject extends GraphObject {
    * @type {string}
    * @default "#000000"
    */
-  color = "#000000";
-
   /**
    *
    * @param {CanvasRenderingContext2D} ctx
@@ -128,6 +134,18 @@ class PolygonObject extends GraphObject {
     if (!this.localPolygonRange || this.localPolygonRange.points.length === 0) {
       return;
     }
+
+    const strokeWidth = this.property.strokeWidth;
+    const shouldFill = Boolean(this.property.fillColor);
+    const shouldStroke =
+      Boolean(this.property.strokeColor) &&
+      Number.isFinite(strokeWidth) &&
+      strokeWidth > 0;
+
+    if (!shouldFill && !shouldStroke) {
+      return;
+    }
+
     const points = this.localPolygonRange.points;
     ctx.save();
     ctx.setTransform(
@@ -138,7 +156,6 @@ class PolygonObject extends GraphObject {
       this.position.x,
       this.position.y,
     );
-    ctx.fillStyle = this.color;
     ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
@@ -146,7 +163,18 @@ class PolygonObject extends GraphObject {
       ctx.lineTo(points[i].x, points[i].y);
     }
     ctx.closePath();
-    ctx.fill();
+
+    if (shouldFill) {
+      ctx.fillStyle = this.property.fillColor;
+      ctx.fill();
+    }
+
+    if (shouldStroke) {
+      ctx.strokeStyle = this.property.strokeColor;
+      ctx.lineWidth = strokeWidth;
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
@@ -155,7 +183,6 @@ class PolygonObject extends GraphObject {
       ...super.serialize(),
       type: "PolygonObject",
       points: this.localPolygonRange.points.map((p) => p.serialize()),
-      color: this.color,
     };
   }
 
@@ -170,9 +197,12 @@ class PolygonObject extends GraphObject {
       data.points.map((p) => Vector.parse(p)),
     );
     obj.setTransform(Matrix.parse(data.transform));
-    obj.color = data.color;
+    obj.setProperty({
+      ...DEFAULT_POLYGON_PROPERTY,
+      ...(data.property ?? {}),
+    });
     return obj;
   }
 }
 
-export { PolygonObject };
+export { DEFAULT_POLYGON_PROPERTY, PolygonObject };

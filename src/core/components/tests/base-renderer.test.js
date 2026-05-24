@@ -42,6 +42,12 @@ describe("BaseRenderer", () => {
       beginPath() {
         calls.push(["beginPath"]);
       },
+      rect(...args) {
+        calls.push(["rect", ...args]);
+      },
+      clip() {
+        calls.push(["clip"]);
+      },
       moveTo(...args) {
         calls.push(["moveTo", ...args]);
       },
@@ -64,6 +70,90 @@ describe("BaseRenderer", () => {
         calls.push(["strokeStyle", value]);
       },
     };
+  }
+
+  function createReceiverSensitiveContext(calls) {
+    const ctx = {
+      save() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["save"]);
+      },
+      restore() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["restore"]);
+      },
+      setTransform(...args) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["setTransform", ...args]);
+      },
+      clearRect(...args) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["clearRect", ...args]);
+      },
+      beginPath() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["beginPath"]);
+      },
+      rect(...args) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["rect", ...args]);
+      },
+      clip() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["clip"]);
+      },
+      moveTo(...args) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["moveTo", ...args]);
+      },
+      lineTo(...args) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["lineTo", ...args]);
+      },
+      stroke() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["stroke"]);
+      },
+    };
+
+    Object.defineProperty(ctx, "strokeStyle", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        return "#000000";
+      },
+      set(value) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["strokeStyle", value]);
+      },
+    });
+    Object.defineProperty(ctx, "lineJoin", {
+      configurable: true,
+      enumerable: true,
+      set(value) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["lineJoin", value]);
+      },
+    });
+    Object.defineProperty(ctx, "lineCap", {
+      configurable: true,
+      enumerable: true,
+      set(value) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["lineCap", value]);
+      },
+    });
+    Object.defineProperty(ctx, "globalCompositeOperation", {
+      configurable: true,
+      enumerable: true,
+      set(value) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push(["globalCompositeOperation", value]);
+      },
+    });
+
+    return ctx;
   }
 
   test("应按已加载区块的静态图拓扑序渲染静态对象", () => {
@@ -100,6 +190,36 @@ describe("BaseRenderer", () => {
 
     expect(drawables).toEqual([lower, upper]);
     expect(calls).toContainEqual(["clearRect", 0, 0, 320, 240]);
+  });
+
+  test("viewportContext 应保持原生 context accessor 的合法 receiver", () => {
+    const calls = [];
+    const object = new StrokeObject(new Vector(0, 0), 111, 1);
+    object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
+
+    const chunk = Chunk.fromId(1);
+    chunk.objectManager = new ChunkObjectManager(1);
+    chunk.objectManager.staticGraph = DirectedGraph.parse([[111, []]]);
+
+    const monitor = {
+      origin: new Vector(0, 0),
+      zoom: 1,
+      baseCanvas: { width: 320, height: 240 },
+      board: createBoardWithObjects([object]),
+      getContext(layer) {
+        return layer === "base" ? createReceiverSensitiveContext(calls) : null;
+      },
+      chunkBlockLoader: {
+        getLoadedChunks() {
+          return [chunk];
+        },
+      },
+    };
+
+    const renderer = new BaseRenderer(monitor);
+
+    expect(() => renderer.render()).not.toThrow();
+    expect(calls).toContainEqual(["strokeStyle", "#000000"]);
   });
 
   test("应按多区块合并后的全局静态图拓扑序渲染静态对象", () => {
@@ -248,9 +368,28 @@ describe("BaseRenderer", () => {
     renderer.render([new RectangleRange(-1, -1, 20, 20)]);
 
     expect(calls).toContainEqual(["clearRect", -1, -1, 20, 20]);
+    expect(calls).toContainEqual(["rect", -1, -1, 20, 20]);
+    expect(calls).toContainEqual(["clip"]);
     expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
       ["moveTo", 0, 0],
     ]);
+  });
+
+  test("clearDirtyRects 应把浮点脏区向外扩张到整像素清理矩形", () => {
+    const calls = [];
+    const monitor = {
+      origin: new Vector(0, 0),
+      zoom: 1,
+      baseCanvas: { width: 320, height: 240 },
+      getContext(layer) {
+        return layer === "base" ? createContext(calls) : null;
+      },
+    };
+    const renderer = new BaseRenderer(monitor);
+
+    renderer.clearDirtyRects([new RectangleRange(10.2, 20.4, 5.1, 6.2)]);
+
+    expect(calls).toContainEqual(["clearRect", 10, 20, 6, 7]);
   });
 
   test("render(dirtyRects) 应把对象级渲染留白计入静态层局部重绘命中判断", () => {
@@ -507,16 +646,16 @@ describe("BaseRenderer", () => {
     });
 
     expect(dirtyRects).toEqual([
-      new RectangleRange(99.5, -0.5, 6, 1),
-      new RectangleRange(-0.5, -0.5, 6, 1),
+      new RectangleRange(98.5, -1.5, 8, 3),
+      new RectangleRange(-1.5, -1.5, 8, 3),
     ]);
     expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
       1,
-      new RectangleRange(99.5, -0.5, 6, 1),
+      new RectangleRange(98.5, -1.5, 8, 3),
     );
     expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
       2,
-      new RectangleRange(-0.5, -0.5, 6, 1),
+      new RectangleRange(-1.5, -1.5, 8, 3),
     );
   });
 
@@ -543,10 +682,33 @@ describe("BaseRenderer", () => {
       previousWorldRects: new Map([[92, oldWorldRect]]),
     });
 
-    expect(dirtyRects).toEqual([new RectangleRange(-0.5, -0.5, 7, 1)]);
+    expect(dirtyRects).toEqual([new RectangleRange(-1.5, -1.5, 9, 3)]);
     expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledTimes(1);
     expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
-      new RectangleRange(-0.5, -0.5, 7, 1),
+      new RectangleRange(-1.5, -1.5, 9, 3),
+    );
+  });
+
+  test("PathRange 对象的静态层失效矩形应包含额外的抗锯齿安全留白", () => {
+    const object = new StrokeObject(new Vector(0, 0), 93, 1);
+    object.setPathPoints([new Vector(0, 0), new Vector(0, 10)]);
+    const monitor = {
+      origin: new Vector(0, 0),
+      zoom: 1,
+      baseRenderScheduler: {
+        invalidate: jest.fn(),
+      },
+      worldRectToScreenRect(rect) {
+        return RectangleRange.from(rect);
+      },
+    };
+
+    const renderer = new BaseRenderer(monitor);
+    const dirtyRects = renderer.invalidateObjects([object]);
+
+    expect(dirtyRects).toEqual([new RectangleRange(-1.5, -1.5, 3, 13)]);
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
+      new RectangleRange(-1.5, -1.5, 3, 13),
     );
   });
 });

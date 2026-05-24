@@ -19,9 +19,13 @@ class GraphObject extends BasicObject {
     super(p, id, ownerChunkId);
   }
 
-  static isDirected = true;
+  isDirected() {
+    return true;
+  }
 
-  static isErasable = false;
+  isErasable() {
+    return false;
+  }
 }
 
 export { GraphObject };

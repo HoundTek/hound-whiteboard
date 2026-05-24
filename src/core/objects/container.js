@@ -30,6 +30,14 @@ class Container extends BasicObject {
    */
   mode;
 
+  isDirected() {
+    return false;
+  }
+
+  isErasable() {
+    return false;
+  }
+
   /**
    * 创建一个新的容器对象
    * @param {Vector} p - 容器的位置

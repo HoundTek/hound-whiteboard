@@ -209,13 +209,16 @@ class Monitor {
       getChunkById: (chunkId) => this.board?.getChunkById?.(chunkId),
       getChunkWidth: () => this.chunkWidth,
       getChunkHeight: () => this.chunkHeight,
-      getChunkScreenRect: (chunk) => this.baseRenderer?.getChunkScreenRect?.(chunk),
-      getThresholds: () => this.baseDirtyRectThresholdStrategy?.(this.zoom) ?? {},
+      getChunkScreenRect: (chunk) =>
+        this.baseRenderer?.getChunkScreenRect?.(chunk),
+      getThresholds: () =>
+        this.baseDirtyRectThresholdStrategy?.(this.zoom) ?? {},
       getViewportRect: () => this.getViewportScreenRect(),
     });
     this.liveDirtyRectPolicyResolver = createLiveDirtyRectPolicyResolver({
       getZoom: () => this.zoom,
-      getThresholds: () => this.liveDirtyRectThresholdStrategy?.(this.zoom) ?? {},
+      getThresholds: () =>
+        this.liveDirtyRectThresholdStrategy?.(this.zoom) ?? {},
       getViewportRect: () => this.getViewportScreenRect(),
     });
     this.baseRenderScheduler = new RenderScheduler({
@@ -439,11 +442,76 @@ class Monitor {
   }
 
   /**
+   * 让 chunkBlockLoader 至少覆盖当前视口可见区块
+   * @param {Vector} [origin = this.origin] - 视口原点
+   * @param {number} [zoom = this.zoom] - 缩放因子
+   * @returns {Chunk[]} 当前视口可见区块
+   */
+  syncChunkBufferWithViewport(origin = this.origin, zoom = this.zoom) {
+    const visibleChunks = this.getVisibleChunksForViewport(origin, zoom);
+    const chunkBlockLoader = this.chunkBlockLoader;
+
+    if (
+      !chunkBlockLoader?.getLoadedChunks ||
+      !chunkBlockLoader?.resetBuffer ||
+      !chunkBlockLoader?.initChunkByCoordinate
+    ) {
+      return visibleChunks;
+    }
+
+    const visibleChunkIds = new Set(
+      visibleChunks
+        .map((chunk) => chunk?.id)
+        .filter((chunkId) => Number.isInteger(chunkId)),
+    );
+    const loadedChunkIds = new Set(
+      (chunkBlockLoader.getLoadedChunks?.() ?? [])
+        .map((chunk) => chunk?.id)
+        .filter((chunkId) => Number.isInteger(chunkId)),
+    );
+
+    if (
+      visibleChunkIds.size === loadedChunkIds.size &&
+      [...visibleChunkIds].every((chunkId) => loadedChunkIds.has(chunkId))
+    ) {
+      return visibleChunks;
+    }
+
+    if (visibleChunks.length === 0) {
+      chunkBlockLoader.resetBuffer();
+      return visibleChunks;
+    }
+
+    const chunkXs = visibleChunks.map((chunk) => chunk.x);
+    const chunkYs = visibleChunks.map((chunk) => chunk.y);
+    const minX = Math.min(...chunkXs);
+    const maxX = Math.max(...chunkXs);
+    const minY = Math.min(...chunkYs);
+    const maxY = Math.max(...chunkYs);
+
+    chunkBlockLoader.resetBuffer();
+    const firstChunk = chunkBlockLoader.initChunkByCoordinate(minX, minY);
+    if (!firstChunk) {
+      return visibleChunks;
+    }
+
+    for (let currentX = minX + 1; currentX <= maxX; currentX += 1) {
+      chunkBlockLoader.expandBufferRightFullLoad?.();
+    }
+
+    for (let currentY = minY + 1; currentY <= maxY; currentY += 1) {
+      chunkBlockLoader.expandBufferUpFullLoad?.();
+    }
+
+    return visibleChunks;
+  }
+
+  /**
    * 请求一次视口范围内的静态层重绘
    * @param {Chunk[]} [previousChunks = []] - 视口变化前可见区块
    */
   requestViewportBaseRender(previousChunks = [], previousViewportState = {}) {
-    const currentChunks = this.getVisibleChunksForViewport();
+    const currentChunks = this.syncChunkBufferWithViewport();
 
     if (currentChunks.length > 0 || previousChunks.length > 0) {
       this.baseRenderer?.invalidateChunks?.(currentChunks, previousChunks, {

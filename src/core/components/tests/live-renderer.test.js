@@ -39,6 +39,15 @@ describe("LiveRenderer", () => {
       clearRect(x, y, width, height) {
         calls.push({ type: "clearRect", args: [x, y, width, height] });
       },
+      beginPath() {
+        calls.push({ type: "beginPath" });
+      },
+      rect(x, y, width, height) {
+        calls.push({ type: "rect", args: [x, y, width, height] });
+      },
+      clip() {
+        calls.push({ type: "clip" });
+      },
       fillRect(x, y, width, height) {
         calls.push({ type: "fillRect", args: [x, y, width, height] });
       },
@@ -54,6 +63,58 @@ describe("LiveRenderer", () => {
       layer.inactiveGraph = inactiveGraph;
     }
     return layer;
+  }
+
+  function createReceiverSensitiveContext(calls) {
+    const ctx = {
+      save() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "save" });
+      },
+      restore() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "restore" });
+      },
+      setTransform(a, b, c, d, e, f) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "setTransform", args: [a, b, c, d, e, f] });
+      },
+      clearRect(x, y, width, height) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "clearRect", args: [x, y, width, height] });
+      },
+      beginPath() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "beginPath" });
+      },
+      rect(x, y, width, height) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "rect", args: [x, y, width, height] });
+      },
+      clip() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "clip" });
+      },
+      fillRect(x, y, width, height) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "fillRect", args: [x, y, width, height] });
+      },
+    };
+
+    Object.defineProperty(ctx, "fillStyle", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        return "#000000";
+      },
+      set(value) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({ type: "fillStyle", value });
+      },
+    });
+
+    return ctx;
   }
 
   test("应按 layerOrder 顺序渲染活动对象", () => {
@@ -116,6 +177,49 @@ describe("LiveRenderer", () => {
     expect(calls).toContainEqual({
       type: "setTransform",
       args: [2, 0, 0, 2, 20, 40],
+    });
+  });
+
+  test("viewportContext 应保持原生 context accessor 的合法 receiver", () => {
+    const calls = [];
+    class StyledFakeObject extends BasicObject {
+      constructor() {
+        super(new Vector(10, 20), 301, 1);
+        this.boundingBox = new RectangleRange(0, 0, 10, 10);
+      }
+
+      render(ctx) {
+        ctx.save();
+        ctx.fillStyle = "#ff0000";
+        ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
+        ctx.fillRect(0, 0, 10, 10);
+        ctx.restore();
+      }
+    }
+
+    const object = new StyledFakeObject();
+    const ctx = createReceiverSensitiveContext(calls);
+    const monitor = {
+      zoom: 2,
+      origin: new Vector(5, 10),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+    };
+    const aom = {
+      layerOrder: [createLayer(1, [301])],
+      activeObjectIndex: new Map([[301, object]]),
+      activeObjects: new Set([object]),
+    };
+
+    const renderer = new LiveRenderer(monitor, aom);
+
+    expect(() => renderer.render()).not.toThrow();
+    expect(calls).toContainEqual({ type: "fillStyle", value: "#ff0000" });
+    expect(calls).toContainEqual({
+      type: "setTransform",
+      args: [2, 0, 0, 2, 10, 20],
     });
   });
 
@@ -288,9 +392,34 @@ describe("LiveRenderer", () => {
     expect(calls.filter((entry) => entry.type === "clearRect")).toEqual([
       { type: "clearRect", args: [-2, -2, 20, 20] },
     ]);
+    expect(calls).toContainEqual({
+      type: "rect",
+      args: [-2, -2, 20, 20],
+    });
+    expect(calls).toContainEqual({ type: "clip" });
     expect(calls.filter((entry) => entry.type === "render")).toEqual([
       { type: "render", id: 51 },
     ]);
+  });
+
+  test("clearDirtyRects 应把浮点脏区向外扩张到整像素清理矩形", () => {
+    const calls = [];
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+
+    renderer.clearDirtyRects([new RectangleRange(10.2, 20.4, 5.1, 6.2)]);
+
+    expect(calls).toContainEqual({
+      type: "clearRect",
+      args: [10, 20, 6, 7],
+    });
   });
 
   test("invalidateObjects 应同时失效对象变更前后的屏幕范围", () => {
@@ -415,7 +544,7 @@ describe("LiveRenderer", () => {
     );
   });
 
-  test("真实对象应提供默认的渲染 padding", () => {
+  test("真实对象应根据 property 动态提供渲染 padding", () => {
     const circle = new CircleObject(new Vector(0, 0), 81, 1, 10);
     const stroke = new StrokeObject(new Vector(0, 0), 82, 1);
     const text = new TextObject(new Vector(0, 0), 83, 1);
@@ -424,5 +553,44 @@ describe("LiveRenderer", () => {
     expect(circle.getRenderPadding()).toBe(1.5);
     expect(stroke.getRenderPadding()).toBe(0.5);
     expect(text.getRenderPadding()).toBe(0.5);
+
+    circle.setProperty({ strokeWidth: 6 });
+    stroke.setProperty({ width: 4 });
+    text.setProperty({ strokeWidth: 2 });
+
+    expect(circle.getRenderPadding()).toBe(3);
+    expect(stroke.getRenderPadding()).toBe(2);
+    expect(text.getRenderPadding()).toBe(1);
+  });
+
+  test("PathRange 对象的屏幕矩形应包含额外的抗锯齿安全留白", () => {
+    const calls = [];
+    const stroke = new StrokeObject(new Vector(10, 20), 84, 1);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(0, 12)]);
+
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+      worldRectToScreenRect(rect) {
+        return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(13, [84])],
+      activeObjectIndex: new Map([[84, stroke]]),
+      activeObjects: new Set([stroke]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    expect(renderer.getObjectScreenRect(stroke)).toEqual(
+      new RectangleRange(8.5, 18.5, 3, 15),
+    );
   });
 });

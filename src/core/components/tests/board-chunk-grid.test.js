@@ -122,6 +122,43 @@ describe("Board chunk grid", () => {
     ).toBe("full");
   });
 
+  test("无 rootPath 时完整加载请求不应访问文件桥", async () => {
+    const board = new Board();
+    const chunkLoader = board.getChunkLoader();
+    const chunk = chunkLoader.getChunkByCoordinate(0, 0);
+    const loadTierGraphSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "loadTierGraph",
+    );
+    const loadCoverIndexSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "loadChunkObjectCoverIndex",
+    );
+
+    const results = board.chunkLoadEventBus.emit(
+      CHUNK_LOAD_EVENTS.REQUEST_LOAD,
+      {
+        requesterId: "demo-monitor",
+        chunk,
+        strategy: "full",
+        direction: "right",
+        source: "test",
+        alreadyBuffered: false,
+      },
+    );
+
+    expect(results).toHaveLength(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(loadTierGraphSpy).not.toHaveBeenCalled();
+    expect(loadCoverIndexSpy).not.toHaveBeenCalled();
+    expect(chunk.isLoad).toBe(true);
+    expect(chunk.isTempLoad).toBe(false);
+    expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount).toBe(1);
+
+    loadTierGraphSpy.mockRestore();
+    loadCoverIndexSpy.mockRestore();
+  });
+
   test("Board 应响应根 ChunkLoader 直接发出的卸载请求", async () => {
     const board = new Board();
     const chunkLoader = board.getChunkLoader();

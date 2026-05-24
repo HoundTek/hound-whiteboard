@@ -7,41 +7,18 @@ import {
   createDebuggerDevice,
   DEBUGGER_DEVICE_SIGNAL_TYPES,
 } from "../../devices/debugger-device.js";
+import {
+  createNoopCanvas,
+  createNoopCanvasContext2D,
+} from "../../test-support/noop-canvas.js";
 
 describe("Monitor", () => {
   function createContext() {
-    return {
-      save() {},
-      restore() {},
-      setTransform() {},
-      clearRect() {},
-      beginPath() {},
-      moveTo() {},
-      lineTo() {},
-      stroke() {},
-      fill() {},
-      fillRect() {},
-      strokeRect() {},
-      arc() {},
-      fillText() {},
-      measureText() {
-        return { width: 0 };
-      },
-    };
+    return createNoopCanvasContext2D();
   }
 
   function createMonitor(monitorId = "monitor") {
-    const canvas = {
-      width: 0,
-      height: 0,
-      id: "",
-      getBoundingClientRect() {
-        return { left: 0, top: 0, width: 800, height: 600 };
-      },
-      getContext() {
-        return createContext();
-      },
-    };
+    const canvas = createNoopCanvas({ width: 800, height: 600 });
     const board = {
       width: 800,
       height: 600,
@@ -158,16 +135,9 @@ describe("Monitor", () => {
 
   test("attachRenderLayers 应保留 liveCanvas 为兼容入口并同步层尺寸", () => {
     const monitor = createMonitor("delta");
-    const baseCanvas = { width: 0, height: 0, getContext: () => createContext() };
-    const liveCanvas = {
-      width: 320,
-      height: 240,
-      getBoundingClientRect() {
-        return { left: 0, top: 0, width: 320, height: 240 };
-      },
-      getContext: () => createContext(),
-    };
-    const uiCanvas = { width: 0, height: 0, getContext: () => createContext() };
+    const baseCanvas = createNoopCanvas({ width: 0, height: 0 });
+    const liveCanvas = createNoopCanvas({ width: 320, height: 240 });
+    const uiCanvas = createNoopCanvas({ width: 0, height: 0 });
     const rootElement = {};
 
     monitor.attachRenderLayers({
@@ -259,9 +229,15 @@ describe("Monitor", () => {
 
     monitor.zoom = 2;
 
-    expect(monitor.getDirtyRectThresholds("base").viewportCoverageRatio).toBeCloseTo(0.95);
-    expect(monitor.getDirtyRectThresholds("base").canonicalRectCoverageRatio).toBeCloseTo(0.65);
-    expect(monitor.getDirtyRectThresholds("live").viewportCoverageRatio).toBeCloseTo(0.8);
+    expect(
+      monitor.getDirtyRectThresholds("base").viewportCoverageRatio,
+    ).toBeCloseTo(0.95);
+    expect(
+      monitor.getDirtyRectThresholds("base").canonicalRectCoverageRatio,
+    ).toBeCloseTo(0.65);
+    expect(
+      monitor.getDirtyRectThresholds("live").viewportCoverageRatio,
+    ).toBeCloseTo(0.8);
   });
 
   test("应允许通过替换策略函数调整 dirty rect 聚合阈值", () => {

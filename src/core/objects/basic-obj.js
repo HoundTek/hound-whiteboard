@@ -71,6 +71,13 @@ class BasicObject {
   convexHullRange;
 
   /**
+   * 对象属性
+   * @type {Record<string, any>}
+   * @description 存放对象的渲染与行为属性，如颜色、描边宽度、字体等。
+   */
+  property = {};
+
+  /**
    * 计算对象的凸包
    * @description 统一 API，子类可重写此方法以计算对象的凸包。默认是矩形边界。
    */
@@ -87,12 +94,40 @@ class BasicObject {
   }
 
   /**
+   * 合并对象属性
+   * @param {Record<string, any>} [property={}] - 待写入属性
+   * @returns {Record<string, any>} 最新属性
+   */
+  setProperty(property = {}) {
+    if (!property || typeof property !== "object" || Array.isArray(property)) {
+      return this.property;
+    }
+
+    this.property = {
+      ...(this.property ?? {}),
+      ...property,
+    };
+
+    return this.property;
+  }
+
+  /**
    * 获取对象渲染额外留白
    * @description 返回值单位为对象空间中的长度，供活动层 dirty rect 在换算到屏幕空间后补足描边、端点与抗锯齿留白。
    * @returns {number} 额外留白
    */
   getRenderPadding() {
-    return 0;
+    const strokeWidthCandidates = [
+      this.property?.strokeWidth,
+      this.property?.width,
+      this.property?.outlineWidth,
+    ].filter((value) => Number.isFinite(value) && value > 0);
+
+    if (strokeWidthCandidates.length === 0) {
+      return 0;
+    }
+
+    return Math.max(...strokeWidthCandidates) / 2;
   }
 
   /**
@@ -101,7 +136,9 @@ class BasicObject {
    * @static
    * @description 有向对象可以自定义旋转中心且绕该中心旋转。
    */
-  static isDirected = false;
+  isDirected() {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 该对象是否是可擦对象
@@ -110,7 +147,9 @@ class BasicObject {
    * @readonly
    * @description 可擦对象可以被对象擦除工具擦除。
    */
-  static isErasable = false;
+  isErasable() {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 创建一个新的基础对象
@@ -166,6 +205,7 @@ class BasicObject {
       ownerChunkId: this.ownerChunkId,
       position: this.position.serialize(),
       transform: this.transform.serialize(),
+      property: { ...(this.property ?? {}) },
     };
   }
 

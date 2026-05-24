@@ -62,10 +62,13 @@
 - 输入结构由 `DirectedGraph.parse(...)` 处理
 - 同时读取独立的对象覆盖区块索引文件
 - 当前实现会直接替换 `staticGraph` 与 `objectCoverChunks`
+- 当 `boardRootPath` 为空时，视为内存板面（in-memory board），直接 no-op，不触发文件系统访问
 
 ### `saveTierGraph(boardRootPath)`
 
 通过专用 IPC 桥持久化静态图与对象覆盖区块索引。
+
+- 当 `boardRootPath` 为空时直接 no-op，用于 demo 这类不入磁盘板面
 
 ### `unloadTierGraph()`
 
