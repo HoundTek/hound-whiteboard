@@ -10,7 +10,6 @@ import {
   DEFAULT_CIRCLE_PROPERTY,
 } from "../../core/objects/graph/circle.js";
 import { Vector } from "../../core/utils/math.js";
-import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../core/devices/keyboard-device.js";
 
 /**
  * Demo 专用随机圆对象创建工具
@@ -114,10 +113,7 @@ class RandomCircleCreatorTool extends Tool {
   }
 
   process(signalPacket, deviceContext = {}) {
-    const shouldCreate = signalPacket.signals.some(
-      (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-    );
-    if (!shouldCreate) return;
+    if ((signalPacket?.signals?.length ?? 0) === 0) return;
 
     const circle = this.createCircle(deviceContext);
     this.commitCircle(circle, deviceContext);

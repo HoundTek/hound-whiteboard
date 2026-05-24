@@ -32,10 +32,10 @@
 - `/keyup`：抬起事件
 - `/repeat`：长按重复事件
 - `/cancel`：宿主强制中断当前键盘交互，如 Monitor 失焦
-- `/code/<KeyCode>`：按键专属挂载锚点，会接收该键位改写后的设备语义信号
-- `/code/<KeyCode>/tool`：该键位下通过运行时 `mount` 事件追加的独立工具节点
+- `/tools`：键盘工具公共子树，所有键盘工具都应挂在它的下游
+- `/code/<KeyCode>`：按键专属翻译/转发节点，会接收该键位改写后的设备语义信号
 
-若通过 `nodeConfigs` 为某些键位声明了绑定，这些 `/code/<KeyCode>` 节点就不再只是“挂工具的锚点”，还可以继续把信号改写并转发到别的公共节点。
+若通过 `nodeConfigs` 为某些键位声明了绑定，这些 `/code/<KeyCode>` 节点应继续把信号改写并转发到 `/tools/...` 下的公共工具节点，而不是直接在键位节点下挂工具。
 
 更一般地说，现在应优先把它理解成 `DevicesTreeNode` 的通用节点配置：只要是这棵设备子树里的节点，无论是 `/event`、`/keydown`、`/cancel` 还是 `/code/<KeyCode>`，都可以声明自己的 `rewritePacket` 或 `processor`。
 
@@ -48,8 +48,10 @@ graph TD
   keyboard --> keyup
   keyboard --> repeat
   keyboard --> cancel
+  keyboard --> tools
   keyboard --> code
-  code --> Key...
+  code --> key[Key...]
+  tools --> toolPath[tool ...]
 ```
 
 这里的职责边界是：
@@ -63,13 +65,13 @@ graph TD
 - 前者适合 Monitor 级操作，如统一处理视口导航键
 - 后者先把原始按键事件改写成工具语义，再交给工具节点消费
 
-当前键盘设备会在根节点把原始键盘信号改写为更稳定的工具信号，并路由到对应的 `/code/<KeyCode>` 挂载锚点：
+当前键盘设备会在根节点把原始键盘信号改写为更稳定的设备信号，并路由到对应的 `/code/<KeyCode>` 翻译节点：
 
 - 首次 `keydown` 改写为 `trigger`
 - `keyup` / `end` 改写为 `release`
 - `cancel` 改写为 `cancel`
 
-因此，工具通常不应再直接判断具体键位，也不应再假设自己接收到的是原始 `keydown`。
+因此，工具通常不应再直接判断具体键位，也不应再假设自己接收到的是原始 `keydown`。更进一步，键盘工具本身不应再承担“是不是 trigger 才处理”这一类键位路由判断；这些判断应留在 `/code/<KeyCode>` 节点的转发配置里。
 
 ## 聚合模式
 
@@ -83,10 +85,10 @@ graph TD
 
 例如：
 
-- `KeyW` 把 `trigger` 改写为 `position: {x: 0, y: -1}`，再转发到 `../../move`
-- `KeyA` 把 `trigger` 改写为 `position: {x: -1, y: 0}`，再转发到 `../../move`
+- `KeyW` 把 `trigger` 改写为 `position: {x: 0, y: -1}`，再转发到 `../../tools/move`
+- `KeyA` 把 `trigger` 改写为 `position: {x: -1, y: 0}`，再转发到 `../../tools/move`
 - `KeyS`、`KeyD` 同理
-- 最终 `/move/tool` 只需要消费统一的 `position` 信号，而不需要知道具体是哪一个键发来的
+- 最终 `/tools/move/tool` 只需要消费统一的 `position` 信号，而不需要知道具体是哪一个键发来的
 
 对应配置形态如下：
 
@@ -96,7 +98,9 @@ const keyboardDevice = createKeyboardDevice({
     "/code/KeyW": {
       rewritePacket(packet) {
         const signals = packet.signals
-          .filter((signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER)
+          .filter(
+            (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+          )
           .map(() => ({
             type: "position",
             context: {
@@ -105,7 +109,7 @@ const keyboardDevice = createKeyboardDevice({
             },
           }));
 
-        return signals.length === 0 ? [] : { to: "../../move", signals };
+        return signals.length === 0 ? [] : { to: "../../tools/move", signals };
       },
     },
   },
@@ -114,14 +118,14 @@ const keyboardDevice = createKeyboardDevice({
 monitor.mountDevice("/keyboard", keyboardDevice);
 
 board.signalsEventBus.emit("mount", {
-  to: `/${monitor.monitorId}/keyboard/move`,
+  to: `/${monitor.monitorId}/keyboard/tools/move`,
   tool,
 });
 ```
 
 这里的重点是：
 
-- 具体键位节点负责“把键盘事件翻译成工具真正关心的语义”
+- 具体键位节点负责“把键盘事件翻译成工具真正关心的语义，并转发到 tools 子树”
 - 公共节点负责“给同一类工具提供稳定的接入点”
 - 工具不再关心 `KeyW`、`KeyA` 这些具体键位，只关心 `position` 这类统一信号
 
@@ -135,7 +139,9 @@ board.signalsEventBus.emit("configure", {
   options: {
     rewritePacket(packet) {
       const signals = packet.signals
-        .filter((signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER)
+        .filter(
+          (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        )
         .map(() => ({
           type: "position",
           context: {
@@ -144,7 +150,7 @@ board.signalsEventBus.emit("configure", {
           },
         }));
 
-      return signals.length === 0 ? [] : { to: "../../move", signals };
+      return signals.length === 0 ? [] : { to: "../../tools/move", signals };
     },
   },
 });
@@ -200,20 +206,36 @@ const keyboardDevice = createKeyboardDevice();
 
 monitor.mountDevice("/keyboard", keyboardDevice);
 
-board.signalsEventBus.emit("mount", {
+board.signalsEventBus.emit("configure", {
   to: `/${monitor.monitorId}/keyboard/code/Space`,
+  options: {
+    rewritePacket(packet) {
+      const triggerSignals = packet.signals.filter(
+        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+      );
+
+      return triggerSignals.length === 0
+        ? []
+        : { to: "../../tools/create-circle", signals: triggerSignals };
+    },
+  },
+});
+
+board.signalsEventBus.emit("mount", {
+  to: `/${monitor.monitorId}/keyboard/tools/create-circle`,
   tool,
 });
 ```
 
-此时宿主只需把目标 Monitor 的 `keydown` / `keyup` 事件编码后发到 `/${monitorId}/keyboard`，设备树就会把 `Space` 改写为 `trigger` / `release` / `cancel`，并送到 `/code/Space`。如果之前已经通过 `mount` 事件在该锚点下追加了工具节点，信号就会继续落到 `/code/Space/tool` 交给工具消费。
+此时宿主只需把目标 Monitor 的 `keydown` / `keyup` 事件编码后发到 `/${monitorId}/keyboard`，设备树就会把 `Space` 改写为 `trigger` / `release` / `cancel`，先送到 `/code/Space`，再由该节点把真正需要的信号转发到 `/tools/create-circle/tool` 交给工具消费。
 
 ## 设计约束
 
 - 键盘设备不负责定义应用级快捷键系统
 - 键盘设备不负责决定一个按键是否应该被某个工具消费
-- 键盘设备负责把原始按键信号改写为稳定的设备语义，再交给工具节点
+- 键盘设备负责把原始按键信号改写为稳定的设备语义，并允许 `/code/<KeyCode>` 节点继续转发到 `/tools/...`
 - 用户绑定关系与工具挂载关系应由更上层模块通过 `mount` / `umount` 事件维护，键盘设备只负责状态更新与树上路由
+- 键盘工具推荐统一挂在 `/tools/...`；`/code/<KeyCode>` 应只承担翻译与转发职责
 
 这样可以保持设备层与应用命令层解耦。
 

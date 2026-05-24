@@ -4,6 +4,13 @@
 
 `Board` 是 Core 的白板级总控组件。一个白板文件在运行时应只对应一个 `Board` 实例。
 
+当前 `Board` 已支持显式持久化模式：
+
+- `filesystem`：允许区块层叠图、对象数据等通过 file-operate bridge 落到文件系统
+- `memory`：把当前白板视为纯内存运行时，不访问文件系统
+
+若未显式配置，则当前实现仍兼容旧约定：有可用 `rootPath` 时推导为 `filesystem`，否则推导为 `memory`。
+
 ## 术语约定
 
 - **白板级状态**：作用域覆盖整个白板实例的状态，如区块实例所有权、当前打开位置、活动对象管理器、历史树等。
@@ -17,7 +24,7 @@
 
 ## 白板类职责
 
-- 维护白板基础信息（宽、高、根目录）
+- 维护白板基础信息（宽、高、根路径、持久化模式）
 - 通过根 `ChunkLoader` 维护区块实例所有权
 - 维护单区块加载状态落地
 - 维护白板级对象实例注册表与对象加载计数
@@ -27,17 +34,28 @@
 
 ## 核心字段
 
-| 名称                  | 描述                       | 类型                                                                       |
-| --------------------- | -------------------------- | -------------------------------------------------------------------------- |
-| `undoTree`            | 时间回溯树                 | `UndoTree`                                                                 |
-| `activeObjectManager` | 活动对象管理器             | `ActiveObjectManager`                                                      |
-| `chunkLoaded`         | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
-| `objectLoaded`        | 对象 id 到对象加载状态映射 | `Map<number, { obj, loadedCount }>`                                        |
-| `rootChunkLoader`     | 白板根区块加载器           | `ChunkLoader`                                                              |
-| `width`/`height`      | 白板尺寸                   | `number`                                                                   |
-| `root`                | 白板根目录                 | `Directory`                                                                |
-| `chunkCounterPool`    | 区块 id 池                 | `CounterPool`                                                              |
-| `objectCounterPool`   | 对象 id 池                 | `CounterPool`                                                              |
+| 名称                        | 描述                       | 类型                                                                       |
+| --------------------------- | -------------------------- | -------------------------------------------------------------------------- |
+| `undoTree`                  | 时间回溯树                 | `UndoTree`                                                                 |
+| `activeObjectManager`       | 活动对象管理器             | `ActiveObjectManager`                                                      |
+| `chunkLoaded`               | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
+| `objectLoaded`              | 对象 id 到对象加载状态映射 | `Map<number, { obj, loadedCount }>`                                        |
+| `rootChunkLoader`           | 白板根区块加载器           | `ChunkLoader`                                                              |
+| `width`/`height`            | 白板尺寸                   | `number`                                                                   |
+| `rootPath`                  | 白板根路径                 | `string \| undefined`                                                      |
+| `configuredPersistenceMode` | 显式配置的持久化模式       | `"memory" \| "filesystem" \| undefined`                                    |
+| `chunkCounterPool`          | 区块 id 池                 | `CounterPool`                                                              |
+| `objectCounterPool`         | 对象 id 池                 | `CounterPool`                                                              |
+
+## 持久化模式
+
+推荐约定：
+
+- demo、sandbox、一次性演示板面应显式使用 `new Board({ persistenceMode: "memory" })`
+- 真正绑定磁盘目录的白板可显式使用 `filesystem`，也可继续沿用“设置 `rootPath` 即推导为文件模式”的兼容路径
+- 当 `Board` 处于 `memory` 模式时，区块加载链会把 tier graph / object entries 的文件系统访问整体短路为 no-op
+
+也就是说，`rootPath` 不再是唯一语义来源；显式配置优先，`rootPath` 只作为兼容推导依据。
 
 ## 加载流程 `load(directory)`
 

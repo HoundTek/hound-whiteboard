@@ -23,6 +23,26 @@ import { CHUNK_LOAD_EVENTS, ChunkLoader } from "./chunk-loader.js";
 import { Chunk } from "./chunk.js";
 import { boardFileOperateBridge } from "../bridges/file-operate-bridge-renderer.js";
 
+const BOARD_PERSISTENCE_MODES = Object.freeze({
+  MEMORY: "memory",
+  FILESYSTEM: "filesystem",
+});
+
+function isValidBoardRootPath(boardRootPath) {
+  return typeof boardRootPath === "string" && boardRootPath.trim() !== "";
+}
+
+function normalizeBoardPersistenceMode(persistenceMode) {
+  if (
+    persistenceMode === BOARD_PERSISTENCE_MODES.MEMORY ||
+    persistenceMode === BOARD_PERSISTENCE_MODES.FILESYSTEM
+  ) {
+    return persistenceMode;
+  }
+
+  return undefined;
+}
+
 /**
  * @typedef {Object} BoardChunkLoadedState
  * @property {Chunk} chunk - 当前区块实例
@@ -90,9 +110,15 @@ class Board {
 
   /**
    * 白板的文件路径
-   * @type {string}
+   * @type {string | undefined}
    */
   rootPath;
+
+  /**
+   * 显式配置的持久化模式。
+   * @type {"memory" | "filesystem" | undefined}
+   */
+  configuredPersistenceMode;
 
   /**
    * 区块 id 池
@@ -133,7 +159,13 @@ class Board {
    */
   rootChunkLoader;
 
-  constructor() {
+  /**
+   * @param {{
+   *   persistenceMode?: "memory" | "filesystem",
+   *   rootPath?: string,
+   * }} [options={}] - 白板初始化选项
+   */
+  constructor(options = {}) {
     this.undoTree = new UndoTree();
     this.chunkLoaded = new Map();
     this.objectLoaded = new Map();
@@ -150,8 +182,60 @@ class Board {
       requesterId: "board-root",
     });
     this.activeObjectManager = new ActiveObjectManager(this);
+    this.rootPath = isValidBoardRootPath(options.rootPath)
+      ? options.rootPath
+      : undefined;
+    this.configuredPersistenceMode = normalizeBoardPersistenceMode(
+      options.persistenceMode,
+    );
     this.#bindChunkLoadEvents();
     this.#bindSignalsEventBus();
+  }
+
+  /**
+   * 设置白板持久化模式。
+   * @param {"memory" | "filesystem" | undefined | null} persistenceMode - 持久化模式
+   * @returns {Board}
+   */
+  setPersistenceMode(persistenceMode) {
+    this.configuredPersistenceMode =
+      normalizeBoardPersistenceMode(persistenceMode);
+    return this;
+  }
+
+  /**
+   * 获取白板当前生效的持久化模式。
+   * @returns {"memory" | "filesystem"}
+   */
+  getPersistenceMode() {
+    if (this.configuredPersistenceMode) {
+      return this.configuredPersistenceMode;
+    }
+
+    return isValidBoardRootPath(this.rootPath)
+      ? BOARD_PERSISTENCE_MODES.FILESYSTEM
+      : BOARD_PERSISTENCE_MODES.MEMORY;
+  }
+
+  /**
+   * 当前白板是否启用文件系统持久化。
+   * @returns {boolean}
+   */
+  isPersistent() {
+    return this.getPersistenceMode() === BOARD_PERSISTENCE_MODES.FILESYSTEM;
+  }
+
+  /**
+   * 解析当前白板可用的持久化根路径。
+   * @param {string} [boardRootPath = this.rootPath] - 候选根路径
+   * @returns {string | undefined}
+   */
+  resolvePersistenceRootPath(boardRootPath = this.rootPath) {
+    if (!this.isPersistent()) {
+      return undefined;
+    }
+
+    return isValidBoardRootPath(boardRootPath) ? boardRootPath : undefined;
   }
 
   /**
@@ -286,11 +370,13 @@ class Board {
     const chunk =
       typeof chunkOrId === "number" ? this.getChunkById(chunkOrId) : chunkOrId;
     const loadedObjects = new Map();
+    const effectiveBoardRootPath =
+      this.resolvePersistenceRootPath(boardRootPath);
 
-    if (!chunk || !boardRootPath) return loadedObjects;
+    if (!chunk || !effectiveBoardRootPath) return loadedObjects;
 
     const objectDataList = await boardFileOperateBridge.loadChunkObjects(
-      boardRootPath,
+      effectiveBoardRootPath,
       chunk.id,
     );
 
@@ -313,7 +399,9 @@ class Board {
   async saveChunkObjectEntries(chunkOrId, boardRootPath = this.rootPath) {
     const chunk =
       typeof chunkOrId === "number" ? this.getChunkById(chunkOrId) : chunkOrId;
-    if (!chunk || !boardRootPath) return;
+    const effectiveBoardRootPath =
+      this.resolvePersistenceRootPath(boardRootPath);
+    if (!chunk || !effectiveBoardRootPath) return;
 
     const serializedObjects = Array.from(this.objectLoaded.values())
       .map((entry) => entry.obj)
@@ -323,7 +411,7 @@ class Board {
       );
 
     await boardFileOperateBridge.saveChunkObjects(
-      boardRootPath,
+      effectiveBoardRootPath,
       chunk.id,
       serializedObjects,
     );
@@ -598,7 +686,7 @@ class Board {
     const { previousStrategy, effectiveStrategy } =
       this.#registerChunkLoadRequest(chunk.id, requesterId, strategy);
 
-    const boardRootPath = this.rootPath;
+    const boardRootPath = this.resolvePersistenceRootPath();
     const shouldSyncChunkObjects =
       (chunk?.objectManager?.staticGraph?.getNodes?.()?.length ?? 0) > 0;
 
@@ -696,8 +784,9 @@ class Board {
    * @private
    */
   async #persistChunkConnection() {
-    if (!this.rootPath) return;
-    await boardFileOperateBridge.writeChunkConnection(this.rootPath, {
+    const boardRootPath = this.resolvePersistenceRootPath();
+    if (!boardRootPath) return;
+    await boardFileOperateBridge.writeChunkConnection(boardRootPath, {
       count: this.chunkCounterPool.counter,
     });
   }
@@ -856,4 +945,4 @@ const boardMeta = {
   version: "0.1.0",
 };
 
-export { Board };
+export { BOARD_PERSISTENCE_MODES, Board };

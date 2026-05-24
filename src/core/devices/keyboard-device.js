@@ -387,6 +387,10 @@ function createKeyboardDevice(options = {}) {
           ? options.cancelProcessor
           : null,
     },
+    {
+      path: "/tools",
+      processor: null,
+    },
   ];
 
   const customNodeDefinitions = Object.entries(rawNodeConfigs).map(

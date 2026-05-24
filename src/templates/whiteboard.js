@@ -1,12 +1,14 @@
 import { Vector } from "../core/utils/math.js";
-import { Board } from "../core/components/board.js";
+import { BOARD_PERSISTENCE_MODES, Board } from "../core/components/board.js";
 import {
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
 } from "./demo/whiteboard-demo.js";
 import { WasdCoordinateTool } from "./demo/wasd-coordinate-tool.js";
 
-const board = new Board();
+const board = new Board({
+  persistenceMode: BOARD_PERSISTENCE_MODES.MEMORY,
+});
 board.width = 800;
 board.height = 600;
 

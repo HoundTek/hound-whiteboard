@@ -22,12 +22,37 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "KeyS",
   "KeyD",
 ]);
+
+const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
+  MOVE: "tools/move",
+  RANDOM_CIRCLE: "tools/create-circle",
+});
+
 const WASD_ROUTE_PRESETS = Object.freeze({
   KeyW: Object.freeze({ x: 0, y: -1 }),
   KeyA: Object.freeze({ x: -1, y: 0 }),
   KeyS: Object.freeze({ x: 0, y: 1 }),
   KeyD: Object.freeze({ x: 1, y: 0 }),
 });
+
+function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
+  return {
+    rewritePacket(packet) {
+      const triggerSignals = packet.signals.filter(
+        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+      );
+
+      if (triggerSignals.length === 0) {
+        return [];
+      }
+
+      return {
+        to: relativeToolPath,
+        signals: triggerSignals,
+      };
+    },
+  };
+}
 
 function buildWasdNodeConfig(code, vector) {
   return {
@@ -51,7 +76,7 @@ function buildWasdNodeConfig(code, vector) {
       }
 
       return {
-        to: "../../move",
+        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
         signals: movementSignals,
       };
     },
@@ -94,12 +119,18 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     tool: secondaryStrokeTool,
   });
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/code/Space`,
+    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
     tool: randomCircleTool,
   });
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/move`,
+    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
     tool: wasdCoordinateTool,
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/Space`,
+    options: buildKeyboardTriggerForwardNodeConfig(
+      `../../${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
+    ),
   });
 
   for (const [code, vector] of Object.entries(wasdRoutePresets)) {
@@ -120,9 +151,11 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
 }
 
 export {
+  buildKeyboardTriggerForwardNodeConfig,
   buildWasdNodeConfig,
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
+  DEMO_KEYBOARD_TOOL_PATHS,
   DEMO_PRIMARY_STROKE_COLOR,
   DEMO_SECONDARY_STROKE_COLOR,
   WASD_ROUTE_PRESETS,

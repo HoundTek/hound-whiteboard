@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { Board } from "../board.js";
+import { BOARD_PERSISTENCE_MODES, Board } from "../board.js";
 import { Chunk } from "../chunk.js";
 import { CHUNK_LOAD_EVENTS } from "../chunk-loader.js";
 import { StrokeObject } from "../../objects/stroke/stroke.js";
@@ -147,6 +147,47 @@ describe("Board chunk grid", () => {
       },
     );
 
+    expect(results).toHaveLength(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(loadTierGraphSpy).not.toHaveBeenCalled();
+    expect(loadCoverIndexSpy).not.toHaveBeenCalled();
+    expect(chunk.isLoad).toBe(true);
+    expect(chunk.isTempLoad).toBe(false);
+    expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount).toBe(1);
+
+    loadTierGraphSpy.mockRestore();
+    loadCoverIndexSpy.mockRestore();
+  });
+
+  test("显式 memory 模式即使存在 rootPath 也不应访问文件桥", async () => {
+    const board = new Board({
+      persistenceMode: BOARD_PERSISTENCE_MODES.MEMORY,
+      rootPath: "/tmp/hwb-demo-memory",
+    });
+    const chunkLoader = board.getChunkLoader();
+    const chunk = chunkLoader.getChunkByCoordinate(0, 0);
+    const loadTierGraphSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "loadTierGraph",
+    );
+    const loadCoverIndexSpy = jest.spyOn(
+      boardFileOperateBridge,
+      "loadChunkObjectCoverIndex",
+    );
+
+    const results = board.chunkLoadEventBus.emit(
+      CHUNK_LOAD_EVENTS.REQUEST_LOAD,
+      {
+        requesterId: "demo-monitor",
+        chunk,
+        strategy: "full",
+        direction: "right",
+        source: "test",
+        alreadyBuffered: false,
+      },
+    );
+
+    expect(board.getPersistenceMode()).toBe(BOARD_PERSISTENCE_MODES.MEMORY);
     expect(results).toHaveLength(1);
     await new Promise((resolve) => setImmediate(resolve));
     expect(loadTierGraphSpy).not.toHaveBeenCalled();

@@ -8,7 +8,21 @@ import { Tool } from "../../tools/tool.js";
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
     const tree = new DevicesTree();
-    const keyboardDevice = createKeyboardDevice();
+    const keyboardDevice = createKeyboardDevice({
+      nodeConfigs: {
+        "/code/Space": {
+          rewritePacket(packet) {
+            const triggerSignals = packet.signals.filter(
+              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+            );
+
+            return triggerSignals.length === 0
+              ? []
+              : { to: "../../tools/create-circle", signals: triggerSignals };
+          },
+        },
+      },
+    });
     class CollectingTool extends Tool {
       calls = [];
 
@@ -24,7 +38,7 @@ describe("keyboard-device", () => {
     const tool = new CollectingTool();
 
     const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/code/Space", tool);
+    tree.mountTool("/monitor/keyboard/tools/create-circle", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/keyboard",
@@ -33,6 +47,8 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/keyup",
       "/monitor/keyboard/repeat",
       "/monitor/keyboard/cancel",
+      "/monitor/keyboard/tools",
+      "/monitor/keyboard/code/Space",
     ]);
 
     const packets = tree.dispatch({
@@ -117,7 +133,7 @@ describe("keyboard-device", () => {
     expect(tool.calls).toHaveLength(1);
     expect(tool.calls[0]).toEqual({
       signalPacket: {
-        to: "/monitor/keyboard/code/Space/tool",
+        to: "/monitor/keyboard/tools/create-circle/tool",
         signals: [
           {
             type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
@@ -135,7 +151,7 @@ describe("keyboard-device", () => {
         ],
       },
       deviceContext: expect.objectContaining({
-        path: "/monitor/keyboard/code/Space/tool",
+        path: "/monitor/keyboard/tools/create-circle/tool",
       }),
     });
   });
@@ -293,7 +309,8 @@ describe("keyboard-device", () => {
           rewritePacket(packet) {
             const signals = packet.signals
               .filter(
-                (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+                (signal) =>
+                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
               )
               .map((signal) => ({
                 type: "position",
@@ -303,14 +320,17 @@ describe("keyboard-device", () => {
                   sourceType: signal.type,
                 },
               }));
-            return signals.length === 0 ? [] : { to: "../../move", signals };
+            return signals.length === 0
+              ? []
+              : { to: "../../tools/move", signals };
           },
         },
         "/code/KeyD": {
           rewritePacket(packet) {
             const signals = packet.signals
               .filter(
-                (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+                (signal) =>
+                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
               )
               .map((signal) => ({
                 type: "position",
@@ -320,7 +340,9 @@ describe("keyboard-device", () => {
                   sourceType: signal.type,
                 },
               }));
-            return signals.length === 0 ? [] : { to: "../../move", signals };
+            return signals.length === 0
+              ? []
+              : { to: "../../tools/move", signals };
           },
         },
       },
@@ -341,7 +363,7 @@ describe("keyboard-device", () => {
     const tool = new CollectingTool();
 
     const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/move", tool);
+    tree.mountTool("/monitor/keyboard/tools/move", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/keyboard",
@@ -350,6 +372,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/keyup",
       "/monitor/keyboard/repeat",
       "/monitor/keyboard/cancel",
+      "/monitor/keyboard/tools",
       "/monitor/keyboard/code/KeyW",
       "/monitor/keyboard/code/KeyD",
     ]);
@@ -399,7 +422,7 @@ describe("keyboard-device", () => {
 
     expect(tool.calls).toHaveLength(2);
     expect(tool.calls[0].signalPacket).toEqual({
-      to: "/monitor/keyboard/move/tool",
+      to: "/monitor/keyboard/tools/move/tool",
       signals: [
         {
           type: "position",
@@ -412,7 +435,7 @@ describe("keyboard-device", () => {
       ],
     });
     expect(tool.calls[1].signalPacket).toEqual({
-      to: "/monitor/keyboard/move/tool",
+      to: "/monitor/keyboard/tools/move/tool",
       signals: [
         {
           type: "position",

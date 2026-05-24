@@ -164,21 +164,29 @@ describe("Board input flow", () => {
                 context: { value: { x: 0, y: -1 }, code: "KeyW" },
               }));
 
-            return signals.length === 0 ? [] : { to: "../../move", signals };
+            return signals.length === 0
+              ? []
+              : { to: "../../tools/move", signals };
           },
         },
       },
     });
 
     monitor.mountDevice("/keyboard", keyboardDevice);
-    monitor.devicesTree.mount("/main/keyboard/move", (packet, context) => ({
-      to: context.path,
-      signals: packet.signals,
-    }));
-    monitor.devicesTree.mount("/main/keyboard/strafe", (packet, context) => ({
-      to: context.path,
-      signals: packet.signals,
-    }));
+    monitor.devicesTree.mount(
+      "/main/keyboard/tools/move",
+      (packet, context) => ({
+        to: context.path,
+        signals: packet.signals,
+      }),
+    );
+    monitor.devicesTree.mount(
+      "/main/keyboard/tools/strafe",
+      (packet, context) => ({
+        to: context.path,
+        signals: packet.signals,
+      }),
+    );
 
     const configureResults = board.signalsEventBus.emit("configure", {
       to: "/main/keyboard/code/KeyW",
@@ -193,7 +201,9 @@ describe("Board input flow", () => {
               context: { value: { x: 1, y: 0 }, code: "KeyW" },
             }));
 
-          return signals.length === 0 ? [] : { to: "../../strafe", signals };
+          return signals.length === 0
+            ? []
+            : { to: "../../tools/strafe", signals };
         },
       },
     });
@@ -210,7 +220,7 @@ describe("Board input flow", () => {
       }),
     ).toEqual([
       {
-        to: "/main/keyboard/strafe",
+        to: "/main/keyboard/tools/strafe",
         signals: [
           {
             type: "position",
