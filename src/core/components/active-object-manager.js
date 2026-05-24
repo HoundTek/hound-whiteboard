@@ -480,17 +480,46 @@ class ActiveObjectManager {
   }
 
   /**
+   * 收集覆盖区块中的静态对象 id
+   * @param {Iterable<number>} coveredChunkIds
+   * @returns {Set<number>}
+   */
+  collectCoveredStaticObjectIds(coveredChunkIds = []) {
+    const objectIds = new Set();
+    if (!this.board) {
+      return objectIds;
+    }
+
+    for (const chunkId of coveredChunkIds) {
+      const staticGraph = this.board.getChunkById(chunkId)?.objectManager
+        ?.staticGraph;
+      for (const objectId of staticGraph?.getNodes?.() ?? []) {
+        objectIds.add(objectId);
+      }
+    }
+
+    return objectIds;
+  }
+
+  /**
    * 计算对象在静态图中的上下关系
    * @param {BasicObject} obj - 要计算的对象实例
    * @param {Set<number>} coveredChunkIds - 该对象的覆盖区块集合
    * @param {Set<number>} applyingObjectIds - 正在被提交的对象 id 集合
+   * @param {{includeUntrackedCoveredObjectsBelow?: boolean}} [options]
    * @returns {{below: Set<number>, above: Set<number>}}
    */
-  calculateStaticRelations(obj, coveredChunkIds, applyingObjectIds) {
+  calculateStaticRelations(
+    obj,
+    coveredChunkIds,
+    applyingObjectIds,
+    options = {},
+  ) {
     const relation = {
       below: new Set(),
       above: new Set(),
     };
+    const { includeUntrackedCoveredObjectsBelow = false } = options;
     const currentLayer = this.onLayer.get(obj.id);
     const currentLayerIndex = currentLayer
       ? this.layerIndex.get(currentLayer.id)
@@ -531,6 +560,20 @@ class ActiveObjectManager {
         relation.below.add(otherObjectId);
       } else if (otherLayerIndex > currentLayerIndex) {
         relation.above.add(otherObjectId);
+      }
+    }
+
+    if (includeUntrackedCoveredObjectsBelow) {
+      for (const nodeId of this.collectCoveredStaticObjectIds(coveredChunkIds)) {
+        if (nodeId === obj.id) continue;
+        if (applyingObjectIds.has(nodeId)) continue;
+        if (this.onLayer.has(nodeId)) continue;
+
+        const candidate = this.findBoardObjectInstance(nodeId, coveredChunkIds);
+        if (!(candidate instanceof BasicObject)) continue;
+        if (!this.intersectsObjects(obj, candidate)) continue;
+
+        relation.below.add(nodeId);
       }
     }
 
@@ -970,6 +1013,9 @@ class ActiveObjectManager {
         .map((obj) => {
           const ownerChunk = this.resolveObjectChunk(obj);
           if (!ownerChunk) return undefined;
+          const wasOnBoard =
+            this.board?.getObjectById?.(obj.id) instanceof
+            BasicObject;
           const previousCoveredChunkIds =
             ownerChunk.objectManager?.getObjectCoverChunks?.(obj.id) ??
             new Set([ownerChunk.id]);
@@ -983,6 +1029,7 @@ class ActiveObjectManager {
           return {
             obj,
             ownerChunk,
+            wasOnBoard,
             previousCoveredChunkIds,
             coveredChunkIds,
           };
@@ -1000,11 +1047,12 @@ class ActiveObjectManager {
       }
 
       // 再计算它们在静态图中的上下关系
-      for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
+      for (const { obj, ownerChunk, coveredChunkIds, wasOnBoard } of applyContexts) {
         const { below, above } = this.calculateStaticRelations(
           obj,
           coveredChunkIds,
           applyingObjectIds,
+          { includeUntrackedCoveredObjectsBelow: !wasOnBoard },
         );
         for (const chunkId of coveredChunkIds) {
           const chunk = this.board.getChunkById(chunkId);

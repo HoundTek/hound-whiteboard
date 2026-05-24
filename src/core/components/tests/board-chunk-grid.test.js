@@ -159,21 +159,18 @@ describe("Board chunk grid", () => {
     loadCoverIndexSpy.mockRestore();
   });
 
-  test("显式 memory 模式即使存在 rootPath 也不应访问文件桥", async () => {
+  test("存在 rootPath 时应启用文件系统持久化", async () => {
     const board = new Board({
-      persistenceMode: BOARD_PERSISTENCE_MODES.MEMORY,
       rootPath: "/tmp/hwb-demo-memory",
     });
     const chunkLoader = board.getChunkLoader();
     const chunk = chunkLoader.getChunkByCoordinate(0, 0);
-    const loadTierGraphSpy = jest.spyOn(
-      boardFileOperateBridge,
-      "loadTierGraph",
-    );
-    const loadCoverIndexSpy = jest.spyOn(
-      boardFileOperateBridge,
-      "loadChunkObjectCoverIndex",
-    );
+    const loadTierGraphSpy = jest
+      .spyOn(boardFileOperateBridge, "loadTierGraph")
+      .mockResolvedValue([]);
+    const loadCoverIndexSpy = jest
+      .spyOn(boardFileOperateBridge, "loadChunkObjectCoverIndex")
+      .mockResolvedValue([]);
 
     const results = board.chunkLoadEventBus.emit(
       CHUNK_LOAD_EVENTS.REQUEST_LOAD,
@@ -187,11 +184,11 @@ describe("Board chunk grid", () => {
       },
     );
 
-    expect(board.getPersistenceMode()).toBe(BOARD_PERSISTENCE_MODES.MEMORY);
+    expect(board.getPersistenceMode()).toBe(BOARD_PERSISTENCE_MODES.FILESYSTEM);
     expect(results).toHaveLength(1);
     await new Promise((resolve) => setImmediate(resolve));
-    expect(loadTierGraphSpy).not.toHaveBeenCalled();
-    expect(loadCoverIndexSpy).not.toHaveBeenCalled();
+    expect(loadTierGraphSpy).toHaveBeenCalled();
+    expect(loadCoverIndexSpy).toHaveBeenCalled();
     expect(chunk.isLoad).toBe(true);
     expect(chunk.isTempLoad).toBe(false);
     expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount).toBe(1);

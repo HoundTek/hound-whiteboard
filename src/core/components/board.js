@@ -1,8 +1,9 @@
 /**
  * @file 白板组件
  * @description
- * Board 类是白板在面向对象设计中的抽象核心，负责管理区块、对象、历史等信息，
- * 并提供相关初级接口供工具和设备调用。一个 Board 实例对应一个白板管辖。
+ * Board 类是白板在面向对象设计中的抽象核心，负责维护白板级区块实例所有权、
+ * 对象实例注册表、区块加载引用计数、活动对象管理器以及 monitor/设备事件入口。
+ * 一个 Board 实例对应一个白板管辖。
  * @module core/components/board
  * @author Zhou Chenyu
  */
@@ -66,7 +67,7 @@ function normalizeBoardPersistenceMode(persistenceMode) {
 
 /**
  * 白板类
- * @description 一个白板实例就对应了一个白板管辖。
+ * @description 一个白板实例就对应了一个白板管辖，并统一协调区块加载、对象实例生命周期与 monitor 绑定。
  * @class
  * @author Zhou Chenyu
  */
@@ -86,12 +87,14 @@ class Board {
 
   /**
    * 当前已知区块的统一加载状态
+    * @description 区块 id -> 加载状态条目，记录根 `ChunkLoader` 与各 `ChunkBlockLoader` 的持有引用。
    * @type {Map<number, BoardChunkLoadedState>}
    */
   chunkLoaded;
 
   /**
    * 白板级对象实例注册表
+    * @description 对象 id -> `{ obj, loadedCount }`；`loadedCount` 为该对象覆盖区块上的完整加载持有总数。
    * @type {Map<number, BoardObjectLoadedState>}
    */
   objectLoaded;
@@ -110,15 +113,10 @@ class Board {
 
   /**
    * 白板的文件路径
+    * @description 持久化根路径；为空时当前白板工作在纯内存模式。
    * @type {string | undefined}
    */
   rootPath;
-
-  /**
-   * 显式配置的持久化模式。
-   * @type {"memory" | "filesystem" | undefined}
-   */
-  configuredPersistenceMode;
 
   /**
    * 对象 id 池
@@ -128,6 +126,7 @@ class Board {
 
   /**
    * 区块加载事件总线
+    * @description 协调根 `ChunkLoader`、`ChunkBlockLoader` 与 `Board` 私有加载逻辑。
    * @type {EventBus}
    */
   chunkLoadEventBus;
@@ -140,6 +139,7 @@ class Board {
 
   /**
    * 信道事件总线
+    * @description 把设备输入、工具挂载与节点配置请求分发到对应 monitor。
    * @type {EventBus}
    */
   signalsEventBus;
@@ -155,9 +155,8 @@ class Board {
 
   /**
    * @param {{
-   *   persistenceMode?: "memory" | "filesystem",
    *   rootPath?: string,
-   * }} [options={}] - 白板初始化选项
+    * }} [options={}] - 白板初始化选项；传入有效 `rootPath` 时启用文件系统持久化，否则退化为内存模式
    */
   constructor(options = {}) {
     this.undoTree = new UndoTree();
@@ -178,36 +177,28 @@ class Board {
     this.rootPath = isValidBoardRootPath(options.rootPath)
       ? options.rootPath
       : undefined;
-    this.configuredPersistenceMode = normalizeBoardPersistenceMode(
-      options.persistenceMode,
-    );
     this.#bindChunkLoadEvents();
     this.#bindSignalsEventBus();
   }
 
   /**
-   * 设置白板持久化模式。
-   * @param {"memory" | "filesystem" | undefined | null} persistenceMode - 持久化模式
-   * @returns {Board}
+   * 是否使用内存模式。
+    * @description 当前实现仅通过 `rootPath` 是否可用来推导持久化模式。
+   * @returns {boolean}
    */
-  setPersistenceMode(persistenceMode) {
-    this.configuredPersistenceMode =
-      normalizeBoardPersistenceMode(persistenceMode);
-    return this;
+  memoryMode() {
+    return !isValidBoardRootPath(this.rootPath);
   }
 
   /**
    * 获取白板当前生效的持久化模式。
+    * @description 若 `rootPath` 不可用则返回 `memory`，否则返回 `filesystem`。
    * @returns {"memory" | "filesystem"}
    */
   getPersistenceMode() {
-    if (this.configuredPersistenceMode) {
-      return this.configuredPersistenceMode;
-    }
-
-    return isValidBoardRootPath(this.rootPath)
-      ? BOARD_PERSISTENCE_MODES.FILESYSTEM
-      : BOARD_PERSISTENCE_MODES.MEMORY;
+    return this.memoryMode()
+      ? BOARD_PERSISTENCE_MODES.MEMORY
+      : BOARD_PERSISTENCE_MODES.FILESYSTEM;
   }
 
   /**
@@ -220,6 +211,7 @@ class Board {
 
   /**
    * 解析当前白板可用的持久化根路径。
+    * @description 内存模式下统一返回 `undefined`，用于让对象/区块文件读写逻辑短路。
    * @param {string} [boardRootPath = this.rootPath] - 候选根路径
    * @returns {string | undefined}
    */
@@ -235,7 +227,8 @@ class Board {
    * 创建绑定到当前 Board 的区块加载器
    * @description
    * 这里创建的是矩形缓冲区包装器 `ChunkBlockLoader`。
-   * 它内部会再持有一个独立的 `ChunkLoader`，用于保存本缓冲区视角下的区块对象集合。
+    * 它内部会再持有一个独立的 `ChunkLoader`，用于保存本缓冲区视角下的区块对象集合；
+    * 区块实例本身仍由 `Board.rootChunkLoader` 统一解析。
    * @param {number} [limit = 0] - 缓冲区上限，为 0 则不限制
    * @param {number | string} [requesterId] - 请求方 id
    * @returns {ChunkBlockLoader}
@@ -300,6 +293,7 @@ class Board {
 
   /**
    * 注册对象实例到白板级对象表
+    * @description 若提供 `coveredChunkIds`，会立即按这些区块上的完整加载引用数更新 `loadedCount`。
    * @param {BasicObject} obj - 对象实例
    * @param {{ coveredChunkIds?: Iterable<number> }} [options = {}] - 额外选项
    * @returns {BasicObject}
@@ -325,6 +319,7 @@ class Board {
 
   /**
    * 获取对象覆盖区块集合
+    * @description 先从候选区块出发，再按这些区块记录的覆盖索引扩展搜索范围。
    * @param {number} objectId - 对象 id
    * @param {Iterable<number>} [candidateChunkIds = []] - 候选区块 id
    * @returns {Set<number>}
@@ -355,6 +350,7 @@ class Board {
 
   /**
    * 按区块加载对象实例到白板级对象表
+    * @description 仅在文件系统持久化模式下生效；渲染侧通过 IPC 读取对象 JSON，再注册到 `objectLoaded`。
    * @param {Chunk | number} chunkOrId - 区块实例或区块 id
    * @param {string} [boardRootPath = this.rootPath] - 白板根路径
    * @returns {Promise<Map<number, BasicObject>>}
@@ -385,6 +381,7 @@ class Board {
 
   /**
    * 保存指定区块归属的对象
+    * @description 仅保存 `ownerChunkId === chunk.id` 的对象实例。
    * @param {Chunk | number} chunkOrId - 区块实例或区块 id
    * @param {string} [boardRootPath = this.rootPath] - 白板根路径
    * @returns {Promise<void>}
@@ -412,6 +409,7 @@ class Board {
 
   /**
    * 根据区块当前加载状态同步其对象 loadedCount，并清理失活对象
+    * @description 当对象覆盖区块上的完整加载引用降为 0，且对象不在活动层时，会从 `objectLoaded` 回收。
    * @param {Chunk | number} chunkOrId - 区块实例或区块 id
    * @returns {Promise<void>}
    */
@@ -427,6 +425,7 @@ class Board {
 
   /**
    * 卸载指定区块相关的对象实例
+    * @description 该过程不会直接删除活动对象，只会刷新 `loadedCount` 并回收失活对象。
    * @param {Chunk | number} chunkOrId - 区块实例或区块 id
    * @returns {void}
    */
@@ -517,6 +516,7 @@ class Board {
 
   /**
    * 创建绑定到当前 Board 的 Monitor
+    * @description 会同时创建 base/live/ui 三层 canvas，并把 monitor 注册到 `Board.monitors`。
    * @param {HTMLElement} rootElement - Monitor 的根元素
    * @param {{ width: number, height: number }} options - Monitor 尺寸选项
    * @param {string} monitorId - Monitor id
@@ -569,6 +569,7 @@ class Board {
 
   /**
    * 添加对象到指定区块
+    * @description 会同步对象覆盖区块索引，并把对象实例注册到白板级对象表。
    * @param {BasicObject} obj - 要添加的对象
    * @param {number} [chunkId = obj.ownerChunkId] - 要添加到的归属区块 id
    */

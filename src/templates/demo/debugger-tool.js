@@ -33,17 +33,22 @@ class DebuggerTool extends Tool {
           this.logBoard(board);
           break;
         default:
-          if (typeof signal.type === "string" && signal.type.startsWith("debug:")) {
-            console.warn("[debugger-tool] unsupported debug command:", signal.type, signal.context);
+          if (
+            typeof signal.type === "string" &&
+            signal.type.startsWith("debug:")
+          ) {
+            console.warn(
+              "[debugger-tool] unsupported debug command:",
+              signal.type,
+              signal.context,
+            );
           }
           break;
       }
     }
   }
 
-  reset() {
-    // Debug tool 没有内部状态。
-  }
+  reset() {}
 
   cloneSnapshot(value) {
     if (value === null || value === undefined || typeof value !== "object") {
@@ -94,30 +99,164 @@ class DebuggerTool extends Tool {
     return snapshot;
   }
 
-  logChunkLoad(board) {
+  serializeObjectCoverChunks(objectManager) {
+    if (typeof objectManager?.serializeObjectCoverChunks === "function") {
+      return objectManager.serializeObjectCoverChunks();
+    }
+
+    return Array.from(objectManager?.objectCoverChunks?.entries?.() ?? [])
+      .map(([objectId, chunkIds]) => [
+        objectId,
+        Array.from(chunkIds ?? []).sort((left, right) => left - right),
+      ])
+      .sort((left, right) => left[0] - right[0]);
+  }
+
+  summarizeChunk(chunk, chunkState) {
+    const objectManager = chunk?.objectManager;
+    const staticGraph = objectManager?.staticGraph;
+    const staticNodeIds = staticGraph?.getNodes?.() ?? [];
+
+    return {
+      chunk: this.cloneSnapshot(chunk),
+      chunkState: this.cloneSnapshot(chunkState),
+      chunkId: chunk?.id,
+      coordinate:
+        Number.isInteger(chunk?.x) && Number.isInteger(chunk?.y)
+          ? { x: chunk.x, y: chunk.y }
+          : undefined,
+      isLoad: Boolean(chunk?.isLoad),
+      isTempLoad: Boolean(chunk?.isTempLoad),
+      neighborChunkIds: {
+        left: chunk?.leftChunk?.id,
+        right: chunk?.rightChunk?.id,
+        up: chunk?.upChunk?.id,
+        down: chunk?.downChunk?.id,
+      },
+      hasObjectManager: Boolean(objectManager),
+      staticNodeCount: staticNodeIds.length,
+      staticNodeIds,
+      staticGraph: staticGraph?.toArray?.() ?? [],
+      objectCoverChunkEntryCount: objectManager?.objectCoverChunks?.size ?? 0,
+      objectCoverChunks: this.serializeObjectCoverChunks(objectManager),
+    };
+  }
+
+  summarizeChunkLoad(board) {
     const loadedChunks = Array.from(board.chunkLoaded.entries()).map(
       ([chunkId, chunkState]) => ({
         chunkId,
-        isLoad: Boolean(chunkState?.chunk?.isLoad),
         tempLoadedCount: chunkState?.tempLoadedCount ?? 0,
         fullLoadedCount: chunkState?.fullLoadedCount ?? 0,
-        chunk: this.cloneSnapshot(chunkState?.chunk),
+        loaderStrategy: Array.from(
+          chunkState?.loaderStrategy?.entries?.() ?? [],
+        ),
+        chunk: this.summarizeChunk(chunkState?.chunk, chunkState),
       }),
     );
 
-    console.log("[debugger-tool] loaded chunks:", loadedChunks);
+    return {
+      chunkCount: loadedChunks.length,
+      loadedChunkIds: loadedChunks.map((entry) => entry.chunkId),
+      tempLoadedChunkIds: loadedChunks
+        .filter((entry) => entry.tempLoadedCount > 0)
+        .map((entry) => entry.chunkId),
+      fullLoadedChunkIds: loadedChunks
+        .filter((entry) => entry.fullLoadedCount > 0)
+        .map((entry) => entry.chunkId),
+      totalTempLoadedCount: loadedChunks.reduce(
+        (count, entry) => count + entry.tempLoadedCount,
+        0,
+      ),
+      totalFullLoadedCount: loadedChunks.reduce(
+        (count, entry) => count + entry.fullLoadedCount,
+        0,
+      ),
+      loadedChunks,
+    };
+  }
+
+  summarizeObjectLoad(board) {
+    const activeObjectIds = new Set(
+      Array.from(board.activeObjectManager?.activeObjectIndex?.keys?.() ?? []),
+    );
+    const loadedObjects = Array.from(board.objectLoaded.entries()).map(
+      ([objectId, objectState]) => {
+        const obj = objectState?.obj;
+        const candidateChunkIds = Number.isInteger(obj?.ownerChunkId)
+          ? [obj.ownerChunkId]
+          : [];
+
+        return {
+          objectId,
+          ownerChunkId: obj?.ownerChunkId,
+          loadedCount: objectState?.loadedCount ?? 0,
+          isActive: activeObjectIds.has(objectId),
+          coveredChunkIds: Array.from(
+            board.getObjectCoverChunks(objectId, candidateChunkIds),
+          ).sort((left, right) => left - right),
+          object: this.cloneSnapshot(obj),
+        };
+      },
+    );
+
+    return {
+      objectCount: loadedObjects.length,
+      loadedObjectIds: loadedObjects.map((entry) => entry.objectId),
+      activeObjectIds: loadedObjects
+        .filter((entry) => entry.isActive)
+        .map((entry) => entry.objectId),
+      retainedObjectIds: loadedObjects
+        .filter((entry) => entry.loadedCount <= 0)
+        .map((entry) => entry.objectId),
+      loadedObjects,
+    };
+  }
+
+  summarizeBoard(board) {
+    const chunkEntries = Array.from(board.chunkLoaded.entries());
+    const objectIds = Array.from(board.objectLoaded.keys?.() ?? []);
+    const activeObjectIds = Array.from(
+      board.activeObjectManager?.activeObjectIndex?.keys?.() ?? [],
+    );
+    const monitorIds = Array.from(board.monitors?.keys?.() ?? []);
+
+    return {
+      board: this.cloneSnapshot(board),
+      persistenceMode: board.getPersistenceMode?.(),
+      rootPath: board.rootPath,
+      width: board.width,
+      height: board.height,
+      chunkCount: chunkEntries.length,
+      loadedChunkIds: chunkEntries.map(([chunkId]) => chunkId),
+      fullLoadedChunkIds: chunkEntries
+        .filter(([, chunkState]) => (chunkState?.fullLoadedCount ?? 0) > 0)
+        .map(([chunkId]) => chunkId),
+      tempLoadedChunkIds: chunkEntries
+        .filter(([, chunkState]) => (chunkState?.tempLoadedCount ?? 0) > 0)
+        .map(([chunkId]) => chunkId),
+      objectCount: objectIds.length,
+      loadedObjectIds: objectIds,
+      activeObjectCount: activeObjectIds.length,
+      activeObjectIds,
+      monitorCount: monitorIds.length,
+      monitorIds,
+      rootChunkLoader: this.cloneSnapshot(board.rootChunkLoader),
+    };
+  }
+
+  logChunkLoad(board) {
+    console.log(
+      "[debugger-tool] chunk load summary:",
+      this.summarizeChunkLoad(board),
+    );
   }
 
   logObjectLoad(board) {
-    const loadedObjects = Array.from(board.objectLoaded.entries()).map(
-      ([objectId, objectState]) => ({
-        objectId,
-        loadedCount: objectState?.loadedCount ?? 0,
-        object: this.cloneSnapshot(objectState?.obj),
-      }),
+    console.log(
+      "[debugger-tool] object load summary:",
+      this.summarizeObjectLoad(board),
     );
-
-    console.log("[debugger-tool] loaded objects:", loadedObjects);
   }
 
   logChunk(board, chunkId) {
@@ -132,13 +271,20 @@ class DebuggerTool extends Tool {
       return;
     }
 
-    console.log(`[debugger-tool] chunk ${chunkId}:`, this.cloneSnapshot(chunk));
+    console.log(
+      `[debugger-tool] chunk ${chunkId} summary:`,
+      this.summarizeChunk(chunk, board.chunkLoaded.get(chunk.id)),
+    );
   }
 
   logActiveObjectManager(board) {
     const aom = board.activeObjectManager ?? {};
-    const activeObjects = Array.from(aom.activeObjects ?? []).map((obj) => obj.id);
-    const activeObjectIndexIds = Array.from(aom.activeObjectIndex?.keys?.() ?? []);
+    const activeObjects = Array.from(aom.activeObjects ?? []).map(
+      (obj) => obj.id,
+    );
+    const activeObjectIndexIds = Array.from(
+      aom.activeObjectIndex?.keys?.() ?? [],
+    );
     const layers = Array.from(aom.layerOrder ?? []).map((layer) => ({
       id: layer.id,
       activeObjects: Array.from(layer.activeObjects ?? []),
@@ -163,7 +309,7 @@ class DebuggerTool extends Tool {
   }
 
   logBoard(board) {
-    console.log("[debugger-tool] board:", this.cloneSnapshot(board));
+    console.log("[debugger-tool] board summary:", this.summarizeBoard(board));
   }
 }
 

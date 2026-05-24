@@ -115,6 +115,30 @@ describe("ActiveObjectManager/apply", () => {
     expect(ownerChunk.objectManager.staticGraph.hasEdge(21, 22)).toBe(true);
   });
 
+  test("apply 应为顺序创建的相交对象补上静态图连边", () => {
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+
+    const vertical = new StrokeObject(new Vector(0, 0), 41, 1);
+    vertical.setPathPoints([new Vector(5, 1), new Vector(5, 9)]);
+
+    const horizontal = new StrokeObject(new Vector(0, 0), 42, 1);
+    horizontal.setPathPoints([new Vector(1, 5), new Vector(9, 5)]);
+
+    board.activeObjectManager.add(new Set([vertical]));
+    board.activeObjectManager.apply(new Set([vertical]));
+
+    board.activeObjectManager.add(new Set([horizontal]));
+    board.activeObjectManager.apply(new Set([horizontal]));
+
+    const ownerChunk = board.getChunkById(1);
+    expect(ownerChunk.objectManager.staticGraph.hasNode(41)).toBe(true);
+    expect(ownerChunk.objectManager.staticGraph.hasNode(42)).toBe(true);
+    expect(ownerChunk.objectManager.staticGraph.hasEdge(41, 42)).toBe(true);
+    expect(ownerChunk.objectManager.staticGraph.hasEdge(42, 41)).toBe(false);
+  });
+
   test("apply 应触发 monitor.liveRenderer.invalidateObjects", () => {
     const invalidatedChunks = [];
     const monitor = {

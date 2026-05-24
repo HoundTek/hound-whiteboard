@@ -4,12 +4,12 @@
 
 `Board` 是 Core 的白板级总控组件。一个白板文件在运行时应只对应一个 `Board` 实例。
 
-当前 `Board` 已支持显式持久化模式：
+当前 `Board` 的持久化模式由 `rootPath` 是否可用直接推导：
 
-- `filesystem`：允许区块层叠图、对象数据等通过 file-operate bridge 落到文件系统
-- `memory`：把当前白板视为纯内存运行时，不访问文件系统
+- `filesystem`：存在可用 `rootPath`，允许区块层叠图、对象数据等通过 file-operate bridge 落到文件系统
+- `memory`：没有可用 `rootPath`，当前白板视为纯内存运行时，不访问文件系统
 
-若未显式配置，则当前实现仍兼容旧约定：有可用 `rootPath` 时推导为 `filesystem`，否则推导为 `memory`。
+因此当前实现里，`rootPath` 既是持久化根目录，也是模式判定入口。
 
 ## 术语约定
 
@@ -30,7 +30,8 @@
 - 维护白板级对象实例注册表与对象加载计数
 - 管理全局活动对象管理器 `ActiveObjectManager`
 - 管理历史树 `UndoTree`
-- 提供白板加载、创建与对象写入接口
+- 管理 monitor 列表与设备信号分发
+- 提供区块查询、monitor 创建与对象写入接口
 
 ## 核心字段
 
@@ -41,34 +42,35 @@
 | `chunkLoaded`               | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
 | `objectLoaded`              | 对象 id 到对象加载状态映射 | `Map<number, { obj, loadedCount }>`                                        |
 | `rootChunkLoader`           | 白板根区块加载器           | `ChunkLoader`                                                              |
+| `chunkLoadEventBus`         | 区块加载事件总线           | `EventBus`                                                                 |
+| `signalsEventBus`           | 设备信号事件总线           | `EventBus`                                                                 |
+| `monitors`                  | 已挂接 monitor 集合        | `Map<string, Monitor>`                                                     |
 | `width`/`height`            | 白板尺寸                   | `number`                                                                   |
 | `rootPath`                  | 白板根路径                 | `string \| undefined`                                                      |
-| `configuredPersistenceMode` | 显式配置的持久化模式       | `"memory" \| "filesystem" \| undefined`                                    |
-| `chunkCounterPool`          | 区块 id 池                 | `CounterPool`                                                              |
 | `objectCounterPool`         | 对象 id 池                 | `CounterPool`                                                              |
 
 ## 持久化模式
 
-推荐约定：
+当前实现没有独立的 `persistenceMode` 配置字段，只有一条规则：
 
-- demo、sandbox、一次性演示板面应显式使用 `new Board({ persistenceMode: "memory" })`
-- 真正绑定磁盘目录的白板可显式使用 `filesystem`，也可继续沿用“设置 `rootPath` 即推导为文件模式”的兼容路径
-- 当 `Board` 处于 `memory` 模式时，区块加载链会把 tier graph / object entries 的文件系统访问整体短路为 no-op
+- 传入有效 `rootPath` 时，`Board.getPersistenceMode()` 返回 `filesystem`
+- 未传或传入空白 `rootPath` 时，返回 `memory`
+- `resolvePersistenceRootPath(...)` 会在 `memory` 模式下统一返回 `undefined`
+- 区块 tier graph 与对象 entries 的文件访问逻辑都以此为前提短路
 
-也就是说，`rootPath` 不再是唯一语义来源；显式配置优先，`rootPath` 只作为兼容推导依据。
+## 区块加载协调流程
 
-## 加载流程 `load(directory)`
-
-说明：当前 `load(directory)` 已通过 components 专用 IPC 文件桥接读取白板快照，接口语义为异步。
+当前 `Board` 不直接暴露一个总入口式的 `load(directory)` 流程。现阶段更稳定的是“按区块加载事件驱动”的协调链路。
 
 当前实现流程：
 
-1. 读取并校验 `meta.json` 与 `config.json`
-2. 读取 `chunks/connection.json`，恢复文件格式中的区块组织快照与区块计数信息
-3. 读取 `trace.json`（若缺失则默认坐标为 `{ x: 0, y: 0 }` 的区块）
-4. 准备当前区块实例，后续实际缓冲区预取交由 `ChunkBlockLoader` 决定
+1. `ChunkBlockLoader` 或根 `ChunkLoader` 通过 `chunkLoadEventBus` 发出单区块加载/卸载请求。
+2. `Board` 记录请求方对该区块的持有策略，维护 `tempLoadedCount`、`fullLoadedCount` 与 `loaderStrategy`。
+3. 若目标策略为 `full`，则执行 `Chunk.loadFull(...)`；若只是 `temp`，则执行 `Chunk.loadTemp(...)` 或保持现状。
+4. 当区块进入或退出完整加载时，`Board` 会同步该区块涉及对象的 `loadedCount` 与对象实例注册表。
+5. 当完整持有者清零但仍有临时持有者时，区块从完整加载降级为临时加载；只有全部持有都清零时才真正卸载。
 
-该流程已经可作为白板运行时初始化骨架。
+也就是说，`Board` 当前最关键的职责不是“整板一次性载入”，而是“在多请求方并存时保证区块与对象引用计数一致”。
 
 ## 对象加载模型
 
@@ -98,7 +100,7 @@
 - `c1` 上的完整加载持有贡献 `2`
 - `c2` 上的完整加载持有贡献 `1`
 
-`Board` 当前按“对象覆盖区块集合上的 `fullLoadedCount` 求和”来维护这个值。
+`Board` 当前按“对象覆盖区块集合上的 `fullLoadedCount` 求和”来维护这个值，并在按区块加载对象时把反序列化出的实例统一写回 `objectLoaded`。
 
 当对象的 `loadedCount` 降为 `0` 时：
 
@@ -222,8 +224,8 @@
 
 ## 实现状态
 
-- 已实现：白板读取校验、根 `ChunkLoader` 区块持有、单区块实例管理骨架、白板级对象注册表、对象 `loadedCount` 维护、活动对象管理器/历史树挂载、多 `ChunkBlockLoader` 引用计数与完整区块降级。
-- 待完善：完整新建流程、对象计数池初始化、历史与设备状态恢复、区块与对象全链路落盘。
+- 已实现：根 `ChunkLoader` 区块持有、区块加载事件协调、白板级对象注册表、对象 `loadedCount` 维护、活动对象管理器/历史树挂载、monitor 创建、设备信号转发、多 `ChunkBlockLoader` 引用计数与完整区块降级。
+- 待完善：白板整体快照读写入口、对象计数池初始化恢复、历史与设备状态恢复、区块与对象全链路落盘。
 
 ## 相关文档
 
@@ -231,5 +233,5 @@
 - [chunk-loader-document.md](./chunk-loader-document.md)
 - [chunk-block-loader-document.md](./chunk-block-loader-document.md)
 - [chunk-document.md](./chunk-document.md)
-- [active-object-document.md](./active-object-document.md)
+- [active-object-manager-document.md](./active-object-manager-document.md)
 - [tier-graph-document.md](./tier-graph-document.md)
