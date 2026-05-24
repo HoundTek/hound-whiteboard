@@ -12,3 +12,6 @@ yarn.lock
 
 coverage
 release
+
+# Tauri
+src-tauri/target

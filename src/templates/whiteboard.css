@@ -1,3 +1,11 @@
+:root {
+  --bg0: #ffffff;
+  --bg1: #f0f0f0;
+  --fg0: #333333;
+  --fg1: #666666;
+  --fs5: 14px;
+}
+
 * {
   user-select: none;
   transition: color 0.2s ease-in-out;

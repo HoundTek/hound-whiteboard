@@ -1,0 +1,16 @@
+[package]
+name = "hound-whiteboard"
+version = "0.0.0"
+description = "A whiteboard app"
+authors = ["Frank Steven"]
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
