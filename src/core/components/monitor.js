@@ -1,5 +1,6 @@
 /**
  * @file 显示器组件
+ * @description 负责画布视口、块加载和渲染输出的调度与管理。
  * @module core/components/monitor
  * @author Zhou Chenyu
  */

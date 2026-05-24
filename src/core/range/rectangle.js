@@ -1,5 +1,6 @@
 /**
- * 矩形范围
+ * @file 矩形范围
+ * @description 提供矩形范围的表示、变换与包围盒计算功能。
  * @module core/range/rectangle
  * @author Zhou Chenyu
  */

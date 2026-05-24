@@ -1,5 +1,6 @@
 /**
  * @file 活动层渲染器
+ * @description 提供白板活动层的渲染与交互更新能力。
  * @module core/components/live-renderer
  * @author Zhou Chenyu
  */

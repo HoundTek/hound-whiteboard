@@ -1,5 +1,6 @@
 /**
- * 路径工具
+ * @file 路径工具
+ * @description 提供路径片段规整和拼接等基础路径处理函数。
  * @module core/utils/path
  * @author Zhou Chenyu
  */

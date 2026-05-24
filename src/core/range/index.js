@@ -1,3 +1,10 @@
+/**
+ * @file 范围模块聚合入口
+ * @description 导出范围子模块的公共接口。
+ * @module core/range/index
+ * @author Zhou Chenyu
+ */
+
 export { Range } from "./range.js";
 export { RectangleRange } from "./rectangle.js";
 export { PolygonRange } from "./polygon.js";

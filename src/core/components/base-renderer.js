@@ -1,5 +1,6 @@
 /**
  * @file 静态层渲染器
+ * @description 提供白板静态层的脏区域渲染与清理逻辑。
  * @module core/components/base-renderer
  * @author Zhou Chenyu
  */

@@ -1,5 +1,6 @@
 /**
- * 设备树
+ * @file 设备树
+ * @description 提供设备树节点分发与路径解析的核心实现。
  * @module core/devices/devices-tree
  * @author Zhou Chenyu
  */

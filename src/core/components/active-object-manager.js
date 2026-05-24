@@ -1,6 +1,7 @@
 /**
- * 全局活动对象管理器
- * @module active-object-manager
+ * @file 全局活动对象管理器
+ * @description 管理活动对象的层级、筛选与运行时状态。
+ * @module core/components/active-object-manager
  * @author Zhou Chenyu
  */
 

@@ -1,5 +1,6 @@
 /**
- * 椭圆范围
+ * @file 椭圆范围
+ * @description 提供椭圆范围的表示、变换与近似几何运算功能。
  * @module core/range/ellipse
  * @author Zhou Chenyu
  */

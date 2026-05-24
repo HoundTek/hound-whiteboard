@@ -1,5 +1,6 @@
 /**
  * @file 笔画对象定义
+ * @description 定义白板笔画对象的几何表示与渲染支持。
  * @module core/objects/stroke/stroke
  * @author Zhou Chenyu
  */

@@ -1,5 +1,6 @@
 /**
- * 信号包抽象
+ * @file 信号包抽象
+ * @description 定义设备树和工具系统中流动的信号包结构。
  * @module core/devices/signal
  * @author Zhou Chenyu
  */

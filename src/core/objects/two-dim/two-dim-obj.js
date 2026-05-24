@@ -1,3 +1,10 @@
+/**
+ * @file 二维对象基类
+ * @description 定义二维白板对象的公共行为与容器关系。
+ * @module core/objects/two-dim/two-dim-obj
+ * @author Zhou Chenyu
+ */
+
 import { Container } from "../container.js";
 
 /**

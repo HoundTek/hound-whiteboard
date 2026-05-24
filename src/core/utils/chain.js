@@ -1,5 +1,6 @@
 /**
- * 链表
+ * @file 链表
+ * @description 提供简单链表结构及相关节点操作。
  * @module core/utils/chain
  * @author Zhou Chenyu
  */

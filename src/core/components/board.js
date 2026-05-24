@@ -1,9 +1,9 @@
 /**
- * 白板组件
+ * @file 白板组件
  * @description
  * Board 类是白板在面向对象设计中的抽象核心，负责管理区块、对象、历史等信息，
  * 并提供相关初级接口供工具和设备调用。一个 Board 实例对应一个白板管辖。
- * @module board
+ * @module core/components/board
  * @author Zhou Chenyu
  */
 

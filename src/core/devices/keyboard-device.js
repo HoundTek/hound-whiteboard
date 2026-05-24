@@ -1,5 +1,6 @@
 /**
- * 键盘设备
+ * @file 键盘设备
+ * @description 提供键盘输入信号的设备树节点创建与处理接口。
  * @module core/devices/keyboard-device
  * @author Zhou Chenyu
  */

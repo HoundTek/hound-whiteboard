@@ -1,5 +1,6 @@
 /**
  * @file dirty rect 策略
+ * @description dirty rect 策略模块提供基于区域和缩放的脏区域处理策略。
  * @module core/components/dirty-rect-strategy
  * @author Zhou Chenyu
  */

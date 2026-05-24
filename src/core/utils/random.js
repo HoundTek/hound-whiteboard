@@ -1,7 +1,8 @@
 /**
- * 随机数相关算法
+ * @file 随机数相关算法
+ * @description 提供浏览器环境下的随机整数和随机数工具函数。
  * @module core/utils/random
- * @description 功能：
+ * @author Zhou Chenyu
  */
 
 /**

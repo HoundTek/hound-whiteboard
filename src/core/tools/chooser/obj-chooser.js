@@ -1,5 +1,6 @@
 /**
- * 对象选择工具
+ * @file 对象选择工具
+ * @description 提供对象命中选择与选择结果输出的工具基类。
  * @module core/tools/chooser/obj-chooser
  * @author Zhou Chenyu
  */

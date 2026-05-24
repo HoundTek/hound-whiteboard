@@ -1,5 +1,6 @@
 /**
  * @file 多边形对象定义
+ * @description 定义白板多边形对象的几何、绘制与转换逻辑。
  * @module core/objects/graph/polygon
  * @author Zhou Chenyu
  */

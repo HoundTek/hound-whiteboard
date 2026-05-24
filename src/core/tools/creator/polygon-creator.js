@@ -1,5 +1,6 @@
 /**
- * 多边形创建工具
+ * @file 多边形创建工具
+ * @description 提供用于绘制多边形对象的创建器工具实现。
  * @module core/tools/creator/polygon-creator
  * @author Zhou Chenyu
  */

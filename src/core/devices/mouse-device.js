@@ -1,5 +1,6 @@
 /**
- * 鼠标设备
+ * @file 鼠标设备
+ * @description 提供鼠标输入信号的设备树节点创建与处理接口。
  * @module core/devices/mouse-device
  * @author Zhou Chenyu
  */

@@ -1,5 +1,6 @@
 /**
- * Core 事件总线
+ * @file Core 事件总线
+ * @description 提供同步事件订阅、取消订阅和单次订阅能力。
  * @module core/utils/event-bus
  * @author Zhou Chenyu
  */

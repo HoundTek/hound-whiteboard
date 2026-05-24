@@ -55,6 +55,26 @@ user-invocable: true
 - 方法注释优先写职责、参数语义、返回值语义、异常条件，不要重复实现细节
 - 模块头注释在必要时补充 `@module`、`@author`
 
+## 文件头格式
+
+文件头需要统一为：
+
+```javascript
+/**
+ * @file ...
+ * @description ...
+ * @module core/...
+ * @author Zhou Chenyu
+ */
+```
+
+如果需要查询作者名，可使用 git 配置命令，例如：
+
+- `git config user.name`
+- `git config --global user.name`
+- `git config --get user.name`
+- `git config --global --get user.name`
+
 行内注释遵守以下规则：
 
 - 一句话时不打句号

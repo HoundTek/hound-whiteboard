@@ -1,9 +1,9 @@
 /**
- * 区块组件
+ * @file 区块组件
  * @description
  * 区块组件负责管理每一区块的对象和层级关系，以及区块的位置与唯一标识。
  * 每一区块对应一个区块类实例。
- * @module chunk
+ * @module core/components/chunk
  * @author Zhou Chenyu
  */
 

@@ -1,3 +1,10 @@
+/**
+ * @file Core 文件操作渲染器桥接
+ * @description 提供渲染进程向预加载层调用 Core 文件操作的桥接接口。
+ * @module core/bridges/file-operate-bridge-renderer
+ * @author Zhou Chenyu
+ */
+
 import { CORE_FILE_OPERATE_ACTIONS } from "./file-operate-bridge-common.js";
 
 /**

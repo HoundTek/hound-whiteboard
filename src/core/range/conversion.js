@@ -1,5 +1,6 @@
 /**
- * 范围转换算法
+ * @file 范围转换算法
+ * @description 提供范围对象与点集之间的转换与近似处理函数。
  * @module core/range/conversion
  * @author Zhou Chenyu
  */

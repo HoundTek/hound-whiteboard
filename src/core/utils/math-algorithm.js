@@ -1,5 +1,6 @@
 /**
- * 数学算法
+ * @file 数学算法
+ * @description 提供点集凸包等常用数学算法。
  * @module core/utils/math-algorithm
  * @author Zhou Chenyu
  */

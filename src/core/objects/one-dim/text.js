@@ -1,5 +1,6 @@
 /**
  * @file 文本对象定义
+ * @description 定义白板文本对象的数据结构和渲染行为。
  * @module core/objects/one-dim/text
  * @author Zhou Chenyu
  */

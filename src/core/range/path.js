@@ -1,5 +1,6 @@
 /**
- * 路径范围
+ * @file 路径范围
+ * @description 提供路径范围的表示、采样与射线相交等功能。
  * @module core/range/path
  * @author Zhou Chenyu
  */

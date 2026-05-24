@@ -1,5 +1,6 @@
 /**
- * 范围包围盒辅助算法
+ * @file 范围包围盒辅助算法
+ * @description 提供范围包围盒获取与相交判断的辅助函数。
  * @module core/range/bounds
  * @author Zhou Chenyu
  */

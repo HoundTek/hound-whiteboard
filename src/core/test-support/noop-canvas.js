@@ -1,6 +1,8 @@
 /**
  * @file 测试用空实现 canvas/context
+ * @description 提供单元测试中使用的空 canvas/context 接口实现。
  * @module core/test-support/noop-canvas
+ * @author Zhou Chenyu
  */
 
 function createNoopCanvasContext2D() {

@@ -1,5 +1,6 @@
 /**
- * 双端队列
+ * @file 双端队列
+ * @description 提供基于循环数组的双端队列实现。
  * @module core/utils/deque
  * @author Zhou Chenyu
  */

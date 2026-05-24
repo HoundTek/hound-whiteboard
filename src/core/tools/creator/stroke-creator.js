@@ -1,5 +1,6 @@
 /**
- * 笔画创建工具
+ * @file 笔画创建工具
+ * @description 提供用于绘制笔画对象的创建器工具实现。
  * @module core/tools/creator/stroke-creator
  * @author Zhou Chenyu
  */

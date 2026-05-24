@@ -1,5 +1,6 @@
 /**
  * @file 圆对象定义
+ * @description 定义白板圆对象的几何、绘制与转换逻辑。
  * @module core/objects/graph/circle
  * @author Zhou Chenyu
  */

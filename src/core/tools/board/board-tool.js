@@ -1,5 +1,6 @@
 /**
- * 白板工具基类
+ * @file 白板工具基类
+ * @description 提供作用于白板结构本身的基础工具接口。
  * @module core/tools/board/board-tool
  * @author Zhou Chenyu
  */

@@ -1,5 +1,6 @@
 /**
  * @file 渲染调度器
+ * @description 负责脏区域合并、清理和渲染顺序的调度策略。
  * @module core/components/render-scheduler
  * @author Zhou Chenyu
  */

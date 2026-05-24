@@ -1,5 +1,6 @@
 /**
- * 对象修改工具
+ * @file 对象修改工具
+ * @description 提供对象几何和属性修改的基础工具实现。
  * @module core/tools/modifier/obj-modifier
  * @author Zhou Chenyu
  */

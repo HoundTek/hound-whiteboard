@@ -1,5 +1,6 @@
 /**
- * 范围几何算法
+ * @file 范围几何算法
+ * @description 提供范围间交集、包含和段交点计算等核心几何运算。
  * @module core/range/geometry
  * @author Zhou Chenyu
  */

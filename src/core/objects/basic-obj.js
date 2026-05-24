@@ -1,5 +1,6 @@
 /**
- * 白板对象基类
+ * @file 白板对象基类
+ * @description 定义白板对象的基础属性、变换和边界接口。
  * @module core/objects/basic-obj
  * @author Zhou Chenyu
  */

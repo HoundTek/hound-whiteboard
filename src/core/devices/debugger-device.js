@@ -1,5 +1,6 @@
 /**
- * 调试设备
+ * @file 调试设备
+ * @description 提供调试设备节点与信号记录功能。
  * @module core/devices/debugger-device
  * @author Zhou Chenyu
  */

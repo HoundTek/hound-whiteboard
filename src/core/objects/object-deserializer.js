@@ -1,5 +1,6 @@
 /**
  * @file 对象反序列化器
+ * @description 提供白板对象序列化数据的反序列化实现。
  * @module core/objects/object-deserializer
  * @author Zhou Chenyu
  */

@@ -1,5 +1,6 @@
 /**
  * @file 区块加载器
+ * @description 区块加载器负责维护当前区块的矩形缓冲区并调度区块加载请求。
  * @module core/components/chunk-block-loader
  * @author Zhou Chenyu
  */

@@ -1,5 +1,6 @@
 /**
- * 绳子范围
+ * @file 绳子范围
+ * @description 提供基于点列的绳子范围表示与变换功能。
  * @module core/range/rope
  * @author Zhou Chenyu
  */

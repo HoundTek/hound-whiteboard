@@ -1,5 +1,6 @@
 /**
- * 队列
+ * @file 队列
+ * @description 提供循环数组实现的队列结构。
  * @module core/utils/queue
  * @author Zhou Chenyu
  */

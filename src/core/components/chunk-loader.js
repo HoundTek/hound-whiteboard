@@ -1,7 +1,8 @@
 /**
  * @file 通用区块加载器
- * @module core/components/chunk-loader
  * @description 提供面向区块实例持有与索引的基础能力。
+ * @module core/components/chunk-loader
+ * @author Zhou Chenyu
  */
 
 import { Chunk } from "./chunk.js";

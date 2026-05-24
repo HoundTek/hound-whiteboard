@@ -1,5 +1,6 @@
 /**
  * @file 图形对象定义
+ * @description 定义图形对象的基础抽象与通用行为。
  * @module core/objects/graph/graph
  * @author Zhou Chenyu
  */

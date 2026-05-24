@@ -1,5 +1,6 @@
 /**
- * 触摸屏设备
+ * @file 触摸屏设备
+ * @description 提供触摸输入信号的设备树节点创建与处理接口。
  * @module core/devices/touchscreen-device
  * @author Zhou Chenyu
  */

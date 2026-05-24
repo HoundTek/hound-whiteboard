@@ -1,5 +1,6 @@
 /**
- * 范围相交特化算法
+ * @file 范围相交特化算法
+ * @description 提供不同类型范围之间的相交检测与交点计算。
  * @module core/range/intersections
  * @author Zhou Chenyu
  */

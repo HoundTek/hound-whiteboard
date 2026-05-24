@@ -1,5 +1,6 @@
 /**
- * 多边形范围
+ * @file 多边形范围
+ * @description 提供多边形范围的表示、点包含与包围盒计算功能。
  * @module core/range/polygon
  * @author Zhou Chenyu
  */

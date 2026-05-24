@@ -1,3 +1,10 @@
+/**
+ * @file 一维对象基类
+ * @description 定义一维白板对象的公共行为与容器关系。
+ * @module core/objects/one-dim/one-dim-obj
+ * @author Zhou Chenyu
+ */
+
 import { Container } from "../container.js";
 
 /**

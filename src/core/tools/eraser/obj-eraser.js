@@ -1,5 +1,6 @@
 /**
- * 对象擦除工具
+ * @file 对象擦除工具
+ * @description 提供对象擦除与局部擦除的基础工具实现。
  * @module core/tools/eraser/obj-eraser
  * @author Zhou Chenyu
  */
