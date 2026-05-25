@@ -68,6 +68,32 @@ describe("DevicesTree", () => {
     ]);
   });
 
+  test("父节点写入的上下文应能被后续子节点继承", () => {
+    const tree = new DevicesTree();
+    let childRouteContext;
+
+    tree.mount("/monitor/pen", null, { defaultPath: "tool" });
+    tree.mount(
+      "/monitor/pen/tool",
+      (packet, routeContext = {}) => {
+        routeContext.object = { id: 42 };
+        return { to: "", signals: packet.signals };
+      },
+      { defaultPath: "tool" },
+    );
+    tree.mount("/monitor/pen/tool/tool", (packet, routeContext = {}) => {
+      childRouteContext = routeContext;
+      return [];
+    });
+
+    tree.dispatch({
+      to: "/monitor/pen",
+      signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
+    });
+
+    expect(childRouteContext?.object).toEqual({ id: 42 });
+  });
+
   test("mountDevice 应按设备定义挂载整棵子树", () => {
     const createNodeProcessor =
       (nodePath) =>
@@ -168,7 +194,10 @@ describe("DevicesTree", () => {
       },
     };
 
-    const mountedNodes = tree.mountDevice("monitor/debugger/", deviceDefinition);
+    const mountedNodes = tree.mountDevice(
+      "monitor/debugger/",
+      deviceDefinition,
+    );
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/debugger",
@@ -196,9 +225,13 @@ describe("DevicesTree", () => {
     const tree = new DevicesTree();
 
     tree.mount("/monitor/s-pen", null, { defaultPath: "pen" });
-    tree.mount("/monitor/s-pen/pen", (packet) => ({ signals: packet.signals }), {
-      defaultPath: "tool",
-    });
+    tree.mount(
+      "/monitor/s-pen/pen",
+      (packet) => ({ signals: packet.signals }),
+      {
+        defaultPath: "tool",
+      },
+    );
     tree.mount("/monitor/s-pen/pen/tool", (packet, context) => ({
       to: context.path,
       signals: [
@@ -570,27 +603,31 @@ describe("DevicesTree", () => {
   test("节点存在 processor 时应优先使用 processor 而非 rewritePacket", () => {
     const tree = new DevicesTree();
 
-    tree.mount("/monitor/keyboard/code/KeyS", (packet, context) => ({
-      to: context.path,
-      signals: [
-        {
-          type: "processor-result",
-          context: { from: context.path, count: packet.signals.length },
+    tree.mount(
+      "/monitor/keyboard/code/KeyS",
+      (packet, context) => ({
+        to: context.path,
+        signals: [
+          {
+            type: "processor-result",
+            context: { from: context.path, count: packet.signals.length },
+          },
+        ],
+      }),
+      {
+        rewritePacket() {
+          return {
+            to: "../../move",
+            signals: [
+              {
+                type: "position",
+                context: { value: { x: 0, y: 1 } },
+              },
+            ],
+          };
         },
-      ],
-    }), {
-      rewritePacket() {
-        return {
-          to: "../../move",
-          signals: [
-            {
-              type: "position",
-              context: { value: { x: 0, y: 1 } },
-            },
-          ],
-        };
       },
-    });
+    );
 
     expect(
       tree.dispatch({
@@ -629,6 +666,28 @@ describe("DevicesTree", () => {
     expect(tree.getNode("/monitor/stylus/tip")).toBeNull();
   });
 
+  test("unmount 应递归调用节点 umount 钩子", () => {
+    const tree = new DevicesTree();
+    const calls = [];
+
+    tree.mount("/monitor/stylus", null, {
+      umount(context) {
+        calls.push(["stylus", context.path]);
+      },
+    });
+    tree.mount("/monitor/stylus/tip", () => [], {
+      umount(context) {
+        calls.push(["tip", context.path]);
+      },
+    });
+
+    expect(tree.unmount("/monitor/stylus")).toBe(true);
+    expect(calls).toEqual([
+      ["tip", "/monitor/stylus/tip"],
+      ["stylus", "/monitor/stylus"],
+    ]);
+  });
+
   test("mountTool 应沿默认路径在末端追加工具节点", () => {
     const tree = new DevicesTree();
     const processor = () => undefined;
@@ -660,5 +719,38 @@ describe("DevicesTree", () => {
     expect(tree.unmountTool("/monitor/s-pen")).toBe(true);
     expect(tree.getNode("/monitor/s-pen/pen/tool")).toBeNull();
     expect(tree.unmountTool("/monitor/s-pen")).toBe(false);
+  });
+
+  test("unmountTool 应调用工具的 umount 清理钩子", () => {
+    const tree = new DevicesTree();
+    const cleanupCalls = [];
+
+    tree.mount("/monitor/s-pen", null, { defaultPath: "pen" });
+    tree.mount("/monitor/s-pen/pen", null, { defaultPath: "tool" });
+    tree.mountTool(
+      "/monitor/s-pen",
+      {
+        createProcessor() {
+          return () => undefined;
+        },
+        umount(context) {
+          cleanupCalls.push({
+            path: context.path,
+            object: context.object,
+          });
+        },
+      },
+      { board: "board-context" },
+    );
+
+    tree.getNode("/monitor/s-pen/pen/tool").context.object = { id: 42 };
+
+    expect(tree.unmountTool("/monitor/s-pen")).toBe(true);
+    expect(cleanupCalls).toEqual([
+      {
+        path: "/monitor/s-pen/pen/tool",
+        object: { id: 42 },
+      },
+    ]);
   });
 });

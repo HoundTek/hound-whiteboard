@@ -70,15 +70,136 @@ class Tool {
               return monitor.worldToChunk(position)?.chunkId;
             }
           : undefined);
-      this.process(SignalPacket.from(signalPacket), {
-        ...toolContext,
-        ...routeContext,
-        allocateObjectId:
-          routeContext.allocateObjectId ??
-          toolContext.allocateObjectId ??
-          board?.allocateObjectId?.bind(board),
-        resolveOwnerChunkId,
-      });
+      const deviceContext = Object.assign(
+        routeContext,
+        toolContext,
+        routeContext,
+      );
+      deviceContext.allocateObjectId =
+        routeContext.allocateObjectId ??
+        toolContext.allocateObjectId ??
+        board?.allocateObjectId?.bind(board);
+      deviceContext.resolveOwnerChunkId = resolveOwnerChunkId;
+      return this.process(SignalPacket.from(signalPacket), deviceContext);
+    };
+  }
+
+  /**
+   * 将单对象或对象集合规整为数组。
+   * @param {Iterable<*>|*} objects - 原始对象或对象集合
+   * @returns {Array<*>}
+   */
+  normalizeObjectCollection(objects) {
+    if (objects == null) return [];
+
+    if (
+      typeof objects !== "string" &&
+      typeof objects[Symbol.iterator] === "function"
+    ) {
+      return Array.from(objects);
+    }
+
+    return [objects];
+  }
+
+  /**
+   * 从设备上下文中解析当前对象集合。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {Array<*>}
+   */
+  resolveContextObjects(deviceContext = {}) {
+    if (deviceContext.objects) {
+      return this.normalizeObjectCollection(deviceContext.objects);
+    }
+    if (deviceContext.object) {
+      return [deviceContext.object];
+    }
+    if (deviceContext.nodeContext?.objects) {
+      return this.normalizeObjectCollection(deviceContext.nodeContext.objects);
+    }
+    if (deviceContext.nodeContext?.object) {
+      return [deviceContext.nodeContext.object];
+    }
+    if (deviceContext.providedObjectsContext?.objects) {
+      return this.normalizeObjectCollection(
+        deviceContext.providedObjectsContext.objects,
+      );
+    }
+    if (deviceContext.providedObjectsContext?.object) {
+      return [deviceContext.providedObjectsContext.object];
+    }
+    return [];
+  }
+
+  /**
+   * 将对象集合写回设备上下文与节点上下文。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {Iterable<*>|*} objects - 对象或对象集合
+   * @returns {Array<*>}
+   */
+  setContextObjects(deviceContext = {}, objects) {
+    const normalizedObjects = this.normalizeObjectCollection(objects).filter(
+      Boolean,
+    );
+
+    if (normalizedObjects.length === 0) {
+      this.clearContextObjects(deviceContext);
+      return [];
+    }
+
+    deviceContext.objects = normalizedObjects;
+    deviceContext.object = normalizedObjects[0];
+
+    for (const context of [
+      deviceContext.nodeContext,
+      deviceContext.providedObjectsContext,
+    ]) {
+      if (!context) continue;
+      context.objects = normalizedObjects;
+      context.object = normalizedObjects[0];
+    }
+
+    return normalizedObjects;
+  }
+
+  /**
+   * 清理设备上下文中的对象引用。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {void}
+   */
+  clearContextObjects(deviceContext = {}) {
+    delete deviceContext.object;
+    delete deviceContext.objects;
+
+    for (const context of [
+      deviceContext.nodeContext,
+      deviceContext.providedObjectsContext,
+    ]) {
+      if (!context) continue;
+      delete context.object;
+      delete context.objects;
+    }
+  }
+
+  /**
+   * 若当前节点存在默认子节点，则继续向默认路径转发原始信号包。
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {Object|undefined}
+   */
+  continueToDefaultPath(signalPacket, deviceContext = {}) {
+    if (!deviceContext.defaultPath || !deviceContext.resolvedDefaultPath) {
+      return undefined;
+    }
+
+    if (!deviceContext.tree?.getNode?.(deviceContext.resolvedDefaultPath)) {
+      return undefined;
+    }
+
+    const packet = SignalPacket.from(signalPacket);
+    return {
+      to: deviceContext.defaultPath,
+      signals: packet.signals,
     };
   }
 
@@ -91,6 +212,17 @@ class Tool {
    */
   process(signalPacket, deviceContext) {
     throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 工具节点被卸载时执行清理。
+   * @param {Object} [deviceContext={}] - 卸载时的设备上下文
+   * @returns {void}
+   */
+  umount(deviceContext = {}) {
+    if (this.reset !== Tool.prototype.reset) {
+      this.reset(deviceContext);
+    }
   }
 
   /**

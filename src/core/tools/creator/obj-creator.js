@@ -8,6 +8,7 @@
 import { Vector } from "../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { SignalPacket } from "../../devices/signal.js";
+import { joinPath } from "../../utils/path.js";
 import { Tool } from "../tool.js";
 
 /**
@@ -30,6 +31,16 @@ const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
 });
 
 /**
+ * 对象创建完成策略常量
+ * @readonly
+ * @enum {string}
+ */
+const OBJECT_CREATOR_COMPLETION_MODES = Object.freeze({
+  APPLY: "apply",
+  HANDOFF: "handoff",
+});
+
+/**
  * 对象创建工具基类
  * @class
  * @abstract
@@ -43,12 +54,22 @@ const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
  */
 class ObjectCreatorTool extends Tool {
   /**
+   * @param {{
+   *   completionMode?: string,
+   *   createModifierTool?: Function,
+   * }} [options={}]
    * @constructor
    */
-  constructor() {
+  constructor(options = {}) {
     super();
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
+    this.completionMode =
+      options.completionMode ?? OBJECT_CREATOR_COMPLETION_MODES.APPLY;
+    this.createModifierTool =
+      typeof options.createModifierTool === "function"
+        ? options.createModifierTool
+        : null;
   }
 
   /**
@@ -88,6 +109,18 @@ class ObjectCreatorTool extends Tool {
    * @type {boolean}
    */
   isObjectCreationCompleted;
+
+  /**
+   * 创建完成策略
+   * @type {string}
+   */
+  completionMode;
+
+  /**
+   * handoff 模式下用于构造 modifier 的工厂
+   * @type {Function|null}
+   */
+  createModifierTool;
 
   /**
    * 将信号上下文中的坐标规整为 Vector。
@@ -162,12 +195,140 @@ class ObjectCreatorTool extends Tool {
       interaction.objectId = objectId;
       this.create(interaction.position, objectId, interaction.ownerChunkId);
       this.isObjectCreationCompleted = false;
+      this.syncCreatedObjectContext(interaction?.deviceContext);
       interaction?.deviceContext?.board?.activeObjectManager?.add?.(
         new Set([this.obj]),
       );
     }
 
     return true;
+  }
+
+  /**
+   * 当前 creator 是否采用 handoff 完成策略。
+   * @returns {boolean}
+   */
+  isHandoffMode() {
+    return this.completionMode === OBJECT_CREATOR_COMPLETION_MODES.HANDOFF;
+  }
+
+  /**
+   * 当前节点下是否已挂载 handoff modifier。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {boolean}
+   */
+  hasModifierTool(deviceContext = {}) {
+    return Boolean(
+      deviceContext.defaultPath &&
+        deviceContext.resolvedDefaultPath &&
+        deviceContext.tree?.getNode?.(deviceContext.resolvedDefaultPath),
+    );
+  }
+
+  /**
+   * 将当前创建对象写回上下文。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {BasicObject} [objectEntry=this.obj] - 当前对象
+   * @returns {Array<BasicObject>}
+   */
+  syncCreatedObjectContext(deviceContext = {}, objectEntry = this.obj) {
+    deviceContext.providedObjectsContext = deviceContext.nodeContext;
+    return this.setContextObjects(
+      deviceContext,
+      objectEntry ? [objectEntry] : [],
+    );
+  }
+
+  /**
+   * 卸载或结束 workflow 时撤销未提交对象。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {void}
+   */
+  discardCreatedObjects(deviceContext = {}) {
+    const normalizedObjects = this.resolveContextObjects(deviceContext).filter(
+      Boolean,
+    );
+    const activeObjectIndex = deviceContext?.board?.activeObjectManager
+      ?.activeObjectIndex;
+    const activeObjects =
+      typeof activeObjectIndex?.has === "function"
+        ? normalizedObjects.filter((objectEntry) =>
+            activeObjectIndex.has(objectEntry.id),
+          )
+        : normalizedObjects;
+
+    if (activeObjects.length > 0) {
+      deviceContext?.board?.activeObjectManager?.discard?.(
+        new Set(activeObjects),
+      );
+    }
+  }
+
+  /**
+   * 在当前 creator 节点下挂载 handoff modifier。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {*}
+   */
+  mountModifierForCreatedObject(interaction) {
+    const deviceContext = interaction?.deviceContext ?? {};
+    if (
+      !this.isHandoffMode() ||
+      typeof this.createModifierTool !== "function" ||
+      !this.obj ||
+      !deviceContext.tree ||
+      !deviceContext.path
+    ) {
+      return undefined;
+    }
+
+    if (this.hasModifierTool(deviceContext)) {
+      return deviceContext.tree.getNode(deviceContext.resolvedDefaultPath);
+    }
+
+    const modifierTool = this.createModifierTool({
+      interaction,
+      object: this.obj,
+      creatorTool: this,
+    });
+    if (!modifierTool) {
+      return undefined;
+    }
+
+    deviceContext.tree.configureNode(deviceContext.path, {
+      defaultPath: "tool",
+    });
+
+    return deviceContext.tree.mountTool(
+      joinPath(deviceContext.path, "tool"),
+      modifierTool,
+      {
+        board: deviceContext.board,
+        monitor: deviceContext.monitor,
+      },
+    );
+  }
+
+  /**
+   * 当 handoff modifier 存在时，将信号继续转发给它。
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {*}
+   */
+  continueModifierWorkflow(signalPacket, deviceContext = {}) {
+    if (!this.hasModifierTool(deviceContext)) {
+      this.discardCreatedObjects(deviceContext);
+      this.clearContextObjects(deviceContext);
+      this.reset();
+      this.isCreatingGestureActive = false;
+      this.isObjectCreationCompleted = false;
+      return undefined;
+    }
+
+    this.syncCreatedObjectContext(
+      deviceContext,
+      this.obj ?? this.resolveContextObjects(deviceContext)[0],
+    );
+    return this.continueToDefaultPath(signalPacket, deviceContext);
   }
 
   /**
@@ -242,14 +403,28 @@ class ObjectCreatorTool extends Tool {
   completeCreatedObject(interaction) {
     if (!this.obj) return undefined;
     const completedObject = this.obj;
-    const board = interaction?.deviceContext?.board;
+    const deviceContext = interaction?.deviceContext ?? {};
+    const board = deviceContext.board;
+
+    this.syncCreatedObjectContext(deviceContext, completedObject);
+
+    if (this.isHandoffMode()) {
+      const modifierNode = this.mountModifierForCreatedObject(interaction);
+      if (modifierNode) {
+        this.isObjectCreationCompleted = true;
+        return undefined;
+      }
+    }
+
     if (board?.activeObjectManager?.apply) {
       board.activeObjectManager.apply(new Set([completedObject]));
       this.isObjectCreationCompleted = true;
+      this.clearContextObjects(deviceContext);
       return undefined;
     }
     board?.addObject?.(completedObject, completedObject.ownerChunkId);
     this.isObjectCreationCompleted = true;
+    this.clearContextObjects(deviceContext);
     return undefined;
   }
 
@@ -266,9 +441,23 @@ class ObjectCreatorTool extends Tool {
         board.activeObjectManager.unregisterActiveObject(this.obj.id);
       }
     }
+    this.clearContextObjects(interaction?.deviceContext ?? {});
     this.reset();
     this.isObjectCreationCompleted = false;
     return undefined;
+  }
+
+  /**
+   * 工具节点被卸载时撤销未提交对象。
+   * @param {Object} [deviceContext={}] - 卸载时的设备上下文
+   * @returns {void}
+   */
+  umount(deviceContext = {}) {
+    this.discardCreatedObjects(deviceContext);
+    this.clearContextObjects(deviceContext);
+    this.isCreatingGestureActive = false;
+    this.isObjectCreationCompleted = false;
+    super.umount(deviceContext);
   }
 
   /**
@@ -300,6 +489,10 @@ class SingleGestureObjectCreatorTool extends ObjectCreatorTool {
    */
   process(signalPacket, deviceContext = {}) {
     const normalizedPacket = SignalPacket.from(signalPacket);
+    if (this.isHandoffMode() && this.isObjectCreationCompleted) {
+      return this.continueModifierWorkflow(normalizedPacket, deviceContext);
+    }
+
     const interaction = this.buildInteractionContext(
       normalizedPacket,
       deviceContext,
@@ -363,6 +556,10 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
    */
   process(signalPacket, deviceContext = {}) {
     const normalizedPacket = SignalPacket.from(signalPacket);
+    if (this.isHandoffMode() && this.isObjectCreationCompleted) {
+      return this.continueModifierWorkflow(normalizedPacket, deviceContext);
+    }
+
     const interaction = this.buildInteractionContext(
       normalizedPacket,
       deviceContext,
@@ -433,4 +630,5 @@ export {
   SingleGestureObjectCreatorTool,
   MultiGestureObjectCreatorTool,
   OBJECT_CREATOR_SIGNAL_TYPES,
+  OBJECT_CREATOR_COMPLETION_MODES,
 };

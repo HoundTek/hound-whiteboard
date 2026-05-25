@@ -174,17 +174,20 @@ describe("StrokeCreatorTool", () => {
       activeObjectManager: { add: jest.fn() },
     };
 
+    const deviceContext = { objectId: 9, ownerChunkId: 1, board };
+
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { objectId: 9, ownerChunkId: 1, board },
+      deviceContext,
     );
 
     expect(board.activeObjectManager.add).toHaveBeenCalledWith(
       new Set([tool.obj]),
     );
+    expect(deviceContext.object).toBe(tool.obj);
   });
 
   test("创建手势更新前后应记录旧几何快照并请求活动层刷新", () => {

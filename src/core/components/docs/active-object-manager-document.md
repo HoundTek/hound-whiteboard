@@ -91,6 +91,12 @@
 - 调用方传入 `BasicObject` 实例集合。
 - AOM 通过对象自身的 `ownerChunkId` 去向白板解析起始区块。
 
+这也是对象选择工具进入 modifier 链路的入口语义：
+
+- chooser 从静态图挑出对象后，应调用 `choose(startFrom)` 将对象加入动态图
+- 后续 modifier 只应修改这些已经进入 AOM 的对象
+- 只要对象仍在 AOM 中，它们就不应再被重复选择
+
 ### 提交并取消选择 `apply(objects)`
 
 `apply` 是当前 AOM 的关键提交动作。它不再只是把对象从活动集合里删掉，而是会把活动对象重新写回白板区块级结构。
@@ -116,6 +122,11 @@
 - 按覆盖区块把对象重新写回相关 `ChunkObjectManager`。
 - 根据活动层顺序和对象相交关系，生成应回写到静态图的 `below/above` 关系。
 - 清除活动对象实例索引，并清理动态图。
+
+在当前工具链里，`apply(objects)` 不再只对应“选择后提交”：
+
+- handoff 模式下的新建对象也会先停留在 AOM 中
+- 对象修改工具收到 `apply` 信号后，会统一调用 `AOM.apply(objects)` 完成本次编辑提交
 
 ### 置顶 `liftup(objs)`
 

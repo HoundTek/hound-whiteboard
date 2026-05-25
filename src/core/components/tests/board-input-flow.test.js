@@ -1,9 +1,10 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { Tool } from "../../tools/tool.js";
-import { Vector } from "../../utils/math.js";
+import { Matrix, Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
+import { CommonObjectModifierTool } from "../../tools/modifier/common-object-modifier.js";
 import { createMouseDevice } from "../../devices/mouse-device.js";
 import { createNoopCanvas } from "../../test-support/noop-canvas.js";
 import {
@@ -307,6 +308,7 @@ describe("Board input flow", () => {
     monitor.zoom = 2;
 
     monitor.mountDevice("/mouse", createMouseDevice());
+
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary",
       tool,
@@ -328,7 +330,91 @@ describe("Board input flow", () => {
 
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
     expect(board.activeObjectManager.layerOrder.length).toBe(1);
-    expect(board.activeObjectManager.layerOrder[0].activeObjects.has(tool.obj.id)).toBe(true);
+    expect(
+      board.activeObjectManager.layerOrder[0].activeObjects.has(tool.obj.id),
+    ).toBe(true);
+  });
+
+  test("挂载后的 StrokeCreatorTool 与 CommonObjectModifierTool 同一路径中共享上下文并修改对象", () => {
+    const board = new Board();
+    const monitor = createMonitor(board, "main");
+    const creatorTool = new StrokeCreatorTool({
+      completionMode: "handoff",
+      createModifierTool: () => new CommonObjectModifierTool(),
+    });
+
+    monitor.mountDevice("/mouse", createMouseDevice());
+
+    board.signalsEventBus.emit("mount", {
+      to: "/main/mouse/primary",
+      tool: creatorTool,
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: { value: { x: 1, y: 1 }, buttons: 1, button: 0 },
+        },
+      ],
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: { value: { x: 2, y: 2 }, buttons: 1, button: 0 },
+        },
+        {
+          type: "end",
+          context: {},
+        },
+      ],
+    });
+
+    const ownerChunk = board.getChunkById(1);
+    expect(creatorTool.obj).not.toBeNull();
+    expect(creatorTool.obj.id).toBe(1);
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+    expect(
+      monitor.devicesTree.getNode("/main/mouse/primary/tool/tool"),
+    ).not.toBeNull();
+    expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse/primary",
+      signals: [
+        {
+          type: "position",
+          context: { value: { x: 10, y: 10 } },
+        },
+        {
+          type: "transform",
+          context: {
+            value: { a: 2, b: 0, c: 0, d: 2 },
+          },
+        },
+      ],
+    });
+
+    expect(creatorTool.obj).not.toBeNull();
+    expect(creatorTool.obj.id).toBe(1);
+    expect(creatorTool.obj.transform).toEqual(new Matrix(2, 0, 0, 2));
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+    expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse/primary",
+      signals: [{ type: "apply", context: {} }],
+    });
+
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(monitor.devicesTree.getNode("/main/mouse/primary/tool/tool")).toBeNull();
+    expect(ownerChunk.objectManager.getObject(creatorTool.obj.id)).toBe(
+      creatorTool.obj,
+    );
   });
 
   test("挂载后的 PolygonCreatorTool 应可经由输入链路完成 object-end 提交", () => {

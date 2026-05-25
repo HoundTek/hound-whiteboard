@@ -21,6 +21,7 @@
 - `processor`：直接挂在节点上的处理函数。
 - `defaultPath`：当前节点默认往下游继续传递时使用的相对路径。
 - `rewritePacket`：节点在无显式处理器时对整包输入做改写的函数。
+- `umount`：节点被卸载时的清理/撤销回调。
 
 节点路径采用类 Unix 形式，如 `/monitor/s-pen/pen`。
 
@@ -41,7 +42,7 @@
   to: "/monitor/stylus",
   signals: [
     { type: "position", context: { value: { x: 1, y: 2 } } },
-    { type: "pressure", context: { value: 0.4} },
+    { type: "pressure", context: { value: 0.4 } },
   ],
 }
 ```
@@ -110,6 +111,7 @@
 - 运行时节点配置更新，可通过 `configureNode(path, options)` 修改已挂载节点。
 - 基于 `to` 的递归分发。
 - 基于 `defaultPath` 的默认下游转发。
+- 运行时挂载/卸载工具节点，可通过 `mountTool(path, tool)` 和 `unmountTool(path)` 管理工具链路。
 - 最大转发深度保护，防止节点间错误循环。
 
 `configureNode(path, options)` 当前约定如下：
@@ -117,13 +119,14 @@
 - `defaultPath: null` 或 `defaultPath: ""` 表示清空默认下游路径
 - `rewritePacket: null` 表示清空整包改写器
 - `processor: null` 表示清空节点处理器
+- `umount: null` 表示移除卸载回调
 
 当前 DevicesTree 还没有做：
 
-- 权限控制。
-- 广播、多播。
-- 路径通配符。
-- 节点生命周期事件。
-- Monitor 专属坐标转换。
+- 权限控制
+- 广播、多播
+- 路径通配符
+- 节点生命周期事件
+- Monitor 专属坐标转换
 
 这些都可以继续叠加，但不应破坏“节点既能路由也能处理”的核心模型。

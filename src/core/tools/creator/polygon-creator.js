@@ -27,10 +27,14 @@ import { MultiGestureObjectCreatorTool } from "./obj-creator.js";
  */
 class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   /**
-   * @param {{ property?: Partial<typeof DEFAULT_POLYGON_PROPERTY> }} [options={}]
+   * @param {{
+   *   property?: Partial<typeof DEFAULT_POLYGON_PROPERTY>,
+   *   completionMode?: string,
+   *   createModifierTool?: Function,
+   * }} [options={}]
    */
   constructor(options = {}) {
-    super();
+    super(options);
     this.count = 0;
     this.lastPoint = null;
     this.property = {

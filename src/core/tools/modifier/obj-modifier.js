@@ -8,6 +8,15 @@
 import { Tool } from "../tool.js";
 
 /**
+ * 对象修改工具相关信号类型常量
+ * @readonly
+ * @enum {string}
+ */
+const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
+  APPLY: "apply",
+});
+
+/**
  * 对象修改工具基类
  * @class
  * @abstract
@@ -24,23 +33,33 @@ class ObjectModifierTool extends Tool {
    */
   resolveModifiedObjects(modificationContext, objects) {
     if (objects == null) {
-      if (modificationContext?.objects) {
-        return Array.from(modificationContext.objects);
-      }
-      if (modificationContext?.object) {
-        return [modificationContext.object];
-      }
-      return [];
+      return this.resolveContextObjects(modificationContext);
     }
 
-    if (
-      typeof objects !== "string" &&
-      typeof objects[Symbol.iterator] === "function"
-    ) {
-      return Array.from(objects);
+    return this.normalizeObjectCollection(objects);
+  }
+
+  /**
+   * 解析当前仍处于 AOM 动态图中的对象集合。
+   * @param {Object} modificationContext - 修改上下文
+   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
+   * @returns {Array<*>}
+   */
+  resolveActiveModifiedObjects(modificationContext, objects) {
+    const normalizedObjects = this.resolveModifiedObjects(
+      modificationContext,
+      objects,
+    );
+    const activeObjectIndex = modificationContext?.board?.activeObjectManager
+      ?.activeObjectIndex;
+
+    if (typeof activeObjectIndex?.has !== "function") {
+      return normalizedObjects;
     }
 
-    return [objects];
+    return normalizedObjects.filter(
+      (objectEntry) => objectEntry && activeObjectIndex.has(objectEntry.id),
+    );
   }
 
   /**
@@ -100,6 +119,59 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
+   * 将当前修改对象提交回静态图。
+   * @param {Object} modificationContext - 修改上下文
+   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
+   * @returns {boolean}
+   */
+  applyModifiedObjects(modificationContext, objects) {
+    const normalizedObjects = this.resolveActiveModifiedObjects(
+      modificationContext,
+      objects,
+    );
+
+    if (normalizedObjects.length === 0) {
+      this.clearContextObjects(modificationContext);
+      return false;
+    }
+
+    modificationContext?.board?.activeObjectManager?.apply?.(
+      new Set(normalizedObjects),
+    );
+    this.clearContextObjects(modificationContext);
+
+    if (
+      modificationContext.autoUmountOnApply !== false &&
+      typeof modificationContext.tree?.unmount === "function" &&
+      typeof modificationContext.path === "string"
+    ) {
+      modificationContext.tree.unmount(modificationContext.path);
+    }
+
+    return true;
+  }
+
+  /**
+   * 在修改工具被卸载时撤销未提交的活动对象引用。
+   * @param {Object} [modificationContext={}] - 修改上下文
+   * @returns {void}
+   */
+  umount(modificationContext = {}) {
+    const normalizedObjects = this.resolveActiveModifiedObjects(
+      modificationContext,
+    );
+
+    if (normalizedObjects.length > 0) {
+      modificationContext?.board?.activeObjectManager?.discard?.(
+        new Set(normalizedObjects),
+      );
+    }
+
+    this.clearContextObjects(modificationContext);
+    super.umount(modificationContext);
+  }
+
+  /**
    * 对对象应用变更。
    * @param {Object} modificationContext - 修改上下文
    * @returns {*}
@@ -110,3 +182,5 @@ class ObjectModifierTool extends Tool {
 }
 
 export { ObjectModifierTool };
+
+export { OBJECT_MODIFIER_SIGNAL_TYPES };

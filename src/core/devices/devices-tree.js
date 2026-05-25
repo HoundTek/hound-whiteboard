@@ -21,6 +21,7 @@ import { SignalPacket } from "./signal.js";
  * @property {string} [path] - 当前节点路径
  * @property {string} [defaultPath] - 当前节点声明的默认下游路径
  * @property {string} [resolvedDefaultPath] - 当前节点默认下游路径对应的绝对路径
+ * @property {Object} [nodeContext] - 当前节点的持久路由上下文
  * @property {number} [depth] - 当前分发深度
  */
 
@@ -46,11 +47,19 @@ import { SignalPacket } from "./signal.js";
  */
 
 /**
+ * 设备树节点卸载钩子
+ * @callback DevicesTreeNodeUmountHandler
+ * @param {DevicesTreeRouteContext} routeContext - 当前卸载上下文
+ * @returns {*}
+ */
+
+/**
  * 设备树节点配置
  * @typedef {Object} DevicesTreeNodeConfig
  * @property {string|null} [defaultPath] - 当前节点的默认下游路径，可为相对路径；传 `null` 或空串表示清空
  * @property {DevicesTreePacketRewriter|null} [rewritePacket] - 当前节点的整包改写器；传 `null` 表示清空
  * @property {DevicesTreeProcessor|null} [processor] - 挂载到该节点的处理器；传 `null` 表示清空
+ * @property {DevicesTreeNodeUmountHandler|null} [umount] - 当前节点被卸载时的清理钩子；传 `null` 表示清空
  */
 
 /**
@@ -60,6 +69,7 @@ import { SignalPacket } from "./signal.js";
  * @property {string} [defaultPath] - 当前节点的默认下游路径，可为相对路径
  * @property {DevicesTreePacketRewriter|null} [rewritePacket] - 当前节点的整包改写器
  * @property {DevicesTreeProcessor|null} [processor] - 挂载到该节点的处理器
+ * @property {DevicesTreeNodeUmountHandler|null} [umount] - 当前节点被卸载时的清理钩子
  */
 
 /**
@@ -112,6 +122,18 @@ class DevicesTreeNode {
   rewritePacket;
 
   /**
+   * 节点的持久上下文
+   * @type {Object}
+   */
+  context;
+
+  /**
+   * 节点的卸载钩子
+   * @type {DevicesTreeNodeUmountHandler|null}
+   */
+  umountHandler;
+
+  /**
    * @constructor
    * @param {string} name
    * @param {DevicesTreeNode|null} parent
@@ -125,6 +147,7 @@ class DevicesTreeNode {
     processor = null,
     defaultPath = "",
     rewritePacket = null,
+    umountHandler = null,
   ) {
     this.name = name;
     this.parent = parent;
@@ -133,6 +156,9 @@ class DevicesTreeNode {
     this.defaultPath = typeof defaultPath === "string" ? defaultPath : "";
     this.rewritePacket =
       typeof rewritePacket === "function" ? rewritePacket : null;
+    this.context = {};
+    this.umountHandler =
+      typeof umountHandler === "function" ? umountHandler : null;
   }
 
   /**
@@ -186,12 +212,34 @@ class DevicesTreeNode {
   }
 
   /**
+   * 设置节点卸载钩子
+   * @param {DevicesTreeNodeUmountHandler|null} umountHandler - 节点卸载钩子
+   * @returns {DevicesTreeNode} 当前节点
+   */
+  setUmountHandler(umountHandler) {
+    this.umountHandler =
+      typeof umountHandler === "function" ? umountHandler : null;
+    return this;
+  }
+
+  /**
    * 获取节点整包改写器
    * @returns {DevicesTreePacketRewriter|null}
    */
   getRewritePacket() {
     if (typeof this.rewritePacket === "function") {
       return this.rewritePacket;
+    }
+    return null;
+  }
+
+  /**
+   * 获取节点卸载钩子
+   * @returns {DevicesTreeNodeUmountHandler|null}
+   */
+  getUmountHandler() {
+    if (typeof this.umountHandler === "function") {
+      return this.umountHandler;
     }
     return null;
   }
@@ -225,15 +273,14 @@ class DevicesTreeNode {
     const normalizedPacket = SignalPacket.from(signalPacket, {
       defaultTo: "/",
     });
-    const baseContext = {
-      ...routeContext,
-      node: this,
-      path: this.path,
-      defaultPath: this.getDefaultPath(),
-      resolvedDefaultPath: this.getDefaultPath()
-        ? DevicesTree.resolvePath(this.path, this.getDefaultPath())
-        : this.path,
-    };
+    const baseContext = routeContext;
+    baseContext.node = this;
+    baseContext.path = this.path;
+    baseContext.defaultPath = this.getDefaultPath();
+    baseContext.resolvedDefaultPath = this.getDefaultPath()
+      ? DevicesTree.resolvePath(this.path, this.getDefaultPath())
+      : this.path;
+    baseContext.nodeContext = this.context;
     const processor = this.getProcessor();
     if (processor) {
       return DevicesTree.normalizeProcessResult(
@@ -249,6 +296,26 @@ class DevicesTreeNode {
     }
 
     return [new SignalPacket("", normalizedPacket.signals)];
+  }
+
+  /**
+   * 在节点被卸载时执行清理。
+   * @param {DevicesTreeRouteContext} routeContext - 卸载上下文
+   * @returns {*}
+   */
+  umount(routeContext = {}) {
+    const baseContext = routeContext;
+    baseContext.node = this;
+    baseContext.path = this.path;
+    baseContext.defaultPath = this.getDefaultPath();
+    baseContext.resolvedDefaultPath = this.getDefaultPath()
+      ? DevicesTree.resolvePath(this.path, this.getDefaultPath())
+      : this.path;
+    baseContext.nodeContext = this.context;
+    const umountHandler = this.getUmountHandler();
+    const result = umountHandler?.(baseContext);
+    this.context = {};
+    return result;
   }
 }
 
@@ -350,6 +417,7 @@ class DevicesTree {
     node.setProcessor(processor);
     node.setDefaultPath(options.defaultPath ?? "");
     node.setRewritePacket(options.rewritePacket ?? null);
+    node.setUmountHandler(options.umount ?? null);
     return node;
   }
 
@@ -372,6 +440,10 @@ class DevicesTree {
 
     if (Object.prototype.hasOwnProperty.call(options, "rewritePacket")) {
       node.setRewritePacket(options.rewritePacket ?? null);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(options, "umount")) {
+      node.setUmountHandler(options.umount ?? null);
     }
 
     return node;
@@ -421,12 +493,26 @@ class DevicesTree {
       throw new Error(`Cannot resolve tool mount path: ${path}`);
     }
 
-    if (!tailNode.getDefaultPath()) {
+    const isToolNode = tailNode.name === "tool";
+    if (!isToolNode && !tailNode.getDefaultPath()) {
       tailNode.setDefaultPath("tool");
     }
 
-    const toolPath = joinPath(tailNode.path, "tool");
-    return this.mount(toolPath, tool.createProcessor(toolContext));
+    const toolPath = isToolNode ? tailNode.path : joinPath(tailNode.path, "tool");
+    return this.mount(toolPath, tool.createProcessor(toolContext), {
+      umount: (routeContext = {}) => {
+        const deviceContext = Object.assign({}, toolContext, routeContext);
+        deviceContext.nodeContext =
+          routeContext.nodeContext ?? routeContext.node?.context ?? {};
+        if (deviceContext.object == null) {
+          deviceContext.object = deviceContext.nodeContext.object;
+        }
+        if (deviceContext.objects == null) {
+          deviceContext.objects = deviceContext.nodeContext.objects;
+        }
+        return tool.umount?.(deviceContext);
+      },
+    });
   }
 
   /**
@@ -471,6 +557,7 @@ class DevicesTree {
           {
             defaultPath: nodeDefinition.defaultPath ?? "",
             rewritePacket: nodeDefinition.rewritePacket ?? null,
+            umount: nodeDefinition.umount ?? null,
           },
         ),
       );
@@ -490,7 +577,18 @@ class DevicesTree {
     const name = segments[segments.length - 1];
     const parentPath = `/${segments.slice(0, -1).join("/")}`;
     const parentNode = this.getNode(parentPath === "/" ? "/" : parentPath);
-    if (!parentNode) return false;
+    const targetNode = this.getNode(path);
+    if (!parentNode || !targetNode) return false;
+
+    const umountRecursively = (node) => {
+      for (const child of [...node.children.values()]) {
+        umountRecursively(child);
+      }
+      node.umount({ tree: this });
+      node.children.clear();
+    };
+
+    umountRecursively(targetNode);
     return parentNode.children.delete(name);
   }
 
@@ -514,11 +612,15 @@ class DevicesTree {
       return [normalizedPacket];
     }
 
-    const normalizedNextPackets = targetNode.process(normalizedPacket, {
+    const nextRouteContext = {
       ...routeContext,
       tree: this,
       depth,
-    });
+    };
+    const normalizedNextPackets = targetNode.process(
+      normalizedPacket,
+      nextRouteContext,
+    );
 
     if (normalizedNextPackets.length === 0) {
       return [];
@@ -547,7 +649,7 @@ class DevicesTree {
         return [resolvedPacket];
       }
       return this.dispatch(resolvedPacket, {
-        ...routeContext,
+        ...nextRouteContext,
         depth: depth + 1,
       });
     });

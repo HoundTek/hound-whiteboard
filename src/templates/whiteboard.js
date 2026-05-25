@@ -78,6 +78,7 @@ const emitMousePacket = (event) => {
   const signals = [];
 
   if (event.type === "mousedown") {
+    event.preventDefault();
     if (event.button === 0) {
       logDemoStatus("当前输入", "左键黑笔");
     } else if (event.button === 2) {
@@ -145,6 +146,12 @@ monitor.canvas.addEventListener("mousemove", emitMousePacket);
 window.addEventListener("mouseup", emitMousePacket);
 monitor.canvas.addEventListener("mouseleave", emitMousePacket);
 monitor.canvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
+monitor.canvas.addEventListener("dragstart", (event) => {
+  event.preventDefault();
+});
+monitor.canvas.addEventListener("selectstart", (event) => {
   event.preventDefault();
 });
 

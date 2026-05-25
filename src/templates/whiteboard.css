@@ -202,6 +202,11 @@ body {
   z-index: 1;
   pointer-events: auto;
   background-color: transparent;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .monitor-layer-ui {
