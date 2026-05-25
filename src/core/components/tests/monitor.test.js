@@ -406,4 +406,95 @@ describe("Monitor", () => {
     baseInvalidateSpy.mockRestore();
     liveInvalidateSpy.mockRestore();
   });
+
+  test("setViewportScaleAroundCenter 应以视口中心为锚点更新 origin 与 zoom", () => {
+    const monitor = createMonitor("iota-scale-center");
+    const liveInvalidateSpy = jest
+      .spyOn(monitor.renderScheduler, "invalidate")
+      .mockImplementation(() => false);
+
+    monitor.setViewportScaleAroundCenter(2);
+
+    expect(monitor.zoom).toBe(2);
+    expect(monitor.origin.serialize()).toEqual({ x: 200, y: 150 });
+    expect(liveInvalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+
+    liveInvalidateSpy.mockRestore();
+  });
+
+  test("flushViewportRender 应触发 base/live 全视口刷新", () => {
+    const monitor = createMonitor("kappa-flush");
+    const syncSpy = jest
+      .spyOn(monitor, "syncChunkBufferWithViewport")
+      .mockImplementation(() => []);
+    const baseInvalidateSpy = jest
+      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .mockImplementation(() => false);
+    const liveInvalidateSpy = jest
+      .spyOn(monitor.renderScheduler, "invalidate")
+      .mockImplementation(() => false);
+
+    monitor.flushViewportRender();
+
+    expect(syncSpy).toHaveBeenCalledTimes(1);
+    expect(baseInvalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+    expect(liveInvalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+
+    syncSpy.mockRestore();
+    baseInvalidateSpy.mockRestore();
+    liveInvalidateSpy.mockRestore();
+  });
+
+  test("memory board 的视口同步应增量扩展 chunk buffer，而不是 reset", () => {
+    const chunk1 = Chunk.fromId(1);
+    const chunk2 = Chunk.fromId(2);
+    const monitor = createMonitor("lambda-memory-sync");
+    const bufferState = {
+      bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+      chunks: [chunk1],
+    };
+
+    monitor.board.isPersistent = () => false;
+    monitor.chunkBlockLoader = {
+      chunkLoader: {
+        emitBufferUpdated() {
+          return true;
+        },
+      },
+      getLoadedChunks() {
+        return bufferState.chunks;
+      },
+      getBufferBounds() {
+        return { ...bufferState.bounds };
+      },
+      resetBuffer: jest.fn(),
+      initChunkByCoordinate: jest.fn(() => chunk1),
+      expandBufferLeftFullLoad: jest.fn(() => false),
+      expandBufferRightFullLoad: jest.fn(() => {
+        bufferState.bounds.maxX = 1;
+        bufferState.chunks = [chunk1, chunk2];
+        return true;
+      }),
+      expandBufferUpFullLoad: jest.fn(() => false),
+      expandBufferDownFullLoad: jest.fn(() => false),
+    };
+
+    jest
+      .spyOn(monitor, "getVisibleChunksForViewport")
+      .mockReturnValue([chunk1, chunk2]);
+
+    const currentChunks = monitor.syncChunkBufferWithViewport();
+
+    expect(currentChunks).toEqual([chunk1, chunk2]);
+    expect(monitor.chunkBlockLoader.resetBuffer).not.toHaveBeenCalled();
+    expect(
+      monitor.chunkBlockLoader.expandBufferRightFullLoad,
+    ).toHaveBeenCalledTimes(1);
+  });
 });

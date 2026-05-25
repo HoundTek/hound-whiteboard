@@ -1,10 +1,8 @@
 import { jest } from "@jest/globals";
-import {
-  BOARD_PERSISTENCE_MODES,
-  Board,
-} from "../../../core/components/board.js";
+import { Board } from "../../../core/components/board.js";
 import { boardFileOperateBridge } from "../../../core/bridges/file-operate-bridge-renderer.js";
 import { Monitor } from "../../../core/components/monitor.js";
+import { RectangleRange } from "../../../core/range/index.js";
 import { Vector } from "../../../core/utils/math.js";
 import { CircleObject } from "../../../core/objects/graph/circle.js";
 import { StrokeObject } from "../../../core/objects/stroke/stroke.js";
@@ -14,14 +12,13 @@ import {
   DEMO_PRIMARY_STROKE_COLOR,
   DEMO_SECONDARY_STROKE_COLOR,
 } from "../whiteboard-demo.js";
+import { DebuggerTool } from "../debugger-tool.js";
 import { RandomCircleCreatorTool } from "../random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "../wasd-coordinate-tool.js";
 
 describe("whiteboard demo", () => {
   function createDemoBoard() {
-    return new Board({
-      persistenceMode: BOARD_PERSISTENCE_MODES.MEMORY,
-    });
+    return new Board();
   }
 
   function createCanvas() {
@@ -478,5 +475,126 @@ describe("whiteboard demo", () => {
     });
 
     expect(wasdCoordinateTool.position.serialize()).toEqual({ x: 1, y: -1 });
+  });
+
+  test("demo 配置后方向键应平移 Monitor 视口", () => {
+    const board = createDemoBoard();
+    const monitor = createMonitor(board, "main");
+
+    configureWhiteboardDemo(board, monitor);
+
+    monitor.origin = new Vector(0, 0);
+    board.signalsEventBus.emit("input", {
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: {
+            key: "ArrowRight",
+            code: "ArrowRight",
+            repeat: false,
+          },
+        },
+      ],
+    });
+    board.signalsEventBus.emit("input", {
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: {
+            key: "ArrowDown",
+            code: "ArrowDown",
+            repeat: false,
+          },
+        },
+      ],
+    });
+
+    expect(monitor.origin.serialize()).toEqual({ x: 200, y: 200 });
+  });
+
+  test("demo 配置后 + 键应以视口中心为锚点缩放", () => {
+    const board = createDemoBoard();
+    const monitor = createMonitor(board, "main");
+
+    configureWhiteboardDemo(board, monitor);
+
+    monitor.origin = new Vector(0, 0);
+    monitor.zoom = 1;
+    board.signalsEventBus.emit("input", {
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: {
+            key: "+",
+            code: "Equal",
+            repeat: false,
+            shiftKey: true,
+          },
+        },
+      ],
+    });
+
+    expect(monitor.zoom).toBe(2);
+    expect(monitor.origin.serialize()).toEqual({ x: 200, y: 150 });
+  });
+
+  test("demo 配置后 R 键应触发视口全屏刷新，且不再落到 debugger-tool", () => {
+    const board = createDemoBoard();
+    const monitor = createMonitor(board, "main");
+    const debugTool = new DebuggerTool();
+    const debugSpy = jest.spyOn(debugTool, "process");
+    const baseInvalidateSpy = jest
+      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .mockImplementation(() => false);
+    const liveInvalidateSpy = jest
+      .spyOn(monitor.renderScheduler, "invalidate")
+      .mockImplementation(() => false);
+
+    configureWhiteboardDemo(board, monitor, { debugTool });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: {
+            key: "r",
+            code: "KeyR",
+            repeat: false,
+          },
+        },
+      ],
+    });
+
+    expect(baseInvalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+    expect(liveInvalidateSpy).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 800, 600),
+    );
+    expect(debugSpy).not.toHaveBeenCalled();
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: {
+            key: "m",
+            code: "KeyM",
+            repeat: false,
+          },
+        },
+      ],
+    });
+
+    expect(debugSpy).toHaveBeenCalledTimes(1);
+
+    debugSpy.mockRestore();
+    baseInvalidateSpy.mockRestore();
+    liveInvalidateSpy.mockRestore();
   });
 });

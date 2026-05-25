@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { BOARD_PERSISTENCE_MODES, Board } from "../board.js";
+import { Board } from "../board.js";
 import { Chunk } from "../chunk.js";
 import { CHUNK_LOAD_EVENTS } from "../chunk-loader.js";
 import { StrokeObject } from "../../objects/stroke/stroke.js";
@@ -73,7 +73,9 @@ describe("Board chunk grid", () => {
   });
 
   test("Board 应通过根 ChunkLoader 暴露区块访问与卸载能力", () => {
-    const board = new Board();
+    const board = new Board({
+      rootPath: "/tmp/hwb-board-test",
+    });
     const chunkLoader = board.getChunkLoader();
 
     const center = board.getChunkById(1);
@@ -87,6 +89,20 @@ describe("Board chunk grid", () => {
     chunkLoader.getChunkByCoordinate(0, 1);
     expect(chunkLoader.clear()).toBe(true);
     expect(board.chunkLoaded.size).toBe(0);
+  });
+
+  test("memory board 的根 ChunkLoader 不应真正卸载区块", () => {
+    const board = new Board({});
+    const chunkLoader = board.getChunkLoader();
+    const chunk = chunkLoader.getChunkByCoordinate(0, 0);
+    chunk.isLoad = true;
+    chunk.isTempLoad = false;
+
+    const unloadSpy = jest.spyOn(chunk, "unload").mockReturnValue(true);
+
+    expect(chunkLoader.unloadChunkById(chunk.id)).toBe(false);
+    expect(unloadSpy).not.toHaveBeenCalled();
+    expect(board.chunkLoaded.has(chunk.id)).toBe(true);
   });
 
   test("Board 应响应根 ChunkLoader 直接发出的完整加载请求", async () => {
@@ -184,7 +200,7 @@ describe("Board chunk grid", () => {
       },
     );
 
-    expect(board.getPersistenceMode()).toBe(BOARD_PERSISTENCE_MODES.FILESYSTEM);
+    expect(board.isPersistent()).toBe(true);
     expect(results).toHaveLength(1);
     await new Promise((resolve) => setImmediate(resolve));
     expect(loadTierGraphSpy).toHaveBeenCalled();
@@ -198,7 +214,7 @@ describe("Board chunk grid", () => {
   });
 
   test("Board 应响应根 ChunkLoader 直接发出的卸载请求", async () => {
-    const board = new Board();
+    const board = new Board({ rootPath: "/tmp/hwb-board-test" });
     const chunkLoader = board.getChunkLoader();
     const chunk = chunkLoader.getChunkByCoordinate(0, 0);
     chunk.isLoad = true;
@@ -227,6 +243,38 @@ describe("Board chunk grid", () => {
     expect(
       board.chunkLoaded.get(chunk.id)?.loaderStrategy.has("board-root"),
     ).toBe(false);
+  });
+
+  test("memory board 应忽略区块卸载请求", async () => {
+    const board = new Board();
+    const chunkLoader = board.getChunkLoader();
+    const chunk = chunkLoader.getChunkByCoordinate(0, 0);
+    chunk.isLoad = true;
+    chunk.isTempLoad = false;
+    board.chunkLoaded.set(chunk.id, {
+      chunk,
+      tempLoadedCount: 0,
+      fullLoadedCount: 1,
+      loaderStrategy: new Map([["board-root", "full"]]),
+    });
+    const unloadSpy = jest.spyOn(chunk, "unload").mockReturnValue(true);
+
+    const results = board.chunkLoadEventBus.emit(
+      CHUNK_LOAD_EVENTS.REQUEST_UNLOAD,
+      {
+        requesterId: "board-root",
+        chunk,
+        source: "test",
+      },
+    );
+
+    expect(results).toHaveLength(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(unloadSpy).not.toHaveBeenCalled();
+    expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount).toBe(1);
+    expect(
+      board.chunkLoaded.get(chunk.id)?.loaderStrategy.has("board-root"),
+    ).toBe(true);
   });
 
   test("Board.addObject 应将对象加入归属区块并同步覆盖区块索引", () => {

@@ -13,6 +13,8 @@ import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { RandomCircleCreatorTool } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
+import { MonitorViewportTool } from "./monitor-viewport-tool.js";
+import { Vector } from "../../core/utils/math.js";
 
 const DEMO_PRIMARY_STROKE_COLOR = "#000000";
 const DEMO_SECONDARY_STROKE_COLOR = "#ff0000";
@@ -22,10 +24,19 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "KeyA",
   "KeyS",
   "KeyD",
+  "KeyF",
   "KeyQ",
   "KeyE",
   "KeyR",
   "KeyT",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Equal",
+  "Minus",
+  "NumpadAdd",
+  "NumpadSubtract",
   "Digit1",
   "Digit2",
   "Digit3",
@@ -36,8 +47,11 @@ const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
   MOVE: "tools/move",
   RANDOM_CIRCLE: "tools/create-circle",
   DEBUG: "tools/debug",
+  VIEWPORT: "tools/viewport",
 });
 
+const DEMO_VIEWPORT_POSITION_STEP = 200;
+const DEMO_VIEWPORT_SCALE_FACTOR = 0.5;
 const WASD_ROUTE_PRESETS = Object.freeze({
   KeyW: Object.freeze({ x: 0, y: -1 }),
   KeyA: Object.freeze({ x: -1, y: 0 }),
@@ -59,6 +73,89 @@ function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
       return {
         to: relativeToolPath,
         signals: triggerSignals,
+      };
+    },
+  };
+}
+
+function buildViewportPositionNodeConfig(monitor, delta) {
+  return {
+    rewritePacket(packet) {
+      const triggerSignals = packet.signals.filter(
+        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+      );
+
+      if (triggerSignals.length === 0) {
+        return [];
+      }
+
+      return {
+        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
+        signals: triggerSignals.map((signal) => ({
+          type: "position",
+          context: {
+            value: {
+              x: monitor.origin.x + (delta?.x ?? 0),
+              y: monitor.origin.y + (delta?.y ?? 0),
+            },
+            code: signal?.context?.code,
+            key: signal?.context?.key,
+            sourceType: signal.type,
+          },
+        })),
+      };
+    },
+  };
+}
+
+function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
+  return {
+    rewritePacket(packet) {
+      const triggerSignals = packet.signals.filter(
+        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+      );
+
+      if (triggerSignals.length === 0) {
+        return [];
+      }
+
+      return {
+        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
+        signals: triggerSignals.map((signal) => ({
+          type: "scale",
+          context: {
+            value: scaleTransformer(monitor.zoom),
+            code: signal?.context?.code,
+            key: signal?.context?.key,
+            sourceType: signal.type,
+          },
+        })),
+      };
+    },
+  };
+}
+
+function buildViewportFlushNodeConfig() {
+  return {
+    rewritePacket(packet) {
+      const triggerSignals = packet.signals.filter(
+        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+      );
+
+      if (triggerSignals.length === 0) {
+        return [];
+      }
+
+      return {
+        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
+        signals: triggerSignals.map((signal) => ({
+          type: "flush",
+          context: {
+            code: signal?.context?.code,
+            key: signal?.context?.key,
+            sourceType: signal.type,
+          },
+        })),
       };
     },
   };
@@ -137,6 +234,8 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options.randomCircleTool ?? new RandomCircleCreatorTool();
   const wasdCoordinateTool =
     options.wasdCoordinateTool ?? new WasdCoordinateTool();
+  const monitorViewportTool =
+    options.monitorViewportTool ?? new MonitorViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
@@ -162,6 +261,10 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     tool: wasdCoordinateTool,
   });
   effectiveBoard.signalsEventBus.emit("mount", {
+    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
+    tool: monitorViewportTool,
+  });
+  effectiveBoard.signalsEventBus.emit("mount", {
     to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.DEBUG}`,
     tool: debugTool,
   });
@@ -180,19 +283,80 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   }
 
   effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyQ`,
-    options: buildKeyboardDebugNodeConfig("debug:chunkload"),
+    to: `/${monitor.monitorId}/keyboard/code/ArrowUp`,
+    options: buildViewportPositionNodeConfig(
+      monitor,
+      new Vector(0, -1).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
+    ),
   });
   effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyE`,
-    options: buildKeyboardDebugNodeConfig("debug:objectload"),
+    to: `/${monitor.monitorId}/keyboard/code/ArrowDown`,
+    options: buildViewportPositionNodeConfig(
+      monitor,
+      new Vector(0, 1).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
+    ),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/ArrowLeft`,
+    options: buildViewportPositionNodeConfig(
+      monitor,
+      new Vector(-1, 0).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
+    ),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/ArrowRight`,
+    options: buildViewportPositionNodeConfig(
+      monitor,
+      new Vector(1, 0).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
+    ),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/Equal`,
+    options: buildViewportScaleNodeConfig(
+      monitor,
+      (zoom) => zoom / DEMO_VIEWPORT_SCALE_FACTOR,
+    ),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/NumpadAdd`,
+    options: buildViewportScaleNodeConfig(
+      monitor,
+      (zoom) => zoom / DEMO_VIEWPORT_SCALE_FACTOR,
+    ),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/Minus`,
+    options: buildViewportScaleNodeConfig(
+      monitor,
+      (zoom) => zoom * DEMO_VIEWPORT_SCALE_FACTOR,
+    ),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/NumpadSubtract`,
+    options: buildViewportScaleNodeConfig(
+      monitor,
+      (zoom) => zoom * DEMO_VIEWPORT_SCALE_FACTOR,
+    ),
   });
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/KeyR`,
+    options: buildViewportFlushNodeConfig(),
+  });
+
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyC`,
+    options: buildKeyboardDebugNodeConfig("debug:chunkload"),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyO`,
+    options: buildKeyboardDebugNodeConfig("debug:objectload"),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyM`,
     options: buildKeyboardDebugNodeConfig("debug:aom"),
   });
   effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyT`,
+    to: `/${monitor.monitorId}/keyboard/code/KeyB`,
     options: buildKeyboardDebugNodeConfig("debug:board"),
   });
   effectiveBoard.signalsEventBus.emit("configure", {
@@ -212,13 +376,15 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 4 }),
   });
 
+  console.log(`[whiteboard-demo] viewport keys: arrows=pan, +/-=zoom, R=flush`);
   console.log(
-    `[whiteboard-demo] debug keys: Q=chunkload, E=objectload, R=aom, T=board, 1/2/3/4=chunk detail`,
+    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, 1/2/3/4=chunk detail`,
   );
 
   return {
     keyboardDevice,
     mouseDevice,
+    monitorViewportTool,
     primaryStrokeTool,
     secondaryStrokeTool,
     randomCircleTool,
@@ -230,10 +396,15 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
 export {
   buildKeyboardTriggerForwardNodeConfig,
   buildWasdNodeConfig,
+  buildViewportFlushNodeConfig,
+  buildViewportPositionNodeConfig,
+  buildViewportScaleNodeConfig,
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
   DEMO_KEYBOARD_TOOL_PATHS,
   DEMO_PRIMARY_STROKE_COLOR,
   DEMO_SECONDARY_STROKE_COLOR,
+  DEMO_VIEWPORT_POSITION_STEP,
+  DEMO_VIEWPORT_SCALE_FACTOR,
   WASD_ROUTE_PRESETS,
 };

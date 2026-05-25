@@ -90,6 +90,13 @@ graph TD
 - `KeyS`、`KeyD` 同理
 - 最终 `/tools/move/tool` 只需要消费统一的 `position` 信号，而不需要知道具体是哪一个键发来的
 
+同样的模式也适合视口工具：
+
+- 方向键节点可把 `trigger` 改写为 `position`，其值是新的视口原点
+- `+` / `-` 节点可把 `trigger` 改写为 `scale`，其值是新的目标缩放比
+- 某个刷新键可把 `trigger` 改写为 `flush`
+- 它们最终都可汇流到同一个 `/tools/viewport` 工具节点
+
 对应配置形态如下：
 
 ```javascript
@@ -128,6 +135,7 @@ board.signalsEventBus.emit("mount", {
 - 具体键位节点负责“把键盘事件翻译成工具真正关心的语义，并转发到 tools 子树”
 - 公共节点负责“给同一类工具提供稳定的接入点”
 - 工具不再关心 `KeyW`、`KeyA` 这些具体键位，只关心 `position` 这类统一信号
+- 对于视口类工具，`/code/<KeyCode>` 节点推荐直接输出“目标视口状态”而不是“按键增量”，这样 Monitor 侧 API 可以保持稳定，还可以减小累积误差
 
 无论是 `/code/<KeyCode>` 还是别的节点，都统一通过 `nodeConfigs` 声明，因为它直接映射到通用 `DevicesTreeNode` 配置。
 

@@ -246,14 +246,7 @@ class Monitor {
   }
 
   set origin(value) {
-    const previousChunks = this.getVisibleChunksForViewport();
-    const previousViewportState = {
-      origin: this.origin,
-      zoom: this.zoom,
-    };
-    this._origin =
-      value instanceof Vector ? value : new Vector(value.x, value.y);
-    this.requestViewportBaseRender(previousChunks, previousViewportState);
+    this.setViewportState({ origin: value });
   }
 
   /**
@@ -265,13 +258,128 @@ class Monitor {
   }
 
   set zoom(value) {
+    this.setViewportState({ zoom: value });
+  }
+
+  /**
+   * 获取当前视口屏幕中心点
+   * @returns {Vector}
+   */
+  getViewportScreenCenter() {
+    return new Vector(
+      (this.canvas?.width ?? 0) / 2,
+      (this.canvas?.height ?? 0) / 2,
+    );
+  }
+
+  /**
+   * 以当前视口参数将屏幕点映射到世界坐标
+   * @param {Vector | {x:number, y:number}} screenPoint - 屏幕坐标
+   * @param {Vector} [origin = this.origin] - 视口原点
+   * @param {number} [zoom = this.zoom] - 缩放因子
+   * @returns {Vector}
+   */
+  screenPointToWorld(screenPoint, origin = this.origin, zoom = this.zoom) {
+    const normalizedPoint =
+      screenPoint instanceof Vector
+        ? screenPoint
+        : new Vector(screenPoint?.x ?? 0, screenPoint?.y ?? 0);
+
+    return new Vector(
+      normalizedPoint.x / zoom + origin.x,
+      normalizedPoint.y / zoom + origin.y,
+    );
+  }
+
+  /**
+   * 统一更新视口状态，并触发 base/live 补绘
+   * @param {{ origin?: Vector | {x:number, y:number}, zoom?: number }} nextState - 新视口状态
+   */
+  setViewportState(nextState = {}) {
     const previousChunks = this.getVisibleChunksForViewport();
     const previousViewportState = {
       origin: this.origin,
       zoom: this.zoom,
     };
-    this._zoom = Number.isFinite(value) && value > 0 ? value : 1;
+    const nextOrigin =
+      nextState.origin === undefined
+        ? this.origin
+        : nextState.origin instanceof Vector
+          ? nextState.origin
+          : new Vector(
+              nextState.origin?.x ?? this.origin.x,
+              nextState.origin?.y ?? this.origin.y,
+            );
+    const nextZoom =
+      nextState.zoom === undefined
+        ? this.zoom
+        : Number.isFinite(nextState.zoom) && nextState.zoom > 0
+          ? nextState.zoom
+          : this.zoom;
+
+    this._origin = nextOrigin;
+    this._zoom = nextZoom;
     this.requestViewportBaseRender(previousChunks, previousViewportState);
+    this.requestViewportLiveRender();
+  }
+
+  /**
+   * 将视口原点移动到指定世界坐标
+   * @param {Vector | {x:number, y:number}} position - 新视口原点
+   */
+  setViewportPosition(position) {
+    this.setViewportState({ origin: position });
+  }
+
+  /**
+   * 以指定屏幕锚点调整缩放因子
+   * @param {number} scale - 新缩放因子
+   * @param {Vector | {x:number, y:number}} [screenAnchor = this.getViewportScreenCenter()] - 屏幕锚点
+   */
+  setViewportScale(scale, screenAnchor = this.getViewportScreenCenter()) {
+    const nextZoom = Number.isFinite(scale) && scale > 0 ? scale : this.zoom;
+    const normalizedAnchor =
+      screenAnchor instanceof Vector
+        ? screenAnchor
+        : new Vector(screenAnchor?.x ?? 0, screenAnchor?.y ?? 0);
+    const anchorWorld = this.screenPointToWorld(normalizedAnchor);
+
+    this.setViewportState({
+      zoom: nextZoom,
+      origin: new Vector(
+        anchorWorld.x - normalizedAnchor.x / nextZoom,
+        anchorWorld.y - normalizedAnchor.y / nextZoom,
+      ),
+    });
+  }
+
+  /**
+   * 以当前视口中心点为锚点调整缩放
+   * @param {number} scale - 新缩放因子
+   */
+  setViewportScaleAroundCenter(scale) {
+    this.setViewportScale(scale, this.getViewportScreenCenter());
+  }
+
+  /**
+   * 请求一次视口范围内的活动层补绘
+   */
+  requestViewportLiveRender() {
+    const viewportRect = this.getViewportScreenRect();
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
+    this.renderScheduler?.invalidate?.(viewportRect);
+  }
+
+  /**
+   * 强制刷新当前视口的 base/live 全屏渲染
+   */
+  flushViewportRender() {
+    const viewportRect = this.getViewportScreenRect();
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
+
+    this.syncChunkBufferWithViewport();
+    this.baseRenderScheduler?.invalidate?.(viewportRect);
+    this.renderScheduler?.invalidate?.(viewportRect);
   }
 
   /**
@@ -451,6 +559,10 @@ class Monitor {
   syncChunkBufferWithViewport(origin = this.origin, zoom = this.zoom) {
     const visibleChunks = this.getVisibleChunksForViewport(origin, zoom);
     const chunkBlockLoader = this.chunkBlockLoader;
+    const shouldPreserveLoadedChunks =
+      typeof this.board?.isPersistent === "function"
+        ? !this.board.isPersistent()
+        : false;
 
     if (
       !chunkBlockLoader?.getLoadedChunks ||
@@ -472,14 +584,17 @@ class Monitor {
     );
 
     if (
-      visibleChunkIds.size === loadedChunkIds.size &&
-      [...visibleChunkIds].every((chunkId) => loadedChunkIds.has(chunkId))
+      [...visibleChunkIds].every((chunkId) => loadedChunkIds.has(chunkId)) &&
+      (shouldPreserveLoadedChunks ||
+        visibleChunkIds.size === loadedChunkIds.size)
     ) {
       return visibleChunks;
     }
 
     if (visibleChunks.length === 0) {
-      chunkBlockLoader.resetBuffer();
+      if (!shouldPreserveLoadedChunks) {
+        chunkBlockLoader.resetBuffer();
+      }
       return visibleChunks;
     }
 
@@ -489,6 +604,49 @@ class Monitor {
     const maxX = Math.max(...chunkXs);
     const minY = Math.min(...chunkYs);
     const maxY = Math.max(...chunkYs);
+
+    if (shouldPreserveLoadedChunks) {
+      const currentBounds = chunkBlockLoader.getBufferBounds?.();
+      const hasLoadedChunks =
+        (chunkBlockLoader.getLoadedChunks?.()?.length ?? 0) > 0;
+
+      if (!hasLoadedChunks || !currentBounds) {
+        const firstChunk = chunkBlockLoader.initChunkByCoordinate(minX, minY);
+        if (!firstChunk) {
+          return visibleChunks;
+        }
+
+        for (let currentX = minX + 1; currentX <= maxX; currentX += 1) {
+          chunkBlockLoader.expandBufferRightFullLoad?.();
+        }
+
+        for (let currentY = minY + 1; currentY <= maxY; currentY += 1) {
+          chunkBlockLoader.expandBufferUpFullLoad?.();
+        }
+
+        return visibleChunks;
+      }
+
+      let nextBounds = currentBounds;
+      while (nextBounds.minX > minX) {
+        chunkBlockLoader.expandBufferLeftFullLoad?.();
+        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
+      }
+      while (nextBounds.maxX < maxX) {
+        chunkBlockLoader.expandBufferRightFullLoad?.();
+        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
+      }
+      while (nextBounds.minY > minY) {
+        chunkBlockLoader.expandBufferDownFullLoad?.();
+        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
+      }
+      while (nextBounds.maxY < maxY) {
+        chunkBlockLoader.expandBufferUpFullLoad?.();
+        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
+      }
+
+      return visibleChunks;
+    }
 
     chunkBlockLoader.resetBuffer();
     const firstChunk = chunkBlockLoader.initChunkByCoordinate(minX, minY);

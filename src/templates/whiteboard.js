@@ -1,14 +1,13 @@
 import { Vector } from "../core/utils/math.js";
-import { BOARD_PERSISTENCE_MODES, Board } from "../core/components/board.js";
+import { Board } from "../core/components/board.js";
 import {
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
 } from "./demo/whiteboard-demo.js";
+import { MonitorViewportTool } from "./demo/monitor-viewport-tool.js";
 import { WasdCoordinateTool } from "./demo/wasd-coordinate-tool.js";
 
-const board = new Board({
-  persistenceMode: BOARD_PERSISTENCE_MODES.MEMORY,
-});
+const board = new Board();
 board.width = 800;
 board.height = 600;
 
@@ -40,12 +39,30 @@ const wasdCoordinateTool = new WasdCoordinateTool({
     logDemoStatus("WASD 坐标", position.serialize());
   },
 });
+const monitorViewportTool = new MonitorViewportTool({
+  onViewportChange(targetMonitor) {
+    logDemoStatus("视口状态", {
+      origin: targetMonitor.origin.serialize(),
+      zoom: targetMonitor.zoom,
+    });
+  },
+  onFlush(targetMonitor) {
+    logDemoStatus("视口全屏刷新", {
+      origin: targetMonitor.origin.serialize(),
+      zoom: targetMonitor.zoom,
+    });
+  },
+});
 
 logDemoStatus("左键工具", "黑色笔划对象");
 logDemoStatus("右键工具", "红色笔划对象");
 logDemoStatus("空格工具", "随机圆对象");
 logDemoStatus("WASD 初始坐标", { x: 0, y: 0 });
-configureWhiteboardDemo(board, monitor, { wasdCoordinateTool });
+logDemoStatus("视口快捷键", "方向键平移，+/- 缩放，R 全屏刷新");
+configureWhiteboardDemo(board, monitor, {
+  wasdCoordinateTool,
+  monitorViewportTool,
+});
 
 const resizeMonitor = () => {
   const width = window.innerWidth;
@@ -149,10 +166,22 @@ const emitKeyboardPacket = (event) => {
     if (event.code === "Space") {
       logDemoStatus("当前输入", "空格随机圆");
     } else if (
-      event.code === "KeyQ" ||
-      event.code === "KeyE" ||
-      event.code === "KeyR" ||
-      event.code === "KeyT" ||
+      event.code === "ArrowUp" ||
+      event.code === "ArrowDown" ||
+      event.code === "ArrowLeft" ||
+      event.code === "ArrowRight" ||
+      event.code === "Equal" ||
+      event.code === "Minus" ||
+      event.code === "NumpadAdd" ||
+      event.code === "NumpadSubtract" ||
+      event.code === "KeyR"
+    ) {
+      logDemoStatus("当前输入", `viewport ${event.code}`);
+    } else if (
+      event.code === "KeyC" ||
+      event.code === "KeyO" ||
+      event.code === "KeyM" ||
+      event.code === "KeyB" ||
       event.code.startsWith("Digit")
     ) {
       logDemoStatus("当前输入", `debug ${event.code}`);

@@ -35,28 +35,33 @@
 
 ## 核心字段
 
-| 名称                        | 描述                       | 类型                                                                       |
-| --------------------------- | -------------------------- | -------------------------------------------------------------------------- |
-| `undoTree`                  | 时间回溯树                 | `UndoTree`                                                                 |
-| `activeObjectManager`       | 活动对象管理器             | `ActiveObjectManager`                                                      |
-| `chunkLoaded`               | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
-| `objectLoaded`              | 对象 id 到对象加载状态映射 | `Map<number, { obj, loadedCount }>`                                        |
-| `rootChunkLoader`           | 白板根区块加载器           | `ChunkLoader`                                                              |
-| `chunkLoadEventBus`         | 区块加载事件总线           | `EventBus`                                                                 |
-| `signalsEventBus`           | 设备信号事件总线           | `EventBus`                                                                 |
-| `monitors`                  | 已挂接 monitor 集合        | `Map<string, Monitor>`                                                     |
-| `width`/`height`            | 白板尺寸                   | `number`                                                                   |
-| `rootPath`                  | 白板根路径                 | `string \| undefined`                                                      |
-| `objectCounterPool`         | 对象 id 池                 | `CounterPool`                                                              |
+| 名称                  | 描述                       | 类型                                                                       |
+| --------------------- | -------------------------- | -------------------------------------------------------------------------- |
+| `undoTree`            | 时间回溯树                 | `UndoTree`                                                                 |
+| `activeObjectManager` | 活动对象管理器             | `ActiveObjectManager`                                                      |
+| `chunkLoaded`         | 区块 id 到区块加载状态映射 | `Map<number, { chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }>` |
+| `objectLoaded`        | 对象 id 到对象加载状态映射 | `Map<number, { obj, loadedCount }>`                                        |
+| `rootChunkLoader`     | 白板根区块加载器           | `ChunkLoader`                                                              |
+| `chunkLoadEventBus`   | 区块加载事件总线           | `EventBus`                                                                 |
+| `signalsEventBus`     | 设备信号事件总线           | `EventBus`                                                                 |
+| `monitors`            | 已挂接 monitor 集合        | `Map<string, Monitor>`                                                     |
+| `width`/`height`      | 白板尺寸                   | `number`                                                                   |
+| `rootPath`            | 白板根路径                 | `string \| undefined`                                                      |
+| `objectCounterPool`   | 对象 id 池                 | `CounterPool`                                                              |
 
 ## 持久化模式
 
-当前实现没有独立的 `persistenceMode` 配置字段，只有一条规则：
+持久化模式由一条规则推导：
 
 - 传入有效 `rootPath` 时，`Board.getPersistenceMode()` 返回 `filesystem`
 - 未传或传入空白 `rootPath` 时，返回 `memory`
 - `resolvePersistenceRootPath(...)` 会在 `memory` 模式下统一返回 `undefined`
-- 区块 tier graph 与对象 entries 的文件访问逻辑都以此为前提短路
+- 区块 tier graph 与对象 entries 的文件访问逻辑都以前述入口短路
+
+这里有一个当前阶段的重要约束：
+
+- `memory` 模式下，区块卸载请求会在 `Board` 落地层被直接拒绝
+- 这意味着纯内存白板里的区块一旦进入运行时，就默认继续常驻，适合 demo 与非持久化会话
 
 ## 区块加载协调流程
 
@@ -68,7 +73,7 @@
 2. `Board` 记录请求方对该区块的持有策略，维护 `tempLoadedCount`、`fullLoadedCount` 与 `loaderStrategy`。
 3. 若目标策略为 `full`，则执行 `Chunk.loadFull(...)`；若只是 `temp`，则执行 `Chunk.loadTemp(...)` 或保持现状。
 4. 当区块进入或退出完整加载时，`Board` 会同步该区块涉及对象的 `loadedCount` 与对象实例注册表。
-5. 当完整持有者清零但仍有临时持有者时，区块从完整加载降级为临时加载；只有全部持有都清零时才真正卸载。
+5. 当完整持有者清零但仍有临时持有者时，区块从完整加载降级为临时加载；只有全部持有都清零且当前为 `filesystem` 模式时才真正卸载。
 
 也就是说，`Board` 当前最关键的职责不是“整板一次性载入”，而是“在多请求方并存时保证区块与对象引用计数一致”。
 
@@ -175,7 +180,8 @@
 - 同一个 `Board` 可以挂接多个 `ChunkBlockLoader`
 - 某区块只要仍被任意一个 `ChunkBlockLoader` 持有，就不能真正卸载
 - 若某区块的完整加载持有者清零，但仍有临时加载持有者，则该区块应从完整加载降级为临时加载
-- 只有当完整加载持有者和临时加载持有者都清零时，该区块才会真正卸载
+- 只有当完整加载持有者和临时加载持有者都清零，且当前白板允许持久化时，该区块才会真正卸载
+- 若当前白板处于 `memory` 模式，则卸载请求会保留为 no-op，不会驱逐已进入运行时的区块
 
 ### 典型协作流程
 
@@ -224,7 +230,7 @@
 
 ## 实现状态
 
-- 已实现：根 `ChunkLoader` 区块持有、区块加载事件协调、白板级对象注册表、对象 `loadedCount` 维护、活动对象管理器/历史树挂载、monitor 创建、设备信号转发、多 `ChunkBlockLoader` 引用计数与完整区块降级。
+- 已实现：根 `ChunkLoader` 区块持有、区块加载事件协调、白板级对象注册表、对象 `loadedCount` 维护、活动对象管理器/历史树挂载、monitor 创建、设备信号转发、多 `ChunkBlockLoader` 引用计数与完整区块降级、显式持久化模式、memory 模式文件桥短路与区块常驻。
 - 待完善：白板整体快照读写入口、对象计数池初始化恢复、历史与设备状态恢复、区块与对象全链路落盘。
 
 ## 相关文档
