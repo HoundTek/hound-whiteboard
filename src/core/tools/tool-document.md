@@ -93,7 +93,23 @@
 
 对象创建工具是用来创建对象的工具，对于每种对象，都有一个对应的对象创建工具。
 
-比如笔刷工具就是一种对象创建工具。笔刷工具也有很多种，比如铅笔、钢笔等。
+它们不仅负责生成对象实例，还要处理创建过程中的连续几何变更，例如起点、拖动、尺寸调整、控制点变化、完成或取消。
+
+因此，对象创建工具也应复用与几何刷新相关的钩子：
+
+- `beforeGeometryMutation(interaction)`：创建过程前记录旧几何快照
+- `afterGeometryMutation(interaction)`：创建过程后请求 `LiveRenderer.invalidateObjects(...)`
+
+对象创建工具一般没有像 `ObjectModifierTool` 这样的 `withGeometryMutation(...)`，因为创建流程不是“单次已有对象修改”的原子操作，而是一个包含：
+
+- 对象实例创建
+- id/ownerChunkId 分配
+- activeObjectManager add/apply/discard
+- 手势 begin/update/complete/cancel
+
+这就需要在不同阶段分别插入 `beforeGeometryMutation` / `afterGeometryMutation`，而不是把整个过程包成一个一次性包装器。
+
+比如 `StrokeCreatorTool`、`PolygonCreatorTool` 等在创作过程中会先捕获当前几何状态，再更新对象几何，最后触发活动层刷新。
 
 ### 对象选择工具
 

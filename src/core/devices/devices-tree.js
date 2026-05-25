@@ -175,7 +175,7 @@ class DevicesTreeNode {
   }
 
   /**
-   * 设置节点整包改写器。
+   * 设置节点整包改写器
    * @param {DevicesTreePacketRewriter|null} rewritePacket - 节点整包改写器
    * @returns {DevicesTreeNode} 当前节点
    */
@@ -186,7 +186,7 @@ class DevicesTreeNode {
   }
 
   /**
-   * 获取节点整包改写器。
+   * 获取节点整包改写器
    * @returns {DevicesTreePacketRewriter|null}
    */
   getRewritePacket() {
@@ -288,7 +288,7 @@ class DevicesTree {
   }
 
   /**
-   * 将相对路径或绝对路径解析为绝对路径。
+   * 将相对路径或绝对路径解析为绝对路径
    * @param {string} basePath - 当前节点绝对路径
    * @param {string} targetPath - 目标路径，可为相对路径
    * @returns {string}
@@ -354,7 +354,7 @@ class DevicesTree {
   }
 
   /**
-   * 运行时更新某个节点的配置。
+   * 运行时更新某个节点的配置
    * @param {string} path - 节点路径
    * @param {DevicesTreeNodeConfig} [options={}] - 节点配置变更
    * @returns {DevicesTreeNode} 更新后的节点
@@ -378,7 +378,7 @@ class DevicesTree {
   }
 
   /**
-   * 解析从某个锚点路径出发，沿默认路径能到达的最末端节点。
+   * 解析从某个锚点路径出发，沿默认路径能到达的最末端节点
    * @param {string} path - 锚点路径
    * @param {{createMissing?: boolean}} [options={}] - 解析选项
    * @returns {DevicesTreeNode|null}
@@ -405,7 +405,7 @@ class DevicesTree {
   }
 
   /**
-   * 运行时在某个设备节点末端挂载工具节点。
+   * 运行时在某个设备节点末端挂载工具节点
    * @param {string} path - 工具挂载锚点路径
    * @param {import("../tools/tool.js").Tool} tool - 要挂载的工具
    * @param {Object} [toolContext={}] - 工具固定上下文
@@ -430,7 +430,7 @@ class DevicesTree {
   }
 
   /**
-   * 运行时从某个设备节点末端卸载最后一个工具节点。
+   * 运行时从某个设备节点末端卸载最后一个工具节点
    * @param {string} path - 工具卸载锚点路径
    * @returns {boolean}
    */
@@ -461,7 +461,6 @@ class DevicesTree {
       return [];
     }
 
-    const normalizedRootSegments = DevicesTree.normalizePath(rootPath);
     const mountedNodes = [];
     for (const nodeDefinition of nodes) {
       const absolutePath = joinPath(rootPath, nodeDefinition.path ?? "");
