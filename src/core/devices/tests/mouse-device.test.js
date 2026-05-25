@@ -7,7 +7,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    const mountedNodes = tree.mountDevice("/monitor/mouse", mouseDevice);
+    const mountedNodes = tree.mountDevice("/monitor", mouseDevice);
     const packets = tree.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -52,7 +52,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
+    tree.mountDevice("/monitor", mouseDevice);
 
     const packets = tree.dispatch({
       to: "/monitor/mouse",
@@ -109,7 +109,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
+    tree.mountDevice("/monitor", mouseDevice);
     tree.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -188,7 +188,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
+    tree.mountDevice("/monitor", mouseDevice);
     tree.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -280,18 +280,32 @@ describe("mouse-device", () => {
 
       createProcessor() {
         return (packet, context) => ({
-          to: context.path,
-          signals: [{ type: this.type, context: { from: context.path } }],
+          to: context.eventContext.path,
+          signals: [
+            {
+              type: this.type,
+              context: { from: context.eventContext.path },
+            },
+          ],
         });
       }
 
       reset() {}
     }
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
-    tree.mountTool("/monitor/mouse/pointer", new MappingTool("pointer-handled"));
-    tree.mountTool("/monitor/mouse/primary", new MappingTool("primary-handled"));
-    tree.mountTool("/monitor/mouse/wheel", new MappingTool("wheel-handled"));
+    tree.mountDevice("/monitor", mouseDevice);
+    tree.mountTool(
+      "/monitor/mouse/pointer/tool",
+      new MappingTool("pointer-handled"),
+    );
+    tree.mountTool(
+      "/monitor/mouse/primary/tool",
+      new MappingTool("primary-handled"),
+    );
+    tree.mountTool(
+      "/monitor/mouse/wheel/tool",
+      new MappingTool("wheel-handled"),
+    );
 
     expect(
       tree.dispatch({

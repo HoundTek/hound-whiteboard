@@ -14,7 +14,7 @@ describe("debugger-device", () => {
       },
     });
 
-    const mountedNodes = tree.mountDevice("/monitor/debugger", debuggerDevice);
+    const mountedNodes = tree.mountDevice("/monitor", debuggerDevice);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/debugger",

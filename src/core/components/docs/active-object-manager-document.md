@@ -160,14 +160,14 @@
 
 ## API
 
-| 名称                | 描述                                           | 类型                                     |
-| ------------------- | ---------------------------------------------- | ---------------------------------------- |
-| `add(objects)`      | 将白板外新对象加入动态图顶层                   | `Iterable<BasicObject> -> Layer`         |
+| 名称                | 描述                                             | 类型                                     |
+| ------------------- | ------------------------------------------------ | ---------------------------------------- |
+| `add(objects)`      | 将白板外新对象加入动态图顶层                     | `Iterable<BasicObject> -> Layer`         |
 | `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖区块范围内提取子图 | `Iterable<BasicObject> -> DirectedGraph` |
-| `choose(startFrom)` | 将对象集加入活动对象系统并分层                 | `Iterable<BasicObject> -> void`          |
-| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构   | `Iterable<BasicObject> -> void`          |
-| `liftup(objs)`      | 将对象置顶                                     | `Iterable<BasicObject> -> void`          |
-| `tidyup()`          | 清理动态图中的无效层和空层                     | `void -> void`                           |
+| `choose(startFrom)` | 将对象集加入活动对象系统并分层                   | `Iterable<BasicObject> -> void`          |
+| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构     | `Iterable<BasicObject> -> void`          |
+| `liftup(objs)`      | 将对象置顶                                       | `Iterable<BasicObject> -> void`          |
+| `tidyup()`          | 清理动态图中的无效层和空层                       | `void -> void`                           |
 
 ## 实现状态
 

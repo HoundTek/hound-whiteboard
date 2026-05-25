@@ -9,7 +9,6 @@ import { Board } from "../components/board.js";
 import { ChunkBlockLoader } from "./chunk-block-loader.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { Vector } from "../utils/math.js";
-import { DevicesTree, DevicesTreeNode } from "../devices/devices-tree.js";
 import { joinPath } from "../utils/path.js";
 import { Chunk } from "./chunk.js";
 import { ChunkObjectManager } from "./chunk-object-manager.js";
@@ -39,13 +38,6 @@ class Monitor {
    * @type {HTMLElement | null}
    */
   rootElement;
-
-  /**
-   * 显示器组件的画布
-   * @type {HTMLCanvasElement}
-   * @todo 现在还没有转移到 React，所以用原生 html。
-   */
-  canvas;
 
   /**
    * 静态内容画布
@@ -82,12 +74,6 @@ class Monitor {
    * @type {string}
    */
   monitorId;
-
-  /**
-   * 设备树
-   * @type {DevicesTree}
-   */
-  devicesTree;
 
   /**
    * 当前显示器的静态层渲染调度器
@@ -169,23 +155,29 @@ class Monitor {
   liveDirtyRectPolicyResolver;
 
   /**
-   * @param {HTMLCanvasElement} canvas - 画布元素
+   * @param {{
+   *   rootElement?: HTMLElement | null,
+   *   baseCanvas?: HTMLCanvasElement | null,
+   *   liveCanvas?: HTMLCanvasElement | null,
+   *   uiCanvas?: HTMLCanvasElement | null,
+   * }} htmlElements - 画布元素选项
    * @param {Board} board - 白板管理器
    * @param {{ width: number, height: number }} options - 画布尺寸选项
    * @param {string} monitorId - 显示器 id
    */
-  constructor(canvas, board, { width, height }, monitorId) {
-    this.rootElement = null;
-    this.baseCanvas = null;
-    this.liveCanvas = canvas;
-    this.uiCanvas = null;
-    this.canvas = canvas;
+  constructor({ rootElement, baseCanvas, liveCanvas, uiCanvas }, board, { width, height }, monitorId) {
+    this.attachRenderLayers({
+      rootElement,
+      baseCanvas,
+      liveCanvas,
+      uiCanvas,
+    });
     this.board = board;
     this.chunkBlockLoader = this.board.createChunkBlockLoader();
     this._zoom = 1;
     this.monitorId = monitorId;
     this.baseBufferedChunks = [];
-    const rect = canvas?.getBoundingClientRect();
+    const rect = this.liveCanvas?.getBoundingClientRect();
     const canvasWidth = rect?.width ?? 0;
     const canvasHeight = rect?.height ?? 0;
     // 初始 origin 使第一区块居中显示。若 canvas 尚未布局，调用方应在布局后重新计算
@@ -194,9 +186,7 @@ class Monitor {
       this.chunkHeight / 2 - canvasHeight / (2 * this._zoom),
     );
     this.resizeRenderLayers(width, height);
-    this.canvas.id = `monitor-canvas-${monitorId}`;
 
-    this.devicesTree = new DevicesTree();
     this.baseRenderer = new BaseRenderer(this);
     this.liveRenderer = new LiveRenderer(this, this.board?.activeObjectManager);
     this.baseDirtyRectThresholdStrategy =
@@ -262,13 +252,21 @@ class Monitor {
   }
 
   /**
+   * 当前白板级唯一设备树。
+   * @type {import("../devices/devices-tree.js").DevicesTree}
+   */
+  get devicesTree() {
+    return this.board?.devicesTree;
+  }
+
+  /**
    * 获取当前视口屏幕中心点
    * @returns {Vector}
    */
   getViewportScreenCenter() {
     return new Vector(
-      (this.canvas?.width ?? 0) / 2,
-      (this.canvas?.height ?? 0) / 2,
+      (this.liveCanvas?.width ?? 0) / 2,
+      (this.liveCanvas?.height ?? 0) / 2,
     );
   }
 
@@ -400,16 +398,15 @@ class Monitor {
       this.baseCanvas = baseCanvas ?? null;
     }
 
-    if (liveCanvas) {
-      this.liveCanvas = liveCanvas;
-      this.canvas = liveCanvas;
+    if (liveCanvas !== undefined) {
+      this.liveCanvas = liveCanvas ?? null;
     }
 
     if (uiCanvas !== undefined) {
       this.uiCanvas = uiCanvas ?? null;
     }
 
-    this.resizeRenderLayers(this.canvas?.width, this.canvas?.height);
+    this.resizeRenderLayers(this.liveCanvas?.width, this.liveCanvas?.height);
   }
 
   /**
@@ -505,8 +502,8 @@ class Monitor {
     return new RectangleRange(
       0,
       0,
-      this.canvas?.width ?? 0,
-      this.canvas?.height ?? 0,
+      this.liveCanvas?.width ?? 0,
+      this.liveCanvas?.height ?? 0,
     );
   }
 
@@ -517,8 +514,8 @@ class Monitor {
    * @returns {RectangleRange}
    */
   getViewportWorldRect(origin = this.origin, zoom = this.zoom) {
-    const viewportWidth = (this.canvas?.width ?? 0) / zoom;
-    const viewportHeight = (this.canvas?.height ?? 0) / zoom;
+    const viewportWidth = (this.liveCanvas?.width ?? 0) / zoom;
+    const viewportHeight = (this.liveCanvas?.height ?? 0) / zoom;
     return new RectangleRange(
       origin.x,
       origin.y,
@@ -762,9 +759,9 @@ class Monitor {
    * @returns {Vector | null}
    */
   screenToWorld(screenPos) {
-    if (!this.canvas || !screenPos) return null;
+    if (!this.liveCanvas || !screenPos) return null;
 
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.liveCanvas.getBoundingClientRect();
     const canvasX = screenPos.x - rect.left;
     const canvasY = screenPos.y - rect.top;
 
@@ -807,31 +804,42 @@ class Monitor {
    * @returns {{ chunkId: number, x: number, y: number } | null}
    */
   screenToChunk(screenPos) {
-    if (!this.canvas || !this.board) return null;
+    if (!this.liveCanvas || !this.board) return null;
     const worldPos = this.screenToWorld(screenPos);
     if (!worldPos) return null;
     return this.worldToChunk(worldPos);
   }
 
   /**
-   * 挂载设备到显示器的设备树
-   *
-   * @param {string} path - 设备路径（相对于显示器根节点，可带或不带前导 /）
-   * @param {import("../devices/devices-tree.js").DeviceDefinition} deviceDefinition - 设备定义
-   * @returns {DevicesTreeNode[]} 挂载后的设备树节点列表
+   * 挂载设备到白板级设备树。
+   * @param {string|import("../devices/devices-tree.js").DeviceDefinition} pathOrDeviceDefinition - 设备根路径或设备定义
+   * @param {import("../devices/devices-tree.js").DeviceDefinition} [deviceDefinition] - 设备定义
+   * @returns {import("../devices/devices-tree.js").DevicesTreeNode[]} 挂载后的设备树节点列表
    */
-  mountDevice(path, deviceDefinition) {
+  mountDevice(pathOrDeviceDefinition, deviceDefinition) {
+    const hasExplicitPath = typeof pathOrDeviceDefinition === "string";
+    const resolvedDeviceDefinition = hasExplicitPath
+      ? {
+          ...deviceDefinition,
+          root: pathOrDeviceDefinition,
+        }
+      : pathOrDeviceDefinition;
+
     return this.devicesTree.mountDevice(
-      joinPath(this.monitorId, path),
-      deviceDefinition,
+      joinPath(this.monitorId),
+      resolvedDeviceDefinition,
+      {
+        board: this.board,
+        monitor: this,
+      },
     );
   }
 
   /**
-   * 在显示器设备树中运行时挂载工具。
-   * @param {string} path - 挂载锚点路径（相对于显示器根）
+   * 在白板级设备树中运行时挂载工具。
+   * @param {string} path - 工具叶子路径（相对于显示器根）
    * @param {import("../tools/tool.js").Tool} tool - 要挂载的工具
-   * @returns {DevicesTreeNode}
+   * @returns {import("../devices/devices-tree.js").DevicesTreeNode}
    */
   mountTool(path, tool) {
     return this.devicesTree.mountTool(joinPath(this.monitorId, path), tool, {
@@ -841,12 +849,17 @@ class Monitor {
   }
 
   /**
-   * 在显示器设备树中运行时卸载末端工具。
-   * @param {string} path - 卸载锚点路径（相对于显示器根）
+   * 在白板级设备树中运行时卸载工具叶子节点。
+   * @param {string} path - 工具叶子路径（相对于显示器根）
    * @returns {boolean}
    */
   unmountTool(path) {
-    return this.devicesTree.unmountTool(joinPath(this.monitorId, path));
+    return this.devicesTree.unmountTool(joinPath(this.monitorId, path), {
+      runtimeContext: {
+        board: this.board,
+        monitor: this,
+      },
+    });
   }
 }
 

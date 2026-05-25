@@ -31,17 +31,16 @@ describe("whiteboard demo", () => {
 
     const liveCanvas = createCanvas();
     const monitor = new Monitor(
-      liveCanvas,
+      {
+        rootElement: {},
+        baseCanvas: createCanvas(),
+        liveCanvas,
+        uiCanvas: createCanvas(),
+      },
       board,
       { width: 800, height: 600 },
       monitorId,
     );
-    monitor.attachRenderLayers({
-      rootElement: {},
-      baseCanvas: createCanvas(),
-      liveCanvas,
-      uiCanvas: createCanvas(),
-    });
     board.monitors.set(monitorId, monitor);
     return monitor;
   }

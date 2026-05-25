@@ -50,8 +50,8 @@ class ObjectModifierTool extends Tool {
       modificationContext,
       objects,
     );
-    const activeObjectIndex = modificationContext?.board?.activeObjectManager
-      ?.activeObjectIndex;
+    const activeObjectIndex =
+      modificationContext?.board?.activeObjectManager?.activeObjectIndex;
 
     if (typeof activeObjectIndex?.has !== "function") {
       return normalizedObjects;
@@ -157,9 +157,8 @@ class ObjectModifierTool extends Tool {
    * @returns {void}
    */
   umount(modificationContext = {}) {
-    const normalizedObjects = this.resolveActiveModifiedObjects(
-      modificationContext,
-    );
+    const normalizedObjects =
+      this.resolveActiveModifiedObjects(modificationContext);
 
     if (normalizedObjects.length > 0) {
       modificationContext?.board?.activeObjectManager?.discard?.(

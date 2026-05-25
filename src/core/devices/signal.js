@@ -22,7 +22,7 @@ class SignalPacket {
   }
 
   /**
-   * 将任意输入规整为 SignalPacket。
+   * 将任意输入规整为 SignalPacket
    * @param {Object|SignalPacket|null|undefined} signalPacket - 原始输入
    * @param {{defaultTo?: string}} [options={}] - 规整选项
    * @returns {SignalPacket}
@@ -43,7 +43,7 @@ class SignalPacket {
   }
 
   /**
-   * 将处理结果规整为 SignalPacket 列表。
+   * 将处理结果规整为 SignalPacket 列表
    * @param {SignalPacket|Object|Array<SignalPacket|Object>|null|undefined} result - 原始处理结果
    * @param {{defaultTo?: string}} [options={}] - 规整选项
    * @returns {SignalPacket[]}

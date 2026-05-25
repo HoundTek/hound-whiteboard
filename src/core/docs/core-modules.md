@@ -132,10 +132,10 @@
 
 ## 5. devices/
 
-- `DevicesTree` 负责保存节点层级，并按路径把信号包送到节点处理器。
-- `DevicesTreeNode` 只表示信号处理单元，本身只挂 `processor`。
-- 设备子树定义目前是普通对象协议，核心入口是 `defineNodes()`。
-- 业务侧挂载设备时应优先从 `Monitor` 的 `mountDevice()` 进入，再由 `Monitor` 转交给底层 `DevicesTree`。
+- `DevicesTree` 负责保存节点层级，并按路径把信号包送到节点 handler。
+- `DevicesTreeNode` 只表示信号处理单元，核心字段是 `handler`、`defaultChild`、`umount` 与 `state`。
+- 设备子树定义已经统一为 `root + nodes` 结构，推荐通过 `createDevice(root).build()` 生成。
+- 业务侧挂载设备时应优先从 `Monitor` 的 `mountDevice()` 进入，再由 `Monitor` 代理到 `Board` 持有的唯一 `DevicesTree`。
 - 输入从 Board 到 Monitor、再到 DevicesTree 与工具节点的完整链路，见 `core-input-flow.md`。
 - DOM/Pointer/Touch 到 `SignalPacket` 的编码约定，见 `core-input-encoding.md`。
 - 当前建议冻结的阶段性稳定接口，见 `core-stable-interfaces.md`。

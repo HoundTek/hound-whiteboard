@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
+import { DevicesTree } from "../../devices/devices-tree.js";
 import { Vector } from "../../utils/math.js";
 import { Chunk } from "../chunk.js";
 import { RectangleRange } from "../../range/index.js";
@@ -22,6 +23,7 @@ describe("Monitor", () => {
     const board = {
       width: 800,
       height: 600,
+      devicesTree: null,
       getChunkById(chunkId) {
         return Chunk.fromId(chunkId);
       },
@@ -39,14 +41,23 @@ describe("Monitor", () => {
       },
     };
 
-    return new Monitor(canvas, board, { width: 800, height: 600 }, monitorId);
+    board.devicesTree = new DevicesTree({
+      runtimeContext: { board },
+    });
+
+    return new Monitor(
+      { liveCanvas: canvas },
+      board,
+      { width: 800, height: 600 },
+      monitorId,
+    );
   }
 
   test("mountDevice 应自动补上 monitorId 后挂载设备", () => {
     const monitor = createMonitor("alpha");
     const debuggerDevice = createDebuggerDevice();
 
-    const mountedNodes = monitor.mountDevice("/debugger", debuggerDevice);
+    const mountedNodes = monitor.mountDevice(debuggerDevice);
     const packets = monitor.devicesTree.dispatch({
       to: "/alpha/debugger",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
@@ -133,7 +144,7 @@ describe("Monitor", () => {
     });
   });
 
-  test("attachRenderLayers 应保留 liveCanvas 为兼容入口并同步层尺寸", () => {
+  test("attachRenderLayers 同步层尺寸", () => {
     const monitor = createMonitor("delta");
     const baseCanvas = createNoopCanvas({ width: 0, height: 0 });
     const liveCanvas = createNoopCanvas({ width: 320, height: 240 });
@@ -148,7 +159,6 @@ describe("Monitor", () => {
     });
 
     expect(monitor.rootElement).toBe(rootElement);
-    expect(monitor.canvas).toBe(liveCanvas);
     expect(monitor.liveCanvas).toBe(liveCanvas);
     expect(monitor.baseCanvas).toBe(baseCanvas);
     expect(monitor.uiCanvas).toBe(uiCanvas);

@@ -1,5 +1,6 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
+import { createDevice } from "../../devices/devices-tree.js";
 import { Tool } from "../../tools/tool.js";
 import { Matrix, Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
@@ -47,20 +48,16 @@ describe("Board input flow", () => {
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountDevice("/sample-device", {
-      defineNodes() {
-        return [
-          {
-            path: "",
-            defaultPath: "tool",
-          },
-          {
-            path: "/tool",
-            processor: tool.createProcessor({ board, monitor }),
-          },
-        ];
-      },
-    });
+    monitor.mountDevice(
+      createDevice("/sample-device")
+        .node("")
+        .defaultChild("tool")
+        .end()
+        .node("tool")
+        .handler(tool.createProcessor({ board, monitor }))
+        .end()
+        .build(),
+    );
 
     const emitResults = board.signalsEventBus.emit("input", {
       to: "/main/sample-device",
@@ -110,14 +107,16 @@ describe("Board input flow", () => {
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountDevice("/sample-device", {
-      defineNodes() {
-        return [{ path: "", defaultPath: "tool" }];
-      },
-    });
+    monitor.mountDevice(
+      createDevice("/sample-device")
+        .node("")
+        .defaultChild("tool")
+        .end()
+        .build(),
+    );
 
     const mountResults = board.signalsEventBus.emit("mount", {
-      to: "/main/sample-device",
+      to: "/main/sample-device/tool",
       tool,
     });
 
@@ -141,7 +140,7 @@ describe("Board input flow", () => {
     );
 
     const umountResults = board.signalsEventBus.emit("umount", {
-      to: "/main/sample-device",
+      to: "/main/sample-device/tool",
     });
 
     expect(umountResults).toEqual([true]);
@@ -154,7 +153,7 @@ describe("Board input flow", () => {
     const keyboardDevice = createKeyboardDevice({
       nodeConfigs: {
         "/code/KeyW": {
-          rewritePacket(packet) {
+          handler(packet) {
             const signals = packet.signals
               .filter(
                 (signal) =>
@@ -167,24 +166,24 @@ describe("Board input flow", () => {
 
             return signals.length === 0
               ? []
-              : { to: "../../tools/move", signals };
+              : { to: "../../tools/move/tool", signals };
           },
         },
       },
     });
 
-    monitor.mountDevice("/keyboard", keyboardDevice);
+    monitor.mountDevice(keyboardDevice);
     monitor.devicesTree.mount(
-      "/main/keyboard/tools/move",
+      "/main/keyboard/tools/move/tool",
       (packet, context) => ({
-        to: context.path,
+        to: context.eventContext.path,
         signals: packet.signals,
       }),
     );
     monitor.devicesTree.mount(
-      "/main/keyboard/tools/strafe",
+      "/main/keyboard/tools/strafe/tool",
       (packet, context) => ({
-        to: context.path,
+        to: context.eventContext.path,
         signals: packet.signals,
       }),
     );
@@ -192,7 +191,7 @@ describe("Board input flow", () => {
     const configureResults = board.signalsEventBus.emit("configure", {
       to: "/main/keyboard/code/KeyW",
       options: {
-        rewritePacket(packet) {
+        handler(packet) {
           const signals = packet.signals
             .filter(
               (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
@@ -204,7 +203,7 @@ describe("Board input flow", () => {
 
           return signals.length === 0
             ? []
-            : { to: "../../tools/strafe", signals };
+            : { to: "../../tools/strafe/tool", signals };
         },
       },
     });
@@ -221,7 +220,7 @@ describe("Board input flow", () => {
       }),
     ).toEqual([
       {
-        to: "/main/keyboard/tools/strafe",
+        to: "/main/keyboard/tools/strafe/tool",
         signals: [
           {
             type: "position",
@@ -239,9 +238,9 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountDevice("/mouse", createMouseDevice());
+    monitor.mountDevice(createMouseDevice());
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary",
+      to: "/main/mouse/primary/tool",
       tool,
     });
 
@@ -307,10 +306,10 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountDevice("/mouse", createMouseDevice());
+    monitor.mountDevice(createMouseDevice());
 
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary",
+      to: "/main/mouse/primary/tool",
       tool,
     });
 
@@ -343,10 +342,10 @@ describe("Board input flow", () => {
       createModifierTool: () => new CommonObjectModifierTool(),
     });
 
-    monitor.mountDevice("/mouse", createMouseDevice());
+    monitor.mountDevice(createMouseDevice());
 
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary",
+      to: "/main/mouse/primary/tool",
       tool: creatorTool,
     });
 
@@ -384,7 +383,7 @@ describe("Board input flow", () => {
     expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
 
     board.signalsEventBus.emit("input", {
-      to: "/main/mouse/primary",
+      to: "/main/mouse/primary/tool/tool",
       signals: [
         {
           type: "position",
@@ -406,7 +405,7 @@ describe("Board input flow", () => {
     expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
 
     board.signalsEventBus.emit("input", {
-      to: "/main/mouse/primary",
+      to: "/main/mouse/primary/tool/tool",
       signals: [{ type: "apply", context: {} }],
     });
 
@@ -424,9 +423,9 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountDevice("/mouse", createMouseDevice());
+    monitor.mountDevice(createMouseDevice());
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary",
+      to: "/main/mouse/primary/tool",
       tool,
     });
 

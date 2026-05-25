@@ -219,9 +219,9 @@ class ObjectCreatorTool extends Tool {
    */
   hasModifierTool(deviceContext = {}) {
     return Boolean(
-      deviceContext.defaultPath &&
-        deviceContext.resolvedDefaultPath &&
-        deviceContext.tree?.getNode?.(deviceContext.resolvedDefaultPath),
+      deviceContext.defaultChild &&
+      deviceContext.resolvedDefaultChildPath &&
+      deviceContext.tree?.getNode?.(deviceContext.resolvedDefaultChildPath),
     );
   }
 
@@ -232,11 +232,37 @@ class ObjectCreatorTool extends Tool {
    * @returns {Array<BasicObject>}
    */
   syncCreatedObjectContext(deviceContext = {}, objectEntry = this.obj) {
-    deviceContext.providedObjectsContext = deviceContext.nodeContext;
     return this.setContextObjects(
       deviceContext,
       objectEntry ? [objectEntry] : [],
     );
+  }
+
+  /**
+   * 将当前创建对象同步到下游 modifier 节点状态。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {BasicObject} [objectEntry=this.obj] - 当前对象
+   * @returns {Array<BasicObject>}
+   */
+  syncModifierObjectContext(deviceContext = {}, objectEntry = this.obj) {
+    if (!deviceContext.path) {
+      return [];
+    }
+
+    const normalizedObjects = this.normalizeObjectCollection(
+      objectEntry ? [objectEntry] : [],
+    ).filter(Boolean);
+    this.writeNodeState(
+      deviceContext,
+      normalizedObjects.length === 0
+        ? {}
+        : {
+            object: normalizedObjects[0],
+            objects: normalizedObjects,
+          },
+      joinPath(deviceContext.path, "tool"),
+    );
+    return normalizedObjects;
   }
 
   /**
@@ -245,11 +271,10 @@ class ObjectCreatorTool extends Tool {
    * @returns {void}
    */
   discardCreatedObjects(deviceContext = {}) {
-    const normalizedObjects = this.resolveContextObjects(deviceContext).filter(
-      Boolean,
-    );
-    const activeObjectIndex = deviceContext?.board?.activeObjectManager
-      ?.activeObjectIndex;
+    const normalizedObjects =
+      this.resolveContextObjects(deviceContext).filter(Boolean);
+    const activeObjectIndex =
+      deviceContext?.board?.activeObjectManager?.activeObjectIndex;
     const activeObjects =
       typeof activeObjectIndex?.has === "function"
         ? normalizedObjects.filter((objectEntry) =>
@@ -282,7 +307,7 @@ class ObjectCreatorTool extends Tool {
     }
 
     if (this.hasModifierTool(deviceContext)) {
-      return deviceContext.tree.getNode(deviceContext.resolvedDefaultPath);
+      return deviceContext.tree.getNode(deviceContext.resolvedDefaultChildPath);
     }
 
     const modifierTool = this.createModifierTool({
@@ -295,10 +320,10 @@ class ObjectCreatorTool extends Tool {
     }
 
     deviceContext.tree.configureNode(deviceContext.path, {
-      defaultPath: "tool",
+      defaultChild: "tool",
     });
 
-    return deviceContext.tree.mountTool(
+    const mountedNode = deviceContext.tree.mountTool(
       joinPath(deviceContext.path, "tool"),
       modifierTool,
       {
@@ -306,6 +331,8 @@ class ObjectCreatorTool extends Tool {
         monitor: deviceContext.monitor,
       },
     );
+    this.syncModifierObjectContext(deviceContext, this.obj);
+    return mountedNode;
   }
 
   /**
@@ -325,6 +352,10 @@ class ObjectCreatorTool extends Tool {
     }
 
     this.syncCreatedObjectContext(
+      deviceContext,
+      this.obj ?? this.resolveContextObjects(deviceContext)[0],
+    );
+    this.syncModifierObjectContext(
       deviceContext,
       this.obj ?? this.resolveContextObjects(deviceContext)[0],
     );

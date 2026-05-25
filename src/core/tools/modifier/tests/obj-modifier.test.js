@@ -65,6 +65,8 @@ describe("ObjectModifierTool", () => {
     expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith(
       objects,
     );
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith(objects);
+    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
+      objects,
+    );
   });
 });

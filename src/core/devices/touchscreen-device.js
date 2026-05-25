@@ -5,10 +5,11 @@
  * @author Zhou Chenyu
  */
 
+import { createDevice } from "./devices-tree.js";
 import { SignalPacket } from "./signal.js";
 
 /**
- * 触摸屏设备输出信号类型。
+ * 触摸屏设备输出信号类型
  * @type {{CONTACTS: string}}
  */
 const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
@@ -16,7 +17,7 @@ const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
 });
 
 /**
- * 创建一棵触摸屏设备子树。
+ * 创建一棵触摸屏设备子树
  * @param {{onUpdate?: Function}} [options={}] - 触摸屏设备选项
  * @returns {import("./devices-tree.js").DeviceDefinition & {
  *   clearTouches: () => void,
@@ -30,15 +31,7 @@ function createTouchscreenDevice(options = {}) {
   let lastChangedTouchIds = [];
 
   /**
-   * 将节点处理结果规整为信号包数组。
-   * @param {any} result - 原始处理结果
-   * @returns {SignalPacket[]}
-   */
-  const normalizeProcessorResult = (result) =>
-    SignalPacket.normalizeResult(result);
-
-  /**
-   * 复制位置值，避免把可变对象直接暴露到设备外部。
+   * 复制位置值，避免把可变对象直接暴露到设备外部
    * @param {any} position - 原始位置值
    * @returns {any}
    */
@@ -50,7 +43,7 @@ function createTouchscreenDevice(options = {}) {
   };
 
   /**
-   * 从信号中解析触点 id。
+   * 从信号中解析触点 id
    * @param {{context?: Object}} signal - 输入信号
    * @returns {string|null}
    */
@@ -61,7 +54,7 @@ function createTouchscreenDevice(options = {}) {
   };
 
   /**
-   * 从信号中读取位置值。
+   * 从信号中读取位置值
    * @param {{context?: Object}} signal - 输入信号
    * @returns {any}
    */
@@ -71,7 +64,7 @@ function createTouchscreenDevice(options = {}) {
   };
 
   /**
-   * 获取当前活动触点列表。
+   * 获取当前活动触点列表
    * @returns {Array<{touchId: string, position: any}>}
    */
   const getActiveTouches = () =>
@@ -81,7 +74,7 @@ function createTouchscreenDevice(options = {}) {
     }));
 
   /**
-   * 根据输入包更新当前活动触点集合。
+   * 根据输入包更新当前活动触点集合
    * @param {SignalPacket} packet - 当前信号包
    * @returns {void}
    */
@@ -114,19 +107,30 @@ function createTouchscreenDevice(options = {}) {
     });
   };
 
-  const rootProcessor = (signalPacket) => {
+  /**
+   * 根节点处理器
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @returns {Object}
+   */
+  const rootHandler = (signalPacket) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     updateTouches(packet);
-    return normalizeProcessorResult({
+    return {
       signals: packet.signals,
-    });
+    };
   };
 
-  const contactsPacketRewriter = (signalPacket, routeContext = {}) => {
+  /**
+   * 触点报告处理器
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {import("./devices-tree.js").DevicesTreeHandlerContext} [context={}] - 当前路由上下文
+   * @returns {Object}
+   */
+  const contactsHandler = (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const contacts = getActiveTouches();
     return {
-      to: routeContext.path,
+      to: context.eventContext?.path,
       signals: [
         {
           type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
@@ -140,37 +144,22 @@ function createTouchscreenDevice(options = {}) {
     };
   };
 
-  return {
-    /**
-     * 清空当前活动触点状态。
-     * @returns {void}
-     */
-    clearTouches() {
-      activeTouches.clear();
-      lastChangedTouchIds = [];
-    },
-
-    /**
-     * 获取当前活动触点列表。
-     * @returns {Array<{touchId: string, position: any}>}
-     */
-    getActiveTouches,
-
-    /**
-     * 定义触摸屏设备子树节点。
-     * @returns {Array<{path: string, processor: import("./devices-tree.js").DevicesTreeProcessor}>}
-     */
-    defineNodes() {
-      return [
-        {
-          path: "",
-          processor: rootProcessor,
-          defaultPath: "contacts",
-        },
-        { path: "/contacts", rewritePacket: contactsPacketRewriter },
-      ];
-    },
-  };
+  return createDevice("/touchscreen")
+    .node("")
+    .handler(rootHandler)
+    .defaultChild("contacts")
+    .end()
+    .node("contacts")
+    .handler(contactsHandler)
+    .end()
+    .expose({
+      clearTouches() {
+        activeTouches.clear();
+        lastChangedTouchIds = [];
+      },
+      getActiveTouches,
+    })
+    .build();
 }
 
 export { createTouchscreenDevice, TOUCHSCREEN_DEVICE_SIGNAL_TYPES };

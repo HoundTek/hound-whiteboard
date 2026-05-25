@@ -56,9 +56,9 @@
 
 目前 demo 侧重于信号路由和工具挂载验证，已经符合当前工具体系的设计约定：
 
-- 工具通过 `mount` 事件运行时挂载
+- 工具通过 `mount` 事件运行时挂载，并显式落到 `/tool` 叶子路径
 - 设备节点负责把硬件输入转成语义信号
-- creator / chooser 与 modifier 的上下文共享以 `deviceContext` / `nodeContext` 为边界
+- creator / chooser 与 modifier 的上下文共享以当前节点 state 和子 tool 路径 state 为边界
 - handoff 模式下，creator 可在自身下方自动挂载固定 modifier 子工具
 - modifier 通过 `apply` 信号把 AOM 中的对象提交回静态图
 - 屏幕坐标应在 Monitor 层转换为世界坐标后进入工具链

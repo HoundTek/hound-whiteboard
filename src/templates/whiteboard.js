@@ -22,7 +22,7 @@ const monitor = board.createMonitor(
 );
 monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
-monitor.canvas.tabIndex = 0;
+monitor.liveCanvas.tabIndex = 0;
 
 const logDemoStatus = (label, payload) => {
   if (payload === undefined) {
@@ -141,17 +141,17 @@ const emitMousePacket = (event) => {
   });
 };
 
-monitor.canvas.addEventListener("mousedown", emitMousePacket);
-monitor.canvas.addEventListener("mousemove", emitMousePacket);
+monitor.liveCanvas.addEventListener("mousedown", emitMousePacket);
+monitor.liveCanvas.addEventListener("mousemove", emitMousePacket);
 window.addEventListener("mouseup", emitMousePacket);
-monitor.canvas.addEventListener("mouseleave", emitMousePacket);
-monitor.canvas.addEventListener("contextmenu", (event) => {
+monitor.liveCanvas.addEventListener("mouseleave", emitMousePacket);
+monitor.liveCanvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
 });
-monitor.canvas.addEventListener("dragstart", (event) => {
+monitor.liveCanvas.addEventListener("dragstart", (event) => {
   event.preventDefault();
 });
-monitor.canvas.addEventListener("selectstart", (event) => {
+monitor.liveCanvas.addEventListener("selectstart", (event) => {
   event.preventDefault();
 });
 
@@ -224,12 +224,12 @@ const emitKeyboardCancelPacket = () => {
   });
 };
 
-monitor.canvas.addEventListener("mousedown", () => {
-  monitor.canvas.focus();
+monitor.liveCanvas.addEventListener("mousedown", () => {
+  monitor.liveCanvas.focus();
 });
-monitor.canvas.addEventListener("keydown", emitKeyboardPacket);
-monitor.canvas.addEventListener("keyup", emitKeyboardPacket);
-monitor.canvas.addEventListener("blur", emitKeyboardCancelPacket);
+monitor.liveCanvas.addEventListener("keydown", emitKeyboardPacket);
+monitor.liveCanvas.addEventListener("keyup", emitKeyboardPacket);
+monitor.liveCanvas.addEventListener("blur", emitKeyboardCancelPacket);
 window.addEventListener("resize", resizeMonitor);
 
-monitor.canvas.focus();
+monitor.liveCanvas.focus();

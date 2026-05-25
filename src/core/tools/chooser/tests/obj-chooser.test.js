@@ -2,6 +2,20 @@ import { jest } from "@jest/globals";
 import { ObjectChooserTool } from "../obj-chooser.js";
 
 describe("ObjectChooserTool", () => {
+  function createStateAccess(initialState = {}) {
+    let state = { ...initialState };
+
+    return {
+      getState() {
+        return state;
+      },
+      setState(path, nextState) {
+        state = nextState ?? {};
+        return state;
+      },
+    };
+  }
+
   class TestChooserTool extends ObjectChooserTool {
     constructor(options = {}) {
       super(options);
@@ -22,21 +36,29 @@ describe("ObjectChooserTool", () => {
         choose: jest.fn(),
       },
     };
+    const stateAccess = createStateAccess();
     const deviceContext = {
       board,
-      nodeContext: {},
+      path: "/monitor/chooser/tool",
+      getNodeState: stateAccess.getState,
+      setNodeState: stateAccess.setState,
     };
     const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
 
-    tool.process({ signals: [{ type: "trigger", context: {} }] }, deviceContext);
+    tool.process(
+      { signals: [{ type: "trigger", context: {} }] },
+      deviceContext,
+    );
 
     expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
       new Set([chosenObject]),
     );
     expect(deviceContext.object).toBe(chosenObject);
     expect(deviceContext.objects).toEqual([chosenObject]);
-    expect(deviceContext.nodeContext.object).toBe(chosenObject);
-    expect(deviceContext.nodeContext.objects).toEqual([chosenObject]);
+    expect(stateAccess.getState()).toEqual({
+      object: chosenObject,
+      objects: [chosenObject],
+    });
   });
 
   test("process 可自动在 chooser 下挂载固定 modifier 子工具", () => {
@@ -52,6 +74,7 @@ describe("ObjectChooserTool", () => {
         choose: jest.fn(),
       },
     };
+    const stateAccess = createStateAccess();
     const tool = new TestChooserTool({
       chosenObjects: [chosenObject],
       createModifierTool: () => modifierTool,
@@ -63,15 +86,15 @@ describe("ObjectChooserTool", () => {
         board,
         tree,
         path: "/monitor/chooser/tool",
-        nodeContext: {},
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
         monitor: "monitor-context",
       },
     );
 
-    expect(tree.configureNode).toHaveBeenCalledWith(
-      "/monitor/chooser/tool",
-      { defaultPath: "tool" },
-    );
+    expect(tree.configureNode).toHaveBeenCalledWith("/monitor/chooser/tool", {
+      defaultChild: "tool",
+    });
     expect(tree.mountTool).toHaveBeenCalledWith(
       "/monitor/chooser/tool/tool",
       modifierTool,
@@ -89,9 +112,9 @@ describe("ObjectChooserTool", () => {
       { signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }] },
       {
         object: chosenObject,
-        nodeContext: { object: chosenObject },
-        defaultPath: "tool",
-        resolvedDefaultPath: "/monitor/chooser/tool/tool",
+        path: "/monitor/chooser/tool",
+        defaultChild: "tool",
+        resolvedDefaultChildPath: "/monitor/chooser/tool/tool",
         tree: { getNode: () => ({ path: "/monitor/chooser/tool/tool" }) },
       },
     );
@@ -110,14 +133,17 @@ describe("ObjectChooserTool", () => {
       },
     };
     const tool = new TestChooserTool();
-    const deviceContext = {
-      board,
+    const stateAccess = createStateAccess({
       object: chosenObject,
       objects: [chosenObject],
-      nodeContext: {
-        object: chosenObject,
-        objects: [chosenObject],
-      },
+    });
+    const deviceContext = {
+      board,
+      path: "/monitor/chooser/tool",
+      object: chosenObject,
+      objects: [chosenObject],
+      getNodeState: stateAccess.getState,
+      setNodeState: stateAccess.setState,
     };
 
     tool.umount(deviceContext);
@@ -127,7 +153,6 @@ describe("ObjectChooserTool", () => {
     );
     expect(deviceContext.object).toBeUndefined();
     expect(deviceContext.objects).toBeUndefined();
-    expect(deviceContext.nodeContext.object).toBeUndefined();
-    expect(deviceContext.nodeContext.objects).toBeUndefined();
+    expect(stateAccess.getState()).toEqual({});
   });
 });

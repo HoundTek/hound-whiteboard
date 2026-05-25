@@ -20,7 +20,10 @@ describe("Tool", () => {
 
     const result = processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
-      { path: "/monitor/s-pen/pen" },
+      {
+        eventContext: { path: "/monitor/s-pen/pen" },
+        runtimeContext: {},
+      },
     );
 
     expect(result).toBeUndefined();
@@ -33,6 +36,8 @@ describe("Tool", () => {
         deviceContext: expect.objectContaining({
           board: "board-context",
           path: "/monitor/s-pen/pen",
+          eventContext: expect.objectContaining({ path: "/monitor/s-pen/pen" }),
+          runtimeContext: expect.objectContaining({ board: "board-context" }),
         }),
       },
     ]);
@@ -62,7 +67,10 @@ describe("Tool", () => {
 
     processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
-      { path: "/monitor/s-pen/pen" },
+      {
+        eventContext: { path: "/monitor/s-pen/pen" },
+        runtimeContext: {},
+      },
     );
 
     expect(tool.calls[0].deviceContext.allocateObjectId()).toBe(7);
@@ -94,7 +102,10 @@ describe("Tool", () => {
 
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
-      { path: "/monitor/s-pen/pen" },
+      {
+        eventContext: { path: "/monitor/s-pen/pen" },
+        runtimeContext: {},
+      },
     );
 
     expect(
@@ -123,10 +134,45 @@ describe("Tool", () => {
 
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
-      { path: "/monitor/s-pen/pen" },
+      {
+        eventContext: { path: "/monitor/s-pen/pen" },
+        runtimeContext: {},
+      },
     );
 
     expect(tool.calls[0].deviceContext.resolvePosition).toBeUndefined();
+  });
+
+  test("createProcessor 不应修改传入的 handlerContext", () => {
+    class TestTool extends Tool {
+      process() {}
+
+      reset() {}
+    }
+
+    const tool = new TestTool();
+    const handlerContext = {
+      eventContext: { path: "/monitor/s-pen/pen" },
+      runtimeContext: {},
+      getNodeState() {
+        return {};
+      },
+      setNodeState() {
+        return {};
+      },
+    };
+
+    tool.createProcessor({ board: "board-context" })(
+      { signals: [{ type: "pressure", context: { value: 0.5 } }] },
+      handlerContext,
+    );
+
+    expect(handlerContext).toEqual({
+      eventContext: { path: "/monitor/s-pen/pen" },
+      runtimeContext: {},
+      getNodeState: handlerContext.getNodeState,
+      setNodeState: handlerContext.setNodeState,
+    });
   });
 
   test("基类 process 仍为抽象方法", () => {

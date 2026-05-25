@@ -47,41 +47,127 @@ class Tool {
   }
 
   /**
-   * 创建一个可直接挂载到设备树节点上的处理器
+   * 合并运行时上下文，生成工具处理所需的只读运行时快照。
+   * @param {Object} [routeRuntimeContext={}] - 路由侧运行时上下文
+   * @param {Object} [toolContext={}] - 工具固定上下文
+   * @returns {Object}
+   */
+  createRuntimeContext(routeRuntimeContext = {}, toolContext = {}) {
+    const board = routeRuntimeContext.board ?? toolContext.board;
+    const monitor = routeRuntimeContext.monitor ?? toolContext.monitor;
+    const resolveOwnerChunkId =
+      routeRuntimeContext.resolveOwnerChunkId ??
+      toolContext.resolveOwnerChunkId ??
+      (typeof monitor?.worldToChunk === "function"
+        ? (position) => {
+            if (
+              !position ||
+              typeof position.x !== "number" ||
+              typeof position.y !== "number"
+            ) {
+              return undefined;
+            }
+            return monitor.worldToChunk(position)?.chunkId;
+          }
+        : undefined);
+
+    return {
+      ...toolContext,
+      ...routeRuntimeContext,
+      board,
+      monitor,
+      allocateObjectId:
+        routeRuntimeContext.allocateObjectId ??
+        toolContext.allocateObjectId ??
+        board?.allocateObjectId?.bind(board),
+      resolveOwnerChunkId,
+    };
+  }
+
+  /**
+   * 将设备树上下文规整为工具上下文。
+   * @param {{eventContext?: Object, runtimeContext?: Object, getNodeState?: Function, setNodeState?: Function}} [handlerContext={}] - 设备树处理上下文
+   * @param {Object} [toolContext={}] - 工具固定上下文
+   * @returns {Object}
+   */
+  createDeviceContext(handlerContext = {}, toolContext = {}) {
+    const eventContext = handlerContext.eventContext ?? {};
+    const runtimeContext = this.createRuntimeContext(
+      handlerContext.runtimeContext ?? {},
+      toolContext,
+    );
+
+    return {
+      eventContext,
+      runtimeContext,
+      tree: eventContext.tree,
+      node: eventContext.node,
+      path: eventContext.path ?? eventContext.node?.path ?? "",
+      defaultChild: eventContext.defaultChild ?? "",
+      resolvedDefaultChildPath:
+        eventContext.resolvedDefaultChildPath ?? eventContext.path ?? "",
+      depth: eventContext.depth ?? 0,
+      board: runtimeContext.board,
+      monitor: runtimeContext.monitor,
+      allocateObjectId: runtimeContext.allocateObjectId,
+      resolveOwnerChunkId: runtimeContext.resolveOwnerChunkId,
+      getNodeState:
+        typeof handlerContext.getNodeState === "function"
+          ? handlerContext.getNodeState
+          : undefined,
+      setNodeState:
+        typeof handlerContext.setNodeState === "function"
+          ? handlerContext.setNodeState
+          : undefined,
+    };
+  }
+
+  /**
+   * 创建一个可直接挂载到设备树节点上的处理器。
    * @param {Object} [toolContext = {}] - 工具固定上下文
-   * @returns {import("../devices/devices-tree.js").DevicesTreeProcessor}
+   * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
    */
   createProcessor(toolContext = {}) {
-    return (signalPacket, routeContext = {}) => {
-      const board = routeContext.board ?? toolContext.board;
-      const monitor = routeContext.monitor ?? toolContext.monitor;
-      const resolveOwnerChunkId =
-        routeContext.resolveOwnerChunkId ??
-        toolContext.resolveOwnerChunkId ??
-        (typeof monitor?.worldToChunk === "function"
-          ? (position) => {
-              if (
-                !position ||
-                typeof position.x !== "number" ||
-                typeof position.y !== "number"
-              ) {
-                return undefined;
-              }
-              return monitor.worldToChunk(position)?.chunkId;
-            }
-          : undefined);
-      const deviceContext = Object.assign(
-        routeContext,
+    return (signalPacket, handlerContext = {}) => {
+      const deviceContext = this.createDeviceContext(
+        handlerContext,
         toolContext,
-        routeContext,
       );
-      deviceContext.allocateObjectId =
-        routeContext.allocateObjectId ??
-        toolContext.allocateObjectId ??
-        board?.allocateObjectId?.bind(board);
-      deviceContext.resolveOwnerChunkId = resolveOwnerChunkId;
       return this.process(SignalPacket.from(signalPacket), deviceContext);
     };
+  }
+
+  /**
+   * 读取当前路径关联的节点状态。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {string} [statePath=deviceContext.path] - 节点路径
+   * @returns {Object}
+   */
+  resolveNodeState(deviceContext = {}, statePath = deviceContext.path) {
+    if (typeof deviceContext.getNodeState !== "function") {
+      return {};
+    }
+
+    return deviceContext.getNodeState(statePath) ?? {};
+  }
+
+  /**
+   * 写入当前路径关联的节点状态。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {Object} nextState - 新状态
+   * @param {string} [statePath=deviceContext.path] - 节点路径
+   * @returns {Object}
+   */
+  writeNodeState(
+    deviceContext = {},
+    nextState,
+    statePath = deviceContext.path,
+  ) {
+    if (typeof deviceContext.setNodeState !== "function") {
+      return nextState ?? {};
+    }
+
+    return deviceContext.setNodeState(statePath, nextState ?? {}) ?? {};
   }
 
   /**
@@ -114,19 +200,12 @@ class Tool {
     if (deviceContext.object) {
       return [deviceContext.object];
     }
-    if (deviceContext.nodeContext?.objects) {
-      return this.normalizeObjectCollection(deviceContext.nodeContext.objects);
+    const nodeState = this.resolveNodeState(deviceContext);
+    if (nodeState.objects) {
+      return this.normalizeObjectCollection(nodeState.objects);
     }
-    if (deviceContext.nodeContext?.object) {
-      return [deviceContext.nodeContext.object];
-    }
-    if (deviceContext.providedObjectsContext?.objects) {
-      return this.normalizeObjectCollection(
-        deviceContext.providedObjectsContext.objects,
-      );
-    }
-    if (deviceContext.providedObjectsContext?.object) {
-      return [deviceContext.providedObjectsContext.object];
+    if (nodeState.object) {
+      return [nodeState.object];
     }
     return [];
   }
@@ -138,9 +217,8 @@ class Tool {
    * @returns {Array<*>}
    */
   setContextObjects(deviceContext = {}, objects) {
-    const normalizedObjects = this.normalizeObjectCollection(objects).filter(
-      Boolean,
-    );
+    const normalizedObjects =
+      this.normalizeObjectCollection(objects).filter(Boolean);
 
     if (normalizedObjects.length === 0) {
       this.clearContextObjects(deviceContext);
@@ -150,14 +228,12 @@ class Tool {
     deviceContext.objects = normalizedObjects;
     deviceContext.object = normalizedObjects[0];
 
-    for (const context of [
-      deviceContext.nodeContext,
-      deviceContext.providedObjectsContext,
-    ]) {
-      if (!context) continue;
-      context.objects = normalizedObjects;
-      context.object = normalizedObjects[0];
-    }
+    const nodeState = this.resolveNodeState(deviceContext);
+    this.writeNodeState(deviceContext, {
+      ...nodeState,
+      objects: normalizedObjects,
+      object: normalizedObjects[0],
+    });
 
     return normalizedObjects;
   }
@@ -171,14 +247,15 @@ class Tool {
     delete deviceContext.object;
     delete deviceContext.objects;
 
-    for (const context of [
-      deviceContext.nodeContext,
-      deviceContext.providedObjectsContext,
-    ]) {
-      if (!context) continue;
-      delete context.object;
-      delete context.objects;
+    const nodeState = { ...this.resolveNodeState(deviceContext) };
+    if (Object.prototype.hasOwnProperty.call(nodeState, "object")) {
+      delete nodeState.object;
     }
+    if (Object.prototype.hasOwnProperty.call(nodeState, "objects")) {
+      delete nodeState.objects;
+    }
+
+    this.writeNodeState(deviceContext, nodeState);
   }
 
   /**
@@ -188,17 +265,22 @@ class Tool {
    * @returns {Object|undefined}
    */
   continueToDefaultPath(signalPacket, deviceContext = {}) {
-    if (!deviceContext.defaultPath || !deviceContext.resolvedDefaultPath) {
+    if (
+      !deviceContext.defaultChild ||
+      !deviceContext.resolvedDefaultChildPath
+    ) {
       return undefined;
     }
 
-    if (!deviceContext.tree?.getNode?.(deviceContext.resolvedDefaultPath)) {
+    if (
+      !deviceContext.tree?.getNode?.(deviceContext.resolvedDefaultChildPath)
+    ) {
       return undefined;
     }
 
     const packet = SignalPacket.from(signalPacket);
     return {
-      to: deviceContext.defaultPath,
+      to: deviceContext.defaultChild,
       signals: packet.signals,
     };
   }

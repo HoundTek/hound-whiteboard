@@ -120,12 +120,7 @@ function screenRectToWorldRect(rect, origin = { x: 0, y: 0 }, zoom = 1) {
 
 function collectLoadedChunksForWorldRect(
   worldRect,
-  {
-    loadedChunks = [],
-    getChunkById,
-    chunkWidth = 0,
-    chunkHeight = 0,
-  } = {},
+  { loadedChunks = [], getChunkById, chunkWidth = 0, chunkHeight = 0 } = {},
 ) {
   const normalizedWorldRect = RectangleRange.fromRectLike(worldRect);
   if (!normalizedWorldRect || chunkWidth <= 0 || chunkHeight <= 0) {
@@ -138,11 +133,13 @@ function collectLoadedChunksForWorldRect(
       .filter((chunkId) => Number.isInteger(chunkId)),
   );
 
-  return [...ChunkObjectManager.calculateCoveredChunkIdsForRange(
-    normalizedWorldRect,
-    chunkWidth,
-    chunkHeight,
-  )]
+  return [
+    ...ChunkObjectManager.calculateCoveredChunkIdsForRange(
+      normalizedWorldRect,
+      chunkWidth,
+      chunkHeight,
+    ),
+  ]
     .filter((chunkId) => loadedChunkIds.has(chunkId))
     .map((chunkId) => getChunkById?.(chunkId))
     .filter(Boolean);
@@ -176,7 +173,8 @@ function createBaseDirtyRectCanonicalRectsResolver({
     })
       .map((chunk) => RectangleRange.fromRectLike(getChunkScreenRect?.(chunk)))
       .filter(
-        (chunkRect) => chunkRect && intersectsRanges(chunkRect, normalizedDirtyRect),
+        (chunkRect) =>
+          chunkRect && intersectsRanges(chunkRect, normalizedDirtyRect),
       );
   };
 }
@@ -230,7 +228,8 @@ function createBaseDirtyRectPolicyResolver(options = {}) {
 
   return createDirtyRectPolicyResolver({
     getThresholds:
-      options.getThresholds ?? (() => resolveBaseThresholds(options.getZoom?.())),
+      options.getThresholds ??
+      (() => resolveBaseThresholds(options.getZoom?.())),
     getViewportRect: options.getViewportRect,
     getCanonicalRectsForRect: resolveBaseCanonicalRectsForDirtyRect,
   });
@@ -241,7 +240,8 @@ function createLiveDirtyRectPolicyResolver(options = {}) {
 
   return createDirtyRectPolicyResolver({
     getThresholds:
-      options.getThresholds ?? (() => resolveLiveThresholds(options.getZoom?.())),
+      options.getThresholds ??
+      (() => resolveLiveThresholds(options.getZoom?.())),
     getViewportRect: options.getViewportRect,
     getCanonicalRectsForRect: options.getCanonicalRectsForRect,
   });

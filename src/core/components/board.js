@@ -14,6 +14,7 @@ import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { EventBus } from "../utils/event-bus.js";
 import { UndoTree } from "../hit/undo-tree-core.js";
+import { DevicesTree } from "../devices/devices-tree.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import { Monitor } from "./monitor.js";
 import {
@@ -46,7 +47,7 @@ function isValidBoardRootPath(boardRootPath) {
  * Board 运行时节点配置事件载荷。
  * @typedef {Object} BoardConfigureEventPayload
  * @property {string} to - 目标设备树节点绝对路径，必须包含 monitorId
- * @property {import("../devices/devices-tree.js").DevicesTreeNodeConfig} options - 要更新到节点上的配置片段；`defaultPath` 传 `null` 或空串表示清空，`processor`/`rewritePacket` 传 `null` 表示清空
+ * @property {import("../devices/devices-tree.js").DevicesTreeNodeConfig} options - 要更新到节点上的配置片段；`defaultChild` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
  */
 
 /**
@@ -129,6 +130,12 @@ class Board {
   signalsEventBus;
 
   /**
+   * 白板级唯一设备树。
+   * @type {DevicesTree}
+   */
+  devicesTree;
+
+  /**
    * 根区块加载器。
    * @description
    * `Board` 通过根 `ChunkLoader` 持有白板级区块实例所有权。
@@ -150,6 +157,9 @@ class Board {
     this.chunkLoadEventBus = new EventBus();
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
+    this.devicesTree = new DevicesTree({
+      runtimeContext: { board: this },
+    });
     this.rootChunkLoader = new ChunkLoader({
       resolveChunkById: (chunkId) =>
         this.#getOrCreateChunkLoadedState(chunkId).chunk,
@@ -521,7 +531,12 @@ class Board {
     rootElement.appendChild(monitorRoot);
 
     const monitor = new Monitor(
-      liveCanvas,
+      {
+        rootElement: monitorRoot,
+        baseCanvas,
+        liveCanvas,
+        uiCanvas,
+      },
       this,
       {
         width: monitorWidth,
@@ -529,13 +544,6 @@ class Board {
       },
       monitorId,
     );
-    monitor.attachRenderLayers({
-      rootElement: monitorRoot,
-      baseCanvas,
-      liveCanvas,
-      uiCanvas,
-    });
-    // [todo] 监听 Monitor 的视口变化事件以更新 Board 的 origin 和 zoom
     this.monitors.set(monitorId, monitor);
     return monitor;
   }
@@ -580,7 +588,15 @@ class Board {
       const monitorId = to.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (monitor) {
-        monitor.devicesTree.dispatch({ to, signals });
+        this.devicesTree.dispatch(
+          { to, signals },
+          {
+            runtimeContext: {
+              board: this,
+              monitor,
+            },
+          },
+        );
       }
     });
 
@@ -589,7 +605,7 @@ class Board {
       const monitorId = to?.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (!monitor) return false;
-      return monitor.devicesTree.mountTool(to, tool, {
+      return this.devicesTree.mountTool(to, tool, {
         board: this,
         monitor,
       });
@@ -600,7 +616,12 @@ class Board {
       const monitorId = to?.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (!monitor) return false;
-      return monitor.devicesTree.unmountTool(to);
+      return this.devicesTree.unmountTool(to, {
+        runtimeContext: {
+          board: this,
+          monitor,
+        },
+      });
     });
 
     // configure 事件负责更新设备树节点配置
@@ -608,7 +629,7 @@ class Board {
       const monitorId = to?.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (!monitor) return false;
-      return monitor.devicesTree.configureNode(to, options ?? {});
+      return this.devicesTree.configureNode(to, options ?? {});
     });
   }
 

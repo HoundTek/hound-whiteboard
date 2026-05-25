@@ -491,8 +491,8 @@ class ActiveObjectManager {
     }
 
     for (const chunkId of coveredChunkIds) {
-      const staticGraph = this.board.getChunkById(chunkId)?.objectManager
-        ?.staticGraph;
+      const staticGraph =
+        this.board.getChunkById(chunkId)?.objectManager?.staticGraph;
       for (const objectId of staticGraph?.getNodes?.() ?? []) {
         objectIds.add(objectId);
       }
@@ -564,7 +564,9 @@ class ActiveObjectManager {
     }
 
     if (includeUntrackedCoveredObjectsBelow) {
-      for (const nodeId of this.collectCoveredStaticObjectIds(coveredChunkIds)) {
+      for (const nodeId of this.collectCoveredStaticObjectIds(
+        coveredChunkIds,
+      )) {
         if (nodeId === obj.id) continue;
         if (applyingObjectIds.has(nodeId)) continue;
         if (this.onLayer.has(nodeId)) continue;
@@ -1014,8 +1016,7 @@ class ActiveObjectManager {
           const ownerChunk = this.resolveObjectChunk(obj);
           if (!ownerChunk) return undefined;
           const wasOnBoard =
-            this.board?.getObjectById?.(obj.id) instanceof
-            BasicObject;
+            this.board?.getObjectById?.(obj.id) instanceof BasicObject;
           const previousCoveredChunkIds =
             ownerChunk.objectManager?.getObjectCoverChunks?.(obj.id) ??
             new Set([ownerChunk.id]);
@@ -1047,7 +1048,12 @@ class ActiveObjectManager {
       }
 
       // 再计算它们在静态图中的上下关系
-      for (const { obj, ownerChunk, coveredChunkIds, wasOnBoard } of applyContexts) {
+      for (const {
+        obj,
+        ownerChunk,
+        coveredChunkIds,
+        wasOnBoard,
+      } of applyContexts) {
         const { below, above } = this.calculateStaticRelations(
           obj,
           coveredChunkIds,

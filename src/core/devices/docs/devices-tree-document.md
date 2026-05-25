@@ -1,132 +1,153 @@
-# 设备树文档
+# 设备树
 
-本文档描述 Hound Whiteboard 中设备树（DevicesTree）的结构、路由模型和当前实现边界。
+## 概述
 
-## 总览
+DevicesTree 是 Core 输入系统的唯一分发引擎。
 
-设备树是 Monitor 名下所有逻辑设备的路由骨架。它负责两件事：
+它只做四件事：
 
-- 保存设备树节点的层级关系。
-- 按 `to` 路径将一个信号包送到对应节点，并允许节点立即处理该包。
+- 按路径保存节点层级
+- 在目标节点上执行 handler
+- 在需要时沿 defaultChild 继续转发
+- 为节点提供显式 state 与卸载钩子
 
-设备树并不只是“送达器”。节点只是处理单元。某个节点收到包后，可以消费、改写信号，再决定往哪个相对位置的子节点继续送；如果处理结果没有显式写 `to`，且默认下游节点当前存在，还可以沿当前节点的 `defaultPath` 继续下传。
+当前实现不再使用 processor、rewritePacket、defaultPath 或 defineNodes 一类旧接口。节点语义已经收敛为 handler、defaultChild、umount、state 四个维度。
+
+## 角色边界
+
+DevicesTree 负责：
+
+- 路径解析与递归分发
+- 节点配置的运行时更新
+- 工具节点和结构化设备子树的挂载与卸载
+- 为 handler 提供 eventContext、runtimeContext、getNodeState、setNodeState
+
+DevicesTree 不负责：
+
+- 从 DOM 事件直接生成设备信号
+- 决定业务工具如何修改对象
+- 推断某个输入应该进入哪个 Monitor
 
 ## 节点模型
 
-每个节点包含以下信息：
+每个 DevicesTreeNode 只描述一个路径节点。
 
-- `name`：当前节点名。
-- `parent`：父节点。
-- `children`：子节点表。
-- `processor`：直接挂在节点上的处理函数。
-- `defaultPath`：当前节点默认往下游继续传递时使用的相对路径。
-- `rewritePacket`：节点在无显式处理器时对整包输入做改写的函数。
-- `umount`：节点被卸载时的清理/撤销回调。
+节点上的可变内容有：
 
-节点路径采用类 Unix 形式，如 `/monitor/s-pen/pen`。
+- handler：当前节点的处理函数
+- defaultChild：默认子链路名称，不是绝对路径
+- umount：节点卸载时的清理钩子
+- state：节点私有状态
 
-每个节点都没有单独的设备意义，它只是一个信号处理单元。只有若干节点组成的子树，才代表一个设备。比如 S-Pen 设备由 `/monitor/s-pen` 以及它的子节点 `/monitor/s-pen/pen`、`/monitor/s-pen/eraser` 等组成。
+handler 的输入是 SignalPacket，输出可以是：
 
-这意味着：
+- 单个包
+- 多个包
+- 普通对象，后续会被规整为 SignalPacket
+- null、undefined 或空数组，表示当前链路结束
 
-- “设备树节点”不是“设备实例”。
-- “设备”应理解为一组协作节点构成的子树。
-- 某个节点的状态意义，只有放回所属设备子树里才完整。
+## 处理上下文
 
-## 路由模型
+handler 的第二个参数是 DevicesTreeHandlerContext，包含：
 
-设备树接收的仍是一个完整信号包：
+- eventContext：当前事件上下文，只读
+- runtimeContext：Board、Monitor、对象分配器等运行时资源
+- getNodeState(path?)：读取任意节点状态，默认读当前节点
+- setNodeState(path, state)：写入任意节点状态
 
-```javascript
-{
-  to: "/monitor/stylus",
-  signals: [
-    { type: "position", context: { value: { x: 1, y: 2 } } },
-    { type: "pressure", context: { value: 0.4 } },
-  ],
-}
+eventContext 的核心字段有：
+
+- path：当前正在处理的节点绝对路径
+- defaultChild：当前节点声明的默认子链路
+- resolvedDefaultChildPath：当前默认子链路对应的绝对路径
+- depth：当前递归分发深度
+- node：当前节点实例
+- tree：所属 DevicesTree
+
+## 路由规则
+
+一次 dispatch 的处理顺序如下：
+
+1. 按包上的 to 找到目标节点
+2. 若目标节点不存在，直接返回规整后的输入包
+3. 执行目标节点 handler，得到下一批包
+4. 若下一包未显式声明 to，且当前节点存在可达的 defaultChild，则自动继续路由到该子节点
+5. 若下一包仍然指向当前节点自身，则停止递归并返回结果
+
+这意味着 defaultChild 只是“缺省继续链路”，不是强制跳转。显式返回的 to 始终优先。
+
+## 挂载模型
+
+当前推荐的挂载方式有三类：
+
+- mount(path, handler, options)：挂载普通节点
+- mountTool(path, tool, toolContext)：挂载显式工具叶子
+- mountDevice(basePath, deviceDefinition, runtimeContext)：挂载结构化设备子树
+
+工具节点路径现在要求显式写出最终叶子，例如 /monitor/main/mouse/pointer/tool。
+
+## 结构化设备定义
+
+设备定义统一为 root + nodes：
+
+```js
+const device = createDevice("/mouse")
+  .node("")
+  .handler(rootHandler)
+  .end()
+  .node("pointer")
+  .defaultChild("tool")
+  .end()
+  .build();
 ```
 
-路由过程如下：
+其中：
 
-1. 读取 `to` 字段并定位目标节点。
-2. 执行该节点的 `processor`。
-3. 节点处理后可返回新的信号包，并将 `to` 改写为子节点或其它节点路径。
-4. 若返回包没有写 `to`，则设备树优先检查当前节点的 `defaultPath` 是否已有真实下游；只有该下游节点存在时才继续转发。
-5. 相对路径会以当前节点路径为基准解析；绝对路径则按原样定位。
-6. 若返回包最终仍停在当前节点上，则递归在此终止。
-7. 若目标不存在，或节点上没有处理器，则该包直接作为未消费结果返回。
+- root 是设备根路径
+- nodes 是一棵结构化节点树
+- 节点可继续声明 children、handler、defaultChild、tool、toolContext、umount
+- 设备还可以通过 expose() 暴露 resetState()、getState() 等设备级 API
 
-这说明设备树既负责“送达”，也负责承载节点上的局部处理。
+## 运行时更新
 
-当前节点处理优先级如下：
+configureNode(path, options) 支持在不重挂载的情况下修改节点：
 
-- 若存在 `processor`，优先执行 `processor`
-- 否则，若存在 `rewritePacket`，对整包输入做改写
-- 若上述能力都不存在，则原样返回当前输入包
+- 传入 handler 可替换处理器
+- 传入 handler: null 可清空处理器
+- 传入 defaultChild 可替换默认子链路
+- 传入 defaultChild: "" 或 null 可清空默认子链路
+- 传入 umount 可替换卸载逻辑
 
-这意味着：
+## 卸载语义
 
-- `rewritePacket` 适合把整包输入汇总成一条或少量输出信号
-- `rewritePacket` 也适合把多条输入过滤或翻译后，再整包返回新的设备语义
-- `processor` 仍保留给需要副作用、状态更新或复杂包级分流的节点
+当前有两种卸载方式：
 
-## 设备子树
+- unmount(path)：卸载某个节点及其整棵子树
+- unmountLeaf(path)：从锚点出发，沿 defaultChild 链找到最末端节点并卸载它
 
-在当前实现里，设备以“子树定义”的形式挂到设备树上。设备本身并不挂在节点里，而是先展开为多个节点处理器，再挂入设备树。
+工具卸载走 unmountTool(path)，本质上是对显式工具节点调用 unmount。
 
-一个设备至少要描述：
+## 设计约束
 
-- 它包含哪些相对节点路径。
-- 每个节点对应哪个处理器。
-- 哪些节点在未显式改写 `to` 且默认下游存在时应继续下传。
+- Board 持有唯一 DevicesTree 实例
+- Monitor 只做代理入口，不再拥有独立设备树
+- 工具共享状态必须显式写入节点 state，不再依赖隐式上下文对象
+- handler 与 tool 不能在同一结构化节点上同时声明
+- 显式路径优先于 defaultChild 推断
 
-例如，S-Pen 可以描述为：
+## 当前状态
 
-- 根节点 `/monitor/s-pen`：根据按键状态，把包分发到 `pen` 或 `eraser`。
-- 子节点 `/monitor/s-pen/pen`：消费绘画信号，并向后续 Core 节点输出绘画结果。
-- 子节点 `/monitor/s-pen/eraser`：消费擦除信号，并输出擦除结果。
+当前 DevicesTree 已完成以下收敛：
 
-因此，设备的身份不在单个节点上，而在整棵子树的协作关系上。
+- 设备定义统一为 createDevice(root).build()
+- 工具挂载统一为显式叶子路径
+- 节点处理统一为 handler
+- 节点状态统一为 getNodeState 和 setNodeState
+- Board 到 Tool 的端到端输入链路已经按新模型验证通过
 
-## 示例
+## 相关文档
 
-设备树的完整示例详见[示例文档](./devices-tree-example.md)。
-
-该示例直接取自当前测试中的简化 S-Pen 子树，覆盖了三件事：
-
-- 如何直接挂载多个节点处理器。
-- 如何通过 `mountDevice()` 展开设备子树定义。
-- 一次 `dispatch()` 在根节点与叶子节点之间如何递归路由并终止。
-
-这里的 `DevicesTree` 示例主要用于说明底层路由模型。业务侧在真实代码里应优先从 `Monitor` 进入，通过 `monitor.mountDevice(path, deviceDefinition)` 挂载设备；`Monitor` 会自动补上当前 `monitorId`，再转交给底层设备树。
-
-## 当前实现边界
-
-当前 DevicesTree 实现提供：
-
-- 路径归一化。
-- 基于相对位置的路径解析。
-- 节点挂载、查询、卸载。
-- 运行时节点配置更新，可通过 `configureNode(path, options)` 修改已挂载节点。
-- 基于 `to` 的递归分发。
-- 基于 `defaultPath` 的默认下游转发。
-- 运行时挂载/卸载工具节点，可通过 `mountTool(path, tool)` 和 `unmountTool(path)` 管理工具链路。
-- 最大转发深度保护，防止节点间错误循环。
-
-`configureNode(path, options)` 当前约定如下：
-
-- `defaultPath: null` 或 `defaultPath: ""` 表示清空默认下游路径
-- `rewritePacket: null` 表示清空整包改写器
-- `processor: null` 表示清空节点处理器
-- `umount: null` 表示移除卸载回调
-
-当前 DevicesTree 还没有做：
-
-- 权限控制
-- 广播、多播
-- 路径通配符
-- 节点生命周期事件
-- Monitor 专属坐标转换
-
-这些都可以继续叠加，但不应破坏“节点既能路由也能处理”的核心模型。
+- [设备定义](./device-document.md)
+- [设备树示例](./devices-tree-example.md)
+- [工具基类](../../tools/tool-document.md)
+- [Core 输入流](../../docs/core-input-flow.md)

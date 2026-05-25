@@ -23,6 +23,9 @@ class DebuggerTool extends Tool {
         case "debug:objectload":
           this.logObjectLoad(board);
           break;
+        case "debug:devices":
+          this.logDevicesTree(board);
+          break;
         case "debug:chunk":
           this.logChunk(board, signal?.context?.id);
           break;
@@ -256,6 +259,48 @@ class DebuggerTool extends Tool {
     console.log(
       "[debugger-tool] object load summary:",
       this.summarizeObjectLoad(board),
+    );
+  }
+
+  stringifyDevicesTree(tree) {
+    if (!tree || typeof tree.root !== "object") {
+      return "<no devices tree>";
+    }
+
+    const lines = [];
+    const traverseNode = (node, prefix = "", isLast = true) => {
+      const label = node.parent ? node.name : "/";
+      const branch = node.parent ? (isLast ? "└── " : "├── ") : "";
+      const defaultChild = node.getDefaultChild();
+      const handlerHint = node.getHandler() ? " [handler]" : "";
+      const defaultHint = defaultChild ? ` [default=${defaultChild}]` : "";
+      lines.push(`${prefix}${branch}${label}${handlerHint}${defaultHint}`);
+
+      const children = Array.from(node.children.values()).sort((left, right) =>
+        left.name.localeCompare(right.name),
+      );
+      const childPrefix =
+        prefix + (node.parent ? (isLast ? "    " : "│   ") : "");
+
+      children.forEach((child, index) => {
+        traverseNode(child, childPrefix, index === children.length - 1);
+      });
+    };
+
+    traverseNode(tree.root, "", true);
+    return lines.join("\n");
+  }
+
+  logDevicesTree(board) {
+    const devicesTree = board.devicesTree;
+    if (!devicesTree) {
+      console.warn("[debugger-tool] missing devices tree", board);
+      return;
+    }
+
+    console.log(
+      "[debugger-tool] devices tree:\n" +
+        this.stringifyDevicesTree(devicesTree),
     );
   }
 

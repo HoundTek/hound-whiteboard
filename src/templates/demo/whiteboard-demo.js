@@ -24,10 +24,10 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "KeyA",
   "KeyS",
   "KeyD",
-  "KeyF",
-  "KeyQ",
-  "KeyE",
-  "KeyR",
+  "KeyC",
+  "KeyO",
+  "KeyM",
+  "KeyB",
   "KeyT",
   "ArrowUp",
   "ArrowDown",
@@ -44,10 +44,10 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
 ]);
 
 const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
-  MOVE: "tools/move",
-  RANDOM_CIRCLE: "tools/create-circle",
-  DEBUG: "tools/debug",
-  VIEWPORT: "tools/viewport",
+  MOVE: "tools/move/tool",
+  RANDOM_CIRCLE: "tools/create-circle/tool",
+  DEBUG: "tools/debug/tool",
+  VIEWPORT: "tools/viewport/tool",
 });
 
 const DEMO_VIEWPORT_POSITION_STEP = 200;
@@ -61,7 +61,7 @@ const WASD_ROUTE_PRESETS = Object.freeze({
 
 function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
   return {
-    rewritePacket(packet) {
+    handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
@@ -80,7 +80,7 @@ function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
 
 function buildViewportPositionNodeConfig(monitor, delta) {
   return {
-    rewritePacket(packet) {
+    handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
@@ -110,7 +110,7 @@ function buildViewportPositionNodeConfig(monitor, delta) {
 
 function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
   return {
-    rewritePacket(packet) {
+    handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
@@ -137,7 +137,7 @@ function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
 
 function buildViewportFlushNodeConfig() {
   return {
-    rewritePacket(packet) {
+    handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
@@ -163,7 +163,7 @@ function buildViewportFlushNodeConfig() {
 
 function buildWasdNodeConfig(code, vector) {
   return {
-    rewritePacket(packet) {
+    handler(packet) {
       const movementSignals = packet.signals
         .filter(
           (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
@@ -192,7 +192,7 @@ function buildWasdNodeConfig(code, vector) {
 
 function buildKeyboardDebugNodeConfig(type, context = {}) {
   return {
-    rewritePacket(packet) {
+    handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
@@ -245,11 +245,11 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   monitor.mountDevice("/keyboard", keyboardDevice);
 
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/mouse/primary`,
+    to: `/${monitor.monitorId}/mouse/primary/tool`,
     tool: primaryStrokeTool,
   });
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/mouse/secondary`,
+    to: `/${monitor.monitorId}/mouse/secondary/tool`,
     tool: secondaryStrokeTool,
   });
   effectiveBoard.signalsEventBus.emit("mount", {
@@ -360,6 +360,10 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options: buildKeyboardDebugNodeConfig("debug:board"),
   });
   effectiveBoard.signalsEventBus.emit("configure", {
+    to: `/${monitor.monitorId}/keyboard/code/KeyT`,
+    options: buildKeyboardDebugNodeConfig("debug:devices"),
+  });
+  effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Digit1`,
     options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 1 }),
   });
@@ -378,7 +382,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
 
   console.log(`[whiteboard-demo] viewport keys: arrows=pan, +/-=zoom, R=flush`);
   console.log(
-    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, 1/2/3/4=chunk detail`,
+    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, T=devices, 1/2/3/4=chunk detail`,
   );
 
   return {

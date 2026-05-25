@@ -75,21 +75,25 @@ describe("CommonObjectModifierTool", () => {
     const tree = {
       unmount: jest.fn(),
     };
-    const nodeContext = { object };
+    let nodeState = { object };
     const tool = new CommonObjectModifierTool();
 
     tool.process(
       {
-        signals: [
-          { type: OBJECT_MODIFIER_SIGNAL_TYPES.APPLY, context: {} },
-        ],
+        signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.APPLY, context: {} }],
       },
       {
         object,
         board,
         tree,
         path: "/monitor/mouse/primary/tool/tool",
-        nodeContext,
+        getNodeState() {
+          return nodeState;
+        },
+        setNodeState(path, nextState) {
+          nodeState = nextState ?? {};
+          return nodeState;
+        },
       },
     );
 
@@ -99,6 +103,6 @@ describe("CommonObjectModifierTool", () => {
     expect(tree.unmount).toHaveBeenCalledWith(
       "/monitor/mouse/primary/tool/tool",
     );
-    expect(nodeContext.object).toBeUndefined();
+    expect(nodeState.object).toBeUndefined();
   });
 });

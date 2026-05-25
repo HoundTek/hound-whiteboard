@@ -65,7 +65,8 @@ function shouldMergeNearbyRects(firstRect, secondRect) {
 
   const unionRect = firstRect.union(secondRect);
   const unionArea = getRectangleArea(unionRect);
-  const combinedArea = getRectangleArea(firstRect) + getRectangleArea(secondRect);
+  const combinedArea =
+    getRectangleArea(firstRect) + getRectangleArea(secondRect);
   const extraArea = unionArea - combinedArea;
 
   if (extraArea <= DIRTY_RECT_MAX_EXTRA_AREA) {
@@ -155,12 +156,8 @@ function createRectangleDirtyRectMerger(options = {}) {
   const getCanonicalRectsForRect = options.getCanonicalRectsForRect;
 
   function shouldMergeWithOptions(firstRect, secondRect, thresholds) {
-    const {
-      axisNearGap,
-      diagonalNearGap,
-      maxExtraArea,
-      maxGrowthRatio,
-    } = thresholds;
+    const { axisNearGap, diagonalNearGap, maxExtraArea, maxGrowthRatio } =
+      thresholds;
 
     if (intersectsRanges(firstRect, secondRect)) {
       return true;
@@ -170,8 +167,7 @@ function createRectangleDirtyRectMerger(options = {}) {
     const isAxisNearby =
       (gapX <= axisNearGap && gapY === 0) ||
       (gapY <= axisNearGap && gapX === 0);
-    const isDiagonalNearby =
-      gapX <= diagonalNearGap && gapY <= diagonalNearGap;
+    const isDiagonalNearby = gapX <= diagonalNearGap && gapY <= diagonalNearGap;
 
     if (!isAxisNearby && !isDiagonalNearby) {
       return false;
@@ -179,7 +175,8 @@ function createRectangleDirtyRectMerger(options = {}) {
 
     const unionRect = firstRect.union(secondRect);
     const unionArea = getRectangleArea(unionRect);
-    const combinedArea = getRectangleArea(firstRect) + getRectangleArea(secondRect);
+    const combinedArea =
+      getRectangleArea(firstRect) + getRectangleArea(secondRect);
     const extraArea = unionArea - combinedArea;
 
     if (extraArea <= maxExtraArea) {
@@ -236,7 +233,9 @@ function createRectangleDirtyRectMerger(options = {}) {
       }
     }
 
-    const canonicalRects = normalizeRectangleArray(getCanonicalRectsForRect?.(rect));
+    const canonicalRects = normalizeRectangleArray(
+      getCanonicalRectsForRect?.(rect),
+    );
     if (canonicalRects.length === 0) {
       return [rect];
     }

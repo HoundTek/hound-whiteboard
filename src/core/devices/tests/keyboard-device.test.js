@@ -11,14 +11,17 @@ describe("keyboard-device", () => {
     const keyboardDevice = createKeyboardDevice({
       nodeConfigs: {
         "/code/Space": {
-          rewritePacket(packet) {
+          handler(packet) {
             const triggerSignals = packet.signals.filter(
               (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
             );
 
             return triggerSignals.length === 0
               ? []
-              : { to: "../../tools/create-circle", signals: triggerSignals };
+              : {
+                  to: "../../tools/create-circle/tool",
+                  signals: triggerSignals,
+                };
           },
         },
       },
@@ -37,8 +40,8 @@ describe("keyboard-device", () => {
 
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/tools/create-circle", tool);
+    const mountedNodes = tree.mountDevice("/monitor", keyboardDevice);
+    tree.mountTool("/monitor/keyboard/tools/create-circle/tool", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/keyboard",
@@ -48,6 +51,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/repeat",
       "/monitor/keyboard/cancel",
       "/monitor/keyboard/tools",
+      "/monitor/keyboard/code",
       "/monitor/keyboard/code/Space",
     ]);
 
@@ -160,7 +164,7 @@ describe("keyboard-device", () => {
     const tree = new DevicesTree();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountDevice("/monitor/keyboard", keyboardDevice);
+    tree.mountDevice("/monitor", keyboardDevice);
 
     tree.dispatch({
       to: "/monitor/keyboard",
@@ -220,7 +224,7 @@ describe("keyboard-device", () => {
     const tree = new DevicesTree();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountDevice("/monitor/keyboard", keyboardDevice);
+    tree.mountDevice("/monitor", keyboardDevice);
 
     tree.dispatch({
       to: "/monitor/keyboard",
@@ -306,7 +310,7 @@ describe("keyboard-device", () => {
     const keyboardDevice = createKeyboardDevice({
       nodeConfigs: {
         "/code/KeyW": {
-          rewritePacket(packet) {
+          handler(packet) {
             const signals = packet.signals
               .filter(
                 (signal) =>
@@ -322,11 +326,11 @@ describe("keyboard-device", () => {
               }));
             return signals.length === 0
               ? []
-              : { to: "../../tools/move", signals };
+              : { to: "../../tools/move/tool", signals };
           },
         },
         "/code/KeyD": {
-          rewritePacket(packet) {
+          handler(packet) {
             const signals = packet.signals
               .filter(
                 (signal) =>
@@ -342,7 +346,7 @@ describe("keyboard-device", () => {
               }));
             return signals.length === 0
               ? []
-              : { to: "../../tools/move", signals };
+              : { to: "../../tools/move/tool", signals };
           },
         },
       },
@@ -362,8 +366,8 @@ describe("keyboard-device", () => {
 
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/tools/move", tool);
+    const mountedNodes = tree.mountDevice("/monitor", keyboardDevice);
+    tree.mountTool("/monitor/keyboard/tools/move/tool", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/keyboard",
@@ -373,6 +377,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/repeat",
       "/monitor/keyboard/cancel",
       "/monitor/keyboard/tools",
+      "/monitor/keyboard/code",
       "/monitor/keyboard/code/KeyW",
       "/monitor/keyboard/code/KeyD",
     ]);
