@@ -1,0 +1,308 @@
+import { PolygonCreatorTool } from "../polygon-creator.js";
+import { Vector } from "../../../utils/math.js";
+import { Board } from "../../../components/board.js";
+import { ChunkObjectManager } from "../../../components/chunk-object-manager.js";
+import { OBJECT_CREATOR_SIGNAL_TYPES } from "../obj-creator.js";
+import { jest } from "@jest/globals";
+
+describe("PolygonCreatorTool", () => {
+  test("PolygonCreatorTool 应在同一手势内更新当前顶点，并在 end 时固化", () => {
+    const tool = new PolygonCreatorTool();
+    const deviceContext = { objectId: 10, ownerChunkId: 1 };
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [{ type: "position", context: { value: new Vector(8, 9) } }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [
+            { type: "position", context: { value: new Vector(10, 12) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+    ).toEqual([{ x: 5, y: 7 }]);
+    expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 5 });
+    expect(tool.count).toBe(1);
+    expect(tool.lastPoint).toBeNull();
+  });
+
+  test("构造参数应允许通过 property 指定新建多边形属性", () => {
+    const tool = new PolygonCreatorTool({
+      property: {
+        fillColor: "#ff0000",
+        strokeColor: "#0000ff",
+        strokeWidth: 3,
+      },
+    });
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
+      },
+      { objectId: 99, ownerChunkId: 1 },
+    );
+
+    expect(tool.obj.property).toMatchObject({
+      fillColor: "#ff0000",
+      strokeColor: "#0000ff",
+      strokeWidth: 3,
+    });
+  });
+
+  test("cancel 信号应重置当前手势", () => {
+    const tool = new PolygonCreatorTool();
+    const deviceContext = { objectId: 10, ownerChunkId: 1 };
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [
+            { type: "position", context: { value: new Vector(5, 5) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(tool.count).toBe(1);
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [{ type: "cancel", context: {} }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+    ).toEqual([{ x: 0, y: 0 }]);
+    expect(tool.count).toBe(1);
+    expect(tool.lastPoint).toBeNull();
+  });
+
+  test("object-cancel 信号应取消整个多边形对象并撤销 AOM 注册", () => {
+    const tool = new PolygonCreatorTool();
+    const board = {
+      activeObjectManager: { add: jest.fn(), discard: jest.fn() },
+    };
+    const deviceContext = { objectId: 10, ownerChunkId: 1, board };
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [
+            { type: "position", context: { value: new Vector(5, 5) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [{ type: "object-cancel", context: {} }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
+      new Set([expect.anything()]),
+    );
+    expect(tool.obj).toBeNull();
+    expect(tool.count).toBe(0);
+    expect(tool.lastPoint).toBeNull();
+  });
+
+  test("object-end 信号应固化整个多边形对象", () => {
+    const tool = new PolygonCreatorTool();
+    const deviceContext = { objectId: 10, ownerChunkId: 1 };
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [
+            { type: "position", context: { value: new Vector(5, 5) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/polygon",
+          signals: [{ type: "object-end", context: {} }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+    ).toEqual([{ x: 0, y: 0 }]);
+    expect(tool.count).toBe(1);
+    expect(tool.lastPoint).toBeNull();
+  });
+
+  test("object-end 后应将对象交给 activeObjectManager.apply", () => {
+    const tool = new PolygonCreatorTool();
+    const board = {
+      addObject: jest.fn(),
+      activeObjectManager: { apply: jest.fn() },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(5, 5) },
+          },
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+        ],
+      },
+      { objectId: 10, ownerChunkId: 1, board },
+    );
+
+    const createdObject = tool.obj;
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+        ],
+      },
+      { objectId: 10, ownerChunkId: 1, board },
+    );
+
+    expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
+      new Set([createdObject]),
+    );
+    expect(board.addObject).not.toHaveBeenCalled();
+  });
+
+  test("顶点更新前后应记录旧几何快照并请求活动层刷新", () => {
+    const tool = new PolygonCreatorTool();
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(5, 5) },
+          },
+        ],
+      },
+      { objectId: 31, ownerChunkId: 1, monitor },
+    );
+
+    monitor.liveRenderer.captureObjectSnapshot.mockClear();
+    monitor.liveRenderer.invalidateObjects.mockClear();
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(8, 9) },
+          },
+        ],
+      },
+      { objectId: 31, ownerChunkId: 1, monitor },
+    );
+
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith([
+      tool.obj,
+    ]);
+    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
+      tool.obj,
+    ]);
+  });
+
+  test("真实 Board 上 object-end 后应经由 AOM.apply 落回归属区块", () => {
+    const tool = new PolygonCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(5, 5) },
+          },
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+        ],
+      },
+      { objectId: 23, ownerChunkId: 1, board },
+    );
+
+    const createdObject = tool.obj;
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+        ],
+      },
+      { objectId: 23, ownerChunkId: 1, board },
+    );
+
+    const ownerChunk = board.getChunkById(1);
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(ownerChunk.objectManager.getObject(23)).toBe(createdObject);
+  });
+});

@@ -1,0 +1,13 @@
+[source.crates-io]
+replace-with = 'ustc'
+
+[source.ustc]
+registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+
+[net]
+git-fetch-with-cli = true
+retry = 3
+
+[http_proxy]
+http = "socks5://127.0.0.1:7890"
+https = "socks5://127.0.0.1:7890"

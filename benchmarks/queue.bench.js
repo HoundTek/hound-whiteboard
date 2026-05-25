@@ -3,8 +3,8 @@
  * @module benchmarks/queue
  */
 
-const Benchmark = require("benchmark");
-const { Queue } = require("../src/utils/queue");
+import Benchmark from "benchmark";
+import { Queue } from "../src/core/utils/queue.js";
 
 const suite = new Benchmark.Suite("Queue Benchmarks");
 

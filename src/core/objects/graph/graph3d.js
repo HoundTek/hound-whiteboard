@@ -3,13 +3,13 @@
  * @description
  * 多边形对象 PolygonObject
  * 表示白板上的多边形对象类。
- * @module board/graph/graph3d
+ * @module core/objects/graph/graph3d
  * @author Zhou Chenyu
  */
 
-const { GraphObject } = require("./graph");
-const { Matrix, Point } = require("../../../utils/math");
-const { Matrix3D } = require("../../../utils/math3d");
+import { GraphObject } from "./graph.js";
+import { Matrix, Vector } from "../../utils/math.js";
+import { Matrix3D } from "../../utils/math3d.js";
 
 /**
  * 三维图形类
@@ -21,8 +21,8 @@ const { Matrix3D } = require("../../../utils/math3d");
  * @author Zhou Chenyu
  */
 class Graph3DObject extends GraphObject {
-  constructor(p, id, pageId) {
-    super(p, id, pageId, false, true);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId, false, true);
   }
 
   /**
@@ -32,6 +32,4 @@ class Graph3DObject extends GraphObject {
   transform3d;
 }
 
-module.exports = {
-  Graph3DObject,
-};
+export { Graph3DObject };

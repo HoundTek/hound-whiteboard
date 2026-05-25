@@ -1,12 +1,20 @@
 /**
  * @file 多边形对象定义
- * @module board/graph/polygon
+ * @description 定义白板多边形对象的几何、绘制与转换逻辑。
+ * @module core/objects/graph/polygon
  * @author Zhou Chenyu
  */
 
-const { GraphObject } = require("./graph");
-const { Matrix, Point } = require("../../../utils/math");
-const { calculateConvexHull } = require("../../utils/math-algorithm");
+import { GraphObject } from "./graph.js";
+import { Matrix, Vector } from "../../utils/math.js";
+import { calcConvexHull } from "../../utils/math-algorithm.js";
+import { PolygonRange, RectangleRange } from "../../range/index.js";
+
+const DEFAULT_POLYGON_PROPERTY = Object.freeze({
+  fillColor: "#000000",
+  strokeColor: null,
+  strokeWidth: 0,
+});
 
 /**
  * 多边形类
@@ -19,65 +27,86 @@ const { calculateConvexHull } = require("../../utils/math-algorithm");
 class PolygonObject extends GraphObject {
   /**
    * 创建一个新的多边形对象
-   * @param {Point} p - 多边形逻辑左上角的绝对位置
+   * @param {Vector} p - 多边形逻辑左上角的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
-   * @param {Point[]} points - 多边形各顶点相对其左上角的相对位置
+   * @param {number} ownerChunkId - 对象归属区块的 id
+   * @param {Vector[]} points - 多边形各顶点相对其左上角的相对位置
    * @constructor
    */
-  constructor(p, id, pageId, points) {
-    super(p, id, pageId);
+  constructor(p, id, ownerChunkId, points) {
+    super(p, id, ownerChunkId);
     if (points) {
-      this.setPoints(points);
+      this.setPolygonPoints(points);
     }
   }
 
   /**
    * 多边形对象的顶点集
-   * @type {Point[]}
+   * @type {PolygonRange}
    * @description
    * 每一个点在变换前，相对 position 的位置数组，属于基础数据。
-   * 外界不应直接修改它，应使用 setPoints 方法。
+   * 外界不应直接修改它，应使用 setPolygonPoints 方法。
    */
-  points = [];
+  localPolygonRange = new PolygonRange([]);
+
+  property = { ...DEFAULT_POLYGON_PROPERTY };
 
   /**
    * 设置对象的顶点集
    * @description 设置新的顶点集时，会自动更新变换后的顶点集和凸包。
-   * @param {Point[]} points - 新的顶点集
+   * @param {Vector[]} points - 新的顶点集
    */
-  setPoints(points) {
-    this.points = points;
-    this.transformedPoints = points.map((p) =>
-      Point.mulMatrix(this.transform, p)
-    );
+  setPolygonPoints(points) {
+    this.localPolygonRange = new PolygonRange(points);
+    this.worldPolygonRange = this.localPolygonRange.transform(this.transform);
     this.calculateConvexHull();
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (let p of this.transformedPoints) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    this.rectangle = new Matrix(minX, minY, maxX, maxY);
+    this.calculateRectangle();
   }
 
   /**
-   * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。为富数据。
+   * 修改指定索引的顶点
+   * @param {number} index - 要修改的顶点索引
+   * @param {Vector} points - 新的顶点坐标
+   */
+  replacePolygonPoint(index, points) {
+    // 修改指定索引的顶点，并更新变换后的顶点集和凸包。
+    if (index < 0 || index >= this.localPolygonRange.points.length) {
+      throw new RangeError("Index out of bounds");
+    }
+    const nextPoints = [...this.localPolygonRange.points];
+    nextPoints[index] = points;
+    this.setPolygonPoints(nextPoints);
+  }
+
+  /**
+   * 在末尾添加一个新的顶点
+   * @param {Vector} point - 新的顶点坐标
+   */
+  appendPolygonPoint(point) {
+    this.setPolygonPoints(this.localPolygonRange.points.concat([point]));
+  }
+
+  calculateRectangle() {
+    this.boundingBox = RectangleRange.from(
+      this.convexHullRange.transform(this.transform),
+    );
+  }
+
+  /**
+   * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。
    */
   calculateConvexHull() {
-    this.convexHull = calculateConvexHull(this.points);
+    this.convexHullRange = new PolygonRange(
+      calcConvexHull(this.localPolygonRange.points),
+    );
   }
 
   /**
    * 多边形对象经变换的顶点
-   * @type {Point[]}
+   * @type {PolygonRange}
    * @description 每一个点在变换后，相对 position 的位置数组，属于富数据。
    */
-  transformedPoints = [];
+  worldPolygonRange = new PolygonRange([]);
 
   /**
    * @param {Matrix} trans - 新的变换矩阵
@@ -85,7 +114,12 @@ class PolygonObject extends GraphObject {
    */
   setTransform(trans) {
     this.transform = trans;
-    this.transformedPoints = this.points.map((p) => Point.mulMatrix(trans, p));
+    this.worldPolygonRange = this.localPolygonRange.transform(trans);
+    this.calculateRectangle();
+  }
+
+  getRange() {
+    return this.worldPolygonRange;
   }
 
   /**
@@ -93,16 +127,27 @@ class PolygonObject extends GraphObject {
    * @type {string}
    * @default "#000000"
    */
-  color = "#000000";
-
   /**
    *
    * @param {CanvasRenderingContext2D} ctx
    */
   render(ctx) {
-    if (!this.points || this.points.length === 0) {
+    if (!this.localPolygonRange || this.localPolygonRange.points.length === 0) {
       return;
     }
+
+    const strokeWidth = this.property.strokeWidth;
+    const shouldFill = Boolean(this.property.fillColor);
+    const shouldStroke =
+      Boolean(this.property.strokeColor) &&
+      Number.isFinite(strokeWidth) &&
+      strokeWidth > 0;
+
+    if (!shouldFill && !shouldStroke) {
+      return;
+    }
+
+    const points = this.localPolygonRange.points;
     ctx.save();
     ctx.setTransform(
       this.transform.a,
@@ -110,69 +155,55 @@ class PolygonObject extends GraphObject {
       this.transform.c,
       this.transform.d,
       this.position.x,
-      this.position.y
+      this.position.y,
     );
-    ctx.fillStyle = this.color;
     ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
-    ctx.moveTo(this.points[0].x, this.points[0].y);
-    for (let i = 1; i < this.points.length; i++) {
-      ctx.lineTo(this.points[i].x, this.points[i].y);
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
     }
     ctx.closePath();
-    ctx.fill();
+
+    if (shouldFill) {
+      ctx.fillStyle = this.property.fillColor;
+      ctx.fill();
+    }
+
+    if (shouldStroke) {
+      ctx.strokeStyle = this.property.strokeColor;
+      ctx.lineWidth = strokeWidth;
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
-  /**
-   * @param {Point} p - 要检测的点
-   * @description 判断原则：若将该多边形用 canvas 绘制出来，点 p 是否会落在填充区域内或边界上。
-   * @returns {boolean} 点是否在多边形内
-   */
-  isPointIntersect(p) {
-    // 先用矩形框进行初步检测
-    if (!super.isPointIntersect(p)) {
-      return false;
+  serialize() {
+    return {
+      ...super.serialize(),
+      type: "PolygonObject",
+      points: this.localPolygonRange.points.map((p) => p.serialize()),
+    };
+  }
+
+  static parse(data) {
+    if (data.type !== "PolygonObject") {
+      throw new TypeError("Invalid type for PolygonObject parsing");
     }
-
-    // 将点转换到多边形的局部坐标系中（减掉相对位置）
-    p = p.sub(this.position);
-
-    let counter = 0;
-    for (let i = 0; i < this.transformedPoints.length; i++) {
-      let first = this.transformedPoints[i];
-      let second =
-        this.transformedPoints[(i + 1) % this.transformedPoints.length];
-      if (first.x < second.x) {
-        if (p.x < first.x || second.x < p.x) {
-          continue;
-        }
-      } else {
-        if (p.x < second.x || first.x < p.x) {
-          continue;
-        }
-      }
-
-      if (first.x == p.x && first.y == p.y) {
-        return true; // 在顶点上
-      }
-
-      let k = (second.y - first.y) / (second.x - first.x);
-      let ly = first.y + k * (p.x - first.x);
-      if (p.y > ly) {
-        if (first.x <= second.x) {
-          counter++;
-        } else {
-          counter--;
-        }
-      } else if (p.y >= ly - 1e-5) {
-        return true; // 在边上（允许一定误差）
-      }
-    }
-    return counter != 0;
+    let obj = new PolygonObject(
+      Vector.parse(data.position),
+      data.id,
+      data.ownerChunkId,
+      data.points.map((p) => Vector.parse(p)),
+    );
+    obj.setTransform(Matrix.parse(data.transform));
+    obj.setProperty({
+      ...DEFAULT_POLYGON_PROPERTY,
+      ...(data.property ?? {}),
+    });
+    return obj;
   }
 }
 
-module.exports = {
-  PolygonObject,
-};
+export { DEFAULT_POLYGON_PROPERTY, PolygonObject };

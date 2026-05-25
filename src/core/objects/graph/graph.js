@@ -1,10 +1,11 @@
 /**
  * @file 图形对象定义
- * @module board/graph/graph
+ * @description 定义图形对象的基础抽象与通用行为。
+ * @module core/objects/graph/graph
  * @author Zhou Chenyu
  */
 
-const { BasicObject } = require("../basic-obj");
+import { BasicObject } from "../basic-obj.js";
 
 /**
  * 图形对象类
@@ -15,15 +16,17 @@ const { BasicObject } = require("../basic-obj");
  * @author Zhou Chenyu
  */
 class GraphObject extends BasicObject {
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId);
   }
 
-  static isDirected = true;
+  isDirected() {
+    return true;
+  }
 
-  static isErasable = false;
+  isErasable() {
+    return false;
+  }
 }
 
-module.exports = {
-  GraphObject,
-};
+export { GraphObject };

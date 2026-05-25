@@ -1,0 +1,210 @@
+:root {
+  --bg0: #ffffff;
+  --bg1: #f0f0f0;
+  --fg0: #333333;
+  --fg1: #666666;
+  --fs5: 14px;
+}
+
+* {
+  user-select: none;
+  transition: color 0.2s ease-in-out;
+  transition: background-color 0.2s ease-in-out;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg0);
+  color: var(--fg0);
+  height: 100vh;
+  width: 100vw;
+}
+
+.big-flex-btn {
+  margin: 10px;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  -electron-corner-smoothing: 60%;
+  background-color: var(--bg1);
+  color: var(--fg1);
+  font-size: 1.2em;
+  cursor: pointer;
+  width: 150px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.big-flex-btn img {
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+#yes-or-no-button {
+  position: fixed;
+  right: 30px;
+  bottom: 30px;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.content-screen {
+  display: none;
+}
+
+.content-active {
+  display: block;
+}
+
+.button-icon {
+  width: 24px;
+  height: 24px;
+  background-color: aqua;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  background-color: var(--bg0);
+  align-items: center;
+  justify-content: center;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+#app-controls {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#app-controls-island {
+  height: 30px;
+  margin-top: 10px;
+  background-color: var(--bg1);
+  border-radius: 15px;
+  -electron-corner-smoothing: 60%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+}
+
+#app-controls-island-text {
+  font-size: var(--fs5);
+  margin: 0 15px;
+}
+
+#app-controls-side-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+#app-controls-side-controls-left {
+  width: 40px;
+  display: flex;
+  flex-direction: column;
+  margin-left: 10px;
+  border-radius: 5px;
+  -electron-corner-smoothing: 60%;
+  background-color: var(--bg1);
+  z-index: 1;
+}
+
+#app-controls-side-controls-left img {
+  width: 38px;
+  height: 38px;
+}
+
+#app-controls-side-controls-right {
+  width: 40px;
+  display: flex;
+  flex-direction: column;
+  margin-right: 10px;
+  border-radius: 5px;
+  -electron-corner-smoothing: 60%;
+  background-color: var(--bg1);
+  z-index: 1;
+}
+
+#app-controls-side-controls-right img {
+  width: 38px;
+  height: 38px;
+}
+
+#app-controls-bottom-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 40px;
+  background-color: var(--bg1);
+  margin-bottom: 10px;
+  border-radius: 5px;
+  -electron-corner-smoothing: 60%;
+  z-index: 1;
+}
+
+#app-controls-bottom-controls img {
+  width: 38px;
+  height: 38px;
+}
+
+#app-background-layer {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: -2;
+  object-fit: cover;
+}
+
+#svg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.monitor-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+.monitor-layer {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.monitor-layer-base {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.monitor-layer-live {
+  z-index: 1;
+  pointer-events: auto;
+  background-color: transparent;
+}
+
+.monitor-layer-ui {
+  z-index: 2;
+  pointer-events: none;
+}

@@ -1,15 +1,25 @@
 /**
- * 全局活动对象管理器
- * @module active-object-manager
+ * @file 全局活动对象管理器
+ * @description 管理活动对象的层级、筛选与运行时状态。
+ * @module core/components/active-object-manager
  * @author Zhou Chenyu
  */
 
-const { RandomNumberPool } = require("../../utils/algorithm");
-const { Deque } = require("../../utils/deque");
-const { Queue } = require("../../utils/queue");
-const { DirectedGraph } = require("../utils/directed-graph");
-const { PageManager } = require("./page-manager");
+import { RandomNumberPool } from "../utils/random.js";
+import { Queue } from "../utils/queue.js";
+import { DirectedGraph } from "../utils/directed-graph.js";
+import { Chunk } from "./chunk.js";
+import { ChunkBlockLoader } from "./chunk-block-loader.js";
+import { ChunkObjectManager } from "./chunk-object-manager.js";
+import { BasicObject } from "../objects/basic-obj.js";
+import { intersectsRanges, RectangleRange, Range } from "../range/index.js";
 
+/**
+ * 层类
+ * @description 每一层包含一些活动对象和一些非活动对象，层与层之间有顺序关系。
+ * @class
+ * @author Zhou Chenyu
+ */
 class Layer {
   /**
    * 层 id
@@ -29,6 +39,10 @@ class Layer {
    */
   inactiveGraph;
 
+  /**
+   * @constructor
+   * @param {number} id - 层 id
+   */
   constructor(id) {
     this.id = id;
     this.activeObjects = new Set();
@@ -79,22 +93,497 @@ class ActiveObjectManager {
 
   /**
    * 当前所有活动对象 id 集合
-   * @type {Set<number>}
+   * @type {Set<BasicObject>}
    */
   activeObjects;
 
-  constructor() {
+  /**
+   * 活动对象 id 到实例的索引
+   * @type {Map<number, BasicObject>}
+   */
+  activeObjectIndex;
+
+  /**
+   * 活动对象进入动态图前的世界范围快照
+   * @description 用于在提交回静态层时同时失效旧静态像素与新静态像素。
+   * @type {Map<number, RectangleRange>}
+   */
+  baseObjectSnapshotWorldRanges;
+
+  /**
+   * 所属白板
+   * @type {import("./board.js").Board | undefined}
+   */
+  board;
+
+  constructor(board) {
+    this.board = board;
     this.layerPool = new RandomNumberPool(1, 10000000);
     this.layerOrder = [];
     this.onLayer = new Map();
     this.layerIndex = new Map();
     this.activeObjects = new Set();
+    this.activeObjectIndex = new Map();
+    this.baseObjectSnapshotWorldRanges = new Map();
+  }
+
+  /**
+   * 记录对象进入活动层前的世界范围快照
+   * @param {Iterable<BasicObject>} [objects = []] - 待记录对象集合
+   */
+  captureBaseObjectSnapshot(objects = []) {
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      if (this.baseObjectSnapshotWorldRanges.has(objectInstance.id)) continue;
+
+      const worldRange = this.getObjectWorldRange(objectInstance);
+      if (!worldRange) continue;
+
+      this.baseObjectSnapshotWorldRanges.set(
+        objectInstance.id,
+        RectangleRange.from(worldRange),
+      );
+    }
+  }
+
+  /**
+   * 清理对象的静态层旧范围快照
+   * @param {Iterable<BasicObject>} [objects = []] - 待清理对象集合
+   */
+  clearBaseObjectSnapshots(objects = []) {
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      this.baseObjectSnapshotWorldRanges.delete(objectInstance.id);
+    }
+  }
+
+  /**
+   * 断言输入是有效对象实例
+   * @param {*} obj - 候选对象
+   * @returns {BasicObject}
+   */
+  requireObjectInstance(obj) {
+    if (!(obj instanceof BasicObject)) {
+      throw new TypeError(
+        "ActiveObjectManager only accepts BasicObject instances.",
+      );
+    }
+    return obj;
+  }
+
+  /**
+   * 注册活动对象实例
+   * @param {BasicObject} obj - 要注册的对象实例
+   */
+  registerActiveObject(obj) {
+    this.requireObjectInstance(obj);
+    const previous = this.activeObjectIndex.get(obj.id);
+    if (previous) {
+      this.activeObjects.delete(previous);
+    }
+    this.activeObjectIndex.set(obj.id, obj);
+    this.activeObjects.add(obj);
+  }
+
+  /**
+   * 请求所有 monitor 刷新活动层
+   * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
+   */
+  requestLiveRender(objects = []) {
+    const board = this.board;
+    if (!board?.monitors?.values) return;
+
+    const changedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+
+    for (const monitor of board.monitors.values()) {
+      const liveRenderer = monitor?.liveRenderer;
+      if (!liveRenderer) continue;
+
+      const dirtyObjectMap = new Map();
+      for (const objectInstance of changedObjects) {
+        dirtyObjectMap.set(objectInstance.id, objectInstance);
+      }
+      for (const objectInstance of liveRenderer.collectActiveDrawables?.() ??
+        []) {
+        dirtyObjectMap.set(objectInstance.id, objectInstance);
+      }
+
+      if (typeof liveRenderer.invalidateObjects === "function") {
+        liveRenderer.invalidateObjects([...dirtyObjectMap.values()]);
+        continue;
+      }
+
+      monitor?.renderScheduler?.invalidate?.();
+    }
+  }
+
+  /**
+   * 请求所有 monitor 刷新静态层
+   */
+  requestBaseRender(chunks = []) {
+    const board = this.board;
+    if (!board?.monitors?.values) return;
+
+    const normalizedChunks = Array.from(chunks).filter(Boolean);
+
+    for (const monitor of board.monitors.values()) {
+      if (normalizedChunks.length > 0) {
+        monitor?.baseRenderer?.invalidateChunks?.(normalizedChunks);
+        continue;
+      }
+      if (typeof monitor?.requestViewportBaseRender === "function") {
+        monitor.requestViewportBaseRender();
+        continue;
+      }
+      monitor?.baseRenderer?.flush?.();
+    }
+  }
+
+  /**
+   * 请求所有 monitor 按对象范围刷新静态层
+   * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
+   * @param {Iterable<Chunk>} [fallbackChunks = []] - 无法走对象级失效时的回退区块集合
+   */
+  requestBaseRenderForObjects(objects = [], fallbackChunks = []) {
+    const board = this.board;
+    if (!board?.monitors?.values) return;
+
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+    const normalizedChunks = Array.from(fallbackChunks).filter(Boolean);
+    const previousWorldRects = new Map(this.baseObjectSnapshotWorldRanges);
+
+    for (const monitor of board.monitors.values()) {
+      const dirtyRects = monitor?.baseRenderer?.invalidateObjects?.(
+        normalizedObjects,
+        {
+          previousWorldRects,
+        },
+      );
+
+      if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
+        continue;
+      }
+
+      if (normalizedChunks.length > 0) {
+        monitor?.baseRenderer?.invalidateChunks?.(normalizedChunks);
+        continue;
+      }
+
+      if (typeof monitor?.requestViewportBaseRender === "function") {
+        monitor.requestViewportBaseRender();
+        continue;
+      }
+
+      monitor?.baseRenderer?.flush?.();
+    }
+  }
+
+  /**
+   * 解析静态层对象级失效集合
+   * @param {Iterable<BasicObject>} [objects = []] - 起始对象集合
+   * @param {Array<{ coveredChunkIds: Set<number>, relatedObjectIds?: Iterable<number> }>} [contexts = []] - 关联上下文
+   * @returns {BasicObject[]}
+   */
+  collectBaseInvalidationObjects(objects = [], contexts = []) {
+    const invalidationObjectMap = new Map();
+
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      invalidationObjectMap.set(objectInstance.id, objectInstance);
+    }
+
+    for (const context of contexts ?? []) {
+      const coveredChunkIds = context?.coveredChunkIds ?? new Set();
+      for (const objectId of context?.relatedObjectIds ?? []) {
+        if (invalidationObjectMap.has(objectId)) continue;
+
+        const objectInstance = this.findBoardObjectInstance(
+          objectId,
+          coveredChunkIds,
+        );
+        if (!(objectInstance instanceof BasicObject)) continue;
+
+        invalidationObjectMap.set(objectId, objectInstance);
+      }
+    }
+
+    return [...invalidationObjectMap.values()];
+  }
+
+  /**
+   * 从最终静态图中收集某对象的邻接对象 id
+   * @param {number} objectId - 对象 id
+   * @param {Iterable<number>} [coveredChunkIds = []] - 相关覆盖区块
+   * @returns {Set<number>}
+   */
+  collectStaticGraphNeighborIds(objectId, coveredChunkIds = []) {
+    const relatedObjectIds = new Set();
+
+    for (const chunkId of coveredChunkIds ?? []) {
+      const graph =
+        this.board?.getChunkById?.(chunkId)?.objectManager?.staticGraph;
+      if (!graph?.hasNode?.(objectId)) continue;
+
+      for (const neighborId of graph.neighborsUnsafe?.(objectId) ?? []) {
+        relatedObjectIds.add(neighborId);
+      }
+      for (const predecessorId of graph.predecessorsUnsafe?.(objectId) ?? []) {
+        relatedObjectIds.add(predecessorId);
+      }
+    }
+
+    relatedObjectIds.delete(objectId);
+    return relatedObjectIds;
+  }
+
+  /**
+   * 取消注册活动对象实例
+   * @param {number} objectId - 要取消注册的对象 id
+   */
+  unregisterActiveObject(objectId) {
+    const activeObject = this.activeObjectIndex.get(objectId);
+    if (activeObject) {
+      this.activeObjects.delete(activeObject);
+      this.activeObjectIndex.delete(objectId);
+    }
+
+    const layer = this.onLayer.get(objectId);
+    if (layer) {
+      layer.activeObjects.delete(objectId);
+    }
+    this.onLayer.delete(objectId);
+  }
+
+  /**
+   * 解析对象起始区块
+   * @param {BasicObject} obj
+   * @returns {Chunk | undefined}
+   */
+  resolveObjectChunk(obj) {
+    this.requireObjectInstance(obj);
+
+    if (Number.isInteger(obj?.ownerChunkId) && this.board) {
+      return this.board.getChunkById(obj.ownerChunkId);
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 创建与白板区块加载事件总线绑定的区块加载器
+   * @returns {ChunkBlockLoader}
+   */
+  createChunkBlockLoader() {
+    if (this.board?.createChunkBlockLoader) {
+      return this.board.createChunkBlockLoader(undefined, `aom-${Date.now()}`);
+    }
+    return new ChunkBlockLoader();
+  }
+
+  /**
+   * 获取对象世界坐标范围
+   * @param {BasicObject} obj
+   * @returns {Range | undefined}
+   */
+  getObjectWorldRange(obj) {
+    if (!(obj instanceof BasicObject)) return undefined;
+    if (!obj.position || typeof obj.getRange !== "function") return undefined;
+    const range = obj.getRange();
+    if (!range || typeof range.withPosition !== "function") return undefined;
+    return range.withPosition(obj.position);
+  }
+
+  /**
+   * 在当前白板中查找对象实例
+   * @param {number} objectId
+   * @param {Iterable<number>} [candidateChunkIds = []]
+   * @returns {BasicObject | undefined}
+   */
+  findBoardObjectInstance(objectId, candidateChunkIds = []) {
+    const activeObject = this.activeObjectIndex.get(objectId);
+    if (activeObject instanceof BasicObject) {
+      return activeObject;
+    }
+
+    if (!this.board) return undefined;
+
+    const loadedObject = this.board.getObjectById?.(objectId);
+    if (loadedObject instanceof BasicObject) {
+      return loadedObject;
+    }
+
+    const chunkIdsToSearch = new Set(candidateChunkIds);
+    for (const chunkId of candidateChunkIds) {
+      const chunk = this.board.getChunkById(chunkId);
+      const coverChunks =
+        chunk?.objectManager?.getObjectCoverChunks(objectId) || [];
+      for (const coveredChunkId of coverChunks) {
+        chunkIdsToSearch.add(coveredChunkId);
+      }
+    }
+
+    for (const chunkId of chunkIdsToSearch) {
+      const chunk = this.board.getChunkById(chunkId);
+      const objectInstance = chunk?.objectManager?.getObject?.(objectId);
+      if (objectInstance instanceof BasicObject) {
+        return objectInstance;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 判断两个对象是否相交
+   * @param {BasicObject} left
+   * @param {BasicObject} right
+   * @returns {boolean}
+   */
+  intersectsObjects(left, right) {
+    const leftRange = this.getObjectWorldRange(left);
+    const rightRange = this.getObjectWorldRange(right);
+    if (!leftRange || !rightRange) return false;
+    return intersectsRanges(leftRange, rightRange);
+  }
+
+  /**
+   * 计算对象覆盖区块集合
+   * @param {BasicObject} obj
+   * @returns {Set<number>}
+   */
+  calculateCoveredChunkIds(obj) {
+    if (!(obj instanceof BasicObject) || !this.board) {
+      return new Set(
+        Number.isInteger(obj?.ownerChunkId) ? [obj.ownerChunkId] : [],
+      );
+    }
+
+    const worldRange = this.getObjectWorldRange(obj);
+    if (!worldRange || this.board.width <= 0 || this.board.height <= 0) {
+      return new Set([obj.ownerChunkId]);
+    }
+
+    const chunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
+      worldRange,
+      this.board.width,
+      this.board.height,
+    );
+
+    if (chunkIds.size === 0) {
+      chunkIds.add(obj.ownerChunkId);
+    }
+    return chunkIds;
+  }
+
+  /**
+   * 收集覆盖区块中的静态对象 id
+   * @param {Iterable<number>} coveredChunkIds
+   * @returns {Set<number>}
+   */
+  collectCoveredStaticObjectIds(coveredChunkIds = []) {
+    const objectIds = new Set();
+    if (!this.board) {
+      return objectIds;
+    }
+
+    for (const chunkId of coveredChunkIds) {
+      const staticGraph = this.board.getChunkById(chunkId)?.objectManager
+        ?.staticGraph;
+      for (const objectId of staticGraph?.getNodes?.() ?? []) {
+        objectIds.add(objectId);
+      }
+    }
+
+    return objectIds;
+  }
+
+  /**
+   * 计算对象在静态图中的上下关系
+   * @param {BasicObject} obj - 要计算的对象实例
+   * @param {Set<number>} coveredChunkIds - 该对象的覆盖区块集合
+   * @param {Set<number>} applyingObjectIds - 正在被提交的对象 id 集合
+   * @param {{includeUntrackedCoveredObjectsBelow?: boolean}} [options]
+   * @returns {{below: Set<number>, above: Set<number>}}
+   */
+  calculateStaticRelations(
+    obj,
+    coveredChunkIds,
+    applyingObjectIds,
+    options = {},
+  ) {
+    const relation = {
+      below: new Set(),
+      above: new Set(),
+    };
+    const { includeUntrackedCoveredObjectsBelow = false } = options;
+    const currentLayer = this.onLayer.get(obj.id);
+    const currentLayerIndex = currentLayer
+      ? this.layerIndex.get(currentLayer.id)
+      : undefined;
+
+    if (currentLayerIndex === undefined) {
+      return relation;
+    }
+
+    for (let index = 0; index < this.layerOrder.length; index++) {
+      const layer = this.layerOrder[index];
+
+      for (const nodeId of layer.inactiveGraph.getNodes()) {
+        const candidate = this.findBoardObjectInstance(nodeId, coveredChunkIds);
+        if (!(candidate instanceof BasicObject)) continue;
+        if (!this.intersectsObjects(obj, candidate)) continue;
+
+        if (index < currentLayerIndex) {
+          relation.below.add(nodeId);
+        } else if (index > currentLayerIndex) {
+          relation.above.add(nodeId);
+        }
+      }
+    }
+
+    for (const otherObjectId of applyingObjectIds) {
+      if (otherObjectId === obj.id) continue;
+      const otherObject = this.activeObjectIndex.get(otherObjectId);
+      if (!(otherObject instanceof BasicObject)) continue;
+      if (!this.intersectsObjects(obj, otherObject)) continue;
+
+      const otherLayer = this.onLayer.get(otherObjectId);
+      if (!otherLayer) continue;
+      const otherLayerIndex = this.layerIndex.get(otherLayer.id);
+      if (otherLayerIndex === undefined) continue;
+
+      if (otherLayerIndex < currentLayerIndex) {
+        relation.below.add(otherObjectId);
+      } else if (otherLayerIndex > currentLayerIndex) {
+        relation.above.add(otherObjectId);
+      }
+    }
+
+    if (includeUntrackedCoveredObjectsBelow) {
+      for (const nodeId of this.collectCoveredStaticObjectIds(coveredChunkIds)) {
+        if (nodeId === obj.id) continue;
+        if (applyingObjectIds.has(nodeId)) continue;
+        if (this.onLayer.has(nodeId)) continue;
+
+        const candidate = this.findBoardObjectInstance(nodeId, coveredChunkIds);
+        if (!(candidate instanceof BasicObject)) continue;
+        if (!this.intersectsObjects(obj, candidate)) continue;
+
+        relation.below.add(nodeId);
+      }
+    }
+
+    return relation;
   }
 
   /**
    * 获取以指定对象集合为起点的子图
-   * @description 内部使用 BFS 来遍历图，跨页对象（尤其是反复横跳的）会造成较大的性能损失
-   * @param {Set<{id: number, page: PageManager}>} startFrom - 作为起点的对象 id 和其所在页实例的集合
+   * @description 内部使用 BFS 来遍历图，跨区块对象（尤其是反复横跳的）会造成较大的性能损失
+   * @param {Iterable<BasicObject>} startFrom - 作为起点的对象集合
    * @returns {DirectedGraph}
    */
   pickup(startFrom) {
@@ -103,16 +592,54 @@ class ActiveObjectManager {
 
     /**
      * @param {number} obj - 要拾取的对象 id
-     * @param {PageManager} pge - 该对象所在的页
+     * @param {Chunk} chunk - 该对象所在的区块
      */
-    function pickupSingle(obj, pge) {
+    const pickupSingle = (obj, chunk) => {
       if (visit.has(obj)) return;
       visit.add(obj);
       graph.addNodeUnsafe(obj);
 
-      let pageLoader = new PageLoadManager();
-      // 初始化页加载器，预加载当前页
-      pageLoader.resetCurrentPage(pge);
+      let chunkBlockLoader = this.createChunkBlockLoader();
+      // 初始化区块加载器，预加载当前区块
+      chunkBlockLoader.initChunk(chunk);
+
+      /**
+       * 将区块加载器移动到指定坐标
+       * @param {number} targetX - 目标区块坐标 x
+       * @param {number} targetY - 目标区块坐标 y
+       * @returns {boolean}
+       */
+      function moveChunkBlockLoaderTo(targetX, targetY) {
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.x < targetX
+        ) {
+          if (!chunkBlockLoader.forceMoveCurrentRightTempLoad()) return false;
+        }
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.x > targetX
+        ) {
+          if (!chunkBlockLoader.forceMoveCurrentLeftTempLoad()) return false;
+        }
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.y < targetY
+        ) {
+          if (!chunkBlockLoader.forceMoveCurrentUpTempLoad()) return false;
+        }
+        while (
+          chunkBlockLoader.chunkNow &&
+          chunkBlockLoader.chunkNow.y > targetY
+        ) {
+          if (!chunkBlockLoader.forceMoveCurrentDownTempLoad()) return false;
+        }
+
+        return (
+          chunkBlockLoader.chunkNow?.x === targetX &&
+          chunkBlockLoader.chunkNow?.y === targetY
+        );
+      }
 
       /**
        * DFS 遍历
@@ -120,10 +647,12 @@ class ActiveObjectManager {
        * @param {number} node - 对象 id
        */
       function dfs(node) {
+        const chunkNow = chunkBlockLoader.chunkNow;
+        if (!chunkNow?.objectManager) return;
         const neighbors =
-          pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
+          chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
 
-        // 该页对象
+        // 该区块对象
         if (neighbors) {
           for (const next of neighbors) {
             if (!visit.has(next)) {
@@ -135,31 +664,25 @@ class ActiveObjectManager {
           }
         }
 
-        // 跨左页
-        if (pageLoader.pageNow.objectManager.coverLeftPage.has(node)) {
-          pageLoader.moveToLeft();
-          const neighborsLeft =
-            pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
-          if (neighborsLeft) {
-            for (const next of neighborsLeft) {
-              if (!visit.has(next)) {
-                visit.add(next);
-                graph.addNodeUnsafe(next);
-                dfs(next);
-              }
-              graph.addEdgeUnsafe(node, next);
-            }
-          }
-          pageLoader.moveToRight();
-        }
+        const currentChunkId = chunkNow.id;
+        const coveredChunks = chunkNow.objectManager.getObjectCoverChunks(node);
+        for (const chunkId of coveredChunks) {
+          if (chunkId === currentChunkId) continue;
 
-        // 跨右页
-        if (pageLoader.pageNow.objectManager.coverRightPage.has(node)) {
-          pageLoader.moveToRight();
-          const neighborsRight =
-            pageLoader.pageNow.objectManager.staticGraph.neighborsUnsafe(node);
-          if (neighborsRight) {
-            for (const next of neighborsRight) {
+          const originalX = chunkBlockLoader.chunkNow.x;
+          const originalY = chunkBlockLoader.chunkNow.y;
+          const { x: targetX, y: targetY } = Chunk.idToCoordinate(chunkId);
+          if (!moveChunkBlockLoaderTo(targetX, targetY)) {
+            moveChunkBlockLoaderTo(originalX, originalY);
+            continue;
+          }
+
+          const neighborsOnTarget =
+            chunkBlockLoader.chunkNow.objectManager.staticGraph.neighborsUnsafe(
+              node,
+            );
+          if (neighborsOnTarget) {
+            for (const next of neighborsOnTarget) {
               if (!visit.has(next)) {
                 visit.add(next);
                 graph.addNodeUnsafe(next);
@@ -168,30 +691,39 @@ class ActiveObjectManager {
               graph.addEdgeUnsafe(node, next);
             }
           }
-          pageLoader.moveToLeft();
+
+          moveChunkBlockLoaderTo(originalX, originalY);
         }
       } // function dfs ends here
 
       dfs(obj);
-    } // function pickupSingle ends here
+    }; // function pickupSingle ends here
 
-    for (const { id: obj, page: pge } of startFrom) {
-      pickupSingle(obj, pge);
+    for (const entry of startFrom) {
+      const obj = this.requireObjectInstance(entry);
+      const chunk = this.resolveObjectChunk(obj);
+      if (!chunk) continue;
+      pickupSingle(obj.id, chunk);
     }
 
     return graph;
   }
 
   /**
-   * @param {Set<{id: number, page: PageManager}>} startFrom - 要选择的活动对象 id 和其所在页实例的集合
+   * 选取非活动对象并加入活动对象管理器
+   * @param {Iterable<BasicObject>} startFrom - 要选择的对象集合
    */
   choose(startFrom) {
     // 提取出这些对象所构成的子图
     let graph = this.pickup(startFrom);
-    let objs = new Set(); // 只要对象 id
-    for (const { id } of startFrom) {
-      objs.add(id);
-    }
+    const activeEntries = Array.from(startFrom, (item) =>
+      this.requireObjectInstance(item),
+    );
+    let objs = new Set(activeEntries.map((item) => item.id));
+    const activeEntryMap = new Map(
+      activeEntries.map((item) => [item.id, item]),
+    );
+    this.captureBaseObjectSnapshot(activeEntries);
     startFrom = null; // 释放内存
 
     // 获取对象所在层
@@ -247,7 +779,7 @@ class ActiveObjectManager {
     let duplicates = new Set();
     for (const node of graph.getNodes()) {
       let layerIdx = layerIndex.get(node);
-      if (this.activeObjects.has(node)) {
+      if (this.activeObjectIndex.has(node)) {
         // 它是以前就有的活动对象
         // 此时该层应在其之下
         if (underWhich[layerIdx]) {
@@ -293,7 +825,7 @@ class ActiveObjectManager {
         // 新活动对象在这个位置绝对不可能是重复对象
         newLayer.activeObjects.add(node);
         this.onLayer.set(node, newLayer);
-        this.activeObjects.add(node);
+        this.registerActiveObject(activeEntryMap.get(node));
       } else {
         if (!duplicates.has(node)) {
           // 必须是非重复对象才能加入此处
@@ -334,31 +866,82 @@ class ActiveObjectManager {
     for (let i = 0; i < layers.length; i++) {
       this.insertLayerUnderById(layers[i], underWhich[i]);
     }
+
+    this.requestLiveRender(activeEntries);
+  }
+
+  /**
+   * 向活动对象管理器中加入不在白板上的对象
+   * @param {Iterable<BasicObject>} objects - 新添加对象集合
+   */
+  add(objects) {
+    const objectEntries = Array.from(objects || [], (item) =>
+      this.requireObjectInstance(item),
+    );
+
+    const newObjectEntries = objectEntries.filter((item) => {
+      return !this.activeObjectIndex.has(item.id);
+    });
+
+    if (newObjectEntries.length === 0) {
+      return undefined;
+    }
+
+    const newLayer = new Layer(this.layerPool.generate());
+    for (const objectEntry of newObjectEntries) {
+      this.registerActiveObject(objectEntry);
+      this.onLayer.set(objectEntry.id, newLayer);
+      newLayer.activeObjects.add(objectEntry.id);
+    }
+
+    this.insertLayerToTop(newLayer);
+    this.requestLiveRender(newObjectEntries);
+    return newLayer;
+  }
+
+  /**
+   * 清理给定层的 `onLayer` 映射和 `layerPool`
+   * @param {Layer} layer - 要清理的层
+   */
+  purgeLayerMappings(layer) {
+    for (const objectId of layer.activeObjects) {
+      this.onLayer.delete(objectId);
+    }
+    for (const objectId of layer.inactiveGraph.getNodes()) {
+      this.onLayer.delete(objectId);
+    }
+    this.layerPool.remove(layer.id);
   }
 
   /**
    * 清理动态图
    */
   tidyup() {
+    this.layerIndex.clear();
+
     // 删除无法被访问到的层
     let count = 0;
     for (const layer of this.layerOrder) {
       if (layer.activeObjects.size !== 0) break;
+      this.purgeLayerMappings(layer);
       layer.clear();
       count++;
     }
     this.layerOrder.splice(0, count);
+
     // 删除空层
     for (let i = 0; i < this.layerOrder.length; i++) {
       if (
         this.layerOrder[i].activeObjects.size === 0 &&
         this.layerOrder[i].inactiveGraph.getNodes().length === 0
       ) {
+        this.purgeLayerMappings(this.layerOrder[i]);
         this.layerOrder[i].clear();
         this.layerOrder.splice(i, 1);
         i--;
       }
     }
+
     // 更新 layerIndex
     this.layerOrder.forEach((layer, index) => {
       this.layerIndex.set(layer.id, index);
@@ -367,24 +950,26 @@ class ActiveObjectManager {
 
   /**
    * 置顶选择对象
-   * @param {Set<number>} objs
+   * @param {Iterable<BasicObject>} objects
    */
-  liftup(objs) {
+  liftup(objects) {
     /**
      * @description 层索引 -> 新层实例
      * @type {Map<number, Layer>}
      */
     let newLayers = new Map();
-    for (const obj of objs) {
+    for (const entry of objects) {
+      const obj = this.requireObjectInstance(entry);
+      const objId = obj.id;
       let layerIndex;
-      if (this.activeObjects.has(obj)) {
-        let oldLayer = this.onLayer.get(obj);
+      if (this.activeObjectIndex.has(objId)) {
+        let oldLayer = this.onLayer.get(objId);
         layerIndex = this.layerIndex.get(oldLayer.id);
         if (!newLayers.has(layerIndex)) {
           newLayers.set(layerIndex, new Layer(this.layerPool.generate()));
         }
         // 将对象从旧层移除
-        oldLayer.activeObjects.delete(obj);
+        oldLayer.activeObjects.delete(objId);
       } else {
         layerIndex = this.layerOrder.length;
         if (!newLayers.has(layerIndex)) {
@@ -394,29 +979,150 @@ class ActiveObjectManager {
 
       // 将对象加入新层
       let newLayer = newLayers.get(layerIndex);
-      this.onLayer.set(obj, newLayer);
-      newLayer.activeObjects.add(obj);
+      this.onLayer.set(objId, newLayer);
+      newLayer.activeObjects.add(objId);
     }
+
     this.tidyup();
     Array.from(newLayers.entries())
-      .sort((a, b) => a[0] - b[0])
+      .sort(([aIndex, aLayer], [bIndex, bLayer]) => aIndex - bIndex)
       .forEach(([layerIndex, newLayer]) => {
         this.insertLayerToTop(newLayer);
       });
   }
 
   /**
-   * 取消选择对象
-   * @param {Set<number>} objs
+   * 应用活动对象并取消选择
+   * @param {Iterable<BasicObject>} objects
    */
-  remove(objs) {
-    for (const obj of objs) {
-      if (!this.activeObjects.has(obj)) continue;
-      this.activeObjects.delete(obj);
-      let layer = this.onLayer.get(obj);
-      layer.activeObjects.delete(obj);
+  apply(objects) {
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+
+    const canCommitToBoard = Boolean(this.board);
+    const activeBasicObjects = normalizedObjects;
+    const affectedChunkIds = new Set();
+
+    // 计算出所有受影响的区块 id，以便后续请求静态层渲染时使用
+    if (canCommitToBoard && activeBasicObjects.length > 0) {
+      const applyingObjectIds = new Set(
+        activeBasicObjects.map((item) => item.id),
+      );
+      const applyContexts = activeBasicObjects
+        .map((obj) => {
+          const ownerChunk = this.resolveObjectChunk(obj);
+          if (!ownerChunk) return undefined;
+          const wasOnBoard =
+            this.board?.getObjectById?.(obj.id) instanceof
+            BasicObject;
+          const previousCoveredChunkIds =
+            ownerChunk.objectManager?.getObjectCoverChunks?.(obj.id) ??
+            new Set([ownerChunk.id]);
+          for (const chunkId of previousCoveredChunkIds) {
+            affectedChunkIds.add(chunkId);
+          }
+          const coveredChunkIds = this.calculateCoveredChunkIds(obj);
+          for (const chunkId of coveredChunkIds) {
+            affectedChunkIds.add(chunkId);
+          }
+          return {
+            obj,
+            ownerChunk,
+            wasOnBoard,
+            previousCoveredChunkIds,
+            coveredChunkIds,
+          };
+        })
+        .filter(Boolean);
+
+      // 确保所有对象都被加入区块
+      for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
+        for (const chunkId of coveredChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          if (!chunk) continue;
+          chunk.addObject(chunkId === ownerChunk.id ? obj : obj.id);
+          chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
+        }
+      }
+
+      // 再计算它们在静态图中的上下关系
+      for (const { obj, ownerChunk, coveredChunkIds, wasOnBoard } of applyContexts) {
+        const { below, above } = this.calculateStaticRelations(
+          obj,
+          coveredChunkIds,
+          applyingObjectIds,
+          { includeUntrackedCoveredObjectsBelow: !wasOnBoard },
+        );
+        for (const chunkId of coveredChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          if (!chunk) continue;
+          chunk.addObject(
+            chunkId === ownerChunk.id ? obj : obj.id,
+            [...below],
+            [...above],
+          );
+          chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
+        }
+      }
+
+      // 请求静态层失效时，除了直接受影响的对象外，还应包括它们在静态图中的邻接对象
+      activeBasicObjects.splice(
+        0,
+        activeBasicObjects.length,
+        ...this.collectBaseInvalidationObjects(
+          activeBasicObjects,
+          applyContexts.map(({ obj, coveredChunkIds }) => ({
+            coveredChunkIds,
+            relatedObjectIds: this.collectStaticGraphNeighborIds(
+              obj.id,
+              coveredChunkIds,
+            ),
+          })),
+        ),
+      );
+    }
+
+    // 将对象从活动层移除
+    for (const entry of normalizedObjects) {
+      const objId = entry.id;
+      if (!this.activeObjectIndex.has(objId)) {
+        continue;
+      }
+      this.unregisterActiveObject(objId);
     }
     this.tidyup();
+
+    // 请求静态层渲染
+    this.requestBaseRenderForObjects(
+      activeBasicObjects,
+      [...affectedChunkIds]
+        .map((chunkId) => this.board?.getChunkById?.(chunkId))
+        .filter(Boolean),
+    );
+    this.requestLiveRender(normalizedObjects);
+    this.clearBaseObjectSnapshots(normalizedObjects);
+  }
+
+  /**
+   * 取消活动对象而不提交回白板
+   * @param {Iterable<BasicObject>} objects
+   */
+  discard(objects) {
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+
+    for (const entry of normalizedObjects) {
+      if (!this.activeObjectIndex.has(entry.id)) {
+        continue;
+      }
+      this.unregisterActiveObject(entry.id);
+    }
+
+    this.tidyup();
+    this.requestLiveRender(normalizedObjects);
+    this.clearBaseObjectSnapshots(normalizedObjects);
   }
 
   /**
@@ -479,130 +1185,4 @@ class ActiveObjectManager {
   }
 }
 
-class PageLoadManager {
-  /**
-   * 已临时加载的页
-   * @description 页数不超过 `pagesLoadedLimit` 页，为页实例引用的双端队列。
-   * @type {Deque}
-   */
-  pagesLoaded;
-
-  /**
-   * 当前页
-   * @type {PageManager}
-   */
-  pageNow;
-
-  /**
-   * 已加载页数上限
-   * @type {number}
-   * @default 4
-   */
-  pagesLoadedLimit;
-
-  /**
-   * @param {number} [limit = 4] - 可以加载的页数上限
-   */
-  constructor(limit = 4) {
-    this.pagesLoadedLimit = limit;
-    this.pagesLoaded = new Deque();
-  }
-
-  /**
-   * 重置当前页
-   * @param {PageManager} page - 新的当前页
-   */
-  resetCurrentPage(page) {
-    this.pageNow = page;
-    // 卸载所有已加载页
-    while (this.pagesLoaded.count() > 0) {
-      /** @type {PageManager} */
-      let pageToUnload = this.pagesLoaded.popFront();
-      pageToUnload.objectManager.unloadTiermap();
-    }
-    // 加载当前页
-    this.pagesLoaded = new Deque();
-    this.pagesLoaded.pushBack(page);
-    page.objectManager.loadTiermap(/* [todo] file */);
-  }
-
-  /**
-   * 将当前页右移
-   * @todo
-   */
-  moveToRight() {
-    // 加载右页
-    try {
-      this.loadRight();
-    } catch (e) {
-      throw e;
-    }
-    // 右移当前页
-    this.pageNow = this.pageNow.nextPage;
-  }
-
-  /**
-   * 加载右页但不切换当前页
-   * @todo
-   */
-  loadRight() {
-    // 卸载多余页
-    while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
-      /** @type {PageManager} */
-      let pageToUnload = this.pagesLoaded.popFront();
-      pageToUnload.objectManager.unloadTiermap();
-    }
-    // 加载右页
-    let pageToLoad = this.pageNow.nextPage;
-    if (!pageToLoad) {
-      throw new Error("Next page is not exist.");
-    }
-    if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
-      this.pagesLoaded.pushBack(pageToLoad);
-    }
-  }
-
-  /**
-   * 将当前页左移
-   * @todo
-   */
-  moveToLeft() {
-    // 加载左页
-    try {
-      this.loadLeft();
-    } catch (e) {
-      throw e;
-    }
-    // 左移当前页
-    this.pageNow = this.pageNow.prevPage;
-  }
-
-  /**
-   * 加载左页但不切换当前页
-   * @todo
-   */
-  loadLeft() {
-    // 卸载多余页
-    while (this.pagesLoaded.count() >= this.pagesLoadedLimit) {
-      /** @type {PageManager} */
-      let pageToUnload = this.pagesLoaded.popBack();
-      pageToUnload.objectManager.unloadTiermap();
-    }
-    // 加载左页
-    let pageToLoad = this.pageNow.prevPage;
-    if (!pageToLoad) {
-      throw new Error("Previous page is not exist.");
-    }
-    if (!pageToLoad.isLoad) {
-      pageToLoad.objectManager.loadTiermap(/* [todo] file */);
-      this.pagesLoaded.pushFront(pageToLoad);
-    }
-  }
-}
-
-module.exports = {
-  ActiveObjectManager,
-  Layer,
-  PageLoadManager,
-};
+export { ActiveObjectManager, Layer };

@@ -1,11 +1,12 @@
 /**
  * @file 对象容器定义
- * @module board/container
+ * @description 定义将对象零维化并管理其容器关系的基础实现。
+ * @module core/objects/container
  * @author Zhou Chenyu
  */
 
-const { BasicObject } = require("./basic-obj");
-const { Point } = require("../../utils/math");
+import { BasicObject } from "./basic-obj.js";
+import { Vector } from "../utils/math.js";
 
 /**
  * 对象容器类
@@ -30,15 +31,23 @@ class Container extends BasicObject {
    */
   mode;
 
+  isDirected() {
+    return false;
+  }
+
+  isErasable() {
+    return false;
+  }
+
   /**
    * 创建一个新的容器对象
-   * @param {Point} p - 容器的位置
+   * @param {Vector} p - 容器的位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId);
   }
 }
 
@@ -90,7 +99,4 @@ class ContainerMode {
   static SHRINK = new ContainerMode("SHRINK");
 }
 
-module.exports = {
-  Container,
-  ContainerMode,
-};
+export { Container, ContainerMode };

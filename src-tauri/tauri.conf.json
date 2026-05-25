@@ -1,0 +1,38 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "productName": "Hound Whiteboard",
+  "identifier": "com.hound.whiteboard",
+  "version": "0.0.0",
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devUrl": null,
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "url": "templates/whiteboard.html",
+        "title": "Hound Whiteboard",
+        "width": 800,
+        "height": 600,
+        "fullscreen": false,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://tauri.localhost http://tauri.localhost",
+      "capabilities": [
+        {
+          "identifier": "main-default",
+          "windows": ["main"],
+          "permissions": ["core:default"]
+        }
+      ]
+    }
+  },
+  "bundle": {
+    "resources": []
+  }
+}

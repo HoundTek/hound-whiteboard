@@ -1,15 +1,21 @@
 /**
  * @file 笔画对象定义
+ * @description 定义白板笔画对象的几何表示与渲染支持。
  * @module core/objects/stroke/stroke
  * @author Zhou Chenyu
  */
 
-const { Matrix, Point } = require("../../../utils/math");
-const {
-  calculateConvexHull,
-  insertPoints,
-} = require("../../utils/math-algorithm");
-const { BasicObject } = require("../basic-obj");
+import { Matrix, Vector } from "../../utils/math.js";
+import { PathRange, PolygonRange, RectangleRange } from "../../range/index.js";
+import { calcConvexHull, insertPoints } from "../../utils/math-algorithm.js";
+import { BasicObject } from "../basic-obj.js";
+
+const DEFAULT_STROKE_PROPERTY = Object.freeze({
+  color: "#000000",
+  width: 1,
+  lineJoin: "round",
+  lineCap: "round",
+});
 
 /**
  * 笔画类
@@ -22,71 +28,66 @@ const { BasicObject } = require("../basic-obj");
  * @author Zhou Chenyu
  */
 class StrokeObject extends BasicObject {
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId);
   }
 
-  static isDirected = false;
+  property = { ...DEFAULT_STROKE_PROPERTY };
 
-  static isErasable = true;
+  isDirected() {
+    return false;
+  }
+
+  isErasable() {
+    return true;
+  }
 
   /**
    * 内点曲线
-   * @type {Point[]}
+   * @type {PathRange}
    * @description
    * 笔画的内点曲线。笔画沿着这些点绘制。
    *
    * 内点是用来判断笔画位置的。
    */
-  points = [];
+  localPathRange = new PathRange([]);
 
   /**
    * 平滑和变换后的内点曲线
-   * @type {Point[]}
+   * @type {PathRange}
    * @description
-   * 经过平滑处理和变换后的内点曲线。这个属性是根据原始内点曲线（points）通过应用当前的变换矩阵计算得出的。
+   * 经过平滑和变换后的路径范围。这个属性是根据原始局部路径通过应用当前的变换矩阵计算得出的。
    *
    * 这个属性主要用于渲染和碰撞检测等需要考虑对象变换的场景。它反映了笔画在当前变换状态下的实际位置和形状。
-   * 当笔画的变换发生变化时（例如缩放、旋转或平移），transformedPoints 会自动更新以反映新的位置和形状。
+   * 当笔画的变换发生变化时（例如缩放、旋转或平移），worldPathRange 会自动更新以反映新的位置和形状。
    *
-   * 需要注意的是，transformedPoints 是一个计算属性，通常不应直接修改它，而是通过修改 points 和变换矩阵来间接更新它。
+   * 需要注意的是，worldPathRange 是一个计算属性，通常不应直接修改它，而是通过修改 localPathRange 和变换矩阵来间接更新它。
    * 这样可以确保数据的一致性和正确性。
-   * 在渲染笔画时，系统会使用 transformedPoints 来绘制笔画的内点曲线，从而实现正确的视觉效果。
-   * 在碰撞检测时，系统也会使用 transformedPoints 来判断笔画与其他对象之间的交互。
+   * 在渲染笔画时，系统会使用 worldPathRange 来绘制笔画路径，从而实现正确的视觉效果。
+   * 在碰撞检测时，系统也会使用 worldPathRange 来判断笔画与其他对象之间的交互。
    */
-  transformedPoints = [];
+  worldPathRange = new PathRange([]);
 
   calculateRichDatas() {
-    this.transformedPoints = this.points.map((p) =>
-      Point.mulMatrix(this.transform, p),
+    let transformedPoints = this.localPathRange.points.map((p) =>
+      Vector.mulMatrix(this.transform, p),
     );
     // 将其平滑（插点或删点）
     let scale = Math.sqrt(this.transform.det());
     if (scale > 1) {
-      this.transformedPoints = insertPoints(
-        this.transformedPoints,
-        Math.round(scale),
-      );
+      transformedPoints = insertPoints(transformedPoints, Math.round(scale));
     } else if (scale < 1) {
       // [todo] 删点
     }
+    this.worldPathRange = new PathRange(transformedPoints);
     this.calculateConvexHull();
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let i = 0; i < this.transformedPoints.length; i++) {
-      const p = this.transformedPoints[i];
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    this.rectangle = new Matrix(minX, minY, maxX, maxY);
+    this.boundingBox = RectangleRange.from(
+      this.convexHullRange.transform(this.transform),
+    );
   }
 
-  setPoints(points) {
-    this.points = points;
+  setPathPoints(points) {
+    this.localPathRange = new PathRange(points);
     this.calculateRichDatas();
   }
 
@@ -95,10 +96,16 @@ class StrokeObject extends BasicObject {
     this.calculateRichDatas();
   }
 
-  convexHull = [];
+  convexHullRange = new PolygonRange([]);
 
   calculateConvexHull() {
-    this.convexHull = calculateConvexHull(this.points);
+    this.convexHullRange = new PolygonRange(
+      calcConvexHull(this.localPathRange.points),
+    );
+  }
+
+  getRange() {
+    return this.worldPathRange;
   }
 
   /**
@@ -112,28 +119,60 @@ class StrokeObject extends BasicObject {
    * 在擦除笔画时，系统可能会根据这个颜色属性来决定如何处理被擦除部分的视觉效果，例如是否显示擦除痕迹等。
    * 需要注意的是，虽然笔画对象具有颜色属性，但在某些情况下（例如使用特殊的笔刷或工具时），这个属性可能会被忽略或覆盖。
    */
-  color = "#000000";
-
   render(ctx) {
-    if (!this.points || this.points.length === 0) {
+    if (!this.localPathRange || this.localPathRange.points.length === 0) {
       return;
     }
+
+    const strokeWidth = this.property.width;
+    if (!(Number.isFinite(strokeWidth) && strokeWidth > 0)) {
+      return;
+    }
+
+    const transformedPoints = this.worldPathRange.points;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
-    ctx.strokeStyle = this.color;
+    ctx.strokeStyle = this.property.color;
     ctx.globalCompositeOperation = "source-over";
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
+    ctx.lineWidth = strokeWidth;
+    ctx.lineJoin = this.property.lineJoin ?? DEFAULT_STROKE_PROPERTY.lineJoin;
+    ctx.lineCap = this.property.lineCap ?? DEFAULT_STROKE_PROPERTY.lineCap;
     ctx.beginPath();
-    ctx.moveTo(this.transformedPoints[0].x, this.transformedPoints[0].y);
-    for (let i = 1; i < this.transformedPoints.length; i++) {
-      ctx.lineTo(this.transformedPoints[i].x, this.transformedPoints[i].y);
+    ctx.moveTo(transformedPoints[0].x, transformedPoints[0].y);
+    for (let i = 1; i < transformedPoints.length; i++) {
+      ctx.lineTo(transformedPoints[i].x, transformedPoints[i].y);
     }
     ctx.stroke();
     ctx.restore();
   }
+
+  serialize() {
+    return {
+      ...super.serialize(),
+      type: "StrokeObject",
+      points: this.localPathRange.points.map((point) => point.serialize()),
+    };
+  }
+
+  static parse(data) {
+    if (data.type !== "StrokeObject") {
+      throw new TypeError("Invalid type for StrokeObject parsing");
+    }
+
+    const obj = new StrokeObject(
+      Vector.parse(data.position),
+      data.id,
+      data.ownerChunkId,
+    );
+
+    obj.setPathPoints((data.points ?? []).map((point) => Vector.parse(point)));
+    obj.setTransform(Matrix.parse(data.transform));
+    obj.setProperty({
+      ...DEFAULT_STROKE_PROPERTY,
+      ...(data.property ?? {}),
+    });
+    return obj;
+  }
 }
 
-module.exports = {
-  StrokeObject,
-};
+export { DEFAULT_STROKE_PROPERTY, StrokeObject };

@@ -1,11 +1,20 @@
 /**
  * @file 文本对象定义
- * @module board/text
+ * @description 定义白板文本对象的数据结构和渲染行为。
+ * @module core/objects/one-dim/text
  * @author Zhou Chenyu
  */
 
-const { OneDimensionObject } = require("./one-dim-obj");
-const { Point, Matrix } = require("../../../utils/math");
+import { OneDimensionObject } from "./one-dim-obj.js";
+import { Vector, Matrix } from "../../utils/math.js";
+import { PolygonRange, RectangleRange } from "../../range/index.js";
+
+const DEFAULT_TEXT_PROPERTY = Object.freeze({
+  color: "#000000",
+  size: 16,
+  font: "Arial",
+  strokeWidth: 1,
+});
 
 /**
  * 文本对象类
@@ -14,62 +23,54 @@ const { Point, Matrix } = require("../../../utils/math");
  * @author Zhou Chenyu
  */
 class TextObject extends OneDimensionObject {
+  syncRanges() {
+    if (this.localTextRange.points.length === 0) {
+      this.worldTextRange = new PolygonRange([]);
+      this.boundingBox = new RectangleRange(0, 0, 0, 0);
+      this.convexHullRange = new PolygonRange([]);
+      return;
+    }
+    this.worldTextRange = this.localTextRange.transform(this.transform);
+    this.boundingBox = RectangleRange.from(this.worldTextRange);
+    this.calculateConvexHull();
+  }
+
   /**
    * 创建一个新的文本对象
-   * @param {Point} p - 文本左上角的绝对位置
+   * @param {Vector} p - 文本左上角的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId);
   }
 
   /**
    * @description 文本对象的凸包就是其矩形边界。
    */
   calculateConvexHull() {
-    this.convexHull = this.rectangle;
+    this.convexHullRange = PolygonRange.from(this.localTextRange);
   }
 
-  textProperty = {
-    /**
-     * 文本颜色
-     * @type {string}
-     * @default "#000000"
-     */
-    color: "#000000",
-
-    /**
-     * 字号大小
-     * @type {number}
-     * @default 16
-     */
-    size: 16,
-
-    /**
-     * 字体名称
-     * @type {string}
-     * @default "Arial"
-     */
-    font: "Arial",
-  };
+  /**
+   * 文本主判定范围
+   * @type {PolygonRange}
+   */
+  localTextRange = new PolygonRange([]);
 
   /**
-   * @param {{color?: string, size?: number, font?: string}} param0 - 文字的属性
-   * @param {CanvasRenderingContext2D} ctx - 画布上下文
+   * 变换后的文本主判定范围
+   * @type {PolygonRange}
    */
-  setTextProperty({ color, size, font }, ctx) {
-    if (color) {
-      this.textProperty.color = color;
-    }
-    if (size) {
-      this.textProperty.size = size;
-    }
-    if (font) {
-      this.textProperty.font = font;
-    }
+  worldTextRange = new PolygonRange([]);
+
+  property = { ...DEFAULT_TEXT_PROPERTY };
+
+  setProperty(property = {}, ctx) {
+    super.setProperty(property);
     this.divideText(ctx);
+    return this.property;
   }
 
   /**
@@ -99,12 +100,14 @@ class TextObject extends OneDimensionObject {
    */
   divideText(ctx) {
     this.dividedText = [this.text];
-    this.rectangle = new Matrix(
-      0,
-      0,
-      this.ihatLength,
-      this.textProperty.size * 1.2 * this.dividedText.length
-    );
+    const height = this.property.size * 1.2 * this.dividedText.length;
+    this.localTextRange = new PolygonRange([
+      new Vector(0, 0),
+      new Vector(this.ihatLength, 0),
+      new Vector(this.ihatLength, height),
+      new Vector(0, height),
+    ]);
+    this.syncRanges();
   }
 
   /**
@@ -120,6 +123,15 @@ class TextObject extends OneDimensionObject {
     this.divideText(ctx);
   }
 
+  setTransform(trans) {
+    this.transform = trans;
+    this.syncRanges();
+  }
+
+  getRange() {
+    return this.worldTextRange;
+  }
+
   /**
    * 渲染文字到画布上下文
    * @param {CanvasRenderingContext2D} ctx - 画布上下文
@@ -132,27 +144,61 @@ class TextObject extends OneDimensionObject {
       this.transform.c,
       this.transform.d,
       this.position.x,
-      this.position.y
+      this.position.y,
     );
-    ctx.fillStyle = this.textProperty.color;
-    ctx.font = `${this.textProperty.size}px ${this.textProperty.font}`;
+    ctx.fillStyle = this.property.color;
+    ctx.font = `${this.property.size}px ${this.property.font}`;
     ctx.globalCompositeOperation = "source-over";
+    const rectangle = RectangleRange.from(this.localTextRange);
     if (this.dividedText) {
       this.dividedText.forEach((line, index) => {
-        ctx.fillText(line, 0, (index + 1 / 1.2) * this.textProperty.size * 1.2);
+        ctx.fillText(line, 0, (index + 1 / 1.2) * this.property.size * 1.2);
       });
-      ctx.strokeStyle = this.textProperty.color;
-      ctx.strokeRect(
-        this.rectangle.a,
-        this.rectangle.b,
-        this.rectangle.c,
-        this.rectangle.d
-      );
+      if (
+        Number.isFinite(this.property.strokeWidth) &&
+        this.property.strokeWidth > 0
+      ) {
+        ctx.strokeStyle = this.property.color;
+        ctx.lineWidth = this.property.strokeWidth;
+        ctx.strokeRect(
+          rectangle.left,
+          rectangle.top,
+          rectangle.width,
+          rectangle.height,
+        );
+      }
     }
     ctx.restore();
   }
+
+  serialize() {
+    return {
+      type: "TextObject",
+      ...super.serialize(),
+      text: this.text,
+      ihatLength: this.ihatLength,
+    };
+  }
+
+  static parse(data) {
+    if (data.type !== "TextObject") {
+      throw new TypeError("Invalid type for TextObject parsing");
+    }
+
+    let obj = new TextObject(
+      Vector.parse(data.position),
+      data.id,
+      data.ownerChunkId,
+    );
+    obj.setTransform(Matrix.parse(data.transform));
+    obj.setProperty({
+      ...DEFAULT_TEXT_PROPERTY,
+      ...(data.property ?? data.textProperty ?? {}),
+    });
+    obj.setText(data.text);
+    obj.setIhatLength(data.ihatLength ?? obj.ihatLength);
+    return obj;
+  }
 }
 
-module.exports = {
-  TextObject,
-};
+export { DEFAULT_TEXT_PROPERTY, TextObject };

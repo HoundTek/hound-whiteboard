@@ -1,4 +1,11 @@
-const { Container } = require("../container");
+/**
+ * @file 一维对象基类
+ * @description 定义一维白板对象的公共行为与容器关系。
+ * @module core/objects/one-dim/one-dim-obj
+ * @author Zhou Chenyu
+ */
+
+import { Container } from "../container.js";
 
 /**
  * 一维对象基类
@@ -23,16 +30,14 @@ class OneDimensionObject extends Container {
 
   /**
    * 创建一个新的一维对象
-   * @param {Point} p - 对象的初始位置
+   * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
-    super(p, id, pageId);
+  constructor(p, id, ownerChunkId) {
+    super(p, id, ownerChunkId);
   }
 }
 
-module.exports = {
-  OneDimensionObject,
-};
+export { OneDimensionObject };

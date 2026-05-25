@@ -1,10 +1,12 @@
 /**
- * 白板对象基类
- * @module basic-classes
+ * @file 白板对象基类
+ * @description 定义白板对象的基础属性、变换和边界接口。
+ * @module core/objects/basic-obj
  * @author Zhou Chenyu
  */
 
-const { Matrix, Point } = require("../../utils/math");
+import { Matrix, Vector } from "../utils/math.js";
+import { PolygonRange, RectangleRange, Range } from "../range/index.js";
 
 /**
  * 白板对象基类
@@ -24,14 +26,14 @@ class BasicObject {
   id;
 
   /**
-   * 对象所在的页 id
+   * 对象归属区块 id
    * @type {number}
    */
-  pageId;
+  ownerChunkId;
 
   /**
    * 对象的位置
-   * @type {Point}
+   * @type {Vector}
    * @description 对象在画布上的位置坐标。
    */
   position;
@@ -48,40 +50,85 @@ class BasicObject {
 
   /**
    * 对象的矩形边界范围
-   * @type {Matrix}
+   * @type {RectangleRange}
    * @description 存储对象的边界矩形，用于碰撞检测和选择。
-   * 格式为 [[minX, maxX], [minY, maxY]]。
+   * 边界矩形是相对于变换后的坐标而言的。
    */
-  rectangle;
+  boundingBox;
+
+  /**
+   * 计算对象的边界矩形
+   * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
+   */
+  calculateRectangle() {
+    this.boundingBox = new RectangleRange(0, 0, 0, 0);
+  }
 
   /**
    * 对象的凸包
-   * @type {Point[]}
+   * @type {Range}
    * @description 用于更迅速的碰撞检测，存储凸包的顶点坐标。
    */
-  convexHull;
+  convexHullRange;
+
+  /**
+   * 对象属性
+   * @type {Record<string, any>}
+   * @description 存放对象的渲染与行为属性，如颜色、描边宽度、字体等。
+   */
+  property = {};
 
   /**
    * 计算对象的凸包
    * @description 统一 API，子类可重写此方法以计算对象的凸包。默认是矩形边界。
    */
   calculateConvexHull() {
-    this.convexHull = this.rectangle;
+    this.convexHullRange = PolygonRange.from(this.boundingBox);
   }
 
   /**
-   * 判断某点是否在对象内
-   * @param {Point} p - 要检测的点
-   * @returns {boolean} 点是否在对象内
-   * @description 基类使用矩形边界进行检测，子类可重写此方法以实现更精确的检测逻辑。
+   * 获取对象的主判定范围
+   * @returns {Range} 主判定范围
    */
-  isPointIntersect(p) {
-    return !(
-      this.rectangle.a <= p.x &&
-      p.x <= this.rectangle.b &&
-      this.rectangle.c <= p.y &&
-      p.y <= this.rectangle.d
-    );
+  getRange() {
+    return this.boundingBox;
+  }
+
+  /**
+   * 合并对象属性
+   * @param {Record<string, any>} [property={}] - 待写入属性
+   * @returns {Record<string, any>} 最新属性
+   */
+  setProperty(property = {}) {
+    if (!property || typeof property !== "object" || Array.isArray(property)) {
+      return this.property;
+    }
+
+    this.property = {
+      ...(this.property ?? {}),
+      ...property,
+    };
+
+    return this.property;
+  }
+
+  /**
+   * 获取对象渲染额外留白
+   * @description 返回值单位为对象空间中的长度，供活动层 dirty rect 在换算到屏幕空间后补足描边、端点与抗锯齿留白。
+   * @returns {number} 额外留白
+   */
+  getRenderPadding() {
+    const strokeWidthCandidates = [
+      this.property?.strokeWidth,
+      this.property?.width,
+      this.property?.outlineWidth,
+    ].filter((value) => Number.isFinite(value) && value > 0);
+
+    if (strokeWidthCandidates.length === 0) {
+      return 0;
+    }
+
+    return Math.max(...strokeWidthCandidates) / 2;
   }
 
   /**
@@ -90,7 +137,9 @@ class BasicObject {
    * @static
    * @description 有向对象可以自定义旋转中心且绕该中心旋转。
    */
-  static isDirected = false;
+  isDirected() {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 该对象是否是可擦对象
@@ -99,19 +148,21 @@ class BasicObject {
    * @readonly
    * @description 可擦对象可以被对象擦除工具擦除。
    */
-  static isErasable = false;
+  isErasable() {
+    throw new Error("Method not implemented.");
+  }
 
   /**
    * 创建一个新的基础对象
-   * @param {Point} p - 对象的初始位置
+   * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} pageId - 对象所在页的 id
+   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, pageId) {
+  constructor(p, id, ownerChunkId) {
     this.position = p;
     this.id = id;
-    this.pageId = pageId;
+    this.ownerChunkId = ownerChunkId;
   }
 
   /**
@@ -148,10 +199,15 @@ class BasicObject {
    * @abstract
    * @returns {Object} 序列化后的对象
    * @description 子类必须实现此方法以支持对象的持久化
-   * @throws {Error} 基类未实现此方法
    */
   serialize() {
-    throw new Error("Method not implemented.");
+    return {
+      id: this.id,
+      ownerChunkId: this.ownerChunkId,
+      position: this.position.serialize(),
+      transform: this.transform.serialize(),
+      property: { ...(this.property ?? {}) },
+    };
   }
 
   /**
@@ -168,6 +224,4 @@ class BasicObject {
   }
 }
 
-module.exports = {
-  BasicObject,
-};
+export { BasicObject };

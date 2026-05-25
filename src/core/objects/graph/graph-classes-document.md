@@ -14,8 +14,10 @@ PolygonObject 类是白板上的多边形对象类，是图形的一种，由多
 
 ### 属性
 
-|名称|描述|类型|
-|:-:|:-:|:-:|
-|`points`|多边形对象的顶点集|`Point[]`|
-|`transformedPoints`|经变换后多边形对象的顶点集|`Point[]`|
-|`color`|多边形对象的颜色|`string`|
+| 名称                | 描述                   | 类型             |
+| ------------------- | ---------------------- | ---------------- |
+| `localPolygonRange` | 多边形对象的局部主范围 | `PolygonRange`   |
+| `worldPolygonRange` | 多边形对象的世界主范围 | `PolygonRange`   |
+| `convexHullRange`   | 多边形对象的凸包范围   | `PolygonRange`   |
+| `boundingBox`       | 多边形对象的包围盒     | `RectangleRange` |
+| `color`             | 多边形对象的颜色       | `string`         |

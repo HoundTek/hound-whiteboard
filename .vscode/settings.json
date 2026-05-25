@@ -1,4 +1,8 @@
 {
   "editor.insertSpaces": true,
-  "editor.tabSize": 2
+  "editor.tabSize": 2,
+  "jest.jestCommandLine": "yarn test --",
+  "jest.nodeEnv": {
+    "NODE_OPTIONS": "--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage"
+  }
 }
