@@ -11,8 +11,6 @@ DevicesTree 是 Core 输入系统的唯一分发引擎。
 - 在需要时沿 defaultChild 继续转发
 - 为节点提供显式 state 与卸载钩子
 
-当前实现不再使用 processor、rewritePacket、defaultPath 或 defineNodes 一类旧接口。节点语义已经收敛为 handler、defaultChild、umount、state 四个维度。
-
 ## 角色边界
 
 DevicesTree 负责：

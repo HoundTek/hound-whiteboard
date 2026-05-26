@@ -739,14 +739,20 @@ class DevicesTree {
       throw new TypeError("Tool must provide createProcessor().");
     }
 
-    return this.mount(path, tool.createProcessor(toolContext), {
-      umount: (context = {}) =>
-        tool.umount?.(
+    const processor = tool.createProcessor(toolContext);
+
+    const node = this.mount(path, processor, {
+      umount: (context = {}) => {
+        processor.dispose?.(context);
+        return tool.umount?.(
           typeof tool.createDeviceContext === "function"
             ? tool.createDeviceContext(context, toolContext)
             : context,
-        ),
+        );
+      },
     });
+
+    return node;
   }
 
   /**
@@ -813,21 +819,23 @@ class DevicesTree {
             : {}),
         };
 
-        handler = nodeDefinition.tool.createProcessor(toolContext);
-        umount = (context = {}) =>
-          nodeDefinition.tool.umount?.(
+        const processor = nodeDefinition.tool.createProcessor(toolContext);
+        handler = processor;
+        umount = (context = {}) => {
+          processor.dispose?.(context);
+          return nodeDefinition.tool.umount?.(
             typeof nodeDefinition.tool.createDeviceContext === "function"
               ? nodeDefinition.tool.createDeviceContext(context, toolContext)
               : context,
           );
+        };
       }
 
-      mountedNodes.push(
-        this.mount(currentPath, handler, {
-          defaultChild: nodeDefinition.defaultChild ?? "",
-          umount,
-        }),
-      );
+      const mountedNode = this.mount(currentPath, handler, {
+        defaultChild: nodeDefinition.defaultChild ?? "",
+        umount,
+      });
+      mountedNodes.push(mountedNode);
 
       for (const [childName, childDefinition] of Object.entries(
         nodeDefinition.children ?? {},

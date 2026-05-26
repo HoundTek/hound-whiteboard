@@ -34,13 +34,24 @@ handoff 模式下的关键点是：
 对象创建工具在创建过程中也需要处理几何刷新：
 
 - beforeGeometryMutation(interaction)：在几何变更前记录旧快照
-- afterGeometryMutation(interaction)：在几何变更后请求活动层刷新
+- afterGeometryMutation(interaction)：在几何变更后请求活动层刷新，并同步推动 ui 层兼容 overlay 刷新
 
 与 ObjectModifierTool 的不同点在于：
 
 - 创建流程包含对象实例创建、id 分配、ownerChunkId 解析、活动对象管理和手势生命周期
 - 因此不适合简单包装成一次 withGeometryMutation(...)
 - 创建工具会在不同阶段显式调用几何刷新钩子
+
+当前这条 ui 刷新仍应理解为兼容行为：
+
+- Core 先保证选中框等 overlay 能跟上对象创建中的几何变化
+- chooser 轨迹、控制杆、激光笔等更完整的 UI 语义，后续仍可能转交给宿主 UI 侧 overlay 系统
+
+但这里要注意：
+
+- creator 触发 ui 层刷新，不代表 creator 本身就是默认选择框来源
+- 当前默认选择框仍只来自 chooser / modifier 的节点上下文
+- creator 侧的 ui 刷新更多是在兼容链路里保证已有 overlay 不滞后
 
 ## 上下文共享模型
 

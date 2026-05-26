@@ -26,6 +26,26 @@ const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
  */
 class ObjectModifierTool extends Tool {
   /**
+   * 收集 modifier 当前声明的兼容 ui overlay。
+   * @param {{ deviceContext?: Object, renderer?: Object }} [overlayContext={}]
+   * @returns {Array<Object>}
+   */
+  collectUiOverlayEntries(overlayContext = {}) {
+    const deviceContext = overlayContext.deviceContext ?? {};
+    const renderer = overlayContext.renderer;
+    const objects = this.resolveContextObjects(deviceContext).filter(Boolean);
+
+    if (
+      objects.length === 0 ||
+      typeof renderer?.createCompatSelectionEntriesForObjects !== "function"
+    ) {
+      return [];
+    }
+
+    return renderer.createCompatSelectionEntriesForObjects(objects, "modifier");
+  }
+
+  /**
    * 规整本次修改涉及的对象集合。
    * @param {Object} modificationContext - 修改上下文
    * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
@@ -96,6 +116,7 @@ class ObjectModifierTool extends Tool {
     modificationContext?.monitor?.liveRenderer?.invalidateObjects?.(
       normalizedObjects,
     );
+    modificationContext?.monitor?.requestViewportUiRender?.();
   }
 
   /**

@@ -36,6 +36,13 @@ Tool.createProcessor(toolContext) 会生成一个可直接挂到 DevicesTree 节
 - allocateObjectId
 - resolveOwnerChunkId
 
+如果某个工具覆写了 `collectUiOverlayEntries(...)`，那么 `createProcessor(...)` 还会自动帮它完成一件事：
+
+- 首次处理输入时，把这个工具对应的 overlay provider 注册到当前 monitor
+- 工具节点卸载时，自动注销对应 provider
+
+这样 `UiRenderer` 就不需要自己反向扫描设备树来猜“现在谁该画什么”，而是由工具在自己的生命周期内主动声明 overlay。
+
 ## 对象上下文辅助方法
 
 Tool 现在提供一组围绕节点 state 的对象上下文工具：
@@ -51,6 +58,11 @@ Tool 现在提供一组围绕节点 state 的对象上下文工具：
 - 优先复用当前节点 state
 - 避免 creator、chooser、modifier 依赖同一个可变上下文对象
 - 让父节点到子节点的共享变成显式路径状态同步
+
+对于兼容 ui overlay，这些辅助方法还有一个额外用途：
+
+- chooser / modifier 可以直接复用节点 state 中的对象集合来声明自己的选择框 provider
+- 这份 state 只是工具自己的上下文来源，不再是 `UiRenderer` 直接扫描的入口
 
 ## 默认链路继续
 
@@ -93,6 +105,12 @@ mountTool() 内部会使用 tool.createProcessor() 作为 handler，并在卸载
 - reset()
 
 如果工具需要卸载清理，可覆盖 umount(deviceContext)，或依赖基类在 umount 时自动回调 reset()。
+
+如果工具需要在 `uiCanvas` 上声明兼容 overlay，可额外覆写：
+
+- `collectUiOverlayEntries({ deviceContext, monitor, renderer, activeObjectManager })`
+
+该方法返回的条目会通过 monitor 上注册的 provider 交给 `UiRenderer`。
 
 ## 设计约束
 

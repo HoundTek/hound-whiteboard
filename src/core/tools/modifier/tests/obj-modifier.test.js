@@ -26,6 +26,9 @@ describe("ObjectModifierTool", () => {
             calls.push(["invalidate", objects]);
           },
         },
+        requestViewportUiRender() {
+          calls.push(["ui", undefined]);
+        },
       },
     };
 
@@ -36,6 +39,7 @@ describe("ObjectModifierTool", () => {
     expect(calls).toEqual([
       ["capture", [object]],
       ["invalidate", [object]],
+      ["ui", undefined],
     ]);
   });
 
@@ -53,6 +57,7 @@ describe("ObjectModifierTool", () => {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
       },
+      requestViewportUiRender: jest.fn(),
     };
     const modificationContext = {
       objects: new Set(objects),
@@ -67,6 +72,32 @@ describe("ObjectModifierTool", () => {
     );
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
       objects,
+    );
+    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+  });
+
+  test("collectUiOverlayEntries 应把当前修改对象声明给 renderer", () => {
+    class TestModifierTool extends ObjectModifierTool {
+      modify() {
+        return undefined;
+      }
+    }
+
+    const tool = new TestModifierTool();
+    const object = { id: 3 };
+    const renderer = {
+      createCompatSelectionEntriesForObjects: jest.fn(() => ["modifier-overlay"]),
+    };
+
+    expect(
+      tool.collectUiOverlayEntries({
+        deviceContext: { object, objects: [object] },
+        renderer,
+      }),
+    ).toEqual(["modifier-overlay"]);
+    expect(renderer.createCompatSelectionEntriesForObjects).toHaveBeenCalledWith(
+      [object],
+      "modifier",
     );
   });
 });

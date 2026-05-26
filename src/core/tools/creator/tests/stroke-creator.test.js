@@ -197,6 +197,7 @@ describe("StrokeCreatorTool", () => {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
       },
+      requestViewportUiRender: jest.fn(),
     };
 
     tool.process(
@@ -209,6 +210,7 @@ describe("StrokeCreatorTool", () => {
 
     monitor.liveRenderer.captureObjectSnapshot.mockClear();
     monitor.liveRenderer.invalidateObjects.mockClear();
+    monitor.requestViewportUiRender.mockClear();
 
     tool.process(
       {
@@ -224,6 +226,7 @@ describe("StrokeCreatorTool", () => {
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
       tool.obj,
     ]);
+    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("真实 Board 上创建完成后应经由 AOM.apply 落回归属区块", () => {

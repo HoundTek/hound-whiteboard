@@ -10,6 +10,7 @@ import {
   createKeyboardDevice,
 } from "../../core/devices/keyboard-device.js";
 import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
+import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-object-chooser.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { RandomCircleCreatorTool } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
@@ -17,7 +18,6 @@ import { MonitorViewportTool } from "./monitor-viewport-tool.js";
 import { Vector } from "../../core/utils/math.js";
 
 const DEMO_PRIMARY_STROKE_COLOR = "#000000";
-const DEMO_SECONDARY_STROKE_COLOR = "#ff0000";
 const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "Space",
   "KeyW",
@@ -225,11 +225,8 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     new StrokeCreatorTool({
       property: { color: DEMO_PRIMARY_STROKE_COLOR, width: 2 },
     });
-  const secondaryStrokeTool =
-    options.secondaryStrokeTool ??
-    new StrokeCreatorTool({
-      property: { color: DEMO_SECONDARY_STROKE_COLOR, width: 2 },
-    });
+  const secondarySelectionTool =
+    options.secondarySelectionTool ?? new RectangleObjectChooserTool();
   const randomCircleTool =
     options.randomCircleTool ?? new RandomCircleCreatorTool();
   const wasdCoordinateTool =
@@ -250,7 +247,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   });
   effectiveBoard.signalsEventBus.emit("mount", {
     to: `/${monitor.monitorId}/mouse/secondary/tool`,
-    tool: secondaryStrokeTool,
+    tool: secondarySelectionTool,
   });
   effectiveBoard.signalsEventBus.emit("mount", {
     to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
@@ -390,7 +387,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     mouseDevice,
     monitorViewportTool,
     primaryStrokeTool,
-    secondaryStrokeTool,
+    secondarySelectionTool,
     randomCircleTool,
     wasdCoordinateTool,
     debugTool,
@@ -407,7 +404,6 @@ export {
   DEMO_KEYBOARD_INPUT_CODES,
   DEMO_KEYBOARD_TOOL_PATHS,
   DEMO_PRIMARY_STROKE_COLOR,
-  DEMO_SECONDARY_STROKE_COLOR,
   DEMO_VIEWPORT_POSITION_STEP,
   DEMO_VIEWPORT_SCALE_FACTOR,
   WASD_ROUTE_PRESETS,

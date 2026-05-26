@@ -25,6 +25,7 @@ import {
 } from "./render-scheduler.js";
 import { LiveRenderer } from "./live-renderer.js";
 import { RectangleRange } from "../range/index.js";
+import { UiRenderer } from "./ui-renderer.js";
 
 /**
  * 显示器组件
@@ -88,6 +89,12 @@ class Monitor {
   renderScheduler;
 
   /**
+   * 当前显示器的 UI 层渲染调度器
+   * @type {RenderScheduler}
+   */
+  uiRenderScheduler;
+
+  /**
    * 静态层渲染器
    * @type {BaseRenderer}
    */
@@ -98,6 +105,12 @@ class Monitor {
    * @type {LiveRenderer}
    */
   liveRenderer;
+
+  /**
+   * UI 覆盖层渲染器
+   * @type {UiRenderer}
+   */
+  uiRenderer;
 
   /**
    * canvas 左上角对应的世界坐标（可为负数）
@@ -189,6 +202,7 @@ class Monitor {
 
     this.baseRenderer = new BaseRenderer(this);
     this.liveRenderer = new LiveRenderer(this, this.board?.activeObjectManager);
+    this.uiRenderer = new UiRenderer(this, this.board?.activeObjectManager);
     this.baseDirtyRectThresholdStrategy =
       createBaseDirtyRectThresholdStrategy();
     this.liveDirtyRectThresholdStrategy =
@@ -218,11 +232,17 @@ class Monitor {
     this.renderScheduler = new RenderScheduler({
       mergeDirtyRects: this.createDirtyRectMerger("live"),
     });
+    this.uiRenderScheduler = new RenderScheduler({
+      mergeDirtyRects: this.createDirtyRectMerger("ui"),
+    });
     this.baseRenderScheduler.setFlushHandler((dirtyRects) =>
       this.baseRenderer.flush(dirtyRects),
     );
     this.renderScheduler.setFlushHandler((dirtyRects) =>
       this.liveRenderer.flush(dirtyRects),
+    );
+    this.uiRenderScheduler.setFlushHandler((dirtyRects) =>
+      this.uiRenderer.flush(dirtyRects),
     );
     this.bindChunkBlockLoaderRenderHook();
   }
@@ -319,6 +339,7 @@ class Monitor {
     this._zoom = nextZoom;
     this.requestViewportBaseRender(previousChunks, previousViewportState);
     this.requestViewportLiveRender();
+    this.requestViewportUiRender();
   }
 
   /**
@@ -369,6 +390,15 @@ class Monitor {
   }
 
   /**
+   * 请求一次视口范围内的 UI 层补绘
+   */
+  requestViewportUiRender() {
+    const viewportRect = this.getViewportScreenRect();
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
+    this.uiRenderScheduler?.invalidate?.(viewportRect);
+  }
+
+  /**
    * 强制刷新当前视口的 base/live 全屏渲染
    */
   flushViewportRender() {
@@ -378,6 +408,7 @@ class Monitor {
     this.syncChunkBufferWithViewport();
     this.baseRenderScheduler?.invalidate?.(viewportRect);
     this.renderScheduler?.invalidate?.(viewportRect);
+    this.uiRenderScheduler?.invalidate?.(viewportRect);
   }
 
   /**
@@ -449,11 +480,12 @@ class Monitor {
 
     this.requestViewportBaseRender();
     this.renderScheduler?.invalidate?.(viewportRect);
+    this.uiRenderScheduler?.invalidate?.(viewportRect);
   }
 
   /**
    * 创建指定渲染层的脏区聚合器
-   * @param {"base" | "live"} [layer = "live"] - 渲染层名称
+  * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {(dirtyRects: any[]) => any[]}
    */
   createDirtyRectMerger(layer = "live") {
@@ -469,7 +501,7 @@ class Monitor {
 
   /**
    * 获取指定渲染层当前 dirty rect policy
-   * @param {"base" | "live"} [layer = "live"] - 渲染层名称
+  * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {{
    *   getThresholds?: () => Record<string, number | undefined>,
    *   getViewportRect?: () => any,
@@ -487,11 +519,46 @@ class Monitor {
 
   /**
    * 获取指定渲染层当前 dirty rect 阈值
-   * @param {"base" | "live"} [layer = "live"] - 渲染层名称
+   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {Record<string, number | undefined>}
    */
   getDirtyRectThresholds(layer = "live") {
     return this.getDirtyRectPolicy(layer).getThresholds?.() ?? {};
+  }
+
+  /**
+   * 注册 UI overlay provider
+   * @param {Function} provider - overlay provider
+   * @param {{ invalidate?: boolean }} [options={}] - 附加选项
+   * @returns {Function | undefined}
+   */
+  registerUiOverlayProvider(provider, options = {}) {
+    const registeredProvider = this.uiRenderer?.registerOverlayProvider?.(
+      provider,
+    );
+
+    if (registeredProvider && options.invalidate !== false) {
+      this.requestViewportUiRender();
+    }
+
+    return registeredProvider;
+  }
+
+  /**
+   * 注销 UI overlay provider
+   * @param {Function} provider - overlay provider
+   * @param {{ invalidate?: boolean }} [options={}] - 附加选项
+   * @returns {boolean}
+   */
+  unregisterUiOverlayProvider(provider, options = {}) {
+    const removed =
+      this.uiRenderer?.unregisterOverlayProvider?.(provider) ?? false;
+
+    if (removed && options.invalidate !== false) {
+      this.requestViewportUiRender();
+    }
+
+    return removed;
   }
 
   /**

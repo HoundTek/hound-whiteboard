@@ -212,10 +212,11 @@ class ActiveObjectManager {
 
       if (typeof liveRenderer.invalidateObjects === "function") {
         liveRenderer.invalidateObjects([...dirtyObjectMap.values()]);
-        continue;
+      } else {
+        monitor?.renderScheduler?.invalidate?.();
       }
 
-      monitor?.renderScheduler?.invalidate?.();
+      monitor?.requestViewportUiRender?.();
     }
   }
 

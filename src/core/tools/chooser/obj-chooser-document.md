@@ -38,6 +38,19 @@ chooser 和 modifier 的关系是父子关系，而不是并列关系：
 
 当 modifier 已存在时，chooser 会复用当前上下文对象并通过 continueToDefaultPath() 把输入继续送下去。
 
+## 与兼容 ui 选择框的关系
+
+当前 chooser 基类会自己声明兼容选择框 provider，并默认从 chooser 节点当前 state 中读取 `object/objects`。
+
+这意味着：
+
+- 当当前工具仍是 chooser 时，选择框会显示在这些对象各自的矩形范围上
+- 若当前是多对象选择，除了各自矩形框，还会显示这些矩形的最小外接大矩形
+- 若 chooser 已切到下游 modifier，则兼容层会优先采用 modifier 节点状态，避免 chooser 和 modifier 两套框重复绘制
+- 若某个 chooser 子类还需要自己的交互 overlay，例如矩形框选拖拽框，它可以在自己的 provider 条目里继续补充
+
+这里依旧只是兼容方案，不代表 chooser 节点 state 就是未来 overlay 系统的最终协议；当前只是 chooser 自己先把这份上下文声明给 `UiRenderer`。
+
 ## 卸载清理
 
 chooser 被 umount 时会执行清理：

@@ -128,12 +128,84 @@ class Tool {
    * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
    */
   createProcessor(toolContext = {}) {
-    return (signalPacket, handlerContext = {}) => {
+    const uiOverlayBinding = this.createUiOverlayBinding(toolContext);
+    const processor = (signalPacket, handlerContext = {}) => {
       const deviceContext = this.createDeviceContext(
         handlerContext,
         toolContext,
       );
+      uiOverlayBinding?.sync(deviceContext);
       return this.process(SignalPacket.from(signalPacket), deviceContext);
+    };
+
+    processor.dispose = (handlerContext = {}) => {
+      const deviceContext = this.createDeviceContext(
+        handlerContext,
+        toolContext,
+      );
+      uiOverlayBinding?.cleanup(deviceContext);
+    };
+
+    return processor;
+  }
+
+  /**
+   * 为当前工具处理器创建 ui overlay 绑定。
+   * @param {Object} [toolContext={}] - 工具固定上下文
+   * @returns {{ sync: Function, cleanup: Function } | null}
+   */
+  createUiOverlayBinding(toolContext = {}) {
+    if (this.collectUiOverlayEntries === Tool.prototype.collectUiOverlayEntries) {
+      return null;
+    }
+
+    let latestDeviceContext = {};
+    let registeredMonitor = null;
+    const provider = (overlayContext = {}) =>
+      this.collectUiOverlayEntries({
+        ...overlayContext,
+        toolContext,
+        deviceContext: latestDeviceContext,
+      });
+
+    return {
+      sync: (deviceContext = {}) => {
+        latestDeviceContext = deviceContext;
+
+        const monitor = deviceContext.monitor;
+        if (!monitor?.registerUiOverlayProvider) {
+          return;
+        }
+
+        if (registeredMonitor === monitor) {
+          return;
+        }
+
+        if (registeredMonitor?.unregisterUiOverlayProvider) {
+          registeredMonitor.unregisterUiOverlayProvider(provider, {
+            invalidate: false,
+          });
+        }
+
+        registeredMonitor = monitor;
+        monitor.registerUiOverlayProvider(provider, {
+          invalidate: false,
+        });
+      },
+      cleanup: (deviceContext = {}) => {
+        latestDeviceContext = deviceContext;
+
+        const monitor = registeredMonitor ?? deviceContext.monitor;
+        if (monitor?.unregisterUiOverlayProvider) {
+          monitor.unregisterUiOverlayProvider(provider, {
+            invalidate: false,
+          });
+        }
+
+        registeredMonitor = null;
+        latestDeviceContext = {};
+        deviceContext.monitor?.requestViewportUiRender?.();
+      },
     };
   }
 
@@ -283,6 +355,24 @@ class Tool {
       to: deviceContext.defaultChild,
       signals: packet.signals,
     };
+  }
+
+  /**
+   * 收集当前工具声明的 ui overlay 条目。
+   * @param {{ deviceContext?: Object, monitor?: Object, activeObjectManager?: Object, renderer?: Object, toolContext?: Object }} [_overlayContext={}] - overlay 上下文
+   * @returns {Array<*>}
+   */
+  collectUiOverlayEntries(_overlayContext = {}) {
+    return [];
+  }
+
+  /**
+   * 主动请求 ui overlay 重绘。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {void}
+   */
+  requestUiOverlayRefresh(deviceContext = {}) {
+    deviceContext.monitor?.requestViewportUiRender?.();
   }
 
   /**

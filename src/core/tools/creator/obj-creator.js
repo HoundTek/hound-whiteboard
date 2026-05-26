@@ -401,6 +401,7 @@ class ObjectCreatorTool extends Tool {
     interaction?.deviceContext?.monitor?.liveRenderer?.invalidateObjects?.([
       this.obj,
     ]);
+    interaction?.deviceContext?.monitor?.requestViewportUiRender?.();
   }
 
   /**

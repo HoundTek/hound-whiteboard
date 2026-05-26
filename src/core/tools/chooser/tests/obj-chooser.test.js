@@ -155,4 +155,51 @@ describe("ObjectChooserTool", () => {
     expect(deviceContext.objects).toBeUndefined();
     expect(stateAccess.getState()).toEqual({});
   });
+
+  test("collectUiOverlayEntries 在子 modifier 已有对象时不应重复声明 chooser 选择框", () => {
+    const chosenObject = { id: 5 };
+    const tool = new TestChooserTool();
+    const renderer = {
+      createCompatSelectionEntriesForObjects: jest.fn(() => ["chooser-overlay"]),
+    };
+
+    const suppressed = tool.collectUiOverlayEntries({
+      deviceContext: {
+        path: "/monitor/chooser/tool",
+        object: chosenObject,
+        objects: [chosenObject],
+        tree: {
+          resolveDefaultLeaf: () => ({
+            path: "/monitor/chooser/tool/tool",
+            state: { object: chosenObject, objects: [chosenObject] },
+          }),
+        },
+      },
+      renderer,
+    });
+
+    expect(suppressed).toEqual([]);
+    expect(renderer.createCompatSelectionEntriesForObjects).not.toHaveBeenCalled();
+
+    const visible = tool.collectUiOverlayEntries({
+      deviceContext: {
+        path: "/monitor/chooser/tool",
+        object: chosenObject,
+        objects: [chosenObject],
+        tree: {
+          resolveDefaultLeaf: () => ({
+            path: "/monitor/chooser/tool",
+            state: { object: chosenObject, objects: [chosenObject] },
+          }),
+        },
+      },
+      renderer,
+    });
+
+    expect(visible).toEqual(["chooser-overlay"]);
+    expect(renderer.createCompatSelectionEntriesForObjects).toHaveBeenCalledWith(
+      [chosenObject],
+      "chooser",
+    );
+  });
 });

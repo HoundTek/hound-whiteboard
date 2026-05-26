@@ -229,6 +229,7 @@ describe("PolygonCreatorTool", () => {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
       },
+      requestViewportUiRender: jest.fn(),
     };
 
     tool.process(
@@ -246,6 +247,7 @@ describe("PolygonCreatorTool", () => {
 
     monitor.liveRenderer.captureObjectSnapshot.mockClear();
     monitor.liveRenderer.invalidateObjects.mockClear();
+    monitor.requestViewportUiRender.mockClear();
 
     tool.process(
       {
@@ -266,6 +268,7 @@ describe("PolygonCreatorTool", () => {
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
       tool.obj,
     ]);
+    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("真实 Board 上 object-end 后应经由 AOM.apply 落回归属区块", () => {

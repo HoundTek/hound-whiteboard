@@ -173,9 +173,10 @@
 
 - 已实现：核心分层逻辑、层插入与顺序比较、白板外对象 `add()`、置顶、清理、基于二维覆盖区块索引的跨区块拾取、基于对象实例的活动对象索引、`apply()` 提交回写。
 - 已验证：二维区块下的右上/左下组合移动、不可达覆盖区块跳过、覆盖区块索引更新后 `pickup` 与 `choose` 读取新结果、`pickup` 通过 `Board.createChunkBlockLoader()` 接入白板区块加载链、`add()` 将新对象注册进动态图顶层、`apply()` 回写区块对象和覆盖区块索引。
-- 已接入的渲染链路：`Monitor.liveRenderer` 已可直接读取 AOM 当前活动对象集合与层顺序，并将其绘制到 `liveCanvas`。
+- 已接入的渲染链路：`Monitor.liveRenderer` 已可直接读取 AOM 当前活动对象集合与层顺序，并将其绘制到 `liveCanvas`；AOM 的 `requestLiveRender(...)` 现在还会同步推动 `uiCanvas` 的兼容刷新。
 - 已接入的提交后静态层刷新：`apply(objects)` 完成静态结构写回后，会优先走对象级静态失效，把对象旧范围、新范围以及受静态层级变化影响的邻接对象一起送入 `BaseRenderer.invalidateObjects(...)`；无法走对象级路径时，才退回区块并集失效。
-- 已接入的高频修改路径：creator 工具已会在对象几何变更前记录旧几何快照，并在变更后调用 `monitor.liveRenderer.invalidateObjects(...)` 请求活动层刷新。
+- 已接入的高频修改路径：creator 工具已会在对象几何变更前记录旧几何快照，并在变更后调用 `monitor.liveRenderer.invalidateObjects(...)` 请求活动层刷新；creator 与 modifier 的高频几何修改路径现在也会同步请求 ui 层刷新，使兼容选择框能及时重绘。
+- 当前实现里，AOM 只负责推动 ui 层刷新，不再直接决定默认选择框出现时机；默认选择框来源已收口到 chooser / modifier 工具主动声明的 overlay，工具内部当前可复用自己的节点上下文。
 - 待完善：对象级 dirty rect 仍未覆盖完整对象族；跨区块高频移动下的脏区裁剪与性能优化仍待推进。
 
 ## 相关文档

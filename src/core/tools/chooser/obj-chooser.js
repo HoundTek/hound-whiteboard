@@ -128,6 +128,43 @@ class ObjectChooserTool extends Tool {
   }
 
   /**
+   * 收集 chooser 当前声明的兼容 ui overlay。
+   * @param {{ deviceContext?: Object, renderer?: Object }} [overlayContext={}]
+   * @returns {Array<Object>}
+   */
+  collectUiOverlayEntries(overlayContext = {}) {
+    const deviceContext = overlayContext.deviceContext ?? {};
+    const renderer = overlayContext.renderer;
+    const objects = this.resolveContextObjects(deviceContext).filter(Boolean);
+
+    if (
+      objects.length === 0 ||
+      typeof renderer?.createCompatSelectionEntriesForObjects !== "function"
+    ) {
+      return [];
+    }
+
+    const defaultLeaf =
+      typeof deviceContext.tree?.resolveDefaultLeaf === "function" &&
+      typeof deviceContext.path === "string"
+        ? deviceContext.tree.resolveDefaultLeaf(deviceContext.path)
+        : null;
+
+    const childObjects =
+      defaultLeaf && defaultLeaf.path !== deviceContext.path
+        ? this.normalizeObjectCollection(
+            defaultLeaf.state?.objects ?? defaultLeaf.state?.object,
+          ).filter(Boolean)
+        : [];
+
+    if (childObjects.length > 0) {
+      return [];
+    }
+
+    return renderer.createCompatSelectionEntriesForObjects(objects, "chooser");
+  }
+
+  /**
    * 处理一个完整信号包。
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {Object} [deviceContext={}] - 设备上下文

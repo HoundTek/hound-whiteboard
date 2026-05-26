@@ -10,11 +10,11 @@ import { createNoopCanvas } from "../../../core/test-support/noop-canvas.js";
 import {
   configureWhiteboardDemo,
   DEMO_PRIMARY_STROKE_COLOR,
-  DEMO_SECONDARY_STROKE_COLOR,
 } from "../whiteboard-demo.js";
 import { DebuggerTool } from "../debugger-tool.js";
 import { RandomCircleCreatorTool } from "../random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "../wasd-coordinate-tool.js";
+import { RectangleObjectChooserTool } from "../../../core/tools/chooser/rectangle-object-chooser.js";
 
 describe("whiteboard demo", () => {
   function createDemoBoard() {
@@ -102,10 +102,15 @@ describe("whiteboard demo", () => {
     expect(object.property.color).toBe(DEMO_PRIMARY_STROKE_COLOR);
   });
 
-  test("demo 配置后右键应创建红色笔画并写回白板", () => {
+  test("demo 配置后右键应使用矩形框选工具选择覆盖对象", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const { secondaryStrokeTool } = configureWhiteboardDemo(board, monitor);
+    const stroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    board.addObject(stroke, 1);
+    const { secondarySelectionTool } = configureWhiteboardDemo(board, monitor);
+
+    expect(secondarySelectionTool).toBeInstanceOf(RectangleObjectChooserTool);
 
     board.signalsEventBus.emit("input", {
       to: "/main/mouse",
@@ -146,9 +151,10 @@ describe("whiteboard demo", () => {
       ],
     });
 
-    const object = board.getChunkById(1).objectManager.getObject(1);
-    expect(object).toBe(secondaryStrokeTool.obj);
-    expect(object.property.color).toBe(DEMO_SECONDARY_STROKE_COLOR);
+    expect(board.activeObjectManager.activeObjectIndex.get(1)).toBe(stroke);
+    expect(
+      monitor.devicesTree.getNode("/main/mouse/secondary/tool")?.state?.object,
+    ).toBe(stroke);
   });
 
   test("demo 配置后连续两次左键应生成两条独立黑色笔画", () => {
@@ -245,9 +251,16 @@ describe("whiteboard demo", () => {
     expect(ownerChunk.getObject(1)).not.toBe(ownerChunk.getObject(2));
   });
 
-  test("demo 配置后连续两次右键应生成两条独立红色笔画", () => {
+  test("demo 配置后连续两次右键应替换当前框选结果", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
+    const firstStroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    firstStroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    const secondStroke = new StrokeObject(new Vector(90, 100), 2, 1);
+    secondStroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+
+    board.addObject(firstStroke, 1);
+    board.addObject(secondStroke, 1);
 
     configureWhiteboardDemo(board, monitor);
 
@@ -296,7 +309,7 @@ describe("whiteboard demo", () => {
         {
           type: "position",
           context: {
-            value: new Vector(60, 70),
+            value: new Vector(88, 98),
             buttons: 2,
             button: 2,
           },
@@ -309,7 +322,7 @@ describe("whiteboard demo", () => {
         {
           type: "position",
           context: {
-            value: new Vector(70, 80),
+            value: new Vector(112, 116),
             buttons: 2,
             button: 2,
           },
@@ -329,14 +342,12 @@ describe("whiteboard demo", () => {
       ],
     });
 
-    const ownerChunk = board.getChunkById(1).objectManager;
-    expect(ownerChunk.getObject(1).property.color).toBe(
-      DEMO_SECONDARY_STROKE_COLOR,
+    expect(board.activeObjectManager.activeObjectIndex.has(firstStroke.id)).toBe(
+      false,
     );
-    expect(ownerChunk.getObject(2).property.color).toBe(
-      DEMO_SECONDARY_STROKE_COLOR,
+    expect(board.activeObjectManager.activeObjectIndex.get(secondStroke.id)).toBe(
+      secondStroke,
     );
-    expect(ownerChunk.getObject(1)).not.toBe(ownerChunk.getObject(2));
   });
 
   test("requestViewportBaseRender 应让 base 层缓冲区覆盖当前视口并承接已提交笔画", () => {
