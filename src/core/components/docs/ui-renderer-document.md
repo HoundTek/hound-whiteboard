@@ -57,6 +57,11 @@
 - 若当前工具是对象修改工具，则 modifier tool provider 会声明当前上下文对象的选择框
 - 对于多对象场景，除了每个对象自己的矩形框，还会额外绘制这些对象矩形的最小外接大矩形
 
+当前默认样式也有一条固定约定：
+
+- 每个对象自己的选择框使用实线
+- 多对象组合大矩形继续使用虚线
+
 这并不意味着 chooser / modifier 节点 state 就是最终 UI overlay 协议。当前只是让 chooser / modifier 工具先复用自己已有的上下文状态，把它们主动声明成 provider 条目，先把 `uiCanvas` 链路兼容起来。
 
 ## Overlay Provider 扩展口

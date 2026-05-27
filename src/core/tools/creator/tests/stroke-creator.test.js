@@ -51,7 +51,51 @@ describe("StrokeCreatorTool", () => {
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
-      { x: 2, y: 2 },
+    ]);
+  });
+
+  test("连续重复位置不应产生重复路径点", () => {
+    const tool = new StrokeCreatorTool();
+    const deviceContext = { objectId: 200, ownerChunkId: 2 };
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/stroke",
+          signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/stroke",
+          signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.process(
+        {
+          to: "/monitor/stroke",
+          signals: [
+            { type: "position", context: { value: new Vector(2, 3) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext,
+      ),
+    ).toBeUndefined();
+
+    expect(
+      tool.obj.localPathRange.points.map((point) => point.serialize()),
+    ).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
     ]);
   });
 

@@ -18,13 +18,13 @@ import { Range } from "./range.js";
  */
 class PathRange extends Range {
   /**
-   * 路径点列。
+   * 路径点列
    * @type {Array<Vector>}
    */
   points;
 
   /**
-   * 路径是否闭合。
+   * 路径是否闭合
    * @type {boolean}
    */
   closed;

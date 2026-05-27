@@ -8,9 +8,32 @@
   </head>
   <body>
     <div id="app">
-      <img id="app-background-layer" />
-      <div id="app-texture-layer"></div>
-      <div id="app-foreground-layer"></div>
+      <div id="app-left">
+        <div id="app-foreground-layer"></div>
+      </div>
+      <div id="app-divider"></div>
+      <aside id="app-right">
+        <div class="demo-panel">
+          <h1>Demo UI</h1>
+          <p>这个面板仅用于演示，右侧宽度固定为 300px。</p>
+          <section>
+            <h2>说明</h2>
+            <ul>
+              <li>左侧 Monitor 区域宽度可变。</li>
+              <li>右侧 UI 区域宽度固定为 300px。</li>
+              <li>中间使用分割线区隔。</li>
+            </ul>
+          </section>
+          <section>
+            <h2>快捷键</h2>
+            <ul>
+              <li>左键：黑色笔划对象</li>
+              <li>右键：矩形框选对象</li>
+              <li>空格：随机圆对象</li>
+            </ul>
+          </section>
+        </div>
+      </aside>
     </div>
 
     <script type="module" src="./whiteboard.js"></script>

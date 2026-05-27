@@ -7,6 +7,7 @@
 
 import { Tool } from "../tool.js";
 import { SignalPacket } from "../../devices/signal.js";
+import { intersectsRanges } from "../../range/index.js";
 import { joinPath } from "../../utils/path.js";
 
 /**
@@ -125,6 +126,57 @@ class ObjectChooserTool extends Tool {
       joinPath(deviceContext.path, "tool"),
     );
     return normalizedObjects;
+  }
+
+  /**
+   * 解析对象主判定范围在世界空间中的范围。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {*} objectEntry - 候选对象
+   * @returns {import("../../range/index.js").Range | undefined}
+   */
+  resolveObjectSelectionWorldRange(deviceContext = {}, objectEntry) {
+    if (!objectEntry || typeof objectEntry.getRange !== "function") {
+      return undefined;
+    }
+
+    const position = objectEntry.position;
+    if (!position) {
+      return undefined;
+    }
+
+    try {
+      const selectionRange = objectEntry.getRange();
+      if (!selectionRange || typeof selectionRange.withPosition !== "function") {
+        return undefined;
+      }
+
+      return selectionRange.withPosition(position);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 判断对象主判定范围是否与给定选择范围相交。
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {*} objectEntry - 候选对象
+   * @param {*} selectionWorldRange - 选择范围
+   * @returns {boolean}
+   */
+  objectIntersectsSelectionRange(
+    deviceContext = {},
+    objectEntry,
+    selectionWorldRange,
+  ) {
+    const objectWorldRange = this.resolveObjectSelectionWorldRange(
+      deviceContext,
+      objectEntry,
+    );
+    if (!objectWorldRange || !selectionWorldRange) {
+      return false;
+    }
+
+    return intersectsRanges(objectWorldRange, selectionWorldRange);
   }
 
   /**

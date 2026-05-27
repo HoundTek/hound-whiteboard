@@ -96,6 +96,7 @@ describe("UiRenderer", () => {
       [56, 76, 28, 18],
       [6, 16, 78, 78],
     ]);
+    expect(context.setLineDash.mock.calls).toEqual([[[ ]], [[ ]], [[10, 4]]]);
   });
 
   test("对象只在 AOM 中但不在 chooser/modifier 当前上下文时，不应显示选择框", () => {

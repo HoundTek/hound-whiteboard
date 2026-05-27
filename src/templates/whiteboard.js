@@ -11,11 +11,12 @@ const board = new Board();
 board.width = 800;
 board.height = 600;
 
+const appLeft = document.getElementById("app-left");
 const foregroundLayer = document.getElementById("app-foreground-layer");
 const monitor = board.createMonitor(
   foregroundLayer,
   {
-    width: window.innerWidth,
+    width: appLeft.clientWidth,
     height: window.innerHeight,
   },
   "monitor",
@@ -65,7 +66,7 @@ configureWhiteboardDemo(board, monitor, {
 });
 
 const resizeMonitor = () => {
-  const width = window.innerWidth;
+  const width = appLeft.clientWidth;
   const height = window.innerHeight;
   monitor.rootElement.style.width = `${width}px`;
   monitor.rootElement.style.height = `${height}px`;

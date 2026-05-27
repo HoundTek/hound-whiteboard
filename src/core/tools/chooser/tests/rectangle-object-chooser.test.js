@@ -20,8 +20,20 @@ describe("RectangleObjectChooserTool", () => {
 
   test("拖拽结束后应选择与矩形相交的对象并清理拖拽状态", () => {
     const tool = new RectangleObjectChooserTool();
-    const firstObject = { id: 1 };
-    const secondObject = { id: 2 };
+    const firstObject = {
+      id: 1,
+      position: new Vector(10, 10),
+      getRange() {
+        return new RectangleRange(0, 0, 20, 20);
+      },
+    };
+    const secondObject = {
+      id: 2,
+      position: new Vector(100, 100),
+      getRange() {
+        return new RectangleRange(0, 0, 20, 20);
+      },
+    };
     const stateAccess = createStateAccess();
     const board = {
       objectLoaded: new Map([
@@ -32,11 +44,6 @@ describe("RectangleObjectChooserTool", () => {
         choose: jest.fn(),
         discard: jest.fn(),
         activeObjectIndex: new Map(),
-        getObjectWorldRange(objectInstance) {
-          return objectInstance.id === 1
-            ? new RectangleRange(10, 10, 20, 20)
-            : new RectangleRange(100, 100, 20, 20);
-        },
       },
     };
     const deviceContext = {
@@ -52,7 +59,7 @@ describe("RectangleObjectChooserTool", () => {
         signals: [
           {
             type: "position",
-            context: { value: new Vector(5, 5), buttons: 2, button: 2 },
+            context: { value: new Vector(5, 5) },
           },
         ],
       },
@@ -63,7 +70,7 @@ describe("RectangleObjectChooserTool", () => {
         signals: [
           {
             type: "position",
-            context: { value: new Vector(40, 40), buttons: 2, button: 2 },
+            context: { value: new Vector(40, 40) },
           },
         ],
       },
@@ -74,11 +81,11 @@ describe("RectangleObjectChooserTool", () => {
         signals: [
           {
             type: "position",
-            context: { value: new Vector(40, 40), buttons: 0, button: 2 },
+            context: { value: new Vector(40, 40) },
           },
           {
             type: "end",
-            context: { buttons: 0, button: 2 },
+            context: {},
           },
         ],
       },
@@ -126,7 +133,7 @@ describe("RectangleObjectChooserTool", () => {
         signals: [
           {
             type: "position",
-            context: { value: new Vector(0, 0), buttons: 2, button: 2 },
+            context: { value: new Vector(0, 0) },
           },
         ],
       },
@@ -137,11 +144,11 @@ describe("RectangleObjectChooserTool", () => {
         signals: [
           {
             type: "position",
-            context: { value: new Vector(10, 10), buttons: 0, button: 2 },
+            context: { value: new Vector(10, 10) },
           },
           {
             type: "end",
-            context: { buttons: 0, button: 2 },
+            context: {},
           },
         ],
       },
@@ -151,6 +158,53 @@ describe("RectangleObjectChooserTool", () => {
     expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
       new Set([previousObject]),
     );
+    expect(board.activeObjectManager.choose).not.toHaveBeenCalled();
+    expect(stateAccess.getState()).toEqual({});
+  });
+
+  test("框选应基于对象主判定范围而不是 boundingBox", () => {
+    const tool = new RectangleObjectChooserTool();
+    const objectEntry = {
+      id: 3,
+      position: new Vector(100, 100),
+      boundingBox: new RectangleRange(0, 0, 60, 60),
+      getRange() {
+        return new RectangleRange(50, 50, 10, 10);
+      },
+    };
+    const stateAccess = createStateAccess();
+    const board = {
+      objectLoaded: new Map([[3, { obj: objectEntry }]]),
+      activeObjectManager: {
+        choose: jest.fn(),
+        discard: jest.fn(),
+        activeObjectIndex: new Map(),
+      },
+    };
+    const deviceContext = {
+      board,
+      monitor: { requestViewportUiRender: jest.fn() },
+      path: "/main/mouse/secondary/tool",
+      getNodeState: stateAccess.getState,
+      setNodeState: stateAccess.setState,
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(100, 100) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(120, 120) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
     expect(board.activeObjectManager.choose).not.toHaveBeenCalled();
     expect(stateAccess.getState()).toEqual({});
   });

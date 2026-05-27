@@ -63,29 +63,26 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     return position.sub(this.obj.position);
   }
 
+  appendPathPoint(point) {
+    const points = this.obj.localPathRange.points;
+    const lastPoint = points[points.length - 1];
+    if (lastPoint && Vector.nearlyEq(lastPoint, point)) {
+      return;
+    }
+    this.obj.setPathPoints(points.concat([point]));
+  }
+
   beginCreationGesture(interaction) {
-    this.obj.setPathPoints(
-      this.obj.localPathRange.points.concat([
-        this.toLocalPoint(interaction.position),
-      ]),
-    );
+    this.appendPathPoint(this.toLocalPoint(interaction.position));
   }
 
   updateCreationGesture(interaction) {
-    this.obj.setPathPoints(
-      this.obj.localPathRange.points.concat([
-        this.toLocalPoint(interaction.position),
-      ]),
-    );
+    this.appendPathPoint(this.toLocalPoint(interaction.position));
   }
 
   completeCreationGesture(interaction) {
     if (interaction.position) {
-      this.obj.setPathPoints(
-        this.obj.localPathRange.points.concat([
-          this.toLocalPoint(interaction.position),
-        ]),
-      );
+      this.appendPathPoint(this.toLocalPoint(interaction.position));
     }
   }
 

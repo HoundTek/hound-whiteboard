@@ -1,5 +1,7 @@
 import { jest } from "@jest/globals";
 import { ObjectChooserTool } from "../obj-chooser.js";
+import { RectangleRange } from "../../../range/index.js";
+import { Vector } from "../../../utils/math.js";
 
 describe("ObjectChooserTool", () => {
   function createStateAccess(initialState = {}) {
@@ -200,6 +202,22 @@ describe("ObjectChooserTool", () => {
     expect(renderer.createCompatSelectionEntriesForObjects).toHaveBeenCalledWith(
       [chosenObject],
       "chooser",
+    );
+  });
+
+  test("resolveObjectSelectionWorldRange 应使用对象主判定范围而不是 boundingBox", () => {
+    const tool = new TestChooserTool();
+    const objectEntry = {
+      id: 6,
+      position: new Vector(100, 200),
+      boundingBox: new RectangleRange(0, 0, 40, 50),
+      getRange() {
+        return new RectangleRange(10, 20, 5, 6);
+      },
+    };
+
+    expect(tool.resolveObjectSelectionWorldRange({}, objectEntry)).toEqual(
+      new RectangleRange(110, 220, 5, 6),
     );
   });
 });

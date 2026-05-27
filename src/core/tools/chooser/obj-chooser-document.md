@@ -38,6 +38,16 @@ chooser 和 modifier 的关系是父子关系，而不是并列关系：
 
 当 modifier 已存在时，chooser 会复用当前上下文对象并通过 continueToDefaultPath() 把输入继续送下去。
 
+## 命中范围约束
+
+对象选择工具在判断“对象是否命中 / 是否应被框选”时，应统一以对象的主判定范围 `getRange()` 为准，而不是直接使用 `boundingBox`。
+
+这意味着：
+
+- `boundingBox` 可以继续服务于局部刷新、快速裁剪等场景
+- 但 chooser 的命中和框选语义应优先尊重对象真正的主判定范围
+- 当前基类已提供主判定范围到世界空间的辅助解析接口，供子类复用
+
 ## 与兼容 ui 选择框的关系
 
 当前 chooser 基类会自己声明兼容选择框 provider，并默认从 chooser 节点当前 state 中读取 `object/objects`。

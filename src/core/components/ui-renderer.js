@@ -13,7 +13,7 @@ import { ActiveObjectManager } from "./active-object-manager.js";
 const COMPAT_SELECTION_FRAME_MARGIN = 4;
 const COMPAT_SELECTION_FRAME_STROKE_STYLE = "#33a1ff";
 const COMPAT_SELECTION_FRAME_LINE_WIDTH = 1;
-const COMPAT_SELECTION_FRAME_LINE_DASH = Object.freeze([6, 3]);
+const COMPAT_SELECTION_FRAME_LINE_DASH = Object.freeze([]);
 const COMPAT_SELECTION_GROUP_LINE_WIDTH = 1;
 const COMPAT_SELECTION_GROUP_LINE_DASH = Object.freeze([10, 4]);
 
