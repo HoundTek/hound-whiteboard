@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createDevice } from "./devices-tree.js";
+import { createSubTree } from "./devices-tree.js";
 import { SignalPacket } from "./signal.js";
 
 /**
@@ -17,7 +17,7 @@ import { SignalPacket } from "./signal.js";
  *   auxiliaryProcessor?: import("./devices-tree.js").DevicesTreeHandler,
  *   wheelProcessor?: import("./devices-tree.js").DevicesTreeHandler,
  * }} [options={}] - 鼠标设备选项
- * @returns {import("./devices-tree.js").DeviceDefinition & {
+ * @returns {import("./devices-tree.js").SubTreeDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeButtons: {primary: boolean, secondary: boolean, auxiliary: boolean},
@@ -233,7 +233,7 @@ function createMouseDevice(options = {}) {
         : null,
   };
 
-  const mouseDeviceBuilder = createDevice("/mouse")
+  const mouseSubTreeBuilder = createSubTree("/mouse")
     .node("")
     .handler(rootHandler)
     .end();
@@ -245,14 +245,14 @@ function createMouseDevice(options = {}) {
     "auxiliary",
     "wheel",
   ]) {
-    mouseDeviceBuilder
+    mouseSubTreeBuilder
       .node(channel)
       .handler(channelProcessors[channel])
       .defaultChild("tool")
       .end();
   }
 
-  return mouseDeviceBuilder
+  return mouseSubTreeBuilder
     .expose({
       resetState() {
         activeButtons = {

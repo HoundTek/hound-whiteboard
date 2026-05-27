@@ -10,6 +10,7 @@
 - Board.signalsEventBus 收到输入事件
 - Board.devicesTree.dispatch() 开始按路径分发
 - 设备节点 handler 做状态更新与分流
+- 修饰节点按职责执行记录、参数注入、路由或状态机
 - 显式工具叶子消费最终信号
 
 ## 关系图
@@ -20,7 +21,8 @@ flowchart LR
     Bus --> Tree[Board.devicesTree]
     Tree --> Device[Device Root Handler]
     Device --> Node[Device Child Node]
-    Node --> Tool[Explicit Tool Leaf]
+    Node --> Prefix[Prefixrefi Node]
+    Prefix --> Tool[Explicit Tool Leaf]
     Tool --> BoardState[Board / Monitor / Objects]
 ```
 
@@ -44,6 +46,13 @@ DevicesTree 负责：
 - defaultChild 自动继续
 - 节点 state
 - 卸载钩子
+
+修饰节点负责：
+
+- 记录和监视信号
+- 注入或改写信号字段
+- 路由到当前活动 child
+- 维护局部状态机
 
 Tool 负责：
 
@@ -75,7 +84,7 @@ Tool 负责：
 - keyboard 根节点可把输入分到 event、keydown、keyup、repeat、cancel、code/<Key>
 - touchscreen 根节点可维护 activeTouches 并输出 contacts
 
-## 工具阶段
+## 修饰节点与工具阶段
 
 业务工具现在要求挂在显式叶子路径上，例如：
 
@@ -83,10 +92,17 @@ Tool 负责：
 - /keyboard/tools/move/tool
 - /keyboard/code/KeyW/tool
 
+如果某条链路需要“先前置处理，再交给工具”，推荐插入修饰节点，例如：
+
+- /keyboard/tools/create-circle
+- /keyboard/tools/create-circle/params
+- /keyboard/tools/create-circle/params/tool
+
 这带来两个直接收益：
 
 - 工具归属路径稳定，不依赖隐式挂载约定
-- creator、chooser、modifier 可以通过相邻节点 state 做显式 handoff
+- 修饰节点可以承接参数注入、多工具路由和状态机
+- creator、chooser、modifier 仍可通过相邻节点 state 做显式 handoff，但这是当前兼容路径
 
 ## 动态配置
 
@@ -103,6 +119,7 @@ Tool 负责：
 ## 当前建议
 
 - 设备根节点做粗分流，复杂业务逻辑交给工具
+- 需要记录、注入、路由、状态机时，优先引入修饰节点
 - 工具一律显式挂到 /tool 叶子
 - 父子工具共享状态时，显式写入节点 state
 - Monitor 侧只做挂载代理，不持有第二棵树

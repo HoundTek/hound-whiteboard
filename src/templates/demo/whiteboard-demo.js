@@ -45,7 +45,8 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
 
 const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
   MOVE: "tools/move/tool",
-  RANDOM_CIRCLE: "tools/create-circle/tool",
+  RANDOM_CIRCLE: "tools/create-circle",
+  RANDOM_CIRCLE_TOOL: "tools/create-circle/tool",
   DEBUG: "tools/debug/tool",
   VIEWPORT: "tools/viewport/tool",
 });
@@ -229,6 +230,13 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options.secondarySelectionTool ?? new RectangleObjectChooserTool();
   const randomCircleTool =
     options.randomCircleTool ?? new RandomCircleCreatorTool();
+  const randomCircleSubTree =
+    options.randomCircleSubTree ??
+    options.randomCircleDevice ??
+    randomCircleTool.createSubTreeDefinition?.(
+      `/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
+    ) ??
+    null;
   const wasdCoordinateTool =
     options.wasdCoordinateTool ?? new WasdCoordinateTool();
   const monitorViewportTool =
@@ -249,10 +257,14 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     to: `/${monitor.monitorId}/mouse/secondary/tool`,
     tool: secondarySelectionTool,
   });
-  effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
-    tool: randomCircleTool,
-  });
+  if (randomCircleSubTree) {
+    monitor.mountDevice(randomCircleSubTree);
+  } else {
+    effectiveBoard.signalsEventBus.emit("mount", {
+      to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE_TOOL}`,
+      tool: randomCircleTool,
+    });
+  }
   effectiveBoard.signalsEventBus.emit("mount", {
     to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
     tool: wasdCoordinateTool,
@@ -268,7 +280,11 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Space`,
     options: buildKeyboardTriggerForwardNodeConfig(
-      `../../${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
+      `../../${
+        randomCircleSubTree
+          ? DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE
+          : DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE_TOOL
+      }`,
     ),
   });
 

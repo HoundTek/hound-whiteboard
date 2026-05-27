@@ -5,7 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { createDevice } from "./devices-tree.js";
+import { createSubTree } from "./devices-tree.js";
+import { createPrefixNodeHandler } from "./prefix-node.js";
 import { SignalPacket } from "./signal.js";
 
 /**
@@ -21,7 +22,7 @@ const DEBUGGER_DEVICE_SIGNAL_TYPES = Object.freeze({
  * @description
  * 创建一个用于记录和报告信号包历史的调试设备子树
  * @param {{onRecord?: Function}} [options={}] - 调试设备选项
- * @returns {import("./devices-tree.js").DeviceDefinition & {
+ * @returns {import("./devices-tree.js").SubTreeDefinition & {
  *   history: Array<Object>,
  *   clearHistory: () => void,
  *   getLastEntry: () => Object|null,
@@ -50,16 +51,22 @@ function createDebuggerDevice(options = {}) {
    * @param {import("./devices-tree.js").DevicesTreeHandlerContext} [context={}] - 当前路由上下文
    * @returns {Object}
    */
-  const rootHandler = (signalPacket, context = {}) => {
-    const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
-    const entry = createHistoryEntry(packet, context);
-    history.push(entry);
-    onRecord?.(entry);
+  const rootHandler = createPrefixNodeHandler({
+    initialState: {
+      lastEntryIndex: -1,
+    },
+    handle(signalPacket, prefixContext = {}) {
+      const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
+      const entry = createHistoryEntry(packet, prefixContext);
+      history.push(entry);
+      prefixContext.patchState({
+        lastEntryIndex: entry.index,
+      });
+      onRecord?.(entry);
 
-    return {
-      signals: packet.signals,
-    };
-  };
+      return prefixContext.routeToChild("report", packet.signals);
+    },
+  });
 
   /**
    * 报告节点处理器
@@ -88,9 +95,12 @@ function createDebuggerDevice(options = {}) {
     };
   };
 
-  const debuggerDevice = createDevice("/debugger")
+  const debuggerDevice = createSubTree("/debugger")
     .node("")
-    .handler(rootHandler)
+    .prefix(rootHandler, {
+      prefixKind: "debug",
+      routePolicy: "inspect",
+    })
     .defaultChild("report")
     .end()
     .node("report")

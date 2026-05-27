@@ -2,7 +2,7 @@
 
 ## 概述
 
-设备在当前 Core 中不是一组零散回调，而是一份结构化的 DeviceDefinition。
+设备在当前 Core 中不是一组零散回调，而是一份结构化的 SubTreeDefinition。
 
 它描述的是：
 
@@ -16,7 +16,7 @@
 
 ## 结构
 
-DeviceDefinition 的最小结构如下：
+SubTreeDefinition 的最小结构如下：
 
 ```js
 {
@@ -37,14 +37,14 @@ DeviceDefinition 的最小结构如下：
 }
 ```
 
-推荐直接使用 createDevice() 构建，而不是手写整棵对象树。
+推荐直接使用 createSubTree() 构建，而不是手写整棵对象树。
 
-## createDevice 构建器
+## createSubTree 构建器
 
 典型写法如下：
 
 ```js
-const device = createDevice("/debugger")
+const device = createSubTree("/debugger")
   .node("")
   .handler(rootHandler)
   .end()
@@ -61,12 +61,38 @@ const device = createDevice("/debugger")
 构建器支持：
 
 - node(path)：获取或创建某个相对节点
+- prefix(fn, semantics)：把当前节点标记为修饰节点语义，并设置 handler
 - handler(fn)：设置节点处理器
 - defaultChild(name)：设置默认子链路
+- semantics(meta)：写入节点职责语义元数据
 - tool(toolInstance, toolContext)：把某个节点声明为工具节点
 - umount(fn)：设置节点卸载钩子
 - expose(api)：暴露设备级 API
-- build()：生成 DeviceDefinition
+- build()：生成 SubTreeDefinition
+
+其中有一条边界需要明确：
+
+- 修饰节点不是新的节点类型
+- 它仍然是 DevicesTreeNode，只是 `semantics.prefix === true` 的职责标记
+- 是否把某个节点视为修饰节点，由构建器配置和 handler 语义共同决定
+
+当前 builder 也支持嵌套写法，用于表达修饰节点下继续挂修饰节点或 tool 的链路，例如：
+
+```js
+const workflow = createSubTree("/keyboard/tools/create-circle")
+  .node("")
+  .prefix(randomPrefixHandler)
+  .defaultChild("params")
+  .node("params")
+  .prefix(circleParamPrefixHandler)
+  .defaultChild("tool")
+  .node("tool")
+  .tool(circleTool)
+  .end()
+  .end()
+  .end()
+  .build();
+```
 
 ## 设备与工具的分工
 
@@ -98,13 +124,13 @@ const device = createDevice("/debugger")
 monitor.mountDevice(createKeyboardDevice());
 ```
 
-也可以指定额外挂载前缀：
+也可以指定额外挂载修饰节点：
 
 ```js
 monitor.mountDevice("/presentation", createKeyboardDevice());
 ```
 
-最终仍会由 Board 持有的 DevicesTree 执行 mountDevice(basePath, deviceDefinition)。
+最终仍会由 Board 持有的 DevicesTree 执行 mountDevice(basePath, subTreeDefinition)。
 
 ## 状态暴露
 
@@ -127,13 +153,14 @@ monitor.mountDevice("/presentation", createKeyboardDevice());
 
 ## 当前实践
 
-当前仓库内的 debugger、touchscreen、mouse、keyboard 都已经迁移到 createDevice(root) 新模型。
+当前仓库内的 debugger、touchscreen、mouse、keyboard 都已经迁移到 createSubTree(root) 新模型。
 
 它们的共同特点是：
 
 - 根节点只做设备态更新与初始分流
 - 业务工具位于显式的 /tool 叶子
 - 设备状态通过 expose() 对外暴露
+- debugger 的根节点现在是修饰节点语义，用于记录经过该节点的信号并继续下传
 
 ## 相关文档
 

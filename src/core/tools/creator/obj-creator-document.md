@@ -22,6 +22,12 @@
 - apply：创建完成后直接调用 AOM.apply(...)，对象立即回到静态图
 - handoff：创建完成后保持对象留在 AOM 中，并在当前 creator 节点下自动挂载固定 modifier 子工具
 
+这里要注意一个“当前基线”和“推荐方向”的区别：
+
+- 当前基线里，creator 的 handoff 仍由工具自身维护
+- 新增 workflow 更推荐把 handoff 状态机上移到修饰节点
+- 也就是说，creator 更适合只专注于对象创建本身
+
 handoff 模式下的关键点是：
 
 - creator 通过 setContextObjects() 把对象写回当前节点上下文
@@ -72,3 +78,4 @@ handoff 模式下的关键点是：
 - 两者都复用对象创建工具基类的几何刷新钩子
 - 创建工具现在可配置 completionMode 与 createModifierTool
 - handoff workflow 被 umount 时，creator 会撤销未提交对象并清理上下文
+- prefix 驱动的多工具 handoff 已有通用 helper，但 creator / chooser 旧路径尚未整体迁移

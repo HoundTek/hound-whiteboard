@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createDevice } from "./devices-tree.js";
+import { createSubTree } from "./devices-tree.js";
 import { SignalPacket } from "./signal.js";
 import { joinPath } from "../utils/path.js";
 
@@ -28,7 +28,7 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
  *     defaultChild?: string,
  *   }>,
  * }} [options={}] - 键盘设备选项
- * @returns {import("./devices-tree.js").DeviceDefinition & {
+ * @returns {import("./devices-tree.js").SubTreeDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeKeys: Array<{
@@ -322,7 +322,7 @@ function createKeyboardDevice(options = {}) {
     return resolveRouteTargets(packet);
   };
 
-  const keyboardDeviceBuilder = createDevice("/keyboard")
+  const keyboardSubTreeBuilder = createSubTree("/keyboard")
     .node("")
     .handler(rootHandler)
     .end()
@@ -365,7 +365,7 @@ function createKeyboardDevice(options = {}) {
     .end();
 
   for (const [nodePath, config] of Object.entries(rawNodeConfigs)) {
-    keyboardDeviceBuilder
+    keyboardSubTreeBuilder
       .node(normalizeNodePathKey(nodePath))
       .handler(typeof config?.handler === "function" ? config.handler : null)
       .defaultChild(
@@ -374,7 +374,7 @@ function createKeyboardDevice(options = {}) {
       .end();
   }
 
-  return keyboardDeviceBuilder
+  return keyboardSubTreeBuilder
     .expose({
       resetState() {
         activeKeys.clear();

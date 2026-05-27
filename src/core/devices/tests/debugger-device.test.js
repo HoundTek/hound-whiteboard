@@ -20,6 +20,11 @@ describe("debugger-device", () => {
       "/monitor/debugger",
       "/monitor/debugger/report",
     ]);
+    expect(tree.getNode("/monitor/debugger")?.getSemantics()).toEqual({
+      prefix: true,
+      prefixKind: "debug",
+      routePolicy: "inspect",
+    });
 
     const packets = tree.dispatch({
       to: "/monitor/debugger",

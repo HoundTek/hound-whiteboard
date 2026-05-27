@@ -21,7 +21,7 @@
 - configureNode(path, options)
 - mountTool(path, tool, toolContext)
 - unmountTool(path, routeContext)
-- mountDevice(basePath, deviceDefinition, runtimeContext)
+- mountDevice(basePath, subTreeDefinition, runtimeContext)
 - unmount(path, routeContext)
 - unmountLeaf(path, routeContext)
 - dispatch(signalPacket, routeContext)
@@ -33,13 +33,13 @@
 - 工具挂载使用显式叶子路径
 - 结构化设备定义使用 root + nodes
 
-## DeviceDefinition
+## SubTreeDefinition
 
 当前稳定结构如下：
 
 ```js
 {
-  root: "/device-root",
+  root: "/sub-tree-root",
   nodes: {
     handler,
     defaultChild,
@@ -53,7 +53,7 @@
 }
 ```
 
-推荐通过 createDevice(root).build() 生成，不直接依赖旧的对象协议。
+推荐通过 createSubTree(root).build() 生成，不直接依赖旧的对象协议。
 
 ## Tool
 
@@ -76,8 +76,8 @@
 
 当前建议依赖的 Monitor 输入接口有：
 
-- mountDevice(deviceDefinition)
-- mountDevice(pathPrefix, deviceDefinition)
+- mountDevice(subTreeDefinition)
+- mountDevice(pathPrefix, subTreeDefinition)
 - mountTool(path, tool)
 - unmountTool(path)
 - 通过 board.devicesTree 读取当前输入树

@@ -22,6 +22,7 @@ import { SignalPacket } from "./signal.js";
  * @property {DevicesTreeNode} node - 当前正在处理的节点
  * @property {DevicesTree} tree - 所属设备树
  * @property {string} path - 当前节点路径
+ * @property {Object} semantics - 当前节点语义元数据
  * @property {string} defaultChild - 当前节点声明的默认子链路
  * @property {string} resolvedDefaultChildPath - 当前默认子链路对应的绝对路径
  * @property {number} depth - 当前分发深度
@@ -87,33 +88,34 @@ import { SignalPacket } from "./signal.js";
  * @typedef {Object} DevicesTreeNodeConfig
  * @property {string|null} [defaultChild] - 当前节点的默认子链路；传 `null` 或空串表示清空
  * @property {DevicesTreeHandler|null} [handler] - 当前节点处理器；传 `null` 表示清空
+ * @property {Object|null} [semantics] - 当前节点的职责语义；传 `null` 表示清空
  * @property {DevicesTreeNodeUmountHandler|null} [umount] - 当前节点被卸载时的清理钩子；传 `null` 表示清空
  */
 
 /**
- * 结构化设备节点定义
+ * 结构化子树节点定义
  * @description
- * 结构化设备节点定义用于描述设备子树的结构化定义，
- * 供设备构建器在构建设备节点时使用。
- * @typedef {Object} DeviceNodeDefinition
+ * 结构化子树节点定义用于描述任意输入子树的结构化定义，
+ * 供子树构建器在构建节点时使用。
+ * @typedef {Object} SubTreeNodeDefinition
  * @property {DevicesTreeHandler|null} [handler] - 当前节点处理器
+ * @property {Object} [semantics] - 当前节点职责语义
  * @property {string} [defaultChild] - 当前节点默认子链路
  * @property {import("../tools/tool.js").Tool} [tool] - 当前节点绑定的工具实例
  * @property {Object} [toolContext] - 当前工具节点固定运行时上下文
  * @property {DevicesTreeNodeUmountHandler|null} [umount] - 当前节点卸载钩子
- * @property {Record<string, DeviceNodeDefinition>} [children] - 子节点定义
+ * @property {Record<string, SubTreeNodeDefinition>} [children] - 子节点定义
  */
 
 /**
- * 设备子树定义
+ * 结构化子树定义
  * @description
- * 设备子树定义用于描述整个设备的结构化定义，
- * 供设备构建器在构建设备时使用。
- * @typedef {Object} DeviceDefinition
- * @property {string} root - 设备根路径
- * @property {DeviceNodeDefinition} nodes - 结构化设备节点树
- * @property {() => void} [resetState] - 重置设备内部状态
- * @property {() => any} [getState] - 读取设备内部状态
+ * 结构化子树定义用于描述任意一棵可挂载到 DevicesTree 的输入子树。
+ * @typedef {Object} SubTreeDefinition
+ * @property {string} root - 子树根路径
+ * @property {SubTreeNodeDefinition} nodes - 结构化子树节点树
+ * @property {() => void} [resetState] - 重置子树内部状态
+ * @property {() => any} [getState] - 读取子树内部状态
  */
 
 /**
@@ -127,14 +129,15 @@ function isPlainObject(value) {
 }
 
 /**
- * 创建设备节点定义的空模板
+ * 创建子树节点定义的空模板
  * @description
- * 返回一个带默认字段的节点定义结构，供设备构建器初始化节点时使用。
- * @returns {DeviceNodeDefinition} 一个具有默认值的空设备节点定义
+ * 返回一个带默认字段的节点定义结构，供子树构建器初始化节点时使用。
+ * @returns {SubTreeNodeDefinition} 一个具有默认值的空子树节点定义
  */
-function createEmptyDeviceNodeDefinition() {
+function createEmptySubTreeNodeDefinition() {
   return {
     handler: null,
+    semantics: {},
     defaultChild: "",
     tool: undefined,
     toolContext: {},
@@ -144,18 +147,18 @@ function createEmptyDeviceNodeDefinition() {
 }
 
 /**
- * 深度克隆设备节点定义
+ * 深度克隆子树节点定义
  * @description
  * 复制节点定义及其子节点，避免构建过程中共享可变引用。
- * @param {DeviceNodeDefinition} nodeDefinition - 原始节点定义
- * @returns {DeviceNodeDefinition} 克隆后的节点定义
+ * @param {SubTreeNodeDefinition} nodeDefinition - 原始节点定义
+ * @returns {SubTreeNodeDefinition} 克隆后的节点定义
  */
-function cloneDeviceNodeDefinition(nodeDefinition) {
+function cloneSubTreeNodeDefinition(nodeDefinition) {
   const clonedChildren = {};
   for (const [name, childDefinition] of Object.entries(
     nodeDefinition.children ?? {},
   )) {
-    clonedChildren[name] = cloneDeviceNodeDefinition(childDefinition);
+    clonedChildren[name] = cloneSubTreeNodeDefinition(childDefinition);
   }
 
   return {
@@ -163,6 +166,9 @@ function cloneDeviceNodeDefinition(nodeDefinition) {
       typeof nodeDefinition.handler === "function"
         ? nodeDefinition.handler
         : null,
+    semantics: isPlainObject(nodeDefinition.semantics)
+      ? { ...nodeDefinition.semantics }
+      : {},
     defaultChild:
       typeof nodeDefinition.defaultChild === "string"
         ? nodeDefinition.defaultChild
@@ -180,25 +186,46 @@ function cloneDeviceNodeDefinition(nodeDefinition) {
 }
 
 /**
- * 设备节点定义构建器
+ * 子树节点定义构建器
  * @class
  * @author Zhou Chenyu
  */
-class DeviceNodeBuilder {
+class SubTreeNodeBuilder {
   /**
    * @constructor
-   * @param {DeviceBuilder} deviceBuilder - 所属设备构建器
-   * @param {DeviceNodeDefinition} nodeDefinition - 当前节点定义
+   * @param {SubTreeBuilder} subTreeBuilder - 所属子树构建器
+   * @param {SubTreeNodeDefinition} nodeDefinition - 当前节点定义
+   * @param {SubTreeNodeBuilder|null} [parentNodeBuilder=null] - 父节点构建器
    */
-  constructor(deviceBuilder, nodeDefinition) {
-    this.deviceBuilder = deviceBuilder;
+  constructor(subTreeBuilder, nodeDefinition, parentNodeBuilder = null) {
+    this.subTreeBuilder = subTreeBuilder;
     this.nodeDefinition = nodeDefinition;
+    this.parentNodeBuilder = parentNodeBuilder;
+  }
+
+  /**
+   * 在当前节点下创建或读取相对子节点
+   * @param {string} path - 相对当前节点的子路径
+   * @returns {SubTreeNodeBuilder} 返回对应子节点构建器
+   */
+  node(path = "") {
+    const segments = normalizePath(path);
+    let currentNode = this.nodeDefinition;
+
+    for (const segment of segments) {
+      if (!currentNode.children[segment]) {
+        currentNode.children[segment] = createEmptySubTreeNodeDefinition();
+      }
+      currentNode = currentNode.children[segment];
+    }
+
+    return new SubTreeNodeBuilder(this.subTreeBuilder, currentNode, this);
   }
 
   /**
    * 设置节点处理器
    * @param {DevicesTreeHandler|null} handler - 节点处理器
-   * @returns {DeviceNodeBuilder} 返回自身以继续配置当前节点
+  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   handler(handler) {
     this.nodeDefinition.handler =
@@ -207,9 +234,39 @@ class DeviceNodeBuilder {
   }
 
   /**
+   * 合并当前节点的职责语义
+   * @param {Object|null} semantics - 节点语义片段
+  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   */
+  semantics(semantics = {}) {
+    this.nodeDefinition.semantics = isPlainObject(semantics)
+      ? {
+          ...(isPlainObject(this.nodeDefinition.semantics)
+            ? this.nodeDefinition.semantics
+            : {}),
+          ...semantics,
+        }
+      : {};
+    return this;
+  }
+
+  /**
+   * 将当前节点标记为 prefix 语义节点
+    * @param {DevicesTreeHandler|null} handler - 修饰节点处理器
+   * @param {Object} [semantics={}] - 额外语义片段
+  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   */
+  prefix(handler, semantics = {}) {
+    return this.handler(handler).semantics({
+      prefix: true,
+      ...(isPlainObject(semantics) ? semantics : {}),
+    });
+  }
+
+  /**
    * 设置节点默认子链路
    * @param {string} defaultChild - 默认子链路
-   * @returns {DeviceNodeBuilder} 返回自身以继续配置当前节点
+  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   defaultChild(defaultChild = "") {
     this.nodeDefinition.defaultChild =
@@ -221,20 +278,26 @@ class DeviceNodeBuilder {
    * 绑定当前节点的工具
    * @param {import("../tools/tool.js").Tool} tool - 工具实例
    * @param {Object} [toolContext={}] - 工具节点固定上下文
-   * @returns {DeviceNodeBuilder} 返回自身以继续配置当前节点
+  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   tool(tool, toolContext = {}) {
     this.nodeDefinition.tool = tool;
     this.nodeDefinition.toolContext = isPlainObject(toolContext)
       ? { ...toolContext }
       : {};
+    this.nodeDefinition.semantics = {
+      ...(isPlainObject(this.nodeDefinition.semantics)
+        ? this.nodeDefinition.semantics
+        : {}),
+      tool: true,
+    };
     return this;
   }
 
   /**
    * 设置节点卸载钩子
    * @param {DevicesTreeNodeUmountHandler|null} umountHandler - 节点卸载钩子
-   * @returns {DeviceNodeBuilder} 返回自身以继续配置当前节点
+  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   umount(umountHandler) {
     this.nodeDefinition.umount =
@@ -244,33 +307,33 @@ class DeviceNodeBuilder {
 
   /**
    * 结束当前子节点构建
-   * @returns {DeviceBuilder} 返回设备构建器以继续配置其他节点或完成设备构建
+   * @returns {SubTreeBuilder|SubTreeNodeBuilder} 返回父节点构建器或子树构建器
    */
   end() {
-    return this.deviceBuilder;
+    return this.parentNodeBuilder ?? this.subTreeBuilder;
   }
 }
 
 /**
- * 设备定义构建器
+ * 结构化子树构建器
  * @class
  * @author Zhou Chenyu
  */
-class DeviceBuilder {
+class SubTreeBuilder {
   /**
    * @constructor
-   * @param {string} rootPath - 设备根路径
+   * @param {string} rootPath - 子树根路径
    */
   constructor(rootPath = "/") {
     this.root = toAbsolutePath(normalizePath(rootPath));
-    this.rootNodeDefinition = createEmptyDeviceNodeDefinition();
+    this.rootNodeDefinition = createEmptySubTreeNodeDefinition();
     this.exposedApi = {};
   }
 
   /**
    * 获取或创建某个相对路径的节点定义
-   * @param {string} path - 相对设备根路径
-   * @returns {DeviceNodeBuilder} 返回对应节点构建器以开始配置某节点
+   * @param {string} path - 相对子树根路径
+   * @returns {SubTreeNodeBuilder} 返回对应节点构建器以开始配置某节点
    */
   node(path = "") {
     const segments = normalizePath(path);
@@ -278,18 +341,18 @@ class DeviceBuilder {
 
     for (const segment of segments) {
       if (!currentNode.children[segment]) {
-        currentNode.children[segment] = createEmptyDeviceNodeDefinition();
+        currentNode.children[segment] = createEmptySubTreeNodeDefinition();
       }
       currentNode = currentNode.children[segment];
     }
 
-    return new DeviceNodeBuilder(this, currentNode);
+    return new SubTreeNodeBuilder(this, currentNode);
   }
 
   /**
-   * 暴露设备级状态 API
-   * @param {Record<string, Function>} api - 设备接口
-   * @returns {DeviceBuilder} 返回自身以继续配置设备或完成设备构建
+   * 暴露子树级状态 API
+   * @param {Record<string, Function>} api - 子树接口
+   * @returns {SubTreeBuilder} 返回自身以继续配置子树或完成子树构建
    */
   expose(api = {}) {
     for (const [name, value] of Object.entries(api)) {
@@ -301,26 +364,26 @@ class DeviceBuilder {
   }
 
   /**
-   * 生成结构化设备定义
-   * @returns {DeviceDefinition} 返回结构化设备定义
+   * 生成结构化子树定义
+   * @returns {SubTreeDefinition} 返回结构化子树定义
    */
   build() {
     return {
       root: this.root,
-      nodes: cloneDeviceNodeDefinition(this.rootNodeDefinition),
+      nodes: cloneSubTreeNodeDefinition(this.rootNodeDefinition),
       ...this.exposedApi,
     };
   }
 }
 
 /**
- * 创建设备定义构建器
- * @description 创建设备根路径对应的节点构建器，供后续配置子节点和状态 API。
- * @param {string} rootPath - 设备根路径
- * @returns {DeviceBuilder} 返回设备定义构建器以开始配置设备子树
+ * 创建结构化子树构建器
+ * @description 创建子树根路径对应的节点构建器，供后续配置子节点和状态 API。
+ * @param {string} rootPath - 子树根路径
+ * @returns {SubTreeBuilder} 返回子树定义构建器以开始配置子树
  */
-function createDevice(rootPath = "/") {
-  return new DeviceBuilder(rootPath);
+function createSubTree(rootPath = "/") {
+  return new SubTreeBuilder(rootPath);
 }
 
 /**
@@ -354,6 +417,12 @@ class DevicesTreeNode {
   handler;
 
   /**
+   * 节点职责语义
+   * @type {Object}
+   */
+  semantics;
+
+  /**
    * 节点默认子链路
    * @type {string}
    */
@@ -375,6 +444,7 @@ class DevicesTreeNode {
    * @param {string} name - 节点名
    * @param {DevicesTreeNode|null} [parent=null] - 父节点
    * @param {DevicesTreeHandler|null} [handler=null] - 节点处理器
+   * @param {Object} [semantics={}] - 节点职责语义
    * @param {string} [defaultChild=""] - 节点默认子链路
    * @param {DevicesTreeNodeUmountHandler|null} [umountHandler=null] - 节点卸载钩子
    * @constructor
@@ -383,6 +453,7 @@ class DevicesTreeNode {
     name,
     parent = null,
     handler = null,
+    semantics = {},
     defaultChild = "",
     umountHandler = null,
   ) {
@@ -390,6 +461,7 @@ class DevicesTreeNode {
     this.parent = parent;
     this.children = new Map();
     this.handler = typeof handler === "function" ? handler : null;
+    this.semantics = isPlainObject(semantics) ? { ...semantics } : {};
     this.defaultChild = typeof defaultChild === "string" ? defaultChild : "";
     this.state = {};
     this.umountHandler =
@@ -413,6 +485,16 @@ class DevicesTreeNode {
    */
   setHandler(handler) {
     this.handler = typeof handler === "function" ? handler : null;
+    return this;
+  }
+
+  /**
+   * 设置节点职责语义
+   * @param {Object|null} semantics - 节点职责语义
+   * @returns {DevicesTreeNode}
+   */
+  setSemantics(semantics = {}) {
+    this.semantics = isPlainObject(semantics) ? { ...semantics } : {};
     return this;
   }
 
@@ -443,6 +525,14 @@ class DevicesTreeNode {
    */
   getHandler() {
     return typeof this.handler === "function" ? this.handler : null;
+  }
+
+  /**
+   * 获取节点职责语义
+   * @returns {Object}
+   */
+  getSemantics() {
+    return isPlainObject(this.semantics) ? { ...this.semantics } : {};
   }
 
   /**
@@ -592,6 +682,7 @@ class DevicesTree {
       node,
       tree: this,
       path: node.path,
+      semantics: node.getSemantics(),
       defaultChild,
       resolvedDefaultChildPath: defaultChild
         ? DevicesTree.resolvePath(node.path, defaultChild)
@@ -671,6 +762,7 @@ class DevicesTree {
   mount(path, handler = null, options = {}) {
     const node = this.ensureNode(path);
     node.setHandler(handler);
+    node.setSemantics(options.semantics ?? {});
     node.setDefaultChild(options.defaultChild ?? "");
     node.setUmountHandler(options.umount ?? null);
     return node;
@@ -687,6 +779,10 @@ class DevicesTree {
 
     if (Object.prototype.hasOwnProperty.call(options, "handler")) {
       node.setHandler(options.handler ?? null);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(options, "semantics")) {
+      node.setSemantics(options.semantics ?? {});
     }
 
     if (Object.prototype.hasOwnProperty.call(options, "defaultChild")) {
@@ -742,6 +838,7 @@ class DevicesTree {
     const processor = tool.createProcessor(toolContext);
 
     const node = this.mount(path, processor, {
+      semantics: { tool: true },
       umount: (context = {}) => {
         processor.dispose?.(context);
         return tool.umount?.(
@@ -766,33 +863,38 @@ class DevicesTree {
   }
 
   /**
-   * 挂载一棵结构化设备子树
-   * @param {string} basePath - 设备挂载基路径
-   * @param {DeviceDefinition} deviceDefinition - 设备子树定义
-   * @param {DevicesTreeRuntimeContext} [runtimeContext={}] - 设备级运行时上下文
+   * 挂载一棵结构化输入子树
+   * @param {string} basePath - 子树挂载基路径
+   * @param {SubTreeDefinition} subTreeDefinition - 结构化子树定义
+   * @param {DevicesTreeRuntimeContext} [runtimeContext={}] - 子树级运行时上下文
    * @returns {DevicesTreeNode[]}
    */
-  mountDevice(basePath, deviceDefinition, runtimeContext = {}) {
-    if (!deviceDefinition || typeof deviceDefinition.root !== "string") {
-      throw new TypeError("Device definition must provide root.");
+  mountDevice(basePath, subTreeDefinition, runtimeContext = {}) {
+    if (!subTreeDefinition || typeof subTreeDefinition.root !== "string") {
+      throw new TypeError("Sub-tree definition must provide root.");
     }
 
-    if (!isPlainObject(deviceDefinition.nodes)) {
-      throw new TypeError("Device definition must provide structured nodes.");
+    if (!isPlainObject(subTreeDefinition.nodes)) {
+      throw new TypeError(
+        "Sub-tree definition must provide structured nodes.",
+      );
     }
 
-    const deviceRootPath = joinPath(basePath, deviceDefinition.root);
+    const subTreeRootPath = joinPath(basePath, subTreeDefinition.root);
     const mountedNodes = [];
 
     const mountStructuredNode = (nodeDefinition, currentPath) => {
       if (!isPlainObject(nodeDefinition)) {
-        throw new TypeError(`Invalid device node definition at ${currentPath}`);
+        throw new TypeError(`Invalid sub-tree node definition at ${currentPath}`);
       }
 
       let handler =
         typeof nodeDefinition.handler === "function"
           ? nodeDefinition.handler
           : null;
+      const semantics = isPlainObject(nodeDefinition.semantics)
+        ? { ...nodeDefinition.semantics }
+        : {};
       let umount =
         typeof nodeDefinition.umount === "function"
           ? nodeDefinition.umount
@@ -808,7 +910,7 @@ class DevicesTree {
 
         if (handler) {
           throw new TypeError(
-            `Device node cannot define both handler and tool at ${currentPath}`,
+            `Sub-tree node cannot define both handler and tool at ${currentPath}`,
           );
         }
 
@@ -821,6 +923,7 @@ class DevicesTree {
 
         const processor = nodeDefinition.tool.createProcessor(toolContext);
         handler = processor;
+        semantics.tool = true;
         umount = (context = {}) => {
           processor.dispose?.(context);
           return nodeDefinition.tool.umount?.(
@@ -832,6 +935,7 @@ class DevicesTree {
       }
 
       const mountedNode = this.mount(currentPath, handler, {
+        semantics,
         defaultChild: nodeDefinition.defaultChild ?? "",
         umount,
       });
@@ -844,7 +948,7 @@ class DevicesTree {
       }
     };
 
-    mountStructuredNode(deviceDefinition.nodes, deviceRootPath);
+    mountStructuredNode(subTreeDefinition.nodes, subTreeRootPath);
     return mountedNodes;
   }
 
@@ -957,4 +1061,4 @@ class DevicesTree {
   }
 }
 
-export { DevicesTree, DevicesTreeNode, createDevice };
+export { DevicesTree, DevicesTreeNode, createSubTree };

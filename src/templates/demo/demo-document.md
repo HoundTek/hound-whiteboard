@@ -15,9 +15,10 @@
 
 ### 2. 随机圆对象创建
 
-- 按下 `Space` 键触发随机圆对象创建工具
-- 工具会在当前视口范围内生成随机位置的圆对象
-- 随机圆具有随机颜色和固定半径区间
+- 按下 `Space` 键触发一条随机圆 prefix 工作流
+- 第一层 prefix 在当前视口范围内生成随机 `position`、`radius` 与颜色属性
+- 第二层 prefix 把这些参数改写为 CircleCreatorTool 可消费的信号序列
+- 末端圆工具只负责消费稳定信号并提交圆对象
 
 ### 3. WASD 坐标工具
 
@@ -56,8 +57,10 @@
 
 目前 demo 侧重于信号路由和工具挂载验证，已经符合当前工具体系的设计约定：
 
-- 工具通过 `mount` 事件运行时挂载，并显式落到 `/tool` 叶子路径
+- 大多数工具通过 `mount` 事件运行时挂载，并显式落到 `/tool` 叶子路径
+- 随机圆 workflow 通过结构化设备定义挂到 `/keyboard/tools/create-circle` 修饰节点链路
 - 设备节点负责把硬件输入转成语义信号
+- 修饰节点负责参数注入、前置转换和子节点路由
 - creator / chooser 与 modifier 的上下文共享以当前节点 state 和子 tool 路径 state 为边界
 - handoff 模式下，creator 可在自身下方自动挂载固定 modifier 子工具
 - modifier 通过 `apply` 信号把 AOM 中的对象提交回静态图

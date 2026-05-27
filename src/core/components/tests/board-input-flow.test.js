@@ -1,6 +1,6 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
-import { createDevice } from "../../devices/devices-tree.js";
+import { createSubTree } from "../../devices/devices-tree.js";
 import { Tool } from "../../tools/tool.js";
 import { Matrix, Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
@@ -49,7 +49,7 @@ describe("Board input flow", () => {
     const tool = new CollectingTool();
 
     monitor.mountDevice(
-      createDevice("/sample-device")
+      createSubTree("/sample-device")
         .node("")
         .defaultChild("tool")
         .end()
@@ -108,7 +108,7 @@ describe("Board input flow", () => {
     const tool = new CollectingTool();
 
     monitor.mountDevice(
-      createDevice("/sample-device")
+      createSubTree("/sample-device")
         .node("")
         .defaultChild("tool")
         .end()

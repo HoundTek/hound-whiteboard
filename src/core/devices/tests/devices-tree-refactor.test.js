@@ -1,10 +1,10 @@
-import { DevicesTree, createDevice } from "../devices-tree.js";
+import { DevicesTree, createSubTree } from "../devices-tree.js";
 import { Tool } from "../../tools/tool.js";
 
 describe("DevicesTree refactor", () => {
-  test("createDevice 应按结构化节点挂载设备子树", () => {
+  test("createSubTree 应按结构化节点挂载输入子树", () => {
     const tree = new DevicesTree();
-    const keyboardDevice = createDevice("/keyboard")
+    const keyboardSubTree = createSubTree("/keyboard")
       .node("")
       .defaultChild("event")
       .end()
@@ -22,7 +22,7 @@ describe("DevicesTree refactor", () => {
       .end()
       .build();
 
-    const mountedNodes = tree.mountDevice("/main", keyboardDevice);
+    const mountedNodes = tree.mountDevice("/main", keyboardSubTree);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/main/keyboard",

@@ -4,7 +4,7 @@
 
 键盘设备负责把宿主层已经确认归属到某个 Monitor 的键盘输入，翻译成 Core 内稳定的设备信号。
 
-当前键盘设备根路径固定为 /keyboard，整体结构已经迁移到 createDevice("/keyboard") 模型。
+当前键盘设备根路径固定为 /keyboard，整体结构已经迁移到 createSubTree("/keyboard") 模型。
 
 ## 节点结构
 

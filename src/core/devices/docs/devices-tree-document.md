@@ -10,6 +10,7 @@ DevicesTree 是 Core 输入系统的唯一分发引擎。
 - 在目标节点上执行 handler
 - 在需要时沿 defaultChild 继续转发
 - 为节点提供显式 state 与卸载钩子
+- 为节点保存轻量职责语义，例如 prefix / tool
 
 DevicesTree 本身不是设备语义的来源。它只负责把信号沿路径传递给节点，执行节点 handler，并根据 defaultChild 继续分发。是否把一个子树视作“键盘”、“触摸屏”或“调试器”，由设备定义和 handler 语义决定。
 
@@ -35,9 +36,16 @@ DevicesTree 不负责：
 节点上的可变内容有：
 
 - handler：当前节点的处理函数
+- semantics：当前节点的职责语义元数据
 - defaultChild：默认子链路名称，不是绝对路径
 - umount：节点卸载时的清理钩子
 - state：节点私有状态
+
+这里的 `semantics` 不是“节点类型系统”。
+
+- DevicesTree 里的所有节点仍然都是 DevicesTreeNode
+- 修饰节点（prefix node）只是 `semantics.prefix === true` 的职责视角
+- tool node 也只是 `semantics.tool === true` 的职责视角
 
 handler 的输入是 SignalPacket，输出可以是：
 
@@ -58,6 +66,7 @@ handler 的第二个参数是 DevicesTreeHandlerContext，包含：
 eventContext 的核心字段有：
 
 - path：当前正在处理的节点绝对路径
+- semantics：当前节点语义元数据快照
 - defaultChild：当前节点声明的默认子链路
 - resolvedDefaultChildPath：当前默认子链路对应的绝对路径
 - depth：当前递归分发深度
@@ -76,37 +85,60 @@ eventContext 的核心字段有：
 
 这意味着 defaultChild 只是“缺省继续链路”，不是强制跳转。显式返回的 to 始终优先。
 
+## 修饰节点语义
+
+修饰节点（prefix node）是信号链路中的前置处理层。
+
+它常见的职责包括：
+
+- 记录或监视经过当前节点的信号
+- 注入或改写信号字段
+- 维护局部状态机
+- 决定当前信号应路由到哪个子节点
+
+当前实现里，prefix 不需要新的节点类。
+
+- 结构化设备定义可通过 `prefix(handler, semantics)` 标记修饰节点语义
+- 运行时 eventContext 会暴露当前节点的 semantics
+- 子节点回送到修饰节点时，仍然直接复用既有 `SignalPacket.to` 路径机制
+
 ## 挂载模型
 
 当前推荐的挂载方式有三类：
 
 - mount(path, handler, options)：挂载普通节点
 - mountTool(path, tool, toolContext)：挂载显式工具叶子
-- mountDevice(basePath, deviceDefinition, runtimeContext)：挂载结构化设备子树
+- mountDevice(basePath, subTreeDefinition, runtimeContext)：挂载结构化输入子树
 
 工具节点路径现在要求显式写出最终叶子，例如 /monitor/main/mouse/pointer/tool。
 
-## 结构化设备定义
+## 结构化子树定义
 
-设备定义统一为 root + nodes：
+结构化子树统一为 root + nodes：
 
 ```js
-const device = createDevice("/mouse")
+const subTree = createSubTree("/keyboard/tools/create-circle")
   .node("")
-  .handler(rootHandler)
-  .end()
-  .node("pointer")
+  .prefix(randomPrefixHandler)
+  .defaultChild("params")
+  .node("params")
+  .prefix(circleParamPrefixHandler)
   .defaultChild("tool")
+  .node("tool")
+  .tool(circleTool)
+  .end()
+  .end()
   .end()
   .build();
 ```
 
 其中：
 
-- root 是设备根路径
+- root 是子树根路径
 - nodes 是一棵结构化节点树
-- 节点可继续声明 children、handler、defaultChild、tool、toolContext、umount
-- 设备还可以通过 expose() 暴露 resetState()、getState() 等设备级 API
+- 节点可继续声明 children、handler、prefix、semantics、defaultChild、tool、toolContext、umount
+- 子树还可以通过 expose() 暴露 resetState()、getState() 等子树级 API
+- 嵌套 `node()` 会以当前节点为锚点继续向下构建子节点
 
 ## 运行时更新
 
@@ -114,6 +146,7 @@ configureNode(path, options) 支持在不重挂载的情况下修改节点：
 
 - 传入 handler 可替换处理器
 - 传入 handler: null 可清空处理器
+- 传入 semantics 可替换节点职责语义
 - 传入 defaultChild 可替换默认子链路
 - 传入 defaultChild: "" 或 null 可清空默认子链路
 - 传入 umount 可替换卸载逻辑
@@ -139,9 +172,11 @@ configureNode(path, options) 支持在不重挂载的情况下修改节点：
 
 当前 DevicesTree 已完成以下收敛：
 
-- 设备定义统一为 createDevice(root).build()
+- 结构化子树统一为 createSubTree(root).build()
+- builder 已支持 prefix(handler) 与嵌套 node() 链式写法
 - 工具挂载统一为显式叶子路径
 - 节点处理统一为 handler
+- 修饰节点语义通过 semantics 元数据与复用 helper 表达，不引入新的节点类
 - 节点状态统一为 getNodeState 和 setNodeState
 - Board 到 Tool 的端到端输入链路已经按新模型验证通过
 

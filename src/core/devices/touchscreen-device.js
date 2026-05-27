@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createDevice } from "./devices-tree.js";
+import { createSubTree } from "./devices-tree.js";
 import { SignalPacket } from "./signal.js";
 
 /**
@@ -19,7 +19,7 @@ const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
 /**
  * 创建一棵触摸屏设备子树
  * @param {{onUpdate?: Function}} [options={}] - 触摸屏设备选项
- * @returns {import("./devices-tree.js").DeviceDefinition & {
+ * @returns {import("./devices-tree.js").SubTreeDefinition & {
  *   clearTouches: () => void,
  *   getActiveTouches: () => Array<{touchId: string, position: any}>,
  * }}
@@ -144,7 +144,7 @@ function createTouchscreenDevice(options = {}) {
     };
   };
 
-  return createDevice("/touchscreen")
+  return createSubTree("/touchscreen")
     .node("")
     .handler(rootHandler)
     .defaultChild("contacts")

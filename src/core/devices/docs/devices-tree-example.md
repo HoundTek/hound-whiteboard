@@ -4,7 +4,7 @@
 
 下面用一个简化的手写笔设备示例说明当前推荐写法：
 
-- 设备用 createDevice(root) 构建
+- 输入子树用 createSubTree(root) 构建
 - 根节点只做分流
 - defaultChild 只表示默认子链路
 - 工具节点使用显式的 /tool 叶子路径
@@ -12,7 +12,7 @@
 ## 示例代码
 
 ```js
-import { DevicesTree, createDevice } from "../devices-tree.js";
+import { DevicesTree, createSubTree } from "../devices-tree.js";
 import { Tool } from "../../tools/tool.js";
 
 class PenTool extends Tool {
@@ -26,7 +26,7 @@ class PenTool extends Tool {
   reset() {}
 }
 
-const penDevice = createDevice("/pen")
+const penSubTree = createSubTree("/pen")
   .node("")
   .handler((packet) => ({
     to: "pointer",
@@ -41,7 +41,7 @@ const penDevice = createDevice("/pen")
 const tree = new DevicesTree();
 const tool = new PenTool();
 
-tree.mountDevice("/monitor/main", penDevice);
+tree.mountDevice("/monitor/main", penSubTree);
 tree.mountTool("/monitor/main/pen/pointer/tool", tool, {
   board,
   monitor,
