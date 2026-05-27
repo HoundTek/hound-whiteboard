@@ -1,7 +1,7 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { createSubTree } from "../../devices/devices-tree.js";
-import { Matrix, Vector } from "../../utils/math.js";
+import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
 import { CommonObjectModifierTool } from "../../tools/modifier/common-object-modifier.js";
@@ -364,27 +364,20 @@ describe("Board input flow", () => {
       to: "/main/mouse/primary/tool/tool",
       signals: [
         {
-          type: "position",
-          context: { value: { x: 10, y: 10 } },
-        },
-        {
-          type: "transform",
-          context: {
-            value: { a: 2, b: 0, c: 0, d: 2 },
-          },
+          type: "displacement",
+          context: { value: { x: 3, y: 0 } },
         },
       ],
     });
 
     expect(creatorTool.obj).not.toBeNull();
     expect(creatorTool.obj.id).toBe(1);
-    expect(creatorTool.obj.transform).toEqual(new Matrix(2, 0, 0, 2));
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
     expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
 
     board.signalsEventBus.emit("input", {
       to: "/main/mouse/primary/tool/tool",
-      signals: [{ type: "apply", context: {} }],
+      signals: [{ type: "success", context: {} }],
     });
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);

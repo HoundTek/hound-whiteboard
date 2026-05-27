@@ -5,6 +5,10 @@
  * @author Zhou Chenyu
  */
 
+/**
+ * 创建一个空实现的 CanvasRenderingContext2D 对象
+ * @returns {CanvasRenderingContext2D}
+ */
 function createNoopCanvasContext2D() {
   return {
     save() {},
@@ -29,6 +33,11 @@ function createNoopCanvasContext2D() {
   };
 }
 
+/**
+ * 创建一个空实现的 HTMLCanvasElement 对象
+ * @param {{width?: number, height?: number, id?: string, context?: CanvasRenderingContext2D}} [options={}] - 画布选项
+ * @returns {HTMLCanvasElement}
+ */
 function createNoopCanvas(options = {}) {
   const context = options.context ?? createNoopCanvasContext2D();
   const canvas = {

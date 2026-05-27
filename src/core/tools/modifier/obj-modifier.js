@@ -13,7 +13,8 @@ import { Tool } from "../tool.js";
  * @enum {string}
  */
 const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
-  APPLY: "apply",
+  /** 将修改提交到静态图 */
+  SUCCESS: "success",
 });
 
 /**

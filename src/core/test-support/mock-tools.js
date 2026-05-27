@@ -8,8 +8,8 @@
 import { Tool } from "../tools/tool.js";
 
 /**
- * 信号收集工具。
- * 记录每次 process() 调用的信号包和设备上下文，供断言验证。
+ * 信号收集工具
+ * @description 记录每次 process() 调用的信号包和设备上下文，供断言验证。
  * @class
  * @extends Tool
  * @example
@@ -31,7 +31,8 @@ class CollectingTool extends Tool {
 }
 
 /**
- * 创建模拟 creator 工具。
+ * 创建模拟 creator 工具
+ * @description
  * 每次 process() 被调用后会自动调用 completeCreatedObject()，
  * 适合验证 wrapCreatorForHandoff 等 hook 行为。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
@@ -48,7 +49,8 @@ function createMockCreator(onProcess) {
 }
 
 /**
- * 创建模拟 chooser 工具。
+ * 创建模拟 chooser 工具
+ * @description
  * 不含 completeCreatedObject，仅执行自定义回调。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
  * @returns {Tool}
@@ -62,7 +64,9 @@ function createMockChooser(onProcess) {
 }
 
 /**
- * 创建模拟 modifier 工具。
+ * 创建模拟 modifier 工具
+ * @description
+ * 不含 completeCreatedObject，仅执行自定义回调。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
  * @returns {Tool}
  */

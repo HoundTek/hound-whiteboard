@@ -1,16 +1,13 @@
 import { jest } from "@jest/globals";
-import { Matrix, Vector } from "../../../utils/math.js";
+import { Vector } from "../../../utils/math.js";
 import { CommonObjectModifierTool } from "../common-object-modifier.js";
 import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../obj-modifier.js";
 
-describe("CommonObjectModifierTool", () => {
-  test("应将绝对 position 和 transform 应用到对象并触发几何刷新", () => {
+describe("CommonObjectModifierTool（手势驱动）", () => {
+  test("首个 displacement 信号应启动手势并应用位移", () => {
     const object = {
-      position: new Vector(1, 1),
-      transform: Matrix.identity(),
-      setTransform(trans) {
-        this.transform = trans;
-      },
+      id: 1,
+      position: new Vector(10, 20),
     };
 
     const monitor = {
@@ -21,49 +18,104 @@ describe("CommonObjectModifierTool", () => {
     };
 
     const tool = new CommonObjectModifierTool();
-    const signalPacket = {
-      signals: [
-        { type: "position", context: { value: { x: 10, y: 20 } } },
-        { type: "transform", context: { value: { a: 2, b: 0, c: 0, d: 3 } } },
-      ],
-    };
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 5, y: 3 } } }],
+      },
+      { object, monitor },
+    );
 
-    tool.process(signalPacket, { object, monitor });
-
-    expect(object.position).toEqual(new Vector(10, 20));
-    expect(object.transform).toEqual(new Matrix(2, 0, 0, 3));
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith([
-      object,
-    ]);
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
-      object,
-    ]);
+    // 首个 displacement：记录初始位置，应用位移 initPos + (5, 3)
+    expect(object.position).toEqual(new Vector(15, 23));
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
   });
 
-  test("不传 position 或 transform 时应保持原状态且不报错", () => {
+  test("后续 displacement 信号应直接以累计位移更新对象", () => {
     const object = {
-      position: new Vector(5, 5),
-      transform: Matrix.identity(),
-      setTransform(trans) {
-        this.transform = trans;
+      id: 1,
+      position: new Vector(10, 20),
+    };
+
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
       },
     };
 
     const tool = new CommonObjectModifierTool();
-    tool.process({ signals: [] }, { object, monitor: {} });
 
-    expect(object.position).toEqual(new Vector(5, 5));
-    expect(object.transform).toEqual(Matrix.identity());
+    // 首个 displacement —— 手势开始，位移 (5, 3)
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 5, y: 3 } } }],
+      },
+      { object, monitor },
+    );
+    expect(object.position).toEqual(new Vector(15, 23));
+
+    // 第二个 displacement —— 累计位移 (7, 3)，直接从 initPos 计算
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 7, y: 3 } } }],
+      },
+      { object, monitor },
+    );
+    expect(object.position).toEqual(new Vector(17, 23));
   });
 
-  test("apply 信号应将动态图对象提交回 AOM 并卸载当前 modifier", () => {
+  test("end 信号应结束手势，对象保持在当前位置", () => {
+    const object = {
+      id: 1,
+      position: new Vector(10, 20),
+    };
+
+    const tool = new CommonObjectModifierTool();
+
+    // 手势开始并移动
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
+      },
+      { object },
+    );
+    expect(object.position).toEqual(new Vector(12, 20));
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 5, y: 1 } } }],
+      },
+      { object },
+    );
+    expect(object.position).toEqual(new Vector(15, 21));
+
+    // end 信号
+    tool.process({ signals: [{ type: "end" }] }, { object });
+    expect(object.position).toEqual(new Vector(15, 21));
+
+    // end 后新一轮手势
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 1, y: 0 } } }],
+      },
+      { object },
+    );
+    // 新锚点：从当前 (15, 21) 启动，位移 (1, 0) → (16, 21)
+    expect(object.position).toEqual(new Vector(16, 21));
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 5, y: 0 } } }],
+      },
+      { object },
+    );
+    // 累计位移 (5, 0)：(15, 21) + (5, 0) = (20, 21)
+    expect(object.position).toEqual(new Vector(20, 21));
+  });
+
+  test("success 信号应将对象提交到静态图并卸载", () => {
     const object = {
       id: 7,
       position: new Vector(5, 5),
-      transform: Matrix.identity(),
-      setTransform(trans) {
-        this.transform = trans;
-      },
     };
 
     const board = {
@@ -78,9 +130,24 @@ describe("CommonObjectModifierTool", () => {
     let nodeState = { object };
     const tool = new CommonObjectModifierTool();
 
+    // 手势移动
     tool.process(
       {
-        signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.APPLY, context: {} }],
+        signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
+      },
+      { object, board, tree, path: "/monitor/mouse/primary/tool/tool" },
+    );
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 5, y: 1 } } }],
+      },
+      { object, board, tree, path: "/monitor/mouse/primary/tool/tool" },
+    );
+
+    // success 信号
+    tool.process(
+      {
+        signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
       },
       {
         object,
@@ -97,6 +164,7 @@ describe("CommonObjectModifierTool", () => {
       },
     );
 
+    expect(object.position).toEqual(new Vector(10, 6));
     expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
       new Set([object]),
     );
@@ -104,5 +172,52 @@ describe("CommonObjectModifierTool", () => {
       "/monitor/mouse/primary/tool/tool",
     );
     expect(nodeState.object).toBeUndefined();
+  });
+
+  test("不传 displacement 信号时应保持原状态且不报错", () => {
+    const object = {
+      id: 1,
+      position: new Vector(5, 5),
+    };
+
+    const tool = new CommonObjectModifierTool();
+    tool.process({ signals: [] }, { object, monitor: {} });
+
+    expect(object.position).toEqual(new Vector(5, 5));
+  });
+
+  test("reset 应清空手势状态", () => {
+    const object = {
+      id: 1,
+      position: new Vector(10, 20),
+    };
+
+    const tool = new CommonObjectModifierTool();
+
+    // 第一轮手势
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
+      },
+      { object },
+    );
+    expect(object.position).toEqual(new Vector(12, 20));
+    tool.reset();
+
+    // reset 后新一轮手势：从当前位置开始
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 5, y: 0 } } }],
+      },
+      { object },
+    );
+    expect(object.position).toEqual(new Vector(17, 20));
+    tool.process(
+      {
+        signals: [{ type: "displacement", context: { value: { x: 8, y: 0 } } }],
+      },
+      { object },
+    );
+    expect(object.position).toEqual(new Vector(20, 20));
   });
 });

@@ -1,8 +1,9 @@
 /**
  * @file 基础修饰节点处理器
- * @description 提供 createPrefixNodeHandler，是所有修饰节点的根基。
- *   它封装了状态读写、前缀上下文 helper（routeTo / routeToChild / bubbleToParent / stop），
- *   让调用方只需在 handle() 中编写路由逻辑。
+ * @description
+ * 提供 createPrefixNodeHandler，是所有修饰节点的根基。
+ * 它封装了状态读写、前缀上下文 helper（routeTo / routeToChild / bubbleToParent / stop），
+ * 让调用方只需在 handle() 中编写路由逻辑。
  * @module core/prefix/handler
  * @author Zhou Chenyu
  */
@@ -12,9 +13,10 @@ import { isPlainObject } from "./utils.js";
 
 /**
  * 创建修饰节点处理器
- * @description 工厂函数，生成可挂载到 DevicesTree 节点上的 handler。
- *   封装了节点状态读写（getState / setState / patchState）和路由 helper（routeTo / routeToChild / bubbleToParent / stop），
- *   调用方只需在 handle() 中编写业务路由逻辑，无需重复状态初始化与包规整。
+ * @description
+ * 工厂函数，生成可挂载到 DevicesTree 节点上的 handler。
+ * 封装了节点状态读写（getState / setState / patchState）和路由 helper（routeTo / routeToChild / bubbleToParent / stop），
+ * 调用方只需在 handle() 中编写业务路由逻辑，无需重复状态初始化与包规整。
  * @param {{
  *   initialState?: Object,
  *   handle: Function,
