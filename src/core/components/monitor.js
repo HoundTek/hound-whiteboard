@@ -884,9 +884,16 @@ class Monitor {
    * @returns {import("../devices/devices-tree.js").DevicesTreeNode[]} 挂载后的设备树节点列表
    */
   mountSubTree(path, subTreeDefinition) {
-    return this.board.mountSubTree(
-      joinPath(this.monitorId, path),
-      subTreeDefinition,
+    return this.devicesTree.mountSubTree(
+      joinPath(this.monitorId),
+      {
+        ...subTreeDefinition,
+        root: path || subTreeDefinition.root,
+      },
+      {
+        board: this.board,
+        monitor: this,
+      },
     );
   }
 

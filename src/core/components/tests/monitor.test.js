@@ -24,11 +24,6 @@ describe("Monitor", () => {
       width: 800,
       height: 600,
       devicesTree: null,
-      mountSubTree(path, subTreeDefinition) {
-        return this.devicesTree.mountSubTree(path, subTreeDefinition, {
-          board: this,
-        });
-      },
       getChunkById(chunkId) {
         return Chunk.fromId(chunkId);
       },

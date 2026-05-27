@@ -399,6 +399,7 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const randomCircleSubTree = createRandomCircleSubTree({
+      rootPath: "/keyboard/tools/create-circle",
       random: () => 0.5,
     });
 
