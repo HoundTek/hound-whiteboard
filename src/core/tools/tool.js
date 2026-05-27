@@ -28,7 +28,6 @@ class Tool {
   /**
    * 解析序列化的工具数据以创建工具实例
    * @returns {Tool} 创建的工具实例
-   * @throws {Error} 基类未实现此方法
    * @static
    * @abstract
    */
@@ -39,7 +38,6 @@ class Tool {
   /**
    * 序列化工具实例以保存工具数据
    * @return {Object} 序列化后的工具数据
-   * @throws {Error} 基类未实现此方法
    * @abstract
    */
   serialize() {
@@ -399,7 +397,6 @@ class Tool {
 
   /**
    * 重置工具状态
-   * @throws {Error} 基类未实现此方法
    * @abstract
    */
   reset() {

@@ -11,6 +11,8 @@ DevicesTree 是 Core 输入系统的唯一分发引擎。
 - 在需要时沿 defaultChild 继续转发
 - 为节点提供显式 state 与卸载钩子
 
+DevicesTree 本身不是设备语义的来源。它只负责把信号沿路径传递给节点，执行节点 handler，并根据 defaultChild 继续分发。是否把一个子树视作“键盘”、“触摸屏”或“调试器”，由设备定义和 handler 语义决定。
+
 ## 角色边界
 
 DevicesTree 负责：

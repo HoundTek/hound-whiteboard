@@ -17,8 +17,10 @@ import { Vector } from "../../utils/math.js";
  * @class
  * @extends SingleGestureObjectCreatorTool
  * @description
- * 笔画创建工具允许用户在白板上绘制笔画对象。
- * 用户可以通过拖动来定义笔画的路径。
+ * 单手势创建笔画对象：
+ * - 手势开始点为笔画起点
+ * - 手势结束点为笔画终点
+ * - 手势路径为笔画路径
  * @author Zhou Chenyu
  */
 class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
@@ -29,7 +31,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   obj;
 
   /**
-   * 新建笔画默认颜色
+   * 笔画对象的属性
    * @type {Record<string, any>}
    */
   property;
@@ -40,6 +42,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
    *   completionMode?: string,
    *   createModifierTool?: Function,
    * }} [options={}]
+   * @constructor
    */
   constructor(options = {}) {
     super(options);

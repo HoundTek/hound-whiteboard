@@ -123,7 +123,7 @@ class ObjectCreatorTool extends Tool {
   createModifierTool;
 
   /**
-   * 将信号上下文中的坐标规整为 Vector。
+   * 将信号上下文中的坐标规整为 Vector
    * @param {*} value - 原始值
    * @returns {Vector|null} 规整后的向量
    */
@@ -137,7 +137,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 从信号包中提取交互上下文。
+   * 从信号包中提取交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
    * @returns {Object} 交互上下文
@@ -178,7 +178,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 确保当前交互已拥有对象实例。
+   * 确保当前交互已拥有对象实例
    * @param {Object} interaction - 当前交互上下文
    * @returns {boolean} 是否已拥有对象实例
    */
@@ -205,7 +205,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 当前 creator 是否采用 handoff 完成策略。
+   * 当前 creator 是否采用 handoff 完成策略
    * @returns {boolean}
    */
   isHandoffMode() {
@@ -213,7 +213,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 当前节点下是否已挂载 handoff modifier。
+   * 当前节点下是否已挂载 handoff modifier
    * @param {Object} [deviceContext={}] - 设备上下文
    * @returns {boolean}
    */
@@ -226,7 +226,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 将当前创建对象写回上下文。
+   * 将当前创建对象写回上下文
    * @param {Object} [deviceContext={}] - 设备上下文
    * @param {BasicObject} [objectEntry=this.obj] - 当前对象
    * @returns {Array<BasicObject>}
@@ -239,7 +239,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 将当前创建对象同步到下游 modifier 节点状态。
+   * 将当前创建对象同步到下游 modifier 节点状态
    * @param {Object} [deviceContext={}] - 设备上下文
    * @param {BasicObject} [objectEntry=this.obj] - 当前对象
    * @returns {Array<BasicObject>}
@@ -266,7 +266,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 卸载或结束 workflow 时撤销未提交对象。
+   * 卸载或结束 workflow 时撤销未提交对象
    * @param {Object} [deviceContext={}] - 设备上下文
    * @returns {void}
    */
@@ -290,7 +290,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 在当前 creator 节点下挂载 handoff modifier。
+   * 在当前 creator 节点下挂载 handoff modifier
    * @param {Object} interaction - 当前交互上下文
    * @returns {*}
    */
@@ -336,7 +336,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 当 handoff modifier 存在时，将信号继续转发给它。
+   * 当 handoff modifier 存在时，将信号继续转发给它
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {Object} [deviceContext={}] - 设备上下文
    * @returns {*}
@@ -363,7 +363,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 处理一个完整信号包。
+   * 处理一个完整信号包
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
    * @returns {void}
@@ -374,7 +374,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 开始一次创建手势。
+   * 开始一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   beginCreationGesture(interaction) {
@@ -405,7 +405,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 更新一次创建手势。
+   * 更新一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   updateCreationGesture(interaction) {
@@ -413,7 +413,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 完成一次创建手势。
+   * 完成一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreationGesture(interaction) {
@@ -421,7 +421,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 取消当前创建手势。
+   * 取消当前创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   cancelCreationGesture(interaction) {
@@ -429,7 +429,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 完成整个对象创建。
+   * 完成整个对象创建
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreatedObject(interaction) {
@@ -461,7 +461,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 取消整个对象创建。
+   * 取消整个对象创建
    * @param {Object} interaction - 当前交互上下文
    */
   cancelCreatedObject(interaction) {
@@ -480,7 +480,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 工具节点被卸载时撤销未提交对象。
+   * 工具节点被卸载时撤销未提交对象
    * @param {Object} [deviceContext={}] - 卸载时的设备上下文
    * @returns {void}
    */

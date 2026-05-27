@@ -55,7 +55,7 @@ const monitorViewportTool = new MonitorViewportTool({
   },
 });
 
-logDemoStatus("左键工具", "黑色笔划对象");
+logDemoStatus("左键工具", "黑色笔画对象");
 logDemoStatus("右键工具", "矩形框选对象");
 logDemoStatus("空格工具", "随机圆对象");
 logDemoStatus("WASD 初始坐标", { x: 0, y: 0 });

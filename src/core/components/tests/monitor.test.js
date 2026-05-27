@@ -170,8 +170,10 @@ describe("Monitor", () => {
     expect(monitor.getContext("live")?.save).toBeDefined();
     expect(monitor.getContext("ui")?.save).toBeDefined();
     expect(monitor.renderScheduler).toBeDefined();
+    expect(monitor.uiRenderScheduler).toBeDefined();
     expect(monitor.baseRenderer).toBeDefined();
     expect(monitor.liveRenderer).toBeDefined();
+    expect(monitor.uiRenderer).toBeDefined();
   });
 
   test("renderScheduler.flush 应调用 liveRenderer.flush", () => {
@@ -182,6 +184,19 @@ describe("Monitor", () => {
 
     monitor.renderScheduler.invalidate({ type: "dirty" });
     monitor.renderScheduler.flush();
+
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    flushSpy.mockRestore();
+  });
+
+  test("uiRenderScheduler.flush 应调用 uiRenderer.flush", () => {
+    const monitor = createMonitor("epsilon-ui");
+    const flushSpy = jest
+      .spyOn(monitor.uiRenderer, "flush")
+      .mockImplementation(() => []);
+
+    monitor.uiRenderScheduler.invalidate({ type: "dirty" });
+    monitor.uiRenderScheduler.flush();
 
     expect(flushSpy).toHaveBeenCalledTimes(1);
     flushSpy.mockRestore();

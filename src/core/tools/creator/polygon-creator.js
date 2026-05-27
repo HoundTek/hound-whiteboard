@@ -90,7 +90,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   lastPoint;
 
   /**
-   * 新建多边形默认属性
+   * 多边形属性
    * @type {Record<string, any>}
    */
   property;
