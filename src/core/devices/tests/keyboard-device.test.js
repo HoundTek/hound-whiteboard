@@ -40,7 +40,7 @@ describe("keyboard-device", () => {
 
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountDevice("/monitor", keyboardDevice);
+    const mountedNodes = tree.mountSubTree("/monitor", keyboardDevice);
     tree.mountTool("/monitor/keyboard/tools/create-circle/tool", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
@@ -164,7 +164,7 @@ describe("keyboard-device", () => {
     const tree = new DevicesTree();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountDevice("/monitor", keyboardDevice);
+    tree.mountSubTree("/monitor", keyboardDevice);
 
     tree.dispatch({
       to: "/monitor/keyboard",
@@ -224,7 +224,7 @@ describe("keyboard-device", () => {
     const tree = new DevicesTree();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountDevice("/monitor", keyboardDevice);
+    tree.mountSubTree("/monitor", keyboardDevice);
 
     tree.dispatch({
       to: "/monitor/keyboard",
@@ -366,7 +366,7 @@ describe("keyboard-device", () => {
 
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountDevice("/monitor", keyboardDevice);
+    const mountedNodes = tree.mountSubTree("/monitor", keyboardDevice);
     tree.mountTool("/monitor/keyboard/tools/move/tool", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([

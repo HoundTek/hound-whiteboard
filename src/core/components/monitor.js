@@ -878,27 +878,15 @@ class Monitor {
   }
 
   /**
-   * 挂载设备到白板级设备树。
-   * @param {string|import("../devices/devices-tree.js").SubTreeDefinition} pathOrSubTreeDefinition - 设备根路径或子树定义
-   * @param {import("../devices/devices-tree.js").SubTreeDefinition} [subTreeDefinition] - 子树定义
+   * 挂载子树到白板级设备树
+   * @param {string} path - 子树根路径（相对于显示器根）
+   * @param {import("../devices/devices-tree.js").SubTreeDefinition} subTreeDefinition - 子树定义
    * @returns {import("../devices/devices-tree.js").DevicesTreeNode[]} 挂载后的设备树节点列表
    */
-  mountDevice(pathOrSubTreeDefinition, subTreeDefinition) {
-    const hasExplicitPath = typeof pathOrSubTreeDefinition === "string";
-    const resolvedSubTreeDefinition = hasExplicitPath
-      ? {
-          ...subTreeDefinition,
-          root: pathOrSubTreeDefinition,
-        }
-      : pathOrSubTreeDefinition;
-
-    return this.devicesTree.mountDevice(
-      joinPath(this.monitorId),
-      resolvedSubTreeDefinition,
-      {
-        board: this.board,
-        monitor: this,
-      },
+  mountSubTree(path, subTreeDefinition) {
+    return this.board.mountSubTree(
+      joinPath(this.monitorId, path),
+      subTreeDefinition,
     );
   }
 

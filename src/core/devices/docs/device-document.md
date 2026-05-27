@@ -121,16 +121,16 @@ const workflow = createSubTree("/keyboard/tools/create-circle")
 业务侧应优先通过 Monitor 挂载设备：
 
 ```js
-monitor.mountDevice(createKeyboardDevice());
+monitor.mountSubTree(createKeyboardDevice());
 ```
 
 也可以指定额外挂载修饰节点：
 
 ```js
-monitor.mountDevice("/presentation", createKeyboardDevice());
+monitor.mountSubTree("/presentation", createKeyboardDevice());
 ```
 
-最终仍会由 Board 持有的 DevicesTree 执行 mountDevice(basePath, subTreeDefinition)。
+最终仍会由 Board 持有的 DevicesTree 执行 mountSubTree(basePath, subTreeDefinition)。
 
 ## 状态暴露
 
@@ -149,7 +149,7 @@ monitor.mountDevice("/presentation", createKeyboardDevice());
 - nodes 必须是结构化对象，不再接受 defineNodes 风格协议
 - 单个节点上不能同时声明 handler 与 tool
 - defaultChild 只写子链路名，不写完整绝对路径
-- 设备挂载路径由设备定义 root 与 mountDevice(basePath, ...) 共同决定
+- 设备挂载路径由设备定义 root 与 mountSubTree(basePath, ...) 共同决定
 
 ## 当前实践
 

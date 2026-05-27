@@ -9,7 +9,7 @@ describe("touchscreen-device", () => {
     const tree = new DevicesTree();
     const touchscreenDevice = createTouchscreenDevice();
 
-    const mountedNodes = tree.mountDevice("/monitor", touchscreenDevice);
+    const mountedNodes = tree.mountSubTree("/monitor", touchscreenDevice);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/touchscreen",
@@ -71,7 +71,7 @@ describe("touchscreen-device", () => {
     const tree = new DevicesTree();
     const touchscreenDevice = createTouchscreenDevice();
 
-    tree.mountDevice("/monitor", touchscreenDevice);
+    tree.mountSubTree("/monitor", touchscreenDevice);
 
     tree.dispatch({
       to: "/monitor/touchscreen",
@@ -131,7 +131,7 @@ describe("touchscreen-device", () => {
     const touchscreenDevice = createTouchscreenDevice();
     const tree = new DevicesTree();
 
-    tree.mountDevice("/monitor", touchscreenDevice);
+    tree.mountSubTree("/monitor", touchscreenDevice);
     tree.dispatch({
       to: "/monitor/touchscreen",
       signals: [

@@ -24,6 +24,11 @@ describe("Monitor", () => {
       width: 800,
       height: 600,
       devicesTree: null,
+      mountSubTree(path, subTreeDefinition) {
+        return this.devicesTree.mountSubTree(path, subTreeDefinition, {
+          board: this,
+        });
+      },
       getChunkById(chunkId) {
         return Chunk.fromId(chunkId);
       },
@@ -53,11 +58,11 @@ describe("Monitor", () => {
     );
   }
 
-  test("mountDevice 应自动补上 monitorId 后挂载设备", () => {
+  test("mountSubTree 应自动补上 monitorId 后挂载设备", () => {
     const monitor = createMonitor("alpha");
     const debuggerDevice = createDebuggerDevice();
 
-    const mountedNodes = monitor.mountDevice(debuggerDevice);
+    const mountedNodes = monitor.mountSubTree("", debuggerDevice);
     const packets = monitor.devicesTree.dispatch({
       to: "/alpha/debugger",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
@@ -85,11 +90,11 @@ describe("Monitor", () => {
     ]);
   });
 
-  test("mountDevice 应规整不带前导斜杠的相对路径", () => {
+  test("mountSubTree 应规整不带前导斜杠的相对路径", () => {
     const monitor = createMonitor("beta");
     const debuggerDevice = createDebuggerDevice();
 
-    const mountedNodes = monitor.mountDevice("debugger", debuggerDevice);
+    const mountedNodes = monitor.mountSubTree("debugger", debuggerDevice);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/beta/debugger",

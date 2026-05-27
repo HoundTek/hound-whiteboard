@@ -21,7 +21,7 @@
 - configureNode(path, options)
 - mountTool(path, tool, toolContext)
 - unmountTool(path, routeContext)
-- mountDevice(basePath, subTreeDefinition, runtimeContext)
+- mountSubTree(basePath, subTreeDefinition, runtimeContext)
 - unmount(path, routeContext)
 - unmountLeaf(path, routeContext)
 - dispatch(signalPacket, routeContext)
@@ -76,8 +76,8 @@
 
 当前建议依赖的 Monitor 输入接口有：
 
-- mountDevice(subTreeDefinition)
-- mountDevice(pathPrefix, subTreeDefinition)
+- mountSubTree(subTreeDefinition)
+- mountSubTree(pathPrefix, subTreeDefinition)
 - mountTool(path, tool)
 - unmountTool(path)
 - 通过 board.devicesTree 读取当前输入树

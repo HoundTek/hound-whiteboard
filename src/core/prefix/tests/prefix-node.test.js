@@ -1,9 +1,10 @@
-import { DevicesTree, createSubTree } from "../devices-tree.js";
+import { DevicesTree, createSubTree } from "../../devices/devices-tree.js";
 import {
   createMultiToolPrefixHandler,
   createPrefixNodeHandler,
+  createRepeatorPrefixHandler,
   PREFIX_NODE_SIGNAL_TYPES,
-} from "../prefix-node.js";
+} from "../index.js";
 
 describe("prefix-node", () => {
   test("SubTreeNodeBuilder.prefix 应保留 prefix 语义并复用现有 dispatch", () => {
@@ -36,7 +37,7 @@ describe("prefix-node", () => {
       .end()
       .build();
 
-    tree.mountDevice("/monitor", prefixSubTree);
+    tree.mountSubTree("/monitor", prefixSubTree);
 
     expect(tree.getNode("/monitor/workflow")?.getSemantics()).toEqual({
       prefix: true,
@@ -117,7 +118,7 @@ describe("prefix-node", () => {
       .end()
       .build();
 
-    tree.mountDevice("/monitor", handoffSubTree);
+    tree.mountSubTree("/monitor", handoffSubTree);
 
     expect(tree.getNode("/monitor/handoff")?.getSemantics()).toEqual({
       prefix: true,
@@ -171,11 +172,95 @@ describe("prefix-node", () => {
       .end()
       .build();
 
-    tree.mountDevice("/monitor", nestedSubTree);
+    tree.mountSubTree("/monitor", nestedSubTree);
 
     expect(tree.getNode("/monitor/nested/handoff")?.getSemantics()).toEqual({
       prefix: true,
     });
     expect(tree.getNode("/monitor/nested/handoff/create")).not.toBeNull();
+  });
+
+  test("createRepeatorPrefixHandler 应把信号复制两份发往同一 child", () => {
+    const tree = new DevicesTree();
+    const trace = [];
+
+    const repeatorSubTree = createSubTree("/repeator-dup")
+      .node("")
+      .prefix(
+        createRepeatorPrefixHandler({
+          toChildren: ["tool", "tool"],
+        }),
+        { prefixKind: "repeator", routePolicy: "fan-out" },
+      )
+      .defaultChild("tool")
+      .end()
+      .node("tool")
+      .handler((packet) => {
+        trace.push(packet.signals);
+        return {
+          to: "/monitor/repeator-dup/tool",
+          signals: [{ type: "done" }],
+        };
+      })
+      .end()
+      .build();
+
+    tree.mountSubTree("/monitor", repeatorSubTree);
+
+    tree.dispatch({
+      to: "/monitor/repeator-dup",
+      signals: [{ type: "input", context: { value: 42 } }],
+    });
+
+    expect(trace).toHaveLength(2);
+    expect(trace[0]).toEqual([{ type: "input", context: { value: 42 } }]);
+    expect(trace[1]).toEqual([{ type: "input", context: { value: 42 } }]);
+  });
+
+  test("createRepeatorPrefixHandler 应把信号复制后分叉到多个不同 child", () => {
+    const tree = new DevicesTree();
+    const traceA = [];
+    const traceB = [];
+
+    const forkSubTree = createSubTree("/fork")
+      .node("")
+      .prefix(
+        createRepeatorPrefixHandler({
+          toChildren: ["branch-a", "branch-b"],
+        }),
+      )
+      .defaultChild("branch-a")
+      .end()
+      .node("branch-a")
+      .handler((packet) => {
+        traceA.push(packet.signals);
+        return {
+          to: "/monitor/fork/branch-a",
+          signals: [{ type: "done-a" }],
+        };
+      })
+      .end()
+      .node("branch-b")
+      .handler((packet) => {
+        traceB.push(packet.signals);
+        return {
+          to: "/monitor/fork/branch-b",
+          signals: [{ type: "done-b" }],
+        };
+      })
+      .end()
+      .build();
+
+    tree.mountSubTree("/monitor", forkSubTree);
+
+    tree.dispatch({
+      to: "/monitor/fork",
+      signals: [{ type: "split", context: { id: 1 } }],
+    });
+
+    expect(traceA).toHaveLength(1);
+    expect(traceA[0]).toEqual([{ type: "split", context: { id: 1 } }]);
+    expect(traceB).toHaveLength(1);
+    expect(traceB[0]).toEqual([{ type: "split", context: { id: 1 } }]);
   });
 });

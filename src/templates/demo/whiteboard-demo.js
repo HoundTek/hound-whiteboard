@@ -12,7 +12,7 @@ import {
 import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-object-chooser.js";
 import { DebuggerTool } from "./debugger-tool.js";
-import { RandomCircleCreatorTool } from "./random-circle-creator-tool.js";
+import { createRandomCircleSubTree } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
 import { MonitorViewportTool } from "./monitor-viewport-tool.js";
 import { Vector } from "../../core/utils/math.js";
@@ -228,15 +228,12 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     });
   const secondarySelectionTool =
     options.secondarySelectionTool ?? new RectangleObjectChooserTool();
-  const randomCircleTool =
-    options.randomCircleTool ?? new RandomCircleCreatorTool();
   const randomCircleSubTree =
     options.randomCircleSubTree ??
     options.randomCircleDevice ??
-    randomCircleTool.createSubTreeDefinition?.(
-      `/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
-    ) ??
-    null;
+    createRandomCircleSubTree({
+      rootPath: `/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
+    });
   const wasdCoordinateTool =
     options.wasdCoordinateTool ?? new WasdCoordinateTool();
   const monitorViewportTool =
@@ -246,8 +243,8 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
 
-  monitor.mountDevice("/mouse", mouseDevice);
-  monitor.mountDevice("/keyboard", keyboardDevice);
+  monitor.mountSubTree("/mouse", mouseDevice);
+  monitor.mountSubTree("/keyboard", keyboardDevice);
 
   effectiveBoard.signalsEventBus.emit("mount", {
     to: `/${monitor.monitorId}/mouse/primary/tool`,
@@ -258,12 +255,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     tool: secondarySelectionTool,
   });
   if (randomCircleSubTree) {
-    monitor.mountDevice(randomCircleSubTree);
-  } else {
-    effectiveBoard.signalsEventBus.emit("mount", {
-      to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE_TOOL}`,
-      tool: randomCircleTool,
-    });
+    monitor.mountSubTree("", randomCircleSubTree);
   }
   effectiveBoard.signalsEventBus.emit("mount", {
     to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
@@ -280,11 +272,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Space`,
     options: buildKeyboardTriggerForwardNodeConfig(
-      `../../${
-        randomCircleSubTree
-          ? DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE
-          : DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE_TOOL
-      }`,
+      `../../${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
     ),
   });
 
@@ -404,7 +392,6 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     monitorViewportTool,
     primaryStrokeTool,
     secondarySelectionTool,
-    randomCircleTool,
     wasdCoordinateTool,
     debugTool,
   };

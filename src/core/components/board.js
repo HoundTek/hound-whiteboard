@@ -579,6 +579,18 @@ class Board {
   }
 
   /**
+   * 挂载结构化子树到白板级设备树
+   * @param {string} path - 子树根路径（相对于设备树根）
+   * @param {import("../devices/devices-tree.js").SubTreeDefinition} subTreeDefinition - 子树定义
+   * @returns {import("../devices/devices-tree.js").DevicesTreeNode[]} 挂载后的设备树节点列表
+   */
+  mountSubTree(path, subTreeDefinition) {
+    return this.devicesTree.mountSubTree(path, subTreeDefinition, {
+      board: this,
+    });
+  }
+
+  /**
    * 绑定信道相关事件
    * @private
    */

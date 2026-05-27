@@ -22,7 +22,7 @@ describe("DevicesTree refactor", () => {
       .end()
       .build();
 
-    const mountedNodes = tree.mountDevice("/main", keyboardSubTree);
+    const mountedNodes = tree.mountSubTree("/main", keyboardSubTree);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/main/keyboard",

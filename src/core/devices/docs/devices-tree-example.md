@@ -41,7 +41,7 @@ const penSubTree = createSubTree("/pen")
 const tree = new DevicesTree();
 const tool = new PenTool();
 
-tree.mountDevice("/monitor/main", penSubTree);
+tree.mountSubTree("/monitor/main", penSubTree);
 tree.mountTool("/monitor/main/pen/pointer/tool", tool, {
   board,
   monitor,

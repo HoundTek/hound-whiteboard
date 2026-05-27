@@ -48,7 +48,8 @@ describe("Board input flow", () => {
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountDevice(
+    monitor.mountSubTree(
+      "",
       createSubTree("/sample-device")
         .node("")
         .defaultChild("tool")
@@ -107,7 +108,8 @@ describe("Board input flow", () => {
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountDevice(
+    monitor.mountSubTree(
+      "",
       createSubTree("/sample-device")
         .node("")
         .defaultChild("tool")
@@ -172,7 +174,7 @@ describe("Board input flow", () => {
       },
     });
 
-    monitor.mountDevice(keyboardDevice);
+    monitor.mountSubTree("", keyboardDevice);
     monitor.devicesTree.mount(
       "/main/keyboard/tools/move/tool",
       (packet, context) => ({
@@ -238,7 +240,7 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountDevice(createMouseDevice());
+    monitor.mountSubTree("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary/tool",
       tool,
@@ -306,7 +308,7 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountDevice(createMouseDevice());
+    monitor.mountSubTree("", createMouseDevice());
 
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary/tool",
@@ -342,7 +344,7 @@ describe("Board input flow", () => {
       createModifierTool: () => new CommonObjectModifierTool(),
     });
 
-    monitor.mountDevice(createMouseDevice());
+    monitor.mountSubTree("", createMouseDevice());
 
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary/tool",
@@ -423,7 +425,7 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountDevice(createMouseDevice());
+    monitor.mountSubTree("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary/tool",
       tool,

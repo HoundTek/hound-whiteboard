@@ -32,11 +32,11 @@ Board 负责：
 
 - 拥有唯一 DevicesTree 实例
 - 监听 input、mount、umount、configure 事件
-- 把运行时上下文传给 dispatch、mountTool、mountDevice
+- 把运行时上下文传给 dispatch、mountTool、mountSubTree
 
 Monitor 负责：
 
-- 作为某个视口边界提供 mountDevice、mountTool、unmountTool 便捷入口
+- 作为某个视口边界提供 mountSubTree、mountTool、unmountTool 便捷入口
 - 通过 board.devicesTree 代理设备与工具挂载
 - 不再持有独立设备树实例
 

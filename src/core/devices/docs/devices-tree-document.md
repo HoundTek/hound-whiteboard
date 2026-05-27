@@ -108,7 +108,7 @@ eventContext 的核心字段有：
 
 - mount(path, handler, options)：挂载普通节点
 - mountTool(path, tool, toolContext)：挂载显式工具叶子
-- mountDevice(basePath, subTreeDefinition, runtimeContext)：挂载结构化输入子树
+- mountSubTree(basePath, subTreeDefinition, runtimeContext)：挂载结构化输入子树
 
 工具节点路径现在要求显式写出最终叶子，例如 /monitor/main/mouse/pointer/tool。
 

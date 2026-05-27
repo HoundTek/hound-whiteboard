@@ -90,7 +90,7 @@ describe("DevicesTree", () => {
     expect(childState).toEqual({ object: { id: 42 } });
   });
 
-  test("mountDevice 应按结构化子树定义挂载整棵子树", () => {
+  test("mountSubTree 应按结构化子树定义挂载整棵子树", () => {
     const tree = new DevicesTree();
     const subTreeDefinition = createSubTree("/s-pen")
       .node("")
@@ -110,7 +110,7 @@ describe("DevicesTree", () => {
       .end()
       .build();
 
-    const mountedNodes = tree.mountDevice("/monitor", subTreeDefinition);
+    const mountedNodes = tree.mountSubTree("/monitor", subTreeDefinition);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/s-pen",

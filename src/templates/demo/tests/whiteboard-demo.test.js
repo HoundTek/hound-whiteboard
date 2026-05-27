@@ -12,9 +12,9 @@ import {
   DEMO_PRIMARY_STROKE_COLOR,
 } from "../whiteboard-demo.js";
 import { DebuggerTool } from "../debugger-tool.js";
-import { RandomCircleCreatorTool } from "../random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "../wasd-coordinate-tool.js";
 import { RectangleObjectChooserTool } from "../../../core/tools/chooser/rectangle-object-chooser.js";
+import { createRandomCircleSubTree } from "../random-circle-creator-tool.js";
 
 describe("whiteboard demo", () => {
   function createDemoBoard() {
@@ -398,11 +398,11 @@ describe("whiteboard demo", () => {
   test("demo 配置后空格键应创建随机圆对象并提交到白板", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const randomCircleTool = new RandomCircleCreatorTool({
+    const randomCircleSubTree = createRandomCircleSubTree({
       random: () => 0.5,
     });
 
-    configureWhiteboardDemo(board, monitor, { randomCircleTool });
+    configureWhiteboardDemo(board, monitor, { randomCircleSubTree });
 
     board.signalsEventBus.emit("input", {
       to: "/main/keyboard",

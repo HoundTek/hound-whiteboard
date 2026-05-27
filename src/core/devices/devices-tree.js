@@ -869,7 +869,7 @@ class DevicesTree {
    * @param {DevicesTreeRuntimeContext} [runtimeContext={}] - 子树级运行时上下文
    * @returns {DevicesTreeNode[]}
    */
-  mountDevice(basePath, subTreeDefinition, runtimeContext = {}) {
+  mountSubTree(basePath, subTreeDefinition, runtimeContext = {}) {
     if (!subTreeDefinition || typeof subTreeDefinition.root !== "string") {
       throw new TypeError("Sub-tree definition must provide root.");
     }

@@ -80,7 +80,7 @@ const keyboard = createKeyboardDevice({
 键盘设备本身应挂在 Monitor 边界下：
 
 ```js
-monitor.mountDevice(createKeyboardDevice());
+monitor.mountSubTree(createKeyboardDevice());
 ```
 
 业务工具应挂在显式工具路径上：

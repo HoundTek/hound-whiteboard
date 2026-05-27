@@ -7,7 +7,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    const mountedNodes = tree.mountDevice("/monitor", mouseDevice);
+    const mountedNodes = tree.mountSubTree("/monitor", mouseDevice);
     const packets = tree.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -52,7 +52,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor", mouseDevice);
+    tree.mountSubTree("/monitor", mouseDevice);
 
     const packets = tree.dispatch({
       to: "/monitor/mouse",
@@ -109,7 +109,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor", mouseDevice);
+    tree.mountSubTree("/monitor", mouseDevice);
     tree.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -188,7 +188,7 @@ describe("mouse-device", () => {
     const tree = new DevicesTree();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor", mouseDevice);
+    tree.mountSubTree("/monitor", mouseDevice);
     tree.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -293,7 +293,7 @@ describe("mouse-device", () => {
       reset() {}
     }
 
-    tree.mountDevice("/monitor", mouseDevice);
+    tree.mountSubTree("/monitor", mouseDevice);
     tree.mountTool(
       "/monitor/mouse/pointer/tool",
       new MappingTool("pointer-handled"),
