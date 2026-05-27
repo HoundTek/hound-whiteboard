@@ -1,9 +1,9 @@
-import { DevicesTree } from "../devices-tree.js";
+import { DevicesTree, createSubTree } from "../devices-tree.js";
 import {
-  KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
+  KEYBOARD_DEVICE_SIGNAL_TYPES,
 } from "../keyboard-device.js";
-import { Tool } from "../../tools/tool.js";
+import { CollectingTool } from "../../test-support/mock-tools.js";
 
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
@@ -26,18 +26,6 @@ describe("keyboard-device", () => {
         },
       },
     });
-    class CollectingTool extends Tool {
-      calls = [];
-
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
-
     const tool = new CollectingTool();
 
     const mountedNodes = tree.mountSubTree("/monitor", keyboardDevice);
@@ -351,18 +339,6 @@ describe("keyboard-device", () => {
         },
       },
     });
-
-    class CollectingTool extends Tool {
-      calls = [];
-
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
 
     const tool = new CollectingTool();
 

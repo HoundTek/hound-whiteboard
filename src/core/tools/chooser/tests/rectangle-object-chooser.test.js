@@ -1,23 +1,10 @@
 import { jest } from "@jest/globals";
-import { RectangleRange } from "../../../range/index.js";
-import { Vector } from "../../../utils/math.js";
 import { RectangleObjectChooserTool } from "../rectangle-object-chooser.js";
+import { Vector } from "../../../utils/math.js";
+import { RectangleRange } from "../../../range/index.js";
+import { createStateAccess } from "../../../test-support/state-fixtures.js";
 
 describe("RectangleObjectChooserTool", () => {
-  function createStateAccess(initialState = {}) {
-    let state = { ...initialState };
-
-    return {
-      getState() {
-        return state;
-      },
-      setState(_path, nextState) {
-        state = nextState ?? {};
-        return state;
-      },
-    };
-  }
-
   test("拖拽结束后应选择与矩形相交的对象并清理拖拽状态", () => {
     const tool = new RectangleObjectChooserTool();
     const firstObject = {

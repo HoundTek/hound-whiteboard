@@ -2,22 +2,9 @@ import { jest } from "@jest/globals";
 import { ObjectChooserTool } from "../obj-chooser.js";
 import { RectangleRange } from "../../../range/index.js";
 import { Vector } from "../../../utils/math.js";
+import { createStateAccess } from "../../../test-support/state-fixtures.js";
 
 describe("ObjectChooserTool", () => {
-  function createStateAccess(initialState = {}) {
-    let state = { ...initialState };
-
-    return {
-      getState() {
-        return state;
-      },
-      setState(path, nextState) {
-        state = nextState ?? {};
-        return state;
-      },
-    };
-  }
-
   class TestChooserTool extends ObjectChooserTool {
     constructor(options = {}) {
       super(options);
@@ -191,7 +178,7 @@ describe("ObjectChooserTool", () => {
         tree: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool",
-            state: { object: chosenObject, objects: [chosenObject] },
+            state: {},
           }),
         },
       },

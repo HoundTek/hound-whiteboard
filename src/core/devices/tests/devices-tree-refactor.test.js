@@ -1,5 +1,5 @@
-import { DevicesTree, createSubTree } from "../devices-tree.js";
-import { Tool } from "../../tools/tool.js";
+import { DevicesTree, DevicesTreeNode, createSubTree } from "../devices-tree.js";
+import { CollectingTool } from "../../test-support/mock-tools.js";
 
 describe("DevicesTree refactor", () => {
   test("createSubTree 应按结构化节点挂载输入子树", () => {
@@ -101,18 +101,6 @@ describe("DevicesTree refactor", () => {
   });
 
   test("mountTool 应使用显式工具节点路径", () => {
-    class CollectingTool extends Tool {
-      calls = [];
-
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
-
     const tree = new DevicesTree();
     const tool = new CollectingTool();
 

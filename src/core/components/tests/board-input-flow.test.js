@@ -1,13 +1,13 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { createSubTree } from "../../devices/devices-tree.js";
-import { Tool } from "../../tools/tool.js";
 import { Matrix, Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
 import { CommonObjectModifierTool } from "../../tools/modifier/common-object-modifier.js";
 import { createMouseDevice } from "../../devices/mouse-device.js";
 import { createNoopCanvas } from "../../test-support/noop-canvas.js";
+import { CollectingTool } from "../../test-support/mock-tools.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
@@ -32,18 +32,6 @@ describe("Board input flow", () => {
   }
 
   test("input 事件应经由 Board、Monitor 与 DevicesTree 落到工具节点", () => {
-    class CollectingTool extends Tool {
-      calls = [];
-
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
-
     const board = new Board();
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
@@ -92,18 +80,6 @@ describe("Board input flow", () => {
   });
 
   test("mount 与 umount 事件应在运行时挂载和卸载工具节点", () => {
-    class CollectingTool extends Tool {
-      calls = [];
-
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
-
     const board = new Board();
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
