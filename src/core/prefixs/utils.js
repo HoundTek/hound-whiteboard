@@ -1,7 +1,7 @@
 /**
  * @file 修饰节点内部工具方法
  * @description 提供修饰节点 handler 内部通用的纯对象判断、浅克隆等辅助逻辑。不对外暴露给消费者直接使用。
- * @module core/prefix/utils
+ * @module core/prefixs/utils
  * @author Zhou Chenyu
  */
 

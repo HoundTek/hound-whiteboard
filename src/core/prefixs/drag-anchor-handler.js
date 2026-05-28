@@ -10,7 +10,7 @@
  * - end 信号 → 手势结束，对象保留在动态图
  * - success 信号 → 提交到静态图
  *
- * @module core/prefix/drag-anchor-handler
+ * @module core/prefixs/drag-anchor-handler
  * @author Zhou Chenyu
  */
 

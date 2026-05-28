@@ -1,6 +1,6 @@
 /**
  * @file 修饰节点 — 统一导出入口
- * @module core/prefix/index
+ * @module core/prefixs/index
  * @author Zhou Chenyu
  */
 

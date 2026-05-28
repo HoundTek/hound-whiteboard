@@ -39,8 +39,6 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   /**
    * @param {{
    *   property?: Partial<typeof DEFAULT_STROKE_PROPERTY>,
-   *   completionMode?: string,
-   *   createModifierTool?: Function,
    * }} [options={}]
    * @constructor
    */

@@ -56,8 +56,6 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
    *   property?: Partial<typeof DEFAULT_CIRCLE_PROPERTY>,
    *   fixedRadiusScreen?: number,
    *   minDragDistanceScreen?: number,
-   *   completionMode?: string,
-   *   createModifierTool?: Function,
    * }} [options={}]
    * @constructor
    */

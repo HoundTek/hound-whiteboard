@@ -4,7 +4,7 @@
  * 提供 createHandoffSubTree 工厂函数，将 first → second 的两阶段工作流
  * 封装为一棵结构化子树。first 可以是 creator（对象创建工具）、chooser（对象选择工具）或任意子树；
  * second 通常是 modifier（对象编辑工具）。两者均可接受 Tool 实例或 SubTreeDefinition。
- * @module core/prefix/handoff-handler
+ * @module core/prefixs/handoff-handler
  * @author Zhou Chenyu
  */
 
@@ -50,13 +50,13 @@ function wrapCreatorForHandoff(tool) {
   let processor = null;
   let completeRequested = false;
 
-  const originalComplete = tool.completeCreatedObject;
-  if (typeof originalComplete === "function") {
-    tool.completeCreatedObject = function (interaction) {
-      completeRequested = true;
-      return originalComplete.call(this, interaction);
-    };
-  }
+  // 替换 completeCreatedObject，拦截完成信号但不调用原始实现
+  // handoff 工作流中由 createHandoffSubTree 的 autoBridgeObjects 负责
+  // 将对象从 creator 节点状态桥接到 modifier 节点状态
+  tool.completeCreatedObject = function (interaction) {
+    completeRequested = true;
+    return undefined;
+  };
 
   return (packet, context = {}) => {
     if (!processor) {

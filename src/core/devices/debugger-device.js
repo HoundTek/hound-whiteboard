@@ -6,7 +6,7 @@
  */
 
 import { createSubTree } from "./devices-tree.js";
-import { createPrefixNodeHandler } from "../prefix/index.js";
+import { createPrefixNodeHandler } from "../prefixs/index.js";
 import { SignalPacket } from "./signal.js";
 
 /**

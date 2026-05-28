@@ -50,70 +50,6 @@ describe("ObjectChooserTool", () => {
     });
   });
 
-  test("process 可自动在 chooser 下挂载固定 modifier 子工具", () => {
-    const chosenObject = { id: 2 };
-    const modifierTool = { createProcessor: () => () => undefined };
-    const tree = {
-      configureNode: jest.fn(),
-      mountTool: jest.fn(),
-      getNode: jest.fn(() => null),
-    };
-    const board = {
-      activeObjectManager: {
-        choose: jest.fn(),
-      },
-    };
-    const stateAccess = createStateAccess();
-    const tool = new TestChooserTool({
-      chosenObjects: [chosenObject],
-      createModifierTool: () => modifierTool,
-    });
-
-    tool.process(
-      { signals: [{ type: "trigger", context: {} }] },
-      {
-        board,
-        tree,
-        path: "/monitor/chooser/tool",
-        getNodeState: stateAccess.getState,
-        setNodeState: stateAccess.setState,
-        monitor: "monitor-context",
-      },
-    );
-
-    expect(tree.configureNode).toHaveBeenCalledWith("/monitor/chooser/tool", {
-      defaultChild: "tool",
-    });
-    expect(tree.mountTool).toHaveBeenCalledWith(
-      "/monitor/chooser/tool/tool",
-      modifierTool,
-      {
-        board,
-        monitor: "monitor-context",
-      },
-    );
-  });
-
-  test("已有 modifier 子工具时应继续向默认路径转发", () => {
-    const chosenObject = { id: 3 };
-    const tool = new TestChooserTool();
-    const result = tool.process(
-      { signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }] },
-      {
-        object: chosenObject,
-        path: "/monitor/chooser/tool",
-        defaultChild: "tool",
-        resolvedDefaultChildPath: "/monitor/chooser/tool/tool",
-        tree: { getNode: () => ({ path: "/monitor/chooser/tool/tool" }) },
-      },
-    );
-
-    expect(result).toEqual({
-      to: "tool",
-      signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
-    });
-  });
-
   test("umount 应撤销当前选择并清理上下文", () => {
     const chosenObject = { id: 4 };
     const board = {
@@ -149,7 +85,9 @@ describe("ObjectChooserTool", () => {
     const chosenObject = { id: 5 };
     const tool = new TestChooserTool();
     const renderer = {
-      createCompatSelectionEntriesForObjects: jest.fn(() => ["chooser-overlay"]),
+      createCompatSelectionEntriesForObjects: jest.fn(() => [
+        "chooser-overlay",
+      ]),
     };
 
     const suppressed = tool.collectUiOverlayEntries({
@@ -168,7 +106,9 @@ describe("ObjectChooserTool", () => {
     });
 
     expect(suppressed).toEqual([]);
-    expect(renderer.createCompatSelectionEntriesForObjects).not.toHaveBeenCalled();
+    expect(
+      renderer.createCompatSelectionEntriesForObjects,
+    ).not.toHaveBeenCalled();
 
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
@@ -186,10 +126,9 @@ describe("ObjectChooserTool", () => {
     });
 
     expect(visible).toEqual(["chooser-overlay"]);
-    expect(renderer.createCompatSelectionEntriesForObjects).toHaveBeenCalledWith(
-      [chosenObject],
-      "chooser",
-    );
+    expect(
+      renderer.createCompatSelectionEntriesForObjects,
+    ).toHaveBeenCalledWith([chosenObject], "chooser");
   });
 
   test("resolveObjectSelectionWorldRange 应使用对象主判定范围而不是 boundingBox", () => {

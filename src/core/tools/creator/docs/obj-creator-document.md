@@ -15,25 +15,13 @@
 5. 根据手势状态进入 beginCreationGesture、updateCreationGesture、completeCreationGesture 或 cancelCreationGesture
 6. 结束时进入 completeCreatedObject(interaction) 或 cancelCreatedObject(interaction)
 
-## 创建完成策略
+## 创建完成
 
-当前创建工具支持两种完成策略：
+对象创建完成后，由外部 `createHandoffSubTree` 决定后续流程：
+- **standalone**：`completeCreatedObject` 直接调用 AOM.apply 提交到静态图
+- **handoff**：`wrapCreatorForHandoff` 拦截完成信号并发出 `TOOL_COMPLETE`，handoff 状态机切换到 modifier，`autoBridgeObjects` 将对象从 creator 节点状态桥接到 modifier 节点状态
 
-- apply：创建完成后直接调用 AOM.apply(...)，对象立即回到静态图
-- handoff：创建完成后保持对象留在 AOM 中，并在当前 creator 节点下自动挂载固定 modifier 子工具
-
-这里要注意一个“当前基线”和“推荐方向”的区别：
-
-- 当前基线里，creator 的 handoff 仍由工具自身维护
-- 新增 workflow 更推荐把 handoff 状态机上移到修饰节点
-- 也就是说，creator 更适合只专注于对象创建本身
-
-handoff 模式下的关键点是：
-
-- creator 通过 setContextObjects() 把对象写回当前节点上下文
-- creator 通过 syncModifierObjectContext() 把同一对象显式写入子工具路径 state，默认是 joinPath(deviceContext.path, "tool")
-- creator 把后续输入通过 continueToDefaultPath() 继续送给该 modifier
-- modifier 收到 apply 信号后再统一提交回静态图
+creator 本身不再持有 modifier 引用或控制 modifier 的挂载/转发。全部衔接逻辑由 `src/core/prefixs/handoff-handler.js` 中的 `createHandoffSubTree` 统一管理。
 
 ## 几何刷新设计
 
@@ -61,13 +49,9 @@ handoff 模式下的关键点是：
 
 ## 上下文共享模型
 
-当前 creator 与 modifier 的共享不再依赖 nodeContext 之类的隐式对象。
-
-当前做法是：
-
-- 当前 creator 节点通过 setContextObjects() 维护自身 object 和 objects
-- 下游 modifier 节点通过 writeNodeState() 显式写入 child tool 路径的 object 和 objects
-- modifier 通过 resolveContextObjects() 与 resolveNodeState() 读取这些共享对象
+creator 通过 `setContextObjects()` 将创建的对象写回当前节点 state。
+handoff 工作流中由 `createHandoffSubTree` 的 `autoBridgeObjects` 读取 first 节点 state
+并桥接到 second（modifier）节点 state。modifier 通过 `resolveContextObjects()` 读取这些共享对象。
 
 这种共享仅在当前工作流涉及的节点路径上有效，不应当作为跨事件的全局状态使用。
 
@@ -76,6 +60,5 @@ handoff 模式下的关键点是：
 - SingleGestureObjectCreatorTool 适用于一个手势完成整个对象创建的场景
 - MultiGestureObjectCreatorTool 适用于一个对象由多个手势逐步完成的场景
 - 两者都复用对象创建工具基类的几何刷新钩子
-- 创建工具现在可配置 completionMode 与 createModifierTool
-- handoff workflow 被 umount 时，creator 会撤销未提交对象并清理上下文
-- prefix 驱动的多工具 handoff 已有通用 helper，但 creator / chooser 旧路径尚未整体迁移
+- creator / modifier 衔接由 `createHandoffSubTree` 统一管理，creator 不再内建 modifier 挂载逻辑
+- umount 时 creator 会撤销未提交对象并清理上下文

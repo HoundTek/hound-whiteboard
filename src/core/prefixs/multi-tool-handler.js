@@ -3,7 +3,7 @@
  * @description 提供 createMultiToolPrefixHandler，基于 createPrefixNodeHandler 实现，
  *   通过 resolveTransition 回调决定当前信号应路由到哪个子节点、是否消费、是否冒泡等。
  *   适合 creator/modifier handoff 等多工具链路切换场景。
- * @module core/prefix/multi-tool-handler
+ * @module core/prefixs/multi-tool-handler
  * @author Zhou Chenyu
  */
 

@@ -4,7 +4,7 @@
  * 提供 createPrefixNodeHandler，是所有修饰节点的根基。
  * 它封装了状态读写、前缀上下文 helper（routeTo / routeToChild / bubbleToParent / stop），
  * 让调用方只需在 handle() 中编写路由逻辑。
- * @module core/prefix/handler
+ * @module core/prefixs/handler
  * @author Zhou Chenyu
  */
 

@@ -6,11 +6,11 @@
  */
 
 import { createSubTree } from "../../core/devices/devices-tree.js";
-import { createPrefixNodeHandler } from "../../core/prefix/index.js";
+import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
 import { SignalPacket } from "../../core/devices/signal.js";
 import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
 import { Vector } from "../../core/utils/math.js";
-import { isPlainObject } from "../../core/prefix/utils.js";
+import { isPlainObject } from "../../core/prefixs/utils.js";
 
 /**
  * 随机圆 prefix 工作流信号类型

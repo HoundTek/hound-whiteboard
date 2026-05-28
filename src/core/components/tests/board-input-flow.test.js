@@ -1,6 +1,7 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { createSubTree } from "../../devices/devices-tree.js";
+import { createHandoffSubTree } from "../../prefixs/handoff-handler.js";
 import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
@@ -315,58 +316,29 @@ describe("Board input flow", () => {
   test("挂载后的 StrokeCreatorTool 与 CommonObjectModifierTool 同一路径中共享上下文并修改对象", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");
-    const creatorTool = new StrokeCreatorTool({
-      completionMode: "handoff",
-      createModifierTool: () => new CommonObjectModifierTool(),
-    });
+    const creatorTool = new StrokeCreatorTool();
 
-    monitor.mountSubTree("", createMouseDevice());
+    // 直接用 handoff 子树，不经过 mouse device 路由
+    monitor.mountSubTree(
+      "",
+      createHandoffSubTree({
+        rootPath: "workflow",
+        first: creatorTool,
+        second: new CommonObjectModifierTool(),
+      }),
+    );
 
-    board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary/tool",
-      tool: creatorTool,
+    // 创建阶段：发送 position + end 信号到 handoff 根节点
+    board.signalsEventBus.emit("input", {
+      to: "/main/workflow",
+      signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
     });
 
     board.signalsEventBus.emit("input", {
-      to: "/main/mouse",
+      to: "/main/workflow",
       signals: [
-        {
-          type: "position",
-          context: { value: { x: 1, y: 1 }, buttons: 1, button: 0 },
-        },
-      ],
-    });
-
-    board.signalsEventBus.emit("input", {
-      to: "/main/mouse",
-      signals: [
-        {
-          type: "position",
-          context: { value: { x: 2, y: 2 }, buttons: 1, button: 0 },
-        },
-        {
-          type: "end",
-          context: {},
-        },
-      ],
-    });
-
-    const ownerChunk = board.getChunkById(1);
-    expect(creatorTool.obj).not.toBeNull();
-    expect(creatorTool.obj.id).toBe(1);
-    expect(board.activeObjectManager.activeObjects.size).toBe(1);
-    expect(
-      monitor.devicesTree.getNode("/main/mouse/primary/tool/tool"),
-    ).not.toBeNull();
-    expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
-
-    board.signalsEventBus.emit("input", {
-      to: "/main/mouse/primary/tool/tool",
-      signals: [
-        {
-          type: "displacement",
-          context: { value: { x: 3, y: 0 } },
-        },
+        { type: "position", context: { value: { x: 2, y: 2 } } },
+        { type: "end", context: {} },
       ],
     });
 
@@ -375,13 +347,23 @@ describe("Board input flow", () => {
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
     expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
 
+    // 修改阶段：handoff 已切换到 second（modifier）
     board.signalsEventBus.emit("input", {
-      to: "/main/mouse/primary/tool/tool",
+      to: "/main/workflow",
+      signals: [{ type: "displacement", context: { value: { x: 3, y: 0 } } }],
+    });
+
+    expect(creatorTool.obj).not.toBeNull();
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+
+    // 提交
+    board.signalsEventBus.emit("input", {
+      to: "/main/workflow",
       signals: [{ type: "success", context: {} }],
     });
 
+    const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(monitor.devicesTree.getNode("/main/mouse/primary/tool/tool")).toBeNull();
     expect(ownerChunk.objectManager.getObject(creatorTool.obj.id)).toBe(
       creatorTool.obj,
     );

@@ -29,8 +29,6 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   /**
    * @param {{
    *   property?: Partial<typeof DEFAULT_POLYGON_PROPERTY>,
-   *   completionMode?: string,
-   *   createModifierTool?: Function,
    * }} [options={}]
    */
   constructor(options = {}) {

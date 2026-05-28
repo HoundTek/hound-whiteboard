@@ -28,7 +28,7 @@ prefix(handler, semantics = {}) {
 
 简言之，`semantics.prefix === true` 只是让节点说"我是一个修饰节点"，仅此而已。
 
-**模块路径**：`src/core/prefix/`
+**模块路径**：`src/core/prefixs/`
 
 ## 模块清单
 
@@ -258,6 +258,7 @@ monitor.mountSubTree("", subTree);
 - 修饰节点语义通过 semantics 元数据与复用 helper 表达，不引入新的节点类
 - 节点状态通过 `getNodeState` / `setNodeState` 显式管理，不依赖隐式共享上下文
 - TOOL_COMPLETE 是父子节点间的标准握手协议
+- **creator / chooser 不再内建 modifier 挂载逻辑**：与 modifier 的衔接全部由 `createHandoffSubTree` 的 `autoBridgeObjects` 完成。creator 在 handoff 模式下仅标记 `isObjectCreationCompleted = true` 而不 apply，chooser 仅做选择并写回上下文，不挂载下游 modifier。
 
 ## 相关文档
 

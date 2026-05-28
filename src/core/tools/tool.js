@@ -329,33 +329,6 @@ class Tool {
   }
 
   /**
-   * 若当前节点存在默认子节点，则继续向默认路径转发原始信号包。
-   * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
-   * @returns {Object|undefined}
-   */
-  continueToDefaultPath(signalPacket, deviceContext = {}) {
-    if (
-      !deviceContext.defaultChild ||
-      !deviceContext.resolvedDefaultChildPath
-    ) {
-      return undefined;
-    }
-
-    if (
-      !deviceContext.tree?.getNode?.(deviceContext.resolvedDefaultChildPath)
-    ) {
-      return undefined;
-    }
-
-    const packet = SignalPacket.from(signalPacket);
-    return {
-      to: deviceContext.defaultChild,
-      signals: packet.signals,
-    };
-  }
-
-  /**
    * 收集当前工具声明的 ui overlay 条目。
    * @param {{ deviceContext?: Object, monitor?: Object, activeObjectManager?: Object, renderer?: Object, toolContext?: Object }} [_overlayContext={}] - overlay 上下文
    * @returns {Array<*>}

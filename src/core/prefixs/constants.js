@@ -1,6 +1,6 @@
 /**
  * @file 修饰节点信号常量
- * @module core/prefix/constants
+ * @module core/prefixs/constants
  * @author Zhou Chenyu
  */
 
