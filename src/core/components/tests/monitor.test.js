@@ -4,10 +4,60 @@ import { DevicesTree } from "../../devices/devices-tree.js";
 import { Vector } from "../../utils/math.js";
 import { Chunk } from "../chunk.js";
 import { RectangleRange } from "../../range/index.js";
-import {
-  createDebuggerDevice,
-  DEBUGGER_DEVICE_SIGNAL_TYPES,
-} from "../../devices/debugger-device.js";
+import { createSubTree } from "../../devices/devices-tree.js";
+import { createPrefixNodeHandler } from "../../prefixs/index.js";
+
+const REPORT_SIGNAL_TYPE = "debug-report";
+
+/**
+ * 创建一个简单的报告子树（prefix 节点），用于验证 Monitor#mountSubTree 行为。
+ * 替代已删除的 debugger-device。
+ */
+function createReportSubtree() {
+  let lastReceivedAt = "/";
+  let lastOriginalTo = "/";
+
+  return createSubTree("/debugger")
+    .node("")
+    .prefix(
+      createPrefixNodeHandler({
+        initialState: { entryIndex: -1 },
+        handle(signalPacket, prefixContext = {}) {
+          const sigs = Array.isArray(signalPacket.signals)
+            ? signalPacket.signals
+            : [];
+          lastReceivedAt = prefixContext.eventContext?.path ?? "/";
+          lastOriginalTo = signalPacket.to ?? "/";
+          prefixContext.patchState({
+            entryIndex: (prefixContext.getState().entryIndex ?? -1) + 1,
+          });
+          return prefixContext.routeToChild("report", sigs);
+        },
+      }),
+      { prefixKind: "debug", routePolicy: "inspect" },
+    )
+    .defaultChild("report")
+    .end()
+    .node("report")
+    .handler((signalPacket, context = {}) => ({
+      to: context.eventContext?.path,
+      signals: [
+        {
+          type: REPORT_SIGNAL_TYPE,
+          context: {
+            index: 0,
+            receivedAt: lastReceivedAt,
+            originalTo: lastOriginalTo,
+            signalCount: Array.isArray(signalPacket.signals)
+              ? signalPacket.signals.length
+              : 0,
+          },
+        },
+      ],
+    }))
+    .end()
+    .build();
+}
 import {
   createNoopCanvas,
   createNoopCanvasContext2D,
@@ -55,9 +105,9 @@ describe("Monitor", () => {
 
   test("mountSubTree 应自动补上 monitorId 后挂载设备", () => {
     const monitor = createMonitor("alpha");
-    const debuggerDevice = createDebuggerDevice();
+    const reportSubtree = createReportSubtree();
 
-    const mountedNodes = monitor.mountSubTree("", debuggerDevice);
+    const mountedNodes = monitor.mountSubTree("", reportSubtree);
     const packets = monitor.devicesTree.dispatch({
       to: "/alpha/debugger",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
@@ -72,7 +122,7 @@ describe("Monitor", () => {
         to: "/alpha/debugger/report",
         signals: [
           {
-            type: DEBUGGER_DEVICE_SIGNAL_TYPES.REPORT,
+            type: REPORT_SIGNAL_TYPE,
             context: {
               index: 0,
               receivedAt: "/alpha/debugger",
@@ -87,9 +137,9 @@ describe("Monitor", () => {
 
   test("mountSubTree 应规整不带前导斜杠的相对路径", () => {
     const monitor = createMonitor("beta");
-    const debuggerDevice = createDebuggerDevice();
+    const reportSubtree = createReportSubtree();
 
-    const mountedNodes = monitor.mountSubTree("debugger", debuggerDevice);
+    const mountedNodes = monitor.mountSubTree("debugger", reportSubtree);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/beta/debugger",

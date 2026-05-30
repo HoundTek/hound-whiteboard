@@ -22,7 +22,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * }} options - 多工具修饰节点路由选项
  * @param {string} [options.defaultChild=""] - 默认活动子节点名，用作 fallback
  * @param {Object} [options.initialState={}] - 额外初始状态，与 { activeChild: defaultChild } 合并
- * @param {Function} options.resolveTransition - 状态机决策函数，接收 { signalPacket, state, prefixContext }，返回路由决策对象
+ * @param {Function} options.resolveTransition - 状态机决策函数，接收 { signalPacket, state, fromPhase, prefixContext }，返回路由决策对象。fromPhase 为切换前的 phase 值，用于避免并发误切
  * @returns {import("../devices/devices-tree.js").DevicesTreeHandler} 可挂载到 DevicesTree 节点上的处理器函数
  */
 function createMultiToolPrefixHandler(options = {}) {
@@ -50,6 +50,7 @@ function createMultiToolPrefixHandler(options = {}) {
         resolveTransition({
           signalPacket: packet,
           state: currentState,
+          fromPhase: currentState.phase,
           prefixContext,
         }) ?? {};
 

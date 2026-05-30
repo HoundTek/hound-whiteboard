@@ -197,6 +197,46 @@ flowchart LR
 | `wrapCreatorForHandoff(tool)`                | hook `completeCreatedObject`                                    | 仅 creator        |
 | `wrapSubTreeForHandoff(subTreeDef, options)` | `options.shouldComplete` 或 end 信号                            | SubTreeDefinition |
 
+#### 门控机制（Gate）
+
+`wrapCreatorForHandoff` 和 `wrapFirstForHandoff` 都内置了一层**单次门控**，解决"完成信号延迟"问题。
+
+**问题场景**：
+
+```
+手势1 结束 → tool.completeCreatedObject() → (可能异步) → TOOL_COMPLETE
+                      ↓
+              ⚡ 新信号流入（手势2）→ 仍在 first 阶段 → tool 接收新手势
+                      ↓
+              TOOL_COMPLETE 最终发出 → 状态机切换 phase=second
+                      ↓
+              ❌ 手势2 的后续信号被路由到 modifier（错误！）
+```
+
+**门控机制**：
+
+- `completeCreatedObject` 被调用时，wrapper 设置内部门控 `gated = true`
+- 门控期间所有到达的信号被直接丢弃（返回 `[]`）
+- 门控在**下次非门控调用**时自动解除（即 handoff 切回 first 后的首个信号）
+- 首次解除信号也被丢弃（因为不知道是哪个阶段的残余），第二个信号开始正常处理
+
+```mermaid
+flowchart LR
+    A[手势1 完成] --> B[gated = true]
+    B --> C[TOOL_COMPLETE 发出]
+    B --> D[⚡ 后续信号]
+    D --> E{wasGated?}
+    E -->|是| F[丢弃]
+    E -->|否| G[正常处理]
+    C --> H[状态机切换]
+    H --> I[second 处理]
+    I --> J[TOOL_COMPLETE 切回 first]
+    J --> K[首个信号 → wasGated=true → 解除门控, 丢弃]
+    K --> L[第二个信号 → 正常处理 ✓]
+```
+
+这牺牲了从 second 切回 first 后的首个信号，换取了竞态安全——在同步模型中不影响体验，在异步模型中防止状态机紊乱。
+
 ### 5. 拖拽位移转换 — `createDragAnchorPrefixHandler`
 
 将鼠标世界坐标序列转换为累计位移 `{x, y}`，以 `"displacement"` 信号输出。

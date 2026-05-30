@@ -21,6 +21,17 @@ Tool 是设备树末端的消费型处理器，**只做叶子节点**。
 所有 orchestration（路由、桥接、状态切换）已上移到**修饰节点层**，由
 `createHandoffSubTree` + `multi-tool-prefix` + `TOOL_COMPLETE` 等握手协议统一管理。
 
+### 实例归属规则
+
+**一个 Tool 实例只属于一个设备树节点。** 不应将同一实例挂载到多个节点或在多个 subtree 间共享。
+
+这保证了：
+- `wrapCreatorForHandoff` 替换 `completeCreatedObject` 等 hook 操作安全（不会污染其他使用方）
+- 工具实例状态（`isCreatingGestureActive`、`_isGestureActive` 等）不会跨节点串扰
+- umount 时清理行为明确（一个节点卸载，对应一个实例释放）
+
+违反本条的场景：如将同一个 `new StrokeCreatorTool()` 同时传给两个 `createHandoffSubTree()` 调用。
+
 ## 上下文模型
 
 Tool.createProcessor(toolContext) 会生成一个可直接挂到 DevicesTree 节点上的 handler。

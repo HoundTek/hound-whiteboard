@@ -11,6 +11,7 @@
 import { createSubTree } from "../devices/devices-tree.js";
 import { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
 import { PREFIX_NODE_SIGNAL_TYPES } from "./constants.js";
+import { Tool } from "../tools/tool.js";
 
 /**
  * 判断值是否是 SubTreeDefinition
@@ -94,7 +95,7 @@ function wrapCreatorForHandoff(tool) {
  * 自动检测工具类型：
  * - 若工具包含 completeCreatedObject（creator），hook 其完成回调
  * - 否则退化为信号检测模式：收到 "end" 信号后追加 TOOL_COMPLETE
- * @param {import("../tools/tool.js").Tool} tool - first 阶段工具实例（creator / chooser）
+ * @param {Tool} tool - first 阶段工具实例（creator / chooser）
  * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
  */
 function wrapFirstForHandoff(tool) {
@@ -119,6 +120,14 @@ function wrapFirstForHandoff(tool) {
     const hasEnd = Array.isArray(sigs) && sigs.some((s) => s?.type === "end");
 
     if (!hasEnd) {
+      return result;
+    }
+
+    // 仅当确实有选中对象时才触发 handoff
+    const nodePath = context.eventContext?.path ?? "";
+    const nodeState = context.getNodeState?.(nodePath);
+    const objects = nodeState?.objects ?? [];
+    if (objects.length === 0) {
       return result;
     }
 
@@ -222,13 +231,13 @@ function wrapSubTreeForHandoff(subTreeDef, options = {}) {
  * 两者均可接受 Tool 实例或 SubTreeDefinition。
  * @param {{
  *   rootPath?: string,
- *   first: import("../tools/tool.js").Tool|import("../devices/devices-tree.js").SubTreeDefinition,
- *   second: import("../tools/tool.js").Tool|import("../devices/devices-tree.js").SubTreeDefinition,
+ *   first: Tool|import("../devices/devices-tree.js").SubTreeDefinition,
+ *   second: Tool|import("../devices/devices-tree.js").SubTreeDefinition,
  *   autoBridgeObjects?: boolean,
  * }} options - handoff 子树配置
  * @param {string} [options.rootPath="/handoff"] - 子树根路径
- * @param {import("../tools/tool.js").Tool|import("../devices/devices-tree.js").SubTreeDefinition} options.first - 第一阶段工具或子树（creator / chooser 等）
- * @param {import("../tools/tool.js").Tool|import("../devices/devices-tree.js").SubTreeDefinition} options.second - 第二阶段工具或子树（通常为 modifier）
+ * @param {Tool|import("../devices/devices-tree.js").SubTreeDefinition} options.first - 第一阶段工具或子树（creator / chooser 等）
+ * @param {Tool|import("../devices/devices-tree.js").SubTreeDefinition} options.second - 第二阶段工具或子树（通常为 modifier）
  * @param {boolean} [options.autoBridgeObjects=true] - 是否在 handoff 时自动桥接对象上下文
  * @returns {import("../devices/devices-tree.js").SubTreeDefinition}
  *
@@ -272,7 +281,7 @@ function createHandoffSubTree(options = {}) {
       createMultiToolPrefixHandler({
         defaultChild: "first",
         initialState: { phase: "first" },
-        resolveTransition({ signalPacket, state, prefixContext }) {
+        resolveTransition({ signalPacket, state, fromPhase, prefixContext }) {
           const hasToolComplete = signalPacket.signals.some(
             (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
           );
@@ -281,7 +290,7 @@ function createHandoffSubTree(options = {}) {
             return { child: state.activeChild };
           }
 
-          if (state.phase === "first" && autoBridgeObjects) {
+          if (fromPhase === "first" && autoBridgeObjects) {
             const tree = prefixContext.eventContext?.tree;
             const basePath = prefixContext.eventContext?.path ?? "";
             const firstState = tree?.getNodeState?.(`${basePath}/first`);
@@ -291,17 +300,21 @@ function createHandoffSubTree(options = {}) {
             }
           }
 
-          if (state.phase === "first") {
+          if (fromPhase === "first") {
             return {
               patchState: { phase: "second", activeChild: "second" },
               consume: true,
             };
           }
 
-          return {
-            patchState: { phase: "first", activeChild: "first" },
-            consume: true,
-          };
+          if (fromPhase === "second") {
+            return {
+              patchState: { phase: "first", activeChild: "first" },
+              consume: true,
+            };
+          }
+
+          return { child: state.activeChild };
         },
       }),
       {
