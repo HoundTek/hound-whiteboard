@@ -20,7 +20,7 @@
 对象创建完成后的去向由外部工作流决定：
 
 - **standalone**：`completeCreatedObject()` 直接调用 `AOM.apply`，把对象提交回静态图
-- **handoff**：`wrapCreatorForHandoff()` 拦截 `completeCreatedObject()`，改为调用累积 `context` 中的 `onToolComplete` 回调，由 `createHandoffSubTree()` 决定后续切换与对象桥接
+- **handoff**：`wrapCreatorForHandoff()` 拦截 `completeCreatedObject()`，改为调用累积 `context` 中的 `onToolComplete` 回调，由 `createHandoffSubDAG()` 决定后续切换与对象桥接
 
 handoff 模式下，`autoBridgeObjects` 会把对象从 creator 节点 state 复制到 second 节点 state，供 modifier 继续消费。
 
@@ -46,7 +46,7 @@ handoff 模式下，`autoBridgeObjects` 会把对象从 creator 节点 state 复
 ## 上下文共享模型
 
 creator 通过 `setContextObjects()` 将创建的对象写回当前节点 state。
-handoff 工作流中由 `createHandoffSubTree()` 的 `autoBridgeObjects` 读取 first 节点 state，并桥接到 second 节点 state。modifier 通过 `resolveContextObjects()` 读取这些共享对象。
+handoff 工作流中由 `createHandoffSubDAG()` 的 `autoBridgeObjects` 读取 first 节点 state，并桥接到 second 节点 state。modifier 通过 `resolveContextObjects()` 读取这些共享对象。
 
 这种共享仅在当前工作流涉及的节点路径上有效，不应当作为跨事件的全局状态使用。
 
@@ -67,5 +67,5 @@ handoff 工作流中由 `createHandoffSubTree()` 的 `autoBridgeObjects` 读取 
 - `SingleGestureObjectCreatorTool` 适用于单次拖拽或单次手势完成对象的场景
 - `MultiGestureObjectCreatorTool` 适用于多边形这类由多次手势逐步完成的场景
 - 两者都复用对象创建工具基类的几何刷新钩子
-- creator / modifier 衔接由 `createHandoffSubTree()` 统一管理，creator 不再内建 modifier 挂载逻辑
+- creator / modifier 衔接由 `createHandoffSubDAG()` 统一管理，creator 不再内建 modifier 挂载逻辑
 - `umount()` 时 creator 会撤销未提交对象并清理上下文

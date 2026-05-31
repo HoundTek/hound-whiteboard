@@ -138,7 +138,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         object,
         board,
-        ddag: mockDag,
+        dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
     );
@@ -149,7 +149,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         object,
         board,
-        ddag: mockDag,
+        dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
     );
@@ -162,7 +162,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         object,
         board,
-        ddag: mockDag,
+        dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
         getNodeState() {
           return nodeState;

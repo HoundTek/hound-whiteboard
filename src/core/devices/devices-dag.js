@@ -30,7 +30,7 @@ import { CounterPool } from "../utils/counter-pool.js";
  *
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
- * @property {DevicesDAG} ddag - 所属设备图
+ * @property {DevicesDAG} dag - 所属设备图
  * @property {string} path - 当前节点路径（分发所用路径；同一节点可能有多条路径）
  * @property {Object} semantics - 当前节点语义元数据快照
  * @property {string} defaultRoute - 当前节点声明的默认出边名
@@ -931,7 +931,7 @@ class DevicesDAG {
    * @param {SignalPacket|undefined} signalPacket
    * @param {Object} accumulatedContext
    * @param {number} depth
-   * @returns {DevicesDAGHandlerContext & {ddag: DevicesDAG, defaultChild: string, resolvedDefaultChildPath: string}}
+   * @returns {DevicesDAGHandlerContext & {dag: DevicesDAG, defaultChild: string, resolvedDefaultChildPath: string}}
    */
   _createHandlerContext(
     node,
@@ -947,7 +947,7 @@ class DevicesDAG {
 
     return {
       node,
-      ddag: this,
+      dag: this,
       path,
       semantics: node.getSemantics?.() ?? { ...node.semantics },
       defaultRoute,
@@ -1389,7 +1389,7 @@ class DevicesDAG {
     if (typeof root.umount === "function") {
       const handlerContext = {
         node: root,
-        ddag: this,
+        dag: this,
         path: nodePath,
         semantics: { ...root.semantics },
         defaultRoute: root.defaultRoute,

@@ -6,17 +6,17 @@ import { DevicesDAG } from "../devices-dag.js";
 
 describe("touchscreen-device", () => {
   test("应聚合同一包中的多个触点位置，并输出多指状态", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const touchscreenDevice = createTouchscreenDevice();
 
-    const mountedNodes = ddag.mountSubDAG("/monitor", touchscreenDevice);
+    const mountedNodes = dag.mountSubDAG("/monitor", touchscreenDevice);
 
-    expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
+    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
       "/monitor/touchscreen",
       "/monitor/touchscreen/contacts",
     ]);
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         {
@@ -68,12 +68,12 @@ describe("touchscreen-device", () => {
   });
 
   test("应在 end/cancel 后移除对应触点，并保留其余触点", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const touchscreenDevice = createTouchscreenDevice();
 
-    ddag.mountSubDAG("/monitor", touchscreenDevice);
+    dag.mountSubDAG("/monitor", touchscreenDevice);
 
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         {
@@ -87,7 +87,7 @@ describe("touchscreen-device", () => {
       ],
     });
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         { type: "end", context: { touchId: "finger-1" } },
@@ -129,10 +129,10 @@ describe("touchscreen-device", () => {
 
   test("clearTouches 应清空所有当前触点", () => {
     const touchscreenDevice = createTouchscreenDevice();
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
 
-    ddag.mountSubDAG("/monitor", touchscreenDevice);
-    ddag.dispatch({
+    dag.mountSubDAG("/monitor", touchscreenDevice);
+    dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         {

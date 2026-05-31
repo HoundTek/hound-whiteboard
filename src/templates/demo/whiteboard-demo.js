@@ -12,7 +12,7 @@ import {
 import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-object-chooser.js";
 import { DebuggerTool } from "./debugger-tool.js";
-import { createRandomCircleSubTree } from "./random-circle-creator-tool.js";
+import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
 import { MonitorViewportTool } from "./monitor-viewport-tool.js";
 import { Vector } from "../../core/utils/math.js";
@@ -307,7 +307,7 @@ function buildKeyboardDebugNodeConfig(type, context = {}) {
  * @param {Object} [options={}] - 可选覆盖配置
  * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
  * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
- * @param {Object} [options.randomCircleSubTree]
+ * @param {Object} [options.randomCircleSubDAG]
  * @param {WasdCoordinateTool} [options.wasdCoordinateTool]
  * @param {MonitorViewportTool} [options.monitorViewportTool]
  * @param {DebuggerTool} [options.debugTool]
@@ -337,10 +337,10 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     });
   const secondarySelectionTool =
     options.secondarySelectionTool ?? new RectangleObjectChooserTool();
-  const randomCircleSubTree =
-    options.randomCircleSubTree ??
+  const randomCircleSubDAG =
+    options.randomCircleSubDAG ??
     options.randomCircleDevice ??
-    createRandomCircleSubTree({
+    createRandomCircleSubDAG({
       rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
     });
   const wasdCoordinateTool =
@@ -376,11 +376,11 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     workflow: secondarySelectionTool,
     edges: [{ from: "/mouse/secondary", edge: "tool" }],
   });
-  if (randomCircleSubTree) {
+  if (randomCircleSubDAG) {
     effectiveBoard.signalsEventBus.emit("mount", {
       monitorId: monitor.monitorId,
       name: DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE,
-      workflow: randomCircleSubTree,
+      workflow: randomCircleSubDAG,
       edges: [{ from: "/keyboard/code/Space", edge: "create-circle" }],
     });
   }

@@ -13,7 +13,7 @@ const REPORT_SIGNAL_TYPE = "debug-report";
  * 创建一个简单的报告子图（prefix 节点），用于验证 Monitor#mountSubDAG 行为。
  * 替代已删除的 debugger-device。
  */
-function createReportSubtree() {
+function createReportSubDAG() {
   let lastReceivedAt = "/";
   let lastOriginalTo = "/";
 
@@ -102,9 +102,9 @@ describe("Monitor", () => {
 
   test("mountSubDAG 应自动补上 monitorId 后挂载设备", () => {
     const monitor = createMonitor("alpha");
-    const reportSubtree = createReportSubtree();
+    const reportSubDAG = createReportSubDAG();
 
-    const mountedNodes = monitor.mountSubDAG("", reportSubtree);
+    const mountedNodes = monitor.mountSubDAG("", reportSubDAG);
     const packets = monitor.devicesDAG.dispatch({
       to: "/alpha/debugger",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
@@ -134,9 +134,9 @@ describe("Monitor", () => {
 
   test("mountSubDAG 应规整不带前导斜杠的相对路径", () => {
     const monitor = createMonitor("beta");
-    const reportSubtree = createReportSubtree();
+    const reportSubDAG = createReportSubDAG();
 
-    const mountedNodes = monitor.mountSubDAG("debugger", reportSubtree);
+    const mountedNodes = monitor.mountSubDAG("debugger", reportSubDAG);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/beta/debugger",

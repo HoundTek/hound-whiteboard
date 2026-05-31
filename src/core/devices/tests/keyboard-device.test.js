@@ -14,7 +14,7 @@ function toPlainPackets(packets) {
 
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice({
       nodeConfigs: {
         "/code/Space": {
@@ -35,15 +35,15 @@ describe("keyboard-device", () => {
     });
     const tool = new CollectingTool();
 
-    const mountedNodes = ddag.mountSubDAG("/monitor", keyboardDevice);
-    ddag.mountWorkflow("/monitor/workflows/space-tool", tool);
-    ddag.addEdge(
+    const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountWorkflow("/monitor/workflows/space-tool", tool);
+    dag.addEdge(
       "/monitor/keyboard/code/Space",
       "tool",
       "/monitor/workflows/space-tool",
     );
 
-    expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
+    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
       "/monitor/keyboard",
       "/monitor/keyboard/event",
       "/monitor/keyboard/keydown",
@@ -55,7 +55,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/code/Space",
     ]);
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -161,12 +161,12 @@ describe("keyboard-device", () => {
   });
 
   test("重复按键应路由到 repeat，并保留当前激活键", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    ddag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountSubDAG("/monitor", keyboardDevice);
 
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -176,7 +176,7 @@ describe("keyboard-device", () => {
       ],
     });
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -221,12 +221,12 @@ describe("keyboard-device", () => {
   });
 
   test("按键抬起与取消应清理状态", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    ddag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountSubDAG("/monitor", keyboardDevice);
 
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -240,7 +240,7 @@ describe("keyboard-device", () => {
       ],
     });
 
-    const keyupPackets = ddag.dispatch({
+    const keyupPackets = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -268,7 +268,7 @@ describe("keyboard-device", () => {
       },
     ]);
 
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/keyboard",
       signals: [{ type: "cancel", context: {} }],
     });
@@ -277,7 +277,7 @@ describe("keyboard-device", () => {
   });
 
   test("可在按键节点把信号改写为 position 并汇流到公共工具节点", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice({
       nodeConfigs: {
         "/code/KeyW": {
@@ -321,20 +321,20 @@ describe("keyboard-device", () => {
 
     const tool = new CollectingTool();
 
-    const mountedNodes = ddag.mountSubDAG("/monitor", keyboardDevice);
-    ddag.mountWorkflow("/monitor/workflows/move-tool", tool);
-    ddag.addEdge(
+    const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountWorkflow("/monitor/workflows/move-tool", tool);
+    dag.addEdge(
       "/monitor/keyboard/code/KeyW",
       "tool",
       "/monitor/workflows/move-tool",
     );
-    ddag.addEdge(
+    dag.addEdge(
       "/monitor/keyboard/code/KeyD",
       "tool",
       "/monitor/workflows/move-tool",
     );
 
-    expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
+    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
       "/monitor/keyboard",
       "/monitor/keyboard/event",
       "/monitor/keyboard/keydown",
@@ -347,7 +347,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/code/KeyD",
     ]);
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {

@@ -7,8 +7,8 @@ import {
 } from "../index.js";
 
 describe("prefix-node", () => {
-  test("SubTreeNodeBuilder.prefix 应保留 prefix 语义并复用现有 dispatch", () => {
-    const ddag = new DevicesDAG();
+  test("SubDAGNodeBuilder.prefix 应保留 prefix 语义并复用现有 dispatch", () => {
+    const dag = new DevicesDAG();
     const _wfb = createSubDAG("/workflow");
     const _wfr = _wfb
       .node()
@@ -41,15 +41,15 @@ describe("prefix-node", () => {
       ],
     }));
     _wfb.edge("tool", _wfr, _wft);
-    const prefixSubTree = _wfb.build();
+    const prefixSubDAG = _wfb.build();
 
-    ddag.mountSubDAG("/monitor", prefixSubTree);
+    dag.mountSubDAG("/monitor", prefixSubDAG);
 
-    expect(ddag.getNode("/monitor/workflow")?.getSemantics()).toEqual({
+    expect(dag.getNode("/monitor/workflow")?.getSemantics()).toEqual({
       prefix: true,
     });
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/workflow",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
@@ -61,7 +61,7 @@ describe("prefix-node", () => {
   });
 
   test("createMultiToolPrefixHandler 应根据状态机切换活动子节点（通过回调）", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const trace = [];
 
     const _hfb = createSubDAG("/handoff");
@@ -111,26 +111,26 @@ describe("prefix-node", () => {
     });
     _hfb.edge("create", _hfr, _hfc);
     _hfb.edge("edit", _hfr, _hfe);
-    const handoffSubTree = _hfb.build();
+    const handoffSubDAG = _hfb.build();
 
-    ddag.mountSubDAG("/monitor", handoffSubTree);
+    dag.mountSubDAG("/monitor", handoffSubDAG);
 
     // 第一次 dispatch：状态为 create，路由到 create 子节点
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/handoff",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
     expect(trace).toEqual(["create"]);
 
     // 第二次 dispatch：状态已切换为 edit，路由到 edit 子节点
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/handoff",
       signals: [{ type: "position", context: { value: { x: 3, y: 4 } } }],
     });
     expect(trace).toEqual(["create", "edit"]);
 
     // 第三次 dispatch：edit 又调用了 onSwitch → 切回 create
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/handoff",
       signals: [{ type: "position", context: { value: { x: 5, y: 6 } } }],
     });
@@ -138,7 +138,7 @@ describe("prefix-node", () => {
   });
 
   test("createRepeatorPrefixHandler 应将信号复制分发到多个子节点", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const toolACalls = [];
     const toolBCalls = [];
 
@@ -158,11 +158,11 @@ describe("prefix-node", () => {
     });
     _rpb.edge("tool-a", _rpr, _rpa);
     _rpb.edge("tool-b", _rpr, _rpb2);
-    const repeatorSubTree = _rpb.build();
+    const repeatorSubDAG = _rpb.build();
 
-    ddag.mountSubDAG("/monitor", repeatorSubTree);
+    dag.mountSubDAG("/monitor", repeatorSubDAG);
 
-    ddag.dispatch({
+    dag.dispatch({
       to: "/monitor/repeater",
       signals: [{ type: "click", context: { button: 0 } }],
     });

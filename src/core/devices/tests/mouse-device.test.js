@@ -41,11 +41,11 @@ function toPlainPackets(packets) {
 
 describe("mouse-device", () => {
   test("普通移动应路由到 pointer 节点", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    const mountedNodes = ddag.mountSubDAG("/monitor", mouseDevice);
-    const result = ddag.dispatch({
+    const mountedNodes = dag.mountSubDAG("/monitor", mouseDevice);
+    const result = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -55,7 +55,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
+    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
       "/monitor/mouse",
       "/monitor/mouse/pointer",
       "/monitor/mouse/primary",
@@ -94,12 +94,12 @@ describe("mouse-device", () => {
   });
 
   test("左键与右键可同时激活，并聚合路由到多个按钮节点", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    ddag.mountSubDAG("/monitor", mouseDevice);
+    dag.mountSubDAG("/monitor", mouseDevice);
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -127,11 +127,11 @@ describe("mouse-device", () => {
   });
 
   test("按住主键时滚轮事件应同时路由到 primary 和 wheel 节点", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    ddag.mountSubDAG("/monitor", mouseDevice);
-    ddag.dispatch({
+    dag.mountSubDAG("/monitor", mouseDevice);
+    dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -141,7 +141,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const result = ddag.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -179,11 +179,11 @@ describe("mouse-device", () => {
   });
 
   test("主键抬起时应继续把结束包路由到 primary，同时保留其它激活键", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    ddag.mountSubDAG("/monitor", mouseDevice);
-    ddag.dispatch({
+    dag.mountSubDAG("/monitor", mouseDevice);
+    dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -193,7 +193,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const releaseResult = ddag.dispatch({
+    const releaseResult = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -224,7 +224,7 @@ describe("mouse-device", () => {
   });
 
   test("可同时把同一包交给多个注入处理器", () => {
-    const ddag = new DevicesDAG();
+    const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
     class MappingTool extends Tool {
       constructor(type) {
@@ -251,26 +251,26 @@ describe("mouse-device", () => {
       reset() {}
     }
 
-    ddag.mountSubDAG("/monitor", mouseDevice);
-    ddag.mountWorkflow(
+    dag.mountSubDAG("/monitor", mouseDevice);
+    dag.mountWorkflow(
       "/monitor/workflows/pointer-handled",
       new MappingTool("pointer-handled"),
     );
-    ddag.addEdge("/monitor/mouse/pointer", "tool", "/monitor/workflows/pointer-handled");
-    ddag.mountWorkflow(
+    dag.addEdge("/monitor/mouse/pointer", "tool", "/monitor/workflows/pointer-handled");
+    dag.mountWorkflow(
       "/monitor/workflows/primary-handled",
       new MappingTool("primary-handled"),
     );
-    ddag.addEdge("/monitor/mouse/primary", "tool", "/monitor/workflows/primary-handled");
-    ddag.mountWorkflow(
+    dag.addEdge("/monitor/mouse/primary", "tool", "/monitor/workflows/primary-handled");
+    dag.mountWorkflow(
       "/monitor/workflows/wheel-handled",
       new MappingTool("wheel-handled"),
     );
-    ddag.addEdge("/monitor/mouse/wheel", "tool", "/monitor/workflows/wheel-handled");
+    dag.addEdge("/monitor/mouse/wheel", "tool", "/monitor/workflows/wheel-handled");
 
     expect(
       toPlainPackets(
-        ddag.dispatch({
+        dag.dispatch({
           to: "/monitor/mouse",
           signals: [
             {

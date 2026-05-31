@@ -47,7 +47,7 @@ prefix 节点现在依赖三条稳定边界：
 | `handler.js`             | `createPrefixNodeHandler`                                                                       | 基础修饰节点处理器          |
 | `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                                                                  | 多工具状态机路由            |
 | `repeator-handler.js`    | `createRepeatorPrefixHandler`                                                                   | 信号复制分发                |
-| `handoff-handler.js`     | `createHandoffSubTree`, `wrapFirstForHandoff`, `wrapCreatorForHandoff`, `wrapSubTreeForHandoff` | first → second 两阶段工作流 |
+| `handoff-handler.js`     | `createHandoffSubDAG`, `wrapFirstForHandoff`, `wrapCreatorForHandoff`, `wrapSubDAGForHandoff` | first → second 两阶段工作流 |
 | `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`                                                                 | 拖拽位移转换                |
 
 ## 关系图
@@ -58,10 +58,10 @@ flowchart TD
     Prefix --> Base[createPrefixNodeHandler]
     Base --> Multi[createMultiToolPrefixHandler]
     Base --> Repeator[createRepeatorPrefixHandler]
-    Multi --> Handoff[createHandoffSubTree]
+    Multi --> Handoff[createHandoffSubDAG]
     Handoff --> WrapFirst[wrapFirstForHandoff]
     Handoff --> WrapCreator[wrapCreatorForHandoff]
-    Handoff --> WrapSub[wrapSubTreeForHandoff]
+    Handoff --> WrapSub[wrapSubDAGForHandoff]
     Prefix --> Tool[Tool Leaf]
 ```
 
@@ -130,9 +130,9 @@ const handler = createRepeatorPrefixHandler({
 
 若未显式提供 `toChildren`，它会回退到当前 prefix 节点的 `defaultChild`。
 
-## 4. Handoff 工作流：`createHandoffSubTree`
+## 4. Handoff 工作流：`createHandoffSubDAG`
 
-`createHandoffSubTree` 把 `first → second` 的两阶段工作流封装成一棵结构化子树。
+`createHandoffSubDAG` 把 `first → second` 的两阶段工作流封装成一棵结构化子树。
 
 典型场景包括：
 
@@ -163,7 +163,7 @@ flowchart LR
 
 - `wrapCreatorForHandoff(tool)`：hook `completeCreatedObject()`，在 creator 真正完成时调用 `onToolComplete`
 - `wrapFirstForHandoff(tool)`：creator 走 hook 路径，chooser 则在 `end` 且已选中对象时调用 `onToolComplete`
-- `wrapSubTreeForHandoff(subTreeDef, options)`：在子树根节点满足 `shouldComplete` 或收到 `end` 时调用 `onToolComplete`
+- `wrapSubDAGForHandoff(subDAGDef, options)`：在子树根节点满足 `shouldComplete` 或收到 `end` 时调用 `onToolComplete`
 
 ### 兼容说明
 

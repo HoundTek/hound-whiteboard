@@ -1,6 +1,6 @@
 /**
  * @file demo 随机圆修饰节点工作流
- * @description 提供 createRandomCircleSubTree 工厂函数，生成完整的随机圆 prefix 工作流。
+ * @description 提供 createRandomCircleSubDAG 工厂函数，生成完整的随机圆 prefix 工作流。
  * @module templates/demo/random-circle-creator-tool
  * @author Zhou Chenyu
  */
@@ -95,17 +95,17 @@ class PropertyAwareCircleCreator extends CircleCreatorTool {
  *   maxRadius?: number,
  *   property?: Record<string, any>,
  * }} [options={}] - 随机圆工作流配置
- * @returns {import("../../core/devices/devices-dag.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subTree) 的结构化子树定义
+ * @returns {import("../../core/devices/devices-dag.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subDAG) 的结构化子树定义
  *
  * @example
- *   const subTree = createRandomCircleSubTree({
+ *   const subDAG = createRandomCircleSubDAG({
  *     rootPath: "/workflows/random-circle",
  *     minRadius: 20,
  *     maxRadius: 80,
  *   });
- *   monitor.mountWorkflow("/workflows/random-circle", subTree);
+ *   monitor.mountWorkflow("/workflows/random-circle", subDAG);
  */
-function createRandomCircleSubTree(options = {}) {
+function createRandomCircleSubDAG(options = {}) {
   const rootPath = options.rootPath ?? "/workflows/create-circle";
   const random =
     typeof options.random === "function" ? options.random : Math.random;
@@ -269,4 +269,4 @@ function createRandomCircleSubTree(options = {}) {
   return builder.build();
 }
 
-export { createRandomCircleSubTree };
+export { createRandomCircleSubDAG };

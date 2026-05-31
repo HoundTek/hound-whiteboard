@@ -14,7 +14,7 @@ import {
 import { DebuggerTool } from "../debugger-tool.js";
 import { WasdCoordinateTool } from "../wasd-coordinate-tool.js";
 import { RectangleObjectChooserTool } from "../../../core/tools/chooser/rectangle-object-chooser.js";
-import { createRandomCircleSubTree } from "../random-circle-creator-tool.js";
+import { createRandomCircleSubDAG } from "../random-circle-creator-tool.js";
 
 describe("whiteboard demo", () => {
   function createDemoBoard() {
@@ -398,12 +398,12 @@ describe("whiteboard demo", () => {
   test("demo 配置后空格键应创建随机圆对象并提交到白板", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const randomCircleSubTree = createRandomCircleSubTree({
+    const randomCircleSubDAG = createRandomCircleSubDAG({
       rootPath: "/keyboard/code/Space/create-circle",
       random: () => 0.5,
     });
 
-    configureWhiteboardDemo(board, monitor, { randomCircleSubTree });
+    configureWhiteboardDemo(board, monitor, { randomCircleSubDAG });
 
     board.signalsEventBus.emit("input", {
       to: "/main/keyboard",

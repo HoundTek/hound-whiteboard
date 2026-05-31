@@ -1,7 +1,7 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { createSubDAG } from "../../devices/devices-dag.js";
-import { createHandoffSubTree } from "../../prefixs/handoff-handler.js";
+import { createHandoffSubDAG } from "../../prefixs/handoff-handler.js";
 import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
@@ -328,7 +328,7 @@ describe("Board input flow", () => {
     // 直接用 handoff 子树，不经过 mouse device 路由
     monitor.mountSubDAG(
       "",
-      createHandoffSubTree({
+      createHandoffSubDAG({
         rootPath: "workflow",
         first: creatorTool,
         second: new CommonObjectModifierTool(),
@@ -418,7 +418,7 @@ describe("Board input flow", () => {
 
     monitor.mountSubDAG(
       "",
-      createHandoffSubTree({
+      createHandoffSubDAG({
         rootPath: "choose-and-modify",
         first: chooserTool,
         second: new CommonObjectModifierTool(),

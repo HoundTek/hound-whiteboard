@@ -9,9 +9,9 @@ export { createPrefixNodeHandler } from "./handler.js";
 export { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
 export { createRepeatorPrefixHandler } from "./repeator-handler.js";
 export {
-  createHandoffSubTree,
+  createHandoffSubDAG,
   wrapCreatorForHandoff,
   wrapFirstForHandoff,
-  wrapSubTreeForHandoff,
+  wrapSubDAGForHandoff,
 } from "./handoff-handler.js";
 export { createDragAnchorPrefixHandler } from "./drag-anchor-handler.js";
