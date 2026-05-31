@@ -79,21 +79,28 @@ const device = builder
 当前 builder 用显式节点和显式边描述链路。例如随机圆 workflow 可表达为：
 
 ```js
-const builder = createSubDAG("/keyboard/code/Space/create-circle");
+// workflow 子树统一放在 /workflows/ 下
+const builder = createSubDAG("/workflows/create-circle");
 const root = builder.node().prefix(randomPrefixHandler).defaultRoute("params");
 const params = builder
   .node()
   .prefix(circleParamPrefixHandler)
-  .defaultRoute("tool");
+  .defaultRoute("circle-creator");
 const tool = builder.node().tool(circleTool);
 
 builder.edge("params", root, params);
-builder.edge("tool", params, tool);
+builder.edge("circle-creator", params, tool);
 
 const workflow = builder.build();
 ```
 
-## 设备与工具的分工
+然后通过 `addEdge` 将键位节点连接到工具子树：
+
+```js
+monitor.addEdge("/keyboard/code/Space", "create-circle", "/workflows/create-circle");
+```
+
+## 设备与 Workflow 的分工
 
 设备负责：
 
@@ -102,7 +109,7 @@ const workflow = builder.build();
 - 决定输入应进入哪些设备子节点
 - 在需要时给下游追加只读 context，例如 `board`、`monitor` 或局部回调
 
-工具负责：
+workflow 负责：
 
 - 消费已经稳定的设备信号
 - 修改白板对象、视口或交互状态
@@ -157,7 +164,7 @@ monitor.mountSubDAG("/presentation", createKeyboardDevice());
 它们的共同特点是：
 
 - 根节点只做设备态更新与初始分流
-- 业务工具位于显式的 `/tool` 叶子
+- 设备通过 `defaultRoute` + 出边连接到 `/<monitorId>/workflows/` 下的 workflow 节点
 - 设备状态通过 `expose()` 对外暴露
 - debugger 的根节点是修饰节点语义，用于记录经过该节点的信号并继续下传
 

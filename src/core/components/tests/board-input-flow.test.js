@@ -90,8 +90,10 @@ describe("Board input flow", () => {
     monitor.mountSubDAG("", emptyBuilder.build());
 
     const mountResults = board.signalsEventBus.emit("mount", {
-      to: "/main/sample-device/tool",
-      tool,
+      monitorId: "main",
+      name: "sample-device-tool",
+      workflow: tool,
+      edges: [{ from: "/sample-device", edge: "tool" }],
     });
 
     expect(mountResults).toHaveLength(1);
@@ -114,7 +116,9 @@ describe("Board input flow", () => {
     );
 
     const umountResults = board.signalsEventBus.emit("umount", {
-      to: "/main/sample-device/tool",
+      monitorId: "main",
+      name: "sample-device-tool",
+      edges: [{ from: "/sample-device", edge: "tool" }],
     });
 
     expect(umountResults).toEqual([true]);
@@ -217,8 +221,10 @@ describe("Board input flow", () => {
 
     monitor.mountSubDAG("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary/tool",
-      tool,
+      monitorId: "main",
+      name: "primary-stroke",
+      workflow: tool,
+      edges: [{ from: "/mouse/primary", edge: "tool" }],
     });
 
     board.signalsEventBus.emit("input", {
@@ -286,8 +292,10 @@ describe("Board input flow", () => {
     monitor.mountSubDAG("", createMouseDevice());
 
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary/tool",
-      tool,
+      monitorId: "main",
+      name: "primary-stroke",
+      workflow: tool,
+      edges: [{ from: "/mouse/primary", edge: "tool" }],
     });
 
     board.signalsEventBus.emit("input", {
@@ -479,8 +487,10 @@ describe("Board input flow", () => {
 
     monitor.mountSubDAG("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary/tool",
-      tool,
+      monitorId: "main",
+      name: "primary-polygon",
+      workflow: tool,
+      edges: [{ from: "/mouse/primary", edge: "tool" }],
     });
 
     board.signalsEventBus.emit("input", {

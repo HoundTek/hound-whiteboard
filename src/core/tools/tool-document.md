@@ -117,23 +117,27 @@ Tool 与 prefix 可以在同一条链路上协作，但边界不同：
 
 ## 挂载方式
 
-当前推荐把工具挂在显式叶子路径上，例如：
+当前推荐把工具作为 workflow 入口挂在 `/<monitorId>/workflows/` 下，再通过设备节点的出边连接过去，例如：
 
 ```js
-monitor.mountTool("/mouse/pointer/tool", pointerTool);
-monitor.mountTool("/keyboard/code/KeyW/tool", moveTool);
+monitor.mountWorkflow("/workflows/pointer", pointerTool);
+monitor.mountWorkflow("/workflows/move", moveTool);
+
+monitor.addEdge("/mouse/pointer", "tool", "/workflows/pointer");
+monitor.addEdge("/keyboard/code/KeyW", "tool", "/workflows/move");
 ```
 
 或直接对 DevicesDAG 调用：
 
 ```js
-dag.mountTool("/monitor/main/mouse/pointer/tool", pointerTool, {
+dag.mountWorkflow("/monitor/main/workflows/pointer", pointerTool, {
   board,
   monitor,
 });
+dag.addEdge("/monitor/main/mouse/pointer", "tool", "/monitor/main/workflows/pointer");
 ```
 
-`mountTool()` 内部会使用 `tool.createProcessor()` 作为 handler，并在卸载时调用 `tool.umount()`。
+`mountWorkflow()` 在挂载单个 Tool 时，内部会使用 `tool.createProcessor()` 作为 handler，并在卸载时调用 `tool.umount()`。
 
 ## 子类约定
 

@@ -99,14 +99,14 @@ class PropertyAwareCircleCreator extends CircleCreatorTool {
  *
  * @example
  *   const subTree = createRandomCircleSubTree({
- *     rootPath: "/keyboard/tools/random-circle",
+ *     rootPath: "/workflows/random-circle",
  *     minRadius: 20,
  *     maxRadius: 80,
  *   });
- *   monitor.mountSubDAG("", subTree);
+ *   monitor.mountWorkflow("/workflows/random-circle", subTree);
  */
 function createRandomCircleSubTree(options = {}) {
-  const rootPath = options.rootPath ?? "/random-circle";
+  const rootPath = options.rootPath ?? "/workflows/create-circle";
   const random =
     typeof options.random === "function" ? options.random : Math.random;
   const minRadius = options.minRadius ?? 12;

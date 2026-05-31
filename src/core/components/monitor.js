@@ -894,24 +894,24 @@ class Monitor {
   }
 
   /**
-   * 在白板级设备图中运行时挂载工具。
-   * @param {string} path - 工具叶子路径（相对于显示器根）
-   * @param {import("../tools/tool.js").Tool} tool - 要挂载的工具
+   * 在白板级设备图中运行时挂载 workflow。
+   * @param {string} path - workflow 路径（相对于显示器根）
+    * @param {import("../tools/tool.js").Tool|import("../devices/devices-dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
    */
-  mountTool(path, tool) {
-    this.devicesDAG.mountTool(joinPath(this.monitorId, path), tool, {
+  mountWorkflow(path, workflow) {
+    return this.devicesDAG.mountWorkflow(joinPath(this.monitorId, path), workflow, {
       board: this.board,
       monitor: this,
     });
   }
 
   /**
-   * 在白板级设备图中运行时卸载工具叶子节点。
-   * @param {string} path - 工具叶子路径（相对于显示器根）
+   * 在白板级设备图中运行时卸载 workflow 节点。
+   * @param {string} path - workflow 路径（相对于显示器根）
    * @returns {boolean}
    */
-  unmountTool(path) {
-    return this.devicesDAG.unmountTool(joinPath(this.monitorId, path), {
+  unmountWorkflow(path) {
+    return this.devicesDAG.unmountWorkflow(joinPath(this.monitorId, path), {
       board: this.board,
       monitor: this,
     });

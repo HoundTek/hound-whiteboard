@@ -7,7 +7,7 @@
 - 输入子图用 `createSubDAG(rootPath)` 构建
 - 根节点只做分流
 - `defaultRoute` 只表示默认出边
-- 工具节点使用显式的 `/tool` 叶子路径
+- workflow 入口挂到 `/workflows/` 下，设备节点通过边连接到它
 
 ## 示例代码
 
@@ -43,10 +43,11 @@ const dag = new DevicesDAG();
 const tool = new PenTool();
 
 dag.mountSubDAG("/monitor/main", penSubDAG);
-dag.mountTool("/monitor/main/pen/pointer/tool", tool, {
+dag.mountWorkflow("/monitor/main/workflows/pen", tool, {
   board,
   monitor,
 });
+dag.addEdge("/monitor/main/pen/pointer", "tool", "/monitor/main/workflows/pen");
 
 const result = dag.dispatch({
   to: "/monitor/main/pen",
@@ -59,7 +60,7 @@ const result = dag.dispatch({
 1. 输入先到 `/monitor/main/pen`
 2. 根节点 handler 把包转发到相对路径 `pointer`
 3. `/monitor/main/pen/pointer` 没有 handler，但声明了 `defaultRoute: "tool"`
-4. 设备图自动把输入继续送到 `/monitor/main/pen/pointer/tool`
+4. 设备图沿 `tool` 出边把输入继续送到 workflow 入口，逻辑路由路径仍表现为 `/monitor/main/pen/pointer/tool`
 5. `PenTool.process()` 消费最终信号包
 
 ## 带状态的写法
@@ -79,7 +80,7 @@ dag.mount("/monitor/main/pen", (packet, context) => {
 
 - 根节点做设备态更新与粗分流
 - 子节点做稳定语义拆分
-- 工具节点只挂在显式叶子路径
+- workflow 入口统一挂在 `/workflows/` 下
 - 跨节点共享状态走 `getNodeState` 和 `setNodeState`
 - 运行时更新节点走 `configureNode()`，不要直接改内部对象
 

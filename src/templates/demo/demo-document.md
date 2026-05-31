@@ -74,14 +74,14 @@
 
 ## 当前说明
 
-目前 demo 侧重于信号路由和工具挂载验证，已经符合当前工具体系的设计约定：
+目前 demo 侧重于信号路由和 workflow 验证，已经符合当前工具体系的设计约定：
 
-- 大多数工具通过 `mount` 事件运行时挂载，并显式落到 `/tool` 叶子路径
-- 随机圆 workflow 通过结构化设备定义挂到 `/keyboard/code/Space/create-circle` 局部修饰节点链路
+- 所有 workflow 通过 `mount` 事件统一挂载到 `/<monitorId>/workflows/` 下，设备节点通过 `addEdge` 连接
+- 随机圆 workflow 通过 `mountWorkflow` 挂载到 `/workflows/create-circle`，`code/Space` 以 `"create-circle"` 边接入
 - 设备节点负责把硬件输入转成语义信号
 - 修饰节点负责参数注入、前置转换和子节点路由
 - creator / chooser 与 modifier 的上下文共享以当前节点 `state` 为边界，handoff 优先通过回调和对象桥接完成
-- 视口工具、调试工具、WASD 工具都按键位后代分布，符合当前单向下传模型
+- 视口 workflow、调试 workflow、WASD workflow 都通过 `addEdge` 多前驱模式连接
 - 屏幕坐标应在 Monitor 层转换为世界坐标后进入工具链
 
 如果需要进一步丰富 demo，可继续增加更多 workflow 观测输出，以及 creator → modifier 同一路径的协同示例。

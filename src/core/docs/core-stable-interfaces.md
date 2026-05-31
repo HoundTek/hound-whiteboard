@@ -20,8 +20,8 @@
 - `setNodeState(pathOrId, state)`
 - `mount(path, handler, options)`
 - `configureNode(path, options)`
-- `mountTool(path, tool, toolContext)`
-- `unmountTool(path, accumulatedContext)`
+- `mountWorkflow(path, workflow, workflowContext)`
+- `unmountWorkflow(path, accumulatedContext)`
 - `mountSubDAG(basePath, subDAGDefinition, mountContext)`
 - `unmount(path, accumulatedContext)`
 - `dispatch(signalPacket, accumulatedContext)`
@@ -30,7 +30,9 @@
 
 - 节点处理统一使用 `handler`
 - `defaultRoute` 是当前节点的默认出边名
-- 工具挂载使用显式叶子路径
+- **workflow 统一挂载到 `/<monitorId>/workflows/` 下**，通过 `addEdge` 与设备节点连接
+- `mountWorkflow` 的第一个参数是 workflow 在 `/workflows/` 下的路径，不再是设备子路径
+- `workflow` 可以是单个 Tool，也可以是单源 `SubDAGDefinition`
 - 结构化设备定义使用 `rootPath + nodes + edges`
 - `handler` 返回统一规整为 `{ packets, context, redirect, stop }`
 - `packets.to` 只描述从当前节点继续向下的子路径
@@ -108,8 +110,8 @@
 
 - `mountSubDAG(subDAGDefinition)`
 - `mountSubDAG(pathPrefix, subDAGDefinition)`
-- `mountTool(path, tool)`
-- `unmountTool(path)`
+- `mountWorkflow(path, workflow)`
+- `unmountWorkflow(path)`
 - 通过 `board.devicesDAG` 读取当前输入图
 
 稳定语义：
@@ -122,8 +124,8 @@
 `Board.signalsEventBus` 侧当前稳定的输入相关事件包括：
 
 - `input`：分发输入包到 `Board.devicesDAG.dispatch()`
-- `mount`：挂载设备或工具节点
-- `umount`：卸载设备或工具节点
+- `mount`：挂载设备或 workflow
+- `umount`：卸载设备或 workflow
 - `configure`：运行时更新节点 `handler`、`defaultRoute`、`umount`
 
 这些事件的 `to` 仍然是绝对路径，但节点内部继续返回的 `packets.to` 应视为局部子路径。

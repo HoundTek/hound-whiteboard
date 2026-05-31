@@ -36,7 +36,12 @@ describe("keyboard-device", () => {
     const tool = new CollectingTool();
 
     const mountedNodes = ddag.mountSubDAG("/monitor", keyboardDevice);
-    ddag.mountTool("/monitor/keyboard/code/Space/tool", tool);
+    ddag.mountWorkflow("/monitor/workflows/space-tool", tool);
+    ddag.addEdge(
+      "/monitor/keyboard/code/Space",
+      "tool",
+      "/monitor/workflows/space-tool",
+    );
 
     expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
       "/monitor/keyboard",
@@ -317,8 +322,17 @@ describe("keyboard-device", () => {
     const tool = new CollectingTool();
 
     const mountedNodes = ddag.mountSubDAG("/monitor", keyboardDevice);
-    ddag.mountTool("/monitor/keyboard/code/KeyW/tool", tool);
-    ddag.mountTool("/monitor/keyboard/code/KeyD/tool", tool);
+    ddag.mountWorkflow("/monitor/workflows/move-tool", tool);
+    ddag.addEdge(
+      "/monitor/keyboard/code/KeyW",
+      "tool",
+      "/monitor/workflows/move-tool",
+    );
+    ddag.addEdge(
+      "/monitor/keyboard/code/KeyD",
+      "tool",
+      "/monitor/workflows/move-tool",
+    );
 
     expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
       "/monitor/keyboard",

@@ -124,7 +124,7 @@ class Board {
 
   /**
    * 信道事件总线
-   * @description 把设备输入、工具挂载与节点配置请求分发到对应 monitor。
+   * @description 把设备输入、workflow 挂载与节点配置请求分发到对应 monitor。
    * @type {EventBus}
    */
   signalsEventBus;
@@ -592,28 +592,52 @@ class Board {
       }
     });
 
-    // mount 事件负责挂载工具到设备图
-    this.signalsEventBus.on("mount", ({ to, tool }) => {
-      const monitorId = to?.split("/")[1];
-      const monitor = this.monitors.get(monitorId);
-      if (!monitor) return false;
-      return this.devicesDAG.mountTool(to, tool, {
-        board: this,
-        monitor,
-      });
-    });
+    const resolveWorkflowPath = (monitorId, name) =>
+      `/${monitorId}/workflows/${name}`;
 
-    // umount 事件负责从设备图卸载工具
-    this.signalsEventBus.on("umount", ({ to }) => {
-      const monitorId = to?.split("/")[1];
-      const monitor = this.monitors.get(monitorId);
-      if (!monitor) return false;
-      return this.devicesDAG.unmountTool(to, {
-        board: this,
-        monitor,
-      });
-    });
+    // mount 事件负责挂载 workflow 到设备图。
+    this.signalsEventBus.on(
+      "mount",
+      ({ monitorId, name, workflow, edges = [] } = {}) => {
+        const monitor = this.monitors.get(monitorId);
+        if (!monitor || !name || !workflow) return false;
 
+        const workflowPath = resolveWorkflowPath(monitorId, name);
+        const mountedNode = this.devicesDAG.mountWorkflow(
+          workflowPath,
+          workflow,
+          {
+            board: this,
+            monitor,
+          },
+        );
+
+        for (const { from, edge } of edges) {
+          this.devicesDAG.addEdge(`/${monitorId}${from}`, edge, workflowPath);
+        }
+
+        return mountedNode;
+      },
+    );
+
+    // umount 事件负责从设备图卸载 workflow。
+    this.signalsEventBus.on(
+      "umount",
+      ({ monitorId, name, edges = [] } = {}) => {
+        const monitor = this.monitors.get(monitorId);
+        if (!monitor || !name) return false;
+
+        const workflowPath = resolveWorkflowPath(monitorId, name);
+        for (const { from, edge } of edges) {
+          this.devicesDAG.removeEdge(`/${monitorId}${from}`, edge);
+        }
+
+        return this.devicesDAG.unmountWorkflow(workflowPath, {
+          board: this,
+          monitor,
+        });
+      },
+    );
     // configure 事件负责更新设备图节点配置
     this.signalsEventBus.on("configure", ({ to, options }) => {
       const monitorId = to?.split("/")[1];

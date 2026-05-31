@@ -112,6 +112,20 @@ function isPlainObject(value) {
 }
 
 /**
+ * 判断一个值是否像 SubDAGDefinition。
+ * @param {any} value - 待判断值
+ * @returns {boolean}
+ */
+function isSubDAGDefinition(value) {
+  return (
+    isPlainObject(value) &&
+    value.nodes instanceof Map &&
+    Array.isArray(value.edges) &&
+    typeof value.rootNodeId === "number"
+  );
+}
+
+/**
  * 将 handler 的原始返回值规整为标准结果结构
  * @param {*} rawResult
  * @param {{ defaultTo?: string }} [options={}]
@@ -749,26 +763,37 @@ class DevicesDAG {
   }
 
   // -----------------------------------------------------------------------
-  // Tool 挂载
+  // Workflow 挂载
   // -----------------------------------------------------------------------
 
   /**
-   * 在指定路径节点挂载一个 Tool
+   * 在指定路径节点挂载一个 workflow 入口。
    * @param {string} path - 节点路径
-   * @param {import("../tools/tool.js").Tool} tool - 工具实例
-   * @param {Object} [toolContext={}] - 工具固定上下文
-   * @returns {DevicesDAGNode} 挂载后的节点
+   * @param {import("../tools/tool.js").Tool|SubDAGDefinition} workflow - workflow 入口实例或单源 workflow 子图
+   * @param {Object} [workflowContext={}] - workflow 固定上下文
+   * @returns {DevicesDAGNode|DevicesDAGNode[]} 挂载后的节点或节点列表
    */
-  mountTool(path, tool, toolContext = {}) {
+  mountWorkflow(path, workflow, workflowContext = {}) {
+    if (isSubDAGDefinition(workflow)) {
+      return this.mountSubDAG(
+        "/",
+        {
+          ...workflow,
+          rootPath: path,
+        },
+        workflowContext,
+      );
+    }
+
     const node = this.ensureNode(path);
 
     if (node.handler) {
       throw new Error(
-        `Cannot mount tool at "${path}": node already has a handler.`,
+        `Cannot mount workflow at "${path}": node already has a handler.`,
       );
     }
 
-    const processor = tool.createProcessor(toolContext);
+    const processor = workflow.createProcessor(workflowContext);
 
     node.handler = processor;
     node.semantics = { ...node.semantics, tool: true };
@@ -781,7 +806,9 @@ class DevicesDAG {
         // 静默吞掉 dispose 错误
       }
       try {
-        tool.umount?.(tool.createDeviceContext(handlerContext, toolContext));
+        workflow.umount?.(
+          workflow.createDeviceContext(handlerContext, workflowContext),
+        );
       } catch {
         // 静默吞掉 umount 错误
       }
@@ -1286,11 +1313,11 @@ class DevicesDAG {
   // -----------------------------------------------------------------------
 
   /**
-   * 卸载指定路径的工具节点（便捷方法）
-   * @param {string} path - 工具节点路径
+   * 卸载指定路径的 workflow 节点（便捷方法）
+   * @param {string} path - workflow 节点路径
    * @param {Object} [context={}] - 卸载上下文
    */
-  unmountTool(path, context = {}) {
+  unmountWorkflow(path, context = {}) {
     return this.unmount(path, context);
   }
 

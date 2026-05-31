@@ -32,11 +32,11 @@ Board 负责：
 
 - 拥有唯一 DevicesDAG 实例
 - 监听 input、mount、umount、configure 事件
-- 把挂载或分发所需的固定上下文传给 dispatch、mountTool、mountSubDAG
+- 把挂载或分发所需的固定上下文传给 dispatch、mountWorkflow、mountSubDAG
 
 Monitor 负责：
 
-- 作为某个视口边界提供 mountSubDAG、mountTool、unmountTool 便捷入口
+- 作为某个视口边界提供 mountSubDAG、mountWorkflow、unmountWorkflow 便捷入口
 - 通过 board.devicesDAG 代理设备与工具挂载
 - 不再持有独立设备图实例
 
@@ -88,29 +88,21 @@ Tool 负责：
 
 ## 修饰节点与工具阶段
 
-业务工具现在要求挂在显式叶子路径上，例如：
+业务 workflow 统一挂载到 `/<monitorId>/workflows/` 路径下，通过有向边与设备节点连接：
 
-- /mouse/pointer/tool
-- /keyboard/code/KeyW/tool
-- /keyboard/code/Space/create-circle/params/tool
+- `/<monitorId>/workflows/primary-stroke`（鼠标主笔画 workflow）
+- `/<monitorId>/workflows/wasd-move`（WASD 坐标 workflow）
+- `/<monitorId>/workflows/create-circle`（随机圆 workflow）
 
-如果某条链路需要“先前置处理，再交给工具”，推荐插入修饰节点，例如：
+设备节点通过 `addEdge` 把信号路由到 `/workflows/` 下的 workflow 节点：
 
-- /keyboard/code/Space/create-circle
-- /keyboard/code/Space/create-circle/params
-- /keyboard/code/Space/create-circle/params/tool
+```
+/<monitorId>/mouse/primary --"tool"--> /<monitorId>/workflows/primary-stroke
+/<monitorId>/keyboard/code/KeyW --"wasd"--> /<monitorId>/workflows/wasd-move
+/<monitorId>/keyboard/code/Space --"create-circle"--> /<monitorId>/workflows/create-circle
+```
 
-这带来三个直接收益：
-
-- 工具归属路径稳定，不依赖隐式挂载约定
-- 修饰节点可以承接参数注入、多工具路由和状态机
-- handoff 这类“向上完成通知”也可以通过累积上下文中的回调完成，而不是依赖冒泡信号
-
-这里有一条新的结构约束：
-
-- 键位节点下的业务链路更推荐直接挂在 `code/<Key>/...` 后代
-- 子节点不再依赖 `../../tools/...` 这类跨层回跳
-- `/keyboard/tools/...` 仍可作为显式公共子树存在，但它不再是键位节点向上跳回的默认目标
+如果某条链路需要"先前置处理，再交给 workflow"，这些修饰节点应作为 workflow 子树的一部分放在 `/workflows/` 下。
 
 ## 动态配置
 
@@ -129,7 +121,7 @@ Tool 负责：
 
 - 设备根节点做粗分流，复杂业务逻辑交给工具
 - 需要记录、注入、路由、状态机时，优先引入修饰节点
-- 工具一律显式挂到 /tool 叶子
+- workflow 统一挂到 `/<monitorId>/workflows/` 下，通过 `addEdge` 与设备节点连接
 - 父子工具共享状态时，显式写入节点 state；短程只读协作则通过累积 context 追加
 - Monitor 侧只做挂载代理，不持有第二棵树
 

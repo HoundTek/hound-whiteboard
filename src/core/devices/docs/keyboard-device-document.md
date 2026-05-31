@@ -19,12 +19,14 @@
 - `/keyboard/tools`：仍保留的公共工具域
 - `/keyboard/code/<KeyCode>`：按具体 code 分出来的键位节点
 
-在当前的设备图体系下，更推荐把键位级业务链路直接挂在 `code/<KeyCode>` 的后继，例如：
+workflow 节点统一挂载到 `/<monitorId>/workflows/` 下，通过有向边与键位节点连接：
 
-- `/keyboard/code/KeyW` → 通过 `wasd` 边 → `/keyboard/wasd-move`
-- `/keyboard/code/Space/create-circle/params/tool`
+- `/keyboard/code/KeyW` —`"wasd"`→ `/<monitorId>/workflows/wasd-move`
+- `/keyboard/code/Space` —`"create-circle"`→ `/<monitorId>/workflows/create-circle`
 
-对于需要多个键位汇聚到同一个 Tool 的场景（如 WASD 坐标），应使用 **DAG 多前驱模式**：每个键位节点各出一条边，指向同一个共享工具节点。
+对于需要多个键位汇聚到同一个 workflow 的场景（如 WASD 坐标），应使用 **DAG 多前驱模式**：每个键位节点各出一条同名边，汇聚到同一个 `/workflows/` 下的共享 workflow 节点。
+
+**不再推荐**把 workflow 直接挂在 code 节点的后代路径（如 `code/KeyW/tool`），因为这会使得 workflow 与设备耦合在一起，并且多入边汇聚需要额外的间接层。
 
 ## 信号语义
 
@@ -84,7 +86,7 @@ const keyboard = createKeyboardDevice({
 
 ## ⚠️ 一个 Tool 实例只能挂载到一个节点
 
-**不要将同一个 Tool 实例通过 `mountTool` 挂载到多个不同的 DAG 节点上。**
+**不要将同一个 Tool 实例通过 `mountWorkflow` 挂载到多个不同的 DAG 节点上。**
 
 原因：
 
@@ -93,23 +95,23 @@ const keyboard = createKeyboardDevice({
 - 不同路径的信号会在彼此不知情的情况下覆盖对方的累积结果
 - 卸载时也会导致问题（`unmount` 钩子只在第一个节点卸载时触发一次）
 
-**正确做法**：创建一个共享节点，然后通过 `addEdge` 让多条路径汇聚到它：
+**正确做法**：创建一个共享 workflow 节点，然后通过 `addEdge` 让多条路径汇聚到它：
 
 ```js
-// ✅ 正确：一个 Tool 实例 → 一个共享节点
-monitor.mountTool("/keyboard/wasd-move", wasdTool);
+// ✅ 正确：一个 Tool 实例 → /workflows/ 下的一个共享节点
+monitor.mountWorkflow("/workflows/wasd-move", wasdTool);
 
 // 多条路径通过同名边汇聚到共享节点
-monitor.addEdge("/keyboard/code/KeyW", "wasd", "/keyboard/wasd-move");
-monitor.addEdge("/keyboard/code/KeyA", "wasd", "/keyboard/wasd-move");
-monitor.addEdge("/keyboard/code/KeyS", "wasd", "/keyboard/wasd-move");
-monitor.addEdge("/keyboard/code/KeyD", "wasd", "/keyboard/wasd-move");
+monitor.addEdge("/keyboard/code/KeyW", "wasd", "/workflows/wasd-move");
+monitor.addEdge("/keyboard/code/KeyA", "wasd", "/workflows/wasd-move");
+monitor.addEdge("/keyboard/code/KeyS", "wasd", "/workflows/wasd-move");
+monitor.addEdge("/keyboard/code/KeyD", "wasd", "/workflows/wasd-move");
 ```
 
 ```js
 // ❌ 错误：同一个 Tool 实例挂在多个节点上
 for (const code of ["KeyW", "KeyA", "KeyS", "KeyD"]) {
-  monitor.mountTool(`/keyboard/code/${code}/tool`, wasdTool); // 禁止！
+  monitor.mountWorkflow(`/keyboard/code/${code}/tool`, wasdTool); // 禁止！
 }
 ```
 
@@ -121,32 +123,38 @@ for (const code of ["KeyW", "KeyA", "KeyS", "KeyD"]) {
 monitor.mountSubDAG("", createKeyboardDevice());
 ```
 
-单键位工具直接挂在对应 code 节点下：
+所有 workflow 统一挂在 `/<monitorId>/workflows/` 下，通过 `addEdge` 与键位节点连接：
 
 ```js
-monitor.mountTool("/keyboard/code/Space/create-circle/params/tool", circleTool);
-```
+// 1. 挂载 prefix-tool workflow 到 /workflows/ 下
+monitor.mountWorkflow("/workflows/wasd-move", wasdTool);
+monitor.mountWorkflow("/workflows/create-circle", createCircleSubDAG);
 
-多键位汇聚工具推荐 DAG 多前驱模式：
+// 2. 每个键位添加有向边指向 workflow 节点
+monitor.addEdge("/keyboard/code/KeyW", "wasd", "/workflows/wasd-move");
+monitor.addEdge("/keyboard/code/KeyA", "wasd", "/workflows/wasd-move");
+monitor.addEdge(
+  "/keyboard/code/Space",
+  "create-circle",
+  "/workflows/create-circle",
+);
 
-```js
-// 1. 挂载工具到共享节点（一次）
-monitor.mountTool("/keyboard/wasd-move", wasdTool);
-
-// 2. 每个键位添加同名边指向共享节点
-monitor.addEdge("/keyboard/code/KeyW", "wasd", "/keyboard/wasd-move");
-
-// 3. 键位 handler 返回该边名即可
+// 3. 键位 handler 返回对应边名
 // handler: return { to: "wasd", signals: [...] }
 ```
+
+即使是单键位 workflow（如 Space 触发随机圆），也统一走 `/workflows/` + `addEdge` 模式，保持一致性。
+
+`mountWorkflow` 的第一个参数现在是 workflow 在 `/workflows/` 下的路径，不再是设备子路径。
 
 ## 设计要点
 
 - Monitor 是键盘设备的归属边界
 - 键盘设备只处理已经确定属于当前 Monitor 的输入
 - 根节点负责更新设备状态并生成分流目标
-- code 节点负责做键位级路由，复杂交互优先继续下传到它自己的后代
-- 需要跨多个键位复用同一个 Tool 时，使用 **DAG 多前驱模式**（`addEdge` → 共享节点），而不是把同一实例挂在多个节点上
+- code 节点负责做键位级路由，通过 `addEdge` 把信号转发到 `/workflows/` 下的 workflow 节点
+- 所有 workflow 统一挂到 `/<monitorId>/workflows/` 下，即使只有一个键位触发，也走 `addEdge` 保持一致性
+- 需要跨多个键位复用同一个 Tool 时，使用 **DAG 多前驱模式**（`addEdge` → `/workflows/` 下的共享节点），而不是把同一实例挂在多个节点上
 - 💡 `addEdge` 支持多对一汇聚，这是 DAG 的核心能力
 
 ## 相关文档

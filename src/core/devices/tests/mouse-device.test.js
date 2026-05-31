@@ -252,18 +252,21 @@ describe("mouse-device", () => {
     }
 
     ddag.mountSubDAG("/monitor", mouseDevice);
-    ddag.mountTool(
-      "/monitor/mouse/pointer/tool",
+    ddag.mountWorkflow(
+      "/monitor/workflows/pointer-handled",
       new MappingTool("pointer-handled"),
     );
-    ddag.mountTool(
-      "/monitor/mouse/primary/tool",
+    ddag.addEdge("/monitor/mouse/pointer", "tool", "/monitor/workflows/pointer-handled");
+    ddag.mountWorkflow(
+      "/monitor/workflows/primary-handled",
       new MappingTool("primary-handled"),
     );
-    ddag.mountTool(
-      "/monitor/mouse/wheel/tool",
+    ddag.addEdge("/monitor/mouse/primary", "tool", "/monitor/workflows/primary-handled");
+    ddag.mountWorkflow(
+      "/monitor/workflows/wheel-handled",
       new MappingTool("wheel-handled"),
     );
+    ddag.addEdge("/monitor/mouse/wheel", "tool", "/monitor/workflows/wheel-handled");
 
     expect(
       toPlainPackets(

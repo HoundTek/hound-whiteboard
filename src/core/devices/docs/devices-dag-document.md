@@ -22,7 +22,7 @@ DevicesDAG 负责：
 - 路径解析与逐段下传
 - `defaultRoute` 的缺省继续链路
 - 运行时节点配置更新
-- 工具节点和结构化子图的挂载与卸载
+- workflow 节点和结构化子图的挂载与卸载
 - 为 `handler` 提供统一的平面上下文与节点状态接口
 - 在多路径可达时，保证一次分发只沿当前命中的那条路径累积上下文
 
@@ -112,35 +112,71 @@ DevicesDAG 不负责：
 当前推荐的挂载方式有三类：
 
 - `mount(path, handler, options)`：挂载普通运行时节点
-- `mountTool(path, tool, toolContext)`：挂载显式工具叶子
+- `mountWorkflow(path, workflow, workflowContext)`：挂载 workflow 节点
 - `mountSubDAG(basePath, subDAGDefinition, mountContext)`：挂载结构化输入子图
 
-工具节点路径要求显式写到最终叶子，例如：
+### Workflow 挂载约定
 
-- `/monitor/main/mouse/pointer/tool`
-- `/monitor/main/keyboard/code/KeyW/tool`
-- `/monitor/main/keyboard/code/Space/create-circle/params/tool`
+workflow 节点统一挂载到 `/<monitorId>/workflows/` 路径下，通过有向边与设备节点连接。
+
+这里的 workflow 有两种等价形态：
+
+- 单个 Tool 入口
+- 由 prefix + tool 组成的单源 SubDAG
+
+这样做的好处：
+
+- **生命周期解耦**：workflow 不挂在设备子树内，不会随设备卸载被意外释放
+- **统一管理**：遍历 `/workflows/` 即可拿到当前 monitor 的所有 workflow
+- **多前驱自然**：多键位或多通道汇聚到同一 workflow 时，多入边是 DAG 原生能力
+- **子图封装**：prefix + tool 的整体工作流可以完整地埋到 `/workflows/` 下
+
+设备节点通过 `addEdge` 与 workflow 节点连接：
+
+- **1:1** 场景：设备节点声明 `defaultRoute`，通过出边指向 `/workflows/` 下的 workflow 节点
+- **多:1** 场景：各设备节点各出一条同名边，汇聚到同一个 workflow 节点
+- **1:多** 场景：由设备节点 handler 做 fan-out 分发
+
+典型映射：
+
+```
+/<monitorId>/mouse/primary --"tool"--> /<monitorId>/workflows/primary-stroke
+/<monitorId>/keyboard/code/KeyW --"wasd"--> /<monitorId>/workflows/wasd-move
+/<monitorId>/keyboard/code/Space --"create-circle"--> /<monitorId>/workflows/create-circle
+```
+
+`mountWorkflow` 的第一个参数现在是 workflow 在 `/workflows/` 下的路径，不再是设备子路径。设备节点与 workflow 的连接通过 `addEdge` 在 wiring 层完成。
 
 ## 结构化子图定义
 
 结构化子图统一为 `rootPath + nodes + edges`：
 
 ```js
-const builder = createSubDAG("/keyboard/code/Space/create-circle");
+const builder = createSubDAG("/workflows/create-circle");
 const root = builder.node().prefix(randomPrefixHandler).defaultRoute("params");
 const params = builder
   .node()
   .prefix(circleParamPrefixHandler)
-  .defaultRoute("tool");
+  .defaultRoute("circle-creator");
 const tool = builder.node().tool(circleTool);
 
 builder.edge("params", root, params);
-builder.edge("tool", params, tool);
+builder.edge("circle-creator", params, tool);
 
 const subDAG = builder.build();
 ```
 
-这里表达的是一条真正局部的向下链路：`Space` 键位节点下挂一个随机圆 workflow，再由末端工具消费稳定信号。
+这个子图通过一条边挂在 `code/Space` 下：
+
+```js
+monitor.addEdge(
+  "/keyboard/code/Space",
+  "create-circle",
+  "/workflows/create-circle",
+);
+```
+
+键位节点收到的 `trigger` 信号会沿 `create-circle` 边进入 workflow 子树，经 prefix 处理后由末端工具消费。
 
 ## 设计约束
 

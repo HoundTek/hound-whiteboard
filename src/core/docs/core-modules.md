@@ -110,7 +110,7 @@
 
 - 设备输入进入 `SignalPacket`
 - `Board.signalsEventBus` 分发到目标 `Monitor`
-- `DevicesDAG` 路由到末端工具节点
+- `DevicesDAG` 路由到末端 workflow 节点
 - creator 工具默认从 `Board` 申请 `objectId`
 - creator 工具直接消费输入包中的世界坐标，并默认从 `Monitor` 解析 `ownerChunkId`
 - 新对象先进入 `ActiveObjectManager.add()`，完成后再通过 `apply()` 回写白板
@@ -136,7 +136,7 @@
 - `DevicesDAGNode` 只表示信号处理单元，核心字段是 `handler`、`defaultRoute`、`umount` 与 `state`。
 - 结构化输入子图已经统一为 `rootPath + nodes + edges` 结构，推荐通过 `createSubDAG(rootPath).build()` 生成。
 - 业务侧挂载设备时应优先从 `Monitor` 的 `mountSubDAG()` 进入，再由 `Monitor` 代理到 `Board` 持有的唯一 `DevicesDAG`。
-- 输入从 Board 到 Monitor、再到 DevicesDAG 与工具节点的完整链路，见 `core-input-flow.md`。
+- 输入从 Board 到 Monitor、再到 DevicesDAG 与 workflow 节点的完整链路，见 `core-input-flow.md`。
 - DOM/Pointer/Touch 到 `SignalPacket` 的编码约定，见 `core-input-encoding.md`。
 - 当前建议冻结的阶段性稳定接口，见 `core-stable-interfaces.md`。
 

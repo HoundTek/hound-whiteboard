@@ -429,8 +429,8 @@ describe("DevicesDAG", () => {
     });
   });
 
-  describe("mount/umount Tool", () => {
-    test("mountTool 应将 Tool 挂载到指定路径节点", () => {
+  describe("mount/umount Workflow", () => {
+    test("mountWorkflow 应将 workflow 挂载到指定路径节点", () => {
       const dag = new DevicesDAG();
       const mockTool = {
         createProcessor() {
@@ -446,13 +446,16 @@ describe("DevicesDAG", () => {
         umount: jest.fn(),
       };
 
-      dag.mountTool("/mouse/tool", mockTool);
-      const node = dag.getNode("/mouse/tool");
+      dag.mountWorkflow("/workflows/test-workflow", mockTool);
+      const node = dag.getNode("/workflows/test-workflow");
       expect(node.handler).toBeInstanceOf(Function);
       expect(node.semantics.tool).toBe(true);
 
-      dag.dispatch({ to: "/mouse/tool", signals: [{ type: "click" }] });
-      expect(node.handler.lastPath).toBe("/mouse/tool");
+      dag.dispatch({
+        to: "/workflows/test-workflow",
+        signals: [{ type: "click" }],
+      });
+      expect(node.handler.lastPath).toBe("/workflows/test-workflow");
     });
 
     test("unmount 应执行卸载钩子并清理子图", () => {
@@ -488,15 +491,14 @@ describe("DevicesDAG", () => {
 
     test("toString 应包含已挂载节点和边", () => {
       const dag = new DevicesDAG();
-      dag.ensureNode("/mouse/primary/tool");
-      dag.configureNode("/mouse/primary/tool", {
+      dag.ensureNode("/workflows/test-workflow");
+      dag.configureNode("/workflows/test-workflow", {
         semantics: { tool: true },
       });
 
       const str = dag.toString();
-      expect(str).toContain("mouse");
-      expect(str).toContain("primary");
-      expect(str).toContain("tool");
+      expect(str).toContain("workflows");
+      expect(str).toContain("test-workflow");
       expect(str).toContain("[tool]");
     });
 

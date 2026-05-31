@@ -44,12 +44,13 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "Digit4",
 ]);
 
-const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
-  MOVE: "tool",
+const DEMO_WORKFLOW_NAMES = Object.freeze({
+  PRIMARY_STROKE: "primary-stroke",
+  SECONDARY_CHOOSER: "secondary-chooser",
   RANDOM_CIRCLE: "create-circle",
-  RANDOM_CIRCLE_TOOL: "create-circle/tool",
-  DEBUG: "tool",
-  VIEWPORT: "tool",
+  WASD_MOVE: "wasd-move",
+  DEBUG: "debug",
+  VIEWPORT: "viewport",
 });
 
 const DEMO_VIEWPORT_CODES = Object.freeze([
@@ -86,37 +87,6 @@ const WASD_ROUTE_PRESETS = Object.freeze({
 });
 
 /**
- * 将键位编码转为安全的 URI 路径片段
- * @param {any} code - 原始键位编码
- * @returns {string} URI 编码后的键位字符串
- */
-function encodeKeyboardCode(code) {
-  return encodeURIComponent(String(code));
-}
-
-/**
- * 获取键盘键位的设备图路径
- * @param {any} code - 键位编码
- * @param {string} [childPath=""] - 子路径后缀
- * @returns {string} 完整设备图路径
- */
-function getKeyboardCodePath(code, childPath = "") {
-  const basePath = `/keyboard/code/${encodeKeyboardCode(code)}`;
-  return childPath ? `${basePath}/${childPath}` : basePath;
-}
-
-/**
- * 获取 Monitor 限定下的键盘键位设备图路径
- * @param {string|number} monitorId - 显示器 id
- * @param {any} code - 键位编码
- * @param {string} [childPath=""] - 子路径后缀
- * @returns {string} 带 Monitor 前缀的完整设备图路径
- */
-function getMonitorKeyboardCodePath(monitorId, code, childPath = "") {
-  return `/${monitorId}${getKeyboardCodePath(code, childPath)}`;
-}
-
-/**
  * 为指定键位列表创建空配置映射
  * @param {string[]} [codes=[]] - 键位编码列表
  * @returns {Record<string, {}>} 路径 -> 空配置的映射
@@ -129,11 +99,11 @@ function createKeyboardNodeConfigs(codes = []) {
 
 /**
  * 构建键盘触发信号转发节点配置
- * @description 过滤出 trigger 信号并转发到指定工具路径，用于没有业务处理的简单键位路由。
- * @param {string} relativeToolPath - 相对工具路径（如 "tool" 或 "create-circle/tool"）
+ * @description 过滤出 trigger 信号并转发到指定出边，用于没有业务处理的简单键位路由。
+ * @param {string} routeName - 目标出边名
  * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
  */
-function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
+function buildKeyboardTriggerForwardNodeConfig(routeName) {
   return {
     handler(packet) {
       const triggerSignals = packet.signals.filter(
@@ -145,7 +115,7 @@ function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
       }
 
       return {
-        to: relativeToolPath,
+        to: routeName,
         signals: triggerSignals,
       };
     },
@@ -171,7 +141,7 @@ function buildViewportPositionNodeConfig(monitor, delta) {
       }
 
       return {
-        to: DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
+        to: "viewport",
         signals: triggerSignals.map((signal) => ({
           type: "position",
           context: {
@@ -208,7 +178,7 @@ function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
       }
 
       return {
-        to: DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
+        to: "viewport",
         signals: triggerSignals.map((signal) => ({
           type: "scale",
           context: {
@@ -240,7 +210,7 @@ function buildViewportFlushNodeConfig() {
       }
 
       return {
-        to: DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
+        to: "viewport",
         signals: triggerSignals.map((signal) => ({
           type: "flush",
           context: {
@@ -322,13 +292,14 @@ function buildKeyboardDebugNodeConfig(type, context = {}) {
 }
 
 /**
- * 配置白板 Demo 的完整设备图与工具绑定
+ * 配置白板 Demo 的完整设备图与 workflow 绑定
  * @description
- * 为指定 board 和 monitor 挂载鼠标/键盘设备子图，注册鼠标主/副工具、
- * WASD 坐标工具、视口控制工具、调试工具，以及所有键盘快捷键的信号路由。
+ * 为指定 board 和 monitor 挂载鼠标/键盘设备子图，注册 stroke、selector、
+ * WASD、viewport、debug、random-circle 等 workflow，以及所有键盘快捷键的信号路由。
  *
- * 工具挂载原则：
- * - 每个 Tool 实例只挂载到一个 DAG 节点（单实例单节点）
+ * Workflow 挂载原则：
+ * - 所有 workflow 统一挂到 `/<monitorId>/workflows/<name>` 下
+ * - 设备节点通过 addEdge 连接到 workflow 入口
  * - 多键位汇聚使用 addEdge 多前驱模式
  *
  * @param {import("../../core/components/board.js").Board} board - 白板实例
@@ -370,10 +341,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options.randomCircleSubTree ??
     options.randomCircleDevice ??
     createRandomCircleSubTree({
-      rootPath: getKeyboardCodePath(
-        "Space",
-        DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE,
-      ),
+      rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
     });
   const wasdCoordinateTool =
     options.wasdCoordinateTool ?? new WasdCoordinateTool();
@@ -397,43 +365,59 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   monitor.mountSubDAG("/keyboard", keyboardDevice);
 
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/mouse/primary/tool`,
-    tool: primaryStrokeTool,
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
+    workflow: primaryStrokeTool,
+    edges: [{ from: "/mouse/primary", edge: "tool" }],
   });
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/mouse/secondary/tool`,
-    tool: secondarySelectionTool,
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
+    workflow: secondarySelectionTool,
+    edges: [{ from: "/mouse/secondary", edge: "tool" }],
   });
   if (randomCircleSubTree) {
-    monitor.mountSubDAG("", randomCircleSubTree);
-  }
-  for (const code of Object.keys(wasdRoutePresets)) {
-    monitor.addEdge(`/keyboard/code/${code}`, "wasd", "/keyboard/wasd-move");
-  }
-  // 挂载共享 WASD 工具节点（一次），四个键通过 addEdge 聚合到同一个节点
-  monitor.mountTool("/keyboard/wasd-move", wasdCoordinateTool);
-  for (const code of DEMO_VIEWPORT_CODES) {
     effectiveBoard.signalsEventBus.emit("mount", {
-      to: getMonitorKeyboardCodePath(
-        monitor.monitorId,
-        code,
-        DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
-      ),
-      tool: monitorViewportTool,
+      monitorId: monitor.monitorId,
+      name: DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE,
+      workflow: randomCircleSubTree,
+      edges: [{ from: "/keyboard/code/Space", edge: "create-circle" }],
     });
   }
 
-  for (const code of DEMO_DEBUG_CODES) {
-    monitor.addEdge(`/keyboard/code/${code}`, "debug", "/keyboard/debug");
-  }
+  effectiveBoard.signalsEventBus.emit("mount", {
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.WASD_MOVE,
+    workflow: wasdCoordinateTool,
+    edges: Object.keys(wasdRoutePresets).map((code) => ({
+      from: `/keyboard/code/${code}`,
+      edge: "wasd",
+    })),
+  });
 
-  // 挂载共享 Debugger 工具节点（一次），多个调试键通过 addEdge 聚合到同一个节点
-  monitor.mountTool("/keyboard/debug", debugTool);
+  effectiveBoard.signalsEventBus.emit("mount", {
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.VIEWPORT,
+    workflow: monitorViewportTool,
+    edges: DEMO_VIEWPORT_CODES.map((code) => ({
+      from: `/keyboard/code/${code}`,
+      edge: "viewport",
+    })),
+  });
+
+  effectiveBoard.signalsEventBus.emit("mount", {
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.DEBUG,
+    workflow: debugTool,
+    edges: DEMO_DEBUG_CODES.map((code) => ({
+      from: `/keyboard/code/${code}`,
+      edge: "debug",
+    })),
+  });
+
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Space`,
-    options: buildKeyboardTriggerForwardNodeConfig(
-      DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE,
-    ),
+    options: buildKeyboardTriggerForwardNodeConfig("create-circle"),
   });
 
   for (const [code, vector] of Object.entries(wasdRoutePresets)) {
@@ -565,9 +549,9 @@ export {
   buildViewportScaleNodeConfig,
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
-  DEMO_KEYBOARD_TOOL_PATHS,
   DEMO_PRIMARY_STROKE_COLOR,
   DEMO_VIEWPORT_POSITION_STEP,
   DEMO_VIEWPORT_SCALE_FACTOR,
+  DEMO_WORKFLOW_NAMES,
   WASD_ROUTE_PRESETS,
 };
