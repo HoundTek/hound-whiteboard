@@ -24,6 +24,7 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "KeyA",
   "KeyS",
   "KeyD",
+  "KeyR",
   "KeyC",
   "KeyO",
   "KeyM",
@@ -44,12 +45,36 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
 ]);
 
 const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
-  MOVE: "tools/move/tool",
-  RANDOM_CIRCLE: "tools/create-circle",
-  RANDOM_CIRCLE_TOOL: "tools/create-circle/tool",
-  DEBUG: "tools/debug/tool",
-  VIEWPORT: "tools/viewport/tool",
+  MOVE: "tool",
+  RANDOM_CIRCLE: "create-circle",
+  RANDOM_CIRCLE_TOOL: "create-circle/tool",
+  DEBUG: "tool",
+  VIEWPORT: "tool",
 });
+
+const DEMO_VIEWPORT_CODES = Object.freeze([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Equal",
+  "Minus",
+  "NumpadAdd",
+  "NumpadSubtract",
+  "KeyR",
+]);
+
+const DEMO_DEBUG_CODES = Object.freeze([
+  "KeyC",
+  "KeyO",
+  "KeyM",
+  "KeyB",
+  "KeyT",
+  "Digit1",
+  "Digit2",
+  "Digit3",
+  "Digit4",
+]);
 
 const DEMO_VIEWPORT_POSITION_STEP = 200;
 const DEMO_VIEWPORT_SCALE_FACTOR = 0.5;
@@ -59,6 +84,25 @@ const WASD_ROUTE_PRESETS = Object.freeze({
   KeyS: Object.freeze({ x: 0, y: 1 }),
   KeyD: Object.freeze({ x: 1, y: 0 }),
 });
+
+function encodeKeyboardCode(code) {
+  return encodeURIComponent(String(code));
+}
+
+function getKeyboardCodePath(code, childPath = "") {
+  const basePath = `/keyboard/code/${encodeKeyboardCode(code)}`;
+  return childPath ? `${basePath}/${childPath}` : basePath;
+}
+
+function getMonitorKeyboardCodePath(monitorId, code, childPath = "") {
+  return `/${monitorId}${getKeyboardCodePath(code, childPath)}`;
+}
+
+function createKeyboardNodeConfigs(codes = []) {
+  return Object.fromEntries(
+    [...new Set(codes)].map((code) => [`/code/${code}`, {}]),
+  );
+}
 
 function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
   return {
@@ -91,7 +135,7 @@ function buildViewportPositionNodeConfig(monitor, delta) {
       }
 
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
+        to: DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
         signals: triggerSignals.map((signal) => ({
           type: "position",
           context: {
@@ -121,7 +165,7 @@ function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
       }
 
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
+        to: DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
         signals: triggerSignals.map((signal) => ({
           type: "scale",
           context: {
@@ -148,7 +192,7 @@ function buildViewportFlushNodeConfig() {
       }
 
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
+        to: DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
         signals: triggerSignals.map((signal) => ({
           type: "flush",
           context: {
@@ -184,7 +228,7 @@ function buildWasdNodeConfig(code, vector) {
       }
 
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
+        to: DEMO_KEYBOARD_TOOL_PATHS.MOVE,
         signals: movementSignals,
       };
     },
@@ -203,7 +247,7 @@ function buildKeyboardDebugNodeConfig(type, context = {}) {
       }
 
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.DEBUG}`,
+        to: DEMO_KEYBOARD_TOOL_PATHS.DEBUG,
         signals: [
           {
             type,
@@ -232,7 +276,10 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options.randomCircleSubTree ??
     options.randomCircleDevice ??
     createRandomCircleSubTree({
-      rootPath: `/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
+      rootPath: getKeyboardCodePath(
+        "Space",
+        DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE,
+      ),
     });
   const wasdCoordinateTool =
     options.wasdCoordinateTool ?? new WasdCoordinateTool();
@@ -240,8 +287,17 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options.monitorViewportTool ?? new MonitorViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
-  const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
+  const keyboardDevice =
+    options.keyboardDevice ??
+    createKeyboardDevice({
+      nodeConfigs: createKeyboardNodeConfigs([
+        ...DEMO_KEYBOARD_INPUT_CODES,
+        ...Object.keys(wasdRoutePresets),
+        ...DEMO_VIEWPORT_CODES,
+        ...DEMO_DEBUG_CODES,
+      ]),
+    });
 
   monitor.mountSubTree("/mouse", mouseDevice);
   monitor.mountSubTree("/keyboard", keyboardDevice);
@@ -257,22 +313,40 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   if (randomCircleSubTree) {
     monitor.mountSubTree("", randomCircleSubTree);
   }
-  effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
-    tool: wasdCoordinateTool,
-  });
-  effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
-    tool: monitorViewportTool,
-  });
-  effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.DEBUG}`,
-    tool: debugTool,
-  });
+  for (const code of Object.keys(wasdRoutePresets)) {
+    effectiveBoard.signalsEventBus.emit("mount", {
+      to: getMonitorKeyboardCodePath(
+        monitor.monitorId,
+        code,
+        DEMO_KEYBOARD_TOOL_PATHS.MOVE,
+      ),
+      tool: wasdCoordinateTool,
+    });
+  }
+  for (const code of DEMO_VIEWPORT_CODES) {
+    effectiveBoard.signalsEventBus.emit("mount", {
+      to: getMonitorKeyboardCodePath(
+        monitor.monitorId,
+        code,
+        DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT,
+      ),
+      tool: monitorViewportTool,
+    });
+  }
+  for (const code of DEMO_DEBUG_CODES) {
+    effectiveBoard.signalsEventBus.emit("mount", {
+      to: getMonitorKeyboardCodePath(
+        monitor.monitorId,
+        code,
+        DEMO_KEYBOARD_TOOL_PATHS.DEBUG,
+      ),
+      tool: debugTool,
+    });
+  }
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Space`,
     options: buildKeyboardTriggerForwardNodeConfig(
-      `../../${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
+      DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE,
     ),
   });
 

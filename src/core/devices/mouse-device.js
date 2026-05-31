@@ -201,13 +201,58 @@ function createMouseDevice(options = {}) {
   };
 
   /**
+   * 解析显式指定的下行目标，保留调用方已经选定的子路径。
+   * @param {SignalPacket} packet - 当前信号包
+   * @param {{ path?: string }} [context={}] - 节点上下文
+   * @returns {string}
+   */
+  const resolveExplicitDescendantPath = (packet, context = {}) => {
+    const packetTo = typeof packet?.to === "string" ? packet.to : "";
+    const currentPath = typeof context?.path === "string" ? context.path : "";
+
+    if (!packetTo) {
+      return "";
+    }
+
+    if (!packetTo.startsWith("/")) {
+      return packetTo;
+    }
+
+    if (!currentPath || packetTo === currentPath) {
+      return "";
+    }
+
+    const prefix = `${currentPath}/`;
+    return packetTo.startsWith(prefix) ? packetTo.slice(prefix.length) : "";
+  };
+
+  /**
    * 根节点处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @returns {Array<SignalPacket|Object>}
    */
-  const rootHandler = (signalPacket) => {
+  const rootHandler = (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
-    return resolveRouteTargets(packet, updateStateFromPacket(packet));
+    const nextPackets = resolveRouteTargets(
+      packet,
+      updateStateFromPacket(packet),
+    );
+    const explicitDescendantPath = resolveExplicitDescendantPath(
+      packet,
+      context,
+    );
+
+    if (
+      explicitDescendantPath &&
+      !nextPackets.some((entry) => entry.to === explicitDescendantPath)
+    ) {
+      nextPackets.push({
+        to: explicitDescendantPath,
+        signals: packet.signals,
+      });
+    }
+
+    return nextPackets;
   };
 
   const channelProcessors = {

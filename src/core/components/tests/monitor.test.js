@@ -26,7 +26,7 @@ function createReportSubtree() {
           const sigs = Array.isArray(signalPacket.signals)
             ? signalPacket.signals
             : [];
-          lastReceivedAt = prefixContext.eventContext?.path ?? "/";
+          lastReceivedAt = prefixContext.path ?? "/";
           lastOriginalTo = signalPacket.to ?? "/";
           prefixContext.patchState({
             entryIndex: (prefixContext.getState().entryIndex ?? -1) + 1,
@@ -40,7 +40,7 @@ function createReportSubtree() {
     .end()
     .node("report")
     .handler((signalPacket, context = {}) => ({
-      to: context.eventContext?.path,
+      to: "",
       signals: [
         {
           type: REPORT_SIGNAL_TYPE,
@@ -91,9 +91,7 @@ describe("Monitor", () => {
       },
     };
 
-    board.devicesTree = new DevicesTree({
-      runtimeContext: { board },
-    });
+    board.devicesTree = new DevicesTree();
 
     return new Monitor(
       { liveCanvas: canvas },
@@ -117,9 +115,9 @@ describe("Monitor", () => {
       "/alpha/debugger",
       "/alpha/debugger/report",
     ]);
-    expect(packets).toEqual([
+    expect(packets.packets).toEqual([
       {
-        to: "/alpha/debugger/report",
+        to: "",
         signals: [
           {
             type: REPORT_SIGNAL_TYPE,

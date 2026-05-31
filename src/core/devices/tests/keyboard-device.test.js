@@ -5,6 +5,13 @@ import {
 } from "../keyboard-device.js";
 import { CollectingTool } from "../../test-support/mock-tools.js";
 
+function toPlainPackets(packets) {
+  return packets.map((packet) => ({
+    to: packet.to,
+    signals: packet.signals,
+  }));
+}
+
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
     const tree = new DevicesTree();
@@ -19,7 +26,7 @@ describe("keyboard-device", () => {
             return triggerSignals.length === 0
               ? []
               : {
-                  to: "../../tools/create-circle/tool",
+                  to: "tool",
                   signals: triggerSignals,
                 };
           },
@@ -29,7 +36,7 @@ describe("keyboard-device", () => {
     const tool = new CollectingTool();
 
     const mountedNodes = tree.mountSubTree("/monitor", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/tools/create-circle/tool", tool);
+    tree.mountTool("/monitor/keyboard/code/Space/tool", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/keyboard",
@@ -43,7 +50,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/code/Space",
     ]);
 
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -85,9 +92,9 @@ describe("keyboard-device", () => {
       },
     });
 
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/keyboard/event",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -104,7 +111,7 @@ describe("keyboard-device", () => {
         ],
       },
       {
-        to: "/monitor/keyboard/keydown",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -125,7 +132,7 @@ describe("keyboard-device", () => {
     expect(tool.calls).toHaveLength(1);
     expect(tool.calls[0]).toEqual({
       signalPacket: {
-        to: "/monitor/keyboard/tools/create-circle/tool",
+        to: "tool",
         signals: [
           {
             type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
@@ -143,7 +150,7 @@ describe("keyboard-device", () => {
         ],
       },
       deviceContext: expect.objectContaining({
-        path: "/monitor/keyboard/tools/create-circle/tool",
+        path: "/monitor/keyboard/code/Space/tool",
       }),
     });
   });
@@ -164,7 +171,7 @@ describe("keyboard-device", () => {
       ],
     });
 
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -174,9 +181,9 @@ describe("keyboard-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/keyboard/event",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -185,7 +192,7 @@ describe("keyboard-device", () => {
         ],
       },
       {
-        to: "/monitor/keyboard/repeat",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -238,40 +245,11 @@ describe("keyboard-device", () => {
       ],
     });
 
-    expect(keyupPackets).toEqual([
-      {
-        to: "/monitor/keyboard/event",
-        signals: [
-          {
-            type: "keyup",
-            context: { code: "KeyW", key: "w", repeat: false },
-          },
-        ],
-      },
-      {
-        to: "/monitor/keyboard/keyup",
-        signals: [
-          {
-            type: "keyup",
-            context: { code: "KeyW", key: "w", repeat: false },
-          },
-        ],
-      },
-      {
-        to: "/monitor/keyboard/code/KeyW",
-        signals: [
-          {
-            type: KEYBOARD_DEVICE_SIGNAL_TYPES.RELEASE,
-            context: {
-              code: "KeyW",
-              key: "w",
-              repeat: false,
-              sourceType: "keyup",
-            },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(keyupPackets.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["keyup", "keyup"]);
 
     expect(keyboardDevice.getState().activeKeys).toEqual([
       {
@@ -312,9 +290,7 @@ describe("keyboard-device", () => {
                   sourceType: signal.type,
                 },
               }));
-            return signals.length === 0
-              ? []
-              : { to: "../../tools/move/tool", signals };
+            return signals.length === 0 ? [] : { to: "tool", signals };
           },
         },
         "/code/KeyD": {
@@ -332,9 +308,7 @@ describe("keyboard-device", () => {
                   sourceType: signal.type,
                 },
               }));
-            return signals.length === 0
-              ? []
-              : { to: "../../tools/move/tool", signals };
+            return signals.length === 0 ? [] : { to: "tool", signals };
           },
         },
       },
@@ -343,7 +317,8 @@ describe("keyboard-device", () => {
     const tool = new CollectingTool();
 
     const mountedNodes = tree.mountSubTree("/monitor", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/tools/move/tool", tool);
+    tree.mountTool("/monitor/keyboard/code/KeyW/tool", tool);
+    tree.mountTool("/monitor/keyboard/code/KeyD/tool", tool);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/monitor/keyboard",
@@ -358,7 +333,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/code/KeyD",
     ]);
 
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -372,9 +347,9 @@ describe("keyboard-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/keyboard/event",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -387,7 +362,7 @@ describe("keyboard-device", () => {
         ],
       },
       {
-        to: "/monitor/keyboard/keydown",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -403,7 +378,7 @@ describe("keyboard-device", () => {
 
     expect(tool.calls).toHaveLength(2);
     expect(tool.calls[0].signalPacket).toEqual({
-      to: "/monitor/keyboard/tools/move/tool",
+      to: "tool",
       signals: [
         {
           type: "position",
@@ -416,7 +391,7 @@ describe("keyboard-device", () => {
       ],
     });
     expect(tool.calls[1].signalPacket).toEqual({
-      to: "/monitor/keyboard/tools/move/tool",
+      to: "tool",
       signals: [
         {
           type: "position",

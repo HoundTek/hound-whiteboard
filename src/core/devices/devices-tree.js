@@ -1,6 +1,6 @@
 /**
  * @file 设备树
- * @description 提供结构化设备定义、节点分发与路径解析的核心实现。
+ * @description 提供结构化设备定义、逐层下传分发与路径解析的核心实现。
  * @module core/devices/devices-tree
  * @author Zhou Chenyu
  */
@@ -14,50 +14,44 @@ import {
 import { SignalPacket } from "./signal.js";
 
 /**
- * 设备树事件上下文
+ * 设备树处理器上下文
  * @description
- * 事件上下文包含当前节点信息、设备树实例、
- * 路径解析结果以及当前信号包等数据，供节点处理器使用。
- * @typedef {Object} DevicesTreeEventContext
+ * 处理器上下文包含当前节点元数据、累积上下文以及节点状态访问接口，
+ * 供节点处理器在处理信号包时使用。
+ *
+ * 累积上下文（`context`）是逐层下传过程中逐步追加的只读对象：
+ * - 上游节点通过返回 { context: { key: value } } 将数据注入累积上下文
+ * - 下游节点从 context 中读取上游注入的数据
+ * - 不可覆盖已有键（dispatcher 保证）
+ * - 需要可变数据时使用 getNodeState / setNodeState
+ * @typedef {Object} DevicesTreeHandlerContext
  * @property {DevicesTreeNode} node - 当前正在处理的节点
  * @property {DevicesTree} tree - 所属设备树
- * @property {string} path - 当前节点路径
- * @property {Object} semantics - 当前节点语义元数据
+ * @property {string} path - 当前节点绝对路径
+ * @property {Object} semantics - 当前节点语义元数据快照
  * @property {string} defaultChild - 当前节点声明的默认子链路
  * @property {string} resolvedDefaultChildPath - 当前默认子链路对应的绝对路径
  * @property {number} depth - 当前分发深度
  * @property {SignalPacket|undefined} signalPacket - 当前已规整的输入信号包
- */
-
-/**
- * 设备树运行时上下文
- * @description
- * 运行时上下文包含设备树级的共享资源和工具实例等数据，
- * 供节点处理器在分发过程中访问。
- * @typedef {Object} DevicesTreeRuntimeContext
- * @property {import("../components/board.js").Board} [board] - 当前白板实例
- * @property {import("../components/monitor.js").Monitor} [monitor] - 当前 monitor 实例
- * @property {() => number} [allocateObjectId] - 对象 id 分配器
- * @property {(position: any) => number|undefined} [resolveOwnerChunkId] - 归属区块解析器
- */
-
-/**
- * 设备树处理器上下文
- * @description
- * 处理器上下文包含事件上下文、树级运行时上下文以及节点状态访问接口等数据，
- * 供节点处理器在处理信号包时使用。
- * @typedef {Object} DevicesTreeHandlerContext
- * @property {DevicesTreeEventContext} eventContext - 只读事件上下文
- * @property {DevicesTreeRuntimeContext} runtimeContext - 运行时上下文
- * @property {(path?: string) => any} getNodeState - 读取节点状态
- * @property {(path: string, state: any) => any} setNodeState - 写入节点状态
+ * @property {Object} context - 累积上下文（逐层追加，只读）
+ * @property {(path?: string) => any} getNodeState - 读取任意节点状态，默认读当前节点
+ * @property {(path: string, state: any) => any} setNodeState - 写入任意节点状态
  */
 
 /**
  * 设备树处理器输出
  * @description
- * 处理器输出可以是单个信号包、对象、信号包或对象的数组，或者为空。
- * @typedef {SignalPacket|Object|Array<SignalPacket|Object>|null|undefined} DevicesTreeHandlerResult
+ * 处理器返回此结构描述下一步的路由决策和上下文追加。
+ * @typedef {Object} DevicesTreeHandlerResult
+ * @property {SignalPacket[]} packets - 继续路由到子节点的信号包列表；空数组表示终止
+ * @property {Object} [context] - 要合并到累积上下文的键值对；不可覆盖已有键
+ * @property {string} [redirect] - 覆盖 dispatcher 原本要走的下一段子路径（仅指向子节点）
+ * @property {boolean} [stop] - 强制终止当前链路路由
+ */
+
+/**
+ * 兼容型 handler 返回值的内部规整目标
+ * @typedef {DevicesTreeHandlerResult|SignalPacket|{to?: string, signals?: Array}|Array|undefined|null} RawHandlerResult
  */
 
 /**
@@ -66,8 +60,8 @@ import { SignalPacket } from "./signal.js";
  * 接受规整后的信号包和处理上下文作为参数，并返回处理结果。
  * @callback DevicesTreeHandler
  * @param {SignalPacket} signalPacket - 已规整的输入信号包
- * @param {DevicesTreeHandlerContext} context - 当前处理上下文
- * @returns {DevicesTreeHandlerResult}
+ * @param {DevicesTreeHandlerContext} context - 当前处理上下文（含累积上下文）
+ * @returns {RawHandlerResult}
  */
 
 /**
@@ -225,7 +219,7 @@ class SubTreeNodeBuilder {
   /**
    * 设置节点处理器
    * @param {DevicesTreeHandler|null} handler - 节点处理器
-  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   handler(handler) {
     this.nodeDefinition.handler =
@@ -236,7 +230,7 @@ class SubTreeNodeBuilder {
   /**
    * 合并当前节点的职责语义
    * @param {Object|null} semantics - 节点语义片段
-  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   semantics(semantics = {}) {
     this.nodeDefinition.semantics = isPlainObject(semantics)
@@ -252,9 +246,9 @@ class SubTreeNodeBuilder {
 
   /**
    * 将当前节点标记为 prefix 语义节点
-    * @param {DevicesTreeHandler|null} handler - 修饰节点处理器
+   * @param {DevicesTreeHandler|null} handler - 修饰节点处理器
    * @param {Object} [semantics={}] - 额外语义片段
-  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   prefix(handler, semantics = {}) {
     return this.handler(handler).semantics({
@@ -266,7 +260,7 @@ class SubTreeNodeBuilder {
   /**
    * 设置节点默认子链路
    * @param {string} defaultChild - 默认子链路
-  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   defaultChild(defaultChild = "") {
     this.nodeDefinition.defaultChild =
@@ -278,7 +272,7 @@ class SubTreeNodeBuilder {
    * 绑定当前节点的工具
    * @param {import("../tools/tool.js").Tool} tool - 工具实例
    * @param {Object} [toolContext={}] - 工具节点固定上下文
-  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   tool(tool, toolContext = {}) {
     this.nodeDefinition.tool = tool;
@@ -297,7 +291,7 @@ class SubTreeNodeBuilder {
   /**
    * 设置节点卸载钩子
    * @param {DevicesTreeNodeUmountHandler|null} umountHandler - 节点卸载钩子
-  * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
+   * @returns {SubTreeNodeBuilder} 返回自身以继续配置当前节点
    */
   umount(umountHandler) {
     this.nodeDefinition.umount =
@@ -555,36 +549,43 @@ class DevicesTreeNode {
    * 处理当前节点收到的信号包
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {DevicesTree} tree - 当前设备树
-   * @param {{depth?: number, runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 路由上下文
-   * @returns {SignalPacket[]}
+   * @param {Object} accumulatedContext - 累积上下文
+   * @param {{isDestination?: boolean, depth?: number}} [options={}] - 路由选项
+   * @returns {DevicesTreeHandlerResult}
    */
-  process(signalPacket, tree, routeContext = {}) {
+  process(signalPacket, tree, accumulatedContext = {}, options = {}) {
     const normalizedPacket = SignalPacket.from(signalPacket, {
-      defaultTo: "/",
+      defaultTo: "",
     });
     const handler = this.getHandler();
+    const handlerContext = tree.createHandlerContext(
+      this,
+      normalizedPacket,
+      accumulatedContext,
+      options,
+    );
+
     if (!handler) {
-      return [new SignalPacket("", normalizedPacket.signals)];
+      return {
+        packets: [new SignalPacket("", normalizedPacket.signals)],
+      };
     }
 
-    return DevicesTree.normalizeProcessResult(
-      handler(
-        normalizedPacket,
-        tree.createHandlerContext(this, normalizedPacket, routeContext),
-      ),
+    return DevicesTree.normalizeHandlerResult(
+      handler(normalizedPacket, handlerContext),
     );
   }
 
   /**
    * 在节点被卸载时执行清理
    * @param {DevicesTree} tree - 当前设备树
-   * @param {{depth?: number, runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 卸载上下文
+   * @param {Object} [accumulatedContext={}] - 累积上下文
    * @returns {*}
    */
-  umount(tree, routeContext = {}) {
+  umount(tree, accumulatedContext = {}) {
     const umountHandler = this.getUmountHandler();
     const result = umountHandler?.(
-      tree.createHandlerContext(this, undefined, routeContext),
+      tree.createHandlerContext(this, undefined, accumulatedContext),
     );
     this.state = {};
     return result;
@@ -610,21 +611,12 @@ class DevicesTree {
   maxDispatchDepth;
 
   /**
-   * 树级运行时上下文
-   * @type {DevicesTreeRuntimeContext}
-   */
-  runtimeContext;
-
-  /**
-   * @param {{maxDispatchDepth?: number, runtimeContext?: DevicesTreeRuntimeContext}} [options={}] - 树配置
+   * @param {{maxDispatchDepth?: number}} [options={}] - 树配置
    * @constructor
    */
   constructor(options = {}) {
     this.root = new DevicesTreeNode("");
     this.maxDispatchDepth = options.maxDispatchDepth ?? 32;
-    this.runtimeContext = isPlainObject(options.runtimeContext)
-      ? { ...options.runtimeContext }
-      : {};
   }
 
   /**
@@ -647,38 +639,91 @@ class DevicesTree {
   }
 
   /**
-   * 规整处理结果
-   * @param {DevicesTreeHandlerResult} result - 处理结果
-   * @returns {SignalPacket[]}
+   * 将 handler 的原始返回值规整为 DevicesTreeHandlerResult
+   * @param {RawHandlerResult} result - handler 原始返回
+   * @returns {DevicesTreeHandlerResult}
    */
-  static normalizeProcessResult(result) {
-    return SignalPacket.normalizeResult(result);
+  static normalizeHandlerResult(result) {
+    // 已是新格式：有 packets 字段则直接返回
+    if (
+      result != null &&
+      typeof result === "object" &&
+      !Array.isArray(result) &&
+      Object.prototype.hasOwnProperty.call(result, "packets")
+    ) {
+      return {
+        packets: Array.isArray(result.packets)
+          ? result.packets.map((p) => SignalPacket.from(p))
+          : [],
+        context:
+          result.context != null && typeof result.context === "object"
+            ? { ...result.context }
+            : undefined,
+        redirect:
+          typeof result.redirect === "string" ? result.redirect : undefined,
+        stop: Boolean(result.stop),
+      };
+    }
+
+    // null / undefined → 终止
+    if (result === undefined || result === null) {
+      return { packets: [] };
+    }
+
+    // 数组 → 将每个元素分别规整，合并所有 packets
+    if (Array.isArray(result)) {
+      const allPackets = [];
+      for (const item of result) {
+        if (
+          item != null &&
+          typeof item === "object" &&
+          !Array.isArray(item) &&
+          Object.prototype.hasOwnProperty.call(item, "packets")
+        ) {
+          // 新格式结果 → 提取 packets
+          allPackets.push(
+            ...(Array.isArray(item.packets)
+              ? item.packets.map((p) => SignalPacket.from(p))
+              : []),
+          );
+        } else {
+          // 旧格式 → 逐个规整
+          allPackets.push(SignalPacket.from(item));
+        }
+      }
+      return { packets: allPackets };
+    }
+
+    // 单个包或 { to, signals } 对象 → 规整为 SignalPacket 放进 packets
+    return { packets: [SignalPacket.from(result)] };
   }
 
   /**
-   * 合并树级与调用级运行时上下文
-   * @param {{runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 调用上下文
-   * @returns {DevicesTreeRuntimeContext}
+   * 将原始 handler 返回（兼容旧格式）规整为 SignalPacket[]
+   * @deprecated 使用 normalizeHandlerResult 替代
+   * @param {*} result - 原始处理结果
+   * @returns {SignalPacket[]}
    */
-  buildRuntimeContext(routeContext = {}) {
-    return {
-      ...this.runtimeContext,
-      ...(isPlainObject(routeContext.runtimeContext)
-        ? routeContext.runtimeContext
-        : {}),
-    };
+  static normalizeProcessResult(result) {
+    return DevicesTree.normalizeHandlerResult(result).packets;
   }
 
   /**
    * 创建节点处理器上下文
    * @param {DevicesTreeNode} node - 当前节点
    * @param {SignalPacket|undefined} signalPacket - 当前信号包
-   * @param {{depth?: number, runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 路由上下文
+   * @param {Object} accumulatedContext - 累积上下文
+   * @param {{isDestination?: boolean, depth?: number}} [options={}] - 路由选项
    * @returns {DevicesTreeHandlerContext}
    */
-  createHandlerContext(node, signalPacket, routeContext = {}) {
+  createHandlerContext(
+    node,
+    signalPacket,
+    accumulatedContext = {},
+    options = {},
+  ) {
     const defaultChild = node.getDefaultChild();
-    const eventContext = Object.freeze({
+    return {
       node,
       tree: this,
       path: node.path,
@@ -687,13 +732,9 @@ class DevicesTree {
       resolvedDefaultChildPath: defaultChild
         ? DevicesTree.resolvePath(node.path, defaultChild)
         : node.path,
-      depth: routeContext.depth ?? 0,
+      depth: options.depth ?? 0,
       signalPacket,
-    });
-
-    return {
-      eventContext,
-      runtimeContext: this.buildRuntimeContext(routeContext),
+      context: { ...accumulatedContext },
       getNodeState: (path = node.path) => this.getNodeState(path),
       setNodeState: (path, state) => this.setNodeState(path, state),
     };
@@ -827,7 +868,7 @@ class DevicesTree {
    * 显式挂载工具节点
    * @param {string} path - 工具节点的绝对路径
    * @param {import("../tools/tool.js").Tool} tool - 要挂载的工具
-   * @param {DevicesTreeRuntimeContext} [toolContext={}] - 工具固定上下文
+   * @param {Object} [toolContext={}] - 工具固定上下文
    * @returns {DevicesTreeNode}
    */
   mountTool(path, tool, toolContext = {}) {
@@ -855,29 +896,27 @@ class DevicesTree {
   /**
    * 显式卸载工具节点
    * @param {string} path - 工具节点绝对路径
-   * @param {{runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 卸载时上下文
+   * @param {Object} [accumulatedContext={}] - 累积上下文
    * @returns {boolean}
    */
-  unmountTool(path, routeContext = {}) {
-    return this.unmount(path, routeContext);
+  unmountTool(path, accumulatedContext = {}) {
+    return this.unmount(path, accumulatedContext);
   }
 
   /**
    * 挂载一棵结构化输入子树
    * @param {string} basePath - 子树挂载基路径
    * @param {SubTreeDefinition} subTreeDefinition - 结构化子树定义
-   * @param {DevicesTreeRuntimeContext} [runtimeContext={}] - 子树级运行时上下文
+   * @param {Object} [mountContext={}] - 子树挂载时的固定上下文
    * @returns {DevicesTreeNode[]}
    */
-  mountSubTree(basePath, subTreeDefinition, runtimeContext = {}) {
+  mountSubTree(basePath, subTreeDefinition, mountContext = {}) {
     if (!subTreeDefinition || typeof subTreeDefinition.root !== "string") {
       throw new TypeError("Sub-tree definition must provide root.");
     }
 
     if (!isPlainObject(subTreeDefinition.nodes)) {
-      throw new TypeError(
-        "Sub-tree definition must provide structured nodes.",
-      );
+      throw new TypeError("Sub-tree definition must provide structured nodes.");
     }
 
     const subTreeRootPath = joinPath(basePath, subTreeDefinition.root);
@@ -885,7 +924,9 @@ class DevicesTree {
 
     const mountStructuredNode = (nodeDefinition, currentPath) => {
       if (!isPlainObject(nodeDefinition)) {
-        throw new TypeError(`Invalid sub-tree node definition at ${currentPath}`);
+        throw new TypeError(
+          `Invalid sub-tree node definition at ${currentPath}`,
+        );
       }
 
       let handler =
@@ -915,7 +956,7 @@ class DevicesTree {
         }
 
         const toolContext = {
-          ...(isPlainObject(runtimeContext) ? runtimeContext : {}),
+          ...(isPlainObject(mountContext) ? mountContext : {}),
           ...(isPlainObject(nodeDefinition.toolContext)
             ? nodeDefinition.toolContext
             : {}),
@@ -955,10 +996,10 @@ class DevicesTree {
   /**
    * 卸载某个节点子树
    * @param {string} path - 节点路径
-   * @param {{runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 卸载时上下文
+   * @param {Object} [accumulatedContext={}] - 累积上下文
    * @returns {boolean}
    */
-  unmount(path, routeContext = {}) {
+  unmount(path, accumulatedContext = {}) {
     const segments = DevicesTree.normalizePath(path);
     if (segments.length === 0) return false;
     const name = segments[segments.length - 1];
@@ -971,7 +1012,7 @@ class DevicesTree {
       for (const child of [...node.children.values()]) {
         umountRecursively(child);
       }
-      node.umount(this, routeContext);
+      node.umount(this, accumulatedContext);
       node.children.clear();
     };
 
@@ -982,82 +1023,288 @@ class DevicesTree {
   /**
    * 沿默认子链路卸载叶子节点
    * @param {string} path - 起始节点路径
-   * @param {{runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 卸载时上下文
+   * @param {Object} [accumulatedContext={}] - 累积上下文
    * @returns {boolean}
    */
-  unmountLeaf(path, routeContext = {}) {
+  unmountLeaf(path, accumulatedContext = {}) {
     const leafNode = this.resolveDefaultLeaf(path);
     if (!leafNode || leafNode.path === "/") {
       return false;
     }
-    return this.unmount(leafNode.path, routeContext);
+    return this.unmount(leafNode.path, accumulatedContext);
   }
 
   /**
-   * 向目标节点分发信号包
-   * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {{depth?: number, runtimeContext?: DevicesTreeRuntimeContext}} [routeContext={}] - 路由上下文
-   * @returns {SignalPacket[]}
+   * 向目标节点逐层下传分发信号包
+   * @description
+   * 从根节点出发，沿 packet.to 路径逐段下传。每经过一个节点都调用其 handler，
+   * 合并 handler 返回的 context（只增不改），支持 redirect 改写剩余路径。
+   * 返回包只能指向当前节点的子节点，不可跳过中间节点或向上路由。
+   * @param {SignalPacket|Object} signalPacket - 输入信号包；to 为从当前节点出发的子节点链
+   * @param {Object} [accumulatedContext={}] - 累积上下文
+   * @param {number} [depth=0] - 当前递归深度
+   * @returns {DevicesTreeHandlerResult}
    */
-  dispatch(signalPacket, routeContext = {}) {
-    const normalizedPacket = SignalPacket.from(signalPacket, {
-      defaultTo: "/",
-    });
-    const depth = routeContext.depth ?? 0;
+  dispatch(signalPacket, accumulatedContext = {}, depth = 0) {
     if (depth > this.maxDispatchDepth) {
       throw new RangeError("DevicesTree dispatch depth exceeded limit");
     }
 
-    const targetNode = this.getNode(normalizedPacket.to || "/");
-    if (!targetNode) {
-      return [normalizedPacket];
+    const startPacket = SignalPacket.from(signalPacket, { defaultTo: "" });
+    let segments = DevicesTree.normalizePath(startPacket.to || "");
+
+    // 无目标路径：尝试 defaultChild，否则终止
+    if (segments.length === 0) {
+      if (this.root.getDefaultChild()) {
+        segments = DevicesTree.normalizePath(this.root.getDefaultChild());
+      } else {
+        return { packets: [startPacket] };
+      }
     }
 
-    const nextRouteContext = {
-      depth,
-      runtimeContext: this.buildRuntimeContext(routeContext),
-    };
-    const normalizedNextPackets = targetNode.process(
-      normalizedPacket,
-      this,
-      nextRouteContext,
-    );
+    let currentNode = this.root;
+    let currentPacket = startPacket;
+    let mergedContext = { ...accumulatedContext };
+    const finalPackets = [];
+    const deferredRoutes = [];
+    let nodeVisitCount = depth; // 累计已访问节点数
 
-    if (normalizedNextPackets.length === 0) {
+    const flushDeferredRoutes = () => {
+      for (const deferredRoute of deferredRoutes) {
+        finalPackets.push(
+          ...this._routeFromNode(
+            deferredRoute.fromNode,
+            deferredRoute.packet,
+            deferredRoute.context,
+            depth + 1,
+          ),
+        );
+      }
+      deferredRoutes.length = 0;
+    };
+
+    // 逐层下传主循环
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const child = currentNode.children.get(segment);
+
+      // 路径中断——当前节点没有名为 segment 的子节点 → 终止
+      if (!child) {
+        flushDeferredRoutes();
+        return {
+          packets:
+            finalPackets.length > 0
+              ? finalPackets
+              : [new SignalPacket("", currentPacket.signals)],
+          context:
+            mergedContext !== accumulatedContext ? mergedContext : undefined,
+        };
+      }
+
+      const isDestination = i === segments.length - 1;
+
+      nodeVisitCount++;
+      if (nodeVisitCount > this.maxDispatchDepth) {
+        throw new RangeError("DevicesTree dispatch depth exceeded limit");
+      }
+
+      const result = child.process(currentPacket, this, mergedContext, {
+        isDestination,
+        depth: nodeVisitCount,
+      });
+
+      // 合并上下文（重复键报错）
+      if (result.context && typeof result.context === "object") {
+        for (const key of Object.keys(result.context)) {
+          if (Object.prototype.hasOwnProperty.call(mergedContext, key)) {
+            throw new Error(
+              `Cannot override existing context key "${key}" at node ${child.path}`,
+            );
+          }
+        }
+        mergedContext = { ...mergedContext, ...result.context };
+      }
+
+      // 强制终止
+      if (result.stop) {
+        if (result.packets.length > 0) {
+          finalPackets.push(...result.packets);
+        }
+        flushDeferredRoutes();
+        return {
+          packets: finalPackets.length > 0 ? finalPackets : result.packets,
+          context:
+            mergedContext !== accumulatedContext ? mergedContext : undefined,
+        };
+      }
+
+      // redirect：替换从下一段开始的剩余路径
+      if (result.redirect) {
+        const redirectSegments = DevicesTree.normalizePath(result.redirect);
+        // 移除从 i+1 开始的所有段，替换为 redirect 的段
+        segments.splice(i + 1, segments.length - i - 1, ...redirectSegments);
+      }
+
+      // handler 返回了 packets——它们应该继续路由（从当前 child 的子节点出发）
+      if (result.packets.length > 0) {
+        // 取第一个 packet 作为继续在当前路径走的主包
+        const primaryPacket = SignalPacket.from(result.packets[0]);
+        const remainingPackets = result.packets.slice(1);
+
+        // 其他包延后到主链完成后再分发，保留 handler 返回顺序
+        for (const extraPacket of remainingPackets) {
+          const p = SignalPacket.from(extraPacket);
+          if (p.to) {
+            deferredRoutes.push({
+              fromNode: child,
+              packet: p,
+              context: mergedContext,
+            });
+          }
+        }
+
+        // 主包继续走剩余路径
+        if (primaryPacket.to) {
+          // 主包显式指定了 to → 用它替换剩余 segments
+          const primarySegments = DevicesTree.normalizePath(primaryPacket.to);
+          segments.splice(i + 1, segments.length - i - 1, ...primarySegments);
+          currentPacket = primaryPacket;
+        } else if (child.getDefaultChild()) {
+          // 主包没有指定 to，但当前 child 有 defaultChild → 继续
+          segments = [...segments.slice(0, i + 1), child.getDefaultChild()];
+          currentPacket = primaryPacket;
+        } else if (i === segments.length - 1) {
+          // 到达目的地且没有后续路由 → 记录
+          finalPackets.push(primaryPacket);
+          break;
+        }
+        // 否则（中间节点、无 to、无 defaultChild）→ 继续沿原路径走下一段
+      } else {
+        // handler 返回空 packets → 终止当前链路
+        break;
+      }
+
+      currentNode = child;
+    }
+
+    flushDeferredRoutes();
+    return {
+      packets: finalPackets.length > 0 ? finalPackets : [],
+      context: mergedContext !== accumulatedContext ? mergedContext : undefined,
+    };
+  }
+
+  /**
+   * 从指定节点出发逐层下发信号包（内部辅助）
+   * @param {DevicesTreeNode} fromNode - 起始节点
+   * @param {SignalPacket} packet - 信号包
+   * @param {Object} accumulatedContext - 累积上下文
+   * @param {number} depth - 当前深度
+   * @returns {SignalPacket[]}
+   * @private
+   */
+  _routeFromNode(fromNode, packet, accumulatedContext, depth) {
+    const segments = DevicesTree.normalizePath(packet.to || "");
+    if (segments.length === 0) {
+      if (fromNode.getDefaultChild()) {
+        return this._routeFromNode(
+          fromNode,
+          new SignalPacket(fromNode.getDefaultChild(), packet.signals),
+          accumulatedContext,
+          depth,
+        );
+      }
       return [];
     }
 
-    return normalizedNextPackets.flatMap((packet) => {
-      const nextPacket = SignalPacket.from(packet);
-      let requestedPath = nextPacket.to;
+    let currentNode = fromNode;
+    let currentPacket = packet;
+    let mergedContext = { ...accumulatedContext };
+    const finalPackets = [];
+    const deferredRoutes = [];
 
-      if (!requestedPath && targetNode.getDefaultChild()) {
-        const defaultTargetPath = DevicesTree.resolvePath(
-          targetNode.path,
-          targetNode.getDefaultChild(),
+    const flushDeferredRoutes = () => {
+      for (const deferredRoute of deferredRoutes) {
+        finalPackets.push(
+          ...this._routeFromNode(
+            deferredRoute.fromNode,
+            deferredRoute.packet,
+            deferredRoute.context,
+            depth,
+          ),
         );
-        if (this.getNode(defaultTargetPath)) {
-          requestedPath = targetNode.getDefaultChild();
+      }
+      deferredRoutes.length = 0;
+    };
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const child = currentNode.children.get(segment);
+      if (!child) {
+        flushDeferredRoutes();
+        return finalPackets;
+      }
+
+      const isDestination = i === segments.length - 1;
+      const result = child.process(currentPacket, this, mergedContext, {
+        isDestination,
+        depth,
+      });
+
+      if (result.context && typeof result.context === "object") {
+        for (const key of Object.keys(result.context)) {
+          if (Object.prototype.hasOwnProperty.call(mergedContext, key)) {
+            throw new Error(
+              `Cannot override existing context key "${key}" at node ${child.path}`,
+            );
+          }
+        }
+        mergedContext = { ...mergedContext, ...result.context };
+      }
+
+      if (result.stop) {
+        if (result.packets.length > 0) {
+          finalPackets.push(...result.packets);
+        }
+        flushDeferredRoutes();
+        return finalPackets;
+      }
+
+      if (result.packets.length === 0) {
+        flushDeferredRoutes();
+        return finalPackets;
+      }
+
+      const primaryPacket = SignalPacket.from(result.packets[0]);
+      const remainingPackets = result.packets.slice(1);
+
+      for (const extraPacket of remainingPackets) {
+        const normalizedPacket = SignalPacket.from(extraPacket);
+        if (normalizedPacket.to) {
+          deferredRoutes.push({
+            fromNode: child,
+            packet: normalizedPacket,
+            context: mergedContext,
+          });
         }
       }
 
-      const resolvedPacket = new SignalPacket(
-        DevicesTree.resolvePath(
-          targetNode.path,
-          requestedPath || targetNode.path,
-        ),
-        nextPacket.signals,
-      );
-
-      if (resolvedPacket.to === targetNode.path) {
-        return [resolvedPacket];
+      currentPacket = primaryPacket;
+      if (!currentPacket.to && child.getDefaultChild()) {
+        segments.push(child.getDefaultChild());
+      } else if (currentPacket.to) {
+        const newSegments = DevicesTree.normalizePath(currentPacket.to);
+        segments.splice(i + 1, segments.length - i - 1, ...newSegments);
+      } else if (i === segments.length - 1) {
+        finalPackets.push(currentPacket);
+        break;
       }
 
-      return this.dispatch(resolvedPacket, {
-        ...nextRouteContext,
-        depth: depth + 1,
-      });
-    });
+      currentNode = child;
+    }
+
+    flushDeferredRoutes();
+    return finalPackets.length > 0 ? finalPackets : [currentPacket];
   }
 }
 

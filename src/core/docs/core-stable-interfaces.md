@@ -20,11 +20,11 @@
 - mount(path, handler, options)
 - configureNode(path, options)
 - mountTool(path, tool, toolContext)
-- unmountTool(path, routeContext)
-- mountSubTree(basePath, subTreeDefinition, runtimeContext)
-- unmount(path, routeContext)
-- unmountLeaf(path, routeContext)
-- dispatch(signalPacket, routeContext)
+- unmountTool(path, accumulatedContext)
+- mountSubTree(basePath, subTreeDefinition, mountContext)
+- unmount(path, accumulatedContext)
+- unmountLeaf(path, accumulatedContext)
+- dispatch(signalPacket, accumulatedContext)
 
 稳定语义：
 
@@ -32,6 +32,30 @@
 - defaultChild 是相对子链路名
 - 工具挂载使用显式叶子路径
 - 结构化设备定义使用 root + nodes
+- handler 返回统一规整为 `{ packets, context, redirect, stop }`
+- `packets.to` 只描述从当前节点继续向下的子路径
+
+## DevicesTreeHandlerContext
+
+当前稳定字段包括：
+
+- node
+- tree
+- path
+- semantics
+- defaultChild
+- resolvedDefaultChildPath
+- depth
+- signalPacket
+- context
+- getNodeState(path?)
+- setNodeState(path, state)
+
+稳定语义：
+
+- `context` 是逐层追加的累积上下文，不能覆盖已有键
+- 需要可变共享数据时，应写入节点 state
+- 需要向上通知时，优先在 `context` 中注入回调函数，而不是继续引入向上路由协议
 
 ## SubTreeDefinition
 
@@ -42,6 +66,7 @@
   root: "/sub-tree-root",
   nodes: {
     handler,
+    semantics,
     defaultChild,
     tool,
     toolContext,
@@ -60,7 +85,6 @@
 当前建议依赖的 Tool 接口有：
 
 - createProcessor(toolContext)
-- createRuntimeContext(routeRuntimeContext, toolContext)
 - createDeviceContext(handlerContext, toolContext)
 - process(signalPacket, deviceContext)
 - umount(deviceContext)
@@ -71,6 +95,12 @@
 - setContextObjects(deviceContext, objects)
 - clearContextObjects(deviceContext)
 - continueToDefaultPath(signalPacket, deviceContext)
+
+稳定语义：
+
+- `deviceContext` 顶层字段 `path`、`context`、`board`、`monitor`、`getNodeState`、`setNodeState` 已稳定
+- `deviceContext` 不再构造 `eventContext` / `runtimeContext` 兼容视图
+- 工具代码应直接读取顶层字段与 `context`
 
 ## Monitor
 
@@ -96,6 +126,8 @@ Board.signalsEventBus 侧当前稳定的输入相关事件包括：
 - umount：卸载设备或工具节点
 - configure：运行时更新节点 handler、defaultChild、umount
 
+这些事件的 `to` 仍然是绝对路径，但节点内部继续返回的 `packets.to` 应视为局部子路径。
+
 ## 不再推荐继续使用的旧术语
 
 以下旧接口名应视为已完成迁移，不应继续在新代码中引入：
@@ -106,6 +138,7 @@ Board.signalsEventBus 侧当前稳定的输入相关事件包括：
 - defineNodes
 - nodeContext
 - providedObjectsContext
+- 子节点通过 `to: ".."` 或 `bubble` 向上协调的约定
 
 ## 相关文档
 

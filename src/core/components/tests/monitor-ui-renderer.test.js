@@ -57,9 +57,7 @@ describe("Monitor/ui renderer", () => {
       },
     };
 
-    board.devicesTree = new DevicesTree({
-      runtimeContext: { board },
-    });
+    board.devicesTree = new DevicesTree();
 
     const monitor = new Monitor(
       { baseCanvas, liveCanvas, uiCanvas },

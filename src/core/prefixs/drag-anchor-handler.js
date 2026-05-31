@@ -59,11 +59,11 @@ function createDragAnchorPrefixHandler(options = {}) {
 
       if (endSig) {
         ctx.patchState({ anchor: null });
-        return ctx.routeToChild(ctx.eventContext?.defaultChild || "", signals);
+        return ctx.routeToChild(ctx.defaultChild || "", signals);
       }
 
       if (!positionSig) {
-        return ctx.routeToChild(ctx.eventContext?.defaultChild || "", signals);
+        return ctx.routeToChild(ctx.defaultChild || "", signals);
       }
 
       const worldPos = positionSig.context?.value;
@@ -88,7 +88,7 @@ function createDragAnchorPrefixHandler(options = {}) {
 
       return [
         {
-          to: ctx.eventContext?.defaultChild || "",
+          to: ctx.defaultChild || "",
           signals: [
             { type: displacementSignalType, context: { value: { x, y } } },
           ],

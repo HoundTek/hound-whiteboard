@@ -342,12 +342,12 @@ describe("whiteboard demo", () => {
       ],
     });
 
-    expect(board.activeObjectManager.activeObjectIndex.has(firstStroke.id)).toBe(
-      false,
-    );
-    expect(board.activeObjectManager.activeObjectIndex.get(secondStroke.id)).toBe(
-      secondStroke,
-    );
+    expect(
+      board.activeObjectManager.activeObjectIndex.has(firstStroke.id),
+    ).toBe(false);
+    expect(
+      board.activeObjectManager.activeObjectIndex.get(secondStroke.id),
+    ).toBe(secondStroke);
   });
 
   test("requestViewportBaseRender 应让 base 层缓冲区覆盖当前视口并承接已提交笔画", () => {
@@ -399,7 +399,7 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const randomCircleSubTree = createRandomCircleSubTree({
-      rootPath: "/keyboard/tools/create-circle",
+      rootPath: "/keyboard/code/Space/create-circle",
       random: () => 0.5,
     });
 

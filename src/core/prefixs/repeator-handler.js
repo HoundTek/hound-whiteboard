@@ -12,13 +12,15 @@ import { createPrefixNodeHandler } from "./handler.js";
 
 /**
  * 创建 repeator 修饰节点处理器，将每条信号包复制为多份发出
- * @description 工厂函数，基于 createPrefixNodeHandler 构建信号复制分发逻辑。
- *   将输入信号包浅克隆后，向 toChildren 指定的每个子节点各发一份。适合广播、双重副作用等场景。
+ * @description
+ * 工厂函数，基于 createPrefixNodeHandler 构建信号复制分发逻辑。
+ * 将输入信号包浅克隆后，向 toChildren 指定的每个子节点各发一份。
+ * 省略 toChildren 时回退到当前 prefix 节点的 defaultChild。
  * @param {{
  *   toChildren?: string|string[],
  *   cloneSignals?: Function,
  * }} options - repeator 选项
- * @param {string|string[]} [options.toChildren] - 目标子节点名。传字符串时单发；传数组时每项各发一份。省略时回退到 eventContext.defaultChild
+ * @param {string|string[]} [options.toChildren] - 目标子节点名。传字符串时单发；传数组时每项各发一份。省略时回退到当前 prefix 节点的 defaultChild
  * @param {Function} [options.cloneSignals] - 自定义信号克隆函数。省略时使用浅层展开克隆
  * @returns {import("../devices/devices-tree.js").DevicesTreeHandler} 可挂载到 DevicesTree 节点上的处理器函数
  */
@@ -41,7 +43,7 @@ function createRepeatorPrefixHandler(options = {}) {
     if (Array.isArray(specified) && specified.length) {
       return specified.filter((child) => typeof child === "string" && child);
     }
-    const defaultChild = prefixContext.eventContext?.defaultChild;
+    const defaultChild = prefixContext.defaultChild;
     return typeof defaultChild === "string" && defaultChild
       ? [defaultChild]
       : [];

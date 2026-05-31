@@ -133,7 +133,7 @@ function createRandomCircleSubTree(options = {}) {
             return [];
           }
 
-          const monitor = prefixContext.runtimeContext?.monitor;
+          const monitor = prefixContext.context?.monitor;
           const viewportWorldRect = monitor?.getViewportWorldRect?.();
           if (!viewportWorldRect) {
             return [];
@@ -208,7 +208,7 @@ function createRandomCircleSubTree(options = {}) {
             return [];
           }
 
-          const target = prefixContext.eventContext?.defaultChild || "tool";
+          const target = prefixContext.defaultChild || "tool";
 
           return [
             {

@@ -120,10 +120,7 @@ class CommonObjectModifierTool extends ObjectModifierTool {
     if (hasSuccessSignal) {
       this._endGesture();
       this.applyModifiedObjects(modificationContext, objects);
-      return {
-        to: "..",
-        signals: [{ type: "TOOL_COMPLETE" }],
-      };
+      return undefined;
     }
   }
 

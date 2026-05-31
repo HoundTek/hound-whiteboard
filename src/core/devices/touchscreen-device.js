@@ -130,7 +130,7 @@ function createTouchscreenDevice(options = {}) {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const contacts = getActiveTouches();
     return {
-      to: context.eventContext?.path,
+      to: context.path,
       signals: [
         {
           type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,

@@ -158,7 +158,7 @@ class Board {
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
     this.devicesTree = new DevicesTree({
-      runtimeContext: { board: this },
+      maxDispatchDepth: 32,
     });
     this.rootChunkLoader = new ChunkLoader({
       resolveChunkById: (chunkId) =>
@@ -588,15 +588,7 @@ class Board {
       const monitorId = to.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (monitor) {
-        this.devicesTree.dispatch(
-          { to, signals },
-          {
-            runtimeContext: {
-              board: this,
-              monitor,
-            },
-          },
-        );
+        this.devicesTree.dispatch({ to, signals }, { board: this, monitor });
       }
     });
 
@@ -617,10 +609,8 @@ class Board {
       const monitor = this.monitors.get(monitorId);
       if (!monitor) return false;
       return this.devicesTree.unmountTool(to, {
-        runtimeContext: {
-          board: this,
-          monitor,
-        },
+        board: this,
+        monitor,
       });
     });
 

@@ -2,8 +2,8 @@
  * @file 基础修饰节点处理器
  * @description
  * 提供 createPrefixNodeHandler，是所有修饰节点的根基。
- * 它封装了状态读写、前缀上下文 helper（routeTo / routeToChild / bubbleToParent / stop），
- * 让调用方只需在 handle() 中编写路由逻辑。
+ * 它封装了节点状态读写与局部路由 helper，
+ * 让调用方只需在 handle() 中编写向下分发逻辑。
  * @module core/prefixs/handler
  * @author Zhou Chenyu
  */
@@ -15,8 +15,11 @@ import { isPlainObject } from "./utils.js";
  * 创建修饰节点处理器
  * @description
  * 工厂函数，生成可挂载到 DevicesTree 节点上的 handler。
- * 封装了节点状态读写（getState / setState / patchState）和路由 helper（routeTo / routeToChild / bubbleToParent / stop），
- * 调用方只需在 handle() 中编写业务路由逻辑，无需重复状态初始化与包规整。
+ * 封装了节点状态读写（getState / setState / patchState）和局部路由 helper
+ * （routeToChild / stop），调用方只需在 handle() 中编写业务路由逻辑，
+ * 无需重复状态初始化与包规整。
+ *
+ * 当前上下文结构是平面的 { path, context（累积上下文）, getNodeState, setNodeState, ... }。
  * @param {{
  *   initialState?: Object,
  *   handle: Function,
@@ -37,9 +40,9 @@ function createPrefixNodeHandler(options = {}) {
 
   return (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, {
-      defaultTo: context.eventContext?.path ?? "/",
+      defaultTo: context.path ?? "/",
     });
-    const nodePath = context.eventContext?.path ?? "/";
+    const nodePath = context.path ?? "/";
     const readState = () => {
       const currentState = context.getNodeState?.(nodePath);
       return isPlainObject(currentState)
@@ -64,17 +67,21 @@ function createPrefixNodeHandler(options = {}) {
           : readState();
         return writeState(nextState);
       },
-      routeTo(to, signals = packet.signals) {
-        return { to, signals };
+      /**
+       * 路由到指定子节点路径（仅允许向下）
+       * @param {string} to - 子节点路径（相对于当前节点）
+       * @param {Array} [signals=packet.signals] - 信号列表
+       * @returns {{ packets: SignalPacket[] }}
+       */
+      routeToChild(to, signals = packet.signals) {
+        return { packets: [new SignalPacket(to, signals)] };
       },
-      routeToChild(childName, signals = packet.signals) {
-        return { to: childName, signals };
-      },
-      bubbleToParent(signals = packet.signals, to = "..") {
-        return { to, signals };
-      },
+      /**
+       * 终止当前链路路由
+       * @returns {{ packets: [] }}
+       */
       stop() {
-        return [];
+        return { packets: [] };
       },
     });
   };

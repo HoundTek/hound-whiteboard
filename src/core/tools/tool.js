@@ -45,16 +45,26 @@ class Tool {
   }
 
   /**
-   * 合并运行时上下文，生成工具处理所需的只读运行时快照。
-   * @param {Object} [routeRuntimeContext={}] - 路由侧运行时上下文
+   * 将设备树上下文规整为工具上下文。
+   * 当前稳定模型只产出平面 deviceContext；累积上下文保留在 context 字段中。
+   * @param {{
+   *   path?: string, tree?: Object, node?: Object, defaultChild?: string,
+   *   resolvedDefaultChildPath?: string, depth?: number,
+   *   context?: Object, getNodeState?: Function, setNodeState?: Function
+   * }} [handlerContext={}] - 设备树处理上下文
    * @param {Object} [toolContext={}] - 工具固定上下文
    * @returns {Object}
    */
-  createRuntimeContext(routeRuntimeContext = {}, toolContext = {}) {
-    const board = routeRuntimeContext.board ?? toolContext.board;
-    const monitor = routeRuntimeContext.monitor ?? toolContext.monitor;
+  createDeviceContext(handlerContext = {}, toolContext = {}) {
+    const accumulatedContext = handlerContext.context ?? {};
+    const board = accumulatedContext.board ?? toolContext.board;
+    const monitor = accumulatedContext.monitor ?? toolContext.monitor;
+    const allocateObjectId =
+      accumulatedContext.allocateObjectId ??
+      toolContext.allocateObjectId ??
+      board?.allocateObjectId?.bind(board);
     const resolveOwnerChunkId =
-      routeRuntimeContext.resolveOwnerChunkId ??
+      accumulatedContext.resolveOwnerChunkId ??
       toolContext.resolveOwnerChunkId ??
       (typeof monitor?.worldToChunk === "function"
         ? (position) => {
@@ -70,45 +80,19 @@ class Tool {
         : undefined);
 
     return {
-      ...toolContext,
-      ...routeRuntimeContext,
+      tree: handlerContext.tree,
+      node: handlerContext.node,
+      semantics: handlerContext.semantics ?? {},
+      path: handlerContext.path ?? handlerContext.node?.path ?? "",
+      defaultChild: handlerContext.defaultChild ?? "",
+      resolvedDefaultChildPath:
+        handlerContext.resolvedDefaultChildPath ?? handlerContext.path ?? "",
+      depth: handlerContext.depth ?? 0,
       board,
       monitor,
-      allocateObjectId:
-        routeRuntimeContext.allocateObjectId ??
-        toolContext.allocateObjectId ??
-        board?.allocateObjectId?.bind(board),
+      allocateObjectId,
       resolveOwnerChunkId,
-    };
-  }
-
-  /**
-   * 将设备树上下文规整为工具上下文。
-   * @param {{eventContext?: Object, runtimeContext?: Object, getNodeState?: Function, setNodeState?: Function}} [handlerContext={}] - 设备树处理上下文
-   * @param {Object} [toolContext={}] - 工具固定上下文
-   * @returns {Object}
-   */
-  createDeviceContext(handlerContext = {}, toolContext = {}) {
-    const eventContext = handlerContext.eventContext ?? {};
-    const runtimeContext = this.createRuntimeContext(
-      handlerContext.runtimeContext ?? {},
-      toolContext,
-    );
-
-    return {
-      eventContext,
-      runtimeContext,
-      tree: eventContext.tree,
-      node: eventContext.node,
-      path: eventContext.path ?? eventContext.node?.path ?? "",
-      defaultChild: eventContext.defaultChild ?? "",
-      resolvedDefaultChildPath:
-        eventContext.resolvedDefaultChildPath ?? eventContext.path ?? "",
-      depth: eventContext.depth ?? 0,
-      board: runtimeContext.board,
-      monitor: runtimeContext.monitor,
-      allocateObjectId: runtimeContext.allocateObjectId,
-      resolveOwnerChunkId: runtimeContext.resolveOwnerChunkId,
+      context: accumulatedContext,
       getNodeState:
         typeof handlerContext.getNodeState === "function"
           ? handlerContext.getNodeState
@@ -153,7 +137,9 @@ class Tool {
    * @returns {{ sync: Function, cleanup: Function } | null}
    */
   createUiOverlayBinding(toolContext = {}) {
-    if (this.collectUiOverlayEntries === Tool.prototype.collectUiOverlayEntries) {
+    if (
+      this.collectUiOverlayEntries === Tool.prototype.collectUiOverlayEntries
+    ) {
       return null;
     }
 

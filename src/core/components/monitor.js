@@ -178,7 +178,12 @@ class Monitor {
    * @param {{ width: number, height: number }} options - 画布尺寸选项
    * @param {string} monitorId - 显示器 id
    */
-  constructor({ rootElement, baseCanvas, liveCanvas, uiCanvas }, board, { width, height }, monitorId) {
+  constructor(
+    { rootElement, baseCanvas, liveCanvas, uiCanvas },
+    board,
+    { width, height },
+    monitorId,
+  ) {
     this.attachRenderLayers({
       rootElement,
       baseCanvas,
@@ -485,7 +490,7 @@ class Monitor {
 
   /**
    * 创建指定渲染层的脏区聚合器
-  * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
+   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {(dirtyRects: any[]) => any[]}
    */
   createDirtyRectMerger(layer = "live") {
@@ -501,7 +506,7 @@ class Monitor {
 
   /**
    * 获取指定渲染层当前 dirty rect policy
-  * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
+   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {{
    *   getThresholds?: () => Record<string, number | undefined>,
    *   getViewportRect?: () => any,
@@ -533,9 +538,8 @@ class Monitor {
    * @returns {Function | undefined}
    */
   registerUiOverlayProvider(provider, options = {}) {
-    const registeredProvider = this.uiRenderer?.registerOverlayProvider?.(
-      provider,
-    );
+    const registeredProvider =
+      this.uiRenderer?.registerOverlayProvider?.(provider);
 
     if (registeredProvider && options.invalidate !== false) {
       this.requestViewportUiRender();
@@ -917,10 +921,8 @@ class Monitor {
    */
   unmountTool(path) {
     return this.devicesTree.unmountTool(joinPath(this.monitorId, path), {
-      runtimeContext: {
-        board: this.board,
-        monitor: this,
-      },
+      board: this.board,
+      monitor: this,
     });
   }
 }

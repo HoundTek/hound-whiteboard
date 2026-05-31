@@ -145,7 +145,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
     );
 
     // success 信号
-    tool.process(
+    const result = tool.process(
       {
         signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
       },
@@ -164,6 +164,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       },
     );
 
+    expect(result).toBeUndefined();
     expect(object.position).toEqual(new Vector(10, 6));
     expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
       new Set([object]),

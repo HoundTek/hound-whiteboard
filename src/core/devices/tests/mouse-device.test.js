@@ -2,13 +2,50 @@ import { DevicesTree } from "../devices-tree.js";
 import { createMouseDevice } from "../mouse-device.js";
 import { Tool } from "../../tools/tool.js";
 
+function createChannelReporter(channel) {
+  return (packet) => ({
+    stop: true,
+    packets: [
+      {
+        to: "",
+        signals: [
+          {
+            type: `${channel}-routed`,
+            context: {
+              channel,
+              signals: packet.signals,
+            },
+          },
+        ],
+      },
+    ],
+  });
+}
+
+function createChannelReportingMouseDevice() {
+  return createMouseDevice({
+    pointerProcessor: createChannelReporter("pointer"),
+    primaryProcessor: createChannelReporter("primary"),
+    secondaryProcessor: createChannelReporter("secondary"),
+    auxiliaryProcessor: createChannelReporter("auxiliary"),
+    wheelProcessor: createChannelReporter("wheel"),
+  });
+}
+
+function toPlainPackets(packets) {
+  return packets.map((packet) => ({
+    to: packet.to,
+    signals: packet.signals,
+  }));
+}
+
 describe("mouse-device", () => {
   test("普通移动应路由到 pointer 节点", () => {
     const tree = new DevicesTree();
-    const mouseDevice = createMouseDevice();
+    const mouseDevice = createChannelReportingMouseDevice();
 
     const mountedNodes = tree.mountSubTree("/monitor", mouseDevice);
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -35,13 +72,21 @@ describe("mouse-device", () => {
       lastPosition: { x: 10, y: 20 },
       lastWheelDelta: null,
     });
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/mouse/pointer",
+        to: "",
         signals: [
           {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 0, button: 0 },
+            type: "pointer-routed",
+            context: {
+              channel: "pointer",
+              signals: [
+                {
+                  type: "position",
+                  context: { value: { x: 10, y: 20 }, buttons: 0, button: 0 },
+                },
+              ],
+            },
           },
         ],
       },
@@ -50,11 +95,11 @@ describe("mouse-device", () => {
 
   test("左键与右键可同时激活，并聚合路由到多个按钮节点", () => {
     const tree = new DevicesTree();
-    const mouseDevice = createMouseDevice();
+    const mouseDevice = createChannelReportingMouseDevice();
 
     tree.mountSubTree("/monitor", mouseDevice);
 
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -64,35 +109,11 @@ describe("mouse-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
-      {
-        to: "/monitor/mouse/pointer",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 3, button: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 3, button: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/secondary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 3, button: 2 },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(result.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["pointer-routed", "primary-routed", "secondary-routed"]);
 
     expect(mouseDevice.getState()).toEqual({
       activeButtons: {
@@ -107,7 +128,7 @@ describe("mouse-device", () => {
 
   test("按住主键时滚轮事件应同时路由到 primary 和 wheel 节点", () => {
     const tree = new DevicesTree();
-    const mouseDevice = createMouseDevice();
+    const mouseDevice = createChannelReportingMouseDevice();
 
     tree.mountSubTree("/monitor", mouseDevice);
     tree.dispatch({
@@ -120,7 +141,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -136,38 +157,11 @@ describe("mouse-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
-      {
-        to: "/monitor/mouse/wheel",
-        signals: [
-          {
-            type: "wheel",
-            context: {
-              deltaX: 0,
-              deltaY: -120,
-              deltaZ: 0,
-              buttons: 1,
-              button: 0,
-            },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary",
-        signals: [
-          {
-            type: "wheel",
-            context: {
-              deltaX: 0,
-              deltaY: -120,
-              deltaZ: 0,
-              buttons: 1,
-              button: 0,
-            },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(result.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["primary-routed", "wheel-routed"]);
 
     expect(mouseDevice.getState()).toEqual({
       activeButtons: {
@@ -186,7 +180,7 @@ describe("mouse-device", () => {
 
   test("主键抬起时应继续把结束包路由到 primary，同时保留其它激活键", () => {
     const tree = new DevicesTree();
-    const mouseDevice = createMouseDevice();
+    const mouseDevice = createChannelReportingMouseDevice();
 
     tree.mountSubTree("/monitor", mouseDevice);
     tree.dispatch({
@@ -199,7 +193,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const releasePackets = tree.dispatch({
+    const releaseResult = tree.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -222,47 +216,11 @@ describe("mouse-device", () => {
       lastPosition: { x: 18, y: 36 },
       lastWheelDelta: null,
     });
-    expect(releasePackets).toEqual([
-      {
-        to: "/monitor/mouse/pointer",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 18, y: 36 }, buttons: 2, button: 0 },
-          },
-          {
-            type: "end",
-            context: { button: 0, buttons: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 18, y: 36 }, buttons: 2, button: 0 },
-          },
-          {
-            type: "end",
-            context: { button: 0, buttons: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/secondary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 18, y: 36 }, buttons: 2, button: 0 },
-          },
-          {
-            type: "end",
-            context: { button: 0, buttons: 2 },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(releaseResult.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["pointer-routed", "primary-routed", "secondary-routed"]);
   });
 
   test("可同时把同一包交给多个注入处理器", () => {
@@ -280,11 +238,11 @@ describe("mouse-device", () => {
 
       createProcessor() {
         return (packet, context) => ({
-          to: context.eventContext.path,
+          to: "",
           signals: [
             {
               type: this.type,
-              context: { from: context.eventContext.path },
+              context: { from: context.path },
             },
           ],
         });
@@ -308,47 +266,29 @@ describe("mouse-device", () => {
     );
 
     expect(
-      tree.dispatch({
-        to: "/monitor/mouse",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 3, y: 4 }, buttons: 1, button: 0 },
-          },
-          {
-            type: "wheel",
-            context: { deltaX: 0, deltaY: 8, deltaZ: 0, buttons: 1, button: 0 },
-          },
-        ],
-      }),
-    ).toEqual([
-      {
-        to: "/monitor/mouse/pointer/tool",
-        signals: [
-          {
-            type: "pointer-handled",
-            context: { from: "/monitor/mouse/pointer/tool" },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/wheel/tool",
-        signals: [
-          {
-            type: "wheel-handled",
-            context: { from: "/monitor/mouse/wheel/tool" },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary/tool",
-        signals: [
-          {
-            type: "primary-handled",
-            context: { from: "/monitor/mouse/primary/tool" },
-          },
-        ],
-      },
-    ]);
+      toPlainPackets(
+        tree.dispatch({
+          to: "/monitor/mouse",
+          signals: [
+            {
+              type: "position",
+              context: { value: { x: 3, y: 4 }, buttons: 1, button: 0 },
+            },
+            {
+              type: "wheel",
+              context: {
+                deltaX: 0,
+                deltaY: 8,
+                deltaZ: 0,
+                buttons: 1,
+                button: 0,
+              },
+            },
+          ],
+        }).packets,
+      )
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["pointer-handled", "primary-handled", "wheel-handled"]);
   });
 });

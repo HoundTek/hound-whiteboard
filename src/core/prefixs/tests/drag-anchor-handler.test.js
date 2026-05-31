@@ -10,7 +10,7 @@ describe("drag-anchor-handler", () => {
       .defaultChild("tool")
       .node("tool")
       .handler((pkt, ctx) => ({
-        to: ctx.eventContext.path,
+        to: "",
         signals: pkt.signals,
       }))
       .end()
@@ -25,7 +25,7 @@ describe("drag-anchor-handler", () => {
     });
 
     // 首个 position：捕获锚点，不转发
-    expect(result).toEqual([]);
+    expect(result.packets).toEqual([]);
   });
 
   test("后续 position 信号应输出累计位移 {x, y}", () => {
@@ -36,7 +36,7 @@ describe("drag-anchor-handler", () => {
       .defaultChild("tool")
       .node("tool")
       .handler((pkt, ctx) => ({
-        to: ctx.eventContext.path,
+        to: "",
         signals: pkt.signals,
       }))
       .end()
@@ -57,10 +57,12 @@ describe("drag-anchor-handler", () => {
       signals: [{ type: "position", context: { value: { x: 120, y: 220 } } }],
     });
 
-    expect(result).toEqual([
+    expect(result.packets).toEqual([
       {
-        to: "/monitor/drag/tool",
-        signals: [{ type: "displacement", context: { value: { x: 20, y: 20 } } }],
+        to: "",
+        signals: [
+          { type: "displacement", context: { value: { x: 20, y: 20 } } },
+        ],
       },
     ]);
   });
@@ -73,7 +75,7 @@ describe("drag-anchor-handler", () => {
       .defaultChild("tool")
       .node("tool")
       .handler((pkt, ctx) => ({
-        to: ctx.eventContext.path,
+        to: "",
         signals: pkt.signals,
       }))
       .end()
@@ -94,9 +96,7 @@ describe("drag-anchor-handler", () => {
       signals: [{ type: "end" }],
     });
 
-    expect(result).toEqual([
-      { to: "/monitor/drag/tool", signals: [{ type: "end" }] },
-    ]);
+    expect(result.packets).toEqual([{ to: "", signals: [{ type: "end" }] }]);
 
     // 验证锚点已清空：下一个 position 应再次成为"首个"
     const result2 = tree.dispatch({
@@ -104,7 +104,7 @@ describe("drag-anchor-handler", () => {
       signals: [{ type: "position", context: { value: { x: 50, y: 80 } } }],
     });
 
-    expect(result2).toEqual([]);
+    expect(result2.packets).toEqual([]);
   });
 
   test("非 position 信号应直接转发不改变锚点", () => {
@@ -115,7 +115,7 @@ describe("drag-anchor-handler", () => {
       .defaultChild("tool")
       .node("tool")
       .handler((pkt, ctx) => ({
-        to: ctx.eventContext.path,
+        to: "",
         signals: pkt.signals,
       }))
       .end()
@@ -135,8 +135,8 @@ describe("drag-anchor-handler", () => {
       signals: [{ type: "success" }],
     });
 
-    expect(result).toEqual([
-      { to: "/monitor/drag/tool", signals: [{ type: "success" }] },
+    expect(result.packets).toEqual([
+      { to: "", signals: [{ type: "success" }] },
     ]);
 
     // 锚点仍存在：下一个 position 应计算累计位移
@@ -145,10 +145,12 @@ describe("drag-anchor-handler", () => {
       signals: [{ type: "position", context: { value: { x: 25, y: 40 } } }],
     });
 
-    expect(result2).toEqual([
+    expect(result2.packets).toEqual([
       {
-        to: "/monitor/drag/tool",
-        signals: [{ type: "displacement", context: { value: { x: 15, y: 20 } } }],
+        to: "",
+        signals: [
+          { type: "displacement", context: { value: { x: 15, y: 20 } } },
+        ],
       },
     ]);
   });

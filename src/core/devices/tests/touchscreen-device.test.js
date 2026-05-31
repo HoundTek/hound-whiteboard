@@ -16,7 +16,7 @@ describe("touchscreen-device", () => {
       "/monitor/touchscreen/contacts",
     ]);
 
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         {
@@ -41,9 +41,9 @@ describe("touchscreen-device", () => {
       },
     ]);
 
-    expect(packets).toEqual([
+    expect(result.packets).toEqual([
       {
-        to: "/monitor/touchscreen/contacts",
+        to: "",
         signals: [
           {
             type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
@@ -87,7 +87,7 @@ describe("touchscreen-device", () => {
       ],
     });
 
-    const packets = tree.dispatch({
+    const result = tree.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         { type: "end", context: { touchId: "finger-1" } },
@@ -105,9 +105,9 @@ describe("touchscreen-device", () => {
       },
     ]);
 
-    expect(packets).toEqual([
+    expect(result.packets).toEqual([
       {
-        to: "/monitor/touchscreen/contacts",
+        to: "",
         signals: [
           {
             type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,

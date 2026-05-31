@@ -21,8 +21,8 @@ describe("Tool", () => {
     const result = processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
-        eventContext: { path: "/monitor/s-pen/pen" },
-        runtimeContext: {},
+        path: "/monitor/s-pen/pen",
+        context: {},
       },
     );
 
@@ -36,8 +36,7 @@ describe("Tool", () => {
         deviceContext: expect.objectContaining({
           board: "board-context",
           path: "/monitor/s-pen/pen",
-          eventContext: expect.objectContaining({ path: "/monitor/s-pen/pen" }),
-          runtimeContext: expect.objectContaining({ board: "board-context" }),
+          context: {},
         }),
       },
     ]);
@@ -68,8 +67,8 @@ describe("Tool", () => {
     processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
-        eventContext: { path: "/monitor/s-pen/pen" },
-        runtimeContext: {},
+        path: "/monitor/s-pen/pen",
+        context: {},
       },
     );
 
@@ -103,8 +102,8 @@ describe("Tool", () => {
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
       {
-        eventContext: { path: "/monitor/s-pen/pen" },
-        runtimeContext: {},
+        path: "/monitor/s-pen/pen",
+        context: {},
       },
     );
 
@@ -114,6 +113,63 @@ describe("Tool", () => {
         y: 20,
       }),
     ).toBe(3);
+  });
+
+  test("createProcessor 应优先使用累积 context 中的 board/monitor 并保留平面上下文", () => {
+    class TestTool extends Tool {
+      calls = [];
+
+      process(signalPacket, deviceContext) {
+        this.calls.push({ signalPacket, deviceContext });
+      }
+
+      reset() {
+        this.calls = [];
+      }
+    }
+
+    const tool = new TestTool();
+    const boardFromContext = {
+      allocateObjectId() {
+        return 11;
+      },
+    };
+    const monitorFromContext = {
+      worldToChunk() {
+        return { chunkId: 9 };
+      },
+    };
+
+    tool.createProcessor({
+      board: { allocateObjectId: () => 99 },
+      monitor: { worldToChunk: () => ({ chunkId: 77 }) },
+    })(
+      { signals: [{ type: "trigger", context: {} }] },
+      {
+        path: "/monitor/s-pen/pen",
+        context: {
+          board: boardFromContext,
+          monitor: monitorFromContext,
+          customFlag: true,
+        },
+      },
+    );
+
+    expect(tool.calls[0].deviceContext).toEqual(
+      expect.objectContaining({
+        board: boardFromContext,
+        monitor: monitorFromContext,
+        context: expect.objectContaining({ customFlag: true }),
+      }),
+    );
+    expect(tool.calls[0].deviceContext.allocateObjectId()).toBe(11);
+    expect(
+      tool.calls[0].deviceContext.resolveOwnerChunkId({ x: 1, y: 2 }),
+    ).toBe(9);
+    expect(tool.calls[0].deviceContext.path).toBe("/monitor/s-pen/pen");
+    expect(tool.calls[0].deviceContext.semantics).toEqual({});
+    expect(tool.calls[0].deviceContext.eventContext).toBeUndefined();
+    expect(tool.calls[0].deviceContext.runtimeContext).toBeUndefined();
   });
 
   test("createProcessor 不再默认暴露坐标转换能力", () => {
@@ -135,8 +191,8 @@ describe("Tool", () => {
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
       {
-        eventContext: { path: "/monitor/s-pen/pen" },
-        runtimeContext: {},
+        path: "/monitor/s-pen/pen",
+        context: {},
       },
     );
 
@@ -152,8 +208,8 @@ describe("Tool", () => {
 
     const tool = new TestTool();
     const handlerContext = {
-      eventContext: { path: "/monitor/s-pen/pen" },
-      runtimeContext: {},
+      path: "/monitor/s-pen/pen",
+      context: {},
       getNodeState() {
         return {};
       },
@@ -168,8 +224,8 @@ describe("Tool", () => {
     );
 
     expect(handlerContext).toEqual({
-      eventContext: { path: "/monitor/s-pen/pen" },
-      runtimeContext: {},
+      path: "/monitor/s-pen/pen",
+      context: {},
       getNodeState: handlerContext.getNodeState,
       setNodeState: handlerContext.setNodeState,
     });

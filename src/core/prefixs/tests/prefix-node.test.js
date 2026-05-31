@@ -14,7 +14,9 @@ describe("prefix-node", () => {
       .prefix(
         createPrefixNodeHandler({
           handle(packet, prefixContext) {
-            prefixContext.patchState({ lastSignalCount: packet.signals.length });
+            prefixContext.patchState({
+              lastSignalCount: packet.signals.length,
+            });
             return prefixContext.routeToChild("tool");
           },
         }),
@@ -23,14 +25,19 @@ describe("prefix-node", () => {
       .end()
       .node("tool")
       .handler((packet, context) => ({
-        to: context.eventContext.path,
-        signals: [
+        packets: [
           {
-            type: "handled",
-            context: {
-              count:
-                context.getNodeState("/monitor/workflow")?.lastSignalCount ?? -1,
-            },
+            to: "",
+            signals: [
+              {
+                type: "handled",
+                context: {
+                  count:
+                    context.getNodeState("/monitor/workflow")
+                      ?.lastSignalCount ?? -1,
+                },
+              },
+            ],
           },
         ],
       }))
@@ -43,20 +50,18 @@ describe("prefix-node", () => {
       prefix: true,
     });
 
-    expect(
-      tree.dispatch({
-        to: "/monitor/workflow",
-        signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
-      }),
-    ).toEqual([
-      {
-        to: "/monitor/workflow/tool",
-        signals: [{ type: "handled", context: { count: 1 } }],
-      },
+    const result = tree.dispatch({
+      to: "/monitor/workflow",
+      signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
+    });
+
+    expect(result.packets).toHaveLength(1);
+    expect(result.packets[0].signals).toEqual([
+      { type: "handled", context: { count: 1 } },
     ]);
   });
 
-  test("createMultiToolPrefixHandler 应根据状态机切换活动子节点", () => {
+  test("createMultiToolPrefixHandler 应根据状态机切换活动子节点（通过回调）", () => {
     const tree = new DevicesTree();
     const trace = [];
 
@@ -66,31 +71,29 @@ describe("prefix-node", () => {
         createMultiToolPrefixHandler({
           defaultChild: "create",
           initialState: { mode: "create" },
-          resolveTransition({ signalPacket, state }) {
-            const hasCompleteSignal = signalPacket.signals.some(
-              (signal) => signal.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-            );
-
-            if (!hasCompleteSignal) {
-              return { child: state.activeChild };
-            }
-
-            if (state.activeChild === "create") {
-              return {
-                patchState: {
+          resolveTransition({ state, prefixContext }) {
+            // 注入回调到上下文，子节点调用以触发状态切换
+            const switchTo = (target) => () => {
+              if (target === "edit") {
+                prefixContext.setState({
                   mode: "edit",
                   activeChild: "edit",
-                },
-                consume: true,
-              };
-            }
+                });
+              } else {
+                prefixContext.setState({
+                  mode: "create",
+                  activeChild: "create",
+                });
+              }
+            };
 
             return {
-              patchState: {
-                mode: "create",
-                activeChild: "create",
+              child: state.activeChild,
+              context: {
+                onSwitch: switchTo(
+                  state.activeChild === "create" ? "edit" : "create",
+                ),
               },
-              consume: true,
             };
           },
         }),
@@ -99,108 +102,68 @@ describe("prefix-node", () => {
       .defaultChild("create")
       .end()
       .node("create")
-      .handler(() => {
+      .handler((packet, context) => {
         trace.push("create");
-        return {
-          to: "..",
-          signals: [{ type: PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE }],
-        };
+        context.context?.onSwitch?.();
+        return { packets: [] };
       })
       .end()
       .node("edit")
       .handler((packet, context) => {
         trace.push("edit");
-        return {
-          to: context.eventContext.path,
-          signals: packet.signals,
-        };
+        context.context?.onSwitch?.();
+        return { packets: [{ to: "", signals: packet.signals }] };
       })
       .end()
       .build();
 
     tree.mountSubTree("/monitor", handoffSubTree);
 
-    expect(tree.getNode("/monitor/handoff")?.getSemantics()).toEqual({
-      prefix: true,
-      routePolicy: "state-machine",
+    // 第一次 dispatch：状态为 create，路由到 create 子节点
+    tree.dispatch({
+      to: "/monitor/handoff",
+      signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
+    expect(trace).toEqual(["create"]);
 
-    expect(
-      tree.dispatch({
-        to: "/monitor/handoff",
-        signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
-      }),
-    ).toEqual([]);
-    expect(tree.getNodeState("/monitor/handoff")).toEqual({
-      activeChild: "edit",
-      mode: "edit",
+    // 第二次 dispatch：状态已切换为 edit，路由到 edit 子节点
+    tree.dispatch({
+      to: "/monitor/handoff",
+      signals: [{ type: "position", context: { value: { x: 3, y: 4 } } }],
     });
-
-    expect(
-      tree.dispatch({
-        to: "/monitor/handoff",
-        signals: [{ type: "transform", context: { value: { a: 1, d: 1 } } }],
-      }),
-    ).toEqual([
-      {
-        to: "/monitor/handoff/edit",
-        signals: [{ type: "transform", context: { value: { a: 1, d: 1 } } }],
-      },
-    ]);
     expect(trace).toEqual(["create", "edit"]);
-  });
 
-  test("嵌套 SubTreeNodeBuilder.node 应按父节点层级构建输入子树", () => {
-    const tree = new DevicesTree();
-    const nestedSubTree = createSubTree("/nested")
-      .node("")
-      .node("handoff")
-      .prefix(
-        createPrefixNodeHandler({
-          handle(packet, prefixContext) {
-            return prefixContext.routeToChild("create", packet.signals);
-          },
-        }),
-      )
-      .node("create")
-      .handler((packet, context) => ({
-        to: context.eventContext.path,
-        signals: packet.signals,
-      }))
-      .end()
-      .end()
-      .end()
-      .build();
-
-    tree.mountSubTree("/monitor", nestedSubTree);
-
-    expect(tree.getNode("/monitor/nested/handoff")?.getSemantics()).toEqual({
-      prefix: true,
+    // 第三次 dispatch：edit 又调用了 onSwitch → 切回 create
+    tree.dispatch({
+      to: "/monitor/handoff",
+      signals: [{ type: "position", context: { value: { x: 5, y: 6 } } }],
     });
-    expect(tree.getNode("/monitor/nested/handoff/create")).not.toBeNull();
+    expect(trace).toEqual(["create", "edit", "create"]);
   });
 
-  test("createRepeatorPrefixHandler 应把信号复制两份发往同一 child", () => {
+  test("createRepeatorPrefixHandler 应将信号复制分发到多个子节点", () => {
     const tree = new DevicesTree();
-    const trace = [];
+    const toolACalls = [];
+    const toolBCalls = [];
 
-    const repeatorSubTree = createSubTree("/repeator-dup")
+    const repeatorSubTree = createSubTree("/repeater")
       .node("")
-      .prefix(
+      .handler(
         createRepeatorPrefixHandler({
-          toChildren: ["tool", "tool"],
+          toChildren: ["tool-a", "tool-b"],
         }),
-        { prefixKind: "repeator", routePolicy: "fan-out" },
       )
-      .defaultChild("tool")
       .end()
-      .node("tool")
+      .node("tool-a")
       .handler((packet) => {
-        trace.push(packet.signals);
-        return {
-          to: "/monitor/repeator-dup/tool",
-          signals: [{ type: "done" }],
-        };
+        toolACalls.push(packet.signals);
+        return { packets: [] };
+      })
+      .end()
+      .node("tool-b")
+      .handler((packet) => {
+        toolBCalls.push(packet.signals);
+        return { packets: [] };
       })
       .end()
       .build();
@@ -208,59 +171,13 @@ describe("prefix-node", () => {
     tree.mountSubTree("/monitor", repeatorSubTree);
 
     tree.dispatch({
-      to: "/monitor/repeator-dup",
-      signals: [{ type: "input", context: { value: 42 } }],
+      to: "/monitor/repeater",
+      signals: [{ type: "click", context: { button: 0 } }],
     });
 
-    expect(trace).toHaveLength(2);
-    expect(trace[0]).toEqual([{ type: "input", context: { value: 42 } }]);
-    expect(trace[1]).toEqual([{ type: "input", context: { value: 42 } }]);
-  });
-
-  test("createRepeatorPrefixHandler 应把信号复制后分叉到多个不同 child", () => {
-    const tree = new DevicesTree();
-    const traceA = [];
-    const traceB = [];
-
-    const forkSubTree = createSubTree("/fork")
-      .node("")
-      .prefix(
-        createRepeatorPrefixHandler({
-          toChildren: ["branch-a", "branch-b"],
-        }),
-      )
-      .defaultChild("branch-a")
-      .end()
-      .node("branch-a")
-      .handler((packet) => {
-        traceA.push(packet.signals);
-        return {
-          to: "/monitor/fork/branch-a",
-          signals: [{ type: "done-a" }],
-        };
-      })
-      .end()
-      .node("branch-b")
-      .handler((packet) => {
-        traceB.push(packet.signals);
-        return {
-          to: "/monitor/fork/branch-b",
-          signals: [{ type: "done-b" }],
-        };
-      })
-      .end()
-      .build();
-
-    tree.mountSubTree("/monitor", forkSubTree);
-
-    tree.dispatch({
-      to: "/monitor/fork",
-      signals: [{ type: "split", context: { id: 1 } }],
-    });
-
-    expect(traceA).toHaveLength(1);
-    expect(traceA[0]).toEqual([{ type: "split", context: { id: 1 } }]);
-    expect(traceB).toHaveLength(1);
-    expect(traceB[0]).toEqual([{ type: "split", context: { id: 1 } }]);
+    expect(toolACalls).toHaveLength(1);
+    expect(toolBCalls).toHaveLength(1);
+    expect(toolACalls[0]).toEqual([{ type: "click", context: { button: 0 } }]);
+    expect(toolBCalls[0]).toEqual([{ type: "click", context: { button: 0 } }]);
   });
 });

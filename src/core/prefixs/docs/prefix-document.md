@@ -2,84 +2,78 @@
 
 ## 概述
 
-修饰节点是 DevicesTree 中的一种职责语义，不是新的节点类型。它仍然是一个 `DevicesTreeNode`，只是通过 `semantics.prefix === true` 标记（详见下文）。
+修饰节点是 DevicesTree 中的一种职责语义，不是新的节点类型。它仍然是一个 `DevicesTreeNode`，只是通过 `semantics.prefix === true` 标记。
 
-修饰节点位于信号链路中的前置处理层，负责记录、参数注入、路由分发和状态机切换。它与末端消费工具（Tool）形成互补：修饰节点做前置处理，工具做最终消费。
+修饰节点位于信号链路中的前置处理层，负责记录、参数注入、路由分发、状态机切换和局部上下文编排。它与末端消费工具形成互补：修饰节点负责“怎么走”，工具负责“到了之后做什么”。
 
-## `semantics.prefix === true` 是什么？
+## `semantics.prefix === true` 是什么
 
-它是 `SubTreeNodeBuilder.prefix(handler)` 方法自动写入节点元数据的一个标记：
+它是 `SubTreeNodeBuilder.prefix(handler)` 自动写入节点元数据的一个标记。
 
-```js
-prefix(handler, semantics = {}) {
-  return this.handler(handler).semantics({
-    prefix: true,
-    ...(isPlainObject(semantics) ? semantics : {}),
-  });
-}
-```
+它的作用是：
 
-**它的作用：**
+- 让调试和文档层知道这个节点承担 prefix 职责
+- 让阅读 `semantics` 的调用方快速区分普通节点、prefix 节点和 tool 节点
+- 不引入新的运行时分发分支
 
-- **自描述标记** — 告诉阅读 `eventContext.semantics` 或调试设备树的人"这个节点是修饰节点"
-- **"文档即数据"** — 没有代码依赖 `semantics.prefix` 做条件判断，它是纯标注
-- **和 `semantics.tool` 同类** — `.tool()` 也会写 `semantics.tool = true`，但同样不起路由作用
-- **不作为新节点类** — 修饰节点仍然是 `DevicesTreeNode`，信号分发行为与普通 handler 节点完全一致
+这意味着：
 
-简言之，`semantics.prefix === true` 只是让节点说"我是一个修饰节点"，仅此而已。
+- prefix 仍然是普通 `DevicesTreeNode`
+- dispatcher 不会因为 `semantics.prefix` 自动改写路径
+- 真正的控制逻辑仍由 `handler`、节点 state 和累积 `context` 决定
 
-**模块路径**：`src/core/prefixs/`
+## 当前协作模型
+
+prefix 节点现在依赖三条稳定边界：
+
+- **局部向下路由**：后续包只能继续发给当前节点的后代
+- **节点 state**：保存可变共享数据，例如锚点、活动 child、桥接对象
+- **累积 context**：逐层追加只读信息，例如 `board`、`monitor`、`onToolComplete`
+
+这里需要特别区分两件事：
+
+- 节点 state 适合保存跨多次输入仍然需要保留的局部状态
+- 累积 context 适合保存当前链路内的只读注入数据或回调函数
+
+`PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE` 常量仍然保留，但内置 handoff 和多工具状态机已经优先改用回调，不再把它作为新的稳定握手协议。
 
 ## 模块清单
 
-| 文件                     | 导出                                                                                            | 用途                                             |
-| ------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `index.js`               | 统一导出入口                                                                                    | 集中导出全部公开 API                             |
-| `constants.js`           | `PREFIX_NODE_SIGNAL_TYPES`                                                                      | 信号类型常量                                     |
-| `utils.js`               | `isPlainObject`, `shallowCloneSignals`                                                          | 内部工具方法                                     |
-| `handler.js`             | `createPrefixNodeHandler`                                                                       | 基础修饰节点处理器                               |
-| `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                                                                  | 多工具状态机路由                                 |
-| `repeator-handler.js`    | `createRepeatorPrefixHandler`                                                                   | 信号复制分发                                     |
-| `handoff-handler.js`     | `createHandoffSubTree`, `wrapFirstForHandoff`, `wrapCreatorForHandoff`, `wrapSubTreeForHandoff` | creator→modifier / chooser→modifier 工作流       |
-| `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`                                                                 | 拖拽位移转换，输出 `displacement {x,y}` 累计位移 |
+| 文件                     | 导出                                                                                            | 用途                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------- | --------------------------- |
+| `index.js`               | 统一导出入口                                                                                    | 集中导出全部公开 API        |
+| `constants.js`           | `PREFIX_NODE_SIGNAL_TYPES`                                                                      | 保留的兼容信号常量          |
+| `utils.js`               | `isPlainObject`, `shallowCloneSignals`                                                          | 内部工具方法                |
+| `handler.js`             | `createPrefixNodeHandler`                                                                       | 基础修饰节点处理器          |
+| `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                                                                  | 多工具状态机路由            |
+| `repeator-handler.js`    | `createRepeatorPrefixHandler`                                                                   | 信号复制分发                |
+| `handoff-handler.js`     | `createHandoffSubTree`, `wrapFirstForHandoff`, `wrapCreatorForHandoff`, `wrapSubTreeForHandoff` | first → second 两阶段工作流 |
+| `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`                                                                 | 拖拽位移转换                |
 
 ## 关系图
 
 ```mermaid
 flowchart TD
-    DevicesTree[DevicesTree] --> Prefix[修饰节点]
-    Prefix --> Handler[createPrefixNodeHandler]
-    Handler --> MultiTool[createMultiToolPrefixHandler]
-    Handler --> Repeator[createRepeatorPrefixHandler]
-    MultiTool --> Handoff[createHandoffSubTree]
+    Tree[DevicesTree] --> Prefix[Prefix Node]
+    Prefix --> Base[createPrefixNodeHandler]
+    Base --> Multi[createMultiToolPrefixHandler]
+    Base --> Repeator[createRepeatorPrefixHandler]
+    Multi --> Handoff[createHandoffSubTree]
     Handoff --> WrapFirst[wrapFirstForHandoff]
     Handoff --> WrapCreator[wrapCreatorForHandoff]
     Handoff --> WrapSub[wrapSubTreeForHandoff]
-    Prefix --> Tool[Tool 叶子节点]
+    Prefix --> Tool[Tool Leaf]
 ```
 
-## 信号模型
+## 1. 基础处理器：`createPrefixNodeHandler`
 
-修饰节点之间通过 `SignalPacket` 传递数据，通过 `PREFIX_NODE_SIGNAL_TYPES` 约定的信号类型完成状态协同。
+所有修饰节点的根基。它封装了节点状态读写和最常用的局部路由 helper。
 
-| 信号类型 | 常量                        | 语义                                 |
-| -------- | --------------------------- | ------------------------------------ |
-| 工具完成 | `TOOL_COMPLETE`             | 子工具已完成当前任务，触发状态机切换 |
-| 重复完成 | `REPEATOR_DUPLICATE_SIGNAL` | repeator 已完成信号复制分发          |
+当前前缀上下文提供的 helper 有：
 
-## 处理器分类
-
-### 1. 基础处理器 — `createPrefixNodeHandler`
-
-所有修饰节点的根基。封装了节点状态读写和路由 helper。
-
-**前缀上下文提供的 helper**：
-
-- `state` / `getState()` / `setState()` / `patchState()` — 节点状态管理
-- `routeTo(to, signals)` — 路由到任意路径
-- `routeToChild(childName, signals)` — 路由到当前节点的子节点
-- `bubbleToParent(signals)` — 冒泡到父节点
-- `stop()` — 停止当前链路
+- `state` / `getState()` / `setState()` / `patchState()`：节点状态管理
+- `routeToChild(childName, signals)`：把信号路由到当前节点的某个子节点
+- `stop()`：终止当前链路
 
 ```js
 const handler = createPrefixNodeHandler({
@@ -90,167 +84,108 @@ const handler = createPrefixNodeHandler({
 });
 ```
 
-### 2. 多工具状态机 — `createMultiToolPrefixHandler`
+这里要注意：
+
+- 基础 helper 只提供 `routeToChild`
+- 若要前往更深层后代，可直接返回 `{ packets: [{ to: "child/grandchild", signals }] }`
+- 当前公共 API 不再提供 `bubbleToParent()` 这类向上路由 helper
+
+## 2. 多工具状态机：`createMultiToolPrefixHandler`
 
 基于基础处理器构建，通过 `resolveTransition` 回调实现状态驱动的子节点路由。
 
-**路由决策对象字段**：
+当前路由决策对象的稳定字段有：
 
-| 字段         | 类型      | 语义                 |
-| ------------ | --------- | -------------------- |
-| `child`      | `string`  | 路由到特定子节点     |
-| `consume`    | `boolean` | 消费信号，不继续转发 |
-| `bubble`     | `boolean` | 向上冒泡             |
-| `to`         | `string`  | 自定义目标路径       |
-| `patchState` | `Object`  | 合并到当前状态       |
-| `state`      | `Object`  | 替换当前状态         |
+| 字段         | 类型      | 语义                                |
+| ------------ | --------- | ----------------------------------- |
+| `child`      | `string`  | 路由到特定子节点                    |
+| `consume`    | `boolean` | 消费信号，不继续转发                |
+| `to`         | `string`  | 覆盖默认 child 路径，仍然只指向后代 |
+| `patchState` | `Object`  | 合并到当前状态                      |
+| `state`      | `Object`  | 直接替换当前状态                    |
+| `signals`    | `Array`   | 改写下发信号                        |
+| `context`    | `Object`  | 追加到下游累积 context              |
 
 ```js
 const handler = createMultiToolPrefixHandler({
-  defaultChild: "create",
-  initialState: { mode: "create" },
-  resolveTransition({ signalPacket, state, prefixContext }) {
-    const hasComplete = signalPacket.signals.some(
-      (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-    );
-    if (!hasComplete) return { child: state.activeChild };
-    if (state.mode === "create") {
-      return {
-        patchState: { mode: "edit", activeChild: "edit" },
-        consume: true,
-      };
-    }
-    return {
-      patchState: { mode: "create", activeChild: "create" },
-      consume: true,
-    };
+  defaultChild: "first",
+  initialState: { activeChild: "first", phase: "first" },
+  resolveTransition({ state }) {
+    return { child: state.activeChild };
   },
 });
 ```
 
-### 3. 信号复制分发 — `createRepeatorPrefixHandler`
+`transition.context` 是这次重构里的关键点：它允许 prefix 在不冒泡的情况下，把回调或只读数据继续传给当前活动子链。
 
-将输入信号包复制为多份，分发给相同或不同的子节点。
+## 3. 信号复制分发：`createRepeatorPrefixHandler`
+
+`repeator` 会把输入信号复制为多份，分别发给不同子节点，或同一个子节点的多份副本。
 
 ```js
 const handler = createRepeatorPrefixHandler({
-  toChildren: ["tool-a", "tool-b"], // 分叉到不同 child
-});
-// 或同 child 双发：
-// toChildren: ["tool", "tool"]
-```
-
-### 4. Handoff 工作流 — `createHandoffSubTree`
-
-将 `first → second` 的两阶段工作流封装为结构化子树。
-
-**first 阶段**：可以是 creator（创建对象）、chooser（选择对象）或任意子树。
-**second 阶段**：通常为 modifier（编辑对象）。
-
-两者均可接受 `Tool` 实例或 `SubTreeDefinition`。
-
-```js
-// creator → modifier
-const subTree = createHandoffSubTree({
-  rootPath: "/mouse/primary/handoff",
-  first: new StrokeCreatorTool(),
-  second: new CommonObjectModifierTool(),
-});
-monitor.mountSubTree("", subTree);
-```
-
-```js
-// chooser → modifier
-const subTree = createHandoffSubTree({
-  first: new RectangleObjectChooserTool(),
-  second: new CommonObjectModifierTool(),
+  toChildren: ["tool-a", "tool-b"],
 });
 ```
 
-```js
-// SubTreeDefinition + wrapSubTreeForHandoff 补 TOOL_COMPLETE
-const circle = createRandomCircleSubTree({ rootPath: "/chain" });
-const subTree = createHandoffSubTree({
-  first: wrapSubTreeForHandoff(circle),
-  second: new CommonObjectModifierTool(),
-});
-```
+若未显式提供 `toChildren`，它会回退到当前 prefix 节点的 `defaultChild`。
 
-**Handoff 状态机流程**：
+## 4. Handoff 工作流：`createHandoffSubTree`
+
+`createHandoffSubTree` 把 `first → second` 的两阶段工作流封装成一棵结构化子树。
+
+典型场景包括：
+
+- creator → modifier
+- chooser → modifier
+- 任意 SubTreeDefinition → modifier
+
+### 当前工作方式
+
+- 根节点是一个 `multi-tool prefix`
+- 根 prefix 根据当前 `state.activeChild` 选择把信号送到 `first` 或 `second`
+- 根 prefix 通过 `transition.context` 向当前活动子链注入 `onToolComplete` 回调
+- `first` 完成时，回调切换到 `second`，必要时把对象从 `first` 节点 state 桥接到 `second` 节点 state
+- `second` 完成时，回调切换回 `first`
 
 ```mermaid
 flowchart LR
-    A[信号进入] --> B{activeChild}
-    B -->|"first"| C[first 处理]
-    C -->|"TOOL_COMPLETE"| D[桥接对象到 second state]
-    D --> E[切换 activeChild='second']
+    A[输入进入 handoff 根节点] --> B{activeChild}
+    B -->|first| C[first 处理]
+    C -->|调用 onToolComplete| D[可选桥接 objects 到 second state]
+    D --> E[切换 activeChild = second]
     E --> F[second 处理]
-    F -->|"TOOL_COMPLETE"| G[切换 activeChild='first']
+    F -->|调用 onToolComplete| G[切换 activeChild = first]
     G --> B
 ```
 
-**辅助函数**：
+### 辅助函数
 
-| 函数                                         | 触发机制                                                        | 适用场景          |
-| -------------------------------------------- | --------------------------------------------------------------- | ----------------- |
-| `wrapFirstForHandoff(tool)`                  | 自动检测：有 `completeCreatedObject` 则 hook，否则 end 信号触发 | creator / chooser |
-| `wrapCreatorForHandoff(tool)`                | hook `completeCreatedObject`                                    | 仅 creator        |
-| `wrapSubTreeForHandoff(subTreeDef, options)` | `options.shouldComplete` 或 end 信号                            | SubTreeDefinition |
+- `wrapCreatorForHandoff(tool)`：hook `completeCreatedObject()`，在 creator 真正完成时调用 `onToolComplete`
+- `wrapFirstForHandoff(tool)`：creator 走 hook 路径，chooser 则在 `end` 且已选中对象时调用 `onToolComplete`
+- `wrapSubTreeForHandoff(subTreeDef, options)`：在子树根节点满足 `shouldComplete` 或收到 `end` 时调用 `onToolComplete`
 
-#### 门控机制（Gate）
+### 兼容说明
 
-`wrapCreatorForHandoff` 和 `wrapFirstForHandoff` 都内置了一层**单次门控**，解决"完成信号延迟"问题。
+`PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE` 仍然保留，用于旧测试、旧工具或局部自定义 workflow 的兼容场景。但对新的 handoff 设计，应该优先理解为“回调通知完成”，而不是“冒泡一个完成信号”。
 
-**问题场景**：
+## 5. 拖拽位移转换：`createDragAnchorPrefixHandler`
 
-```
-手势1 结束 → tool.completeCreatedObject() → (可能异步) → TOOL_COMPLETE
-                      ↓
-              ⚡ 新信号流入（手势2）→ 仍在 first 阶段 → tool 接收新手势
-                      ↓
-              TOOL_COMPLETE 最终发出 → 状态机切换 phase=second
-                      ↓
-              ❌ 手势2 的后续信号被路由到 modifier（错误！）
-```
+`createDragAnchorPrefixHandler` 将位置序列转换为累计位移 `{ x, y }`，并输出 `displacement` 信号。
 
-**门控机制**：
+工作流程是：
 
-- `completeCreatedObject` 被调用时，wrapper 设置内部门控 `gated = true`
-- 门控期间所有到达的信号被直接丢弃（返回 `[]`）
-- 门控在**下次非门控调用**时自动解除（即 handoff 切回 first 后的首个信号）
-- 首次解除信号也被丢弃（因为不知道是哪个阶段的残余），第二个信号开始正常处理
+1. 首个 `position` 信号：捕获锚点，不转发
+2. 后续 `position` 信号：输出从锚点出发的累计位移
+3. `end` 信号：清空锚点并继续下传 `end`
 
-```mermaid
-flowchart LR
-    A[手势1 完成] --> B[gated = true]
-    B --> C[TOOL_COMPLETE 发出]
-    B --> D[⚡ 后续信号]
-    D --> E{wasGated?}
-    E -->|是| F[丢弃]
-    E -->|否| G[正常处理]
-    C --> H[状态机切换]
-    H --> I[second 处理]
-    I --> J[TOOL_COMPLETE 切回 first]
-    J --> K[首个信号 → wasGated=true → 解除门控, 丢弃]
-    K --> L[第二个信号 → 正常处理 ✓]
-```
+它常用于把鼠标世界坐标转换成 modifier 可直接消费的位移输入。
 
-这牺牲了从 second 切回 first 后的首个信号，换取了竞态安全——在同步模型中不影响体验，在异步模型中防止状态机紊乱。
+## 子树构建
 
-### 5. 拖拽位移转换 — `createDragAnchorPrefixHandler`
-
-将鼠标世界坐标序列转换为累计位移 `{x, y}`，以 `"displacement"` 信号输出。
-锚点保持不变，每次输出从锚点出发的累计偏移量。下游手势驱动 modifier
-（如 CommonObjectModifierTool）直接以 `initPos + {x, y}` 更新对象。
-
-**工作流程**：
-
-1. 首个 `position` 信号 → 捕获锚点 `(anchorX, anchorY)`，不转发
-2. 后续 `position` 信号 → 计算 `x = current.x − anchor.x`, `y = current.y − anchor.y`，输出 `{ type: "displacement", context: { value: { x, y } } }`
-3. `end` 信号 → 清空锚点，转发 end
+修饰节点工作流通常通过 `createSubTree` DSL 构建，再通过 `monitor.mountSubTree()` 注册到 DevicesTree。
 
 ```js
-// 手势驱动 modifier
 const subTree = createSubTree("/mouse/primary/handoff")
   .node("")
   .prefix(createDragAnchorPrefixHandler())
@@ -260,45 +195,17 @@ const subTree = createSubTree("/mouse/primary/handoff")
   .end()
   .end()
   .build();
-```
-
-信号路径：
-
-```mermaid
-flowchart LR
-    Mouse[鼠标世界坐标] --> Anchor[createDragAnchorPrefixHandler]
-    Anchor --> Disp["displacement {x,y} 累计位移"]
-    Disp --> Modifier[CommonObjectModifierTool]
-    Modifier -->|initPos + {x,y}| Obj["obj.position 更新"]
-```
-
-## 子树构建
-
-修饰节点工作流通过 `createSubTree` DSL 构建，挂载时通过 `monitor.mountSubTree(path, subTreeDefinition)` 注册到 DevicesTree。
-
-```js
-const subTree = createSubTree("/path")
-  .node("")
-  .prefix(createPrefixNodeHandler({ ... }))
-  .defaultChild("child")
-  .node("child")
-  .tool(someTool)
-  .end()
-  .end()
-  .build();
 
 monitor.mountSubTree("", subTree);
 ```
 
-构建器 API 详见 [设备树文档](../devices/docs/devices-tree-document.md)。
-
 ## 设计约束
 
-- handler 与 tool 不能在同一结构化节点上同时声明
-- 修饰节点语义通过 semantics 元数据与复用 helper 表达，不引入新的节点类
-- 节点状态通过 `getNodeState` / `setNodeState` 显式管理，不依赖隐式共享上下文
-- TOOL_COMPLETE 是父子节点间的标准握手协议
-- **creator / chooser 不再内建 modifier 挂载逻辑**：与 modifier 的衔接全部由 `createHandoffSubTree` 的 `autoBridgeObjects` 完成。creator 在 handoff 模式下仅标记 `isObjectCreationCompleted = true` 而不 apply，chooser 仅做选择并写回上下文，不挂载下游 modifier。
+- `handler` 与 `tool` 不能在同一结构化节点上同时声明
+- prefix 语义通过 `semantics` 标记表达，不引入新的节点类
+- 节点状态通过 `getNodeState()` / `setNodeState()` 显式管理
+- 新设计不再提供 `bubbleToParent()` 这类向上路由 helper
+- first / second 的切换优先使用累积 `context` 中的回调，而不是向上返回信号包
 
 ## 相关文档
 

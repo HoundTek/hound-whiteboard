@@ -67,11 +67,11 @@ class ChunkLoader {
   }
 
   /**
-   * 配置当前 loader 的事件上下文。
-   * @param {{ eventBus?: EventBus, requesterId?: number | string }} [options] - 事件上下文
+   * 配置当前 loader 的请求上下文。
+   * @param {{ eventBus?: EventBus, requesterId?: number | string }} [options] - 请求上下文
    * @returns {ChunkLoader}
    */
-  configureEventContext({ eventBus, requesterId } = {}) {
+  configureRequestContext({ eventBus, requesterId } = {}) {
     this.eventBus = eventBus;
     this.requesterId = requesterId;
     return this;
