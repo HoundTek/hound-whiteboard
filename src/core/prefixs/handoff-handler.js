@@ -217,12 +217,20 @@ function isToolInstance(value) {
  * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
  */
 function wrapCreatorForHandoff(tool) {
+  if (tool.__handoffWrapped) {
+    throw new TypeError(
+      "Tool instance has already been wrapped for handoff. " +
+        "Each tool instance can only participate in one handoff workflow.",
+    );
+  }
+
   let processor = null;
   let completeRequested = false;
 
   // 替换 completeCreatedObject，拦截完成信号但不调用原始实现
   // handoff 工作流中由 createHandoffSubDAG 的 autoBridgeObjects 负责
   // 将对象从 creator 节点状态桥接到 modifier 节点状态
+  tool.__handoffWrapped = true;
   tool.completeCreatedObject = function (interaction) {
     tool.syncCreatedObjectContext?.(interaction?.deviceContext, tool.obj);
     if (
@@ -319,9 +327,17 @@ function wrapFirstForHandoff(tool) {
  * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
  */
 function wrapSecondForHandoff(tool) {
+  if (tool.__handoffWrapped) {
+    throw new TypeError(
+      "Tool instance has already been wrapped for handoff. " +
+        "Each tool instance can only participate in one handoff workflow.",
+    );
+  }
+
   let processor = null;
   let completeRequested = false;
 
+  tool.__handoffWrapped = true;
   if (typeof tool.applyModifiedObjects === "function") {
     const originalApplyModifiedObjects = tool.applyModifiedObjects.bind(tool);
     tool.applyModifiedObjects = function (modificationContext, objects) {
@@ -483,6 +499,12 @@ function createHandoffSubDAG(options = {}) {
     throw new TypeError("createHandoffSubDAG requires both first and second.");
   }
 
+  if (isToolInstance(first) && isToolInstance(second) && first === second) {
+    throw new TypeError(
+      "createHandoffSubDAG: first and second cannot be the same tool instance.",
+    );
+  }
+
   // 保存 handoff 根节点路径用于状态桥接
   let handoffBasePath = "";
 
@@ -595,5 +617,6 @@ export {
   createHandoffSubDAG,
   wrapCreatorForHandoff,
   wrapFirstForHandoff,
+  wrapSecondForHandoff,
   wrapSubDAGForHandoff,
 };

@@ -8,6 +8,7 @@ import {
   createHandoffSubDAG,
   wrapCreatorForHandoff,
   wrapFirstForHandoff,
+  wrapSecondForHandoff,
   wrapSubDAGForHandoff,
 } from "../handoff-handler.js";
 import {
@@ -649,6 +650,49 @@ describe("handoff-handler", () => {
           p.signals.some((s) => s.type === "handled"),
         ),
       ).toBe(true);
+    });
+  });
+
+  describe("重复实例检查", () => {
+    test("createHandoffSubDAG 的 first 和 second 为同一 tool 实例时应抛错", () => {
+      const tool = createMockCreator();
+      expect(() =>
+        createHandoffSubDAG({
+          rootPath: "/bad",
+          first: tool,
+          second: tool,
+        }),
+      ).toThrow(/same tool instance/i);
+    });
+
+    test("wrapCreatorForHandoff 对同一 tool 调用两次应抛错", () => {
+      const tool = createMockCreator();
+      wrapCreatorForHandoff(tool);
+      expect(() => wrapCreatorForHandoff(tool)).toThrow(
+        /already been wrapped/i,
+      );
+    });
+
+    test("wrapFirstForHandoff 对 creator 调用两次应抛错（走 wrapCreatorForHandoff）", () => {
+      const tool = createMockCreator();
+      wrapFirstForHandoff(tool);
+      expect(() => wrapFirstForHandoff(tool)).toThrow(
+        /already been wrapped/i,
+      );
+    });
+
+    test("wrapSecondForHandoff 对同一 modifier tool 调用两次应抛错", () => {
+      const dag = new DevicesDAG();
+      const modifier = new (class extends Tool {
+        process() {}
+        applyModifiedObjects() {
+          return true;
+        }
+      })();
+      wrapSecondForHandoff(modifier);
+      expect(() => wrapSecondForHandoff(modifier)).toThrow(
+        /already been wrapped/i,
+      );
     });
   });
 });

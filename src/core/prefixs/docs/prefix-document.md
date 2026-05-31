@@ -35,20 +35,17 @@ prefix 节点现在依赖三条稳定边界：
 - 节点 state 适合保存跨多次输入仍然需要保留的局部状态
 - 累积 context 适合保存当前链路内的只读注入数据或回调函数
 
-`PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE` 常量仍然保留，但内置 handoff 和多工具状态机已经优先改用回调，不再把它作为新的稳定握手协议。
-
 ## 模块清单
 
-| 文件                     | 导出                                                                                            | 用途                        |
-| ------------------------ | ----------------------------------------------------------------------------------------------- | --------------------------- |
-| `index.js`               | 统一导出入口                                                                                    | 集中导出全部公开 API        |
-| `constants.js`           | `PREFIX_NODE_SIGNAL_TYPES`                                                                      | 保留的兼容信号常量          |
-| `utils.js`               | `isPlainObject`, `shallowCloneSignals`                                                          | 内部工具方法                |
-| `handler.js`             | `createPrefixNodeHandler`                                                                       | 基础修饰节点处理器          |
-| `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                                                                  | 多工具状态机路由            |
-| `repeator-handler.js`    | `createRepeatorPrefixHandler`                                                                   | 信号复制分发                |
+| 文件                     | 导出                                                                                          | 用途                        |
+| ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------- |
+| `index.js`               | 统一导出入口                                                                                  | 集中导出全部公开 API        |
+| `utils.js`               | `isPlainObject`, `shallowCloneSignals`                                                        | 内部工具方法                |
+| `handler.js`             | `createPrefixNodeHandler`                                                                     | 基础修饰节点处理器          |
+| `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                                                                | 多工具状态机路由            |
+| `repeator-handler.js`    | `createRepeatorPrefixHandler`                                                                 | 信号复制分发                |
 | `handoff-handler.js`     | `createHandoffSubDAG`, `wrapFirstForHandoff`, `wrapCreatorForHandoff`, `wrapSubDAGForHandoff` | first → second 两阶段工作流 |
-| `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`                                                                 | 拖拽位移转换                |
+| `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`                                                               | 拖拽位移转换                |
 
 ## 关系图
 
@@ -88,7 +85,7 @@ const handler = createPrefixNodeHandler({
 
 - 基础 helper 只提供 `routeToChild`
 - 若要前往更深层后代，可直接返回 `{ packets: [{ to: "child/grandchild", signals }] }`
-- 当前公共 API 不再提供 `bubbleToParent()` 这类向上路由 helper
+- 若要向上路由请使用回调函数
 
 ## 2. 多工具状态机：`createMultiToolPrefixHandler`
 
@@ -116,7 +113,7 @@ const handler = createMultiToolPrefixHandler({
 });
 ```
 
-`transition.context` 是这次重构里的关键点：它允许 prefix 在不冒泡的情况下，把回调或只读数据继续传给当前活动子链。
+`transition.context` 是 prefix 把回调或只读数据传给当前活动子链的关键途径。
 
 ## 3. 信号复制分发：`createRepeatorPrefixHandler`
 
@@ -165,10 +162,6 @@ flowchart LR
 - `wrapFirstForHandoff(tool)`：creator 走 hook 路径，chooser 则在 `end` 且已选中对象时调用 `onToolComplete`
 - `wrapSubDAGForHandoff(subDAGDef, options)`：在子树根节点满足 `shouldComplete` 或收到 `end` 时调用 `onToolComplete`
 
-### 兼容说明
-
-`PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE` 仍然保留，用于旧测试、旧工具或局部自定义 workflow 的兼容场景。但对新的 handoff 设计，应该优先理解为“回调通知完成”，而不是“冒泡一个完成信号”。
-
 ## 5. 拖拽位移转换：`createDragAnchorPrefixHandler`
 
 `createDragAnchorPrefixHandler` 将位置序列转换为累计位移 `{ x, y }`，并输出 `displacement` 信号。
@@ -203,8 +196,7 @@ monitor.mountSubDAG("", builder.build());
 - `handler` 与 `tool` 不能在同一结构化节点上同时声明
 - prefix 语义通过 `semantics` 标记表达，不引入新的节点类
 - 节点状态通过 `getNodeState()` / `setNodeState()` 显式管理
-- 新设计不再提供 `bubbleToParent()` 这类向上路由 helper
-- first / second 的切换优先使用累积 `context` 中的回调，而不是向上返回信号包
+- first / second 的切换使用累积 `context` 中的回调完成
 
 ## 相关文档
 

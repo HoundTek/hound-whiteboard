@@ -1038,4 +1038,62 @@ describe("DevicesDAG", () => {
       // /a/c 不存在 → deferred route 静默终止
     });
   });
+
+  describe("tool 实例重复挂载检查", () => {
+    const makeTool = () => ({
+      createProcessor() {
+        return () => {};
+      },
+      createDeviceContext(hc) {
+        return hc;
+      },
+    });
+
+    test("同一 tool 实例重复 mountWorkflow 应抛错", () => {
+      const dag = new DevicesDAG();
+      const tool = makeTool();
+      dag.mountWorkflow("/wf/a", tool);
+      expect(() => dag.mountWorkflow("/wf/b", tool)).toThrow(
+        /already mounted/i,
+      );
+    });
+
+    test("卸载后重新挂载同一 tool 实例应成功", () => {
+      const dag = new DevicesDAG();
+      const tool = makeTool();
+
+      dag.mountWorkflow("/wf/a", tool);
+
+      dag.unmount("/wf");
+      // 卸载后 _mountedToolInstances 已清理
+      expect(dag._mountedToolInstances.has(tool)).toBe(false);
+
+      // 重新挂载应成功
+      expect(() => dag.mountWorkflow("/wf2/a", tool)).not.toThrow();
+      expect(dag.getNode("/wf2/a")).not.toBeUndefined();
+    });
+
+    test("不同 tool 实例挂载到不同路径应正常", () => {
+      const dag = new DevicesDAG();
+      const toolA = makeTool();
+      const toolB = makeTool();
+      expect(() => dag.mountWorkflow("/wf/a", toolA)).not.toThrow();
+      expect(() => dag.mountWorkflow("/wf/b", toolB)).not.toThrow();
+    });
+
+    test("通过 mountSubDAG 挂载同一 tool 实例两次应抛错", () => {
+      const dag = new DevicesDAG();
+      const tool = makeTool();
+
+      const b1 = createSubDAG("/sub1");
+      b1.node().tool(tool);
+      dag.mountSubDAG("", b1.build());
+
+      const b2 = createSubDAG("/sub2");
+      b2.node().tool(tool);
+      expect(() => dag.mountSubDAG("", b2.build())).toThrow(
+        /already mounted/i,
+      );
+    });
+  });
 });

@@ -410,16 +410,44 @@ class DevicesDAGEdge {
  */
 class DevicesDAG {
   /**
+   * 所有节点（id → 节点）
+   * @type {Map<number, DevicesDAGNode>}
+   */
+  _nodes;
+
+  /**
+   * 节点 id 分配池
+   * @type {CounterPool}
+   */
+  _nodeIdPool;
+
+  /**
+   * 最大分发深度
+   * @type {number}
+   */
+  _maxDispatchDepth;
+
+  /**
+   * 已挂载 tool 实例集合（禁止重复挂载）
+   * @type {Set<import("../tools/tool.js").Tool>}
+   */
+  _mountedToolInstances;
+
+  /**
+   * 根节点
+   * @type {DevicesDAGNode}
+   */
+  _root;
+
+  /**
    * @param {Object} [options={}] - 构造选项
    * @param {number} [options.maxDispatchDepth=32] - 最大分发深度（防止环路）
    */
   constructor(options = {}) {
-    /** @type {Map<number, DevicesDAGNode>} 所有节点（id → 节点） */
     this._nodes = new Map();
-    /** @type {CounterPool} 节点 id 分配池 */
     this._nodeIdPool = new CounterPool(0);
-    /** @type {number} 最大分发深度 */
     this._maxDispatchDepth = options.maxDispatchDepth ?? 32;
+    this._mountedToolInstances = new Set();
 
     // 创建根节点（id = 0，唯一的源）
     this._root = this._createNode(0);
@@ -430,6 +458,30 @@ class DevicesDAG {
   // -----------------------------------------------------------------------
   // 内部方法
   // -----------------------------------------------------------------------
+
+  /**
+   * 注册 tool 实例到 DAG（禁止重复注册）
+   * @param {import("../tools/tool.js").Tool} tool
+   * @throws {Error} 如果该 tool 实例已在 DAG 中
+   * @private
+   */
+  _registerToolInstance(tool) {
+    if (this._mountedToolInstances.has(tool)) {
+      throw new Error(
+        `Tool instance is already mounted in this DAG. A tool instance cannot be mounted more than once.`,
+      );
+    }
+    this._mountedToolInstances.add(tool);
+  }
+
+  /**
+   * 从 DAG 中取消 tool 实例注册
+   * @param {import("../tools/tool.js").Tool} tool
+   * @private
+   */
+  _unregisterToolInstance(tool) {
+    this._mountedToolInstances.delete(tool);
+  }
 
   /**
    * 创建节点并注册到内部表
@@ -793,10 +845,13 @@ class DevicesDAG {
       );
     }
 
+    this._registerToolInstance(workflow);
+
     const processor = workflow.createProcessor(workflowContext);
 
     node.handler = processor;
     node.semantics = { ...node.semantics, tool: true };
+    node._toolInstance = workflow;
 
     const previousUmount = node.umount;
     node.umount = (handlerContext) => {
@@ -898,9 +953,11 @@ class DevicesDAG {
       node.umount = typeof def.umount === "function" ? def.umount : null;
     }
     if (def.tool) {
+      this._registerToolInstance(def.tool);
       const processor = def.tool.createProcessor(def.toolContext ?? {});
       node.handler = processor;
       node.semantics = { ...node.semantics, tool: true };
+      node._toolInstance = def.tool;
 
       const previousUmount = node.umount;
       node.umount = (handlerContext) => {
@@ -1407,11 +1464,17 @@ class DevicesDAG {
       }
     }
 
+    // 取消 tool 实例注册
+    if (root._toolInstance != null) {
+      this._unregisterToolInstance(root._toolInstance);
+    }
+
     // 重置节点状态
     root.handler = null;
     root.semantics = {};
     root.state = {};
     root.umount = null;
+    root._toolInstance = null;
     root.defaultRoute = "";
 
     // 从全局表中移除
@@ -1431,13 +1494,23 @@ class DevicesDAG {
  */
 class DAGNodeBuilder {
   /**
+   * 所属子图构建器
+   * @type {DAGBuilder}
+   */
+  _dagBuilder;
+
+  /**
+   * 子图内局部 id
+   * @type {number}
+   */
+  _localId;
+
+  /**
    * @param {DAGBuilder} dagBuilder - 所属子图构建器
    * @param {number} localId - 子图内局部 id
    */
   constructor(dagBuilder, localId) {
-    /** @type {DAGBuilder} */
     this._dagBuilder = dagBuilder;
-    /** @type {number} */
     this._localId = localId;
   }
 
@@ -1532,20 +1605,50 @@ class DAGNodeBuilder {
  */
 class DAGBuilder {
   /**
+   * 子图根路径前缀
+   * @type {string}
+   */
+  _rootPath;
+
+  /**
+   * 下一个局部 id
+   * @type {number}
+   */
+  _nextLocalId;
+
+  /**
+   * 节点定义（局部 id → 定义）
+   * @type {Map<number, SubDAGNodeDefinition>}
+   */
+  _nodeDefs;
+
+  /**
+   * 边定义列表
+   * @type {SubDAGEdgeDefinition[]}
+   */
+  _edges;
+
+  /**
+   * 子图根节点局部 id
+   * @type {number|null}
+   */
+  _rootNodeId;
+
+  /**
+   * 暴露的 API 映射
+   * @type {Object}
+   */
+  _exposedApi;
+
+  /**
    * @param {string} rootPath - 子图根路径前缀
    */
   constructor(rootPath = "/") {
-    /** @type {string} */
     this._rootPath = toAbsolutePath(normalizePath(rootPath));
-    /** @type {number} */
     this._nextLocalId = 0;
-    /** @type {Map<number, SubDAGNodeDefinition>} */
     this._nodeDefs = new Map();
-    /** @type {SubDAGEdgeDefinition[]} */
     this._edges = [];
-    /** @type {number|null} */
     this._rootNodeId = null;
-    /** @type {Object} */
     this._exposedApi = {};
   }
 

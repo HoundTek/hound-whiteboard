@@ -3,7 +3,6 @@ import {
   createMultiToolPrefixHandler,
   createPrefixNodeHandler,
   createRepeatorPrefixHandler,
-  PREFIX_NODE_SIGNAL_TYPES,
 } from "../index.js";
 
 describe("prefix-node", () => {
