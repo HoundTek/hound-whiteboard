@@ -48,7 +48,7 @@ class Tool {
    * 将设备图上下文规整为工具上下文。
    * 当前稳定模型只产出平面 deviceContext；累积上下文保留在 context 字段中。
    * @param {{
-   *   path?: string, tree?: Object, node?: Object, defaultChild?: string,
+   *   path?: string, ddag?: Object, node?: Object, defaultChild?: string,
    *   resolvedDefaultChildPath?: string, depth?: number,
    *   context?: Object, getNodeState?: Function, setNodeState?: Function
    * }} [handlerContext={}] - 设备图处理上下文

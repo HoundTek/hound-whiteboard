@@ -1,5 +1,5 @@
 /**
- * @file 设备图（Devices DAG）
+ * @file 设备图
  * @description 提供基于有向无环图的设备信号路由、路径解析与分发的核心实现。
  * @module core/devices/devices-dag
  * @author Zhou Chenyu
@@ -12,6 +12,7 @@ import {
   toAbsolutePath,
 } from "../utils/path.js";
 import { SignalPacket } from "./signal.js";
+import { CounterPool } from "../utils/counter-pool.js";
 
 // ---------------------------------------------------------------------------
 // 类型定义（JSDoc）
@@ -29,7 +30,7 @@ import { SignalPacket } from "./signal.js";
  *
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
- * @property {DevicesDAG} dag - 所属设备图
+ * @property {DevicesDAG} ddag - 所属设备图
  * @property {string} path - 当前节点路径（分发所用路径；同一节点可能有多条路径）
  * @property {Object} semantics - 当前节点语义元数据快照
  * @property {string} defaultRoute - 当前节点声明的默认出边名
@@ -172,29 +173,76 @@ function normalizeHandlerResult(rawResult, options = {}) {
  * 设备图节点
  * @class
  * @description 图中一个信号处理单元，持有处理器、语义元数据、可变状态和入边/出边集合。
+ * @author Zhou Chenyu
  */
 class DevicesDAGNode {
   /**
+   * 节点 id
+   * @type {number}
+   */
+  id;
+
+  /**
+   * 节点处理器
+   * @type {DevicesDAGHandler|null}
+   */
+  handler;
+
+  /**
+   * 节点语义元数据
+   * @type {Object}
+   */
+  semantics;
+
+  /**
+   * 节点可变状态
+   * @type {Object}
+   */
+  state;
+
+  /**
+   * 节点卸载钩子
+   * @type {DevicesDAGNodeUmountHandler|null}
+   */
+  umount;
+
+  /**
+   * 默认出边名（当处理器未指定路由时使用）
+   * @type {string}
+   */
+  defaultRoute;
+
+  /**
+   * 出边集合（边名 -> 边）
+   * @type {Map<string, DevicesDAGEdge>}
+   */
+  outEdges;
+
+  /**
+   * 入边集合
+   * @type {Set<DevicesDAGEdge>}
+   */
+  inEdges;
+
+  /**
+   * 节点的 canonical path 表示（由 DAG 维护，确保唯一且稳定）
+   * @type {string|null}
+   */
+  path;
+
+  /**
    * @param {number} id - 节点唯一标识
+   * @constructor
    */
   constructor(id) {
-    /** @type {number} 节点唯一标识（自增整数） */
     this.id = id;
-    /** @type {DevicesDAGHandler|null} 节点处理器 */
     this.handler = null;
-    /** @type {Object} 节点语义元数据 */
     this.semantics = {};
-    /** @type {Object} 节点可变状态 */
     this.state = {};
-    /** @type {DevicesDAGNodeUmountHandler|null} 卸载钩子 */
     this.umount = null;
-    /** @type {string} 默认出边名 */
     this.defaultRoute = "";
-    /** @type {Map<string, DevicesDAGEdge>} 出边（边名 → 边） */
     this.outEdges = new Map();
-    /** @type {Set<DevicesDAGEdge>} 入边集合 */
     this.inEdges = new Set();
-    /** @type {string|null} 节点的 canonical path 表示 */
     this.path = null;
   }
 
@@ -272,14 +320,6 @@ class DevicesDAGNode {
   }
 
   /**
-   * 兼容旧命名：获取默认子链路
-   * @returns {string}
-   */
-  getDefaultChild() {
-    return this.getDefaultRoute();
-  }
-
-  /**
    * 获取卸载钩子
    * @returns {DevicesDAGNodeUmountHandler|null}
    */
@@ -296,19 +336,36 @@ class DevicesDAGNode {
  * 设备图有向边
  * @class
  * @description 连接两个节点的有向边，携带边名；边名在源节点下唯一。
+ * @author Zhou Chenyu
  */
 class DevicesDAGEdge {
+  /**
+   * 边名（在源节点下唯一）
+   * @type {string}
+   */
+  name;
+
+  /**
+   * 源节点
+   * @type {DevicesDAGNode}
+   */
+  source;
+
+  /**
+   * 目标节点
+   * @type {DevicesDAGNode}
+   */
+  target;
+
   /**
    * @param {string} name - 边名
    * @param {DevicesDAGNode} source - 源节点
    * @param {DevicesDAGNode} target - 目标节点
+   * @constructor
    */
   constructor(name, source, target) {
-    /** @type {string} 边名（在源节点下唯一） */
     this.name = name;
-    /** @type {DevicesDAGNode} 源节点 */
     this.source = source;
-    /** @type {DevicesDAGNode} 目标节点 */
     this.target = target;
   }
 }
@@ -345,12 +402,12 @@ class DevicesDAG {
   constructor(options = {}) {
     /** @type {Map<number, DevicesDAGNode>} 所有节点（id → 节点） */
     this._nodes = new Map();
-    /** @type {number} 下一个可用节点 id */
-    this._nextNodeId = 1;
+    /** @type {CounterPool} 节点 id 分配池 */
+    this._nodeIdPool = new CounterPool(0);
     /** @type {number} 最大分发深度 */
     this._maxDispatchDepth = options.maxDispatchDepth ?? 32;
 
-    // 创建根节点（id=0，唯一的源）
+    // 创建根节点（id = 0，唯一的源）
     this._root = this._createNode(0);
     this._root.semantics = { root: true };
     this._root.path = "/";
@@ -362,6 +419,7 @@ class DevicesDAG {
 
   /**
    * 创建节点并注册到内部表
+   * @private
    * @param {number} id - 节点 id
    * @returns {DevicesDAGNode} 新创建的节点
    */
@@ -373,10 +431,11 @@ class DevicesDAG {
 
   /**
    * 分配新节点 id
+   * @private
    * @returns {number} 下一个可用节点 id
    */
   _allocateNodeId() {
-    return this._nextNodeId++;
+    return this._nodeIdPool.generate();
   }
 
   /**
@@ -503,10 +562,6 @@ class DevicesDAG {
    */
   resolveRelativeNode(fromNode, relativePath = "") {
     if (!fromNode) return undefined;
-    // 从根解析绝对路径，然后从 fromNode 的相对偏移来推算？不，直接用路径解析。
-    // 我们需要先得到 fromNode 的某个路径表示，再拼接 relativePath。
-    // 简单方案：用 getNode 解析绝对路径，但 relativePath 可能以 "./" 开头。
-    // 采用 resolvePath 工具函数
     const absolutePath = resolvePath("/", relativePath);
     return this.getNode(absolutePath);
   }
@@ -593,7 +648,7 @@ class DevicesDAG {
   /**
    * 读取节点状态
    * @param {string|number} pathOrId - 节点路径或节点 id
-   * @returns {Object}
+   * @returns {Object} 节点状态快照
    */
   getNodeState(pathOrId) {
     const node =
@@ -630,6 +685,7 @@ class DevicesDAG {
    * @param {Object|null} [options.semantics] - 新语义
    * @param {string|null} [options.defaultRoute] - 新默认出边
    * @param {DevicesDAGNodeUmountHandler|null} [options.umount] - 新卸载钩子
+   * @returns {DevicesDAGNode} 更新后的节点
    */
   configureNode(path, options = {}) {
     const node = this.ensureNode(path);
@@ -660,10 +716,10 @@ class DevicesDAG {
 
   /**
    * 直接挂载一个运行时节点
-   * @param {string} path
-   * @param {DevicesDAGHandler|null} [handler=null]
-   * @param {{semantics?: Object, defaultChild?: string, defaultRoute?: string, umount?: DevicesDAGNodeUmountHandler|null}} [options={}]
-   * @returns {DevicesDAGNode}
+   * @param {string} path - 节点路径
+   * @param {DevicesDAGHandler|null} [handler=null] - 节点处理器
+   * @param {{semantics?: Object, defaultChild?: string, defaultRoute?: string, umount?: DevicesDAGNodeUmountHandler|null}} [options={}] - 配置选项
+   * @returns {DevicesDAGNode} 挂载后的节点
    */
   mount(path, handler = null, options = {}) {
     const node = this.ensureNode(path);
@@ -864,7 +920,6 @@ class DevicesDAG {
 
     return {
       node,
-      dag: this,
       ddag: this,
       path,
       semantics: node.getSemantics?.() ?? { ...node.semantics },
@@ -883,6 +938,199 @@ class DevicesDAG {
   // -----------------------------------------------------------------------
   // 分发
   // -----------------------------------------------------------------------
+
+  /**
+   * 统一的图走法引擎
+   * @description
+   * 从指定节点出发，沿 segments 逐段下钻，每经过一个节点调用其 handler，
+   * 根据返回结果动态调整后续路由（redirect、stop、多路分发、默认出边等）。
+   *
+   * dispatch 和 _routeFromNode 都是此方法的薄包装。
+   *
+   * @param {Object} params
+   * @param {DevicesDAGNode} params.startNode - 起始节点
+   * @param {string} params.startPath - 起始节点路径
+   * @param {string[]} params.segments - 路径段列表（可被循环内修改）
+   * @param {SignalPacket} params.startPacket - 起始信号包
+   * @param {Object} params.accumulatedContext - 初始累积上下文
+   * @param {number} params.depth - 递归深度（内部计算用）
+   * @param {(currentPacket: SignalPacket) => SignalPacket[]} [params.edgeNotFoundFallback]
+   *   - 边不存在时的回退；传入当前信号包，返回回退结果。
+   *   - 不传则返回空数组。
+   * @returns {{ packets: SignalPacket[], context?: Object }}
+   * @private
+   */
+  _walkSegments({
+    startNode,
+    startPath,
+    segments,
+    startPacket,
+    accumulatedContext,
+    depth,
+    edgeNotFoundFallback,
+  }) {
+    let currentNode = startNode;
+    let currentPath = startPath;
+    let currentPacket = startPacket;
+    let mergedContext = { ...accumulatedContext };
+    let contextChanged = false;
+    const finalPackets = [];
+    const deferredRoutes = [];
+
+    /**
+     * 刷新延迟路由队列
+     * @description 将 deferredRoutes 中累积的额外信号包逐一通过 _routeFromNode 分发，
+     * 结果追加到 finalPackets，最后清空队列。
+     */
+    const flushDeferredRoutes = () => {
+      for (const deferredRoute of deferredRoutes) {
+        const subResult = this._routeFromNode(
+          deferredRoute.fromNode,
+          deferredRoute.fromPath,
+          deferredRoute.packet,
+          deferredRoute.context,
+          depth + 1,
+        );
+        if (subResult.packets.length > 0) {
+          finalPackets.push(...subResult.packets);
+        }
+      }
+      deferredRoutes.length = 0;
+    };
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const edge = currentNode.outEdges.get(segment);
+      const child = edge?.target;
+
+      if (!child) {
+        flushDeferredRoutes();
+        const fallback =
+          finalPackets.length > 0
+            ? finalPackets
+            : edgeNotFoundFallback
+              ? edgeNotFoundFallback(currentPacket)
+              : [];
+        return {
+          packets: fallback,
+          context: contextChanged ? mergedContext : undefined,
+        };
+      }
+
+      const childPath = joinPath(currentPath, segment);
+
+      depth++;
+      if (depth > this._maxDispatchDepth) {
+        throw new Error(
+          `Dispatch depth exceeded (${this._maxDispatchDepth}). Possible cycle detected.`,
+        );
+      }
+
+      const handler = child.getHandler?.() ?? child.handler;
+      const handlerContext = this._createHandlerContext(
+        child,
+        childPath,
+        currentPacket,
+        mergedContext,
+        depth,
+      );
+
+      const result = handler
+        ? normalizeHandlerResult(handler(currentPacket, handlerContext))
+        : { packets: [new SignalPacket("", currentPacket.signals)] };
+
+      // 累积上下文合并（禁止覆盖已有键）
+      if (result.context && isPlainObject(result.context)) {
+        for (const key of Object.keys(result.context)) {
+          if (Object.prototype.hasOwnProperty.call(mergedContext, key)) {
+            throw new Error(
+              `Context key "${key}" already exists in accumulated context. Cannot override.`,
+            );
+          }
+        }
+        mergedContext = { ...mergedContext, ...result.context };
+        contextChanged = true;
+      }
+
+      // stop：终止当前链路
+      if (result.stop) {
+        if (result.packets.length > 0) {
+          finalPackets.push(...result.packets);
+        }
+        flushDeferredRoutes();
+        return {
+          packets: finalPackets.length > 0 ? finalPackets : result.packets,
+          context: contextChanged ? mergedContext : undefined,
+        };
+      }
+
+      // redirect：覆盖后续路径段
+      if (result.redirect) {
+        const redirectSegments = normalizePath(result.redirect);
+        segments.splice(i + 1, segments.length - i - 1, ...redirectSegments);
+      }
+
+      if (result.packets.length > 0) {
+        const primaryPacket = SignalPacket.from(result.packets[0]);
+        const remainingPackets = result.packets.slice(1);
+
+        // 额外信号包 → 延迟路由队列
+        for (const extraPacket of remainingPackets) {
+          const p = SignalPacket.from(extraPacket);
+          if (p.to) {
+            deferredRoutes.push({
+              fromNode: child,
+              fromPath: childPath,
+              packet: p,
+              context: mergedContext,
+            });
+          }
+        }
+
+        if (primaryPacket.to) {
+          // 主包指定了下一段路由 → 替换后续路径
+          const primarySegments = normalizePath(primaryPacket.to);
+          segments.splice(i + 1, segments.length - i - 1, ...primarySegments);
+          currentPacket = primaryPacket;
+        } else if (child.getDefaultRoute()) {
+          // 主包无 to → 走节点的默认出边
+          segments.splice(
+            i + 1,
+            segments.length - i - 1,
+            child.getDefaultRoute(),
+          );
+          currentPacket = primaryPacket;
+        } else if (i === segments.length - 1) {
+          // 路径终点 → 收入最终结果
+          finalPackets.push(primaryPacket);
+          break;
+        }
+      } else if (result.explicitPackets) {
+        // handler 显式返回了空 packets → 终止
+        flushDeferredRoutes();
+        return {
+          packets: finalPackets,
+          context: contextChanged ? mergedContext : undefined,
+        };
+      } else if (i === segments.length - 1 && child.getDefaultRoute()) {
+        // handler 无输出但节点有默认出边 → 继续走
+        segments.splice(
+          i + 1,
+          segments.length - i - 1,
+          child.getDefaultRoute(),
+        );
+      }
+
+      currentNode = child;
+      currentPath = childPath;
+    }
+
+    flushDeferredRoutes();
+    return {
+      packets: finalPackets,
+      context: contextChanged ? mergedContext : undefined,
+    };
+  }
 
   /**
    * 从根节点开始分发信号包
@@ -909,137 +1157,15 @@ class DevicesDAG {
       }
     }
 
-    let currentNode = this._root;
-    let currentPath = "/";
-    let currentPacket = startPacket;
-    let mergedContext = { ...context };
-    let contextChanged = false;
-    const finalPackets = [];
-    const deferredRoutes = [];
-    let nodeVisitCount = depth;
-
-    const flushDeferredRoutes = () => {
-      for (const deferredRoute of deferredRoutes) {
-        const subResult = this._routeFromNode(
-          deferredRoute.fromNode,
-          deferredRoute.fromPath,
-          deferredRoute.packet,
-          deferredRoute.context,
-          depth + 1,
-        );
-        if (subResult.packets.length > 0) {
-          finalPackets.push(...subResult.packets);
-        }
-      }
-      deferredRoutes.length = 0;
-    };
-
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const edge = currentNode.outEdges.get(segment);
-      const child = edge?.target;
-
-      if (!child) {
-        flushDeferredRoutes();
-        return {
-          packets:
-            finalPackets.length > 0
-              ? finalPackets
-              : [new SignalPacket("", currentPacket.signals)],
-          context: contextChanged ? mergedContext : undefined,
-        };
-      }
-
-      const childPath = joinPath(currentPath, segment);
-
-      nodeVisitCount++;
-      if (nodeVisitCount > this._maxDispatchDepth) {
-        throw new Error(`Dispatch depth exceeded (${this._maxDispatchDepth}).`);
-      }
-
-      const handler = child.getHandler?.() ?? child.handler;
-      const handlerContext = this._createHandlerContext(
-        child,
-        childPath,
-        currentPacket,
-        mergedContext,
-        nodeVisitCount,
-      );
-
-      const result = handler
-        ? normalizeHandlerResult(handler(currentPacket, handlerContext))
-        : { packets: [new SignalPacket("", currentPacket.signals)] };
-
-      if (result.context && isPlainObject(result.context)) {
-        for (const key of Object.keys(result.context)) {
-          if (Object.prototype.hasOwnProperty.call(mergedContext, key)) {
-            throw new Error(
-              `Context key "${key}" already exists in accumulated context. Cannot override.`,
-            );
-          }
-        }
-        mergedContext = { ...mergedContext, ...result.context };
-        contextChanged = true;
-      }
-
-      if (result.stop) {
-        if (result.packets.length > 0) {
-          finalPackets.push(...result.packets);
-        }
-        flushDeferredRoutes();
-        return {
-          packets: finalPackets.length > 0 ? finalPackets : result.packets,
-          context: contextChanged ? mergedContext : undefined,
-        };
-      }
-
-      if (result.redirect) {
-        const redirectSegments = normalizePath(result.redirect);
-        segments.splice(i + 1, segments.length - i - 1, ...redirectSegments);
-      }
-
-      if (result.packets.length > 0) {
-        const primaryPacket = SignalPacket.from(result.packets[0]);
-        const remainingPackets = result.packets.slice(1);
-
-        for (const extraPacket of remainingPackets) {
-          const p = SignalPacket.from(extraPacket);
-          if (p.to) {
-            deferredRoutes.push({
-              fromNode: child,
-              fromPath: childPath,
-              packet: p,
-              context: mergedContext,
-            });
-          }
-        }
-
-        if (primaryPacket.to) {
-          const primarySegments = normalizePath(primaryPacket.to);
-          segments.splice(i + 1, segments.length - i - 1, ...primarySegments);
-          currentPacket = primaryPacket;
-        } else if (child.getDefaultRoute()) {
-          segments = [...segments.slice(0, i + 1), child.getDefaultRoute()];
-          currentPacket = primaryPacket;
-        } else if (i === segments.length - 1) {
-          finalPackets.push(primaryPacket);
-          break;
-        }
-      } else if (result.explicitPackets) {
-        break;
-      } else if (i === segments.length - 1 && child.getDefaultRoute()) {
-        segments = [...segments.slice(0, i + 1), child.getDefaultRoute()];
-      }
-
-      currentNode = child;
-      currentPath = childPath;
-    }
-
-    flushDeferredRoutes();
-    return {
-      packets: finalPackets.length > 0 ? finalPackets : [],
-      context: contextChanged ? mergedContext : undefined,
-    };
+    return this._walkSegments({
+      startNode: this._root,
+      startPath: "/",
+      segments,
+      startPacket,
+      accumulatedContext: context,
+      depth,
+      edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
+    });
   }
 
   /**
@@ -1073,130 +1199,86 @@ class DevicesDAG {
       return { packets: [] };
     }
 
-    let currentNode = fromNode;
-    let currentPath = fromPath;
-    let currentPacket = signalPacket;
-    let mergedContext = { ...accumulatedContext };
-    let contextChanged = false;
-    const finalPackets = [];
-    const deferredRoutes = [];
+    return this._walkSegments({
+      startNode: fromNode,
+      startPath: fromPath,
+      segments,
+      startPacket: signalPacket,
+      accumulatedContext,
+      depth,
+    });
+  }
 
-    const flushDeferredRoutes = () => {
-      for (const deferredRoute of deferredRoutes) {
-        const subResult = this._routeFromNode(
-          deferredRoute.fromNode,
-          deferredRoute.fromPath,
-          deferredRoute.packet,
-          deferredRoute.context,
-          depth,
-        );
-        finalPackets.push(...subResult.packets);
-      }
-      deferredRoutes.length = 0;
-    };
+  // -----------------------------------------------------------------------
+  // 调试 / 序列化
+  // -----------------------------------------------------------------------
 
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const edge = currentNode.outEdges.get(segment);
-      const child = edge?.target;
-      if (!child) {
-        flushDeferredRoutes();
-        return {
-          packets: finalPackets,
-          context: contextChanged ? mergedContext : undefined,
-        };
-      }
+  /**
+   * 生成设备图的树状字符串表示
+   * @description
+   * 从根节点开始 DFS 遍历，输出类似如下格式：
+   * ```text
+   * /
+   * ├── keyboard#1
+   * │   ├── code#2
+   * │   │   ├── KeyW#3 [handler] [default=wasd]
+   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
+   * │   │   ├── KeyA#5 [handler] [default=wasd]
+   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
+   * │   │   ├── KeyS#6 [handler] [default=wasd]
+   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
+   * │   │   └── KeyD#7 [handler] [default=wasd]
+   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
+   * │   └── wasd-move#8 [handler] [tool]
+   * └── mouse#9
+   *     └── primary#10
+   *         └── tool#11 [handler] [tool]
+   * ```
+   * @returns {string}
+   */
+  toString() {
+    const lines = [];
 
-      const childPath = joinPath(currentPath, segment);
-      const handler = child.getHandler?.() ?? child.handler;
-      const handlerContext = this._createHandlerContext(
-        child,
-        childPath,
-        currentPacket,
-        mergedContext,
-        depth,
+    /**
+     * 递归遍历节点
+     * @param {DevicesDAGNode} node - 当前节点
+     * @param {string} path - 当前节点路径
+     * @param {string} prefix - 行前缀（缩进 + 连线）
+     * @param {boolean} isLast - 是否为同级最后一个
+     */
+    const traverse = (node, path = "/", prefix = "", isLast = true) => {
+      const label = path === "/" ? "/" : path.split("/").at(-1);
+      const branch = path === "/" ? "" : isLast ? "└── " : "├── ";
+
+      const handler = node.getHandler?.() ?? node.handler;
+      const defaultRoute = node.getDefaultRoute?.() ?? node.defaultRoute ?? "";
+      const semantics = node.getSemantics?.() ?? node.semantics ?? {};
+      const semanticsKeys = Object.keys(semantics).filter((k) => semantics[k]);
+
+      const parts = [
+        `${prefix}${branch}${label}`,
+        Number.isInteger(node.id) ? `#${node.id}` : "",
+        handler ? "[handler]" : "",
+        defaultRoute ? `[default=${defaultRoute}]` : "",
+        semanticsKeys.length ? `[${semanticsKeys.join(",")}]` : "",
+        node.inEdges?.size > 1 ? `[in=${node.inEdges.size}]` : "",
+      ];
+      lines.push(parts.filter(Boolean).join(" "));
+
+      const edges = Array.from(node.outEdges?.entries?.() ?? []).sort(
+        ([a], [b]) => a.localeCompare(b),
       );
-      const result = handler
-        ? normalizeHandlerResult(handler(currentPacket, handlerContext))
-        : { packets: [new SignalPacket("", currentPacket.signals)] };
+      const childPrefix =
+        prefix + (path === "/" ? "" : isLast ? "    " : "│   ");
 
-      if (result.context && isPlainObject(result.context)) {
-        for (const key of Object.keys(result.context)) {
-          if (Object.prototype.hasOwnProperty.call(mergedContext, key)) {
-            throw new Error(
-              `Context key "${key}" already exists in accumulated context. Cannot override.`,
-            );
-          }
-        }
-        mergedContext = { ...mergedContext, ...result.context };
-        contextChanged = true;
-      }
-
-      if (result.stop) {
-        if (result.packets.length > 0) {
-          finalPackets.push(...result.packets);
-        }
-        flushDeferredRoutes();
-        return {
-          packets: finalPackets,
-          context: contextChanged ? mergedContext : undefined,
-        };
-      }
-
-      if (result.packets.length > 0) {
-        const primaryPacket = SignalPacket.from(result.packets[0]);
-        const remainingPackets = result.packets.slice(1);
-
-        for (const extraPacket of remainingPackets) {
-          const p = SignalPacket.from(extraPacket);
-          if (p.to) {
-            deferredRoutes.push({
-              fromNode: child,
-              fromPath: childPath,
-              packet: p,
-              context: mergedContext,
-            });
-          }
-        }
-
-        if (primaryPacket.to) {
-          const primarySegments = normalizePath(primaryPacket.to);
-          segments.splice(i + 1, segments.length - i - 1, ...primarySegments);
-          currentPacket = primaryPacket;
-        } else if (child.getDefaultRoute()) {
-          segments.splice(
-            i + 1,
-            segments.length - i - 1,
-            child.getDefaultRoute(),
-          );
-          currentPacket = primaryPacket;
-        } else if (i === segments.length - 1) {
-          finalPackets.push(primaryPacket);
-          break;
-        }
-      } else if (result.explicitPackets) {
-        flushDeferredRoutes();
-        return {
-          packets: finalPackets,
-          context: contextChanged ? mergedContext : undefined,
-        };
-      } else if (i === segments.length - 1 && child.getDefaultRoute()) {
-        segments.splice(
-          i + 1,
-          segments.length - i - 1,
-          child.getDefaultRoute(),
-        );
-      }
-
-      currentNode = child;
-      currentPath = childPath;
-    }
-
-    flushDeferredRoutes();
-    return {
-      packets: finalPackets,
-      context: contextChanged ? mergedContext : undefined,
+      edges.forEach(([edgeName, edge], i) => {
+        const childPath = path === "/" ? `/${edgeName}` : `${path}/${edgeName}`;
+        traverse(edge.target, childPath, childPrefix, i === edges.length - 1);
+      });
     };
+
+    traverse(this._root);
+    return lines.join("\n");
   }
 
   // -----------------------------------------------------------------------
@@ -1280,7 +1362,7 @@ class DevicesDAG {
     if (typeof root.umount === "function") {
       const handlerContext = {
         node: root,
-        dag: this,
+        ddag: this,
         path: nodePath,
         semantics: { ...root.semantics },
         defaultRoute: root.defaultRoute,
@@ -1313,7 +1395,7 @@ class DevicesDAG {
 }
 
 // ---------------------------------------------------------------------------
-// Builder DSL（方案 B：edge 和 node 显式分离）
+// Builder DSL
 // ---------------------------------------------------------------------------
 
 /**

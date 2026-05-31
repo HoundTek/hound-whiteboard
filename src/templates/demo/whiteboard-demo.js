@@ -85,25 +85,54 @@ const WASD_ROUTE_PRESETS = Object.freeze({
   KeyD: Object.freeze({ x: 1, y: 0 }),
 });
 
+/**
+ * 将键位编码转为安全的 URI 路径片段
+ * @param {any} code - 原始键位编码
+ * @returns {string} URI 编码后的键位字符串
+ */
 function encodeKeyboardCode(code) {
   return encodeURIComponent(String(code));
 }
 
+/**
+ * 获取键盘键位的设备图路径
+ * @param {any} code - 键位编码
+ * @param {string} [childPath=""] - 子路径后缀
+ * @returns {string} 完整设备图路径
+ */
 function getKeyboardCodePath(code, childPath = "") {
   const basePath = `/keyboard/code/${encodeKeyboardCode(code)}`;
   return childPath ? `${basePath}/${childPath}` : basePath;
 }
 
+/**
+ * 获取 Monitor 限定下的键盘键位设备图路径
+ * @param {string|number} monitorId - 显示器 id
+ * @param {any} code - 键位编码
+ * @param {string} [childPath=""] - 子路径后缀
+ * @returns {string} 带 Monitor 前缀的完整设备图路径
+ */
 function getMonitorKeyboardCodePath(monitorId, code, childPath = "") {
   return `/${monitorId}${getKeyboardCodePath(code, childPath)}`;
 }
 
+/**
+ * 为指定键位列表创建空配置映射
+ * @param {string[]} [codes=[]] - 键位编码列表
+ * @returns {Record<string, {}>} 路径 -> 空配置的映射
+ */
 function createKeyboardNodeConfigs(codes = []) {
   return Object.fromEntries(
     [...new Set(codes)].map((code) => [`/code/${code}`, {}]),
   );
 }
 
+/**
+ * 构建键盘触发信号转发节点配置
+ * @description 过滤出 trigger 信号并转发到指定工具路径，用于没有业务处理的简单键位路由。
+ * @param {string} relativeToolPath - 相对工具路径（如 "tool" 或 "create-circle/tool"）
+ * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ */
 function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
   return {
     handler(packet) {
@@ -123,6 +152,13 @@ function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
   };
 }
 
+/**
+ * 构建视口位置移动节点配置
+ * @description 将 trigger 信号转为 position 信号，目标位置 = monitor.origin + delta。
+ * @param {import("../../core/components/monitor.js").Monitor} monitor - 显示器实例
+ * @param {{ x: number, y: number }} delta - 位移增量
+ * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ */
 function buildViewportPositionNodeConfig(monitor, delta) {
   return {
     handler(packet) {
@@ -153,6 +189,13 @@ function buildViewportPositionNodeConfig(monitor, delta) {
   };
 }
 
+/**
+ * 构建视口缩放节点配置
+ * @description 将 trigger 信号转为 scale 信号，缩放值由 scaleTransformer 函数计算。
+ * @param {import("../../core/components/monitor.js").Monitor} monitor - 显示器实例
+ * @param {(currentZoom: number) => number} scaleTransformer - 缩放变换函数
+ * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ */
 function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
   return {
     handler(packet) {
@@ -180,6 +223,11 @@ function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
   };
 }
 
+/**
+ * 构建视口刷新节点配置
+ * @description 将 trigger 信号转为 flush 信号，触发 MonitorViewportTool 执行刷新。
+ * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ */
 function buildViewportFlushNodeConfig() {
   return {
     handler(packet) {
@@ -206,6 +254,13 @@ function buildViewportFlushNodeConfig() {
   };
 }
 
+/**
+ * 构建 WASD 方向键移动节点配置
+ * @description 将 trigger 信号转为 position 信号，附上对应方向向量，路由到共享 WASD 工具节点。
+ * @param {string} code - 键位编码（如 "KeyW"）
+ * @param {{ x: number, y: number }} vector - 方向向量
+ * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ */
 function buildWasdNodeConfig(code, vector) {
   return {
     handler(packet) {
@@ -228,13 +283,20 @@ function buildWasdNodeConfig(code, vector) {
       }
 
       return {
-        to: DEMO_KEYBOARD_TOOL_PATHS.MOVE,
+        to: "wasd",
         signals: movementSignals,
       };
     },
   };
 }
 
+/**
+ * 构建键盘调试节点配置
+ * @description 将 trigger 信号转为指定调试类型的信号，路由到共享 Debugger 工具节点。
+ * @param {string} type - 调试信号类型（如 "debug:chunkload"）
+ * @param {Object} [context={}] - 调试上下文附加数据
+ * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ */
 function buildKeyboardDebugNodeConfig(type, context = {}) {
   return {
     handler(packet) {
@@ -247,7 +309,7 @@ function buildKeyboardDebugNodeConfig(type, context = {}) {
       }
 
       return {
-        to: DEMO_KEYBOARD_TOOL_PATHS.DEBUG,
+        to: "debug",
         signals: [
           {
             type,
@@ -259,6 +321,38 @@ function buildKeyboardDebugNodeConfig(type, context = {}) {
   };
 }
 
+/**
+ * 配置白板 Demo 的完整设备图与工具绑定
+ * @description
+ * 为指定 board 和 monitor 挂载鼠标/键盘设备子图，注册鼠标主/副工具、
+ * WASD 坐标工具、视口控制工具、调试工具，以及所有键盘快捷键的信号路由。
+ *
+ * 工具挂载原则：
+ * - 每个 Tool 实例只挂载到一个 DAG 节点（单实例单节点）
+ * - 多键位汇聚使用 addEdge 多前驱模式
+ *
+ * @param {import("../../core/components/board.js").Board} board - 白板实例
+ * @param {import("../../core/components/monitor.js").Monitor} monitor - 显示器实例
+ * @param {Object} [options={}] - 可选覆盖配置
+ * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
+ * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
+ * @param {Object} [options.randomCircleSubTree]
+ * @param {WasdCoordinateTool} [options.wasdCoordinateTool]
+ * @param {MonitorViewportTool} [options.monitorViewportTool]
+ * @param {DebuggerTool} [options.debugTool]
+ * @param {import("../../core/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
+ * @param {Record<string, { x: number, y: number }>} [options.wasdRoutePresets]
+ * @param {import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition} [options.keyboardDevice]
+ * @returns {{
+ *   keyboardDevice: import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition,
+ *   mouseDevice: import("../../core/devices/mouse-device.js").MouseSubDAGDefinition,
+ *   monitorViewportTool: MonitorViewportTool,
+ *   primaryStrokeTool: import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool,
+ *   secondarySelectionTool: import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
+ *   wasdCoordinateTool: WasdCoordinateTool,
+ *   debugTool: DebuggerTool,
+ * }}
+ */
 function configureWhiteboardDemo(board, monitor, options = {}) {
   const effectiveBoard = board ?? monitor?.board;
   if (!effectiveBoard || !monitor) {
@@ -314,15 +408,10 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     monitor.mountSubDAG("", randomCircleSubTree);
   }
   for (const code of Object.keys(wasdRoutePresets)) {
-    effectiveBoard.signalsEventBus.emit("mount", {
-      to: getMonitorKeyboardCodePath(
-        monitor.monitorId,
-        code,
-        DEMO_KEYBOARD_TOOL_PATHS.MOVE,
-      ),
-      tool: wasdCoordinateTool,
-    });
+    monitor.addEdge(`/keyboard/code/${code}`, "wasd", "/keyboard/wasd-move");
   }
+  // 挂载共享 WASD 工具节点（一次），四个键通过 addEdge 聚合到同一个节点
+  monitor.mountTool("/keyboard/wasd-move", wasdCoordinateTool);
   for (const code of DEMO_VIEWPORT_CODES) {
     effectiveBoard.signalsEventBus.emit("mount", {
       to: getMonitorKeyboardCodePath(
@@ -333,16 +422,13 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
       tool: monitorViewportTool,
     });
   }
+
   for (const code of DEMO_DEBUG_CODES) {
-    effectiveBoard.signalsEventBus.emit("mount", {
-      to: getMonitorKeyboardCodePath(
-        monitor.monitorId,
-        code,
-        DEMO_KEYBOARD_TOOL_PATHS.DEBUG,
-      ),
-      tool: debugTool,
-    });
+    monitor.addEdge(`/keyboard/code/${code}`, "debug", "/keyboard/debug");
   }
+
+  // 挂载共享 Debugger 工具节点（一次），多个调试键通过 addEdge 聚合到同一个节点
+  monitor.mountTool("/keyboard/debug", debugTool);
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Space`,
     options: buildKeyboardTriggerForwardNodeConfig(

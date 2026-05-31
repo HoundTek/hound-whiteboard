@@ -263,52 +263,10 @@ class DebuggerTool extends Tool {
   }
 
   stringifyDevicesDAG(dag) {
-    const root = dag?.getNode?.("/") ?? dag?._root;
-    if (!root || typeof root !== "object") {
+    if (!dag || typeof dag.toString !== "function") {
       return "<no devices dag>";
     }
-
-    const lines = [];
-    const traverseNode = (node, path = "/", prefix = "", isLast = true) => {
-      const label = path === "/" ? "/" : path.split("/").at(-1);
-      const branch = path === "/" ? "" : isLast ? "└── " : "├── ";
-      const handler = node.getHandler?.() ?? node.handler;
-      const defaultRoute = node.getDefaultRoute?.() ?? node.defaultRoute ?? "";
-      const semantics = node.getSemantics?.() ?? node.semantics ?? {};
-      const semanticsKeys = Object.keys(semantics).filter(
-        (key) => semantics[key],
-      );
-      const handlerHint = handler ? " [handler]" : "";
-      const defaultHint = defaultRoute ? ` [default=${defaultRoute}]` : "";
-      const semanticsHint = semanticsKeys.length
-        ? ` [${semanticsKeys.join(",")}]`
-        : "";
-      const nodeIdHint = Number.isInteger(node.id) ? ` #${node.id}` : "";
-      const inEdgeHint =
-        node.inEdges?.size > 1 ? ` [in=${node.inEdges.size}]` : "";
-      lines.push(
-        `${prefix}${branch}${label}${nodeIdHint}${handlerHint}${defaultHint}${semanticsHint}${inEdgeHint}`,
-      );
-
-      const edges = Array.from(node.outEdges?.entries?.() ?? []).sort(
-        ([leftName], [rightName]) => leftName.localeCompare(rightName),
-      );
-      const childPrefix =
-        prefix + (path === "/" ? "" : isLast ? "    " : "│   ");
-
-      edges.forEach(([edgeName, edge], index) => {
-        const childPath = path === "/" ? `/${edgeName}` : `${path}/${edgeName}`;
-        traverseNode(
-          edge.target,
-          childPath,
-          childPrefix,
-          index === edges.length - 1,
-        );
-      });
-    };
-
-    traverseNode(root, "/", "", true);
-    return lines.join("\n");
+    return dag.toString();
   }
 
   logDevicesDAG(board) {

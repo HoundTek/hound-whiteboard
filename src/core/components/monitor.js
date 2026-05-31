@@ -916,6 +916,21 @@ class Monitor {
       monitor: this,
     });
   }
+
+  /**
+   * 在白板级设备图中添加有向边。
+   * @param {string} fromPath - 源节点路径（相对于显示器根）
+   * @param {string} edgeName - 边名
+   * @param {string} toPath - 目标节点路径（相对于显示器根）
+   * @returns {import("../devices/devices-dag.js").DevicesDAGEdge}
+   */
+  addEdge(fromPath, edgeName, toPath) {
+    return this.devicesDAG.addEdge(
+      joinPath(this.monitorId, fromPath),
+      edgeName,
+      joinPath(this.monitorId, toPath),
+    );
+  }
 }
 
 export { Monitor };

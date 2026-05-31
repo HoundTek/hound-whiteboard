@@ -503,7 +503,7 @@ function createHandoffSubTree(options = {}) {
           // 构建 onToolComplete 回调：被 first 或 second 调用时触发状态切换
           const createCompleteCallback = (completedPhase) => () => {
             if (autoBridgeObjects && completedPhase === "first") {
-              const dag = prefixContext.dag || prefixContext.ddag;
+              const dag = prefixContext.ddag;
               const firstState = dag?.getNodeState?.(
                 `${handoffBasePath}/first`,
               );
