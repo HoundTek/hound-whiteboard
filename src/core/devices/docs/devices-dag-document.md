@@ -107,6 +107,20 @@ DevicesDAG 不负责：
 - 调试和文档层通过 `semantics.prefix` 识别该职责
 - 真正的控制逻辑仍由 `handler` 和节点状态决定
 
+### routePolicy 语义标签
+
+`routePolicy` 是 `semantics` 上的一个文档性标签，描述该修饰节点的信号策略意图。它**不参与 DAG 分发引擎的决策**，仅用作调试、日志和未来扩展的预留点位。
+
+当前使用的取值：
+
+| 值                | 含义                                   | 示例                                                                                        |
+| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `"inject"`        | 拦截上游信号后从零生成新信号注入子节点 | `random-circle-generator`：拦截 trigger → 随机计算 position/radius/property → 注入给 params |
+| `"transform"`     | 接收上游信号做变换后转发               | `circle-params`：接收 position+radius → 变换为三阶段信号的 sequence                         |
+| `"state-machine"` | 节点维护局部状态机，按状态决定路由     | `handoff-handler`：根据 phase 状态在不同子节点间切换                                        |
+
+`prefixKind` 则是更细粒度的业务角色标签（如 `"random-circle-generator"`、`"circle-params"`），用于在日志/调试中快速识别前缀节点类型。
+
 ## 挂载模型
 
 当前推荐的挂载方式有三类：

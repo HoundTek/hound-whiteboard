@@ -9,6 +9,7 @@ import { createSubDAG } from "../../core/devices/devices-dag.js";
 import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
 import { SignalPacket } from "../../core/devices/signal.js";
 import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
+import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/tools/creator/obj-creator.js";
 import { Vector } from "../../core/utils/math.js";
 import { isPlainObject } from "../../core/prefixs/utils.js";
 
@@ -19,68 +20,8 @@ import { isPlainObject } from "../../core/prefixs/utils.js";
  */
 const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
   RADIUS: "radius",
-  PROPERTY: "circle-property",
+  PROPERTY: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
 });
-
-/**
- * 属性感知的圆创建工具
- * @class
- * @extends CircleCreatorTool
- */
-class PropertyAwareCircleCreator extends CircleCreatorTool {
-  /**
-   * @param {Record<string, any>} [baseProperty={}] - 基础属性模板
-   */
-  constructor(baseProperty = {}) {
-    super({ property: baseProperty });
-    /** @type {Record<string, any>|null} */
-    this._pendingProperty = null;
-  }
-
-  /**
-   * 从信号包中提取随机圆属性覆盖
-   * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
-   * @returns {Object}
-   */
-  buildInteractionContext(signalPacket, deviceContext = {}) {
-    const interaction = super.buildInteractionContext(
-      signalPacket,
-      deviceContext,
-    );
-    const propertySignal = interaction.signals.find(
-      (signal) => signal.type === RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
-    );
-    interaction.circleProperty = isPlainObject(propertySignal?.context?.value)
-      ? { ...propertySignal.context.value }
-      : null;
-    return interaction;
-  }
-
-  /**
-   * 缓存本次属性覆盖
-   * @param {Object} interaction - 当前交互上下文
-   * @returns {boolean}
-   */
-  ensureObject(interaction) {
-    this._pendingProperty = interaction?.circleProperty ?? null;
-    return super.ensureObject(interaction);
-  }
-
-  /**
-   * 创建圆对象并写入 prefix 注入的属性
-   * @param {Vector} position - 圆心位置
-   * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 归属区块 id
-   */
-  create(position, id, ownerChunkId) {
-    super.create(position, id, ownerChunkId);
-    if (this._pendingProperty) {
-      this.obj.setProperty(this._pendingProperty);
-    }
-    this._pendingProperty = null;
-  }
-}
 
 /**
  * 创建随机圆修饰节点工作流
@@ -118,7 +59,7 @@ function createRandomCircleSubDAG(options = {}) {
     options.property && Object.hasOwn(options.property, "strokeColor"),
   );
 
-  const tool = new PropertyAwareCircleCreator(baseProperty);
+  const tool = new CircleCreatorTool({ property: baseProperty });
 
   const builder = createSubDAG(rootPath);
   const root = builder
@@ -162,7 +103,7 @@ function createRandomCircleSubDAG(options = {}) {
               context: { value: radius },
             },
             {
-              type: RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
+              type: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
               context: {
                 value: {
                   ...baseProperty,
@@ -197,7 +138,7 @@ function createRandomCircleSubDAG(options = {}) {
           );
           const propertySignal = packet.signals.find(
             (signal) =>
-              signal.type === RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
+              signal.type === OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
           );
           const position = positionSignal?.context?.value;
           const radius = radiusSignal?.context?.value;
@@ -222,11 +163,25 @@ function createRandomCircleSubDAG(options = {}) {
                   context: { value: position },
                 },
                 {
-                  type: RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
+                  type: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
                   context: {
                     value: isPlainObject(propertySignal?.context?.value)
                       ? propertySignal.context.value
                       : { ...baseProperty },
+                  },
+                },
+              ],
+            },
+            {
+              to: target,
+              signals: [
+                {
+                  type: "position",
+                  context: {
+                    value: {
+                      x: position.x + radius,
+                      y: position.y,
+                    },
                   },
                 },
               ],

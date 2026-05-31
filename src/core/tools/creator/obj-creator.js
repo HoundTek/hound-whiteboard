@@ -21,6 +21,7 @@ import { Tool } from "../tool.js";
  */
 const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
   POSITION: "position",
+  PROPERTY: "property",
   GESTURE_END: "end",
   GESTURE_CANCEL: "cancel",
   OBJECT_END: "object-end",
@@ -28,6 +29,21 @@ const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
   END: "end",
   CANCEL: "cancel",
 });
+
+/**
+ * 从信号列表中提取 prefix 注入的对象属性
+ * @param {Array<Object>} signals
+ * @returns {Record<string, any>|null}
+ */
+function extractInjectedProperty(signals) {
+  const propertySignal = signals.find(
+    (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+  );
+  const value = propertySignal?.context?.value;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? { ...value }
+    : null;
+}
 
 /**
  * 对象创建工具基类
@@ -49,6 +65,8 @@ class ObjectCreatorTool extends Tool {
     super();
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
+    /** @type {Record<string, any>|null} */
+    this._pendingProperty = null;
   }
 
   /**
@@ -141,6 +159,7 @@ class ObjectCreatorTool extends Tool {
         positionSignal?.context?.ownerChunkId ??
         deviceContext.ownerChunkId ??
         deviceContext.resolveOwnerChunkId?.(position, signalPacket),
+      injectedProperty: extractInjectedProperty(signals),
     };
   }
 
@@ -151,6 +170,7 @@ class ObjectCreatorTool extends Tool {
    */
   ensureObject(interaction) {
     if (!this.obj || this.isObjectCreationCompleted) {
+      this._pendingProperty = interaction?.injectedProperty ?? null;
       const objectId =
         interaction.objectId ??
         interaction?.deviceContext?.allocateObjectId?.();
@@ -161,6 +181,14 @@ class ObjectCreatorTool extends Tool {
       }
       interaction.objectId = objectId;
       this.create(interaction.position, objectId, interaction.ownerChunkId);
+      if (
+        this._pendingProperty &&
+        this.obj &&
+        typeof this.obj.setProperty === "function"
+      ) {
+        this.obj.setProperty(this._pendingProperty);
+      }
+      this._pendingProperty = null;
       this.isObjectCreationCompleted = false;
       this.syncCreatedObjectContext(interaction?.deviceContext);
       interaction?.deviceContext?.board?.activeObjectManager?.add?.(

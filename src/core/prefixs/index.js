@@ -14,3 +14,4 @@ export {
   wrapSubDAGForHandoff,
 } from "./handoff-handler.js";
 export { createDragAnchorPrefixHandler } from "./drag-anchor-handler.js";
+export { createSignalLogPrefixHandler } from "./signal-log-handler.js";
