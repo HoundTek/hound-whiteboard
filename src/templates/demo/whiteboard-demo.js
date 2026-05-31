@@ -299,8 +299,8 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
       ]),
     });
 
-  monitor.mountSubTree("/mouse", mouseDevice);
-  monitor.mountSubTree("/keyboard", keyboardDevice);
+  monitor.mountSubDAG("/mouse", mouseDevice);
+  monitor.mountSubDAG("/keyboard", keyboardDevice);
 
   effectiveBoard.signalsEventBus.emit("mount", {
     to: `/${monitor.monitorId}/mouse/primary/tool`,
@@ -311,7 +311,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     tool: secondarySelectionTool,
   });
   if (randomCircleSubTree) {
-    monitor.mountSubTree("", randomCircleSubTree);
+    monitor.mountSubDAG("", randomCircleSubTree);
   }
   for (const code of Object.keys(wasdRoutePresets)) {
     effectiveBoard.signalsEventBus.emit("mount", {

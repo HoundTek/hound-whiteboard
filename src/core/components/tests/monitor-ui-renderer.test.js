@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
 import { Chunk } from "../chunk.js";
-import { DevicesTree } from "../../devices/devices-tree.js";
+import { DevicesDAG } from "../../devices/devices-dag.js";
 import { RectangleRange } from "../../range/index.js";
 import {
   createNoopCanvas,
@@ -36,7 +36,7 @@ describe("Monitor/ui renderer", () => {
     const board = {
       width: 800,
       height: 600,
-      devicesTree: null,
+      devicesDAG: null,
       activeObjectManager: {
         activeObjects: new Set(),
       },
@@ -57,7 +57,7 @@ describe("Monitor/ui renderer", () => {
       },
     };
 
-    board.devicesTree = new DevicesTree();
+    board.devicesDAG = new DevicesDAG();
 
     const monitor = new Monitor(
       { baseCanvas, liveCanvas, uiCanvas },

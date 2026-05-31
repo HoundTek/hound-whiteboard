@@ -2,13 +2,13 @@
 
 ## 概述
 
-修饰节点是 DevicesTree 中的一种职责语义，不是新的节点类型。它仍然是一个 `DevicesTreeNode`，只是通过 `semantics.prefix === true` 标记。
+修饰节点是 DevicesDAG 中的一种职责语义，不是新的节点类型。它仍然是一个 `DevicesDAGNode`，只是通过 `semantics.prefix === true` 标记。
 
 修饰节点位于信号链路中的前置处理层，负责记录、参数注入、路由分发、状态机切换和局部上下文编排。它与末端消费工具形成互补：修饰节点负责“怎么走”，工具负责“到了之后做什么”。
 
 ## `semantics.prefix === true` 是什么
 
-它是 `SubTreeNodeBuilder.prefix(handler)` 自动写入节点元数据的一个标记。
+它是 `DAGNodeBuilder.prefix(handler)` 自动写入节点元数据的一个标记。
 
 它的作用是：
 
@@ -18,7 +18,7 @@
 
 这意味着：
 
-- prefix 仍然是普通 `DevicesTreeNode`
+- prefix 仍然是普通 `DevicesDAGNode`
 - dispatcher 不会因为 `semantics.prefix` 自动改写路径
 - 真正的控制逻辑仍由 `handler`、节点 state 和累积 `context` 决定
 
@@ -54,7 +54,7 @@ prefix 节点现在依赖三条稳定边界：
 
 ```mermaid
 flowchart TD
-    Tree[DevicesTree] --> Prefix[Prefix Node]
+    Tree[DevicesDAG] --> Prefix[Prefix Node]
     Prefix --> Base[createPrefixNodeHandler]
     Base --> Multi[createMultiToolPrefixHandler]
     Base --> Repeator[createRepeatorPrefixHandler]
@@ -138,7 +138,7 @@ const handler = createRepeatorPrefixHandler({
 
 - creator → modifier
 - chooser → modifier
-- 任意 SubTreeDefinition → modifier
+- 任意 SubDAGDefinition → modifier
 
 ### 当前工作方式
 
@@ -183,20 +183,19 @@ flowchart LR
 
 ## 子树构建
 
-修饰节点工作流通常通过 `createSubTree` DSL 构建，再通过 `monitor.mountSubTree()` 注册到 DevicesTree。
+修饰节点工作流通常通过 `createSubDAG` DSL 构建，再通过 `monitor.mountSubDAG()` 注册到 DevicesDAG。
 
 ```js
-const subTree = createSubTree("/mouse/primary/handoff")
-  .node("")
+const builder = createSubDAG("/mouse/primary/handoff");
+const root = builder
+  .node()
   .prefix(createDragAnchorPrefixHandler())
-  .defaultChild("tool")
-  .node("tool")
-  .tool(new CommonObjectModifierTool())
-  .end()
-  .end()
-  .build();
+  .defaultRoute("tool");
+const toolNode = builder.node().tool(new CommonObjectModifierTool());
 
-monitor.mountSubTree("", subTree);
+builder.edge("tool", root, toolNode);
+
+monitor.mountSubDAG("", builder.build());
 ```
 
 ## 设计约束
@@ -209,6 +208,6 @@ monitor.mountSubTree("", subTree);
 
 ## 相关文档
 
-- [设备树](../devices/docs/devices-tree-document.md)
+- [设备图](../devices/docs/devices-dag-document.md)
 - [工具基类](../tools/tool-document.md)
 - [Core 输入流](../docs/core-input-flow.md)

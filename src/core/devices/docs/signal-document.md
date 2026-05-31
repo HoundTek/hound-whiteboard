@@ -24,9 +24,9 @@
 
 1. Device 采集现实输入，编码成一个信号包。
 2. Core-UI 边界在需要跨边界通知时，通过信道或 EventBus 传输 `SignalPacket`。
-3. DevicesTree 按 `to` 路径继续把包分发到目标节点。
+3. DevicesDAG 按 `to` 路径继续把包分发到目标节点。
 
-因此，信道/EventBus 解决的是“跨边界传输通知”，DevicesTree 解决的是“树上的空间路由”。
+因此，信道/EventBus 解决的是“跨边界传输通知”，DevicesDAG 解决的是“设备图上的空间路由”。
 
 ## 信号类型
 

@@ -1,23 +1,23 @@
 /**
  * @file 鼠标设备
- * @description 提供鼠标输入信号的设备树节点创建与处理接口。
+ * @description 提供鼠标输入信号的设备图节点创建与处理接口。
  * @module core/devices/mouse-device
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "./devices-tree.js";
+import { createSubDAG } from "./devices-dag.js";
 import { SignalPacket } from "./signal.js";
 
 /**
- * 创建一棵鼠标设备子树
+ * 创建一张鼠标设备子图
  * @param {{
- *   pointerProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   primaryProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   secondaryProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   auxiliaryProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   wheelProcessor?: import("./devices-tree.js").DevicesTreeHandler,
+ *   pointerProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   primaryProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   secondaryProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   auxiliaryProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   wheelProcessor?: import("./devices-dag.js").DevicesDAGHandler,
  * }} [options={}] - 鼠标设备选项
- * @returns {import("./devices-tree.js").SubTreeDefinition & {
+ * @returns {import("./devices-dag.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeButtons: {primary: boolean, secondary: boolean, auxiliary: boolean},
@@ -278,26 +278,37 @@ function createMouseDevice(options = {}) {
         : null,
   };
 
-  const mouseSubTreeBuilder = createSubTree("/mouse")
-    .node("")
-    .handler(rootHandler)
-    .end();
+  const builder = createSubDAG("/mouse");
+  const root = builder.node().handler(rootHandler);
 
-  for (const channel of [
-    "pointer",
-    "primary",
-    "secondary",
-    "auxiliary",
-    "wheel",
-  ]) {
-    mouseSubTreeBuilder
-      .node(channel)
-      .handler(channelProcessors[channel])
-      .defaultChild("tool")
-      .end();
-  }
+  const pointer = builder
+    .node()
+    .handler(channelProcessors.pointer)
+    .defaultRoute("tool");
+  const primary = builder
+    .node()
+    .handler(channelProcessors.primary)
+    .defaultRoute("tool");
+  const secondary = builder
+    .node()
+    .handler(channelProcessors.secondary)
+    .defaultRoute("tool");
+  const auxiliary = builder
+    .node()
+    .handler(channelProcessors.auxiliary)
+    .defaultRoute("tool");
+  const wheel = builder
+    .node()
+    .handler(channelProcessors.wheel)
+    .defaultRoute("tool");
 
-  return mouseSubTreeBuilder
+  builder.edge("pointer", root, pointer);
+  builder.edge("primary", root, primary);
+  builder.edge("secondary", root, secondary);
+  builder.edge("auxiliary", root, auxiliary);
+  builder.edge("wheel", root, wheel);
+
+  return builder
     .expose({
       resetState() {
         activeButtons = {

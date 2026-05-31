@@ -164,10 +164,10 @@ class ObjectModifierTool extends Tool {
 
     if (
       modificationContext.autoUmountOnApply !== false &&
-      typeof modificationContext.tree?.unmount === "function" &&
+      typeof modificationContext.ddag?.unmount === "function" &&
       typeof modificationContext.path === "string"
     ) {
-      modificationContext.tree.unmount(modificationContext.path);
+      modificationContext.ddag.unmount(modificationContext.path);
     }
 
     return true;

@@ -70,15 +70,14 @@ flowchart LR
 
 ```js
 // drag-anchor 输出 "displacement" 信号
-const subTree = createSubTree("/mouse/primary/handoff")
-  .node("")
+const builder = createSubDAG("/mouse/primary/handoff");
+const root = builder
+  .node()
   .prefix(createDragAnchorPrefixHandler())
-  .defaultChild("tool")
-  .node("tool")
-  .tool(new CommonObjectModifierTool())
-  .end()
-  .end()
-  .build();
+  .defaultRoute("tool");
+const toolNode = builder.node().tool(new CommonObjectModifierTool());
+
+builder.edge("tool", root, toolNode);
 ```
 
 ### 信号路径

@@ -4,7 +4,7 @@
 
 键盘设备负责把宿主层已经确认归属到某个 Monitor 的键盘输入，翻译成 Core 内稳定的设备信号。
 
-当前键盘设备根路径固定为 `/keyboard`，整体结构已经迁移到 `createSubTree("/keyboard")` 模型。
+当前键盘设备根路径固定为 `/keyboard`，整体结构已经迁移到 `createSubDAG("/keyboard")` 模型。
 
 ## 节点结构
 
@@ -87,7 +87,7 @@ const keyboard = createKeyboardDevice({
 键盘设备本身应挂在 Monitor 边界下：
 
 ```js
-monitor.mountSubTree("", createKeyboardDevice());
+monitor.mountSubDAG("", createKeyboardDevice());
 ```
 
 键位级工具应优先挂在对应 code 节点下：
@@ -99,7 +99,7 @@ monitor.mountTool("/keyboard/code/KeyW/tool", moveTool);
 如果某个键位需要完整 workflow，也推荐直接挂在该键位后代：
 
 ```js
-monitor.mountSubTree(
+monitor.mountSubDAG(
   "",
   createRandomCircleSubTree({
     rootPath: "/keyboard/code/Space/create-circle",
@@ -118,5 +118,5 @@ monitor.mountSubTree(
 ## 相关文档
 
 - [设备定义](./device-document.md)
-- [设备树](./devices-tree-document.md)
+- [设备图](./devices-dag-document.md)
 - [Core 输入编码](../../docs/core-input-encoding.md)

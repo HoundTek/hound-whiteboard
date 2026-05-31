@@ -29,7 +29,7 @@ import { SignalPacket } from "../devices/signal.js";
  *   接收 { signalPacket, state, fromPhase, prefixContext }，
  *   返回 { child?, consume?, to?, patchState?, state?, signals? }。
  *   需要向上通知时可直接调用 prefixContext.context 中的回调函数。
- * @returns {import("../devices/devices-tree.js").DevicesTreeHandler} 可挂载到 DevicesTree 节点上的处理器函数
+ * @returns {import("../devices/devices-dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createMultiToolPrefixHandler(options = {}) {
   const defaultChild =

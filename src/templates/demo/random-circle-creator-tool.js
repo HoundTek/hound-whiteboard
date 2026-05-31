@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "../../core/devices/devices-tree.js";
+import { createSubDAG } from "../../core/devices/devices-dag.js";
 import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
 import { SignalPacket } from "../../core/devices/signal.js";
 import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
@@ -95,7 +95,7 @@ class PropertyAwareCircleCreator extends CircleCreatorTool {
  *   maxRadius?: number,
  *   property?: Record<string, any>,
  * }} [options={}] - 随机圆工作流配置
- * @returns {import("../../core/devices/devices-tree.js").SubTreeDefinition} 可直接传入 monitor.mountSubTree(path, subTree) 的结构化子树定义
+ * @returns {import("../../core/devices/devices-dag.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subTree) 的结构化子树定义
  *
  * @example
  *   const subTree = createRandomCircleSubTree({
@@ -103,7 +103,7 @@ class PropertyAwareCircleCreator extends CircleCreatorTool {
  *     minRadius: 20,
  *     maxRadius: 80,
  *   });
- *   monitor.mountSubTree("", subTree);
+ *   monitor.mountSubDAG("", subTree);
  */
 function createRandomCircleSubTree(options = {}) {
   const rootPath = options.rootPath ?? "/random-circle";
@@ -120,8 +120,9 @@ function createRandomCircleSubTree(options = {}) {
 
   const tool = new PropertyAwareCircleCreator(baseProperty);
 
-  return createSubTree(rootPath)
-    .node("")
+  const builder = createSubDAG(rootPath);
+  const root = builder
+    .node()
     .prefix(
       createPrefixNodeHandler({
         handle: (signalPacket, prefixContext = {}) => {
@@ -179,8 +180,10 @@ function createRandomCircleSubTree(options = {}) {
         routePolicy: "inject",
       },
     )
-    .defaultChild("params")
-    .node("params")
+    .defaultRoute("params");
+
+  const paramsNode = builder
+    .node()
     .prefix(
       createPrefixNodeHandler({
         handle: (signalPacket, prefixContext = {}) => {
@@ -256,13 +259,14 @@ function createRandomCircleSubTree(options = {}) {
         routePolicy: "transform",
       },
     )
-    .defaultChild("tool")
-    .node("tool")
-    .tool(tool)
-    .end()
-    .end()
-    .end()
-    .build();
+    .defaultRoute("tool");
+
+  const toolNode = builder.node().tool(tool);
+
+  builder.edge("params", root, paramsNode);
+  builder.edge("tool", paramsNode, toolNode);
+
+  return builder.build();
 }
 
 export { createRandomCircleSubTree };

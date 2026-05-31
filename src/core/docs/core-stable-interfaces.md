@@ -10,91 +10,91 @@
 - 已有聚焦测试覆盖核心语义
 - 新增功能应优先复用这些接口，而不是继续引入兼容层
 
-## DevicesTree
+## DevicesDAG
 
 当前建议依赖的公开方法有：
 
-- getNode(path)
-- getNodeState(path)
-- setNodeState(path, state)
-- mount(path, handler, options)
-- configureNode(path, options)
-- mountTool(path, tool, toolContext)
-- unmountTool(path, accumulatedContext)
-- mountSubTree(basePath, subTreeDefinition, mountContext)
-- unmount(path, accumulatedContext)
-- unmountLeaf(path, accumulatedContext)
-- dispatch(signalPacket, accumulatedContext)
+- `getNode(path)`
+- `getNodePath(node)`
+- `getNodeState(pathOrId)`
+- `setNodeState(pathOrId, state)`
+- `mount(path, handler, options)`
+- `configureNode(path, options)`
+- `mountTool(path, tool, toolContext)`
+- `unmountTool(path, accumulatedContext)`
+- `mountSubDAG(basePath, subDAGDefinition, mountContext)`
+- `unmount(path, accumulatedContext)`
+- `dispatch(signalPacket, accumulatedContext)`
 
 稳定语义：
 
-- 节点处理统一使用 handler
-- defaultChild 是相对子链路名
+- 节点处理统一使用 `handler`
+- `defaultRoute` 是当前节点的默认出边名
 - 工具挂载使用显式叶子路径
-- 结构化设备定义使用 root + nodes
-- handler 返回统一规整为 `{ packets, context, redirect, stop }`
+- 结构化设备定义使用 `rootPath + nodes + edges`
+- `handler` 返回统一规整为 `{ packets, context, redirect, stop }`
 - `packets.to` 只描述从当前节点继续向下的子路径
+- 节点身份由 node id 决定，而不是由路径决定
 
-## DevicesTreeHandlerContext
+## DevicesDAGHandlerContext
 
 当前稳定字段包括：
 
-- node
-- tree
-- path
-- semantics
-- defaultChild
-- resolvedDefaultChildPath
-- depth
-- signalPacket
-- context
-- getNodeState(path?)
-- setNodeState(path, state)
+- `node`
+- `dag`
+- `path`
+- `semantics`
+- `defaultRoute`
+- `resolvedDefaultRoutePath`
+- `depth`
+- `signalPacket`
+- `context`
+- `getNodeState(pathOrId?)`
+- `setNodeState(pathOrId, state)`
 
 稳定语义：
 
 - `context` 是逐层追加的累积上下文，不能覆盖已有键
-- 需要可变共享数据时，应写入节点 state
+- 需要可变共享数据时，应写入节点 `state`
 - 需要向上通知时，优先在 `context` 中注入回调函数，而不是继续引入向上路由协议
+- 同一节点允许有多条路径可达，但单次 dispatch 的 `context` 只沿当前命中的那条路径累积
 
-## SubTreeDefinition
+## SubDAGDefinition
 
 当前稳定结构如下：
 
 ```js
 {
-  root: "/sub-tree-root",
-  nodes: {
-    handler,
-    semantics,
-    defaultChild,
-    tool,
-    toolContext,
-    umount,
-    children,
-  },
+  rootPath: "/sub-dag-root",
+  rootNodeId: 0,
+  nodes: new Map([
+    [0, { handler, semantics, defaultRoute, tool, toolContext, umount }],
+  ]),
+  edges: [
+    { name: "child", fromNodeId: 0, toNodeId: 1 },
+  ],
   resetState,
   getState,
 }
 ```
 
-推荐通过 createSubTree(root).build() 生成，不直接依赖旧的对象协议。
+推荐通过 `createSubDAG(rootPath).build()` 生成，而不是手写旧对象协议。
 
 ## Tool
 
 当前建议依赖的 Tool 接口有：
 
-- createProcessor(toolContext)
-- createDeviceContext(handlerContext, toolContext)
-- process(signalPacket, deviceContext)
-- umount(deviceContext)
-- reset()
-- resolveNodeState(deviceContext, statePath)
-- writeNodeState(deviceContext, nextState, statePath)
-- resolveContextObjects(deviceContext)
-- setContextObjects(deviceContext, objects)
-- clearContextObjects(deviceContext)
-- continueToDefaultPath(signalPacket, deviceContext)
+- `createProcessor(toolContext)`
+- `createDeviceContext(handlerContext, toolContext)`
+- `process(signalPacket, deviceContext)`
+- `umount(deviceContext)`
+- `reset()`
+- `resolveNodeState(deviceContext, statePath)`
+- `writeNodeState(deviceContext, nextState, statePath)`
+- `resolveContextObjects(deviceContext)`
+- `setContextObjects(deviceContext, objects)`
+- `clearContextObjects(deviceContext)`
+- `continueToDefaultPath(signalPacket, deviceContext)`
 
 稳定语义：
 
@@ -106,25 +106,25 @@
 
 当前建议依赖的 Monitor 输入接口有：
 
-- mountSubTree(subTreeDefinition)
-- mountSubTree(pathPrefix, subTreeDefinition)
-- mountTool(path, tool)
-- unmountTool(path)
-- 通过 board.devicesTree 读取当前输入树
+- `mountSubDAG(subDAGDefinition)`
+- `mountSubDAG(pathPrefix, subDAGDefinition)`
+- `mountTool(path, tool)`
+- `unmountTool(path)`
+- 通过 `board.devicesDAG` 读取当前输入图
 
 稳定语义：
 
-- Monitor 不拥有独立 DevicesTree
-- 所有挂载最终都代理到 Board.devicesTree
+- Monitor 不拥有独立 `DevicesDAG`
+- 所有挂载最终都代理到 `Board.devicesDAG`
 
 ## 配置事件
 
-Board.signalsEventBus 侧当前稳定的输入相关事件包括：
+`Board.signalsEventBus` 侧当前稳定的输入相关事件包括：
 
-- input：分发输入包到 Board.devicesTree.dispatch()
-- mount：挂载设备或工具节点
-- umount：卸载设备或工具节点
-- configure：运行时更新节点 handler、defaultChild、umount
+- `input`：分发输入包到 `Board.devicesDAG.dispatch()`
+- `mount`：挂载设备或工具节点
+- `umount`：卸载设备或工具节点
+- `configure`：运行时更新节点 `handler`、`defaultRoute`、`umount`
 
 这些事件的 `to` 仍然是绝对路径，但节点内部继续返回的 `packets.to` 应视为局部子路径。
 
@@ -132,17 +132,17 @@ Board.signalsEventBus 侧当前稳定的输入相关事件包括：
 
 以下旧接口名应视为已完成迁移，不应继续在新代码中引入：
 
-- processor
-- rewritePacket
-- defaultPath
-- defineNodes
-- nodeContext
-- providedObjectsContext
+- `processor`
+- `rewritePacket`
+- `defaultPath`
+- `defineNodes`
+- `nodeContext`
+- `providedObjectsContext`
 - 子节点通过 `to: ".."` 或 `bubble` 向上协调的约定
 
 ## 相关文档
 
-- [设备树](../devices/docs/devices-tree-document.md)
+- [设备图](../devices/docs/devices-dag-document.md)
 - [设备定义](../devices/docs/device-document.md)
 - [工具基类](../tools/tool-document.md)
 - [Core 输入流](./core-input-flow.md)

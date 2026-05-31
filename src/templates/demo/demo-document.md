@@ -6,7 +6,7 @@
 
 当前 demo 的重点不是视觉包装，而是验证这次输入系统重构后的三条边界：
 
-- 输入先归属到 Monitor，再进入 Board.devicesTree
+- 输入先归属到 Monitor，再进入 Board.devicesDAG
 - 键盘与鼠标链路都通过显式叶子工具消费信号
 - 参数注入、状态切换和对象桥接优先由修饰节点与节点 state 完成
 
@@ -58,7 +58,7 @@
 - `KeyO`：打印 object 加载状态
 - `KeyM`：打印 ActiveObjectManager 状态
 - `KeyB`：打印 board 状态
-- `KeyT`：打印 devicesTree 相关状态
+- `KeyT`：打印 devices DAG 相关状态
 - `Digit1`-`Digit4`：打印指定 chunk 详情
 
 ## 工具链验证点
@@ -66,7 +66,7 @@
 该 demo 主要验证：
 
 - 工具挂载与卸载流程
-- 设备信号在 Monitor / DevicesTree 中的逐层下传
+- 设备信号在 Monitor / DevicesDAG 中的逐层下传
 - 键位级 workflow 是否按局部后代路径组织
 - append-only `context` 与节点 `state` 的协作边界
 - 视口控制与渲染刷新

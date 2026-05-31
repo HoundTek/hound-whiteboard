@@ -1,4 +1,4 @@
-import { DevicesTree, createSubTree } from "../../devices/devices-tree.js";
+import { DevicesDAG, createSubDAG } from "../../devices/devices-dag.js";
 import {
   createMultiToolPrefixHandler,
   createPrefixNodeHandler,
@@ -8,9 +8,11 @@ import {
 
 describe("prefix-node", () => {
   test("SubTreeNodeBuilder.prefix 应保留 prefix 语义并复用现有 dispatch", () => {
-    const tree = new DevicesTree();
-    const prefixSubTree = createSubTree("/workflow")
-      .node("")
+    const ddag = new DevicesDAG();
+    const _wfb = createSubDAG("/workflow");
+    const _wfr = _wfb
+      .node()
+      .defaultRoute("tool")
       .prefix(
         createPrefixNodeHandler({
           handle(packet, prefixContext) {
@@ -20,37 +22,34 @@ describe("prefix-node", () => {
             return prefixContext.routeToChild("tool");
           },
         }),
-      )
-      .defaultChild("tool")
-      .end()
-      .node("tool")
-      .handler((packet, context) => ({
-        packets: [
-          {
-            to: "",
-            signals: [
-              {
-                type: "handled",
-                context: {
-                  count:
-                    context.getNodeState("/monitor/workflow")
-                      ?.lastSignalCount ?? -1,
-                },
+      );
+    const _wft = _wfb.node().handler((packet, context) => ({
+      packets: [
+        {
+          to: "",
+          signals: [
+            {
+              type: "handled",
+              context: {
+                count:
+                  context.getNodeState("/monitor/workflow")?.lastSignalCount ??
+                  -1,
               },
-            ],
-          },
-        ],
-      }))
-      .end()
-      .build();
+            },
+          ],
+        },
+      ],
+    }));
+    _wfb.edge("tool", _wfr, _wft);
+    const prefixSubTree = _wfb.build();
 
-    tree.mountSubTree("/monitor", prefixSubTree);
+    ddag.mountSubDAG("/monitor", prefixSubTree);
 
-    expect(tree.getNode("/monitor/workflow")?.getSemantics()).toEqual({
+    expect(ddag.getNode("/monitor/workflow")?.getSemantics()).toEqual({
       prefix: true,
     });
 
-    const result = tree.dispatch({
+    const result = ddag.dispatch({
       to: "/monitor/workflow",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
@@ -62,17 +61,18 @@ describe("prefix-node", () => {
   });
 
   test("createMultiToolPrefixHandler 应根据状态机切换活动子节点（通过回调）", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const trace = [];
 
-    const handoffSubTree = createSubTree("/handoff")
-      .node("")
+    const _hfb = createSubDAG("/handoff");
+    const _hfr = _hfb
+      .node()
+      .defaultRoute("create")
       .prefix(
         createMultiToolPrefixHandler({
           defaultChild: "create",
           initialState: { mode: "create" },
           resolveTransition({ state, prefixContext }) {
-            // 注入回调到上下文，子节点调用以触发状态切换
             const switchTo = (target) => () => {
               if (target === "edit") {
                 prefixContext.setState({
@@ -98,43 +98,39 @@ describe("prefix-node", () => {
           },
         }),
         { routePolicy: "state-machine" },
-      )
-      .defaultChild("create")
-      .end()
-      .node("create")
-      .handler((packet, context) => {
-        trace.push("create");
-        context.context?.onSwitch?.();
-        return { packets: [] };
-      })
-      .end()
-      .node("edit")
-      .handler((packet, context) => {
-        trace.push("edit");
-        context.context?.onSwitch?.();
-        return { packets: [{ to: "", signals: packet.signals }] };
-      })
-      .end()
-      .build();
+      );
+    const _hfc = _hfb.node().handler((packet, context) => {
+      trace.push("create");
+      context.context?.onSwitch?.();
+      return { packets: [] };
+    });
+    const _hfe = _hfb.node().handler((packet, context) => {
+      trace.push("edit");
+      context.context?.onSwitch?.();
+      return { packets: [{ to: "", signals: packet.signals }] };
+    });
+    _hfb.edge("create", _hfr, _hfc);
+    _hfb.edge("edit", _hfr, _hfe);
+    const handoffSubTree = _hfb.build();
 
-    tree.mountSubTree("/monitor", handoffSubTree);
+    ddag.mountSubDAG("/monitor", handoffSubTree);
 
     // 第一次 dispatch：状态为 create，路由到 create 子节点
-    tree.dispatch({
+    ddag.dispatch({
       to: "/monitor/handoff",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
     expect(trace).toEqual(["create"]);
 
     // 第二次 dispatch：状态已切换为 edit，路由到 edit 子节点
-    tree.dispatch({
+    ddag.dispatch({
       to: "/monitor/handoff",
       signals: [{ type: "position", context: { value: { x: 3, y: 4 } } }],
     });
     expect(trace).toEqual(["create", "edit"]);
 
     // 第三次 dispatch：edit 又调用了 onSwitch → 切回 create
-    tree.dispatch({
+    ddag.dispatch({
       to: "/monitor/handoff",
       signals: [{ type: "position", context: { value: { x: 5, y: 6 } } }],
     });
@@ -142,35 +138,31 @@ describe("prefix-node", () => {
   });
 
   test("createRepeatorPrefixHandler 应将信号复制分发到多个子节点", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const toolACalls = [];
     const toolBCalls = [];
 
-    const repeatorSubTree = createSubTree("/repeater")
-      .node("")
-      .handler(
-        createRepeatorPrefixHandler({
-          toChildren: ["tool-a", "tool-b"],
-        }),
-      )
-      .end()
-      .node("tool-a")
-      .handler((packet) => {
-        toolACalls.push(packet.signals);
-        return { packets: [] };
-      })
-      .end()
-      .node("tool-b")
-      .handler((packet) => {
-        toolBCalls.push(packet.signals);
-        return { packets: [] };
-      })
-      .end()
-      .build();
+    const _rpb = createSubDAG("/repeater");
+    const _rpr = _rpb.node().handler(
+      createRepeatorPrefixHandler({
+        toChildren: ["tool-a", "tool-b"],
+      }),
+    );
+    const _rpa = _rpb.node().handler((packet) => {
+      toolACalls.push(packet.signals);
+      return { packets: [] };
+    });
+    const _rpb2 = _rpb.node().handler((packet) => {
+      toolBCalls.push(packet.signals);
+      return { packets: [] };
+    });
+    _rpb.edge("tool-a", _rpr, _rpa);
+    _rpb.edge("tool-b", _rpr, _rpb2);
+    const repeatorSubTree = _rpb.build();
 
-    tree.mountSubTree("/monitor", repeatorSubTree);
+    ddag.mountSubDAG("/monitor", repeatorSubTree);
 
-    tree.dispatch({
+    ddag.dispatch({
       to: "/monitor/repeater",
       signals: [{ type: "click", context: { button: 0 } }],
     });

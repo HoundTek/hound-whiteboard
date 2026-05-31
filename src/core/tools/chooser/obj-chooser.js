@@ -112,9 +112,9 @@ class ObjectChooserTool extends Tool {
     }
 
     const defaultLeaf =
-      typeof deviceContext.tree?.resolveDefaultLeaf === "function" &&
+      typeof deviceContext.ddag?.resolveDefaultLeaf === "function" &&
       typeof deviceContext.path === "string"
-        ? deviceContext.tree.resolveDefaultLeaf(deviceContext.path)
+        ? deviceContext.ddag.resolveDefaultLeaf(deviceContext.path)
         : null;
 
     const childObjects =

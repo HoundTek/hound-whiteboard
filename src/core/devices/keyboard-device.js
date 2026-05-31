@@ -1,11 +1,11 @@
 /**
  * @file 键盘设备
- * @description 提供键盘输入信号的设备树节点创建与处理接口。
+ * @description 提供键盘输入信号的设备图节点创建与处理接口。
  * @module core/devices/keyboard-device
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "./devices-tree.js";
+import { createSubDAG } from "./devices-dag.js";
 import { SignalPacket } from "./signal.js";
 import { joinPath } from "../utils/path.js";
 
@@ -16,19 +16,19 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
 };
 
 /**
- * 创建一棵键盘设备子树
+ * 创建一张键盘设备子图
  * @param {{
- *   eventProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   keydownProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   keyupProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   repeatProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   cancelProcessor?: import("./devices-tree.js").DevicesTreeHandler,
+ *   eventProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   keydownProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   keyupProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   repeatProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   cancelProcessor?: import("./devices-dag.js").DevicesDAGHandler,
  *   nodeConfigs?: Record<string, {
- *     handler?: import("./devices-tree.js").DevicesTreeHandler,
+ *     handler?: import("./devices-dag.js").DevicesDAGHandler,
  *     defaultChild?: string,
  *   }>,
  * }} [options={}] - 键盘设备选项
- * @returns {import("./devices-tree.js").SubTreeDefinition & {
+ * @returns {import("./devices-dag.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeKeys: Array<{
@@ -322,59 +322,104 @@ function createKeyboardDevice(options = {}) {
     return resolveRouteTargets(packet);
   };
 
-  const keyboardSubTreeBuilder = createSubTree("/keyboard")
-    .node("")
-    .handler(rootHandler)
-    .end()
-    .node("event")
+  const builder = createSubDAG("/keyboard");
+  const root = builder.node().handler(rootHandler);
+
+  const eventNode = builder
+    .node()
     .handler(
       typeof options.eventProcessor === "function"
         ? options.eventProcessor
         : null,
-    )
-    .end()
-    .node("keydown")
+    );
+  const keydownNode = builder
+    .node()
     .handler(
       typeof options.keydownProcessor === "function"
         ? options.keydownProcessor
         : null,
-    )
-    .end()
-    .node("keyup")
+    );
+  const keyupNode = builder
+    .node()
     .handler(
       typeof options.keyupProcessor === "function"
         ? options.keyupProcessor
         : null,
-    )
-    .end()
-    .node("repeat")
+    );
+  const repeatNode = builder
+    .node()
     .handler(
       typeof options.repeatProcessor === "function"
         ? options.repeatProcessor
         : null,
-    )
-    .end()
-    .node("cancel")
+    );
+  const cancelNode = builder
+    .node()
     .handler(
       typeof options.cancelProcessor === "function"
         ? options.cancelProcessor
         : null,
-    )
-    .end()
-    .node("tools")
-    .end();
+    );
+  const toolsNode = builder.node();
 
+  builder.edge("event", root, eventNode);
+  builder.edge("keydown", root, keydownNode);
+  builder.edge("keyup", root, keyupNode);
+  builder.edge("repeat", root, repeatNode);
+  builder.edge("cancel", root, cancelNode);
+  builder.edge("tools", root, toolsNode);
+
+  const routeNodes = new Map([
+    ["", root],
+    ["event", eventNode],
+    ["keydown", keydownNode],
+    ["keyup", keyupNode],
+    ["repeat", repeatNode],
+    ["cancel", cancelNode],
+    ["tools", toolsNode],
+  ]);
+
+  const ensureConfigNode = (nodePathKey) => {
+    const normalizedKey = normalizeNodePathKey(nodePathKey);
+    if (!normalizedKey) return root;
+    if (routeNodes.has(normalizedKey)) {
+      return routeNodes.get(normalizedKey);
+    }
+
+    const segments = normalizedKey.split("/").filter(Boolean);
+    let currentKey = "";
+    let currentNode = root;
+
+    for (const segment of segments) {
+      const nextKey = currentKey ? `${currentKey}/${segment}` : segment;
+      let nextNode = routeNodes.get(nextKey);
+
+      if (!nextNode) {
+        nextNode = builder.node();
+        routeNodes.set(nextKey, nextNode);
+        builder.edge(segment, currentNode, nextNode);
+      }
+
+      currentKey = nextKey;
+      currentNode = nextNode;
+    }
+
+    return currentNode;
+  };
+
+  // 动态节点（来自 rawNodeConfigs）
+  const configNodes = new Map();
   for (const [nodePath, config] of Object.entries(rawNodeConfigs)) {
-    keyboardSubTreeBuilder
-      .node(normalizeNodePathKey(nodePath))
+    const normalizedKey = normalizeNodePathKey(nodePath);
+    const cfgNode = ensureConfigNode(normalizedKey)
       .handler(typeof config?.handler === "function" ? config.handler : null)
-      .defaultChild(
+      .defaultRoute(
         typeof config?.defaultChild === "string" ? config.defaultChild : "",
-      )
-      .end();
+      );
+    configNodes.set(normalizedKey, cfgNode);
   }
 
-  return keyboardSubTreeBuilder
+  return builder
     .expose({
       resetState() {
         activeKeys.clear();

@@ -153,7 +153,7 @@ describe("whiteboard demo", () => {
 
     expect(board.activeObjectManager.activeObjectIndex.get(1)).toBe(stroke);
     expect(
-      monitor.devicesTree.getNode("/main/mouse/secondary/tool")?.state?.object,
+      monitor.devicesDAG.getNode("/main/mouse/secondary/tool")?.state?.object,
     ).toBe(stroke);
   });
 

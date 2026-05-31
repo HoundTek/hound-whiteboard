@@ -135,13 +135,13 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
       },
-      { object, board, tree, path: "/monitor/mouse/primary/tool/tool" },
+      { object, board, ddag: tree, path: "/monitor/mouse/primary/tool/tool" },
     );
     tool.process(
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 1 } } }],
       },
-      { object, board, tree, path: "/monitor/mouse/primary/tool/tool" },
+      { object, board, ddag: tree, path: "/monitor/mouse/primary/tool/tool" },
     );
 
     // success 信号
@@ -152,7 +152,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         object,
         board,
-        tree,
+        ddag: tree,
         path: "/monitor/mouse/primary/tool/tool",
         getNodeState() {
           return nodeState;

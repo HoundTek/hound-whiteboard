@@ -13,8 +13,8 @@ import { SignalPacket } from "../devices/signal.js";
  * @class
  * @abstract
  * @description
- * 工具是挂载在设备树末端的消费型处理器，不再负责把信号继续向下转发。
- * 它接收设备树节点送来的完整信号包，并直接修改白板或相关状态。
+ * 工具是挂载在设备图末端的消费型处理器，不再负责把信号继续向下转发。
+ * 它接收设备图节点送来的完整信号包，并直接修改白板或相关状态。
  *
  * 工具类定义了所有工具的基本属性和方法，具体工具应继承此类并实现其特定功能。
  * @author Zhou Chenyu
@@ -45,13 +45,13 @@ class Tool {
   }
 
   /**
-   * 将设备树上下文规整为工具上下文。
+   * 将设备图上下文规整为工具上下文。
    * 当前稳定模型只产出平面 deviceContext；累积上下文保留在 context 字段中。
    * @param {{
    *   path?: string, tree?: Object, node?: Object, defaultChild?: string,
    *   resolvedDefaultChildPath?: string, depth?: number,
    *   context?: Object, getNodeState?: Function, setNodeState?: Function
-   * }} [handlerContext={}] - 设备树处理上下文
+   * }} [handlerContext={}] - 设备图处理上下文
    * @param {Object} [toolContext={}] - 工具固定上下文
    * @returns {Object}
    */
@@ -80,7 +80,7 @@ class Tool {
         : undefined);
 
     return {
-      tree: handlerContext.tree,
+      ddag: handlerContext.ddag,
       node: handlerContext.node,
       semantics: handlerContext.semantics ?? {},
       path: handlerContext.path ?? handlerContext.node?.path ?? "",
@@ -105,9 +105,9 @@ class Tool {
   }
 
   /**
-   * 创建一个可直接挂载到设备树节点上的处理器。
+   * 创建一个可直接挂载到设备图节点上的处理器。
    * @param {Object} [toolContext = {}] - 工具固定上下文
-   * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
+   * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
    */
   createProcessor(toolContext = {}) {
     const uiOverlayBinding = this.createUiOverlayBinding(toolContext);

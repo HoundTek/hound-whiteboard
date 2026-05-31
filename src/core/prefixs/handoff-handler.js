@@ -2,13 +2,13 @@
  * @file handoff 修饰节点处理器
  * @description
  * 提供 createHandoffSubTree 工厂函数，将 first → second 的两阶段工作流
- * 封装为一棵结构化子树。first 可以是 creator（对象创建工具）、chooser（对象选择工具）或任意子树；
- * second 通常是 modifier（对象编辑工具）。两者均可接受 Tool 实例或 SubTreeDefinition。
+ * 封装为一张结构化子图。first 可以是 creator（对象创建工具）、chooser（对象选择工具）或任意子图；
+ * second 通常是 modifier（对象编辑工具）。两者均可接受 Tool 实例或 SubDAGDefinition。
  * @module core/prefixs/handoff-handler
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "../devices/devices-tree.js";
+import { createSubDAG } from "../devices/devices-dag.js";
 import { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
 import { Tool } from "../tools/tool.js";
 import { SignalPacket } from "../devices/signal.js";
@@ -23,6 +23,17 @@ function normalizeResultPackets(rawResult) {
     return rawResult.map((result) => SignalPacket.from(result));
   }
 
+  if (
+    rawResult != null &&
+    typeof rawResult === "object" &&
+    (Array.isArray(rawResult.packets) ||
+      "stop" in rawResult ||
+      "redirect" in rawResult ||
+      "context" in rawResult)
+  ) {
+    return SignalPacket.normalizeResult(rawResult.packets ?? []);
+  }
+
   if (rawResult != null) {
     return [SignalPacket.from(rawResult)];
   }
@@ -31,18 +42,156 @@ function normalizeResultPackets(rawResult) {
 }
 
 /**
- * 判断值是否是 SubTreeDefinition
+ * 判断值是否是 SubDAGDefinition
  * @param {any} value - 待判断值
  * @returns {boolean}
  */
-function isSubTreeDefinition(value) {
+function isSubDAGDefinition(value) {
   return (
     value != null &&
     typeof value === "object" &&
-    typeof value.root === "string" &&
-    value.nodes != null &&
-    typeof value.nodes === "object"
+    ((typeof value.rootPath === "string" &&
+      value.nodes instanceof Map &&
+      Array.isArray(value.edges)) ||
+      (typeof value.root === "string" &&
+        value.nodes != null &&
+        typeof value.nodes === "object"))
   );
+}
+
+/**
+ * 判断值是否是普通对象
+ * @param {any} value
+ * @returns {boolean}
+ */
+function isPlainObject(value) {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * 规整 wrapper 返回值，同时保留结构化字段。
+ * @param {*} rawResult
+ * @returns {{packets: SignalPacket[], stop?: boolean, redirect?: string, context?: Object}}
+ */
+function normalizeWrappedResult(rawResult) {
+  if (
+    rawResult != null &&
+    typeof rawResult === "object" &&
+    (Array.isArray(rawResult.packets) ||
+      "stop" in rawResult ||
+      "redirect" in rawResult ||
+      "context" in rawResult)
+  ) {
+    return {
+      ...rawResult,
+      packets: SignalPacket.normalizeResult(rawResult.packets ?? []),
+    };
+  }
+
+  return { packets: normalizeResultPackets(rawResult) };
+}
+
+/**
+ * 克隆 DAG 节点定义，避免共享可变结构。
+ * @param {Object} nodeDef
+ * @returns {Object}
+ */
+function cloneDAGNodeDefinition(nodeDef = {}) {
+  return {
+    handler: typeof nodeDef.handler === "function" ? nodeDef.handler : null,
+    semantics: isPlainObject(nodeDef.semantics) ? { ...nodeDef.semantics } : {},
+    defaultRoute:
+      typeof nodeDef.defaultRoute === "string" ? nodeDef.defaultRoute : "",
+    tool: nodeDef.tool,
+    toolContext: isPlainObject(nodeDef.toolContext)
+      ? { ...nodeDef.toolContext }
+      : {},
+    umount: typeof nodeDef.umount === "function" ? nodeDef.umount : null,
+  };
+}
+
+/**
+ * 将 source 节点定义合并到 target 节点定义。
+ * @param {Object} targetNodeDef
+ * @param {Object} sourceNodeDef
+ * @returns {Object}
+ */
+function mergeDAGNodeDefinition(targetNodeDef = {}, sourceNodeDef = {}) {
+  const merged = cloneDAGNodeDefinition(targetNodeDef);
+
+  if (typeof sourceNodeDef.handler === "function") {
+    merged.handler = sourceNodeDef.handler;
+  }
+  if (isPlainObject(sourceNodeDef.semantics)) {
+    merged.semantics = { ...merged.semantics, ...sourceNodeDef.semantics };
+  }
+  if (typeof sourceNodeDef.defaultRoute === "string") {
+    merged.defaultRoute = sourceNodeDef.defaultRoute;
+  }
+  if (sourceNodeDef.tool !== undefined) {
+    merged.tool = sourceNodeDef.tool;
+    merged.toolContext = isPlainObject(sourceNodeDef.toolContext)
+      ? { ...sourceNodeDef.toolContext }
+      : {};
+  }
+  if (typeof sourceNodeDef.umount === "function") {
+    merged.umount = sourceNodeDef.umount;
+  }
+
+  return merged;
+}
+
+/**
+ * 将 DAG 子图定义附着到目标节点上。
+ * 目标节点复用 source root 的定义，并吸收其下游边与节点。
+ * @param {import("../devices/devices-dag.js").SubDAGDefinition} hostSubDAG
+ * @param {number} hostNodeId
+ * @param {import("../devices/devices-dag.js").SubDAGDefinition} subTreeDef
+ * @returns {boolean}
+ */
+function attachDAGSubTree(hostSubDAG, hostNodeId, subTreeDef) {
+  if (
+    !(subTreeDef?.nodes instanceof Map) ||
+    !Array.isArray(subTreeDef?.edges)
+  ) {
+    return false;
+  }
+
+  const sourceRootId = subTreeDef.rootNodeId;
+  const sourceRootDef = subTreeDef.nodes.get(sourceRootId) ?? {};
+  const hostRootDef = hostSubDAG.nodes.get(hostNodeId) ?? {};
+  hostSubDAG.nodes.set(
+    hostNodeId,
+    mergeDAGNodeDefinition(hostRootDef, sourceRootDef),
+  );
+
+  let nextNodeId = 0;
+  for (const nodeId of hostSubDAG.nodes.keys()) {
+    if (typeof nodeId === "number" && nodeId >= nextNodeId) {
+      nextNodeId = nodeId + 1;
+    }
+  }
+
+  const idMap = new Map([[sourceRootId, hostNodeId]]);
+  for (const [sourceNodeId, sourceNodeDef] of subTreeDef.nodes) {
+    if (sourceNodeId === sourceRootId) continue;
+    const mappedNodeId = nextNodeId++;
+    idMap.set(sourceNodeId, mappedNodeId);
+    hostSubDAG.nodes.set(mappedNodeId, cloneDAGNodeDefinition(sourceNodeDef));
+  }
+
+  for (const edge of subTreeDef.edges) {
+    const fromNodeId = idMap.get(edge.fromNodeId);
+    const toNodeId = idMap.get(edge.toNodeId);
+    if (fromNodeId == null || toNodeId == null) continue;
+    hostSubDAG.edges.push({
+      name: edge.name,
+      fromNodeId,
+      toNodeId,
+    });
+  }
+
+  return true;
 }
 
 /**
@@ -60,12 +209,12 @@ function isToolInstance(value) {
 
 /**
  * 将 creator 工具包装为可通知父 prefix 完成信号的 handler
- * 
+ *
  * @description
  * hook tool.completeCreatedObject()——creator 真正完成创建的唯一语义入口。
  * 通过累积上下文中的 onToolComplete 回调向上通知，不再使用冒泡。
  * @param {import("../tools/tool.js").Tool} tool - creator 工具实例
- * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
+ * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
  */
 function wrapCreatorForHandoff(tool) {
   let processor = null;
@@ -76,7 +225,9 @@ function wrapCreatorForHandoff(tool) {
   // 将对象从 creator 节点状态桥接到 modifier 节点状态
   tool.completeCreatedObject = function (interaction) {
     tool.syncCreatedObjectContext?.(interaction?.deviceContext, tool.obj);
-    if (Object.prototype.hasOwnProperty.call(tool, "isObjectCreationCompleted")) {
+    if (
+      Object.prototype.hasOwnProperty.call(tool, "isObjectCreationCompleted")
+    ) {
       tool.isObjectCreationCompleted = true;
     }
     completeRequested = true;
@@ -98,7 +249,7 @@ function wrapCreatorForHandoff(tool) {
       // 通过累积上下文中的回调向上通知，不再使用 to: ".."
       context.context?.onToolComplete?.();
 
-      return { packets: normalizeResultPackets(rawResult) };
+      return normalizeWrappedResult(rawResult);
     }
 
     return rawResult;
@@ -107,7 +258,7 @@ function wrapCreatorForHandoff(tool) {
 
 /**
  * 将 first 阶段工具（creator 或 chooser）包装为可通知父 prefix 完成信号的 handler
- * 
+ *
  * @description
  * 自动检测工具类型：
  * - 若工具包含 completeCreatedObject（creator），hook 其完成回调
@@ -115,7 +266,7 @@ function wrapCreatorForHandoff(tool) {
  *
  * 向上通信通过累积上下文中的 onToolComplete 回调，不再使用冒泡。
  * @param {Tool} tool - first 阶段工具实例（creator / chooser）
- * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
+ * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
  */
 function wrapFirstForHandoff(tool) {
   // Creator 路径：精确 hook completeCreatedObject
@@ -153,7 +304,7 @@ function wrapFirstForHandoff(tool) {
     // 通过回调通知父 prefix，不再使用 to: ".."
     context.context?.onToolComplete?.();
 
-    return { packets: normalizeResultPackets(rawResult) };
+    return normalizeWrappedResult(rawResult);
   };
 }
 
@@ -165,7 +316,7 @@ function wrapFirstForHandoff(tool) {
  * handoff wrapper 会 hook 语义完成入口（例如 applyModifiedObjects），在真正提交成功后
  * 触发父 prefix 的 onToolComplete 回调，并在 handoff 工作流中关闭 auto unmount。
  * @param {Tool} tool - second 阶段工具实例
- * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
+ * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
  */
 function wrapSecondForHandoff(tool) {
   let processor = null;
@@ -216,7 +367,7 @@ function wrapSecondForHandoff(tool) {
 
     if (completeRequested && !completionAlreadyNotified) {
       originalOnToolComplete?.();
-      return { packets: normalizeResultPackets(rawResult) };
+      return normalizeWrappedResult(rawResult);
     }
 
     return rawResult;
@@ -224,64 +375,56 @@ function wrapSecondForHandoff(tool) {
 }
 
 /**
- * 将 SubTreeDefinition 的根节点及其子节点递归挂载到 builder 的当前节点下
- * @param {import("../devices/devices-tree.js").SubTreeNodeBuilder} builder - 当前节点的构建器
- * @param {import("../devices/devices-tree.js").SubTreeNodeDefinition} nodeDef - 子树节点定义
- */
-function attachSubTreeNodes(builder, nodeDef) {
-  if (!nodeDef || typeof nodeDef !== "object") return;
-
-  if (typeof nodeDef.handler === "function") {
-    builder.handler(nodeDef.handler);
-  }
-  if (nodeDef.semantics && Object.keys(nodeDef.semantics).length) {
-    builder.semantics(nodeDef.semantics);
-  }
-  if (nodeDef.defaultChild) {
-    builder.defaultChild(nodeDef.defaultChild);
-  }
-  if (nodeDef.tool !== undefined) {
-    builder.tool(nodeDef.tool, nodeDef.toolContext ?? {});
-  }
-  if (typeof nodeDef.umount === "function") {
-    builder.umount(nodeDef.umount);
-  }
-
-  for (const [childName, childDef] of Object.entries(nodeDef.children ?? {})) {
-    const childBuilder = builder.node(childName);
-    attachSubTreeNodes(childBuilder, childDef);
-    childBuilder.end();
-  }
-}
-
-/**
  * 为 subTree 的根节点追加完成通知包装
- * @param {import("../devices/devices-tree.js").SubTreeDefinition} subTreeDef - 原始子树定义
+ * @param {import("../devices/devices-dag.js").SubDAGDefinition} subTreeDef - 原始子图定义
  * @param {Object} [options={}] - 包装选项
  * @param {Function} [options.shouldComplete] - 决定是否发出完成通知，接收 (packet, context)，省略时在收到 "end" 信号后发出
- * @returns {import("../devices/devices-tree.js").SubTreeDefinition} 包装后的子树定义
+ * @returns {import("../devices/devices-dag.js").SubDAGDefinition} 包装后的子图定义
  */
 function wrapSubTreeForHandoff(subTreeDef, options = {}) {
   const { shouldComplete } = options;
+  const createWrappedHandler = (originalHandler) => (packet, context) => {
+    const rawResult =
+      typeof originalHandler === "function"
+        ? originalHandler(packet, context)
+        : null;
+    const should = shouldComplete
+      ? shouldComplete(packet, context)
+      : packet.signals?.some((s) => s?.type === "end");
+
+    if (!should) return rawResult;
+
+    context.context?.onToolComplete?.();
+    return normalizeWrappedResult(rawResult);
+  };
+
+  if (subTreeDef?.nodes instanceof Map) {
+    const wrappedNodes = new Map();
+    for (const [nodeId, nodeDef] of subTreeDef.nodes) {
+      wrappedNodes.set(nodeId, cloneDAGNodeDefinition(nodeDef));
+    }
+
+    const rootNodeId = subTreeDef.rootNodeId;
+    const rootNodeDef = wrappedNodes.get(rootNodeId) ?? {};
+    const wrappedHandler = createWrappedHandler(rootNodeDef.handler);
+    wrappedNodes.set(rootNodeId, {
+      ...cloneDAGNodeDefinition(rootNodeDef),
+      handler: wrappedHandler,
+    });
+    wrappedNodes.handler = wrappedHandler;
+
+    return {
+      ...subTreeDef,
+      nodes: wrappedNodes,
+      edges: [...(subTreeDef.edges ?? [])],
+    };
+  }
+
   const originalHandler = subTreeDef.nodes?.handler;
 
   const wrappedNodes = {
     ...subTreeDef.nodes,
-    handler: originalHandler
-      ? (packet, context) => {
-          const rawResult = originalHandler(packet, context);
-          const should = shouldComplete
-            ? shouldComplete(packet, context)
-            : packet.signals?.some((s) => s?.type === "end");
-
-          if (!should) return rawResult;
-
-          // 通过回调通知，不再使用冒泡
-          context.context?.onToolComplete?.();
-
-          return { packets: normalizeResultPackets(rawResult) };
-        }
-      : null,
+    handler: createWrappedHandler(originalHandler),
   };
 
   return { ...subTreeDef, nodes: wrappedNodes };
@@ -296,15 +439,15 @@ function wrapSubTreeForHandoff(subTreeDef, options = {}) {
  *
  * 完成通知通过累积上下文中的回调实现，不再使用冒泡信号。 * @param {{
  *   rootPath?: string,
- *   first: Tool|import("../devices/devices-tree.js").SubTreeDefinition,
- *   second: Tool|import("../devices/devices-tree.js").SubTreeDefinition,
+ *   first: Tool|import("../devices/devices-dag.js").SubDAGDefinition,
+ *   second: Tool|import("../devices/devices-dag.js").SubDAGDefinition,
  *   autoBridgeObjects?: boolean,
  * }} options - handoff 子树配置
  * @param {string} [options.rootPath="/handoff"] - 子树根路径
- * @param {Tool|import("../devices/devices-tree.js").SubTreeDefinition} options.first - 第一阶段工具或子树（creator / chooser 等）
- * @param {Tool|import("../devices/devices-tree.js").SubTreeDefinition} options.second - 第二阶段工具或子树（通常为 modifier）
+ * @param {Tool|import("../devices/devices-dag.js").SubDAGDefinition} options.first - 第一阶段工具或子图（creator / chooser 等）
+ * @param {Tool|import("../devices/devices-dag.js").SubDAGDefinition} options.second - 第二阶段工具或子图（通常为 modifier）
  * @param {boolean} [options.autoBridgeObjects=true] - 是否在 handoff 时自动桥接对象上下文
- * @returns {import("../devices/devices-tree.js").SubTreeDefinition}
+ * @returns {import("../devices/devices-dag.js").SubDAGDefinition}
  *
  * @example
  *   // creator → modifier
@@ -321,7 +464,7 @@ function wrapSubTreeForHandoff(subTreeDef, options = {}) {
  *   });
  *
  * @example
- *   // SubTreeDefinition + wrapSubTreeForHandoff
+ *   // SubDAGDefinition + wrapSubTreeForHandoff
  *   const circle = createRandomCircleSubTree({ rootPath: "/chain" });
  *   createHandoffSubTree({
  *     first: wrapSubTreeForHandoff(circle),
@@ -343,8 +486,10 @@ function createHandoffSubTree(options = {}) {
   // 保存 handoff 根节点路径用于状态桥接
   let handoffBasePath = "";
 
-  const builder = createSubTree(rootPath)
-    .node("")
+  const builder = createSubDAG(rootPath);
+  const root = builder
+    .node()
+    .defaultRoute("first")
     .prefix(
       createMultiToolPrefixHandler({
         defaultChild: "first",
@@ -358,13 +503,13 @@ function createHandoffSubTree(options = {}) {
           // 构建 onToolComplete 回调：被 first 或 second 调用时触发状态切换
           const createCompleteCallback = (completedPhase) => () => {
             if (autoBridgeObjects && completedPhase === "first") {
-              const tree = prefixContext.tree;
-              const firstState = tree?.getNodeState?.(
+              const dag = prefixContext.dag || prefixContext.ddag;
+              const firstState = dag?.getNodeState?.(
                 `${handoffBasePath}/first`,
               );
               const objects = firstState?.objects ?? [];
               if (objects.length > 0) {
-                tree?.setNodeState?.(`${handoffBasePath}/second`, { objects });
+                dag?.setNodeState?.(`${handoffBasePath}/second`, { objects });
               }
             }
 
@@ -394,36 +539,56 @@ function createHandoffSubTree(options = {}) {
         prefixKind: "handoff",
         routePolicy: "state-machine",
       },
-    )
-    .defaultChild("first");
+    );
 
   // ── first 子节点 ──
-  const firstBuilder = builder.node("first");
+  const firstNode = builder.node();
+  let firstSubDAGDef = null;
   if (isToolInstance(first)) {
-    firstBuilder.handler(wrapFirstForHandoff(first));
-  } else if (isSubTreeDefinition(first)) {
-    attachSubTreeNodes(firstBuilder, first.nodes);
+    firstNode.handler(wrapFirstForHandoff(first));
+  } else if (isSubDAGDefinition(first)) {
+    firstSubDAGDef = first;
   } else {
     throw new TypeError(
-      "createHandoffSubTree: first must be a Tool or SubTreeDefinition.",
+      "createHandoffSubTree: first must be a Tool or SubDAGDefinition.",
     );
   }
-  firstBuilder.end();
 
   // ── second 子节点 ──
-  const secondBuilder = builder.node("second");
+  const secondNode = builder.node();
+  let secondSubDAGDef = null;
   if (isToolInstance(second)) {
-    secondBuilder.handler(wrapSecondForHandoff(second));
-  } else if (isSubTreeDefinition(second)) {
-    attachSubTreeNodes(secondBuilder, second.nodes);
+    secondNode.handler(wrapSecondForHandoff(second));
+  } else if (isSubDAGDefinition(second)) {
+    secondSubDAGDef = second;
   } else {
     throw new TypeError(
-      "createHandoffSubTree: second must be a Tool or SubTreeDefinition.",
+      "createHandoffSubTree: second must be a Tool or SubDAGDefinition.",
     );
   }
-  secondBuilder.end();
 
-  return builder.end().build();
+  builder.edge("first", root, firstNode);
+  builder.edge("second", root, secondNode);
+
+  const handoffSubTree = builder.build();
+  if (
+    firstSubDAGDef &&
+    !attachDAGSubTree(handoffSubTree, firstNode._localId, firstSubDAGDef)
+  ) {
+    throw new TypeError(
+      "createHandoffSubTree: first must be a DAG SubDAGDefinition after migration.",
+    );
+  }
+  if (
+    secondSubDAGDef &&
+    !attachDAGSubTree(handoffSubTree, secondNode._localId, secondSubDAGDef)
+  ) {
+    throw new TypeError(
+      "createHandoffSubTree: second must be a DAG SubDAGDefinition after migration.",
+    );
+  }
+
+  return handoffSubTree;
 }
 
 export {

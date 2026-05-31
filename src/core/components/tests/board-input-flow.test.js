@@ -1,6 +1,6 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
-import { createSubTree } from "../../devices/devices-tree.js";
+import { createSubDAG } from "../../devices/devices-dag.js";
 import { createHandoffSubTree } from "../../prefixs/handoff-handler.js";
 import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
@@ -34,22 +34,19 @@ describe("Board input flow", () => {
     return monitor;
   }
 
-  test("input 事件应经由 Board、Monitor 与 DevicesTree 落到工具节点", () => {
+  test("input 事件应经由 Board、Monitor 与 DevicesDAG 落到工具节点", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountSubTree(
-      "",
-      createSubTree("/sample-device")
-        .node("")
-        .defaultChild("tool")
-        .end()
-        .node("tool")
-        .handler(tool.createProcessor({ board, monitor }))
-        .end()
-        .build(),
-    );
+    const sampleBuilder = createSubDAG("/sample-device");
+    const sampleRoot = sampleBuilder.node().defaultRoute("tool");
+    const sampleTool = sampleBuilder
+      .node()
+      .handler(tool.createProcessor({ board, monitor }));
+    sampleBuilder.edge("tool", sampleRoot, sampleTool);
+
+    monitor.mountSubDAG("", sampleBuilder.build());
 
     const emitResults = board.signalsEventBus.emit("input", {
       to: "/main/sample-device",
@@ -87,14 +84,10 @@ describe("Board input flow", () => {
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountSubTree(
-      "",
-      createSubTree("/sample-device")
-        .node("")
-        .defaultChild("tool")
-        .end()
-        .build(),
-    );
+    const emptyBuilder = createSubDAG("/sample-device");
+    emptyBuilder.node().defaultRoute("tool");
+
+    monitor.mountSubDAG("", emptyBuilder.build());
 
     const mountResults = board.signalsEventBus.emit("mount", {
       to: "/main/sample-device/tool",
@@ -103,7 +96,7 @@ describe("Board input flow", () => {
 
     expect(mountResults).toHaveLength(1);
     expect(
-      monitor.devicesTree.getNode("/main/sample-device/tool"),
+      monitor.devicesDAG.getNode("/main/sample-device/tool"),
     ).not.toBeNull();
 
     board.signalsEventBus.emit("input", {
@@ -125,7 +118,9 @@ describe("Board input flow", () => {
     });
 
     expect(umountResults).toEqual([true]);
-    expect(monitor.devicesTree.getNode("/main/sample-device/tool")).toBeNull();
+    expect(
+      monitor.devicesDAG.getNode("/main/sample-device/tool"),
+    ).toBeUndefined();
   });
 
   test("configure 事件应在运行时更新设备节点配置", () => {
@@ -151,15 +146,15 @@ describe("Board input flow", () => {
       },
     });
 
-    monitor.mountSubTree("", keyboardDevice);
-    monitor.devicesTree.mount(
+    monitor.mountSubDAG("", keyboardDevice);
+    monitor.devicesDAG.mount(
       "/main/keyboard/code/KeyW/move/tool",
       (packet) => ({
         to: "",
         signals: packet.signals,
       }),
     );
-    monitor.devicesTree.mount(
+    monitor.devicesDAG.mount(
       "/main/keyboard/code/KeyW/strafe/tool",
       (packet) => ({
         to: "",
@@ -191,7 +186,7 @@ describe("Board input flow", () => {
     );
 
     expect(
-      monitor.devicesTree
+      monitor.devicesDAG
         .dispatch({
           to: "/main/keyboard",
           signals: [
@@ -220,7 +215,7 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountSubTree("", createMouseDevice());
+    monitor.mountSubDAG("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary/tool",
       tool,
@@ -288,7 +283,7 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountSubTree("", createMouseDevice());
+    monitor.mountSubDAG("", createMouseDevice());
 
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary/tool",
@@ -323,7 +318,7 @@ describe("Board input flow", () => {
     let firstObjectId = null;
 
     // 直接用 handoff 子树，不经过 mouse device 路由
-    monitor.mountSubTree(
+    monitor.mountSubDAG(
       "",
       createHandoffSubTree({
         rootPath: "workflow",
@@ -372,11 +367,11 @@ describe("Board input flow", () => {
     expect(ownerChunk.objectManager.getObject(creatorTool.obj.id)).toBe(
       creatorTool.obj,
     );
-    expect(monitor.devicesTree.getNodeState("/main/workflow")).toEqual({
+    expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
       phase: "first",
       activeChild: "first",
     });
-    expect(monitor.devicesTree.getNode("/main/workflow/second")).not.toBeNull();
+    expect(monitor.devicesDAG.getNode("/main/workflow/second")).not.toBeNull();
 
     // 再次进入 creator，验证 handoff 周期可重复
     board.signalsEventBus.emit("input", {
@@ -395,7 +390,7 @@ describe("Board input flow", () => {
     expect(creatorTool.obj).not.toBeNull();
     expect(creatorTool.obj.id).not.toBe(firstObjectId);
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
-    expect(monitor.devicesTree.getNodeState("/main/workflow")).toEqual({
+    expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
       phase: "second",
       activeChild: "second",
     });
@@ -413,7 +408,7 @@ describe("Board input flow", () => {
     ]);
     board.addObject(targetObject, 1);
 
-    monitor.mountSubTree(
+    monitor.mountSubDAG(
       "",
       createHandoffSubTree({
         rootPath: "choose-and-modify",
@@ -439,14 +434,12 @@ describe("Board input flow", () => {
     expect(
       board.activeObjectManager.activeObjectIndex.has(targetObject.id),
     ).toBe(true);
-    expect(monitor.devicesTree.getNodeState("/main/choose-and-modify")).toEqual(
-      {
-        phase: "second",
-        activeChild: "second",
-      },
-    );
+    expect(monitor.devicesDAG.getNodeState("/main/choose-and-modify")).toEqual({
+      phase: "second",
+      activeChild: "second",
+    });
     expect(
-      monitor.devicesTree.getNodeState("/main/choose-and-modify/second"),
+      monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
     ).toEqual(
       expect.objectContaining({
         objects: [targetObject],
@@ -468,14 +461,12 @@ describe("Board input flow", () => {
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     expect(board.getObjectById(targetObject.id)).toBe(targetObject);
-    expect(monitor.devicesTree.getNodeState("/main/choose-and-modify")).toEqual(
-      {
-        phase: "first",
-        activeChild: "first",
-      },
-    );
+    expect(monitor.devicesDAG.getNodeState("/main/choose-and-modify")).toEqual({
+      phase: "first",
+      activeChild: "first",
+    });
     expect(
-      monitor.devicesTree.getNodeState("/main/choose-and-modify/second"),
+      monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
     ).toEqual({});
   });
 
@@ -486,7 +477,7 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountSubTree("", createMouseDevice());
+    monitor.mountSubDAG("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
       to: "/main/mouse/primary/tool",
       tool,

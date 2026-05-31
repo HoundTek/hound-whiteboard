@@ -1,4 +1,4 @@
-import { DevicesTree } from "../devices-tree.js";
+import { DevicesDAG } from "../devices-dag.js";
 import { createMouseDevice } from "../mouse-device.js";
 import { Tool } from "../../tools/tool.js";
 
@@ -41,11 +41,11 @@ function toPlainPackets(packets) {
 
 describe("mouse-device", () => {
   test("普通移动应路由到 pointer 节点", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    const mountedNodes = tree.mountSubTree("/monitor", mouseDevice);
-    const result = tree.dispatch({
+    const mountedNodes = ddag.mountSubDAG("/monitor", mouseDevice);
+    const result = ddag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -55,7 +55,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    expect(mountedNodes.map((node) => node.path)).toEqual([
+    expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
       "/monitor/mouse",
       "/monitor/mouse/pointer",
       "/monitor/mouse/primary",
@@ -94,12 +94,12 @@ describe("mouse-device", () => {
   });
 
   test("左键与右键可同时激活，并聚合路由到多个按钮节点", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    tree.mountSubTree("/monitor", mouseDevice);
+    ddag.mountSubDAG("/monitor", mouseDevice);
 
-    const result = tree.dispatch({
+    const result = ddag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -127,11 +127,11 @@ describe("mouse-device", () => {
   });
 
   test("按住主键时滚轮事件应同时路由到 primary 和 wheel 节点", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    tree.mountSubTree("/monitor", mouseDevice);
-    tree.dispatch({
+    ddag.mountSubDAG("/monitor", mouseDevice);
+    ddag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -141,7 +141,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const result = tree.dispatch({
+    const result = ddag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -179,11 +179,11 @@ describe("mouse-device", () => {
   });
 
   test("主键抬起时应继续把结束包路由到 primary，同时保留其它激活键", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const mouseDevice = createChannelReportingMouseDevice();
 
-    tree.mountSubTree("/monitor", mouseDevice);
-    tree.dispatch({
+    ddag.mountSubDAG("/monitor", mouseDevice);
+    ddag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -193,7 +193,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const releaseResult = tree.dispatch({
+    const releaseResult = ddag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -224,7 +224,7 @@ describe("mouse-device", () => {
   });
 
   test("可同时把同一包交给多个注入处理器", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
     class MappingTool extends Tool {
       constructor(type) {
@@ -251,23 +251,23 @@ describe("mouse-device", () => {
       reset() {}
     }
 
-    tree.mountSubTree("/monitor", mouseDevice);
-    tree.mountTool(
+    ddag.mountSubDAG("/monitor", mouseDevice);
+    ddag.mountTool(
       "/monitor/mouse/pointer/tool",
       new MappingTool("pointer-handled"),
     );
-    tree.mountTool(
+    ddag.mountTool(
       "/monitor/mouse/primary/tool",
       new MappingTool("primary-handled"),
     );
-    tree.mountTool(
+    ddag.mountTool(
       "/monitor/mouse/wheel/tool",
       new MappingTool("wheel-handled"),
     );
 
     expect(
       toPlainPackets(
-        tree.dispatch({
+        ddag.dispatch({
           to: "/monitor/mouse",
           signals: [
             {

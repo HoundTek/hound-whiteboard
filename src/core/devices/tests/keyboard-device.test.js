@@ -1,4 +1,4 @@
-import { DevicesTree, createSubTree } from "../devices-tree.js";
+import { DevicesDAG, createSubDAG } from "../devices-dag.js";
 import {
   createKeyboardDevice,
   KEYBOARD_DEVICE_SIGNAL_TYPES,
@@ -14,7 +14,7 @@ function toPlainPackets(packets) {
 
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice({
       nodeConfigs: {
         "/code/Space": {
@@ -35,10 +35,10 @@ describe("keyboard-device", () => {
     });
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountSubTree("/monitor", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/code/Space/tool", tool);
+    const mountedNodes = ddag.mountSubDAG("/monitor", keyboardDevice);
+    ddag.mountTool("/monitor/keyboard/code/Space/tool", tool);
 
-    expect(mountedNodes.map((node) => node.path)).toEqual([
+    expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
       "/monitor/keyboard",
       "/monitor/keyboard/event",
       "/monitor/keyboard/keydown",
@@ -50,7 +50,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/code/Space",
     ]);
 
-    const result = tree.dispatch({
+    const result = ddag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -156,12 +156,12 @@ describe("keyboard-device", () => {
   });
 
   test("重复按键应路由到 repeat，并保留当前激活键", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountSubTree("/monitor", keyboardDevice);
+    ddag.mountSubDAG("/monitor", keyboardDevice);
 
-    tree.dispatch({
+    ddag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -171,7 +171,7 @@ describe("keyboard-device", () => {
       ],
     });
 
-    const result = tree.dispatch({
+    const result = ddag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -216,12 +216,12 @@ describe("keyboard-device", () => {
   });
 
   test("按键抬起与取消应清理状态", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountSubTree("/monitor", keyboardDevice);
+    ddag.mountSubDAG("/monitor", keyboardDevice);
 
-    tree.dispatch({
+    ddag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -235,7 +235,7 @@ describe("keyboard-device", () => {
       ],
     });
 
-    const keyupPackets = tree.dispatch({
+    const keyupPackets = ddag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -263,7 +263,7 @@ describe("keyboard-device", () => {
       },
     ]);
 
-    tree.dispatch({
+    ddag.dispatch({
       to: "/monitor/keyboard",
       signals: [{ type: "cancel", context: {} }],
     });
@@ -272,7 +272,7 @@ describe("keyboard-device", () => {
   });
 
   test("可在按键节点把信号改写为 position 并汇流到公共工具节点", () => {
-    const tree = new DevicesTree();
+    const ddag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice({
       nodeConfigs: {
         "/code/KeyW": {
@@ -316,11 +316,11 @@ describe("keyboard-device", () => {
 
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountSubTree("/monitor", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/code/KeyW/tool", tool);
-    tree.mountTool("/monitor/keyboard/code/KeyD/tool", tool);
+    const mountedNodes = ddag.mountSubDAG("/monitor", keyboardDevice);
+    ddag.mountTool("/monitor/keyboard/code/KeyW/tool", tool);
+    ddag.mountTool("/monitor/keyboard/code/KeyD/tool", tool);
 
-    expect(mountedNodes.map((node) => node.path)).toEqual([
+    expect(mountedNodes.map((node) => ddag.getNodePath(node))).toEqual([
       "/monitor/keyboard",
       "/monitor/keyboard/event",
       "/monitor/keyboard/keydown",
@@ -333,7 +333,7 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/code/KeyD",
     ]);
 
-    const result = tree.dispatch({
+    const result = ddag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {

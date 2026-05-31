@@ -37,7 +37,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  *   displacementSignalType?: string,
  * }} [options={}] - 配置选项
  * @param {string} [options.displacementSignalType="displacement"] - 输出信号的 type 字段值
- * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
+ * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
  *
  * @example
  *   // 手势驱动 modifier

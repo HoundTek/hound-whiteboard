@@ -14,7 +14,7 @@ import { isPlainObject } from "./utils.js";
 /**
  * 创建修饰节点处理器
  * @description
- * 工厂函数，生成可挂载到 DevicesTree 节点上的 handler。
+ * 工厂函数，生成可挂载到 DevicesDAG 节点上的 handler。
  * 封装了节点状态读写（getState / setState / patchState）和局部路由 helper
  * （routeToChild / stop），调用方只需在 handle() 中编写业务路由逻辑，
  * 无需重复状态初始化与包规整。
@@ -26,7 +26,7 @@ import { isPlainObject } from "./utils.js";
  * }} options - 修饰节点处理器选项
  * @param {Object} [options.initialState] - 节点初始状态，挂载后第一次读取时与节点现有 state 合并
  * @param {Function} options.handle - 核心路由函数，接收 (packet, prefixContext) 参数
- * @returns {import("../devices/devices-tree.js").DevicesTreeHandler} 可挂载到 DevicesTree 节点上的处理器函数
+ * @returns {import("../devices/devices-dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createPrefixNodeHandler(options = {}) {
   const initialState = isPlainObject(options.initialState)

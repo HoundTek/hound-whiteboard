@@ -24,7 +24,7 @@ class DebuggerTool extends Tool {
           this.logObjectLoad(board);
           break;
         case "debug:devices":
-          this.logDevicesTree(board);
+          this.logDevicesDAG(board);
           break;
         case "debug:chunk":
           this.logChunk(board, signal?.context?.id);
@@ -262,45 +262,64 @@ class DebuggerTool extends Tool {
     );
   }
 
-  stringifyDevicesTree(tree) {
-    if (!tree || typeof tree.root !== "object") {
-      return "<no devices tree>";
+  stringifyDevicesDAG(dag) {
+    const root = dag?.getNode?.("/") ?? dag?._root;
+    if (!root || typeof root !== "object") {
+      return "<no devices dag>";
     }
 
     const lines = [];
-    const traverseNode = (node, prefix = "", isLast = true) => {
-      const label = node.parent ? node.name : "/";
-      const branch = node.parent ? (isLast ? "└── " : "├── ") : "";
-      const defaultChild = node.getDefaultChild();
-      const handlerHint = node.getHandler() ? " [handler]" : "";
-      const defaultHint = defaultChild ? ` [default=${defaultChild}]` : "";
-      lines.push(`${prefix}${branch}${label}${handlerHint}${defaultHint}`);
+    const traverseNode = (node, path = "/", prefix = "", isLast = true) => {
+      const label = path === "/" ? "/" : path.split("/").at(-1);
+      const branch = path === "/" ? "" : isLast ? "└── " : "├── ";
+      const handler = node.getHandler?.() ?? node.handler;
+      const defaultRoute = node.getDefaultRoute?.() ?? node.defaultRoute ?? "";
+      const semantics = node.getSemantics?.() ?? node.semantics ?? {};
+      const semanticsKeys = Object.keys(semantics).filter(
+        (key) => semantics[key],
+      );
+      const handlerHint = handler ? " [handler]" : "";
+      const defaultHint = defaultRoute ? ` [default=${defaultRoute}]` : "";
+      const semanticsHint = semanticsKeys.length
+        ? ` [${semanticsKeys.join(",")}]`
+        : "";
+      const nodeIdHint = Number.isInteger(node.id) ? ` #${node.id}` : "";
+      const inEdgeHint =
+        node.inEdges?.size > 1 ? ` [in=${node.inEdges.size}]` : "";
+      lines.push(
+        `${prefix}${branch}${label}${nodeIdHint}${handlerHint}${defaultHint}${semanticsHint}${inEdgeHint}`,
+      );
 
-      const children = Array.from(node.children.values()).sort((left, right) =>
-        left.name.localeCompare(right.name),
+      const edges = Array.from(node.outEdges?.entries?.() ?? []).sort(
+        ([leftName], [rightName]) => leftName.localeCompare(rightName),
       );
       const childPrefix =
-        prefix + (node.parent ? (isLast ? "    " : "│   ") : "");
+        prefix + (path === "/" ? "" : isLast ? "    " : "│   ");
 
-      children.forEach((child, index) => {
-        traverseNode(child, childPrefix, index === children.length - 1);
+      edges.forEach(([edgeName, edge], index) => {
+        const childPath = path === "/" ? `/${edgeName}` : `${path}/${edgeName}`;
+        traverseNode(
+          edge.target,
+          childPath,
+          childPrefix,
+          index === edges.length - 1,
+        );
       });
     };
 
-    traverseNode(tree.root, "", true);
+    traverseNode(root, "/", "", true);
     return lines.join("\n");
   }
 
-  logDevicesTree(board) {
-    const devicesTree = board.devicesTree;
-    if (!devicesTree) {
-      console.warn("[debugger-tool] missing devices tree", board);
+  logDevicesDAG(board) {
+    const devicesDAG = board.devicesDAG;
+    if (!devicesDAG) {
+      console.warn("[debugger-tool] missing devices dag", board);
       return;
     }
 
     console.log(
-      "[debugger-tool] devices tree:\n" +
-        this.stringifyDevicesTree(devicesTree),
+      "[debugger-tool] devices dag:\n" + this.stringifyDevicesDAG(devicesDAG),
     );
   }
 

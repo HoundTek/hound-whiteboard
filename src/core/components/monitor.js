@@ -277,11 +277,11 @@ class Monitor {
   }
 
   /**
-   * 当前白板级唯一设备树。
-   * @type {import("../devices/devices-tree.js").DevicesTree}
+   * 当前白板级唯一设备图
+   * @type {import("../devices/devices-dag.js").DevicesDAG}
    */
-  get devicesTree() {
-    return this.board?.devicesTree;
+  get devicesDAG() {
+    return this.board?.devicesDAG;
   }
 
   /**
@@ -882,45 +882,36 @@ class Monitor {
   }
 
   /**
-   * 挂载子树到白板级设备树
-   * @param {string} path - 子树根路径（相对于显示器根）
-   * @param {import("../devices/devices-tree.js").SubTreeDefinition} subTreeDefinition - 子树定义
-   * @returns {import("../devices/devices-tree.js").DevicesTreeNode[]} 挂载后的设备树节点列表
+   * 挂载子图到白板级设备图
+   * @param {string} path - 子图根路径（相对于显示器根）
+   * @param {import("../devices/devices-dag.js").SubDAGDefinition} subDAGDefinition - 子图定义
    */
-  mountSubTree(path, subTreeDefinition) {
-    return this.devicesTree.mountSubTree(
-      joinPath(this.monitorId),
-      {
-        ...subTreeDefinition,
-        root: path || subTreeDefinition.root,
-      },
-      {
-        board: this.board,
-        monitor: this,
-      },
-    );
+  mountSubDAG(path, subDAGDefinition) {
+    return this.devicesDAG.mountSubDAG(this.monitorId, {
+      ...subDAGDefinition,
+      rootPath: path || subDAGDefinition.rootPath,
+    });
   }
 
   /**
-   * 在白板级设备树中运行时挂载工具。
+   * 在白板级设备图中运行时挂载工具。
    * @param {string} path - 工具叶子路径（相对于显示器根）
    * @param {import("../tools/tool.js").Tool} tool - 要挂载的工具
-   * @returns {import("../devices/devices-tree.js").DevicesTreeNode}
    */
   mountTool(path, tool) {
-    return this.devicesTree.mountTool(joinPath(this.monitorId, path), tool, {
+    this.devicesDAG.mountTool(joinPath(this.monitorId, path), tool, {
       board: this.board,
       monitor: this,
     });
   }
 
   /**
-   * 在白板级设备树中运行时卸载工具叶子节点。
+   * 在白板级设备图中运行时卸载工具叶子节点。
    * @param {string} path - 工具叶子路径（相对于显示器根）
    * @returns {boolean}
    */
   unmountTool(path) {
-    return this.devicesTree.unmountTool(joinPath(this.monitorId, path), {
+    return this.devicesDAG.unmountTool(joinPath(this.monitorId, path), {
       board: this.board,
       monitor: this,
     });

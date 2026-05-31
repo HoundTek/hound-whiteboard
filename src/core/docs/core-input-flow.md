@@ -2,13 +2,13 @@
 
 ## 概述
 
-当前 Core 输入流已经收敛为一条单树链路：Board 持有唯一 DevicesTree，Monitor 只负责把设备和工具挂到这棵树上。
+当前 Core 输入流已经收敛为一条单 DAG 链路：Board 持有唯一 DevicesDAG，Monitor 只负责把设备和工具挂到这张图上。
 
 输入在 Core 内的最短路径是：
 
 - 宿主层识别目标 Monitor
 - Board.signalsEventBus 收到输入事件
-- Board.devicesTree.dispatch() 从根节点开始逐段下传
+- Board.devicesDAG.dispatch() 从根节点开始逐段下传
 - 设备节点 handler 做状态更新与分流
 - 修饰节点按职责执行记录、参数注入、路由、状态机或回调注入
 - 显式工具叶子消费最终信号
@@ -18,7 +18,7 @@
 ```mermaid
 flowchart LR
     Host[Host Input] --> Bus[Board.signalsEventBus]
-    Bus --> Tree[Board.devicesTree]
+    Bus --> Tree[Board.devicesDAG]
     Tree --> Device[Device Root Handler]
     Device --> Node[Device Child Node]
     Node --> Prefix[Prefix Node]
@@ -30,20 +30,20 @@ flowchart LR
 
 Board 负责：
 
-- 拥有唯一 DevicesTree 实例
+- 拥有唯一 DevicesDAG 实例
 - 监听 input、mount、umount、configure 事件
-- 把挂载或分发所需的固定上下文传给 dispatch、mountTool、mountSubTree
+- 把挂载或分发所需的固定上下文传给 dispatch、mountTool、mountSubDAG
 
 Monitor 负责：
 
-- 作为某个视口边界提供 mountSubTree、mountTool、unmountTool 便捷入口
-- 通过 board.devicesTree 代理设备与工具挂载
-- 不再持有独立设备树实例
+- 作为某个视口边界提供 mountSubDAG、mountTool、unmountTool 便捷入口
+- 通过 board.devicesDAG 代理设备与工具挂载
+- 不再持有独立设备图实例
 
-DevicesTree 负责：
+DevicesDAG 负责：
 
 - 根到叶的逐段下传路由
-- defaultChild 自动继续
+- defaultRoute 自动继续
 - append-only 累积上下文
 - 节点 state
 - 卸载钩子
@@ -114,16 +114,16 @@ Tool 负责：
 
 ## 动态配置
 
-运行中的输入链路允许通过 configure 事件更新节点配置，最终落到 DevicesTree.configureNode(path, options)。
+运行中的输入链路允许通过 configure 事件更新节点配置，最终落到 DevicesDAG.configureNode(path, options)。
 
 当前允许动态调整的内容是：
 
 - handler
 - semantics
-- defaultChild
+- defaultRoute
 - umount
 
-其中 handler: null 与 defaultChild: "" 表示显式清空。
+其中 handler: null 与 defaultRoute: "" 表示显式清空。
 
 ## 当前建议
 
@@ -135,6 +135,6 @@ Tool 负责：
 
 ## 相关文档
 
-- [设备树](../devices/docs/devices-tree-document.md)
+- [设备图](../devices/docs/devices-dag-document.md)
 - [工具基类](../tools/tool-document.md)
 - [阶段性稳定接口](./core-stable-interfaces.md)
