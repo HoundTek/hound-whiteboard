@@ -2,7 +2,7 @@ import {
   createTouchscreenDevice,
   TOUCHSCREEN_DEVICE_SIGNAL_TYPES,
 } from "../touchscreen-device.js";
-import { DevicesDAG } from "../devices-dag.js";
+import { DevicesDAG } from "../../devices-dag/index.js";
 
 describe("touchscreen-device", () => {
   test("应聚合同一包中的多个触点位置，并输出多指状态", () => {

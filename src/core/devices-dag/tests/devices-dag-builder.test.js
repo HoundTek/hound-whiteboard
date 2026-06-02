@@ -4,8 +4,8 @@ import {
   DevicesDAGNode,
   DevicesDAGEdge,
   createSubDAG,
-} from "../devices-dag.js";
-import { SignalPacket } from "../signal.js";
+} from "../index.js";
+import { SignalPacket } from "../../devices/signal.js";
 
 describe("createSubDAG (Builder DSL)", () => {
   test("应构建基本子图并挂载到 DevicesDAG", () => {

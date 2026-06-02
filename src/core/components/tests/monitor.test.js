@@ -1,10 +1,10 @@
 import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
-import { DevicesDAG } from "../../devices/devices-dag.js";
+import { DevicesDAG } from "../../devices-dag/index.js";
 import { Vector } from "../../utils/math.js";
 import { Chunk } from "../chunk.js";
 import { RectangleRange } from "../../range/index.js";
-import { createSubDAG } from "../../devices/devices-dag.js";
+import { createSubDAG } from "../../devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../prefixs/index.js";
 
 const REPORT_SIGNAL_TYPE = "debug-report";

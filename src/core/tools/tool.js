@@ -107,7 +107,7 @@ class Tool {
   /**
    * 创建一个可直接挂载到设备图节点上的处理器。
    * @param {Object} [toolContext = {}] - 工具固定上下文
-   * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
+   * @returns {import("../devices-dag/index.js").DevicesDAGHandler}
    */
   createProcessor(toolContext = {}) {
     const uiOverlayBinding = this.createUiOverlayBinding(toolContext);

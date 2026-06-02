@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { DevicesDAG, createSubDAG } from "../../devices/devices-dag.js";
+import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import { Tool } from "../../tools/tool.js";
 import { CommonObjectModifierTool } from "../../tools/modifier/common-object-modifier.js";
 import { Vector } from "../../utils/math.js";

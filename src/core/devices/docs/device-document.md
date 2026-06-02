@@ -170,6 +170,6 @@ monitor.mountSubDAG("/presentation", createKeyboardDevice());
 
 ## 相关文档
 
-- [设备图](./devices-dag-document.md)
+- [设备图](../devices-dag/docs/devices-dag-document.md)
 - [键盘设备](./keyboard-device-document.md)
 - [输入流](../../docs/core-input-flow.md)

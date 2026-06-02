@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "./devices-dag.js";
+import { createSubDAG } from "../devices-dag/index.js";
 import { SignalPacket } from "./signal.js";
 
 /**
@@ -19,7 +19,7 @@ const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
 /**
  * 创建一张触摸屏设备子图
  * @param {{onUpdate?: Function}} [options={}] - 触摸屏设备选项
- * @returns {import("./devices-dag.js").SubDAGDefinition & {
+ * @returns {import("../devices-dag/index.js").SubDAGDefinition & {
  *   clearTouches: () => void,
  *   getActiveTouches: () => Array<{touchId: string, position: any}>,
  * }}
@@ -123,7 +123,7 @@ function createTouchscreenDevice(options = {}) {
   /**
    * 触点报告处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("./devices-dag.js").DevicesDAGHandlerContext} [context={}] - 当前路由上下文
+   * @param {import("../devices-dag/index.js").DevicesDAGHandlerContext} [context={}] - 当前路由上下文
    * @returns {Object}
    */
   const contactsHandler = (signalPacket, context = {}) => {

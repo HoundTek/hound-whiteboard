@@ -12,7 +12,7 @@
 ## 示例代码
 
 ```js
-import { DevicesDAG, createSubDAG } from "../devices-dag.js";
+import { DevicesDAG, createSubDAG } from "../index.js";
 import { Tool } from "../../tools/tool.js";
 
 class PenTool extends Tool {

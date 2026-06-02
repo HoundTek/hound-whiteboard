@@ -8,7 +8,7 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "../devices/devices-dag.js";
+import { createSubDAG } from "../devices-dag/index.js";
 import { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
 import { Tool } from "../tools/tool.js";
 import { SignalPacket } from "../devices/signal.js";
@@ -144,9 +144,9 @@ function mergeDAGNodeDefinition(targetNodeDef = {}, sourceNodeDef = {}) {
 /**
  * 将 DAG 子图定义附着到目标节点上。
  * 目标节点复用 source root 的定义，并吸收其下游边与节点。
- * @param {import("../devices/devices-dag.js").SubDAGDefinition} hostSubDAG
+ * @param {import("../devices-dag/index.js").SubDAGDefinition} hostSubDAG
  * @param {number} hostNodeId
- * @param {import("../devices/devices-dag.js").SubDAGDefinition} subDAGDef
+ * @param {import("../devices-dag/index.js").SubDAGDefinition} subDAGDef
  * @returns {boolean}
  */
 function attachDAGSubDAG(hostSubDAG, hostNodeId, subDAGDef) {
@@ -214,7 +214,7 @@ function isToolInstance(value) {
  * hook tool.completeCreatedObject()——creator 真正完成创建的唯一语义入口。
  * 通过累积上下文中的 onToolComplete 回调向上通知，不再使用冒泡。
  * @param {import("../tools/tool.js").Tool} tool - creator 工具实例
- * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
+ * @returns {import("../devices-dag/index.js").DevicesDAGHandler}
  */
 function wrapCreatorForHandoff(tool) {
   if (tool.__handoffWrapped) {
@@ -274,7 +274,7 @@ function wrapCreatorForHandoff(tool) {
  *
  * 向上通信通过累积上下文中的 onToolComplete 回调，不再使用冒泡。
  * @param {Tool} tool - first 阶段工具实例（creator / chooser）
- * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
+ * @returns {import("../devices-dag/index.js").DevicesDAGHandler}
  */
 function wrapFirstForHandoff(tool) {
   // Creator 路径：精确 hook completeCreatedObject
@@ -324,7 +324,7 @@ function wrapFirstForHandoff(tool) {
  * handoff wrapper 会 hook 语义完成入口（例如 applyModifiedObjects），在真正提交成功后
  * 触发父 prefix 的 onToolComplete 回调，并在 handoff 工作流中关闭 auto unmount。
  * @param {Tool} tool - second 阶段工具实例
- * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
+ * @returns {import("../devices-dag/index.js").DevicesDAGHandler}
  */
 function wrapSecondForHandoff(tool) {
   if (tool.__handoffWrapped) {
@@ -392,10 +392,10 @@ function wrapSecondForHandoff(tool) {
 
 /**
  * 为 subDAG 的根节点追加完成通知包装
- * @param {import("../devices/devices-dag.js").SubDAGDefinition} subDAGDef - 原始子图定义
+ * @param {import("../devices-dag/index.js").SubDAGDefinition} subDAGDef - 原始子图定义
  * @param {Object} [options={}] - 包装选项
  * @param {Function} [options.shouldComplete] - 决定是否发出完成通知，接收 (packet, context)，省略时在收到 "end" 信号后发出
- * @returns {import("../devices/devices-dag.js").SubDAGDefinition} 包装后的子图定义
+ * @returns {import("../devices-dag/index.js").SubDAGDefinition} 包装后的子图定义
  */
 function wrapSubDAGForHandoff(subDAGDef, options = {}) {
   const { shouldComplete } = options;
@@ -455,15 +455,15 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
  *
  * 完成通知通过累积上下文中的回调实现，不再使用冒泡信号。 * @param {{
  *   rootPath?: string,
- *   first: Tool|import("../devices/devices-dag.js").SubDAGDefinition,
- *   second: Tool|import("../devices/devices-dag.js").SubDAGDefinition,
+ *   first: Tool|import("../devices-dag/index.js").SubDAGDefinition,
+ *   second: Tool|import("../devices-dag/index.js").SubDAGDefinition,
  *   autoBridgeObjects?: boolean,
  * }} options - handoff 子树配置
  * @param {string} [options.rootPath="/handoff"] - 子树根路径
- * @param {Tool|import("../devices/devices-dag.js").SubDAGDefinition} options.first - 第一阶段工具或子图（creator / chooser 等）
- * @param {Tool|import("../devices/devices-dag.js").SubDAGDefinition} options.second - 第二阶段工具或子图（通常为 modifier）
+ * @param {Tool|import("../devices-dag/index.js").SubDAGDefinition} options.first - 第一阶段工具或子图（creator / chooser 等）
+ * @param {Tool|import("../devices-dag/index.js").SubDAGDefinition} options.second - 第二阶段工具或子图（通常为 modifier）
  * @param {boolean} [options.autoBridgeObjects=true] - 是否在 handoff 时自动桥接对象上下文
- * @returns {import("../devices/devices-dag.js").SubDAGDefinition}
+ * @returns {import("../devices-dag/index.js").SubDAGDefinition}
  *
  * @example
  *   // creator → modifier

@@ -1,4 +1,4 @@
-import { DevicesDAG } from "../devices-dag.js";
+import { DevicesDAG } from "../../devices-dag/index.js";
 import { createMouseDevice } from "../mouse-device.js";
 import { Tool } from "../../tools/tool.js";
 

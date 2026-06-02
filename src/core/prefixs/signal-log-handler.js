@@ -20,7 +20,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  *   label?: string,
  * }} [options={}] - 配置选项
  * @param {string} [options.label="[SignalLog]"] - 日志前缀标签，便于区分多个 log handler
- * @returns {import("../devices/devices-dag.js").DevicesDAGHandler}
+ * @returns {import("../devices-dag/index.js").DevicesDAGHandler}
  *
  * @example
  *   builder

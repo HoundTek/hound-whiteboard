@@ -101,7 +101,7 @@ function createKeyboardNodeConfigs(codes = []) {
  * 构建键盘触发信号转发节点配置
  * @description 过滤出 trigger 信号并转发到指定出边，用于没有业务处理的简单键位路由。
  * @param {string} routeName - 目标出边名
- * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }} 节点配置对象
  */
 function buildKeyboardTriggerForwardNodeConfig(routeName) {
   return {
@@ -127,7 +127,7 @@ function buildKeyboardTriggerForwardNodeConfig(routeName) {
  * @description 将 trigger 信号转为 position 信号，目标位置 = monitor.origin + delta。
  * @param {import("../../core/components/monitor.js").Monitor} monitor - 显示器实例
  * @param {{ x: number, y: number }} delta - 位移增量
- * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }} 节点配置对象
  */
 function buildViewportPositionNodeConfig(monitor, delta) {
   return {
@@ -164,7 +164,7 @@ function buildViewportPositionNodeConfig(monitor, delta) {
  * @description 将 trigger 信号转为 scale 信号，缩放值由 scaleTransformer 函数计算。
  * @param {import("../../core/components/monitor.js").Monitor} monitor - 显示器实例
  * @param {(currentZoom: number) => number} scaleTransformer - 缩放变换函数
- * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }} 节点配置对象
  */
 function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
   return {
@@ -196,7 +196,7 @@ function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
 /**
  * 构建视口刷新节点配置
  * @description 将 trigger 信号转为 flush 信号，触发 MonitorViewportTool 执行刷新。
- * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }} 节点配置对象
  */
 function buildViewportFlushNodeConfig() {
   return {
@@ -229,7 +229,7 @@ function buildViewportFlushNodeConfig() {
  * @description 将 trigger 信号转为 position 信号，附上对应方向向量，路由到共享 WASD 工具节点。
  * @param {string} code - 键位编码（如 "KeyW"）
  * @param {{ x: number, y: number }} vector - 方向向量
- * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }} 节点配置对象
  */
 function buildWasdNodeConfig(code, vector) {
   return {
@@ -265,7 +265,7 @@ function buildWasdNodeConfig(code, vector) {
  * @description 将 trigger 信号转为指定调试类型的信号，路由到共享 Debugger 工具节点。
  * @param {string} type - 调试信号类型（如 "debug:chunkload"）
  * @param {Object} [context={}] - 调试上下文附加数据
- * @returns {{ handler: import("../../core/devices/devices-dag.js").DevicesDAGHandler }} 节点配置对象
+ * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }} 节点配置对象
  */
 function buildKeyboardDebugNodeConfig(type, context = {}) {
   return {

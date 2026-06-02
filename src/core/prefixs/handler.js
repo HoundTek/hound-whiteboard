@@ -26,7 +26,7 @@ import { isPlainObject } from "./utils.js";
  * }} options - 修饰节点处理器选项
  * @param {Object} [options.initialState] - 节点初始状态，挂载后第一次读取时与节点现有 state 合并
  * @param {Function} options.handle - 核心路由函数，接收 (packet, prefixContext) 参数
- * @returns {import("../devices/devices-dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
+ * @returns {import("../devices-dag/index.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createPrefixNodeHandler(options = {}) {
   const initialState = isPlainObject(options.initialState)

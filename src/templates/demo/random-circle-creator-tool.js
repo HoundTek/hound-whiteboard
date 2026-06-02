@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "../../core/devices/devices-dag.js";
+import { createSubDAG } from "../../core/devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
 import { SignalPacket } from "../../core/devices/signal.js";
 import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
@@ -36,7 +36,7 @@ const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
  *   maxRadius?: number,
  *   property?: Record<string, any>,
  * }} [options={}] - 随机圆工作流配置
- * @returns {import("../../core/devices/devices-dag.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subDAG) 的结构化子树定义
+ * @returns {import("../../core/devices-dag/index.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subDAG) 的结构化子树定义
  *
  * @example
  *   const subDAG = createRandomCircleSubDAG({

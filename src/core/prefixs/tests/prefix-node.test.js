@@ -1,4 +1,4 @@
-import { DevicesDAG, createSubDAG } from "../../devices/devices-dag.js";
+import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import {
   createMultiToolPrefixHandler,
   createPrefixNodeHandler,

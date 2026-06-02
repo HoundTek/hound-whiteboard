@@ -14,7 +14,7 @@ import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { EventBus } from "../utils/event-bus.js";
 import { UndoTree } from "../hit/undo-tree-core.js";
-import { DevicesDAG } from "../devices/devices-dag.js";
+import { DevicesDAG } from "../devices-dag/index.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import { Monitor } from "./monitor.js";
 import {
@@ -47,7 +47,7 @@ function isValidBoardRootPath(boardRootPath) {
  * Board 运行时节点配置事件载荷。
  * @typedef {Object} BoardConfigureEventPayload
  * @property {string} to - 目标设备图节点绝对路径，必须包含 monitorId
- * @property {import("../devices/devices-dag.js").DevicesDAGNodeConfig} options - 要更新到节点上的配置片段；`defaultRoute` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
+ * @property {import("../devices-dag/index.js").DevicesDAGNodeConfig} options - 要更新到节点上的配置片段；`defaultRoute` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
  */
 
 /**

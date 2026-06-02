@@ -50,12 +50,67 @@ DevicesDAG 不负责：
 - 修饰节点只是 `semantics.prefix === true` 的职责标记
 - 工具节点只是 `semantics.tool === true` 的职责标记
 
-`handler` 的输入是 `SignalPacket`，输出会被规整为 `DevicesDAGHandlerResult`。稳定结果字段是：
+`handler` 的输入是 `SignalPacket`，输出会被规整为 `DevicesDAGHandlerResult`。
 
-- `packets`：继续向下路由的包列表
-- `context`：要追加到累积上下文的键值对
-- `redirect`：改写当前主链下一段路径
-- `stop`：强制终止当前链路
+### 结果规整
+
+handler 的原生返回值可以是多种形式——单个 `SignalPacket`、数组、纯对象、`undefined` 等——但分发引擎只认经过 `normalizeHandlerResult()` 规整后的四个**稳定结果字段**：
+
+| 字段       | 类型             | 含义                           | 对分发引擎的影响                                                     |
+| ---------- | ---------------- | ------------------------------ | -------------------------------------------------------------------- |
+| `packets`  | `SignalPacket[]` | 继续路由到后继节点的信号包列表 | 第一个包作为主包继续下传；其余排入延迟路由队列，待主链结束后依次分发 |
+| `context`  | `Object`         | 要追加到累积上下文的键值对     | 合并到累积上下文供下游节点读取；已有键重复则抛错                     |
+| `redirect` | `string`         | 改写主链接下来的路径段         | 把当前路径的剩余段全部替换为指定路径，继续分发                       |
+| `stop`     | `boolean`        | 强制终止当前链路               | 立即结束当前链路，不再向下路由                                       |
+
+这些字段的组合行为如下（均为 `_walkSegments` 方法内的稳定行为）：
+
+**1. `packets` 路由规则**
+
+- handler 返回了 `packets`，则提取第一个作为主包继续主链，其余放入延迟路由队列
+- 主包的 `to` 字段决定下一段路径；若无 `to` 且节点有 `defaultRoute`，则走默认出边
+- 若 handler 显式返回空 `packets`（`return { packets: [] }`），则终止当前链路
+- 若 handler 无返回值（未显式声明 packets），链路按默认行为继续
+
+**2. `stop` 优先级**
+
+- `stop: true` 立即终止当前链路，无视 `redirect` 和后续路径段
+- 停止前已产生的 `packets` 仍会正常路由
+
+**3. `redirect` 与默认出边**
+
+- `redirect` 的优先级高于主包 `to` 和节点 `defaultRoute`
+- `redirect` 和主包 `to` 同时存在时，后者覆盖前者（redirect 先作用，主包 to 再覆盖）
+
+**4. `context` 合并规则**
+
+- 仅在当前节点追加，不可覆盖已有键（重复键抛错）
+- 即使当前链路因 `stop` 或边缺失而终止，累积的上下文仍会随结果返回
+
+### 返回值样例
+
+```js
+// 基础：继续走默认出边
+return { packets: [new SignalPacket("", packet.signals)] };
+
+// 注入上下文给下游节点
+return { context: { onToolComplete: () => console.log("done") } };
+
+// 改写后续路由
+return { redirect: "alternate-child" };
+
+// 多路分发：主包走 redirect，额外包排入延迟队列
+return {
+  redirect: "primary-child",
+  packets: [
+    new SignalPacket("", packet.signals),
+    new SignalPacket("secondary-child", extraSignals),
+  ],
+};
+
+// 终止
+return { stop: true };
+```
 
 ## 处理上下文
 
@@ -77,6 +132,50 @@ DevicesDAG 不负责：
 - 需要可变共享数据时，应显式写入节点 `state`。例如对象桥接、拖拽锚点、局部状态机都应落在节点状态里。
 
 如果一条链路需要“向上通知”，当前推荐做法不是返回向上的 `to`，而是在 `context` 里注入回调函数，例如 `onToolComplete`。
+
+## 状态模型与约定
+
+设备图中有三种不同作用域的可变状态，各自遵循不同的读写规则和生命周期。
+
+### 三种状态
+
+| 状态类别       | 存储位置                 | 作用域                        | 读写规则                           | 生命周期             |
+| -------------- | ------------------------ | ----------------------------- | ---------------------------------- | -------------------- |
+| **累积上下文** | `handlerContext.context` | 当前分发链路                  | 上游注入，下游只读；不可覆盖已有键 | 单次 `dispatch`      |
+| **节点状态**   | `DevicesDAGNode.state`   | 全图可读；由节点 handler 拥有 | 外部优先只读；写入由 handler 控制  | 节点存续期间         |
+| **闭包状态**   | handler 工厂闭包         | 仅 handler 自身可访问         | 彻底私有，外部不可见不可写         | handler 实例存续期间 |
+
+### 三种状态的分工
+
+**累积上下文** 适合沿链路传递一次性的决策信息：
+
+- 共享资源引用（`board`、`monitor`、`renderer`）
+- 向上通知的回调函数（`onToolComplete`）
+- 链路级别的元数据标记
+
+**节点状态** 适合需要长期维护且允许外部观察的数据：
+
+- 拖拽锚点位置（`anchor`）
+- 状态机相位（`phase`、`activeChild`）
+- 跨 handler 配置切换后仍需保留的状态
+- 测试断言、序列化、调试日志需要读取的数据
+
+**闭包状态** 适合 handler 的纯内部实现细节：
+
+- 配置常量（`displacementSignalType`）
+- 懒初始化的重量级处理器（tool `processor`）
+- 临时缓存，不需要暴露给外部
+
+### 节点状态的写入约定
+
+节点状态由**该节点的 handler 拥有**。读写规则如下：
+
+- **读取**：任何代码可以通过 `dag.getNodeState(path)` 或 `handlerContext.getNodeState(path)` 读取任意节点的状态。这是节点状态区别于闭包状态的核心价值——可外部观察。
+- **写入自身**：handler 通过 `handlerContext.setNodeState(handlerContext.path, state)` 写入当前节点的状态。这是最常用的写入方式。
+- **跨节点写入**：仅允许**父节点协调子节点状态**的场景（如 handoff-handler 中父 prefix 切换子节点 phases 时转移数据），属于父节点对其子树的协调职责。除此之外，不应随意写入其他节点的状态。
+- **外部写入**：非 handler 代码不应直接调用 `dag.setNodeState()` 写入。若确有需要（如测试、初始化），应通过图配置层面的 API 完成，而非直接操作节点状态。
+
+简而言之，闭包存实现细节，节点状态存可观察数据。节点状态由 handler 拥有，外部只读优先。
 
 ## 路由规则
 

@@ -1,18 +1,30 @@
 /**
- * @file 设备图
- * @description 提供基于有向无环图的设备信号路由、路径解析与分发的核心实现。
- * @module core/devices/devices-dag
+ * @file 设备图核心引擎
+ * @description
+ * 提供基于有向无环图的设备信号路由、路径解析与分发的核心实现。
+ *
+ * 文件结构：
+ * - `dag.js`（本文件）：DevicesDAG 类 + JSDoc 类型定义
+ * - `dag-utils.js`：内部工具函数（isPlainObject、normalizeHandlerResult 等）
+ * - `dag-node-edge.js`：DevicesDAGNode 与 DevicesDAGEdge 基础数据结构
+ * - `dag-builder.js`：DAGBuilder / DAGNodeBuilder 声明式 DSL
+ * - `index.js`：统一 re-export 入口
+ *
+ * 外部使用者通过 `import { ... } from "../devices-dag"` 引入。
+ * @module core/devices-dag/dag
  * @author Zhou Chenyu
  */
 
-import {
-  joinPath,
-  normalizePath,
-  resolvePath,
-  toAbsolutePath,
-} from "../utils/path.js";
-import { SignalPacket } from "./signal.js";
+import { joinPath, normalizePath, resolvePath } from "../utils/path.js";
+import { SignalPacket } from "../devices/signal.js";
 import { CounterPool } from "../utils/counter-pool.js";
+import {
+  isPlainObject,
+  isSubDAGDefinition,
+  normalizeHandlerResult,
+} from "./dag-utils.js";
+import { DevicesDAGNode } from "./dag-node-edge.js";
+import { DevicesDAGEdge } from "./dag-node-edge.js";
 
 // ---------------------------------------------------------------------------
 // 类型定义（JSDoc）
@@ -24,7 +36,7 @@ import { CounterPool } from "../utils/counter-pool.js";
  * 处理器上下文包含当前节点元数据、累积上下文以及节点状态访问接口，
  * 供节点处理器在处理信号包时使用。
  *
- * 累积上下文（`context`）是沿分发路径逐步追加的只读对象。
+ * 累积上下文（\`context\`）是沿分发路径逐步追加的只读对象。
  * 在 DAG 中，分发沿单一路径进行，上下文只沿该路径累积，
  * 节点的多入边不影响单次分发的上下文。
  *
@@ -98,296 +110,6 @@ import { CounterPool } from "../utils/counter-pool.js";
  * @property {() => any} [getState] - 读取子图内部状态
  */
 
-// ---------------------------------------------------------------------------
-// 内部工具
-// ---------------------------------------------------------------------------
-
-/**
- * 判断值是否为纯对象
- * @param {any} value
- * @returns {boolean}
- */
-function isPlainObject(value) {
-  return Object.prototype.toString.call(value) === "[object Object]";
-}
-
-/**
- * 判断一个值是否像 SubDAGDefinition。
- * @param {any} value - 待判断值
- * @returns {boolean}
- */
-function isSubDAGDefinition(value) {
-  return (
-    isPlainObject(value) &&
-    value.nodes instanceof Map &&
-    Array.isArray(value.edges) &&
-    typeof value.rootNodeId === "number"
-  );
-}
-
-/**
- * 将 handler 的原始返回值规整为标准结果结构
- * @param {*} rawResult
- * @param {{ defaultTo?: string }} [options={}]
- * @returns {DevicesDAGHandlerResult}
- */
-function normalizeHandlerResult(rawResult, options = {}) {
-  if (
-    isPlainObject(rawResult) &&
-    (Array.isArray(rawResult.packets) ||
-      "stop" in rawResult ||
-      "redirect" in rawResult ||
-      "context" in rawResult)
-  ) {
-    return {
-      ...rawResult,
-      packets: SignalPacket.normalizeResult(rawResult.packets ?? [], options),
-      explicitPackets: Object.prototype.hasOwnProperty.call(
-        rawResult,
-        "packets",
-      ),
-    };
-  }
-
-  if (rawResult === undefined || rawResult === null) {
-    return { packets: [], explicitPackets: false };
-  }
-
-  if (Array.isArray(rawResult)) {
-    const packets = [];
-    for (const item of rawResult) {
-      if (
-        isPlainObject(item) &&
-        (Array.isArray(item.packets) ||
-          "stop" in item ||
-          "redirect" in item ||
-          "context" in item)
-      ) {
-        packets.push(
-          ...SignalPacket.normalizeResult(item.packets ?? [], options),
-        );
-      } else {
-        packets.push(SignalPacket.from(item, options));
-      }
-    }
-    return { packets, explicitPackets: true };
-  }
-
-  return {
-    packets: SignalPacket.normalizeResult(rawResult, options),
-    explicitPackets: true,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// DevicesDAGNode
-// ---------------------------------------------------------------------------
-
-/**
- * 设备图节点
- * @class
- * @description 图中一个信号处理单元，持有处理器、语义元数据、可变状态和入边/出边集合。
- * @author Zhou Chenyu
- */
-class DevicesDAGNode {
-  /**
-   * 节点 id
-   * @type {number}
-   */
-  id;
-
-  /**
-   * 节点处理器
-   * @type {DevicesDAGHandler|null}
-   */
-  handler;
-
-  /**
-   * 节点语义元数据
-   * @type {Object}
-   */
-  semantics;
-
-  /**
-   * 节点可变状态
-   * @type {Object}
-   */
-  state;
-
-  /**
-   * 节点卸载钩子
-   * @type {DevicesDAGNodeUmountHandler|null}
-   */
-  umount;
-
-  /**
-   * 默认出边名（当处理器未指定路由时使用）
-   * @type {string}
-   */
-  defaultRoute;
-
-  /**
-   * 出边集合（边名 -> 边）
-   * @type {Map<string, DevicesDAGEdge>}
-   */
-  outEdges;
-
-  /**
-   * 入边集合
-   * @type {Set<DevicesDAGEdge>}
-   */
-  inEdges;
-
-  /**
-   * 节点的 canonical path 表示（由 DAG 维护，确保唯一且稳定）
-   * @type {string|null}
-   */
-  path;
-
-  /**
-   * @param {number} id - 节点唯一标识
-   * @constructor
-   */
-  constructor(id) {
-    this.id = id;
-    this.handler = null;
-    this.semantics = {};
-    this.state = {};
-    this.umount = null;
-    this.defaultRoute = "";
-    this.outEdges = new Map();
-    this.inEdges = new Set();
-    this.path = null;
-  }
-
-  /**
-   * 设置节点处理器
-   * @param {DevicesDAGHandler|null} handler
-   * @returns {DevicesDAGNode}
-   */
-  setHandler(handler) {
-    this.handler = typeof handler === "function" ? handler : null;
-    return this;
-  }
-
-  /**
-   * 设置节点职责语义
-   * @param {Object|null} semantics
-   * @returns {DevicesDAGNode}
-   */
-  setSemantics(semantics = {}) {
-    this.semantics = isPlainObject(semantics) ? { ...semantics } : {};
-    return this;
-  }
-
-  /**
-   * 设置默认出边
-   * @param {string} defaultRoute
-   * @returns {DevicesDAGNode}
-   */
-  setDefaultRoute(defaultRoute = "") {
-    this.defaultRoute = typeof defaultRoute === "string" ? defaultRoute : "";
-    return this;
-  }
-
-  /**
-   * 兼容旧命名：设置默认子链路
-   * @param {string} defaultChild
-   * @returns {DevicesDAGNode}
-   */
-  setDefaultChild(defaultChild = "") {
-    return this.setDefaultRoute(defaultChild);
-  }
-
-  /**
-   * 设置卸载钩子
-   * @param {DevicesDAGNodeUmountHandler|null} umountHandler
-   * @returns {DevicesDAGNode}
-   */
-  setUmountHandler(umountHandler) {
-    this.umount = typeof umountHandler === "function" ? umountHandler : null;
-    return this;
-  }
-
-  /**
-   * 获取节点处理器
-   * @returns {DevicesDAGHandler|null}
-   */
-  getHandler() {
-    return typeof this.handler === "function" ? this.handler : null;
-  }
-
-  /**
-   * 获取节点职责语义
-   * @returns {Object}
-   */
-  getSemantics() {
-    return isPlainObject(this.semantics) ? { ...this.semantics } : {};
-  }
-
-  /**
-   * 获取默认出边
-   * @returns {string}
-   */
-  getDefaultRoute() {
-    return this.defaultRoute || "";
-  }
-
-  /**
-   * 获取卸载钩子
-   * @returns {DevicesDAGNodeUmountHandler|null}
-   */
-  getUmountHandler() {
-    return typeof this.umount === "function" ? this.umount : null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// DevicesDAGEdge
-// ---------------------------------------------------------------------------
-
-/**
- * 设备图有向边
- * @class
- * @description 连接两个节点的有向边，携带边名；边名在源节点下唯一。
- * @author Zhou Chenyu
- */
-class DevicesDAGEdge {
-  /**
-   * 边名（在源节点下唯一）
-   * @type {string}
-   */
-  name;
-
-  /**
-   * 源节点
-   * @type {DevicesDAGNode}
-   */
-  source;
-
-  /**
-   * 目标节点
-   * @type {DevicesDAGNode}
-   */
-  target;
-
-  /**
-   * @param {string} name - 边名
-   * @param {DevicesDAGNode} source - 源节点
-   * @param {DevicesDAGNode} target - 目标节点
-   * @constructor
-   */
-  constructor(name, source, target) {
-    this.name = name;
-    this.source = source;
-    this.target = target;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// DevicesDAG
-// ---------------------------------------------------------------------------
-
 /**
  * 设备图
  * @class
@@ -407,6 +129,32 @@ class DevicesDAGEdge {
  * - 相对路径以 "./" 开头或不以 "/" 开头
  *
  * @author Zhou Chenyu
+ * @example
+ * // 基础用法：创建图、挂载节点、分发信号
+ * const dag = new DevicesDAG();
+ *
+ * // 挂载一个设备节点
+ * dag.mount("/mouse", (packet, ctx) => ({
+ *   to: "primary",
+ *   signals: packet.signals,
+ * }));
+ *
+ * // 挂载 workflow
+ * dag.mountWorkflow("/mouse/primary/tool", myTool, { board });
+ *
+ * // 分发信号
+ * const result = dag.dispatch({
+ *   to: "/mouse",
+ *   signals: [{ type: "pointer", x: 100, y: 200 }],
+ * });
+ *
+ * @example
+ * // 使用子图 DSL
+ * const builder = createSubDAG("/keyboard");
+ * const root = builder.node().handler(codeRouter);
+ * const keyW = builder.node().handler(keyHandler).defaultRoute("wasd");
+ * builder.edge("code", root, keyW);
+ * dag.mountSubDAG("/monitor/main", builder.build());
  */
 class DevicesDAG {
   /**
@@ -1485,290 +1233,7 @@ class DevicesDAG {
 }
 
 // ---------------------------------------------------------------------------
-// Builder DSL
-// ---------------------------------------------------------------------------
-
-/**
- * 子图节点构建器
- * @class
- */
-class DAGNodeBuilder {
-  /**
-   * 所属子图构建器
-   * @type {DAGBuilder}
-   */
-  _dagBuilder;
-
-  /**
-   * 子图内局部 id
-   * @type {number}
-   */
-  _localId;
-
-  /**
-   * @param {DAGBuilder} dagBuilder - 所属子图构建器
-   * @param {number} localId - 子图内局部 id
-   */
-  constructor(dagBuilder, localId) {
-    this._dagBuilder = dagBuilder;
-    this._localId = localId;
-  }
-
-  /**
-   * 设置节点处理器
-   * @param {DevicesDAGHandler|null} handler
-   * @returns {DAGNodeBuilder}
-   */
-  handler(handler) {
-    this._dagBuilder._setNodeDef(this._localId, {
-      handler: typeof handler === "function" ? handler : null,
-    });
-    return this;
-  }
-
-  /**
-   * 合并节点语义
-   * @param {Object} semantics
-   * @returns {DAGNodeBuilder}
-   */
-  semantics(semantics = {}) {
-    this._dagBuilder._mergeNodeSemantics(this._localId, semantics);
-    return this;
-  }
-
-  /**
-   * 标记为 prefix 语义并设置处理器
-   * @param {DevicesDAGHandler|null} handler
-   * @param {Object} [semantics={}]
-   * @returns {DAGNodeBuilder}
-   */
-  prefix(handler, semantics = {}) {
-    return this.handler(handler).semantics({
-      prefix: true,
-      ...(isPlainObject(semantics) ? semantics : {}),
-    });
-  }
-
-  /**
-   * 设置默认出边名
-   * @param {string} name
-   * @returns {DAGNodeBuilder}
-   */
-  defaultRoute(name = "") {
-    this._dagBuilder._setNodeDef(this._localId, {
-      defaultRoute: typeof name === "string" ? name : "",
-    });
-    return this;
-  }
-
-  /**
-   * 绑定工具
-   * @param {import("../tools/tool.js").Tool} tool
-   * @param {Object} [toolContext={}]
-   * @returns {DAGNodeBuilder}
-   */
-  tool(tool, toolContext = {}) {
-    this._dagBuilder._setNodeDef(this._localId, {
-      tool,
-      toolContext: isPlainObject(toolContext) ? { ...toolContext } : {},
-    });
-    this._dagBuilder._mergeNodeSemantics(this._localId, { tool: true });
-    return this;
-  }
-
-  /**
-   * 设置卸载钩子
-   * @param {DevicesDAGNodeUmountHandler|null} umountHandler
-   * @returns {DAGNodeBuilder}
-   */
-  umount(umountHandler) {
-    this._dagBuilder._setNodeDef(this._localId, {
-      umount: typeof umountHandler === "function" ? umountHandler : null,
-    });
-    return this;
-  }
-
-  /**
-   * 给当前节点设置标签（可选，便于调试）
-   * @param {string} _label
-   * @returns {DAGNodeBuilder}
-   */
-  label(_label = "") {
-    // 标签仅用于调试，不影响行为
-    return this;
-  }
-}
-
-/**
- * 子图构建器（方案 B：声明式）
- * @class
- */
-class DAGBuilder {
-  /**
-   * 子图根路径前缀
-   * @type {string}
-   */
-  _rootPath;
-
-  /**
-   * 下一个局部 id
-   * @type {number}
-   */
-  _nextLocalId;
-
-  /**
-   * 节点定义（局部 id → 定义）
-   * @type {Map<number, SubDAGNodeDefinition>}
-   */
-  _nodeDefs;
-
-  /**
-   * 边定义列表
-   * @type {SubDAGEdgeDefinition[]}
-   */
-  _edges;
-
-  /**
-   * 子图根节点局部 id
-   * @type {number|null}
-   */
-  _rootNodeId;
-
-  /**
-   * 暴露的 API 映射
-   * @type {Object}
-   */
-  _exposedApi;
-
-  /**
-   * @param {string} rootPath - 子图根路径前缀
-   */
-  constructor(rootPath = "/") {
-    this._rootPath = toAbsolutePath(normalizePath(rootPath));
-    this._nextLocalId = 0;
-    this._nodeDefs = new Map();
-    this._edges = [];
-    this._rootNodeId = null;
-    this._exposedApi = {};
-  }
-
-  /**
-   * 声明一个节点并返回其构建器
-   * 第一个 node() 调用隐式成为子图根节点
-   * @returns {DAGNodeBuilder}
-   */
-  node() {
-    const localId = this._nextLocalId++;
-    if (this._rootNodeId === null) {
-      this._rootNodeId = localId;
-    }
-    this._nodeDefs.set(localId, {
-      handler: null,
-      semantics: {},
-      defaultRoute: "",
-      tool: undefined,
-      toolContext: {},
-      umount: null,
-    });
-    return new DAGNodeBuilder(this, localId);
-  }
-
-  /**
-   * 声明一条有向边
-   * @param {string} name - 边名
-   * @param {DAGNodeBuilder} from - 源节点构建器
-   * @param {DAGNodeBuilder} to - 目标节点构建器
-   * @returns {DAGBuilder}
-   */
-  edge(name, from, to) {
-    if (!(from instanceof DAGNodeBuilder) || !(to instanceof DAGNodeBuilder)) {
-      throw new TypeError(
-        "edge() requires two DAGNodeBuilder instances (from, to).",
-      );
-    }
-    this._edges.push({
-      name,
-      fromNodeId: from._localId,
-      toNodeId: to._localId,
-    });
-    return this;
-  }
-
-  /**
-   * 暴露子图级状态 API
-   * @param {Record<string, Function>} api
-   * @returns {DAGBuilder}
-   */
-  expose(api = {}) {
-    for (const [name, value] of Object.entries(api)) {
-      if (typeof value === "function") {
-        this._exposedApi[name] = value;
-      }
-    }
-    return this;
-  }
-
-  /**
-   * 生成子图定义
-   * @returns {SubDAGDefinition}
-   */
-  build() {
-    return {
-      rootPath: this._rootPath,
-      rootNodeId: this._rootNodeId ?? 0,
-      nodes: new Map(this._nodeDefs),
-      edges: [...this._edges],
-      ...this._exposedApi,
-    };
-  }
-
-  // ---- 内部方法 ----
-
-  /**
-   * @param {number} localId
-   * @param {Partial<SubDAGNodeDefinition>} patch
-   */
-  _setNodeDef(localId, patch) {
-    const existing = this._nodeDefs.get(localId);
-    if (!existing) return;
-    this._nodeDefs.set(localId, { ...existing, ...patch });
-  }
-
-  /**
-   * @param {number} localId
-   * @param {Object} semantics
-   */
-  _mergeNodeSemantics(localId, semantics = {}) {
-    const existing = this._nodeDefs.get(localId);
-    if (!existing) return;
-    this._nodeDefs.set(localId, {
-      ...existing,
-      semantics: {
-        ...(isPlainObject(existing.semantics) ? existing.semantics : {}),
-        ...(isPlainObject(semantics) ? semantics : {}),
-      },
-    });
-  }
-}
-
-/**
- * 创建一个子图构建器
- * @param {string} rootPath - 子图根路径前缀（挂载时与 basePath 拼接）
- * @returns {DAGBuilder}
- */
-function createSubDAG(rootPath = "/") {
-  return new DAGBuilder(rootPath);
-}
-
-// ---------------------------------------------------------------------------
 // 导出
 // ---------------------------------------------------------------------------
 
-export {
-  DevicesDAG,
-  DevicesDAGNode,
-  DevicesDAGEdge,
-  DAGBuilder,
-  DAGNodeBuilder,
-  createSubDAG,
-};
+export { DevicesDAG };

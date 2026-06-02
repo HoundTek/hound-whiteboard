@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "./devices-dag.js";
+import { createSubDAG } from "../devices-dag/index.js";
 import { SignalPacket } from "./signal.js";
 import { joinPath } from "../utils/path.js";
 
@@ -18,17 +18,17 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
 /**
  * 创建一张键盘设备子图
  * @param {{
- *   eventProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   keydownProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   keyupProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   repeatProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   cancelProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   eventProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   keydownProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   keyupProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   repeatProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   cancelProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
  *   nodeConfigs?: Record<string, {
- *     handler?: import("./devices-dag.js").DevicesDAGHandler,
+ *     handler?: import("../devices-dag/index.js").DevicesDAGHandler,
  *     defaultChild?: string,
  *   }>,
  * }} [options={}] - 键盘设备选项
- * @returns {import("./devices-dag.js").SubDAGDefinition & {
+ * @returns {import("../devices-dag/index.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeKeys: Array<{

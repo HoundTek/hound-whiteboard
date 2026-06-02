@@ -1,6 +1,6 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
-import { createSubDAG } from "../../devices/devices-dag.js";
+import { createSubDAG } from "../../devices-dag/index.js";
 import { createHandoffSubDAG } from "../../prefixs/handoff-handler.js";
 import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";

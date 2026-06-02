@@ -5,19 +5,19 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "./devices-dag.js";
+import { createSubDAG } from "../devices-dag/index.js";
 import { SignalPacket } from "./signal.js";
 
 /**
  * 创建一张鼠标设备子图
  * @param {{
- *   pointerProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   primaryProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   secondaryProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   auxiliaryProcessor?: import("./devices-dag.js").DevicesDAGHandler,
- *   wheelProcessor?: import("./devices-dag.js").DevicesDAGHandler,
+ *   pointerProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   primaryProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   secondaryProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   auxiliaryProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
+ *   wheelProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
  * }} [options={}] - 鼠标设备选项
- * @returns {import("./devices-dag.js").SubDAGDefinition & {
+ * @returns {import("../devices-dag/index.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeButtons: {primary: boolean, secondary: boolean, auxiliary: boolean},

@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
 import { Chunk } from "../chunk.js";
-import { DevicesDAG } from "../../devices/devices-dag.js";
+import { DevicesDAG } from "../../devices-dag/index.js";
 import { RectangleRange } from "../../range/index.js";
 import {
   createNoopCanvas,

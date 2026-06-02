@@ -1,4 +1,4 @@
-import { DevicesDAG, createSubDAG } from "../devices-dag.js";
+import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import {
   createKeyboardDevice,
   KEYBOARD_DEVICE_SIGNAL_TYPES,

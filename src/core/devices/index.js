@@ -11,7 +11,7 @@ export {
   DAGBuilder,
   DAGNodeBuilder,
   createSubDAG,
-} from "./devices-dag.js";
+} from "../devices-dag/index.js";
 export {
   createKeyboardDevice,
   KEYBOARD_DEVICE_SIGNAL_TYPES,

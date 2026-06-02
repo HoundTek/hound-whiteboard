@@ -22,7 +22,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * }} options - repeator 选项
  * @param {string|string[]} [options.toChildren] - 目标子节点名。传字符串时单发；传数组时每项各发一份。省略时回退到当前 prefix 节点的 defaultChild
  * @param {Function} [options.cloneSignals] - 自定义信号克隆函数。省略时使用浅层展开克隆
- * @returns {import("../devices/devices-dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
+ * @returns {import("../devices-dag/index.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createRepeatorPrefixHandler(options = {}) {
   const cloneFn =
@@ -32,7 +32,7 @@ function createRepeatorPrefixHandler(options = {}) {
 
   /**
    * 解析目标子节点列表
-   * @param {import("../devices/devices-dag.js").DevicesDAGHandlerContext} prefixContext - 当前修饰节点上下文
+   * @param {import("../devices-dag/index.js").DevicesDAGHandlerContext} prefixContext - 当前修饰节点上下文
    * @returns {Array<string>}
    */
   const resolveTargets = (prefixContext) => {

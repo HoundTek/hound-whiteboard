@@ -4,8 +4,8 @@ import {
   DevicesDAGNode,
   DevicesDAGEdge,
   createSubDAG,
-} from "../devices-dag.js";
-import { SignalPacket } from "../signal.js";
+} from "../index.js";
+import { SignalPacket } from "../../devices/signal.js";
 
 // =========================================================================
 // DevicesDAG 核心测试
