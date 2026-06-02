@@ -7,11 +7,11 @@
  * 典型用法：
  * ```js
  * const builder = createSubDAG("/keyboard");
- * const root = builder.node().handler(fn1);
- * const child = builder.node().defaultRoute("tool");
- * builder.edge("code", root, child);
+ * const root = builder.node().handler(codeRouter);
+ * const keyW = builder.node().handler(keyHandler).defaultRoute("wasd");
+ * builder.edge("code", root, keyW);
  * const subDAG = builder.build();
- * dag.mountSubDAG("/monitor/main", subDAG);
+ * dag.mountSubDAG("", subDAG);
  * ```
  * @module core/devices-dag/dag-builder
  * @author Zhou Chenyu
@@ -32,11 +32,13 @@ import { normalizePath, toAbsolutePath } from "../utils/path.js";
  * 提供链式 API 设置处理器、语义、默认出边、工具绑定和卸载钩子。
  * @author Zhou Chenyu
  * @example
+ * // 在 builder 上下文中创建节点并链式配置
  * const builder = createSubDAG("/pen");
  * const node = builder.node()
  *   .handler((pkt, ctx) => ({ to: "pointer", signals: pkt.signals }))
  *   .defaultRoute("tool")
  *   .semantics({ prefix: true });
+ * // 之后通过 builder.edge(..., node, ...) 连接到子图中
  */
 class DAGNodeBuilder {
   /**
@@ -160,13 +162,17 @@ class DAGNodeBuilder {
  * 构建完成后调用 `build()` 生成不可变的子图定义。
  * @author Zhou Chenyu
  * @example
+ * const dag = new DevicesDAG();
  * const builder = createSubDAG("/keyboard");
- * const root = builder.node().handler(fn1);
- * const child = builder.node().handler(fn2);
- * builder.edge("code", root, child);
- * builder.expose({ getState: () => ({ ... }) });
- * const subDAG = builder.build();
- * dag.mountSubDAG("/monitor/main", subDAG);
+ *
+ * const root = builder.node().handler(codeRouter);
+ * const keyW = builder.node().handler(keyHandler).defaultRoute("wasd");
+ * const wasd = builder.node().handler(wasdHandler);
+ *
+ * builder.edge("code", root, keyW);
+ * builder.edge("wasd", keyW, wasd);
+ *
+ * dag.mountSubDAG("", builder.build());
  */
 class DAGBuilder {
   /**
@@ -325,16 +331,23 @@ class DAGBuilder {
  * @param {string} rootPath - 子图根路径前缀
  * @returns {DAGBuilder} 一个新的子图构建器实例
  * @example
- * // 构建一个键盘设备子图
+ * // 构建一个键盘设备子图，挂载后分发信号
+ * const dag = new DevicesDAG();
  * const builder = createSubDAG("/keyboard");
- * const root = builder.node().handler(codeRouter);
- * const keys = ["KeyW", "KeyA", "KeyS", "KeyD"].map(k =>
- *   builder.node().handler(keyHandler).defaultRoute("wasd")
- * );
- * keys.forEach(k => builder.edge(k._localId > 1 ? keys[0]._localId : "code", root, k));
  *
- * // 挂载
- * dag.mountSubDAG("/monitor/main", builder.build());
+ * const root = builder.node().handler(codeRouter);
+ * const keyW = builder.node().handler(keyHandler).defaultRoute("wasd");
+ * const wasd = builder.node().handler(wasdHandler);
+ *
+ * builder.edge("code", root, keyW);
+ * builder.edge("wasd", keyW, wasd);
+ *
+ * dag.mountSubDAG("", builder.build());
+ *
+ * dag.dispatch({
+ *   to: "/keyboard/code",
+ *   signals: [{ type: "keydown", code: "KeyW" }],
+ * });
  */
 function createSubDAG(rootPath = "/") {
   return new DAGBuilder(rootPath);

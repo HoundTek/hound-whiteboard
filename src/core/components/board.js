@@ -545,6 +545,8 @@ class Board {
       monitorId,
     );
     this.monitors.set(monitorId, monitor);
+    // 在设备图中标记 monitor 语义
+    this.devicesDAG.configureNode(monitorId, { semantics: { monitor: true } });
     return monitor;
   }
 

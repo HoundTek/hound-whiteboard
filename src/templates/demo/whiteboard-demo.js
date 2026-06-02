@@ -506,7 +506,21 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   });
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/KeyT`,
-    options: buildKeyboardDebugNodeConfig("debug:devices"),
+    options: {
+      handler(packet) {
+        const triggerSignals = packet.signals.filter(
+          (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        );
+        if (triggerSignals.length === 0) return [];
+
+        // Shift+T → Mermaid 格式；普通 T → 树状文本
+        const isShift = triggerSignals.some((s) => s?.context?.shiftKey);
+        return {
+          to: "debug",
+          signals: [{ type: isShift ? "debug:mermaid" : "debug:devices" }],
+        };
+      },
+    },
   });
   effectiveBoard.signalsEventBus.emit("configure", {
     to: `/${monitor.monitorId}/keyboard/code/Digit1`,
@@ -527,7 +541,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
 
   console.log(`[whiteboard-demo] viewport keys: arrows=pan, +/-=zoom, R=flush`);
   console.log(
-    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, T=devices, 1/2/3/4=chunk detail`,
+    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, T=devices-dag, Shift+T=devices-mermaid, 1/2/3/4=chunk detail`,
   );
 
   return {

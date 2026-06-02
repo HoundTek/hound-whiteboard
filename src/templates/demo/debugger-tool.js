@@ -6,6 +6,7 @@
  */
 
 import { Tool } from "../../core/tools/tool.js";
+import { dagToMermaid } from "../../core/devices-dag/index.js";
 
 class DebuggerTool extends Tool {
   process(signalPacket, deviceContext = {}) {
@@ -25,6 +26,9 @@ class DebuggerTool extends Tool {
           break;
         case "debug:devices":
           this.logDevicesDAG(board);
+          break;
+        case "debug:mermaid":
+          this.logMermaidDevicesDAG(board);
           break;
         case "debug:chunk":
           this.logChunk(board, signal?.context?.id);
@@ -269,6 +273,13 @@ class DebuggerTool extends Tool {
     return dag.toString();
   }
 
+  mermaidizeDevicesDAG(dag, options = {}) {
+    if (!dag) {
+      return "<no devices dag>";
+    }
+    return dagToMermaid(dag, options);
+  }
+
   logDevicesDAG(board) {
     const devicesDAG = board.devicesDAG;
     if (!devicesDAG) {
@@ -278,6 +289,19 @@ class DebuggerTool extends Tool {
 
     console.log(
       "[debugger-tool] devices dag:\n" + this.stringifyDevicesDAG(devicesDAG),
+    );
+  }
+
+  logMermaidDevicesDAG(board) {
+    const devicesDAG = board.devicesDAG;
+    if (!devicesDAG) {
+      console.warn("[debugger-tool] missing devices dag", board);
+      return;
+    }
+
+    console.log(
+      "[debugger-tool] devices dag in Mermaid format:\n" +
+        this.mermaidizeDevicesDAG(devicesDAG, { orientation: "TD" }),
     );
   }
 

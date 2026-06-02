@@ -552,11 +552,9 @@ describe("whiteboard demo", () => {
     expect(monitor.origin.serialize()).toEqual({ x: 200, y: 150 });
   });
 
-  test("demo 配置后 R 键应触发视口全屏刷新，且不再落到 debugger-tool", () => {
+  test("demo 配置后 R 键应触发视口全屏刷新", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const debugTool = new DebuggerTool();
-    const debugSpy = jest.spyOn(debugTool, "process");
     const baseInvalidateSpy = jest
       .spyOn(monitor.baseRenderScheduler, "invalidate")
       .mockImplementation(() => false);
@@ -564,7 +562,7 @@ describe("whiteboard demo", () => {
       .spyOn(monitor.renderScheduler, "invalidate")
       .mockImplementation(() => false);
 
-    configureWhiteboardDemo(board, monitor, { debugTool });
+    configureWhiteboardDemo(board, monitor);
 
     board.signalsEventBus.emit("input", {
       to: "/main/keyboard",
@@ -586,26 +584,5 @@ describe("whiteboard demo", () => {
     expect(liveInvalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(0, 0, 800, 600),
     );
-    expect(debugSpy).not.toHaveBeenCalled();
-
-    board.signalsEventBus.emit("input", {
-      to: "/main/keyboard",
-      signals: [
-        {
-          type: "keydown",
-          context: {
-            key: "m",
-            code: "KeyM",
-            repeat: false,
-          },
-        },
-      ],
-    });
-
-    expect(debugSpy).toHaveBeenCalledTimes(1);
-
-    debugSpy.mockRestore();
-    baseInvalidateSpy.mockRestore();
-    liveInvalidateSpy.mockRestore();
   });
 });

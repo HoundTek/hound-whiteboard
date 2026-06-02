@@ -8,6 +8,7 @@
  * - `dag-utils.js`：内部工具函数（isPlainObject、normalizeHandlerResult 等）
  * - `dag-node-edge.js`：DevicesDAGNode 与 DevicesDAGEdge 基础数据结构
  * - `dag-builder.js`：DAGBuilder / DAGNodeBuilder 声明式 DSL
+ * - `dag-debug.js`：dagToString（树状文本）/ toMermaid（流程图）
  * - `index.js`：统一 re-export 入口
  *
  * 外部使用者通过 `import { ... } from "../devices-dag"` 引入。
@@ -25,6 +26,7 @@ import {
 } from "./dag-utils.js";
 import { DevicesDAGNode } from "./dag-node-edge.js";
 import { DevicesDAGEdge } from "./dag-node-edge.js";
+import { dagToString } from "./dag-debug.js";
 
 // ---------------------------------------------------------------------------
 // 类型定义（JSDoc）
@@ -130,31 +132,36 @@ import { DevicesDAGEdge } from "./dag-node-edge.js";
  *
  * @author Zhou Chenyu
  * @example
- * // 基础用法：创建图、挂载节点、分发信号
+ * // 基础用法：通过 configureNode 配置 Monitor 下的设备路由，再分发信号
  * const dag = new DevicesDAG();
  *
- * // 挂载一个设备节点
- * dag.mount("/mouse", (packet, ctx) => ({
- *   to: "primary",
- *   signals: packet.signals,
- * }));
+ * // 标记 Monitor 根节点（通常由 Board.createMonitor 自动完成）
+ * dag.configureNode("/monitor", { semantics: { monitor: true } });
  *
- * // 挂载 workflow
- * dag.mountWorkflow("/mouse/primary/tool", myTool, { board });
+ * // 配置 Monitor 下的设备路由节点
+ * dag.configureNode("/monitor/mouse", { defaultRoute: "primary" });
+ * dag.configureNode("/monitor/mouse/primary", {
+ *   handler(pkt, ctx) {
+ *     return { stop: true, packets: [pkt] };
+ *   },
+ * });
+ *
+ * // 挂载 workflow 工具实例
+ * dag.mountWorkflow("/monitor/workflows/pen", myPenTool, { board });
  *
  * // 分发信号
- * const result = dag.dispatch({
- *   to: "/mouse",
- *   signals: [{ type: "pointer", x: 100, y: 200 }],
+ * dag.dispatch({
+ *   to: "/monitor/mouse",
+ *   signals: [{ type: "pointerdown", x: 100, y: 200 }],
  * });
  *
  * @example
- * // 使用子图 DSL
+ * // 使用 Builder DSL 构建子图并挂载（详见 dag-builder.js）
  * const builder = createSubDAG("/keyboard");
- * const root = builder.node().handler(codeRouter);
- * const keyW = builder.node().handler(keyHandler).defaultRoute("wasd");
- * builder.edge("code", root, keyW);
- * dag.mountSubDAG("/monitor/main", builder.build());
+ * const r = builder.node().handler(codeRouter);
+ * const k = builder.node().handler(keyHandler).defaultRoute("wasd");
+ * builder.edge("code", r, k);
+ * dag.mountSubDAG("", builder.build());
  */
 class DevicesDAG {
   /**
@@ -1046,71 +1053,12 @@ class DevicesDAG {
   // -----------------------------------------------------------------------
 
   /**
-   * 生成设备图的树状字符串表示
-   * @description
-   * 从根节点开始 DFS 遍历，输出类似如下格式：
-   * ```text
-   * /
-   * ├── keyboard#1
-   * │   ├── code#2
-   * │   │   ├── KeyW#3 [handler] [default=wasd]
-   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
-   * │   │   ├── KeyA#5 [handler] [default=wasd]
-   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
-   * │   │   ├── KeyS#6 [handler] [default=wasd]
-   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
-   * │   │   └── KeyD#7 [handler] [default=wasd]
-   * │   │   │   └── wasd#4 [handler] [tool] [in=4]
-   * │   └── wasd-move#8 [handler] [tool]
-   * └── mouse#9
-   *     └── primary#10
-   *         └── tool#11 [handler] [tool]
-   * ```
+   * 生成设备图的树状字符串表示（委托 dag-debug.js）
+   * @see {@link module:core/devices-dag/dag-debug.dagToString}
    * @returns {string}
    */
   toString() {
-    const lines = [];
-
-    /**
-     * 递归遍历节点
-     * @param {DevicesDAGNode} node - 当前节点
-     * @param {string} path - 当前节点路径
-     * @param {string} prefix - 行前缀（缩进 + 连线）
-     * @param {boolean} isLast - 是否为同级最后一个
-     */
-    const traverse = (node, path = "/", prefix = "", isLast = true) => {
-      const label = path === "/" ? "/" : path.split("/").at(-1);
-      const branch = path === "/" ? "" : isLast ? "└── " : "├── ";
-
-      const handler = node.getHandler?.() ?? node.handler;
-      const defaultRoute = node.getDefaultRoute?.() ?? node.defaultRoute ?? "";
-      const semantics = node.getSemantics?.() ?? node.semantics ?? {};
-      const semanticsKeys = Object.keys(semantics).filter((k) => semantics[k]);
-
-      const parts = [
-        `${prefix}${branch}${label}`,
-        Number.isInteger(node.id) ? `#${node.id}` : "",
-        handler ? "[handler]" : "",
-        defaultRoute ? `[default=${defaultRoute}]` : "",
-        semanticsKeys.length ? `[${semanticsKeys.join(",")}]` : "",
-        node.inEdges?.size > 1 ? `[in=${node.inEdges.size}]` : "",
-      ];
-      lines.push(parts.filter(Boolean).join(" "));
-
-      const edges = Array.from(node.outEdges?.entries?.() ?? []).sort(
-        ([a], [b]) => a.localeCompare(b),
-      );
-      const childPrefix =
-        prefix + (path === "/" ? "" : isLast ? "    " : "│   ");
-
-      edges.forEach(([edgeName, edge], i) => {
-        const childPath = path === "/" ? `/${edgeName}` : `${path}/${edgeName}`;
-        traverse(edge.target, childPath, childPrefix, i === edges.length - 1);
-      });
-    };
-
-    traverse(this._root);
-    return lines.join("\n");
+    return dagToString(this);
   }
 
   // -----------------------------------------------------------------------
