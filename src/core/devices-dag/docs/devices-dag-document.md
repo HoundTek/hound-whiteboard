@@ -212,11 +212,12 @@ return { stop: true };
 
 当前使用的取值：
 
-| 值                | 含义                                   | 示例                                                                                        |
-| ----------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `"inject"`        | 拦截上游信号后从零生成新信号注入子节点 | `random-circle-generator`：拦截 trigger → 随机计算 position/radius/property → 注入给 params |
-| `"transform"`     | 接收上游信号做变换后转发               | `circle-params`：接收 position+radius → 变换为三阶段信号的 sequence                         |
-| `"state-machine"` | 节点维护局部状态机，按状态决定路由     | `handoff-handler`：根据 phase 状态在不同子节点间切换                                        |
+| 值                | 含义                                      | 示例                                                                                        |
+| ----------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `"inject"`        | 拦截上游信号后从零生成新信号注入子节点    | `random-circle-generator`：拦截 trigger → 随机计算 position/radius/property → 注入给 params |
+| `"transform"`     | 接收上游信号做变换后转发                  | `circle-params`：接收 position+radius → 变换为三阶段信号的 sequence                         |
+| `"state-machine"` | 节点维护局部状态机，按状态决定路由        | `handoff-handler`：根据 phase 状态在不同子节点间切换                                        |
+| `"inspect"`       | 被动观测/记录信号元数据，原样转发给子节点 | `debug` prefix：记录 entryIndex/path/originalTo 后原样路由到 report 子节点                  |
 
 `prefixKind` 则是更细粒度的业务角色标签（如 `"random-circle-generator"`、`"circle-params"`），用于在日志/调试中快速识别前缀节点类型。
 

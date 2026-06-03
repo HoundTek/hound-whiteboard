@@ -17,7 +17,7 @@ import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
 import { MonitorViewportTool } from "./monitor-viewport-tool.js";
 
-const DEMO_PRIMARY_STROKE_COLOR = "#000000";
+const DEMO_PRIMARY_STROKE_COLOR = "#ff0000";
 
 /** @type {ReadonlyArray<string>} 所有活跃按键编码 */
 const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
@@ -85,15 +85,22 @@ function buildKeyboardTriggerForwardNodeConfig() {
 /**
  * 构建视口位置移动 prefix handler
  * @description
- * 将 trigger 信号转为 position 信号，目标位置 = monitor.origin + delta。
+ * 将 trigger 信号转为 position 信号，目标位置 = monitor.origin + (baseStep / zoom) * direction。
  * monitor 从 handlerContext.context 获取；路由依赖 defaultRoute。
- * @param {{ x: number, y: number }} delta - 位移增量
+ * @param {{ x: number, y: number }} direction - 位移方向（单位向量）
+ * @param {number} [baseStep=200] - 缩放为 1 时的位移步长
  * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
-function buildViewportPositionNodeConfig(delta) {
+function buildViewportPositionNodeConfig(direction, baseStep = 200) {
   return {
     handler(packet, context) {
       const monitor = context?.context?.monitor;
+      const zoom = monitor?.zoom ?? 1;
+      const step = baseStep / zoom;
+      const delta = {
+        x: (direction?.x ?? 0) * step,
+        y: (direction?.y ?? 0) * step,
+      };
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
@@ -207,8 +214,9 @@ function buildWasdNodeConfig(code, vector) {
 
 /**
  * 构建键盘调试 prefix handler
- * @description 将 trigger 信号转为指定调试类型的信号。
- * @param {string} type - 调试信号类型（如 "debug:chunkload"）
+ * @description 将 trigger 信号转为指定调试类型的信号。type 可以是静态字符串或
+ * 动态函数 (signals) => string（如根据 Shift 分流）。
+ * @param {string | ((signals: object[]) => string)} type - 调试信号类型或解析函数
  * @param {Object} [context={}] - 调试上下文附加数据
  * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
@@ -219,27 +227,9 @@ function buildKeyboardDebugNodeConfig(type, context = {}) {
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return [];
-      return { signals: [{ type, context: { ...context } }] };
-    },
-  };
-}
-
-/**
- * 构建 KeyT 双模调试 prefix handler
- * @description Shift+T → "debug:mermaid"，普通 T → "debug:devices"。
- * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
- */
-function buildKeyboardDebugKeyTHandler() {
-  return {
-    handler(packet) {
-      const triggerSignals = packet.signals.filter(
-        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-      );
-      if (triggerSignals.length === 0) return [];
-      const isShift = triggerSignals.some((s) => s?.context?.shiftKey);
-      return {
-        signals: [{ type: isShift ? "debug:mermaid" : "debug:devices" }],
-      };
+      const resolvedType =
+        typeof type === "function" ? type(triggerSignals) : type;
+      return { signals: [{ type: resolvedType, context: { ...context } }] };
     },
   };
 }
@@ -302,8 +292,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
-  const keyboardDevice =
-    options.keyboardDevice ?? createKeyboardDevice();
+  const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
 
   monitor.mountSubDAG("/mouse", mouseDevice);
   monitor.mountSubDAG("/keyboard", keyboardDevice);
@@ -359,14 +348,16 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     const factor = DEMO_VIEWPORT_SCALE_FACTOR;
 
     const positionEdges = [
-      { code: "ArrowUp", delta: { x: 0, y: -step } },
-      { code: "ArrowDown", delta: { x: 0, y: step } },
-      { code: "ArrowLeft", delta: { x: -step, y: 0 } },
-      { code: "ArrowRight", delta: { x: step, y: 0 } },
-    ].map(({ code, delta }) => ({
+      { code: "ArrowUp", direction: { x: 0, y: -1 } },
+      { code: "ArrowDown", direction: { x: 0, y: 1 } },
+      { code: "ArrowLeft", direction: { x: -1, y: 0 } },
+      { code: "ArrowRight", direction: { x: 1, y: 0 } },
+    ].map(({ code, direction }) => ({
       from: `/keyboard/code/${code}`,
       edge: "default",
-      prefix: createEdgePrefix(buildViewportPositionNodeConfig(delta)),
+      prefix: createEdgePrefix(
+        buildViewportPositionNodeConfig(direction, step),
+      ),
     }));
 
     const scaleEdges = [
@@ -401,6 +392,13 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
       { code: "KeyO", type: "debug:objectload" },
       { code: "KeyM", type: "debug:aom" },
       { code: "KeyB", type: "debug:board" },
+      {
+        code: "KeyT",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:mermaid"
+            : "debug:devices",
+      },
       { code: "Digit1", type: "debug:chunk", ctx: { id: 1 } },
       { code: "Digit2", type: "debug:chunk", ctx: { id: 2 } },
       { code: "Digit3", type: "debug:chunk", ctx: { id: 3 } },
@@ -411,17 +409,11 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
       prefix: createEdgePrefix(buildKeyboardDebugNodeConfig(type, ctx)),
     }));
 
-    const keyTEdge = {
-      from: "/keyboard/code/KeyT",
-      edge: "default",
-      prefix: createEdgePrefix(buildKeyboardDebugKeyTHandler()),
-    };
-
     effectiveBoard.signalsEventBus.emit("mount", {
       monitorId: monitor.monitorId,
       name: DEMO_WORKFLOW_NAMES.DEBUG,
       workflow: debugTool,
-      edges: [...simpleDebugEdges, keyTEdge],
+      edges: simpleDebugEdges,
     });
   }
 
@@ -442,7 +434,6 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
 }
 
 export {
-  buildKeyboardDebugKeyTHandler,
   buildKeyboardDebugNodeConfig,
   buildKeyboardTriggerForwardNodeConfig,
   buildWasdNodeConfig,

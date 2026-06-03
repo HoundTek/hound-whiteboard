@@ -6,19 +6,23 @@ import { Chunk } from "../chunk.js";
 import { RectangleRange } from "../../range/index.js";
 import { createSubDAG } from "../../devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../prefixs/index.js";
+import {
+  createNoopCanvas,
+  createNoopCanvasContext2D,
+} from "../../test-support/noop-canvas.js";
 
 const REPORT_SIGNAL_TYPE = "debug-report";
 
 /**
  * 创建一个简单的报告子图（prefix 节点），用于验证 Monitor#mountSubDAG 行为。
- * 替代已删除的 debugger-device。
  */
 function createReportSubDAG() {
   let lastReceivedAt = "/";
   let lastOriginalTo = "/";
 
   const builder = createSubDAG("/debugger");
-  const root = builder.node()
+  const root = builder
+    .node()
     .prefix(
       createPrefixNodeHandler({
         initialState: { entryIndex: -1 },
@@ -37,30 +41,28 @@ function createReportSubDAG() {
       { prefixKind: "debug", routePolicy: "inspect" },
     )
     .defaultRoute("report");
-  const report = builder.node()
-    .handler((signalPacket, context = {}) => ({
-      to: "",
-      signals: [
-        {
-          type: REPORT_SIGNAL_TYPE,
-          context: {
-            index: 0,
-            receivedAt: lastReceivedAt,
-            originalTo: lastOriginalTo,
-            signalCount: Array.isArray(signalPacket.signals)
-              ? signalPacket.signals.length
-              : 0,
-          },
+
+  const report = builder.node().handler((signalPacket, context = {}) => ({
+    to: "",
+    signals: [
+      {
+        type: REPORT_SIGNAL_TYPE,
+        context: {
+          index: 0,
+          receivedAt: lastReceivedAt,
+          originalTo: lastOriginalTo,
+          signalCount: Array.isArray(signalPacket.signals)
+            ? signalPacket.signals.length
+            : 0,
         },
-      ],
-    }));
+      },
+    ],
+  }));
+
   builder.edge("report", root, report);
+
   return builder.build();
 }
-import {
-  createNoopCanvas,
-  createNoopCanvasContext2D,
-} from "../../test-support/noop-canvas.js";
 
 describe("Monitor", () => {
   function createContext() {

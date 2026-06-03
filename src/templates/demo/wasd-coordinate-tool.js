@@ -11,6 +11,7 @@ import { Vector } from "../../core/utils/math.js";
  * Demo 专用 WASD 坐标工具
  * @class
  * @extends Tool
+ * @author Zhou Chenyu
  */
 class WasdCoordinateTool extends Tool {
   /**
