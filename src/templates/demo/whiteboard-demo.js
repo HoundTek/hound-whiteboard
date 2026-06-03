@@ -9,21 +9,24 @@ import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
 } from "../../core/devices/keyboard-device.js";
+import { createEdgePrefix } from "../../core/prefixs/index.js";
 import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-object-chooser.js";
 import { DebuggerTool } from "./debugger-tool.js";
-import { createRandomCircleSubTree } from "./random-circle-creator-tool.js";
+import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
 import { MonitorViewportTool } from "./monitor-viewport-tool.js";
-import { Vector } from "../../core/utils/math.js";
 
-const DEMO_PRIMARY_STROKE_COLOR = "#000000";
+const DEMO_PRIMARY_STROKE_COLOR = "#ff0000";
+
+/** @type {ReadonlyArray<string>} 所有活跃按键编码 */
 const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "Space",
   "KeyW",
   "KeyA",
   "KeyS",
   "KeyD",
+  "KeyR",
   "KeyC",
   "KeyO",
   "KeyM",
@@ -43,12 +46,13 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "Digit4",
 ]);
 
-const DEMO_KEYBOARD_TOOL_PATHS = Object.freeze({
-  MOVE: "tools/move/tool",
-  RANDOM_CIRCLE: "tools/create-circle",
-  RANDOM_CIRCLE_TOOL: "tools/create-circle/tool",
-  DEBUG: "tools/debug/tool",
-  VIEWPORT: "tools/viewport/tool",
+const DEMO_WORKFLOW_NAMES = Object.freeze({
+  PRIMARY_STROKE: "primary-stroke",
+  SECONDARY_CHOOSER: "secondary-chooser",
+  RANDOM_CIRCLE: "create-circle",
+  WASD_MOVE: "wasd-move",
+  DEBUG: "debug",
+  VIEWPORT: "viewport",
 });
 
 const DEMO_VIEWPORT_POSITION_STEP = 200;
@@ -60,44 +64,55 @@ const WASD_ROUTE_PRESETS = Object.freeze({
   KeyD: Object.freeze({ x: 1, y: 0 }),
 });
 
-function buildKeyboardTriggerForwardNodeConfig(relativeToolPath) {
+/**
+ * 构建键盘触发信号转发 prefix handler
+ * @description
+ * 过滤出 trigger 信号并返回，路由依赖 defaultRoute 自动走边。
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ */
+function buildKeyboardTriggerForwardNodeConfig() {
   return {
     handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-
-      if (triggerSignals.length === 0) {
-        return [];
-      }
-
-      return {
-        to: relativeToolPath,
-        signals: triggerSignals,
-      };
+      if (triggerSignals.length === 0) return [];
+      return { signals: triggerSignals };
     },
   };
 }
 
-function buildViewportPositionNodeConfig(monitor, delta) {
+/**
+ * 构建视口位置移动 prefix handler
+ * @description
+ * 将 trigger 信号转为 position 信号，目标位置 = monitor.origin + (baseStep / zoom) * direction。
+ * monitor 从 handlerContext.context 获取；路由依赖 defaultRoute。
+ * @param {{ x: number, y: number }} direction - 位移方向（单位向量）
+ * @param {number} [baseStep=200] - 缩放为 1 时的位移步长
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ */
+function buildViewportPositionNodeConfig(direction, baseStep = 200) {
   return {
-    handler(packet) {
+    handler(packet, context) {
+      const monitor = context?.context?.monitor;
+      const zoom = monitor?.zoom ?? 1;
+      const step = baseStep / zoom;
+      const delta = {
+        x: (direction?.x ?? 0) * step,
+        y: (direction?.y ?? 0) * step,
+      };
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-
-      if (triggerSignals.length === 0) {
-        return [];
-      }
+      if (triggerSignals.length === 0) return [];
 
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
         signals: triggerSignals.map((signal) => ({
           type: "position",
           context: {
             value: {
-              x: monitor.origin.x + (delta?.x ?? 0),
-              y: monitor.origin.y + (delta?.y ?? 0),
+              x: (monitor?.origin?.x ?? 0) + (delta?.x ?? 0),
+              y: (monitor?.origin?.y ?? 0) + (delta?.y ?? 0),
             },
             code: signal?.context?.code,
             key: signal?.context?.key,
@@ -109,23 +124,28 @@ function buildViewportPositionNodeConfig(monitor, delta) {
   };
 }
 
-function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
+/**
+ * 构建视口缩放 prefix handler
+ * @description
+ * 将 trigger 信号转为 scale 信号，缩放值由 scaleTransformer 函数计算。
+ * monitor 从 handlerContext.context 获取；路由依赖 defaultRoute。
+ * @param {(currentZoom: number) => number} scaleTransformer - 缩放变换函数
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ */
+function buildViewportScaleNodeConfig(scaleTransformer) {
   return {
-    handler(packet) {
+    handler(packet, context) {
+      const monitor = context?.context?.monitor;
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-
-      if (triggerSignals.length === 0) {
-        return [];
-      }
+      if (triggerSignals.length === 0) return [];
 
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
         signals: triggerSignals.map((signal) => ({
           type: "scale",
           context: {
-            value: scaleTransformer(monitor.zoom),
+            value: scaleTransformer(monitor?.zoom ?? 1),
             code: signal?.context?.code,
             key: signal?.context?.key,
             sourceType: signal.type,
@@ -136,19 +156,19 @@ function buildViewportScaleNodeConfig(monitor, scaleTransformer) {
   };
 }
 
+/**
+ * 构建视口刷新 prefix handler
+ * @description 将 trigger 信号转为 flush 信号，路由依赖 defaultRoute。
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ */
 function buildViewportFlushNodeConfig() {
   return {
     handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-
-      if (triggerSignals.length === 0) {
-        return [];
-      }
-
+      if (triggerSignals.length === 0) return [];
       return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
         signals: triggerSignals.map((signal) => ({
           type: "flush",
           context: {
@@ -162,6 +182,13 @@ function buildViewportFlushNodeConfig() {
   };
 }
 
+/**
+ * 构建 WASD 方向键移动 prefix handler
+ * @description 将 trigger 信号转为 position 信号，附上对应方向向量。
+ * @param {string} code - 键位编码（如 "KeyW"）
+ * @param {{ x: number, y: number }} vector - 方向向量
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ */
 function buildWasdNodeConfig(code, vector) {
   return {
     handler(packet) {
@@ -179,42 +206,66 @@ function buildWasdNodeConfig(code, vector) {
           },
         }));
 
-      if (movementSignals.length === 0) {
-        return [];
-      }
-
-      return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
-        signals: movementSignals,
-      };
+      if (movementSignals.length === 0) return [];
+      return { signals: movementSignals };
     },
   };
 }
 
+/**
+ * 构建键盘调试 prefix handler
+ * @description 将 trigger 信号转为指定调试类型的信号。type 可以是静态字符串或
+ * 动态函数 (signals) => string（如根据 Shift 分流）。
+ * @param {string | ((signals: object[]) => string)} type - 调试信号类型或解析函数
+ * @param {Object} [context={}] - 调试上下文附加数据
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ */
 function buildKeyboardDebugNodeConfig(type, context = {}) {
   return {
     handler(packet) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-
-      if (triggerSignals.length === 0) {
-        return [];
-      }
-
-      return {
-        to: `../../${DEMO_KEYBOARD_TOOL_PATHS.DEBUG}`,
-        signals: [
-          {
-            type,
-            context: { ...context },
-          },
-        ],
-      };
+      if (triggerSignals.length === 0) return [];
+      const resolvedType =
+        typeof type === "function" ? type(triggerSignals) : type;
+      return { signals: [{ type: resolvedType, context: { ...context } }] };
     },
   };
 }
 
+/**
+ * 配置白板 Demo 的完整设备图与 workflow 绑定
+ * @description
+ * 为指定 board 和 monitor 挂载鼠标/键盘设备子图，注册 stroke、selector、
+ * WASD、viewport、debug、random-circle 等 workflow。
+ *
+ * 所有设备叶节点的 defaultRoute 统一为 "default"；
+ * 所有键位级信号转换通过边级 prefix（createEdgePrefix）注入；
+ * prefix handler 不再指定 to:，依赖 defaultRoute 自动走边。
+ *
+ * @param {import("../../core/components/board.js").Board} board - 白板实例
+ * @param {import("../../core/components/monitor.js").Monitor} monitor - 显示器实例
+ * @param {Object} [options={}] - 可选覆盖配置
+ * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
+ * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
+ * @param {Object} [options.randomCircleSubDAG]
+ * @param {WasdCoordinateTool} [options.wasdCoordinateTool]
+ * @param {MonitorViewportTool} [options.monitorViewportTool]
+ * @param {DebuggerTool} [options.debugTool]
+ * @param {import("../../core/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
+ * @param {Record<string, { x: number, y: number }>} [options.wasdRoutePresets]
+ * @param {import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition} [options.keyboardDevice]
+ * @returns {{
+ *   keyboardDevice: import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition,
+ *   mouseDevice: import("../../core/devices/mouse-device.js").MouseSubDAGDefinition,
+ *   monitorViewportTool: MonitorViewportTool,
+ *   primaryStrokeTool: import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool,
+ *   secondarySelectionTool: import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
+ *   wasdCoordinateTool: WasdCoordinateTool,
+ *   debugTool: DebuggerTool,
+ * }}
+ */
 function configureWhiteboardDemo(board, monitor, options = {}) {
   const effectiveBoard = board ?? monitor?.board;
   if (!effectiveBoard || !monitor) {
@@ -228,11 +279,11 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     });
   const secondarySelectionTool =
     options.secondarySelectionTool ?? new RectangleObjectChooserTool();
-  const randomCircleSubTree =
-    options.randomCircleSubTree ??
+  const randomCircleSubDAG =
+    options.randomCircleSubDAG ??
     options.randomCircleDevice ??
-    createRandomCircleSubTree({
-      rootPath: `/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
+    createRandomCircleSubDAG({
+      rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
     });
   const wasdCoordinateTool =
     options.wasdCoordinateTool ?? new WasdCoordinateTool();
@@ -240,150 +291,135 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     options.monitorViewportTool ?? new MonitorViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
-  const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
+  const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
 
-  monitor.mountSubTree("/mouse", mouseDevice);
-  monitor.mountSubTree("/keyboard", keyboardDevice);
+  monitor.mountSubDAG("/mouse", mouseDevice);
+  monitor.mountSubDAG("/keyboard", keyboardDevice);
 
+  // 所有设备叶节点 defaultRoute = "default"，
+  // 所有 mount edge 统一 "default"，handler 不再写 to:
+
+  // 鼠标（无需 prefix，信号直接可被工具消费）
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/mouse/primary/tool`,
-    tool: primaryStrokeTool,
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
+    workflow: primaryStrokeTool,
+    edges: [{ from: "/mouse/primary", edge: "default" }],
   });
   effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/mouse/secondary/tool`,
-    tool: secondarySelectionTool,
-  });
-  if (randomCircleSubTree) {
-    monitor.mountSubTree("", randomCircleSubTree);
-  }
-  effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.MOVE}`,
-    tool: wasdCoordinateTool,
-  });
-  effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.VIEWPORT}`,
-    tool: monitorViewportTool,
-  });
-  effectiveBoard.signalsEventBus.emit("mount", {
-    to: `/${monitor.monitorId}/keyboard/${DEMO_KEYBOARD_TOOL_PATHS.DEBUG}`,
-    tool: debugTool,
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/Space`,
-    options: buildKeyboardTriggerForwardNodeConfig(
-      `../../${DEMO_KEYBOARD_TOOL_PATHS.RANDOM_CIRCLE}`,
-    ),
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
+    workflow: secondarySelectionTool,
+    edges: [{ from: "/mouse/secondary", edge: "default" }],
   });
 
-  for (const [code, vector] of Object.entries(wasdRoutePresets)) {
-    effectiveBoard.signalsEventBus.emit("configure", {
-      to: `/${monitor.monitorId}/keyboard/code/${code}`,
-      options: buildWasdNodeConfig(code, vector),
+  // Space → prefix → random-circle
+  if (randomCircleSubDAG) {
+    effectiveBoard.signalsEventBus.emit("mount", {
+      monitorId: monitor.monitorId,
+      name: DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE,
+      workflow: randomCircleSubDAG,
+      edges: [
+        {
+          from: "/keyboard/code/Space",
+          edge: "default",
+          prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
+        },
+      ],
     });
   }
 
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/ArrowUp`,
-    options: buildViewportPositionNodeConfig(
-      monitor,
-      new Vector(0, -1).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/ArrowDown`,
-    options: buildViewportPositionNodeConfig(
-      monitor,
-      new Vector(0, 1).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/ArrowLeft`,
-    options: buildViewportPositionNodeConfig(
-      monitor,
-      new Vector(-1, 0).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/ArrowRight`,
-    options: buildViewportPositionNodeConfig(
-      monitor,
-      new Vector(1, 0).scale(DEMO_VIEWPORT_POSITION_STEP).serialize(),
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/Equal`,
-    options: buildViewportScaleNodeConfig(
-      monitor,
-      (zoom) => zoom / DEMO_VIEWPORT_SCALE_FACTOR,
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/NumpadAdd`,
-    options: buildViewportScaleNodeConfig(
-      monitor,
-      (zoom) => zoom / DEMO_VIEWPORT_SCALE_FACTOR,
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/Minus`,
-    options: buildViewportScaleNodeConfig(
-      monitor,
-      (zoom) => zoom * DEMO_VIEWPORT_SCALE_FACTOR,
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/NumpadSubtract`,
-    options: buildViewportScaleNodeConfig(
-      monitor,
-      (zoom) => zoom * DEMO_VIEWPORT_SCALE_FACTOR,
-    ),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyR`,
-    options: buildViewportFlushNodeConfig(),
+  // WASD → per-key prefix
+  effectiveBoard.signalsEventBus.emit("mount", {
+    monitorId: monitor.monitorId,
+    name: DEMO_WORKFLOW_NAMES.WASD_MOVE,
+    workflow: wasdCoordinateTool,
+    edges: Object.entries(wasdRoutePresets).map(([code, vector]) => ({
+      from: `/keyboard/code/${code}`,
+      edge: "default",
+      prefix: createEdgePrefix(buildWasdNodeConfig(code, vector)),
+    })),
   });
 
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyC`,
-    options: buildKeyboardDebugNodeConfig("debug:chunkload"),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyO`,
-    options: buildKeyboardDebugNodeConfig("debug:objectload"),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyM`,
-    options: buildKeyboardDebugNodeConfig("debug:aom"),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyB`,
-    options: buildKeyboardDebugNodeConfig("debug:board"),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/KeyT`,
-    options: buildKeyboardDebugNodeConfig("debug:devices"),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/Digit1`,
-    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 1 }),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/Digit2`,
-    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 2 }),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/Digit3`,
-    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 3 }),
-  });
-  effectiveBoard.signalsEventBus.emit("configure", {
-    to: `/${monitor.monitorId}/keyboard/code/Digit4`,
-    options: buildKeyboardDebugNodeConfig("debug:chunk", { id: 4 }),
-  });
+  // Viewport：position / scale / flush 三类 prefix
+  {
+    const step = DEMO_VIEWPORT_POSITION_STEP;
+    const factor = DEMO_VIEWPORT_SCALE_FACTOR;
+
+    const positionEdges = [
+      { code: "ArrowUp", direction: { x: 0, y: -1 } },
+      { code: "ArrowDown", direction: { x: 0, y: 1 } },
+      { code: "ArrowLeft", direction: { x: -1, y: 0 } },
+      { code: "ArrowRight", direction: { x: 1, y: 0 } },
+    ].map(({ code, direction }) => ({
+      from: `/keyboard/code/${code}`,
+      edge: "default",
+      prefix: createEdgePrefix(
+        buildViewportPositionNodeConfig(direction, step),
+      ),
+    }));
+
+    const scaleEdges = [
+      { code: "Equal", transformer: (zoom) => zoom / factor },
+      { code: "NumpadAdd", transformer: (zoom) => zoom / factor },
+      { code: "Minus", transformer: (zoom) => zoom * factor },
+      { code: "NumpadSubtract", transformer: (zoom) => zoom * factor },
+    ].map(({ code, transformer }) => ({
+      from: `/keyboard/code/${code}`,
+      edge: "default",
+      prefix: createEdgePrefix(buildViewportScaleNodeConfig(transformer)),
+    }));
+
+    const flushEdge = {
+      from: "/keyboard/code/KeyR",
+      edge: "default",
+      prefix: createEdgePrefix(buildViewportFlushNodeConfig()),
+    };
+
+    effectiveBoard.signalsEventBus.emit("mount", {
+      monitorId: monitor.monitorId,
+      name: DEMO_WORKFLOW_NAMES.VIEWPORT,
+      workflow: monitorViewportTool,
+      edges: [...positionEdges, ...scaleEdges, flushEdge],
+    });
+  }
+
+  // Debug：C/O/M/B/T/1-4 → per-key prefix
+  {
+    const simpleDebugEdges = [
+      { code: "KeyC", type: "debug:chunkload" },
+      { code: "KeyO", type: "debug:objectload" },
+      { code: "KeyM", type: "debug:aom" },
+      { code: "KeyB", type: "debug:board" },
+      {
+        code: "KeyT",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:mermaid"
+            : "debug:devices",
+      },
+      { code: "Digit1", type: "debug:chunk", ctx: { id: 1 } },
+      { code: "Digit2", type: "debug:chunk", ctx: { id: 2 } },
+      { code: "Digit3", type: "debug:chunk", ctx: { id: 3 } },
+      { code: "Digit4", type: "debug:chunk", ctx: { id: 4 } },
+    ].map(({ code, type, ctx }) => ({
+      from: `/keyboard/code/${code}`,
+      edge: "default",
+      prefix: createEdgePrefix(buildKeyboardDebugNodeConfig(type, ctx)),
+    }));
+
+    effectiveBoard.signalsEventBus.emit("mount", {
+      monitorId: monitor.monitorId,
+      name: DEMO_WORKFLOW_NAMES.DEBUG,
+      workflow: debugTool,
+      edges: simpleDebugEdges,
+    });
+  }
 
   console.log(`[whiteboard-demo] viewport keys: arrows=pan, +/-=zoom, R=flush`);
   console.log(
-    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, T=devices, 1/2/3/4=chunk detail`,
+    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, T=devices-dag, Shift+T=devices-mermaid, 1/2/3/4=chunk detail`,
   );
 
   return {
@@ -398,6 +434,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
 }
 
 export {
+  buildKeyboardDebugNodeConfig,
   buildKeyboardTriggerForwardNodeConfig,
   buildWasdNodeConfig,
   buildViewportFlushNodeConfig,
@@ -405,9 +442,9 @@ export {
   buildViewportScaleNodeConfig,
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
-  DEMO_KEYBOARD_TOOL_PATHS,
   DEMO_PRIMARY_STROKE_COLOR,
   DEMO_VIEWPORT_POSITION_STEP,
   DEMO_VIEWPORT_SCALE_FACTOR,
+  DEMO_WORKFLOW_NAMES,
   WASD_ROUTE_PRESETS,
 };

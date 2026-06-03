@@ -1,24 +1,28 @@
 import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
-import { DevicesTree } from "../../devices/devices-tree.js";
+import { DevicesDAG } from "../../devices-dag/index.js";
 import { Vector } from "../../utils/math.js";
 import { Chunk } from "../chunk.js";
 import { RectangleRange } from "../../range/index.js";
-import { createSubTree } from "../../devices/devices-tree.js";
+import { createSubDAG } from "../../devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../prefixs/index.js";
+import {
+  createNoopCanvas,
+  createNoopCanvasContext2D,
+} from "../../test-support/noop-canvas.js";
 
 const REPORT_SIGNAL_TYPE = "debug-report";
 
 /**
- * 创建一个简单的报告子树（prefix 节点），用于验证 Monitor#mountSubTree 行为。
- * 替代已删除的 debugger-device。
+ * 创建一个简单的报告子图（prefix 节点），用于验证 Monitor#mountSubDAG 行为。
  */
-function createReportSubtree() {
+function createReportSubDAG() {
   let lastReceivedAt = "/";
   let lastOriginalTo = "/";
 
-  return createSubTree("/debugger")
-    .node("")
+  const builder = createSubDAG("/debugger");
+  const root = builder
+    .node()
     .prefix(
       createPrefixNodeHandler({
         initialState: { entryIndex: -1 },
@@ -26,7 +30,7 @@ function createReportSubtree() {
           const sigs = Array.isArray(signalPacket.signals)
             ? signalPacket.signals
             : [];
-          lastReceivedAt = prefixContext.eventContext?.path ?? "/";
+          lastReceivedAt = prefixContext.path ?? "/";
           lastOriginalTo = signalPacket.to ?? "/";
           prefixContext.patchState({
             entryIndex: (prefixContext.getState().entryIndex ?? -1) + 1,
@@ -36,32 +40,29 @@ function createReportSubtree() {
       }),
       { prefixKind: "debug", routePolicy: "inspect" },
     )
-    .defaultChild("report")
-    .end()
-    .node("report")
-    .handler((signalPacket, context = {}) => ({
-      to: context.eventContext?.path,
-      signals: [
-        {
-          type: REPORT_SIGNAL_TYPE,
-          context: {
-            index: 0,
-            receivedAt: lastReceivedAt,
-            originalTo: lastOriginalTo,
-            signalCount: Array.isArray(signalPacket.signals)
-              ? signalPacket.signals.length
-              : 0,
-          },
+    .defaultRoute("report");
+
+  const report = builder.node().handler((signalPacket, context = {}) => ({
+    to: "",
+    signals: [
+      {
+        type: REPORT_SIGNAL_TYPE,
+        context: {
+          index: 0,
+          receivedAt: lastReceivedAt,
+          originalTo: lastOriginalTo,
+          signalCount: Array.isArray(signalPacket.signals)
+            ? signalPacket.signals.length
+            : 0,
         },
-      ],
-    }))
-    .end()
-    .build();
+      },
+    ],
+  }));
+
+  builder.edge("report", root, report);
+
+  return builder.build();
 }
-import {
-  createNoopCanvas,
-  createNoopCanvasContext2D,
-} from "../../test-support/noop-canvas.js";
 
 describe("Monitor", () => {
   function createContext() {
@@ -73,7 +74,7 @@ describe("Monitor", () => {
     const board = {
       width: 800,
       height: 600,
-      devicesTree: null,
+      devicesDAG: null,
       getChunkById(chunkId) {
         return Chunk.fromId(chunkId);
       },
@@ -91,9 +92,7 @@ describe("Monitor", () => {
       },
     };
 
-    board.devicesTree = new DevicesTree({
-      runtimeContext: { board },
-    });
+    board.devicesDAG = new DevicesDAG();
 
     return new Monitor(
       { liveCanvas: canvas },
@@ -103,12 +102,12 @@ describe("Monitor", () => {
     );
   }
 
-  test("mountSubTree 应自动补上 monitorId 后挂载设备", () => {
+  test("mountSubDAG 应自动补上 monitorId 后挂载设备", () => {
     const monitor = createMonitor("alpha");
-    const reportSubtree = createReportSubtree();
+    const reportSubDAG = createReportSubDAG();
 
-    const mountedNodes = monitor.mountSubTree("", reportSubtree);
-    const packets = monitor.devicesTree.dispatch({
+    const mountedNodes = monitor.mountSubDAG("", reportSubDAG);
+    const packets = monitor.devicesDAG.dispatch({
       to: "/alpha/debugger",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
@@ -117,9 +116,9 @@ describe("Monitor", () => {
       "/alpha/debugger",
       "/alpha/debugger/report",
     ]);
-    expect(packets).toEqual([
+    expect(packets.packets).toEqual([
       {
-        to: "/alpha/debugger/report",
+        to: "",
         signals: [
           {
             type: REPORT_SIGNAL_TYPE,
@@ -135,11 +134,11 @@ describe("Monitor", () => {
     ]);
   });
 
-  test("mountSubTree 应规整不带前导斜杠的相对路径", () => {
+  test("mountSubDAG 应规整不带前导斜杠的相对路径", () => {
     const monitor = createMonitor("beta");
-    const reportSubtree = createReportSubtree();
+    const reportSubDAG = createReportSubDAG();
 
-    const mountedNodes = monitor.mountSubTree("debugger", reportSubtree);
+    const mountedNodes = monitor.mountSubDAG("debugger", reportSubDAG);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/beta/debugger",

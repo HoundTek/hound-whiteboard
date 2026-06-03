@@ -10,7 +10,7 @@
  */
 
 import { Vector } from "../../utils/math.js";
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 import {
   ObjectModifierTool,
   OBJECT_MODIFIER_SIGNAL_TYPES,
@@ -120,10 +120,7 @@ class CommonObjectModifierTool extends ObjectModifierTool {
     if (hasSuccessSignal) {
       this._endGesture();
       this.applyModifiedObjects(modificationContext, objects);
-      return {
-        to: "..",
-        signals: [{ type: "TOOL_COMPLETE" }],
-      };
+      return undefined;
     }
   }
 

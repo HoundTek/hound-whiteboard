@@ -1,13 +1,12 @@
 /**
  * @file 键盘设备
- * @description 提供键盘输入信号的设备树节点创建与处理接口。
+ * @description 提供键盘输入信号的设备图节点创建与处理接口。
  * @module core/devices/keyboard-device
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "./devices-tree.js";
-import { SignalPacket } from "./signal.js";
-import { joinPath } from "../utils/path.js";
+import { createSubDAG, SignalPacket } from "../devices-dag/index.js";
+import { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";
 
 const KEYBOARD_DEVICE_SIGNAL_TYPES = {
   TRIGGER: "trigger",
@@ -16,19 +15,11 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
 };
 
 /**
- * 创建一棵键盘设备子树
- * @param {{
- *   eventProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   keydownProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   keyupProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   repeatProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   cancelProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   nodeConfigs?: Record<string, {
- *     handler?: import("./devices-tree.js").DevicesTreeHandler,
- *     defaultChild?: string,
- *   }>,
- * }} [options={}] - 键盘设备选项
- * @returns {import("./devices-tree.js").SubTreeDefinition & {
+ * 创建一张键盘设备子图
+ * @description
+ * 仅按活跃键位列表预创建 code 节点；所有 code 节点的 defaultRoute 统一为 "default"。
+ * 不再接受 processor / nodeConfigs 等定制参数——设备只负责信号产出，路由由外部通过边级 prefix 完成。
+ * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeKeys: Array<{
@@ -52,15 +43,11 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
  *     }|null,
  *   },
  * }}
+ * @author Zhou Chenyu
  */
-function createKeyboardDevice(options = {}) {
+function createKeyboardDevice() {
   const activeKeys = new Map();
   let lastEvent = null;
-
-  const rawNodeConfigs =
-    options.nodeConfigs && typeof options.nodeConfigs === "object"
-      ? options.nodeConfigs
-      : {};
 
   /**
    * 将原始键位编码规整为字符串或 null
@@ -76,16 +63,6 @@ function createKeyboardDevice(options = {}) {
    * @returns {string}
    */
   const encodeKeyPathSegment = (code) => encodeURIComponent(String(code));
-
-  /**
-   * 规整设备内部节点路径 key
-   * @param {string} nodePath - 原始节点路径
-   * @returns {string}
-   */
-  const normalizeNodePathKey = (nodePath = "") => {
-    if (!nodePath || nodePath === "/") return "";
-    return joinPath(nodePath).slice(1);
-  };
 
   /**
    * 将原始键盘信号改写为工具消费信号
@@ -322,59 +299,32 @@ function createKeyboardDevice(options = {}) {
     return resolveRouteTargets(packet);
   };
 
-  const keyboardSubTreeBuilder = createSubTree("/keyboard")
-    .node("")
-    .handler(rootHandler)
-    .end()
-    .node("event")
-    .handler(
-      typeof options.eventProcessor === "function"
-        ? options.eventProcessor
-        : null,
-    )
-    .end()
-    .node("keydown")
-    .handler(
-      typeof options.keydownProcessor === "function"
-        ? options.keydownProcessor
-        : null,
-    )
-    .end()
-    .node("keyup")
-    .handler(
-      typeof options.keyupProcessor === "function"
-        ? options.keyupProcessor
-        : null,
-    )
-    .end()
-    .node("repeat")
-    .handler(
-      typeof options.repeatProcessor === "function"
-        ? options.repeatProcessor
-        : null,
-    )
-    .end()
-    .node("cancel")
-    .handler(
-      typeof options.cancelProcessor === "function"
-        ? options.cancelProcessor
-        : null,
-    )
-    .end()
-    .node("tools")
-    .end();
+  const builder = createSubDAG("/keyboard");
+  const root = builder.node().handler(rootHandler);
 
-  for (const [nodePath, config] of Object.entries(rawNodeConfigs)) {
-    keyboardSubTreeBuilder
-      .node(normalizeNodePathKey(nodePath))
-      .handler(typeof config?.handler === "function" ? config.handler : null)
-      .defaultChild(
-        typeof config?.defaultChild === "string" ? config.defaultChild : "",
-      )
-      .end();
+  const eventNode = builder.node();
+  const keydownNode = builder.node();
+  const keyupNode = builder.node();
+  const repeatNode = builder.node();
+  const cancelNode = builder.node();
+
+  builder.edge("event", root, eventNode);
+  builder.edge("keydown", root, keydownNode);
+  builder.edge("keyup", root, keyupNode);
+  builder.edge("repeat", root, repeatNode);
+  builder.edge("cancel", root, cancelNode);
+
+  // 预创建 code 节点，统一 defaultRoute = "default"
+  const codeRoot = builder.node();
+  builder.edge("code", root, codeRoot);
+
+  for (const code of STANDARD_KEYBOARD_CODES) {
+    const segment = encodeKeyPathSegment(String(code));
+    const codeNode = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+    builder.edge(segment, codeRoot, codeNode);
   }
 
-  return keyboardSubTreeBuilder
+  return builder
     .expose({
       resetState() {
         activeKeys.clear();

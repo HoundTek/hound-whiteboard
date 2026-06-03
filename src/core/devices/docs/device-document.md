@@ -2,55 +2,86 @@
 
 ## 概述
 
-设备在当前 Core 中不是一组零散回调，而是一份结构化的 SubTreeDefinition。
+设备在当前 Core 中不是一组零散回调，而是一份结构化的 `SubDAGDefinition`。
 
 它描述的是：
 
-- 设备根路径 root
-- 从根节点开始展开的 nodes 子树
-- 可选的设备级状态接口，例如 resetState()、getState()
+- 设备根路径 `rootPath`
+- 子图根节点 `rootNodeId`
+- 节点定义表 `nodes`
+- 边定义表 `edges`
+- 可选的设备级状态接口，例如 `resetState()`、`getState()`
 
-在这个模型里，设备不是直接映射到某个物理硬件，而是一个“信号空间”的结构化路由。它定义了一个根路径与一棵节点树，用来接收、稳定化并分发已经归属的输入信号。
+在这个模型里，设备不是直接映射到某个物理硬件，而是一个“信号空间”的结构化路由。它定义了一个根路径与一张局部 DAG，用来接收、稳定化并分发已经归属的输入信号。
 
-设备负责把宿主侧已经确认归属的输入，翻译成稳定的设备语义，再把这些语义分发到设备子节点或工具叶子。
+当前模型遵守以下约束：
+
+- 路由逐层向下
+- 节点只能把信号继续发给自己的后继节点
+- 跨节点可变共享数据写入节点 `state`
+- 短程只读协作通过累积 `context` 追加
+- 同一节点允许有多条入边，多条路径可达同一个节点
 
 ## 结构
 
-SubTreeDefinition 的最小结构如下：
+`SubDAGDefinition` 的数据结构可表达为：
 
-```js
+```mermaid
+flowchart LR
+  subgraph SubDAGDefinition
+    direction LR
+    RP["rootPath: /keyboard"]
+    RN["rootNodeId: 0"]
+    ND["nodes: Map
+    {localId → nodeDef}"]
+    ED["edges: [{name,
+    fromNodeId, toNodeId}]"]
+  end
+
+  ND -->|0| ND0["nodeDef 0
+handler: rootHandler
+semantics: {}"]
+  ND -->|1| ND1["nodeDef 1
+handler: null
+defaultRoute: default"]
+  ND -->|N| NDN["nodeDef N
+tool: Tool
+semantics: {tool: true}"]
+
+  ED -->|0| E0["{name: event,
+fromNodeId: 0, toNodeId: 1}"]
+```
+
+最小实现：
 {
-  root: "/keyboard",
-  nodes: {
-    handler: rootHandler,
-    children: {
-      event: { handler: eventHandler },
-      code: {
-        children: {
-          KeyW: { defaultChild: "tool" },
-        },
-      },
-    },
-  },
+  rootPath: "/keyboard",
+  rootNodeId: 0,
+  nodes: new Map([
+    [0, { handler: rootHandler, defaultRoute: "event" }],
+    [1, { handler: eventHandler }],
+  ]),
+  edges: [
+    { name: "event", fromNodeId: 0, toNodeId: 1 },
+  ],
   resetState() {},
   getState() {},
 }
 ```
 
-推荐直接使用 createSubTree() 构建，而不是手写整棵对象树。
+推荐直接使用 `createSubDAG()` 构建，而不是手写 `nodes + edges`。
 
-## createSubTree 构建器
+## createSubDAG 构建器
 
 典型写法如下：
 
 ```js
-const device = createSubTree("/debugger")
-  .node("")
-  .handler(rootHandler)
-  .end()
-  .node("report")
-  .handler(reportHandler)
-  .end()
+const builder = createSubDAG("/debugger");
+const root = builder.node().handler(rootHandler);
+const report = builder.node().handler(reportHandler);
+
+builder.edge("report", root, report);
+
+const device = builder
   .expose({
     resetState() {},
     getState() {},
@@ -60,53 +91,99 @@ const device = createSubTree("/debugger")
 
 构建器支持：
 
-- node(path)：获取或创建某个相对节点
-- prefix(fn, semantics)：把当前节点标记为修饰节点语义，并设置 handler
-- handler(fn)：设置节点处理器
-- defaultChild(name)：设置默认子链路
-- semantics(meta)：写入节点职责语义元数据
-- tool(toolInstance, toolContext)：把某个节点声明为工具节点
-- umount(fn)：设置节点卸载钩子
-- expose(api)：暴露设备级 API
-- build()：生成 SubTreeDefinition
+- `node()`：声明一个节点并返回 `DAGNodeBuilder`
+- `edge(name, from, to)`：声明一条有向边
+- `prefix(fn, semantics)`：把节点标记为修饰节点语义，并设置 `handler`
+- `handler(fn)`：设置节点处理器
+- `defaultRoute(name)`：设置默认出边
+- `semantics(meta)`：写入节点职责语义元数据
+- `tool(toolInstance, toolContext)`：把某个节点声明为工具节点
+- `umount(fn)`：设置节点卸载钩子
+- `expose(api)`：暴露设备级 API
+- `build()`：生成 `SubDAGDefinition`
 
-其中有一条边界需要明确：
-
-- 修饰节点不是新的节点类型
-- 它仍然是 DevicesTreeNode，只是 `semantics.prefix === true` 的职责标记
-- 是否把某个节点视为修饰节点，由构建器配置和 handler 语义共同决定
-
-当前 builder 也支持嵌套写法，用于表达修饰节点下继续挂修饰节点或 tool 的链路，例如：
+当前 builder 用显式节点和显式边描述链路。例如随机圆 workflow 可表达为：
 
 ```js
-const workflow = createSubTree("/keyboard/tools/create-circle")
-  .node("")
-  .prefix(randomPrefixHandler)
-  .defaultChild("params")
-  .node("params")
+// workflow 子树统一放在 /workflows/ 下
+const builder = createSubDAG("/workflows/create-circle");
+const root = builder.node().prefix(randomPrefixHandler).defaultRoute("params");
+const params = builder
+  .node()
   .prefix(circleParamPrefixHandler)
-  .defaultChild("tool")
-  .node("tool")
-  .tool(circleTool)
-  .end()
-  .end()
-  .end()
-  .build();
+  .defaultRoute("circle-creator");
+const tool = builder.node().tool(circleTool);
+
+builder.edge("params", root, params);
+builder.edge("circle-creator", params, tool);
+
+const workflow = builder.build();
 ```
 
-## 设备与工具的分工
+然后通过 `addEdge` 将键位节点连接到工具子树：
+
+```js
+monitor.addEdge(
+  "/keyboard/code/Space",
+  "create-circle",
+  "/workflows/create-circle",
+);
+```
+
+## 设备 → Workflow 连接模式
+
+以下 Mermaid 图展示当前推荐的整体连接模式（使用 `dagToMermaid` 约定）：
+
+```mermaid
+flowchart LR
+  subgraph Device[Device e.g. keyboard]
+    DR("keyboard #1 [handler]")
+    CH2("code/Space #2 →default")
+    CH3("code/KeyW #3 →default")
+    CH1("keydown #4")
+    DR -->|"code"| CH2
+    DR -->|"code"| CH3
+    DR -->|"keydown"| CH1
+  end
+
+  subgraph Mount[Edge + Prefix]
+    CH2 -->|"default"| P1
+    CH3 -->|"default"| P2
+    CH1 -->|"default"| W1
+  end
+
+  subgraph Workflows[/workflows/]
+    W1("/workflows/event-log #1 [tool]")
+    W2("/workflows/wasd-move #2 [tool]")
+  end
+
+  P1[["Space/ #1 [prefix] [handler]"]]
+  P1 -->|"default"| W2
+  P2[["KeyW/ #2 [prefix] [handler]"]]
+  P2 -->|"default"| W2
+```
+
+核心约定：
+
+- 设备叶节点（channel / code）`defaultRoute` 统一为 `"default"`
+- mount edge 名统一为 `"default"`
+- 无需信号转换时（如鼠标），设备直连 workflow
+- 需要信号转换时，通过 `edge.prefix` 注入
+
+## 设备与 Workflow 的分工
 
 设备负责：
 
-- 保存设备级状态，例如 activeTouches、activeKeys、按钮状态
+- 保存设备级状态，例如 `activeTouches`、`activeKeys`、按钮状态
 - 把原始设备输入改写为稳定信号
 - 决定输入应进入哪些设备子节点
+- 在需要时给下游追加只读 context，例如 `board`、`monitor` 或局部回调
 
-工具负责：
+workflow 负责：
 
 - 消费已经稳定的设备信号
 - 修改白板对象、视口或交互状态
-- 通过节点 state 与上游设备或同链路工具共享上下文
+- 通过节点 `state` 与上游设备或同链路工具共享上下文
 
 这里要特别强调一条边界：
 
@@ -114,56 +191,55 @@ const workflow = createSubTree("/keyboard/tools/create-circle")
 - 一旦设备已经按这些字段把输入分发到正确的子节点或工具叶子，这些字段就不应再成为工具自己的判断条件
 - 因此，“哪个按钮触发了这次输入”应由设备决定；“收到这组稳定信号后做什么”才由工具决定
 
-设备不应直接承担复杂业务流程；业务动作应尽量落到工具节点上。
-
 ## 设备挂载
 
 业务侧应优先通过 Monitor 挂载设备：
 
 ```js
-monitor.mountSubTree(createKeyboardDevice());
+monitor.mountSubDAG("", createKeyboardDevice());
 ```
 
-也可以指定额外挂载修饰节点：
+也可以指定额外挂载前缀：
 
 ```js
-monitor.mountSubTree("/presentation", createKeyboardDevice());
+monitor.mountSubDAG("/presentation", createKeyboardDevice());
 ```
 
-最终仍会由 Board 持有的 DevicesTree 执行 mountSubTree(basePath, subTreeDefinition)。
+最终仍会由 Board 持有的 `DevicesDAG` 执行 `mountSubDAG(basePath, subDAGDefinition, mountContext)`。
 
 ## 状态暴露
 
 设备内部常有两类状态：
 
-- 私有运行态，例如 Map、Set、最近一次事件
-- 对外可观测快照，通过 getState() 返回
+- 私有运行态，例如 `Map`、`Set`、最近一次事件
+- 对外可观测快照，通过 `getState()` 返回
 
-如果设备需要被测试、调试或热切换重置，建议额外暴露 resetState()。
+如果设备需要被测试、调试或热切换重置，建议额外暴露 `resetState()`。
 
-需要跨节点共享的短生命周期状态，不建议继续塞回设备对象本身；更适合写入 DevicesTree 节点 state。
+需要跨节点共享的短生命周期状态，不建议继续塞回设备对象本身；更适合写入 `DevicesDAG` 节点 `state`。
 
 ## 设计约束
 
-- root 必须是绝对路径
-- nodes 必须是结构化对象，不再接受 defineNodes 风格协议
-- 单个节点上不能同时声明 handler 与 tool
-- defaultChild 只写子链路名，不写完整绝对路径
-- 设备挂载路径由设备定义 root 与 mountSubTree(basePath, ...) 共同决定
+- `rootPath` 必须是绝对路径
+- `nodes` 与 `edges` 必须显式声明，不再接受旧对象树协议
+- 单个节点上不能同时声明 `handler` 与 `tool`
+- `defaultRoute` 只写当前节点的出边名，不写完整绝对路径
+- 设备挂载路径由设备定义 `rootPath` 与 `mountSubDAG(basePath, ...)` 共同决定
+- 设备子节点不能再通过相对路径向上跳回兄弟分支
 
 ## 当前实践
 
-当前仓库内的 debugger、touchscreen、mouse、keyboard 都已经迁移到 createSubTree(root) 新模型。
+当前仓库内的 debugger、touchscreen、mouse、keyboard 都已经迁移到 `createSubDAG(rootPath)` 新模型。
 
 它们的共同特点是：
 
 - 根节点只做设备态更新与初始分流
-- 业务工具位于显式的 /tool 叶子
-- 设备状态通过 expose() 对外暴露
-- debugger 的根节点现在是修饰节点语义，用于记录经过该节点的信号并继续下传
+- 设备通过 `defaultRoute` + 出边连接到 `/<monitorId>/workflows/` 下的 workflow 节点
+- 设备状态通过 `expose()` 对外暴露
+- debugger 的根节点是修饰节点语义，用于记录经过该节点的信号并继续下传
 
 ## 相关文档
 
-- [设备树](./devices-tree-document.md)
+- [设备图](../devices-dag/docs/devices-dag-document.md)
 - [键盘设备](./keyboard-device-document.md)
 - [输入流](../../docs/core-input-flow.md)

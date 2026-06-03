@@ -12,7 +12,7 @@ components 目录下的模块用于管理白板运行时状态，负责把对象
 - `ChunkObjectManager`：区块对象管理器，负责静态层叠图与对象覆盖区块索引，并通过 `Board` 间接解析对象实例。
 - `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
 - `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
-- `Monitor`：显示器组件，负责视口坐标变换、设备树挂载，以及多层渲染画布的承载。
+- `Monitor`：显示器组件，负责视口坐标变换、设备图挂载，以及多层渲染画布的承载。
 - `BaseRenderer`：静态层渲染器，负责把已提交静态对象绘制到 `baseCanvas`。
 - `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。
 - `LiveRenderer`：活动层渲染器，负责把 AOM 当前活动对象按层顺序绘制到 `liveCanvas`。

@@ -1,15 +1,15 @@
 /**
  * @file 信号包抽象
- * @description 定义设备树和工具系统中流动的信号包结构。
- * @module core/devices/signal
+ * @description 定义设备图和工具系统中流动的信号包结构。
+ * @module core/devices-dag/signal
  * @author Zhou Chenyu
  */
 
 /**
  * 信号包
  * @class
- * @description
- * 表示一次在设备树或工具体系中流动的完整输入包。
+ * @description 表示一次在设备图或工具体系中流动的完整输入包。
+ * @author Zhou Chenyu
  */
 class SignalPacket {
   /**

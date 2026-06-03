@@ -14,7 +14,7 @@ import {
 import { DebuggerTool } from "../debugger-tool.js";
 import { WasdCoordinateTool } from "../wasd-coordinate-tool.js";
 import { RectangleObjectChooserTool } from "../../../core/tools/chooser/rectangle-object-chooser.js";
-import { createRandomCircleSubTree } from "../random-circle-creator-tool.js";
+import { createRandomCircleSubDAG } from "../random-circle-creator-tool.js";
 
 describe("whiteboard demo", () => {
   function createDemoBoard() {
@@ -153,7 +153,8 @@ describe("whiteboard demo", () => {
 
     expect(board.activeObjectManager.activeObjectIndex.get(1)).toBe(stroke);
     expect(
-      monitor.devicesTree.getNode("/main/mouse/secondary/tool")?.state?.object,
+      monitor.devicesDAG.getNode("/main/mouse/secondary/default")?.state
+        ?.object,
     ).toBe(stroke);
   });
 
@@ -342,12 +343,12 @@ describe("whiteboard demo", () => {
       ],
     });
 
-    expect(board.activeObjectManager.activeObjectIndex.has(firstStroke.id)).toBe(
-      false,
-    );
-    expect(board.activeObjectManager.activeObjectIndex.get(secondStroke.id)).toBe(
-      secondStroke,
-    );
+    expect(
+      board.activeObjectManager.activeObjectIndex.has(firstStroke.id),
+    ).toBe(false);
+    expect(
+      board.activeObjectManager.activeObjectIndex.get(secondStroke.id),
+    ).toBe(secondStroke);
   });
 
   test("requestViewportBaseRender 应让 base 层缓冲区覆盖当前视口并承接已提交笔画", () => {
@@ -398,12 +399,12 @@ describe("whiteboard demo", () => {
   test("demo 配置后空格键应创建随机圆对象并提交到白板", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const randomCircleSubTree = createRandomCircleSubTree({
-      rootPath: "/keyboard/tools/create-circle",
+    const randomCircleSubDAG = createRandomCircleSubDAG({
+      rootPath: "/keyboard/code/Space/create-circle",
       random: () => 0.5,
     });
 
-    configureWhiteboardDemo(board, monitor, { randomCircleSubTree });
+    configureWhiteboardDemo(board, monitor, { randomCircleSubDAG });
 
     board.signalsEventBus.emit("input", {
       to: "/main/keyboard",
@@ -552,11 +553,9 @@ describe("whiteboard demo", () => {
     expect(monitor.origin.serialize()).toEqual({ x: 200, y: 150 });
   });
 
-  test("demo 配置后 R 键应触发视口全屏刷新，且不再落到 debugger-tool", () => {
+  test("demo 配置后 R 键应触发视口全屏刷新", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const debugTool = new DebuggerTool();
-    const debugSpy = jest.spyOn(debugTool, "process");
     const baseInvalidateSpy = jest
       .spyOn(monitor.baseRenderScheduler, "invalidate")
       .mockImplementation(() => false);
@@ -564,7 +563,7 @@ describe("whiteboard demo", () => {
       .spyOn(monitor.renderScheduler, "invalidate")
       .mockImplementation(() => false);
 
-    configureWhiteboardDemo(board, monitor, { debugTool });
+    configureWhiteboardDemo(board, monitor);
 
     board.signalsEventBus.emit("input", {
       to: "/main/keyboard",
@@ -586,26 +585,5 @@ describe("whiteboard demo", () => {
     expect(liveInvalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(0, 0, 800, 600),
     );
-    expect(debugSpy).not.toHaveBeenCalled();
-
-    board.signalsEventBus.emit("input", {
-      to: "/main/keyboard",
-      signals: [
-        {
-          type: "keydown",
-          context: {
-            key: "m",
-            code: "KeyM",
-            repeat: false,
-          },
-        },
-      ],
-    });
-
-    expect(debugSpy).toHaveBeenCalledTimes(1);
-
-    debugSpy.mockRestore();
-    baseInvalidateSpy.mockRestore();
-    liveInvalidateSpy.mockRestore();
   });
 });

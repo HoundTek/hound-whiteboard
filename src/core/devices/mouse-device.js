@@ -1,23 +1,19 @@
 /**
  * @file 鼠标设备
- * @description 提供鼠标输入信号的设备树节点创建与处理接口。
+ * @description 提供鼠标输入信号的设备图节点创建与处理接口。
  * @module core/devices/mouse-device
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "./devices-tree.js";
-import { SignalPacket } from "./signal.js";
+import { createSubDAG, SignalPacket } from "../devices-dag/index.js";
+import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
 
 /**
- * 创建一棵鼠标设备子树
- * @param {{
- *   pointerProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   primaryProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   secondaryProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   auxiliaryProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- *   wheelProcessor?: import("./devices-tree.js").DevicesTreeHandler,
- * }} [options={}] - 鼠标设备选项
- * @returns {import("./devices-tree.js").SubTreeDefinition & {
+ * 创建一张鼠标设备子图
+ * @description
+ * 五个通道路由节点（pointer / primary / secondary / auxiliary / wheel）
+ * 均只设 defaultRoute = "default"，不再接受外部 processor 定制。
+ * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeButtons: {primary: boolean, secondary: boolean, auxiliary: boolean},
@@ -25,8 +21,9 @@ import { SignalPacket } from "./signal.js";
  *     lastWheelDelta: {deltaX: number, deltaY: number, deltaZ: number}|null,
  *   },
  * }}
+ * @author Zhou Chenyu
  */
-function createMouseDevice(options = {}) {
+function createMouseDevice() {
   let activeButtons = {
     primary: false,
     secondary: false,
@@ -201,58 +198,65 @@ function createMouseDevice(options = {}) {
   };
 
   /**
+   * 解析显式指定的下行目标，保留调用方已经选定的子路径。
+   * @param {SignalPacket} packet
+   * @param {{ path?: string }} [ctx={}]
+   * @returns {string}
+   */
+  const resolveExplicitDescendantPath = (packet, ctx = {}) => {
+    const packetTo = typeof packet?.to === "string" ? packet.to : "";
+    const currentPath = typeof ctx?.path === "string" ? ctx.path : "";
+    if (!packetTo) return "";
+    if (!packetTo.startsWith("/")) return packetTo;
+    if (!currentPath || packetTo === currentPath) return "";
+    const prefix = `${currentPath}/`;
+    return packetTo.startsWith(prefix) ? packetTo.slice(prefix.length) : "";
+  };
+
+  /**
    * 根节点处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {Object} [context={}] - handler context
    * @returns {Array<SignalPacket|Object>}
    */
-  const rootHandler = (signalPacket) => {
+  const rootHandler = (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
-    return resolveRouteTargets(packet, updateStateFromPacket(packet));
+    const nextPackets = resolveRouteTargets(
+      packet,
+      updateStateFromPacket(packet),
+    );
+    const explicitDescendantPath = resolveExplicitDescendantPath(
+      packet,
+      context,
+    );
+    if (
+      explicitDescendantPath &&
+      !nextPackets.some((entry) => entry.to === explicitDescendantPath)
+    ) {
+      nextPackets.push({
+        to: explicitDescendantPath,
+        signals: packet.signals,
+      });
+    }
+    return nextPackets;
   };
 
-  const channelProcessors = {
-    pointer:
-      typeof options.pointerProcessor === "function"
-        ? options.pointerProcessor
-        : null,
-    primary:
-      typeof options.primaryProcessor === "function"
-        ? options.primaryProcessor
-        : null,
-    secondary:
-      typeof options.secondaryProcessor === "function"
-        ? options.secondaryProcessor
-        : null,
-    auxiliary:
-      typeof options.auxiliaryProcessor === "function"
-        ? options.auxiliaryProcessor
-        : null,
-    wheel:
-      typeof options.wheelProcessor === "function"
-        ? options.wheelProcessor
-        : null,
-  };
+  const builder = createSubDAG("/mouse");
+  const root = builder.node().handler(rootHandler);
 
-  const mouseSubTreeBuilder = createSubTree("/mouse")
-    .node("")
-    .handler(rootHandler)
-    .end();
+  const pointer = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const primary = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const secondary = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const auxiliary = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const wheel = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
 
-  for (const channel of [
-    "pointer",
-    "primary",
-    "secondary",
-    "auxiliary",
-    "wheel",
-  ]) {
-    mouseSubTreeBuilder
-      .node(channel)
-      .handler(channelProcessors[channel])
-      .defaultChild("tool")
-      .end();
-  }
+  builder.edge("pointer", root, pointer);
+  builder.edge("primary", root, primary);
+  builder.edge("secondary", root, secondary);
+  builder.edge("auxiliary", root, auxiliary);
+  builder.edge("wheel", root, wheel);
 
-  return mouseSubTreeBuilder
+  return builder
     .expose({
       resetState() {
         activeButtons = {

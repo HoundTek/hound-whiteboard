@@ -16,7 +16,7 @@
 
 其中，`to` 是该信号当前要到达的节点路径。
 
-当前代码里，这个结构已经集中抽象为 [src/core/devices/signal.js](src/core/devices/signal.js) 中的 `SignalPacket` 类。Core 内部不再在各处各自实现 `normalizeSignalPacket()`，而是统一通过 `SignalPacket.from()` 和 `SignalPacket.normalizeResult()` 完成规整。
+当前代码里，这个结构已经集中抽象为 [src/core/devices-dag/signal.js](../signal.js) 中的 `SignalPacket` 类。Core 内部不再在各处各自实现 `normalizeSignalPacket()`，而是统一通过 `SignalPacket.from()` 和 `SignalPacket.normalizeResult()` 完成规整。
 
 ## 当前实现
 
@@ -24,9 +24,9 @@
 
 1. Device 采集现实输入，编码成一个信号包。
 2. Core-UI 边界在需要跨边界通知时，通过信道或 EventBus 传输 `SignalPacket`。
-3. DevicesTree 按 `to` 路径继续把包分发到目标节点。
+3. DevicesDAG 按 `to` 路径继续把包分发到目标节点。
 
-因此，信道/EventBus 解决的是“跨边界传输通知”，DevicesTree 解决的是“树上的空间路由”。
+因此，信道/EventBus 解决的是“跨边界传输通知”，DevicesDAG 解决的是“设备图上的空间路由”。
 
 ## 信号类型
 

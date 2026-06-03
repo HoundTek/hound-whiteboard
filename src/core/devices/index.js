@@ -4,8 +4,14 @@
  * @author Zhou Chenyu
  */
 
-export { createDevicesTreeHandler } from "./devices-tree.js";
-export { createDevicesTree } from "./devices-tree-factory.js";
+export {
+  DevicesDAG,
+  DevicesDAGNode,
+  DevicesDAGEdge,
+  DAGBuilder,
+  DAGNodeBuilder,
+  createSubDAG,
+} from "../devices-dag/index.js";
 export {
   createKeyboardDevice,
   KEYBOARD_DEVICE_SIGNAL_TYPES,
@@ -15,3 +21,4 @@ export {
   createTouchscreenDevice,
   TOUCHSCREEN_DEVICE_SIGNAL_TYPES,
 } from "./touchscreen-device.js";
+export { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";

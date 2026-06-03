@@ -37,7 +37,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  *   displacementSignalType?: string,
  * }} [options={}] - 配置选项
  * @param {string} [options.displacementSignalType="displacement"] - 输出信号的 type 字段值
- * @returns {import("../devices/devices-tree.js").DevicesTreeHandler}
+ * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
  *
  * @example
  *   // 手势驱动 modifier
@@ -59,11 +59,11 @@ function createDragAnchorPrefixHandler(options = {}) {
 
       if (endSig) {
         ctx.patchState({ anchor: null });
-        return ctx.routeToChild(ctx.eventContext?.defaultChild || "", signals);
+        return ctx.routeToChild(ctx.defaultChild || "", signals);
       }
 
       if (!positionSig) {
-        return ctx.routeToChild(ctx.eventContext?.defaultChild || "", signals);
+        return ctx.routeToChild(ctx.defaultChild || "", signals);
       }
 
       const worldPos = positionSig.context?.value;
@@ -88,7 +88,7 @@ function createDragAnchorPrefixHandler(options = {}) {
 
       return [
         {
-          to: ctx.eventContext?.defaultChild || "",
+          to: ctx.defaultChild || "",
           signals: [
             { type: displacementSignalType, context: { value: { x, y } } },
           ],

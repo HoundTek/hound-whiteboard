@@ -1,14 +1,15 @@
 /**
  * @file demo 随机圆修饰节点工作流
- * @description 提供 createRandomCircleSubTree 工厂函数，生成完整的随机圆 prefix 工作流。
+ * @description 提供 createRandomCircleSubDAG 工厂函数，生成完整的随机圆 prefix 工作流。
  * @module templates/demo/random-circle-creator-tool
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "../../core/devices/devices-tree.js";
+import { createSubDAG } from "../../core/devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
-import { SignalPacket } from "../../core/devices/signal.js";
+import { SignalPacket } from "../../core/devices-dag/signal.js";
 import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
+import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/tools/creator/obj-creator.js";
 import { Vector } from "../../core/utils/math.js";
 import { isPlainObject } from "../../core/prefixs/utils.js";
 
@@ -19,68 +20,8 @@ import { isPlainObject } from "../../core/prefixs/utils.js";
  */
 const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
   RADIUS: "radius",
-  PROPERTY: "circle-property",
+  PROPERTY: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
 });
-
-/**
- * 属性感知的圆创建工具
- * @class
- * @extends CircleCreatorTool
- */
-class PropertyAwareCircleCreator extends CircleCreatorTool {
-  /**
-   * @param {Record<string, any>} [baseProperty={}] - 基础属性模板
-   */
-  constructor(baseProperty = {}) {
-    super({ property: baseProperty });
-    /** @type {Record<string, any>|null} */
-    this._pendingProperty = null;
-  }
-
-  /**
-   * 从信号包中提取随机圆属性覆盖
-   * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
-   * @returns {Object}
-   */
-  buildInteractionContext(signalPacket, deviceContext = {}) {
-    const interaction = super.buildInteractionContext(
-      signalPacket,
-      deviceContext,
-    );
-    const propertySignal = interaction.signals.find(
-      (signal) => signal.type === RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
-    );
-    interaction.circleProperty = isPlainObject(propertySignal?.context?.value)
-      ? { ...propertySignal.context.value }
-      : null;
-    return interaction;
-  }
-
-  /**
-   * 缓存本次属性覆盖
-   * @param {Object} interaction - 当前交互上下文
-   * @returns {boolean}
-   */
-  ensureObject(interaction) {
-    this._pendingProperty = interaction?.circleProperty ?? null;
-    return super.ensureObject(interaction);
-  }
-
-  /**
-   * 创建圆对象并写入 prefix 注入的属性
-   * @param {Vector} position - 圆心位置
-   * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 归属区块 id
-   */
-  create(position, id, ownerChunkId) {
-    super.create(position, id, ownerChunkId);
-    if (this._pendingProperty) {
-      this.obj.setProperty(this._pendingProperty);
-    }
-    this._pendingProperty = null;
-  }
-}
 
 /**
  * 创建随机圆修饰节点工作流
@@ -95,18 +36,18 @@ class PropertyAwareCircleCreator extends CircleCreatorTool {
  *   maxRadius?: number,
  *   property?: Record<string, any>,
  * }} [options={}] - 随机圆工作流配置
- * @returns {import("../../core/devices/devices-tree.js").SubTreeDefinition} 可直接传入 monitor.mountSubTree(path, subTree) 的结构化子树定义
- *
+ * @returns {import("../../core/devices-dag/dag.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subDAG) 的结构化子树定义
+ * @see CircleCreatorTool
  * @example
- *   const subTree = createRandomCircleSubTree({
- *     rootPath: "/keyboard/tools/random-circle",
- *     minRadius: 20,
- *     maxRadius: 80,
- *   });
- *   monitor.mountSubTree("", subTree);
+ * const subDAG = createRandomCircleSubDAG({
+ *   rootPath: "/workflows/random-circle",
+ *   minRadius: 20,
+ *   maxRadius: 80,
+ * });
+ * monitor.mountWorkflow("/workflows/random-circle", subDAG);
  */
-function createRandomCircleSubTree(options = {}) {
-  const rootPath = options.rootPath ?? "/random-circle";
+function createRandomCircleSubDAG(options = {}) {
+  const rootPath = options.rootPath ?? "/workflows/create-circle";
   const random =
     typeof options.random === "function" ? options.random : Math.random;
   const minRadius = options.minRadius ?? 12;
@@ -117,11 +58,17 @@ function createRandomCircleSubTree(options = {}) {
   const hasCustomStrokeColor = Boolean(
     options.property && Object.hasOwn(options.property, "strokeColor"),
   );
+  const hasCustomFillColor = Boolean(
+    options.property && Object.hasOwn(options.property, "fillColor"),
+  );
 
-  const tool = new PropertyAwareCircleCreator(baseProperty);
+  const tool = new CircleCreatorTool({ property: baseProperty });
 
-  return createSubTree(rootPath)
-    .node("")
+  const builder = createSubDAG(rootPath);
+
+  // 生成随机圆 prefix 节点，接收 trigger 信号并计算随机圆参数后路由到 params prefix
+  const root = builder
+    .node()
     .prefix(
       createPrefixNodeHandler({
         handle: (signalPacket, prefixContext = {}) => {
@@ -133,7 +80,7 @@ function createRandomCircleSubTree(options = {}) {
             return [];
           }
 
-          const monitor = prefixContext.runtimeContext?.monitor;
+          const monitor = prefixContext.context?.monitor;
           const viewportWorldRect = monitor?.getViewportWorldRect?.();
           if (!viewportWorldRect) {
             return [];
@@ -149,7 +96,9 @@ function createRandomCircleSubTree(options = {}) {
             viewportWorldRect.top +
             radius +
             random() * Math.max(viewportWorldRect.height - radius * 2, 0);
-          const randomStrokeColor = `hsl(${Math.floor(random() * 360)}, 70%, 42%)`;
+          const hue = Math.floor(random() * 360);
+          const randomStrokeColor = `hsl(${hue}, 70%, 42%)`;
+          const randomFillColor = `hsla(${hue}, 75%, 60%, 0.22)`;
 
           return prefixContext.routeToChild("params", [
             {
@@ -161,13 +110,16 @@ function createRandomCircleSubTree(options = {}) {
               context: { value: radius },
             },
             {
-              type: RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
+              type: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
               context: {
                 value: {
                   ...baseProperty,
                   strokeColor: hasCustomStrokeColor
                     ? baseProperty.strokeColor
                     : randomStrokeColor,
+                  fillColor: hasCustomFillColor
+                    ? baseProperty.fillColor
+                    : randomFillColor,
                 },
               },
             },
@@ -179,8 +131,11 @@ function createRandomCircleSubTree(options = {}) {
         routePolicy: "inject",
       },
     )
-    .defaultChild("params")
-    .node("params")
+    .defaultRoute("params");
+
+  // circle-params prefix 节点，接收随机圆参数信号并转换为工具输入信号路由到 CircleCreatorTool
+  const paramsNode = builder
+    .node()
     .prefix(
       createPrefixNodeHandler({
         handle: (signalPacket, prefixContext = {}) => {
@@ -193,8 +148,7 @@ function createRandomCircleSubTree(options = {}) {
               signal.type === RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS,
           );
           const propertySignal = packet.signals.find(
-            (signal) =>
-              signal.type === RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
+            (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
           );
           const position = positionSignal?.context?.value;
           const radius = radiusSignal?.context?.value;
@@ -208,7 +162,7 @@ function createRandomCircleSubTree(options = {}) {
             return [];
           }
 
-          const target = prefixContext.eventContext?.defaultChild || "tool";
+          const target = prefixContext.defaultChild || "tool";
 
           return [
             {
@@ -219,11 +173,25 @@ function createRandomCircleSubTree(options = {}) {
                   context: { value: position },
                 },
                 {
-                  type: RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.PROPERTY,
+                  type: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
                   context: {
                     value: isPlainObject(propertySignal?.context?.value)
                       ? propertySignal.context.value
                       : { ...baseProperty },
+                  },
+                },
+              ],
+            },
+            {
+              to: target,
+              signals: [
+                {
+                  type: "position",
+                  context: {
+                    value: {
+                      x: position.x + radius,
+                      y: position.y,
+                    },
                   },
                 },
               ],
@@ -256,13 +224,15 @@ function createRandomCircleSubTree(options = {}) {
         routePolicy: "transform",
       },
     )
-    .defaultChild("tool")
-    .node("tool")
-    .tool(tool)
-    .end()
-    .end()
-    .end()
-    .build();
+    .defaultRoute("tool");
+
+  // CircleCreatorTool 节点，接收信号并创建圆对象
+  const toolNode = builder.node().tool(tool);
+
+  builder.edge("params", root, paramsNode);
+  builder.edge("tool", paramsNode, toolNode);
+
+  return builder.build();
 }
 
-export { createRandomCircleSubTree };
+export { createRandomCircleSubDAG };

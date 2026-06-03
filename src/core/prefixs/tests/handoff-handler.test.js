@@ -1,13 +1,16 @@
-import { DevicesTree, createSubTree } from "../../devices/devices-tree.js";
+import { jest } from "@jest/globals";
+import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import { Tool } from "../../tools/tool.js";
+import { CommonObjectModifierTool } from "../../tools/modifier/common-object-modifier.js";
+import { Vector } from "../../utils/math.js";
 import { createPrefixNodeHandler } from "../handler.js";
 import {
-  createHandoffSubTree,
+  createHandoffSubDAG,
   wrapCreatorForHandoff,
   wrapFirstForHandoff,
-  wrapSubTreeForHandoff,
+  wrapSecondForHandoff,
+  wrapSubDAGForHandoff,
 } from "../handoff-handler.js";
-import { PREFIX_NODE_SIGNAL_TYPES } from "../constants.js";
 import {
   createMockCreator,
   createMockChooser,
@@ -16,78 +19,62 @@ import {
 
 describe("handoff-handler", () => {
   describe("hook functions", () => {
-    test("wrapCreatorForHandoff 应在 completeCreatedObject 后追加 TOOL_COMPLETE", () => {
-      const tree = new DevicesTree();
+    test("wrapCreatorForHandoff 应在 completeCreatedObject 后调用 onToolComplete 回调", () => {
+      const dag = new DevicesDAG();
       const creator = createMockCreator((_pkt, ctx) => {
-        ctx.setNodeState?.(ctx.eventContext?.path, { objects: [{ id: 1 }] });
+        ctx.setNodeState?.(ctx.path, { objects: [{ id: 1 }] });
       });
+      const onToolComplete = jest.fn();
 
-      const subTree = createSubTree("/handoff")
-        .node("")
-        .prefix(
-          createPrefixNodeHandler({
-            handle(packet, ctx) {
-              return packet.signals.some(
-                (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-              )
-                ? ctx.routeToChild("second")
-                : ctx.routeToChild("first");
-            },
-          }),
-        )
-        .defaultChild("first")
-        .node("first")
-        .handler(wrapCreatorForHandoff(creator))
-        .end()
-        .node("second")
-        .handler((_pkt, ctx) => ({
-          to: ctx.eventContext.path,
-          signals: [{ type: "modified" }],
-        }))
-        .end()
-        .end()
-        .build();
+      const builder = createSubDAG("/handoff");
+      builder.node().handler(wrapCreatorForHandoff(creator));
+      const subDAG = builder.build();
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
-      const result = tree.dispatch({
-        to: "/monitor/handoff",
-        signals: [{ type: "position" }],
-      });
-      expect(result).toEqual([
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
+      const result = dag.dispatch(
         {
-          to: "/monitor/handoff/second",
-          signals: [{ type: "modified" }],
+          to: "/monitor/handoff",
+          signals: [{ type: "position" }],
         },
-      ]);
+        {
+          board: {},
+          monitor: {},
+          onToolComplete,
+        },
+      );
+      expect(onToolComplete).toHaveBeenCalledTimes(1);
+      expect(result.packets).toEqual([]);
     });
 
-    test("wrapFirstForHandoff 对 creator 应走 completeCreatedObject 路径", () => {
-      const tree = new DevicesTree();
+    test("wrapFirstForHandoff 对 creator 应走 completeCreatedObject 回调路径", () => {
+      const dag = new DevicesDAG();
       const creator = createMockCreator();
+      const onToolComplete = jest.fn();
 
-      const subTree = createSubTree("/wf")
-        .node("")
-        .handler(wrapFirstForHandoff(creator))
-        .end()
-        .build();
+      const builder = createSubDAG("/wf");
+      builder.node().handler(wrapFirstForHandoff(creator));
+      const subDAG = builder.build();
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
-      const result = tree.dispatch({
-        to: "/monitor/wf",
-        signals: [{ type: "position" }],
-      });
-      expect(
-        result.some((p) =>
-          p.signals.some(
-            (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-          ),
-        ),
-      ).toBe(true);
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
+      const result = dag.dispatch(
+        {
+          to: "/monitor/wf",
+          signals: [{ type: "position" }],
+        },
+        {
+          board: {},
+          monitor: {},
+          onToolComplete,
+        },
+      );
+      expect(onToolComplete).toHaveBeenCalledTimes(1);
+      expect(result.packets).toEqual([]);
     });
 
-    test("wrapFirstForHandoff 对 chooser 应在 end 信号且已选中对象后追加 TOOL_COMPLETE", () => {
-      const tree = new DevicesTree();
+    test("wrapFirstForHandoff 对 chooser 应在 end 信号且已选中对象后调用 onToolComplete", () => {
+      const dag = new DevicesDAG();
       const selectedObject = { id: 1 };
+      const onToolComplete = jest.fn();
       // chooser 需要实际写入对象到上下文，wrapper 才会触发 handoff
       const chooser = createMockChooser((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, {
@@ -96,360 +83,418 @@ describe("handoff-handler", () => {
         });
       });
 
-      const subTree = createSubTree("/wf")
-        .node("")
-        .handler(wrapFirstForHandoff(chooser))
-        .end()
-        .build();
+      const builder = createSubDAG("/wf");
+      builder.node().handler(wrapFirstForHandoff(chooser));
+      const subDAG = builder.build();
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      const r1 = tree.dispatch({
-        to: "/monitor/wf",
-        signals: [{ type: "position" }],
-      });
-      expect(
-        r1.some((p) =>
-          p.signals.some(
-            (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-          ),
-        ),
-      ).toBe(false);
+      const r1 = dag.dispatch(
+        {
+          to: "/monitor/wf",
+          signals: [{ type: "position" }],
+        },
+        {
+          board: {},
+          monitor: {},
+          onToolComplete,
+        },
+      );
+      expect(r1.packets).toEqual([]);
+      expect(onToolComplete).not.toHaveBeenCalled();
 
-      const r2 = tree.dispatch({
-        to: "/monitor/wf",
-        signals: [{ type: "end" }],
-      });
-      expect(
-        r2.some((p) =>
-          p.signals.some(
-            (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-          ),
-        ),
-      ).toBe(true);
+      const r2 = dag.dispatch(
+        {
+          to: "/monitor/wf",
+          signals: [{ type: "end" }],
+        },
+        {
+          board: {},
+          monitor: {},
+          onToolComplete,
+        },
+      );
+      expect(r2.packets).toEqual([]);
+      expect(onToolComplete).toHaveBeenCalledTimes(1);
     });
 
-    test("wrapFirstForHandoff 对 chooser 选择失败时不应追加 TOOL_COMPLETE", () => {
-      const tree = new DevicesTree();
+    test("wrapFirstForHandoff 对 chooser 选择失败时不应调用 onToolComplete", () => {
+      const dag = new DevicesDAG();
       // 不写入对象 → 选择失败
       const chooser = createMockChooser();
+      const onToolComplete = jest.fn();
 
-      const subTree = createSubTree("/wf")
-        .node("")
-        .handler(wrapFirstForHandoff(chooser))
-        .end()
-        .build();
+      const builder = createSubDAG("/wf");
+      builder.node().handler(wrapFirstForHandoff(chooser));
+      const subDAG = builder.build();
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      const r = tree.dispatch({
-        to: "/monitor/wf",
-        signals: [{ type: "end" }],
-      });
-      expect(
-        r.some((p) =>
-          p.signals.some(
-            (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-          ),
-        ),
-      ).toBe(false);
+      const r = dag.dispatch(
+        {
+          to: "/monitor/wf",
+          signals: [{ type: "end" }],
+        },
+        {
+          board: {},
+          monitor: {},
+          onToolComplete,
+        },
+      );
+      expect(r.packets).toEqual([]);
+      expect(onToolComplete).not.toHaveBeenCalled();
     });
   });
 
-  describe("createHandoffSubTree", () => {
+  describe("createHandoffSubDAG", () => {
     test("应构建三层结构并支持 first -> second 切换", () => {
-      const tree = new DevicesTree();
+      const dag = new DevicesDAG();
       const first = createMockCreator();
       const second = createMockModifier();
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/workflow",
         first,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      const root = tree.getNode("/monitor/workflow");
+      const root = dag.getNode("/monitor/workflow");
       expect(root).not.toBeNull();
-      expect(tree.getNode("/monitor/workflow/first")).not.toBeNull();
-      expect(tree.getNode("/monitor/workflow/second")).not.toBeNull();
+      expect(dag.getNode("/monitor/workflow/first")).not.toBeNull();
+      expect(dag.getNode("/monitor/workflow/second")).not.toBeNull();
       expect(root.getSemantics()).toEqual({
         prefix: true,
         prefixKind: "handoff",
         routePolicy: "state-machine",
       });
 
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/workflow",
         signals: [{ type: "position" }],
       });
-      expect(tree.getNodeState("/monitor/workflow")).toEqual({
+      expect(dag.getNodeState("/monitor/workflow")).toEqual({
         phase: "second",
         activeChild: "second",
       });
     });
 
     test("应自动桥接对象上下文", () => {
-      const tree = new DevicesTree();
+      const dag = new DevicesDAG();
       const first = createMockCreator((_pkt, ctx) => {
-        ctx.setNodeState?.(ctx.eventContext?.path, {
+        ctx.setNodeState?.(ctx.path, {
           objects: [{ id: 42, type: "circle" }],
         });
       });
       const second = createMockModifier((_pkt, ctx) => {
-        const st = ctx.getNodeState?.(ctx.eventContext?.path);
+        const st = ctx.getNodeState?.(ctx.path);
         if (st?.objects) {
-          ctx.setNodeState?.(ctx.eventContext?.path, { ...st, touched: true });
+          ctx.setNodeState?.(ctx.path, { ...st, touched: true });
         }
       });
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/ce",
         first,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/ce",
         signals: [{ type: "position" }],
       });
 
-      expect(tree.getNodeState("/monitor/ce/first")).toEqual({
+      expect(dag.getNodeState("/monitor/ce/first")).toEqual({
         objects: [{ id: 42, type: "circle" }],
       });
-      expect(tree.getNodeState("/monitor/ce/second")).toEqual({
+      expect(dag.getNodeState("/monitor/ce/second")).toEqual({
         objects: [{ id: 42, type: "circle" }],
       });
 
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/ce",
         signals: [{ type: "transform" }],
       });
-      expect(tree.getNodeState("/monitor/ce/second")).toEqual({
+      expect(dag.getNodeState("/monitor/ce/second")).toEqual({
         objects: [{ id: 42, type: "circle" }],
         touched: true,
       });
     });
 
-    test("应在 second 返回 TOOL_COMPLETE 后切回 first", () => {
-      const tree = new DevicesTree();
+    test("应在 second 调用完成回调后切回 first", () => {
+      const dag = new DevicesDAG();
       const first = createMockCreator();
       const second = new (class extends Tool {
-        process() {
-          return {
-            to: "..",
-            signals: [{ type: PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE }],
-          };
+        process(_packet, ctx) {
+          ctx.context?.onToolComplete?.();
         }
       })();
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/toggle",
         first,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      tree.dispatch({ to: "/monitor/toggle", signals: [{ type: "position" }] });
-      expect(tree.getNodeState("/monitor/toggle")).toEqual({
+      dag.dispatch({ to: "/monitor/toggle", signals: [{ type: "position" }] });
+      expect(dag.getNodeState("/monitor/toggle")).toEqual({
         phase: "second",
         activeChild: "second",
       });
 
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/toggle",
         signals: [{ type: "transform" }],
       });
-      expect(tree.getNodeState("/monitor/toggle")).toEqual({
+      expect(dag.getNodeState("/monitor/toggle")).toEqual({
         phase: "first",
         activeChild: "first",
       });
     });
 
+    test("应在真实 CommonObjectModifierTool 提交成功后切回 first 且保留 second 节点", () => {
+      const dag = new DevicesDAG();
+      const object = {
+        id: 7,
+        position: new Vector(5, 5),
+      };
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply: jest.fn(),
+        },
+      };
+      const accumulatedContext = { board, monitor: {} };
+      const first = createMockCreator((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, {
+          objects: [object],
+        });
+      });
+      const second = new CommonObjectModifierTool();
+
+      const subDAG = createHandoffSubDAG({
+        rootPath: "/modifier-cycle",
+        first,
+        second,
+      });
+
+      dag.mountSubDAG("/monitor", subDAG, accumulatedContext);
+
+      dag.dispatch(
+        {
+          to: "/monitor/modifier-cycle",
+          signals: [{ type: "position" }],
+        },
+        accumulatedContext,
+      );
+      expect(dag.getNodeState("/monitor/modifier-cycle")).toEqual({
+        phase: "second",
+        activeChild: "second",
+      });
+
+      dag.dispatch(
+        {
+          to: "/monitor/modifier-cycle",
+          signals: [
+            { type: "displacement", context: { value: { x: 3, y: 1 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      dag.dispatch(
+        {
+          to: "/monitor/modifier-cycle",
+          signals: [{ type: "success", context: {} }],
+        },
+        accumulatedContext,
+      );
+
+      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
+        new Set([object]),
+      );
+      expect(object.position).toEqual(new Vector(8, 6));
+      expect(dag.getNodeState("/monitor/modifier-cycle")).toEqual({
+        phase: "first",
+        activeChild: "first",
+      });
+      expect(dag.getNode("/monitor/modifier-cycle/second")).not.toBeNull();
+      expect(dag.getNodeState("/monitor/modifier-cycle/second")).toEqual({});
+    });
+
     test("应支持 chooser 作为 first", () => {
-      const tree = new DevicesTree();
+      const dag = new DevicesDAG();
       const first = createMockChooser((_pkt, ctx) => {
-        ctx.setNodeState?.(ctx.eventContext?.path, {
+        ctx.setNodeState?.(ctx.path, {
           objects: [{ id: 7, type: "stroke" }],
         });
       });
       const second = createMockModifier();
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/chooser-flow",
         first,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      // Position signal: chooser selects, but no TOOL_COMPLETE (no "end")
-      tree.dispatch({
+      // Position signal: chooser selects, but no completion callback yet (no "end")
+      dag.dispatch({
         to: "/monitor/chooser-flow",
         signals: [{ type: "position" }],
       });
       // 初始状态在 prefix 内部 merge，未写入 node state
-      expect(tree.getNodeState("/monitor/chooser-flow")).toEqual({});
+      expect(dag.getNodeState("/monitor/chooser-flow")).toEqual({});
 
-      // End 信号触发 chooser 的 TOOL_COMPLETE → handoff
-      tree.dispatch({
+      // End 信号触发 chooser 的完成回调 → handoff
+      dag.dispatch({
         to: "/monitor/chooser-flow",
         signals: [{ type: "end" }],
       });
-      expect(tree.getNodeState("/monitor/chooser-flow")).toEqual({
+      expect(dag.getNodeState("/monitor/chooser-flow")).toEqual({
         phase: "second",
         activeChild: "second",
       });
-      expect(tree.getNodeState("/monitor/chooser-flow/second")).toEqual({
+      expect(dag.getNodeState("/monitor/chooser-flow/second")).toEqual({
         objects: [{ id: 7, type: "stroke" }],
       });
     });
 
-    test("应支持 SubTreeDefinition 作为 first", () => {
-      const tree = new DevicesTree();
-      const firstSubTree = createSubTree("/chain")
-        .node("")
+    test("应支持 SubDAGDefinition 作为 first", () => {
+      const dag = new DevicesDAG();
+      const chainDAG = createSubDAG("/chain");
+      const chainRoot = chainDAG
+        .node()
+        .defaultRoute("tool")
         .prefix(
           createPrefixNodeHandler({
             handle(_pkt, ctx) {
-              ctx.setNodeState?.(ctx.eventContext?.path, {
+              ctx.setNodeState?.(ctx.path, {
                 objects: [{ id: 99 }],
               });
-              return [
-                ctx.routeToChild("tool"),
-                {
-                  to: "..",
-                  signals: [{ type: PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE }],
-                },
-              ];
+              ctx.context?.onToolComplete?.();
+              return ctx.routeToChild("tool");
             },
           }),
-        )
-        .defaultChild("tool")
-        .node("tool")
-        .handler((_pkt, ctx) => ({
-          to: ctx.eventContext.path,
-          signals: [{ type: "created" }],
-        }))
-        .end()
-        .end()
-        .build();
+        );
+      const chainTool = chainDAG.node().handler(() => ({
+        to: "",
+        signals: [{ type: "created" }],
+      }));
+      chainDAG.edge("tool", chainRoot, chainTool);
+      const firstSubDAG = chainDAG.build();
 
       const second = createMockModifier();
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/nested",
-        first: firstSubTree,
+        first: firstSubDAG,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      expect(tree.getNode("/monitor/nested/first")).not.toBeNull();
-      expect(tree.getNode("/monitor/nested/first/tool")).not.toBeNull();
+      expect(dag.getNode("/monitor/nested/first")).not.toBeNull();
+      expect(dag.getNode("/monitor/nested/first/tool")).not.toBeNull();
 
-      tree.dispatch({ to: "/monitor/nested", signals: [{ type: "trigger" }] });
-      expect(tree.getNodeState("/monitor/nested")).toEqual({
+      dag.dispatch({ to: "/monitor/nested", signals: [{ type: "trigger" }] });
+      expect(dag.getNodeState("/monitor/nested")).toEqual({
         phase: "second",
         activeChild: "second",
       });
-      expect(tree.getNodeState("/monitor/nested/second")).toEqual({
+      expect(dag.getNodeState("/monitor/nested/second")).toEqual({
         objects: [{ id: 99 }],
       });
     });
 
     test("autoBridgeObjects = false 时应跳过对象桥接", () => {
-      const tree = new DevicesTree();
+      const dag = new DevicesDAG();
       const first = createMockCreator((_pkt, ctx) => {
-        ctx.setNodeState?.(ctx.eventContext?.path, {
+        ctx.setNodeState?.(ctx.path, {
           objects: [{ id: 42 }],
         });
       });
       const second = createMockModifier();
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/no-bridge",
         first,
         second,
         autoBridgeObjects: false,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/no-bridge",
         signals: [{ type: "position" }],
       });
       // 对象不应被桥接到 second
-      expect(tree.getNodeState("/monitor/no-bridge/second")).toEqual({});
+      expect(dag.getNodeState("/monitor/no-bridge/second")).toEqual({});
     });
 
     test("first 无对象时不应崩溃", () => {
-      const tree = new DevicesTree();
+      const dag = new DevicesDAG();
       // creator 不写入任何对象到 state
       const first = createMockCreator();
       const second = createMockModifier();
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/empty",
         first,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
       // 不应抛出异常
       expect(() => {
-        tree.dispatch({
+        dag.dispatch({
           to: "/monitor/empty",
           signals: [{ type: "position" }],
         });
       }).not.toThrow();
 
       // second 状态保持为空
-      expect(tree.getNodeState("/monitor/empty/second")).toEqual({});
+      expect(dag.getNodeState("/monitor/empty/second")).toEqual({});
     });
 
-    test("连续两次 TOOL_COMPLETE 不应导致状态紊乱", () => {
-      const tree = new DevicesTree();
+    test("连续两次完成回调不应导致状态紊乱", () => {
+      const dag = new DevicesDAG();
       let toggleCount = 0;
-      // first 每次 process 都发出 TOOL_COMPLETE + 写入不同对象
+      // first 每次 process 都通过回调触发完成
       const first = new (class extends Tool {
-        process() {
+        process(_pkt, ctx) {
           toggleCount++;
-          return [
-            {
-              to: "..",
-              signals: [{ type: PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE }],
-            },
-          ];
+          ctx.context?.onToolComplete?.();
         }
       })();
       const second = createMockModifier();
 
-      const subTree = createHandoffSubTree({
+      const subDAG = createHandoffSubDAG({
         rootPath: "/rapid",
         first,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      // 第一次 TOOL_COMPLETE: first → second
-      tree.dispatch({ to: "/monitor/rapid", signals: [{ type: "trigger" }] });
-      expect(tree.getNodeState("/monitor/rapid")).toEqual({
+      // 第一次完成回调：first → second
+      dag.dispatch({ to: "/monitor/rapid", signals: [{ type: "trigger" }] });
+      expect(dag.getNodeState("/monitor/rapid")).toEqual({
         phase: "second",
         activeChild: "second",
       });
 
       // 第二次 dispatch 信号路由到 second（modifier），first 的 process 不会被调用
-      tree.dispatch({ to: "/monitor/rapid", signals: [{ type: "trigger" }] });
-      // 状态保持 second（second 无 handler 返回 TOOL_COMPLETE，不会触发切换）
-      expect(tree.getNodeState("/monitor/rapid")).toEqual({
+      dag.dispatch({ to: "/monitor/rapid", signals: [{ type: "trigger" }] });
+      // 状态保持 second（second 未发出完成回调，不会触发切换）
+      expect(dag.getNodeState("/monitor/rapid")).toEqual({
         phase: "second",
         activeChild: "second",
       });
@@ -459,22 +504,16 @@ describe("handoff-handler", () => {
 
   describe("integration scenarios", () => {
     test("完整周期：creator 创建 → modifier 修改 → 切回 creator 重新创建", () => {
-      const tree = new DevicesTree();
+      const dag = new DevicesDAG();
       let createdCount = 0;
       const createdIds = [];
 
       const first = new (class extends Tool {
-        process() {
+        process(_pkt, ctx) {
           createdCount++;
           const id = createdCount;
           createdIds.push(id);
-          // 模拟 completeCreatedObject
-          return [
-            {
-              to: "..",
-              signals: [{ type: PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE }],
-            },
-          ];
+          ctx.context?.onToolComplete?.();
         }
       })();
 
@@ -482,57 +521,60 @@ describe("handoff-handler", () => {
         process(pkt) {
           const hasSuccess = pkt.signals?.some((s) => s.type === "success");
           if (hasSuccess) {
-            return [
-              {
-                to: "..",
-                signals: [{ type: PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE }],
-              },
-            ];
+            return undefined;
           }
           return undefined;
         }
       })();
 
-      const subTree = createHandoffSubTree({
+      second.process = function (pkt, ctx) {
+        const hasSuccess = pkt.signals?.some((s) => s.type === "success");
+        if (hasSuccess) {
+          ctx.context?.onToolComplete?.();
+        }
+        return undefined;
+      };
+
+      const subDAG = createHandoffSubDAG({
         rootPath: "/full-cycle",
         first,
         second,
       });
 
-      tree.mountSubTree("/monitor", subTree, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
       // 第一轮：creator → modifier
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/full-cycle",
         signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
       });
-      expect(tree.getNodeState("/monitor/full-cycle")).toEqual({
+      expect(dag.getNodeState("/monitor/full-cycle")).toEqual({
         phase: "second",
         activeChild: "second",
       });
       expect(createdCount).toBe(1);
 
       // modifier 收到 displacement
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/full-cycle",
         signals: [{ type: "displacement", context: { value: { x: 5, y: 0 } } }],
       });
       // modifier 收到 success → 切回 first
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/full-cycle",
         signals: [{ type: "success" }],
       });
-      expect(tree.getNodeState("/monitor/full-cycle")).toEqual({
+      expect(dag.getNodeState("/monitor/full-cycle")).toEqual({
         phase: "first",
         activeChild: "first",
       });
 
       // 第二轮：creator 再次创建
-      tree.dispatch({
+      dag.dispatch({
         to: "/monitor/full-cycle",
         signals: [{ type: "position", context: { value: { x: 10, y: 10 } } }],
       });
-      expect(tree.getNodeState("/monitor/full-cycle")).toEqual({
+      expect(dag.getNodeState("/monitor/full-cycle")).toEqual({
         phase: "second",
         activeChild: "second",
       });
@@ -541,57 +583,116 @@ describe("handoff-handler", () => {
     });
   });
 
-  describe("wrapSubTreeForHandoff", () => {
-    test("应在 end 信号后补 TOOL_COMPLETE 并被父 prefix 消费", () => {
-      const tree = new DevicesTree();
-      const inner = createSubTree("/inner")
-        .node("")
-        .handler((_pkt, ctx) => ({
-          to: ctx.eventContext.path,
-          signals: [{ type: "inner-done" }],
-        }))
-        .end()
-        .build();
+  describe("wrapSubDAGForHandoff", () => {
+    test("应在 end 信号后调用 onToolComplete 并保留原始输出", () => {
+      const dag = new DevicesDAG();
+      const innerDAG = createSubDAG("/inner");
+      innerDAG.node().handler(() => ({
+        to: "",
+        signals: [{ type: "inner-done" }],
+      }));
+      const inner = innerDAG.build();
 
-      const wrapped = wrapSubTreeForHandoff(inner);
-      const outer = createSubTree("/outer")
-        .node("")
+      const wrapped = wrapSubDAGForHandoff(inner);
+      const outerDAG = createSubDAG("/outer");
+      const outerRoot = outerDAG
+        .node()
+        .defaultRoute("child")
         .prefix(
           createPrefixNodeHandler({
             handle(packet, ctx) {
-              return packet.signals.some(
-                (s) => s.type === PREFIX_NODE_SIGNAL_TYPES.TOOL_COMPLETE,
-              )
-                ? [
+              if (ctx.state.completed) {
+                return {
+                  stop: true,
+                  packets: [
                     {
-                      to: ctx.eventContext.path,
+                      to: "",
                       signals: [{ type: "handled" }],
                     },
-                  ]
-                : ctx.routeToChild("child");
+                  ],
+                };
+              }
+
+              return {
+                packets: [{ to: "child", signals: packet.signals }],
+                context: {
+                  onToolComplete() {
+                    ctx.patchState({ completed: true });
+                  },
+                },
+              };
             },
           }),
-        )
-        .defaultChild("child")
-        .node("child")
-        .handler(wrapped.nodes.handler)
-        .end()
-        .end()
-        .build();
+        );
+      const outerChild = outerDAG.node().handler(wrapped.nodes.handler);
+      outerDAG.edge("child", outerRoot, outerChild);
+      const outer = outerDAG.build();
 
-      tree.mountSubTree("/monitor", outer, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", outer, { board: {}, monitor: {} });
 
-      const result = tree.dispatch({
+      const result = dag.dispatch({
         to: "/monitor/outer",
         signals: [{ type: "end" }],
       });
+      const secondResult = dag.dispatch({
+        to: "/monitor/outer",
+        signals: [{ type: "trigger" }],
+      });
 
       expect(
-        result.some((p) => p.signals.some((s) => s.type === "inner-done")),
+        result.packets.some((p) =>
+          p.signals.some((s) => s.type === "inner-done"),
+        ),
       ).toBe(true);
+      expect(dag.getNodeState("/monitor/outer")).toEqual({ completed: true });
       expect(
-        result.some((p) => p.signals.some((s) => s.type === "handled")),
+        secondResult.packets.some((p) =>
+          p.signals.some((s) => s.type === "handled"),
+        ),
       ).toBe(true);
+    });
+  });
+
+  describe("重复实例检查", () => {
+    test("createHandoffSubDAG 的 first 和 second 为同一 tool 实例时应抛错", () => {
+      const tool = createMockCreator();
+      expect(() =>
+        createHandoffSubDAG({
+          rootPath: "/bad",
+          first: tool,
+          second: tool,
+        }),
+      ).toThrow(/same tool instance/i);
+    });
+
+    test("wrapCreatorForHandoff 对同一 tool 调用两次应抛错", () => {
+      const tool = createMockCreator();
+      wrapCreatorForHandoff(tool);
+      expect(() => wrapCreatorForHandoff(tool)).toThrow(
+        /already been wrapped/i,
+      );
+    });
+
+    test("wrapFirstForHandoff 对 creator 调用两次应抛错（走 wrapCreatorForHandoff）", () => {
+      const tool = createMockCreator();
+      wrapFirstForHandoff(tool);
+      expect(() => wrapFirstForHandoff(tool)).toThrow(
+        /already been wrapped/i,
+      );
+    });
+
+    test("wrapSecondForHandoff 对同一 modifier tool 调用两次应抛错", () => {
+      const dag = new DevicesDAG();
+      const modifier = new (class extends Tool {
+        process() {}
+        applyModifiedObjects() {
+          return true;
+        }
+      })();
+      wrapSecondForHandoff(modifier);
+      expect(() => wrapSecondForHandoff(modifier)).toThrow(
+        /already been wrapped/i,
+      );
     });
   });
 });

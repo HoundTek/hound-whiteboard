@@ -6,6 +6,7 @@
  */
 
 import { Tool } from "../../core/tools/tool.js";
+import { dagToMermaid } from "../../core/devices-dag/index.js";
 
 class DebuggerTool extends Tool {
   process(signalPacket, deviceContext = {}) {
@@ -24,7 +25,10 @@ class DebuggerTool extends Tool {
           this.logObjectLoad(board);
           break;
         case "debug:devices":
-          this.logDevicesTree(board);
+          this.logDevicesDAG(board);
+          break;
+        case "debug:mermaid":
+          this.logMermaidDevicesDAG(board);
           break;
         case "debug:chunk":
           this.logChunk(board, signal?.context?.id);
@@ -262,45 +266,42 @@ class DebuggerTool extends Tool {
     );
   }
 
-  stringifyDevicesTree(tree) {
-    if (!tree || typeof tree.root !== "object") {
-      return "<no devices tree>";
+  stringifyDevicesDAG(dag) {
+    if (!dag || typeof dag.toString !== "function") {
+      return "<no devices dag>";
     }
-
-    const lines = [];
-    const traverseNode = (node, prefix = "", isLast = true) => {
-      const label = node.parent ? node.name : "/";
-      const branch = node.parent ? (isLast ? "└── " : "├── ") : "";
-      const defaultChild = node.getDefaultChild();
-      const handlerHint = node.getHandler() ? " [handler]" : "";
-      const defaultHint = defaultChild ? ` [default=${defaultChild}]` : "";
-      lines.push(`${prefix}${branch}${label}${handlerHint}${defaultHint}`);
-
-      const children = Array.from(node.children.values()).sort((left, right) =>
-        left.name.localeCompare(right.name),
-      );
-      const childPrefix =
-        prefix + (node.parent ? (isLast ? "    " : "│   ") : "");
-
-      children.forEach((child, index) => {
-        traverseNode(child, childPrefix, index === children.length - 1);
-      });
-    };
-
-    traverseNode(tree.root, "", true);
-    return lines.join("\n");
+    return dag.toString();
   }
 
-  logDevicesTree(board) {
-    const devicesTree = board.devicesTree;
-    if (!devicesTree) {
-      console.warn("[debugger-tool] missing devices tree", board);
+  mermaidizeDevicesDAG(dag, options = {}) {
+    if (!dag) {
+      return "<no devices dag>";
+    }
+    return dagToMermaid(dag, options);
+  }
+
+  logDevicesDAG(board) {
+    const devicesDAG = board.devicesDAG;
+    if (!devicesDAG) {
+      console.warn("[debugger-tool] missing devices dag", board);
       return;
     }
 
     console.log(
-      "[debugger-tool] devices tree:\n" +
-        this.stringifyDevicesTree(devicesTree),
+      "[debugger-tool] devices dag:\n" + this.stringifyDevicesDAG(devicesDAG),
+    );
+  }
+
+  logMermaidDevicesDAG(board) {
+    const devicesDAG = board.devicesDAG;
+    if (!devicesDAG) {
+      console.warn("[debugger-tool] missing devices dag", board);
+      return;
+    }
+
+    console.log(
+      "[debugger-tool] devices dag in Mermaid format:\n" +
+        this.mermaidizeDevicesDAG(devicesDAG, { orientation: "TD" }),
     );
   }
 

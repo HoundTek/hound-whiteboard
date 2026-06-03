@@ -4,14 +4,15 @@
  * @author Zhou Chenyu
  */
 
-export { PREFIX_NODE_SIGNAL_TYPES } from "./constants.js";
 export { createPrefixNodeHandler } from "./handler.js";
 export { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
 export { createRepeatorPrefixHandler } from "./repeator-handler.js";
 export {
-  createHandoffSubTree,
+  createHandoffSubDAG,
   wrapCreatorForHandoff,
   wrapFirstForHandoff,
-  wrapSubTreeForHandoff,
+  wrapSubDAGForHandoff,
 } from "./handoff-handler.js";
 export { createDragAnchorPrefixHandler } from "./drag-anchor-handler.js";
+export { createSignalLogPrefixHandler } from "./signal-log-handler.js";
+export { createEdgePrefix } from "./edge-prefix.js";

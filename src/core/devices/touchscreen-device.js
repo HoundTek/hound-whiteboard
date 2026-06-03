@@ -1,12 +1,12 @@
 /**
  * @file 触摸屏设备
- * @description 提供触摸输入信号的设备树节点创建与处理接口。
+ * @description 提供触摸输入信号的设备图节点创建与处理接口。
  * @module core/devices/touchscreen-device
  * @author Zhou Chenyu
  */
 
-import { createSubTree } from "./devices-tree.js";
-import { SignalPacket } from "./signal.js";
+import { createSubDAG } from "../devices-dag/index.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 
 /**
  * 触摸屏设备输出信号类型
@@ -17,9 +17,9 @@ const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
 });
 
 /**
- * 创建一棵触摸屏设备子树
+ * 创建一张触摸屏设备子图
  * @param {{onUpdate?: Function}} [options={}] - 触摸屏设备选项
- * @returns {import("./devices-tree.js").SubTreeDefinition & {
+ * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
  *   clearTouches: () => void,
  *   getActiveTouches: () => Array<{touchId: string, position: any}>,
  * }}
@@ -123,14 +123,14 @@ function createTouchscreenDevice(options = {}) {
   /**
    * 触点报告处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("./devices-tree.js").DevicesTreeHandlerContext} [context={}] - 当前路由上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 当前路由上下文
    * @returns {Object}
    */
   const contactsHandler = (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const contacts = getActiveTouches();
     return {
-      to: context.eventContext?.path,
+      to: context.path,
       signals: [
         {
           type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
@@ -144,14 +144,12 @@ function createTouchscreenDevice(options = {}) {
     };
   };
 
-  return createSubTree("/touchscreen")
-    .node("")
-    .handler(rootHandler)
-    .defaultChild("contacts")
-    .end()
-    .node("contacts")
-    .handler(contactsHandler)
-    .end()
+  const builder = createSubDAG("/touchscreen");
+  const root = builder.node().handler(rootHandler).defaultRoute("contacts");
+  const contacts = builder.node().handler(contactsHandler);
+  builder.edge("contacts", root, contacts);
+
+  return builder
     .expose({
       clearTouches() {
         activeTouches.clear();

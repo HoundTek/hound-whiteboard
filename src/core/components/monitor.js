@@ -178,7 +178,12 @@ class Monitor {
    * @param {{ width: number, height: number }} options - 画布尺寸选项
    * @param {string} monitorId - 显示器 id
    */
-  constructor({ rootElement, baseCanvas, liveCanvas, uiCanvas }, board, { width, height }, monitorId) {
+  constructor(
+    { rootElement, baseCanvas, liveCanvas, uiCanvas },
+    board,
+    { width, height },
+    monitorId,
+  ) {
     this.attachRenderLayers({
       rootElement,
       baseCanvas,
@@ -272,11 +277,11 @@ class Monitor {
   }
 
   /**
-   * 当前白板级唯一设备树。
-   * @type {import("../devices/devices-tree.js").DevicesTree}
+   * 当前白板级唯一设备图
+   * @type {import("../devices-dag/dag.js").DevicesDAG}
    */
-  get devicesTree() {
-    return this.board?.devicesTree;
+  get devicesDAG() {
+    return this.board?.devicesDAG;
   }
 
   /**
@@ -485,7 +490,7 @@ class Monitor {
 
   /**
    * 创建指定渲染层的脏区聚合器
-  * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
+   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {(dirtyRects: any[]) => any[]}
    */
   createDirtyRectMerger(layer = "live") {
@@ -501,7 +506,7 @@ class Monitor {
 
   /**
    * 获取指定渲染层当前 dirty rect policy
-  * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
+   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {{
    *   getThresholds?: () => Record<string, number | undefined>,
    *   getViewportRect?: () => any,
@@ -533,9 +538,8 @@ class Monitor {
    * @returns {Function | undefined}
    */
   registerUiOverlayProvider(provider, options = {}) {
-    const registeredProvider = this.uiRenderer?.registerOverlayProvider?.(
-      provider,
-    );
+    const registeredProvider =
+      this.uiRenderer?.registerOverlayProvider?.(provider);
 
     if (registeredProvider && options.invalidate !== false) {
       this.requestViewportUiRender();
@@ -878,50 +882,54 @@ class Monitor {
   }
 
   /**
-   * 挂载子树到白板级设备树
-   * @param {string} path - 子树根路径（相对于显示器根）
-   * @param {import("../devices/devices-tree.js").SubTreeDefinition} subTreeDefinition - 子树定义
-   * @returns {import("../devices/devices-tree.js").DevicesTreeNode[]} 挂载后的设备树节点列表
+   * 挂载子图到白板级设备图
+   * @param {string} path - 子图根路径（相对于显示器根）
+   * @param {import("../devices-dag/dag.js").SubDAGDefinition} subDAGDefinition - 子图定义
    */
-  mountSubTree(path, subTreeDefinition) {
-    return this.devicesTree.mountSubTree(
-      joinPath(this.monitorId),
-      {
-        ...subTreeDefinition,
-        root: path || subTreeDefinition.root,
-      },
-      {
-        board: this.board,
-        monitor: this,
-      },
-    );
+  mountSubDAG(path, subDAGDefinition) {
+    return this.devicesDAG.mountSubDAG(this.monitorId, {
+      ...subDAGDefinition,
+      rootPath: path || subDAGDefinition.rootPath,
+    });
   }
 
   /**
-   * 在白板级设备树中运行时挂载工具。
-   * @param {string} path - 工具叶子路径（相对于显示器根）
-   * @param {import("../tools/tool.js").Tool} tool - 要挂载的工具
-   * @returns {import("../devices/devices-tree.js").DevicesTreeNode}
+   * 在白板级设备图中运行时挂载 workflow。
+   * @param {string} path - workflow 路径（相对于显示器根）
+    * @param {import("../tools/tool.js").Tool|import("../devices-dag/dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
    */
-  mountTool(path, tool) {
-    return this.devicesTree.mountTool(joinPath(this.monitorId, path), tool, {
+  mountWorkflow(path, workflow) {
+    return this.devicesDAG.mountWorkflow(joinPath(this.monitorId, path), workflow, {
       board: this.board,
       monitor: this,
     });
   }
 
   /**
-   * 在白板级设备树中运行时卸载工具叶子节点。
-   * @param {string} path - 工具叶子路径（相对于显示器根）
+   * 在白板级设备图中运行时卸载 workflow 节点。
+   * @param {string} path - workflow 路径（相对于显示器根）
    * @returns {boolean}
    */
-  unmountTool(path) {
-    return this.devicesTree.unmountTool(joinPath(this.monitorId, path), {
-      runtimeContext: {
-        board: this.board,
-        monitor: this,
-      },
+  unmountWorkflow(path) {
+    return this.devicesDAG.unmountWorkflow(joinPath(this.monitorId, path), {
+      board: this.board,
+      monitor: this,
     });
+  }
+
+  /**
+   * 在白板级设备图中添加有向边。
+   * @param {string} fromPath - 源节点路径（相对于显示器根）
+   * @param {string} edgeName - 边名
+   * @param {string} toPath - 目标节点路径（相对于显示器根）
+   * @returns {import("../devices-dag/dag.js").DevicesDAGEdge}
+   */
+  addEdge(fromPath, edgeName, toPath) {
+    return this.devicesDAG.addEdge(
+      joinPath(this.monitorId, fromPath),
+      edgeName,
+      joinPath(this.monitorId, toPath),
+    );
   }
 }
 

@@ -6,8 +6,9 @@
  */
 
 import { Tool } from "../tool.js";
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 import { intersectsRanges } from "../../range/index.js";
+import { Range } from "../../range/range.js";
 
 /**
  * 对象选择工具基类
@@ -44,7 +45,7 @@ class ObjectChooserTool extends Tool {
    * 解析对象主判定范围在世界空间中的范围
    * @param {Object} [deviceContext={}] - 设备上下文
    * @param {*} objectEntry - 候选对象
-   * @returns {import("../../range/index.js").Range | undefined}
+   * @returns {Range | undefined}
    */
   resolveObjectSelectionWorldRange(deviceContext = {}, objectEntry) {
     if (!objectEntry || typeof objectEntry.getRange !== "function") {
@@ -112,9 +113,9 @@ class ObjectChooserTool extends Tool {
     }
 
     const defaultLeaf =
-      typeof deviceContext.tree?.resolveDefaultLeaf === "function" &&
+      typeof deviceContext.dag?.resolveDefaultLeaf === "function" &&
       typeof deviceContext.path === "string"
-        ? deviceContext.tree.resolveDefaultLeaf(deviceContext.path)
+        ? deviceContext.dag.resolveDefaultLeaf(deviceContext.path)
         : null;
 
     const childObjects =

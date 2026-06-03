@@ -126,7 +126,7 @@ const emitMousePacket = (event) => {
 
   if (event.type === "mouseleave") {
     signals.push({
-      type: "cancel",
+      type: "end",
       context: {
         buttons: event.buttons,
         domEvent: event.type,
@@ -142,9 +142,26 @@ const emitMousePacket = (event) => {
   });
 };
 
+const emitWindowMouseUpPacket = (event) => {
+  board.signalsEventBus.emit("input", {
+    to: `/${monitor.monitorId}/mouse`,
+    signals: [
+      {
+        type: "end",
+        context: {
+          button: event.button,
+          buttons: event.buttons,
+          domEvent: event.type,
+        },
+      },
+    ],
+  });
+};
+
 monitor.liveCanvas.addEventListener("mousedown", emitMousePacket);
 monitor.liveCanvas.addEventListener("mousemove", emitMousePacket);
-window.addEventListener("mouseup", emitMousePacket);
+monitor.liveCanvas.addEventListener("mouseup", emitMousePacket);
+window.addEventListener("mouseup", emitWindowMouseUpPacket);
 monitor.liveCanvas.addEventListener("mouseleave", emitMousePacket);
 monitor.liveCanvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
@@ -221,7 +238,7 @@ const emitKeyboardPacket = (event) => {
 const emitKeyboardCancelPacket = () => {
   board.signalsEventBus.emit("input", {
     to: `/${monitor.monitorId}/keyboard`,
-    signals: [{ type: "cancel", context: { domEvent: "blur" } }],
+    signals: [{ type: "end", context: { domEvent: "blur" } }],
   });
 };
 

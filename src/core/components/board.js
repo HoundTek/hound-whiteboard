@@ -14,7 +14,7 @@ import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { EventBus } from "../utils/event-bus.js";
 import { UndoTree } from "../hit/undo-tree-core.js";
-import { DevicesTree } from "../devices/devices-tree.js";
+import { DevicesDAG } from "../devices-dag/index.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import { Monitor } from "./monitor.js";
 import {
@@ -46,8 +46,8 @@ function isValidBoardRootPath(boardRootPath) {
 /**
  * Board 运行时节点配置事件载荷。
  * @typedef {Object} BoardConfigureEventPayload
- * @property {string} to - 目标设备树节点绝对路径，必须包含 monitorId
- * @property {import("../devices/devices-tree.js").DevicesTreeNodeConfig} options - 要更新到节点上的配置片段；`defaultChild` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
+ * @property {string} to - 目标设备图节点绝对路径，必须包含 monitorId
+ * @property {import("../devices-dag/dag.js").DevicesDAGNodeConfig} options - 要更新到节点上的配置片段；`defaultRoute` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
  */
 
 /**
@@ -124,16 +124,16 @@ class Board {
 
   /**
    * 信道事件总线
-   * @description 把设备输入、工具挂载与节点配置请求分发到对应 monitor。
+   * @description 把设备输入、workflow 挂载与节点配置请求分发到对应 monitor。
    * @type {EventBus}
    */
   signalsEventBus;
 
   /**
-   * 白板级唯一设备树。
-   * @type {DevicesTree}
+   * 白板级唯一设备图。
+   * @type {DevicesDAG}
    */
-  devicesTree;
+  devicesDAG;
 
   /**
    * 根区块加载器。
@@ -157,8 +157,8 @@ class Board {
     this.chunkLoadEventBus = new EventBus();
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
-    this.devicesTree = new DevicesTree({
-      runtimeContext: { board: this },
+    this.devicesDAG = new DevicesDAG({
+      maxDispatchDepth: 32,
     });
     this.rootChunkLoader = new ChunkLoader({
       resolveChunkById: (chunkId) =>
@@ -545,6 +545,8 @@ class Board {
       monitorId,
     );
     this.monitors.set(monitorId, monitor);
+    // 在设备图中标记 monitor 语义
+    this.devicesDAG.configureNode(monitorId, { semantics: { monitor: true } });
     return monitor;
   }
 
@@ -588,49 +590,90 @@ class Board {
       const monitorId = to.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (monitor) {
-        this.devicesTree.dispatch(
-          { to, signals },
-          {
-            runtimeContext: {
-              board: this,
-              monitor,
-            },
-          },
-        );
+        this.devicesDAG.dispatch({ to, signals }, { board: this, monitor });
       }
     });
 
-    // mount 事件负责挂载工具到设备树
-    this.signalsEventBus.on("mount", ({ to, tool }) => {
-      const monitorId = to?.split("/")[1];
-      const monitor = this.monitors.get(monitorId);
-      if (!monitor) return false;
-      return this.devicesTree.mountTool(to, tool, {
-        board: this,
-        monitor,
-      });
-    });
+    const resolveWorkflowPath = (monitorId, name) =>
+      `/${monitorId}/workflows/${name}`;
 
-    // umount 事件负责从设备树卸载工具
-    this.signalsEventBus.on("umount", ({ to }) => {
-      const monitorId = to?.split("/")[1];
-      const monitor = this.monitors.get(monitorId);
-      if (!monitor) return false;
-      return this.devicesTree.unmountTool(to, {
-        runtimeContext: {
+    // mount 事件负责挂载 workflow 到设备图。
+    this.signalsEventBus.on(
+      "mount",
+      ({ monitorId, name, workflow, edges = [] } = {}) => {
+        const monitor = this.monitors.get(monitorId);
+        if (!monitor || !name || !workflow) return false;
+
+        const workflowPath = resolveWorkflowPath(monitorId, name);
+        const mountedNode = this.devicesDAG.mountWorkflow(
+          workflowPath,
+          workflow,
+          {
+            board: this,
+            monitor,
+          },
+        );
+
+        /**
+         * 在已挂载的单源单汇子图中找到汇节点
+         * @description
+         * 汇节点 = 无出边（或所有出边均不指向同批挂载的其他节点）。
+         * 对单节点 prefix，根节点即汇节点。
+         * @param {import("../devices-dag/dag-node-edge.js").DevicesDAGNode[]} mountedNodes
+         * @returns {import("../devices-dag/dag-node-edge.js").DevicesDAGNode|undefined}
+         */
+        const findPrefixSink = (mountedNodes = []) => {
+          if (mountedNodes.length === 1) return mountedNodes[0];
+          return mountedNodes.find((n) => {
+            for (const outEdge of n.outEdges.values()) {
+              if (mountedNodes.includes(outEdge.target)) return false;
+            }
+            return true;
+          });
+        };
+
+        for (const { from, edge, prefix } of edges) {
+          const sourcePath = `/${monitorId}${from}`;
+
+          if (prefix) {
+            // 将 prefix 子图挂到 sourcePath 下，用 edge 名作为路径段
+            const prefixSubDAG = { ...prefix, rootPath: `/${edge}` };
+            const prefixNodes = this.devicesDAG.mountSubDAG(
+              sourcePath,
+              prefixSubDAG,
+              { board: this, monitor },
+            );
+            const sinkNode = findPrefixSink(prefixNodes);
+            if (sinkNode?.path) {
+              this.devicesDAG.addEdge(sinkNode.path, edge, workflowPath);
+            }
+          } else {
+            this.devicesDAG.addEdge(sourcePath, edge, workflowPath);
+          }
+        }
+
+        return mountedNode;
+      },
+    );
+
+    // umount 事件负责从设备图卸载 workflow。
+    this.signalsEventBus.on(
+      "umount",
+      ({ monitorId, name, edges = [] } = {}) => {
+        const monitor = this.monitors.get(monitorId);
+        if (!monitor || !name) return false;
+
+        const workflowPath = resolveWorkflowPath(monitorId, name);
+        for (const { from, edge } of edges) {
+          this.devicesDAG.removeEdge(`/${monitorId}${from}`, edge);
+        }
+
+        return this.devicesDAG.unmountWorkflow(workflowPath, {
           board: this,
           monitor,
-        },
-      });
-    });
-
-    // configure 事件负责更新设备树节点配置
-    this.signalsEventBus.on("configure", ({ to, options }) => {
-      const monitorId = to?.split("/")[1];
-      const monitor = this.monitors.get(monitorId);
-      if (!monitor) return false;
-      return this.devicesTree.configureNode(to, options ?? {});
-    });
+        });
+      },
+    );
   }
 
   /**

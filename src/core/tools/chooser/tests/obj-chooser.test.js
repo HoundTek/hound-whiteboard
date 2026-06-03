@@ -95,7 +95,7 @@ describe("ObjectChooserTool", () => {
         path: "/monitor/chooser/tool",
         object: chosenObject,
         objects: [chosenObject],
-        tree: {
+        dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool/tool",
             state: { object: chosenObject, objects: [chosenObject] },
@@ -115,7 +115,7 @@ describe("ObjectChooserTool", () => {
         path: "/monitor/chooser/tool",
         object: chosenObject,
         objects: [chosenObject],
-        tree: {
+        dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool",
             state: {},

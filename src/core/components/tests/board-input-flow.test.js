@@ -1,12 +1,14 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
-import { createSubTree } from "../../devices/devices-tree.js";
-import { createHandoffSubTree } from "../../prefixs/handoff-handler.js";
+import { createSubDAG } from "../../devices-dag/index.js";
+import { createEdgePrefix, createHandoffSubDAG } from "../../prefixs/index.js";
 import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
+import { RectangleObjectChooserTool } from "../../tools/chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../tools/modifier/common-object-modifier.js";
 import { createMouseDevice } from "../../devices/mouse-device.js";
+import { StrokeObject } from "../../objects/stroke/stroke.js";
 import { createNoopCanvas } from "../../test-support/noop-canvas.js";
 import { CollectingTool } from "../../test-support/mock-tools.js";
 import {
@@ -32,22 +34,19 @@ describe("Board input flow", () => {
     return monitor;
   }
 
-  test("input 事件应经由 Board、Monitor 与 DevicesTree 落到工具节点", () => {
+  test("input 事件应经由 Board、Monitor 与 DevicesDAG 落到工具节点", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountSubTree(
-      "",
-      createSubTree("/sample-device")
-        .node("")
-        .defaultChild("tool")
-        .end()
-        .node("tool")
-        .handler(tool.createProcessor({ board, monitor }))
-        .end()
-        .build(),
-    );
+    const sampleBuilder = createSubDAG("/sample-device");
+    const sampleRoot = sampleBuilder.node().defaultRoute("tool");
+    const sampleTool = sampleBuilder
+      .node()
+      .handler(tool.createProcessor({ board, monitor }));
+    sampleBuilder.edge("tool", sampleRoot, sampleTool);
+
+    monitor.mountSubDAG("", sampleBuilder.build());
 
     const emitResults = board.signalsEventBus.emit("input", {
       to: "/main/sample-device",
@@ -56,17 +55,17 @@ describe("Board input flow", () => {
 
     expect(emitResults).toEqual([undefined]);
     expect(tool.calls).toHaveLength(1);
-    expect(tool.calls[0]).toEqual({
-      signalPacket: {
-        to: "/main/sample-device/tool",
-        signals: [{ type: "position", context: { value: { x: 3, y: 4 } } }],
-      },
-      deviceContext: expect.objectContaining({
+    expect(tool.calls[0].signalPacket.to).toBe("");
+    expect(tool.calls[0].signalPacket.signals).toEqual([
+      { type: "position", context: { value: { x: 3, y: 4 } } },
+    ]);
+    expect(tool.calls[0].deviceContext).toEqual(
+      expect.objectContaining({
         board,
         monitor,
         path: "/main/sample-device/tool",
       }),
-    });
+    );
   });
 
   test("input 事件指向不存在的 monitor 时应被忽略", () => {
@@ -85,23 +84,21 @@ describe("Board input flow", () => {
     const monitor = createMonitor(board, "main");
     const tool = new CollectingTool();
 
-    monitor.mountSubTree(
-      "",
-      createSubTree("/sample-device")
-        .node("")
-        .defaultChild("tool")
-        .end()
-        .build(),
-    );
+    const emptyBuilder = createSubDAG("/sample-device");
+    emptyBuilder.node().defaultRoute("tool");
+
+    monitor.mountSubDAG("", emptyBuilder.build());
 
     const mountResults = board.signalsEventBus.emit("mount", {
-      to: "/main/sample-device/tool",
-      tool,
+      monitorId: "main",
+      name: "sample-device-tool",
+      workflow: tool,
+      edges: [{ from: "/sample-device", edge: "tool" }],
     });
 
     expect(mountResults).toHaveLength(1);
     expect(
-      monitor.devicesTree.getNode("/main/sample-device/tool"),
+      monitor.devicesDAG.getNode("/main/sample-device/tool"),
     ).not.toBeNull();
 
     board.signalsEventBus.emit("input", {
@@ -119,95 +116,77 @@ describe("Board input flow", () => {
     );
 
     const umountResults = board.signalsEventBus.emit("umount", {
-      to: "/main/sample-device/tool",
+      monitorId: "main",
+      name: "sample-device-tool",
+      edges: [{ from: "/sample-device", edge: "tool" }],
     });
 
     expect(umountResults).toEqual([true]);
-    expect(monitor.devicesTree.getNode("/main/sample-device/tool")).toBeNull();
+    expect(
+      monitor.devicesDAG.getNode("/main/sample-device/tool"),
+    ).toBeUndefined();
   });
 
-  test("configure 事件应在运行时更新设备节点配置", () => {
+  test("mount 事件应支持 edge.prefix 在设备节点与 workflow 之间注入边级 prefix 链", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");
-    const keyboardDevice = createKeyboardDevice({
-      nodeConfigs: {
-        "/code/KeyW": {
-          handler(packet) {
-            const signals = packet.signals
-              .filter(
-                (signal) =>
-                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-              )
-              .map(() => ({
-                type: "position",
-                context: { value: { x: 0, y: -1 }, code: "KeyW" },
-              }));
+    const keyboardDevice = createKeyboardDevice();
 
-            return signals.length === 0
-              ? []
-              : { to: "../../tools/move/tool", signals };
-          },
-        },
+    monitor.mountSubDAG("", keyboardDevice);
+
+    const receivedPackets = [];
+    const workflow = {
+      createProcessor: () => (packet) => {
+        receivedPackets.push({ to: packet.to, signals: packet.signals });
+        return [];
       },
+    };
+
+    board.signalsEventBus.emit("mount", {
+      monitorId: "main",
+      name: "strafe-workflow",
+      workflow,
+      edges: [
+        {
+          from: "/keyboard/code/KeyW",
+          edge: "default",
+          prefix: createEdgePrefix({
+            handler(packet) {
+              const signals = packet.signals
+                .filter(
+                  (signal) =>
+                    signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+                )
+                .map(() => ({
+                  type: "position",
+                  context: { value: { x: 1, y: 0 }, code: "KeyW" },
+                }));
+              return signals.length === 0 ? [] : { signals };
+            },
+          }),
+        },
+      ],
     });
 
-    monitor.mountSubTree("", keyboardDevice);
-    monitor.devicesTree.mount(
-      "/main/keyboard/tools/move/tool",
-      (packet, context) => ({
-        to: context.eventContext.path,
-        signals: packet.signals,
-      }),
-    );
-    monitor.devicesTree.mount(
-      "/main/keyboard/tools/strafe/tool",
-      (packet, context) => ({
-        to: context.eventContext.path,
-        signals: packet.signals,
-      }),
-    );
-
-    const configureResults = board.signalsEventBus.emit("configure", {
-      to: "/main/keyboard/code/KeyW",
-      options: {
-        handler(packet) {
-          const signals = packet.signals
-            .filter(
-              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-            )
-            .map(() => ({
-              type: "position",
-              context: { value: { x: 1, y: 0 }, code: "KeyW" },
-            }));
-
-          return signals.length === 0
-            ? []
-            : { to: "../../tools/strafe/tool", signals };
+    monitor.devicesDAG.dispatch({
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: { code: "KeyW", key: "w", repeat: false },
         },
-      },
+      ],
     });
 
-    expect(configureResults).toHaveLength(1);
-    expect(configureResults[0]).toEqual(
-      expect.objectContaining({ path: "/main/keyboard/code/KeyW" }),
-    );
-
-    expect(
-      monitor.devicesTree.dispatch({
-        to: "/main/keyboard/code/KeyW",
-        signals: [{ type: "trigger", context: { code: "KeyW" } }],
-      }),
-    ).toEqual([
-      {
-        to: "/main/keyboard/tools/strafe/tool",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 1, y: 0 }, code: "KeyW" },
-          },
-        ],
+    expect(receivedPackets).toHaveLength(1);
+    expect(receivedPackets[0].signals).toHaveLength(1);
+    expect(receivedPackets[0].signals[0]).toMatchObject({
+      type: "position",
+      context: {
+        value: { x: 1, y: 0 },
+        code: "KeyW",
       },
-    ]);
+    });
   });
 
   test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", () => {
@@ -217,10 +196,12 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountSubTree("", createMouseDevice());
+    monitor.mountSubDAG("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary/tool",
-      tool,
+      monitorId: "main",
+      name: "primary-stroke",
+      workflow: tool,
+      edges: [{ from: "/mouse/primary", edge: "default" }],
     });
 
     board.signalsEventBus.emit("input", {
@@ -285,11 +266,13 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountSubTree("", createMouseDevice());
+    monitor.mountSubDAG("", createMouseDevice());
 
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary/tool",
-      tool,
+      monitorId: "main",
+      name: "primary-stroke",
+      workflow: tool,
+      edges: [{ from: "/mouse/primary", edge: "default" }],
     });
 
     board.signalsEventBus.emit("input", {
@@ -317,11 +300,12 @@ describe("Board input flow", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");
     const creatorTool = new StrokeCreatorTool();
+    let firstObjectId = null;
 
     // 直接用 handoff 子树，不经过 mouse device 路由
-    monitor.mountSubTree(
+    monitor.mountSubDAG(
       "",
-      createHandoffSubTree({
+      createHandoffSubDAG({
         rootPath: "workflow",
         first: creatorTool,
         second: new CommonObjectModifierTool(),
@@ -344,6 +328,7 @@ describe("Board input flow", () => {
 
     expect(creatorTool.obj).not.toBeNull();
     expect(creatorTool.obj.id).toBe(1);
+    firstObjectId = creatorTool.obj.id;
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
     expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
 
@@ -367,6 +352,107 @@ describe("Board input flow", () => {
     expect(ownerChunk.objectManager.getObject(creatorTool.obj.id)).toBe(
       creatorTool.obj,
     );
+    expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
+      phase: "first",
+      activeChild: "first",
+    });
+    expect(monitor.devicesDAG.getNode("/main/workflow/second")).not.toBeNull();
+
+    // 再次进入 creator，验证 handoff 周期可重复
+    board.signalsEventBus.emit("input", {
+      to: "/main/workflow",
+      signals: [{ type: "position", context: { value: { x: 4, y: 4 } } }],
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/workflow",
+      signals: [
+        { type: "position", context: { value: { x: 5, y: 5 } } },
+        { type: "end", context: {} },
+      ],
+    });
+
+    expect(creatorTool.obj).not.toBeNull();
+    expect(creatorTool.obj.id).not.toBe(firstObjectId);
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+    expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
+      phase: "second",
+      activeChild: "second",
+    });
+  });
+
+  test("挂载后的 RectangleObjectChooserTool 与 CommonObjectModifierTool 应可完成 chooser -> modifier -> apply 周期", () => {
+    const board = new Board();
+    const monitor = createMonitor(board, "main");
+    const chooserTool = new RectangleObjectChooserTool();
+    const targetObject = new StrokeObject(new Vector(10, 10), 41, 1);
+    targetObject.setPathPoints([
+      new Vector(0, 0),
+      new Vector(8, 0),
+      new Vector(8, 8),
+    ]);
+    board.addObject(targetObject, 1);
+
+    monitor.mountSubDAG(
+      "",
+      createHandoffSubDAG({
+        rootPath: "choose-and-modify",
+        first: chooserTool,
+        second: new CommonObjectModifierTool(),
+      }),
+    );
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/choose-and-modify",
+      signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
+    });
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/choose-and-modify",
+      signals: [
+        { type: "position", context: { value: { x: 25, y: 25 } } },
+        { type: "end", context: {} },
+      ],
+    });
+
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+    expect(
+      board.activeObjectManager.activeObjectIndex.has(targetObject.id),
+    ).toBe(true);
+    expect(monitor.devicesDAG.getNodeState("/main/choose-and-modify")).toEqual({
+      phase: "second",
+      activeChild: "second",
+    });
+    expect(
+      monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
+    ).toEqual(
+      expect.objectContaining({
+        objects: [targetObject],
+      }),
+    );
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/choose-and-modify",
+      signals: [{ type: "displacement", context: { value: { x: 4, y: -2 } } }],
+    });
+
+    expect(targetObject.position.serialize()).toEqual({ x: 14, y: 8 });
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+
+    board.signalsEventBus.emit("input", {
+      to: "/main/choose-and-modify",
+      signals: [{ type: "success", context: {} }],
+    });
+
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(board.getObjectById(targetObject.id)).toBe(targetObject);
+    expect(monitor.devicesDAG.getNodeState("/main/choose-and-modify")).toEqual({
+      phase: "first",
+      activeChild: "first",
+    });
+    expect(
+      monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
+    ).toEqual({});
   });
 
   test("挂载后的 PolygonCreatorTool 应可经由输入链路完成 object-end 提交", () => {
@@ -376,10 +462,12 @@ describe("Board input flow", () => {
     monitor.origin = new Vector(100, 50);
     monitor.zoom = 2;
 
-    monitor.mountSubTree("", createMouseDevice());
+    monitor.mountSubDAG("", createMouseDevice());
     board.signalsEventBus.emit("mount", {
-      to: "/main/mouse/primary/tool",
-      tool,
+      monitorId: "main",
+      name: "primary-polygon",
+      workflow: tool,
+      edges: [{ from: "/mouse/primary", edge: "default" }],
     });
 
     board.signalsEventBus.emit("input", {

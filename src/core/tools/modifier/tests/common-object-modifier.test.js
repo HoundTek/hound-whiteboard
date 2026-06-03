@@ -124,7 +124,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
         apply: jest.fn(),
       },
     };
-    const tree = {
+    const mockDag = {
       unmount: jest.fn(),
     };
     let nodeState = { object };
@@ -135,24 +135,34 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
       },
-      { object, board, tree, path: "/monitor/mouse/primary/tool/tool" },
+      {
+        object,
+        board,
+        dag: mockDag,
+        path: "/monitor/mouse/primary/tool/tool",
+      },
     );
     tool.process(
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 1 } } }],
       },
-      { object, board, tree, path: "/monitor/mouse/primary/tool/tool" },
+      {
+        object,
+        board,
+        dag: mockDag,
+        path: "/monitor/mouse/primary/tool/tool",
+      },
     );
 
     // success 信号
-    tool.process(
+    const result = tool.process(
       {
         signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
       },
       {
         object,
         board,
-        tree,
+        dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
         getNodeState() {
           return nodeState;
@@ -164,11 +174,12 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       },
     );
 
+    expect(result).toBeUndefined();
     expect(object.position).toEqual(new Vector(10, 6));
     expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
       new Set([object]),
     );
-    expect(tree.unmount).toHaveBeenCalledWith(
+    expect(mockDag.unmount).toHaveBeenCalledWith(
       "/monitor/mouse/primary/tool/tool",
     );
     expect(nodeState.object).toBeUndefined();
