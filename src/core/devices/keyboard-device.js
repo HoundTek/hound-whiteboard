@@ -7,7 +7,7 @@
 
 import { createSubDAG } from "../devices-dag/index.js";
 import { SignalPacket } from "../devices-dag/signal.js";
-import { joinPath } from "../utils/path.js";
+import { DEVICE_DEFAULT_ROUTE } from "./index.js";
 
 const KEYBOARD_DEVICE_SIGNAL_TYPES = {
   TRIGGER: "trigger",
@@ -17,17 +17,10 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
 
 /**
  * 创建一张键盘设备子图
- * @param {{
- *   eventProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   keydownProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   keyupProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   repeatProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   cancelProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   nodeConfigs?: Record<string, {
- *     handler?: import("../devices-dag/index.js").DevicesDAGHandler,
- *     defaultChild?: string,
- *   }>,
- * }} [options={}] - 键盘设备选项
+ * @description
+ * 仅按活跃键位列表预创建 code 节点；所有 code 节点的 defaultRoute 统一为 "default"。
+ * 不再接受 processor / nodeConfigs 等定制参数——设备只负责信号产出，路由由外部通过边级 prefix 完成。
+ * @param {string[]} [activeCodes=[]] - 需要预创建节点的键位编码列表
  * @returns {import("../devices-dag/index.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
@@ -53,14 +46,9 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
  *   },
  * }}
  */
-function createKeyboardDevice(options = {}) {
+function createKeyboardDevice(activeCodes = []) {
   const activeKeys = new Map();
   let lastEvent = null;
-
-  const rawNodeConfigs =
-    options.nodeConfigs && typeof options.nodeConfigs === "object"
-      ? options.nodeConfigs
-      : {};
 
   /**
    * 将原始键位编码规整为字符串或 null
@@ -76,16 +64,6 @@ function createKeyboardDevice(options = {}) {
    * @returns {string}
    */
   const encodeKeyPathSegment = (code) => encodeURIComponent(String(code));
-
-  /**
-   * 规整设备内部节点路径 key
-   * @param {string} nodePath - 原始节点路径
-   * @returns {string}
-   */
-  const normalizeNodePathKey = (nodePath = "") => {
-    if (!nodePath || nodePath === "/") return "";
-    return joinPath(nodePath).slice(1);
-  };
 
   /**
    * 将原始键盘信号改写为工具消费信号
@@ -325,98 +303,26 @@ function createKeyboardDevice(options = {}) {
   const builder = createSubDAG("/keyboard");
   const root = builder.node().handler(rootHandler);
 
-  const eventNode = builder
-    .node()
-    .handler(
-      typeof options.eventProcessor === "function"
-        ? options.eventProcessor
-        : null,
-    );
-  const keydownNode = builder
-    .node()
-    .handler(
-      typeof options.keydownProcessor === "function"
-        ? options.keydownProcessor
-        : null,
-    );
-  const keyupNode = builder
-    .node()
-    .handler(
-      typeof options.keyupProcessor === "function"
-        ? options.keyupProcessor
-        : null,
-    );
-  const repeatNode = builder
-    .node()
-    .handler(
-      typeof options.repeatProcessor === "function"
-        ? options.repeatProcessor
-        : null,
-    );
-  const cancelNode = builder
-    .node()
-    .handler(
-      typeof options.cancelProcessor === "function"
-        ? options.cancelProcessor
-        : null,
-    );
-  const toolsNode = builder.node();
+  const eventNode = builder.node();
+  const keydownNode = builder.node();
+  const keyupNode = builder.node();
+  const repeatNode = builder.node();
+  const cancelNode = builder.node();
 
   builder.edge("event", root, eventNode);
   builder.edge("keydown", root, keydownNode);
   builder.edge("keyup", root, keyupNode);
   builder.edge("repeat", root, repeatNode);
   builder.edge("cancel", root, cancelNode);
-  builder.edge("tools", root, toolsNode);
 
-  const routeNodes = new Map([
-    ["", root],
-    ["event", eventNode],
-    ["keydown", keydownNode],
-    ["keyup", keyupNode],
-    ["repeat", repeatNode],
-    ["cancel", cancelNode],
-    ["tools", toolsNode],
-  ]);
+  // 预创建 code 节点，统一 defaultRoute = "default"
+  const codeRoot = builder.node();
+  builder.edge("code", root, codeRoot);
 
-  const ensureConfigNode = (nodePathKey) => {
-    const normalizedKey = normalizeNodePathKey(nodePathKey);
-    if (!normalizedKey) return root;
-    if (routeNodes.has(normalizedKey)) {
-      return routeNodes.get(normalizedKey);
-    }
-
-    const segments = normalizedKey.split("/").filter(Boolean);
-    let currentKey = "";
-    let currentNode = root;
-
-    for (const segment of segments) {
-      const nextKey = currentKey ? `${currentKey}/${segment}` : segment;
-      let nextNode = routeNodes.get(nextKey);
-
-      if (!nextNode) {
-        nextNode = builder.node();
-        routeNodes.set(nextKey, nextNode);
-        builder.edge(segment, currentNode, nextNode);
-      }
-
-      currentKey = nextKey;
-      currentNode = nextNode;
-    }
-
-    return currentNode;
-  };
-
-  // 动态节点（来自 rawNodeConfigs）
-  const configNodes = new Map();
-  for (const [nodePath, config] of Object.entries(rawNodeConfigs)) {
-    const normalizedKey = normalizeNodePathKey(nodePath);
-    const cfgNode = ensureConfigNode(normalizedKey)
-      .handler(typeof config?.handler === "function" ? config.handler : null)
-      .defaultRoute(
-        typeof config?.defaultChild === "string" ? config.defaultChild : "",
-      );
-    configNodes.set(normalizedKey, cfgNode);
+  for (const code of activeCodes) {
+    const segment = encodeKeyPathSegment(String(code));
+    const codeNode = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+    builder.edge(segment, codeRoot, codeNode);
   }
 
   return builder

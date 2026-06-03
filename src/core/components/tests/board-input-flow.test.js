@@ -1,7 +1,7 @@
 import { Board } from "../board.js";
 import { Monitor } from "../monitor.js";
 import { createSubDAG } from "../../devices-dag/index.js";
-import { createHandoffSubDAG } from "../../prefixs/handoff-handler.js";
+import { createEdgePrefix, createHandoffSubDAG } from "../../prefixs/index.js";
 import { Vector } from "../../utils/math.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { PolygonCreatorTool } from "../../tools/creator/polygon-creator.js";
@@ -127,89 +127,66 @@ describe("Board input flow", () => {
     ).toBeUndefined();
   });
 
-  test("configure 事件应在运行时更新设备节点配置", () => {
+  test("mount 事件应支持 edge.prefix 在设备节点与 workflow 之间注入边级 prefix 链", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");
-    const keyboardDevice = createKeyboardDevice({
-      nodeConfigs: {
-        "/code/KeyW": {
-          handler(packet) {
-            const signals = packet.signals
-              .filter(
-                (signal) =>
-                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-              )
-              .map(() => ({
-                type: "position",
-                context: { value: { x: 0, y: -1 }, code: "KeyW" },
-              }));
-
-            return signals.length === 0 ? [] : { to: "move/tool", signals };
-          },
-        },
-      },
-    });
+    const keyboardDevice = createKeyboardDevice(["KeyW"]);
 
     monitor.mountSubDAG("", keyboardDevice);
-    monitor.devicesDAG.mount(
-      "/main/keyboard/code/KeyW/move/tool",
-      (packet) => ({
-        to: "",
-        signals: packet.signals,
-      }),
-    );
-    monitor.devicesDAG.mount(
-      "/main/keyboard/code/KeyW/strafe/tool",
-      (packet) => ({
-        to: "",
-        signals: packet.signals,
-      }),
-    );
 
-    const configureResults = board.signalsEventBus.emit("configure", {
-      to: "/main/keyboard/code/KeyW",
-      options: {
-        handler(packet) {
-          const signals = packet.signals
-            .filter(
-              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-            )
-            .map(() => ({
-              type: "position",
-              context: { value: { x: 1, y: 0 }, code: "KeyW" },
-            }));
-
-          return signals.length === 0 ? [] : { to: "strafe/tool", signals };
-        },
+    const receivedPackets = [];
+    const workflow = {
+      createProcessor: () => (packet) => {
+        receivedPackets.push({ to: packet.to, signals: packet.signals });
+        return [];
       },
+    };
+
+    board.signalsEventBus.emit("mount", {
+      monitorId: "main",
+      name: "strafe-workflow",
+      workflow,
+      edges: [
+        {
+          from: "/keyboard/code/KeyW",
+          edge: "default",
+          prefix: createEdgePrefix({
+            handler(packet) {
+              const signals = packet.signals
+                .filter(
+                  (signal) =>
+                    signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+                )
+                .map(() => ({
+                  type: "position",
+                  context: { value: { x: 1, y: 0 }, code: "KeyW" },
+                }));
+              return signals.length === 0 ? [] : { signals };
+            },
+          }),
+        },
+      ],
     });
 
-    expect(configureResults).toHaveLength(1);
-    expect(configureResults[0]).toEqual(
-      expect.objectContaining({ path: "/main/keyboard/code/KeyW" }),
-    );
+    monitor.devicesDAG.dispatch({
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: { code: "KeyW", key: "w", repeat: false },
+        },
+      ],
+    });
 
-    expect(
-      monitor.devicesDAG
-        .dispatch({
-          to: "/main/keyboard",
-          signals: [
-            {
-              type: "keydown",
-              context: { code: "KeyW", key: "w", repeat: false },
-            },
-          ],
-        })
-        .packets.map((packet) => ({ to: packet.to, signals: packet.signals }))
-        .some(
-          (packet) =>
-            packet.signals.length === 1 &&
-            packet.signals[0].type === "position" &&
-            packet.signals[0].context?.code === "KeyW" &&
-            packet.signals[0].context?.value?.x === 1 &&
-            packet.signals[0].context?.value?.y === 0,
-        ),
-    ).toBe(true);
+    expect(receivedPackets).toHaveLength(1);
+    expect(receivedPackets[0].signals).toHaveLength(1);
+    expect(receivedPackets[0].signals[0]).toMatchObject({
+      type: "position",
+      context: {
+        value: { x: 1, y: 0 },
+        code: "KeyW",
+      },
+    });
   });
 
   test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", () => {
@@ -224,7 +201,7 @@ describe("Board input flow", () => {
       monitorId: "main",
       name: "primary-stroke",
       workflow: tool,
-      edges: [{ from: "/mouse/primary", edge: "tool" }],
+      edges: [{ from: "/mouse/primary", edge: "default" }],
     });
 
     board.signalsEventBus.emit("input", {
@@ -295,7 +272,7 @@ describe("Board input flow", () => {
       monitorId: "main",
       name: "primary-stroke",
       workflow: tool,
-      edges: [{ from: "/mouse/primary", edge: "tool" }],
+      edges: [{ from: "/mouse/primary", edge: "default" }],
     });
 
     board.signalsEventBus.emit("input", {
@@ -490,7 +467,7 @@ describe("Board input flow", () => {
       monitorId: "main",
       name: "primary-polygon",
       workflow: tool,
-      edges: [{ from: "/mouse/primary", edge: "tool" }],
+      edges: [{ from: "/mouse/primary", edge: "default" }],
     });
 
     board.signalsEventBus.emit("input", {

@@ -1,35 +1,57 @@
-import { DevicesDAG } from "../../devices-dag/index.js";
+import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import { createMouseDevice } from "../mouse-device.js";
+import { createEdgePrefix } from "../../prefixs/index.js";
 import { Tool } from "../../tools/tool.js";
 
+/**
+ * 创建通道报告 prefix handler — 拦截信号并报告通道名
+ * @param {string} channel
+ * @returns {{ handler: Function }}
+ */
 function createChannelReporter(channel) {
-  return (packet) => ({
-    stop: true,
-    packets: [
-      {
-        to: "",
-        signals: [
+  return {
+    handler(packet) {
+      return {
+        stop: true,
+        packets: [
           {
-            type: `${channel}-routed`,
-            context: {
-              channel,
-              signals: packet.signals,
-            },
+            to: "",
+            signals: [
+              {
+                type: `${channel}-routed`,
+                context: {
+                  channel,
+                  signals: packet.signals,
+                },
+              },
+            ],
           },
         ],
-      },
-    ],
-  });
+      };
+    },
+  };
 }
 
-function createChannelReportingMouseDevice() {
-  return createMouseDevice({
-    pointerProcessor: createChannelReporter("pointer"),
-    primaryProcessor: createChannelReporter("primary"),
-    secondaryProcessor: createChannelReporter("secondary"),
-    auxiliaryProcessor: createChannelReporter("auxiliary"),
-    wheelProcessor: createChannelReporter("wheel"),
-  });
+/**
+ * 在所有鼠标通道节点上挂载报告 prefix（替代旧 processor options）
+ * @param {DevicesDAG} dag
+ * @param {string} mouseBasePath
+ */
+function mountChannelReporters(dag, mouseBasePath) {
+  for (const channel of [
+    "pointer",
+    "primary",
+    "secondary",
+    "auxiliary",
+    "wheel",
+  ]) {
+    const prefix = createEdgePrefix(createChannelReporter(channel));
+    dag.mountSubDAG(
+      `${mouseBasePath}/${channel}`,
+      { ...prefix, rootPath: "/default" },
+      {},
+    );
+  }
 }
 
 function toPlainPackets(packets) {
@@ -42,9 +64,11 @@ function toPlainPackets(packets) {
 describe("mouse-device", () => {
   test("普通移动应路由到 pointer 节点", () => {
     const dag = new DevicesDAG();
-    const mouseDevice = createChannelReportingMouseDevice();
+    const mouseDevice = createMouseDevice();
 
     const mountedNodes = dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
+
     const result = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -95,9 +119,10 @@ describe("mouse-device", () => {
 
   test("左键与右键可同时激活，并聚合路由到多个按钮节点", () => {
     const dag = new DevicesDAG();
-    const mouseDevice = createChannelReportingMouseDevice();
+    const mouseDevice = createMouseDevice();
 
     dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
 
     const result = dag.dispatch({
       to: "/monitor/mouse",
@@ -128,9 +153,11 @@ describe("mouse-device", () => {
 
   test("按住主键时滚轮事件应同时路由到 primary 和 wheel 节点", () => {
     const dag = new DevicesDAG();
-    const mouseDevice = createChannelReportingMouseDevice();
+    const mouseDevice = createMouseDevice();
 
     dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
+
     dag.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -180,9 +207,11 @@ describe("mouse-device", () => {
 
   test("主键抬起时应继续把结束包路由到 primary，同时保留其它激活键", () => {
     const dag = new DevicesDAG();
-    const mouseDevice = createChannelReportingMouseDevice();
+    const mouseDevice = createMouseDevice();
 
     dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
+
     dag.dispatch({
       to: "/monitor/mouse",
       signals: [
@@ -256,17 +285,29 @@ describe("mouse-device", () => {
       "/monitor/workflows/pointer-handled",
       new MappingTool("pointer-handled"),
     );
-    dag.addEdge("/monitor/mouse/pointer", "tool", "/monitor/workflows/pointer-handled");
+    dag.addEdge(
+      "/monitor/mouse/pointer",
+      "default",
+      "/monitor/workflows/pointer-handled",
+    );
     dag.mountWorkflow(
       "/monitor/workflows/primary-handled",
       new MappingTool("primary-handled"),
     );
-    dag.addEdge("/monitor/mouse/primary", "tool", "/monitor/workflows/primary-handled");
+    dag.addEdge(
+      "/monitor/mouse/primary",
+      "default",
+      "/monitor/workflows/primary-handled",
+    );
     dag.mountWorkflow(
       "/monitor/workflows/wheel-handled",
       new MappingTool("wheel-handled"),
     );
-    dag.addEdge("/monitor/mouse/wheel", "tool", "/monitor/workflows/wheel-handled");
+    dag.addEdge(
+      "/monitor/mouse/wheel",
+      "default",
+      "/monitor/workflows/wheel-handled",
+    );
 
     expect(
       toPlainPackets(

@@ -7,16 +7,13 @@
 
 import { createSubDAG } from "../devices-dag/index.js";
 import { SignalPacket } from "../devices-dag/signal.js";
+import { DEVICE_DEFAULT_ROUTE } from "./index.js";
 
 /**
  * 创建一张鼠标设备子图
- * @param {{
- *   pointerProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   primaryProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   secondaryProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   auxiliaryProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- *   wheelProcessor?: import("../devices-dag/index.js").DevicesDAGHandler,
- * }} [options={}] - 鼠标设备选项
+ * @description
+ * 五个通道路由节点（pointer / primary / secondary / auxiliary / wheel）
+ * 均只设 defaultRoute = "default"，不再接受外部 processor 定制。
  * @returns {import("../devices-dag/index.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
@@ -26,7 +23,7 @@ import { SignalPacket } from "../devices-dag/signal.js";
  *   },
  * }}
  */
-function createMouseDevice(options = {}) {
+function createMouseDevice() {
   let activeButtons = {
     primary: false,
     secondary: false,
@@ -202,26 +199,16 @@ function createMouseDevice(options = {}) {
 
   /**
    * 解析显式指定的下行目标，保留调用方已经选定的子路径。
-   * @param {SignalPacket} packet - 当前信号包
-   * @param {{ path?: string }} [context={}] - 节点上下文
+   * @param {SignalPacket} packet
+   * @param {{ path?: string }} [ctx={}]
    * @returns {string}
    */
-  const resolveExplicitDescendantPath = (packet, context = {}) => {
+  const resolveExplicitDescendantPath = (packet, ctx = {}) => {
     const packetTo = typeof packet?.to === "string" ? packet.to : "";
-    const currentPath = typeof context?.path === "string" ? context.path : "";
-
-    if (!packetTo) {
-      return "";
-    }
-
-    if (!packetTo.startsWith("/")) {
-      return packetTo;
-    }
-
-    if (!currentPath || packetTo === currentPath) {
-      return "";
-    }
-
+    const currentPath = typeof ctx?.path === "string" ? ctx.path : "";
+    if (!packetTo) return "";
+    if (!packetTo.startsWith("/")) return packetTo;
+    if (!currentPath || packetTo === currentPath) return "";
     const prefix = `${currentPath}/`;
     return packetTo.startsWith(prefix) ? packetTo.slice(prefix.length) : "";
   };
@@ -229,6 +216,7 @@ function createMouseDevice(options = {}) {
   /**
    * 根节点处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {Object} [context={}] - handler context
    * @returns {Array<SignalPacket|Object>}
    */
   const rootHandler = (signalPacket, context = {}) => {
@@ -241,7 +229,6 @@ function createMouseDevice(options = {}) {
       packet,
       context,
     );
-
     if (
       explicitDescendantPath &&
       !nextPackets.some((entry) => entry.to === explicitDescendantPath)
@@ -251,56 +238,17 @@ function createMouseDevice(options = {}) {
         signals: packet.signals,
       });
     }
-
     return nextPackets;
-  };
-
-  const channelProcessors = {
-    pointer:
-      typeof options.pointerProcessor === "function"
-        ? options.pointerProcessor
-        : null,
-    primary:
-      typeof options.primaryProcessor === "function"
-        ? options.primaryProcessor
-        : null,
-    secondary:
-      typeof options.secondaryProcessor === "function"
-        ? options.secondaryProcessor
-        : null,
-    auxiliary:
-      typeof options.auxiliaryProcessor === "function"
-        ? options.auxiliaryProcessor
-        : null,
-    wheel:
-      typeof options.wheelProcessor === "function"
-        ? options.wheelProcessor
-        : null,
   };
 
   const builder = createSubDAG("/mouse");
   const root = builder.node().handler(rootHandler);
 
-  const pointer = builder
-    .node()
-    .handler(channelProcessors.pointer)
-    .defaultRoute("tool");
-  const primary = builder
-    .node()
-    .handler(channelProcessors.primary)
-    .defaultRoute("tool");
-  const secondary = builder
-    .node()
-    .handler(channelProcessors.secondary)
-    .defaultRoute("tool");
-  const auxiliary = builder
-    .node()
-    .handler(channelProcessors.auxiliary)
-    .defaultRoute("tool");
-  const wheel = builder
-    .node()
-    .handler(channelProcessors.wheel)
-    .defaultRoute("tool");
+  const pointer = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const primary = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const secondary = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const auxiliary = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const wheel = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
 
   builder.edge("pointer", root, pointer);
   builder.edge("primary", root, primary);

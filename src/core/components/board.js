@@ -614,8 +614,42 @@ class Board {
           },
         );
 
-        for (const { from, edge } of edges) {
-          this.devicesDAG.addEdge(`/${monitorId}${from}`, edge, workflowPath);
+        /**
+         * 在已挂载的单源单汇子图中找到汇节点
+         * @description
+         * 汇节点 = 无出边（或所有出边均不指向同批挂载的其他节点）。
+         * 对单节点 prefix，根节点即汇节点。
+         * @param {import("../devices-dag/dag-node-edge.js").DevicesDAGNode[]} mountedNodes
+         * @returns {import("../devices-dag/dag-node-edge.js").DevicesDAGNode|undefined}
+         */
+        const findPrefixSink = (mountedNodes = []) => {
+          if (mountedNodes.length === 1) return mountedNodes[0];
+          return mountedNodes.find((n) => {
+            for (const outEdge of n.outEdges.values()) {
+              if (mountedNodes.includes(outEdge.target)) return false;
+            }
+            return true;
+          });
+        };
+
+        for (const { from, edge, prefix } of edges) {
+          const sourcePath = `/${monitorId}${from}`;
+
+          if (prefix) {
+            // 将 prefix 子图挂到 sourcePath 下，用 edge 名作为路径段
+            const prefixSubDAG = { ...prefix, rootPath: `/${edge}` };
+            const prefixNodes = this.devicesDAG.mountSubDAG(
+              sourcePath,
+              prefixSubDAG,
+              { board: this, monitor },
+            );
+            const sinkNode = findPrefixSink(prefixNodes);
+            if (sinkNode?.path) {
+              this.devicesDAG.addEdge(sinkNode.path, edge, workflowPath);
+            }
+          } else {
+            this.devicesDAG.addEdge(sourcePath, edge, workflowPath);
+          }
         }
 
         return mountedNode;
@@ -640,13 +674,6 @@ class Board {
         });
       },
     );
-    // configure 事件负责更新设备图节点配置
-    this.signalsEventBus.on("configure", ({ to, options }) => {
-      const monitorId = to?.split("/")[1];
-      const monitor = this.monitors.get(monitorId);
-      if (!monitor) return false;
-      return this.devicesDAG.configureNode(to, options ?? {});
-    });
   }
 
   /**

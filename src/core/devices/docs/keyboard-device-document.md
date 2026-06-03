@@ -16,7 +16,6 @@
 - `/keyboard/keyup`：接收 `keyup` 或 `end`
 - `/keyboard/repeat`：接收 repeat `keydown`
 - `/keyboard/cancel`：接收 `cancel`
-- `/keyboard/tools`：仍保留的公共工具域
 - `/keyboard/code/<KeyCode>`：按具体 code 分出来的键位节点
 
 workflow 节点统一挂载到 `/<monitorId>/workflows/` 下，通过有向边与键位节点连接：

@@ -1,4 +1,5 @@
 import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
+import { createEdgePrefix } from "../../prefixs/index.js";
 import {
   createKeyboardDevice,
   KEYBOARD_DEVICE_SIGNAL_TYPES,
@@ -15,31 +16,29 @@ function toPlainPackets(packets) {
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
     const dag = new DevicesDAG();
-    const keyboardDevice = createKeyboardDevice({
-      nodeConfigs: {
-        "/code/Space": {
-          handler(packet) {
-            const triggerSignals = packet.signals.filter(
-              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-            );
-
-            return triggerSignals.length === 0
-              ? []
-              : {
-                  to: "tool",
-                  signals: triggerSignals,
-                };
-          },
-        },
-      },
-    });
+    const keyboardDevice = createKeyboardDevice(["Space"]);
     const tool = new CollectingTool();
 
     const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
     dag.mountWorkflow("/monitor/workflows/space-tool", tool);
-    dag.addEdge(
+
+    // 用边级 prefix 替代旧 nodeConfigs handler
+    const prefix = createEdgePrefix({
+      handler(packet) {
+        const triggerSignals = packet.signals.filter(
+          (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        );
+        return triggerSignals.length === 0 ? [] : { signals: triggerSignals };
+      },
+    });
+    const prefixNodes = dag.mountSubDAG(
       "/monitor/keyboard/code/Space",
-      "tool",
+      { ...prefix, rootPath: "/default" },
+      {},
+    );
+    dag.addEdge(
+      prefixNodes[0].path,
+      "default",
       "/monitor/workflows/space-tool",
     );
 
@@ -50,7 +49,6 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/keyup",
       "/monitor/keyboard/repeat",
       "/monitor/keyboard/cancel",
-      "/monitor/keyboard/tools",
       "/monitor/keyboard/code",
       "/monitor/keyboard/code/Space",
     ]);
@@ -137,7 +135,7 @@ describe("keyboard-device", () => {
     expect(tool.calls).toHaveLength(1);
     expect(tool.calls[0]).toEqual({
       signalPacket: {
-        to: "tool",
+        to: "",
         signals: [
           {
             type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
@@ -155,7 +153,7 @@ describe("keyboard-device", () => {
         ],
       },
       deviceContext: expect.objectContaining({
-        path: "/monitor/keyboard/code/Space/tool",
+        path: "/monitor/keyboard/code/Space/default/default",
       }),
     });
   });
@@ -278,61 +276,49 @@ describe("keyboard-device", () => {
 
   test("可在按键节点把信号改写为 position 并汇流到公共工具节点", () => {
     const dag = new DevicesDAG();
-    const keyboardDevice = createKeyboardDevice({
-      nodeConfigs: {
-        "/code/KeyW": {
-          handler(packet) {
-            const signals = packet.signals
-              .filter(
-                (signal) =>
-                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-              )
-              .map((signal) => ({
-                type: "position",
-                context: {
-                  value: { x: 0, y: -1 },
-                  code: "KeyW",
-                  sourceType: signal.type,
-                },
-              }));
-            return signals.length === 0 ? [] : { to: "tool", signals };
-          },
-        },
-        "/code/KeyD": {
-          handler(packet) {
-            const signals = packet.signals
-              .filter(
-                (signal) =>
-                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-              )
-              .map((signal) => ({
-                type: "position",
-                context: {
-                  value: { x: 1, y: 0 },
-                  code: "KeyD",
-                  sourceType: signal.type,
-                },
-              }));
-            return signals.length === 0 ? [] : { to: "tool", signals };
-          },
-        },
-      },
-    });
-
+    const keyboardDevice = createKeyboardDevice(["KeyW", "KeyD"]);
     const tool = new CollectingTool();
 
     const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
     dag.mountWorkflow("/monitor/workflows/move-tool", tool);
-    dag.addEdge(
-      "/monitor/keyboard/code/KeyW",
-      "tool",
-      "/monitor/workflows/move-tool",
-    );
-    dag.addEdge(
-      "/monitor/keyboard/code/KeyD",
-      "tool",
-      "/monitor/workflows/move-tool",
-    );
+
+    // 用边级 prefix 替代旧 nodeConfigs handler
+    const wasdPrefix = (code, vector) =>
+      createEdgePrefix({
+        handler(packet) {
+          const signals = packet.signals
+            .filter(
+              (signal) =>
+                signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+            )
+            .map((signal) => ({
+              type: "position",
+              context: {
+                value: { ...vector },
+                code,
+                sourceType: signal.type,
+              },
+            }));
+          return signals.length === 0 ? [] : { signals };
+        },
+      });
+
+    for (const [code, vector] of [
+      ["KeyW", { x: 0, y: -1 }],
+      ["KeyD", { x: 1, y: 0 }],
+    ]) {
+      const prefix = wasdPrefix(code, vector);
+      const prefixNodes = dag.mountSubDAG(
+        `/monitor/keyboard/code/${code}`,
+        { ...prefix, rootPath: "/default" },
+        {},
+      );
+      dag.addEdge(
+        prefixNodes[0].path,
+        "default",
+        "/monitor/workflows/move-tool",
+      );
+    }
 
     expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
       "/monitor/keyboard",
@@ -341,7 +327,6 @@ describe("keyboard-device", () => {
       "/monitor/keyboard/keyup",
       "/monitor/keyboard/repeat",
       "/monitor/keyboard/cancel",
-      "/monitor/keyboard/tools",
       "/monitor/keyboard/code",
       "/monitor/keyboard/code/KeyW",
       "/monitor/keyboard/code/KeyD",
@@ -392,7 +377,7 @@ describe("keyboard-device", () => {
 
     expect(tool.calls).toHaveLength(2);
     expect(tool.calls[0].signalPacket).toEqual({
-      to: "tool",
+      to: "",
       signals: [
         {
           type: "position",
@@ -405,7 +390,7 @@ describe("keyboard-device", () => {
       ],
     });
     expect(tool.calls[1].signalPacket).toEqual({
-      to: "tool",
+      to: "",
       signals: [
         {
           type: "position",
