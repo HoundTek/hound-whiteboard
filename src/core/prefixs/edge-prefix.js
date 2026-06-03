@@ -19,8 +19,58 @@ import { createSubDAG } from "../devices-dag/index.js";
  * @param {Function|{ handler: Function }} handlerOrConfig - 处理器函数，或 { handler } 对象
  * @param {{ semantics?: Object }} [options={}] - 附加配置
  * @returns {import("../devices-dag/dag.js").SubDAGDefinition}
+ * @example
+ * // 在 keyboardDevice 定义中使用边级 prefix 转换信号
+ * const keyboardDevice = createKeyboardDevice();
+ * const prefix = createEdgePrefix({
+ *   handler(packet) {
+ *     const triggerSignals = packet.signals.filter(
+ *       (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+ *     );
+ *     if (triggerSignals.length > 0) {
+ *       return {
+ *         signals: triggerSignals.map((signal) => ({
+ *           type: "position",
+ *           context: { value: mapKeyToPosition(signal.value) },
+ *         })),
+ *       };
+ *     }
+ *     return null;
+ *   },
+ * });
+ *
+ * // 挂载时作为 edge.prefix 插入设备节点与 workflow 之间
+ * dag.mountSubDAG("/monitor", keyboardDevice, {
+ *   workflows: {
+ *     "/space-tool": { edge: { prefix } },
+ *   },
+ * });
+ *
+ * // 在 workflow 定义中使用边级 prefix 转换信号
+ * const prefix = createEdgePrefix({
+ *   handler(packet) {
+ *     const positionSig = packet.signals.find((s) => s?.type === "position");
+ *     if (positionSig) {
+ *       const { value } = positionSig.context ?? {};
+ *       return {
+ *         signals: [
+ *           {
+ *             type: "displacement",
+ *             context: { value: mapPositionToDisplacement(value) },
+ *           },
+ *         ],
+ *       };
+ *     }
+ *     return null;
+ *   },
+ * });
+ *
+ * // 挂载时作为 edge.prefix 插入 workflow 之间
+ * dag.mountWorkflow("/monitor/workflows/space-tool", tool, {
+ *   edge: { prefix },
+ * });
  */
-export function createEdgePrefix(handlerOrConfig, options = {}) {
+function createEdgePrefix(handlerOrConfig, options = {}) {
   const handlerFn =
     typeof handlerOrConfig === "function"
       ? handlerOrConfig
@@ -43,3 +93,5 @@ export function createEdgePrefix(handlerOrConfig, options = {}) {
     });
   return builder.build();
 }
+
+export { createEdgePrefix };

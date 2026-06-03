@@ -13,10 +13,10 @@ import { Tool } from "../tools/tool.js";
  * @class
  * @extends Tool
  * @example
- *   const tool = new CollectingTool();
- *   // 挂载后：
- *   expect(tool.calls).toHaveLength(1);
- *   expect(tool.calls[0].signalPacket.signals).toEqual([...]);
+ * const tool = new CollectingTool();
+ * // 挂载后：
+ * expect(tool.calls).toHaveLength(1);
+ * expect(tool.calls[0].signalPacket.signals).toEqual([...]);
  */
 class CollectingTool extends Tool {
   calls = [];
@@ -78,4 +78,9 @@ function createMockModifier(onProcess) {
   })();
 }
 
-export { CollectingTool, createMockCreator, createMockChooser, createMockModifier };
+export {
+  CollectingTool,
+  createMockCreator,
+  createMockChooser,
+  createMockModifier,
+};

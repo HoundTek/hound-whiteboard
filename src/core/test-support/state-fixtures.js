@@ -13,9 +13,9 @@
  * @returns {{ getState: () => Object, setState: (path: string, nextState: Object) => Object }}
  *
  * @example
- *   const { getState, setState } = createStateAccess({ count: 0 });
- *   setState("/node", { count: 1 });
- *   expect(getState()).toEqual({ count: 1 });
+ * const { getState, setState } = createStateAccess({ count: 0 });
+ * setState("/node", { count: 1 });
+ * expect(getState()).toEqual({ count: 1 });
  */
 function createStateAccess(initialState = {}) {
   let state = { ...initialState };
