@@ -278,7 +278,7 @@ class Monitor {
 
   /**
    * 当前白板级唯一设备图
-   * @type {import("../devices-dag/index.js").DevicesDAG}
+   * @type {import("../devices-dag/dag.js").DevicesDAG}
    */
   get devicesDAG() {
     return this.board?.devicesDAG;
@@ -884,7 +884,7 @@ class Monitor {
   /**
    * 挂载子图到白板级设备图
    * @param {string} path - 子图根路径（相对于显示器根）
-   * @param {import("../devices-dag/index.js").SubDAGDefinition} subDAGDefinition - 子图定义
+   * @param {import("../devices-dag/dag.js").SubDAGDefinition} subDAGDefinition - 子图定义
    */
   mountSubDAG(path, subDAGDefinition) {
     return this.devicesDAG.mountSubDAG(this.monitorId, {
@@ -896,7 +896,7 @@ class Monitor {
   /**
    * 在白板级设备图中运行时挂载 workflow。
    * @param {string} path - workflow 路径（相对于显示器根）
-    * @param {import("../tools/tool.js").Tool|import("../devices-dag/index.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
+    * @param {import("../tools/tool.js").Tool|import("../devices-dag/dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
    */
   mountWorkflow(path, workflow) {
     return this.devicesDAG.mountWorkflow(joinPath(this.monitorId, path), workflow, {
@@ -922,7 +922,7 @@ class Monitor {
    * @param {string} fromPath - 源节点路径（相对于显示器根）
    * @param {string} edgeName - 边名
    * @param {string} toPath - 目标节点路径（相对于显示器根）
-   * @returns {import("../devices-dag/index.js").DevicesDAGEdge}
+   * @returns {import("../devices-dag/dag.js").DevicesDAGEdge}
    */
   addEdge(fromPath, edgeName, toPath) {
     return this.devicesDAG.addEdge(

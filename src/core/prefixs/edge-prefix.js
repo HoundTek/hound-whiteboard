@@ -18,7 +18,7 @@ import { createSubDAG } from "../devices-dag/index.js";
  * 对途经信号做转换、过滤或路由。
  * @param {Function|{ handler: Function }} handlerOrConfig - 处理器函数，或 { handler } 对象
  * @param {{ semantics?: Object }} [options={}] - 附加配置
- * @returns {import("../devices-dag/index.js").SubDAGDefinition}
+ * @returns {import("../devices-dag/dag.js").SubDAGDefinition}
  */
 export function createEdgePrefix(handlerOrConfig, options = {}) {
   const handlerFn =

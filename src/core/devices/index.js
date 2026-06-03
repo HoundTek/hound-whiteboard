@@ -21,5 +21,4 @@ export {
   createTouchscreenDevice,
   TOUCHSCREEN_DEVICE_SIGNAL_TYPES,
 } from "./touchscreen-device.js";
-const DEVICE_DEFAULT_ROUTE = "default";
-export { DEVICE_DEFAULT_ROUTE };
+export { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";

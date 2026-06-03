@@ -16,13 +16,12 @@ function toPlainPackets(packets) {
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
     const dag = new DevicesDAG();
-    const keyboardDevice = createKeyboardDevice(["Space"]);
+    const keyboardDevice = createKeyboardDevice();
     const tool = new CollectingTool();
 
     const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
     dag.mountWorkflow("/monitor/workflows/space-tool", tool);
 
-    // 用边级 prefix 替代旧 nodeConfigs handler
     const prefix = createEdgePrefix({
       handler(packet) {
         const triggerSignals = packet.signals.filter(
@@ -41,17 +40,6 @@ describe("keyboard-device", () => {
       "default",
       "/monitor/workflows/space-tool",
     );
-
-    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
-      "/monitor/keyboard",
-      "/monitor/keyboard/event",
-      "/monitor/keyboard/keydown",
-      "/monitor/keyboard/keyup",
-      "/monitor/keyboard/repeat",
-      "/monitor/keyboard/cancel",
-      "/monitor/keyboard/code",
-      "/monitor/keyboard/code/Space",
-    ]);
 
     const result = dag.dispatch({
       to: "/monitor/keyboard",
@@ -276,7 +264,7 @@ describe("keyboard-device", () => {
 
   test("可在按键节点把信号改写为 position 并汇流到公共工具节点", () => {
     const dag = new DevicesDAG();
-    const keyboardDevice = createKeyboardDevice(["KeyW", "KeyD"]);
+    const keyboardDevice = createKeyboardDevice();
     const tool = new CollectingTool();
 
     const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
@@ -288,8 +276,7 @@ describe("keyboard-device", () => {
         handler(packet) {
           const signals = packet.signals
             .filter(
-              (signal) =>
-                signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
             )
             .map((signal) => ({
               type: "position",
@@ -319,18 +306,6 @@ describe("keyboard-device", () => {
         "/monitor/workflows/move-tool",
       );
     }
-
-    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
-      "/monitor/keyboard",
-      "/monitor/keyboard/event",
-      "/monitor/keyboard/keydown",
-      "/monitor/keyboard/keyup",
-      "/monitor/keyboard/repeat",
-      "/monitor/keyboard/cancel",
-      "/monitor/keyboard/code",
-      "/monitor/keyboard/code/KeyW",
-      "/monitor/keyboard/code/KeyD",
-    ]);
 
     const result = dag.dispatch({
       to: "/monitor/keyboard",

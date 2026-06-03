@@ -68,7 +68,7 @@ const WASD_ROUTE_PRESETS = Object.freeze({
  * 构建键盘触发信号转发 prefix handler
  * @description
  * 过滤出 trigger 信号并返回，路由依赖 defaultRoute 自动走边。
- * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildKeyboardTriggerForwardNodeConfig() {
   return {
@@ -88,7 +88,7 @@ function buildKeyboardTriggerForwardNodeConfig() {
  * 将 trigger 信号转为 position 信号，目标位置 = monitor.origin + delta。
  * monitor 从 handlerContext.context 获取；路由依赖 defaultRoute。
  * @param {{ x: number, y: number }} delta - 位移增量
- * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildViewportPositionNodeConfig(delta) {
   return {
@@ -123,7 +123,7 @@ function buildViewportPositionNodeConfig(delta) {
  * 将 trigger 信号转为 scale 信号，缩放值由 scaleTransformer 函数计算。
  * monitor 从 handlerContext.context 获取；路由依赖 defaultRoute。
  * @param {(currentZoom: number) => number} scaleTransformer - 缩放变换函数
- * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildViewportScaleNodeConfig(scaleTransformer) {
   return {
@@ -152,7 +152,7 @@ function buildViewportScaleNodeConfig(scaleTransformer) {
 /**
  * 构建视口刷新 prefix handler
  * @description 将 trigger 信号转为 flush 信号，路由依赖 defaultRoute。
- * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildViewportFlushNodeConfig() {
   return {
@@ -180,7 +180,7 @@ function buildViewportFlushNodeConfig() {
  * @description 将 trigger 信号转为 position 信号，附上对应方向向量。
  * @param {string} code - 键位编码（如 "KeyW"）
  * @param {{ x: number, y: number }} vector - 方向向量
- * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildWasdNodeConfig(code, vector) {
   return {
@@ -210,7 +210,7 @@ function buildWasdNodeConfig(code, vector) {
  * @description 将 trigger 信号转为指定调试类型的信号。
  * @param {string} type - 调试信号类型（如 "debug:chunkload"）
  * @param {Object} [context={}] - 调试上下文附加数据
- * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildKeyboardDebugNodeConfig(type, context = {}) {
   return {
@@ -227,7 +227,7 @@ function buildKeyboardDebugNodeConfig(type, context = {}) {
 /**
  * 构建 KeyT 双模调试 prefix handler
  * @description Shift+T → "debug:mermaid"，普通 T → "debug:devices"。
- * @returns {{ handler: import("../../core/devices-dag/index.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildKeyboardDebugKeyTHandler() {
   return {
@@ -303,7 +303,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
   const keyboardDevice =
-    options.keyboardDevice ?? createKeyboardDevice(DEMO_KEYBOARD_INPUT_CODES);
+    options.keyboardDevice ?? createKeyboardDevice();
 
   monitor.mountSubDAG("/mouse", mouseDevice);
   monitor.mountSubDAG("/keyboard", keyboardDevice);

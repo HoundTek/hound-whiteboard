@@ -5,9 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "../devices-dag/index.js";
-import { SignalPacket } from "../devices-dag/signal.js";
-import { DEVICE_DEFAULT_ROUTE } from "./index.js";
+import { createSubDAG, SignalPacket } from "../devices-dag/index.js";
+import { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";
 
 const KEYBOARD_DEVICE_SIGNAL_TYPES = {
   TRIGGER: "trigger",
@@ -20,8 +19,7 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
  * @description
  * 仅按活跃键位列表预创建 code 节点；所有 code 节点的 defaultRoute 统一为 "default"。
  * 不再接受 processor / nodeConfigs 等定制参数——设备只负责信号产出，路由由外部通过边级 prefix 完成。
- * @param {string[]} [activeCodes=[]] - 需要预创建节点的键位编码列表
- * @returns {import("../devices-dag/index.js").SubDAGDefinition & {
+ * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeKeys: Array<{
@@ -45,8 +43,9 @@ const KEYBOARD_DEVICE_SIGNAL_TYPES = {
  *     }|null,
  *   },
  * }}
+ * @author Zhou Chenyu
  */
-function createKeyboardDevice(activeCodes = []) {
+function createKeyboardDevice() {
   const activeKeys = new Map();
   let lastEvent = null;
 
@@ -319,7 +318,7 @@ function createKeyboardDevice(activeCodes = []) {
   const codeRoot = builder.node();
   builder.edge("code", root, codeRoot);
 
-  for (const code of activeCodes) {
+  for (const code of STANDARD_KEYBOARD_CODES) {
     const segment = encodeKeyPathSegment(String(code));
     const codeNode = builder.node().defaultRoute(DEVICE_DEFAULT_ROUTE);
     builder.edge(segment, codeRoot, codeNode);

@@ -31,7 +31,7 @@ flowchart LR
 Board 负责：
 
 - 拥有唯一 DevicesDAG 实例
-- 监听 input、mount、umount、configure 事件
+- 监听 input、mount、umount 事件
 - 把挂载或分发所需的固定上下文传给 dispatch、mountWorkflow、mountSubDAG
 
 Monitor 负责：
@@ -94,28 +94,24 @@ Tool 负责：
 - `/<monitorId>/workflows/wasd-move`（WASD 坐标 workflow）
 - `/<monitorId>/workflows/create-circle`（随机圆 workflow）
 
-设备节点通过 `addEdge` 把信号路由到 `/workflows/` 下的 workflow 节点：
+设备节点通过 `addEdge` 把信号路由到 `/workflows/` 下的 workflow 节点；
+设备叶节点 `defaultRoute` 与 mount edge 统一为 `"default"`。
 
 ```
-/<monitorId>/mouse/primary --"tool"--> /<monitorId>/workflows/primary-stroke
-/<monitorId>/keyboard/code/KeyW --"wasd"--> /<monitorId>/workflows/wasd-move
-/<monitorId>/keyboard/code/Space --"create-circle"--> /<monitorId>/workflows/create-circle
+/<monitorId>/mouse/primary --"default"--> /<monitorId>/workflows/primary-stroke
+/<monitorId>/keyboard/code/KeyW  --"default"--> [prefix] --"default"--> /<monitorId>/workflows/wasd-move
+/<monitorId>/keyboard/code/Space --"default"--> [prefix] --"default"--> /<monitorId>/workflows/create-circle
 ```
 
 如果某条链路需要"先前置处理，再交给 workflow"，这些修饰节点应作为 workflow 子树的一部分放在 `/workflows/` 下。
 
-## 动态配置
+## 信号转换
 
-运行中的输入链路允许通过 configure 事件更新节点配置，最终落到 DevicesDAG.configureNode(path, options)。
+所有信号转换（如键盘 trigger → mouse position）通过 mount 时的 `edge.prefix` 注入完成，不再使用 configure 事件。
 
-当前允许动态调整的内容是：
+mount 事件声明 device 节点 → workflow 之间的边时，可通过 `prefix` 字段插入一个单源单汇子图（通常是单个 `createEdgePrefix` 节点）。prefix 内的 handler 负责将设备信号转换为 workflow 可消费的信号模型。
 
-- handler
-- semantics
-- defaultRoute
-- umount
-
-其中 handler: null 与 defaultRoute: "" 表示显式清空。
+handler 不应显式指定 `to:`——路由依靠 `defaultRoute: "default"` 自动完成。
 
 ## 当前建议
 

@@ -130,7 +130,7 @@ describe("Board input flow", () => {
   test("mount 事件应支持 edge.prefix 在设备节点与 workflow 之间注入边级 prefix 链", () => {
     const board = new Board();
     const monitor = createMonitor(board, "main");
-    const keyboardDevice = createKeyboardDevice(["KeyW"]);
+    const keyboardDevice = createKeyboardDevice();
 
     monitor.mountSubDAG("", keyboardDevice);
 

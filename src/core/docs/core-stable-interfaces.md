@@ -19,7 +19,7 @@
 - `getNodeState(pathOrId)`
 - `setNodeState(pathOrId, state)`
 - `mount(path, handler, options)`
-- `configureNode(path, options)`
+- `configureNode(path, options)`：更新节点语义/元数据（**不用于设置 handler**）
 - `mountWorkflow(path, workflow, workflowContext)`
 - `unmountWorkflow(path, accumulatedContext)`
 - `mountSubDAG(basePath, subDAGDefinition, mountContext)`
@@ -124,9 +124,8 @@
 `Board.signalsEventBus` 侧当前稳定的输入相关事件包括：
 
 - `input`：分发输入包到 `Board.devicesDAG.dispatch()`
-- `mount`：挂载设备或 workflow
+- `mount`：挂载设备或 workflow，支持 `edge.prefix` 注入信号转换
 - `umount`：卸载设备或 workflow
-- `configure`：运行时更新节点 `handler`、`defaultRoute`、`umount`
 
 这些事件的 `to` 仍然是绝对路径，但节点内部继续返回的 `packets.to` 应视为局部子路径。
 
@@ -140,6 +139,7 @@
 - `defineNodes`
 - `nodeContext`
 - `providedObjectsContext`
+- `configure`（事件）
 - 子节点通过 `to: ".."` 或 `bubble` 向上协调的约定
 
 ## 相关文档

@@ -47,7 +47,7 @@ function isValidBoardRootPath(boardRootPath) {
  * Board 运行时节点配置事件载荷。
  * @typedef {Object} BoardConfigureEventPayload
  * @property {string} to - 目标设备图节点绝对路径，必须包含 monitorId
- * @property {import("../devices-dag/index.js").DevicesDAGNodeConfig} options - 要更新到节点上的配置片段；`defaultRoute` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
+ * @property {import("../devices-dag/dag.js").DevicesDAGNodeConfig} options - 要更新到节点上的配置片段；`defaultRoute` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
  */
 
 /**

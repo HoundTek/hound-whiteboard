@@ -5,16 +5,15 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "../devices-dag/index.js";
-import { SignalPacket } from "../devices-dag/signal.js";
-import { DEVICE_DEFAULT_ROUTE } from "./index.js";
+import { createSubDAG, SignalPacket } from "../devices-dag/index.js";
+import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
 
 /**
  * 创建一张鼠标设备子图
  * @description
  * 五个通道路由节点（pointer / primary / secondary / auxiliary / wheel）
  * 均只设 defaultRoute = "default"，不再接受外部 processor 定制。
- * @returns {import("../devices-dag/index.js").SubDAGDefinition & {
+ * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeButtons: {primary: boolean, secondary: boolean, auxiliary: boolean},
@@ -22,6 +21,7 @@ import { DEVICE_DEFAULT_ROUTE } from "./index.js";
  *     lastWheelDelta: {deltaX: number, deltaY: number, deltaZ: number}|null,
  *   },
  * }}
+ * @author Zhou Chenyu
  */
 function createMouseDevice() {
   let activeButtons = {

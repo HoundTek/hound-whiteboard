@@ -24,9 +24,35 @@
 
 ## 结构
 
-`SubDAGDefinition` 的最小结构如下：
+`SubDAGDefinition` 的数据结构可表达为：
 
-```js
+```mermaid
+flowchart LR
+  subgraph SubDAGDefinition
+    direction LR
+    RP["rootPath: /keyboard"]
+    RN["rootNodeId: 0"]
+    ND["nodes: Map
+    {localId → nodeDef}"]
+    ED["edges: [{name,
+    fromNodeId, toNodeId}]"]
+  end
+
+  ND -->|0| ND0["nodeDef 0
+handler: rootHandler
+semantics: {}"]
+  ND -->|1| ND1["nodeDef 1
+handler: null
+defaultRoute: default"]
+  ND -->|N| NDN["nodeDef N
+tool: Tool
+semantics: {tool: true}"]
+
+  ED -->|0| E0["{name: event,
+fromNodeId: 0, toNodeId: 1}"]
+```
+
+最小实现：
 {
   rootPath: "/keyboard",
   rootNodeId: 0,
@@ -97,8 +123,52 @@ const workflow = builder.build();
 然后通过 `addEdge` 将键位节点连接到工具子树：
 
 ```js
-monitor.addEdge("/keyboard/code/Space", "create-circle", "/workflows/create-circle");
+monitor.addEdge(
+  "/keyboard/code/Space",
+  "create-circle",
+  "/workflows/create-circle",
+);
 ```
+
+## 设备 → Workflow 连接模式
+
+以下 Mermaid 图展示当前推荐的整体连接模式（使用 `dagToMermaid` 约定）：
+
+```mermaid
+flowchart LR
+  subgraph Device[Device e.g. keyboard]
+    DR("keyboard #1 [handler]")
+    CH2("code/Space #2 →default")
+    CH3("code/KeyW #3 →default")
+    CH1("keydown #4")
+    DR -->|"code"| CH2
+    DR -->|"code"| CH3
+    DR -->|"keydown"| CH1
+  end
+
+  subgraph Mount[Edge + Prefix]
+    CH2 -->|"default"| P1
+    CH3 -->|"default"| P2
+    CH1 -->|"default"| W1
+  end
+
+  subgraph Workflows[/workflows/]
+    W1("/workflows/event-log #1 [tool]")
+    W2("/workflows/wasd-move #2 [tool]")
+  end
+
+  P1[["Space/ #1 [prefix] [handler]"]]
+  P1 -->|"default"| W2
+  P2[["KeyW/ #2 [prefix] [handler]"]]
+  P2 -->|"default"| W2
+```
+
+核心约定：
+
+- 设备叶节点（channel / code）`defaultRoute` 统一为 `"default"`
+- mount edge 名统一为 `"default"`
+- 无需信号转换时（如鼠标），设备直连 workflow
+- 需要信号转换时，通过 `edge.prefix` 注入
 
 ## 设备与 Workflow 的分工
 
