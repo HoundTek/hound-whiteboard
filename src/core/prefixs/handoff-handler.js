@@ -232,8 +232,8 @@ function registerHandoffTool(tool) {
  * 将 chooser 工具包装为可通知父 prefix 完成信号的 handler
  *
  * @description
- * chooser 没有 create/apply 生命周期，通过信号检测（"end" 信号 + 已选中对象）
- * 判断完成。完成通知通过累积上下文中的 onToolComplete 回调向上传递。
+ * chooser 通过 confirmSelection → afterConfirmSelection 钩子宣告完成。
+ * handler 在每次分发时临时订阅 afterConfirm，触发后桥接到 onToolComplete。
  * @param {Tool} tool - chooser 工具实例
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
  */
@@ -248,24 +248,26 @@ function wrapChooserForHandoff(tool) {
       });
     }
 
+    const onToolComplete = context.context?.onToolComplete;
+    let completed = false;
+
+    const unsub =
+      typeof tool.on === "function"
+        ? tool.on("afterConfirm", () => {
+            completed = true;
+            onToolComplete?.();
+          })
+        : null;
+
     const rawResult = processor(packet, context);
-    const sigs = packet?.signals ?? [];
-    const hasEnd = Array.isArray(sigs) && sigs.some((s) => s?.type === "end");
 
-    if (!hasEnd) {
-      return rawResult;
+    unsub?.();
+
+    if (completed) {
+      return normalizeWrappedResult(rawResult);
     }
 
-    // 仅当确实有选中对象时才触发 handoff
-    const nodePath = context.path ?? "";
-    const nodeState = context.getNodeState?.(nodePath);
-    const objects = nodeState?.objects ?? [];
-    if (objects.length === 0) {
-      return rawResult;
-    }
-
-    context.context?.onToolComplete?.();
-    return normalizeWrappedResult(rawResult);
+    return rawResult;
   };
 }
 

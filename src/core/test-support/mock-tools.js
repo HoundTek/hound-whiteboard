@@ -85,7 +85,10 @@ function createMockCreator(onProcess) {
 /**
  * 创建模拟 chooser 工具
  * @description
- * 不含 completeCreatedObject，仅执行自定义回调。
+ * 支持选择生命周期钩子。
+ * process 中调用 onProcess 后，会调用 confirmSelection 触发 afterConfirm。
+ * 延迟 0ms 的 end 信号让 chooser 先写入 state，
+ * 再通过 confirmSelection 通知完成。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
  * @returns {Tool}
  */
@@ -93,6 +96,31 @@ function createMockChooser(onProcess) {
   return new (class extends Tool {
     process(packet, ctx) {
       if (onProcess) onProcess(packet, ctx);
+
+      // 检查是否携带 end 信号：是则确认选择
+      const sigs = packet?.signals ?? [];
+      const hasEnd = Array.isArray(sigs) && sigs.some((s) => s?.type === "end");
+      if (hasEnd) {
+        const nodeState = ctx.getNodeState?.(ctx.path) ?? {};
+        const objects = nodeState?.objects ?? [];
+        if (objects.length > 0) {
+          this.confirmSelection?.(ctx, objects);
+        }
+      }
+    }
+
+    beforeConfirmSelection() {
+      return true;
+    }
+
+    afterConfirmSelection(deviceContext, objects) {
+      this._emit?.("afterConfirm", deviceContext, objects);
+    }
+
+    confirmSelection(deviceContext, objects) {
+      if (this.beforeConfirmSelection(deviceContext) === false) return false;
+      this.afterConfirmSelection(deviceContext, objects);
+      return true;
     }
   })();
 }

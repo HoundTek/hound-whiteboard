@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import { ObjectChooserTool } from "../obj-chooser.js";
+import { RectangleObjectChooserTool } from "../rectangle-object-chooser.js";
 import { RectangleRange } from "../../../range/index.js";
 import { Vector } from "../../../utils/math.js";
 import { createStateAccess } from "../../../test-support/state-fixtures.js";
@@ -145,5 +146,153 @@ describe("ObjectChooserTool", () => {
     expect(tool.resolveObjectSelectionWorldRange({}, objectEntry)).toEqual(
       new RectangleRange(110, 220, 5, 6),
     );
+  });
+
+  describe("生命周期钩子", () => {
+    test("afterChoose 在有选中对象时触发", () => {
+      const chosenObject = { id: 10 };
+      const board = {
+        activeObjectManager: { choose: jest.fn() },
+      };
+      const stateAccess = createStateAccess();
+      const deviceContext = {
+        board,
+        path: "/test",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
+      };
+      const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
+      const afterChoose = jest.fn();
+      tool.on("afterChoose", afterChoose);
+
+      tool.process({ signals: [{ type: "trigger" }] }, deviceContext);
+
+      expect(afterChoose).toHaveBeenCalledTimes(1);
+      expect(afterChoose).toHaveBeenCalledWith([chosenObject]);
+    });
+
+    test("afterChoose 在无选中对象时不触发", () => {
+      const board = {
+        activeObjectManager: { choose: jest.fn() },
+      };
+      const tool = new TestChooserTool({ chosenObjects: [] });
+      const afterChoose = jest.fn();
+      tool.on("afterChoose", afterChoose);
+
+      tool.process(
+        { signals: [{ type: "trigger" }] },
+        {
+          board,
+          path: "/test",
+          getNodeState: () => ({}),
+          setNodeState: () => {},
+        },
+      );
+
+      expect(afterChoose).not.toHaveBeenCalled();
+    });
+
+    test("confirmSelection → beforeConfirm 返回 false 时阻止 afterConfirm", () => {
+      const chosenObject = { id: 11 };
+      const board = {
+        activeObjectManager: { choose: jest.fn() },
+      };
+      const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
+      const afterConfirm = jest.fn();
+      tool.on("afterConfirm", afterConfirm);
+      tool.beforeConfirmSelection = () => false;
+
+      const result = tool.confirmSelection({ board, path: "/test" }, [
+        chosenObject,
+      ]);
+
+      expect(result).toBe(false);
+      expect(afterConfirm).not.toHaveBeenCalled();
+    });
+
+    test("confirmSelection 默认触发 afterConfirm", () => {
+      const chosenObject = { id: 12 };
+      const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
+      const afterConfirm = jest.fn();
+      tool.on("afterConfirm", afterConfirm);
+
+      const result = tool.confirmSelection({ board: {}, path: "/test" }, [
+        chosenObject,
+      ]);
+
+      expect(result).toBe(true);
+      expect(afterConfirm).toHaveBeenCalledTimes(1);
+      expect(afterConfirm).toHaveBeenCalledWith({ board: {}, path: "/test" }, [
+        chosenObject,
+      ]);
+    });
+
+    test("RectangleObjectChooserTool 在 end 信号时调用 confirmSelection", () => {
+      // 准备一个虚拟对象用于框选命中
+      const objectInBoard = {
+        id: 20,
+        position: new Vector(50, 50),
+        getRange() {
+          return new RectangleRange(0, 0, 10, 10);
+        },
+      };
+      const board = {
+        objectLoaded: new Map([["chunk-1", { obj: objectInBoard }]]),
+        activeObjectManager: {
+          activeObjectIndex: new Map(),
+          choose: jest.fn(),
+          discard: jest.fn(),
+        },
+      };
+      const stateAccess = createStateAccess();
+      const deviceContext = {
+        board,
+        path: "/monitor/chooser",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
+      };
+
+      const tool = new RectangleObjectChooserTool();
+      const afterConfirm = jest.fn();
+      const afterChoose = jest.fn();
+      tool.on("afterConfirm", afterConfirm);
+      tool.on("afterChoose", afterChoose);
+
+      // 先发送 position 信号，建立拖拽状态
+      tool.process(
+        {
+          signals: [
+            {
+              type: "position",
+              context: { value: new Vector(0, 0) },
+            },
+          ],
+        },
+        deviceContext,
+      );
+
+      // 发送 end 信号，携带最终位置 → 框选命中 → confirmSelection
+      tool.process(
+        {
+          signals: [
+            { type: "end" },
+            {
+              type: "position",
+              context: { value: new Vector(200, 200) },
+            },
+          ],
+        },
+        deviceContext,
+      );
+
+      // afterChoose 触发（setContextObjects 后）
+      expect(afterChoose).toHaveBeenCalledTimes(1);
+      // afterConfirm 触发（confirmSelection 后）
+      expect(afterConfirm).toHaveBeenCalledTimes(1);
+
+      const confirmCall = afterConfirm.mock.calls[0];
+      expect(confirmCall[0]).toMatchObject({ path: "/monitor/chooser" });
+      expect(confirmCall[1]).toEqual([objectInBoard]);
+    });
   });
 });

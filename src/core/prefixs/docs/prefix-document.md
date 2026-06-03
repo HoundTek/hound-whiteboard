@@ -37,15 +37,15 @@ prefix 节点现在依赖三条稳定边界：
 
 ## 模块清单
 
-| 文件                     | 导出                                                                                          | 用途                        |
-| ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------- |
-| `index.js`               | 统一导出入口                                                                                  | 集中导出全部公开 API        |
-| `utils.js`               | `isPlainObject`, `shallowCloneSignals`                                                        | 内部工具方法                |
-| `handler.js`             | `createPrefixNodeHandler`                                                                     | 基础修饰节点处理器          |
-| `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                                                                | 多工具状态机路由            |
-| `repeator-handler.js`    | `createRepeatorPrefixHandler`                                                                 | 信号复制分发                |
-| `handoff-handler.js`     | `createHandoffSubDAG`, `wrapFirstForHandoff`, `wrapCreatorForHandoff`, `wrapSubDAGForHandoff` | first → second 两阶段工作流 |
-| `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`                                                               | 拖拽位移转换                |
+| 文件                     | 导出                                          | 用途                        |
+| ------------------------ | --------------------------------------------- | --------------------------- |
+| `index.js`               | 统一导出入口                                  | 集中导出全部公开 API        |
+| `utils.js`               | `isPlainObject`, `shallowCloneSignals`        | 内部工具方法                |
+| `handler.js`             | `createPrefixNodeHandler`                     | 基础修饰节点处理器          |
+| `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                | 多工具状态机路由            |
+| `repeator-handler.js`    | `createRepeatorPrefixHandler`                 | 信号复制分发                |
+| `handoff-handler.js`     | `createHandoffSubDAG`, `wrapSubDAGForHandoff` | first → second 两阶段工作流 |
+| `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`               | 拖拽位移转换                |
 
 ## 关系图
 
@@ -143,7 +143,7 @@ const handler = createRepeatorPrefixHandler({
 - 根 prefix 通过 `transition.context` 向当前活动子链注入 `onToolComplete` 回调和 `autoUmountOnApply: false`
 - **creator 的 first**：handoff 覆盖 `beforeCommitCreatedObject` 返回 `false`（阻止进入静态图），订阅 `"afterCreate"` 钩子
 - **modifier 的 second**：handoff 订阅 `"afterApply"` 钩子，通过 context 注入 `autoUmountOnApply: false` 阻止自卸载
-- **chooser 的 first**：使用 `end` 信号 + 对象检测
+- **chooser 的 first**：通过 `confirmSelection → afterConfirmSelection` 钩子宣告完成
 
 ```mermaid
 flowchart LR
@@ -159,12 +159,13 @@ flowchart LR
 
 ### 控制流与钩子对照
 
-| 步骤          | 独立模式                        | handoff 模式                                   |
-| ------------- | ------------------------------- | ---------------------------------------------- |
-| Creator 完成  | `beforeCommit→true` → AOM.apply | `beforeCommit→false` → 对象留在 AOM            |
-| Creator 通知  | `afterCreate` 无人订阅          | handoff handler 订阅 `afterCreate`             |
-| Modifier 提交 | AOM.apply → 自卸载              | AOM.apply → `autoUmountOnApply:false` 阻止卸载 |
-| Modifier 通知 | `afterApply` 无人订阅           | handoff handler 订阅 `afterApply`              |
+| 步骤          | 独立模式                                     | handoff 模式                                   |
+| ------------- | -------------------------------------------- | ---------------------------------------------- |
+| Creator 完成  | `beforeCommit→true` → AOM.apply              | `beforeCommit→false` → 对象留在 AOM            |
+| Creator 通知  | `afterCreate` 无人订阅                       | handoff handler 订阅 `afterCreate`             |
+| Chooser 确认  | `confirmSelection` → `afterConfirm` 无人订阅 | handoff handler 订阅 `afterConfirm`            |
+| Modifier 提交 | AOM.apply → 自卸载                           | AOM.apply → `autoUmountOnApply:false` 阻止卸载 |
+| Modifier 通知 | `afterApply` 无人订阅                        | handoff handler 订阅 `afterApply`              |
 
 ### 辅助函数
 

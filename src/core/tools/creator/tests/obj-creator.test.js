@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
+import { SingleGestureObjectCreatorTool } from "../obj-creator.js";
 import { Vector } from "../../../utils/math.js";
 
 describe("ObjectCreatorTool — property 信号", () => {
@@ -109,5 +110,107 @@ describe("ObjectCreatorTool — property 信号", () => {
     );
 
     expect(interaction.injectedProperty).toBeNull();
+  });
+
+  describe("生命周期钩子", () => {
+    test("completeCreatedObject 后触发 afterCreate 通知", () => {
+      class TestCreator extends SingleGestureObjectCreatorTool {
+        create() {}
+        beginCreationGesture() {}
+        updateCreationGesture() {}
+        completeCreationGesture() {}
+      }
+
+      const tool = new TestCreator();
+      const afterCreate = jest.fn();
+      tool.on("afterCreate", afterCreate);
+
+      tool.obj = { id: 1, type: "test" };
+      tool.completeCreatedObject({});
+
+      expect(afterCreate).toHaveBeenCalledTimes(1);
+    });
+
+    test("beforeCommitCreatedObject 返回 false 时阻止 AOM.apply", () => {
+      class TestCreator extends SingleGestureObjectCreatorTool {
+        create() {}
+        beginCreationGesture() {}
+        updateCreationGesture() {}
+        completeCreationGesture() {}
+      }
+
+      const tool = new TestCreator();
+      const apply = jest.fn();
+      const board = { activeObjectManager: { apply } };
+
+      tool.beforeCommitCreatedObject = () => false;
+      tool.obj = { id: 2 };
+      tool.completeCreatedObject({ deviceContext: { board } });
+
+      expect(apply).not.toHaveBeenCalled();
+      expect(tool.isObjectCreationCompleted).toBe(true);
+    });
+
+    test("beforeCommitCreatedObject 默认返回 true → 对象进入静态图", () => {
+      class TestCreator extends SingleGestureObjectCreatorTool {
+        create() {}
+        beginCreationGesture() {}
+        updateCreationGesture() {}
+        completeCreationGesture() {}
+      }
+
+      const tool = new TestCreator();
+      const apply = jest.fn();
+      const board = { activeObjectManager: { apply } };
+
+      tool.obj = { id: 3 };
+      tool.completeCreatedObject({ deviceContext: { board } });
+
+      expect(apply).toHaveBeenCalledWith(new Set([tool.obj]));
+      expect(tool.isObjectCreationCompleted).toBe(true);
+    });
+
+    test("beforeCommit 返回 false 时 afterCreate 仍然触发", () => {
+      class TestCreator extends SingleGestureObjectCreatorTool {
+        create() {}
+        beginCreationGesture() {}
+        updateCreationGesture() {}
+        completeCreationGesture() {}
+      }
+
+      const tool = new TestCreator();
+      const afterCreate = jest.fn();
+      tool.on("afterCreate", afterCreate);
+      tool.beforeCommitCreatedObject = () => false;
+      tool.obj = { id: 4 };
+
+      tool.completeCreatedObject({});
+
+      expect(afterCreate).toHaveBeenCalledTimes(1);
+    });
+
+    test("process 完整周期（position → end）触发 afterCreate", () => {
+      const tool = new CircleCreatorTool();
+      const afterCreate = jest.fn();
+      tool.on("afterCreate", afterCreate);
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(10, 10) } },
+          ],
+        },
+        { objectId: 301, ownerChunkId: 1 },
+      );
+
+      expect(afterCreate).not.toHaveBeenCalled();
+
+      tool.process(
+        { signals: [{ type: "end" }] },
+        { objectId: 302, ownerChunkId: 1 },
+      );
+
+      expect(afterCreate).toHaveBeenCalledTimes(1);
+    });
   });
 });

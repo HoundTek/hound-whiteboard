@@ -173,10 +173,11 @@ unsub();
 
 ### 当前预定义钩子
 
-| 工具类型 | 控制型钩子（可覆盖）           | 通知型钩子（可订阅） |
-| -------- | ------------------------------ | -------------------- |
-| Creator  | `beforeCommitCreatedObject()`  | `"afterCreate"`      |
-| Modifier | `beforeApplyModifiedObjects()` | `"afterApply"`       |
+| 工具类型 | 控制型钩子（可覆盖）           | 通知型钩子（可订阅）               |
+| -------- | ------------------------------ | ---------------------------------- |
+| Creator  | `beforeCommitCreatedObject()`  | `"afterCreate"`                    |
+| Modifier | `beforeApplyModifiedObjects()` | `"afterApply"`                     |
+| Chooser  | `beforeConfirmSelection()`     | `"afterChoose"` / `"afterConfirm"` |
 
 控制型钩子返回 `false` 即阻止该生命周期步骤继续执行。
 

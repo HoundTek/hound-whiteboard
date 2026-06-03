@@ -135,6 +135,78 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     });
   });
 
+  describe("chooser 生命周期钩子", () => {
+    test("end 信号且已选中对象时触发 afterConfirm", () => {
+      const chooser = createMockChooser((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, {
+          objects: [{ id: 7, type: "stroke" }],
+        });
+      });
+      const afterConfirm = jest.fn();
+
+      chooser.on("afterConfirm", afterConfirm);
+
+      chooser.process(
+        { signals: [{ type: "end" }] },
+        {
+          path: "/test",
+          getNodeState: (p) => (p === "/test" ? { objects: [{ id: 7 }] } : {}),
+          setNodeState: () => {},
+        },
+      );
+
+      expect(afterConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    test("end 信号但无选中对象时不触发 afterConfirm", () => {
+      const chooser = createMockChooser();
+      const afterConfirm = jest.fn();
+
+      chooser.on("afterConfirm", afterConfirm);
+
+      chooser.process(
+        { signals: [{ type: "end" }] },
+        {
+          path: "/test",
+          getNodeState: () => ({}),
+          setNodeState: () => {},
+        },
+      );
+
+      expect(afterConfirm).not.toHaveBeenCalled();
+    });
+
+    test("handoff 中 chooser 通过 afterConfirm 钩子触发切换（不再依赖信号检测）", () => {
+      const dag = new DevicesDAG();
+      const chooser = createMockChooser((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, {
+          objects: [{ id: 99, type: "circle" }],
+        });
+      });
+      const modifier = createMockModifier();
+
+      const subDAG = createHandoffSubDAG({
+        rootPath: "/chooser-hook",
+        first: chooser,
+        second: modifier,
+      });
+
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
+
+      // end 信号 → chooser 选中对象 → confirmSelection → afterConfirm
+      // → handler 订阅 afterConfirm → onToolComplete → 切换到 second
+      dag.dispatch({
+        to: "/monitor/chooser-hook",
+        signals: [{ type: "end" }],
+      });
+
+      expect(dag.getNodeState("/monitor/chooser-hook")).toEqual({
+        phase: "second",
+        activeChild: "second",
+      });
+    });
+  });
+
   describe("createHandoffSubDAG", () => {
     test("应构建三层结构并支持 first → second 切换", () => {
       const dag = new DevicesDAG();

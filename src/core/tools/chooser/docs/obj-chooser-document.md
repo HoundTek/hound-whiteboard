@@ -16,6 +16,34 @@
 
 因此，modifier 的父节点必须是一个能把对象放进上下文的节点。chooser 正是这种 provider 节点之一。
 
+## 选择生命周期钩子
+
+chooser 提供与 creator / modifier 一致的生命周期钩子，handoff 通过订阅钩子感知选择完成，无需外部信号检测：
+
+### 通知型钩子
+
+| 钩子                                            | 事件名           | 触发时机                                         |
+| ----------------------------------------------- | ---------------- | ------------------------------------------------ |
+| `afterChoose(objects)`                          | `"afterChoose"`  | 每次成功选择对象后（`setContextObjects` 完成时） |
+| `afterConfirmSelection(deviceContext, objects)` | `"afterConfirm"` | 手势结束时（子类调用 `confirmSelection`）        |
+
+### 控制型钩子
+
+| 钩子                                    | 语义                      |
+| --------------------------------------- | ------------------------- |
+| `beforeConfirmSelection(deviceContext)` | 返回 `false` 阻止确认通知 |
+
+### confirmSelection 入口
+
+```
+confirmSelection(deviceContext, objects)
+  │
+  ├─ beforeConfirmSelection()   ← 控制型钩子
+  └─ afterConfirmSelection()    ← 通知型钩子，handoff 订阅 "afterConfirm"
+```
+
+`RectangleObjectChooserTool` 在手势结束（`end` 信号）时调用 `confirmSelection`。handoff 通过 `on('afterConfirm', ...)` 订阅，替代了之前依赖信号检测的代层方式。
+
 ## 为什么选择结果要进入 AOM
 
 对象选择工具选中的不是“随便一组对象”，而是后续要进入动态编辑态的对象。

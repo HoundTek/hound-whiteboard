@@ -17,6 +17,7 @@ import { Range } from "../../range/range.js";
  * @extends Tool
  * @description
  * 对象选择工具负责根据命中规则挑选对象，并输出选择结果或选择范围。
+ * @author Zhou Chenyu
  */
 class ObjectChooserTool extends Tool {
   /**
@@ -133,6 +134,56 @@ class ObjectChooserTool extends Tool {
   }
 
   /**
+   * 选择完成后的通知钩子
+   * @description
+   * 每次成功选择对象后触发，handoff 可通过 on('afterChoose', ...) 订阅。
+   * @param {Array<*>} objects - 被选中的对象
+   * @protected
+   */
+  afterChoose(objects) {
+    this._emit("afterChoose", objects);
+  }
+
+  /**
+   * 决定是否确认当前选择钩子
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {boolean}
+   * @protected
+   */
+  beforeConfirmSelection(deviceContext) {
+    return true;
+  }
+
+  /**
+   * 确认选择后的通知钩子
+   * @description
+   * 子类在手势结束时调用，handoff 通过 on('afterConfirm', ...) 订阅。
+   * @param {Object} deviceContext - 设备上下文
+   * @param {Array<*>} objects - 已确认的对象
+   * @protected
+   */
+  afterConfirmSelection(deviceContext, objects) {
+    this._emit("afterConfirm", deviceContext, objects);
+  }
+
+  /**
+   * 显式确认当前选择
+   * @description
+   * 子类（如 RectangleObjectChooserTool）在手势完成（end 信号）时调用，
+   * 触发 beforeConfirm / afterConfirm 生命周期钩子。
+   * 与 creator 的 completeCreatedObject、modifier 的 applyModifiedObjects
+   * 构成统一的完成确认语义入口。
+   * @param {Object} deviceContext - 设备上下文
+   * @param {Array<*>} objects - 待确认的对象
+   * @returns {boolean}
+   */
+  confirmSelection(deviceContext, objects) {
+    if (this.beforeConfirmSelection(deviceContext) === false) return false;
+    this.afterConfirmSelection(deviceContext, objects);
+    return true;
+  }
+
+  /**
    * 处理一个完整信号包
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {Object} [deviceContext={}] - 设备上下文
@@ -152,6 +203,7 @@ class ObjectChooserTool extends Tool {
       new Set(selectedObjects),
     );
     this.setContextObjects(selectionContext.deviceContext, selectedObjects);
+    this.afterChoose(selectedObjects);
     return undefined;
   }
 

@@ -291,6 +291,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
     this.replaceSelection(deviceContext, selectedObjects);
     this.clearSelectionDragState(deviceContext);
+    this.afterChoose(selectedObjects);
+    this.confirmSelection(deviceContext, selectedObjects);
     this.requestUiOverlayRefresh(deviceContext);
   }
 

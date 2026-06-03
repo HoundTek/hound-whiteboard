@@ -86,7 +86,9 @@ describe("ObjectModifierTool", () => {
     const tool = new TestModifierTool();
     const object = { id: 3 };
     const renderer = {
-      createCompatSelectionEntriesForObjects: jest.fn(() => ["modifier-overlay"]),
+      createCompatSelectionEntriesForObjects: jest.fn(() => [
+        "modifier-overlay",
+      ]),
     };
 
     expect(
@@ -95,9 +97,117 @@ describe("ObjectModifierTool", () => {
         renderer,
       }),
     ).toEqual(["modifier-overlay"]);
-    expect(renderer.createCompatSelectionEntriesForObjects).toHaveBeenCalledWith(
-      [object],
-      "modifier",
-    );
+    expect(
+      renderer.createCompatSelectionEntriesForObjects,
+    ).toHaveBeenCalledWith([object], "modifier");
+  });
+
+  describe("生命周期钩子", () => {
+    test("applyModifiedObjects 成功后触发 afterApply 通知", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() {}
+      }
+
+      const tool = new TestModifier();
+      const afterApply = jest.fn();
+      tool.on("afterApply", afterApply);
+
+      const object = { id: 10 };
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply: jest.fn(),
+        },
+      };
+
+      tool.applyModifiedObjects({ board, path: "/test" }, [object]);
+
+      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
+        new Set([object]),
+      );
+      expect(afterApply).toHaveBeenCalledTimes(1);
+      expect(afterApply.mock.calls[0][2]).toBe(true);
+    });
+
+    test("beforeApplyModifiedObjects 返回 false 时阻止 apply", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() {}
+      }
+
+      const tool = new TestModifier();
+      const afterApply = jest.fn();
+      tool.on("afterApply", afterApply);
+      tool.beforeApplyModifiedObjects = () => false;
+
+      const object = { id: 11 };
+      const apply = jest.fn();
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply,
+        },
+      };
+
+      const result = tool.applyModifiedObjects({ board, path: "/test" }, [
+        object,
+      ]);
+
+      expect(result).toBe(false);
+      expect(apply).not.toHaveBeenCalled();
+      expect(afterApply).not.toHaveBeenCalled();
+    });
+
+    test("autoUmountOnApply 通过 context 注入 false 时阻止自卸载", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() {}
+      }
+
+      const tool = new TestModifier();
+      const object = { id: 12 };
+      const unmount = jest.fn();
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply: jest.fn(),
+        },
+      };
+
+      tool.applyModifiedObjects(
+        {
+          board,
+          dag: { unmount },
+          path: "/test",
+          context: { autoUmountOnApply: false },
+        },
+        [object],
+      );
+
+      // apply 正常执行
+      expect(board.activeObjectManager.apply).toHaveBeenCalled();
+      // 但 unmount 不应被调用
+      expect(unmount).not.toHaveBeenCalled();
+    });
+
+    test("autoUmountOnApply 默认行为 → 提交后自卸载", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() {}
+      }
+
+      const tool = new TestModifier();
+      const object = { id: 13 };
+      const unmount = jest.fn();
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply: jest.fn(),
+        },
+      };
+
+      tool.applyModifiedObjects({ board, dag: { unmount }, path: "/test" }, [
+        object,
+      ]);
+
+      expect(unmount).toHaveBeenCalledWith("/test");
+    });
   });
 });
