@@ -160,5 +160,5 @@ monitor.addEdge(
 ## 相关文档
 
 - [设备定义](./device-document.md)
-- [设备图](../devices-dag/docs/devices-dag-document.md)
+- [设备图](../../devices-dag/docs/devices-dag-document.md)
 - [Core 输入编码](../../docs/core-input-encoding.md)

@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../devices/signal.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 
 /**
  * 工具基类

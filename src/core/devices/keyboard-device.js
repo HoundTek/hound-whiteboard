@@ -6,7 +6,7 @@
  */
 
 import { createSubDAG } from "../devices-dag/index.js";
-import { SignalPacket } from "./signal.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 import { joinPath } from "../utils/path.js";
 
 const KEYBOARD_DEVICE_SIGNAL_TYPES = {

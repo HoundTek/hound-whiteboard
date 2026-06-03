@@ -8,7 +8,7 @@
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../devices/signal.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 import { isPlainObject } from "./utils.js";
 
 /**

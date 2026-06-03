@@ -7,7 +7,7 @@
 
 import { createSubDAG } from "../../core/devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
-import { SignalPacket } from "../../core/devices/signal.js";
+import { SignalPacket } from "../../core/devices-dag/signal.js";
 import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
 import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/tools/creator/obj-creator.js";
 import { Vector } from "../../core/utils/math.js";

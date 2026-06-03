@@ -6,7 +6,7 @@
  */
 
 import { Tool } from "../tool.js";
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 import { intersectsRanges } from "../../range/index.js";
 
 /**

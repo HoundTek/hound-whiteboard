@@ -1,4 +1,4 @@
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../signal.js";
 
 describe("SignalPacket", () => {
   test("SignalPacket.from 应规整工具侧缺省字段", () => {

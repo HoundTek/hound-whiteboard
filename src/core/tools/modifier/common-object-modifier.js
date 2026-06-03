@@ -10,7 +10,7 @@
  */
 
 import { Vector } from "../../utils/math.js";
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 import {
   ObjectModifierTool,
   OBJECT_MODIFIER_SIGNAL_TYPES,

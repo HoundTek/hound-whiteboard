@@ -7,7 +7,7 @@
 
 import { Vector } from "../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 import { Tool } from "../tool.js";
 
 /**

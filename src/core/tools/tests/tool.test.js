@@ -1,5 +1,5 @@
 import { Tool } from "../tool.js";
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 
 describe("Tool", () => {
   test("createProcessor 应把输入规整后交给工具消费", () => {

@@ -16,7 +16,7 @@
 
 其中，`to` 是该信号当前要到达的节点路径。
 
-当前代码里，这个结构已经集中抽象为 [src/core/devices/signal.js](src/core/devices/signal.js) 中的 `SignalPacket` 类。Core 内部不再在各处各自实现 `normalizeSignalPacket()`，而是统一通过 `SignalPacket.from()` 和 `SignalPacket.normalizeResult()` 完成规整。
+当前代码里，这个结构已经集中抽象为 [src/core/devices-dag/signal.js](../signal.js) 中的 `SignalPacket` 类。Core 内部不再在各处各自实现 `normalizeSignalPacket()`，而是统一通过 `SignalPacket.from()` 和 `SignalPacket.normalizeResult()` 完成规整。
 
 ## 当前实现
 

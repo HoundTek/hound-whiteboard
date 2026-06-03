@@ -6,7 +6,7 @@
  */
 
 import { createSubDAG } from "../devices-dag/index.js";
-import { SignalPacket } from "./signal.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 
 /**
  * 触摸屏设备输出信号类型

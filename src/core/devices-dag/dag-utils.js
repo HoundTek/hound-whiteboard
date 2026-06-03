@@ -11,7 +11,7 @@
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../devices/signal.js";
+import { SignalPacket } from "./signal.js";
 
 // ---------------------------------------------------------------------------
 // 工具函数

@@ -10,7 +10,7 @@
 
 import { isPlainObject } from "./utils.js";
 import { createPrefixNodeHandler } from "./handler.js";
-import { SignalPacket } from "../devices/signal.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 
 /**
  * 创建多工具修饰节点处理器

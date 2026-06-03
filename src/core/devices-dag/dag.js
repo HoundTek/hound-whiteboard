@@ -17,7 +17,7 @@
  */
 
 import { joinPath, normalizePath, resolvePath } from "../utils/path.js";
-import { SignalPacket } from "../devices/signal.js";
+import { SignalPacket } from "./signal.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import {
   isPlainObject,

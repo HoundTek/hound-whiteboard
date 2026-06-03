@@ -11,7 +11,7 @@
 import { createSubDAG } from "../devices-dag/index.js";
 import { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
 import { Tool } from "../tools/tool.js";
-import { SignalPacket } from "../devices/signal.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 
 /**
  * 规整 handler 输出中的继续路由包列表

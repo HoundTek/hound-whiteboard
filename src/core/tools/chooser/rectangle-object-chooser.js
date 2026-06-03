@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
 import { ObjectChooserTool } from "./obj-chooser.js";
