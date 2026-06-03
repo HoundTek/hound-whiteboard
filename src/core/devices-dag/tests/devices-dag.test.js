@@ -1091,9 +1091,323 @@ describe("DevicesDAG", () => {
 
       const b2 = createSubDAG("/sub2");
       b2.node().tool(tool);
-      expect(() => dag.mountSubDAG("", b2.build())).toThrow(
-        /already mounted/i,
+      expect(() => dag.mountSubDAG("", b2.build())).toThrow(/already mounted/i);
+    });
+  });
+
+  describe("getNode 相对路径", () => {
+    test("getNode 应支持相对路径", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      expect(dag.getNode("a/b")).toBeInstanceOf(DevicesDAGNode);
+      expect(dag.getNode("a/b")).toBe(dag.getNode("/a/b"));
+    });
+  });
+
+  describe("resolveRelativeNode", () => {
+    test("resolveRelativeNode 应从指定节点解析相对路径", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      const aNode = dag.getNode("/a");
+      // resolveRelativeNode 内部使用 resolvePath("/", relativePath) 解析为绝对路径
+      // 然后调用 getNode(absolutePath)，所以 "b" 会解析为 "/b"
+      const result = dag.resolveRelativeNode(aNode, "/a/b");
+      expect(result).toBe(dag.getNode("/a/b"));
+    });
+
+    test("resolveRelativeNode 在 fromNode 为 undefined 时应返回 undefined", () => {
+      const dag = new DevicesDAG();
+      expect(dag.resolveRelativeNode(undefined, "a")).toBeUndefined();
+    });
+
+    test("resolveRelativeNode 空路径应返回根节点", () => {
+      const dag = new DevicesDAG();
+      const root = dag.getNode("/");
+      expect(dag.resolveRelativeNode(root, "")).toBe(root);
+    });
+  });
+
+  describe("getNodePath", () => {
+    test("getNodePath 应返回节点的一条可达路径", () => {
+      const dag = new DevicesDAG();
+      const node = dag.ensureNode("/a/b");
+      const path = dag.getNodePath(node);
+      expect(path).toBe("/a/b");
+    });
+
+    test("getNodePath 对根节点应返回 /", () => {
+      const dag = new DevicesDAG();
+      expect(dag.getNodePath(dag.getNode("/"))).toBe("/");
+    });
+
+    test("getNodePath 对 undefined 应返回 undefined", () => {
+      const dag = new DevicesDAG();
+      expect(dag.getNodePath(undefined)).toBeUndefined();
+    });
+
+    test("getNodePath 对多入边节点应返回其中一条路径", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/shared");
+      dag.addEdge("/", "via-a", "/shared");
+      dag.addEdge("/", "via-b", "/shared");
+      const path = dag.getNodePath(dag.getNode("/shared"));
+      expect(typeof path).toBe("string");
+      expect(path.startsWith("/")).toBe(true);
+    });
+  });
+
+  describe("mount() 方法", () => {
+    test("mount 应设置 handler、semantics 和 defaultRoute", () => {
+      const dag = new DevicesDAG();
+      const handler = () => {};
+      const node = dag.mount("/mounted", handler, {
+        semantics: { prefix: true },
+        defaultRoute: "next",
+      });
+      expect(node.handler).toBe(handler);
+      expect(node.semantics).toMatchObject({ prefix: true });
+      expect(node.defaultRoute).toBe("next");
+    });
+
+    test("mount 应支持 defaultChild 作为 defaultRoute 的别名", () => {
+      const dag = new DevicesDAG();
+      const node = dag.mount("/mounted", () => {}, {
+        defaultChild: "leaf",
+      });
+      expect(node.defaultRoute).toBe("leaf");
+    });
+
+    test("mount 应优先使用 defaultRoute 而非 defaultChild", () => {
+      const dag = new DevicesDAG();
+      const node = dag.mount("/mounted", () => {}, {
+        defaultRoute: "route",
+        defaultChild: "child",
+      });
+      expect(node.defaultRoute).toBe("route");
+    });
+
+    test("mount 不传 handler 不应覆盖已有 handler", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/mounted");
+      dag.configureNode("/mounted", { handler: () => "existing" });
+      dag.mount("/mounted");
+      expect(dag.getNode("/mounted").handler).toBeInstanceOf(Function);
+    });
+
+    test("mount 应设置 umount 钩子", () => {
+      const dag = new DevicesDAG();
+      const cleanup = () => {};
+      dag.mount("/mounted", () => {}, { umount: cleanup });
+      expect(dag.getNode("/mounted").umount).toBe(cleanup);
+    });
+  });
+
+  describe("mountWorkflow 边界", () => {
+    test("mountWorkflow 在节点已有 handler 时应抛错", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/occupied");
+      dag.configureNode("/occupied", { handler: () => {} });
+      const tool = {
+        createProcessor() {
+          return () => {};
+        },
+        createDeviceContext(hc) {
+          return hc;
+        },
+      };
+      expect(() => dag.mountWorkflow("/occupied", tool)).toThrow(
+        /already has a handler/i,
       );
+    });
+
+    test("mountWorkflow 传入 SubDAGDefinition 应委托 mountSubDAG", () => {
+      const dag = new DevicesDAG();
+      const builder = createSubDAG("/wf-sub");
+      const handler = () => {};
+      builder.node().handler(handler);
+      const subDAG = builder.build();
+
+      const result = dag.mountWorkflow("/workflows/wf", subDAG);
+      expect(Array.isArray(result)).toBe(true);
+      expect(dag.getNode("/workflows/wf")).toBeInstanceOf(DevicesDAGNode);
+    });
+  });
+
+  describe("mountSubDAG 边界", () => {
+    test("mountSubDAG 传入 null 应返回空数组", () => {
+      const dag = new DevicesDAG();
+      expect(dag.mountSubDAG("", null)).toEqual([]);
+    });
+
+    test("mountSubDAG 传入非对象应返回空数组", () => {
+      const dag = new DevicesDAG();
+      expect(dag.mountSubDAG("", "not-object")).toEqual([]);
+    });
+
+    test("mountSubDAG 应处理重复边名（幂等）", () => {
+      const dag = new DevicesDAG();
+      const builder = createSubDAG("/dup");
+      const r = builder.node();
+      const c = builder.node();
+      builder.edge("link", r, c);
+      // 先手动创建同一条边
+      dag.ensureNode("/dup/link");
+
+      expect(() => dag.mountSubDAG("", builder.build())).not.toThrow();
+    });
+  });
+
+  describe("unmount 边界", () => {
+    test("unmount 对不存在的路径应返回 false", () => {
+      const dag = new DevicesDAG();
+      expect(dag.unmount("/nowhere")).toBe(false);
+    });
+
+    test("unmount 对中间段缺失的路径应返回 false", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a");
+      expect(dag.unmount("/a/b/c")).toBe(false);
+    });
+
+    test("unmount 应清理 tool 实例注册", () => {
+      const dag = new DevicesDAG();
+      const tool = {
+        createProcessor() {
+          return () => {};
+        },
+        createDeviceContext(hc) {
+          return hc;
+        },
+      };
+      dag.mountWorkflow("/wf/tool", tool);
+      expect(dag._mountedToolInstances.has(tool)).toBe(true);
+      dag.unmount("/wf");
+      expect(dag._mountedToolInstances.has(tool)).toBe(false);
+    });
+
+    test("unmount 多入边节点只清除指定路径的入边", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/shared");
+      dag.addEdge("/", "route-a", "/shared");
+      dag.addEdge("/", "route-b", "/shared");
+
+      // 卸载 route-a 路径
+      dag.unmount("/route-a");
+      expect(dag.getNode("/route-a")).toBeUndefined();
+      // route-b 仍然可达
+      expect(dag.getNode("/route-b")).toBe(dag.getNode("/shared"));
+    });
+
+    test("unmountWorkflow 应委托 unmount", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/wf/test");
+      const result = dag.unmountWorkflow("/wf");
+      expect(result).toBe(true);
+      expect(dag.getNode("/wf")).toBeUndefined();
+    });
+  });
+
+  describe("configureNode 边界", () => {
+    test("configureNode 应支持 defaultChild 向后兼容", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/legacy");
+      dag.configureNode("/legacy", { defaultChild: "old-way" });
+      expect(dag.getNode("/legacy").defaultRoute).toBe("old-way");
+    });
+
+    test("configureNode 的 defaultChild 为 null 时应清空 defaultRoute", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/legacy");
+      dag.configureNode("/legacy", { defaultRoute: "before" });
+      dag.configureNode("/legacy", { defaultChild: null });
+      expect(dag.getNode("/legacy").defaultRoute).toBe("");
+    });
+  });
+
+  describe("dispatch 其他边缘场景", () => {
+    test("dispatch 深度超限应在递归中抛错", () => {
+      const dag = new DevicesDAG({ maxDispatchDepth: 2 });
+      dag.dispatch = jest.fn(function (...args) {
+        return DevicesDAG.prototype.dispatch.apply(this, args);
+      });
+      dag.ensureNode("/deep/deep/deep");
+      expect(() =>
+        dag.dispatch(
+          { to: "/deep/deep/deep", signals: [{ type: "d" }] },
+          {},
+          3,
+        ),
+      ).toThrow(/depth exceeded/i);
+    });
+
+    test("dispatch 无 to 且根节点无 defaultRoute 应返回原包", () => {
+      const dag = new DevicesDAG();
+      const result = dag.dispatch({ signals: [{ type: "no-target" }] });
+      expect(result.packets).toHaveLength(1);
+      expect(result.packets[0].signals[0].type).toBe("no-target");
+    });
+
+    test("dispatch 在路径末节点无 handler 应有默认行为", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      const result = dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] });
+      // 中间 /a 无 handler → 默认生成继续包
+      // 末端 /a/b 无 handler → 默认生成最终包
+      expect(result.packets).toHaveLength(1);
+      expect(result.packets[0].signals[0].type).toBe("t");
+    });
+
+    test("handler 返回 empty 信号数组应正常继续", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a", {
+        handler() {
+          return { signals: [] };
+        },
+      });
+      const bCalls = [];
+      dag.configureNode("/a/b", {
+        handler(pkt) {
+          bCalls.push(pkt.signals.map((s) => s.type));
+        },
+      });
+
+      dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] });
+      expect(bCalls).toEqual([["t"]]);
+    });
+  });
+
+  describe("setNodeState 边界", () => {
+    test("setNodeState 传入非纯对象应使用空对象", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a");
+      dag.setNodeState("/a", "not-object");
+      expect(dag.getNodeState("/a")).toEqual({});
+    });
+
+    test("setNodeState 无 state 参数应使用空对象", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a");
+      dag.setNodeState("/a", { count: 5 });
+      dag.setNodeState("/a");
+      expect(dag.getNodeState("/a")).toEqual({});
+    });
+  });
+
+  describe("toString 其他场景", () => {
+    test("空 DAG 的 toString 应包含根节点", () => {
+      const dag = new DevicesDAG();
+      const str = dag.toString();
+      expect(str).toContain("/");
+      expect(str).toContain("#0");
+    });
+
+    test("toString 应显示 monitor 标注", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/mon");
+      dag.configureNode("/mon", { semantics: { monitor: true } });
+      const str = dag.toString();
+      expect(str).toContain("[monitor]");
     });
   });
 });
