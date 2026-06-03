@@ -4,6 +4,9 @@
  * 提供 createHandoffSubDAG 工厂函数，将 first → second 的两阶段工作流
  * 封装为一张结构化子图。first 可以是 creator（对象创建工具）、chooser（对象选择工具）或任意子图；
  * second 通常是 modifier（对象编辑工具）。两者均可接受 Tool 实例或 SubDAGDefinition。
+ *
+ * 通过生命周期钩子（beforeCommit / afterCreate / afterApply）
+ * 实现非侵入的完成通知与流程控制，不再直接替换工具实例方法。
  * @module core/prefixs/handoff-handler
  * @author Zhou Chenyu
  */
@@ -69,8 +72,8 @@ function isPlainObject(value) {
 }
 
 /**
- * 规整 wrapper 返回值，同时保留结构化字段。
- * @param {*} rawResult
+ * 规整 wrapper 返回值，同时保留结构化字段（packets、stop、redirect、context）
+ * @param {*} rawResult - wrapper 原始返回值
  * @returns {{packets: SignalPacket[], stop?: boolean, redirect?: string, context?: Object}}
  */
 function normalizeWrappedResult(rawResult) {
@@ -92,7 +95,7 @@ function normalizeWrappedResult(rawResult) {
 }
 
 /**
- * 克隆 DAG 节点定义，避免共享可变结构。
+ * 克隆 DAG 节点定义，避免共享可变结构
  * @param {Object} nodeDef
  * @returns {Object}
  */
@@ -111,7 +114,7 @@ function cloneDAGNodeDefinition(nodeDef = {}) {
 }
 
 /**
- * 将 source 节点定义合并到 target 节点定义。
+ * 将 source 节点定义合并到 target 节点定义
  * @param {Object} targetNodeDef
  * @param {Object} sourceNodeDef
  * @returns {Object}
@@ -142,18 +145,14 @@ function mergeDAGNodeDefinition(targetNodeDef = {}, sourceNodeDef = {}) {
 }
 
 /**
- * 将 DAG 子图定义附着到目标节点上。
- * 目标节点复用 source root 的定义，并吸收其下游边与节点。
+ * 将 DAG 子图定义附着到目标节点上
  * @param {import("../devices-dag/dag.js").SubDAGDefinition} hostSubDAG
  * @param {number} hostNodeId
  * @param {import("../devices-dag/dag.js").SubDAGDefinition} subDAGDef
  * @returns {boolean}
  */
 function attachDAGSubDAG(hostSubDAG, hostNodeId, subDAGDef) {
-  if (
-    !(subDAGDef?.nodes instanceof Map) ||
-    !Array.isArray(subDAGDef?.edges)
-  ) {
+  if (!(subDAGDef?.nodes instanceof Map) || !Array.isArray(subDAGDef?.edges)) {
     return false;
   }
 
@@ -208,81 +207,37 @@ function isToolInstance(value) {
 }
 
 /**
- * 将 creator 工具包装为可通知父 prefix 完成信号的 handler
- *
- * @description
- * hook tool.completeCreatedObject()——creator 真正完成创建的唯一语义入口。
- * 通过累积上下文中的 onToolComplete 回调向上通知，不再使用冒泡。
- * @param {import("../tools/tool.js").Tool} tool - creator 工具实例
- * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
+ * 已注册到 handoff 的 tool 实例集合
+ * 使用 WeakSet 避免内存泄漏，tool 被 GC 后自动清理。
+ * @type {WeakSet<object>}
  */
-function wrapCreatorForHandoff(tool) {
-  if (tool.__handoffWrapped) {
+const registeredHandoffTools = new WeakSet();
+
+/**
+ * 将 tool 标记为已参与某个 handoff 工作流
+ * @param {Tool} tool
+ * @throws {TypeError} 如果 tool 已在另一个 handoff 中
+ */
+function registerHandoffTool(tool) {
+  if (registeredHandoffTools.has(tool)) {
     throw new TypeError(
-      "Tool instance has already been wrapped for handoff. " +
+      "Tool instance has already been registered in a handoff workflow. " +
         "Each tool instance can only participate in one handoff workflow.",
     );
   }
-
-  let processor = null;
-  let completeRequested = false;
-
-  // 替换 completeCreatedObject，拦截完成信号但不调用原始实现
-  // handoff 工作流中由 createHandoffSubDAG 的 autoBridgeObjects 负责
-  // 将对象从 creator 节点状态桥接到 modifier 节点状态
-  tool.__handoffWrapped = true;
-  tool.completeCreatedObject = function (interaction) {
-    tool.syncCreatedObjectContext?.(interaction?.deviceContext, tool.obj);
-    if (
-      Object.prototype.hasOwnProperty.call(tool, "isObjectCreationCompleted")
-    ) {
-      tool.isObjectCreationCompleted = true;
-    }
-    completeRequested = true;
-    return undefined;
-  };
-
-  return (packet, context = {}) => {
-    if (!processor) {
-      processor = tool.createProcessor({
-        board: context.context?.board,
-        monitor: context.context?.monitor,
-      });
-    }
-
-    completeRequested = false;
-    const rawResult = processor(packet, context);
-
-    if (completeRequested) {
-      // 通过累积上下文中的回调向上通知，不再使用 to: ".."
-      context.context?.onToolComplete?.();
-
-      return normalizeWrappedResult(rawResult);
-    }
-
-    return rawResult;
-  };
+  registeredHandoffTools.add(tool);
 }
 
 /**
- * 将 first 阶段工具（creator 或 chooser）包装为可通知父 prefix 完成信号的 handler
+ * 将 chooser 工具包装为可通知父 prefix 完成信号的 handler
  *
  * @description
- * 自动检测工具类型：
- * - 若工具包含 completeCreatedObject（creator），hook 其完成回调
- * - 否则退化为信号检测模式：收到 "end" 信号后调用 onToolComplete 回调
- *
- * 向上通信通过累积上下文中的 onToolComplete 回调，不再使用冒泡。
- * @param {Tool} tool - first 阶段工具实例（creator / chooser）
+ * chooser 没有 create/apply 生命周期，通过信号检测（"end" 信号 + 已选中对象）
+ * 判断完成。完成通知通过累积上下文中的 onToolComplete 回调向上传递。
+ * @param {Tool} tool - chooser 工具实例
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
  */
-function wrapFirstForHandoff(tool) {
-  // Creator 路径：精确 hook completeCreatedObject
-  if (typeof tool.completeCreatedObject === "function") {
-    return wrapCreatorForHandoff(tool);
-  }
-
-  // Chooser / 通用路径：end 信号触发
+function wrapChooserForHandoff(tool) {
   let processor = null;
 
   return (packet, context = {}) => {
@@ -309,84 +264,8 @@ function wrapFirstForHandoff(tool) {
       return rawResult;
     }
 
-    // 通过回调通知父 prefix，不再使用 to: ".."
     context.context?.onToolComplete?.();
-
     return normalizeWrappedResult(rawResult);
-  };
-}
-
-/**
- * 将 second 阶段工具包装为由 handoff 统一协调的完成通知 handler。
- *
- * @description
- * second 通常是 modifier。它本体只负责提交对象，不直接感知 onToolComplete。
- * handoff wrapper 会 hook 语义完成入口（例如 applyModifiedObjects），在真正提交成功后
- * 触发父 prefix 的 onToolComplete 回调，并在 handoff 工作流中关闭 auto unmount。
- * @param {Tool} tool - second 阶段工具实例
- * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
- */
-function wrapSecondForHandoff(tool) {
-  if (tool.__handoffWrapped) {
-    throw new TypeError(
-      "Tool instance has already been wrapped for handoff. " +
-        "Each tool instance can only participate in one handoff workflow.",
-    );
-  }
-
-  let processor = null;
-  let completeRequested = false;
-
-  tool.__handoffWrapped = true;
-  if (typeof tool.applyModifiedObjects === "function") {
-    const originalApplyModifiedObjects = tool.applyModifiedObjects.bind(tool);
-    tool.applyModifiedObjects = function (modificationContext, objects) {
-      const applied = originalApplyModifiedObjects(
-        {
-          ...modificationContext,
-          autoUmountOnApply: false,
-        },
-        objects,
-      );
-
-      if (applied) {
-        completeRequested = true;
-      }
-
-      return applied;
-    };
-  }
-
-  return (packet, context = {}) => {
-    if (!processor) {
-      processor = tool.createProcessor({
-        board: context.context?.board,
-        monitor: context.context?.monitor,
-      });
-    }
-
-    completeRequested = false;
-    let completionAlreadyNotified = false;
-    const originalOnToolComplete = context.context?.onToolComplete;
-    const wrappedContext = {
-      ...context,
-      context: {
-        ...(context.context ?? {}),
-        onToolComplete() {
-          completionAlreadyNotified = true;
-          return originalOnToolComplete?.();
-        },
-      },
-    };
-
-    const rawResult = processor(packet, wrappedContext);
-
-    if (completeRequested && !completionAlreadyNotified) {
-      originalOnToolComplete?.();
-      return normalizeWrappedResult(rawResult);
-    }
-
-    return rawResult;
   };
 }
 
@@ -448,12 +327,17 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
 
 /**
  * 创建 handoff 修饰节点子树
+ *
  * @description
  * 生成一棵三层子树：根节点为 multi-tool prefix 状态机，默认将信号路由到 first 子节点；
- * 当 first 通过 onToolComplete 回调通知完成时切换到 second；
- * 当 second 通过 onToolComplete 回调通知完成时切回 first，开始新周期。
+ * 当 first 完成后切换到 second；当 second 完成后切回 first。
  *
- * 完成通知通过累积上下文中的回调实现，不再使用冒泡信号。 * @param {{
+ * 采用生命周期钩子：
+ * - creator 的 first：override `beforeCommitCreatedObject → false`，订阅 `afterCreate`
+ * - modifier 的 second：订阅 `afterApply`，通过 context 注入 `autoUmountOnApply: false`
+ * - chooser 的 first：使用 end 信号 + 对象检测
+ *
+ * @param {{
  *   rootPath?: string,
  *   first: Tool|import("../devices-dag/dag.js").SubDAGDefinition,
  *   second: Tool|import("../devices-dag/dag.js").SubDAGDefinition,
@@ -466,7 +350,7 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
  * @returns {import("../devices-dag/dag.js").SubDAGDefinition}
  *
  * @example
- *   // creator → modifier
+ *   // creator → modifier（生命周期钩子模式）
  *   createHandoffSubDAG({
  *     first: new StrokeCreatorTool(),
  *     second: new CommonObjectModifierTool(),
@@ -476,14 +360,6 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
  *   // chooser → modifier
  *   createHandoffSubDAG({
  *     first: new RectangleObjectChooserTool(),
- *     second: new CommonObjectModifierTool(),
- *   });
- *
- * @example
- *   // SubDAGDefinition + wrapSubDAGForHandoff
- *   const circle = createRandomCircleSubDAG({ rootPath: "/chain" });
- *   createHandoffSubDAG({
- *     first: wrapSubDAGForHandoff(circle),
  *     second: new CommonObjectModifierTool(),
  *   });
  */
@@ -505,9 +381,45 @@ function createHandoffSubDAG(options = {}) {
     );
   }
 
+  // 注册 tool 实例，防止同一实例参与多个 handoff
+  if (isToolInstance(first)) registerHandoffTool(first);
+  if (isToolInstance(second)) registerHandoffTool(second);
+
   // 保存 handoff 根节点路径用于状态桥接
   let handoffBasePath = "";
 
+  // ── 判断 first 类型 ──
+  const firstIsCreator =
+    isToolInstance(first) && typeof first.completeCreatedObject === "function";
+  const firstIsChooser = isToolInstance(first) && !firstIsCreator;
+  const firstIsSubDAG = isSubDAGDefinition(first);
+
+  // ── 判断 second 类型 ──
+  const secondIsModifier =
+    isToolInstance(second) && typeof second.applyModifiedObjects === "function";
+  const secondIsSubDAG = isSubDAGDefinition(second);
+
+  // ── 为 creator-first 配置钩子 ──
+  /** @type {Function[]} */
+  const handoffCleanups = [];
+
+  if (firstIsCreator) {
+    // 保存原始 beforeCommit，准备 override
+    const originalBeforeCommit = first.beforeCommitCreatedObject?.bind(first);
+
+    // 阻止 creator 将对象提交到静态图（由 modifier 最终提交）
+    first.beforeCommitCreatedObject = () => false;
+
+    handoffCleanups.push(() => {
+      if (originalBeforeCommit) {
+        first.beforeCommitCreatedObject = originalBeforeCommit;
+      } else {
+        delete first.beforeCommitCreatedObject;
+      }
+    });
+  }
+
+  // ── 构建子树 ──
   const builder = createSubDAG(rootPath);
   const root = builder
     .node()
@@ -522,7 +434,7 @@ function createHandoffSubDAG(options = {}) {
             handoffBasePath = prefixContext.path ?? "";
           }
 
-          // 构建 onToolComplete 回调：被 first 或 second 调用时触发状态切换
+          // 构建 onToolComplete 回调
           const createCompleteCallback = (completedPhase) => () => {
             if (autoBridgeObjects && completedPhase === "first") {
               const dag = prefixContext.dag;
@@ -550,9 +462,10 @@ function createHandoffSubDAG(options = {}) {
 
           return {
             child: state.activeChild,
-            // 注入回调到上下文，供子节点调用以向上通知
             context: {
               onToolComplete: createCompleteCallback(fromPhase || "first"),
+              // 阻止 modifier 在 handoff 中自卸载
+              autoUmountOnApply: false,
             },
           };
         },
@@ -566,9 +479,41 @@ function createHandoffSubDAG(options = {}) {
   // ── first 子节点 ──
   const firstNode = builder.node();
   let firstSubDAGDef = null;
-  if (isToolInstance(first)) {
-    firstNode.handler(wrapFirstForHandoff(first));
-  } else if (isSubDAGDefinition(first)) {
+
+  if (firstIsCreator) {
+    // Creator 路径：handler 桥接 afterCreate 钩子 → onToolComplete 回调
+    firstNode.handler((packet, context = {}) => {
+      const onToolComplete = context.context?.onToolComplete;
+      let completed = false;
+
+      // 临时订阅 afterCreate：工具触发时桥接到 onToolComplete
+      const unsub =
+        typeof first.on === "function"
+          ? first.on("afterCreate", () => {
+              completed = true;
+              onToolComplete?.();
+            })
+          : null;
+
+      const processor = first.createProcessor({
+        board: context.context?.board,
+        monitor: context.context?.monitor,
+      });
+      const rawResult = processor(packet, context);
+
+      unsub?.();
+
+      if (completed) {
+        return normalizeWrappedResult(rawResult);
+      }
+
+      return rawResult;
+    });
+  } else if (firstIsChooser) {
+    // Chooser 路径：使用信号检测 handler
+    const wrappedHandler = wrapChooserForHandoff(first);
+    firstNode.handler(wrappedHandler);
+  } else if (firstIsSubDAG) {
     firstSubDAGDef = first;
   } else {
     throw new TypeError(
@@ -579,10 +524,47 @@ function createHandoffSubDAG(options = {}) {
   // ── second 子节点 ──
   const secondNode = builder.node();
   let secondSubDAGDef = null;
-  if (isToolInstance(second)) {
-    secondNode.handler(wrapSecondForHandoff(second));
-  } else if (isSubDAGDefinition(second)) {
+
+  if (secondIsModifier) {
+    // Modifier 路径：handler 桥接 afterApply 钩子 → onToolComplete 回调
+    secondNode.handler((packet, context = {}) => {
+      const onToolComplete = context.context?.onToolComplete;
+      let completed = false;
+
+      // 临时订阅 afterApply：工具触发时桥接到 onToolComplete
+      const unsub =
+        typeof second.on === "function"
+          ? second.on("afterApply", () => {
+              completed = true;
+              onToolComplete?.();
+            })
+          : null;
+
+      const processor = second.createProcessor({
+        board: context.context?.board,
+        monitor: context.context?.monitor,
+      });
+      const rawResult = processor(packet, context);
+
+      unsub?.();
+
+      if (completed) {
+        return normalizeWrappedResult(rawResult);
+      }
+
+      return rawResult;
+    });
+  } else if (secondIsSubDAG) {
     secondSubDAGDef = second;
+  } else if (isToolInstance(second)) {
+    // 通用 Tool 路径：透传，工具通过 context.onToolComplete 自行通知完成
+    secondNode.handler((packet, context = {}) => {
+      const processor = second.createProcessor({
+        board: context.context?.board,
+        monitor: context.context?.monitor,
+      });
+      return processor(packet, context);
+    });
   } else {
     throw new TypeError(
       "createHandoffSubDAG: second must be a Tool or SubDAGDefinition.",
@@ -593,6 +575,8 @@ function createHandoffSubDAG(options = {}) {
   builder.edge("second", root, secondNode);
 
   const handoffSubDAG = builder.build();
+
+  // ── 附着 SubDAGDefinition ──
   if (
     firstSubDAGDef &&
     !attachDAGSubDAG(handoffSubDAG, firstNode._localId, firstSubDAGDef)
@@ -610,13 +594,19 @@ function createHandoffSubDAG(options = {}) {
     );
   }
 
+  // 将钩子清理函数挂到子图上，供外部在卸载 handoff 时恢复 tool 状态
+  handoffSubDAG.resetHandoff = () => {
+    for (const cleanup of handoffCleanups) {
+      try {
+        cleanup();
+      } catch {
+        // 静默吞掉清理错误
+      }
+    }
+    handoffCleanups.length = 0;
+  };
+
   return handoffSubDAG;
 }
 
-export {
-  createHandoffSubDAG,
-  wrapCreatorForHandoff,
-  wrapFirstForHandoff,
-  wrapSecondForHandoff,
-  wrapSubDAGForHandoff,
-};
+export { createHandoffSubDAG, wrapSubDAGForHandoff };

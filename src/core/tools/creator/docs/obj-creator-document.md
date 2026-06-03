@@ -15,20 +15,59 @@
 5. 根据手势状态进入 `beginCreationGesture`、`updateCreationGesture`、`completeCreationGesture` 或 `cancelCreationGesture`
 6. 结束时进入 `completeCreatedObject(interaction)` 或 `cancelCreatedObject(interaction)`
 
-## 创建完成
+## 创建完成生命周期
 
-对象创建完成后的去向由外部工作流决定：
+`completeCreatedObject(interaction)` 是创建流程的统一入口，内部按生命周期钩子编排：
 
-- **standalone**：`completeCreatedObject()` 直接调用 `AOM.apply`，把对象提交回静态图
-- **handoff**：`wrapCreatorForHandoff()` 拦截 `completeCreatedObject()`，改为调用累积 `context` 中的 `onToolComplete` 回调，由 `createHandoffSubDAG()` 决定后续切换与对象桥接
+```
+completeCreatedObject(interaction)
+  │
+  ├─ ① finalizeCreatedObject()        ← 总是执行（同步上下文、标记完成）
+  │
+  ├─ ② beforeCommitCreatedObject()    ← 控制型钩子，返回 bool
+  │     ├─ true (默认) → commitCreatedObject()  → AOM.apply → 进入静态图
+  │     └─ false (handoff 模式) → 跳过提交，对象留在 AOM 动态图中
+  │
+  └─ ③ afterCompleteCreatedObject()   ← 通知型钩子，触发 "afterCreate" 事件
+```
+
+### 控制型钩子：`beforeCommitCreatedObject`
+
+决定 `finalize` 之后是否将对象提交到静态图。handoff 工作流覆盖此钩子返回 `false`，阻止 creator 将对象推入静态图，对象留在 AOM 动态图中等待 modifier 最终提交。
+
+```js
+// 默认：提交到静态图
+beforeCommitCreatedObject(interaction) {
+  return true;
+}
+
+// Handoff 覆盖：阻止提交
+creator.beforeCommitCreatedObject = () => false;
+```
+
+### 通知型钩子：`afterCompleteCreatedObject`
+
+对象创建流程完成时触发（无论是否 commit），对外发出 `"afterCreate"` 事件：
+
+```js
+// Handoff 订阅完成通知
+creator.on("afterCreate", (interaction, obj) => {
+  // 对象已完工，可桥接到 modifier
+});
+```
+
+### 与 handoff 协作
+
+- **standalone**：`beforeCommitCreatedObject` 返回 `true`，对象直接进入静态图
+- **handoff**：handoff 覆盖 `beforeCommitCreatedObject` 返回 `false`，订阅 `"afterCreate"` 完成桥接与状态切换
 
 handoff 模式下，`autoBridgeObjects` 会把对象从 creator 节点 state 复制到 second 节点 state，供 modifier 继续消费。
 
 这里要特别说明：
 
-- 新的稳定契约是“调用回调通知完成”
-- 个别旧工具或旧链路里仍可能保留兼容型完成信号，但它们不再代表新的首选设计
 - creator 本身不再持有 modifier 引用或控制 modifier 的挂载/转发
+- 钩子系统使得 handoff 无需替换 creator 的任何方法
+- creator 的原始 `completeCreatedObject` 逻辑完整保留，只在钩子处接入
 
 ## 几何刷新设计
 

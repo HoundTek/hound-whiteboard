@@ -303,26 +303,80 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 完成整个对象创建
+   * 决定 finalize 之后是否将对象提交到静态图。
+   * handoff 工作流 override 此钩子返回 false 以阻止提交，
+   * 使对象停留在 AOM 动态图中等待 modifier 最终提交。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {boolean}
+   * @protected
+   */
+  beforeCommitCreatedObject(interaction) {
+    return true;
+  }
+
+  /**
+   * 固化对象上下文（同步到 node state、标记完成）。
+   * 无论后续是否 commit，此步骤始终执行。
+   * @param {Object} interaction - 当前交互上下文
+   * @protected
+   */
+  finalizeCreatedObject(interaction) {
+    const deviceContext = interaction?.deviceContext ?? {};
+    this.syncCreatedObjectContext(deviceContext, this.obj);
+    this.isObjectCreationCompleted = true;
+  }
+
+  /**
+   * 将对象正式提交到静态图。
+   * 仅当 {@link beforeCommitCreatedObject} 返回 true 时由
+   * {@link completeCreatedObject} 调用。
+   * @param {Object} interaction - 当前交互上下文
+   * @protected
+   */
+  commitCreatedObject(interaction) {
+    const deviceContext = interaction?.deviceContext ?? {};
+    const board = deviceContext.board;
+    const completedObject = this.obj;
+
+    if (board?.activeObjectManager?.apply) {
+      board.activeObjectManager.apply(new Set([completedObject]));
+      this.clearContextObjects(deviceContext);
+      return;
+    }
+    board?.addObject?.(completedObject, completedObject.ownerChunkId);
+    this.clearContextObjects(deviceContext);
+  }
+
+  /**
+   * 对象创建生命周期完成通知。
+   * handoff 通过 {@link Tool#on|on('afterCreate', ...)} 订阅。
+   * @param {Object} interaction - 当前交互上下文
+   * @param {BasicObject} completedObject - 已完成的对象
+   * @protected
+   */
+  afterCompleteCreatedObject(interaction, completedObject) {
+    this._emit("afterCreate", interaction, completedObject);
+  }
+
+  /**
+   * 完成整个对象创建（编排钩子流程）
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreatedObject(interaction) {
     if (!this.obj) return undefined;
     const completedObject = this.obj;
-    const deviceContext = interaction?.deviceContext ?? {};
-    const board = deviceContext.board;
 
-    this.syncCreatedObjectContext(deviceContext, completedObject);
+    // ① Finalize：总是执行（同步上下文 + 标记完成）
+    this.finalizeCreatedObject(interaction);
 
-    if (board?.activeObjectManager?.apply) {
-      board.activeObjectManager.apply(new Set([completedObject]));
-      this.isObjectCreationCompleted = true;
-      this.clearContextObjects(deviceContext);
-      return undefined;
+    // ② beforeCommit 钩子决定是否进入静态图
+    //    handoff 返回 false → 对象留在 AOM 动态图中
+    if (this.beforeCommitCreatedObject(interaction) !== false) {
+      this.commitCreatedObject(interaction);
     }
-    board?.addObject?.(completedObject, completedObject.ownerChunkId);
-    this.isObjectCreationCompleted = true;
-    this.clearContextObjects(deviceContext);
+
+    // ③ 通知钩子（无论是否 commit）
+    this.afterCompleteCreatedObject(interaction, completedObject);
     return undefined;
   }
 

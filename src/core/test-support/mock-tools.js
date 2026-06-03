@@ -33,18 +33,52 @@ class CollectingTool extends Tool {
 /**
  * 创建模拟 creator 工具
  * @description
- * 每次 process() 被调用后会自动调用 completeCreatedObject()，
- * 适合验证 wrapCreatorForHandoff 等 hook 行为。
+ * 实现完整的创建生命周期钩子，默认过程：
+ *   finalize → beforeCommit → commit（可选）→ afterCreate
+ * 默认 beforeCommit 返回 true（进入静态图）。
+ * handoff 测试可通过 mockCreator.beforeCommitCreatedObject = () => false 阻止。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
  * @returns {Tool}
  */
 function createMockCreator(onProcess) {
   return new (class extends Tool {
+    constructor() {
+      super();
+      this.isObjectCreationCompleted = false;
+    }
+
     process(packet, ctx) {
       if (onProcess) onProcess(packet, ctx);
-      this.completeCreatedObject({});
+      this.completeCreatedObject({ deviceContext: ctx });
     }
-    completeCreatedObject(_interaction) {}
+
+    /**
+     * 完整的创建生命周期入口。
+     * 被 handoff 通过钩子（beforeCommit / afterCreate）拦截。
+     */
+    completeCreatedObject(interaction) {
+      if (this.beforeCommitCreatedObject?.(interaction) === false) {
+        // handoff 模式：只 finalize，不 commit
+        this.isObjectCreationCompleted = true;
+      } else {
+        // 独立模式：commit 到静态图
+        this.isObjectCreationCompleted = true;
+        interaction?.deviceContext?.board?.activeObjectManager?.apply?.(
+          new Set([this.obj].filter(Boolean)),
+        );
+      }
+      this.afterCompleteCreatedObject?.(interaction, this.obj);
+    }
+
+    beforeCommitCreatedObject(_interaction) {
+      return true;
+    }
+
+    afterCompleteCreatedObject(interaction, obj) {
+      this._emit?.("afterCreate", interaction, obj);
+    }
+
+    obj;
   })();
 }
 
@@ -66,7 +100,7 @@ function createMockChooser(onProcess) {
 /**
  * 创建模拟 modifier 工具
  * @description
- * 不含 completeCreatedObject，仅执行自定义回调。
+ * 支持修改生命周期钩子，默认 applyModifiedObjects 会触发 afterApply。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
  * @returns {Tool}
  */
@@ -74,6 +108,31 @@ function createMockModifier(onProcess) {
   return new (class extends Tool {
     process(packet, ctx) {
       if (onProcess) onProcess(packet, ctx);
+    }
+
+    applyModifiedObjects(modificationContext, objects) {
+      const normalized = Array.isArray(objects)
+        ? objects
+        : objects
+          ? [objects]
+          : [];
+      if (normalized.length === 0) return false;
+      if (
+        this.beforeApplyModifiedObjects?.(modificationContext, normalized) ===
+        false
+      ) {
+        return false;
+      }
+      this.afterApplyModifiedObjects?.(modificationContext, normalized, true);
+      return true;
+    }
+
+    beforeApplyModifiedObjects() {
+      return true;
+    }
+
+    afterApplyModifiedObjects(ctx, objects) {
+      this._emit?.("afterApply", ctx, objects, true);
     }
   })();
 }

@@ -21,9 +21,18 @@ import { SignalPacket } from "../devices-dag/signal.js";
  */
 class Tool {
   /**
+   * 生命周期钩子监听器集合，钩子名称->监听器函数数组
+   * @type {Map<string, Array<Function>>|null}
+   * @private
+   */
+  _hooks;
+
+  /**
    * @constructor
    */
-  constructor() {}
+  constructor() {
+    this._hooks = null;
+  }
 
   /**
    * 解析序列化的工具数据以创建工具实例
@@ -330,6 +339,43 @@ class Tool {
    */
   requestUiOverlayRefresh(deviceContext = {}) {
     deviceContext.monitor?.requestViewportUiRender?.();
+  }
+
+  /**
+   * 注册生命周期钩子监听器
+   * @param {string} hookName - 钩子名称
+   * @param {Function} listener - 监听器函数
+   * @returns {Function} 取消订阅函数
+   */
+  on(hookName, listener) {
+    if (!this._hooks) this._hooks = new Map();
+    if (!this._hooks.has(hookName)) this._hooks.set(hookName, []);
+    this._hooks.get(hookName).push(listener);
+    return () => this.off(hookName, listener);
+  }
+
+  /**
+   * 取消生命周期钩子监听
+   * @param {string} hookName - 钩子名称
+   * @param {Function} listener - 监听器函数
+   */
+  off(hookName, listener) {
+    const list = this._hooks?.get(hookName);
+    if (!list) return;
+    const idx = list.indexOf(listener);
+    if (idx >= 0) list.splice(idx, 1);
+  }
+
+  /**
+   * 触发钩子（仅用于通知型钩子，不涉及控制流）
+   * @param {string} hookName
+   * @param  {...any} args
+   * @protected
+   */
+  _emit(hookName, ...args) {
+    const list = this._hooks?.get(hookName);
+    if (!list) return;
+    for (const fn of list) fn(...args);
   }
 
   /**

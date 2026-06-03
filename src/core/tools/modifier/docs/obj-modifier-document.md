@@ -13,6 +13,56 @@
 - withGeometryMutation(modificationContext, mutate, objects)：把一次对象修改封装为“快照 -> 变更 -> 失效”的统一流程
 - applyModifiedObjects(modificationContext, objects)：将当前对象提交回静态图并结束本次修改流程
 
+## 提交生命周期钩子
+
+`applyModifiedObjects(modificationContext, objects)` 内部按钩子编排提交流程：
+
+```
+applyModifiedObjects(modificationContext, objects)
+  │
+  ├─ ① resolveActiveModifiedObjects()  ← 解析 AOM 动态图中的对象
+  │
+  ├─ ② beforeApplyModifiedObjects()    ← 控制型钩子，返回 bool
+  │     └─ false → 终止，不提交
+  │
+  ├─ ③ AOM.apply()                     ← 提交到静态图
+  │
+  ├─ ④ autoUmountOnApply 检查          ← 支持双层读取（顶层 / 累积 context）
+  │     └─ handoff 通过 context 注入 false 阻止自卸载
+  │
+  └─ ⑤ afterApplyModifiedObjects()     ← 通知型钩子，触发 "afterApply" 事件
+```
+
+### 控制型钩子：`beforeApplyModifiedObjects`
+
+决定是否执行 apply。handoff 可通过覆盖或订阅控制提交行为。
+
+```js
+// 默认：允许提交
+beforeApplyModifiedObjects(modificationContext, objects) {
+  return true;
+}
+```
+
+### 通知型钩子：`afterApplyModifiedObjects`
+
+提交成功后触发 `"afterApply"` 事件，handoff 借以感知 modifier 完成并切回 first。
+
+```js
+modifier.on("afterApply", (ctx, objects, result) => {
+  // 修改已提交，可切回 creator
+});
+```
+
+### autoUmountOnApply 的双层读取
+
+`applyModifiedObjects` 检查 `autoUmountOnApply` 时支持两层：
+
+1. `modificationContext.autoUmountOnApply` — 直接传入
+2. `modificationContext.context?.autoUmountOnApply` — 通过累积 context 注入（handoff 方式）
+
+handoff 通过 `resolveTransition` 的 `transition.context` 注入 `autoUmountOnApply: false`，无需覆盖 modifier 的任何方法。
+
 ## 上下文解析规则
 
 修改工具现在统一通过 Tool.resolveContextObjects() 读取对象集合。

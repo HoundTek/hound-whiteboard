@@ -47,7 +47,7 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
-   * 规整本次修改涉及的对象集合。
+   * 规整本次修改涉及的对象集合
    * @param {Object} modificationContext - 修改上下文
    * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
    * @returns {Array<*>}
@@ -61,7 +61,7 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
-   * 解析当前仍处于 AOM 动态图中的对象集合。
+   * 解析当前仍处于 AOM 动态图中的对象集合
    * @param {Object} modificationContext - 修改上下文
    * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
    * @returns {Array<*>}
@@ -141,6 +141,29 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
+   * 决定是否执行 apply。
+   * @param {Object} modificationContext - 修改上下文
+   * @param {Array<*>} objects - 已解析的活动对象
+   * @returns {boolean}
+   * @protected
+   */
+  beforeApplyModifiedObjects(modificationContext, objects) {
+    return true;
+  }
+
+  /**
+   * 提交成功后的通知钩子。
+   * handoff 通过 {@link Tool#on|on('afterApply', ...)} 订阅。
+   * @param {Object} modificationContext - 修改上下文
+   * @param {Array<*>} objects - 已提交的对象
+   * @param {boolean} result - 提交结果
+   * @protected
+   */
+  afterApplyModifiedObjects(modificationContext, objects, result) {
+    this._emit("afterApply", modificationContext, objects, result);
+  }
+
+  /**
    * 将当前修改对象提交回静态图。
    * @param {Object} modificationContext - 修改上下文
    * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
@@ -157,19 +180,37 @@ class ObjectModifierTool extends Tool {
       return false;
     }
 
+    if (
+      this.beforeApplyModifiedObjects(
+        modificationContext,
+        normalizedObjects,
+      ) === false
+    ) {
+      return false;
+    }
+
     modificationContext?.board?.activeObjectManager?.apply?.(
       new Set(normalizedObjects),
     );
     this.clearContextObjects(modificationContext);
 
-    if (
+    // autoUmountOnApply 支持两层读取：顶层直接传入或通过累积 context 传入
+    const autoUmount =
       modificationContext.autoUmountOnApply !== false &&
+      modificationContext.context?.autoUmountOnApply !== false;
+    if (
+      autoUmount &&
       typeof modificationContext.dag?.unmount === "function" &&
       typeof modificationContext.path === "string"
     ) {
       modificationContext.dag.unmount(modificationContext.path);
     }
 
+    this.afterApplyModifiedObjects(
+      modificationContext,
+      normalizedObjects,
+      true,
+    );
     return true;
   }
 

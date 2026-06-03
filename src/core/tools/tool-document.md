@@ -6,11 +6,11 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 
 ### 职责边界
 
-| 层面       | 做什么                                 | 谁做                   |
-| ---------- | -------------------------------------- | ---------------------- |
-| 信号预处理 | 锚点、参数注入、局部路由、状态机       | 修饰节点               |
+| 层面       | 做什么                                 | 谁做                  |
+| ---------- | -------------------------------------- | --------------------- |
+| 信号预处理 | 锚点、参数注入、局部路由、状态机       | 修饰节点              |
 | 对象编排   | first → second 切换、对象桥接          | `createHandoffSubDAG` |
-| 末端消费   | 创建对象、修改对象、选择对象、更新视口 | Tool                   |
+| 末端消费   | 创建对象、修改对象、选择对象、更新视口 | Tool                  |
 
 ### Tool 只做三件事
 
@@ -134,10 +134,51 @@ dag.mountWorkflow("/monitor/main/workflows/pointer", pointerTool, {
   board,
   monitor,
 });
-dag.addEdge("/monitor/main/mouse/pointer", "tool", "/monitor/main/workflows/pointer");
+dag.addEdge(
+  "/monitor/main/mouse/pointer",
+  "tool",
+  "/monitor/main/workflows/pointer",
+);
 ```
 
 `mountWorkflow()` 在挂载单个 Tool 时，内部会使用 `tool.createProcessor()` 作为 handler，并在卸载时调用 `tool.umount()`。
+
+## 生命周期钩子系统
+
+Tool 基类提供了一套发布-订阅式生命周期钩子，允许外部观察者（如 handoff 工作流）在不修改工具方法的前提下感知工具的关键生命周期事件。
+
+### 钩子 API
+
+| 方法                       | 用途                                  |
+| -------------------------- | ------------------------------------- |
+| `on(hookName, listener)`   | 注册钩子监听器，返回取消订阅函数      |
+| `off(hookName, listener)`  | 取消注册                              |
+| `_emit(hookName, ...args)` | 触发通知型钩子（protected，子类调用） |
+
+### 设计原则
+
+- **通知型钩子**通过 `_emit` 触发，不参与控制流
+- **控制型钩子**是可覆盖的实例方法，返回 `bool` 决定流程是否继续
+- 钩子名称约定为语义化字符串：`"afterCreate"`、`"afterApply"` 等
+
+```js
+// 注册监听
+const unsub = tool.on("afterCreate", (interaction, obj) => {
+  console.log("对象创建完成", obj);
+});
+
+// 取消监听
+unsub();
+```
+
+### 当前预定义钩子
+
+| 工具类型 | 控制型钩子（可覆盖）           | 通知型钩子（可订阅） |
+| -------- | ------------------------------ | -------------------- |
+| Creator  | `beforeCommitCreatedObject()`  | `"afterCreate"`      |
+| Modifier | `beforeApplyModifiedObjects()` | `"afterApply"`       |
+
+控制型钩子返回 `false` 即阻止该生命周期步骤继续执行。
 
 ## 子类约定
 

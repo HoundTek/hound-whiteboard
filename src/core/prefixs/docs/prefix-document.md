@@ -56,8 +56,6 @@ flowchart TD
     Base --> Multi[createMultiToolPrefixHandler]
     Base --> Repeator[createRepeatorPrefixHandler]
     Multi --> Handoff[createHandoffSubDAG]
-    Handoff --> WrapFirst[wrapFirstForHandoff]
-    Handoff --> WrapCreator[wrapCreatorForHandoff]
     Handoff --> WrapSub[wrapSubDAGForHandoff]
     Prefix --> Tool[Tool Leaf]
 ```
@@ -139,28 +137,43 @@ const handler = createRepeatorPrefixHandler({
 
 ### 当前工作方式
 
-- 根节点是一个 `multi-tool prefix`
-- 根 prefix 根据当前 `state.activeChild` 选择把信号送到 `first` 或 `second`
-- 根 prefix 通过 `transition.context` 向当前活动子链注入 `onToolComplete` 回调
-- `first` 完成时，回调切换到 `second`，必要时把对象从 `first` 节点 state 桥接到 `second` 节点 state
-- `second` 完成时，回调切换回 `first`
+采用生命周期钩子，handoff 不再替换工具方法，而是通过钩子订阅实现非侵入的完成通知与流程控制：
+
+- 根节点是一个 `multi-tool prefix`，根据 `state.activeChild` 路由
+- 根 prefix 通过 `transition.context` 向当前活动子链注入 `onToolComplete` 回调和 `autoUmountOnApply: false`
+- **creator 的 first**：handoff 覆盖 `beforeCommitCreatedObject` 返回 `false`（阻止进入静态图），订阅 `"afterCreate"` 钩子
+- **modifier 的 second**：handoff 订阅 `"afterApply"` 钩子，通过 context 注入 `autoUmountOnApply: false` 阻止自卸载
+- **chooser 的 first**：使用 `end` 信号 + 对象检测
 
 ```mermaid
 flowchart LR
     A[输入进入 handoff 根节点] --> B{activeChild}
-    B -->|first| C[first 处理]
-    C -->|调用 onToolComplete| D[可选桥接 objects 到 second state]
+    B -->|"first (creator)"| C[first 处理]
+    C -->|"beforeCommit→false"| C1[跳过 AOM.apply]
+    C1 -->|"afterCreate 钩子"| D[autoBridgeObjects]
     D --> E[切换 activeChild = second]
     E --> F[second 处理]
-    F -->|调用 onToolComplete| G[切换 activeChild = first]
+    F -->|"afterApply 钩子"| G[切换 activeChild = first]
     G --> B
 ```
 
+### 控制流与钩子对照
+
+| 步骤          | 独立模式                        | handoff 模式                                   |
+| ------------- | ------------------------------- | ---------------------------------------------- |
+| Creator 完成  | `beforeCommit→true` → AOM.apply | `beforeCommit→false` → 对象留在 AOM            |
+| Creator 通知  | `afterCreate` 无人订阅          | handoff handler 订阅 `afterCreate`             |
+| Modifier 提交 | AOM.apply → 自卸载              | AOM.apply → `autoUmountOnApply:false` 阻止卸载 |
+| Modifier 通知 | `afterApply` 无人订阅           | handoff handler 订阅 `afterApply`              |
+
 ### 辅助函数
 
-- `wrapCreatorForHandoff(tool)`：hook `completeCreatedObject()`，在 creator 真正完成时调用 `onToolComplete`
-- `wrapFirstForHandoff(tool)`：creator 走 hook 路径，chooser 则在 `end` 且已选中对象时调用 `onToolComplete`
 - `wrapSubDAGForHandoff(subDAGDef, options)`：在子树根节点满足 `shouldComplete` 或收到 `end` 时调用 `onToolComplete`
+- handler 内部桥接：在 first / second 节点 handler 中临时订阅工具钩子，触发时调用累积 context 中的 `onToolComplete` 回调
+
+### 钩子清理
+
+handoff 子图构建后会保存 `beforeCommitCreatedObject` 的原始引用，并通过 `subDAG.resetHandoff()` 暴露清理入口，在卸载 handoff 时恢复工具原始行为。
 
 ## 5. 拖拽位移转换：`createDragAnchorPrefixHandler`
 
@@ -197,6 +210,7 @@ monitor.mountSubDAG("", builder.build());
 - prefix 语义通过 `semantics` 标记表达，不引入新的节点类
 - 节点状态通过 `getNodeState()` / `setNodeState()` 显式管理
 - first / second 的切换使用累积 `context` 中的回调完成
+- handoff 通过生命周期钩子订阅实现完成通知，不替换工具方法
 
 ## 相关文档
 

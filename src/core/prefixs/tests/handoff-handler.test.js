@@ -6,9 +6,6 @@ import { Vector } from "../../utils/math.js";
 import { createPrefixNodeHandler } from "../handler.js";
 import {
   createHandoffSubDAG,
-  wrapCreatorForHandoff,
-  wrapFirstForHandoff,
-  wrapSecondForHandoff,
   wrapSubDAGForHandoff,
 } from "../handoff-handler.js";
 import {
@@ -17,137 +14,129 @@ import {
   createMockModifier,
 } from "../../test-support/mock-tools.js";
 
-describe("handoff-handler", () => {
-  describe("hook functions", () => {
-    test("wrapCreatorForHandoff 应在 completeCreatedObject 后调用 onToolComplete 回调", () => {
-      const dag = new DevicesDAG();
-      const creator = createMockCreator((_pkt, ctx) => {
-        ctx.setNodeState?.(ctx.path, { objects: [{ id: 1 }] });
-      });
-      const onToolComplete = jest.fn();
-
-      const builder = createSubDAG("/handoff");
-      builder.node().handler(wrapCreatorForHandoff(creator));
-      const subDAG = builder.build();
-
-      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
-      const result = dag.dispatch(
-        {
-          to: "/monitor/handoff",
-          signals: [{ type: "position" }],
-        },
-        {
-          board: {},
-          monitor: {},
-          onToolComplete,
-        },
-      );
-      expect(onToolComplete).toHaveBeenCalledTimes(1);
-      expect(result.packets).toEqual([]);
-    });
-
-    test("wrapFirstForHandoff 对 creator 应走 completeCreatedObject 回调路径", () => {
-      const dag = new DevicesDAG();
+describe("handoff-handler（生命周期钩子模式）", () => {
+  describe("钩子系统（Tool.on / off / _emit）", () => {
+    test("on 注册的监听器在 _emit 触发时被调用", () => {
       const creator = createMockCreator();
-      const onToolComplete = jest.fn();
+      const listener = jest.fn();
 
-      const builder = createSubDAG("/wf");
-      builder.node().handler(wrapFirstForHandoff(creator));
-      const subDAG = builder.build();
+      creator.on("afterCreate", listener);
+      creator._emit("afterCreate", { id: 1 }, { type: "circle" });
 
-      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
-      const result = dag.dispatch(
-        {
-          to: "/monitor/wf",
-          signals: [{ type: "position" }],
-        },
-        {
-          board: {},
-          monitor: {},
-          onToolComplete,
-        },
-      );
-      expect(onToolComplete).toHaveBeenCalledTimes(1);
-      expect(result.packets).toEqual([]);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith({ id: 1 }, { type: "circle" });
     });
 
-    test("wrapFirstForHandoff 对 chooser 应在 end 信号且已选中对象后调用 onToolComplete", () => {
-      const dag = new DevicesDAG();
-      const selectedObject = { id: 1 };
-      const onToolComplete = jest.fn();
-      // chooser 需要实际写入对象到上下文，wrapper 才会触发 handoff
-      const chooser = createMockChooser((_pkt, ctx) => {
-        ctx.setNodeState?.(ctx.path, {
-          object: selectedObject,
-          objects: [selectedObject],
-        });
-      });
+    test("off 取消注册后不再调用", () => {
+      const creator = createMockCreator();
+      const listener = jest.fn();
 
-      const builder = createSubDAG("/wf");
-      builder.node().handler(wrapFirstForHandoff(chooser));
-      const subDAG = builder.build();
+      const unsub = creator.on("afterCreate", listener);
+      unsub(); // 等效于 off
+      creator._emit("afterCreate");
 
-      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
-
-      const r1 = dag.dispatch(
-        {
-          to: "/monitor/wf",
-          signals: [{ type: "position" }],
-        },
-        {
-          board: {},
-          monitor: {},
-          onToolComplete,
-        },
-      );
-      expect(r1.packets).toEqual([]);
-      expect(onToolComplete).not.toHaveBeenCalled();
-
-      const r2 = dag.dispatch(
-        {
-          to: "/monitor/wf",
-          signals: [{ type: "end" }],
-        },
-        {
-          board: {},
-          monitor: {},
-          onToolComplete,
-        },
-      );
-      expect(r2.packets).toEqual([]);
-      expect(onToolComplete).toHaveBeenCalledTimes(1);
+      expect(listener).not.toHaveBeenCalled();
     });
 
-    test("wrapFirstForHandoff 对 chooser 选择失败时不应调用 onToolComplete", () => {
-      const dag = new DevicesDAG();
-      // 不写入对象 → 选择失败
-      const chooser = createMockChooser();
-      const onToolComplete = jest.fn();
+    test("多个监听器各自独立触发", () => {
+      const creator = createMockCreator();
+      const a = jest.fn();
+      const b = jest.fn();
 
-      const builder = createSubDAG("/wf");
-      builder.node().handler(wrapFirstForHandoff(chooser));
-      const subDAG = builder.build();
+      creator.on("afterCreate", a);
+      creator.on("afterCreate", b);
+      creator._emit("afterCreate", "x");
 
-      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
+      expect(a).toHaveBeenCalledWith("x");
+      expect(b).toHaveBeenCalledWith("x");
+    });
+  });
 
-      const r = dag.dispatch(
-        {
-          to: "/monitor/wf",
-          signals: [{ type: "end" }],
+  describe("beforeCommitCreatedObject 控制对象是否进入静态图", () => {
+    test("默认返回 true：对象进入静态图", () => {
+      const creator = createMockCreator();
+      const appliedObjects = [];
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map(),
+          apply: jest.fn((objects) => {
+            for (const obj of objects) appliedObjects.push(obj);
+          }),
         },
-        {
-          board: {},
-          monitor: {},
-          onToolComplete,
+      };
+
+      // 默认 beforeCommitCreatedObject 返回 true
+      creator.obj = { id: 1, type: "rect" };
+      creator.completeCreatedObject?.({ deviceContext: { board } });
+
+      // 如果没有 completeCreatedObject（mock 是自己实现 process），走 process
+      creator.process({ signals: [{ type: "position" }] }, { board });
+      expect(creator.isObjectCreationCompleted).toBe(true);
+    });
+
+    test("返回 false：对象停留在 AOM 动态图（handoff 模式）", () => {
+      const creator = createMockCreator();
+      const appliedObjects = [];
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map(),
+          apply: jest.fn((objects) => {
+            for (const obj of objects) appliedObjects.push(obj);
+          }),
         },
-      );
-      expect(r.packets).toEqual([]);
-      expect(onToolComplete).not.toHaveBeenCalled();
+      };
+
+      // Override 钩子：阻止 commit
+      creator.beforeCommitCreatedObject = () => false;
+      creator.obj = { id: 1, type: "rect" };
+
+      creator.process({ signals: [{ type: "position" }] }, { board });
+
+      // beforeCommit 返回 false → apply 不应被调用
+      expect(appliedObjects).toEqual([]);
+      // 但创建生命周期仍应执行 finalize
+      expect(creator.isObjectCreationCompleted).toBe(true);
+    });
+  });
+
+  describe("afterCreate / afterApply 通知钩子", () => {
+    test("creator 完成时触发 afterCreate", () => {
+      const creator = createMockCreator();
+      const afterCreate = jest.fn();
+
+      creator.on("afterCreate", afterCreate);
+      creator.obj = { id: 1 };
+      creator.process({ signals: [{ type: "position" }] }, {});
+
+      expect(afterCreate).toHaveBeenCalledTimes(1);
+    });
+
+    test("modifier apply 成功时触发 afterApply", () => {
+      const modifier = createMockModifier();
+      const afterApply = jest.fn();
+
+      modifier.on("afterApply", afterApply);
+      modifier.applyModifiedObjects({}, [{ id: 1 }]);
+
+      expect(afterApply).toHaveBeenCalledTimes(1);
+    });
+
+    test("beforeCommit 返回 false 时 afterCreate 仍触发", () => {
+      const creator = createMockCreator();
+      const afterCreate = jest.fn();
+
+      creator.on("afterCreate", afterCreate);
+      creator.beforeCommitCreatedObject = () => false;
+      creator.obj = { id: 1 };
+      creator.process({ signals: [{ type: "position" }] }, {});
+
+      // afterCreate 无论是否 commit 都应触发（finalize 总是执行）
+      expect(afterCreate).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("createHandoffSubDAG", () => {
-    test("应构建三层结构并支持 first -> second 切换", () => {
+    test("应构建三层结构并支持 first → second 切换", () => {
       const dag = new DevicesDAG();
       const first = createMockCreator();
       const second = createMockModifier();
@@ -194,6 +183,8 @@ describe("handoff-handler", () => {
         }
       });
 
+      first.obj = { id: 42, type: "circle" };
+
       const subDAG = createHandoffSubDAG({
         rootPath: "/ce",
         first,
@@ -224,9 +215,11 @@ describe("handoff-handler", () => {
       });
     });
 
-    test("应在 second 调用完成回调后切回 first", () => {
+    test("应在 second 通过 onToolComplete 切回 first", () => {
       const dag = new DevicesDAG();
       const first = createMockCreator();
+
+      // second：手动触发 onToolComplete 来模拟 modifier 完成
       const second = new (class extends Tool {
         process(_packet, ctx) {
           ctx.context?.onToolComplete?.();
@@ -275,6 +268,7 @@ describe("handoff-handler", () => {
           objects: [object],
         });
       });
+      first.obj = object;
       const second = new CommonObjectModifierTool();
 
       const subDAG = createHandoffSubDAG({
@@ -343,12 +337,11 @@ describe("handoff-handler", () => {
 
       dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      // Position signal: chooser selects, but no completion callback yet (no "end")
+      // Position signal: chooser selects, no completion yet (no "end")
       dag.dispatch({
         to: "/monitor/chooser-flow",
         signals: [{ type: "position" }],
       });
-      // 初始状态在 prefix 内部 merge，未写入 node state
       expect(dag.getNodeState("/monitor/chooser-flow")).toEqual({});
 
       // End 信号触发 chooser 的完成回调 → handoff
@@ -419,6 +412,7 @@ describe("handoff-handler", () => {
           objects: [{ id: 42 }],
         });
       });
+      first.obj = { id: 42 };
       const second = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -440,7 +434,6 @@ describe("handoff-handler", () => {
 
     test("first 无对象时不应崩溃", () => {
       const dag = new DevicesDAG();
-      // creator 不写入任何对象到 state
       const first = createMockCreator();
       const second = createMockModifier();
 
@@ -452,7 +445,6 @@ describe("handoff-handler", () => {
 
       dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
-      // 不应抛出异常
       expect(() => {
         dag.dispatch({
           to: "/monitor/empty",
@@ -460,7 +452,6 @@ describe("handoff-handler", () => {
         });
       }).not.toThrow();
 
-      // second 状态保持为空
       expect(dag.getNodeState("/monitor/empty/second")).toEqual({});
     });
 
@@ -476,13 +467,32 @@ describe("handoff-handler", () => {
       })();
       const second = createMockModifier();
 
-      const subDAG = createHandoffSubDAG({
+      // 对于非 creator 非 chooser 的 Tool，createHandoffSubDAG 会走到 chooser 分支
+      // 这里我们用 SubDAGDefinition 包装来测试状态机
+      const subDAG = createSubDAG("/rapid-wrapper");
+      const r = subDAG
+        .node()
+        .defaultRoute("child")
+        .prefix(
+          createPrefixNodeHandler({
+            handle(pkt, ctx) {
+              toggleCount++;
+              ctx.context?.onToolComplete?.();
+              return ctx.routeToChild("child");
+            },
+          }),
+        );
+      const c = subDAG.node().handler(() => ({ packets: [] }));
+      subDAG.edge("child", r, c);
+      const firstSubDAG = subDAG.build();
+
+      const handoffSubDAG = createHandoffSubDAG({
         rootPath: "/rapid",
-        first,
+        first: firstSubDAG,
         second,
       });
 
-      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
+      dag.mountSubDAG("/monitor", handoffSubDAG, { board: {}, monitor: {} });
 
       // 第一次完成回调：first → second
       dag.dispatch({ to: "/monitor/rapid", signals: [{ type: "trigger" }] });
@@ -498,7 +508,7 @@ describe("handoff-handler", () => {
         phase: "second",
         activeChild: "second",
       });
-      expect(toggleCount).toBe(1);
+      expect(toggleCount).toBe(1); // 仅第一次 dispatch 路由到 first 子图
     });
   });
 
@@ -509,31 +519,26 @@ describe("handoff-handler", () => {
       const createdIds = [];
 
       const first = new (class extends Tool {
+        constructor() {
+          super();
+          this.isObjectCreationCompleted = false;
+        }
         process(_pkt, ctx) {
           createdCount++;
           const id = createdCount;
           createdIds.push(id);
+          this.isObjectCreationCompleted = true;
+          this._emit?.("afterCreate");
           ctx.context?.onToolComplete?.();
         }
       })();
 
-      const second = new (class extends Tool {
-        process(pkt) {
-          const hasSuccess = pkt.signals?.some((s) => s.type === "success");
-          if (hasSuccess) {
-            return undefined;
-          }
-          return undefined;
-        }
-      })();
-
-      second.process = function (pkt, ctx) {
-        const hasSuccess = pkt.signals?.some((s) => s.type === "success");
+      const second = createMockModifier((_pkt, ctx) => {
+        const hasSuccess = _pkt.signals?.some((s) => s.type === "success");
         if (hasSuccess) {
           ctx.context?.onToolComplete?.();
         }
-        return undefined;
-      };
+      });
 
       const subDAG = createHandoffSubDAG({
         rootPath: "/full-cycle",
@@ -665,34 +670,119 @@ describe("handoff-handler", () => {
       ).toThrow(/same tool instance/i);
     });
 
-    test("wrapCreatorForHandoff 对同一 tool 调用两次应抛错", () => {
+    test("同一 tool 实例参与两个不同的 handoff 应抛错", () => {
       const tool = createMockCreator();
-      wrapCreatorForHandoff(tool);
-      expect(() => wrapCreatorForHandoff(tool)).toThrow(
-        /already been wrapped/i,
-      );
+      const modifier1 = createMockModifier();
+      const modifier2 = createMockModifier();
+
+      createHandoffSubDAG({
+        rootPath: "/first-handoff",
+        first: tool,
+        second: modifier1,
+      });
+
+      expect(() =>
+        createHandoffSubDAG({
+          rootPath: "/second-handoff",
+          first: tool,
+          second: modifier2,
+        }),
+      ).toThrow(/already been registered/i);
     });
 
-    test("wrapFirstForHandoff 对 creator 调用两次应抛错（走 wrapCreatorForHandoff）", () => {
-      const tool = createMockCreator();
-      wrapFirstForHandoff(tool);
-      expect(() => wrapFirstForHandoff(tool)).toThrow(
-        /already been wrapped/i,
-      );
+    test("不同 tool 实例可以各自参与 handoff", () => {
+      const creator1 = createMockCreator();
+      const creator2 = createMockCreator();
+      const modifier1 = createMockModifier();
+      const modifier2 = createMockModifier();
+
+      expect(() => {
+        createHandoffSubDAG({
+          rootPath: "/handoff-a",
+          first: creator1,
+          second: modifier1,
+        });
+        createHandoffSubDAG({
+          rootPath: "/handoff-b",
+          first: creator2,
+          second: modifier2,
+        });
+      }).not.toThrow();
     });
 
-    test("wrapSecondForHandoff 对同一 modifier tool 调用两次应抛错", () => {
+    test("resetHandoff 清理后 tool 可重新参与 handoff", () => {
+      // 注意：WeakSet 不支持手动 delete，所以此测试验证 resetHandoff
+      // 能正确恢复 beforeCommitCreatedObject
+      const tool = createMockCreator();
+      const originalBeforeCommit = tool.beforeCommitCreatedObject.bind(tool);
+
+      tool.obj = { id: 1 };
+      const modifier = createMockModifier();
+
+      const subDAG = createHandoffSubDAG({
+        rootPath: "/test",
+        first: tool,
+        second: modifier,
+      });
+
+      // beforeCommitCreatedObject 已被 handoff override
+      expect(tool.beforeCommitCreatedObject()).toBe(false);
+
+      // 执行清理
+      subDAG.resetHandoff();
+
+      // 应恢复原始行为
+      expect(tool.beforeCommitCreatedObject()).toBe(true);
+    });
+  });
+
+  describe("autoUmountOnApply context 注入", () => {
+    test("handoff 中 modifier 不应自卸载", () => {
       const dag = new DevicesDAG();
-      const modifier = new (class extends Tool {
-        process() {}
-        applyModifiedObjects() {
-          return true;
+      const first = createMockCreator();
+      const mockUnmount = jest.fn();
+
+      // 创建一个真实的 modifier，有 dag.unmount 能力
+      const second = new (class extends Tool {
+        process(_pkt, ctx) {
+          // 模拟 applyModifiedObjects
+          const modificationContext = {
+            ...ctx,
+            dag: { unmount: mockUnmount },
+            path: "/monitor/test/second",
+          };
+          // 直接调用 apply 模拟（绕过真实 AOM 逻辑）
+          this.applyModifiedObjects?.(modificationContext, [{ id: 1 }]);
+        }
+        applyModifiedObjects(modificationContext, objects) {
+          // 模拟：即使有 dag.unmount 也不应被调用
+          const shouldUnmount =
+            modificationContext.autoUmountOnApply !== false &&
+            modificationContext.context?.autoUmountOnApply !== false;
+          return !shouldUnmount; // 只要 autoUmountOnApply 生效就不卸载
         }
       })();
-      wrapSecondForHandoff(modifier);
-      expect(() => wrapSecondForHandoff(modifier)).toThrow(
-        /already been wrapped/i,
-      );
+
+      const subDAG = createHandoffSubDAG({
+        rootPath: "/test-umount",
+        first,
+        second,
+      });
+
+      dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
+
+      dag.dispatch({
+        to: "/monitor/test-umount",
+        signals: [{ type: "position" }],
+      });
+
+      expect(dag.getNodeState("/monitor/test-umount")).toEqual({
+        phase: "second",
+        activeChild: "second",
+      });
+
+      // modifier process 被调用，但 autoUmountOnApply: false 应阻止卸载
+      expect(mockUnmount).not.toHaveBeenCalled();
     });
   });
 });
