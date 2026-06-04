@@ -72,7 +72,8 @@ class ObjectModifierTool extends Tool {
       objects,
     );
     const activeObjectIndex =
-      modificationContext?.board?.activeObjectManager?.activeObjectIndex;
+      modificationContext?.context?.board?.activeObjectManager
+        ?.activeObjectIndex;
 
     if (typeof activeObjectIndex?.has !== "function") {
       return normalizedObjects;
@@ -96,7 +97,7 @@ class ObjectModifierTool extends Tool {
 
     if (normalizedObjects.length === 0) return;
 
-    modificationContext?.monitor?.liveRenderer?.captureObjectSnapshot?.(
+    modificationContext?.context?.monitor?.liveRenderer?.captureObjectSnapshot?.(
       normalizedObjects,
     );
   }
@@ -114,10 +115,10 @@ class ObjectModifierTool extends Tool {
 
     if (normalizedObjects.length === 0) return;
 
-    modificationContext?.monitor?.liveRenderer?.invalidateObjects?.(
+    modificationContext?.context?.monitor?.liveRenderer?.invalidateObjects?.(
       normalizedObjects,
     );
-    modificationContext?.monitor?.requestViewportUiRender?.();
+    modificationContext?.context?.monitor?.requestViewportUiRender?.();
   }
 
   /**
@@ -189,15 +190,12 @@ class ObjectModifierTool extends Tool {
       return false;
     }
 
-    modificationContext?.board?.activeObjectManager?.apply?.(
+    modificationContext?.context?.board?.activeObjectManager?.apply?.(
       new Set(normalizedObjects),
     );
     this.clearContextObjects(modificationContext);
 
-    // autoUmountOnApply 支持两层读取：顶层直接传入或通过累积 context 传入
-    const autoUmount =
-      modificationContext.autoUmountOnApply !== false &&
-      modificationContext.context?.autoUmountOnApply !== false;
+    const autoUmount = modificationContext.context?.autoUmountOnApply !== false;
     if (
       autoUmount &&
       typeof modificationContext.dag?.unmount === "function" &&
@@ -224,7 +222,7 @@ class ObjectModifierTool extends Tool {
       this.resolveActiveModifiedObjects(modificationContext);
 
     if (normalizedObjects.length > 0) {
-      modificationContext?.board?.activeObjectManager?.discard?.(
+      modificationContext?.context?.board?.activeObjectManager?.discard?.(
         new Set(normalizedObjects),
       );
     }
@@ -243,6 +241,4 @@ class ObjectModifierTool extends Tool {
   }
 }
 
-export { ObjectModifierTool };
-
-export { OBJECT_MODIFIER_SIGNAL_TYPES };
+export { OBJECT_MODIFIER_SIGNAL_TYPES, ObjectModifierTool };

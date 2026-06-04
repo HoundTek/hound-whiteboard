@@ -66,10 +66,10 @@ class CommonObjectModifierTool extends ObjectModifierTool {
 
     const modificationContext = {
       ...deviceContext,
-      objects:
-        deviceContext.objects ??
-        (deviceContext.object ? [deviceContext.object] : undefined) ??
-        this.resolveContextObjects(deviceContext),
+      context: {
+        ...deviceContext.context,
+        objects: this.resolveContextObjects(deviceContext),
+      },
     };
 
     const objects = this.resolveActiveModifiedObjects(modificationContext);

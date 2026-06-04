@@ -136,7 +136,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @returns {Array<*>}
    */
   collectSelectableObjects(deviceContext = {}) {
-    const board = deviceContext.board;
+    const board = deviceContext.context?.board;
     const objectMap = new Map();
 
     for (const entry of board?.objectLoaded?.values?.() ?? []) {
@@ -186,7 +186,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     const previousObjects =
       this.resolveContextObjects(deviceContext).filter(Boolean);
     if (previousObjects.length > 0) {
-      deviceContext.board?.activeObjectManager?.discard?.(
+      deviceContext.context?.board?.activeObjectManager?.discard?.(
         new Set(previousObjects),
       );
     }
@@ -197,7 +197,9 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       return [];
     }
 
-    deviceContext.board?.activeObjectManager?.choose?.(new Set(nextObjects));
+    deviceContext.context?.board?.activeObjectManager?.choose?.(
+      new Set(nextObjects),
+    );
     return this.setContextObjects(deviceContext, nextObjects);
   }
 

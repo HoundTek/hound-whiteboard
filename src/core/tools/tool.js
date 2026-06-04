@@ -55,14 +55,11 @@ class Tool {
 
   /**
    * 将设备图上下文规整为工具上下文。
-   * 当前稳定模型只产出平面 deviceContext；累积上下文保留在 context 字段中。
-   * @param {{
-   *   path?: string, dag?: Object, node?: Object, defaultRoute?: string,
-   *   resolvedDefaultRoutePath?: string, depth?: number,
-   *   context?: Object, getNodeState?: Function, setNodeState?: Function
-   * }} [handlerContext={}] - 设备图处理上下文
+   * 直接透传 handlerContext 全集，仅对 context 累积上下文集成了
+   * toolContext 提供的 board / monitor 等 fallback。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [handlerContext={}] - 设备图处理上下文
    * @param {Object} [toolContext={}] - 工具固定上下文
-   * @returns {Object}
+   * @returns {import("../devices-dag/dag.js").DevicesDAGHandlerContext}
    */
   createDeviceContext(handlerContext = {}, toolContext = {}) {
     const accumulatedContext = handlerContext.context ?? {};
@@ -89,27 +86,14 @@ class Tool {
         : undefined);
 
     return {
-      dag: handlerContext.dag,
-      node: handlerContext.node,
-      semantics: handlerContext.semantics ?? {},
-      path: handlerContext.path ?? handlerContext.node?.path ?? "",
-      defaultRoute: handlerContext.defaultRoute ?? "",
-      resolvedDefaultRoutePath:
-        handlerContext.resolvedDefaultRoutePath ?? handlerContext.path ?? "",
-      depth: handlerContext.depth ?? 0,
-      board,
-      monitor,
-      allocateObjectId,
-      resolveOwnerChunkId,
-      context: accumulatedContext,
-      getNodeState:
-        typeof handlerContext.getNodeState === "function"
-          ? handlerContext.getNodeState
-          : undefined,
-      setNodeState:
-        typeof handlerContext.setNodeState === "function"
-          ? handlerContext.setNodeState
-          : undefined,
+      ...handlerContext,
+      context: {
+        ...accumulatedContext,
+        board,
+        monitor,
+        allocateObjectId,
+        resolveOwnerChunkId,
+      },
     };
   }
 
@@ -165,7 +149,7 @@ class Tool {
       sync: (deviceContext = {}) => {
         latestDeviceContext = deviceContext;
 
-        const monitor = deviceContext.monitor;
+        const monitor = deviceContext.context?.monitor;
         if (!monitor?.registerUiOverlayProvider) {
           return;
         }
@@ -188,7 +172,7 @@ class Tool {
       cleanup: (deviceContext = {}) => {
         latestDeviceContext = deviceContext;
 
-        const monitor = registeredMonitor ?? deviceContext.monitor;
+        const monitor = registeredMonitor ?? deviceContext.context?.monitor;
         if (monitor?.unregisterUiOverlayProvider) {
           monitor.unregisterUiOverlayProvider(provider, {
             invalidate: false,
@@ -197,7 +181,7 @@ class Tool {
 
         registeredMonitor = null;
         latestDeviceContext = {};
-        deviceContext.monitor?.requestViewportUiRender?.();
+        deviceContext.context?.monitor?.requestViewportUiRender?.();
       },
     };
   }
@@ -259,11 +243,11 @@ class Tool {
    * @returns {Array<*>}
    */
   resolveContextObjects(deviceContext = {}) {
-    if (deviceContext.objects) {
-      return this.normalizeObjectCollection(deviceContext.objects);
+    if (deviceContext.context?.objects) {
+      return this.normalizeObjectCollection(deviceContext.context.objects);
     }
-    if (deviceContext.object) {
-      return [deviceContext.object];
+    if (deviceContext.context?.object) {
+      return [deviceContext.context.object];
     }
     const nodeState = this.resolveNodeState(deviceContext);
     if (nodeState.objects) {
@@ -290,8 +274,8 @@ class Tool {
       return [];
     }
 
-    deviceContext.objects = normalizedObjects;
-    deviceContext.object = normalizedObjects[0];
+    deviceContext.context.objects = normalizedObjects;
+    deviceContext.context.object = normalizedObjects[0];
 
     const nodeState = this.resolveNodeState(deviceContext);
     this.writeNodeState(deviceContext, {
@@ -309,8 +293,8 @@ class Tool {
    * @returns {void}
    */
   clearContextObjects(deviceContext = {}) {
-    delete deviceContext.object;
-    delete deviceContext.objects;
+    delete deviceContext.context?.object;
+    delete deviceContext.context?.objects;
 
     const nodeState = { ...this.resolveNodeState(deviceContext) };
     if (Object.prototype.hasOwnProperty.call(nodeState, "object")) {
@@ -338,7 +322,7 @@ class Tool {
    * @returns {void}
    */
   requestUiOverlayRefresh(deviceContext = {}) {
-    deviceContext.monitor?.requestViewportUiRender?.();
+    deviceContext.context?.monitor?.requestViewportUiRender?.();
   }
 
   /**

@@ -73,8 +73,8 @@ ctx.signal("flush", undefined, { code: "KeyR" });
 
 ```js
 handler(packet, ctx) {
-    const { anchor } = ctx.state;     // 读取快照
-    const latest = ctx.getState();    // 读取最新状态
+  const { anchor } = ctx.state;     // 读取快照
+  const latest = ctx.getState();    // 读取最新状态
 }
 ```
 
@@ -127,22 +127,22 @@ return ctx.stop();
 
 ```js
 handler(packet, ctx) {
-    // 1. 不感兴趣 → 透传
-    if (!interesting(packet)) {
-        return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
-    }
+  // 1. 不感兴趣 → 透传
+  if (!interesting(packet)) {
+    return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
+  }
 
-    // 2. 消费 + 状态写入（如捕获锚点）
-    if (shouldCapture) {
-        ctx.patchState({ anchor: current });
-        return ctx.stop();
-    }
+  // 2. 消费 + 状态写入（如捕获锚点）
+  if (shouldCapture) {
+    ctx.patchState({ anchor: current });
+    return ctx.stop();
+  }
 
-    // 3. 状态机切换 + 路由
-    ctx.setState({ phase: "next" });
-    return ctx.routeToChild("tool", [
-        ctx.signal("position", newPos),
-    ]);
+  // 3. 状态机切换 + 路由
+  ctx.setState({ phase: "next" });
+  return ctx.routeToChild("tool", [
+    ctx.signal("position", newPos),
+  ]);
 }
 ```
 
@@ -174,6 +174,8 @@ createPrefixNodeHandler({
 - prefix handler（`drag-anchor`、`signal-log`、`multi-tool`、`repeator`、`handoff`）
 - 工具 processor（`Tool.createProcessor` → `createDeviceContext`）
 - 裸 handler（直接挂在 DAG 节点上的任意函数）
+
+工具 processor 拿到的同样是标准 handler context 全集。`createDeviceContext` 仅在 `context` 累积上下文中注入 `board` / `monitor` 等 toolContext fallback，不增删平级键。
 
 ---
 
