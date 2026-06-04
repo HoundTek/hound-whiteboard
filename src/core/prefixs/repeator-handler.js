@@ -53,7 +53,7 @@ function createRepeatorPrefixHandler(options = {}) {
     handle(packet, prefixContext) {
       const targets = resolveTargets(prefixContext);
       if (!targets.length) {
-        return [];
+        return prefixContext.stop();
       }
 
       return {

@@ -27,10 +27,12 @@ import { createPrefixNodeHandler } from "./handler.js";
  * 1. 收到首个 "position" 信号 → 记录锚点 (anchorX, anchorY)，不转发
  * 2. 收到后续 "position" 信号 → 计算累计位移 x = current.x − anchor.x,
  *    y = current.y − anchor.y，输出
- *    `{ type: "displacement", context: { value: { x, y } } }`
+ *    `{ type: "displacement", context: { value: { x, y }, position: { x, y } } }`
+ *    ——其中 position 为当前世界坐标，供下游 modifier 做手势准入检测
  * 3. 收到 "end" 信号 → 清空锚点，转发 end
  *
- * 下游 modifier（如 CommonObjectModifierTool）直接以 `initPos + {x, y}` 更新对象，
+ * 下游 modifier（如 CommonObjectModifierTool）通过 `context.value` 取位移、
+ * 通过 `context.position` 做手势准入检测（判断点击是否落在对象合矩形内），
  * 无需内部累加。
  *
  * @param {{
@@ -40,12 +42,12 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
  *
  * @example
- *   // 手势驱动 modifier
- *   .prefix(createDragAnchorPrefixHandler())
- *   .defaultChild("tool")
- *   .node("tool")
- *   .tool(new CommonObjectModifierTool())
- *   .end()
+ * // 手势驱动 modifier
+ * .prefix(createDragAnchorPrefixHandler())
+ * .defaultChild("tool")
+ * .node("tool")
+ * .tool(new CommonObjectModifierTool())
+ * .end()
  */
 function createDragAnchorPrefixHandler(options = {}) {
   const { displacementSignalType = "displacement" } = options;
@@ -72,7 +74,7 @@ function createDragAnchorPrefixHandler(options = {}) {
         typeof worldPos.x !== "number" ||
         typeof worldPos.y !== "number"
       ) {
-        return [];
+        return ctx.routeToChild(ctx.defaultChild || "", signals);
       }
 
       const state = ctx.state;
@@ -80,20 +82,21 @@ function createDragAnchorPrefixHandler(options = {}) {
 
       if (!state.anchor) {
         ctx.patchState({ anchor: current });
-        return [];
+        return ctx.stop();
       }
 
       const x = current.x - state.anchor.x;
       const y = current.y - state.anchor.y;
 
-      return [
+      return ctx.routeToChild(ctx.defaultChild || "", [
         {
-          to: ctx.defaultChild || "",
-          signals: [
-            { type: displacementSignalType, context: { value: { x, y } } },
-          ],
+          type: displacementSignalType,
+          context: {
+            value: { x, y },
+            position: { x: current.x, y: current.y },
+          },
         },
-      ];
+      ]);
     },
   });
 }

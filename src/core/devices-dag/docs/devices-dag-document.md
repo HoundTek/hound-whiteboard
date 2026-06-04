@@ -118,10 +118,10 @@ return { stop: true };
 
 - `path`：当前节点的活动路径
 - `semantics`：当前节点职责语义快照
-- `defaultRoute`
+- `defaultRoute`：默认路径
 - `resolvedDefaultRoutePath`
-- `depth`
-- `signalPacket`
+- `depth`：当前路由深度
+- `signalPacket`：当前信号包
 - `context`：累积上下文
 - `getNodeState(pathOrId?)`
 - `setNodeState(pathOrId, state)`

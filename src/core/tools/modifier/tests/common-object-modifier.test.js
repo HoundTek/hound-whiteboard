@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import { Vector } from "../../../utils/math.js";
+import { RectangleRange } from "../../../range/rectangle.js";
 import { CommonObjectModifierTool } from "../common-object-modifier.js";
 import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../obj-modifier.js";
 
@@ -195,6 +196,233 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
     tool.process({ signals: [] }, { object, monitor: {} });
 
     expect(object.position).toEqual(new Vector(5, 5));
+  });
+
+  test("首个 displacement 的 position 在合矩形内时应启动手势", () => {
+    const object = {
+      id: 1,
+      position: new Vector(10, 20),
+      getRange: () => new RectangleRange(0, 0, 50, 30),
+    };
+
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    const tool = new CommonObjectModifierTool();
+    // position (35, 35) 在 world rect (10, 20, 50, 30) = (10..60, 20..50) 内
+    tool.process(
+      {
+        signals: [
+          {
+            type: "displacement",
+            context: {
+              value: { x: 5, y: 3 },
+              position: { x: 35, y: 35 },
+            },
+          },
+        ],
+      },
+      { object, monitor },
+    );
+
+    // 准入通过，手势应启动并应用位移
+    expect(object.position).toEqual(new Vector(15, 23));
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  test("首个 displacement 的 position 不在合矩形内时应拒绝手势", () => {
+    const object = {
+      id: 1,
+      position: new Vector(10, 20),
+      getRange: () => new RectangleRange(0, 0, 50, 30),
+    };
+
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    const tool = new CommonObjectModifierTool();
+    // position (100, 200) 远在 world rect (10, 20, 50, 30) 之外
+    tool.process(
+      {
+        signals: [
+          {
+            type: "displacement",
+            context: {
+              value: { x: 5, y: 3 },
+              position: { x: 100, y: 200 },
+            },
+          },
+        ],
+      },
+      { object, monitor },
+    );
+
+    // 准入拒绝，对象位置不变，无快照无失效
+    expect(object.position).toEqual(new Vector(10, 20));
+    expect(
+      monitor.liveRenderer.captureObjectSnapshot,
+    ).not.toHaveBeenCalled();
+    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+  });
+
+  test("首个 displacement 无 position 上下文时跳过准入检测（向后兼容）", () => {
+    const object = {
+      id: 1,
+      position: new Vector(10, 20),
+      getRange: () => new RectangleRange(0, 0, 50, 30),
+    };
+
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    const tool = new CommonObjectModifierTool();
+    // 不含 position → 跳过准入检测，正常启动手势
+    tool.process(
+      {
+        signals: [
+          { type: "displacement", context: { value: { x: 5, y: 3 } } },
+        ],
+      },
+      { object, monitor },
+    );
+
+    expect(object.position).toEqual(new Vector(15, 23));
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  test("多对象合矩形准入检测：position 应在所有对象合矩形内", () => {
+    const objectA = {
+      id: 1,
+      position: new Vector(10, 20),
+      getRange: () => new RectangleRange(0, 0, 50, 30),
+    };
+    const objectB = {
+      id: 2,
+      position: new Vector(70, 80),
+      getRange: () => new RectangleRange(0, 0, 40, 20),
+    };
+    // 合矩形 world rect: left=10, top=20, right=110, bottom=100
+
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    const tool = new CommonObjectModifierTool();
+
+    // position (80, 50) 在合矩形内
+    tool.process(
+      {
+        signals: [
+          {
+            type: "displacement",
+            context: {
+              value: { x: 0, y: 0 },
+              position: { x: 80, y: 50 },
+            },
+          },
+        ],
+      },
+      { objects: [objectA, objectB], monitor },
+    );
+
+    expect(objectA.position).toEqual(new Vector(10, 20));
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  test("多对象合矩形准入检测：position 在合矩形外应拒绝", () => {
+    const objectA = {
+      id: 1,
+      position: new Vector(10, 20),
+      getRange: () => new RectangleRange(0, 0, 50, 30),
+    };
+    const objectB = {
+      id: 2,
+      position: new Vector(70, 80),
+      getRange: () => new RectangleRange(0, 0, 40, 20),
+    };
+    // 合矩形 world rect: left=10, top=20, right=110, bottom=100
+
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    const tool = new CommonObjectModifierTool();
+
+    // position (5, 5) 在合矩形之外（left=10, top=20 的左上方）
+    tool.process(
+      {
+        signals: [
+          {
+            type: "displacement",
+            context: {
+              value: { x: 0, y: 0 },
+              position: { x: 5, y: 5 },
+            },
+          },
+        ],
+      },
+      { objects: [objectA, objectB], monitor },
+    );
+
+    // 准入拒绝，对象不变
+    expect(objectA.position).toEqual(new Vector(10, 20));
+    expect(objectB.position).toEqual(new Vector(70, 80));
+    expect(
+      monitor.liveRenderer.captureObjectSnapshot,
+    ).not.toHaveBeenCalled();
+  });
+
+  test("对象无 getRange 时跳过准入检测（兼容旧版对象）", () => {
+    const object = {
+      id: 1,
+      position: new Vector(10, 20),
+      // 没有 getRange
+    };
+
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+    };
+
+    const tool = new CommonObjectModifierTool();
+    tool.process(
+      {
+        signals: [
+          {
+            type: "displacement",
+            context: {
+              value: { x: 5, y: 3 },
+              position: { x: 100, y: 200 },
+            },
+          },
+        ],
+      },
+      { object, monitor },
+    );
+
+    // combinedRect 为 null → 跳过检测，正常启动手势
+    expect(object.position).toEqual(new Vector(15, 23));
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
   });
 
   test("reset 应清空手势状态", () => {

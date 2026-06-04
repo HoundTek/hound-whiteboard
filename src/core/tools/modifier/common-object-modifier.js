@@ -10,6 +10,7 @@
  */
 
 import { Vector } from "../../utils/math.js";
+import { RectangleRange } from "../../range/index.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
 import {
   ObjectModifierTool,
@@ -85,6 +86,15 @@ class CommonObjectModifierTool extends ObjectModifierTool {
     // 处理 displacement 信号 —— 手势位移
     if (displacementSignal && !hasSuccessSignal && displacement) {
       if (!this._isGestureActive) {
+        // 手势准入检测：检查当前 position 是否落在对象合矩形内
+        const position = displacementSignal?.context?.position;
+        if (
+          position &&
+          !this._isPositionInsideCombinedRect(objects, position)
+        ) {
+          return;
+        }
+
         // 手势开始：记录各对象的初始位置
         this._isGestureActive = true;
         this._initialPositions = new Map(
@@ -154,6 +164,47 @@ class CommonObjectModifierTool extends ObjectModifierTool {
       return { x: value.x, y: value.y };
     }
     return null;
+  }
+
+  /**
+   * 计算所有持有对象的合矩形范围（世界坐标）
+   * @param {Array<*>} objects - 待计算对象数组
+   * @returns {RectangleRange|null}
+   * @private
+   */
+  _computeCombinedWorldRect(objects) {
+    let combined = null;
+    for (const obj of objects) {
+      let worldRect;
+      if (obj && typeof obj.getRange === "function" && obj.position) {
+        const range = obj.getRange();
+        if (range && typeof range.withPosition === "function") {
+          worldRect = range.withPosition(obj.position);
+        }
+      }
+      if (!worldRect) continue;
+      const rect = RectangleRange.from(worldRect);
+      if (!rect) continue;
+      if (!combined) {
+        combined = rect;
+      } else {
+        combined = combined.union(rect);
+      }
+    }
+    return combined;
+  }
+
+  /**
+   * 判断给定的世界坐标点是否落在对象合矩形内
+   * @param {Array<*>} objects - 待检查对象数组
+   * @param {{ x: number, y: number }} position - 世界坐标点
+   * @returns {boolean}
+   * @private
+   */
+  _isPositionInsideCombinedRect(objects, position) {
+    const combinedRect = this._computeCombinedWorldRect(objects);
+    if (!combinedRect) return true;
+    return combinedRect.containsPoint(position);
   }
 }
 

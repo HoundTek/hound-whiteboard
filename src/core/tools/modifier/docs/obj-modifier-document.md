@@ -116,33 +116,46 @@ flowchart LR
 
 ### 与 drag-anchor 的协作
 
-`createDragAnchorPrefixHandler` 输出累计 `{ x, y }` 位移信号，modifier 直接应用：
+`createDragAnchorPrefixHandler` 输出累计 `{ x, y }` 位移信号，同时保留原始世界坐标 `position`。modifier 通过 `context.value` 取位移、通过 `context.position` 做手势准入检测。
+
+drag-anchor **只挂在 modifier 路径上**，不覆盖 handoff 整体：
 
 ```js
-// drag-anchor 输出 "displacement" 信号
-const builder = createSubDAG("/mouse/primary/handoff");
-const root = builder
+// handoff 结构：first 直通原始信号，second 经过 drag-anchor → modifier
+const builder = createSubDAG("/mouse/primary/tool");
+const toolNode = builder
   .node()
   .prefix(createDragAnchorPrefixHandler())
-  .defaultRoute("tool");
-const toolNode = builder.node().tool(new CommonObjectModifierTool());
+  .tool(new CommonObjectModifierTool());
 
-builder.edge("tool", root, toolNode);
+// 外部将这个 builder 构建为 modifier 子图，挂入 handoff 的 second 分支
 ```
+
+### 手势准入检测
+
+首个 `displacement` 信号到来时，modifier 会根据 `context.position` 判断当前鼠标位置是否落在持有对象的合矩形范围内：
+
+- **在合矩形内** → 正常启动手势，记录各对象初始位置，应用位移
+- **在合矩形外** → 拒绝整个手势，不记录锚点、不修改对象
+
+若没有 `context.position`（向后兼容），或对象不支持 `getRange()`，则跳过准入检测，直接启动手势。
 
 ### 信号路径
 
 ```mermaid
 flowchart LR
     Mouse[鼠标世界坐标] --> Anchor[createDragAnchorPrefixHandler]
-    Anchor --> Disp["displacement {x,y} 累计位移"]
+    Anchor --> Disp["displacement {value: {x,y}, position: {x,y}}"]
     Disp --> Modifier[CommonObjectModifierTool]
-    Modifier -->|initPos + {x,y}| Obj["obj.position 更新"]
+    Modifier -->|hit-test 通过| Pos["initPos + {x,y} → obj.position 更新"]
+    Modifier -->|hit-test 拒绝| Reject[拒绝手势]
 ```
 
 ### 设计要点
 
 - **锚点在 drag-anchor 中**：modifier 无需关心世界坐标，只消费已转换好的累计位移
+- **drag-anchor 保留 position**：输出位移时同时携带世界坐标，供准入检测使用
+- **手势准入检测**：首个 displacement 时检查 position 是否在对象合矩形内，避免误拖拽
 - **无内部累加**：drag-anchor 输出累计值，modifier 直接 `initPos + {x, y}`，无浮点累积误差
 - **手势语义清晰**：与 creator 的 `begin/update/completeCreationGesture` 模型一致
 

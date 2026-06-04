@@ -59,7 +59,13 @@ describe("drag-anchor-handler", () => {
       {
         to: "",
         signals: [
-          { type: "displacement", context: { value: { x: 20, y: 20 } } },
+          {
+            type: "displacement",
+            context: {
+              value: { x: 20, y: 20 },
+              position: { x: 120, y: 220 },
+            },
+          },
         ],
       },
     ]);
@@ -145,7 +151,13 @@ describe("drag-anchor-handler", () => {
       {
         to: "",
         signals: [
-          { type: "displacement", context: { value: { x: 15, y: 20 } } },
+          {
+            type: "displacement",
+            context: {
+              value: { x: 15, y: 20 },
+              position: { x: 25, y: 40 },
+            },
+          },
         ],
       },
     ]);
@@ -161,7 +173,11 @@ describe("drag-anchor-handler", () => {
       .prefix(createDragAnchorPrefixHandler())
       .defaultRoute("tool");
     const _t4 = _dag4.node().handler((pkt) => {
-      trace.push(pkt.signals[0]?.context?.value);
+      const ctx = pkt.signals[0]?.context;
+      trace.push({
+        value: ctx?.value,
+        position: ctx?.position,
+      });
       return [];
     });
     _dag4.edge("tool", _r4, _t4);
@@ -186,8 +202,14 @@ describe("drag-anchor-handler", () => {
     });
 
     expect(trace).toEqual([
-      { x: 10, y: 5 },
-      { x: 25, y: 10 },
+      {
+        value: { x: 10, y: 5 },
+        position: { x: 110, y: 105 },
+      },
+      {
+        value: { x: 25, y: 10 },
+        position: { x: 125, y: 110 },
+      },
     ]);
   });
 
