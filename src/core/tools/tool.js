@@ -246,15 +246,9 @@ class Tool {
     if (deviceContext.context?.objects) {
       return this.normalizeObjectCollection(deviceContext.context.objects);
     }
-    if (deviceContext.context?.object) {
-      return [deviceContext.context.object];
-    }
     const nodeState = this.resolveNodeState(deviceContext);
     if (nodeState.objects) {
       return this.normalizeObjectCollection(nodeState.objects);
-    }
-    if (nodeState.object) {
-      return [nodeState.object];
     }
     return [];
   }
@@ -275,13 +269,11 @@ class Tool {
     }
 
     deviceContext.context.objects = normalizedObjects;
-    deviceContext.context.object = normalizedObjects[0];
 
     const nodeState = this.resolveNodeState(deviceContext);
     this.writeNodeState(deviceContext, {
       ...nodeState,
       objects: normalizedObjects,
-      object: normalizedObjects[0],
     });
 
     return normalizedObjects;
@@ -293,13 +285,9 @@ class Tool {
    * @returns {void}
    */
   clearContextObjects(deviceContext = {}) {
-    delete deviceContext.context?.object;
     delete deviceContext.context?.objects;
 
     const nodeState = { ...this.resolveNodeState(deviceContext) };
-    if (Object.prototype.hasOwnProperty.call(nodeState, "object")) {
-      delete nodeState.object;
-    }
     if (Object.prototype.hasOwnProperty.call(nodeState, "objects")) {
       delete nodeState.objects;
     }

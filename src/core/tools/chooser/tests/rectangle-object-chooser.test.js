@@ -81,9 +81,8 @@ describe("RectangleObjectChooserTool", () => {
     expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
       new Set([firstObject]),
     );
-    expect(deviceContext.context.object).toBe(firstObject);
+    expect(deviceContext.context.objects).toEqual([firstObject]);
     expect(stateAccess.getState()).toEqual({
-      object: firstObject,
       objects: [firstObject],
     });
   });
@@ -92,7 +91,6 @@ describe("RectangleObjectChooserTool", () => {
     const tool = new RectangleObjectChooserTool();
     const previousObject = { id: 1 };
     const stateAccess = createStateAccess({
-      object: previousObject,
       objects: [previousObject],
     });
     const board = {
@@ -199,7 +197,6 @@ describe("RectangleObjectChooserTool", () => {
       selectionStart: new Vector(0, 0),
       selectionCurrent: new Vector(20, 30),
       selectionWorldRect: new RectangleRange(0, 0, 20, 30),
-      object: { id: 1 },
       objects: [{ id: 1 }],
     });
     const renderer = {
@@ -209,7 +206,7 @@ describe("RectangleObjectChooserTool", () => {
     expect(
       tool.collectUiOverlayEntries({
         deviceContext: {
-          context: { object: { id: 1 }, objects: [{ id: 1 }] },
+          context: { objects: [{ id: 1 }] },
           path: "/main/mouse/secondary/tool",
           getNodeState: stateAccess.getState,
           setNodeState: stateAccess.setState,

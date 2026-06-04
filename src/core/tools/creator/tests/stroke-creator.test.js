@@ -231,7 +231,7 @@ describe("StrokeCreatorTool", () => {
     expect(board.activeObjectManager.add).toHaveBeenCalledWith(
       new Set([tool.obj]),
     );
-    expect(deviceContext.context.object).toBe(tool.obj);
+    expect(deviceContext.context.objects).toEqual([tool.obj]);
   });
 
   test("创建手势更新前后应记录旧几何快照并请求活动层刷新", () => {

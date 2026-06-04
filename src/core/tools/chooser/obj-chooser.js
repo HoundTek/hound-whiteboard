@@ -122,7 +122,7 @@ class ObjectChooserTool extends Tool {
     const childObjects =
       defaultLeaf && defaultLeaf.path !== deviceContext.path
         ? this.normalizeObjectCollection(
-            defaultLeaf.state?.objects ?? defaultLeaf.state?.object,
+            defaultLeaf.state?.objects ?? [],
           ).filter(Boolean)
         : [];
 

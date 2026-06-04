@@ -96,7 +96,7 @@ describe("ObjectModifierTool", () => {
 
     expect(
       tool.collectUiOverlayEntries({
-        deviceContext: { context: { object, objects: [object] } },
+        deviceContext: { context: { objects: [object] } },
         renderer,
       }),
     ).toEqual(["modifier-overlay"]);

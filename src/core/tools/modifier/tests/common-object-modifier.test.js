@@ -23,7 +23,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 3 } } }],
       },
-      { context: { object, monitor } },
+      { context: { objects: [object], monitor } },
     );
 
     // 首个 displacement：记录初始位置，应用位移 initPos + (5, 3)
@@ -52,7 +52,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 3 } } }],
       },
-      { context: { object, monitor } },
+      { context: { objects: [object], monitor } },
     );
     expect(object.position).toEqual(new Vector(15, 23));
 
@@ -61,7 +61,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 7, y: 3 } } }],
       },
-      { context: { object, monitor } },
+      { context: { objects: [object], monitor } },
     );
     expect(object.position).toEqual(new Vector(17, 23));
   });
@@ -79,19 +79,19 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
       },
-      { context: { object } },
+      { context: { objects: [object] } },
     );
     expect(object.position).toEqual(new Vector(12, 20));
     tool.process(
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 1 } } }],
       },
-      { context: { object } },
+      { context: { objects: [object] } },
     );
     expect(object.position).toEqual(new Vector(15, 21));
 
     // end 信号
-    tool.process({ signals: [{ type: "end" }] }, { context: { object } });
+    tool.process({ signals: [{ type: "end" }] }, { context: { objects: [object] } });
     expect(object.position).toEqual(new Vector(15, 21));
 
     // end 后新一轮手势
@@ -99,7 +99,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 1, y: 0 } } }],
       },
-      { context: { object } },
+      { context: { objects: [object] } },
     );
     // 新锚点：从当前 (15, 21) 启动，位移 (1, 0) → (16, 21)
     expect(object.position).toEqual(new Vector(16, 21));
@@ -107,7 +107,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 0 } } }],
       },
-      { context: { object } },
+      { context: { objects: [object] } },
     );
     // 累计位移 (5, 0)：(15, 21) + (5, 0) = (20, 21)
     expect(object.position).toEqual(new Vector(20, 21));
@@ -137,7 +137,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
         signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
       },
       {
-        context: { object, board },
+        context: { objects: [object], board },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
@@ -147,7 +147,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 1 } } }],
       },
       {
-        context: { object, board },
+        context: { objects: [object], board },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
@@ -159,7 +159,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
         signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
       },
       {
-        context: { object, board },
+        context: { objects: [object], board },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
         getNodeState() {
@@ -180,7 +180,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
     expect(mockDag.unmount).toHaveBeenCalledWith(
       "/monitor/mouse/primary/tool/tool",
     );
-    expect(nodeState.object).toBeUndefined();
+    expect(nodeState.objects).toBeUndefined();
   });
 
   test("不传 displacement 信号时应保持原状态且不报错", () => {
@@ -190,7 +190,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
     };
 
     const tool = new CommonObjectModifierTool();
-    tool.process({ signals: [] }, { context: { object, monitor: {} } });
+    tool.process({ signals: [] }, { context: { objects: [object], monitor: {} } });
 
     expect(object.position).toEqual(new Vector(5, 5));
   });
@@ -223,7 +223,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
           },
         ],
       },
-      { context: { object, monitor } },
+      { context: { objects: [object], monitor } },
     );
 
     // 准入通过，手势应启动并应用位移
@@ -259,7 +259,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
           },
         ],
       },
-      { context: { object, monitor } },
+      { context: { objects: [object], monitor } },
     );
 
     // 准入拒绝，对象位置不变，无快照无失效
@@ -288,7 +288,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 3 } } }],
       },
-      { context: { object, monitor } },
+      { context: { objects: [object], monitor } },
     );
 
     expect(object.position).toEqual(new Vector(15, 23));
@@ -408,7 +408,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
           },
         ],
       },
-      { context: { object, monitor } },
+      { context: { objects: [object], monitor } },
     );
 
     // combinedRect 为 null → 跳过检测，正常启动手势
@@ -429,7 +429,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 2, y: 0 } } }],
       },
-      { context: { object } },
+      { context: { objects: [object] } },
     );
     expect(object.position).toEqual(new Vector(12, 20));
     tool.reset();
@@ -439,14 +439,14 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
       {
         signals: [{ type: "displacement", context: { value: { x: 5, y: 0 } } }],
       },
-      { context: { object } },
+      { context: { objects: [object] } },
     );
     expect(object.position).toEqual(new Vector(17, 20));
     tool.process(
       {
         signals: [{ type: "displacement", context: { value: { x: 8, y: 0 } } }],
       },
-      { context: { object } },
+      { context: { objects: [object] } },
     );
     expect(object.position).toEqual(new Vector(20, 20));
   });
@@ -458,10 +458,10 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
      * 因此必须将 object(s) 放在 context 层。
      */
     function makeDeviceContext(opts = {}) {
-      const { object, objects, board, monitor } = opts;
+      const { objects, board, monitor } = opts;
       return {
         context: {
-          ...(object ? { object } : {}),
+          
           ...(objects ? { objects } : {}),
           ...(board ? { board } : {}),
           ...(monitor ? { monitor } : {}),
@@ -490,7 +490,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object }),
+        makeDeviceContext({ objects: [object] }),
       );
 
       // 应跳过检测，正常启动手势
@@ -527,7 +527,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
       expect(object.position).toEqual(new Vector(12, 20));
       tool.reset();
@@ -545,7 +545,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
       // containsPoint 使用 1e-8 容差，边界点应命中
       expect(object.position).toEqual(new Vector(14, 20));
@@ -580,7 +580,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
       expect(object.position).toEqual(new Vector(10, 20));
       expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
@@ -598,7 +598,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
       // 新锚点：(10, 20) → initPos + (0, 5) = (10, 25)
       expect(object.position).toEqual(new Vector(10, 25));
@@ -636,7 +636,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
 
       // 第二个 displacement：position 移到合矩形外
@@ -653,7 +653,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
       // 正常应用位移：initPos (10, 20) + (20, 0) = (30, 20)
       // 证明手势已激活后即使 position 在合矩形外也照常应用位移
@@ -689,7 +689,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, board }),
+        makeDeviceContext({ objects: [object], board }),
       );
 
       // 对象不在 AOM 中 → 不处理
@@ -725,14 +725,14 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
       expect(object.position).toEqual(new Vector(12, 20));
 
       // end 结束手势
       tool.process(
         { signals: [{ type: "end" }] },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
 
       // 新一轮：position 在外部 → 应拒绝
@@ -748,7 +748,7 @@ describe("CommonObjectModifierTool（手势驱动）", () => {
             },
           ],
         },
-        makeDeviceContext({ object, monitor }),
+        makeDeviceContext({ objects: [object], monitor }),
       );
       // 准入拒绝，对象位置保持 end 时刻的位置
       expect(object.position).toEqual(new Vector(12, 20));

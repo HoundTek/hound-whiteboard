@@ -43,10 +43,8 @@ describe("ObjectChooserTool", () => {
     expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
       new Set([chosenObject]),
     );
-    expect(deviceContext.context.object).toBe(chosenObject);
     expect(deviceContext.context.objects).toEqual([chosenObject]);
     expect(stateAccess.getState()).toEqual({
-      object: chosenObject,
       objects: [chosenObject],
     });
   });
@@ -60,11 +58,10 @@ describe("ObjectChooserTool", () => {
     };
     const tool = new TestChooserTool();
     const stateAccess = createStateAccess({
-      object: chosenObject,
       objects: [chosenObject],
     });
     const deviceContext = {
-      context: { board, object: chosenObject, objects: [chosenObject] },
+      context: { board, objects: [chosenObject] },
       path: "/monitor/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -75,7 +72,6 @@ describe("ObjectChooserTool", () => {
     expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
       new Set([chosenObject]),
     );
-    expect(deviceContext.context.object).toBeUndefined();
     expect(deviceContext.context.objects).toBeUndefined();
     expect(stateAccess.getState()).toEqual({});
   });
@@ -91,12 +87,12 @@ describe("ObjectChooserTool", () => {
 
     const suppressed = tool.collectUiOverlayEntries({
       deviceContext: {
-        context: { object: chosenObject, objects: [chosenObject] },
+        context: { objects: [chosenObject] },
         path: "/monitor/chooser/tool",
         dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool/tool",
-            state: { object: chosenObject, objects: [chosenObject] },
+            state: { objects: [chosenObject] },
           }),
         },
       },
@@ -110,7 +106,7 @@ describe("ObjectChooserTool", () => {
 
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
-        context: { object: chosenObject, objects: [chosenObject] },
+        context: { objects: [chosenObject] },
         path: "/monitor/chooser/tool",
         dag: {
           resolveDefaultLeaf: () => ({
