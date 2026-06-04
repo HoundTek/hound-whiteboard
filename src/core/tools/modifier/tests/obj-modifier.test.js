@@ -16,20 +16,24 @@ describe("ObjectModifierTool", () => {
     const object = { id: 1, changed: false };
     const calls = [];
     const modificationContext = {
-      object,
-      monitor: {
-        liveRenderer: {
-          captureObjectSnapshot(objects) {
-            calls.push(["capture", objects]);
+      context: {
+        monitor: {
+          liveRenderer: {
+            captureObjectSnapshot(objects) {
+              calls.push(["capture", objects]);
+            },
+            invalidateObjects(objects) {
+              calls.push(["invalidate", objects]);
+            },
           },
-          invalidateObjects(objects) {
-            calls.push(["invalidate", objects]);
+          requestViewportUiRender() {
+            calls.push(["ui", undefined]);
           },
         },
-        requestViewportUiRender() {
-          calls.push(["ui", undefined]);
-        },
+        object,
+        objects: [object],
       },
+      object,
     };
 
     const result = tool.modify(modificationContext);
@@ -60,8 +64,7 @@ describe("ObjectModifierTool", () => {
       requestViewportUiRender: jest.fn(),
     };
     const modificationContext = {
-      objects: new Set(objects),
-      monitor,
+      context: { monitor, objects: new Set(objects) },
     };
 
     tool.beforeGeometryMutation(modificationContext);
@@ -93,7 +96,7 @@ describe("ObjectModifierTool", () => {
 
     expect(
       tool.collectUiOverlayEntries({
-        deviceContext: { object, objects: [object] },
+        deviceContext: { context: { object, objects: [object] } },
         renderer,
       }),
     ).toEqual(["modifier-overlay"]);
@@ -120,7 +123,7 @@ describe("ObjectModifierTool", () => {
         },
       };
 
-      tool.applyModifiedObjects({ board, path: "/test" }, [object]);
+      tool.applyModifiedObjects({ context: { board }, path: "/test" }, [object]);
 
       expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
         new Set([object]),
@@ -148,7 +151,7 @@ describe("ObjectModifierTool", () => {
         },
       };
 
-      const result = tool.applyModifiedObjects({ board, path: "/test" }, [
+      const result = tool.applyModifiedObjects({ context: { board }, path: "/test" }, [
         object,
       ]);
 
@@ -174,10 +177,9 @@ describe("ObjectModifierTool", () => {
 
       tool.applyModifiedObjects(
         {
-          board,
+          context: { board, autoUmountOnApply: false },
           dag: { unmount },
           path: "/test",
-          context: { autoUmountOnApply: false },
         },
         [object],
       );

@@ -70,10 +70,10 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // 默认 beforeCommitCreatedObject 返回 true
       creator.obj = { id: 1, type: "rect" };
-      creator.completeCreatedObject?.({ deviceContext: { board } });
+      creator.completeCreatedObject?.({ deviceContext: { context: { board } } });
 
       // 如果没有 completeCreatedObject（mock 是自己实现 process），走 process
-      creator.process({ signals: [{ type: "position" }] }, { board });
+      creator.process({ signals: [{ type: "position" }] }, { context: { board } });
       expect(creator.isObjectCreationCompleted).toBe(true);
     });
 
@@ -93,7 +93,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       creator.beforeCommitCreatedObject = () => false;
       creator.obj = { id: 1, type: "rect" };
 
-      creator.process({ signals: [{ type: "position" }] }, { board });
+      creator.process({ signals: [{ type: "position" }] }, { context: { board } });
 
       // beforeCommit 返回 false → apply 不应被调用
       expect(appliedObjects).toEqual([]);

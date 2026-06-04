@@ -7,7 +7,7 @@ import { ChunkObjectManager } from "../../../components/chunk-object-manager.js"
 describe("CircleCreatorTool", () => {
   test("单手势起点为圆心，终点决定半径", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { objectId: 101, ownerChunkId: 1 };
+    const deviceContext = { context: {}, objectId: 101, ownerChunkId: 1 };
 
     tool.process(
       {
@@ -35,7 +35,7 @@ describe("CircleCreatorTool", () => {
 
   test("结束点过近时使用固定半径，固定半径由 monitor.zoom 决定", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { objectId: 102, ownerChunkId: 2, monitor: { zoom: 2 } };
+    const deviceContext = { context: { monitor: { zoom: 2 } }, objectId: 102, ownerChunkId: 2 };
 
     tool.process(
       {
@@ -67,7 +67,7 @@ describe("CircleCreatorTool", () => {
         apply: jest.fn(),
       },
     };
-    const deviceContext = { objectId: 103, ownerChunkId: 3, board };
+    const deviceContext = { context: { board }, objectId: 103, ownerChunkId: 3 };
 
     tool.process(
       {
@@ -103,7 +103,7 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
-      { objectId: 110, ownerChunkId: 1, board },
+      { context: { board }, objectId: 110, ownerChunkId: 1 },
     );
 
     tool.process(
@@ -111,7 +111,7 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "end", context: {} }],
       },
-      { objectId: 110, ownerChunkId: 1, board },
+      { context: { board }, objectId: 110, ownerChunkId: 1 },
     );
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);

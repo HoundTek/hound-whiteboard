@@ -34,13 +34,14 @@ describe("Tool", () => {
           signals: [{ type: "pressure", context: { value: 0.5 } }],
         },
         deviceContext: expect.objectContaining({
-          board: "board-context",
           path: "/monitor/s-pen/pen",
-          context: {},
+          context: expect.objectContaining({
+            board: "board-context",
+          }),
         }),
       },
     ]);
-    expect(tool.calls[0].deviceContext.allocateObjectId).toBeUndefined();
+    expect(tool.calls[0].deviceContext.context.allocateObjectId).toBeUndefined();
   });
 
   test("createProcessor 应默认暴露来自 Board 的 allocateObjectId", () => {
@@ -72,7 +73,7 @@ describe("Tool", () => {
       },
     );
 
-    expect(tool.calls[0].deviceContext.allocateObjectId()).toBe(7);
+    expect(tool.calls[0].deviceContext.context.allocateObjectId()).toBe(7);
   });
 
   test("createProcessor 应默认暴露来自 Monitor 的 resolveOwnerChunkId", () => {
@@ -108,7 +109,7 @@ describe("Tool", () => {
     );
 
     expect(
-      tool.calls[0].deviceContext.resolveOwnerChunkId({
+      tool.calls[0].deviceContext.context.resolveOwnerChunkId({
         x: 10,
         y: 20,
       }),
@@ -157,17 +158,19 @@ describe("Tool", () => {
 
     expect(tool.calls[0].deviceContext).toEqual(
       expect.objectContaining({
-        board: boardFromContext,
-        monitor: monitorFromContext,
-        context: expect.objectContaining({ customFlag: true }),
+        context: expect.objectContaining({
+          board: boardFromContext,
+          monitor: monitorFromContext,
+          customFlag: true,
+        }),
       }),
     );
-    expect(tool.calls[0].deviceContext.allocateObjectId()).toBe(11);
+    expect(tool.calls[0].deviceContext.context.allocateObjectId()).toBe(11);
     expect(
-      tool.calls[0].deviceContext.resolveOwnerChunkId({ x: 1, y: 2 }),
+      tool.calls[0].deviceContext.context.resolveOwnerChunkId({ x: 1, y: 2 }),
     ).toBe(9);
     expect(tool.calls[0].deviceContext.path).toBe("/monitor/s-pen/pen");
-    expect(tool.calls[0].deviceContext.semantics).toEqual({});
+    expect(tool.calls[0].deviceContext.semantics).toBeUndefined();
     expect(tool.calls[0].deviceContext.eventContext).toBeUndefined();
     expect(tool.calls[0].deviceContext.runtimeContext).toBeUndefined();
   });

@@ -8,7 +8,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#000", fillColor: "#fff" },
     });
-    const deviceContext = { objectId: 201, ownerChunkId: 1 };
+    const deviceContext = { context: {}, objectId: 201, ownerChunkId: 1 };
 
     tool.process(
       {
@@ -40,7 +40,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#000" },
     });
-    const deviceContext = { objectId: 202, ownerChunkId: 1 };
+    const deviceContext = { context: {}, objectId: 202, ownerChunkId: 1 };
 
     tool.process(
       {
@@ -61,7 +61,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#abc" },
     });
-    const deviceContext = { objectId: 203, ownerChunkId: 1 };
+    const deviceContext = { context: {}, objectId: 203, ownerChunkId: 1 };
 
     tool.process(
       {
@@ -126,7 +126,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.on("afterCreate", afterCreate);
 
       tool.obj = { id: 1, type: "test" };
-      tool.completeCreatedObject({});
+      tool.completeCreatedObject({ deviceContext: { context: {} } });
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
     });
@@ -145,7 +145,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
       tool.beforeCommitCreatedObject = () => false;
       tool.obj = { id: 2 };
-      tool.completeCreatedObject({ deviceContext: { board } });
+      tool.completeCreatedObject({ deviceContext: { context: { board } } });
 
       expect(apply).not.toHaveBeenCalled();
       expect(tool.isObjectCreationCompleted).toBe(true);
@@ -164,7 +164,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       const board = { activeObjectManager: { apply } };
 
       tool.obj = { id: 3 };
-      tool.completeCreatedObject({ deviceContext: { board } });
+      tool.completeCreatedObject({ deviceContext: { context: { board } } });
 
       expect(apply).toHaveBeenCalledWith(new Set([tool.obj]));
       expect(tool.isObjectCreationCompleted).toBe(true);
@@ -184,7 +184,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.beforeCommitCreatedObject = () => false;
       tool.obj = { id: 4 };
 
-      tool.completeCreatedObject({});
+      tool.completeCreatedObject({ deviceContext: { context: {} } });
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
     });
@@ -200,14 +200,14 @@ describe("ObjectCreatorTool — property 信号", () => {
             { type: "position", context: { value: new Vector(10, 10) } },
           ],
         },
-        { objectId: 301, ownerChunkId: 1 },
+        { context: {}, objectId: 301, ownerChunkId: 1 },
       );
 
       expect(afterCreate).not.toHaveBeenCalled();
 
       tool.process(
         { signals: [{ type: "end" }] },
-        { objectId: 302, ownerChunkId: 1 },
+        { context: {}, objectId: 302, ownerChunkId: 1 },
       );
 
       expect(afterCreate).toHaveBeenCalledTimes(1);

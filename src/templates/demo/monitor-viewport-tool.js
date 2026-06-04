@@ -39,7 +39,7 @@ class MonitorViewportTool extends Tool {
   onFlush;
 
   process(signalPacket, deviceContext = {}) {
-    const monitor = deviceContext.monitor;
+    const monitor = deviceContext?.context?.monitor;
     if (!monitor) return;
 
     for (const signal of signalPacket?.signals ?? []) {

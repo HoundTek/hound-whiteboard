@@ -8,7 +8,7 @@ import { jest } from "@jest/globals";
 describe("PolygonCreatorTool", () => {
   test("PolygonCreatorTool 应在同一手势内更新当前顶点，并在 end 时固化", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { objectId: 10, ownerChunkId: 1 };
+    const deviceContext = { context: {}, objectId: 10, ownerChunkId: 1 };
 
     expect(
       tool.process(
@@ -65,7 +65,7 @@ describe("PolygonCreatorTool", () => {
         to: "/monitor/polygon",
         signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
       },
-      { objectId: 99, ownerChunkId: 1 },
+      { context: {}, objectId: 99, ownerChunkId: 1 },
     );
 
     expect(tool.obj.property).toMatchObject({
@@ -77,7 +77,7 @@ describe("PolygonCreatorTool", () => {
 
   test("cancel 信号应重置当前手势", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { objectId: 10, ownerChunkId: 1 };
+    const deviceContext = { context: {}, objectId: 10, ownerChunkId: 1 };
 
     expect(
       tool.process(
@@ -116,7 +116,7 @@ describe("PolygonCreatorTool", () => {
     const board = {
       activeObjectManager: { add: jest.fn(), discard: jest.fn() },
     };
-    const deviceContext = { objectId: 10, ownerChunkId: 1, board };
+    const deviceContext = { context: { board }, objectId: 10, ownerChunkId: 1 };
 
     expect(
       tool.process(
@@ -151,7 +151,7 @@ describe("PolygonCreatorTool", () => {
 
   test("object-end 信号应固化整个多边形对象", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { objectId: 10, ownerChunkId: 1 };
+    const deviceContext = { context: {}, objectId: 10, ownerChunkId: 1 };
 
     expect(
       tool.process(
@@ -201,7 +201,7 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
         ],
       },
-      { objectId: 10, ownerChunkId: 1, board },
+      { context: { board }, objectId: 10, ownerChunkId: 1 },
     );
 
     const createdObject = tool.obj;
@@ -213,7 +213,7 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
       },
-      { objectId: 10, ownerChunkId: 1, board },
+      { context: { board }, objectId: 10, ownerChunkId: 1 },
     );
 
     expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
@@ -242,7 +242,7 @@ describe("PolygonCreatorTool", () => {
           },
         ],
       },
-      { objectId: 31, ownerChunkId: 1, monitor },
+      { context: { monitor }, objectId: 31, ownerChunkId: 1 },
     );
 
     monitor.liveRenderer.captureObjectSnapshot.mockClear();
@@ -259,7 +259,7 @@ describe("PolygonCreatorTool", () => {
           },
         ],
       },
-      { objectId: 31, ownerChunkId: 1, monitor },
+      { context: { monitor }, objectId: 31, ownerChunkId: 1 },
     );
 
     expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith([
@@ -289,7 +289,7 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
         ],
       },
-      { objectId: 23, ownerChunkId: 1, board },
+      { context: { board }, objectId: 23, ownerChunkId: 1 },
     );
 
     const createdObject = tool.obj;
@@ -301,7 +301,7 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
       },
-      { objectId: 23, ownerChunkId: 1, board },
+      { context: { board }, objectId: 23, ownerChunkId: 1 },
     );
 
     const ownerChunk = board.getChunkById(1);

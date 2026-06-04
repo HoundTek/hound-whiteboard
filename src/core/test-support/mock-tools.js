@@ -63,7 +63,7 @@ function createMockCreator(onProcess) {
       } else {
         // 独立模式：commit 到静态图
         this.isObjectCreationCompleted = true;
-        interaction?.deviceContext?.board?.activeObjectManager?.apply?.(
+        interaction?.deviceContext?.context?.board?.activeObjectManager?.apply?.(
           new Set([this.obj].filter(Boolean)),
         );
       }

@@ -34,8 +34,7 @@ describe("RectangleObjectChooserTool", () => {
       },
     };
     const deviceContext = {
-      board,
-      monitor: { requestViewportUiRender: jest.fn() },
+      context: { board, monitor: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -82,7 +81,7 @@ describe("RectangleObjectChooserTool", () => {
     expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
       new Set([firstObject]),
     );
-    expect(deviceContext.object).toBe(firstObject);
+    expect(deviceContext.context.object).toBe(firstObject);
     expect(stateAccess.getState()).toEqual({
       object: firstObject,
       objects: [firstObject],
@@ -108,8 +107,7 @@ describe("RectangleObjectChooserTool", () => {
       },
     };
     const deviceContext = {
-      board,
-      monitor: { requestViewportUiRender: jest.fn() },
+      context: { board, monitor: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -169,8 +167,7 @@ describe("RectangleObjectChooserTool", () => {
       },
     };
     const deviceContext = {
-      board,
-      monitor: { requestViewportUiRender: jest.fn() },
+      context: { board, monitor: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -212,11 +209,10 @@ describe("RectangleObjectChooserTool", () => {
     expect(
       tool.collectUiOverlayEntries({
         deviceContext: {
+          context: { object: { id: 1 }, objects: [{ id: 1 }] },
           path: "/main/mouse/secondary/tool",
           getNodeState: stateAccess.getState,
           setNodeState: stateAccess.setState,
-          object: { id: 1 },
-          objects: [{ id: 1 }],
         },
         renderer,
       }),

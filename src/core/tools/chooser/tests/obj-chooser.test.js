@@ -28,7 +28,7 @@ describe("ObjectChooserTool", () => {
     };
     const stateAccess = createStateAccess();
     const deviceContext = {
-      board,
+      context: { board },
       path: "/monitor/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -43,8 +43,8 @@ describe("ObjectChooserTool", () => {
     expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
       new Set([chosenObject]),
     );
-    expect(deviceContext.object).toBe(chosenObject);
-    expect(deviceContext.objects).toEqual([chosenObject]);
+    expect(deviceContext.context.object).toBe(chosenObject);
+    expect(deviceContext.context.objects).toEqual([chosenObject]);
     expect(stateAccess.getState()).toEqual({
       object: chosenObject,
       objects: [chosenObject],
@@ -64,10 +64,8 @@ describe("ObjectChooserTool", () => {
       objects: [chosenObject],
     });
     const deviceContext = {
-      board,
+      context: { board, object: chosenObject, objects: [chosenObject] },
       path: "/monitor/chooser/tool",
-      object: chosenObject,
-      objects: [chosenObject],
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -77,8 +75,8 @@ describe("ObjectChooserTool", () => {
     expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
       new Set([chosenObject]),
     );
-    expect(deviceContext.object).toBeUndefined();
-    expect(deviceContext.objects).toBeUndefined();
+    expect(deviceContext.context.object).toBeUndefined();
+    expect(deviceContext.context.objects).toBeUndefined();
     expect(stateAccess.getState()).toEqual({});
   });
 
@@ -93,9 +91,8 @@ describe("ObjectChooserTool", () => {
 
     const suppressed = tool.collectUiOverlayEntries({
       deviceContext: {
+        context: { object: chosenObject, objects: [chosenObject] },
         path: "/monitor/chooser/tool",
-        object: chosenObject,
-        objects: [chosenObject],
         dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool/tool",
@@ -113,9 +110,8 @@ describe("ObjectChooserTool", () => {
 
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
+        context: { object: chosenObject, objects: [chosenObject] },
         path: "/monitor/chooser/tool",
-        object: chosenObject,
-        objects: [chosenObject],
         dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool",
@@ -156,7 +152,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        board,
+        context: { board },
         path: "/test",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
@@ -182,7 +178,7 @@ describe("ObjectChooserTool", () => {
       tool.process(
         { signals: [{ type: "trigger" }] },
         {
-          board,
+          context: { board },
           path: "/test",
           getNodeState: () => ({}),
           setNodeState: () => {},
@@ -202,7 +198,7 @@ describe("ObjectChooserTool", () => {
       tool.on("afterConfirm", afterConfirm);
       tool.beforeConfirmSelection = () => false;
 
-      const result = tool.confirmSelection({ board, path: "/test" }, [
+      const result = tool.confirmSelection({ context: { board }, path: "/test" }, [
         chosenObject,
       ]);
 
@@ -216,13 +212,13 @@ describe("ObjectChooserTool", () => {
       const afterConfirm = jest.fn();
       tool.on("afterConfirm", afterConfirm);
 
-      const result = tool.confirmSelection({ board: {}, path: "/test" }, [
+      const result = tool.confirmSelection({ context: { board: {} }, path: "/test" }, [
         chosenObject,
       ]);
 
       expect(result).toBe(true);
       expect(afterConfirm).toHaveBeenCalledTimes(1);
-      expect(afterConfirm).toHaveBeenCalledWith({ board: {}, path: "/test" }, [
+      expect(afterConfirm).toHaveBeenCalledWith({ context: { board: {} }, path: "/test" }, [
         chosenObject,
       ]);
     });
@@ -246,7 +242,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        board,
+        context: { board },
         path: "/monitor/chooser",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
