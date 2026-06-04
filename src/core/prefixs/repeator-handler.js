@@ -15,12 +15,12 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @description
  * 工厂函数，基于 createPrefixNodeHandler 构建信号复制分发逻辑。
  * 将输入信号包浅克隆后，向 toChildren 指定的每个子节点各发一份。
- * 省略 toChildren 时回退到当前 prefix 节点的 defaultChild。
+ * 省略 toChildren 时回退到当前节点的 defaultRoute。
  * @param {{
  *   toChildren?: string|string[],
  *   cloneSignals?: Function,
  * }} options - repeator 选项
- * @param {string|string[]} [options.toChildren] - 目标子节点名。传字符串时单发；传数组时每项各发一份。省略时回退到当前 prefix 节点的 defaultChild
+ * @param {string|string[]} [options.toChildren] - 目标子节点名。传字符串时单发；传数组时每项各发一份。省略时回退到当前节点的 defaultRoute
  * @param {Function} [options.cloneSignals] - 自定义信号克隆函数。省略时使用浅层展开克隆
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
@@ -43,9 +43,9 @@ function createRepeatorPrefixHandler(options = {}) {
     if (Array.isArray(specified) && specified.length) {
       return specified.filter((child) => typeof child === "string" && child);
     }
-    const defaultChild = prefixContext.defaultChild;
-    return typeof defaultChild === "string" && defaultChild
-      ? [defaultChild]
+    const defaultRoute = prefixContext.defaultRoute;
+    return typeof defaultRoute === "string" && defaultRoute
+      ? [defaultRoute]
       : [];
   };
 

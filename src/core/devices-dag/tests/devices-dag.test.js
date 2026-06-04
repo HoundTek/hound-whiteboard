@@ -1169,21 +1169,19 @@ describe("DevicesDAG", () => {
       expect(node.defaultRoute).toBe("next");
     });
 
-    test("mount 应支持 defaultChild 作为 defaultRoute 的别名", () => {
+    test("mount 应通过 defaultRoute 设置默认路由", () => {
       const dag = new DevicesDAG();
       const node = dag.mount("/mounted", () => {}, {
-        defaultChild: "leaf",
+        defaultRoute: "leaf",
       });
       expect(node.defaultRoute).toBe("leaf");
     });
 
-    test("mount 应优先使用 defaultRoute 而非 defaultChild", () => {
+    test("mount 不传 defaultRoute 时应为空串", () => {
       const dag = new DevicesDAG();
-      const node = dag.mount("/mounted", () => {}, {
-        defaultRoute: "route",
-        defaultChild: "child",
-      });
-      expect(node.defaultRoute).toBe("route");
+      dag.ensureNode("/mounted");
+      const node = dag.mount("/mounted", () => {}, {});
+      expect(node.defaultRoute).toBe("");
     });
 
     test("mount 不传 handler 不应覆盖已有 handler", () => {
@@ -1308,18 +1306,18 @@ describe("DevicesDAG", () => {
   });
 
   describe("configureNode 边界", () => {
-    test("configureNode 应支持 defaultChild 向后兼容", () => {
+    test("configureNode 应通过 defaultRoute 设置默认路由", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/legacy");
-      dag.configureNode("/legacy", { defaultChild: "old-way" });
+      dag.configureNode("/legacy", { defaultRoute: "old-way" });
       expect(dag.getNode("/legacy").defaultRoute).toBe("old-way");
     });
 
-    test("configureNode 的 defaultChild 为 null 时应清空 defaultRoute", () => {
+    test("configureNode 的 defaultRoute 为 null 时应清空", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/legacy");
       dag.configureNode("/legacy", { defaultRoute: "before" });
-      dag.configureNode("/legacy", { defaultChild: null });
+      dag.configureNode("/legacy", { defaultRoute: null });
       expect(dag.getNode("/legacy").defaultRoute).toBe("");
     });
   });

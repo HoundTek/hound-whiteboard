@@ -45,8 +45,8 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 - `tree`
 - `node`
 - `path`
-- `defaultChild`
-- `resolvedDefaultChildPath`
+- `defaultRoute`
+- `resolvedDefaultRoutePath`
 - `depth`
 - `context`
 - `board`
@@ -86,8 +86,8 @@ Tool 现在提供一组围绕节点 `state` 的对象上下文工具：
 
 `continueToDefaultPath(signalPacket, deviceContext)` 会在满足以下条件时返回一个新的相对转发包：
 
-- 当前节点声明了 `defaultChild`
-- 已经解析出 `resolvedDefaultChildPath`
+- 当前节点声明了 `defaultRoute`
+- 已经解析出 `resolvedDefaultRoutePath`
 - 对应子节点真实存在
 
 如果条件不满足，则返回 `undefined`。

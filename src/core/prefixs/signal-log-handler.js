@@ -23,12 +23,12 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
  *
  * @example
- *   builder
- *     .prefix(createSignalLogPrefixHandler({ label: "[Debug]" }))
- *     .defaultChild("tool")
- *     .node("tool")
- *     .tool(new SomeTool())
- *     .end();
+ * builder
+ *   .prefix(createSignalLogPrefixHandler({ label: "[Debug]" }))
+ *   .defaultRoute("tool")
+ *   .node("tool")
+ *   .tool(new SomeTool())
+ *   .end();
  */
 function createSignalLogPrefixHandler(options = {}) {
   const label =
@@ -44,7 +44,7 @@ function createSignalLogPrefixHandler(options = {}) {
         signals.length === 1 ? signals[0] : signals,
       );
 
-      return ctx.routeToChild(ctx.defaultChild || "", signals);
+      return ctx.routeToChild(ctx.defaultRoute || "", signals);
     },
   });
 }

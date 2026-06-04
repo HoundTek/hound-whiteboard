@@ -162,7 +162,7 @@ function createRandomCircleSubDAG(options = {}) {
             return [];
           }
 
-          const target = prefixContext.defaultChild || "tool";
+          const target = prefixContext.defaultRoute || "tool";
 
           return [
             {

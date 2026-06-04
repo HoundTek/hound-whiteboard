@@ -42,12 +42,12 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
  *
  * @example
- * // 手势驱动 modifier
- * .prefix(createDragAnchorPrefixHandler())
- * .defaultChild("tool")
- * .node("tool")
- * .tool(new CommonObjectModifierTool())
- * .end()
+ *   // 手势驱动 modifier
+ *   .prefix(createDragAnchorPrefixHandler())
+ *   .defaultRoute("tool")
+ *   .node("tool")
+ *   .tool(new CommonObjectModifierTool())
+ *   .end()
  */
 function createDragAnchorPrefixHandler(options = {}) {
   const { displacementSignalType = "displacement" } = options;
@@ -61,11 +61,11 @@ function createDragAnchorPrefixHandler(options = {}) {
 
       if (endSig) {
         ctx.patchState({ anchor: null });
-        return ctx.routeToChild(ctx.defaultChild || "", signals);
+        return ctx.routeToChild(ctx.defaultRoute || "", signals);
       }
 
       if (!positionSig) {
-        return ctx.routeToChild(ctx.defaultChild || "", signals);
+        return ctx.routeToChild(ctx.defaultRoute || "", signals);
       }
 
       const worldPos = positionSig.context?.value;
@@ -74,7 +74,7 @@ function createDragAnchorPrefixHandler(options = {}) {
         typeof worldPos.x !== "number" ||
         typeof worldPos.y !== "number"
       ) {
-        return ctx.routeToChild(ctx.defaultChild || "", signals);
+        return ctx.routeToChild(ctx.defaultRoute || "", signals);
       }
 
       const state = ctx.state;
@@ -88,7 +88,7 @@ function createDragAnchorPrefixHandler(options = {}) {
       const x = current.x - state.anchor.x;
       const y = current.y - state.anchor.y;
 
-      return ctx.routeToChild(ctx.defaultChild || "", [
+      return ctx.routeToChild(ctx.defaultRoute || "", [
         {
           type: displacementSignalType,
           context: {

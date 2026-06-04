@@ -62,28 +62,23 @@ flowchart TD
 
 ## 1. 基础处理器：`createPrefixNodeHandler`
 
-所有修饰节点的根基。它封装了节点状态读写和最常用的局部路由 helper。
+`createPrefixNodeHandler` 是最轻量的 handler 工厂。它的唯一额外职责是提供 `initialState` 默认值合并——使 `ctx.state` 自动包含初始默认值。
 
-当前前缀上下文提供的 helper 有：
-
-- `state` / `getState()` / `setState()` / `patchState()`：节点状态管理
-- `routeToChild(childName, signals)`：把信号路由到当前节点的某个子节点
-- `stop()`：终止当前链路
+状态管理（`state` / `getState` / `setState` / `patchState`）和路由操作（`routeToChild` / `stop`）**均来自 DevicesDAG 的标准上下文**，不由本模块注入。
 
 ```js
 const handler = createPrefixNodeHandler({
+  initialState: { anchor: null },
   handle(packet, ctx) {
-    ctx.patchState({ count: (ctx.state.count ?? 0) + 1 });
+    // ctx.state 自动带有 { anchor: null } 默认值
+    // ctx.routeToChild / ctx.stop 来自 DAG
+    ctx.patchState({ anchor: current });
     return ctx.routeToChild("tool", packet.signals);
   },
 });
 ```
 
-这里要注意：
-
-- 基础 helper 只提供 `routeToChild`
-- 若要前往更深层后代，可直接返回 `{ packets: [{ to: "child/grandchild", signals }] }`
-- 若要向上路由请使用回调函数
+若不需要 `initialState`，可以直接用裸 handler，拿到的 ctx 也有同样的 helper。
 
 ## 2. 多工具状态机：`createMultiToolPrefixHandler`
 
@@ -123,7 +118,7 @@ const handler = createRepeatorPrefixHandler({
 });
 ```
 
-若未显式提供 `toChildren`，它会回退到当前 prefix 节点的 `defaultChild`。
+若未显式提供 `toChildren`，它会回退到当前节点的 `defaultRoute`。
 
 ## 4. Handoff 工作流：`createHandoffSubDAG`
 

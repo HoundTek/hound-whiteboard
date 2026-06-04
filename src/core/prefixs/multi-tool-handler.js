@@ -85,7 +85,7 @@ function createMultiToolPrefixHandler(options = {}) {
             : typeof currentState.activeChild === "string" &&
                 currentState.activeChild
               ? currentState.activeChild
-              : defaultChild || prefixContext.defaultChild || "";
+              : defaultChild || prefixContext.defaultRoute || "";
 
       if (!targetChild) {
         return transition.signals

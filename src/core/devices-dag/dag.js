@@ -51,9 +51,15 @@ import { dagToString } from "./dag-debug.js";
  * @property {string} resolvedDefaultRoutePath - 当前默认出边对应的绝对路径
  * @property {number} depth - 当前分发深度
  * @property {SignalPacket|undefined} signalPacket - 当前已规整的输入信号包
- * @property {Object} context - 累积上下文（沿分发路径逐层追加，只读）
- * @property {(path?: string) => any} getNodeState - 读取节点状态（接受路径或节点 id）
- * @property {(pathOrId: string|number, state: any) => any} setNodeState - 写入节点状态
+ * @property {Object} context - 累积上下文（沿分发路径逐层追加，handler 不能在此平级新增键）
+ * @property {Object} state - 当前节点状态的只读快照
+ * @property {() => any} getState - 重读节点最新状态
+ * @property {(nextState: Object) => Object} setState - 全量写入节点状态
+ * @property {(partial: Object) => Object} patchState - 浅合并写入节点状态
+ * @property {(to: string, signals?: Array) => DevicesDAGHandlerResult} routeToChild - 路由到子节点
+ * @property {() => DevicesDAGHandlerResult} stop - 终止当前链路
+ * @property {(pathOrId?: string|number) => any} getNodeState - 读取任意节点状态
+ * @property {(pathOrId: string|number, state: any) => any} setNodeState - 写入任意节点状态
  */
 
 /**
@@ -523,9 +529,6 @@ class DevicesDAG {
     if ("defaultRoute" in options) {
       node.defaultRoute =
         typeof options.defaultRoute === "string" ? options.defaultRoute : "";
-    } else if ("defaultChild" in options) {
-      node.defaultRoute =
-        typeof options.defaultChild === "string" ? options.defaultChild : "";
     }
     if ("umount" in options) {
       node.umount =
@@ -539,7 +542,7 @@ class DevicesDAG {
    * 直接挂载一个运行时节点
    * @param {string} path - 节点路径
    * @param {DevicesDAGHandler|null} [handler=null] - 节点处理器
-   * @param {{semantics?: Object, defaultChild?: string, defaultRoute?: string, umount?: DevicesDAGNodeUmountHandler|null}} [options={}] - 配置选项
+   * @param {{semantics?: Object, defaultRoute?: string, umount?: DevicesDAGNodeUmountHandler|null}} [options={}] - 配置选项
    * @returns {DevicesDAGNode} 挂载后的节点
    */
   mount(path, handler = null, options = {}) {
@@ -555,9 +558,7 @@ class DevicesDAG {
     const defaultRoute =
       typeof options.defaultRoute === "string"
         ? options.defaultRoute
-        : typeof options.defaultChild === "string"
-          ? options.defaultChild
-          : null;
+        : null;
     if (defaultRoute !== null) {
       node.defaultRoute = defaultRoute;
     }
@@ -743,7 +744,7 @@ class DevicesDAG {
    * @param {SignalPacket|undefined} signalPacket
    * @param {Object} accumulatedContext
    * @param {number} depth
-   * @returns {DevicesDAGHandlerContext & {dag: DevicesDAG, defaultChild: string, resolvedDefaultChildPath: string}}
+   * @returns {DevicesDAGHandlerContext}
    */
   _createHandlerContext(
     node,
@@ -757,6 +758,8 @@ class DevicesDAG {
       ? joinPath(path, defaultRoute)
       : path;
 
+    const readNodeState = () => this.getNodeState(path);
+
     return {
       node,
       dag: this,
@@ -764,13 +767,27 @@ class DevicesDAG {
       semantics: node.getSemantics?.() ?? { ...node.semantics },
       defaultRoute,
       resolvedDefaultRoutePath,
-      defaultChild: defaultRoute,
-      resolvedDefaultChildPath: resolvedDefaultRoutePath,
       depth,
       signalPacket,
       context: { ...accumulatedContext },
+      state: readNodeState(),
+      getState: readNodeState,
+      setState: (nextState) => this.setNodeState(path, nextState),
+      patchState(partial = {}) {
+        const current = readNodeState();
+        return this.setNodeState(
+          path,
+          isPlainObject(partial) ? { ...current, ...partial } : current,
+        );
+      },
       getNodeState: (pathOrId = path) => this.getNodeState(pathOrId),
       setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
+      routeToChild(to, signals = signalPacket?.signals) {
+        return { packets: [new SignalPacket(to, signals)] };
+      },
+      stop() {
+        return { packets: [] };
+      },
     };
   }
 

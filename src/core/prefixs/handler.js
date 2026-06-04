@@ -2,8 +2,11 @@
  * @file 基础修饰节点处理器
  * @description
  * 提供 createPrefixNodeHandler，是所有修饰节点的根基。
- * 它封装了节点状态读写与局部路由 helper，
- * 让调用方只需在 handle() 中编写向下分发逻辑。
+ * 它在 DAG 标准 handler context 之上叠加 initialState 语义，
+ * 使 handle() 中看到的 ctx.state 自动合并初始默认值。
+ *
+ * 状态写入（setState / patchState）和路由操作（routeToChild / stop）
+ * 均直接委托 DAG 提供的标准 helper，不在本模块重复实现。
  * @module core/prefixs/handler
  * @author Zhou Chenyu
  */
@@ -15,17 +18,21 @@ import { isPlainObject } from "./utils.js";
  * 创建修饰节点处理器
  * @description
  * 工厂函数，生成可挂载到 DevicesDAG 节点上的 handler。
- * 封装了节点状态读写（getState / setState / patchState）和局部路由 helper
- * （routeToChild / stop），调用方只需在 handle() 中编写业务路由逻辑，
- * 无需重复状态初始化与包规整。
  *
- * 当前上下文结构是平面的 { path, context（累积上下文）, getNodeState, setNodeState, ... }。
+ * 与直接使用 DAG 标准 handler 相比，本函数额外提供 initialState 语义：
+ * - ctx.state 会优先展示 initialState 中的默认值
+ * - ctx.getState() 同样合并 initialState
+ * - 写入操作（setState / patchState）仅写入实际值，不持久化初始默认值
+ *
+ * 路由操作（routeToChild / stop）直接使用 DAG 标准 context 中的 helper。
+ *
  * @param {{
  *   initialState?: Object,
  *   handle: Function,
  * }} options - 修饰节点处理器选项
  * @param {Object} [options.initialState] - 节点初始状态，挂载后第一次读取时与节点现有 state 合并
- * @param {Function} options.handle - 核心路由函数，接收 (packet, prefixContext) 参数
+ * @param {Function} options.handle - 核心路由函数，接收 (packet, ctx) 参数
+ *   ctx 即标准的 DevicesDAGHandlerContext，其中 ctx.state 已合并 initialState
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createPrefixNodeHandler(options = {}) {
@@ -42,46 +49,12 @@ function createPrefixNodeHandler(options = {}) {
     const packet = SignalPacket.from(signalPacket, {
       defaultTo: context.path ?? "/",
     });
-    const nodePath = context.path ?? "/";
-    const readState = () => {
-      const currentState = context.getNodeState?.(nodePath);
-      return isPlainObject(currentState)
-        ? { ...initialState, ...currentState }
-        : { ...initialState };
-    };
-    const writeState = (nextState = {}) => {
-      const normalizedState = isPlainObject(nextState) ? nextState : {};
-      return (
-        context.setNodeState?.(nodePath, normalizedState) ?? normalizedState
-      );
-    };
 
     return handle(packet, {
       ...context,
-      state: readState(),
-      getState: readState,
-      setState: writeState,
-      patchState(partialState = {}) {
-        const nextState = isPlainObject(partialState)
-          ? { ...readState(), ...partialState }
-          : readState();
-        return writeState(nextState);
-      },
-      /**
-       * 路由到指定子节点路径（仅允许向下）
-       * @param {string} to - 子节点路径（相对于当前节点）
-       * @param {Array} [signals=packet.signals] - 信号列表
-       * @returns {{ packets: SignalPacket[] }}
-       */
-      routeToChild(to, signals = packet.signals) {
-        return { packets: [new SignalPacket(to, signals)] };
-      },
-      /**
-       * 终止当前链路路由
-       * @returns {{ packets: [] }}
-       */
-      stop() {
-        return { packets: [] };
+      state: { ...initialState, ...(context.state ?? {}) },
+      getState() {
+        return { ...initialState, ...(context.getState?.() ?? {}) };
       },
     });
   };

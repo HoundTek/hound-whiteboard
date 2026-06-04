@@ -57,8 +57,8 @@ class Tool {
    * 将设备图上下文规整为工具上下文。
    * 当前稳定模型只产出平面 deviceContext；累积上下文保留在 context 字段中。
    * @param {{
-   *   path?: string, dag?: Object, node?: Object, defaultChild?: string,
-   *   resolvedDefaultChildPath?: string, depth?: number,
+   *   path?: string, dag?: Object, node?: Object, defaultRoute?: string,
+   *   resolvedDefaultRoutePath?: string, depth?: number,
    *   context?: Object, getNodeState?: Function, setNodeState?: Function
    * }} [handlerContext={}] - 设备图处理上下文
    * @param {Object} [toolContext={}] - 工具固定上下文
@@ -93,9 +93,9 @@ class Tool {
       node: handlerContext.node,
       semantics: handlerContext.semantics ?? {},
       path: handlerContext.path ?? handlerContext.node?.path ?? "",
-      defaultChild: handlerContext.defaultChild ?? "",
-      resolvedDefaultChildPath:
-        handlerContext.resolvedDefaultChildPath ?? handlerContext.path ?? "",
+      defaultRoute: handlerContext.defaultRoute ?? "",
+      resolvedDefaultRoutePath:
+        handlerContext.resolvedDefaultRoutePath ?? handlerContext.path ?? "",
       depth: handlerContext.depth ?? 0,
       board,
       monitor,
