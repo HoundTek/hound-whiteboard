@@ -10,7 +10,6 @@
 
 import { isPlainObject } from "./utils.js";
 import { createPrefixNodeHandler } from "./handler.js";
-import { SignalPacket } from "../devices-dag/signal.js";
 
 /**
  * 创建多工具修饰节点处理器
@@ -89,7 +88,7 @@ function createMultiToolPrefixHandler(options = {}) {
 
       if (!targetChild) {
         return transition.signals
-          ? { packets: [new SignalPacket("", transition.signals)] }
+          ? prefixContext.routeToChild("", transition.signals)
           : prefixContext.stop();
       }
 

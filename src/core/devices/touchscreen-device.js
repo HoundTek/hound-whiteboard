@@ -110,38 +110,31 @@ function createTouchscreenDevice(options = {}) {
   /**
    * 根节点处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文
    * @returns {Object}
    */
-  const rootHandler = (signalPacket) => {
+  const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     updateTouches(packet);
-    return {
-      signals: packet.signals,
-    };
+    return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
   };
 
   /**
    * 触点报告处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 当前路由上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 当前路由上下文
    * @returns {Object}
    */
-  const contactsHandler = (signalPacket, context = {}) => {
+  const contactsHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const contacts = getActiveTouches();
-    return {
-      to: context.path,
-      signals: [
-        {
-          type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
-          context: {
-            contacts,
-            changedTouchIds: [...lastChangedTouchIds],
-            activeTouchIds: contacts.map((contact) => contact.touchId),
-          },
-        },
-      ],
-    };
+    return ctx.routeToChild(ctx.defaultRoute || "", [
+      ctx.signal(TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS, undefined, {
+        contacts,
+        changedTouchIds: [...lastChangedTouchIds],
+        activeTouchIds: contacts.map((contact) => contact.touchId),
+      }),
+    ]);
   };
 
   const builder = createSubDAG("/touchscreen");

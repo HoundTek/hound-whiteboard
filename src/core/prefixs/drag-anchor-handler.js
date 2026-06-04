@@ -27,7 +27,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * 1. 收到首个 "position" 信号 → 记录锚点 (anchorX, anchorY)，不转发
  * 2. 收到后续 "position" 信号 → 计算累计位移 x = current.x − anchor.x,
  *    y = current.y − anchor.y，输出
- *    `{ type: "displacement", context: { value: { x, y }, position: { x, y } } }`
+ *    `ctx.signal(displacementSignalType, { x, y }, { position: current })`
  *    ——其中 position 为当前世界坐标，供下游 modifier 做手势准入检测
  * 3. 收到 "end" 信号 → 清空锚点，转发 end
  *
@@ -89,13 +89,13 @@ function createDragAnchorPrefixHandler(options = {}) {
       const y = current.y - state.anchor.y;
 
       return ctx.routeToChild(ctx.defaultRoute || "", [
-        {
-          type: displacementSignalType,
-          context: {
-            value: { x, y },
+        ctx.signal(
+          displacementSignalType,
+          { x, y },
+          {
             position: { x: current.x, y: current.y },
           },
-        },
+        ),
       ]);
     },
   });

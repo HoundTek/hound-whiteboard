@@ -16,7 +16,7 @@ import { createSubDAG } from "../devices-dag/index.js";
  * 单源单汇子图的特例：仅含一个节点，即源即汇。
  * 用于 mount 事件的 edge.prefix 字段——插在设备节点与 workflow 之间，
  * 对途经信号做转换、过滤或路由。
- * @param {Function|{ handler: Function }} handlerOrConfig - 处理器函数，或 { handler } 对象
+ * @param {import("../devices-dag/dag.js").DevicesDAGHandler|{ handler: import("../devices-dag/dag.js").DevicesDAGHandler }} handlerOrConfig - 处理器函数，或 { handler } 对象
  * @param {{ semantics?: Object }} [options={}] - 附加配置
  * @returns {import("../devices-dag/dag.js").SubDAGDefinition}
  * @example

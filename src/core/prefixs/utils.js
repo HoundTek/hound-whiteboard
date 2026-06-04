@@ -22,9 +22,7 @@ function isPlainObject(value) {
 function shallowCloneSignals(signals = []) {
   if (!Array.isArray(signals)) return [];
   return signals.map((signal) =>
-    signal && typeof signal === "object"
-      ? { ...signal }
-      : signal,
+    signal && typeof signal === "object" ? { ...signal } : signal,
   );
 }
 

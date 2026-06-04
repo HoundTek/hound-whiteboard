@@ -57,6 +57,7 @@
 - `patchState(partial)` — 浅合并写入节点状态
 - `routeToChild(to, signals?)` — 路由信号到子节点
 - `stop()` — 终止当前链路
+- `signal(type, value, extra?)` — 构造标准信号 { type, context: { value?, ...extra } }，value 为 undefined 时省略
 - `getNodeState(pathOrId?)` — 读取任意节点状态
 - `setNodeState(pathOrId, state)` — 写入任意节点状态
 
@@ -151,7 +152,8 @@
 
 ## 相关文档
 
-- [设备图](../devices/docs/devices-dag-document.md)
-- [设备定义](../devices/docs/device-document.md)
+- [handler 上下文（ctx）用法](../devices-dag/docs/handler-context-document.md)
+- [设备图](../devices-dag/docs/devices-dag-document.md)
+- [设备定义](../devices-dag/docs/device-document.md)
 - [工具基类](../tools/tool-document.md)
 - [Core 输入流](./core-input-flow.md)

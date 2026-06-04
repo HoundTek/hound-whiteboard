@@ -35,7 +35,7 @@ function createRepeatorPrefixHandler(options = {}) {
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} prefixContext - 当前修饰节点上下文
    * @returns {Array<string>}
    */
-  const resolveTargets = (prefixContext) => {
+  const resolveTargets = (ctx) => {
     const specified = options.toChildren;
     if (typeof specified === "string" && specified) {
       return [specified];
@@ -43,22 +43,22 @@ function createRepeatorPrefixHandler(options = {}) {
     if (Array.isArray(specified) && specified.length) {
       return specified.filter((child) => typeof child === "string" && child);
     }
-    const defaultRoute = prefixContext.defaultRoute;
+    const defaultRoute = ctx.defaultRoute;
     return typeof defaultRoute === "string" && defaultRoute
       ? [defaultRoute]
       : [];
   };
 
   return createPrefixNodeHandler({
-    handle(packet, prefixContext) {
-      const targets = resolveTargets(prefixContext);
+    handle(packet, ctx) {
+      const targets = resolveTargets(ctx);
       if (!targets.length) {
-        return prefixContext.stop();
+        return ctx.stop();
       }
 
       return {
         packets: targets.flatMap((childName) => {
-          const result = prefixContext.routeToChild(
+          const result = ctx.routeToChild(
             childName,
             cloneFn(packet.signals),
           );

@@ -72,12 +72,12 @@ const WASD_ROUTE_PRESETS = Object.freeze({
  */
 function buildKeyboardTriggerForwardNodeConfig() {
   return {
-    handler(packet) {
+    handler(packet, ctx = {}) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-      if (triggerSignals.length === 0) return [];
-      return { signals: triggerSignals };
+      if (triggerSignals.length === 0) return ctx.stop();
+      return ctx.routeToChild(ctx.defaultRoute || "", triggerSignals);
     },
   };
 }
@@ -93,8 +93,8 @@ function buildKeyboardTriggerForwardNodeConfig() {
  */
 function buildViewportPositionNodeConfig(direction, baseStep = 200) {
   return {
-    handler(packet, context) {
-      const monitor = context?.context?.monitor;
+    handler(packet, ctx = {}) {
+      const monitor = ctx?.context?.monitor;
       const zoom = monitor?.zoom ?? 1;
       const step = baseStep / zoom;
       const delta = {
@@ -104,22 +104,24 @@ function buildViewportPositionNodeConfig(direction, baseStep = 200) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-      if (triggerSignals.length === 0) return [];
+      if (triggerSignals.length === 0) return ctx.stop();
 
-      return {
-        signals: triggerSignals.map((signal) => ({
-          type: "position",
-          context: {
-            value: {
+      return ctx.routeToChild(ctx.defaultRoute || "", [
+        ...triggerSignals.map((signal) =>
+          ctx.signal(
+            "position",
+            {
               x: (monitor?.origin?.x ?? 0) + (delta?.x ?? 0),
               y: (monitor?.origin?.y ?? 0) + (delta?.y ?? 0),
             },
-            code: signal?.context?.code,
-            key: signal?.context?.key,
-            sourceType: signal.type,
-          },
-        })),
-      };
+            {
+              code: signal?.context?.code,
+              key: signal?.context?.key,
+              sourceType: signal.type,
+            },
+          ),
+        ),
+      ]);
     },
   };
 }
@@ -134,24 +136,22 @@ function buildViewportPositionNodeConfig(direction, baseStep = 200) {
  */
 function buildViewportScaleNodeConfig(scaleTransformer) {
   return {
-    handler(packet, context) {
-      const monitor = context?.context?.monitor;
+    handler(packet, ctx = {}) {
+      const monitor = ctx?.context?.monitor;
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-      if (triggerSignals.length === 0) return [];
+      if (triggerSignals.length === 0) return ctx.stop();
 
-      return {
-        signals: triggerSignals.map((signal) => ({
-          type: "scale",
-          context: {
-            value: scaleTransformer(monitor?.zoom ?? 1),
+      return ctx.routeToChild(ctx.defaultRoute || "", [
+        ...triggerSignals.map((signal) =>
+          ctx.signal("scale", scaleTransformer(monitor?.zoom ?? 1), {
             code: signal?.context?.code,
             key: signal?.context?.key,
             sourceType: signal.type,
-          },
-        })),
-      };
+          }),
+        ),
+      ]);
     },
   };
 }
@@ -163,21 +163,20 @@ function buildViewportScaleNodeConfig(scaleTransformer) {
  */
 function buildViewportFlushNodeConfig() {
   return {
-    handler(packet) {
+    handler(packet, ctx = {}) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-      if (triggerSignals.length === 0) return [];
-      return {
-        signals: triggerSignals.map((signal) => ({
-          type: "flush",
-          context: {
+      if (triggerSignals.length === 0) return ctx.stop();
+      return ctx.routeToChild(ctx.defaultRoute || "", [
+        ...triggerSignals.map((signal) =>
+          ctx.signal("flush", undefined, {
             code: signal?.context?.code,
             key: signal?.context?.key,
             sourceType: signal.type,
-          },
-        })),
-      };
+          }),
+        ),
+      ]);
     },
   };
 }
@@ -191,23 +190,25 @@ function buildViewportFlushNodeConfig() {
  */
 function buildWasdNodeConfig(code, vector) {
   return {
-    handler(packet) {
+    handler(packet, ctx = {}) {
       const movementSignals = packet.signals
         .filter(
           (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
         )
-        .map((signal) => ({
-          type: "position",
-          context: {
-            value: { ...vector },
-            code,
-            key: signal?.context?.key,
-            sourceType: signal.type,
-          },
-        }));
+        .map((signal) =>
+          ctx.signal(
+            "position",
+            { ...vector },
+            {
+              code,
+              key: signal?.context?.key,
+              sourceType: signal.type,
+            },
+          ),
+        );
 
-      if (movementSignals.length === 0) return [];
-      return { signals: movementSignals };
+      if (movementSignals.length === 0) return ctx.stop();
+      return ctx.routeToChild(ctx.defaultRoute || "", movementSignals);
     },
   };
 }
@@ -217,19 +218,21 @@ function buildWasdNodeConfig(code, vector) {
  * @description 将 trigger 信号转为指定调试类型的信号。type 可以是静态字符串或
  * 动态函数 (signals) => string（如根据 Shift 分流）。
  * @param {string | ((signals: object[]) => string)} type - 调试信号类型或解析函数
- * @param {Object} [context={}] - 调试上下文附加数据
+ * @param {Object} [debugContext={}] - 调试上下文附加数据
  * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
-function buildKeyboardDebugNodeConfig(type, context = {}) {
+function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
   return {
-    handler(packet) {
+    handler(packet, ctx = {}) {
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
-      if (triggerSignals.length === 0) return [];
+      if (triggerSignals.length === 0) return ctx.stop();
       const resolvedType =
         typeof type === "function" ? type(triggerSignals) : type;
-      return { signals: [{ type: resolvedType, context: { ...context } }] };
+      return ctx.routeToChild(ctx.defaultRoute || "", [
+        ctx.signal(resolvedType, undefined, debugContext),
+      ]);
     },
   };
 }

@@ -28,11 +28,10 @@ import { isPlainObject } from "./utils.js";
  *
  * @param {{
  *   initialState?: Object,
- *   handle: Function,
+ *   handle: import("../devices-dag/dag.js").DevicesDAGHandler | Array<{ path: string, signals: Array<Object> }>
  * }} options - 修饰节点处理器选项
  * @param {Object} [options.initialState] - 节点初始状态，挂载后第一次读取时与节点现有 state 合并
- * @param {Function} options.handle - 核心路由函数，接收 (packet, ctx) 参数
- *   ctx 即标准的 DevicesDAGHandlerContext，其中 ctx.state 已合并 initialState
+ * @param {import("../devices-dag/dag.js").DevicesDAGHandler} options.handle - 核心路由函数
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createPrefixNodeHandler(options = {}) {

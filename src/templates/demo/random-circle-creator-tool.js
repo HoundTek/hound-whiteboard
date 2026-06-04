@@ -71,19 +71,19 @@ function createRandomCircleSubDAG(options = {}) {
     .node()
     .prefix(
       createPrefixNodeHandler({
-        handle: (signalPacket, prefixContext = {}) => {
-          const packet = SignalPacket.from(signalPacket);
+        handle: (pkt, ctx = {}) => {
+          const packet = SignalPacket.from(pkt);
           const hasTriggerSignal = packet.signals.some(
             (signal) => signal.type === "trigger",
           );
           if (!hasTriggerSignal) {
-            return [];
+            return ctx.stop();
           }
 
-          const monitor = prefixContext.context?.monitor;
+          const monitor = ctx.context?.monitor;
           const viewportWorldRect = monitor?.getViewportWorldRect?.();
           if (!viewportWorldRect) {
-            return [];
+            return ctx.stop();
           }
 
           const radiusRange = Math.max(maxRadius - minRadius, 0);
@@ -100,29 +100,21 @@ function createRandomCircleSubDAG(options = {}) {
           const randomStrokeColor = `hsl(${hue}, 70%, 42%)`;
           const randomFillColor = `hsla(${hue}, 75%, 60%, 0.22)`;
 
-          return prefixContext.routeToChild("params", [
-            {
-              type: "position",
-              context: { value: { x: centerX, y: centerY } },
-            },
-            {
-              type: RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS,
-              context: { value: radius },
-            },
-            {
-              type: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
-              context: {
-                value: {
-                  ...baseProperty,
-                  strokeColor: hasCustomStrokeColor
-                    ? baseProperty.strokeColor
-                    : randomStrokeColor,
-                  fillColor: hasCustomFillColor
-                    ? baseProperty.fillColor
-                    : randomFillColor,
-                },
-              },
-            },
+          return ctx.routeToChild("params", [
+            ctx.signal("position", { x: centerX, y: centerY }),
+            ctx.signal(
+              RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS,
+              radius,
+            ),
+            ctx.signal(OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY, {
+              ...baseProperty,
+              strokeColor: hasCustomStrokeColor
+                ? baseProperty.strokeColor
+                : randomStrokeColor,
+              fillColor: hasCustomFillColor
+                ? baseProperty.fillColor
+                : randomFillColor,
+            }),
           ]);
         },
       }),
@@ -138,8 +130,8 @@ function createRandomCircleSubDAG(options = {}) {
     .node()
     .prefix(
       createPrefixNodeHandler({
-        handle: (signalPacket, prefixContext = {}) => {
-          const packet = SignalPacket.from(signalPacket);
+        handle: (pkt, ctx = {}) => {
+          const packet = SignalPacket.from(pkt);
           const positionSignal = packet.signals.find(
             (signal) => signal.type === "position",
           );
@@ -159,64 +151,45 @@ function createRandomCircleSubDAG(options = {}) {
             typeof position.y !== "number" ||
             typeof radius !== "number"
           ) {
-            return [];
+            return ctx.stop();
           }
 
-          const target = prefixContext.defaultRoute || "tool";
+          const target = ctx.defaultRoute || "tool";
 
-          return [
-            {
-              to: target,
-              signals: [
-                {
-                  type: "position",
-                  context: { value: position },
-                },
-                {
-                  type: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
-                  context: {
-                    value: isPlainObject(propertySignal?.context?.value)
-                      ? propertySignal.context.value
-                      : { ...baseProperty },
-                  },
-                },
-              ],
-            },
-            {
-              to: target,
-              signals: [
-                {
-                  type: "position",
-                  context: {
-                    value: {
-                      x: position.x + radius,
-                      y: position.y,
-                    },
-                  },
-                },
-              ],
-            },
-            {
-              to: target,
-              signals: [
-                {
-                  type: "position",
-                  context: {
-                    value: {
-                      x: position.x + radius,
-                      y: position.y,
-                    },
-                  },
-                },
-                {
-                  type: "end",
-                  context: {
-                    sourceType: "random-circle-prefix",
-                  },
-                },
-              ],
-            },
+          const signalsA = [
+            ctx.signal("position", position),
+            ctx.signal(
+              OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+              isPlainObject(propertySignal?.context?.value)
+                ? propertySignal.context.value
+                : { ...baseProperty },
+            ),
           ];
+
+          const signalsB = [
+            ctx.signal("position", {
+              x: position.x + radius,
+              y: position.y,
+            }),
+          ];
+
+          const signalsC = [
+            ctx.signal("position", {
+              x: position.x + radius,
+              y: position.y,
+            }),
+            ctx.signal("end", undefined, {
+              sourceType: "random-circle-prefix",
+            }),
+          ];
+
+          return {
+            packets: [
+              ...ctx.routeToChild(target, signalsA).packets,
+              ...ctx.routeToChild(target, signalsB).packets,
+              ...ctx.routeToChild(target, signalsC).packets,
+            ],
+          };
         },
       }),
       {
