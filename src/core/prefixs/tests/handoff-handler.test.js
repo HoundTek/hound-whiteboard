@@ -3,7 +3,10 @@ import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import { Tool } from "../../tools/tool.js";
 import { CommonObjectModifierTool } from "../../tools/modifier/common-object-modifier.js";
 import { Vector } from "../../utils/math.js";
+import { RectangleRange } from "../../range/rectangle.js";
 import { createPrefixNodeHandler } from "../handler.js";
+import { createDragAnchorPrefixHandler } from "../drag-anchor-handler.js";
+import { createMultiToolPrefixHandler } from "../multi-tool-handler.js";
 import {
   createHandoffSubDAG,
   wrapSubDAGForHandoff,
@@ -805,6 +808,546 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // 应恢复原始行为
       expect(tool.beforeCommitCreatedObject()).toBe(true);
+    });
+  });
+
+  describe("modifier + anchor + handoff 完整工作流集成", () => {
+    /**
+     * 手动构建完整工作流 DAG：
+     * 根节点(multi-tool prefix) → first(creator) / second(drag-anchor + modifier)。
+     *
+     * 注：createHandoffSubDAG 目前对 SubDAGDefinition 作为 second 时
+     * 不注入 afterApply 订阅，因此这里手动复现其内部结构来验证
+     * drag-anchor → modifier → handoff 回切的完整信号链。
+     */
+    function mountModifierWithAnchorWorkflow(
+      dag,
+      basePath,
+      { creator, modifier, board, monitor },
+    ) {
+      const accumulatedContext = { board, monitor };
+      const subDAG = createSubDAG(basePath);
+
+      // ── 根节点：multi-tool prefix，负责 first ↔ second 切换 ──
+      const root = subDAG
+        .node()
+        .defaultRoute("first")
+        .prefix(
+          createMultiToolPrefixHandler({
+            defaultChild: "first",
+            initialState: { phase: "first" },
+            resolveTransition({
+              signalPacket,
+              state,
+              fromPhase,
+              prefixContext,
+            }) {
+              const dag = prefixContext.dag;
+              const handoffBasePath = prefixContext.path ?? "";
+
+              const createCompleteCallback = (completedPhase) => () => {
+                // 对象桥接
+                if (completedPhase === "first") {
+                  const firstState = dag?.getNodeState?.(
+                    `${handoffBasePath}/first`,
+                  );
+                  const objects = firstState?.objects ?? [];
+                  if (objects.length > 0) {
+                    dag?.setNodeState?.(`${handoffBasePath}/second`, {
+                      objects,
+                    });
+                  }
+                }
+
+                if (completedPhase === "first") {
+                  prefixContext.setState({
+                    phase: "second",
+                    activeChild: "second",
+                  });
+                } else if (completedPhase === "second") {
+                  prefixContext.setState({
+                    phase: "first",
+                    activeChild: "first",
+                  });
+                }
+              };
+
+              return {
+                child: state.activeChild,
+                context: {
+                  onToolComplete: createCompleteCallback(fromPhase || "first"),
+                  autoUmountOnApply: false,
+                },
+              };
+            },
+          }),
+          { prefixKind: "handoff", routePolicy: "state-machine" },
+        );
+
+      // ── first 子节点：creator ──
+      const firstNode = subDAG.node();
+      firstNode.handler((packet, context = {}) => {
+        const onToolComplete = context.context?.onToolComplete;
+        let completed = false;
+        const unsub =
+          typeof creator.on === "function"
+            ? creator.on("afterCreate", () => {
+                completed = true;
+                onToolComplete?.();
+              })
+            : null;
+
+        const processor = creator.createProcessor({
+          board: context.context?.board,
+          monitor: context.context?.monitor,
+        });
+        const rawResult = processor(packet, context);
+        unsub?.();
+        return completed ? { ...rawResult } : rawResult;
+      });
+
+      // ── second 子节点：drag-anchor prefix + modifier tool ──
+      // 先定义 modifier wrapper（含 afterApply 订阅），再在其外包裹 drag-anchor
+      function modifierWrapper(packet, context = {}) {
+        const onToolComplete = context.context?.onToolComplete;
+        let completed = false;
+        const unsub =
+          typeof modifier.on === "function"
+            ? modifier.on("afterApply", () => {
+                completed = true;
+                onToolComplete?.();
+              })
+            : null;
+
+        const processor = modifier.createProcessor({
+          board: context.context?.board,
+          monitor: context.context?.monitor,
+        });
+        const rawResult = processor(packet, context);
+        unsub?.();
+        return completed ? { ...rawResult } : rawResult;
+      }
+
+      const dragAnchorHandler = createDragAnchorPrefixHandler();
+
+      const secondNode = subDAG.node();
+      secondNode.handler(function anchoredHandler(packet, context = {}) {
+        const inheritedContext = { ...context };
+
+        const anchorCtx = {
+          ...context,
+          path: context.path ?? `${basePath}/second`,
+          defaultRoute: "",
+        };
+
+        const anchorResult = dragAnchorHandler(packet, anchorCtx);
+        if (!anchorResult) return undefined;
+
+        const anchoredPacket =
+          anchorResult.packets?.[0] ??
+          (Array.isArray(anchorResult) ? anchorResult[0] : anchorResult);
+
+        if (!anchoredPacket || !anchoredPacket.signals?.length) {
+          return undefined;
+        }
+
+        return modifierWrapper(anchoredPacket, inheritedContext);
+      });
+
+      subDAG.edge("first", root, firstNode);
+      subDAG.edge("second", root, secondNode);
+
+      const built = subDAG.build();
+      dag.mountSubDAG("/monitor", built, accumulatedContext);
+      return { basePath, accumulatedContext };
+    }
+
+    test("position → drag-anchor → displacement → modifier 准入检测 → 位移 → success → 切回 first", () => {
+      const dag = new DevicesDAG();
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+        getRange: () => new RectangleRange(0, 0, 50, 30),
+      };
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply: jest.fn(),
+        },
+      };
+
+      const first = createMockCreator((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, {
+          objects: [object],
+        });
+      });
+      first.obj = object;
+
+      const { accumulatedContext } = mountModifierWithAnchorWorkflow(
+        dag,
+        "/full-anchor-flow",
+        {
+          creator: first,
+          modifier: new CommonObjectModifierTool(),
+          board,
+          monitor: {},
+        },
+      );
+
+      // ── 阶段 1: creator 创建 → 触发 handoff 切换到 second ──
+      dag.dispatch(
+        { to: "/monitor/full-anchor-flow", signals: [{ type: "position" }] },
+        accumulatedContext,
+      );
+      expect(dag.getNodeState("/monitor/full-anchor-flow")).toEqual({
+        phase: "second",
+        activeChild: "second",
+      });
+
+      // ── 阶段 2: 模拟鼠标拖拽，信号经 drag-anchor → modifier ──
+
+      // 2a. 首个 position → drag-anchor 捕获锚点 (100, 100)，不转发
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [
+            { type: "position", context: { value: { x: 100, y: 100 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      expect(object.position).toEqual(new Vector(10, 20));
+
+      // 2b. 第二个 position → drag-anchor 计算位移 (20, 10) 并携带 position (120, 110)
+      //     world rect = (10, 20, 50, 30) → (10..60, 20..50)
+      //     position (120, 110) 在合矩形外 → 准入检测应拒绝
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [
+            { type: "position", context: { value: { x: 120, y: 110 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      expect(object.position).toEqual(new Vector(10, 20));
+
+      // 2c. end → 清空 drag-anchor 锚点，允许新一轮手势
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "end" }],
+        },
+        accumulatedContext,
+      );
+
+      // 2d. 新锚点 (30, 35) — 第一个 position 不转发
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
+        },
+        accumulatedContext,
+      );
+
+      // 2e. 位移 (10, 5) → position (40, 40) 在 world rect 内 → 准入通过
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "position", context: { value: { x: 40, y: 40 } } }],
+        },
+        accumulatedContext,
+      );
+      // initPos (10, 20) + (10, 5) = (20, 25)
+      expect(object.position).toEqual(new Vector(20, 25));
+
+      // 2f. 继续拖拽，累计位移 (25, 10)
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "position", context: { value: { x: 55, y: 45 } } }],
+        },
+        accumulatedContext,
+      );
+      // initPos (10, 20) + (25, 10) = (35, 30)
+      expect(object.position).toEqual(new Vector(35, 30));
+
+      // ── 阶段 3: success 信号 → 提交到静态图 + handoff 切回 first ──
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "success", context: {} }],
+        },
+        accumulatedContext,
+      );
+
+      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
+        new Set([object]),
+      );
+      expect(object.position).toEqual(new Vector(35, 30));
+      expect(dag.getNodeState("/monitor/full-anchor-flow")).toEqual({
+        phase: "first",
+        activeChild: "first",
+      });
+
+      // ── 阶段 4: 第二轮创建 → 修改 完整周期 ──
+      const object2 = {
+        id: 2,
+        position: new Vector(50, 60),
+        getRange: () => new RectangleRange(0, 0, 30, 20),
+      };
+      board.activeObjectManager.activeObjectIndex.set(object2.id, object2);
+
+      // 手动将第二轮对象写入 first 节点并触发 handoff 切换到 second
+      dag.setNodeState("/monitor/full-anchor-flow/first", {
+        objects: [object2],
+      });
+      // 通过 multi-tool 根节点的状态迁移直接切到 second
+      dag.setNodeState("/monitor/full-anchor-flow", {
+        phase: "second",
+        activeChild: "second",
+      });
+      // 桥接对象到 second
+      dag.setNodeState("/monitor/full-anchor-flow/second", {
+        objects: [object2],
+      });
+      expect(dag.getNodeState("/monitor/full-anchor-flow")).toEqual({
+        phase: "second",
+        activeChild: "second",
+      });
+
+      // 拖拽第二个对象：锚点 (50, 60) → 位移 (8, 4)
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "position", context: { value: { x: 50, y: 60 } } }],
+        },
+        accumulatedContext,
+      );
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "position", context: { value: { x: 58, y: 64 } } }],
+        },
+        accumulatedContext,
+      );
+      // object2 的 world rect: (50, 60, 30, 20) → (50..80, 60..80)
+      // position (58, 64) 在内部 → 准入通过
+      // initPos (50, 60) + (8, 4) = (58, 64)
+      expect(object2.position).toEqual(new Vector(58, 64));
+
+      dag.dispatch(
+        {
+          to: "/monitor/full-anchor-flow",
+          signals: [{ type: "success", context: {} }],
+        },
+        accumulatedContext,
+      );
+      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
+        new Set([object2]),
+      );
+      expect(dag.getNodeState("/monitor/full-anchor-flow")).toEqual({
+        phase: "first",
+        activeChild: "first",
+      });
+    });
+
+    test("handoff 中 modifier 修改后不卸载 second 节点（autoUmountOnApply: false）", () => {
+      const dag = new DevicesDAG();
+      const object = {
+        id: 1,
+        position: new Vector(0, 0),
+      };
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply: jest.fn(),
+        },
+      };
+
+      const first = createMockCreator((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, { objects: [object] });
+      });
+      first.obj = object;
+
+      const { accumulatedContext } = mountModifierWithAnchorWorkflow(
+        dag,
+        "/no-unmount-flow",
+        {
+          creator: first,
+          modifier: new CommonObjectModifierTool(),
+          board,
+          monitor: {},
+        },
+      );
+
+      // creator → handoff 切换到 second
+      dag.dispatch(
+        { to: "/monitor/no-unmount-flow", signals: [{ type: "position" }] },
+        accumulatedContext,
+      );
+
+      // 拖拽 + success 提交
+      dag.dispatch(
+        {
+          to: "/monitor/no-unmount-flow",
+          signals: [{ type: "position", context: { value: { x: 10, y: 10 } } }],
+        },
+        accumulatedContext,
+      );
+      dag.dispatch(
+        {
+          to: "/monitor/no-unmount-flow",
+          signals: [{ type: "position", context: { value: { x: 20, y: 20 } } }],
+        },
+        accumulatedContext,
+      );
+      dag.dispatch(
+        {
+          to: "/monitor/no-unmount-flow",
+          signals: [{ type: "success", context: {} }],
+        },
+        accumulatedContext,
+      );
+
+      // 切回 first 后 second 节点应仍然存在
+      expect(dag.getNodeState("/monitor/no-unmount-flow")).toEqual({
+        phase: "first",
+        activeChild: "first",
+      });
+      expect(dag.getNode("/monitor/no-unmount-flow/second")).not.toBeNull();
+    });
+
+    test("准入检测在完整工作流中正确过滤：手势激活后不重复检测", () => {
+      const dag = new DevicesDAG();
+      const calls = [];
+
+      const object = {
+        id: 1,
+        position: new Vector(100, 100),
+        getRange: () => new RectangleRange(0, 0, 50, 50),
+      };
+      // world rect: (100, 100, 50, 50) → (100..150, 100..150)
+
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[object.id, object]]),
+          apply: jest.fn(),
+        },
+      };
+      const monitor = {
+        liveRenderer: {
+          captureObjectSnapshot: jest.fn((objs) =>
+            calls.push(["capture", objs.length]),
+          ),
+          invalidateObjects: jest.fn((objs) =>
+            calls.push(["invalidate", objs.length]),
+          ),
+        },
+      };
+
+      const first = createMockCreator((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, { objects: [object] });
+      });
+      first.obj = object;
+
+      const modifier = new CommonObjectModifierTool();
+      modifier.on("afterApply", () => calls.push(["afterApply"]));
+
+      const { accumulatedContext } = mountModifierWithAnchorWorkflow(
+        dag,
+        "/hit-test-flow",
+        { creator: first, modifier, board, monitor },
+      );
+
+      // 进入 second 阶段
+      dag.dispatch(
+        { to: "/monitor/hit-test-flow", signals: [{ type: "position" }] },
+        accumulatedContext,
+      );
+
+      // 首次拖拽：锚点 (110, 110) 在合矩形内 → 准入通过
+      dag.dispatch(
+        {
+          to: "/monitor/hit-test-flow",
+          signals: [
+            { type: "position", context: { value: { x: 110, y: 110 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      dag.dispatch(
+        {
+          to: "/monitor/hit-test-flow",
+          signals: [
+            { type: "position", context: { value: { x: 130, y: 120 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      // initPos (100, 100) + (20, 10) = (120, 110)
+      expect(object.position).toEqual(new Vector(120, 110));
+
+      // 继续拖拽，position (200, 200) 远在合矩形外，但手势已激活不应再检测
+      dag.dispatch(
+        {
+          to: "/monitor/hit-test-flow",
+          signals: [
+            { type: "position", context: { value: { x: 200, y: 200 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      // initPos (100, 100) + (90, 90) = (190, 190)
+      expect(object.position).toEqual(new Vector(190, 190));
+
+      // end → 清锚点
+      dag.dispatch(
+        {
+          to: "/monitor/hit-test-flow",
+          signals: [{ type: "end" }],
+        },
+        accumulatedContext,
+      );
+
+      // 新一轮：锚点 (210, 210) 在合矩形外（对象已移至 190, 190 → 合矩形 190..240）
+      // position (210, 210) 在 190..240 内 → 准入通过
+      dag.dispatch(
+        {
+          to: "/monitor/hit-test-flow",
+          signals: [
+            { type: "position", context: { value: { x: 210, y: 210 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      dag.dispatch(
+        {
+          to: "/monitor/hit-test-flow",
+          signals: [
+            { type: "position", context: { value: { x: 220, y: 215 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      // 新的 initPos (190, 190) + (10, 5) = (200, 195)
+      expect(object.position).toEqual(new Vector(200, 195));
+
+      // success 提交
+      dag.dispatch(
+        {
+          to: "/monitor/hit-test-flow",
+          signals: [{ type: "success", context: {} }],
+        },
+        accumulatedContext,
+      );
+
+      expect(board.activeObjectManager.apply).toHaveBeenCalled();
+      expect(calls.filter((c) => c[0] === "afterApply")).toHaveLength(1);
+      expect(dag.getNodeState("/monitor/hit-test-flow")).toEqual({
+        phase: "first",
+        activeChild: "first",
+      });
     });
   });
 
