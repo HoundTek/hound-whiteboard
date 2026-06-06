@@ -24,12 +24,13 @@ import { createPrefixNodeHandler } from "./handler.js";
  * 累计位移 `{x, y}`，以 `"displacement"` 信号输出。
  *
  * 工作流程：
- * 1. 收到首个 "position" 信号 → 记录锚点 (anchorX, anchorY)，不转发
- * 2. 收到后续 "position" 信号 → 计算累计位移 x = current.x − anchor.x,
+ * 1. 收到 "position" 信号 → 计算累计位移 x = current.x − anchor.x,
  *    y = current.y − anchor.y，输出
  *    `ctx.signal(displacementSignalType, { x, y }, { position: current })`
  *    ——其中 position 为当前世界坐标，供下游 modifier 做手势准入检测
- * 3. 收到 "end" 信号 → 清空锚点，转发 end
+ *    - 首个 position 同时记录锚点，位移为 {x: 0, y: 0}
+ *    - 后续 position 基于锚点计算累计位移
+ * 2. 收到 "end" 信号 → 清空锚点，position 仍转为 displacement 后再转发
  *
  * 下游 modifier（如 CommonObjectModifierTool）通过 `context.value` 取位移、
  * 通过 `context.position` 做手势准入检测（判断点击是否落在对象合矩形内），
@@ -61,7 +62,7 @@ function createDragAnchorPrefixHandler(options = {}) {
 
       if (endSig) {
         ctx.patchState({ anchor: null });
-        return ctx.routeToChild(ctx.defaultRoute || "", signals);
+        // 不清空锚点前仍可计算本次位移，继续处理 position
       }
 
       if (!positionSig) {
@@ -80,15 +81,19 @@ function createDragAnchorPrefixHandler(options = {}) {
       const state = ctx.state;
       const current = { x: worldPos.x, y: worldPos.y };
 
-      if (!state.anchor) {
+      const anchor = state.anchor;
+      if (!anchor) {
         ctx.patchState({ anchor: current });
-        return ctx.stop();
       }
 
-      const x = current.x - state.anchor.x;
-      const y = current.y - state.anchor.y;
+      // 若无锚点（首个 position），位移为 {0, 0}；否则基于锚点计算累计位移
+      const x = current.x - (anchor?.x ?? current.x);
+      const y = current.y - (anchor?.y ?? current.y);
 
+      // 去掉 position 信号，加入 displacement 信号，其余信号不变
+      const filtered = signals.filter((s) => s?.type !== "position");
       return ctx.routeToChild(ctx.defaultRoute || "", [
+        ...filtered,
         ctx.signal(
           displacementSignalType,
           { x, y },

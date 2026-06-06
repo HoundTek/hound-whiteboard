@@ -2,7 +2,7 @@ import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import { createDragAnchorPrefixHandler } from "../drag-anchor-handler.js";
 
 describe("drag-anchor-handler", () => {
-  test("首个 position 信号应捕获锚点，不转发", () => {
+  test("首个 position 信号应捕获锚点并输出位移 {0, 0}", () => {
     const dag = new DevicesDAG();
     const _dag1 = createSubDAG("/drag");
     const _r1 = _dag1
@@ -23,8 +23,21 @@ describe("drag-anchor-handler", () => {
       signals: [{ type: "position", context: { value: { x: 100, y: 200 } } }],
     });
 
-    // 首个 position：捕获锚点，不转发
-    expect(result.packets).toEqual([]);
+    // 首个 position：捕获锚点，输出 displacement {0, 0}
+    expect(result.packets).toEqual([
+      {
+        to: "",
+        signals: [
+          {
+            type: "displacement",
+            context: {
+              value: { x: 0, y: 0 },
+              position: { x: 100, y: 200 },
+            },
+          },
+        ],
+      },
+    ]);
   });
 
   test("后续 position 信号应输出累计位移 {x, y}", () => {
@@ -101,13 +114,26 @@ describe("drag-anchor-handler", () => {
 
     expect(result.packets).toEqual([{ to: "", signals: [{ type: "end" }] }]);
 
-    // 验证锚点已清空：下一个 position 应再次成为"首个"
+    // 验证锚点已清空：下一个 position 应新建锚点并输出 {0, 0}
     const result2 = dag.dispatch({
       to: "/monitor/drag",
       signals: [{ type: "position", context: { value: { x: 50, y: 80 } } }],
     });
 
-    expect(result2.packets).toEqual([]);
+    expect(result2.packets).toEqual([
+      {
+        to: "",
+        signals: [
+          {
+            type: "displacement",
+            context: {
+              value: { x: 0, y: 0 },
+              position: { x: 50, y: 80 },
+            },
+          },
+        ],
+      },
+    ]);
   });
 
   test("非 position 信号应直接转发不改变锚点", () => {
@@ -163,6 +189,89 @@ describe("drag-anchor-handler", () => {
     ]);
   });
 
+  test("position + 其他信号同包时，position 被替换为 displacement，其余信号保留", () => {
+    const dag = new DevicesDAG();
+    const anchorWorkflow = createSubDAG("/drag");
+    const _r = anchorWorkflow
+      .node()
+      .prefix(createDragAnchorPrefixHandler())
+      .defaultRoute("tool");
+    const _t = anchorWorkflow.node().handler((pkt, ctx) => ({
+      to: "",
+      signals: pkt.signals,
+    }));
+    anchorWorkflow.edge("tool", _r, _t);
+    const subDAG = anchorWorkflow.build();
+
+    dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
+
+    // 建立锚点
+    dag.dispatch({
+      to: "/monitor/drag",
+      signals: [{ type: "position", context: { value: { x: 100, y: 100 } } }],
+    });
+
+    // 同包发送 position + success + end，end 清空锚点，但 position 仍转为 displacement
+    const result = dag.dispatch({
+      to: "/monitor/drag",
+      signals: [
+        { type: "position", context: { value: { x: 130, y: 150 } } },
+        { type: "success" },
+        { type: "end" },
+      ],
+    });
+
+    // end 分支：position 替换为 displacement，其余信号（含 end）保留
+    expect(result.packets).toEqual([
+      {
+        to: "",
+        signals: [
+          { type: "success" },
+          { type: "end" },
+          {
+            type: "displacement",
+            context: {
+              value: { x: 30, y: 50 },
+              position: { x: 130, y: 150 },
+            },
+          },
+        ],
+      },
+    ]);
+
+    // 重新建立锚点
+    dag.dispatch({
+      to: "/monitor/drag",
+      signals: [{ type: "position", context: { value: { x: 0, y: 0 } } }],
+    });
+
+    // 同包发送 position + 自定义信号：position 被替换，custom 保留
+    const result2 = dag.dispatch({
+      to: "/monitor/drag",
+      signals: [
+        { type: "position", context: { value: { x: 50, y: 60 } } },
+        { type: "custom", context: { value: "hello" } },
+      ],
+    });
+
+    expect(result2.packets).toEqual([
+      {
+        to: "",
+        signals: [
+          // position 已被移除
+          { type: "custom", context: { value: "hello" } },
+          {
+            type: "displacement",
+            context: {
+              value: { x: 50, y: 60 },
+              position: { x: 50, y: 60 },
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
   test("连续拖动应输出累计位移（锚点不变）", () => {
     const dag = new DevicesDAG();
     const trace = [];
@@ -202,6 +311,10 @@ describe("drag-anchor-handler", () => {
     });
 
     expect(trace).toEqual([
+      {
+        value: { x: 0, y: 0 },
+        position: { x: 100, y: 100 },
+      },
       {
         value: { x: 10, y: 5 },
         position: { x: 110, y: 105 },
@@ -249,6 +362,7 @@ describe("drag-anchor-handler", () => {
     });
 
     expect(trace).toEqual([
+      { x: 0, y: 0 },
       { x: 25, y: 25 },
       { x: 60, y: 50 },
     ]);
@@ -285,7 +399,10 @@ describe("drag-anchor-handler", () => {
       to: "/monitor/zoom-reset",
       signals: [{ type: "end" }],
     });
-    expect(trace).toEqual([{ x: 20, y: 20 }]);
+    expect(trace).toEqual([
+      { x: 0, y: 0 },
+      { x: 20, y: 20 },
+    ]);
 
     // zoom=2 时新拖拽，锚点应重建
     dag.dispatch({

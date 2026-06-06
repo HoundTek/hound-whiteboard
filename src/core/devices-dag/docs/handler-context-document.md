@@ -95,6 +95,29 @@ ctx.setState({ anchor: { x: 100, y: 200 }, active: true }); // 全量覆盖
 ctx.patchState({ anchor: null }); // 浅合并（常用）
 ```
 
+**⚠️ 陷阱：`ctx.state` 是入口快照，写入后不自动更新**
+
+`ctx.state` 在 handler 入口处一次性构造，`setState` / `patchState` 写入的是节点内部存储，
+**不会**修改已解构出来的 `ctx.state` 对象。写入后立即读取 `ctx.state` 得到的是旧值。
+
+```js
+// ❌ 错误：state 仍是写入前的快照
+const state = ctx.state;
+ctx.patchState({ anchor: current });
+const x = current.x - state.anchor.x; // state.anchor 可能还是 null
+
+// ✅ 正确：写入后用 getState() 重新读取
+ctx.patchState({ anchor: current });
+const latest = ctx.getState();
+const x = current.x - latest.anchor.x;
+
+// ✅ 也正确：写入前将旧值保留到本地变量
+const state = ctx.state;
+const anchor = state.anchor;
+ctx.patchState({ anchor: current });
+const x = current.x - (anchor?.x ?? current.x); // 用本地变量兜底
+```
+
 ---
 
 ## 路由
