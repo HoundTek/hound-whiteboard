@@ -6,6 +6,8 @@
  */
 
 import { Tool } from "../tool.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
+import { Vector } from "../../utils/math.js";
 
 /**
  * 对象修改工具相关信号类型常量
@@ -13,6 +15,12 @@ import { Tool } from "../tool.js";
  * @enum {string}
  */
 const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
+  /** 世界坐标位置更新 */
+  POSITION: "position",
+  /** 手势结束（对象留在动态图） */
+  GESTURE_END: "end",
+  /** 手势取消 */
+  GESTURE_CANCEL: "cancel",
   /** 将修改提交到静态图 */
   SUCCESS: "success",
 });
@@ -230,15 +238,304 @@ class ObjectModifierTool extends Tool {
     this.clearContextObjects(modificationContext);
     super.umount(modificationContext);
   }
+}
+
+/**
+ * 手势驱动对象修改工具
+ * @class
+ * @abstract
+ * @extends ObjectModifierTool
+ * @description
+ * 内置手势生命周期的对象修改工具。消费 position 信号（而非 displacement），
+ * 子类只需覆写手势 hook 即可实现具体修改逻辑，无需关心 process() 调度细节。
+ *
+ * 手势模型：
+ * 1. position 信号到达 → 手势开始（beginModifyGesture）或持续更新（updateModifyGesture）
+ * 2. end 信号 → 手势结束（completeModifyGesture），对象保留在 AOM 动态图中
+ * 3. success 信号 → 提交到静态图（applyModifiedObjects）
+ * 4. cancel 信号 → 取消当前手势（cancelModifyGesture），对象不回滚，仅停止接收后续位置更新
+ *
+ * 该工具直接使用世界坐标 position 驱动，无需前置 prefix 计算位移。
+ * 子类可在 hook 内自行计算增量并更新对象几何。
+ *
+ * @author Zhou Chenyu
+ */
+class GestureBasedObjectModifierTool extends ObjectModifierTool {
+  constructor() {
+    super();
+    /** @type {boolean} 当前修改手势是否激活 */
+    this.isModifyingGestureActive = false;
+  }
 
   /**
-   * 对对象应用变更。
-   * @param {Object} modificationContext - 修改上下文
-   * @returns {*}
+   * 将信号上下文中的坐标规整为 Vector
+   * @param {*} value - 原始值
+   * @returns {Vector|null} 规整后的向量
+   * @private
    */
-  modify(modificationContext) {
+  _normalizeVector(value) {
+    if (!value) return null;
+    if (value instanceof Vector) return value;
+    if (typeof value.x === "number" && typeof value.y === "number") {
+      return new Vector(value.x, value.y);
+    }
+    return null;
+  }
+
+  /**
+   * 从信号包中提取世界坐标位置。
+   * 优先通过 deviceContext.resolvePosition 解析，否则从 position 信号中读取。
+   * 所有路径的结果都会经过 _normalizeVector 归一化为 Vector。
+   * @param {SignalPacket} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {Vector|null}
+   * @protected
+   */
+  _extractPosition(signalPacket, deviceContext) {
+    if (typeof deviceContext.resolvePosition === "function") {
+      const resolved = deviceContext.resolvePosition(signalPacket);
+      if (resolved) return this._normalizeVector(resolved);
+    }
+    const positionSignal = signalPacket.signals.find(
+      (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.POSITION,
+    );
+    if (!positionSignal) return null;
+    const raw =
+      positionSignal?.context?.value ?? positionSignal?.context?.position;
+    return this._normalizeVector(raw);
+  }
+
+  /**
+   * 构造扁平的修改上下文。
+   * 将 deviceContext 的嵌套 context 提升到顶层，使基类方法能通过
+   * modificationContext.context.board / .monitor 访问运行时依赖。
+   * 若 deviceContext 未提供 context 属性，则创建空 context，
+   * 基类方法通过可选链安全访问，不会报错。
+   * @param {Object} deviceContext - 设备上下文
+   * @returns {Object}
+   * @private
+   */
+  _buildModificationContext(deviceContext = {}) {
+    return {
+      ...deviceContext,
+      context: {
+        ...(deviceContext?.context ?? {}),
+      },
+    };
+  }
+
+  /**
+   * 从信号包中提取修改交互上下文
+   * @param {SignalPacket} signalPacket - 输入信号包
+   * @param {Object} deviceContext - 设备上下文
+   * @param {Array<*>} objects - 当前活动的修改对象
+   * @returns {Object} 交互上下文
+   * @protected
+   */
+  buildModifyInteractionContext(
+    signalPacket,
+    deviceContext = {},
+    objects = [],
+  ) {
+    const signals = signalPacket.signals;
+    return {
+      signalPacket,
+      deviceContext,
+      signals,
+      position: this._extractPosition(signalPacket, deviceContext),
+      objects,
+      hasEndSignal: signals.some(
+        (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.GESTURE_END,
+      ),
+      hasCancelSignal: signals.some(
+        (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.GESTURE_CANCEL,
+      ),
+      hasSuccessSignal: signals.some(
+        (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS,
+      ),
+    };
+  }
+
+  /**
+   * 处理信号包（手势驱动）
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {Object} [deviceContext={}] - 设备上下文
+   * @returns {void}
+   */
+  process(signalPacket, deviceContext = {}) {
+    const packet = SignalPacket.from(signalPacket);
+    const modificationContext = this._buildModificationContext(deviceContext);
+
+    const objects = this.resolveActiveModifiedObjects(modificationContext);
+    if (objects.length === 0) return;
+
+    this.setContextObjects(modificationContext, objects);
+    const interaction = this.buildModifyInteractionContext(
+      packet,
+      deviceContext,
+      objects,
+    );
+
+    if (interaction.hasCancelSignal) {
+      this._handleCancel(interaction);
+      return;
+    }
+
+    if (interaction.hasSuccessSignal) {
+      this._handleSuccess(interaction, modificationContext, objects);
+      return;
+    }
+
+    if (!interaction.position) {
+      this._handleOrphanEnd(interaction);
+      return;
+    }
+
+    this._handlePositionUpdate(interaction, modificationContext, objects);
+  }
+
+  /**
+   * 处理 cancel 信号：取消当前手势。
+   * 注意：cancel 仅停止接收后续位置更新，对象保持在最后修改的位置，不会回滚。
+   * @param {Object} interaction - 当前交互上下文
+   * @private
+   */
+  _handleCancel(interaction) {
+    if (this.isModifyingGestureActive) {
+      this.cancelModifyGesture(interaction);
+      this.isModifyingGestureActive = false;
+    }
+  }
+
+  /**
+   * 处理 success 信号：结束手势并提交修改到静态图。
+   * @param {Object} interaction - 当前交互上下文
+   * @param {Object} modificationContext - 修改上下文
+   * @param {Array<*>} objects - 活动对象
+   * @private
+   */
+  _handleSuccess(interaction, modificationContext, objects) {
+    if (this.isModifyingGestureActive) {
+      this.completeModifyGesture(interaction);
+      this.isModifyingGestureActive = false;
+    }
+    this.applyModifiedObjects(modificationContext, objects);
+  }
+
+  /**
+   * 处理无位置信号时孤立的 end 信号。
+   * @param {Object} interaction - 当前交互上下文
+   * @private
+   */
+  _handleOrphanEnd(interaction) {
+    if (interaction.hasEndSignal && this.isModifyingGestureActive) {
+      this.completeModifyGesture(interaction);
+      this.isModifyingGestureActive = false;
+    }
+  }
+
+  /**
+   * 处理位置更新：首次启动手势或持续更新对象位置。
+   * @param {Object} interaction - 当前交互上下文
+   * @param {Object} modificationContext - 修改上下文
+   * @param {Array<*>} objects - 活动对象
+   * @private
+   */
+  _handlePositionUpdate(interaction, modificationContext, objects) {
+    if (!this.isModifyingGestureActive) {
+      // 首次位置：准入检测 → begin + update
+      if (this.canBeginModifyGesture(interaction) === false) return;
+      this.withGeometryMutation(
+        modificationContext,
+        () => {
+          this.beginModifyGesture(interaction);
+          this.updateModifyGesture(interaction);
+        },
+        objects,
+      );
+      this.isModifyingGestureActive = true;
+    } else {
+      // 后续位置：仅 update
+      this.withGeometryMutation(
+        modificationContext,
+        () => {
+          this.updateModifyGesture(interaction);
+        },
+        objects,
+      );
+    }
+
+    // 同一信号包中附带的 end 信号。
+    // completeModifyGesture 仅做状态清理，不修改几何，因此不包裹 withGeometryMutation。
+    if (interaction.hasEndSignal) {
+      this.completeModifyGesture(interaction);
+      this.isModifyingGestureActive = false;
+    }
+  }
+
+  /**
+   * 手势准入检查，决定是否允许开始修改手势。
+   * 子类可覆写以添加区域命中检测等限制。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {boolean}
+   * @protected
+   */
+  canBeginModifyGesture(interaction) {
+    return true;
+  }
+
+  /**
+   * 修改手势开始
+   * @param {Object} interaction - 当前交互上下文
+   * @abstract
+   */
+  beginModifyGesture(interaction) {
     throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 修改手势更新
+   * @param {Object} interaction - 当前交互上下文
+   * @abstract
+   */
+  updateModifyGesture(interaction) {
+    throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 修改手势完成
+   * @param {Object} interaction - 当前交互上下文
+   */
+  completeModifyGesture(interaction) {}
+
+  /**
+   * 修改手势取消。
+   * 对象不会回滚到初始状态，仅停止接收后续位置更新。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  cancelModifyGesture(interaction) {}
+
+  /**
+   * 工具节点被卸载时清理手势状态
+   * @param {Object} [modificationContext={}] - 卸载时的修改上下文
+   * @returns {void}
+   */
+  umount(modificationContext = {}) {
+    this.isModifyingGestureActive = false;
+    super.umount(modificationContext);
+  }
+
+  /**
+   * 重置工具状态，清除当前手势
+   * @returns {void}
+   */
+  reset() {
+    this.isModifyingGestureActive = false;
   }
 }
 
-export { OBJECT_MODIFIER_SIGNAL_TYPES, ObjectModifierTool };
+export {
+  OBJECT_MODIFIER_SIGNAL_TYPES,
+  ObjectModifierTool,
+  GestureBasedObjectModifierTool,
+};

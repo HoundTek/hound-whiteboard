@@ -429,11 +429,19 @@ describe("Board input flow", () => {
       }),
     );
 
+    // 首个 position → 启动手势（对象暂不动，保持光标偏移）
     board.signalsEventBus.emit("input", {
       to: "/main/choose-and-modify",
-      signals: [{ type: "displacement", context: { value: { x: 4, y: -2 } } }],
+      signals: [{ type: "position", context: { value: { x: 10, y: 10 } } }],
     });
 
+    // 第二个 position → 应用位移
+    board.signalsEventBus.emit("input", {
+      to: "/main/choose-and-modify",
+      signals: [{ type: "position", context: { value: { x: 14, y: 8 } } }],
+    });
+
+    // dx=14-10=4, dy=8-10=-2 → (14, 8)
     expect(targetObject.position.serialize()).toEqual({ x: 14, y: 8 });
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
 

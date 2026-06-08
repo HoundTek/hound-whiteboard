@@ -70,10 +70,15 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // 默认 beforeCommitCreatedObject 返回 true
       creator.obj = { id: 1, type: "rect" };
-      creator.completeCreatedObject?.({ deviceContext: { context: { board } } });
+      creator.completeCreatedObject?.({
+        deviceContext: { context: { board } },
+      });
 
       // 如果没有 completeCreatedObject（mock 是自己实现 process），走 process
-      creator.process({ signals: [{ type: "position" }] }, { context: { board } });
+      creator.process(
+        { signals: [{ type: "position" }] },
+        { context: { board } },
+      );
       expect(creator.isObjectCreationCompleted).toBe(true);
     });
 
@@ -93,7 +98,10 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       creator.beforeCommitCreatedObject = () => false;
       creator.obj = { id: 1, type: "rect" };
 
-      creator.process({ signals: [{ type: "position" }] }, { context: { board } });
+      creator.process(
+        { signals: [{ type: "position" }] },
+        { context: { board } },
+      );
 
       // beforeCommit 返回 false → apply 不应被调用
       expect(appliedObjects).toEqual([]);
@@ -366,12 +374,19 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         activeChild: "second",
       });
 
+      // 首个 position → 启动手势（对象暂不动）
       dag.dispatch(
         {
           to: "/monitor/modifier-cycle",
-          signals: [
-            { type: "displacement", context: { value: { x: 3, y: 1 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
+        },
+        accumulatedContext,
+      );
+      // 第二个 position → 应用位移
+      dag.dispatch(
+        {
+          to: "/monitor/modifier-cycle",
+          signals: [{ type: "position", context: { value: { x: 8, y: 6 } } }],
         },
         accumulatedContext,
       );
@@ -386,6 +401,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
         new Set([object]),
       );
+      // dx=8-5=3, dy=6-5=1 → (8, 6)
       expect(object.position).toEqual(new Vector(8, 6));
       expect(dag.getNodeState("/monitor/modifier-cycle")).toEqual({
         phase: "first",
@@ -906,8 +922,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         return completed ? { ...rawResult } : rawResult;
       });
 
-      // ── second 子节点：drag-anchor prefix + modifier tool ──
-      // 先定义 modifier wrapper（含 afterApply 订阅），再在其外包裹 drag-anchor
+      // ── second 子节点：modifier tool（直接消费 position 信号）──
       function modifierWrapper(packet, context = {}) {
         const onToolComplete = context.context?.onToolComplete;
         let completed = false;
@@ -928,30 +943,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         return completed ? { ...rawResult } : rawResult;
       }
 
-      const dragAnchorHandler = createDragAnchorPrefixHandler();
-
       const secondNode = subDAG.node();
-      secondNode.handler(function anchoredHandler(packet, context = {}) {
-        const inheritedContext = { ...context };
-
-        const anchorCtx = {
-          ...context,
-          path: context.path ?? `${basePath}/second`,
-          defaultRoute: "",
-        };
-
-        const anchorResult = dragAnchorHandler(packet, anchorCtx);
-        if (!anchorResult) return undefined;
-
-        const anchoredPacket =
-          anchorResult.packets?.[0] ??
-          (Array.isArray(anchorResult) ? anchorResult[0] : anchorResult);
-
-        if (!anchoredPacket || !anchoredPacket.signals?.length) {
-          return undefined;
-        }
-
-        return modifierWrapper(anchoredPacket, inheritedContext);
+      secondNode.handler(function modifierHandler(packet, context = {}) {
+        return modifierWrapper(packet, context);
       });
 
       subDAG.edge("first", root, firstNode);
@@ -962,7 +956,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       return { basePath, accumulatedContext };
     }
 
-    test("position → drag-anchor → displacement → modifier 准入检测 → 位移 → success → 切回 first", () => {
+    test("position → modifier 准入检测 → 位移 → success → 切回 first", () => {
       const dag = new DevicesDAG();
       const object = {
         id: 1,
@@ -1004,9 +998,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         activeChild: "second",
       });
 
-      // ── 阶段 2: 模拟鼠标拖拽，信号经 drag-anchor → modifier ──
+      // ── 阶段 2: 模拟鼠标拖拽，position 信号直达 modifier ──
 
-      // 2a. 首个 position → drag-anchor 捕获锚点 (100, 100)，不转发
+      // 2a. 首个 position (100, 100) 在合矩形外 → 准入检测拒绝
       dag.dispatch(
         {
           to: "/monitor/full-anchor-flow",
@@ -1018,9 +1012,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       );
       expect(object.position).toEqual(new Vector(10, 20));
 
-      // 2b. 第二个 position → drag-anchor 计算位移 (20, 10) 并携带 position (120, 110)
-      //     world rect = (10, 20, 50, 30) → (10..60, 20..50)
-      //     position (120, 110) 在合矩形外 → 准入检测应拒绝
+      // 2b. position (120, 110) 仍在合矩形外 → 准入检测拒绝
       dag.dispatch(
         {
           to: "/monitor/full-anchor-flow",
@@ -1032,7 +1024,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       );
       expect(object.position).toEqual(new Vector(10, 20));
 
-      // 2c. end → 清空 drag-anchor 锚点，允许新一轮手势
+      // 2c. end → 清空手势状态，允许新一轮手势
       dag.dispatch(
         {
           to: "/monitor/full-anchor-flow",
@@ -1041,7 +1033,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         accumulatedContext,
       );
 
-      // 2d. 新锚点 (30, 35) — 第一个 position 不转发
+      // 2d. 新锚点 (30, 35) — position 在合矩形内 → 准入通过，手势启动
       dag.dispatch(
         {
           to: "/monitor/full-anchor-flow",
@@ -1050,7 +1042,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         accumulatedContext,
       );
 
-      // 2e. 位移 (10, 5) → position (40, 40) 在 world rect 内 → 准入通过
+      // 2e. position (40, 40) → 位移 (10, 5)，对象在 world rect 内 → 准入通过
       dag.dispatch(
         {
           to: "/monitor/full-anchor-flow",
@@ -1061,7 +1053,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // initPos (10, 20) + (10, 5) = (20, 25)
       expect(object.position).toEqual(new Vector(20, 25));
 
-      // 2f. 继续拖拽，累计位移 (25, 10)
+      // 2f. 继续拖拽，position (55, 45) → 位移 (25, 10)
       dag.dispatch(
         {
           to: "/monitor/full-anchor-flow",
@@ -1266,7 +1258,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         accumulatedContext,
       );
 
-      // 首次拖拽：锚点 (110, 110) 在合矩形内 → 准入通过
+      // 首次拖拽：position (110, 110) 在合矩形内 → 准入通过，启动手势
       dag.dispatch(
         {
           to: "/monitor/hit-test-flow",
@@ -1288,7 +1280,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // initPos (100, 100) + (20, 10) = (120, 110)
       expect(object.position).toEqual(new Vector(120, 110));
 
-      // 继续拖拽，position (200, 200) 远在合矩形外，但手势已激活不应再检测
+      // 继续拖拽，position (200, 200) 远在合矩形外，但手势已激活不应再检测准入
       dag.dispatch(
         {
           to: "/monitor/hit-test-flow",
@@ -1301,7 +1293,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // initPos (100, 100) + (90, 90) = (190, 190)
       expect(object.position).toEqual(new Vector(190, 190));
 
-      // end → 清锚点
+      // end → 清空手势锚点，对象停在 (190, 190)
       dag.dispatch(
         {
           to: "/monitor/hit-test-flow",
@@ -1310,8 +1302,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         accumulatedContext,
       );
 
-      // 新一轮：锚点 (210, 210) 在合矩形外（对象已移至 190, 190 → 合矩形 190..240）
-      // position (210, 210) 在 190..240 内 → 准入通过
+      // 新一轮：position (210, 210) → 对象已移至 (190, 190)，合矩形 (190..240, 190..240)
+      // (210, 210) 在合矩形内 → 准入通过，新锚点=(210,210)
       dag.dispatch(
         {
           to: "/monitor/hit-test-flow",
@@ -1330,7 +1322,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         },
         accumulatedContext,
       );
-      // 新的 initPos (190, 190) + (10, 5) = (200, 195)
+      // dx=220-210=10, dy=215-210=5，initPos=(190,190) → (200, 195)
       expect(object.position).toEqual(new Vector(200, 195));
 
       // success 提交

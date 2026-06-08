@@ -1,9 +1,8 @@
 /**
  * @file 通用对象修改工具（手势驱动）
  * @description
- * 基于手势位移的对象修改工具。与 creator 工具采用相同的手势模型：
- * 接收 displacement / end / success 信号，displacement 信号携带从手势锚点
- * 出发的累计位移 {x, y}，modifier 直接以 initPos + {x, y} 更新对象位置。
+ * 基于手势位置的对象修改工具。消费 position / end / success 信号，
+ * 内部以手势起始位置为锚点计算位移并更新对象位置。
  * end 结束当前手势但不提交（对象仍在动态图中），success 将修改提交到静态图。
  * @module core/tools/modifier/common-object-modifier
  * @author Zhou Chenyu
@@ -11,159 +10,95 @@
 
 import { Vector } from "../../utils/math.js";
 import { RectangleRange } from "../../range/index.js";
-import { SignalPacket } from "../../devices-dag/signal.js";
-import {
-  ObjectModifierTool,
-  OBJECT_MODIFIER_SIGNAL_TYPES,
-} from "./obj-modifier.js";
+import { GestureBasedObjectModifierTool } from "./obj-modifier.js";
 
 /**
  * 通用对象修改工具类
  *
  * @class
- * @extends ObjectModifierTool
+ * @extends GestureBasedObjectModifierTool
  * @description
  * 手势驱动的对象位置修改工具，适用于所有对象类型。
  *
- * 手势生命周期：
- * 1. 首个 displacement 信号 → 手势开始，记录对象初始位置，位移应用
- * 2. 后续 displacement 信号 → 直接以 initPos + {x, y} 更新对象
- * 3. end 信号 → 手势结束，清空锚点状态，但对象保留在动态图中
- * 4. success 信号 → 将修改后的对象提交到静态图，结束修改流程
- *
- * 该工具消费来自 drag-anchor 前缀处理器的 "displacement" 信号，
- * 信号携带从手势锚点出发的累计位移 {x, y}，无需内部累加。
+ * 手势生命周期（由基类 GestureBasedObjectModifierTool 编排）：
+ * 1. 首个 position 信号 → canBeginModifyGesture 准入检测 → beginModifyGesture 记录锚点
+ * 2. 后续 position 信号 → updateModifyGesture 以锚点为基准更新对象位置
+ * 3. end 信号 → completeModifyGesture 清空锚点，对象留在动态图
+ * 4. success 信号 → 对象提交到静态图
  *
  * @author Zhou Chenyu
  */
-class CommonObjectModifierTool extends ObjectModifierTool {
+class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   constructor() {
     super();
-    /** @type {boolean} 当前手势是否激活 */
-    this._isGestureActive = false;
+    /** @type {{ x: number, y: number }|null} 手势锚点（世界坐标） */
+    this._anchorPosition = null;
     /** @type {Map<*, { x: number, y: number }>|null} 手势开始时各对象的初始位置 */
     this._initialPositions = null;
   }
 
   /**
-   * 处理信号包
-   * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
-   * @returns {void}
+   * 手势准入检测：检查 position 是否落在对象合矩形内
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {boolean}
    */
-  process(signalPacket, deviceContext = {}) {
-    const packet = SignalPacket.from(signalPacket);
+  canBeginModifyGesture(interaction) {
+    const { objects, position } = interaction;
+    return this._isPositionInsideCombinedRect(objects, position);
+  }
 
-    const displacementSignal = packet.signals.find(
-      (signal) => signal.type === "displacement",
+  /**
+   * 记录手势锚点与各对象初始位置。
+   * 锚点为手势起始光标位置（世界坐标），而非对象位置，
+   * 从而保持光标与对象之间的相对偏移不变（光标拖哪，对象跟哪）。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  beginModifyGesture(interaction) {
+    const { objects, position } = interaction;
+    this._anchorPosition = { x: position.x, y: position.y };
+    this._initialPositions = new Map(
+      objects.map((obj) => [
+        obj.id ?? obj,
+        { x: obj.position.x, y: obj.position.y },
+      ]),
     );
-    const hasEndSignal = packet.signals.some(
-      (signal) => signal.type === "end",
-    );
-    const hasSuccessSignal = packet.signals.some(
-      (signal) => signal.type === OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS,
-    );
+  }
 
-    const modificationContext = {
-      ...deviceContext,
-      context: {
-        ...deviceContext.context,
-        objects: this.resolveContextObjects(deviceContext),
-      },
-    };
+  /**
+   * 以锚点为基准计算位移，更新各对象位置
+   * @param {Object} interaction - 当前交互上下文
+   */
+  updateModifyGesture(interaction) {
+    const { objects, position } = interaction;
+    if (!this._anchorPosition) return;
 
-    const objects = this.resolveActiveModifiedObjects(modificationContext);
-    if (objects.length === 0) {
-      return;
-    }
+    const dx = position.x - this._anchorPosition.x;
+    const dy = position.y - this._anchorPosition.y;
 
-    this.setContextObjects(modificationContext, objects);
-
-    const rawDisplacement =
-      displacementSignal?.context?.value ?? displacementSignal?.context;
-    const displacement = this._normalizeDisplacement(rawDisplacement);
-
-    // 处理 displacement 信号 —— 手势位移
-    if (displacementSignal && !hasSuccessSignal && displacement) {
-      if (!this._isGestureActive) {
-        // 手势准入检测：检查当前 position 是否落在对象合矩形内
-        const position = displacementSignal?.context?.position;
-        if (
-          position &&
-          !this._isPositionInsideCombinedRect(objects, position)
-        ) {
-          return;
-        }
-
-        // 手势开始：记录各对象的初始位置
-        this._isGestureActive = true;
-        this._initialPositions = new Map(
-          objects.map((obj) => [
-            obj.id ?? obj,
-            { x: obj.position.x, y: obj.position.y },
-          ]),
-        );
-      }
-
-      this.withGeometryMutation(
-        modificationContext,
-        () => {
-          for (const obj of objects) {
-            const initPos = this._initialPositions.get(obj.id ?? obj);
-            if (!initPos) continue;
-            obj.position = new Vector(
-              initPos.x + displacement.x,
-              initPos.y + displacement.y,
-            );
-          }
-        },
-        objects,
-      );
-    }
-
-    // 处理 end 信号 —— 手势结束，对象保留在动态图中
-    if (hasEndSignal) {
-      this._endGesture();
-    }
-
-    // 处理 success 信号 —— 提交到静态图
-    if (hasSuccessSignal) {
-      this._endGesture();
-      this.applyModifiedObjects(modificationContext, objects);
-      return undefined;
+    for (const obj of objects) {
+      const initPos = this._initialPositions.get(obj.id ?? obj);
+      if (!initPos) continue;
+      obj.position = new Vector(initPos.x + dx, initPos.y + dy);
     }
   }
 
   /**
-   * 重置工具状态
-   * @returns {void}
+   * 清空手势锚点与初始位置缓存
+   * @param {Object} interaction - 当前交互上下文
    */
-  reset() {
-    this._endGesture();
-  }
-
-  /**
-   * 结束当前手势，清空内部状态
-   * @returns {void}
-   * @private
-   */
-  _endGesture() {
-    this._isGestureActive = false;
+  completeModifyGesture(interaction) {
+    this._anchorPosition = null;
     this._initialPositions = null;
   }
 
   /**
-   * 将信号上下文中的位移规整为 { x, y }
-   * @param {*} value - 原始值
-   * @returns {{ x: number, y: number }|null}
-   * @private
+   * 重置工具状态，清除手势锚点
+   * @returns {void}
    */
-  _normalizeDisplacement(value) {
-    if (!value) return null;
-    if (typeof value.x === "number" && typeof value.y === "number") {
-      return { x: value.x, y: value.y };
-    }
-    return null;
+  reset() {
+    this._anchorPosition = null;
+    this._initialPositions = null;
+    super.reset();
   }
 
   /**
