@@ -114,4 +114,74 @@ describe("Monitor/ui renderer", () => {
 
     invalidateSpy.mockRestore();
   });
+
+  test("flush 在传入空 dirtyRects 时应回退到全视口刷新", () => {
+    const { monitor, uiContext } = createMonitorWithUi();
+
+    monitor.uiRenderer.flush([]);
+
+    expect(uiContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
+  });
+
+  test("overlay provider 返回 null 或非对象条目时应被安全过滤", () => {
+    const { monitor, uiContext } = createMonitorWithUi();
+    const goodDraw = jest.fn();
+
+    monitor.uiRenderer.registerOverlayProvider(() => [
+      null,
+      undefined,
+      123,
+      {
+        type: "rect",
+        screenRect: new RectangleRange(10, 20, 30, 40),
+        draw: goodDraw,
+      },
+    ]);
+
+    expect(() => {
+      monitor.uiRenderer.flush([new RectangleRange(0, 0, 800, 600)]);
+    }).not.toThrow();
+
+    // 仅合法条目被绘制
+    expect(goodDraw).toHaveBeenCalledTimes(1);
+  });
+
+  test("overlay provider 抛出异常时不应中断其他 provider 的收集", () => {
+    const { monitor, uiContext } = createMonitorWithUi();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const goodDraw = jest.fn();
+    monitor.uiRenderer.registerOverlayProvider(() => {
+      throw new Error("provider crash");
+    });
+    monitor.uiRenderer.registerOverlayProvider(() => [
+      {
+        type: "rect",
+        screenRect: new RectangleRange(50, 60, 20, 10),
+        draw: goodDraw,
+      },
+    ]);
+
+    expect(() => {
+      monitor.uiRenderer.flush([new RectangleRange(0, 0, 800, 600)]);
+    }).not.toThrow();
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(goodDraw).toHaveBeenCalledTimes(1);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  test("flush 在 getContext 返回 falsy 时应安全返回空数组", () => {
+    const { monitor } = createMonitorWithUi();
+    jest.spyOn(monitor, "getContext").mockReturnValue(null);
+
+    const result = monitor.uiRenderer.flush([
+      new RectangleRange(0, 0, 100, 100),
+    ]);
+
+    expect(result).toEqual([]);
+  });
 });

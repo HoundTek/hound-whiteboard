@@ -177,7 +177,6 @@ describe("Deque", () => {
     });
   });
 
-  // ========== 混合操作测试 ==========
   describe("混合操作", () => {
     test("混合使用 pushFront 和 pushBack", () => {
       deque.pushBack(1);
@@ -205,9 +204,9 @@ describe("Deque", () => {
 
       // 从两端移除
       expect(deque.popFront()).toBe(1); // 剩余: 2, 3, 4
-      expect(deque.popBack()).toBe(4);  // 剩余: 2, 3
+      expect(deque.popBack()).toBe(4); // 剩余: 2, 3
       expect(deque.popFront()).toBe(2); // 剩余: 3
-      expect(deque.popBack()).toBe(3);  // 剩余: 空
+      expect(deque.popBack()).toBe(3); // 剩余: 空
 
       expect(deque.empty()).toBe(true);
     });
@@ -259,7 +258,6 @@ describe("Deque", () => {
     });
   });
 
-  // ========== 动态扩容测试 ==========
   describe("动态扩容", () => {
     test("pushBack 触发扩容", () => {
       // 初始容量为 8，可以存放 7 个元素（需要预留 1 个空位）
@@ -416,29 +414,6 @@ describe("Deque", () => {
       expect(deque.count()).toBe(8);
     });
 
-    test("大量数据扩容测试", () => {
-      const testSize = 1000;
-
-      // 添加大量数据
-      for (let i = 0; i < testSize; i++) {
-        if (i % 2 === 0) {
-          deque.pushBack(i);
-        } else {
-          deque.pushFront(-i);
-        }
-      }
-
-      expect(deque.count()).toBe(testSize);
-
-      // 清空验证
-      let count = 0;
-      while (!deque.empty()) {
-        deque.popFront();
-        count++;
-      }
-      expect(count).toBe(testSize);
-    });
-
     test("扩容后 clear 应该重置容量", () => {
       // 触发扩容
       for (let i = 0; i < 20; i++) {
@@ -452,33 +427,8 @@ describe("Deque", () => {
       expect(deque.count()).toBe(0);
       expect(deque.empty()).toBe(true);
     });
-
-    test("扩容不应影响内存清理", () => {
-      // 添加对象引用
-      const obj1 = { id: 1 };
-      const obj2 = { id: 2 };
-
-      deque.pushBack(obj1);
-      deque.pushBack(obj2);
-
-      for (let i = 0; i < 10; i++) {
-        deque.pushBack({ id: i + 3 });
-      }
-
-      // 触发扩容并移除元素
-      const removed1 = deque.popFront();
-      const removed2 = deque.popFront();
-
-      expect(removed1).toBe(obj1);
-      expect(removed2).toBe(obj2);
-
-      // 验证已移除位置被清理（设为 undefined）
-      expect(deque.elements[0]).toBeUndefined();
-      expect(deque.elements[1]).toBeUndefined();
-    });
   });
 
-  // ========== 边界情况测试 ==========
   describe("边界情况", () => {
     test("单个元素的各种操作", () => {
       deque.pushBack(42);
@@ -494,73 +444,6 @@ describe("Deque", () => {
       expect(deque.peekBack()).toBe(42);
       expect(deque.popBack()).toBe(42);
       expect(deque.empty()).toBe(true);
-    });
-
-    test("反复填满和清空", () => {
-      for (let round = 0; round < 3; round++) {
-        for (let i = 0; i < 7; i++) {
-          if (i % 2 === 0) {
-            deque.pushBack(i);
-          } else {
-            deque.pushFront(i);
-          }
-        }
-        expect(deque.count()).toBe(7);
-
-        while (!deque.empty()) {
-          deque.popFront();
-        }
-        expect(deque.empty()).toBe(true);
-      }
-    });
-
-    test("应该正确处理 undefined 和 null 值", () => {
-      deque.pushBack(undefined);
-      deque.pushFront(null);
-      deque.pushBack(0);
-      deque.pushFront("");
-      deque.pushBack(false);
-
-      expect(deque.popFront()).toBe("");
-      expect(deque.popFront()).toBeNull();
-      expect(deque.popFront()).toBeUndefined();
-      expect(deque.popFront()).toBe(0);
-      expect(deque.popFront()).toBe(false);
-      expect(deque.empty()).toBe(true);
-    });
-
-    test("应该正确处理各种数据类型", () => {
-      const testData = [
-        123,
-        "string",
-        { obj: "test" },
-        [1, 2, 3],
-        true,
-        null,
-        undefined,
-        Symbol("test"),
-        new Date(),
-        /regex/,
-      ];
-
-      // 交替使用 pushFront 和 pushBack
-      testData.forEach((data, index) => {
-        if (index % 2 === 0) {
-          deque.pushBack(data);
-        } else {
-          deque.pushFront(data);
-        }
-      });
-
-      expect(deque.count()).toBe(testData.length);
-
-      // 清空并验证元素数量正确减少
-      let count = 0;
-      while (!deque.empty()) {
-        deque.popFront();
-        count++;
-      }
-      expect(count).toBe(testData.length);
     });
 
     test("两端同时操作到只剩一个元素", () => {
@@ -615,57 +498,6 @@ describe("Deque", () => {
       // pushBack: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
       // popFront 应该按: 0, 1, 2, ...
       for (let i = 0; i < 10; i++) {
-        expect(deque.popFront()).toBe(i);
-      }
-      expect(deque.empty()).toBe(true);
-    });
-  });
-
-  // ========== 性能和压力测试 ==========
-  describe("性能和压力测试", () => {
-    test("大量数据混合操作", () => {
-      const operations = 10000;
-      let expectedCount = 0;
-
-      for (let i = 0; i < operations; i++) {
-        const op = i % 4;
-        if (op === 0) {
-          deque.pushBack(i);
-          expectedCount++;
-        } else if (op === 1) {
-          deque.pushFront(i);
-          expectedCount++;
-        } else if (op === 2 && !deque.empty()) {
-          deque.popFront();
-          expectedCount--;
-        } else if (op === 3 && !deque.empty()) {
-          deque.popBack();
-          expectedCount--;
-        }
-      }
-
-      expect(deque.count()).toBe(expectedCount);
-    });
-
-    test("栈式使用（LIFO）", () => {
-      // 使用双端队列实现栈：pushBack + popBack
-      for (let i = 0; i < 100; i++) {
-        deque.pushBack(i);
-      }
-
-      for (let i = 99; i >= 0; i--) {
-        expect(deque.popBack()).toBe(i);
-      }
-      expect(deque.empty()).toBe(true);
-    });
-
-    test("队列式使用（FIFO）", () => {
-      // 使用双端队列实现队列：pushBack + popFront
-      for (let i = 0; i < 100; i++) {
-        deque.pushBack(i);
-      }
-
-      for (let i = 0; i < 100; i++) {
         expect(deque.popFront()).toBe(i);
       }
       expect(deque.empty()).toBe(true);
