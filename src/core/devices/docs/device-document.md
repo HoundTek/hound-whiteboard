@@ -32,27 +32,20 @@ flowchart LR
     direction LR
     RP["rootPath: /keyboard"]
     RN["rootNodeId: 0"]
-    ND["nodes: Map
-    {localId → nodeDef}"]
-    ED["edges: [{name,
-    fromNodeId, toNodeId}]"]
+    ND["nodes: Map\n{localId → nodeDef}"]
+    ED["edges: [{name,\nfromNodeId, toNodeId}]"]
   end
 
-  ND -->|0| ND0["nodeDef 0
-handler: rootHandler
-semantics: {}"]
-  ND -->|1| ND1["nodeDef 1
-handler: null
-defaultRoute: default"]
-  ND -->|N| NDN["nodeDef N
-tool: Tool
-semantics: {tool: true}"]
+  ND -->|0| ND0["nodeDef 0\nhandler:\nrootHandler\nsemantics: {}"]
+  ND -->|1| ND1["nodeDef 1\nhandler: null\ndefaultRoute: default"]
+  ND -->|N| NDN["nodeDef N\nhandler: toolHandler\nsemantics: {tool: true}"]
 
-  ED -->|0| E0["{name: event,
-fromNodeId: 0, toNodeId: 1}"]
+  ED -->|0| E0["{name: event,\nfromNodeId: 0, toNodeId: 1}"]
 ```
 
 最小实现：
+
+```js
 {
   rootPath: "/keyboard",
   rootNodeId: 0,

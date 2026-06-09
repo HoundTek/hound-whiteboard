@@ -1,7 +1,10 @@
 import { StrokeCreatorTool } from "../stroke-creator.js";
 import { Vector } from "../../../utils/math.js";
 import { Board } from "../../../components/board.js";
+import { Monitor } from "../../../components/monitor.js";
 import { ChunkObjectManager } from "../../../components/chunk-object-manager.js";
+import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
+import { createMouseDevice } from "../../../devices/mouse-device.js";
 import { jest } from "@jest/globals";
 
 describe("StrokeCreatorTool", () => {
@@ -381,5 +384,130 @@ describe("StrokeCreatorTool", () => {
     expect(ownerChunk.objectManager.getObject(31)).toBe(firstObject);
     expect(ownerChunk.objectManager.getObject(32)).toBe(secondObject);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
+  });
+
+  describe("端到端集成（通过 Board 输入链路）", () => {
+    test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", () => {
+      const board = new Board();
+      const monitor = new Monitor(
+        createNoopCanvas({ width: 800, height: 600 }),
+        board,
+        { width: 800, height: 600 },
+        "main",
+      );
+      board.monitors.set("main", monitor);
+      board.width = 800;
+      board.height = 600;
+      const tool = new StrokeCreatorTool();
+      monitor.origin = new Vector(100, 50);
+      monitor.zoom = 2;
+
+      monitor.mountSubDAG("", createMouseDevice());
+      board.signalsEventBus.emit("mount", {
+        monitorId: "main",
+        name: "primary-stroke",
+        workflow: tool,
+        edges: [{ from: "/mouse/primary", edge: "default" }],
+      });
+
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(105, 60),
+              buttons: 1,
+              button: 0,
+            },
+          },
+        ],
+      });
+
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(110, 65),
+              buttons: 1,
+              button: 0,
+            },
+          },
+        ],
+      });
+
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "end",
+            context: {
+              buttons: 0,
+              button: 0,
+            },
+          },
+        ],
+      });
+
+      const ownerChunk = board.getChunkById(1);
+      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+      expect(tool.obj.id).toBe(1);
+      expect(board.objectCounterPool.counter).toBe(1);
+      expect(ownerChunk.objectManager.getObject(tool.obj.id)).toBe(tool.obj);
+      expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
+      expect(
+        tool.obj.localPathRange.points.map((point) => point.serialize()),
+      ).toEqual([
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+      ]);
+    });
+
+    test("挂载后的 StrokeCreatorTool 在绘制中应将对象加入 activeObjectManager 层", () => {
+      const board = new Board();
+      const monitor = new Monitor(
+        createNoopCanvas({ width: 800, height: 600 }),
+        board,
+        { width: 800, height: 600 },
+        "main",
+      );
+      board.monitors.set("main", monitor);
+      board.width = 800;
+      board.height = 600;
+      const tool = new StrokeCreatorTool();
+      monitor.origin = new Vector(100, 50);
+      monitor.zoom = 2;
+
+      monitor.mountSubDAG("", createMouseDevice());
+
+      board.signalsEventBus.emit("mount", {
+        monitorId: "main",
+        name: "primary-stroke",
+        workflow: tool,
+        edges: [{ from: "/mouse/primary", edge: "default" }],
+      });
+
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(105, 60),
+              buttons: 1,
+              button: 0,
+            },
+          },
+        ],
+      });
+
+      expect(board.activeObjectManager.activeObjects.size).toBe(1);
+      expect(board.activeObjectManager.layerOrder.length).toBe(1);
+      expect(
+        board.activeObjectManager.layerOrder[0].activeObjects.has(tool.obj.id),
+      ).toBe(true);
+    });
   });
 });
