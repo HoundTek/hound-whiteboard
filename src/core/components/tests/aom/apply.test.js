@@ -1,4 +1,5 @@
 import { jest } from "@jest/globals";
+import { createChunk } from "../../../test-support/aom-fixtures.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Vector } from "../../../utils/math.js";
 import { BasicObject } from "../../../objects/basic-obj.js";
@@ -12,12 +13,6 @@ import { oneChunkData } from "./data.js";
 import { RectangleRange } from "../../../range/index.js";
 
 describe("ActiveObjectManager/apply", () => {
-  function createChunk(id) {
-    const chunk = Chunk.fromId(id);
-    chunk.isLoad = true;
-    chunk.isTempLoad = false;
-    return chunk;
-  }
 
   test("pickup 应优先使用 Board.createChunkBlockLoader 且不再要求 Chunk 入参", () => {
     const chunk = createChunk(1);

@@ -36,20 +36,6 @@ const RECTANGLE_SELECTION_OVERLAY_LINE_DASH = Object.freeze([4, 4]);
  */
 class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
-   * 将位置值规整为 `Vector`
-   * @param {*} value - 原始位置值
-   * @returns {Vector | null}
-   */
-  static normalizeVector(value) {
-    if (!value) return null;
-    if (value instanceof Vector) return value;
-    if (typeof value.x === "number" && typeof value.y === "number") {
-      return new Vector(value.x, value.y);
-    }
-    return null;
-  }
-
-  /**
    * @returns {void}
    */
   reset() {}
@@ -61,8 +47,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @returns {RectangleRange | undefined}
    */
   createSelectionWorldRect(startPosition, endPosition) {
-    const start = RectangleObjectChooserTool.normalizeVector(startPosition);
-    const end = RectangleObjectChooserTool.normalizeVector(endPosition);
+    const start = Vector.parse(startPosition);
+    const end = Vector.parse(endPosition);
 
     if (!start || !end) {
       return undefined;
@@ -86,10 +72,10 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
     return {
       isSelecting: Boolean(nodeState.isSelecting),
-      startPosition: RectangleObjectChooserTool.normalizeVector(
+      startPosition: Vector.parse(
         nodeState.selectionStart,
       ),
-      currentPosition: RectangleObjectChooserTool.normalizeVector(
+      currentPosition: Vector.parse(
         nodeState.selectionCurrent,
       ),
       worldRect: RectangleRange.fromRectLike(nodeState.selectionWorldRect),
@@ -242,7 +228,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     const positionSignal = packet.signals.find(
       (signal) => signal.type === "position",
     );
-    const position = RectangleObjectChooserTool.normalizeVector(
+    const position = Vector.parse(
       positionSignal?.context?.value ?? positionSignal?.context?.position,
     );
     const isGestureEnded = packet.signals.some(

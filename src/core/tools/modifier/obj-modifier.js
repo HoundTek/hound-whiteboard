@@ -268,24 +268,9 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
-   * 将信号上下文中的坐标规整为 Vector
-   * @param {*} value - 原始值
-   * @returns {Vector|null} 规整后的向量
-   * @private
-   */
-  _normalizeVector(value) {
-    if (!value) return null;
-    if (value instanceof Vector) return value;
-    if (typeof value.x === "number" && typeof value.y === "number") {
-      return new Vector(value.x, value.y);
-    }
-    return null;
-  }
-
-  /**
    * 从信号包中提取世界坐标位置。
    * 优先通过 deviceContext.resolvePosition 解析，否则从 position 信号中读取。
-   * 所有路径的结果都会经过 _normalizeVector 归一化为 Vector。
+   * 所有路径的结果都会经过 Vector.parse 归一化为 Vector。
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
    * @returns {Vector|null}
@@ -294,7 +279,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   _extractPosition(signalPacket, deviceContext) {
     if (typeof deviceContext.resolvePosition === "function") {
       const resolved = deviceContext.resolvePosition(signalPacket);
-      if (resolved) return this._normalizeVector(resolved);
+      if (resolved) return Vector.parse(resolved);
     }
     const positionSignal = signalPacket.signals.find(
       (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.POSITION,
@@ -302,7 +287,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
     if (!positionSignal) return null;
     const raw =
       positionSignal?.context?.value ?? positionSignal?.context?.position;
-    return this._normalizeVector(raw);
+    return Vector.parse(raw);
   }
 
   /**

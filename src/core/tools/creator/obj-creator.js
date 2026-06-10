@@ -108,20 +108,6 @@ class ObjectCreatorTool extends Tool {
   isObjectCreationCompleted;
 
   /**
-   * 将信号上下文中的坐标规整为 Vector
-   * @param {*} value - 原始值
-   * @returns {Vector|null} 规整后的向量
-   */
-  static normalizeVector(value) {
-    if (!value) return null;
-    if (value instanceof Vector) return value;
-    if (typeof value.x === "number" && typeof value.y === "number") {
-      return new Vector(value.x, value.y);
-    }
-    return null;
-  }
-
-  /**
    * 从信号包中提取交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {Object} deviceContext - 设备上下文
@@ -134,7 +120,7 @@ class ObjectCreatorTool extends Tool {
     );
     const position =
       deviceContext.resolvePosition?.(signalPacket) ??
-      ObjectCreatorTool.normalizeVector(
+      Vector.parse(
         positionSignal?.context?.value ?? positionSignal?.context?.position,
       );
     return {

@@ -70,7 +70,7 @@ describe("Monitor", () => {
   }
 
   function createMonitor(monitorId = "monitor") {
-    const canvas = createNoopCanvas({ width: 800, height: 600 });
+    const canvas = createNoopCanvas();
     const board = {
       width: 800,
       height: 600,

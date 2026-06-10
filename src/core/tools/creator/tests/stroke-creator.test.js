@@ -390,7 +390,7 @@ describe("StrokeCreatorTool", () => {
     test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", () => {
       const board = new Board();
       const monitor = new Monitor(
-        createNoopCanvas({ width: 800, height: 600 }),
+        createNoopCanvas(),
         board,
         { width: 800, height: 600 },
         "main",
@@ -468,7 +468,7 @@ describe("StrokeCreatorTool", () => {
     test("挂载后的 StrokeCreatorTool 在绘制中应将对象加入 activeObjectManager 层", () => {
       const board = new Board();
       const monitor = new Monitor(
-        createNoopCanvas({ width: 800, height: 600 }),
+        createNoopCanvas(),
         board,
         { width: 800, height: 600 },
         "main",

@@ -10,19 +10,20 @@ import { createNoopCanvas } from "../../test-support/noop-canvas.js";
 import { CollectingTool } from "../../test-support/mock-tools.js";
 
 describe("Board input flow", () => {
-  function createCanvas() {
-    return createNoopCanvas({ width: 800, height: 600 });
+  function createMonitor(board, monitorId = "main") {
+    const monitor = new Monitor(
+      createNoopCanvas(),
+      board,
+      { width: 800, height: 600 },
+      monitorId,
+    );
+    board.monitors.set(monitorId, monitor);
+    return monitor;
   }
 
   test("input 事件应经由 Board、Monitor 与 DevicesDAG 落到工具节点", () => {
     const board = new Board();
-    const monitor = new Monitor(
-      createCanvas(),
-      board,
-      { width: 800, height: 600 },
-      "main",
-    );
-    board.monitors.set("main", monitor);
+    const monitor = createMonitor(board);
     const tool = new CollectingTool();
 
     const sampleBuilder = createSubDAG("/sample-device");
@@ -66,13 +67,7 @@ describe("Board input flow", () => {
 
   test("mount 与 umount 事件应在运行时挂载和卸载工具节点", () => {
     const board = new Board();
-    const monitor = new Monitor(
-      createCanvas(),
-      board,
-      { width: 800, height: 600 },
-      "main",
-    );
-    board.monitors.set("main", monitor);
+    const monitor = createMonitor(board);
     const tool = new CollectingTool();
 
     const emptyBuilder = createSubDAG("/sample-device");
@@ -119,13 +114,7 @@ describe("Board input flow", () => {
 
   test("mount 事件应支持 edge.prefix 在设备节点与 workflow 之间注入边级 prefix 链", () => {
     const board = new Board();
-    const monitor = new Monitor(
-      createCanvas(),
-      board,
-      { width: 800, height: 600 },
-      "main",
-    );
-    board.monitors.set("main", monitor);
+    const monitor = createMonitor(board);
     const keyboardDevice = createKeyboardDevice();
 
     monitor.mountSubDAG("", keyboardDevice);

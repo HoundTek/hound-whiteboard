@@ -1402,7 +1402,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     test("挂载后的 StrokeCreatorTool 与 CommonObjectModifierTool 同一路径中共享上下文并修改对象", () => {
       const board = new Board();
       const monitor = new Monitor(
-        createNoopCanvas({ width: 800, height: 600 }),
+        createNoopCanvas(),
         board,
         { width: 800, height: 600 },
         "main",
@@ -1511,7 +1511,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     test("挂载后的 RectangleObjectChooserTool 与 CommonObjectModifierTool 应可完成 chooser -> modifier -> apply 周期", () => {
       const board = new Board();
       const monitor = new Monitor(
-        createNoopCanvas({ width: 800, height: 600 }),
+        createNoopCanvas(),
         board,
         { width: 800, height: 600 },
         "main",

@@ -316,7 +316,7 @@ describe("PolygonCreatorTool", () => {
     test("挂载后的 PolygonCreatorTool 应可经由输入链路完成 object-end 提交", () => {
       const board = new Board();
       const monitor = new Monitor(
-        createNoopCanvas({ width: 800, height: 600 }),
+        createNoopCanvas(),
         board,
         { width: 800, height: 600 },
         "main",

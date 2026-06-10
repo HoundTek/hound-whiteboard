@@ -21,21 +21,17 @@ describe("whiteboard demo", () => {
     return new Board();
   }
 
-  function createCanvas() {
-    return createNoopCanvas({ width: 800, height: 600 });
-  }
-
   function createMonitor(board, monitorId = "monitor") {
     board.width = 800;
     board.height = 600;
 
-    const liveCanvas = createCanvas();
+    const liveCanvas = createNoopCanvas();
     const monitor = new Monitor(
       {
         rootElement: {},
-        baseCanvas: createCanvas(),
+        baseCanvas: createNoopCanvas(),
         liveCanvas,
-        uiCanvas: createCanvas(),
+        uiCanvas: createNoopCanvas(),
       },
       board,
       { width: 800, height: 600 },

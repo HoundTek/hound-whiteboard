@@ -26,8 +26,8 @@ describe("Monitor/ui renderer", () => {
 
   function createMonitorWithUi() {
     const uiContext = createUiContext();
-    const liveCanvas = createNoopCanvas({ width: 800, height: 600 });
-    const baseCanvas = createNoopCanvas({ width: 800, height: 600 });
+    const liveCanvas = createNoopCanvas();
+    const baseCanvas = createNoopCanvas();
     const uiCanvas = createNoopCanvas({
       width: 800,
       height: 600,

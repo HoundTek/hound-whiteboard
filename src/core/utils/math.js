@@ -79,23 +79,18 @@ class Vector {
    * const vec = Vector.parse({ x: 10, y: 20 }); // Vector(10, 20)
    */
   static parse(vec) {
-    return new Vector(vec.x, vec.y);
-  }
-
-  /**
-   * 将序列化成数组的对象转化为 Vector 实例
-   * @param {number[]} arr - 一个长度为 2 的数组，分别表示其横坐标和纵坐标
-   * @returns {Vector} Vector 实例
-   * @static
-   * @throws {RangeError} 当 `arr` 的长度小于 2 时
-   * @example
-   * const vec = Vector.parseFromArray([10, 20]); // Vector(10, 20)
-   */
-  static parseFromArray(arr) {
-    if (arr.length < 2) {
-      throw new RangeError("Array must have at least 2 elements");
+    if (!vec) return null;
+    if (vec instanceof Vector) return vec;
+    if (Array.isArray(vec)) {
+      if (vec.length < 2) {
+        throw new RangeError("Array must have at least 2 elements");
+      }
+      return new Vector(vec[0], vec[1]);
     }
-    return new Vector(arr[0], arr[1]);
+    if (typeof vec.x === "number" && typeof vec.y === "number") {
+      return new Vector(vec.x, vec.y);
+    }
+    return null;
   }
 
   /**
@@ -400,25 +395,21 @@ class Matrix {
    * const matrix = Matrix.parse({ a: 10, b: 30, c: 20, d: 40 }); // Matrix[[10, 20], [30, 40]]
    */
   static parse(matrix) {
-    return new Matrix(matrix.a, matrix.b, matrix.c, matrix.d);
-  }
-
-  /**
-   * 将序列化成数组的对象转化为 Matrix 实例
-   * @param {number[][]} arr - 一个 2x2 的二维数组
-   * @returns {Matrix} Matrix 实例
-   * @static
-   * @throws {RangeError} 当 `arr` 的大小小于 2x2 时
-   * @example
-   * const matrix = Matrix.parse([[10, 20], [30, 40]]); // Matrix[[10, 20], [30, 40]]
-   */
-  static parseFromArray(arr) {
-    if (arr.length < 2) {
-      throw new RangeError("Array must have at least 2 elements");
-    } else if (arr[0].length < 2 || arr[1].length < 2) {
-      throw new RangeError("Element array must have at least 2 elements");
+    if (!matrix) return null;
+    if (matrix instanceof Matrix) return matrix;
+    if (Array.isArray(matrix)) {
+      if (matrix.length < 2) {
+        throw new RangeError("Array must have at least 2 elements");
+      }
+      if (matrix[0].length < 2 || matrix[1].length < 2) {
+        throw new RangeError("Element array must have at least 2 elements");
+      }
+      return new Matrix(matrix[0][0], matrix[1][0], matrix[0][1], matrix[1][1]);
     }
-    return new Matrix(arr[0][0], arr[1][0], arr[0][1], arr[1][1]);
+    if (typeof matrix.a === "number") {
+      return new Matrix(matrix.a, matrix.b, matrix.c, matrix.d);
+    }
+    return null;
   }
 
   /**

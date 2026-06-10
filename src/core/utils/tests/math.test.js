@@ -213,24 +213,32 @@ describe("Vector Class", () => {
       expect(p.x).toBe(3.14);
       expect(p.y).toBe(2.71);
     });
-  });
 
-  describe("Vector.parseFromArray", () => {
     test("应能从数组创建点", () => {
-      const p = Vector.parseFromArray([3, 4]);
+      const p = Vector.parse([3, 4]);
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
     });
 
     test("应该只使用前两个元素", () => {
-      const p = Vector.parseFromArray([1, 2, 3, 4, 5]);
+      const p = Vector.parse([1, 2, 3, 4, 5]);
       expect(p.x).toBe(1);
       expect(p.y).toBe(2);
     });
 
-    test("应该在数组长度不足时抛出错误", () => {
-      expect(() => Vector.parseFromArray([1])).toThrow();
-      expect(() => Vector.parseFromArray([])).toThrow();
+    test("应在数组长度不足时抛出错误", () => {
+      expect(() => Vector.parse([1])).toThrow();
+      expect(() => Vector.parse([])).toThrow();
+    });
+
+    test("应返回 null 对 null/undefined", () => {
+      expect(Vector.parse(null)).toBeNull();
+      expect(Vector.parse(undefined)).toBeNull();
+    });
+
+    test("应原样返回 Vector 实例", () => {
+      const v = new Vector(5, 6);
+      expect(Vector.parse(v)).toBe(v);
     });
   });
 
@@ -589,11 +597,9 @@ describe("Matrix Class", () => {
       expect(m.c).toBe(-3);
       expect(m.d).toBe(-4);
     });
-  });
 
-  describe("Matrix.parseFromArray", () => {
     test("应该从二维数组创建矩阵", () => {
-      const m = Matrix.parseFromArray([
+      const m = Matrix.parse([
         [1, 3],
         [2, 4],
       ]);
@@ -604,7 +610,7 @@ describe("Matrix Class", () => {
     });
 
     test("应该只使用前 2x2 元素", () => {
-      const m = Matrix.parseFromArray([
+      const m = Matrix.parse([
         [1, 3, 5],
         [2, 4, 6],
         [7, 8, 9],
@@ -616,17 +622,17 @@ describe("Matrix Class", () => {
     });
 
     test("应该在外层数组长度不足时抛出错误", () => {
-      expect(() => Matrix.parseFromArray([[1, 2]])).toThrow();
-      expect(() => Matrix.parseFromArray([])).toThrow();
+      expect(() => Matrix.parse([[1, 2]])).toThrow();
+      expect(() => Matrix.parse([])).toThrow();
     });
 
     test("应该在内层数组长度不足时抛出错误", () => {
-      expect(() => Matrix.parseFromArray([[1], [2]])).toThrow();
-      expect(() => Matrix.parseFromArray([[1, 2], [3]])).toThrow();
+      expect(() => Matrix.parse([[1], [2]])).toThrow();
+      expect(() => Matrix.parse([[1, 2], [3]])).toThrow();
     });
 
     test("应该正确处理小数", () => {
-      const m = Matrix.parseFromArray([
+      const m = Matrix.parse([
         [1.5, 3.5],
         [2.5, 4.5],
       ]);

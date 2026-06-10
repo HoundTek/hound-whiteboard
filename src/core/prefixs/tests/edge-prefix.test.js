@@ -5,15 +5,11 @@ import { createKeyboardDevice } from "../../devices/keyboard-device.js";
 import { createNoopCanvas } from "../../test-support/noop-canvas.js";
 
 describe("edge.prefix", () => {
-  function createCanvas() {
-    return createNoopCanvas({ width: 800, height: 600 });
-  }
-
   function createMonitor(board, monitorId = "monitor") {
     board.width = 800;
     board.height = 600;
     const monitor = new Monitor(
-      createCanvas(),
+      createNoopCanvas(),
       board,
       { width: 800, height: 600 },
       monitorId,

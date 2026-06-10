@@ -11,8 +11,9 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "../devices-dag/index.js";
+import { createSubDAG, isSubDAGDefinition } from "../devices-dag/index.js";
 import { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
+import { isPlainObject } from "./utils.js";
 import { Tool } from "../tools/tool.js";
 import { SignalPacket } from "../devices-dag/signal.js";
 
@@ -42,33 +43,6 @@ function normalizeResultPackets(rawResult) {
   }
 
   return [];
-}
-
-/**
- * 判断值是否是 SubDAGDefinition
- * @param {any} value - 待判断值
- * @returns {boolean}
- */
-function isSubDAGDefinition(value) {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    ((typeof value.rootPath === "string" &&
-      value.nodes instanceof Map &&
-      Array.isArray(value.edges)) ||
-      (typeof value.root === "string" &&
-        value.nodes != null &&
-        typeof value.nodes === "object"))
-  );
-}
-
-/**
- * 判断值是否是普通对象
- * @param {any} value
- * @returns {boolean}
- */
-function isPlainObject(value) {
-  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**
