@@ -8,6 +8,7 @@
 import { Tool } from "../tool.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
 import { Vector } from "../../utils/math.js";
+import { BasicObject } from "../../objects/basic-obj.js";
 
 /**
  * 对象修改工具相关信号类型常量
@@ -57,8 +58,8 @@ class ObjectModifierTool extends Tool {
   /**
    * 规整本次修改涉及的对象集合
    * @param {Object} modificationContext - 修改上下文
-   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
-   * @returns {Array<*>}
+   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
+   * @returns {Array<BasicObject>}
    */
   resolveModifiedObjects(modificationContext, objects) {
     if (objects == null) {
@@ -71,8 +72,8 @@ class ObjectModifierTool extends Tool {
   /**
    * 解析当前仍处于 AOM 动态图中的对象集合
    * @param {Object} modificationContext - 修改上下文
-   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
-   * @returns {Array<*>}
+   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
+   * @returns {Array<BasicObject>}
    */
   resolveActiveModifiedObjects(modificationContext, objects) {
     const normalizedObjects = this.resolveModifiedObjects(
@@ -95,7 +96,7 @@ class ObjectModifierTool extends Tool {
   /**
    * 在对象几何修改前记录旧快照。
    * @param {Object} modificationContext - 修改上下文
-   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
+   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    */
   beforeGeometryMutation(modificationContext, objects) {
     const normalizedObjects = this.resolveModifiedObjects(
@@ -113,7 +114,7 @@ class ObjectModifierTool extends Tool {
   /**
    * 在对象几何修改后请求活动层刷新。
    * @param {Object} modificationContext - 修改上下文
-   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
+   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    */
   afterGeometryMutation(modificationContext, objects) {
     const normalizedObjects = this.resolveModifiedObjects(
@@ -133,7 +134,7 @@ class ObjectModifierTool extends Tool {
    * 以统一的快照协议包装一次几何修改。
    * @param {Object} modificationContext - 修改上下文
    * @param {Function} mutate - 实际执行修改的回调
-   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
+   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {*}
    */
   withGeometryMutation(modificationContext, mutate, objects) {
@@ -152,7 +153,7 @@ class ObjectModifierTool extends Tool {
   /**
    * 决定是否执行 apply。
    * @param {Object} modificationContext - 修改上下文
-   * @param {Array<*>} objects - 已解析的活动对象
+   * @param {Array<BasicObject>} objects - 已解析的活动对象
    * @returns {boolean}
    * @protected
    */
@@ -164,7 +165,7 @@ class ObjectModifierTool extends Tool {
    * 提交成功后的通知钩子。
    * handoff 通过 {@link Tool#on|on('afterApply', ...)} 订阅。
    * @param {Object} modificationContext - 修改上下文
-   * @param {Array<*>} objects - 已提交的对象
+   * @param {Array<BasicObject>} objects - 已提交的对象
    * @param {boolean} result - 提交结果
    * @protected
    */
@@ -175,7 +176,7 @@ class ObjectModifierTool extends Tool {
   /**
    * 将当前修改对象提交回静态图。
    * @param {Object} modificationContext - 修改上下文
-   * @param {Iterable<*>|*} [objects] - 显式传入的对象或对象集合
+   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {boolean}
    */
   applyModifiedObjects(modificationContext, objects) {
@@ -261,9 +262,14 @@ class ObjectModifierTool extends Tool {
  * @author Zhou Chenyu
  */
 class GestureBasedObjectModifierTool extends ObjectModifierTool {
+  /**
+   * 当前修改手势是否激活
+   * @type {boolean}
+   */
+  isModifyingGestureActive;
+
   constructor() {
     super();
-    /** @type {boolean} 当前修改手势是否激活 */
     this.isModifyingGestureActive = false;
   }
 

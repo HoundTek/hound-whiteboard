@@ -9,6 +9,7 @@ import { Tool } from "../tool.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
 import { intersectsRanges } from "../../range/index.js";
 import { Range } from "../../range/range.js";
+import { BasicObject } from "../../objects/basic-obj.js";
 
 /**
  * 对象选择工具基类
@@ -45,7 +46,7 @@ class ObjectChooserTool extends Tool {
   /**
    * 解析对象主判定范围在世界空间中的范围
    * @param {Object} [deviceContext={}] - 设备上下文
-   * @param {*} objectEntry - 候选对象
+   * @param {BasicObject} objectEntry - 候选对象
    * @returns {Range | undefined}
    */
   resolveObjectSelectionWorldRange(deviceContext = {}, objectEntry) {
@@ -76,8 +77,8 @@ class ObjectChooserTool extends Tool {
   /**
    * 判断对象主判定范围是否与给定选择范围相交
    * @param {Object} [deviceContext={}] - 设备上下文
-   * @param {*} objectEntry - 候选对象
-   * @param {*} selectionWorldRange - 选择范围
+   * @param {BasicObject} objectEntry - 候选对象
+   * @param {Range} selectionWorldRange - 选择范围
    * @returns {boolean}
    */
   objectIntersectsSelectionRange(

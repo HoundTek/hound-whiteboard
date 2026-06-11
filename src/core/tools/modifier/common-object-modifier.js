@@ -11,6 +11,7 @@
 import { Vector } from "../../utils/math.js";
 import { RectangleRange } from "../../range/index.js";
 import { GestureBasedObjectModifierTool } from "./obj-modifier.js";
+import { BasicObject } from "../../objects/basic-obj.js";
 
 /**
  * 通用对象修改工具类
@@ -29,11 +30,26 @@ import { GestureBasedObjectModifierTool } from "./obj-modifier.js";
  * @author Zhou Chenyu
  */
 class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
+  /**
+   * 手势锚点（世界坐标）
+   * @type {{ x: number, y: number }|null}
+   * @private
+   */
+  _anchorPosition;
+
+  /**
+   * 手势开始时各对象的初始位置
+   * @type {Map<number|object, { x: number, y: number }>|null}
+   * @private
+   */
+  _initialPositions;
+
+  /**
+   * @constructor
+   */
   constructor() {
     super();
-    /** @type {{ x: number, y: number }|null} 手势锚点（世界坐标） */
     this._anchorPosition = null;
-    /** @type {Map<*, { x: number, y: number }>|null} 手势开始时各对象的初始位置 */
     this._initialPositions = null;
   }
 
@@ -48,7 +64,8 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   }
 
   /**
-   * 记录手势锚点与各对象初始位置。
+   * 记录手势锚点与各对象初始位置
+   * @description
    * 锚点为手势起始光标位置（世界坐标），而非对象位置，
    * 从而保持光标与对象之间的相对偏移不变（光标拖哪，对象跟哪）。
    * @param {Object} interaction - 当前交互上下文
@@ -103,7 +120,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
 
   /**
    * 计算所有持有对象的合矩形范围（世界坐标）
-   * @param {Array<*>} objects - 待计算对象数组
+   * @param {Array<BasicObject>} objects - 待计算对象数组
    * @returns {RectangleRange|null}
    * @private
    */
@@ -131,7 +148,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
 
   /**
    * 判断给定的世界坐标点是否落在对象合矩形内
-   * @param {Array<*>} objects - 待检查对象数组
+   * @param {Array<BasicObject>} objects - 待检查对象数组
    * @param {{ x: number, y: number }} position - 世界坐标点
    * @returns {boolean}
    * @private

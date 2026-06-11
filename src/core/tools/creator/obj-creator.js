@@ -65,7 +65,6 @@ class ObjectCreatorTool extends Tool {
     super();
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
-    /** @type {Record<string, any>|null} */
     this._pendingProperty = null;
   }
 
@@ -106,6 +105,12 @@ class ObjectCreatorTool extends Tool {
    * @type {boolean}
    */
   isObjectCreationCompleted;
+
+  /**
+   * 从信号包中提取的注入属性
+   * @type {Record<string, any>|null}
+   */
+  _pendingProperty;
 
   /**
    * 从信号包中提取交互上下文
@@ -247,9 +252,9 @@ class ObjectCreatorTool extends Tool {
    */
   beforeGeometryMutation(interaction) {
     if (!this.obj) return;
-    interaction?.deviceContext?.context?.monitor?.liveRenderer?.captureObjectSnapshot?.([
-      this.obj,
-    ]);
+    interaction?.deviceContext?.context?.monitor?.liveRenderer?.captureObjectSnapshot?.(
+      [this.obj],
+    );
   }
 
   /**
@@ -258,9 +263,9 @@ class ObjectCreatorTool extends Tool {
    */
   afterGeometryMutation(interaction) {
     if (!this.obj) return;
-    interaction?.deviceContext?.context?.monitor?.liveRenderer?.invalidateObjects?.([
-      this.obj,
-    ]);
+    interaction?.deviceContext?.context?.monitor?.liveRenderer?.invalidateObjects?.(
+      [this.obj],
+    );
     interaction?.deviceContext?.context?.monitor?.requestViewportUiRender?.();
   }
 

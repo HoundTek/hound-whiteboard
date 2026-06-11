@@ -9,6 +9,7 @@ import { SignalPacket } from "../../devices-dag/signal.js";
 import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
 import { ObjectChooserTool } from "./obj-chooser.js";
+import { BasicObject } from "../../objects/basic-obj.js";
 
 const RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE = "#33a1ff";
 const RECTANGLE_SELECTION_OVERLAY_FILL_STYLE = "rgba(51, 161, 255, 0.14)";
@@ -42,8 +43,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 根据拖拽起止点生成当前框选矩形
-   * @param {*} startPosition - 起点
-   * @param {*} endPosition - 终点
+   * @param {Vector} startPosition - 起点
+   * @param {Vector} endPosition - 终点
    * @returns {RectangleRange | undefined}
    */
   createSelectionWorldRect(startPosition, endPosition) {
@@ -72,12 +73,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
     return {
       isSelecting: Boolean(nodeState.isSelecting),
-      startPosition: Vector.parse(
-        nodeState.selectionStart,
-      ),
-      currentPosition: Vector.parse(
-        nodeState.selectionCurrent,
-      ),
+      startPosition: Vector.parse(nodeState.selectionStart),
+      currentPosition: Vector.parse(nodeState.selectionCurrent),
       worldRect: RectangleRange.fromRectLike(nodeState.selectionWorldRect),
     };
   }
@@ -119,7 +116,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
    * 汇总当前可参与框选的对象集合
    * @param {Object} [deviceContext={}] - 设备上下文
-   * @returns {Array<*>}
+   * @returns {Array<BasicObject>}
    */
   collectSelectableObjects(deviceContext = {}) {
     const board = deviceContext.context?.board;
@@ -143,8 +140,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
    * 从候选对象里筛出与当前框选矩形相交的对象
    * @param {Object} [deviceContext={}] - 设备上下文
-   * @param {*} worldRect - 当前框选矩形
-   * @returns {Array<*>}
+   * @param {RectangleRange} worldRect - 当前框选矩形
+   * @returns {Array<BasicObject>}
    */
   selectObjectsInWorldRect(deviceContext = {}, worldRect) {
     const normalizedSelectionRect = RectangleRange.fromRectLike(worldRect);
@@ -165,8 +162,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
    * 用新的框选结果替换当前选择
    * @param {Object} [deviceContext={}] - 设备上下文
-   * @param {Array<*>} [nextObjects=[]] - 新选择结果
-   * @returns {Array<*>}
+   * @param {Array<BasicObject>} [nextObjects=[]] - 新选择结果
+   * @returns {Array<BasicObject>}
    */
   replaceSelection(deviceContext = {}, nextObjects = []) {
     const previousObjects =
