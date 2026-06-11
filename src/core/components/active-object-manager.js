@@ -266,6 +266,9 @@ class ActiveObjectManager {
       );
 
       if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
+        // 对象级失效成功后也要确保视口对应 chunk 缓冲区已同步，
+        // 避免 BaseRenderer 在收集静态对象时漏掉跨区块对象所在 chunk。
+        monitor?.syncChunkBufferWithViewport?.();
         continue;
       }
 

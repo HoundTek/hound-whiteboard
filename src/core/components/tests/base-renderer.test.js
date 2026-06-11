@@ -659,7 +659,7 @@ describe("BaseRenderer", () => {
     );
   });
 
-  test("invalidateObjects 应先合并批内重叠脏区再提交给调度器", () => {
+  test("invalidateObjects 应将原始脏区逐一提交给调度器，由调度器统一合并", () => {
     const object = new StrokeObject(new Vector(1, 0), 92, 1);
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
     const monitor = {
@@ -682,10 +682,20 @@ describe("BaseRenderer", () => {
       previousWorldRects: new Map([[92, oldWorldRect]]),
     });
 
-    expect(dirtyRects).toEqual([new RectangleRange(-1.5, -1.5, 9, 3)]);
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledTimes(1);
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
-      new RectangleRange(-1.5, -1.5, 9, 3),
+    // 不再预合并：current 和 previous 各自单独提交给调度器，
+    // 合并由 RenderScheduler.flush 统一完成。
+    expect(dirtyRects).toEqual([
+      new RectangleRange(-0.5, -1.5, 8, 3),
+      new RectangleRange(-1.5, -1.5, 8, 3),
+    ]);
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledTimes(2);
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+      1,
+      new RectangleRange(-0.5, -1.5, 8, 3),
+    );
+    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+      2,
+      new RectangleRange(-1.5, -1.5, 8, 3),
     );
   });
 
