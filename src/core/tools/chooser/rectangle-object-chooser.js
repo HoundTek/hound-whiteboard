@@ -65,11 +65,11 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 从节点 state 读取当前拖拽状态
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {RectangleSelectionDragState}
    */
-  resolveSelectionDragState(deviceContext = {}) {
-    const nodeState = this.resolveNodeState(deviceContext);
+  resolveSelectionDragState(context = {}) {
+    const nodeState = this.resolveNodeState(context);
 
     return {
       isSelecting: Boolean(nodeState.isSelecting),
@@ -81,14 +81,14 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 将拖拽状态写回当前工具节点
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Partial<RectangleSelectionDragState>} [dragState={}] - 新拖拽状态
    * @returns {Object}
    */
-  writeSelectionDragState(deviceContext = {}, dragState = {}) {
-    const nodeState = this.resolveNodeState(deviceContext);
+  writeSelectionDragState(context = {}, dragState = {}) {
+    const nodeState = this.resolveNodeState(context);
 
-    return this.writeNodeState(deviceContext, {
+    return this.writeNodeState(context, {
       ...nodeState,
       isSelecting: Boolean(dragState.isSelecting),
       selectionStart: dragState.startPosition ?? undefined,
@@ -99,27 +99,27 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 清空当前工具节点中的拖拽状态
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  clearSelectionDragState(deviceContext = {}) {
-    const nodeState = { ...this.resolveNodeState(deviceContext) };
+  clearSelectionDragState(context = {}) {
+    const nodeState = { ...this.resolveNodeState(context) };
 
     delete nodeState.isSelecting;
     delete nodeState.selectionStart;
     delete nodeState.selectionCurrent;
     delete nodeState.selectionWorldRect;
 
-    this.writeNodeState(deviceContext, nodeState);
+    this.writeNodeState(context, nodeState);
   }
 
   /**
    * 汇总当前可参与框选的对象集合
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Array<BasicObject>}
    */
-  collectSelectableObjects(deviceContext = {}) {
-    const board = deviceContext.context?.board;
+  collectSelectableObjects(context = {}) {
+    const board = context.context?.board;
     const objectMap = new Map();
 
     for (const entry of board?.objectLoaded?.values?.() ?? []) {
@@ -139,51 +139,47 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 从候选对象里筛出与当前框选矩形相交的对象
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {RectangleRange} worldRect - 当前框选矩形
    * @returns {Array<BasicObject>}
    */
-  selectObjectsInWorldRect(deviceContext = {}, worldRect) {
+  selectObjectsInWorldRect(context = {}, worldRect) {
     const normalizedSelectionRect = RectangleRange.fromRectLike(worldRect);
     if (!normalizedSelectionRect) {
       return [];
     }
 
-    return this.collectSelectableObjects(deviceContext).filter(
-      (objectInstance) =>
-        this.objectIntersectsSelectionRange(
-          deviceContext,
-          objectInstance,
-          normalizedSelectionRect,
-        ),
+    return this.collectSelectableObjects(context).filter((objectInstance) =>
+      this.objectIntersectsSelectionRange(
+        context,
+        objectInstance,
+        normalizedSelectionRect,
+      ),
     );
   }
 
   /**
    * 用新的框选结果替换当前选择
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Array<BasicObject>} [nextObjects=[]] - 新选择结果
    * @returns {Array<BasicObject>}
    */
-  replaceSelection(deviceContext = {}, nextObjects = []) {
-    const previousObjects =
-      this.resolveContextObjects(deviceContext).filter(Boolean);
+  replaceSelection(context = {}, nextObjects = []) {
+    const previousObjects = this.resolveContextObjects(context).filter(Boolean);
     if (previousObjects.length > 0) {
-      deviceContext.context?.board?.activeObjectManager?.discard?.(
+      context.context?.board?.activeObjectManager?.discard?.(
         new Set(previousObjects),
       );
     }
 
-    this.clearContextObjects(deviceContext);
+    this.clearContextObjects(context);
 
     if (nextObjects.length === 0) {
       return [];
     }
 
-    deviceContext.context?.board?.activeObjectManager?.choose?.(
-      new Set(nextObjects),
-    );
-    return this.setContextObjects(deviceContext, nextObjects);
+    context.context?.board?.activeObjectManager?.choose?.(new Set(nextObjects));
+    return this.setContextObjects(context, nextObjects);
   }
 
   /**
@@ -217,10 +213,10 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
    * 处理矩形框选手势
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  process(signalPacket, deviceContext = {}) {
+  process(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
     const positionSignal = packet.signals.find(
       (signal) => signal.type === "position",
@@ -234,13 +230,13 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     const isGestureCancelled = packet.signals.some(
       (signal) => signal.type === "cancel",
     );
-    const dragState = this.resolveSelectionDragState(deviceContext);
+    const dragState = this.resolveSelectionDragState(context);
     let nextDragState = dragState;
 
     if (isGestureCancelled) {
       if (dragState.isSelecting || dragState.worldRect) {
-        this.clearSelectionDragState(deviceContext);
-        this.requestUiOverlayRefresh(deviceContext);
+        this.clearSelectionDragState(context);
+        this.requestUiOverlayRefresh(context);
       }
       return;
     }
@@ -256,8 +252,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
       // `button/buttons` 这类设备语义已在 mouse 设备路由阶段被消费
       // 工具节点只根据“自己已收到的位置/结束信号”维护工作流
-      this.writeSelectionDragState(deviceContext, nextDragState);
-      this.requestUiOverlayRefresh(deviceContext);
+      this.writeSelectionDragState(context, nextDragState);
+      this.requestUiOverlayRefresh(context);
     }
 
     if (!isGestureEnded || !nextDragState.startPosition) {
@@ -270,25 +266,25 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       position ?? nextDragState.currentPosition ?? nextDragState.startPosition,
     );
     const selectedObjects = this.selectObjectsInWorldRect(
-      deviceContext,
+      context,
       selectionWorldRect,
     );
 
-    this.replaceSelection(deviceContext, selectedObjects);
-    this.clearSelectionDragState(deviceContext);
+    this.replaceSelection(context, selectedObjects);
+    this.clearSelectionDragState(context);
     this.afterChoose(selectedObjects);
-    this.confirmSelection(deviceContext, selectedObjects);
-    this.requestUiOverlayRefresh(deviceContext);
+    this.confirmSelection(context, selectedObjects);
+    this.requestUiOverlayRefresh(context);
   }
 
   /**
    * 卸载工具时清理拖拽状态和当前选择
-   * @param {Object} [deviceContext={}] - 卸载上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  umount(deviceContext = {}) {
-    this.clearSelectionDragState(deviceContext);
-    super.umount(deviceContext);
+  umount(context = {}) {
+    this.clearSelectionDragState(context);
+    super.umount(context);
   }
 }
 

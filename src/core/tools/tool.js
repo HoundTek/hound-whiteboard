@@ -105,20 +105,14 @@ class Tool {
   createProcessor(toolContext = {}) {
     const uiOverlayBinding = this.createUiOverlayBinding(toolContext);
     const processor = (signalPacket, handlerContext = {}) => {
-      const deviceContext = this.createDeviceContext(
-        handlerContext,
-        toolContext,
-      );
-      uiOverlayBinding?.sync(deviceContext);
-      return this.process(SignalPacket.from(signalPacket), deviceContext);
+      const context = this.createDeviceContext(handlerContext, toolContext);
+      uiOverlayBinding?.sync(context);
+      return this.process(SignalPacket.from(signalPacket), context);
     };
 
     processor.dispose = (handlerContext = {}) => {
-      const deviceContext = this.createDeviceContext(
-        handlerContext,
-        toolContext,
-      );
-      uiOverlayBinding?.cleanup(deviceContext);
+      const context = this.createDeviceContext(handlerContext, toolContext);
+      uiOverlayBinding?.cleanup(context);
     };
 
     return processor;
@@ -142,14 +136,14 @@ class Tool {
       this.collectUiOverlayEntries({
         ...overlayContext,
         toolContext,
-        deviceContext: latestDeviceContext,
+        context: latestDeviceContext,
       });
 
     return {
-      sync: (deviceContext = {}) => {
-        latestDeviceContext = deviceContext;
+      sync: (context = {}) => {
+        latestDeviceContext = context;
 
-        const monitor = deviceContext.context?.monitor;
+        const monitor = context.context?.monitor;
         if (!monitor?.registerUiOverlayProvider) {
           return;
         }
@@ -169,10 +163,10 @@ class Tool {
           invalidate: false,
         });
       },
-      cleanup: (deviceContext = {}) => {
-        latestDeviceContext = deviceContext;
+      cleanup: (context = {}) => {
+        latestDeviceContext = context;
 
-        const monitor = registeredMonitor ?? deviceContext.context?.monitor;
+        const monitor = registeredMonitor ?? context.context?.monitor;
         if (monitor?.unregisterUiOverlayProvider) {
           monitor.unregisterUiOverlayProvider(provider, {
             invalidate: false,
@@ -181,42 +175,38 @@ class Tool {
 
         registeredMonitor = null;
         latestDeviceContext = {};
-        deviceContext.context?.monitor?.requestViewportUiRender?.();
+        context.context?.monitor?.requestViewportUiRender?.();
       },
     };
   }
 
   /**
    * 读取当前路径关联的节点状态。
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {string} [statePath=deviceContext.path] - 节点路径
    * @returns {Object}
    */
-  resolveNodeState(deviceContext = {}, statePath = deviceContext.path) {
-    if (typeof deviceContext.getNodeState !== "function") {
+  resolveNodeState(context = {}, statePath = context.path) {
+    if (typeof context.getNodeState !== "function") {
       return {};
     }
 
-    return deviceContext.getNodeState(statePath) ?? {};
+    return context.getNodeState(statePath) ?? {};
   }
 
   /**
    * 写入当前路径关联的节点状态。
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Object} nextState - 新状态
    * @param {string} [statePath=deviceContext.path] - 节点路径
    * @returns {Object}
    */
-  writeNodeState(
-    deviceContext = {},
-    nextState,
-    statePath = deviceContext.path,
-  ) {
-    if (typeof deviceContext.setNodeState !== "function") {
+  writeNodeState(context = {}, nextState, statePath = context.path) {
+    if (typeof context.setNodeState !== "function") {
       return nextState ?? {};
     }
 
-    return deviceContext.setNodeState(statePath, nextState ?? {}) ?? {};
+    return context.setNodeState(statePath, nextState ?? {}) ?? {};
   }
 
   /**
@@ -239,14 +229,14 @@ class Tool {
 
   /**
    * 从设备上下文中解析当前对象集合。
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Array<*>}
    */
-  resolveContextObjects(deviceContext = {}) {
-    if (deviceContext.context?.objects) {
-      return this.normalizeObjectCollection(deviceContext.context.objects);
+  resolveContextObjects(context = {}) {
+    if (context.context?.objects) {
+      return this.normalizeObjectCollection(context.context.objects);
     }
-    const nodeState = this.resolveNodeState(deviceContext);
+    const nodeState = this.resolveNodeState(context);
     if (nodeState.objects) {
       return this.normalizeObjectCollection(nodeState.objects);
     }
@@ -255,23 +245,23 @@ class Tool {
 
   /**
    * 将对象集合写回设备上下文与节点上下文。
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合
    * @returns {Array<*>}
    */
-  setContextObjects(deviceContext = {}, objects) {
+  setContextObjects(context = {}, objects) {
     const normalizedObjects =
       this.normalizeObjectCollection(objects).filter(Boolean);
 
     if (normalizedObjects.length === 0) {
-      this.clearContextObjects(deviceContext);
+      this.clearContextObjects(context);
       return [];
     }
 
-    deviceContext.context.objects = normalizedObjects;
+    context.context.objects = normalizedObjects;
 
-    const nodeState = this.resolveNodeState(deviceContext);
-    this.writeNodeState(deviceContext, {
+    const nodeState = this.resolveNodeState(context);
+    this.writeNodeState(context, {
       ...nodeState,
       objects: normalizedObjects,
     });
@@ -281,18 +271,18 @@ class Tool {
 
   /**
    * 清理设备上下文中的对象引用。
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  clearContextObjects(deviceContext = {}) {
-    delete deviceContext.context?.objects;
+  clearContextObjects(context = {}) {
+    delete context.context?.objects;
 
-    const nodeState = { ...this.resolveNodeState(deviceContext) };
+    const nodeState = { ...this.resolveNodeState(context) };
     if (Object.prototype.hasOwnProperty.call(nodeState, "objects")) {
       delete nodeState.objects;
     }
 
-    this.writeNodeState(deviceContext, nodeState);
+    this.writeNodeState(context, nodeState);
   }
 
   /**
@@ -306,11 +296,11 @@ class Tool {
 
   /**
    * 主动请求 ui overlay 重绘。
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  requestUiOverlayRefresh(deviceContext = {}) {
-    deviceContext.context?.monitor?.requestViewportUiRender?.();
+  requestUiOverlayRefresh(context = {}) {
+    context.context?.monitor?.requestViewportUiRender?.();
   }
 
   /**
@@ -353,22 +343,22 @@ class Tool {
   /**
    * 处理一个完整信号包
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    * @abstract
    */
-  process(signalPacket, deviceContext) {
+  process(signalPacket, context) {
     throw new Error("Method not implemented.");
   }
 
   /**
    * 工具节点被卸载时执行清理。
-   * @param {Object} [deviceContext={}] - 卸载时的设备上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  umount(deviceContext = {}) {
+  umount(context = {}) {
     if (this.reset !== Tool.prototype.reset) {
-      this.reset(deviceContext);
+      this.reset(context);
     }
   }
 

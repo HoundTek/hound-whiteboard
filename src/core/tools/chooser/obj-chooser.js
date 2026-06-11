@@ -31,25 +31,25 @@ class ObjectChooserTool extends Tool {
   /**
    * 从信号包构建选择上下文
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Object}
    */
-  buildSelectionContext(signalPacket, deviceContext = {}) {
+  buildSelectionContext(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
     return {
       signalPacket: packet,
-      deviceContext,
+      context,
       signals: packet.signals,
     };
   }
 
   /**
    * 解析对象主判定范围在世界空间中的范围
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {BasicObject} objectEntry - 候选对象
    * @returns {Range | undefined}
    */
-  resolveObjectSelectionWorldRange(deviceContext = {}, objectEntry) {
+  resolveObjectSelectionWorldRange(context = {}, objectEntry) {
     if (!objectEntry || typeof objectEntry.getRange !== "function") {
       return undefined;
     }
@@ -76,18 +76,18 @@ class ObjectChooserTool extends Tool {
 
   /**
    * 判断对象主判定范围是否与给定选择范围相交
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {BasicObject} objectEntry - 候选对象
    * @param {Range} selectionWorldRange - 选择范围
    * @returns {boolean}
    */
   objectIntersectsSelectionRange(
-    deviceContext = {},
+    context = {},
     objectEntry,
     selectionWorldRange,
   ) {
     const objectWorldRange = this.resolveObjectSelectionWorldRange(
-      deviceContext,
+      context,
       objectEntry,
     );
     if (!objectWorldRange || !selectionWorldRange) {
@@ -103,9 +103,9 @@ class ObjectChooserTool extends Tool {
    * @returns {Array<Object>}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const deviceContext = overlayContext.deviceContext ?? {};
+    const context = overlayContext.deviceContext ?? {};
     const renderer = overlayContext.renderer;
-    const objects = this.resolveContextObjects(deviceContext).filter(Boolean);
+    const objects = this.resolveContextObjects(context).filter(Boolean);
 
     if (
       objects.length === 0 ||
@@ -115,13 +115,13 @@ class ObjectChooserTool extends Tool {
     }
 
     const defaultLeaf =
-      typeof deviceContext.dag?.resolveDefaultLeaf === "function" &&
-      typeof deviceContext.path === "string"
-        ? deviceContext.dag.resolveDefaultLeaf(deviceContext.path)
+      typeof context.dag?.resolveDefaultLeaf === "function" &&
+      typeof context.path === "string"
+        ? context.dag.resolveDefaultLeaf(context.path)
         : null;
 
     const childObjects =
-      defaultLeaf && defaultLeaf.path !== deviceContext.path
+      defaultLeaf && defaultLeaf.path !== context.path
         ? this.normalizeObjectCollection(
             defaultLeaf.state?.objects ?? [],
           ).filter(Boolean)
@@ -147,11 +147,11 @@ class ObjectChooserTool extends Tool {
 
   /**
    * 决定是否确认当前选择钩子
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    * @protected
    */
-  beforeConfirmSelection(deviceContext) {
+  beforeConfirmSelection(context) {
     return true;
   }
 
@@ -159,12 +159,12 @@ class ObjectChooserTool extends Tool {
    * 确认选择后的通知钩子
    * @description
    * 子类在手势结束时调用，handoff 通过 on('afterConfirm', ...) 订阅。
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<*>} objects - 已确认的对象
    * @protected
    */
-  afterConfirmSelection(deviceContext, objects) {
-    this._emit("afterConfirm", deviceContext, objects);
+  afterConfirmSelection(context, objects) {
+    this._emit("afterConfirm", context, objects);
   }
 
   /**
@@ -174,25 +174,25 @@ class ObjectChooserTool extends Tool {
    * 触发 beforeConfirm / afterConfirm 生命周期钩子。
    * 与 creator 的 completeCreatedObject、modifier 的 applyModifiedObjects
    * 构成统一的完成确认语义入口。
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<*>} objects - 待确认的对象
    * @returns {boolean}
    */
-  confirmSelection(deviceContext, objects) {
-    if (this.beforeConfirmSelection(deviceContext) === false) return false;
-    this.afterConfirmSelection(deviceContext, objects);
+  confirmSelection(context, objects) {
+    if (this.beforeConfirmSelection(context) === false) return false;
+    this.afterConfirmSelection(context, objects);
     return true;
   }
 
   /**
    * 处理一个完整信号包
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {*}
    */
-  process(signalPacket, deviceContext = {}) {
+  process(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
-    const selectionContext = this.buildSelectionContext(packet, deviceContext);
+    const selectionContext = this.buildSelectionContext(packet, context);
     const selectedObjects = this.normalizeObjectCollection(
       this.choose(selectionContext),
     ).filter(Boolean);
@@ -200,10 +200,10 @@ class ObjectChooserTool extends Tool {
       return undefined;
     }
 
-    selectionContext.deviceContext.context?.board?.activeObjectManager?.choose?.(
+    selectionContext.context.context?.board?.activeObjectManager?.choose?.(
       new Set(selectedObjects),
     );
-    this.setContextObjects(selectionContext.deviceContext, selectedObjects);
+    this.setContextObjects(selectionContext.context, selectedObjects);
     this.afterChoose(selectedObjects);
     return undefined;
   }
@@ -219,18 +219,18 @@ class ObjectChooserTool extends Tool {
 
   /**
    * 工具节点被卸载时撤销当前选择
-   * @param {Object} [deviceContext={}] - 卸载时的设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  umount(deviceContext = {}) {
-    const selectedObjects = this.resolveContextObjects(deviceContext);
+  umount(context = {}) {
+    const selectedObjects = this.resolveContextObjects(context);
     if (selectedObjects.length > 0) {
-      deviceContext?.context?.board?.activeObjectManager?.discard?.(
+      context?.context?.board?.activeObjectManager?.discard?.(
         new Set(selectedObjects),
       );
     }
-    this.clearContextObjects(deviceContext);
-    super.umount(deviceContext);
+    this.clearContextObjects(context);
+    super.umount(context);
   }
 }
 

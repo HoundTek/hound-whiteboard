@@ -76,7 +76,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // 默认 beforeCommitCreatedObject 返回 true
       creator.obj = { id: 1, type: "rect" };
       creator.completeCreatedObject?.({
-        deviceContext: { context: { board } },
+        context: { context: { board } },
       });
 
       // 如果没有 completeCreatedObject（mock 是自己实现 process），走 process
@@ -226,7 +226,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
   describe("createHandoffSubDAG", () => {
     test("应构建三层结构并支持 first → second 切换", () => {
       const dag = new DevicesDAG();
-      const first = createMockCreator();
+      const first = createMockCreator((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, {
+          objects: [{ id: 1 }],
+        });
+      });
       const second = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -305,7 +309,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
     test("应在 second 通过 onToolComplete 切回 first", () => {
       const dag = new DevicesDAG();
-      const first = createMockCreator();
+      const first = createMockCreator((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, {
+          objects: [{ id: 1 }],
+        });
+      });
 
       // second：手动触发 onToolComplete 来模拟 modifier 完成
       const second = new (class extends Tool {
@@ -528,9 +536,13 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(dag.getNodeState("/monitor/no-bridge/second")).toEqual({});
     });
 
-    test("first 无对象时不应崩溃", () => {
+    test("first 无对象时不应崩溃且应停留在 first 阶段", () => {
       const dag = new DevicesDAG();
-      const first = createMockCreator();
+      let firstReceivedSignals = 0;
+      const first = createMockCreator((_pkt, ctx) => {
+        firstReceivedSignals++;
+        // 不设置对象，模拟创建失败等无对象场景
+      });
       const second = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -541,6 +553,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
 
+      // 首次触发：first 完成但无对象 → 不切换，保持在 first
       expect(() => {
         dag.dispatch({
           to: "/monitor/empty",
@@ -548,7 +561,16 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         });
       }).not.toThrow();
 
+      // 状态未持久化写入（prefix 初始状态仅内存合并），
+      // 但验证 second 没有获得对象，且后续信号仍由 first 处理
       expect(dag.getNodeState("/monitor/empty/second")).toEqual({});
+
+      // 第二轮信号仍应被 first 接收
+      dag.dispatch({
+        to: "/monitor/empty",
+        signals: [{ type: "position" }],
+      });
+      expect(firstReceivedSignals).toBe(2);
     });
 
     test("连续两次完成回调不应导致状态紊乱", () => {
@@ -586,6 +608,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         rootPath: "/rapid",
         first: firstSubDAG,
         second,
+        autoBridgeObjects: false,
       });
 
       dag.mountSubDAG("/monitor", handoffSubDAG, { board: {}, monitor: {} });
@@ -640,6 +663,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         rootPath: "/full-cycle",
         first,
         second,
+        autoBridgeObjects: false,
       });
 
       dag.mountSubDAG("/monitor", subDAG, { board: {}, monitor: {} });
@@ -1351,7 +1375,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
   describe("autoUmountOnApply context 注入", () => {
     test("handoff 中 modifier 不应自卸载", () => {
       const dag = new DevicesDAG();
-      const first = createMockCreator();
+      const first = createMockCreator((_pkt, ctx) => {
+        ctx.setNodeState?.(ctx.path, {
+          objects: [{ id: 1 }],
+        });
+      });
       const mockUnmount = jest.fn();
 
       // 创建一个真实的 modifier，有 dag.unmount 能力

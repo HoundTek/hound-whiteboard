@@ -36,14 +36,14 @@ const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
  */
 class ObjectModifierTool extends Tool {
   /**
-   * 收集 modifier 当前声明的兼容 ui overlay。
+   * 收集 modifier 当前声明的兼容 ui overlay
    * @param {{ deviceContext?: Object, renderer?: Object }} [overlayContext={}]
    * @returns {Array<Object>}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const deviceContext = overlayContext.deviceContext ?? {};
+    const context = overlayContext.deviceContext ?? {};
     const renderer = overlayContext.renderer;
-    const objects = this.resolveContextObjects(deviceContext).filter(Boolean);
+    const objects = this.resolveContextObjects(context).filter(Boolean);
 
     if (
       objects.length === 0 ||
@@ -57,13 +57,13 @@ class ObjectModifierTool extends Tool {
 
   /**
    * 规整本次修改涉及的对象集合
-   * @param {Object} modificationContext - 修改上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    */
-  resolveModifiedObjects(modificationContext, objects) {
+  resolveModifiedObjects(context, objects) {
     if (objects == null) {
-      return this.resolveContextObjects(modificationContext);
+      return this.resolveContextObjects(context);
     }
 
     return this.normalizeObjectCollection(objects);
@@ -71,18 +71,14 @@ class ObjectModifierTool extends Tool {
 
   /**
    * 解析当前仍处于 AOM 动态图中的对象集合
-   * @param {Object} modificationContext - 修改上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    */
-  resolveActiveModifiedObjects(modificationContext, objects) {
-    const normalizedObjects = this.resolveModifiedObjects(
-      modificationContext,
-      objects,
-    );
+  resolveActiveModifiedObjects(context, objects) {
+    const normalizedObjects = this.resolveModifiedObjects(context, objects);
     const activeObjectIndex =
-      modificationContext?.context?.board?.activeObjectManager
-        ?.activeObjectIndex;
+      context?.context?.board?.activeObjectManager?.activeObjectIndex;
 
     if (typeof activeObjectIndex?.has !== "function") {
       return normalizedObjects;
@@ -94,150 +90,133 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
-   * 在对象几何修改前记录旧快照。
-   * @param {Object} modificationContext - 修改上下文
+   * 在对象几何修改前记录旧快照
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    */
-  beforeGeometryMutation(modificationContext, objects) {
-    const normalizedObjects = this.resolveModifiedObjects(
-      modificationContext,
-      objects,
-    );
+  beforeGeometryMutation(context, objects) {
+    const normalizedObjects = this.resolveModifiedObjects(context, objects);
 
     if (normalizedObjects.length === 0) return;
 
-    modificationContext?.context?.monitor?.liveRenderer?.captureObjectSnapshot?.(
+    context?.context?.monitor?.liveRenderer?.captureObjectSnapshot?.(
       normalizedObjects,
     );
   }
 
   /**
-   * 在对象几何修改后请求活动层刷新。
-   * @param {Object} modificationContext - 修改上下文
+   * 在对象几何修改后请求活动层刷新
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    */
-  afterGeometryMutation(modificationContext, objects) {
-    const normalizedObjects = this.resolveModifiedObjects(
-      modificationContext,
-      objects,
-    );
+  afterGeometryMutation(context, objects) {
+    const normalizedObjects = this.resolveModifiedObjects(context, objects);
 
     if (normalizedObjects.length === 0) return;
 
-    modificationContext?.context?.monitor?.liveRenderer?.invalidateObjects?.(
+    context?.context?.monitor?.liveRenderer?.invalidateObjects?.(
       normalizedObjects,
     );
-    modificationContext?.context?.monitor?.requestViewportUiRender?.();
+    context?.context?.monitor?.requestViewportUiRender?.();
   }
 
   /**
-   * 以统一的快照协议包装一次几何修改。
-   * @param {Object} modificationContext - 修改上下文
+   * 以统一的快照协议包装一次几何修改
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Function} mutate - 实际执行修改的回调
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {*}
    */
-  withGeometryMutation(modificationContext, mutate, objects) {
-    const normalizedObjects = this.resolveModifiedObjects(
-      modificationContext,
-      objects,
-    );
+  withGeometryMutation(context, mutate, objects) {
+    const normalizedObjects = this.resolveModifiedObjects(context, objects);
 
-    this.beforeGeometryMutation(modificationContext, normalizedObjects);
-    const result = mutate?.();
-    this.afterGeometryMutation(modificationContext, normalizedObjects);
-
-    return result;
+    this.beforeGeometryMutation(context, normalizedObjects);
+    try {
+      return mutate?.();
+    } finally {
+      this.afterGeometryMutation(context, normalizedObjects);
+    }
   }
 
   /**
-   * 决定是否执行 apply。
-   * @param {Object} modificationContext - 修改上下文
+   * 决定是否执行 apply
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<BasicObject>} objects - 已解析的活动对象
    * @returns {boolean}
    * @protected
    */
-  beforeApplyModifiedObjects(modificationContext, objects) {
+  beforeApplyModifiedObjects(context, objects) {
     return true;
   }
 
   /**
-   * 提交成功后的通知钩子。
-   * handoff 通过 {@link Tool#on|on('afterApply', ...)} 订阅。
-   * @param {Object} modificationContext - 修改上下文
+   * 提交成功后的通知钩子
+   * @description
+   * handoff 通过 {@link Tool#on|on('afterApply', ...)} 订阅
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<BasicObject>} objects - 已提交的对象
    * @param {boolean} result - 提交结果
    * @protected
    */
-  afterApplyModifiedObjects(modificationContext, objects, result) {
-    this._emit("afterApply", modificationContext, objects, result);
+  afterApplyModifiedObjects(context, objects, result) {
+    this._emit("afterApply", context, objects, result);
   }
 
   /**
-   * 将当前修改对象提交回静态图。
-   * @param {Object} modificationContext - 修改上下文
+   * 将当前修改对象提交回静态图
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {boolean}
    */
-  applyModifiedObjects(modificationContext, objects) {
+  applyModifiedObjects(context, objects) {
     const normalizedObjects = this.resolveActiveModifiedObjects(
-      modificationContext,
+      context,
       objects,
     );
 
     if (normalizedObjects.length === 0) {
-      this.clearContextObjects(modificationContext);
+      this.clearContextObjects(context);
       return false;
     }
 
-    if (
-      this.beforeApplyModifiedObjects(
-        modificationContext,
-        normalizedObjects,
-      ) === false
-    ) {
+    if (this.beforeApplyModifiedObjects(context, normalizedObjects) === false) {
       return false;
     }
 
-    modificationContext?.context?.board?.activeObjectManager?.apply?.(
+    context?.context?.board?.activeObjectManager?.apply?.(
       new Set(normalizedObjects),
     );
-    this.clearContextObjects(modificationContext);
+    this.clearContextObjects(context);
 
-    const autoUmount = modificationContext.context?.autoUmountOnApply !== false;
+    const autoUmount = context.context?.autoUmountOnApply !== false;
     if (
       autoUmount &&
-      typeof modificationContext.dag?.unmount === "function" &&
-      typeof modificationContext.path === "string"
+      typeof context.dag?.unmount === "function" &&
+      typeof context.path === "string"
     ) {
-      modificationContext.dag.unmount(modificationContext.path);
+      context.dag.unmount(context.path);
     }
 
-    this.afterApplyModifiedObjects(
-      modificationContext,
-      normalizedObjects,
-      true,
-    );
+    this.afterApplyModifiedObjects(context, normalizedObjects, true);
     return true;
   }
 
   /**
-   * 在修改工具被卸载时撤销未提交的活动对象引用。
-   * @param {Object} [modificationContext={}] - 修改上下文
+   * 在修改工具被卸载时撤销未提交的活动对象引用
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  umount(modificationContext = {}) {
-    const normalizedObjects =
-      this.resolveActiveModifiedObjects(modificationContext);
+  umount(context = {}) {
+    const normalizedObjects = this.resolveActiveModifiedObjects(context);
 
     if (normalizedObjects.length > 0) {
-      modificationContext?.context?.board?.activeObjectManager?.discard?.(
+      context?.context?.board?.activeObjectManager?.discard?.(
         new Set(normalizedObjects),
       );
     }
 
-    this.clearContextObjects(modificationContext);
-    super.umount(modificationContext);
+    this.clearContextObjects(context);
+    super.umount(context);
   }
 }
 
@@ -274,17 +253,18 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
-   * 从信号包中提取世界坐标位置。
-   * 优先通过 deviceContext.resolvePosition 解析，否则从 position 信号中读取。
+   * 从信号包中提取世界坐标位置
+   * @description
+   * 优先通过 context.resolvePosition 解析，否则从 position 信号中读取。
    * 所有路径的结果都会经过 Vector.parse 归一化为 Vector。
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {Vector|null}
    * @protected
    */
-  _extractPosition(signalPacket, deviceContext) {
-    if (typeof deviceContext.resolvePosition === "function") {
-      const resolved = deviceContext.resolvePosition(signalPacket);
+  _extractPosition(signalPacket, context) {
+    if (typeof context.resolvePosition === "function") {
+      const resolved = context.resolvePosition(signalPacket);
       if (resolved) return Vector.parse(resolved);
     }
     const positionSignal = signalPacket.signals.find(
@@ -297,43 +277,20 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
-   * 构造扁平的修改上下文。
-   * 将 deviceContext 的嵌套 context 提升到顶层，使基类方法能通过
-   * modificationContext.context.board / .monitor 访问运行时依赖。
-   * 若 deviceContext 未提供 context 属性，则创建空 context，
-   * 基类方法通过可选链安全访问，不会报错。
-   * @param {Object} deviceContext - 设备上下文
-   * @returns {Object}
-   * @private
-   */
-  _buildModificationContext(deviceContext = {}) {
-    return {
-      ...deviceContext,
-      context: {
-        ...(deviceContext?.context ?? {}),
-      },
-    };
-  }
-
-  /**
    * 从信号包中提取修改交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<*>} objects - 当前活动的修改对象
    * @returns {Object} 交互上下文
    * @protected
    */
-  buildModifyInteractionContext(
-    signalPacket,
-    deviceContext = {},
-    objects = [],
-  ) {
+  buildModifyInteractionContext(signalPacket, context = {}, objects = []) {
     const signals = signalPacket.signals;
     return {
       signalPacket,
-      deviceContext,
+      context,
       signals,
-      position: this._extractPosition(signalPacket, deviceContext),
+      position: this._extractPosition(signalPacket, context),
       objects,
       hasEndSignal: signals.some(
         (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.GESTURE_END,
@@ -350,20 +307,19 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   /**
    * 处理信号包（手势驱动）
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [deviceContext={}] - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  process(signalPacket, deviceContext = {}) {
+  process(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
-    const modificationContext = this._buildModificationContext(deviceContext);
 
-    const objects = this.resolveActiveModifiedObjects(modificationContext);
+    const objects = this.resolveActiveModifiedObjects(context);
     if (objects.length === 0) return;
 
-    this.setContextObjects(modificationContext, objects);
+    this.setContextObjects(context, objects);
     const interaction = this.buildModifyInteractionContext(
       packet,
-      deviceContext,
+      context,
       objects,
     );
 
@@ -373,7 +329,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
     }
 
     if (interaction.hasSuccessSignal) {
-      this._handleSuccess(interaction, modificationContext, objects);
+      this._handleSuccess(interaction, context, objects);
       return;
     }
 
@@ -382,12 +338,11 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       return;
     }
 
-    this._handlePositionUpdate(interaction, modificationContext, objects);
+    this._handlePositionUpdate(interaction, context, objects);
   }
 
   /**
-   * 处理 cancel 信号：取消当前手势。
-   * 注意：cancel 仅停止接收后续位置更新，对象保持在最后修改的位置，不会回滚。
+   * 处理 cancel 信号：取消当前手势
    * @param {Object} interaction - 当前交互上下文
    * @private
    */
@@ -399,22 +354,22 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
-   * 处理 success 信号：结束手势并提交修改到静态图。
+   * 处理 success 信号：结束手势并提交修改到静态图
    * @param {Object} interaction - 当前交互上下文
-   * @param {Object} modificationContext - 修改上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<*>} objects - 活动对象
    * @private
    */
-  _handleSuccess(interaction, modificationContext, objects) {
+  _handleSuccess(interaction, context, objects) {
     if (this.isModifyingGestureActive) {
       this.completeModifyGesture(interaction);
       this.isModifyingGestureActive = false;
     }
-    this.applyModifiedObjects(modificationContext, objects);
+    this.applyModifiedObjects(context, objects);
   }
 
   /**
-   * 处理无位置信号时孤立的 end 信号。
+   * 处理无位置信号时孤立的 end 信号
    * @param {Object} interaction - 当前交互上下文
    * @private
    */
@@ -426,18 +381,18 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
-   * 处理位置更新：首次启动手势或持续更新对象位置。
+   * 处理位置更新：首次启动手势或持续更新对象位置
    * @param {Object} interaction - 当前交互上下文
-   * @param {Object} modificationContext - 修改上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<*>} objects - 活动对象
    * @private
    */
-  _handlePositionUpdate(interaction, modificationContext, objects) {
+  _handlePositionUpdate(interaction, context, objects) {
     if (!this.isModifyingGestureActive) {
       // 首次位置：准入检测 → begin + update
       if (this.canBeginModifyGesture(interaction) === false) return;
       this.withGeometryMutation(
-        modificationContext,
+        context,
         () => {
           this.beginModifyGesture(interaction);
           this.updateModifyGesture(interaction);
@@ -448,7 +403,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
     } else {
       // 后续位置：仅 update
       this.withGeometryMutation(
-        modificationContext,
+        context,
         () => {
           this.updateModifyGesture(interaction);
         },
@@ -456,8 +411,8 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       );
     }
 
-    // 同一信号包中附带的 end 信号。
-    // completeModifyGesture 仅做状态清理，不修改几何，因此不包裹 withGeometryMutation。
+    // 同一信号包中附带的 end 信号
+    // completeModifyGesture 仅做状态清理，不修改几何，因此不包裹 withGeometryMutation
     if (interaction.hasEndSignal) {
       this.completeModifyGesture(interaction);
       this.isModifyingGestureActive = false;
@@ -465,8 +420,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
-   * 手势准入检查，决定是否允许开始修改手势。
-   * 子类可覆写以添加区域命中检测等限制。
+   * 手势准入检查，决定是否允许开始修改手势，子类可覆写以添加区域命中检测等限制
    * @param {Object} interaction - 当前交互上下文
    * @returns {boolean}
    * @protected
@@ -500,20 +454,21 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   completeModifyGesture(interaction) {}
 
   /**
-   * 修改手势取消。
-   * 对象不会回滚到初始状态，仅停止接收后续位置更新。
+   * 修改手势取消
+   * @description
+   * 对象不会回滚到初始状态，仅停止接收后续位置更新
    * @param {Object} interaction - 当前交互上下文
    */
   cancelModifyGesture(interaction) {}
 
   /**
    * 工具节点被卸载时清理手势状态
-   * @param {Object} [modificationContext={}] - 卸载时的修改上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  umount(modificationContext = {}) {
+  umount(context = {}) {
     this.isModifyingGestureActive = false;
-    super.umount(modificationContext);
+    super.umount(context);
   }
 
   /**

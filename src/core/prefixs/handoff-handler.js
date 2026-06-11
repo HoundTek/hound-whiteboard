@@ -412,22 +412,32 @@ function createHandoffSubDAG(options = {}) {
 
           // 构建 onToolComplete 回调
           const createCompleteCallback = (completedPhase) => () => {
-            if (autoBridgeObjects && completedPhase === "first") {
-              const dag = prefixContext.dag;
-              const firstState = dag?.getNodeState?.(
-                `${handoffBasePath}/first`,
-              );
-              const objects = firstState?.objects ?? [];
-              if (objects.length > 0) {
-                dag?.setNodeState?.(`${handoffBasePath}/second`, { objects });
-              }
-            }
-
             if (completedPhase === "first") {
-              prefixContext.setState({
-                phase: "second",
-                activeChild: "second",
-              });
+              // 判断是否能安全切换到 second
+              let canSwitchToSecond = true;
+
+              if (autoBridgeObjects) {
+                const dag = prefixContext.dag;
+                const firstState = dag?.getNodeState?.(
+                  `${handoffBasePath}/first`,
+                );
+                const objects = firstState?.objects ?? [];
+                if (objects.length > 0) {
+                  dag?.setNodeState?.(`${handoffBasePath}/second`, {
+                    objects,
+                  });
+                } else {
+                  // autoBridgeObjects 开启但无对象可桥接 → 不切到 second
+                  canSwitchToSecond = false;
+                }
+              }
+
+              if (canSwitchToSecond) {
+                prefixContext.setState({
+                  phase: "second",
+                  activeChild: "second",
+                });
+              }
             } else if (completedPhase === "second") {
               prefixContext.setState({
                 phase: "first",

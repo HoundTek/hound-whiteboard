@@ -126,7 +126,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.on("afterCreate", afterCreate);
 
       tool.obj = { id: 1, type: "test" };
-      tool.completeCreatedObject({ deviceContext: { context: {} } });
+      tool.completeCreatedObject({ context: { context: {} } });
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
     });
@@ -145,7 +145,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
       tool.beforeCommitCreatedObject = () => false;
       tool.obj = { id: 2 };
-      tool.completeCreatedObject({ deviceContext: { context: { board } } });
+      tool.completeCreatedObject({ context: { context: { board } } });
 
       expect(apply).not.toHaveBeenCalled();
       expect(tool.isObjectCreationCompleted).toBe(true);
@@ -164,7 +164,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       const board = { activeObjectManager: { apply } };
 
       tool.obj = { id: 3 };
-      tool.completeCreatedObject({ deviceContext: { context: { board } } });
+      tool.completeCreatedObject({ context: { context: { board } } });
 
       expect(apply).toHaveBeenCalledWith(new Set([tool.obj]));
       expect(tool.isObjectCreationCompleted).toBe(true);
@@ -184,7 +184,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.beforeCommitCreatedObject = () => false;
       tool.obj = { id: 4 };
 
-      tool.completeCreatedObject({ deviceContext: { context: {} } });
+      tool.completeCreatedObject({ context: { context: {} } });
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
     });
