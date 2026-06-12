@@ -315,12 +315,12 @@ describe("DevicesDAG", () => {
       dag.ensureNode("/a/b");
       dag.configureNode("/a", {
         handler(_pkt, _ctx) {
-          return { context: { layer: "a" } };
+          return { acc: { layer: "a" } };
         },
       });
       dag.configureNode("/a/b", {
         handler(_pkt, _ctx) {
-          return { context: { layer: "b" } };
+          return { acc: { layer: "b" } };
         },
       });
 
@@ -335,13 +335,13 @@ describe("DevicesDAG", () => {
       dag.ensureNode("/a/b");
       dag.configureNode("/a", {
         handler(_pkt, _ctx) {
-          return { context: { injected: 42 } };
+          return { acc: { injected: 42 } };
         },
       });
       const bContext = [];
       dag.configureNode("/a/b", {
         handler(_pkt, ctx) {
-          bContext.push(ctx.context);
+          bContext.push(ctx.acc);
         },
       });
 
@@ -401,19 +401,19 @@ describe("DevicesDAG", () => {
 
       dag.configureNode("/route-a", {
         handler(_pkt, _ctx) {
-          return { context: { via: "route-a" } };
+          return { acc: { via: "route-a" } };
         },
       });
       dag.configureNode("/route-b", {
         handler(_pkt, _ctx) {
-          return { context: { via: "route-b" } };
+          return { acc: { via: "route-b" } };
         },
       });
 
       const leafContexts = [];
       dag.configureNode("/shared-leaf", {
         handler(_pkt, ctx) {
-          leafContexts.push(ctx.context);
+          leafContexts.push(ctx.acc);
         },
       });
 
@@ -768,7 +768,7 @@ describe("DevicesDAG", () => {
       const ctxSnap = [];
       dag.configureNode("/a", {
         handler(_pkt, ctx) {
-          ctxSnap.push({ ...ctx.context });
+          ctxSnap.push({ ...ctx.acc });
         },
       });
 
@@ -786,18 +786,18 @@ describe("DevicesDAG", () => {
 
       dag.configureNode("/a", {
         handler() {
-          return { context: { layerA: 1 } };
+          return { acc: { layerA: 1 } };
         },
       });
       dag.configureNode("/a/b", {
         handler() {
-          return { context: { layerB: 2 } };
+          return { acc: { layerB: 2 } };
         },
       });
       const finalCtx = [];
       dag.configureNode("/a/b/c", {
         handler(_pkt, ctx) {
-          finalCtx.push({ ...ctx.context });
+          finalCtx.push({ ...ctx.acc });
         },
       });
 
@@ -811,12 +811,12 @@ describe("DevicesDAG", () => {
 
       dag.configureNode("/a", {
         handler() {
-          return { context: "not-a-plain-object" };
+          return { acc: "not-a-plain-object" };
         },
       });
       dag.configureNode("/a/b", {
         handler(_pkt, ctx) {
-          ctx.snap = { ...ctx.context };
+          ctx.snap = { ...ctx.acc };
         },
       });
 

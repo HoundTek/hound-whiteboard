@@ -28,7 +28,7 @@ describe("ObjectChooserTool", () => {
     };
     const stateAccess = createStateAccess();
     const deviceContext = {
-      context: { board },
+      acc: { board },
       path: "/monitor/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -43,7 +43,7 @@ describe("ObjectChooserTool", () => {
     expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
       new Set([chosenObject]),
     );
-    expect(deviceContext.context.objects).toEqual([chosenObject]);
+    expect(deviceContext.acc.objects).toEqual([chosenObject]);
     expect(stateAccess.getState()).toEqual({
       objects: [chosenObject],
     });
@@ -61,7 +61,7 @@ describe("ObjectChooserTool", () => {
       objects: [chosenObject],
     });
     const deviceContext = {
-      context: { board, objects: [chosenObject] },
+      acc: { board, objects: [chosenObject] },
       path: "/monitor/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -72,7 +72,7 @@ describe("ObjectChooserTool", () => {
     expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
       new Set([chosenObject]),
     );
-    expect(deviceContext.context.objects).toBeUndefined();
+    expect(deviceContext.acc.objects).toBeUndefined();
     expect(stateAccess.getState()).toEqual({});
   });
 
@@ -87,7 +87,7 @@ describe("ObjectChooserTool", () => {
 
     const suppressed = tool.collectUiOverlayEntries({
       deviceContext: {
-        context: { objects: [chosenObject] },
+        acc: { objects: [chosenObject] },
         path: "/monitor/chooser/tool",
         dag: {
           resolveDefaultLeaf: () => ({
@@ -106,7 +106,7 @@ describe("ObjectChooserTool", () => {
 
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
-        context: { objects: [chosenObject] },
+        acc: { objects: [chosenObject] },
         path: "/monitor/chooser/tool",
         dag: {
           resolveDefaultLeaf: () => ({
@@ -148,7 +148,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        context: { board },
+        acc: { board },
         path: "/test",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
@@ -174,7 +174,7 @@ describe("ObjectChooserTool", () => {
       tool.process(
         { signals: [{ type: "trigger" }] },
         {
-          context: { board },
+          acc: { board },
           path: "/test",
           getNodeState: () => ({}),
           setNodeState: () => {},
@@ -194,7 +194,7 @@ describe("ObjectChooserTool", () => {
       tool.on("afterConfirm", afterConfirm);
       tool.beforeConfirmSelection = () => false;
 
-      const result = tool.confirmSelection({ context: { board }, path: "/test" }, [
+      const result = tool.confirmSelection({ acc: { board }, path: "/test" }, [
         chosenObject,
       ]);
 
@@ -208,15 +208,17 @@ describe("ObjectChooserTool", () => {
       const afterConfirm = jest.fn();
       tool.on("afterConfirm", afterConfirm);
 
-      const result = tool.confirmSelection({ context: { board: {} }, path: "/test" }, [
-        chosenObject,
-      ]);
+      const result = tool.confirmSelection(
+        { acc: { board: {} }, path: "/test" },
+        [chosenObject],
+      );
 
       expect(result).toBe(true);
       expect(afterConfirm).toHaveBeenCalledTimes(1);
-      expect(afterConfirm).toHaveBeenCalledWith({ context: { board: {} }, path: "/test" }, [
-        chosenObject,
-      ]);
+      expect(afterConfirm).toHaveBeenCalledWith(
+        { acc: { board: {} }, path: "/test" },
+        [chosenObject],
+      );
     });
 
     test("RectangleObjectChooserTool 在 end 信号时调用 confirmSelection", () => {
@@ -238,7 +240,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        context: { board },
+        acc: { board },
         path: "/monitor/chooser",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,

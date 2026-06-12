@@ -200,7 +200,7 @@ class ObjectChooserTool extends Tool {
       return undefined;
     }
 
-    selectionContext.context.context?.board?.activeObjectManager?.choose?.(
+    selectionContext.context.acc?.board?.activeObjectManager?.choose?.(
       new Set(selectedObjects),
     );
     this.setContextObjects(selectionContext.context, selectedObjects);
@@ -225,7 +225,7 @@ class ObjectChooserTool extends Tool {
   umount(context = {}) {
     const selectedObjects = this.resolveContextObjects(context);
     if (selectedObjects.length > 0) {
-      context?.context?.board?.activeObjectManager?.discard?.(
+      context?.acc?.board?.activeObjectManager?.discard?.(
         new Set(selectedObjects),
       );
     }

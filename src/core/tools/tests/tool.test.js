@@ -6,8 +6,8 @@ describe("Tool", () => {
     class TestTool extends Tool {
       calls = [];
 
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
+      process(signalPacket, context) {
+        this.calls.push({ signalPacket, context });
       }
 
       reset() {
@@ -33,23 +33,23 @@ describe("Tool", () => {
           to: "",
           signals: [{ type: "pressure", context: { value: 0.5 } }],
         },
-        deviceContext: expect.objectContaining({
+        context: expect.objectContaining({
           path: "/monitor/s-pen/pen",
-          context: expect.objectContaining({
+          acc: expect.objectContaining({
             board: "board-context",
           }),
         }),
       },
     ]);
-    expect(tool.calls[0].deviceContext.context.allocateObjectId).toBeUndefined();
+    expect(tool.calls[0].context.acc.allocateObjectId).toBeUndefined();
   });
 
   test("createProcessor 应默认暴露来自 Board 的 allocateObjectId", () => {
     class TestTool extends Tool {
       calls = [];
 
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
+      process(signalPacket, context) {
+        this.calls.push({ signalPacket, context });
       }
 
       reset() {
@@ -73,15 +73,15 @@ describe("Tool", () => {
       },
     );
 
-    expect(tool.calls[0].deviceContext.context.allocateObjectId()).toBe(7);
+    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(7);
   });
 
   test("createProcessor 应默认暴露来自 Monitor 的 resolveOwnerChunkId", () => {
     class TestTool extends Tool {
       calls = [];
 
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
+      process(signalPacket, context) {
+        this.calls.push({ signalPacket, context });
       }
 
       reset() {
@@ -109,7 +109,7 @@ describe("Tool", () => {
     );
 
     expect(
-      tool.calls[0].deviceContext.context.resolveOwnerChunkId({
+      tool.calls[0].context.acc.resolveOwnerChunkId({
         x: 10,
         y: 20,
       }),
@@ -120,8 +120,8 @@ describe("Tool", () => {
     class TestTool extends Tool {
       calls = [];
 
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
+      process(signalPacket, context) {
+        this.calls.push({ signalPacket, context });
       }
 
       reset() {
@@ -148,7 +148,7 @@ describe("Tool", () => {
       { signals: [{ type: "trigger", context: {} }] },
       {
         path: "/monitor/s-pen/pen",
-        context: {
+        acc: {
           board: boardFromContext,
           monitor: monitorFromContext,
           customFlag: true,
@@ -156,31 +156,31 @@ describe("Tool", () => {
       },
     );
 
-    expect(tool.calls[0].deviceContext).toEqual(
+    expect(tool.calls[0].context).toEqual(
       expect.objectContaining({
-        context: expect.objectContaining({
+        acc: expect.objectContaining({
           board: boardFromContext,
           monitor: monitorFromContext,
           customFlag: true,
         }),
       }),
     );
-    expect(tool.calls[0].deviceContext.context.allocateObjectId()).toBe(11);
-    expect(
-      tool.calls[0].deviceContext.context.resolveOwnerChunkId({ x: 1, y: 2 }),
-    ).toBe(9);
-    expect(tool.calls[0].deviceContext.path).toBe("/monitor/s-pen/pen");
-    expect(tool.calls[0].deviceContext.semantics).toBeUndefined();
-    expect(tool.calls[0].deviceContext.eventContext).toBeUndefined();
-    expect(tool.calls[0].deviceContext.runtimeContext).toBeUndefined();
+    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(11);
+    expect(tool.calls[0].context.acc.resolveOwnerChunkId({ x: 1, y: 2 })).toBe(
+      9,
+    );
+    expect(tool.calls[0].context.path).toBe("/monitor/s-pen/pen");
+    expect(tool.calls[0].context.semantics).toBeUndefined();
+    expect(tool.calls[0].context.eventContext).toBeUndefined();
+    expect(tool.calls[0].context.runtimeContext).toBeUndefined();
   });
 
   test("createProcessor 不再默认暴露坐标转换能力", () => {
     class TestTool extends Tool {
       calls = [];
 
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
+      process(signalPacket, context) {
+        this.calls.push({ signalPacket, context });
       }
 
       reset() {
@@ -199,7 +199,7 @@ describe("Tool", () => {
       },
     );
 
-    expect(tool.calls[0].deviceContext.resolvePosition).toBeUndefined();
+    expect(tool.calls[0].context.resolvePosition).toBeUndefined();
   });
 
   test("createProcessor 不应修改传入的 handlerContext", () => {

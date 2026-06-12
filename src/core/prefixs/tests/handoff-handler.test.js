@@ -76,14 +76,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // 默认 beforeCommitCreatedObject 返回 true
       creator.obj = { id: 1, type: "rect" };
       creator.completeCreatedObject?.({
-        context: { context: { board } },
+        context: { acc: { board } },
       });
 
       // 如果没有 completeCreatedObject（mock 是自己实现 process），走 process
-      creator.process(
-        { signals: [{ type: "position" }] },
-        { context: { board } },
-      );
+      creator.process({ signals: [{ type: "position" }] }, { acc: { board } });
       expect(creator.isObjectCreationCompleted).toBe(true);
     });
 
@@ -103,10 +100,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       creator.beforeCommitCreatedObject = () => false;
       creator.obj = { id: 1, type: "rect" };
 
-      creator.process(
-        { signals: [{ type: "position" }] },
-        { context: { board } },
-      );
+      creator.process({ signals: [{ type: "position" }] }, { acc: { board } });
 
       // beforeCommit 返回 false → apply 不应被调用
       expect(appliedObjects).toEqual([]);
@@ -318,7 +312,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // second：手动触发 onToolComplete 来模拟 modifier 完成
       const second = new (class extends Tool {
         process(_packet, ctx) {
-          ctx.context?.onToolComplete?.();
+          ctx.acc?.onToolComplete?.();
         }
       })();
 
@@ -474,7 +468,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
               ctx.setNodeState?.(ctx.path, {
                 objects: [{ id: 99 }],
               });
-              ctx.context?.onToolComplete?.();
+              ctx.acc?.onToolComplete?.();
               return ctx.routeToChild("tool");
             },
           }),
@@ -580,7 +574,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const first = new (class extends Tool {
         process(_pkt, ctx) {
           toggleCount++;
-          ctx.context?.onToolComplete?.();
+          ctx.acc?.onToolComplete?.();
         }
       })();
       const second = createMockModifier();
@@ -595,7 +589,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           createPrefixNodeHandler({
             handle(pkt, ctx) {
               toggleCount++;
-              ctx.context?.onToolComplete?.();
+              ctx.acc?.onToolComplete?.();
               return ctx.routeToChild("child");
             },
           }),
@@ -648,14 +642,14 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           createdIds.push(id);
           this.isObjectCreationCompleted = true;
           this._emit?.("afterCreate");
-          ctx.context?.onToolComplete?.();
+          ctx.acc?.onToolComplete?.();
         }
       })();
 
       const second = createMockModifier((_pkt, ctx) => {
         const hasSuccess = _pkt.signals?.some((s) => s.type === "success");
         if (hasSuccess) {
-          ctx.context?.onToolComplete?.();
+          ctx.acc?.onToolComplete?.();
         }
       });
 
@@ -740,7 +734,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
               return {
                 packets: [{ to: "child", signals: packet.signals }],
-                context: {
+                acc: {
                   onToolComplete() {
                     ctx.patchState({ completed: true });
                   },
@@ -919,7 +913,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
               return {
                 child: state.activeChild,
-                context: {
+                acc: {
                   onToolComplete: createCompleteCallback(fromPhase || "first"),
                   autoUmountOnApply: false,
                 },
@@ -932,7 +926,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // ── first 子节点：creator ──
       const firstNode = subDAG.node();
       firstNode.handler((packet, context = {}) => {
-        const onToolComplete = context.context?.onToolComplete;
+        const onToolComplete = context.acc?.onToolComplete;
         let completed = false;
         const unsub =
           typeof creator.on === "function"
@@ -943,8 +937,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
             : null;
 
         const processor = creator.createProcessor({
-          board: context.context?.board,
-          monitor: context.context?.monitor,
+          board: context.acc?.board,
+          monitor: context.acc?.monitor,
         });
         const rawResult = processor(packet, context);
         unsub?.();
@@ -953,7 +947,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // ── second 子节点：modifier tool（直接消费 position 信号）──
       function modifierWrapper(packet, context = {}) {
-        const onToolComplete = context.context?.onToolComplete;
+        const onToolComplete = context.acc?.onToolComplete;
         let completed = false;
         const unsub =
           typeof modifier.on === "function"
@@ -964,8 +958,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
             : null;
 
         const processor = modifier.createProcessor({
-          board: context.context?.board,
-          monitor: context.context?.monitor,
+          board: context.acc?.board,
+          monitor: context.acc?.monitor,
         });
         const rawResult = processor(packet, context);
         unsub?.();

@@ -10,7 +10,7 @@ import { dagToMermaid } from "../../core/devices-dag/index.js";
 
 class DebuggerTool extends Tool {
   process(signalPacket, deviceContext = {}) {
-    const board = deviceContext?.context?.board;
+    const board = deviceContext?.acc?.board;
     if (!board) {
       console.warn("[debugger-tool] missing board context", signalPacket);
       return;

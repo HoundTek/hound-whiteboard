@@ -80,7 +80,7 @@ function createRandomCircleSubDAG(options = {}) {
             return ctx.stop();
           }
 
-          const monitor = ctx.context?.monitor;
+          const monitor = ctx.acc?.monitor;
           const viewportWorldRect = monitor?.getViewportWorldRect?.();
           if (!viewportWorldRect) {
             return ctx.stop();
@@ -102,10 +102,7 @@ function createRandomCircleSubDAG(options = {}) {
 
           return ctx.routeToChild("params", [
             ctx.signal("position", { x: centerX, y: centerY }),
-            ctx.signal(
-              RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS,
-              radius,
-            ),
+            ctx.signal(RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS, radius),
             ctx.signal(OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY, {
               ...baseProperty,
               strokeColor: hasCustomStrokeColor

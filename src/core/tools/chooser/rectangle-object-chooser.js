@@ -119,7 +119,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @returns {Array<BasicObject>}
    */
   collectSelectableObjects(context = {}) {
-    const board = context.context?.board;
+    const board = context.acc?.board;
     const objectMap = new Map();
 
     for (const entry of board?.objectLoaded?.values?.() ?? []) {
@@ -167,7 +167,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   replaceSelection(context = {}, nextObjects = []) {
     const previousObjects = this.resolveContextObjects(context).filter(Boolean);
     if (previousObjects.length > 0) {
-      context.context?.board?.activeObjectManager?.discard?.(
+      context.acc?.board?.activeObjectManager?.discard?.(
         new Set(previousObjects),
       );
     }
@@ -178,7 +178,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       return [];
     }
 
-    context.context?.board?.activeObjectManager?.choose?.(new Set(nextObjects));
+    context.acc?.board?.activeObjectManager?.choose?.(new Set(nextObjects));
     return this.setContextObjects(context, nextObjects);
   }
 

@@ -50,7 +50,7 @@
 - `resolvedDefaultRoutePath`
 - `depth`
 - `signalPacket`
-- `context`
+- `acc`
 - `state` — 当前节点状态的只读快照
 - `getState()` — 重读节点最新状态
 - `setState(nextState)` — 全量写入节点状态
@@ -63,10 +63,10 @@
 
 稳定语义：
 
-- `context` 是逐层追加的累积上下文，handler 不能在此平级新增键
+- `acc` 是逐层追加的累积上下文，handler 不能在此平级新增键
 - 需要可变共享数据时，使用 `setState` / `patchState` 写入节点 `state`
 - `initialState` 可通过 `createPrefixNodeHandler` 提供默认值，参与 `ctx.state` 的合并视图
-- 需要向上通知时，优先在 `context` 中注入回调函数，而不是继续引入向上路由协议
+- 需要向上通知时，优先在 `acc` 中注入回调函数，而不是继续引入向上路由协议
 - 同一节点允许有多条路径可达，但单次 dispatch 的 `context` 只沿当前命中的那条路径累积
 
 ## SubDAGDefinition

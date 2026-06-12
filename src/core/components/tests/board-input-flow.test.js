@@ -46,9 +46,9 @@ describe("Board input flow", () => {
     expect(tool.calls[0].signalPacket.signals).toEqual([
       { type: "position", context: { value: { x: 3, y: 4 } } },
     ]);
-    expect(tool.calls[0].deviceContext).toEqual(
+    expect(tool.calls[0].context).toEqual(
       expect.objectContaining({
-        context: expect.objectContaining({ board, monitor }),
+        acc: expect.objectContaining({ board, monitor }),
         path: "/main/sample-device/tool",
       }),
     );
@@ -93,9 +93,9 @@ describe("Board input flow", () => {
     });
 
     expect(tool.calls).toHaveLength(1);
-    expect(tool.calls[0].deviceContext).toEqual(
+    expect(tool.calls[0].context).toEqual(
       expect.objectContaining({
-        context: expect.objectContaining({ board, monitor }),
+        acc: expect.objectContaining({ board, monitor }),
         path: "/main/sample-device/tool",
       }),
     );

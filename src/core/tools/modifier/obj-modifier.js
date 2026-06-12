@@ -78,7 +78,7 @@ class ObjectModifierTool extends Tool {
   resolveActiveModifiedObjects(context, objects) {
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
     const activeObjectIndex =
-      context?.context?.board?.activeObjectManager?.activeObjectIndex;
+      context?.acc?.board?.activeObjectManager?.activeObjectIndex;
 
     if (typeof activeObjectIndex?.has !== "function") {
       return normalizedObjects;
@@ -99,7 +99,7 @@ class ObjectModifierTool extends Tool {
 
     if (normalizedObjects.length === 0) return;
 
-    context?.context?.monitor?.liveRenderer?.captureObjectSnapshot?.(
+    context?.acc?.monitor?.liveRenderer?.captureObjectSnapshot?.(
       normalizedObjects,
     );
   }
@@ -114,10 +114,8 @@ class ObjectModifierTool extends Tool {
 
     if (normalizedObjects.length === 0) return;
 
-    context?.context?.monitor?.liveRenderer?.invalidateObjects?.(
-      normalizedObjects,
-    );
-    context?.context?.monitor?.requestViewportUiRender?.();
+    context?.acc?.monitor?.liveRenderer?.invalidateObjects?.(normalizedObjects);
+    context?.acc?.monitor?.requestViewportUiRender?.();
   }
 
   /**
@@ -183,12 +181,12 @@ class ObjectModifierTool extends Tool {
       return false;
     }
 
-    context?.context?.board?.activeObjectManager?.apply?.(
+    context?.acc?.board?.activeObjectManager?.apply?.(
       new Set(normalizedObjects),
     );
     this.clearContextObjects(context);
 
-    const autoUmount = context.context?.autoUmountOnApply !== false;
+    const autoUmount = context.acc?.autoUmountOnApply !== false;
     if (
       autoUmount &&
       typeof context.dag?.unmount === "function" &&
@@ -210,7 +208,7 @@ class ObjectModifierTool extends Tool {
     const normalizedObjects = this.resolveActiveModifiedObjects(context);
 
     if (normalizedObjects.length > 0) {
-      context?.context?.board?.activeObjectManager?.discard?.(
+      context?.acc?.board?.activeObjectManager?.discard?.(
         new Set(normalizedObjects),
       );
     }

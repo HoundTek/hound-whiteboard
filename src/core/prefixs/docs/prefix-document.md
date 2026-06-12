@@ -106,7 +106,7 @@ const handler = createMultiToolPrefixHandler({
 });
 ```
 
-`transition.context` 是 prefix 把回调或只读数据传给当前活动子链的关键途径。
+`transition.acc` 是 prefix 把回调或只读数据传给当前活动子链的关键途径。
 
 ## 3. 信号复制分发：`createRepeatorPrefixHandler`
 
@@ -135,7 +135,7 @@ const handler = createRepeatorPrefixHandler({
 采用生命周期钩子，handoff 不再替换工具方法，而是通过钩子订阅实现非侵入的完成通知与流程控制：
 
 - 根节点是一个 `multi-tool prefix`，根据 `state.activeChild` 路由
-- 根 prefix 通过 `transition.context` 向当前活动子链注入 `onToolComplete` 回调和 `autoUmountOnApply: false`
+- 根 prefix 通过 `transition.acc` 向当前活动子链注入 `onToolComplete` 回调和 `autoUmountOnApply: false`
 - **creator 的 first**：handoff 覆盖 `beforeCommitCreatedObject` 返回 `false`（阻止进入静态图），订阅 `"afterCreate"` 钩子
 - **modifier 的 second**：handoff 订阅 `"afterApply"` 钩子，通过 context 注入 `autoUmountOnApply: false` 阻止自卸载
 - **chooser 的 first**：通过 `confirmSelection → afterConfirmSelection` 钩子宣告完成

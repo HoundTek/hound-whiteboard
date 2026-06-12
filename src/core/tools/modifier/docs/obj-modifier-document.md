@@ -79,11 +79,11 @@ Tool（基类）
 - `context.path` — 当前节点路径
 - `context.dag` — 所属设备图
 - `context.getNodeState(path)` / `context.setNodeState(path, state)` — 节点状态读写
-- `context.context` — 累积上下文，沿分发路径逐层追加
-  - `context.context.board` — Board 实例
-  - `context.context.monitor` — Monitor 实例
-  - `context.context.objects` — 当前工具的操作对象集合
-  - `context.context.autoUmountOnApply` — [handoff] 阻止 modifier 自卸载
+- `context.acc` — 累积上下文，沿分发路径逐层追加
+  - `context.acc.board` — Board 实例
+  - `context.acc.monitor` — Monitor 实例
+  - `context.acc.objects` — 当前工具的操作对象集合
+  - `context.acc.autoUmountOnApply` — [handoff] 阻止 modifier 自卸载
 
 **工具不应自行构造、扁平化或改写上下文。** 直接使用 DAG
 分发的 `context` 即可。
@@ -133,15 +133,14 @@ modifier.on("afterApply", (ctx, objects, result) => {
 
 `autoUmountOnApply` 只能通过累积上下文 (`context.context`) 注入，不支持直接作为 `context` 的属性传入。
 
-handoff 通过 `resolveTransition` 的 `transition.context` 注入 `autoUmountOnApply: false`，无需覆盖 modifier 的任何方法。
+handoff 通过 `resolveTransition` 的 `transition.acc` 注入 `autoUmountOnApply: false`，无需覆盖 modifier 的任何方法。
 
 注入链路：
 
 ```
-resolveTransition transition.context
-  → handler context.context
-    → deviceContext.context
-      → modifier 读取 context.context?.autoUmountOnApply
+resolveTransition transition.acc
+  → handler context.acc
+    → modifier 读取 context.acc?.autoUmountOnApply
 ```
 
 ## 上下文解析规则

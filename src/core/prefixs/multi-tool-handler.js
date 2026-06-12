@@ -101,8 +101,8 @@ function createMultiToolPrefixHandler(options = {}) {
       );
 
       // 传递 transition 中的 context（如回调函数）到下游
-      if (transition.context && typeof transition.context === "object") {
-        return { ...result, context: transition.context };
+      if (transition.acc && typeof transition.acc === "object") {
+        return { ...result, acc: transition.acc };
       }
 
       return result;

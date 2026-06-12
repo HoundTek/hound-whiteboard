@@ -140,7 +140,7 @@ describe("keyboard-device", () => {
           },
         ],
       },
-      deviceContext: expect.objectContaining({
+      context: expect.objectContaining({
         path: "/monitor/keyboard/code/Space/default/default",
       }),
     });

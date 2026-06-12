@@ -88,7 +88,7 @@ describe("prefix-node", () => {
 
             return {
               child: state.activeChild,
-              context: {
+              acc: {
                 onSwitch: switchTo(
                   state.activeChild === "create" ? "edit" : "create",
                 ),
@@ -100,12 +100,12 @@ describe("prefix-node", () => {
       );
     const _hfc = _hfb.node().handler((packet, context) => {
       trace.push("create");
-      context.context?.onSwitch?.();
+      context.acc?.onSwitch?.();
       return { packets: [] };
     });
     const _hfe = _hfb.node().handler((packet, context) => {
       trace.push("edit");
-      context.context?.onSwitch?.();
+      context.acc?.onSwitch?.();
       return { packets: [{ to: "", signals: packet.signals }] };
     });
     _hfb.edge("create", _hfr, _hfc);
@@ -163,12 +163,12 @@ describe("prefix-node", () => {
 
     dag.dispatch({
       to: "/monitor/repeater",
-      signals: [{ type: "click", context: { button: 0 } }],
+      signals: [{ type: "click", acc: { button: 0 } }],
     });
 
     expect(toolACalls).toHaveLength(1);
     expect(toolBCalls).toHaveLength(1);
-    expect(toolACalls[0]).toEqual([{ type: "click", context: { button: 0 } }]);
-    expect(toolBCalls[0]).toEqual([{ type: "click", context: { button: 0 } }]);
+    expect(toolACalls[0]).toEqual([{ type: "click", acc: { button: 0 } }]);
+    expect(toolBCalls[0]).toEqual([{ type: "click", acc: { button: 0 } }]);
   });
 });

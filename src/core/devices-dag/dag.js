@@ -38,7 +38,7 @@ import { dagToString } from "./dag-debug.js";
  * 处理器上下文包含当前节点元数据、累积上下文以及节点状态访问接口，
  * 供节点处理器在处理信号包时使用。
  *
- * 累积上下文（\`context\`）是沿分发路径逐步追加的只读对象。
+ * 累积上下文（\`acc\`）是沿分发路径逐步追加的只读对象。
  * 在 DAG 中，分发沿单一路径进行，上下文只沿该路径累积，
  * 节点的多入边不影响单次分发的上下文。
  *
@@ -51,7 +51,7 @@ import { dagToString } from "./dag-debug.js";
  * @property {string} resolvedDefaultRoutePath - 当前默认出边对应的绝对路径
  * @property {number} depth - 当前分发深度
  * @property {SignalPacket|undefined} signalPacket - 当前已规整的输入信号包
- * @property {Object} context - 累积上下文（沿分发路径逐层追加，handler 不能在此平级新增键）
+ * @property {Object} acc - 累积上下文（沿分发路径逐层追加，handler 不能在此平级新增键）
  * @property {Object} state - 当前节点状态的只读快照
  * @property {() => any} getState - 重读节点最新状态
  * @property {(nextState: Object) => Object} setState - 全量写入节点状态
@@ -67,7 +67,7 @@ import { dagToString } from "./dag-debug.js";
  * 设备图处理器输出
  * @typedef {Object} DevicesDAGHandlerResult
  * @property {SignalPacket[]} packets - 继续路由到后继节点的信号包列表
- * @property {Object} [context] - 要合并到累积上下文的键值对
+ * @property {Object} [acc] - 要合并到累积上下文的键值对
  * @property {string} [redirect] - 覆盖 dispatcher 原本要走的下一段出边名
  * @property {boolean} [stop] - 强制终止当前链路路由
  */
@@ -557,9 +557,7 @@ class DevicesDAG {
     }
 
     const defaultRoute =
-      typeof options.defaultRoute === "string"
-        ? options.defaultRoute
-        : null;
+      typeof options.defaultRoute === "string" ? options.defaultRoute : null;
     if (defaultRoute !== null) {
       node.defaultRoute = defaultRoute;
     }
@@ -770,7 +768,7 @@ class DevicesDAG {
       resolvedDefaultRoutePath,
       depth,
       signalPacket,
-      context: { ...accumulatedContext },
+      acc: { ...accumulatedContext },
       state: readNodeState(),
       getState: readNodeState,
       setState: (nextState) => this.setNodeState(path, nextState),
@@ -852,7 +850,7 @@ class DevicesDAG {
           deferredRoute.fromNode,
           deferredRoute.fromPath,
           deferredRoute.packet,
-          deferredRoute.context,
+          deferredRoute.acc,
           depth + 1,
         );
         if (subResult.packets.length > 0) {
@@ -877,7 +875,7 @@ class DevicesDAG {
               : [];
         return {
           packets: fallback,
-          context: contextChanged ? mergedContext : undefined,
+          acc: contextChanged ? mergedContext : undefined,
         };
       }
 
@@ -904,15 +902,15 @@ class DevicesDAG {
         : { packets: [new SignalPacket("", currentPacket.signals)] };
 
       // 累积上下文合并（禁止覆盖已有键）
-      if (result.context && isPlainObject(result.context)) {
-        for (const key of Object.keys(result.context)) {
+      if (result.acc && isPlainObject(result.acc)) {
+        for (const key of Object.keys(result.acc)) {
           if (Object.prototype.hasOwnProperty.call(mergedContext, key)) {
             throw new Error(
               `Context key "${key}" already exists in accumulated context. Cannot override.`,
             );
           }
         }
-        mergedContext = { ...mergedContext, ...result.context };
+        mergedContext = { ...mergedContext, ...result.acc };
         contextChanged = true;
       }
 
@@ -924,7 +922,7 @@ class DevicesDAG {
         flushDeferredRoutes();
         return {
           packets: finalPackets.length > 0 ? finalPackets : result.packets,
-          context: contextChanged ? mergedContext : undefined,
+          acc: contextChanged ? mergedContext : undefined,
         };
       }
 
@@ -946,7 +944,7 @@ class DevicesDAG {
               fromNode: child,
               fromPath: childPath,
               packet: p,
-              context: mergedContext,
+              acc: mergedContext,
             });
           }
         }
@@ -974,7 +972,7 @@ class DevicesDAG {
         flushDeferredRoutes();
         return {
           packets: finalPackets,
-          context: contextChanged ? mergedContext : undefined,
+          acc: contextChanged ? mergedContext : undefined,
         };
       } else if (i === segments.length - 1 && child.getDefaultRoute()) {
         // handler 无输出但节点有默认出边 → 继续走
@@ -992,7 +990,7 @@ class DevicesDAG {
     flushDeferredRoutes();
     return {
       packets: finalPackets,
-      context: contextChanged ? mergedContext : undefined,
+      acc: contextChanged ? mergedContext : undefined,
     };
   }
 
@@ -1174,7 +1172,7 @@ class DevicesDAG {
         resolvedDefaultRoutePath: "",
         depth: 0,
         signalPacket: undefined,
-        context: { ...context },
+        acc: { ...context },
         getNodeState: (pathOrId) => this.getNodeState(pathOrId),
         setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
       };

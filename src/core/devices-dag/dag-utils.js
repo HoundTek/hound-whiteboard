@@ -61,7 +61,7 @@ function normalizeHandlerResult(rawResult, options = {}) {
     (Array.isArray(rawResult.packets) ||
       "stop" in rawResult ||
       "redirect" in rawResult ||
-      "context" in rawResult)
+      "acc" in rawResult)
   ) {
     return {
       ...rawResult,
@@ -85,7 +85,7 @@ function normalizeHandlerResult(rawResult, options = {}) {
         (Array.isArray(item.packets) ||
           "stop" in item ||
           "redirect" in item ||
-          "context" in item)
+          "acc" in item)
       ) {
         packets.push(
           ...SignalPacket.normalizeResult(item.packets ?? [], options),

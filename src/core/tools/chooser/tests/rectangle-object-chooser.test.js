@@ -34,7 +34,7 @@ describe("RectangleObjectChooserTool", () => {
       },
     };
     const deviceContext = {
-      context: { board, monitor: { requestViewportUiRender: jest.fn() } },
+      acc: { board, monitor: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -81,7 +81,7 @@ describe("RectangleObjectChooserTool", () => {
     expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
       new Set([firstObject]),
     );
-    expect(deviceContext.context.objects).toEqual([firstObject]);
+    expect(deviceContext.acc.objects).toEqual([firstObject]);
     expect(stateAccess.getState()).toEqual({
       objects: [firstObject],
     });
@@ -105,7 +105,7 @@ describe("RectangleObjectChooserTool", () => {
       },
     };
     const deviceContext = {
-      context: { board, monitor: { requestViewportUiRender: jest.fn() } },
+      acc: { board, monitor: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -165,7 +165,7 @@ describe("RectangleObjectChooserTool", () => {
       },
     };
     const deviceContext = {
-      context: { board, monitor: { requestViewportUiRender: jest.fn() } },
+      acc: { board, monitor: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -173,7 +173,9 @@ describe("RectangleObjectChooserTool", () => {
 
     tool.process(
       {
-        signals: [{ type: "position", context: { value: new Vector(100, 100) } }],
+        signals: [
+          { type: "position", context: { value: new Vector(100, 100) } },
+        ],
       },
       deviceContext,
     );
@@ -200,13 +202,15 @@ describe("RectangleObjectChooserTool", () => {
       objects: [{ id: 1 }],
     });
     const renderer = {
-      createCompatSelectionEntriesForObjects: jest.fn(() => ["selection-frame"]),
+      createCompatSelectionEntriesForObjects: jest.fn(() => [
+        "selection-frame",
+      ]),
     };
 
     expect(
       tool.collectUiOverlayEntries({
         deviceContext: {
-          context: { objects: [{ id: 1 }] },
+          acc: { objects: [{ id: 1 }] },
           path: "/main/mouse/secondary/tool",
           getNodeState: stateAccess.getState,
           setNodeState: stateAccess.setState,

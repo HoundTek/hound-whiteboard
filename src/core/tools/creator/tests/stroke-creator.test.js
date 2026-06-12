@@ -10,7 +10,7 @@ import { jest } from "@jest/globals";
 describe("StrokeCreatorTool", () => {
   test("StrokeCreatorTool 应消费 position/end 信号并累计点列", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { context: {}, objectId: 100, ownerChunkId: 2 };
+    const deviceContext = { acc: {}, objectId: 100, ownerChunkId: 2 };
 
     expect(
       tool.process(
@@ -59,7 +59,7 @@ describe("StrokeCreatorTool", () => {
 
   test("连续重复位置不应产生重复路径点", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { context: {}, objectId: 200, ownerChunkId: 2 };
+    const deviceContext = { acc: {}, objectId: 200, ownerChunkId: 2 };
 
     expect(
       tool.process(
@@ -104,7 +104,7 @@ describe("StrokeCreatorTool", () => {
 
   test("单 end 信号应能被正确处理", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { context: {}, objectId: 101, ownerChunkId: 3 };
+    const deviceContext = { acc: {}, objectId: 101, ownerChunkId: 3 };
 
     expect(
       tool.process(
@@ -144,7 +144,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
       },
-      { context: {}, objectId: 102, ownerChunkId: 3 },
+      { acc: {}, objectId: 102, ownerChunkId: 3 },
     );
 
     expect(tool.obj.property).toMatchObject({ color: "#ff0000", width: 4 });
@@ -162,7 +162,7 @@ describe("StrokeCreatorTool", () => {
           to: "/monitor/stroke",
           signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
         },
-        { context: { board }, objectId: 1, ownerChunkId: 1 },
+        { acc: { board }, objectId: 1, ownerChunkId: 1 },
       ),
     ).toBeUndefined();
 
@@ -174,7 +174,7 @@ describe("StrokeCreatorTool", () => {
           to: "/monitor/stroke",
           signals: [{ type: "cancel", context: {} }],
         },
-        { context: { board } },
+        { acc: { board } },
       ),
     ).toBeUndefined();
 
@@ -196,7 +196,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { context: { board }, objectId: 5, ownerChunkId: 1 },
+      { acc: { board }, objectId: 5, ownerChunkId: 1 },
     );
 
     const createdObject = tool.obj;
@@ -206,7 +206,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { context: { board }, objectId: 5, ownerChunkId: 1 },
+      { acc: { board }, objectId: 5, ownerChunkId: 1 },
     );
 
     expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
@@ -221,7 +221,7 @@ describe("StrokeCreatorTool", () => {
       activeObjectManager: { add: jest.fn() },
     };
 
-    const deviceContext = { context: { board }, objectId: 9, ownerChunkId: 1 };
+    const deviceContext = { acc: { board }, objectId: 9, ownerChunkId: 1 };
 
     tool.process(
       {
@@ -234,7 +234,7 @@ describe("StrokeCreatorTool", () => {
     expect(board.activeObjectManager.add).toHaveBeenCalledWith(
       new Set([tool.obj]),
     );
-    expect(deviceContext.context.objects).toEqual([tool.obj]);
+    expect(deviceContext.acc.objects).toEqual([tool.obj]);
   });
 
   test("创建手势更新前后应记录旧几何快照并请求活动层刷新", () => {
@@ -252,7 +252,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { context: { monitor }, objectId: 30, ownerChunkId: 1 },
+      { acc: { monitor }, objectId: 30, ownerChunkId: 1 },
     );
 
     monitor.liveRenderer.captureObjectSnapshot.mockClear();
@@ -264,7 +264,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
-      { context: { monitor }, objectId: 30, ownerChunkId: 1 },
+      { acc: { monitor }, objectId: 30, ownerChunkId: 1 },
     );
 
     expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith([
@@ -288,7 +288,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { context: { board }, objectId: 21, ownerChunkId: 1 },
+      { acc: { board }, objectId: 21, ownerChunkId: 1 },
     );
 
     const createdObject = tool.obj;
@@ -298,7 +298,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { context: { board }, objectId: 21, ownerChunkId: 1 },
+      { acc: { board }, objectId: 21, ownerChunkId: 1 },
     );
 
     const ownerChunk = board.getChunkById(1);
@@ -318,7 +318,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { context: { board }, objectId: 22, ownerChunkId: 1 },
+      { acc: { board }, objectId: 22, ownerChunkId: 1 },
     );
 
     tool.process(
@@ -326,7 +326,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
-      { context: { board }, objectId: 22, ownerChunkId: 1 },
+      { acc: { board }, objectId: 22, ownerChunkId: 1 },
     );
 
     const ownerChunk = board.getChunkById(1);
@@ -346,7 +346,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { context: { board }, objectId: 31, ownerChunkId: 1 },
+      { acc: { board }, objectId: 31, ownerChunkId: 1 },
     );
 
     const firstObject = tool.obj;
@@ -356,7 +356,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { context: { board }, objectId: 31, ownerChunkId: 1 },
+      { acc: { board }, objectId: 31, ownerChunkId: 1 },
     );
 
     tool.process(
@@ -364,7 +364,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(4, 5) } }],
       },
-      { context: { board }, objectId: 32, ownerChunkId: 1 },
+      { acc: { board }, objectId: 32, ownerChunkId: 1 },
     );
 
     const secondObject = tool.obj;
@@ -374,7 +374,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { context: { board }, objectId: 32, ownerChunkId: 1 },
+      { acc: { board }, objectId: 32, ownerChunkId: 1 },
     );
 
     const ownerChunk = board.getChunkById(1);

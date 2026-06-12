@@ -149,7 +149,7 @@ class ObjectCreatorTool extends Tool {
       ownerChunkId:
         positionSignal?.context?.ownerChunkId ??
         context.ownerChunkId ??
-        context.context?.resolveOwnerChunkId?.(position, signalPacket),
+        context.acc?.resolveOwnerChunkId?.(position, signalPacket),
       injectedProperty: extractInjectedProperty(signals),
     };
   }
@@ -163,8 +163,7 @@ class ObjectCreatorTool extends Tool {
     if (!this.obj || this.isObjectCreationCompleted) {
       this._pendingProperty = interaction?.injectedProperty ?? null;
       const objectId =
-        interaction.objectId ??
-        interaction?.context?.context?.allocateObjectId?.();
+        interaction.objectId ?? interaction?.context?.acc?.allocateObjectId?.();
       if (interaction.objectId == null || interaction.ownerChunkId == null) {
         if (objectId == null || interaction.ownerChunkId == null) {
           return false;
@@ -182,7 +181,7 @@ class ObjectCreatorTool extends Tool {
       this._pendingProperty = null;
       this.isObjectCreationCompleted = false;
       this.syncCreatedObjectContext(interaction?.context);
-      interaction?.context?.context?.board?.activeObjectManager?.add?.(
+      interaction?.context?.acc?.board?.activeObjectManager?.add?.(
         new Set([this.obj]),
       );
     }
@@ -209,7 +208,7 @@ class ObjectCreatorTool extends Tool {
     const normalizedObjects =
       this.resolveContextObjects(context).filter(Boolean);
     const activeObjectIndex =
-      context?.context?.board?.activeObjectManager?.activeObjectIndex;
+      context?.acc?.board?.activeObjectManager?.activeObjectIndex;
     const activeObjects =
       typeof activeObjectIndex?.has === "function"
         ? normalizedObjects.filter((objectEntry) =>
@@ -218,7 +217,7 @@ class ObjectCreatorTool extends Tool {
         : normalizedObjects;
 
     if (activeObjects.length > 0) {
-      context?.context?.board?.activeObjectManager?.discard?.(
+      context?.acc?.board?.activeObjectManager?.discard?.(
         new Set(activeObjects),
       );
     }
@@ -249,9 +248,9 @@ class ObjectCreatorTool extends Tool {
    */
   beforeGeometryMutation(interaction) {
     if (!this.obj) return;
-    interaction?.context?.context?.monitor?.liveRenderer?.captureObjectSnapshot?.(
-      [this.obj],
-    );
+    interaction?.context?.acc?.monitor?.liveRenderer?.captureObjectSnapshot?.([
+      this.obj,
+    ]);
   }
 
   /**
@@ -260,10 +259,10 @@ class ObjectCreatorTool extends Tool {
    */
   afterGeometryMutation(interaction) {
     if (!this.obj) return;
-    interaction?.context?.context?.monitor?.liveRenderer?.invalidateObjects?.([
+    interaction?.context?.acc?.monitor?.liveRenderer?.invalidateObjects?.([
       this.obj,
     ]);
-    interaction?.context?.context?.monitor?.requestViewportUiRender?.();
+    interaction?.context?.acc?.monitor?.requestViewportUiRender?.();
   }
 
   /**
@@ -326,7 +325,7 @@ class ObjectCreatorTool extends Tool {
    */
   commitCreatedObject(interaction) {
     const context = interaction?.context ?? {};
-    const board = context.context?.board;
+    const board = context.acc?.board;
     const completedObject = this.obj;
 
     if (board?.activeObjectManager?.apply) {
@@ -376,7 +375,7 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   cancelCreatedObject(interaction) {
-    const board = interaction?.context?.context?.board;
+    const board = interaction?.context?.acc?.board;
     if (this.obj) {
       if (board?.activeObjectManager?.discard) {
         board.activeObjectManager.discard(new Set([this.obj]));

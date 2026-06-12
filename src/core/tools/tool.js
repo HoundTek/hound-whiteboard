@@ -62,7 +62,7 @@ class Tool {
    * @returns {import("../devices-dag/dag.js").DevicesDAGHandlerContext}
    */
   createDeviceContext(handlerContext = {}, toolContext = {}) {
-    const accumulatedContext = handlerContext.context ?? {};
+    const accumulatedContext = handlerContext.acc ?? {};
     const board = accumulatedContext.board ?? toolContext.board;
     const monitor = accumulatedContext.monitor ?? toolContext.monitor;
     const allocateObjectId =
@@ -87,7 +87,7 @@ class Tool {
 
     return {
       ...handlerContext,
-      context: {
+      acc: {
         ...accumulatedContext,
         board,
         monitor,
@@ -143,7 +143,7 @@ class Tool {
       sync: (context = {}) => {
         latestDeviceContext = context;
 
-        const monitor = context.context?.monitor;
+        const monitor = context.acc?.monitor;
         if (!monitor?.registerUiOverlayProvider) {
           return;
         }
@@ -166,7 +166,7 @@ class Tool {
       cleanup: (context = {}) => {
         latestDeviceContext = context;
 
-        const monitor = registeredMonitor ?? context.context?.monitor;
+        const monitor = registeredMonitor ?? context.acc?.monitor;
         if (monitor?.unregisterUiOverlayProvider) {
           monitor.unregisterUiOverlayProvider(provider, {
             invalidate: false,
@@ -175,7 +175,7 @@ class Tool {
 
         registeredMonitor = null;
         latestDeviceContext = {};
-        context.context?.monitor?.requestViewportUiRender?.();
+        context.acc?.monitor?.requestViewportUiRender?.();
       },
     };
   }
@@ -233,8 +233,8 @@ class Tool {
    * @returns {Array<*>}
    */
   resolveContextObjects(context = {}) {
-    if (context.context?.objects) {
-      return this.normalizeObjectCollection(context.context.objects);
+    if (context.acc?.objects) {
+      return this.normalizeObjectCollection(context.acc.objects);
     }
     const nodeState = this.resolveNodeState(context);
     if (nodeState.objects) {
@@ -258,7 +258,7 @@ class Tool {
       return [];
     }
 
-    context.context.objects = normalizedObjects;
+    context.acc.objects = normalizedObjects;
 
     const nodeState = this.resolveNodeState(context);
     this.writeNodeState(context, {
@@ -275,7 +275,7 @@ class Tool {
    * @returns {void}
    */
   clearContextObjects(context = {}) {
-    delete context.context?.objects;
+    delete context.acc?.objects;
 
     const nodeState = { ...this.resolveNodeState(context) };
     if (Object.prototype.hasOwnProperty.call(nodeState, "objects")) {
@@ -300,7 +300,7 @@ class Tool {
    * @returns {void}
    */
   requestUiOverlayRefresh(context = {}) {
-    context.context?.monitor?.requestViewportUiRender?.();
+    context.acc?.monitor?.requestViewportUiRender?.();
   }
 
   /**

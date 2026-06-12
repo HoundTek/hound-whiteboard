@@ -16,7 +16,7 @@ describe("ObjectModifierTool", () => {
     const object = { id: 1, changed: false };
     const calls = [];
     const modificationContext = {
-      context: {
+      acc: {
         monitor: {
           liveRenderer: {
             captureObjectSnapshot(objects) {
@@ -64,7 +64,7 @@ describe("ObjectModifierTool", () => {
       requestViewportUiRender: jest.fn(),
     };
     const modificationContext = {
-      context: { monitor, objects: new Set(objects) },
+      acc: { monitor, objects: new Set(objects) },
     };
 
     tool.beforeGeometryMutation(modificationContext);
@@ -96,7 +96,7 @@ describe("ObjectModifierTool", () => {
 
     expect(
       tool.collectUiOverlayEntries({
-        deviceContext: { context: { objects: [object] } },
+        deviceContext: { acc: { objects: [object] } },
         renderer,
       }),
     ).toEqual(["modifier-overlay"]);
@@ -123,7 +123,7 @@ describe("ObjectModifierTool", () => {
         },
       };
 
-      tool.applyModifiedObjects({ context: { board }, path: "/test" }, [object]);
+      tool.applyModifiedObjects({ acc: { board }, path: "/test" }, [object]);
 
       expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
         new Set([object]),
@@ -151,9 +151,10 @@ describe("ObjectModifierTool", () => {
         },
       };
 
-      const result = tool.applyModifiedObjects({ context: { board }, path: "/test" }, [
-        object,
-      ]);
+      const result = tool.applyModifiedObjects(
+        { acc: { board }, path: "/test" },
+        [object],
+      );
 
       expect(result).toBe(false);
       expect(apply).not.toHaveBeenCalled();
@@ -177,7 +178,7 @@ describe("ObjectModifierTool", () => {
 
       tool.applyModifiedObjects(
         {
-          context: { board, autoUmountOnApply: false },
+          acc: { board, autoUmountOnApply: false },
           dag: { unmount },
           path: "/test",
         },

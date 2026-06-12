@@ -217,12 +217,12 @@ function wrapChooserForHandoff(tool) {
   return (packet, context = {}) => {
     if (!processor) {
       processor = tool.createProcessor({
-        board: context.context?.board,
-        monitor: context.context?.monitor,
+        board: context.acc?.board,
+        monitor: context.acc?.monitor,
       });
     }
 
-    const onToolComplete = context.context?.onToolComplete;
+    const onToolComplete = context.acc?.onToolComplete;
     let completed = false;
 
     const unsub =
@@ -265,7 +265,7 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
 
     if (!should) return rawResult;
 
-    context.context?.onToolComplete?.();
+    context.acc?.onToolComplete?.();
     return normalizeWrappedResult(rawResult);
   };
 
@@ -448,7 +448,7 @@ function createHandoffSubDAG(options = {}) {
 
           return {
             child: state.activeChild,
-            context: {
+            acc: {
               onToolComplete: createCompleteCallback(fromPhase || "first"),
               // 阻止 modifier 在 handoff 中自卸载
               autoUmountOnApply: false,
@@ -469,7 +469,7 @@ function createHandoffSubDAG(options = {}) {
   if (firstIsCreator) {
     // Creator 路径：handler 桥接 afterCreate 钩子 → onToolComplete 回调
     firstNode.handler((packet, context = {}) => {
-      const onToolComplete = context.context?.onToolComplete;
+      const onToolComplete = context.acc?.onToolComplete;
       let completed = false;
 
       // 临时订阅 afterCreate：工具触发时桥接到 onToolComplete
@@ -482,8 +482,8 @@ function createHandoffSubDAG(options = {}) {
           : null;
 
       const processor = first.createProcessor({
-        board: context.context?.board,
-        monitor: context.context?.monitor,
+        board: context.acc?.board,
+        monitor: context.acc?.monitor,
       });
       const rawResult = processor(packet, context);
 
@@ -514,7 +514,7 @@ function createHandoffSubDAG(options = {}) {
   if (secondIsModifier) {
     // Modifier 路径：handler 桥接 afterApply 钩子 → onToolComplete 回调
     secondNode.handler((packet, context = {}) => {
-      const onToolComplete = context.context?.onToolComplete;
+      const onToolComplete = context.acc?.onToolComplete;
       let completed = false;
 
       // 临时订阅 afterApply：工具触发时桥接到 onToolComplete
@@ -527,8 +527,8 @@ function createHandoffSubDAG(options = {}) {
           : null;
 
       const processor = second.createProcessor({
-        board: context.context?.board,
-        monitor: context.context?.monitor,
+        board: context.acc?.board,
+        monitor: context.acc?.monitor,
       });
       const rawResult = processor(packet, context);
 
@@ -546,8 +546,8 @@ function createHandoffSubDAG(options = {}) {
     // 通用 Tool 路径：透传，工具通过 context.onToolComplete 自行通知完成
     secondNode.handler((packet, context = {}) => {
       const processor = second.createProcessor({
-        board: context.context?.board,
-        monitor: context.context?.monitor,
+        board: context.acc?.board,
+        monitor: context.acc?.monitor,
       });
       return processor(packet, context);
     });

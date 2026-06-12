@@ -21,8 +21,8 @@ import { Tool } from "../tools/tool.js";
 class CollectingTool extends Tool {
   calls = [];
 
-  process(signalPacket, deviceContext) {
-    this.calls.push({ signalPacket, deviceContext });
+  process(signalPacket, context) {
+    this.calls.push({ signalPacket, context });
   }
 
   reset() {
@@ -49,7 +49,7 @@ function createMockCreator(onProcess) {
 
     process(packet, ctx) {
       if (onProcess) onProcess(packet, ctx);
-      this.completeCreatedObject({ deviceContext: ctx });
+      this.completeCreatedObject({ context: ctx });
     }
 
     /**
@@ -63,7 +63,7 @@ function createMockCreator(onProcess) {
       } else {
         // 独立模式：commit 到静态图
         this.isObjectCreationCompleted = true;
-        interaction?.deviceContext?.context?.board?.activeObjectManager?.apply?.(
+        interaction?.context?.acc?.board?.activeObjectManager?.apply?.(
           new Set([this.obj].filter(Boolean)),
         );
       }
