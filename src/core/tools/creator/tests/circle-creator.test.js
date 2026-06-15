@@ -7,7 +7,7 @@ import { ChunkObjectManager } from "../../../components/chunk-object-manager.js"
 describe("CircleCreatorTool", () => {
   test("单手势起点为圆心，终点决定半径", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: {}, objectId: 101, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 101, ownerChunkId: 1 } };
 
     tool.process(
       {
@@ -36,9 +36,7 @@ describe("CircleCreatorTool", () => {
   test("结束点过近时使用固定半径，固定半径由 monitor.zoom 决定", () => {
     const tool = new CircleCreatorTool();
     const deviceContext = {
-      acc: { monitor: { zoom: 2 } },
-      objectId: 102,
-      ownerChunkId: 2,
+      acc: { monitor: { zoom: 2 }, objectId: 102, ownerChunkId: 2 },
     };
 
     tool.process(
@@ -71,11 +69,7 @@ describe("CircleCreatorTool", () => {
         apply: jest.fn(),
       },
     };
-    const deviceContext = {
-      acc: { board },
-      objectId: 103,
-      ownerChunkId: 3,
-    };
+    const deviceContext = { acc: { board, objectId: 103, ownerChunkId: 3 } };
 
     tool.process(
       {
@@ -105,7 +99,7 @@ describe("CircleCreatorTool", () => {
 
   test("未提供 monitor 时应以默认 zoom=1 计算固定半径", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: {}, objectId: 401, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 401, ownerChunkId: 1 } };
 
     // 起始点与结束点距离仅 1 像素，小于 minDragDistanceScreen=4 → 应用固定半径
     tool.process(
@@ -142,7 +136,7 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
-      { acc: { board }, objectId: 110, ownerChunkId: 1 },
+      { acc: { board, objectId: 110, ownerChunkId: 1 } },
     );
 
     tool.process(
@@ -150,7 +144,7 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board }, objectId: 110, ownerChunkId: 1 },
+      { acc: { board, objectId: 110, ownerChunkId: 1 } },
     );
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
@@ -171,7 +165,7 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board }, objectId: 201, ownerChunkId: 1 },
+      { acc: { board, objectId: 201, ownerChunkId: 1 } },
     );
 
     const firstObject = tool.obj;
@@ -184,7 +178,7 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { acc: { board }, objectId: 201, ownerChunkId: 1 },
+      { acc: { board, objectId: 201, ownerChunkId: 1 } },
     );
 
     // 第二次创建
@@ -193,7 +187,7 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(6, 7) } }],
       },
-      { acc: { board }, objectId: 202, ownerChunkId: 1 },
+      { acc: { board, objectId: 202, ownerChunkId: 1 } },
     );
 
     const secondObject = tool.obj;
@@ -206,7 +200,7 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { acc: { board }, objectId: 202, ownerChunkId: 1 },
+      { acc: { board, objectId: 202, ownerChunkId: 1 } },
     );
 
     expect(firstObject).not.toBe(secondObject);
@@ -222,7 +216,7 @@ describe("CircleCreatorTool", () => {
 
   test("起始点与结束点完全相同时应使用固定半径（默认 zoom=1）", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: {}, objectId: 301, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 301, ownerChunkId: 1 } };
 
     tool.process(
       {

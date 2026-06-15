@@ -145,10 +145,10 @@ class ObjectCreatorTool extends Tool {
       isObjectCancelled: signals.some(
         (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_CANCEL,
       ),
-      objectId: positionSignal?.context?.objectId ?? context.objectId,
+      objectId: positionSignal?.context?.objectId ?? context.acc?.objectId,
       ownerChunkId:
         positionSignal?.context?.ownerChunkId ??
-        context.ownerChunkId ??
+        context.acc?.ownerChunkId ??
         context.acc?.resolveOwnerChunkId?.(position, signalPacket),
       injectedProperty: extractInjectedProperty(signals),
     };
@@ -162,15 +162,23 @@ class ObjectCreatorTool extends Tool {
   ensureObject(interaction) {
     if (!this.obj || this.isObjectCreationCompleted) {
       this._pendingProperty = interaction?.injectedProperty ?? null;
-      const objectId =
-        interaction.objectId ?? interaction?.context?.acc?.allocateObjectId?.();
-      if (interaction.objectId == null || interaction.ownerChunkId == null) {
-        if (objectId == null || interaction.ownerChunkId == null) {
-          return false;
+
+      // 惰性分配 objectId：仅当需要创建新对象时才调用 allocateObjectId
+      if (interaction.objectId == null) {
+        const allocatedId = interaction?.context?.acc?.allocateObjectId?.();
+        if (allocatedId != null) {
+          interaction.objectId = allocatedId;
         }
       }
-      interaction.objectId = objectId;
-      this.create(interaction.position, objectId, interaction.ownerChunkId);
+
+      if (interaction.objectId == null || interaction.ownerChunkId == null) {
+        return false;
+      }
+      this.create(
+        interaction.position,
+        interaction.objectId,
+        interaction.ownerChunkId,
+      );
       if (
         this._pendingProperty &&
         this.obj &&
@@ -214,7 +222,7 @@ class ObjectCreatorTool extends Tool {
         ? normalizedObjects.filter((objectEntry) =>
             activeObjectIndex.has(objectEntry.id),
           )
-        : normalizedObjects;
+        : [];
 
     if (activeObjects.length > 0) {
       context?.acc?.board?.activeObjectManager?.discard?.(

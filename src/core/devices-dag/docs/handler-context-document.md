@@ -2,7 +2,7 @@
 
 ## 概述
 
-所有 DevicesDAG handler 的 `handler(packet, ctx)` 签名的第二个参数 `ctx`，即 `DevicesDAGHandlerContext`，由 DAG 引擎在分发时通过 `_createHandlerContext` 统一构建。所有 handler（设备根节点、prefix handler、工具 processor）拿到的都是同一套接口。
+所有 DevicesDAG 节点 handler 的 `handler(packet, ctx)` 签名的第二个参数 `ctx`，即 `DevicesDAGHandlerContext`，由 DAG 引擎在分发时通过 `_createHandlerContext` 统一构建。所有 handler（设备根节点、prefix handler、工具 processor）拿到的都是同一套接口。
 
 `createPrefixNodeHandler` 仅在此基础上为 `ctx.state` / `ctx.getState()` 叠加 `initialState` 默认值，不引入额外字段。
 
@@ -95,7 +95,7 @@ ctx.setState({ anchor: { x: 100, y: 200 }, active: true }); // 全量覆盖
 ctx.patchState({ anchor: null }); // 浅合并（常用）
 ```
 
-**⚠️ 陷阱：`ctx.state` 是入口快照，写入后不自动更新**
+注意：`ctx.state` 是入口快照，写入后不自动更新
 
 `ctx.state` 在 handler 入口处一次性构造，`setState` / `patchState` 写入的是节点内部存储，
 **不会**修改已解构出来的 `ctx.state` 对象。写入后立即读取 `ctx.state` 得到的是旧值。

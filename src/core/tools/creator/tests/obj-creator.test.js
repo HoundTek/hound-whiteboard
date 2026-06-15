@@ -8,7 +8,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#000", fillColor: "#fff" },
     });
-    const deviceContext = { acc: {}, objectId: 201, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 201, ownerChunkId: 1 } };
 
     tool.process(
       {
@@ -40,7 +40,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#000" },
     });
-    const deviceContext = { acc: {}, objectId: 202, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 202, ownerChunkId: 1 } };
 
     tool.process(
       {
@@ -61,7 +61,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#abc" },
     });
-    const deviceContext = { acc: {}, objectId: 203, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 203, ownerChunkId: 1 } };
 
     tool.process(
       {
@@ -77,7 +77,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
   test("buildInteractionContext 在基类中提取 injectedProperty", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { objectId: 204, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 204, ownerChunkId: 1 } };
 
     const interaction = tool.buildInteractionContext(
       {
@@ -96,7 +96,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
   test("property 为数组值 → injectedProperty 为 null", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { objectId: 205, ownerChunkId: 1 };
+    const deviceContext = { acc: { objectId: 205, ownerChunkId: 1 } };
 
     const interaction = tool.buildInteractionContext(
       {
@@ -200,14 +200,14 @@ describe("ObjectCreatorTool — property 信号", () => {
             { type: "position", context: { value: new Vector(10, 10) } },
           ],
         },
-        { acc: {}, objectId: 301, ownerChunkId: 1 },
+        { acc: { objectId: 301, ownerChunkId: 1 } },
       );
 
       expect(afterCreate).not.toHaveBeenCalled();
 
       tool.process(
         { signals: [{ type: "end" }] },
-        { acc: {}, objectId: 302, ownerChunkId: 1 },
+        { acc: { objectId: 302, ownerChunkId: 1 } },
       );
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
