@@ -460,13 +460,11 @@ class SingleGestureObjectCreatorTool extends ObjectCreatorTool {
       this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = true;
     } else {
-      this.beforeGeometryMutation(interaction);
       this.updateCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
     }
 
     if (interaction.isGestureEnded) {
-      this.beforeGeometryMutation(interaction);
       this.completeCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
       this.completeCreatedObject(interaction);
@@ -514,7 +512,6 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
 
     if (interaction.isObjectEnded) {
       if (this.isCreatingGestureActive) {
-        this.beforeGeometryMutation(interaction);
         this.completeCreationGesture(interaction);
         this.afterGeometryMutation(interaction);
         this.isCreatingGestureActive = false;
@@ -541,13 +538,11 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
       this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = true;
     } else {
-      this.beforeGeometryMutation(interaction);
       this.updateCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
     }
 
     if (interaction.isGestureEnded) {
-      this.beforeGeometryMutation(interaction);
       this.completeCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = false;

@@ -171,7 +171,7 @@ modifier 节点路径的 state。
 | -------- | -------------------------- | ------------------------------------------------------ |
 | 位置更新 | `POSITION: "position"`     | 携带世界坐标 `{ x, y }`，内部以锚点为基准计算位移      |
 | 手势结束 | `GESTURE_END: "end"`       | 结束当前手势，对象保留在动态图中，后续可开始新一轮手势 |
-| 手势取消 | `GESTURE_CANCEL: "cancel"` | 取消当前手势（对象不回滚，仅停止接收后续位置更新）     |
+| 手势取消 | `GESTURE_CANCEL: "cancel"` | 取消当前手势并将对象回滚到手势开始时的初始位置         |
 | 提交修改 | `SUCCESS: "success"`       | 将修改完毕的对象 apply 到静态图，结束修改流程          |
 
 ### 手势生命周期
@@ -202,7 +202,7 @@ flowchart LR
 2. `resolveActiveModifiedObjects(context)` 解析 AOM 动态图中的对象
 3. `setContextObjects(context, objects)` 同步对象到上下文
 4. `buildModifyInteractionContext()` 提取 position、end、cancel、success 等信号
-5. cancel 信号 → `cancelModifyGesture()`，清空手势（对象不回滚）
+5. cancel 信号 → `cancelModifyGesture()`，回滚对象到手势起始位置
 6. success 信号 → `completeModifyGesture()` → `applyModifiedObjects()`，提交到静态图
 7. 无 position → 仅处理孤立 end 信号
 8. 首个 position → `canBeginModifyGesture()` 准入检测 → `withGeometryMutation({ begin + update })`

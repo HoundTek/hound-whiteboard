@@ -25,7 +25,8 @@ import { BasicObject } from "../../objects/basic-obj.js";
  * 1. 首个 position 信号 → canBeginModifyGesture 准入检测 → beginModifyGesture 记录锚点
  * 2. 后续 position 信号 → updateModifyGesture 以锚点为基准更新对象位置
  * 3. end 信号 → completeModifyGesture 清空锚点，对象留在动态图
- * 4. success 信号 → 对象提交到静态图
+ * 4. cancel 信号 → cancelModifyGesture 将对象回滚到手势初始位置
+ * 5. success 信号 → 对象提交到静态图
  *
  * @author Zhou Chenyu
  */
@@ -104,6 +105,25 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * @param {Object} interaction - 当前交互上下文
    */
   completeModifyGesture(interaction) {
+    this._anchorPosition = null;
+    this._initialPositions = null;
+  }
+
+  /**
+   * 取消手势
+   * @description
+   * 将对象位置回滚到手势开始时的初始位置，清空锚点与缓存。
+   * 由基类 _handleCancel 在 withGeometryMutation 内调用，
+   * 回滚后基层会自动触发 invalidateObjects 刷新活动层。
+   * @param {Object} interaction - 当前交互上下文
+   */
+  cancelModifyGesture(interaction) {
+    if (!this._initialPositions) return;
+    for (const obj of interaction.objects) {
+      const initPos = this._initialPositions.get(obj.id ?? obj);
+      if (!initPos) continue;
+      obj.position = new Vector(initPos.x, initPos.y);
+    }
     this._anchorPosition = null;
     this._initialPositions = null;
   }

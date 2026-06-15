@@ -267,12 +267,12 @@ describe("StrokeCreatorTool", () => {
       { acc: { monitor }, objectId: 30, ownerChunkId: 1 },
     );
 
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith([
-      tool.obj,
-    ]);
+    // 后续 update 不再重复抓取初始快照（仅在 begin 时抓一次）
+    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
       tool.obj,
     ]);
+
     expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 

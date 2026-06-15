@@ -4,6 +4,31 @@ import { RectangleRange } from "../../../range/rectangle.js";
 import { CommonObjectModifierTool } from "../common-object-modifier.js";
 import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../obj-modifier.js";
 
+/**
+ * 构造包含 AOM 的测试上下文
+ * 新代码中 resolveActiveModifiedObjects 在没有 activeObjectIndex 时返回空，
+ * 因此测试必须提供模拟的 AOM 上下文。
+ * @param {Array|Object} objects - 测试对象（或对象数组）
+ * @param {Object} [extra={}] - 额外的 acc 属性（如 monitor）
+ * @returns {{ acc: Object }} 可用于 tool.process 的 DAG 上下文
+ */
+function aomCtx(objects, extra = {}) {
+  const normalized = Array.isArray(objects) ? objects : [objects];
+  return {
+    acc: {
+      objects: normalized.filter(Boolean),
+      board: {
+        activeObjectManager: {
+          activeObjectIndex: new Map(
+            normalized.filter((o) => o && o.id != null).map((o) => [o.id, o]),
+          ),
+        },
+      },
+      ...extra,
+    },
+  };
+}
+
 describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () => {
   test("首个 position 应启动手势（对象暂不动），第二个 position 才应用位移", () => {
     const object = {
@@ -25,7 +50,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
 
@@ -34,10 +59,11 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 23 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(12, 20));
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(2);
+    // 首次 position 抓快照，后续 position 不抓
+    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(2);
   });
 
@@ -61,7 +87,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
 
@@ -70,7 +96,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 23 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(12, 20));
 
@@ -79,7 +105,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 22, y: 28 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(17, 25));
   });
@@ -97,7 +123,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // 锚点=(12,20)，dx=0 → (10, 20)
     expect(object.position).toEqual(new Vector(10, 20));
@@ -106,16 +132,13 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // dx=16-12=4, dy=22-20=2 → (14, 22)
     expect(object.position).toEqual(new Vector(14, 22));
 
     // end 信号
-    tool.process(
-      { signals: [{ type: "end" }] },
-      { acc: { objects: [object] } },
-    );
+    tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
     expect(object.position).toEqual(new Vector(14, 22));
 
     // end 后新一轮手势：锚点从新光标位置开始
@@ -123,7 +146,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 20, y: 22 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // 新锚点=(20,22)，新的 initPos={(14,22)}，dx=0 → (14, 22)
     expect(object.position).toEqual(new Vector(14, 22));
@@ -132,7 +155,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 25, y: 22 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // dx=25-20=5, dy=0 → (19, 22)
     expect(object.position).toEqual(new Vector(19, 22));
@@ -220,7 +243,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
     };
 
     const tool = new CommonObjectModifierTool();
-    tool.process({ signals: [] }, { acc: { objects: [object], monitor: {} } });
+    tool.process({ signals: [] }, aomCtx(object, { monitor: {} }));
 
     expect(object.position).toEqual(new Vector(5, 5));
   });
@@ -246,7 +269,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 35, y: 35 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     // 锚点=(35,35)，initPos=(10,20)，dx=0 → 对象不动
     expect(object.position).toEqual(new Vector(10, 20));
@@ -258,7 +281,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 40, y: 40 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(15, 25));
   });
@@ -283,7 +306,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 100, y: 200 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
 
     expect(object.position).toEqual(new Vector(10, 20));
@@ -318,7 +341,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 80, y: 50 } } }],
       },
-      { acc: { objects: [objectA, objectB], monitor } },
+      aomCtx([objectA, objectB], { monitor }),
     );
     expect(objectA.position).toEqual(new Vector(10, 20));
     expect(objectB.position).toEqual(new Vector(70, 80));
@@ -330,7 +353,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 90, y: 60 } } }],
       },
-      { acc: { objects: [objectA, objectB], monitor } },
+      aomCtx([objectA, objectB], { monitor }),
     );
     expect(objectA.position).toEqual(new Vector(20, 30));
     expect(objectB.position).toEqual(new Vector(80, 90));
@@ -362,7 +385,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
       },
-      { acc: { objects: [objectA, objectB], monitor } },
+      aomCtx([objectA, objectB], { monitor }),
     );
 
     expect(objectA.position).toEqual(new Vector(10, 20));
@@ -390,7 +413,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 100, y: 200 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
     expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
@@ -400,7 +423,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 110, y: 210 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(20, 30));
   });
@@ -418,7 +441,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // 锚点=(12,20)，dx=0 → (10, 20)
     expect(object.position).toEqual(new Vector(10, 20));
@@ -427,7 +450,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 16, y: 20 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // dx=16-12=4, dy=0 → (14, 20)
     expect(object.position).toEqual(new Vector(14, 20));
@@ -439,7 +462,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 20 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // 新锚点=(17,20)，新 initPos(14,20)，dx=0 → (14,20)
     expect(object.position).toEqual(new Vector(14, 20));
@@ -448,7 +471,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 20, y: 20 } } }],
       },
-      { acc: { objects: [object] } },
+      aomCtx(object),
     );
     // dx=20-17=3, dy=0 → (17, 20)
     expect(object.position).toEqual(new Vector(17, 20));
@@ -478,7 +501,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
           { type: "end" },
         ],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
 
     // 手势启动后立即结束，对象未移动
@@ -493,7 +516,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 20, y: 25 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     expect(object.position).toEqual(new Vector(10, 20)); // 新锚点=(20,25)，dx=0
 
@@ -501,19 +524,33 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       {
         signals: [{ type: "position", context: { value: { x: 25, y: 30 } } }],
       },
-      { acc: { objects: [object], monitor } },
+      aomCtx(object, { monitor }),
     );
     // dx=25-20=5, dy=30-25=5 → (15, 25)
     expect(object.position).toEqual(new Vector(15, 25));
   });
 
   describe("手势准入检测——边缘场景", () => {
-    function makeDeviceContext(opts = {}) {
+    function makeAomCtx(opts = {}) {
       const { objects, board, monitor } = opts;
+      const normalized = objects
+        ? Array.isArray(objects)
+          ? objects
+          : [objects]
+        : [];
       return {
         acc: {
-          ...(objects ? { objects } : {}),
-          ...(board ? { board } : {}),
+          objects: normalized.filter(Boolean),
+          board: {
+            activeObjectManager: {
+              activeObjectIndex: new Map(
+                normalized
+                  .filter((o) => o && o.id != null)
+                  .map((o) => [o.id, o]),
+              ),
+            },
+            ...(board || {}),
+          },
           ...(monitor ? { monitor } : {}),
         },
       };
@@ -541,7 +578,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       expect(object.position).toEqual(new Vector(10, 20));
       // 第二个 position → 确认手势确实激活并能移动
@@ -549,7 +586,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 25 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -560,7 +597,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 60, y: 50 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       expect(object.position).toEqual(new Vector(15, 25));
       // containsPoint 使用 1e-8 容差，边界点应命中
@@ -568,7 +605,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 65, y: 55 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // dx=5, dy=5 → (20, 30)
       expect(object.position).toEqual(new Vector(20, 30));
@@ -597,7 +634,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       expect(object.position).toEqual(new Vector(10, 20));
       expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
@@ -607,7 +644,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -620,7 +657,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 35, y: 40 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -647,7 +684,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -659,13 +696,13 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // 锚点仍为(30,35)，dx=70, dy=165 → (80, 185)
       expect(object.position).toEqual(new Vector(80, 185));
-      // withGeometryMutation 每次 position 都会执行快照→变更→失效协议
+      // 首次 position 抓快照，后续 position 不重复抓取
       expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
-        2,
+        1,
       );
     });
 
@@ -686,7 +723,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
         },
-        makeDeviceContext({ objects: [object], board }),
+        makeAomCtx({ objects: [object], board }),
       );
 
       expect(object.position).toEqual(new Vector(10, 20));
@@ -713,7 +750,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -722,7 +759,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         {
           signals: [{ type: "position", context: { value: { x: 35, y: 40 } } }],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -730,7 +767,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       // end 结束手势
       tool.process(
         { signals: [{ type: "end" }] },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
 
       // 新一轮：position (100, 200) 在外部 → 应拒绝
@@ -740,12 +777,13 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeDeviceContext({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], monitor }),
       );
       // 准入拒绝，对象位置保持在 end 时刻
       expect(object.position).toEqual(new Vector(15, 25));
+      // 仅在首次 position 抓了快照，后续 update 和拒绝的准入都不抓
       expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
-        2,
+        1,
       );
     });
   });

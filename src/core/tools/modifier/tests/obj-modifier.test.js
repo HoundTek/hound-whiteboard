@@ -206,9 +206,10 @@ describe("ObjectModifierTool", () => {
         },
       };
 
-      tool.applyModifiedObjects({ board, dag: { unmount }, path: "/test" }, [
-        object,
-      ]);
+      tool.applyModifiedObjects(
+        { acc: { board }, dag: { unmount }, path: "/test" },
+        [object],
+      );
 
       expect(unmount).toHaveBeenCalledWith("/test");
     });

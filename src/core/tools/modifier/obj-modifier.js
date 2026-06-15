@@ -81,7 +81,8 @@ class ObjectModifierTool extends Tool {
       context?.acc?.board?.activeObjectManager?.activeObjectIndex;
 
     if (typeof activeObjectIndex?.has !== "function") {
-      return normalizedObjects;
+      // 无法确认对象是否仍在 AOM 动态图中 → 返回空，不做任何修改
+      return [];
     }
 
     return normalizedObjects.filter(
@@ -123,12 +124,16 @@ class ObjectModifierTool extends Tool {
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Function} mutate - 实际执行修改的回调
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
+   * @param {Object} [options={}] - 选项对象
    * @returns {*}
    */
-  withGeometryMutation(context, mutate, objects) {
+  withGeometryMutation(context, mutate, objects, options = {}) {
+    const { captureSnapshot = true } = options;
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
 
-    this.beforeGeometryMutation(context, normalizedObjects);
+    if (captureSnapshot) {
+      this.beforeGeometryMutation(context, normalizedObjects);
+    }
     try {
       return mutate?.();
     } finally {
@@ -231,7 +236,7 @@ class ObjectModifierTool extends Tool {
  * 1. position 信号到达 → 手势开始（beginModifyGesture）或持续更新（updateModifyGesture）
  * 2. end 信号 → 手势结束（completeModifyGesture），对象保留在 AOM 动态图中
  * 3. success 信号 → 提交到静态图（applyModifiedObjects）
- * 4. cancel 信号 → 取消当前手势（cancelModifyGesture），对象不回滚，仅停止接收后续位置更新
+ * 4. cancel 信号 → 取消当前手势（cancelModifyGesture），将对象回滚到手势开始时的初始位置
  *
  * 该工具直接使用世界坐标 position 驱动，无需前置 prefix 计算位移。
  * 子类可在 hook 内自行计算增量并更新对象几何。
@@ -322,7 +327,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
     );
 
     if (interaction.hasCancelSignal) {
-      this._handleCancel(interaction);
+      this._handleCancel(interaction, context, objects);
       return;
     }
 
@@ -344,9 +349,14 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @param {Object} interaction - 当前交互上下文
    * @private
    */
-  _handleCancel(interaction) {
+  _handleCancel(interaction, context, objects) {
     if (this.isModifyingGestureActive) {
-      this.cancelModifyGesture(interaction);
+      this.withGeometryMutation(
+        context,
+        () => this.cancelModifyGesture(interaction),
+        objects,
+        { captureSnapshot: false },
+      );
       this.isModifyingGestureActive = false;
     }
   }
@@ -399,13 +409,14 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       );
       this.isModifyingGestureActive = true;
     } else {
-      // 后续位置：仅 update
+      // 后续位置：仅 update，无需重复抓取快照
       this.withGeometryMutation(
         context,
         () => {
           this.updateModifyGesture(interaction);
         },
         objects,
+        { captureSnapshot: false },
       );
     }
 
@@ -454,7 +465,9 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   /**
    * 修改手势取消
    * @description
-   * 对象不会回滚到初始状态，仅停止接收后续位置更新
+   * 子类应覆写此方法将对象回滚到手势开始时的初始状态。
+   * 基类 _handleCancel 已包裹 withGeometryMutation，
+   * 覆写时只需恢复几何，无需关心引用失效与渲染刷新。
    * @param {Object} interaction - 当前交互上下文
    */
   cancelModifyGesture(interaction) {}
