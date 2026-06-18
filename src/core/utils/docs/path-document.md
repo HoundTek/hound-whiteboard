@@ -19,10 +19,10 @@
 
 | 名称                                           | 描述                               | 类型                         |
 | ---------------------------------------------- | ---------------------------------- | ---------------------------- |
-| `normalizePath(path = "/")`                    | 将路径规整为片段数组               | `string -> string[]`         |
-| `toAbsolutePath(segments = [])`                | 将片段数组转回绝对路径             | `string[] -> string`         |
-| `joinPath(...parts)`                           | 拼接多个路径段并输出绝对路径       | `string[] -> string`         |
-| `resolvePath(basePath = "/", targetPath = "")` | 在基准路径上解析相对路径或绝对路径 | `string -> string -> string` |
+| `normalizePath(path = "/")`                    | 将路径规整为片段数组               | `(string) => string[]`       |
+| `toAbsolutePath(segments = [])`                | 将片段数组转回绝对路径             | `(string[]) => string`       |
+| `joinPath(...parts)`                           | 拼接多个路径段并输出绝对路径       | `(string[]) => string`       |
+| `resolvePath(basePath = "/", targetPath = "")` | 在基准路径上解析相对路径或绝对路径 | `(string, string) => string` |
 
 ## 行为特点
 

@@ -119,15 +119,15 @@
 
 | 名称                            | 描述                           | 类型                                     |
 | ------------------------------- | ------------------------------ | ---------------------------------------- |
-| `getChunkById(chunkId)`         | 按区块 id 获取区块             | `number -> Chunk \| undefined`           |
-| `getChunkByCoordinate(x, y)`    | 按二维坐标获取区块             | `number -> number -> Chunk \| undefined` |
-| `unloadChunkById(chunkId)`      | 按区块 id 卸载区块             | `number -> boolean`                      |
-| `unloadChunkByCoordinate(x, y)` | 按坐标卸载区块                 | `number -> number -> boolean`            |
-| `clear()`                       | 卸载并清空当前持有集合         | `void -> boolean`                        |
-| `reset()`                       | 只重置持有集合，不触发卸载钩子 | `void -> void`                           |
-| `emitLoadRequest(...)`          | 发出区块加载请求               | `Chunk -> Object -> boolean`             |
-| `emitUnloadRequest(...)`        | 发出区块卸载请求               | `Chunk -> Object -> boolean`             |
-| `emitBufferUpdated(...)`        | 发出缓冲区更新事件             | `Object -> boolean`                      |
+| `getChunkById(chunkId)`         | 按区块 id 获取区块             | `(number) => Chunk \| undefined`         |
+| `getChunkByCoordinate(x, y)`    | 按二维坐标获取区块             | `(number, number) => Chunk \| undefined` |
+| `unloadChunkById(chunkId)`      | 按区块 id 卸载区块             | `(number) => boolean`                    |
+| `unloadChunkByCoordinate(x, y)` | 按坐标卸载区块                 | `(number, number) => boolean`            |
+| `clear()`                       | 卸载并清空当前持有集合         | `() => boolean`                          |
+| `reset()`                       | 只重置持有集合，不触发卸载钩子 | `() => void`                             |
+| `emitLoadRequest(...)`          | 发出区块加载请求               | `(Chunk, Object) => boolean`             |
+| `emitUnloadRequest(...)`        | 发出区块卸载请求               | `(Chunk, Object) => boolean`             |
+| `emitBufferUpdated(...)`        | 发出缓冲区更新事件             | `(Object) => boolean`                    |
 
 ## 实现状态
 

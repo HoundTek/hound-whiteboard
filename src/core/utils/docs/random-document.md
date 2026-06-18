@@ -38,14 +38,14 @@
 
 | 名称                    | 描述                   | 类型                                   |
 | ----------------------- | ---------------------- | -------------------------------------- |
-| `constructor(min, max)` | 创建随机数池           | `number -> number -> RandomNumberPool` |
-| `initFromArray(arr)`    | 用现有数组重建池状态   | `number[] -> void`                     |
-| `add(num)`              | 手动占用一个数字       | `number -> boolean`                    |
-| `include(num)`          | 判断数字是否已在池中   | `number -> boolean`                    |
-| `isFull()`              | 判断池是否已满         | `void -> boolean`                      |
-| `generate()`            | 生成一个新的不重复数字 | `void -> number`                       |
-| `remove(num)`           | 释放一个数字           | `number -> boolean`                    |
-| `rename(num)`           | 生成新数字并移除旧数字 | `number -> number`                     |
+| `constructor(min, max)` | 创建随机数池           | `(number, number) => RandomNumberPool` |
+| `initFromArray(arr)`    | 用现有数组重建池状态   | `(number[]) => void`                   |
+| `add(num)`              | 手动占用一个数字       | `(number) => boolean`                  |
+| `include(num)`          | 判断数字是否已在池中   | `(number) => boolean`                  |
+| `isFull()`              | 判断池是否已满         | `() => boolean`                        |
+| `generate()`            | 生成一个新的不重复数字 | `() => number`                         |
+| `remove(num)`           | 释放一个数字           | `(number) => boolean`                  |
+| `rename(num)`           | 生成新数字并移除旧数字 | `(number) => number`                   |
 
 ## 行为特点
 

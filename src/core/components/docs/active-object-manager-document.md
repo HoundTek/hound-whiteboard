@@ -243,64 +243,64 @@
 
 ### 公开方法
 
-| 名称                | 描述                                             | 类型                                     |
-| ------------------- | ------------------------------------------------ | ---------------------------------------- |
-| `add(objects)`      | 将白板外新对象加入动态图顶层                     | `Iterable<BasicObject> -> Layer`         |
-| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖区块范围内提取子图 | `Iterable<BasicObject> -> DirectedGraph` |
-| `choose(startFrom)` | 将对象集加入活动对象系统并分层                   | `Iterable<BasicObject> -> void`          |
-| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构     | `Iterable<BasicObject> -> void`          |
-| `discard(objects)`  | 取消活动对象选择，不提交回白板                   | `Iterable<BasicObject> -> void`          |
-| `liftup(objs)`      | 将对象置顶                                       | `Iterable<BasicObject> -> void`          |
-| `tidyup()`          | 清理动态图中的无效层和空层                       | `void -> void`                           |
+| 名称                | 描述                                             | 类型                                       |
+| ------------------- | ------------------------------------------------ | ------------------------------------------ |
+| `add(objects)`      | 将白板外新对象加入动态图顶层                     | `(Iterable<BasicObject>) => Layer`         |
+| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖区块范围内提取子图 | `(Iterable<BasicObject>) => DirectedGraph` |
+| `choose(startFrom)` | 将对象集加入活动对象系统并分层                   | `(Iterable<BasicObject>) => void`          |
+| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构     | `(Iterable<BasicObject>) => void`          |
+| `discard(objects)`  | 取消活动对象选择，不提交回白板                   | `(Iterable<BasicObject>) => void`          |
+| `liftup(objs)`      | 将对象置顶                                       | `(Iterable<BasicObject>) => void`          |
+| `tidyup()`          | 清理动态图中的无效层和空层                       | `() => void`                               |
 
 ### 渲染请求
 
-| 名称                                                   | 描述                                   | 类型                                             |
-| ------------------------------------------------------ | -------------------------------------- | ------------------------------------------------ |
-| `requestLiveRender(objects)`                           | 请求所有 monitor 刷新活动层            | `Iterable<BasicObject> -> void`                  |
-| `requestBaseRender(chunks)`                            | 请求所有 monitor 刷新静态层（区块级）  | `Iterable<Chunk> -> void`                        |
-| `requestBaseRenderForObjects(objects, fallbackChunks)` | 按对象范围请求静态层刷新，支持多级回退 | `Iterable<BasicObject>, Iterable<Chunk> -> void` |
+| 名称                                                   | 描述                                   | 类型                                               |
+| ------------------------------------------------------ | -------------------------------------- | -------------------------------------------------- |
+| `requestLiveRender(objects)`                           | 请求所有 monitor 刷新活动层            | `(Iterable<BasicObject>) => void`                  |
+| `requestBaseRender(chunks)`                            | 请求所有 monitor 刷新静态层（区块级）  | `(Iterable<Chunk>) => void`                        |
+| `requestBaseRenderForObjects(objects, fallbackChunks)` | 按对象范围请求静态层刷新，支持多级回退 | `(Iterable<BasicObject>, Iterable<Chunk>) => void` |
 
 ### 快照与失效
 
-| 名称                                                       | 描述                                   | 类型                                            |
-| ---------------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
-| `captureBaseObjectSnapshot(objects)`                       | 记录对象进入活动层前的世界范围快照     | `Iterable<BasicObject> -> void`                 |
-| `clearBaseObjectSnapshots(objects)`                        | 清理对象的静态层旧范围快照             | `Iterable<BasicObject> -> void`                 |
-| `collectBaseInvalidationObjects(objects, contexts)`        | 解析静态层对象级失效集合（含邻接对象） | `Iterable<BasicObject>, Array -> BasicObject[]` |
-| `collectStaticGraphNeighborIds(objectId, coveredChunkIds)` | 收集对象在静态图中的邻接对象 id        | `number, Iterable<number> -> Set<number>`       |
+| 名称                                                       | 描述                                   | 类型                                              |
+| ---------------------------------------------------------- | -------------------------------------- | ------------------------------------------------- |
+| `captureBaseObjectSnapshot(objects)`                       | 记录对象进入活动层前的世界范围快照     | `(Iterable<BasicObject>) => void`                 |
+| `clearBaseObjectSnapshots(objects)`                        | 清理对象的静态层旧范围快照             | `(Iterable<BasicObject>) => void`                 |
+| `collectBaseInvalidationObjects(objects, contexts)`        | 解析静态层对象级失效集合（含邻接对象） | `(Iterable<BasicObject>, Array) => BasicObject[]` |
+| `collectStaticGraphNeighborIds(objectId, coveredChunkIds)` | 收集对象在静态图中的邻接对象 id        | `(number, Iterable<number>) => Set<number>`       |
 
 ### 关系计算
 
-| 名称                                                                         | 描述                             | 类型                                                                                              |
-| ---------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `calculateStaticRelations(obj, coveredChunkIds, applyingObjectIds, options)` | 计算对象在静态图中的上下关系     | `BasicObject, Set<number>, Set<number>, {includeUntrackedCoveredObjectsBelow?} -> {below, above}` |
-| `calculateCoveredChunkIds(obj)`                                              | 计算对象覆盖区块集合             | `BasicObject -> Set<number>`                                                                      |
-| `intersectsObjects(left, right)`                                             | 判断两个对象是否在世界坐标中相交 | `BasicObject, BasicObject -> boolean`                                                             |
-| `collectCoveredStaticObjectIds(coveredChunkIds)`                             | 收集覆盖区块中的静态对象 id      | `Iterable<number> -> Set<number>`                                                                 |
+| 名称                                                                         | 描述                             | 类型                                                                                                |
+| ---------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `calculateStaticRelations(obj, coveredChunkIds, applyingObjectIds, options)` | 计算对象在静态图中的上下关系     | `(BasicObject, Set<number>, Set<number>, {includeUntrackedCoveredObjectsBelow?}) => {below, above}` |
+| `calculateCoveredChunkIds(obj)`                                              | 计算对象覆盖区块集合             | `(BasicObject) => Set<number>`                                                                      |
+| `intersectsObjects(left, right)`                                             | 判断两个对象是否在世界坐标中相交 | `(BasicObject, BasicObject) => boolean`                                                             |
+| `collectCoveredStaticObjectIds(coveredChunkIds)`                             | 收集覆盖区块中的静态对象 id      | `(Iterable<number>) => Set<number>`                                                                 |
 
 ### 内部工具
 
-| 名称                                                   | 描述                                          | 类型                                      |
-| ------------------------------------------------------ | --------------------------------------------- | ----------------------------------------- |
-| `requireObjectInstance(obj)`                           | 断言输入为 BasicObject 实例，否则抛 TypeError | `* -> BasicObject`                        |
-| `registerActiveObject(obj)`                            | 注册活动对象实例到索引                        | `BasicObject -> void`                     |
-| `unregisterActiveObject(objectId)`                     | 从活动对象索引和 onLayer 映射中移除           | `number -> void`                          |
-| `resolveObjectChunk(obj)`                              | 解析对象所属起始区块                          | `BasicObject -> Chunk`                    |
-| `createChunkBlockLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `-> ChunkBlockLoader`                     |
-| `getObjectWorldRange(obj)`                             | 获取对象世界坐标范围                          | `BasicObject -> Range`                    |
-| `findBoardObjectInstance(objectId, candidateChunkIds)` | 在白板全局和覆盖区块中查找对象实例            | `number, Iterable<number> -> BasicObject` |
+| 名称                                                   | 描述                                          | 类型                                        |
+| ------------------------------------------------------ | --------------------------------------------- | ------------------------------------------- |
+| `requireObjectInstance(obj)`                           | 断言输入为 BasicObject 实例，否则抛 TypeError | `(*) => BasicObject`                        |
+| `registerActiveObject(obj)`                            | 注册活动对象实例到索引                        | `(BasicObject) => void`                     |
+| `unregisterActiveObject(objectId)`                     | 从活动对象索引和 onLayer 映射中移除           | `(number) => void`                          |
+| `resolveObjectChunk(obj)`                              | 解析对象所属起始区块                          | `(BasicObject) => Chunk`                    |
+| `createChunkBlockLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `-> ChunkBlockLoader`                       |
+| `getObjectWorldRange(obj)`                             | 获取对象世界坐标范围                          | `(BasicObject) => Range`                    |
+| `findBoardObjectInstance(objectId, candidateChunkIds)` | 在白板全局和覆盖区块中查找对象实例            | `(number, Iterable<number>) => BasicObject` |
 
 ### 层操作
 
-| 名称                                           | 描述                                      | 类型                       |
-| ---------------------------------------------- | ----------------------------------------- | -------------------------- |
-| `insertLayerUnder(layerNow, layerAbove)`       | 将某层插入到另一层之下                    | `Layer, Layer -> void`     |
-| `insertLayerUnderById(layerNow, layerAboveId)` | 将某层插入到另一层（用 id 表示）之下      | `Layer, number -> void`    |
-| `insertLayerToTop(layerNow)`                   | 将某层插入至顶层                          | `Layer -> void`            |
-| `compareLayerOrderById(layer1, layer2)`        | 比较两层（用 id 表示）的层次顺序          | `number, number -> number` |
-| `compareLayerOrder(layer1, layer2)`            | 比较两层实例的层次顺序                    | `Layer, Layer -> number`   |
-| `purgeLayerMappings(layer)`                    | 清理给定层的 `onLayer` 映射和 `layerPool` | `Layer -> void`            |
+| 名称                                           | 描述                                      | 类型                         |
+| ---------------------------------------------- | ----------------------------------------- | ---------------------------- |
+| `insertLayerUnder(layerNow, layerAbove)`       | 将某层插入到另一层之下                    | `(Layer, Layer) => void`     |
+| `insertLayerUnderById(layerNow, layerAboveId)` | 将某层插入到另一层（用 id 表示）之下      | `(Layer, number) => void`    |
+| `insertLayerToTop(layerNow)`                   | 将某层插入至顶层                          | `(Layer) => void`            |
+| `compareLayerOrderById(layer1, layer2)`        | 比较两层（用 id 表示）的层次顺序          | `(number, number) => number` |
+| `compareLayerOrder(layer1, layer2)`            | 比较两层实例的层次顺序                    | `(Layer, Layer) => number`   |
+| `purgeLayerMappings(layer)`                    | 清理给定层的 `onLayer` 映射和 `layerPool` | `(Layer) => void`            |
 
 ## 实现状态
 

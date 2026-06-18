@@ -34,15 +34,15 @@
 
 | 名称                     | 描述                     | 类型                    |
 | ------------------------ | ------------------------ | ----------------------- |
-| `append(value)`          | 在尾部追加节点           | `any -> void`           |
-| `prepend(value)`         | 在头部插入节点           | `any -> void`           |
-| `insertAt(value, index)` | 在指定索引插入节点       | `any -> number -> void` |
-| `removeAt(index)`        | 删除指定索引节点并返回值 | `number -> any`         |
-| `getAt(index)`           | 获取指定索引值           | `number -> any`         |
-| `indexOf(value)`         | 查找值对应索引           | `any -> number`         |
-| `isEmpty()`              | 判断链表是否为空         | `void -> boolean`       |
-| `size()`                 | 获取链表长度             | `void -> number`        |
-| `clear()`                | 清空链表                 | `void -> void`          |
+| `append(value)`          | 在尾部追加节点           | `(any) => void`         |
+| `prepend(value)`         | 在头部插入节点           | `(any) => void`         |
+| `insertAt(value, index)` | 在指定索引插入节点       | `(any, number) => void` |
+| `removeAt(index)`        | 删除指定索引节点并返回值 | `(number) => any`       |
+| `getAt(index)`           | 获取指定索引值           | `(number) => any`       |
+| `indexOf(value)`         | 查找值对应索引           | `(any) => number`       |
+| `isEmpty()`              | 判断链表是否为空         | `() => boolean`         |
+| `size()`                 | 获取链表长度             | `() => number`          |
+| `clear()`                | 清空链表                 | `() => void`            |
 
 ## 行为特点
 
