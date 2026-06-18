@@ -111,6 +111,15 @@ class ActiveObjectManager {
   baseObjectSnapshotWorldRanges;
 
   /**
+   * 活动对象进入动态图前的覆盖区块快照
+   * @description 用于在 apply 时正确识别应从哪些旧区块中移除对象。
+   *   和 baseObjectSnapshotWorldRanges 不同，该快照不依赖 ownerChunk 的覆盖索引，
+   *   因此多次 apply 间移动对象时仍能定位到正确的旧覆盖区块。
+   * @type {Map<number, Set<number>>}
+   */
+  baseObjectSnapshotCoverChunks;
+
+  /**
    * 所属白板
    * @type {import("./board.js").Board | undefined}
    */
@@ -125,6 +134,7 @@ class ActiveObjectManager {
     this.activeObjects = new Set();
     this.activeObjectIndex = new Map();
     this.baseObjectSnapshotWorldRanges = new Map();
+    this.baseObjectSnapshotCoverChunks = new Map();
   }
 
   /**
@@ -147,6 +157,23 @@ class ActiveObjectManager {
   }
 
   /**
+   * 记录对象进入活动层前的覆盖区块快照
+   * @param {Iterable<BasicObject>} [objects = []] - 待记录对象集合
+   */
+  captureBaseObjectCoverChunks(objects = []) {
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      if (this.baseObjectSnapshotCoverChunks.has(objectInstance.id)) continue;
+
+      const coveredChunkIds = this.calculateCoveredChunkIds(objectInstance);
+      this.baseObjectSnapshotCoverChunks.set(
+        objectInstance.id,
+        new Set(coveredChunkIds),
+      );
+    }
+  }
+
+  /**
    * 清理对象的静态层旧范围快照
    * @param {Iterable<BasicObject>} [objects = []] - 待清理对象集合
    */
@@ -154,6 +181,7 @@ class ActiveObjectManager {
     for (const entry of objects ?? []) {
       const objectInstance = this.requireObjectInstance(entry);
       this.baseObjectSnapshotWorldRanges.delete(objectInstance.id);
+      this.baseObjectSnapshotCoverChunks.delete(objectInstance.id);
     }
   }
 
@@ -730,6 +758,7 @@ class ActiveObjectManager {
       activeEntries.map((item) => [item.id, item]),
     );
     this.captureBaseObjectSnapshot(activeEntries);
+    this.captureBaseObjectCoverChunks(activeEntries);
     startFrom = null; // 释放内存
 
     // 获取对象所在层
@@ -1022,6 +1051,7 @@ class ActiveObjectManager {
           const wasOnBoard =
             this.board?.getObjectById?.(obj.id) instanceof BasicObject;
           const previousCoveredChunkIds =
+            this.baseObjectSnapshotCoverChunks.get(obj.id) ??
             ownerChunk.objectManager?.getObjectCoverChunks?.(obj.id) ??
             new Set([ownerChunk.id]);
           for (const chunkId of previousCoveredChunkIds) {
@@ -1031,15 +1061,34 @@ class ActiveObjectManager {
           for (const chunkId of coveredChunkIds) {
             affectedChunkIds.add(chunkId);
           }
+          // 在清理旧区块前收集旧邻接对象，避免清理后丢失
+          const previousNeighborIds = this.collectStaticGraphNeighborIds(
+            obj.id,
+            previousCoveredChunkIds,
+          );
           return {
             obj,
             ownerChunk,
             wasOnBoard,
             previousCoveredChunkIds,
             coveredChunkIds,
+            previousNeighborIds,
           };
         })
         .filter(Boolean);
+
+      // 从不再覆盖的旧区块中移除对象
+      for (const {
+        obj,
+        previousCoveredChunkIds,
+        coveredChunkIds,
+      } of applyContexts) {
+        for (const staleChunkId of previousCoveredChunkIds) {
+          if (coveredChunkIds.has(staleChunkId)) continue;
+          const staleChunk = this.board.getChunkById(staleChunkId);
+          staleChunk?.removeObject(obj.id);
+        }
+      }
 
       // 确保所有对象都被加入区块
       for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
@@ -1048,6 +1097,19 @@ class ActiveObjectManager {
           if (!chunk) continue;
           chunk.addObject(chunkId === ownerChunk.id ? obj : obj.id);
           chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
+        }
+      }
+
+      // 清除对象在覆盖区块中的旧边，避免对象移动后残留之前的关系
+      for (const { obj, coveredChunkIds } of applyContexts) {
+        for (const chunkId of coveredChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          if (!chunk?.objectManager) continue;
+          const graph = chunk.objectManager.staticGraph;
+          if (graph.hasNode(obj.id)) {
+            graph.deleteNodeUnsafe(obj.id);
+            graph.addNodeUnsafe(obj.id);
+          }
         }
       }
 
@@ -1062,7 +1124,7 @@ class ActiveObjectManager {
           obj,
           coveredChunkIds,
           applyingObjectIds,
-          { includeUntrackedCoveredObjectsBelow: !wasOnBoard },
+          { includeUntrackedCoveredObjectsBelow: true },
         );
         for (const chunkId of coveredChunkIds) {
           const chunk = this.board.getChunkById(chunkId);
@@ -1082,13 +1144,18 @@ class ActiveObjectManager {
         activeBasicObjects.length,
         ...this.collectBaseInvalidationObjects(
           activeBasicObjects,
-          applyContexts.map(({ obj, coveredChunkIds }) => ({
-            coveredChunkIds,
-            relatedObjectIds: this.collectStaticGraphNeighborIds(
-              obj.id,
+          applyContexts.map(
+            ({ obj, coveredChunkIds, previousNeighborIds }) => ({
               coveredChunkIds,
-            ),
-          })),
+              relatedObjectIds: new Set([
+                ...(previousNeighborIds ?? []),
+                ...(this.collectStaticGraphNeighborIds(
+                  obj.id,
+                  coveredChunkIds,
+                ) ?? []),
+              ]),
+            }),
+          ),
         ),
       );
     }

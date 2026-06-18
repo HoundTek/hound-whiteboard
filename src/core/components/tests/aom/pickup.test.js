@@ -437,4 +437,33 @@ describe("ActiveObjectManager/pickup", () => {
       ).toBe(true);
     });
   });
+
+  describe("优先使用 Board.createChunkBlockLoader", () => {
+    test("pickup 应优先使用 Board.createChunkBlockLoader 且不再要求 Chunk 入参", () => {
+      const chunk = createChunk(1);
+      chunk.objectManager = new ChunkObjectManager(1);
+      chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
+
+      const board = {
+        createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+        getChunkById: jest.fn((chunkId) => (chunkId === 1 ? chunk : undefined)),
+      };
+      const aom = new ActiveObjectManager(board);
+
+      const pickup8 = aom.pickup(
+        new Set([new BasicObject(new Vector(0, 0), 8, 1)]),
+      );
+      const expected8 = DirectedGraph.parse([
+        [8, [4, 5]],
+        [4, [2]],
+        [5, [2, 3]],
+        [2, [1]],
+        [3, [1]],
+        [1, []],
+      ]);
+
+      expect(board.createChunkBlockLoader).toHaveBeenCalled();
+      expect(pickup8.equals(expected8)).toBe(true);
+    });
+  });
 });

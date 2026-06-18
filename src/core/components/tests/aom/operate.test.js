@@ -145,7 +145,7 @@ describe("ActiveObjectManager/operate", () => {
         ]),
       );
       // 取消选择 5
-      aom.apply(new Set([object5]));
+      aom.discard(new Set([object5]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set()];
       const expectedInactiveGraph = [
@@ -185,7 +185,7 @@ describe("ActiveObjectManager/operate", () => {
         ]),
       );
       // 取消选择 5, 13
-      aom.apply(new Set([object5, object13]));
+      aom.discard(new Set([object5, object13]));
 
       const expectedActiveSet = [new Set([12]), new Set()];
       const expectedInactiveGraph = [
@@ -225,7 +225,7 @@ describe("ActiveObjectManager/operate", () => {
         ]),
       );
       // 取消选择 12, 13
-      aom.apply(new Set([object12, object13]));
+      aom.discard(new Set([object12, object13]));
 
       const expectedActiveSet = [new Set([5])];
       const expectedInactiveGraph = [

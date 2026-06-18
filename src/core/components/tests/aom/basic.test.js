@@ -50,5 +50,23 @@ describe("ActiveObjectManager/basic", () => {
         [stroke],
       );
     });
+
+    test("add 应将白板外新对象注册到动态图顶层", () => {
+      const aom = new ActiveObjectManager();
+      const lower = new StrokeObject(new Vector(0, 0), 30, 1);
+      lower.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
+      const upper = new StrokeObject(new Vector(0, 0), 31, 1);
+      upper.setPathPoints([new Vector(2, 2), new Vector(6, 6)]);
+
+      const firstLayer = aom.add(new Set([lower]));
+      const secondLayer = aom.add(new Set([upper]));
+
+      expect(firstLayer.activeObjects).toEqual(new Set([30]));
+      expect(secondLayer.activeObjects).toEqual(new Set([31]));
+      expect(aom.activeObjects).toEqual(new Set([lower, upper]));
+      expect(aom.layerOrder).toEqual([firstLayer, secondLayer]);
+      expect(aom.onLayer.get(30)).toBe(firstLayer);
+      expect(aom.onLayer.get(31)).toBe(secondLayer);
+    });
   });
 });

@@ -303,6 +303,19 @@ class Chunk {
   }
 
   /**
+   * 从区块静态图中移除对象
+   * @param {number} objectId - 要移除的对象 id
+   */
+  removeObject(objectId) {
+    if (!this.objectManager) return;
+    const graph = this.objectManager.staticGraph;
+    if (graph.hasNode(objectId)) {
+      graph.deleteNodeUnsafe(objectId);
+    }
+    this.objectManager.objectCoverChunks.delete(objectId);
+  }
+
+  /**
    * 完整加载该区块
    * @description
    * @param {string} boardRootPath - 白板根目录
