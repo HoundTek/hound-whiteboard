@@ -550,5 +550,39 @@ describe("ActiveObjectManager/apply", () => {
         new Set([chunkId00]),
       );
     });
+
+    test("apply 同层活动的对象时应保留指向同层非活动对象的边缘", () => {
+      const board = new Board();
+      board.width = 10;
+      board.height = 10;
+
+      const circle = new CircleObject(new Vector(5, 5), 1, 1, 20);
+      const stroke = new StrokeObject(new Vector(0, 0), 2, 1);
+      stroke.setPathPoints([
+        new Vector(0, 0),
+        new Vector(9, 0),
+        new Vector(9, 9),
+      ]);
+
+      board.addObject(circle, 1);
+      board.addObject(stroke, 1);
+
+      // 手动建立静态边缘：圆(1) → 线(2)，表示线在圆之上
+      const graph = board.getChunkById(1).objectManager.staticGraph;
+      graph.addEdgeUnsafe(1, 2);
+
+      expect(graph.hasEdge(1, 2)).toBe(true);
+
+      // 仅选中圆（不选线）→ choose 会将线作为同层 inactive 加入
+      board.activeObjectManager.choose(new Set([circle]));
+
+      // apply 仅提交圆
+      board.activeObjectManager.apply(new Set([circle]));
+
+      // 圆→线的边缘应保留
+      expect(graph.hasNode(1)).toBe(true);
+      expect(graph.hasNode(2)).toBe(true);
+      expect(graph.hasEdge(1, 2)).toBe(true);
+    });
   });
 });

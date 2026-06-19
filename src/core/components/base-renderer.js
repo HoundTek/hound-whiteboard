@@ -523,11 +523,12 @@ class BaseRenderer {
     if (!ctx) return [];
 
     const allDrawables = this.collectStaticDrawables();
-    // 过滤掉当前在 AOM 活跃层中的对象，避免 BaseRenderer 与 LiveRenderer 双渲染
+    // 过滤掉当前在 AOM 中的对象（无论活跃与否），避免 BaseRenderer 与 LiveRenderer 双渲染
     const aom = this.monitor?.board?.activeObjectManager;
-    const drawables = aom
-      ? allDrawables.filter((obj) => !aom.activeObjectIndex?.has(obj.id))
-      : allDrawables;
+    const drawables =
+      typeof aom?.has === "function"
+        ? allDrawables.filter((obj) => !aom.has(obj.id))
+        : allDrawables;
     const drawableEntries = this.createDrawableEntries(drawables);
     const viewportContext = this.createViewportContext(ctx);
     const hasExplicitDirtyRects =

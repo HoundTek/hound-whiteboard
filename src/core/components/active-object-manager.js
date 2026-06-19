@@ -112,9 +112,10 @@ class ActiveObjectManager {
 
   /**
    * 活动对象进入动态图前的覆盖区块快照
-   * @description 用于在 apply 时正确识别应从哪些旧区块中移除对象。
-   *   和 baseObjectSnapshotWorldRanges 不同，该快照不依赖 ownerChunk 的覆盖索引，
-   *   因此多次 apply 间移动对象时仍能定位到正确的旧覆盖区块。
+   * @description
+   * 用于在 apply 时正确识别应从哪些旧区块中移除对象。
+   * 和 baseObjectSnapshotWorldRanges 不同，该快照不依赖 ownerChunk 的覆盖索引，
+   * 因此多次 apply 间移动对象时仍能定位到正确的旧覆盖区块。
    * @type {Map<number, Set<number>>}
    */
   baseObjectSnapshotCoverChunks;
@@ -538,6 +539,15 @@ class ActiveObjectManager {
 
   /**
    * 计算对象在静态图中的上下关系
+   * @description
+   * 遍历 AOM 所有层，对每层的非活动对象按层位置确定 below/above：
+   *
+   * - 低层 → `below`（在 applied 对象之下）
+   * - 同层 → `above`（因为 pickup 只遍历下游，同层非活动一定在 applied 之上）
+   * - 高层 → `above`（在 applied 对象之上）
+   *
+   * 此外，若 `includeUntrackedCoveredObjectsBelow` 为 true，
+   * 还会扫描覆盖区块中所有不在 AOM 中的静态对象，与 applied 对象相交的加入 `below`。
    * @param {BasicObject} obj - 要计算的对象实例
    * @param {Set<number>} coveredChunkIds - 该对象的覆盖区块集合
    * @param {Set<number>} applyingObjectIds - 正在被提交的对象 id 集合
@@ -575,6 +585,11 @@ class ActiveObjectManager {
         if (index < currentLayerIndex) {
           relation.below.add(nodeId);
         } else if (index > currentLayerIndex) {
+          relation.above.add(nodeId);
+        } else {
+          // 同层 inactive：pickup 从活动对象出发只沿下游遍历（逆边缘方向），
+          // 因此同层 inactive 对象在原始静态图中一定处于活动对象的下游
+          // （即放在活动对象之上）。apply 时应恢复为 `above`。
           relation.above.add(nodeId);
         }
       }
@@ -748,8 +763,9 @@ class ActiveObjectManager {
 
   /**
    * 选取非活动对象并加入活动对象管理器
-   * @description 通过 pickup 提取子图，按层依赖关系为对象分配动态层，
-   *   再将新层插入到 layerOrder 中的正确位置。
+   * @description
+   * 通过 pickup 提取子图，按层依赖关系为对象分配动态层，
+   * 再将新层插入到 layerOrder 中的正确位置。
    * @param {Iterable<BasicObject>} startFrom - 要选择的对象集合
    */
   choose(startFrom) {
@@ -1024,9 +1040,10 @@ class ActiveObjectManager {
 
   /**
    * 应用活动对象并取消选择
-   * @description 将活动对象按当前动态层关系提交回白板区块静态结构，
-   *   清理旧覆盖区块中的残留边，重新计算静态图上下关系，
-   *   最后触发 base 层和 live 层渲染。
+   * @description
+   * 将活动对象按当前动态层关系提交回白板区块静态结构，
+   * 清理旧覆盖区块中的残留边，重新计算静态图上下关系，
+   * 最后触发 base 层和 live 层渲染。
    * @param {Iterable<BasicObject>} objects
    */
   apply(objects) {
@@ -1182,10 +1199,11 @@ class ActiveObjectManager {
 
   /**
    * 将对象从白板上移除并取消选择
-   * @description 从所有覆盖区块的 ChunkObjectManager 静态图中彻底删除对象，
-   *   同时清理活动对象索引和动态图层。
-   *   与 apply 不同，remove 不会把对象写回静态图，而是从静态图中移除。
-   *   与 discard 不同，remove 会同步修改白板区块静态结构。
+   * @description
+   * 从所有覆盖区块的 ChunkObjectManager 静态图中彻底删除对象，
+   * 同时清理活动对象索引和动态图层。
+   * 与 apply 不同，remove 不会把对象写回静态图，而是从静态图中移除。
+   * 与 discard 不同，remove 会同步修改白板区块静态结构。
    * @param {Iterable<BasicObject>} objects
    */
   remove(objects) {
@@ -1271,8 +1289,10 @@ class ActiveObjectManager {
 
   /**
    * 取消活动对象而不提交回白板
-   * @description 仅从动态图活动层中移除对象，不修改区块静态结构。
-   *   适合临时取消选择、撤销等不需要同步静态图的场景。
+   * @description
+   * 仅从动态图活动层中移除对象，不修改区块静态结构。
+   * 适合临时取消选择、撤销等不需要同步静态图的场景。
+   * 会触发静态层局部重绘，使被丢弃的对象重新在 BaseRenderer 中显示。
    * @param {Iterable<BasicObject>} objects
    */
   discard(objects) {
@@ -1292,6 +1312,15 @@ class ActiveObjectManager {
     // 请求静态层刷新：对象已从 AOM 丢弃回静态图，需重新在 BaseRenderer 中出现
     this.requestBaseRenderForObjects(normalizedObjects, []);
     this.clearBaseObjectSnapshots(normalizedObjects);
+  }
+
+  /**
+   * 判断指定对象 id 是否当前在 AOM 中（不论活跃与否）
+   * @param {number} objectId - 对象 id
+   * @returns {boolean}
+   */
+  has(objectId) {
+    return this.onLayer.has(objectId);
   }
 
   /**

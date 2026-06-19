@@ -26,6 +26,8 @@
 - `activeObjects`：本层活动对象 id 集合
 - `inactiveGraph`：本层非活动对象子图
 
+**层内渲染顺序**：同一层中，活动对象（`activeObjects`）先渲染（底部），非活动对象（`inactiveGraph` 按拓扑序）后渲染（顶部）。
+
 ### ActiveObjectManager
 
 主要字段：
@@ -269,16 +271,17 @@
 
 ### 公开方法
 
-| 名称                | 描述                                             | 类型                                       |
-| ------------------- | ------------------------------------------------ | ------------------------------------------ |
-| `add(objects)`      | 将白板外新对象加入动态图顶层                     | `(Iterable<BasicObject>) => Layer`         |
-| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖区块范围内提取子图 | `(Iterable<BasicObject>) => DirectedGraph` |
-| `choose(startFrom)` | 将对象集加入活动对象系统并分层                   | `(Iterable<BasicObject>) => void`          |
-| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构     | `(Iterable<BasicObject>) => void`          |
-| `discard(objects)`  | 取消活动对象选择，不提交回白板                   | `(Iterable<BasicObject>) => void`          |
-| `remove(objects)`   | 从白板区块静态图中删除对象并取消活动状态         | `(Iterable<BasicObject>) => void`          |
-| `liftup(objs)`      | 将对象置顶                                       | `(Iterable<BasicObject>) => void`          |
-| `tidyup()`          | 清理动态图中的无效层和空层                       | `() => void`                               |
+| 名称                | 描述                                              | 类型                                       |
+| ------------------- | ------------------------------------------------- | ------------------------------------------ |
+| `add(objects)`      | 将白板外新对象加入动态图顶层                      | `(Iterable<BasicObject>) => Layer`         |
+| `pickup(startFrom)` | 以起点对象集为入口，在二维覆盖区块范围内提取子图  | `(Iterable<BasicObject>) => DirectedGraph` |
+| `choose(startFrom)` | 将对象集加入活动对象系统并分层                    | `(Iterable<BasicObject>) => void`          |
+| `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构      | `(Iterable<BasicObject>) => void`          |
+| `discard(objects)`  | 取消活动对象选择，不提交回白板                    | `(Iterable<BasicObject>) => void`          |
+| `remove(objects)`   | 从白板区块静态图中删除对象并取消活动状态          | `(Iterable<BasicObject>) => void`          |
+| `liftup(objs)`      | 将对象置顶                                        | `(Iterable<BasicObject>) => void`          |
+| `tidyup()`          | 清理动态图中的无效层和空层                        | `() => void`                               |
+| `has(objectId)`     | 判断指定对象 id 当前是否在 AOM 中（不论活跃与否） | `(number) => boolean`                      |
 
 ### 渲染请求
 
@@ -314,7 +317,7 @@
 | `registerActiveObject(obj)`                            | 注册活动对象实例到索引                        | `(BasicObject) => void`                     |
 | `unregisterActiveObject(objectId)`                     | 从活动对象索引和 onLayer 映射中移除           | `(number) => void`                          |
 | `resolveObjectChunk(obj)`                              | 解析对象所属起始区块                          | `(BasicObject) => Chunk`                    |
-| `createChunkBlockLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `() => ChunkBlockLoader`                       |
+| `createChunkBlockLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `() => ChunkBlockLoader`                    |
 | `getObjectWorldRange(obj)`                             | 获取对象世界坐标范围                          | `(BasicObject) => Range`                    |
 | `findBoardObjectInstance(objectId, candidateChunkIds)` | 在白板全局和覆盖区块中查找对象实例            | `(number, Iterable<number>) => BasicObject` |
 

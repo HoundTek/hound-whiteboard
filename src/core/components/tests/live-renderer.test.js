@@ -223,7 +223,7 @@ describe("LiveRenderer", () => {
     });
   });
 
-  test("应按 layer.inactiveGraph 拓扑序先绘制同层非活动对象，再绘制活动对象", () => {
+  test("应先在层内绘制活动对象，再按 inactiveGraph 拓扑序绘制非活动对象", () => {
     const calls = [];
     const inactiveLower = new FakeObject(11, new Vector(0, 0), calls);
     const inactiveUpper = new FakeObject(12, new Vector(5, 5), calls);
@@ -257,11 +257,11 @@ describe("LiveRenderer", () => {
     const renderer = new LiveRenderer(monitor, aom);
     const drawables = renderer.render();
 
-    expect(drawables).toEqual([inactiveLower, inactiveUpper, active]);
+    expect(drawables).toEqual([active, inactiveLower, inactiveUpper]);
     expect(calls.filter((entry) => entry.type === "render")).toEqual([
+      { type: "render", id: 13 },
       { type: "render", id: 11 },
       { type: "render", id: 12 },
-      { type: "render", id: 13 },
     ]);
   });
 
@@ -323,7 +323,7 @@ describe("LiveRenderer", () => {
     expect(seenObjectIds).toEqual(new Set([31, 32]));
   });
 
-  test("collectLayerDrawables 应保持同层 inactive 在前、active 在后", () => {
+  test("collectLayerDrawables 应保持同层 active 在前、inactive 在后", () => {
     const calls = [];
     const inactive = new FakeObject(41, new Vector(0, 0), calls);
     const active = new FakeObject(42, new Vector(10, 10), calls);
@@ -347,7 +347,7 @@ describe("LiveRenderer", () => {
 
     const drawables = renderer.collectLayerDrawables(layer, new Set());
 
-    expect(drawables).toEqual([inactive, active]);
+    expect(drawables).toEqual([active, inactive]);
   });
 
   test("render 传入 dirtyRects 时应只清理并重绘命中的对象", () => {
