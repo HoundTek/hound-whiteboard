@@ -27,10 +27,10 @@ description: Write module documentation, technical overviews, and API docs follo
 
 JSDoc 中的 `@module` 路径与源码路径对应，前缀为 `core/`：
 
-| 源文件路径 | `@module` |
-|-----------|-----------|
-| `src/core/components/board.js` | `core/components/board` |
-| `src/core/devices-dag/dag.js` | `core/devices-dag/dag` |
+| 源文件路径                                 | `@module`                           |
+| ------------------------------------------ | ----------------------------------- |
+| `src/core/components/board.js`             | `core/components/board`             |
+| `src/core/devices-dag/dag.js`              | `core/devices-dag/dag`              |
 | `src/core/tools/creator/stroke-creator.js` | `core/tools/creator/stroke-creator` |
 
 ## 文档文风

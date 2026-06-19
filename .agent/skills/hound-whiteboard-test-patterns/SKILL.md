@@ -28,6 +28,7 @@ src/core/
 ```
 
 **规则**：
+
 1. `board-input-flow.test.js` **禁止**放置具体工具的端到端测试 — 只放路由基础设施测试（使用 `CollectingTool` 等通用 Mock）
 2. 每个工具的测试 **必须**放在该工具的 `tests/` 目录下，不得跨文件混放
 3. 迁移测试后 **必须清理**被迁移文件的 import 语句
@@ -40,8 +41,8 @@ src/core/
 
 ```js
 board.monitors.set("main", monitor);
-board.width = 800;    // ← 必须！否则 chunkWidth = 0
-board.height = 600;   // ← 必须！否则 chunkHeight = 0
+board.width = 800; // ← 必须！否则 chunkWidth = 0
+board.height = 600; // ← 必须！否则 chunkHeight = 0
 ```
 
 `Monitor.chunkWidth` 的 getter 是 `this.board?.width ?? 0`。不设置则 `worldToChunk` 返回 null → `resolveOwnerChunkId` 返回 undefined → `ensureObject` 返回 false → **对象创建静默失败**。如果测试不涉及位置→区块解析（如纯 DAG 路由测试、Mock 测试），可以省略。
@@ -53,10 +54,13 @@ board.height = 600;   // ← 必须！否则 chunkHeight = 0
 ```js
 const accumulatedContext = { board, monitor };
 
-monitor.devicesDAG.dispatch({
-  to: "/main/workflow",
-  signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
-}, accumulatedContext);   // ← 必须！
+monitor.devicesDAG.dispatch(
+  {
+    to: "/main/workflow",
+    signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
+  },
+  accumulatedContext,
+); // ← 必须！
 ```
 
 原因：通过 `builder.node().tool(tool)` 挂载的工具有 `toolContext = {}`，`board` 和 `monitor` 只能从 dispatch 的 accumulated context 获取。而 `board.signalsEventBus.emit("input", ...)` 内部已自动添加该上下文，不需要手动传递。
@@ -79,12 +83,12 @@ emit("input", {
 
 手势生命周期：
 
-| 信号 | 作用 |
-|------|------|
-| 首个 `position` | 记录锚点，启动手势（对象暂不动） |
+| 信号            | 作用                               |
+| --------------- | ---------------------------------- |
+| 首个 `position` | 记录锚点，启动手势（对象暂不动）   |
 | 后续 `position` | 以锚点为基准计算位移并更新对象位置 |
-| `end` | 结束手势，对象保留在 AOM 动态图中 |
-| `success` | 将修改提交到静态图 |
+| `end`           | 结束手势，对象保留在 AOM 动态图中  |
+| `success`       | 将修改提交到静态图                 |
 
 **例外**：`handoff-handler.test.js` 中有一个测试使用了 `displacement` 信号，但那是发给 **Mock Modifier** 的，不是发给 `CommonObjectModifierTool` 的，合法。
 
@@ -108,7 +112,3 @@ expect(AOM.size).toBe(1);
 ```
 
 `.not.toBeNull()` 仅应在结构验证（如检查 DAG 节点是否存在）时使用。
-
-## 当前违规扫描
-
-最后检查时间：2026-06-10。64 个测试套件、861 个测试，**0 项遗留违规**。
