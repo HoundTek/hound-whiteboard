@@ -11,7 +11,7 @@ import { RectangleRange } from "../../../range/index.js";
 import { oneChunkData } from "./data.js";
 
 describe("ActiveObjectManager/remove", () => {
-  describe("basic remove", () => {
+  describe("基础删除", () => {
     test("remove 应将对象从区块静态图中移除", () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -180,7 +180,7 @@ describe("ActiveObjectManager/remove", () => {
     });
   });
 
-  describe("rendering triggers", () => {
+  describe("渲染触发", () => {
     test("remove 应触发 liveRenderer.invalidateObjects", () => {
       const liveRenderer = {
         collectActiveDrawables: jest.fn(() => []),
@@ -301,7 +301,7 @@ describe("ActiveObjectManager/remove", () => {
     });
   });
 
-  describe("snapshot cleanup", () => {
+  describe("快照清理", () => {
     test("remove 应清理 baseObjectSnapshotWorldRanges", () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -368,7 +368,7 @@ describe("ActiveObjectManager/remove", () => {
     });
   });
 
-  describe("static graph neighbor cleanup", () => {
+  describe("静态图邻接清理", () => {
     test("remove 应将邻接对象纳入 base 层失效", () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -462,7 +462,7 @@ describe("ActiveObjectManager/remove", () => {
     });
   });
 
-  describe("mixed scenarios", () => {
+  describe("混合场景", () => {
     test("remove 应支持同时移除活动和静态对象", () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -568,7 +568,7 @@ describe("ActiveObjectManager/remove", () => {
     });
   });
 
-  describe("cross-chunk removal", () => {
+  describe("跨区块删除", () => {
     test("remove 应能从多个区块中正确移除跨区块对象", () => {
       // 螺旋 id：(0,0)=1, (1,0)=2, (2,0)=11
       const chunk00 = createChunk(1);

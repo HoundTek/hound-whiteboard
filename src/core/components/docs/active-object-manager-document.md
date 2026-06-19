@@ -116,7 +116,7 @@
 - 调用 `requestLiveRender()` 通知活动层重绘。
 - 调用 `clearBaseObjectSnapshots()` 清理旧范围快照。
 
-`discard` 和 `apply` 的关键区别：`discard` 不会同步静态结构，不会触发 base 层刷新，适合临时性取消选择。`apply` 则会完成完整的提交同步路径。
+`discard` 与 `remove` 的关键区别：`discard` 不会修改白板区块静态结构，适合临时取消选择或撤销；`remove` 会从静态结构中彻底删除对象。`discard` 与 `apply` 的关键区别：`discard` 不会同步静态结构，不会触发 base 层刷新；`apply` 则会完成完整的提交同步路径。
 
 ### 从白板删除并取消选择 `remove(objects)`
 
@@ -314,7 +314,7 @@
 | `registerActiveObject(obj)`                            | 注册活动对象实例到索引                        | `(BasicObject) => void`                     |
 | `unregisterActiveObject(objectId)`                     | 从活动对象索引和 onLayer 映射中移除           | `(number) => void`                          |
 | `resolveObjectChunk(obj)`                              | 解析对象所属起始区块                          | `(BasicObject) => Chunk`                    |
-| `createChunkBlockLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `-> ChunkBlockLoader`                       |
+| `createChunkBlockLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `() => ChunkBlockLoader`                       |
 | `getObjectWorldRange(obj)`                             | 获取对象世界坐标范围                          | `(BasicObject) => Range`                    |
 | `findBoardObjectInstance(objectId, candidateChunkIds)` | 在白板全局和覆盖区块中查找对象实例            | `(number, Iterable<number>) => BasicObject` |
 
