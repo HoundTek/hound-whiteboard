@@ -118,6 +118,32 @@
 
 `discard` 和 `apply` 的关键区别：`discard` 不会同步静态结构，不会触发 base 层刷新，适合临时性取消选择。`apply` 则会完成完整的提交同步路径。
 
+### 从白板删除并取消选择 `remove(objects)`
+
+`remove` 用于从白板上彻底删除对象，并从 AOM 中取消其活动状态。它会将对象从所有覆盖区块的 `ChunkObjectManager` 静态图中移除，同时清理活动对象索引和动态图层。
+
+当前实现中，`remove` 会：
+
+- 收集每个对象的覆盖区块 id（合并快照记录的旧覆盖与当前几何计算的新覆盖）。
+- 从所有覆盖区块中调用 `chunk.removeObject(objectId)` 移除节点、关联边和覆盖索引。
+- 收集受影响的静态邻接对象，一并纳入 base 层对象级失效。
+- 从 `activeObjects` / `activeObjectIndex` 中移除对象实例。
+- 清理 `onLayer` 映射，调用 `tidyup()` 清理空层。
+- 优先走对象级静态失效，回退到区块并集失效。
+- 触发活动层重绘。
+- 清理快照记录。
+
+`remove` 与 `apply` 的关键区别：`apply` 是把活动对象写回白板静态结构，`remove` 是从白板静态结构中删除对象。
+
+`remove` 与 `discard` 的关键区别：`discard` 仅取消活动状态，不修改白板静态结构；`remove` 会同时取消活动状态并删除白板中的对象。
+
+`remove` 同时处理两种状态的对象：
+
+- 当前活跃（在 AOM 中的）对象：从活动集合和区块静态图中双双移除。
+- 当前不在 AOM 中的静态对象：仅从区块静态图中移除，不影响活动集合。
+
+如果对象未挂载到白板（例如通过 `add` 加入但尚未 `apply` 的对象），`remove` 只负责取消其活动状态，不涉及区块清理。
+
 ### 提交并取消选择 `apply(objects)`
 
 `apply` 是当前 AOM 的关键提交动作。它不再只是把对象从活动集合里删掉，而是会把活动期间的变化同步回白板区块级静态结构。
@@ -250,6 +276,7 @@
 | `choose(startFrom)` | 将对象集加入活动对象系统并分层                   | `(Iterable<BasicObject>) => void`          |
 | `apply(objects)`    | 将活动对象按当前动态层关系提交回白板静态结构     | `(Iterable<BasicObject>) => void`          |
 | `discard(objects)`  | 取消活动对象选择，不提交回白板                   | `(Iterable<BasicObject>) => void`          |
+| `remove(objects)`   | 从白板区块静态图中删除对象并取消活动状态         | `(Iterable<BasicObject>) => void`          |
 | `liftup(objs)`      | 将对象置顶                                       | `(Iterable<BasicObject>) => void`          |
 | `tidyup()`          | 清理动态图中的无效层和空层                       | `() => void`                               |
 
@@ -304,7 +331,7 @@
 
 ## 实现状态
 
-- 已实现：核心分层逻辑、层插入与顺序比较、白板外对象 `add()`、取消选择不提交 `discard()`、置顶、清理、基于二维覆盖区块索引的跨区块拾取、基于对象实例的活动对象索引、`apply()` 提交回写、对象级静态失效快照与邻接对象失效聚合、多级回退的 base 层渲染请求链。
+- 已实现：核心分层逻辑、层插入与顺序比较、白板外对象 `add()`、取消选择不提交 `discard()`、从白板永久删除 `remove()`、置顶、清理、基于二维覆盖区块索引的跨区块拾取、基于对象实例的活动对象索引、`apply()` 提交回写、对象级静态失效快照与邻接对象失效聚合、多级回退的 base 层渲染请求链。
 - 已验证：二维区块下的右上/左下组合移动、不可达覆盖区块跳过、覆盖区块索引更新后 `pickup` 与 `choose` 读取新结果、`pickup` 通过 `Board.createChunkBlockLoader()` 接入白板区块加载链、`add()` 将新对象注册进动态图顶层、`apply()` 回写区块对象和覆盖区块索引。
 - 已接入的渲染链路：`Monitor.liveRenderer` 已可直接读取 AOM 当前活动对象集合与层顺序，并将其绘制到 `liveCanvas`；AOM 的 `requestLiveRender(...)` 现在还会同步推动 `uiCanvas` 的兼容刷新；`requestBaseRenderForObjects(...)` 已接入 `BaseRenderer.invalidateObjects` 对象级失效路径。
 - 已接入的提交后静态层刷新：`apply(objects)` 完成静态结构写回后，会优先走对象级静态失效，把对象旧范围、新范围以及受静态层级变化影响的邻接对象一起送入 `BaseRenderer.invalidateObjects(...)`；无法走对象级路径时，才退回区块并集失效。
