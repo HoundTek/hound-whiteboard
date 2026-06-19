@@ -319,6 +319,38 @@ class ActiveObjectManager {
   }
 
   /**
+   * 刷新能看到指定对象集合的那些 monitor 的静态层
+   * @description 为每个对象取世界范围，只 flush 视口与之相交的 monitor。
+   *   避免 flush 无关 monitor。
+   * @param {Array<BasicObject>} objects - 对象实例数组
+   * @private
+   */
+  _flushViewportForObjects(objects = []) {
+    if (!this.board?.monitors?.size) return;
+
+    const worldRanges = objects
+      .map((obj) => {
+        const range = this.getObjectWorldRange(obj);
+        return range ? RectangleRange.from(range) : null;
+      })
+      .filter(Boolean);
+
+    if (worldRanges.length === 0) return;
+
+    for (const monitor of this.board.monitors.values()) {
+      const viewportWorldRect = monitor.getViewportWorldRect?.();
+      if (!viewportWorldRect) continue;
+
+      const intersects = worldRanges.some((worldRange) =>
+        intersectsRanges(viewportWorldRect, worldRange),
+      );
+      if (intersects) {
+        monitor.flushViewportRender?.();
+      }
+    }
+  }
+
+  /**
    * 解析静态层对象级失效集合
    * @param {Iterable<BasicObject>} [objects = []] - 起始对象集合
    * @param {Array<{ coveredChunkIds: Set<number>, relatedObjectIds?: Iterable<number> }>} [contexts = []] - 关联上下文
@@ -925,10 +957,9 @@ class ActiveObjectManager {
     }
 
     this.requestLiveRender(activeEntries);
-    // 请求静态层刷新：对象已从静态图中被拾取到 AOM，
-    // 应通过之前捕获的 baseObjectSnapshotWorldRanges 失效对应区块，
-    // 避免 BaseRenderer 与 LiveRenderer 双渲染同一对象。
-    this.requestBaseRenderForObjects(activeEntries, []);
+    // 按对象范围刷新受影响的 monitor：对象已从静态图被拾取到 AOM，
+    // 需要让 BaseRenderer 通过 AOM 过滤将它们从静态层中隐藏。
+    this._flushViewportForObjects(activeEntries);
   }
 
   /**
@@ -1309,8 +1340,9 @@ class ActiveObjectManager {
 
     this.tidyup();
     this.requestLiveRender(normalizedObjects);
-    // 请求静态层刷新：对象已从 AOM 丢弃回静态图，需重新在 BaseRenderer 中出现
-    this.requestBaseRenderForObjects(normalizedObjects, []);
+    // 按对象范围刷新受影响的 monitor：对象从 AOM 被丢弃回静态图，
+    // 需要让 BaseRenderer 通过 AOM 过滤将它们重新渲染到静态层。
+    this._flushViewportForObjects(normalizedObjects);
     this.clearBaseObjectSnapshots(normalizedObjects);
   }
 
