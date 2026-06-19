@@ -4,6 +4,8 @@
  * @author Zhou Chenyu
  */
 
+import { Logger } from "../../utils/log/logger.js";
+import { logBus } from "../../utils/log/log-bus.js";
 import { createMouseDevice } from "../../core/devices/mouse-device.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
@@ -276,6 +278,8 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * }}
  */
 function configureWhiteboardDemo(board, monitor, options = {}) {
+  const demoLog = new Logger("DemoConfig", "INFO", logBus);
+
   const effectiveBoard = board ?? monitor?.board;
   if (!effectiveBoard || !monitor) {
     throw new TypeError("configureWhiteboardDemo requires board and monitor");
@@ -458,8 +462,8 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     });
   }
 
-  console.log(
-    `[whiteboard-demo] ── 快捷键 ──\n` +
+  demoLog.info(
+    `── 快捷键 ──\n` +
       `左键 : 创建笔画\n` +
       `右键 : 首次拖拽框选对象 → 再次拖拽修改位置\n` +
       `Enter : 提交修改\n` +

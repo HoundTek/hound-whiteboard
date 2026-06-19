@@ -13,6 +13,8 @@ import { deserialize } from "../objects/object-deserializer.js";
 import { CounterPool } from "../utils/counter-pool.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { EventBus } from "../utils/event-bus.js";
+import { Logger } from "../../utils/log/logger.js";
+import { logBus } from "../../utils/log/log-bus.js";
 import { UndoTree } from "../hit/undo-tree-core.js";
 import { DevicesDAG } from "../devices-dag/index.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
@@ -145,11 +147,18 @@ class Board {
   rootChunkLoader;
 
   /**
+   * 日志 Logger
+   * @type {Logger}
+   */
+  #log;
+
+  /**
    * @param {{
    *   rootPath?: string,
    * }} [options={}] - 白板初始化选项；传入有效 `rootPath` 时启用文件系统持久化，否则退化为内存模式
    */
   constructor(options = {}) {
+    this.#log = new Logger("Board", "INFO", logBus);
     this.undoTree = new UndoTree();
     this.chunkLoaded = new Map();
     this.objectLoaded = new Map();
@@ -562,7 +571,10 @@ class Board {
     }
     const chunk = this.getChunkById(chunkId);
     if (!chunk) {
-      console.warn(`Chunk ${chunkId} does not exist.`);
+      this.#log.throttledWarn(
+        "chunk-not-exist",
+        `Chunk ${chunkId} does not exist.`,
+      );
       throw new Error("Chunk not exist.");
     }
 
@@ -686,7 +698,7 @@ class Board {
       ({ requesterId, chunk, strategy, alreadyBuffered }) => {
         this.#loadChunk(chunk, strategy, alreadyBuffered, requesterId).catch(
           (error) => {
-            console.error("Failed to load chunk via IPC bridge:", error);
+            this.#log.error("Failed to load chunk via IPC bridge:", error);
           },
         );
       },
@@ -696,7 +708,7 @@ class Board {
       CHUNK_LOAD_EVENTS.REQUEST_UNLOAD,
       ({ requesterId, chunk }) => {
         this.#unloadChunk(chunk, requesterId).catch((error) => {
-          console.error("Failed to unload chunk:", error);
+          this.#log.error("Failed to unload chunk:", error);
         });
       },
     );

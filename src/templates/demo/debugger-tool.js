@@ -7,12 +7,16 @@
 
 import { Tool } from "../../core/tools/tool.js";
 import { dagToMermaid } from "../../core/devices-dag/index.js";
+import { Logger } from "../../utils/log/logger.js";
+import { logBus } from "../../utils/log/log-bus.js";
 
 class DebuggerTool extends Tool {
+  /** @type {Logger} */
+  #log = new Logger("Debugger", "INFO", logBus);
   process(signalPacket, deviceContext = {}) {
     const board = deviceContext?.acc?.board;
     if (!board) {
-      console.warn("[debugger-tool] missing board context", signalPacket);
+      this.#log.warn("missing board context", signalPacket);
       return;
     }
 
@@ -44,8 +48,8 @@ class DebuggerTool extends Tool {
             typeof signal.type === "string" &&
             signal.type.startsWith("debug:")
           ) {
-            console.warn(
-              "[debugger-tool] unsupported debug command:",
+            this.#log.warn(
+              "unsupported debug command:",
               signal.type,
               signal.context,
             );
@@ -253,17 +257,11 @@ class DebuggerTool extends Tool {
   }
 
   logChunkLoad(board) {
-    console.log(
-      "[debugger-tool] chunk load summary:",
-      this.summarizeChunkLoad(board),
-    );
+    this.#log.info("chunk load summary:", this.summarizeChunkLoad(board));
   }
 
   logObjectLoad(board) {
-    console.log(
-      "[debugger-tool] object load summary:",
-      this.summarizeObjectLoad(board),
-    );
+    this.#log.info("object load summary:", this.summarizeObjectLoad(board));
   }
 
   stringifyDevicesDAG(dag) {
@@ -283,42 +281,40 @@ class DebuggerTool extends Tool {
   logDevicesDAG(board) {
     const devicesDAG = board.devicesDAG;
     if (!devicesDAG) {
-      console.warn("[debugger-tool] missing devices dag", board);
+      this.#log.warn("missing devices dag", board);
       return;
     }
 
-    console.log(
-      "[debugger-tool] devices dag:\n" + this.stringifyDevicesDAG(devicesDAG),
-    );
+    this.#log.info("devices dag:\n" + this.stringifyDevicesDAG(devicesDAG));
   }
 
   logMermaidDevicesDAG(board) {
     const devicesDAG = board.devicesDAG;
     if (!devicesDAG) {
-      console.warn("[debugger-tool] missing devices dag", board);
+      this.#log.warn("missing devices dag", board);
       return;
     }
 
-    console.log(
-      "[debugger-tool] devices dag in Mermaid format:\n" +
+    this.#log.info(
+      "devices dag in Mermaid format:\n" +
         this.mermaidizeDevicesDAG(devicesDAG, { orientation: "TD" }),
     );
   }
 
   logChunk(board, chunkId) {
     if (chunkId === undefined || chunkId === null) {
-      console.warn("[debugger-tool] debug:chunk requires context.id");
+      this.#log.warn("debug:chunk requires context.id");
       return;
     }
 
     const chunk = board.getChunkById(Number(chunkId));
     if (!chunk) {
-      console.warn(`[debugger-tool] chunk ${chunkId} not found`);
+      this.#log.warn("chunk %s not found", chunkId);
       return;
     }
 
-    console.log(
-      `[debugger-tool] chunk ${chunkId} summary:`,
+    this.#log.info(
+      `chunk ${chunkId} summary:`,
       this.summarizeChunk(chunk, board.chunkLoaded.get(chunk.id)),
     );
   }
@@ -343,7 +339,7 @@ class DebuggerTool extends Tool {
       }),
     );
 
-    console.log("[debugger-tool] activeObjectManager summary:", {
+    this.#log.info("activeObjectManager summary:", {
       manager: this.cloneSnapshot(aom),
       activeObjectCount: activeObjects.length,
       activeObjectIds: activeObjects,
@@ -355,7 +351,7 @@ class DebuggerTool extends Tool {
   }
 
   logBoard(board) {
-    console.log("[debugger-tool] board summary:", this.summarizeBoard(board));
+    this.#log.info("board summary:", this.summarizeBoard(board));
   }
 }
 

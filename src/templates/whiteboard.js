@@ -1,11 +1,17 @@
 import { Vector } from "../core/utils/math.js";
 import { Board } from "../core/components/board.js";
+import { Logger } from "../utils/log/logger.js";
+import { logBus } from "../utils/log/log-bus.js";
+import { createConsolePrinter } from "../utils/log/console-printer.js";
 import {
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
 } from "./demo/whiteboard-demo.js";
 import { MonitorViewportTool } from "./demo/monitor-viewport-tool.js";
 import { WasdCoordinateTool } from "./demo/wasd-coordinate-tool.js";
+
+// Demo 独立入口，需要手动注册控制台输出器
+createConsolePrinter(logBus, { timestamps: true });
 
 const board = new Board();
 board.width = 800;
@@ -25,13 +31,15 @@ monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
 monitor.liveCanvas.tabIndex = 0;
 
+const demoLog = new Logger("Demo", "INFO", logBus);
+
 const logDemoStatus = (label, payload) => {
   if (payload === undefined) {
-    console.log(`[whiteboard-demo] ${label}`);
+    demoLog.info(label);
     return;
   }
 
-  console.log(`[whiteboard-demo] ${label}`, payload);
+  demoLog.info(label, payload);
 };
 
 const wasdCoordinateTool = new WasdCoordinateTool({

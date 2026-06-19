@@ -9,6 +9,8 @@ import { BasicObject } from "../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange } from "../range/index.js";
 import { Monitor } from "./monitor.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
+import { Logger } from "../../utils/log/logger.js";
+import { logBus } from "../../utils/log/log-bus.js";
 
 const COMPAT_SELECTION_FRAME_MARGIN = 4;
 const COMPAT_SELECTION_FRAME_STROKE_STYLE = "#33a1ff";
@@ -76,6 +78,12 @@ class UiRenderer {
   overlayProviders;
 
   /**
+   * 日志 Logger
+   * @type {Logger}
+   */
+  #log;
+
+  /**
    * @param {Monitor} monitor - 目标显示器
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
    */
@@ -83,6 +91,9 @@ class UiRenderer {
     this.monitor = monitor;
     this.activeObjectManager = activeObjectManager;
     this.overlayProviders = new Set();
+
+    /** @type {Logger} */
+    this.#log = new Logger("UiRenderer", "WARN", logBus);
   }
 
   /**
@@ -330,7 +341,7 @@ class UiRenderer {
           }
         }
       } catch (error) {
-        console.error("Failed to collect ui overlay entries:", error);
+        this.#log.error("Failed to collect ui overlay entries:", error);
       }
     }
 
