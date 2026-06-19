@@ -1,16 +1,32 @@
 import { ioBridge } from "./io-bridge-renderer.js";
+import { Logger } from "./utils/log/logger.js";
+import { logBus } from "./utils/log/log-bus.js";
+import { createConsolePrinter } from "./utils/log/console-printer.js";
 
-console.log("[Hound Whiteboard] Main module loaded");
+// ── 初始化全局日志系统 ──────────────────────────────────────────
+
+/** @type {Logger} */
+const log = new Logger("HWB", "INFO", logBus);
+
+// 挂载默认控制台输出器
+createConsolePrinter(logBus, { timestamps: true });
+
+// 暴露到全局，方便调试
+if (typeof window !== "undefined") {
+  window.__logBus = logBus;
+}
+
+log.info("Main module loaded");
 
 const initializeApp = async () => {
   try {
-    console.log("[Hound Whiteboard] Initializing application...");
-    
+    log.info("Initializing application...");
+
     window.__HoundIOBridge = ioBridge;
-    
-    console.log("[Hound Whiteboard] Application initialized successfully");
+
+    log.info("Application initialized successfully");
   } catch (error) {
-    console.error("[Hound Whiteboard] Failed to initialize:", error);
+    log.error("Failed to initialize:", error);
     throw error;
   }
 };

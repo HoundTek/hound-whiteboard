@@ -26,7 +26,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
  * @file ...
  * @description ...
  * @module core/...
- * @author Zhou Chenyu
+ * @author ...
  */
 ```
 
@@ -44,7 +44,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
  * @file 白板组件
  * @description Board 类是白板在面向对象设计中的抽象核心，负责维护白板级区块实例所有权、对象实例注册表、区块加载引用计数、活动对象管理器以及 monitor/设备事件入口。
  * @module core/components/board
- * @author Zhou Chenyu
+ * @author ...
  */
 ```
 
