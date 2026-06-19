@@ -27,10 +27,12 @@ import { MultiGestureObjectCreatorTool } from "./obj-creator.js";
  */
 class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   /**
-   * @param {{ property?: Partial<typeof DEFAULT_POLYGON_PROPERTY> }} [options={}]
+   * @param {{
+   *   property?: Partial<typeof DEFAULT_POLYGON_PROPERTY>,
+   * }} [options={}]
    */
   constructor(options = {}) {
-    super();
+    super(options);
     this.count = 0;
     this.lastPoint = null;
     this.property = {
@@ -86,7 +88,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   lastPoint;
 
   /**
-   * 新建多边形默认属性
+   * 多边形属性
    * @type {Record<string, any>}
    */
   property;

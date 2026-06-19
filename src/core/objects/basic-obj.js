@@ -51,7 +51,8 @@ class BasicObject {
   /**
    * 对象的矩形边界范围
    * @type {RectangleRange}
-   * @description 存储对象的边界矩形，用于碰撞检测和选择。
+   * @description
+   * 存储对象的边界矩形，用于碰撞检测和选择。
    * 边界矩形是相对于变换后的坐标而言的。
    */
   boundingBox;
@@ -83,11 +84,12 @@ class BasicObject {
    * @description 统一 API，子类可重写此方法以计算对象的凸包。默认是矩形边界。
    */
   calculateConvexHull() {
-    this.convexHullRange = PolygonRange.from(this.boundingBox);
+    this.convexHullRange = RectangleRange.from(this.boundingBox);
   }
 
   /**
    * 获取对象的主判定范围
+   * @description 统一 API，子类可重写此方法以返回更适合的判定范围。默认是矩形边界。
    * @returns {Range} 主判定范围
    */
   getRange() {
@@ -114,7 +116,8 @@ class BasicObject {
 
   /**
    * 获取对象渲染额外留白
-   * @description 返回值单位为对象空间中的长度，供活动层 dirty rect 在换算到屏幕空间后补足描边、端点与抗锯齿留白。
+   * @description
+   * 返回值单位为对象空间中的长度，供活动层 dirty rect 在换算到屏幕空间后补足描边、端点与抗锯齿留白。
    * @returns {number} 额外留白
    */
   getRenderPadding() {
@@ -135,7 +138,9 @@ class BasicObject {
    * 标识对象是否是有向对象
    * @type {boolean}
    * @static
-   * @description 有向对象可以自定义旋转中心且绕该中心旋转。
+   * @description
+   * 有向对象可以自定义旋转中心且绕该中心旋转。
+   * 无向对象的旋转中心固定在边界矩形中心。
    */
   isDirected() {
     throw new Error("Method not implemented.");
@@ -153,7 +158,6 @@ class BasicObject {
   }
 
   /**
-   * 创建一个新的基础对象
    * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
    * @param {number} ownerChunkId - 对象归属区块的 id
@@ -188,7 +192,6 @@ class BasicObject {
    * @abstract
    * @param {CanvasRenderingContext2D} ctx - 画布上下文
    * @description 子类必须实现此方法以支持对象的渲染
-   * @throws {Error} 基类未实现此方法
    */
   render(ctx) {
     throw new Error("Method not implemented.");
@@ -217,7 +220,6 @@ class BasicObject {
    * @returns {BasicObject} 对象实例
    * @static
    * @description 子类必须实现此方法以支持对象的持久化
-   * @throws {Error} 基类未实现此方法
    */
   static parse(obj) {
     throw new Error("Method not implemented.");

@@ -6,7 +6,7 @@
 
 `path.js` 提供 Core 层内部使用的逻辑路径工具。
 
-这里的路径不是操作系统文件路径，而是设备树、事件路由和运行时节点使用的统一绝对路径表示，例如 `/monitor/keyboard/code/Space`。
+这里的路径不是操作系统文件路径，而是设备图、事件路由和运行时节点使用的统一绝对路径表示，例如 `/monitor/keyboard/code/Space`。
 
 ## 路径表示约定
 
@@ -19,10 +19,10 @@
 
 | 名称                                           | 描述                               | 类型                         |
 | ---------------------------------------------- | ---------------------------------- | ---------------------------- |
-| `normalizePath(path = "/")`                    | 将路径规整为片段数组               | `string -> string[]`         |
-| `toAbsolutePath(segments = [])`                | 将片段数组转回绝对路径             | `string[] -> string`         |
-| `joinPath(...parts)`                           | 拼接多个路径段并输出绝对路径       | `string[] -> string`         |
-| `resolvePath(basePath = "/", targetPath = "")` | 在基准路径上解析相对路径或绝对路径 | `string -> string -> string` |
+| `normalizePath(path = "/")`                    | 将路径规整为片段数组               | `(string) => string[]`       |
+| `toAbsolutePath(segments = [])`                | 将片段数组转回绝对路径             | `(string[]) => string`       |
+| `joinPath(...parts)`                           | 拼接多个路径段并输出绝对路径       | `(string[]) => string`       |
+| `resolvePath(basePath = "/", targetPath = "")` | 在基准路径上解析相对路径或绝对路径 | `(string, string) => string` |
 
 ## 行为特点
 
@@ -43,7 +43,7 @@
 
 ## 在仓库中的典型用途
 
-- 设备树节点路径拼接
+- 设备图节点路径拼接
 - 输入信号路由目标解析
 - 显示器和键盘设备的运行时节点命名
 

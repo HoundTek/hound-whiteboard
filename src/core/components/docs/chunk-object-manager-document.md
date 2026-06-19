@@ -84,21 +84,21 @@
 
 ## API
 
-| 名称                                                           | 描述                               | 类型                                             |
-| -------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | ---------- |
-| `setObjectCoverChunks(objectId, chunkIds)`                     | 设置对象覆盖区块 id 集合           | `number -> Iterable<number> -> void`             |
-| `getObjectCoverChunks(objectId)`                               | 获取对象覆盖区块 id 集合           | `number -> Set<number>`                          |
-| `serializeObjectCoverChunks()`                                 | 序列化对象覆盖区块索引             | `void -> Array<[number, number[]]>`              |
-| `syncObjectCoverChunksForObject(obj, chunkWidth, chunkHeight)` | 基于对象 range 重算覆盖区块        | `BasicObject -> number -> number -> Set<number>` |
-| `syncAllObjectCoverChunks(chunkWidth, chunkHeight)`            | 重建当前区块全部对象的覆盖区块索引 | `number -> number -> Map<number, Set<number>>`   |
-| `loadTierGraph(boardRootPath)`                                 | 加载区块层叠图                     | `string -> Promise<void>`                        |
-| `saveTierGraph(boardRootPath)`                                 | 保存区块层叠图                     | `string -> Promise<void>`                        |
-| `unloadTierGraph()`                                            | 卸载区块层叠图                     | `void -> void`                                   |
-| `getObject(objectId)`                                          | 间接获取对象实例                   | `number -> BasicObject \\                        | undefined` |
-| `loadObjects(boardRootPath)`                                   | 加载区块对象                       | `string -> Promise<void>`                        |
-| `saveObjects(boardRootPath)`                                   | 保存区块对象                       | `string -> Promise<void>`                        |
-| `unloadObjects()`                                              | 卸载区块对象                       | `void -> void`                                   |
-| `unload()`                                                     | 卸载本区块全部数据                 | `void -> void`                                   |
+| 名称                                                           | 描述                               | 类型                                           |
+| -------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------- | ---------- |
+| `setObjectCoverChunks(objectId, chunkIds)`                     | 设置对象覆盖区块 id 集合           | `(number, Iterable<number>) => void`           |
+| `getObjectCoverChunks(objectId)`                               | 获取对象覆盖区块 id 集合           | `(number) => Set<number>`                      |
+| `serializeObjectCoverChunks()`                                 | 序列化对象覆盖区块索引             | `() => Array<[number, number[]]>`              |
+| `syncObjectCoverChunksForObject(obj, chunkWidth, chunkHeight)` | 基于对象 range 重算覆盖区块        | `(BasicObject, number, number) => Set<number>` |
+| `syncAllObjectCoverChunks(chunkWidth, chunkHeight)`            | 重建当前区块全部对象的覆盖区块索引 | `(number, number) => Map<number, Set<number>>` |
+| `loadTierGraph(boardRootPath)`                                 | 加载区块层叠图                     | `(string) => Promise<void>`                    |
+| `saveTierGraph(boardRootPath)`                                 | 保存区块层叠图                     | `(string) => Promise<void>`                    |
+| `unloadTierGraph()`                                            | 卸载区块层叠图                     | `() => void`                                   |
+| `getObject(objectId)`                                          | 间接获取对象实例                   | `(number) => BasicObject \\                    | undefined` |
+| `loadObjects(boardRootPath)`                                   | 加载区块对象                       | `(string) => Promise<void>`                    |
+| `saveObjects(boardRootPath)`                                   | 保存区块对象                       | `(string) => Promise<void>`                    |
+| `unloadObjects()`                                              | 卸载区块对象                       | `() => void`                                   |
+| `unload()`                                                     | 卸载本区块全部数据                 | `() => void`                                   |
 
 ## 与其它组件的关系
 

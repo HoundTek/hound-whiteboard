@@ -20,11 +20,11 @@
 
 | 名称                       | 描述                         | 类型                             |
 | -------------------------- | ---------------------------- | -------------------------------- |
-| `on(eventName, handler)`   | 订阅事件，并返回取消订阅函数 | `string -> Function -> Function` |
-| `off(eventName, handler)`  | 取消订阅指定监听器           | `string -> Function -> boolean`  |
-| `once(eventName, handler)` | 只订阅一次                   | `string -> Function -> Function` |
-| `emit(eventName, payload)` | 同步触发事件                 | `string -> any -> Array<any>`    |
-| `clear(eventName)`         | 清空指定事件或全部事件       | `string? -> void`                |
+| `on(eventName, handler)`   | 订阅事件，并返回取消订阅函数 | `(string, Function) => Function` |
+| `off(eventName, handler)`  | 取消订阅指定监听器           | `(string, Function) => boolean`  |
+| `once(eventName, handler)` | 只订阅一次                   | `(string, Function) => Function` |
+| `emit(eventName, payload)` | 同步触发事件                 | `(string, any) => Array<any>`    |
+| `clear(eventName)`         | 清空指定事件或全部事件       | `(string?) => void`              |
 
 ## 行为特点
 

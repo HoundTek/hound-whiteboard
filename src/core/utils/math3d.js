@@ -91,23 +91,18 @@ class Vector3D {
    * const vec = Vector3D.parse({ x: 10, y: 20, z: 30 }); // Vector3D(10, 20, 30)
    */
   static parse(vec) {
-    return new Vector3D(vec.x, vec.y, vec.z);
-  }
-
-  /**
-   * 将序列化成数组的对象转化为 Vector3D 实例
-   * @param {number[]} arr - 包含向量坐标的数组
-   * @returns {Vector3D} Vector3D 实例
-   * @static
-   * @throws {RangeError} 当 `arr` 的大小小于 3 时
-   * @example
-   * const vec = Vector3D.parseFromArray([10, 20, 30]); // Vector3D(10, 20, 30)
-   */
-  static parseFromArray(arr) {
-    if (arr.length < 3) {
-      throw new RangeError("Array must have at least 3 elements");
+    if (!vec) return null;
+    if (vec instanceof Vector3D) return vec;
+    if (Array.isArray(vec)) {
+      if (vec.length < 3) {
+        throw new RangeError("Array must have at least 3 elements");
+      }
+      return new Vector3D(vec[0], vec[1], vec[2]);
     }
-    return new Vector3D(arr[0], arr[1], arr[2]);
+    if (typeof vec.x === "number" && typeof vec.y === "number" && typeof vec.z === "number") {
+      return new Vector3D(vec.x, vec.y, vec.z);
+    }
+    return null;
   }
 
   /**
@@ -411,45 +406,29 @@ class Matrix3D {
    * const matrix = Matrix3D.parse({ a11: 10, a12: 20, a13: 30, a21: 40, a22: 50, a23: 60, a31: 70, a32: 80, a33: 90 }); // Matrix3D[[10, 20, 30], [40, 50, 60], [70, 80, 90]]
    */
   static parse(matrix) {
-    return new Matrix3D(
-      matrix.a11,
-      matrix.a12,
-      matrix.a13,
-      matrix.a21,
-      matrix.a22,
-      matrix.a23,
-      matrix.a31,
-      matrix.a32,
-      matrix.a33
-    );
-  }
-
-  /**
-   * 将序列化成数组的对象转化为 Matrix3D 实例
-   * @param {number[][]} arr - 一个 3x3 的二维数组
-   * @returns {Matrix3D} Matrix3D 实例
-   * @static
-   * @throws {RangeError} 当 `arr` 的大小小于 3x3 时
-   * @example
-   * const matrix = Matrix3D.parse([[10, 20, 30], [40, 50, 60], [70, 80, 90]]); // Matrix3D[[10, 20, 30], [40, 50, 60], [70, 80, 90]]
-   */
-  static parseFromArray(arr) {
-    if (arr.length < 3) {
-      throw new RangeError("Array must have at least 3 elements");
-    } else if (arr[0].length < 3 || arr[1].length < 3 || arr[2].length < 3) {
-      throw new RangeError("Element array must have at least 3 elements");
+    if (!matrix) return null;
+    if (matrix instanceof Matrix3D) return matrix;
+    if (Array.isArray(matrix)) {
+      if (matrix.length < 3) {
+        throw new RangeError("Array must have at least 3 elements");
+      }
+      if (matrix[0].length < 3 || matrix[1].length < 3 || matrix[2].length < 3) {
+        throw new RangeError("Element array must have at least 3 elements");
+      }
+      return new Matrix3D(
+        matrix[0][0], matrix[0][1], matrix[0][2],
+        matrix[1][0], matrix[1][1], matrix[1][2],
+        matrix[2][0], matrix[2][1], matrix[2][2],
+      );
     }
-    return new Matrix3D(
-      arr[0][0],
-      arr[0][1],
-      arr[0][2],
-      arr[1][0],
-      arr[1][1],
-      arr[1][2],
-      arr[2][0],
-      arr[2][1],
-      arr[2][2]
-    );
+    if (typeof matrix.a11 === "number") {
+      return new Matrix3D(
+        matrix.a11, matrix.a12, matrix.a13,
+        matrix.a21, matrix.a22, matrix.a23,
+        matrix.a31, matrix.a32, matrix.a33
+      );
+    }
+    return null;
   }
 
   /**

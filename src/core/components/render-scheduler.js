@@ -15,10 +15,21 @@ const DIRTY_RECT_MAX_GROWTH_RATIO = 1.35;
 const DIRTY_RECT_VIEWPORT_COVERAGE_RATIO = 0.75;
 const DIRTY_RECT_CANONICAL_RECT_COVERAGE_RATIO = 0.6;
 
+/**
+ * 获取矩形面积
+ * @param {{ width: number, height: number }} rect - 矩形对象
+ * @returns {number}
+ */
 function getRectangleArea(rect) {
   return Math.max(0, rect.width) * Math.max(0, rect.height);
 }
 
+/**
+ * 计算两个矩形的相交面积
+ * @param {{ left: number, top: number, right: number, bottom: number }} firstRect
+ * @param {{ left: number, top: number, right: number, bottom: number }} secondRect
+ * @returns {number}
+ */
 function getRectangleIntersectionArea(firstRect, secondRect) {
   const left = Math.max(firstRect.left, secondRect.left);
   const top = Math.max(firstRect.top, secondRect.top);
@@ -32,6 +43,12 @@ function getRectangleIntersectionArea(firstRect, secondRect) {
   return (right - left) * (bottom - top);
 }
 
+/**
+ * 计算两个矩形在各轴上的间隔
+ * @param {{ left: number, top: number, right: number, bottom: number }} firstRect
+ * @param {{ left: number, top: number, right: number, bottom: number }} secondRect
+ * @returns {{ gapX: number, gapY: number }}
+ */
 function getRectangleGap(firstRect, secondRect) {
   const gapX = Math.max(
     0,
@@ -47,6 +64,12 @@ function getRectangleGap(firstRect, secondRect) {
   return { gapX, gapY };
 }
 
+/**
+ * 判断两个矩形是否应因相交或近邻而合并
+ * @param {{ left: number, top: number, right: number, bottom: number, width: number, height: number }} firstRect
+ * @param {{ left: number, top: number, right: number, bottom: number, width: number, height: number }} secondRect
+ * @returns {boolean}
+ */
 function shouldMergeNearbyRects(firstRect, secondRect) {
   if (intersectsRanges(firstRect, secondRect)) {
     return true;
@@ -65,7 +88,8 @@ function shouldMergeNearbyRects(firstRect, secondRect) {
 
   const unionRect = firstRect.union(secondRect);
   const unionArea = getRectangleArea(unionRect);
-  const combinedArea = getRectangleArea(firstRect) + getRectangleArea(secondRect);
+  const combinedArea =
+    getRectangleArea(firstRect) + getRectangleArea(secondRect);
   const extraArea = unionArea - combinedArea;
 
   if (extraArea <= DIRTY_RECT_MAX_EXTRA_AREA) {
@@ -79,10 +103,21 @@ function shouldMergeNearbyRects(firstRect, secondRect) {
   return unionArea / combinedArea <= DIRTY_RECT_MAX_GROWTH_RATIO;
 }
 
+/**
+ * 将输入矩形数组统一规整为 RectangleRange 数组
+ * @param {any[]} [rects = []] - 原始矩形集合
+ * @returns {RectangleRange[]}
+ */
 function normalizeRectangleArray(rects = []) {
   return rects.map((rect) => RectangleRange.fromRectLike(rect)).filter(Boolean);
 }
 
+/**
+ * 解析配置值，支持惰性回调形式
+ * @param {any | Function} optionValue - 配置值或返回配置值的函数
+ * @param {any} fallbackValue - 回退默认值
+ * @returns {any}
+ */
 function resolveOptionValue(optionValue, fallbackValue) {
   const resolvedValue =
     typeof optionValue === "function" ? optionValue() : optionValue;
@@ -90,6 +125,21 @@ function resolveOptionValue(optionValue, fallbackValue) {
   return resolvedValue ?? fallbackValue;
 }
 
+/**
+ * 从配置选项中解析完整的脏区合并阈值集合
+ * @description
+ * 优先从 options.getThresholds() 回调读取分组阈值，
+ * 再允许单个字段覆盖，最终回退到默认值。
+ * @param {Object} [options = {}] - 合并配置
+ * @param {Function} [options.getThresholds] - 返回分组阈值的回调
+ * @param {number} [options.axisNearGap] - 轴向近邻最大间距
+ * @param {number} [options.diagonalNearGap] - 对角近邻最大间距
+ * @param {number} [options.maxExtraArea] - 合并允许的最大额外扫描面积
+ * @param {number} [options.maxGrowthRatio] - 合并后面积增长最大比例
+ * @param {number} [options.viewportCoverageRatio] - 退化整视口的脏区覆盖比例
+ * @param {number} [options.canonicalRectCoverageRatio] - 退化整 chunk 的脏区覆盖比例
+ * @returns {{ axisNearGap: number, diagonalNearGap: number, maxExtraArea: number, maxGrowthRatio: number, viewportCoverageRatio: number, canonicalRectCoverageRatio: number }}
+ */
 function resolveMergerThresholds(options = {}) {
   const groupedThresholds = resolveOptionValue(options.getThresholds, {}) ?? {};
 
@@ -136,6 +186,11 @@ function resolveMergerThresholds(options = {}) {
   };
 }
 
+/**
+ * 去重完全相同的矩形
+ * @param {any[]} [rects = []] - 矩形集合
+ * @returns {any[]}
+ */
 function dedupeRectangles(rects = []) {
   const uniqueRects = [];
   const rectKeys = new Set();
@@ -150,17 +205,31 @@ function dedupeRectangles(rects = []) {
   return uniqueRects;
 }
 
+/**
+ * 创建宿主可配置的脏区矩形合并器
+ * @description
+ * 支持按宿主传入阈值、视口矩形（viewportCoverageRatio 退化）、
+ * canonical rect 集合（canonicalRectCoverageRatio 退化）来控制合并策略。
+ * 合并流程依次为：近邻合并 → canonical rect 坍塌 → 再合并。
+ * @param {Object} [options = {}] - 合并配置
+ * @param {Function} [options.getViewportRect] - 返回当前视口矩形的回调
+ * @param {Function} [options.getCanonicalRectsForRect] - 返回给定脏区对应的 canonical rect 集合的回调
+ * @returns {(dirtyRects: any[]) => any[]}
+ */
 function createRectangleDirtyRectMerger(options = {}) {
   const getViewportRect = options.getViewportRect;
   const getCanonicalRectsForRect = options.getCanonicalRectsForRect;
 
+  /**
+   * 判断两个矩形是否应按当前阈值合并
+   * @param {RectangleRange} firstRect
+   * @param {RectangleRange} secondRect
+   * @param {{ axisNearGap: number, diagonalNearGap: number, maxExtraArea: number, maxGrowthRatio: number }} thresholds
+   * @returns {boolean}
+   */
   function shouldMergeWithOptions(firstRect, secondRect, thresholds) {
-    const {
-      axisNearGap,
-      diagonalNearGap,
-      maxExtraArea,
-      maxGrowthRatio,
-    } = thresholds;
+    const { axisNearGap, diagonalNearGap, maxExtraArea, maxGrowthRatio } =
+      thresholds;
 
     if (intersectsRanges(firstRect, secondRect)) {
       return true;
@@ -170,8 +239,7 @@ function createRectangleDirtyRectMerger(options = {}) {
     const isAxisNearby =
       (gapX <= axisNearGap && gapY === 0) ||
       (gapY <= axisNearGap && gapX === 0);
-    const isDiagonalNearby =
-      gapX <= diagonalNearGap && gapY <= diagonalNearGap;
+    const isDiagonalNearby = gapX <= diagonalNearGap && gapY <= diagonalNearGap;
 
     if (!isAxisNearby && !isDiagonalNearby) {
       return false;
@@ -179,7 +247,8 @@ function createRectangleDirtyRectMerger(options = {}) {
 
     const unionRect = firstRect.union(secondRect);
     const unionArea = getRectangleArea(unionRect);
-    const combinedArea = getRectangleArea(firstRect) + getRectangleArea(secondRect);
+    const combinedArea =
+      getRectangleArea(firstRect) + getRectangleArea(secondRect);
     const extraArea = unionArea - combinedArea;
 
     if (extraArea <= maxExtraArea) {
@@ -193,6 +262,15 @@ function createRectangleDirtyRectMerger(options = {}) {
     return unionArea / combinedArea <= maxGrowthRatio;
   }
 
+  /**
+   * 对已规整的矩形列表执行一轮贪心合并
+   * @description
+   * 每次遍历维护已合并结果集，新矩形依次尝试与已有结果合并；
+   * 若发生合并则替换并重置索引，确保两两之间不会再分离。
+   * @param {RectangleRange[]} [rects = []] - 已规整矩形
+   * @param {{ axisNearGap: number, diagonalNearGap: number, maxExtraArea: number, maxGrowthRatio: number }} thresholds - 合并阈值
+   * @returns {RectangleRange[]}
+   */
   function mergeNormalizedRectangles(rects = [], thresholds) {
     const mergedRects = [];
 
@@ -222,6 +300,37 @@ function createRectangleDirtyRectMerger(options = {}) {
     return mergedRects;
   }
 
+  /**
+   * 计算两个矩形的交集
+   * @param {{ left: number, top: number, right: number, bottom: number }} firstRect
+   * @param {{ left: number, top: number, right: number, bottom: number }} secondRect
+   * @returns {RectangleRange | undefined}
+   */
+  function computeRectangleIntersection(firstRect, secondRect) {
+    const left = Math.max(firstRect.left, secondRect.left);
+    const top = Math.max(firstRect.top, secondRect.top);
+    const right = Math.min(firstRect.right, secondRect.right);
+    const bottom = Math.min(firstRect.bottom, secondRect.bottom);
+
+    if (right <= left || bottom <= top) {
+      return undefined;
+    }
+
+    return new RectangleRange(left, top, right - left, bottom - top);
+  }
+
+  /**
+   * 将大矩形按 canonical rect 塌缩为单个或多个较小矩形
+   * @description
+   * 处理流程：
+   * 1. 若脏区覆盖 viewport 比例 ≥ viewportCoverageRatio → 退化为整 viewport
+   * 2. 遍历 canonical rect（如 chunk 屏幕矩形），对其中覆盖率 ≥ canonicalRectCoverageRatio 的退化为整 canonical rect
+   * 3. 对覆盖率 < canonicalRectCoverageRatio 但 > 0 的，保留交集（不丢失脏区）
+   * 4. 没有任何 canonical rect 达标时返回原始矩形
+   * @param {RectangleRange} rect - 当前脏区
+   * @param {{ viewportCoverageRatio: number, canonicalRectCoverageRatio: number }} thresholds - 退化阈值
+   * @returns {RectangleRange[]}
+   */
   function collapseLargeRect(rect, thresholds) {
     const { viewportCoverageRatio, canonicalRectCoverageRatio } = thresholds;
     const viewportRect = RectangleRange.fromRectLike(getViewportRect?.());
@@ -236,24 +345,44 @@ function createRectangleDirtyRectMerger(options = {}) {
       }
     }
 
-    const canonicalRects = normalizeRectangleArray(getCanonicalRectsForRect?.(rect));
+    const canonicalRects = normalizeRectangleArray(
+      getCanonicalRectsForRect?.(rect),
+    );
     if (canonicalRects.length === 0) {
       return [rect];
     }
 
-    const collapsedRects = canonicalRects.filter((canonicalRect) => {
+    const resultRects = [];
+    let anyCollapsed = false;
+
+    for (const canonicalRect of canonicalRects) {
       const canonicalArea = getRectangleArea(canonicalRect);
-      if (canonicalArea <= 0) return false;
+      if (canonicalArea <= 0) continue;
 
-      return (
-        getRectangleIntersectionArea(rect, canonicalRect) / canonicalArea >=
-        canonicalRectCoverageRatio
-      );
-    });
+      const ratio =
+        getRectangleIntersectionArea(rect, canonicalRect) / canonicalArea;
 
-    return collapsedRects.length > 0 ? collapsedRects : [rect];
+      if (ratio >= canonicalRectCoverageRatio) {
+        // 覆盖率足够 → 退化为整 chunk 矩形
+        resultRects.push(canonicalRect);
+        anyCollapsed = true;
+      } else if (ratio > 0) {
+        // 覆盖率不足 → 保留交集，避免丢弃该 chunk 上的脏区
+        const intersection = computeRectangleIntersection(rect, canonicalRect);
+        if (intersection && getRectangleArea(intersection) > 0) {
+          resultRects.push(intersection);
+        }
+      }
+    }
+
+    return anyCollapsed ? resultRects : [rect];
   }
 
+  /**
+   * 合并器的入口函数：规整 → 近邻合并 → canonical rect 塌缩 → 去重 → 再合并
+   * @param {any[]} dirtyRects - 原始脏区集合（允许非 RectangleRange 类型透传）
+   * @returns {any[]}
+   */
   return function mergeConfiguredRectangleDirtyRects(dirtyRects) {
     const thresholds = resolveMergerThresholds(options);
     const passthroughRects = [];

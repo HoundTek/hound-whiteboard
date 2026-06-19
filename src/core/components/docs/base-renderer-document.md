@@ -57,7 +57,7 @@
 
 原因是 `apply()` 属于低频、语义明确的提交点；对象提交回静态结构后，至少要同时覆盖它进入活动层前的旧静态像素和提交后的新静态像素，所以这里现在优先按对象旧/新范围失效，只在缺少对象级能力时才退回区块并集。
 
-`BaseRenderer.invalidateObjects(...)` 现在还会在提交给 `baseRenderScheduler` 前，先把同一批对象带来的重叠 dirty rect 做一次批内合并。这样对象移动较小、旧范围与新范围高度重叠时，不会把一串重复小矩形逐个压给调度器。
+`BaseRenderer.invalidateObjects(...)` 不再在提交给 `baseRenderScheduler` 前做批内脏区合并，而是把每个对象的当前屏幕范围和旧世界快照范围直接提交给调度器。由调度器统一在 `flush()` 时执行合并与 canonical rect 塌缩。
 
 而后两条则已经开始走脏区驱动：
 
@@ -66,8 +66,9 @@
 
 ## 当前实现状态
 
-- 已实现：按已加载区块收集静态对象、按已加载区块合并后的全局静态图拓扑序绘制、跨区块重复对象去重、显式 dirty rect 局部清理与局部重绘、局部补绘 clip、对象级 `getRenderPadding()` 动态留白、对象级静态失效、批内 dirty rect 合并。
+- 已实现：按已加载区块收集静态对象、按已加载区块合并后的全局静态图拓扑序绘制、跨区块重复对象去重、显式 dirty rect 局部清理与局部重绘、局部补绘 clip、对象级 `getRenderPadding()` 动态留白、对象级静态失效。
 - 已接入：`Monitor` 已持有 `baseRenderer` 与专用 `baseRenderScheduler`；`ActiveObjectManager.apply(objects)` 已会优先按对象旧/新范围触发 base 层刷新，并在必要时回退到旧/新区块并集；区块缓冲区变化与视口变化也会自动触发 base 层刷新。
+- 对象级失效的屏幕脏区不再在 `invalidateObjects` 中预合并，而是原样提交给调度器，由 `RenderScheduler.flush()` 统一合并与 canonical rect 塌缩，避免预合并时的区域丢失。
 - 待完善：按对象真实像素进一步细化静态层脏区、按区块裁剪重绘、区块增量补绘、缩放平移下更细粒度的静态层缓存策略。
 
 ## 相关文档

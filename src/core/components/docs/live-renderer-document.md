@@ -155,12 +155,13 @@
 ## 当前实现状态
 
 - 已实现：按 `layerOrder` 读取对象、同层 `inactiveGraph` 拓扑序绘制、活动对象回退路径、世界矩形到屏幕矩形换算、显式 dirty rect 局部清理与局部重绘、局部补绘 clip、对象级 `getRenderPadding()` 动态留白、旧范围与新范围同时失效、显式旧几何快照协议。
-- 已接入：`Monitor` 已把 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`；`ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`；`stroke-creator` 与 `polygon-creator` 这类高频几何修改路径已会在变更前记录快照、变更后请求活动层刷新；`ObjectModifierTool` 已具备统一的几何变更包装钩子。
+- 已接入：`Monitor` 已把 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`；`ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`；`stroke-creator` 与 `polygon-creator` 这类高频几何修改路径已会在变更前记录快照、变更后请求活动层刷新；`ObjectModifierTool` 已具备统一的几何变更包装钩子；同一批高频修改路径也会同步推动 ui 层刷新，使兼容选中框不会滞后。
 - 已兼容：无参 `render()` 仍保持整层重绘语义；传入普通矩形对象时仍会被兼容处理。
-- 待完善：调度器侧的 dirty rect 合并策略已得到更完整的近邻/退化支持，但对象级 padding 仍需要覆盖更完整的对象族；`baseCanvas` / `uiCanvas` 的专用渲染器尚未补齐；真实 modifier 子类尚未接入这套快照协议。
+- 待完善：调度器侧的 dirty rect 合并策略已得到更完整的近邻/退化支持，但对象级 padding 仍需要覆盖更完整的对象族；真实 modifier 子类尚未接入这套快照协议；`uiCanvas` 真实 overlay 语义与宿主边界仍需继续收敛。
 
 ## 相关文档
 
 - [monitor-document.md](./monitor-document.md)
+- [ui-renderer-document.md](./ui-renderer-document.md)
 - [active-object-manager-document.md](./active-object-manager-document.md)
 - [tier-graph-document.md](./tier-graph-document.md)

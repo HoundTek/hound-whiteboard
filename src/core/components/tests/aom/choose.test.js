@@ -1,4 +1,5 @@
 import { jest } from "@jest/globals";
+import { createChunk, createChunkAt } from "../../../test-support/aom-fixtures.js";
 import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Chunk } from "../../chunk.js";
@@ -16,20 +17,6 @@ const { ActiveObjectManager } = await import("../../active-object-manager.js");
 describe("ActiveObjectManager/choose", () => {
   let aom = new ActiveObjectManager();
   let chunk = createChunk(1);
-
-  function createChunk(id) {
-    const chunk = Chunk.fromId(id);
-    chunk.isLoad = true;
-    chunk.isTempLoad = false;
-    return chunk;
-  }
-
-  function createChunkAt(x, y) {
-    const chunk = Chunk.fromCoordinate(x, y);
-    chunk.isLoad = true;
-    chunk.isTempLoad = false;
-    return chunk;
-  }
 
   function createObject(id, chunkId) {
     return new BasicObject(new Vector(0, 0), id, chunkId);

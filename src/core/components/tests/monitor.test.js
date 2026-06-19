@@ -1,16 +1,68 @@
 import { jest } from "@jest/globals";
 import { Monitor } from "../monitor.js";
+import { DevicesDAG } from "../../devices-dag/index.js";
 import { Vector } from "../../utils/math.js";
 import { Chunk } from "../chunk.js";
 import { RectangleRange } from "../../range/index.js";
-import {
-  createDebuggerDevice,
-  DEBUGGER_DEVICE_SIGNAL_TYPES,
-} from "../../devices/debugger-device.js";
+import { createSubDAG } from "../../devices-dag/index.js";
+import { createPrefixNodeHandler } from "../../prefixs/index.js";
 import {
   createNoopCanvas,
   createNoopCanvasContext2D,
 } from "../../test-support/noop-canvas.js";
+
+const REPORT_SIGNAL_TYPE = "debug-report";
+
+/**
+ * 创建一个简单的报告子图（prefix 节点），用于验证 Monitor#mountSubDAG 行为。
+ */
+function createReportSubDAG() {
+  let lastReceivedAt = "/";
+  let lastOriginalTo = "/";
+
+  const builder = createSubDAG("/debugger");
+  const root = builder
+    .node()
+    .prefix(
+      createPrefixNodeHandler({
+        initialState: { entryIndex: -1 },
+        handle(signalPacket, prefixContext = {}) {
+          const sigs = Array.isArray(signalPacket.signals)
+            ? signalPacket.signals
+            : [];
+          lastReceivedAt = prefixContext.path ?? "/";
+          lastOriginalTo = signalPacket.to ?? "/";
+          prefixContext.patchState({
+            entryIndex: (prefixContext.getState().entryIndex ?? -1) + 1,
+          });
+          return prefixContext.routeToChild("report", sigs);
+        },
+      }),
+      { prefixKind: "debug", routePolicy: "inspect" },
+    )
+    .defaultRoute("report");
+
+  const report = builder.node().handler((signalPacket, context = {}) => ({
+    to: "",
+    signals: [
+      {
+        type: REPORT_SIGNAL_TYPE,
+        context: {
+          index: 0,
+          receivedAt: lastReceivedAt,
+          originalTo: lastOriginalTo,
+          signalCount: Array.isArray(signalPacket.signals)
+            ? signalPacket.signals.length
+            : 0,
+        },
+      },
+    ],
+  }));
+
+  builder.edge("report", root, report);
+
+  return builder.build();
+}
 
 describe("Monitor", () => {
   function createContext() {
@@ -18,10 +70,11 @@ describe("Monitor", () => {
   }
 
   function createMonitor(monitorId = "monitor") {
-    const canvas = createNoopCanvas({ width: 800, height: 600 });
+    const canvas = createNoopCanvas();
     const board = {
       width: 800,
       height: 600,
+      devicesDAG: null,
       getChunkById(chunkId) {
         return Chunk.fromId(chunkId);
       },
@@ -39,15 +92,22 @@ describe("Monitor", () => {
       },
     };
 
-    return new Monitor(canvas, board, { width: 800, height: 600 }, monitorId);
+    board.devicesDAG = new DevicesDAG();
+
+    return new Monitor(
+      { liveCanvas: canvas },
+      board,
+      { width: 800, height: 600 },
+      monitorId,
+    );
   }
 
-  test("mountDevice 应自动补上 monitorId 后挂载设备", () => {
+  test("mountSubDAG 应自动补上 monitorId 后挂载设备", () => {
     const monitor = createMonitor("alpha");
-    const debuggerDevice = createDebuggerDevice();
+    const reportSubDAG = createReportSubDAG();
 
-    const mountedNodes = monitor.mountDevice("/debugger", debuggerDevice);
-    const packets = monitor.devicesTree.dispatch({
+    const mountedNodes = monitor.mountSubDAG("", reportSubDAG);
+    const packets = monitor.devicesDAG.dispatch({
       to: "/alpha/debugger",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
@@ -56,12 +116,12 @@ describe("Monitor", () => {
       "/alpha/debugger",
       "/alpha/debugger/report",
     ]);
-    expect(packets).toEqual([
+    expect(packets.packets).toEqual([
       {
-        to: "/alpha/debugger/report",
+        to: "",
         signals: [
           {
-            type: DEBUGGER_DEVICE_SIGNAL_TYPES.REPORT,
+            type: REPORT_SIGNAL_TYPE,
             context: {
               index: 0,
               receivedAt: "/alpha/debugger",
@@ -74,11 +134,11 @@ describe("Monitor", () => {
     ]);
   });
 
-  test("mountDevice 应规整不带前导斜杠的相对路径", () => {
+  test("mountSubDAG 应规整不带前导斜杠的相对路径", () => {
     const monitor = createMonitor("beta");
-    const debuggerDevice = createDebuggerDevice();
+    const reportSubDAG = createReportSubDAG();
 
-    const mountedNodes = monitor.mountDevice("debugger", debuggerDevice);
+    const mountedNodes = monitor.mountSubDAG("debugger", reportSubDAG);
 
     expect(mountedNodes.map((node) => node.path)).toEqual([
       "/beta/debugger",
@@ -133,7 +193,7 @@ describe("Monitor", () => {
     });
   });
 
-  test("attachRenderLayers 应保留 liveCanvas 为兼容入口并同步层尺寸", () => {
+  test("attachRenderLayers 同步层尺寸", () => {
     const monitor = createMonitor("delta");
     const baseCanvas = createNoopCanvas({ width: 0, height: 0 });
     const liveCanvas = createNoopCanvas({ width: 320, height: 240 });
@@ -148,7 +208,6 @@ describe("Monitor", () => {
     });
 
     expect(monitor.rootElement).toBe(rootElement);
-    expect(monitor.canvas).toBe(liveCanvas);
     expect(monitor.liveCanvas).toBe(liveCanvas);
     expect(monitor.baseCanvas).toBe(baseCanvas);
     expect(monitor.uiCanvas).toBe(uiCanvas);
@@ -160,8 +219,10 @@ describe("Monitor", () => {
     expect(monitor.getContext("live")?.save).toBeDefined();
     expect(monitor.getContext("ui")?.save).toBeDefined();
     expect(monitor.renderScheduler).toBeDefined();
+    expect(monitor.uiRenderScheduler).toBeDefined();
     expect(monitor.baseRenderer).toBeDefined();
     expect(monitor.liveRenderer).toBeDefined();
+    expect(monitor.uiRenderer).toBeDefined();
   });
 
   test("renderScheduler.flush 应调用 liveRenderer.flush", () => {
@@ -172,6 +233,19 @@ describe("Monitor", () => {
 
     monitor.renderScheduler.invalidate({ type: "dirty" });
     monitor.renderScheduler.flush();
+
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    flushSpy.mockRestore();
+  });
+
+  test("uiRenderScheduler.flush 应调用 uiRenderer.flush", () => {
+    const monitor = createMonitor("epsilon-ui");
+    const flushSpy = jest
+      .spyOn(monitor.uiRenderer, "flush")
+      .mockImplementation(() => []);
+
+    monitor.uiRenderScheduler.invalidate({ type: "dirty" });
+    monitor.uiRenderScheduler.flush();
 
     expect(flushSpy).toHaveBeenCalledTimes(1);
     flushSpy.mockRestore();

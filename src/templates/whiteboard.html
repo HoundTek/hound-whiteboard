@@ -8,9 +8,74 @@
   </head>
   <body>
     <div id="app">
-      <img id="app-background-layer" />
-      <div id="app-texture-layer"></div>
-      <div id="app-foreground-layer"></div>
+      <div id="app-left">
+        <div id="app-foreground-layer"></div>
+      </div>
+      <div id="app-divider"></div>
+      <aside id="app-right">
+        <div class="demo-panel">
+          <h1>Demo UI</h1>
+          <p>这个面板仅用于演示，右侧宽度固定为 300px。</p>
+          <section>
+            <h2>说明</h2>
+            <ul>
+              <li>左侧 Monitor 区域宽度可变。</li>
+              <li>右侧 UI 区域宽度固定为 300px。</li>
+              <li>中间使用分割线区隔。</li>
+            </ul>
+          </section>
+          <section>
+            <style>
+            .kbd { border:1px solid #aaa; border-radius:3px; padding:0 5px; background:#f5f5f5; font-size:.85em; font-family:monospace }
+            .shortcut-grid { display:grid; grid-template-columns:auto 1fr; gap:2px 8px; margin:4px 0; font-size:.92em }
+            .shortcut-grid .key { white-space:nowrap; color:#333 }
+            .shortcut-grid .desc { color:#555 }
+          </style>
+          <h2>快捷键</h2>
+          <b>工具</b>
+          <div class="shortcut-grid">
+            <span class="key"><kbd class="kbd">左键</kbd></span>
+            <span class="desc">红色笔画</span>
+            <span class="key"><kbd class="kbd">右键</kbd></span>
+            <span class="desc">首次拖拽框选→再次拖拽修改位置</span>
+            <span class="key"><kbd class="kbd">Enter</kbd></span>
+            <span class="desc">提交修改</span>
+            <span class="key"><kbd class="kbd">Esc</kbd></span>
+            <span class="desc">取消修改</span>
+            <span class="key"><kbd class="kbd">Space</kbd></span>
+            <span class="desc">随机圆</span>
+            <span class="key"><kbd class="kbd">W</kbd><kbd class="kbd">A</kbd><kbd class="kbd">S</kbd><kbd class="kbd">D</kbd></span>
+            <span class="desc">移动坐标</span>
+          </div>
+          <b>视口</b>
+          <div class="shortcut-grid">
+            <span class="key"><kbd class="kbd">←</kbd><kbd class="kbd">↑</kbd><kbd class="kbd">↓</kbd><kbd class="kbd">→</kbd></span>
+            <span class="desc">平移</span>
+            <span class="key"><kbd class="kbd">+</kbd><kbd class="kbd">-</kbd></span>
+            <span class="desc">缩放</span>
+            <span class="key"><kbd class="kbd">R</kbd></span>
+            <span class="desc">刷新</span>
+          </div>
+          <b>调试</b>
+          <div class="shortcut-grid">
+            <span class="key"><kbd class="kbd">C</kbd></span>
+            <span class="desc">区块加载</span>
+            <span class="key"><kbd class="kbd">O</kbd></span>
+            <span class="desc">对象加载</span>
+            <span class="key"><kbd class="kbd">M</kbd></span>
+            <span class="desc">AOM</span>
+            <span class="key"><kbd class="kbd">B</kbd></span>
+            <span class="desc">白板信息</span>
+            <span class="key"><kbd class="kbd">T</kbd></span>
+            <span class="desc">设备图（树状显示）</span>
+            <span class="key"><kbd class="kbd">Shift</kbd>+<kbd class="kbd">T</kbd></span>
+            <span class="desc">设备图（mermaid 显示）</span>
+            <span class="key"><kbd class="kbd">1</kbd>~<kbd class="kbd">4</kbd></span>
+            <span class="desc">区块详情</span>
+          </div>
+          </section>
+        </div>
+      </aside>
     </div>
 
     <script type="module" src="./whiteboard.js"></script>

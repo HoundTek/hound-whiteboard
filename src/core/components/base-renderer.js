@@ -9,10 +9,13 @@ import { BasicObject } from "../objects/basic-obj.js";
 import { intersectsRanges, PathRange, RectangleRange } from "../range/index.js";
 import { DirectedGraph } from "../utils/directed-graph.js";
 import { Monitor } from "./monitor.js";
-import { mergeRectangleDirtyRects } from "./render-scheduler.js";
-
 const PATH_RASTERIZATION_SCREEN_PADDING = 1;
 
+/**
+ * 用于 clearRect 时对脏区做整数扩边，避免子像素残留
+ * @param {RectangleRange | Object} rect - 原始脏区
+ * @returns {RectangleRange | undefined}
+ */
 function expandRectForClear(rect) {
   const normalizedRect = RectangleRange.fromRectLike(rect);
   if (!normalizedRect) return undefined;
@@ -25,6 +28,11 @@ function expandRectForClear(rect) {
   return new RectangleRange(left, top, right - left, bottom - top);
 }
 
+/**
+ * 规整脏区数组用于屏幕清理：扩边 + 过滤无效项
+ * @param {any[]} [dirtyRects = []]
+ * @returns {RectangleRange[]}
+ */
 function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
   return dirtyRects
     .map((dirtyRect) => expandRectForClear(dirtyRect))
@@ -409,18 +417,15 @@ class BaseRenderer {
       if (previousRect) dirtyRects.push(previousRect);
     }
 
-    const mergeDirtyRects =
-      this.monitor?.baseRenderScheduler?.mergeDirtyRects ??
-      mergeRectangleDirtyRects;
-    const mergedDirtyRects = mergeDirtyRects(dirtyRects).filter(
+    const normalizedRects = dirtyRects.filter(
       (dirtyRect) => dirtyRect instanceof RectangleRange,
     );
 
-    for (const dirtyRect of mergedDirtyRects) {
+    for (const dirtyRect of normalizedRects) {
       this.monitor?.baseRenderScheduler?.invalidate?.(dirtyRect);
     }
 
-    return mergedDirtyRects;
+    return normalizedRects;
   }
 
   /**
@@ -517,7 +522,13 @@ class BaseRenderer {
     const ctx = this.monitor?.getContext?.("base");
     if (!ctx) return [];
 
-    const drawables = this.collectStaticDrawables();
+    const allDrawables = this.collectStaticDrawables();
+    // 过滤掉当前在 AOM 中的对象（无论活跃与否），避免 BaseRenderer 与 LiveRenderer 双渲染
+    const aom = this.monitor?.board?.activeObjectManager;
+    const drawables =
+      typeof aom?.has === "function"
+        ? allDrawables.filter((obj) => !aom.has(obj.id))
+        : allDrawables;
     const drawableEntries = this.createDrawableEntries(drawables);
     const viewportContext = this.createViewportContext(ctx);
     const hasExplicitDirtyRects =

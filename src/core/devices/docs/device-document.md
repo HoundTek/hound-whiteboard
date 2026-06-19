@@ -1,320 +1,238 @@
-# 设备文档
+# 设备定义
 
-本文档描述 HoundWhiteboard 中设备的概念定义、分类哲学和状态模型。
+## 概述
 
-## 设备的定义
+设备在当前 Core 中不是一组零散回调，而是一份结构化的 `SubDAGDefinition`。
 
-在当前架构里，设备应理解为挂载在 Monitor 下的一棵**设备子树**。
+它描述的是：
 
-也就是说：
+- 设备根路径 `rootPath`
+- 子图根节点 `rootNodeId`
+- 节点定义表 `nodes`
+- 边定义表 `edges`
+- 可选的设备级状态接口，例如 `resetState()`、`getState()`
 
-- 单个节点只是信号处理单元。
-- 一组节点组成的子树，才共同表达一个设备。
-- 设备的状态，也被拆散并压缩在这些节点之间。
+在这个模型里，设备不是直接映射到某个物理硬件，而是一个“信号空间”的结构化路由。它定义了一个根路径与一张局部 DAG，用来接收、稳定化并分发已经归属的输入信号。
 
-设备由若干 **inputter**（输入信道）和 **outputter**（输出信道）组成：
+当前模型遵守以下约束：
 
-| 设备示例   | inputter                   | outputter                |
-| ---------- | -------------------------- | ------------------------ |
-| 键盘       | 104 个按键（按键流）       | —                        |
-| S-Pen      | 二维位置、压力、角度、按键 | —                        |
-| 虚拟翻区块轮 | 一维滑动                   | 当前区块码显示（一维数字） |
+- 路由逐层向下
+- 节点只能把信号继续发给自己的后继节点
+- 跨节点可变共享数据写入节点 `state`
+- 短程只读协作通过累积 `context` 追加
+- 同一节点允许有多条入边，多条路径可达同一个节点
 
-数据流向是：DOM 事件（或蓝牙/网络）→ 设备节点 → Core；Core 的反馈再由 Monitor 渲染。
+## 结构
 
-设备在 Core 里体现为一棵挂载在 Monitor 上的**子树**，见[设备树文档](./devices-tree-document.md)。
-
-设备子树定义对象负责返回节点定义列表；每个节点定义声明相对路径、对应处理器，以及可选的默认下游路径。真正挂到设备树节点上的，是这些处理器与它们之间的默认流向关系。
-
-例如，S-Pen 设备就是挂载在 Monitor 上的一棵子树。树上的节点处理位置、压力等输入信号，再把这些信号交给笔划工具、橡皮工具等后续处理单元消费。
-
-真正的输出信号是 Core -> UI 的。比如“显示区块数”设备不会把区块码直接写进 UI，而是在白板当前区块变更时输出“当前区块数”信号，再由 UI 消费这个信号并完成显示。
-
-当前实现里，Core 端通过 `defineNodes()` 返回节点定义；其中的处理器可以来自闭包、工厂函数，也可以来自对象方法。某个设备子树中的节点收到包后，会执行自己挂载的处理器；若处理结果没有显式写 `to``，且默认下游节点当前存在，设备树就会沿该节点的 `defaultPath` 继续向下传递。
-
-## 设备哲学
-
-### 设备是否可分
-
-设备可分与否取决于**信道**（Channel）的划分——一个信道携带一种信号。共用同一套信道的输入源可视为同一个设备；占据多个不同信道的输入源则可按信道拆分为多个设备。
+`SubDAGDefinition` 的数据结构可表达为：
 
 ```mermaid
-graph LR
-  A1[手指] -->|物理信道（压力、位移）| B1[无刻度轮（设备）]
-  A2[手指] -->|物理信道（压力）| B2[翻区块按钮（设备）]
-  B1 -->|编码| C1[offset]
-  B2 -->|编码| C2[offset]
-  C1 -->|逻辑信道 offset| D[Monitor]
-  C2 -->|逻辑信道 offset| D
+flowchart LR
+  subgraph SubDAGDefinition
+    direction LR
+    RP["rootPath: /keyboard"]
+    RN["rootNodeId: 0"]
+    ND["nodes: Map\n{localId → nodeDef}"]
+    ED["edges: [{name,\nfromNodeId, toNodeId}]"]
+  end
+
+  ND -->|0| ND0["nodeDef 0\nhandler:\nrootHandler\nsemantics: {}"]
+  ND -->|1| ND1["nodeDef 1\nhandler: null\ndefaultRoute: default"]
+  ND -->|N| NDN["nodeDef N\nhandler: toolHandler\nsemantics: {tool: true}"]
+
+  ED -->|0| E0["{name: event,\nfromNodeId: 0, toNodeId: 1}"]
 ```
 
-物理信道客观存在，逻辑信道由开发者规定。两个手势共用同一个逻辑信道（offset），可视为同一设备。
+最小实现：
+
+```js
+{
+  rootPath: "/keyboard",
+  rootNodeId: 0,
+  nodes: new Map([
+    [0, { handler: rootHandler, defaultRoute: "event" }],
+    [1, { handler: eventHandler }],
+  ]),
+  edges: [
+    { name: "event", fromNodeId: 0, toNodeId: 1 },
+  ],
+  resetState() {},
+  getState() {},
+}
+```
+
+推荐直接使用 `createSubDAG()` 构建，而不是手写 `nodes + edges`。
+
+## createSubDAG 构建器
+
+典型写法如下：
+
+```js
+const builder = createSubDAG("/debugger");
+const root = builder.node().handler(rootHandler);
+const report = builder.node().handler(reportHandler);
+
+builder.edge("report", root, report);
+
+const device = builder
+  .expose({
+    resetState() {},
+    getState() {},
+  })
+  .build();
+```
+
+构建器支持：
+
+- `node()`：声明一个节点并返回 `DAGNodeBuilder`
+- `edge(name, from, to)`：声明一条有向边
+- `prefix(fn, semantics)`：把节点标记为修饰节点语义，并设置 `handler`
+- `handler(fn)`：设置节点处理器
+- `defaultRoute(name)`：设置默认出边
+- `semantics(meta)`：写入节点职责语义元数据
+- `tool(toolInstance, toolContext)`：把某个节点声明为工具节点
+- `umount(fn)`：设置节点卸载钩子
+- `expose(api)`：暴露设备级 API
+- `build()`：生成 `SubDAGDefinition`
+
+当前 builder 用显式节点和显式边描述链路。例如随机圆 workflow 可表达为：
+
+```js
+// workflow 子树统一放在 /workflows/ 下
+const builder = createSubDAG("/workflows/create-circle");
+const root = builder.node().prefix(randomPrefixHandler).defaultRoute("params");
+const params = builder
+  .node()
+  .prefix(circleParamPrefixHandler)
+  .defaultRoute("circle-creator");
+const tool = builder.node().tool(circleTool);
+
+builder.edge("params", root, params);
+builder.edge("circle-creator", params, tool);
+
+const workflow = builder.build();
+```
+
+然后通过 `addEdge` 将键位节点连接到工具子树：
+
+```js
+monitor.addEdge(
+  "/keyboard/code/Space",
+  "create-circle",
+  "/workflows/create-circle",
+);
+```
+
+## 设备 → Workflow 连接模式
+
+以下 Mermaid 图展示当前推荐的整体连接模式（使用 `dagToMermaid` 约定）：
 
 ```mermaid
-graph LR
-  A[笔]-->|信道1（绘画）|B1[Monitor 1]
-  A-->|信道2（滚动）|B2[Monitor 2]
+flowchart LR
+  subgraph Device[Device e.g. keyboard]
+    DR("keyboard #1 [handler]")
+    CH2("code/Space #2 →default")
+    CH3("code/KeyW #3 →default")
+    CH1("keydown #4")
+    DR -->|"code"| CH2
+    DR -->|"code"| CH3
+    DR -->|"keydown"| CH1
+  end
+
+  subgraph Mount[Edge + Prefix]
+    CH2 -->|"default"| P1
+    CH3 -->|"default"| P2
+    CH1 -->|"default"| W1
+  end
+
+  subgraph Workflows[/workflows/]
+    W1("/workflows/event-log #1 [tool]")
+    W2("/workflows/wasd-move #2 [tool]")
+  end
+
+  P1[["Space/ #1 [prefix] [handler]"]]
+  P1 -->|"default"| W2
+  P2[["KeyW/ #2 [prefix] [handler]"]]
+  P2 -->|"default"| W2
 ```
 
-同一支物理笔可按信道拆分为两个逻辑设备。
+核心约定：
 
-```mermaid
-graph LR
-  A1[笔]-->|绘画|B1[笔（逻辑设备）]-->|编码|C[Core]
-  A2[笔]-->|按按钮|B2[按钮（逻辑设备）]-->|编码|C
+- 设备叶节点（channel / code）`defaultRoute` 统一为 `"default"`
+- mount edge 名统一为 `"default"`
+- 无需信号转换时（如鼠标），设备直连 workflow
+- 需要信号转换时，通过 `edge.prefix` 注入
+
+## 设备与 Workflow 的分工
+
+设备负责：
+
+- 保存设备级状态，例如 `activeTouches`、`activeKeys`、按钮状态
+- 把原始设备输入改写为稳定信号
+- 决定输入应进入哪些设备子节点
+- 在需要时给下游追加只读 context，例如 `board`、`monitor` 或局部回调
+
+workflow 负责：
+
+- 消费已经稳定的设备信号
+- 修改白板对象、视口或交互状态
+- 通过节点 `state` 与上游设备或同链路工具共享上下文
+
+这里要特别强调一条边界：
+
+- `button`、`buttons`、active button state 这类字段属于设备路由语义
+- 一旦设备已经按这些字段把输入分发到正确的子节点或工具叶子，这些字段就不应再成为工具自己的判断条件
+- 因此，“哪个按钮触发了这次输入”应由设备决定；“收到这组稳定信号后做什么”才由工具决定
+
+## 设备挂载
+
+业务侧应优先通过 Monitor 挂载设备：
+
+```js
+monitor.mountSubDAG("", createKeyboardDevice());
 ```
 
-信号会以事件驱动的方式从 UI 传至 Core。
+也可以指定额外挂载前缀：
 
-```mermaid
-graph LR
-  物理信号 -->|物理信道| 编码器
-  编码器 -->|逻辑信道| Core
-  Core -->|逻辑信道| 解码器
-  解码器 -->|物理信道| 物理信号2[物理信号]
+```js
+monitor.mountSubDAG("/presentation", createKeyboardDevice());
 ```
 
-### 设备的状态指示
+最终仍会由 Board 持有的 `DevicesDAG` 执行 `mountSubDAG(basePath, subDAGDefinition, mountContext)`。
 
-设备有两类状态：**本原状态**和**关联状态**。
+## 状态暴露
 
-**本原状态**是设备自身持有的 UI 状态，如动画进度、悬停高亮、按键按下效果等。从函数式角度看，这是设备的"真实状态"——由 React `useState` / `useReducer` 管理，数据流是单向的。
+设备内部常有两类状态：
 
-**关联状态**是 OOP 意义下挂载在设备实例上的成员变量（如 `this.isDrawing`、`this.lastPoint`）。本质上，它是外部副作用；也包括设备子树各节点共享或分散持有的状态路由信息。
+- 私有运行态，例如 `Map`、`Set`、最近一次事件
+- 对外可观测快照，通过 `getState()` 返回
 
-### 设备的状态压缩
+如果设备需要被测试、调试或热切换重置，建议额外暴露 `resetState()`。
 
-设备的本原状态由 UI 处理，而其关联状态由 Core 处理。
+需要跨节点共享的短生命周期状态，不建议继续塞回设备对象本身；更适合写入 `DevicesDAG` 节点 `state`。
 
-处理方式，就是将状态压缩到[设备树](./devices-tree-document.md)的节点里。这样，设备变化的状态就化成了设备子树中的不同节点，只存在于现实设备的驱动程序里。
+## 设计约束
 
-比如现在有支 S-Pen 挂载到了 Monitor 上，其设备树的一部分长这样：
+- `rootPath` 必须是绝对路径
+- `nodes` 与 `edges` 必须显式声明，不再接受旧对象树协议
+- 单个节点上不能同时声明 `handler` 与 `tool`
+- `defaultRoute` 只写当前节点的出边名，不写完整绝对路径
+- 设备挂载路径由设备定义 `rootPath` 与 `mountSubDAG(basePath, ...)` 共同决定
+- 设备子节点不能再通过相对路径向上跳回兄弟分支
 
-```mermaid
-graph TD
-  A[Monitor]---|挂载子树|B[S-Pen]
-  B-->|默认路径|C1[S-Pen 笔]
-  C1-->|信息继续向下流动|Ca1[笔划工具]
-  Ca1-.->|通过笔划工具消费信息|D[Board]
-  B-->|按下按钮的路径|C2[S-Pen 橡皮]
-  C2-->|信息继续向下流动|Cb1
-  Cb1[橡皮工具]-.->|通过橡皮工具消费信息|D
-```
+## 当前实践
 
-上图中节点 S-Pen 以下以实线连接的部分就是 S-Pen 设备的子树。挂载设备，就是把这棵子树展开为若干节点处理器，再接到 Monitor 根节点上。
+当前仓库内的 debugger、touchscreen、mouse、keyboard 都已经迁移到 `createSubDAG(rootPath)` 新模型。
 
-设备树本身的节点、路径与分发规则，见[设备树文档](./devices-tree-document.md)。
+它们的共同特点是：
 
-更复杂的设备也会带来更复杂的状态（如触摸屏的多指聚合），但只要节点划分得当，就可以使这些状态显化并封存到节点中了。
+- 根节点只做设备态更新与初始分流
+- 设备通过 `defaultRoute` + 出边连接到 `/<monitorId>/workflows/` 下的 workflow 节点
+- 设备状态通过 `expose()` 对外暴露
+- debugger 的根节点是修饰节点语义，用于记录经过该节点的信号并继续下传
 
-### 设备间通信
+## 相关文档
 
-设备间不可直接通信，只能通过 Monitor 组件间接传递信息。例如，设备侧若拿到的是一组屏幕坐标，通常应先借助 Monitor 暴露的 `screenToWorld()` 在进入 Core 前完成规整；进入 Tool 链路后的 `position` 默认就应被视为世界坐标。设备本身对其他设备无感知。
-
-在当前代码实现中，这种“间接传递”分成两段：
-
-- Core 端内部由设备树节点上的处理器直接处理并转发信号包。
-- 只有当信号跨 Core-UI Interface 边界时，才进入 EventBus 这类总线通道。
-
-因此，设备既不是直接互调，也不是把所有传输都塞进总线。
-
-## 各设备举例
-
-### 触摸屏设备、笔设备
-
-触摸屏设备、笔设备是最常见的绘画设备。笔设备还可能携带按键（S-Pen）、倾斜角（Apple Pencil）、橡皮端（Apple Pencil 背面）等额外信道。
-
-触摸屏设备和单笔设备不同的一点在于：它天然可能同时携带多个触点。也就是说，同一个输入包里可以并列出现多个 `position` 信号，只要它们通过 `touchId` 之类的字段区分来源，就可以在设备内部被聚合成一组活动触点。
-
-当前代码中已经提供了一个触摸屏设备示例，见 [touchscreen-device.js](../touchscreen-device.js)。它维护一组当前活动触点，并在收到多条位置/结束信号后产出一个聚合后的 `touch-contacts` 信号。
-
-注意：现实中"手指"和"笔"本身没有位置传感器，位置由屏幕识别。HWB 中按信道归属，将位置传感器划归这两个设备（见[设备哲学](#设备哲学)）。
-
-### 鼠标设备
-
-鼠标设备是当前最典型的单点输入设备之一。它与触摸屏不同，不需要聚合多个触点；但它通常需要在设备层区分“悬停移动”和“主键拖动”两类状态。
-
-当前代码中已经提供了一个鼠标设备示例，见 [mouse-device.js](../mouse-device.js)。它维护按钮状态，并把输入路由到多个通道节点：
-
-- `/pointer`：位置类输入
-- `/primary`：左键相关输入
-- `/secondary`：右键相关输入
-- `/auxiliary`：中键相关输入
-- `/wheel`：滚轮输入
-
-如果某个通道需要挂工具，则会继续在该通道节点下展开独立的 `/tool` 子节点。这样，按钮状态判断和工具消费就分离成了两层：通道节点负责设备语义，工具节点负责业务修改。
-
-### 键盘设备
-
-键盘设备与鼠标、触摸屏不同的一点在于：它的边界不由硬件决定，而由当前输入语义决定。
-
-只有两类键盘输入应进入键盘设备子树：
-
-- 该输入直接操作某个 Monitor
-- 该输入最终会被某个工具消费
-
-例如：
-
-- 用户绑定 `WASD` 作为画笔移动键，这几组按键应进入键盘设备子树
-- 空格被绑定为某个临时绘图工具，这个空格按键也应进入键盘设备子树
-
-相对地，下面这些不应视为键盘设备输入：
-
-- `Command+S` / `Ctrl+S` 保存
-- 切换工具、打开 UndoTree、打开面板等应用级快捷键
-- 与 Monitor 操作和工具消费无关的全局热键
-
-原因很简单：这些按键不是“设备信道”，而是宿主 UI 的命令入口。若也塞进键盘设备子树，会把设备层与应用命令层混在一起。
-
-当前代码中已经提供了一个键盘设备示例，见 [keyboard-device.js](../keyboard-device.js)。它维护一组当前按下的按键，并把输入路由到几类子节点：
-
-- `/event`：接收所有进入键盘设备的键盘事件
-- `/keydown`：接收非重复按下事件
-- `/keyup`：接收抬起事件
-- `/repeat`：接收长按重复事件
-- `/cancel`：接收取消事件
-- `/code/<KeyCode>`：接收某个具体键位改写后的设备语义信号，如 `Space`、`KeyW`
-- `/code/<KeyCode>/tool`：通过运行时挂载追加的工具节点
-
-这样做的意义是：
-
-- Monitor 侧可以在通用节点消费视口操作键
-- 具体键位节点可以先把原始 `keydown` / `keyup` 改写成更稳定的 `trigger` / `release` / `cancel`
-- 工具侧只消费键位节点下通过 `mount` 事件追加的独立工具节点，而不必绑定到设备语义节点本身
-- 宿主 UI 仍可保留自己的快捷键系统，而不必被迫走设备树
-
-## 与现实中的设备的区别
-
-HWB 中的"设备"与硬件意义上的设备差异显著——任何可与白板交互的东西都可以是一个设备（虚拟设备亦然）。
-
-现实物件与 HWB 设备的主要差异：
-
-- **非一一对应**：一根手指触摸一次就可注册一个新的"手指设备"，总数不受现实手指数量限制。
-- **一物多设备**：S-Pen 在白板上绘画时是"笔设备"，但拨动虚拟滑轮时就切换为"滑轮设备"。
-- **按需激活**：鼠标指针始终注册在屏幕上，但只有按下鼠标键时设备才被激活并处理事件。
-
-## 设备的实现
-
-在 Core 端，设备是一个**设备子树定义对象**，它最少只需要提供一个 `defineNodes()` 方法，用来返回这棵设备子树中的节点定义。
-
-节点定义至少包含两项：
-
-- 相对设备根路径 `path`
-- 节点处理器 `processor`
-
-若当前节点存在“默认往下走”的下游，还可以声明：
-
-- 默认下游路径 `defaultPath`
-
-工具本身不是设备定义对象的一部分。当前建议通过运行时事件挂载：
-
-- `mount`：`{ to: string, tool: Tool }`
-- `umount`：`{ to: string }`
-
-真正挂载到 DevicesTree 上的只有这些节点处理器。底层的 `devicesTree.mountDevice(rootPath, deviceDefinition)` 会把相对路径展开到目标根路径下，再统一挂载；若从 `Monitor` 调用 `monitor.mountDevice(path, deviceDefinition)`，则会先自动补上当前 `monitorId`，再转交给设备树。
-
-### 最小协议
-
-当前设备定义对象的最小协议可以写成：
-
-```javascript
-const deviceDefinition = {
-  defineNodes() {
-    return [
-      { path: "", processor: rootProcessor, defaultPath: "tool" },
-      { path: "/child", processor: childProcessor },
-      { path: "/tool", processor: toolProcessor },
-    ];
-  },
-};
-```
-
-这意味着：
-
-- 设备的“身份”来自一组节点的协作关系，而不是某个单独实例。
-- 设备状态可以保存在闭包里，也可以被拆散到多个节点处理器的共享上下文里。
-- 节点之间可以通过相对路径与默认路径表达稳定的数据流，而不必在每个节点里手写绝对路径拼接。
-- 工具可以在设备挂载完成后，再由上层通过 `mount` / `umount` 事件动态追加或移除。
-- 若某个设备需要额外方法，也可以直接把这些方法挂在定义对象上。
-
-### 协议扩展边界
-
-当前 `DevicesTree` 真正消费的最小协议，只有 `defineNodes()`。
-
-这意味着，像下面这些字段即使未来要补，也都属于**定义对象自己的扩展信息**，而不是当前设备树已经依赖的字段：
-
-- `name`：设备的人类可读名称
-- `kind`：设备类别或用途标签
-- `meta`：调试、展示或序列化所需的附加元信息
-- `mount` / `unmount`：设备级生命周期钩子
-
-目前这些扩展字段都不是必需项。若将来要让 `DevicesTree` 感知它们，就应显式扩展挂载协议，而不是把它们默认视为现有协议的一部分。
-
-## 为什么设备不是类，但工具是类
-
-这不是风格偶然，而是两类对象在系统里的职责边界不同。
-
-先看设备。当前 Core 把设备建模为“设备子树定义对象”，最小协议只有 `defineNodes()`。原因是设备的身份并不来自某个单一实例，而来自一组节点处理器之间的协作关系：
-
-- 设备真正参与运行的是展开后的节点、路径、`processor` 和 `defaultPath`
-- 同一个设备完全可以由闭包、工厂函数或普通对象方法提供处理器
-- 设备状态往往分散在多个通道节点之间，而不是集中在某个 `this` 上
-- `DevicesTree` 只需要知道“这棵子树怎么展开”，不需要知道“这个实例继承自什么基类”
-
-因此，设备若强制建成类，收益其实很小，反而会制造一种错觉：好像“设备实例”本身才是运行主体。但在当前架构里，真正被分发系统消费的是节点协议，不是类层次。
-
-再看工具。工具承担的是业务消费职责，它接收整包信号后，要直接修改 `Board`、对象或活动状态。这里用类更合适，原因是：
-
-- 工具有稳定且明确的实例级行为边界：`process()`、`reset()`、`serialize()`
-- 工具经常需要持有一次手势或一次交互过程的局部状态，例如 `isDrawing`、`lastPoint`
-- 不同工具共享一组统一入口，但内部行为差异很大，继承 `Tool` 基类比复制协议更容易复用
-- 工具常常需要被运行时挂载、卸载、重置；把它建成实例对象，比把一组散落函数重新拼装成协议更直接
-
-可以把两者理解为两种不同层次的抽象：
-
-- 设备是“路由结构定义”，重点是节点协作关系，所以采用对象协议
-- 工具是“业务行为单元”，重点是实例行为与局部状态，所以采用类抽象
-
-这也是为什么当前代码允许 `createMouseDevice()`、`createKeyboardDevice()` 返回普通定义对象，却要求业务工具继承 `Tool`。前者要解决“信号在设备树里怎么走”，后者要解决“信号到达末端后怎么消费”。它们解决的问题不同，所以抽象方式也不需要对称。
-
-### debugger-device 示例
-
-当前代码里已经提供了一个调试设备示例，见 [debugger-device.js](../debugger-device.js)。它是一个设备子树定义工厂。
-
-它包含两个节点：
-
-- 根节点 `/`：接收输入包，记录调试历史，并把包转发到 `report` 节点。
-- 子节点 `/report`：产出一个 `debug-report` 结果包，并让该结果包停在当前节点路径上，作为 `dispatch()` 的终止结果返回。
-
-简化用法如下。这里直接走 `Monitor` 提供的便捷入口，因此路径只需相对于当前 monitor 根节点书写：
-
-```javascript
-const debuggerDevice = createDebuggerDevice({
-  onRecord(entry) {
-    console.debug(entry);
-  },
-});
-
-monitor.mountDevice("/debugger", debuggerDevice);
-```
-
-这个例子说明了两件事：
-
-- 设备定义对象本身也可以带附加状态和方法，比如 `history`、`clearHistory()`、`getLastEntry()`。
-- 设备树并不关心这些附加成员，它只消费 `defineNodes()` 返回的节点列表。
-
-### 与工具的关系
-
-设备节点和工具节点的职责不同：
-
-- 设备节点更偏向信道接入、信号改写、状态路由、目标改写。
-- 工具更偏向消费信号并直接修改 Board / Object。
-
-因此，一个典型的数据路径会是：
-
-1. 设备根节点接收现实输入编码后的 `SignalPacket`
-2. 设备子树内部根据状态把包送到合适的节点
-3. 节点把信号交给工具处理，或者生成 Core -> UI 的输出信号
-4. 不一定是叶子节点才可以产出结果包，设备树会在每个节点检查包的 `to` 字段来决定是否继续递归。
-
-设备的实现重点不在继承层级，而在“如何把状态和路由拆成一棵可组合的子树”。
+- [设备图](../devices-dag/docs/devices-dag-document.md)
+- [键盘设备](./keyboard-device-document.md)
+- [输入流](../../docs/core-input-flow.md)

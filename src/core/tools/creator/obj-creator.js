@@ -7,7 +7,7 @@
 
 import { Vector } from "../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
-import { SignalPacket } from "../../devices/signal.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 import { Tool } from "../tool.js";
 
 /**
@@ -21,6 +21,7 @@ import { Tool } from "../tool.js";
  */
 const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
   POSITION: "position",
+  PROPERTY: "property",
   GESTURE_END: "end",
   GESTURE_CANCEL: "cancel",
   OBJECT_END: "object-end",
@@ -28,6 +29,21 @@ const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
   END: "end",
   CANCEL: "cancel",
 });
+
+/**
+ * 从信号列表中提取 prefix 注入的对象属性
+ * @param {Array<Object>} signals
+ * @returns {Record<string, any>|null}
+ */
+function extractInjectedProperty(signals) {
+  const propertySignal = signals.find(
+    (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+  );
+  const value = propertySignal?.context?.value;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? { ...value }
+    : null;
+}
 
 /**
  * 对象创建工具基类
@@ -49,6 +65,7 @@ class ObjectCreatorTool extends Tool {
     super();
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
+    this._pendingProperty = null;
   }
 
   /**
@@ -90,38 +107,30 @@ class ObjectCreatorTool extends Tool {
   isObjectCreationCompleted;
 
   /**
-   * 将信号上下文中的坐标规整为 Vector。
-   * @param {*} value - 原始值
-   * @returns {Vector|null} 规整后的向量
+   * 从信号包中提取的注入属性
+   * @type {Record<string, any>|null}
    */
-  static normalizeVector(value) {
-    if (!value) return null;
-    if (value instanceof Vector) return value;
-    if (typeof value.x === "number" && typeof value.y === "number") {
-      return new Vector(value.x, value.y);
-    }
-    return null;
-  }
+  _pendingProperty;
 
   /**
-   * 从信号包中提取交互上下文。
+   * 从信号包中提取交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {Object} 交互上下文
    */
-  buildInteractionContext(signalPacket, deviceContext = {}) {
+  buildInteractionContext(signalPacket, context = {}) {
     const signals = signalPacket.signals;
     const positionSignal = signals.find(
       (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
     );
     const position =
-      deviceContext.resolvePosition?.(signalPacket) ??
-      ObjectCreatorTool.normalizeVector(
+      context.resolvePosition?.(signalPacket) ??
+      Vector.parse(
         positionSignal?.context?.value ?? positionSignal?.context?.position,
       );
     return {
       signalPacket,
-      deviceContext,
+      context,
       signals,
       position,
       isGestureEnded: signals.some(
@@ -136,33 +145,51 @@ class ObjectCreatorTool extends Tool {
       isObjectCancelled: signals.some(
         (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_CANCEL,
       ),
-      objectId: positionSignal?.context?.objectId ?? deviceContext.objectId,
+      objectId: positionSignal?.context?.objectId ?? context.acc?.objectId,
       ownerChunkId:
         positionSignal?.context?.ownerChunkId ??
-        deviceContext.ownerChunkId ??
-        deviceContext.resolveOwnerChunkId?.(position, signalPacket),
+        context.acc?.ownerChunkId ??
+        context.acc?.resolveOwnerChunkId?.(position, signalPacket),
+      injectedProperty: extractInjectedProperty(signals),
     };
   }
 
   /**
-   * 确保当前交互已拥有对象实例。
+   * 确保当前交互已拥有对象实例
    * @param {Object} interaction - 当前交互上下文
    * @returns {boolean} 是否已拥有对象实例
    */
   ensureObject(interaction) {
     if (!this.obj || this.isObjectCreationCompleted) {
-      const objectId =
-        interaction.objectId ??
-        interaction?.deviceContext?.allocateObjectId?.();
-      if (interaction.objectId == null || interaction.ownerChunkId == null) {
-        if (objectId == null || interaction.ownerChunkId == null) {
-          return false;
+      this._pendingProperty = interaction?.injectedProperty ?? null;
+
+      // 惰性分配 objectId：仅当需要创建新对象时才调用 allocateObjectId
+      if (interaction.objectId == null) {
+        const allocatedId = interaction?.context?.acc?.allocateObjectId?.();
+        if (allocatedId != null) {
+          interaction.objectId = allocatedId;
         }
       }
-      interaction.objectId = objectId;
-      this.create(interaction.position, objectId, interaction.ownerChunkId);
+
+      if (interaction.objectId == null || interaction.ownerChunkId == null) {
+        return false;
+      }
+      this.create(
+        interaction.position,
+        interaction.objectId,
+        interaction.ownerChunkId,
+      );
+      if (
+        this._pendingProperty &&
+        this.obj &&
+        typeof this.obj.setProperty === "function"
+      ) {
+        this.obj.setProperty(this._pendingProperty);
+      }
+      this._pendingProperty = null;
       this.isObjectCreationCompleted = false;
-      interaction?.deviceContext?.board?.activeObjectManager?.add?.(
+      this.syncCreatedObjectContext(interaction?.context);
+      interaction?.context?.acc?.board?.activeObjectManager?.add?.(
         new Set([this.obj]),
       );
     }
@@ -171,18 +198,52 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 处理一个完整信号包。
+   * 将当前创建对象写回上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {BasicObject} [objectEntry=this.obj] - 当前对象
+   * @returns {Array<BasicObject>}
+   */
+  syncCreatedObjectContext(context = {}, objectEntry = this.obj) {
+    return this.setContextObjects(context, objectEntry ? [objectEntry] : []);
+  }
+
+  /**
+   * 卸载或结束 workflow 时撤销未提交对象
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   */
+  discardCreatedObjects(context = {}) {
+    const normalizedObjects =
+      this.resolveContextObjects(context).filter(Boolean);
+    const activeObjectIndex =
+      context?.acc?.board?.activeObjectManager?.activeObjectIndex;
+    const activeObjects =
+      typeof activeObjectIndex?.has === "function"
+        ? normalizedObjects.filter((objectEntry) =>
+            activeObjectIndex.has(objectEntry.id),
+          )
+        : [];
+
+    if (activeObjects.length > 0) {
+      context?.acc?.board?.activeObjectManager?.discard?.(
+        new Set(activeObjects),
+      );
+    }
+  }
+
+  /**
+   * 处理一个完整信号包
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    * @abstract
    */
-  process(signalPacket, deviceContext = {}) {
+  process(signalPacket, context = {}) {
     throw new Error("Method not implemented.");
   }
 
   /**
-   * 开始一次创建手势。
+   * 开始一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   beginCreationGesture(interaction) {
@@ -195,7 +256,7 @@ class ObjectCreatorTool extends Tool {
    */
   beforeGeometryMutation(interaction) {
     if (!this.obj) return;
-    interaction?.deviceContext?.monitor?.liveRenderer?.captureObjectSnapshot?.([
+    interaction?.context?.acc?.monitor?.liveRenderer?.captureObjectSnapshot?.([
       this.obj,
     ]);
   }
@@ -206,13 +267,14 @@ class ObjectCreatorTool extends Tool {
    */
   afterGeometryMutation(interaction) {
     if (!this.obj) return;
-    interaction?.deviceContext?.monitor?.liveRenderer?.invalidateObjects?.([
+    interaction?.context?.acc?.monitor?.liveRenderer?.invalidateObjects?.([
       this.obj,
     ]);
+    interaction?.context?.acc?.monitor?.requestViewportUiRender?.();
   }
 
   /**
-   * 更新一次创建手势。
+   * 更新一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   updateCreationGesture(interaction) {
@@ -220,7 +282,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 完成一次创建手势。
+   * 完成一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreationGesture(interaction) {
@@ -228,7 +290,7 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 取消当前创建手势。
+   * 取消当前创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   cancelCreationGesture(interaction) {
@@ -236,29 +298,92 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 完成整个对象创建。
+   * 决定 finalize 之后是否将对象提交到静态图
+   * @description
+   * handoff 工作流 override 此钩子返回 false 以阻止提交，
+   * 使对象停留在 AOM 动态图中等待 modifier 最终提交。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {boolean}
+   * @protected
+   */
+  beforeCommitCreatedObject(interaction) {
+    return true;
+  }
+
+  /**
+   * 固化对象上下文（同步到 node state、标记完成）
+   * @description
+   * 无论后续是否 commit，此步骤始终执行。
+   * @param {Object} interaction - 当前交互上下文
+   * @protected
+   */
+  finalizeCreatedObject(interaction) {
+    const context = interaction?.context ?? {};
+    this.syncCreatedObjectContext(context, this.obj);
+    this.isObjectCreationCompleted = true;
+  }
+
+  /**
+   * 将对象正式提交到静态图
+   * @description
+   * 仅当 {@link beforeCommitCreatedObject} 返回 true 时由
+   * {@link completeCreatedObject} 调用。
+   * @param {Object} interaction - 当前交互上下文
+   * @protected
+   */
+  commitCreatedObject(interaction) {
+    const context = interaction?.context ?? {};
+    const board = context.acc?.board;
+    const completedObject = this.obj;
+
+    if (board?.activeObjectManager?.apply) {
+      board.activeObjectManager.apply(new Set([completedObject]));
+      this.clearContextObjects(context);
+      return;
+    }
+    board?.addObject?.(completedObject, completedObject.ownerChunkId);
+    this.clearContextObjects(context);
+  }
+
+  /**
+   * 对象创建生命周期完成通知。
+   * handoff 通过 {@link Tool#on|on('afterCreate', ...)} 订阅。
+   * @param {Object} interaction - 当前交互上下文
+   * @param {BasicObject} completedObject - 已完成的对象
+   * @protected
+   */
+  afterCompleteCreatedObject(interaction, completedObject) {
+    this._emit("afterCreate", interaction, completedObject);
+  }
+
+  /**
+   * 完成整个对象创建（编排钩子流程）
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreatedObject(interaction) {
     if (!this.obj) return undefined;
     const completedObject = this.obj;
-    const board = interaction?.deviceContext?.board;
-    if (board?.activeObjectManager?.apply) {
-      board.activeObjectManager.apply(new Set([completedObject]));
-      this.isObjectCreationCompleted = true;
-      return undefined;
+
+    // ① Finalize：总是执行（同步上下文 + 标记完成）
+    this.finalizeCreatedObject(interaction);
+
+    // ② beforeCommit 钩子决定是否进入静态图
+    //    handoff 返回 false → 对象留在 AOM 动态图中
+    if (this.beforeCommitCreatedObject(interaction) !== false) {
+      this.commitCreatedObject(interaction);
     }
-    board?.addObject?.(completedObject, completedObject.ownerChunkId);
-    this.isObjectCreationCompleted = true;
+
+    // ③ 通知钩子（无论是否 commit）
+    this.afterCompleteCreatedObject(interaction, completedObject);
     return undefined;
   }
 
   /**
-   * 取消整个对象创建。
+   * 取消整个对象创建
    * @param {Object} interaction - 当前交互上下文
    */
   cancelCreatedObject(interaction) {
-    const board = interaction?.deviceContext?.board;
+    const board = interaction?.context?.acc?.board;
     if (this.obj) {
       if (board?.activeObjectManager?.discard) {
         board.activeObjectManager.discard(new Set([this.obj]));
@@ -266,9 +391,23 @@ class ObjectCreatorTool extends Tool {
         board.activeObjectManager.unregisterActiveObject(this.obj.id);
       }
     }
+    this.clearContextObjects(interaction?.context ?? {});
     this.reset();
     this.isObjectCreationCompleted = false;
     return undefined;
+  }
+
+  /**
+   * 工具节点被卸载时撤销未提交对象
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   */
+  umount(context = {}) {
+    this.discardCreatedObjects(context);
+    this.clearContextObjects(context);
+    this.isCreatingGestureActive = false;
+    this.isObjectCreationCompleted = false;
+    super.umount(context);
   }
 
   /**
@@ -295,15 +434,13 @@ class ObjectCreatorTool extends Tool {
 class SingleGestureObjectCreatorTool extends ObjectCreatorTool {
   /**
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    */
-  process(signalPacket, deviceContext = {}) {
+  process(signalPacket, context = {}) {
     const normalizedPacket = SignalPacket.from(signalPacket);
-    const interaction = this.buildInteractionContext(
-      normalizedPacket,
-      deviceContext,
-    );
+
+    const interaction = this.buildInteractionContext(normalizedPacket, context);
 
     if (interaction.isGestureCancelled) {
       this.cancelCreationGesture(interaction);
@@ -331,13 +468,11 @@ class SingleGestureObjectCreatorTool extends ObjectCreatorTool {
       this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = true;
     } else {
-      this.beforeGeometryMutation(interaction);
       this.updateCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
     }
 
     if (interaction.isGestureEnded) {
-      this.beforeGeometryMutation(interaction);
       this.completeCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
       this.completeCreatedObject(interaction);
@@ -358,15 +493,13 @@ class SingleGestureObjectCreatorTool extends ObjectCreatorTool {
 class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
   /**
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} deviceContext - 设备上下文
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    */
-  process(signalPacket, deviceContext = {}) {
+  process(signalPacket, context = {}) {
     const normalizedPacket = SignalPacket.from(signalPacket);
-    const interaction = this.buildInteractionContext(
-      normalizedPacket,
-      deviceContext,
-    );
+
+    const interaction = this.buildInteractionContext(normalizedPacket, context);
 
     if (interaction.isObjectCancelled) {
       if (this.isCreatingGestureActive) {
@@ -387,7 +520,6 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
 
     if (interaction.isObjectEnded) {
       if (this.isCreatingGestureActive) {
-        this.beforeGeometryMutation(interaction);
         this.completeCreationGesture(interaction);
         this.afterGeometryMutation(interaction);
         this.isCreatingGestureActive = false;
@@ -414,13 +546,11 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
       this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = true;
     } else {
-      this.beforeGeometryMutation(interaction);
       this.updateCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
     }
 
     if (interaction.isGestureEnded) {
-      this.beforeGeometryMutation(interaction);
       this.completeCreationGesture(interaction);
       this.afterGeometryMutation(interaction);
       this.isCreatingGestureActive = false;

@@ -1,14 +1,75 @@
-import { DevicesTree } from "../devices-tree.js";
+import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
 import { createMouseDevice } from "../mouse-device.js";
+import { createEdgePrefix } from "../../prefixs/index.js";
 import { Tool } from "../../tools/tool.js";
+
+/**
+ * 创建通道报告 prefix handler — 拦截信号并报告通道名
+ * @param {string} channel
+ * @returns {{ handler: Function }}
+ */
+function createChannelReporter(channel) {
+  return {
+    handler(packet) {
+      return {
+        stop: true,
+        packets: [
+          {
+            to: "",
+            signals: [
+              {
+                type: `${channel}-routed`,
+                context: {
+                  channel,
+                  signals: packet.signals,
+                },
+              },
+            ],
+          },
+        ],
+      };
+    },
+  };
+}
+
+/**
+ * 在所有鼠标通道节点上挂载报告 prefix（替代旧 processor options）
+ * @param {DevicesDAG} dag
+ * @param {string} mouseBasePath
+ */
+function mountChannelReporters(dag, mouseBasePath) {
+  for (const channel of [
+    "pointer",
+    "primary",
+    "secondary",
+    "auxiliary",
+    "wheel",
+  ]) {
+    const prefix = createEdgePrefix(createChannelReporter(channel));
+    dag.mountSubDAG(
+      `${mouseBasePath}/${channel}`,
+      { ...prefix, rootPath: "/default" },
+      {},
+    );
+  }
+}
+
+function toPlainPackets(packets) {
+  return packets.map((packet) => ({
+    to: packet.to,
+    signals: packet.signals,
+  }));
+}
 
 describe("mouse-device", () => {
   test("普通移动应路由到 pointer 节点", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    const mountedNodes = tree.mountDevice("/monitor/mouse", mouseDevice);
-    const packets = tree.dispatch({
+    const mountedNodes = dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
+
+    const result = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -18,7 +79,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    expect(mountedNodes.map((node) => node.path)).toEqual([
+    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
       "/monitor/mouse",
       "/monitor/mouse/pointer",
       "/monitor/mouse/primary",
@@ -35,13 +96,21 @@ describe("mouse-device", () => {
       lastPosition: { x: 10, y: 20 },
       lastWheelDelta: null,
     });
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/mouse/pointer",
+        to: "",
         signals: [
           {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 0, button: 0 },
+            type: "pointer-routed",
+            context: {
+              channel: "pointer",
+              signals: [
+                {
+                  type: "position",
+                  context: { value: { x: 10, y: 20 }, buttons: 0, button: 0 },
+                },
+              ],
+            },
           },
         ],
       },
@@ -49,12 +118,13 @@ describe("mouse-device", () => {
   });
 
   test("左键与右键可同时激活，并聚合路由到多个按钮节点", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
+    dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
 
-    const packets = tree.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -64,35 +134,11 @@ describe("mouse-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
-      {
-        to: "/monitor/mouse/pointer",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 3, button: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 3, button: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/secondary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 10, y: 20 }, buttons: 3, button: 2 },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(result.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["pointer-routed", "primary-routed", "secondary-routed"]);
 
     expect(mouseDevice.getState()).toEqual({
       activeButtons: {
@@ -106,11 +152,13 @@ describe("mouse-device", () => {
   });
 
   test("按住主键时滚轮事件应同时路由到 primary 和 wheel 节点", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
-    tree.dispatch({
+    dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
+
+    dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -120,7 +168,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const packets = tree.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -136,38 +184,11 @@ describe("mouse-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
-      {
-        to: "/monitor/mouse/wheel",
-        signals: [
-          {
-            type: "wheel",
-            context: {
-              deltaX: 0,
-              deltaY: -120,
-              deltaZ: 0,
-              buttons: 1,
-              button: 0,
-            },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary",
-        signals: [
-          {
-            type: "wheel",
-            context: {
-              deltaX: 0,
-              deltaY: -120,
-              deltaZ: 0,
-              buttons: 1,
-              button: 0,
-            },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(result.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["primary-routed", "wheel-routed"]);
 
     expect(mouseDevice.getState()).toEqual({
       activeButtons: {
@@ -185,11 +206,13 @@ describe("mouse-device", () => {
   });
 
   test("主键抬起时应继续把结束包路由到 primary，同时保留其它激活键", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
-    tree.dispatch({
+    dag.mountSubDAG("/monitor", mouseDevice);
+    mountChannelReporters(dag, "/monitor/mouse");
+
+    dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -199,7 +222,7 @@ describe("mouse-device", () => {
       ],
     });
 
-    const releasePackets = tree.dispatch({
+    const releaseResult = dag.dispatch({
       to: "/monitor/mouse",
       signals: [
         {
@@ -222,51 +245,15 @@ describe("mouse-device", () => {
       lastPosition: { x: 18, y: 36 },
       lastWheelDelta: null,
     });
-    expect(releasePackets).toEqual([
-      {
-        to: "/monitor/mouse/pointer",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 18, y: 36 }, buttons: 2, button: 0 },
-          },
-          {
-            type: "end",
-            context: { button: 0, buttons: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 18, y: 36 }, buttons: 2, button: 0 },
-          },
-          {
-            type: "end",
-            context: { button: 0, buttons: 2 },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/secondary",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 18, y: 36 }, buttons: 2, button: 0 },
-          },
-          {
-            type: "end",
-            context: { button: 0, buttons: 2 },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(releaseResult.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["pointer-routed", "primary-routed", "secondary-routed"]);
   });
 
   test("可同时把同一包交给多个注入处理器", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
     class MappingTool extends Tool {
       constructor(type) {
@@ -280,61 +267,72 @@ describe("mouse-device", () => {
 
       createProcessor() {
         return (packet, context) => ({
-          to: context.path,
-          signals: [{ type: this.type, context: { from: context.path } }],
+          to: "",
+          signals: [
+            {
+              type: this.type,
+              context: { from: context.path },
+            },
+          ],
         });
       }
 
       reset() {}
     }
 
-    tree.mountDevice("/monitor/mouse", mouseDevice);
-    tree.mountTool("/monitor/mouse/pointer", new MappingTool("pointer-handled"));
-    tree.mountTool("/monitor/mouse/primary", new MappingTool("primary-handled"));
-    tree.mountTool("/monitor/mouse/wheel", new MappingTool("wheel-handled"));
+    dag.mountSubDAG("/monitor", mouseDevice);
+    dag.mountWorkflow(
+      "/monitor/workflows/pointer-handled",
+      new MappingTool("pointer-handled"),
+    );
+    dag.addEdge(
+      "/monitor/mouse/pointer",
+      "default",
+      "/monitor/workflows/pointer-handled",
+    );
+    dag.mountWorkflow(
+      "/monitor/workflows/primary-handled",
+      new MappingTool("primary-handled"),
+    );
+    dag.addEdge(
+      "/monitor/mouse/primary",
+      "default",
+      "/monitor/workflows/primary-handled",
+    );
+    dag.mountWorkflow(
+      "/monitor/workflows/wheel-handled",
+      new MappingTool("wheel-handled"),
+    );
+    dag.addEdge(
+      "/monitor/mouse/wheel",
+      "default",
+      "/monitor/workflows/wheel-handled",
+    );
 
     expect(
-      tree.dispatch({
-        to: "/monitor/mouse",
-        signals: [
-          {
-            type: "position",
-            context: { value: { x: 3, y: 4 }, buttons: 1, button: 0 },
-          },
-          {
-            type: "wheel",
-            context: { deltaX: 0, deltaY: 8, deltaZ: 0, buttons: 1, button: 0 },
-          },
-        ],
-      }),
-    ).toEqual([
-      {
-        to: "/monitor/mouse/pointer/tool",
-        signals: [
-          {
-            type: "pointer-handled",
-            context: { from: "/monitor/mouse/pointer/tool" },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/wheel/tool",
-        signals: [
-          {
-            type: "wheel-handled",
-            context: { from: "/monitor/mouse/wheel/tool" },
-          },
-        ],
-      },
-      {
-        to: "/monitor/mouse/primary/tool",
-        signals: [
-          {
-            type: "primary-handled",
-            context: { from: "/monitor/mouse/primary/tool" },
-          },
-        ],
-      },
-    ]);
+      toPlainPackets(
+        dag.dispatch({
+          to: "/monitor/mouse",
+          signals: [
+            {
+              type: "position",
+              context: { value: { x: 3, y: 4 }, buttons: 1, button: 0 },
+            },
+            {
+              type: "wheel",
+              context: {
+                deltaX: 0,
+                deltaY: 8,
+                deltaZ: 0,
+                buttons: 1,
+                button: 0,
+              },
+            },
+          ],
+        }).packets,
+      )
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["pointer-handled", "primary-handled", "wheel-handled"]);
   });
 });

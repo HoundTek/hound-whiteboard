@@ -1,256 +1,270 @@
-# 键盘设备文档
-
-本文档描述 HoundWhiteboard 当前阶段的键盘设备定义、路由模型与使用边界。
+# 键盘设备
 
 ## 概述
 
-键盘设备是挂载在某个 Monitor 下的一棵设备子树。它处理的不是“所有来自键盘的按键”，而是已经被宿主层判定为设备语义的那部分键盘输入。
+键盘设备负责把宿主层已经确认归属到某个 Monitor 的键盘输入，翻译成 Core 内稳定的设备信号。
 
-当前建议只有两类输入进入键盘设备：
+根路径固定为 `/keyboard`，整体结构由 `createSubDAG("/keyboard")` 构建。
 
-- 该输入直接操作 Monitor
-- 该输入最终会被工具消费
+`createKeyboardDevice()` **不接受任何参数**——设备内部预创建了 `STANDARD_KEYBOARD_CODES`（105 个标准键位）的全部 code 节点，每个 code 节点统一 `defaultRoute = "default"`。设备不负责信号转换，只负责从原始键盘事件中稳定产出 `trigger` / `release` / `cancel` 三类工具层信号。
 
-因此，键盘设备的关键不在“怎么监听键盘”，而在“哪些键盘事件值得进入设备树”。
+## 节点结构
 
-## 不属于键盘设备的输入
+### 内部结构
 
-下面这些输入当前不应进入键盘设备：
-
-- `Command+S` / `Ctrl+S` 保存
-- 切换工具、打开 UndoTree、打开设置面板等应用级快捷键
-- 与 Monitor 操作和工具消费无关的全局热键
-
-这些行为应直接留在宿主 UI 层处理。
-
-## 当前子树结构
-
-当前实现见 [keyboard-device.js](../keyboard-device.js)。设备根路径下会展开出以下节点：
-
-- `/event`：所有进入设备树的键盘事件都会先转发到这里
-- `/keydown`：非重复按下事件
-- `/keyup`：抬起事件
-- `/repeat`：长按重复事件
-- `/cancel`：宿主强制中断当前键盘交互，如 Monitor 失焦
-- `/tools`：键盘工具公共子树，所有键盘工具都应挂在它的下游
-- `/code/<KeyCode>`：按键专属翻译/转发节点，会接收该键位改写后的设备语义信号
-
-若通过 `nodeConfigs` 为某些键位声明了绑定，这些 `/code/<KeyCode>` 节点应继续把信号改写并转发到 `/tools/...` 下的公共工具节点，而不是直接在键位节点下挂工具。
-
-更一般地说，现在应优先把它理解成 `DevicesTreeNode` 的通用节点配置：只要是这棵设备子树里的节点，无论是 `/event`、`/keydown`、`/cancel` 还是 `/code/<KeyCode>`，都可以声明自己的 `rewritePacket` 或 `processor`。
-
-示意图如下：
+键盘设备默认创建以下节点：
 
 ```mermaid
-graph TD
-  keyboard --> event
-  keyboard --> keydown
-  keyboard --> keyup
-  keyboard --> repeat
-  keyboard --> cancel
-  keyboard --> tools
-  keyboard --> code
-  code --> key[Key...]
-  tools --> toolPath[tool ...]
+flowchart TD
+  K("keyboard #1 [handler]")
+  K -->|"event"| E("event #2")
+  K -->|"keydown"| Kd("keydown #3")
+  K -->|"keyup"| Ku("keyup #4")
+  K -->|"repeat"| Rp("repeat #5")
+  K -->|"cancel"| Cc("cancel #6")
+  K -->|"code"| Cd("code #7")
+
+  Cd -->|"Space"| Sp("Space #8 →default")
+  Cd -->|"KeyW"| W("KeyW #9 →default")
+  Cd -->|"ArrowUp"| Up("ArrowUp #10 →default")
+  Cd -->|"KeyA"| A("KeyA #11 →default")
+  Cd -->|"..."| Dots("... #N →default")
 ```
 
-这里的职责边界是：
+文本形式：
 
-- 键盘设备只负责产出节点定义
-- `DevicesTreeNode` 负责执行节点级 `rewritePacket` 与 `processor`
-- `nodeConfigs` 是设备侧声明节点行为的唯一配置入口
+```
+keyboard/ (root handler: 更新状态 + 分流)
+├── event/ ← 所有原始键盘事件
+├── keydown/ ← 非 repeat 的 keydown
+├── keyup/ ← keyup 或 end
+├── repeat/ ← repeat keydown
+├── cancel/ ← cancel
+└── code/ ← code 节点容器
+    ├── Space/ ← defaultRoute: "default"
+    ├── KeyW/ ← defaultRoute: "default"
+    ├── ArrowUp/ ← defaultRoute: "default"
+    ├── Digit1/ ← defaultRoute: "default"
+    ├── KeyA/ ← defaultRoute: "default"
+    ├── F1/ ← defaultRoute: "default"
+    └── ... 共 105 个
+```
 
-这种结构把“通用键盘语义”和“具体绑定键位”拆开了：
+所有 105 个 code 节点（从 `KeyA` 到 `ContextMenu`）均**不带 handler**，统一 `defaultRoute: "default"`。外部通过 `edge.prefix` 在"code 节点 → workflow"的边上插入修饰节点来完成信号转换。
 
-- 前者适合 Monitor 级操作，如统一处理视口导航键
-- 后者先把原始按键事件改写成工具语义，再交给工具节点消费
+### 外部接入
 
-当前键盘设备会在根节点把原始键盘信号改写为更稳定的设备信号，并路由到对应的 `/code/<KeyCode>` 翻译节点：
+外部通过 `edge.prefix` 在 code 节点的 `"default"` 边上注入信号转换：
 
-- 首次 `keydown` 改写为 `trigger`
-- `keyup` / `end` 改写为 `release`
-- `cancel` 改写为 `cancel`
+```mermaid
+flowchart LR
+  Sp("Space #1 →default")
+  Sp -->|"default"| P1
+  P1[["Space/ #2 [prefix] [handler]"]]
+  P1 -->|"default"| WFC[("/workflows/create-circle #3 [tool]")]
 
-因此，工具通常不应再直接判断具体键位，也不应再假设自己接收到的是原始 `keydown`。更进一步，键盘工具本身不应再承担“是不是 trigger 才处理”这一类键位路由判断；这些判断应留在 `/code/<KeyCode>` 节点的转发配置里。
+  W("KeyW #4 →default")
+  W -->|"default"| P2
+  P2[["KeyW/ #5 [prefix] [handler]"]]
+  P2 -->|"default"| WFW[("/workflows/wasd-move #6 [tool]")]
 
-## 聚合模式
+  A("KeyA #7 →default")
+  A -->|"default"| P3
+  P3[["KeyA/ #8 [prefix] [handler]"]]
+  P3 -->|"default"| WFW
 
-键盘设备现在正式支持一种“按键节点改写后汇流”的模式：
+  Up("ArrowUp #9 →default")
+  Up -->|"default"| P4
+  P4[["ArrowUp/ #10 [prefix] [handler]"]]
+  P4 -->|"default"| WFV[("/workflows/viewport #11 [tool]")]
+```
 
-- 某个按键先在自己的 `/code/<KeyCode>` 节点上把信号改写成设备语义信号
-- 然后该节点把结果继续转发到一个公共锚点
-- 公共锚点下只挂一个工具节点，用来统一消费这批聚合后的信号
+## 信号语义
 
-这适合 `WASD`、方向键、数字热键组这类“多个键都在驱动同一工具”的场景。
+键盘设备内部会把宿主事件规整为两层语义：
 
-例如：
+- 原始层：`keydown`、`keyup`、`cancel`、`end`
+- 工具层：`trigger`、`release`、`cancel`
 
-- `KeyW` 把 `trigger` 改写为 `position: {x: 0, y: -1}`，再转发到 `../../tools/move`
-- `KeyA` 把 `trigger` 改写为 `position: {x: -1, y: 0}`，再转发到 `../../tools/move`
-- `KeyS`、`KeyD` 同理
-- 最终 `/tools/move/tool` 只需要消费统一的 `position` 信号，而不需要知道具体是哪一个键发来的
+转换规则如下：
 
-同样的模式也适合视口工具：
+| 原始信号        | 生成信号  | 条件               |
+| --------------- | --------- | ------------------ |
+| `keydown`       | `trigger` | `repeat === false` |
+| `keyup` / `end` | `release` | —                  |
+| `cancel`        | `cancel`  | —                  |
+| `keydown`       | _忽略_    | `repeat === true`  |
 
-- 方向键节点可把 `trigger` 改写为 `position`，其值是新的视口原点
-- `+` / `-` 节点可把 `trigger` 改写为 `scale`，其值是新的目标缩放比
-- 某个刷新键可把 `trigger` 改写为 `flush`
-- 它们最终都可汇流到同一个 `/tools/viewport` 工具节点
+工具层信号类型定义在 `KEYBOARD_DEVICE_SIGNAL_TYPES` 中：
 
-对应配置形态如下：
+- `KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER` = `"trigger"`
+- `KEYBOARD_DEVICE_SIGNAL_TYPES.RELEASE` = `"release"`
+- `KEYBOARD_DEVICE_SIGNAL_TYPES.CANCEL` = `"cancel"`
 
-```javascript
-const keyboardDevice = createKeyboardDevice({
-  nodeConfigs: {
-    "/code/KeyW": {
-      rewritePacket(packet) {
-        const signals = packet.signals
-          .filter(
-            (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-          )
-          .map(() => ({
-            type: "position",
-            context: {
-              value: { x: 0, y: -1 },
-              code: "KeyW",
-            },
-          }));
+## 设备状态
 
-        return signals.length === 0 ? [] : { to: "../../tools/move", signals };
-      },
+键盘设备维护两份状态：
+
+- `activeKeys`：当前仍处于按下状态的键集合快照
+- `lastEvent`：最近一次处理过的键事件描述
+
+设备定义通过 `expose()` 暴露：
+
+- `resetState()`：清空内部状态
+- `getState()`：返回可序列化快照
+
+## 常量
+
+`STANDARD_KEYBOARD_CODES` 定义了 105 个标准键盘码，涵盖：
+
+| 分类       | 数量 | 示例                                              |
+| ---------- | ---- | ------------------------------------------------- |
+| 字母       | 26   | `KeyA` ~ `KeyZ`                                   |
+| 主键盘数字 | 10   | `Digit0` ~ `Digit9`                               |
+| 功能键     | 12   | `F1` ~ `F12`                                      |
+| 方向键     | 4    | `ArrowUp` / `Down` / `Left` / `Right`             |
+| 导航       | 4    | `Home`, `End`, `PageUp`, `PageDown`               |
+| 编辑       | 3    | `Insert`, `Delete`, `Backspace`                   |
+| 空白       | 3    | `Space`, `Tab`, `Enter`                           |
+| 修饰键     | 8    | `ShiftLeft` / `Right`, `ControlLeft` / `Right` 等 |
+| 符号       | 12   | `Minus`, `Equal`, `BracketLeft` / `Right` 等      |
+| 小键盘     | 16   | `Numpad0` ~ `Numpad9`, 运算符, 小数点, 回车       |
+| 锁定       | 3    | `CapsLock`, `NumLock`, `ScrollLock`               |
+| 其它       | 4    | `Escape`, `Pause`, `PrintScreen`, `ContextMenu`   |
+
+`DEVICE_DEFAULT_ROUTE` 定义为字符串 `"default"`，是所有设备叶节点的默认路由名。
+
+从 `devices/index.js` 统一导出：
+
+```js
+import {
+  createKeyboardDevice,
+  KEYBOARD_DEVICE_SIGNAL_TYPES,
+  STANDARD_KEYBOARD_CODES,
+  DEVICE_DEFAULT_ROUTE,
+} from "../devices/index.js";
+```
+
+## ⚠️ 一个 Tool 实例只能挂载到一个节点
+
+**不要将同一个 Tool 实例通过 `mountWorkflow` 挂载到多个不同的 DAG 节点上。**
+
+原因：
+
+- Tool 实例内部持有可变状态（如 WASD 坐标工具的 `position`）
+- 如果同一实例挂在多个节点上，每次信号到达都会修改这个共享状态
+- 不同路径的信号会在彼此不知情的情况下覆盖对方的累积结果
+- 卸载时也会导致问题（`unmount` 钩子只在第一个节点卸载时触发一次）
+
+**正确做法**：创建一个共享 workflow 节点，然后通过 `addEdge` 让多条路径汇聚到它，每条路径挂各自的 prefix：
+
+```js
+// ✅ 正确：每个键位通过各自 prefix 汇聚到共享 workflow
+const wasdPrefix = (code, vector) =>
+  createEdgePrefix({
+    handler(packet) {
+      const signals = packet.signals
+        .filter((s) => s.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER)
+        .map((s) => ({
+          type: "position",
+          context: { value: { ...vector }, code, sourceType: s.type },
+        }));
+      return signals.length === 0 ? [] : { signals };
     },
-  },
-});
-
-monitor.mountDevice("/keyboard", keyboardDevice);
+  });
 
 board.signalsEventBus.emit("mount", {
-  to: `/${monitor.monitorId}/keyboard/tools/move`,
-  tool,
-});
-```
-
-这里的重点是：
-
-- 具体键位节点负责“把键盘事件翻译成工具真正关心的语义，并转发到 tools 子树”
-- 公共节点负责“给同一类工具提供稳定的接入点”
-- 工具不再关心 `KeyW`、`KeyA` 这些具体键位，只关心 `position` 这类统一信号
-- 对于视口类工具，`/code/<KeyCode>` 节点推荐直接输出“目标视口状态”而不是“按键增量”，这样 Monitor 侧 API 可以保持稳定，还可以减小累积误差
-
-无论是 `/code/<KeyCode>` 还是别的节点，都统一通过 `nodeConfigs` 声明，因为它直接映射到通用 `DevicesTreeNode` 配置。
-
-`nodeConfigs` 负责的是设备挂载时的初始节点配置。若设备已经挂到树上，后续要动态修改某个键位节点，更通用的做法是走事件总线，例如：
-
-```javascript
-board.signalsEventBus.emit("configure", {
-  to: `/${monitor.monitorId}/keyboard/code/KeyW`,
-  options: {
-    rewritePacket(packet) {
-      const signals = packet.signals
-        .filter(
-          (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-        )
-        .map(() => ({
-          type: "position",
-          context: {
-            value: { x: 0, y: -1 },
-            code: "KeyW",
-          },
-        }));
-
-      return signals.length === 0 ? [] : { to: "../../tools/move", signals };
-    },
-  },
-});
-```
-
-也就是说，`nodeConfigs` 是“初始声明”，而动态改写应通过 `configure` 事件落到已经挂载的 `DevicesTreeNode` 上。
-
-当前 `configure` 的清空语义也已经固定：
-
-- `defaultPath: null` 或空串表示取消默认下游
-- `rewritePacket: null` 表示移除节点改写器
-- `processor: null` 表示移除节点处理器
-
-## 状态模型
-
-当前键盘设备维护两类最小状态：
-
-- `activeKeys`：当前仍处于按下状态的键集合
-- `lastEvent`：最近一次进入设备树的键盘事件快照
-
-这两类状态都属于设备的关联状态，目的是辅助路由与调试，而不是表达宿主 UI 的全部快捷键系统。
-
-## 输入包约定
-
-当前建议的最小输入包如下：
-
-```javascript
-{
-  to: "/monitor/keyboard",
-  signals: [
+  monitorId: "main",
+  name: "wasd-move",
+  workflow: wasdTool,
+  edges: [
     {
-      type: "keydown",
-      context: {
-        code: "Space",
-        key: " ",
-        repeat: false,
-        ctrlKey: false,
-        shiftKey: false,
-        altKey: false,
-        metaKey: false,
-      },
+      from: "/keyboard/code/KeyW",
+      edge: "default",
+      prefix: wasdPrefix("KeyW", { x: 0, y: -1 }),
+    },
+    {
+      from: "/keyboard/code/KeyA",
+      edge: "default",
+      prefix: wasdPrefix("KeyA", { x: -1, y: 0 }),
+    },
+    {
+      from: "/keyboard/code/KeyS",
+      edge: "default",
+      prefix: wasdPrefix("KeyS", { x: 0, y: 1 }),
+    },
+    {
+      from: "/keyboard/code/KeyD",
+      edge: "default",
+      prefix: wasdPrefix("KeyD", { x: 1, y: 0 }),
     },
   ],
-}
+});
 ```
 
-抬起时发送 `keyup`，失焦或宿主中断时发送 `cancel`。
+## 推荐挂载方式
 
-## 最小使用方式
+键盘设备本身挂在 Monitor 边界下：
 
-```javascript
-const keyboardDevice = createKeyboardDevice();
+```js
+monitor.mountSubDAG("", createKeyboardDevice());
+```
 
-monitor.mountDevice("/keyboard", keyboardDevice);
+所有 workflow 统一通过 `signalsEventBus.emit("mount", ...)` 挂载，使用 `edge.prefix` 注入信号转换逻辑：
 
-board.signalsEventBus.emit("configure", {
-  to: `/${monitor.monitorId}/keyboard/code/Space`,
-  options: {
-    rewritePacket(packet) {
-      const triggerSignals = packet.signals.filter(
-        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-      );
-
-      return triggerSignals.length === 0
-        ? []
-        : { to: "../../tools/create-circle", signals: triggerSignals };
-    },
-  },
-});
-
+```js
+// 简单的信号转发（如 Space 触发随机圆）
 board.signalsEventBus.emit("mount", {
-  to: `/${monitor.monitorId}/keyboard/tools/create-circle`,
-  tool,
+  monitorId: "main",
+  name: "create-circle",
+  workflow: randomCircleSubDAG,
+  edges: [
+    {
+      from: "/keyboard/code/Space",
+      edge: "default",
+      prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
+    },
+  ],
+});
+
+// 需要 monitor 引用的信号转换（如视口平移）
+board.signalsEventBus.emit("mount", {
+  monitorId: "main",
+  name: "viewport",
+  workflow: monitorViewportTool,
+  edges: [
+    {
+      from: "/keyboard/code/ArrowUp",
+      edge: "default",
+      prefix: createEdgePrefix(
+        buildViewportPositionNodeConfig({ x: 0, y: -200 }),
+      ),
+    },
+  ],
+});
+
+// 鼠标设备不需要 prefix（信号直接可被工具消费）
+board.signalsEventBus.emit("mount", {
+  monitorId: "main",
+  name: "primary-stroke",
+  workflow: strokeTool,
+  edges: [{ from: "/mouse/primary", edge: "default" }],
 });
 ```
 
-此时宿主只需把目标 Monitor 的 `keydown` / `keyup` 事件编码后发到 `/${monitorId}/keyboard`，设备树就会把 `Space` 改写为 `trigger` / `release` / `cancel`，先送到 `/code/Space`，再由该节点把真正需要的信号转发到 `/tools/create-circle/tool` 交给工具消费。
+prefix handler 不应指定 `to:`。路由由 `defaultRoute: "default"` 自动完成。
 
-## 设计约束
+## 设计要点
 
-- 键盘设备不负责定义应用级快捷键系统
-- 键盘设备不负责决定一个按键是否应该被某个工具消费
-- 键盘设备负责把原始按键信号改写为稳定的设备语义，并允许 `/code/<KeyCode>` 节点继续转发到 `/tools/...`
-- 用户绑定关系与工具挂载关系应由更上层模块通过 `mount` / `umount` 事件维护，键盘设备只负责状态更新与树上路由
-- 键盘工具推荐统一挂在 `/tools/...`；`/code/<KeyCode>` 应只承担翻译与转发职责
-
-这样可以保持设备层与应用命令层解耦。
+- `createKeyboardDevice()` 无参数：预创建全部 105 个标准 code 节点，不依赖外部配置
+- 设备只负责信号产出：原始键盘事件 → `trigger` / `release` / `cancel`
+- 信号转换交给 `edge.prefix`：在 mount 时注入，不修改设备节点
+- 所有 code 节点 `defaultRoute` 统一为 `"default"`：handler 不写 `to:` 时自动走边
+- 多键位汇聚到同一 workflow：通过 `edge.prefix` 各走各的 prefix，汇聚到共享 workflow 节点
+- 常量从 `devices/constant.js` 集中管理，`devices/index.js` 统一导出
 
 ## 相关文档
 
-- [device-document.md](./device-document.md)
-- [devices-tree-document.md](./devices-tree-document.md)
-- [signal-document.md](./signal-document.md)
-- [../../docs/core-input-encoding.md](../../docs/core-input-encoding.md)
-- [../../components/docs/monitor-document.md](../../components/docs/monitor-document.md)
+- [设备定义](./device-document.md)
+- [设备图](../../devices-dag/docs/devices-dag-document.md)
+- [Core 输入编码](../../docs/core-input-encoding.md)

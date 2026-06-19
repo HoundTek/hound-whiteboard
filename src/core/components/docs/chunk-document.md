@@ -92,17 +92,17 @@
 
 ## API
 
-| 名称                             | 描述                       | 类型                                     |
-| -------------------------------- | -------------------------- | ---------------------------------------- |
-| `idToCoordinate(id)`             | id 转二维坐标              | `number -> { x: number, y: number }`     |
-| `coordinateToId(x, y)`           | 二维坐标转 id              | `number -> number -> number`             |
-| `isValidChunkIdentity(id, x, y)` | 判断区块 id 与坐标是否匹配 | `number -> number -> number -> boolean`  |
-| `addObject(obj, below, above)`   | 按上下关系加入对象         | `number -> number[] -> number[] -> void` |
-| `loadFull(boardRootPath)`        | 完整加载区块               | `string -> Promise<boolean>`             |
-| `loadTemp(boardRootPath)`        | 临时加载区块               | `string -> Promise<boolean>`             |
-| `downgradeToTemp()`              | 从完整加载降级为临时加载   | `void -> boolean`                        |
-| `unload()`                       | 完整卸载区块               | `void -> void`                           |
-| `unloadTemp()`                   | 临时卸载区块               | `void -> boolean`                        |
+| 名称                             | 描述                       | 类型                                   |
+| -------------------------------- | -------------------------- | -------------------------------------- |
+| `idToCoordinate(id)`             | id 转二维坐标              | `(number) => { x: number, y: number }` |
+| `coordinateToId(x, y)`           | 二维坐标转 id              | `(number, number) => number`           |
+| `isValidChunkIdentity(id, x, y)` | 判断区块 id 与坐标是否匹配 | `(number, number, number) => boolean`  |
+| `addObject(obj, below, above)`   | 按上下关系加入对象         | `(number, number[], number[]) => void` |
+| `loadFull(boardRootPath)`        | 完整加载区块               | `(string) => Promise<boolean>`         |
+| `loadTemp(boardRootPath)`        | 临时加载区块               | `(string) => Promise<boolean>`         |
+| `downgradeToTemp()`              | 从完整加载降级为临时加载   | `() => boolean`                        |
+| `unload()`                       | 完整卸载区块               | `() => void`                           |
+| `unloadTemp()`                   | 临时卸载区块               | `() => boolean`                        |
 
 ## 实现状态
 

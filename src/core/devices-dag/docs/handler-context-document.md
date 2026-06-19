@@ -1,0 +1,210 @@
+# handler 上下文（ctx）用法文档
+
+## 概述
+
+所有 DevicesDAG 节点 handler 的 `handler(packet, ctx)` 签名的第二个参数 `ctx`，即 `DevicesDAGHandlerContext`，由 DAG 引擎在分发时通过 `_createHandlerContext` 统一构建。所有 handler（设备根节点、prefix handler、工具 processor）拿到的都是同一套接口。
+
+`createPrefixNodeHandler` 仅在此基础上为 `ctx.state` / `ctx.getState()` 叠加 `initialState` 默认值，不引入额外字段。
+
+## ctx 成员速览
+
+### 节点信息
+
+| 成员               | 类型             | 说明                                |
+| ------------------ | ---------------- | ----------------------------------- |
+| `ctx.path`         | `string`         | 当前节点路径（如 `/mouse/primary`） |
+| `ctx.dag`          | `DevicesDAG`     | 所属设备图实例                      |
+| `ctx.node`         | `DevicesDAGNode` | 当前节点                            |
+| `ctx.semantics`    | `Object`         | 节点语义元数据快照                  |
+| `ctx.defaultRoute` | `string`         | 当前节点默认出边名                  |
+| `ctx.depth`        | `number`         | 当前分发深度                        |
+| `ctx.signalPacket` | `SignalPacket`   | 当前输入信号包                      |
+
+### 累积上下文
+
+| 成员      | 类型     | 说明                                                  |
+| --------- | -------- | ----------------------------------------------------- |
+| `ctx.acc` | `Object` | 沿 DAG 逐层累积的只读上下文（board、monitor、回调等） |
+
+**规则**：handler 不能往 `ctx` 平级新增键。向下游传递额外数据时，通过返回值 `{ acc: { key: value } }` 写入累积上下文。
+
+### 状态管理
+
+| 成员                                | 类型                                 | 说明                                                                   |
+| ----------------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
+| `ctx.state`                         | `Object`                             | 当前节点状态快照。若走 `createPrefixNodeHandler` 已合并 `initialState` |
+| `ctx.getState()`                    | `() => Object`                       | 重读节点最新状态                                                       |
+| `ctx.setState(nextState)`           | `(Object) => Object`                 | 全量覆盖节点状态                                                       |
+| `ctx.patchState(partial)`           | `(Object) => Object`                 | 浅合并 `{ ...current, ...partial }`                                    |
+| `ctx.getNodeState(pathOrId?)`       | `(string\|number?) => Object`        | 读取任意节点（默认为当前节点）状态                                     |
+| `ctx.setNodeState(pathOrId, state)` | `(string\|number, Object) => Object` | 写入任意节点状态                                                       |
+
+### 路由
+
+| 成员                             | 类型                              | 说明         |
+| -------------------------------- | --------------------------------- | ------------ |
+| `ctx.routeToChild(to, signals?)` | `(string, Array?) => { packets }` | 路由到子节点 |
+| `ctx.stop()`                     | `() => { packets: [] }`           | 终止当前链路 |
+
+### 信号构造
+
+| 成员                              | 类型                               | 说明                                           |
+| --------------------------------- | ---------------------------------- | ---------------------------------------------- |
+| `ctx.signal(type, value, extra?)` | `(string, any, Object?) => Object` | 构造 `{ type, context: { value?, ...extra } }` |
+
+`value` 为 `undefined` 时省略 `context.value`。
+
+```js
+ctx.signal("position", { x: 10, y: 20 });
+// → { type: "position", context: { value: { x: 10, y: 20 } } }
+
+ctx.signal("displacement", { x: 5, y: 3 }, { position: { x: 120, y: 220 } });
+// → { type: "displacement", context: { value: { x: 5, y: 3 }, position: { x: 120, y: 220 } } }
+
+ctx.signal("flush", undefined, { code: "KeyR" });
+// → { type: "flush", context: { code: "KeyR" } }
+```
+
+---
+
+## 状态管理
+
+### 读取
+
+```js
+handler(packet, ctx) {
+  const { anchor } = ctx.state;     // 读取快照
+  const latest = ctx.getState();    // 读取最新状态
+}
+```
+
+若 handler 通过 `createPrefixNodeHandler` 包装且提供了 `initialState`，`ctx.state` / `ctx.getState()` 自动合并默认值：
+
+```js
+// initialState = { phase: "idle" }
+// 节点实际 state = { anchor: { x: 10, y: 20 } }
+ctx.state; // { phase: "idle", anchor: { x: 10, y: 20 } }
+```
+
+写入时只写实际值，不持久化初始默认值。
+
+### 写入
+
+```js
+ctx.setState({ anchor: { x: 100, y: 200 }, active: true }); // 全量覆盖
+ctx.patchState({ anchor: null }); // 浅合并（常用）
+```
+
+注意：`ctx.state` 是入口快照，写入后不自动更新
+
+`ctx.state` 在 handler 入口处一次性构造，`setState` / `patchState` 写入的是节点内部存储，
+**不会**修改已解构出来的 `ctx.state` 对象。写入后立即读取 `ctx.state` 得到的是旧值。
+
+```js
+// ❌ 错误：state 仍是写入前的快照
+const state = ctx.state;
+ctx.patchState({ anchor: current });
+const x = current.x - state.anchor.x; // state.anchor 可能还是 null
+
+// ✅ 正确：写入后用 getState() 重新读取
+ctx.patchState({ anchor: current });
+const latest = ctx.getState();
+const x = current.x - latest.anchor.x;
+
+// ✅ 也正确：写入前将旧值保留到本地变量
+const state = ctx.state;
+const anchor = state.anchor;
+ctx.patchState({ anchor: current });
+const x = current.x - (anchor?.x ?? current.x); // 用本地变量兜底
+```
+
+---
+
+## 路由
+
+### `ctx.routeToChild(to, signals?)`
+
+将信号路由到下游子节点。**这是向下转发信号的唯一规范方式**。
+
+```js
+// 透传
+return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
+
+// 转发变换后的信号
+return ctx.routeToChild("tool", [ctx.signal("displacement", { x: 5, y: 3 })]);
+```
+
+若不传 `signals`，默认使用当前 `signalPacket.signals`。
+
+### `ctx.stop()`
+
+终止当前链路。
+
+```js
+return ctx.stop();
+```
+
+---
+
+## 典型用法
+
+```js
+handler(packet, ctx) {
+  // 1. 不感兴趣 → 透传
+  if (!interesting(packet)) {
+    return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
+  }
+
+  // 2. 消费 + 状态写入（如捕获锚点）
+  if (shouldCapture) {
+    ctx.patchState({ anchor: current });
+    return ctx.stop();
+  }
+
+  // 3. 状态机切换 + 路由
+  ctx.setState({ phase: "next" });
+  return ctx.routeToChild("tool", [
+    ctx.signal("position", newPos),
+  ]);
+}
+```
+
+---
+
+## createPrefixNodeHandler 的职责
+
+`createPrefixNodeHandler` 的唯一作用是为 `ctx.state` / `ctx.getState()` 提供 `initialState` 默认值合并。handler 拿到的仍是标准 `DevicesDAGHandlerContext`。
+
+```js
+createPrefixNodeHandler({
+  initialState: { anchor: null },
+  handle(packet, ctx) {
+    // ctx.state 自动带有 { anchor: null } 默认值
+    // ctx.routeToChild / ctx.stop / ctx.signal 均来自 DAG
+    ctx.patchState({ anchor: current });
+    return ctx.routeToChild("tool", packet.signals);
+  },
+});
+```
+
+---
+
+## 适用于所有 handler
+
+以上接口适用于 **所有** DevicesDAG handler，包括：
+
+- 设备根节点（`mouse-device`、`keyboard-device`、`touchscreen-device`）
+- prefix handler（`drag-anchor`、`signal-log`、`multi-tool`、`repeator`、`handoff`）
+- 工具 processor（`Tool.createProcessor` → `createDeviceContext`）
+- 裸 handler（直接挂在 DAG 节点上的任意函数）
+
+工具 processor 拿到的同样是标准 handler context 全集。`createDeviceContext` 仅在 `acc` 累积上下文中注入 `board` / `monitor` 等 toolContext fallback，不增删平级键。
+
+---
+
+## 相关文档
+
+- [DevicesDAG 核心文档](./devices-dag-document.md)
+- [修饰节点文档](../../prefixs/docs/prefix-document.md)
+- [Core 稳定接口](../../docs/core-stable-interfaces.md)
+- [signal 文档](./signal-document.md)

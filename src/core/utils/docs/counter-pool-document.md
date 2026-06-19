@@ -16,11 +16,11 @@
 
 ## API
 
-| 名称                     | 描述               | 类型                    |
-| ------------------------ | ------------------ | ----------------------- |
-| `constructor(count = 0)` | 创建计数器池       | `number -> CounterPool` |
-| `init(count = 0)`        | 重置当前计数值     | `number -> CounterPool` |
-| `generate()`             | 返回下一个递增数字 | `void -> number`        |
+| 名称                     | 描述               | 类型                      |
+| ------------------------ | ------------------ | ------------------------- |
+| `constructor(count = 0)` | 创建计数器池       | `(number) => CounterPool` |
+| `init(count = 0)`        | 重置当前计数值     | `(number) => CounterPool` |
+| `generate()`             | 返回下一个递增数字 | `() => number`            |
 
 ## 行为特点
 

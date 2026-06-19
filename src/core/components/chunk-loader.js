@@ -67,11 +67,11 @@ class ChunkLoader {
   }
 
   /**
-   * 配置当前 loader 的事件上下文。
-   * @param {{ eventBus?: EventBus, requesterId?: number | string }} [options] - 事件上下文
+   * 配置当前 loader 的请求上下文。
+   * @param {{ eventBus?: EventBus, requesterId?: number | string }} [options] - 请求上下文
    * @returns {ChunkLoader}
    */
-  configureEventContext({ eventBus, requesterId } = {}) {
+  configureRequestContext({ eventBus, requesterId } = {}) {
     this.eventBus = eventBus;
     this.requesterId = requesterId;
     return this;
@@ -257,7 +257,13 @@ class ChunkLoader {
    * @param {{ action: "expand" | "shrink" | "move" | "reset", direction: "right" | "left" | "up" | "down" | "none", chunkNow?: Chunk, chunksLoaded?: Chunk[], bufferBounds?: { minX: number, maxX: number, minY: number, maxY: number } | undefined }} payload - 事件载荷
    * @returns {boolean}
    */
-  emitBufferUpdated({ action, direction, chunkNow, chunksLoaded, bufferBounds }) {
+  emitBufferUpdated({
+    action,
+    direction,
+    chunkNow,
+    chunksLoaded,
+    bufferBounds,
+  }) {
     if (!(this.eventBus instanceof EventBus)) return false;
     this.eventBus.emit(CHUNK_LOAD_EVENTS.BUFFER_UPDATED, {
       action,
@@ -290,7 +296,10 @@ class ChunkLoader {
       ];
 
       for (const [direction, deltaX, deltaY] of directions) {
-        const neighborId = Chunk.coordinateToId(chunk.x + deltaX, chunk.y + deltaY);
+        const neighborId = Chunk.coordinateToId(
+          chunk.x + deltaX,
+          chunk.y + deltaY,
+        );
         const neighbor = this.chunksLoaded.get(neighborId);
         if (!neighbor) continue;
         Chunk.connectTwoChunk(chunk, neighbor, direction);

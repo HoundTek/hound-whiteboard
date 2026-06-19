@@ -132,13 +132,13 @@
 
 | 名称                                           | 描述                                         | 类型                                                   |
 | ---------------------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
-| `pickup(startFrom)`                            | 获取以指定对象集合为起点的子图               | `Iterable<BasicObject> -> DirectedGraph`               |
-| `apply(objects)`                               | 将活动对象按当前动态层关系提交回静态图       | `Iterable<BasicObject> -> void`                        |
-| `insertLayerUnder(layerNow, layerAbove)`       | 将某层插入到另一层之下                       | `Layer -> Layer \| Undefined -> void`                  |
-| `insertLayerUnderById(layerNow, LayerAboveId)` | 将某层插入到另一层之下，其中另一层用 id 表示 | `Layer -> number \| undefined -> void`                 |
-| `insertLayerToTop(layerNow)`                   | 将某层插至顶层                               | `Layer -> void`                                        |
-| `compareLayerOrderById(layer1, layer2)`        | 比较两层的层次顺序，其中两层都用 id 表示     | `number \| undefined -> number \| undefined -> number` |
-| `compareLayerOrder(layer1, layer2)`            | 比较两层的层次顺序                           | `Layer -> Layer -> number`                             |
+| `pickup(startFrom)`                            | 获取以指定对象集合为起点的子图               | `(Iterable<BasicObject>) => DirectedGraph`             |
+| `apply(objects)`                               | 将活动对象按当前动态层关系提交回静态图       | `(Iterable<BasicObject>) => void`                      |
+| `insertLayerUnder(layerNow, layerAbove)`       | 将某层插入到另一层之下                       | `(Layer, Layer \| Undefined) => void`                  |
+| `insertLayerUnderById(layerNow, LayerAboveId)` | 将某层插入到另一层之下，其中另一层用 id 表示 | `(Layer, number \| undefined) => void`                 |
+| `insertLayerToTop(layerNow)`                   | 将某层插至顶层                               | `(Layer) => void`                                      |
+| `compareLayerOrderById(layer1, layer2)`        | 比较两层的层次顺序，其中两层都用 id 表示     | `(number \| undefined, number \| undefined) => number` |
+| `compareLayerOrder(layer1, layer2)`            | 比较两层的层次顺序                           | `(Layer, Layer) => number`                             |
 
 ## 层叠图示例
 
@@ -264,6 +264,8 @@ graph BT
     end
   end
 ```
+
+注意层内的渲染顺序：`graph BT` 中先定义的活动对象（`active: 2`）渲染在底部，后定义的非活动对象（`inactive: 2`）渲染在顶部。同一层内，活动对象先画、非活动对象后画，使活动对象浮在相关非活动对象之上。
 
 放入动态图中，静态图不变，动态图同上。
 

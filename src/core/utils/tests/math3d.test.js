@@ -61,18 +61,16 @@ describe("Vector3D Class", () => {
       expect(p.y).toBe(4);
       expect(p.z).toBe(5);
     });
-  });
 
-  describe("Vector3D.parseFromArray", () => {
     test("应能从数组创建点", () => {
-      const p = Vector3D.parseFromArray([3, 4, 5]);
+      const p = Vector3D.parse([3, 4, 5]);
       expect(p.x).toBe(3);
       expect(p.y).toBe(4);
       expect(p.z).toBe(5);
     });
 
-    test("应该在数组长度不足时抛出错误", () => {
-      expect(() => Vector3D.parseFromArray([1, 2])).toThrow();
+    test("应在数组长度不足时抛出错误", () => {
+      expect(() => Vector3D.parse([1, 2])).toThrow();
     });
   });
 
@@ -366,11 +364,9 @@ describe("Matrix3D Class", () => {
       expect(m.a11).toBe(1);
       expect(m.a33).toBe(9);
     });
-  });
 
-  describe("Matrix3D.parseFromArray", () => {
     test("应该从二维数组创建矩阵", () => {
-      const m = Matrix3D.parseFromArray([
+      const m = Matrix3D.parse([
         [1, 2, 3],
         [4, 5, 6],
         [7, 8, 9]
@@ -379,9 +375,9 @@ describe("Matrix3D Class", () => {
       expect(m.a33).toBe(9);
     });
 
-    test("应该在数组不合法时抛出错误", () => {
-      expect(() => Matrix3D.parseFromArray([])).toThrow();
-      expect(() => Matrix3D.parseFromArray([[1], [2], [3]])).toThrow();
+    test("应在数组不合法时抛出错误", () => {
+      expect(() => Matrix3D.parse([])).toThrow();
+      expect(() => Matrix3D.parse([[1], [2], [3]])).toThrow();
     });
   });
 

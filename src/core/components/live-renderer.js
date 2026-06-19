@@ -149,8 +149,8 @@ class LiveRenderer {
    */
   collectLayerDrawables(layer, seenObjectIds) {
     return [
-      ...this.collectInactiveLayerDrawables(layer, seenObjectIds),
       ...this.collectActiveLayerDrawables(layer, seenObjectIds),
+      ...this.collectInactiveLayerDrawables(layer, seenObjectIds),
     ];
   }
 

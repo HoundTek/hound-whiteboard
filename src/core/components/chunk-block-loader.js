@@ -100,7 +100,7 @@ class ChunkBlockLoader {
     chunkLoader = new ChunkLoader(),
   ) {
     this.chunksLoadedLimit = limit;
-    this.chunkLoader = chunkLoader.configureEventContext({
+    this.chunkLoader = chunkLoader.configureRequestContext({
       eventBus,
       requesterId,
     });

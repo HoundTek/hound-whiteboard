@@ -110,7 +110,7 @@
 
 - 设备输入进入 `SignalPacket`
 - `Board.signalsEventBus` 分发到目标 `Monitor`
-- `DevicesTree` 路由到末端工具节点
+- `DevicesDAG` 路由到末端 workflow 节点
 - creator 工具默认从 `Board` 申请 `objectId`
 - creator 工具直接消费输入包中的世界坐标，并默认从 `Monitor` 解析 `ownerChunkId`
 - 新对象先进入 `ActiveObjectManager.add()`，完成后再通过 `apply()` 回写白板
@@ -132,18 +132,18 @@
 
 ## 5. devices/
 
-- `DevicesTree` 负责保存节点层级，并按路径把信号包送到节点处理器。
-- `DevicesTreeNode` 只表示信号处理单元，本身只挂 `processor`。
-- 设备子树定义目前是普通对象协议，核心入口是 `defineNodes()`。
-- 业务侧挂载设备时应优先从 `Monitor` 的 `mountDevice()` 进入，再由 `Monitor` 转交给底层 `DevicesTree`。
-- 输入从 Board 到 Monitor、再到 DevicesTree 与工具节点的完整链路，见 `core-input-flow.md`。
+- `DevicesDAG` 负责保存节点与边的结构，并按路径把信号包送到节点 handler。
+- `DevicesDAGNode` 只表示信号处理单元，核心字段是 `handler`、`defaultRoute`、`umount` 与 `state`。
+- 结构化输入子图已经统一为 `rootPath + nodes + edges` 结构，推荐通过 `createSubDAG(rootPath).build()` 生成。
+- 业务侧挂载设备时应优先从 `Monitor` 的 `mountSubDAG()` 进入，再由 `Monitor` 代理到 `Board` 持有的唯一 `DevicesDAG`。
+- 输入从 Board 到 Monitor、再到 DevicesDAG 与 workflow 节点的完整链路，见 `core-input-flow.md`。
 - DOM/Pointer/Touch 到 `SignalPacket` 的编码约定，见 `core-input-encoding.md`。
 - 当前建议冻结的阶段性稳定接口，见 `core-stable-interfaces.md`。
 
 当前状态：
 
 - 节点级 `processor` 路由模型已经建立。
-- 设备子树定义可展开并挂载到设备树。
+- 设备子图定义可展开并挂载到设备图。
 - Core 内部信号通过节点处理器递归传递；处理器可来自闭包、工厂函数或对象方法。
 - 跨 Core-UI Interface 的信号边界已经在文档层明确。
 

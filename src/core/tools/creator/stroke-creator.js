@@ -17,8 +17,10 @@ import { Vector } from "../../utils/math.js";
  * @class
  * @extends SingleGestureObjectCreatorTool
  * @description
- * 笔画创建工具允许用户在白板上绘制笔画对象。
- * 用户可以通过拖动来定义笔画的路径。
+ * 单手势创建笔画对象：
+ * - 手势开始点为笔画起点
+ * - 手势结束点为笔画终点
+ * - 手势路径为笔画路径
  * @author Zhou Chenyu
  */
 class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
@@ -29,16 +31,19 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   obj;
 
   /**
-   * 新建笔画默认颜色
+   * 笔画对象的属性
    * @type {Record<string, any>}
    */
   property;
 
   /**
-   * @param {{ property?: Partial<typeof DEFAULT_STROKE_PROPERTY> }} [options={}]
+   * @param {{
+   *   property?: Partial<typeof DEFAULT_STROKE_PROPERTY>,
+   * }} [options={}]
+   * @constructor
    */
   constructor(options = {}) {
-    super();
+    super(options);
     this.property = {
       ...DEFAULT_STROKE_PROPERTY,
       ...(options.property ?? {}),
@@ -59,29 +64,26 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     return position.sub(this.obj.position);
   }
 
+  appendPathPoint(point) {
+    const points = this.obj.localPathRange.points;
+    const lastPoint = points[points.length - 1];
+    if (lastPoint && Vector.nearlyEq(lastPoint, point)) {
+      return;
+    }
+    this.obj.setPathPoints(points.concat([point]));
+  }
+
   beginCreationGesture(interaction) {
-    this.obj.setPathPoints(
-      this.obj.localPathRange.points.concat([
-        this.toLocalPoint(interaction.position),
-      ]),
-    );
+    this.appendPathPoint(this.toLocalPoint(interaction.position));
   }
 
   updateCreationGesture(interaction) {
-    this.obj.setPathPoints(
-      this.obj.localPathRange.points.concat([
-        this.toLocalPoint(interaction.position),
-      ]),
-    );
+    this.appendPathPoint(this.toLocalPoint(interaction.position));
   }
 
   completeCreationGesture(interaction) {
     if (interaction.position) {
-      this.obj.setPathPoints(
-        this.obj.localPathRange.points.concat([
-          this.toLocalPoint(interaction.position),
-        ]),
-      );
+      this.appendPathPoint(this.toLocalPoint(interaction.position));
     }
   }
 

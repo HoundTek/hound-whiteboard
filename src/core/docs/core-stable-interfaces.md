@@ -1,118 +1,159 @@
-# Core 阶段性稳定接口
+# 阶段性稳定接口
 
-本文档列出 HoundWhiteboard Core 当前阶段建议冻结的接口边界。
+## 概述
 
-这里的“冻结”不是永远不改，而是指：在继续增加设备、工具和业务链路前，这些接口默认应视为稳定前提。若要修改，应先显式更新相关文档、测试和样板链路。
+这一页记录当前输入系统已经收敛、可被业务代码依赖的最小接口面。
 
-## 建议冻结的接口
+这里的“稳定”指的是：
 
-### 1. SignalPacket 最小结构
+- 当前重构已经完成迁移
+- 已有聚焦测试覆盖核心语义
+- 新增功能应优先复用这些接口，而不是继续引入兼容层
 
-```javascript
+## DevicesDAG
+
+当前建议依赖的公开方法有：
+
+- `getNode(path)`
+- `getNodePath(node)`
+- `getNodeState(pathOrId)`
+- `setNodeState(pathOrId, state)`
+- `mount(path, handler, options)`
+- `configureNode(path, options)`：更新节点语义/元数据（**不用于设置 handler**）
+- `mountWorkflow(path, workflow, workflowContext)`
+- `unmountWorkflow(path, accumulatedContext)`
+- `mountSubDAG(basePath, subDAGDefinition, mountContext)`
+- `unmount(path, accumulatedContext)`
+- `dispatch(signalPacket, accumulatedContext)`
+
+稳定语义：
+
+- 节点处理统一使用 `handler`
+- `defaultRoute` 是当前节点的默认出边名
+- **workflow 统一挂载到 `/<monitorId>/workflows/` 下**，通过 `addEdge` 与设备节点连接
+- `mountWorkflow` 的第一个参数是 workflow 在 `/workflows/` 下的路径，不再是设备子路径
+- `workflow` 可以是单个 Tool，也可以是单源 `SubDAGDefinition`
+- 结构化设备定义使用 `rootPath + nodes + edges`
+- `handler` 返回统一规整为 `{ packets, context, redirect, stop }`
+- `packets.to` 只描述从当前节点继续向下的子路径
+- 节点身份由 node id 决定，而不是由路径决定
+
+## DevicesDAGHandlerContext
+
+当前稳定字段包括：
+
+- `node`
+- `dag`
+- `path`
+- `semantics`
+- `defaultRoute`
+- `resolvedDefaultRoutePath`
+- `depth`
+- `signalPacket`
+- `acc`
+- `state` — 当前节点状态的只读快照
+- `getState()` — 重读节点最新状态
+- `setState(nextState)` — 全量写入节点状态
+- `patchState(partial)` — 浅合并写入节点状态
+- `routeToChild(to, signals?)` — 路由信号到子节点
+- `stop()` — 终止当前链路
+- `signal(type, value, extra?)` — 构造标准信号 { type, context: { value?, ...extra } }，value 为 undefined 时省略
+- `getNodeState(pathOrId?)` — 读取任意节点状态
+- `setNodeState(pathOrId, state)` — 写入任意节点状态
+
+稳定语义：
+
+- `acc` 是逐层追加的累积上下文，handler 不能在此平级新增键
+- 需要可变共享数据时，使用 `setState` / `patchState` 写入节点 `state`
+- `initialState` 可通过 `createPrefixNodeHandler` 提供默认值，参与 `ctx.state` 的合并视图
+- 需要向上通知时，优先在 `acc` 中注入回调函数，而不是继续引入向上路由协议
+- 同一节点允许有多条路径可达，但单次 dispatch 的 `context` 只沿当前命中的那条路径累积
+
+## SubDAGDefinition
+
+当前稳定结构如下：
+
+```js
 {
-  to: String,
-  signals: Array<{ type: String, context: * }>,
+  rootPath: "/sub-dag-root",
+  rootNodeId: 0,
+  nodes: new Map([
+    [0, { handler, semantics, defaultRoute, tool, toolContext, umount }],
+  ]),
+  edges: [
+    { name: "child", fromNodeId: 0, toNodeId: 1 },
+  ],
+  resetState,
+  getState,
 }
 ```
 
-约束：
+推荐通过 `createSubDAG(rootPath).build()` 生成，而不是手写旧对象协议。
 
-- `to` 表示当前目标节点路径
-- `signals` 是同一时刻需要一起处理的信号集合
+## Tool
 
-### 2. DeviceDefinition 最小协议
+当前建议依赖的 Tool 接口有：
 
-```javascript
-const deviceDefinition = {
-  defineNodes() {
-    return [{ path: "", processor, defaultPath: "tool" }];
-  },
-};
-```
-
-约束：
-
-- `DevicesTree` 当前只消费 `defineNodes()`
-- 节点定义可通过 `defaultPath` 声明默认下游
-- 其它字段都应视为定义对象扩展信息
-
-### 3. Monitor 是业务侧设备挂载入口
-
-业务代码应优先调用：
-
-```javascript
-monitor.mountDevice(path, deviceDefinition);
-```
-
-而不是直接操作 `devicesTree.mountDevice()`。
-
-### 4. 工具的运行时挂载入口
-
-业务代码应优先调用：
-
-```javascript
-board.signalsEventBus.emit("mount", { to, tool });
-board.signalsEventBus.emit("umount", { to });
-```
-
-约束：
-
-- `mount` 会沿当前已有的 `defaultPath` 走到末端，再追加一个新的 `/tool` 节点
-- `umount` 会沿当前已有的 `defaultPath` 走到末端，并尝试删除最后一个工具节点
-- 工具不应在 `createKeyboardDevice()`、`createMouseDevice()` 这类设备工厂调用时静态注入
-
-### 5. DevicesTree 的终止语义
-
-当前递归分发规则中，若节点处理结果包的 `to` 停在当前节点路径上，则路由在此终止。
-
-若处理结果没有显式写 `to`，则设备树会优先检查当前节点的 `defaultPath` 是否已有真实下游；只有该下游节点存在时才会继续分发。相对路径会以当前节点位置为基准解析。
-
-这是设备节点和工具节点能稳定协作的基础语义。
-
-### 6. Tool 的最小接口
-
-工具最小接口为：
-
-- `process(signalPacket, deviceContext)`
 - `createProcessor(toolContext)`
+- `createDeviceContext(handlerContext, toolContext)`
+- `process(signalPacket, deviceContext)`
+- `umount(deviceContext)`
+- `reset()`
+- `resolveNodeState(deviceContext, statePath)`
+- `writeNodeState(deviceContext, nextState, statePath)`
+- `resolveContextObjects(deviceContext)`
+- `setContextObjects(deviceContext, objects)`
+- `clearContextObjects(deviceContext)`
+- `continueToDefaultPath(signalPacket, deviceContext)`
 
-其中 `createProcessor()` 把 Tool 包装成独立工具节点上的处理器；Tool 默认消费信号，不承担继续改写路由的职责。
+稳定语义：
 
-### 7. 多指输入区分方式
+- `deviceContext` 顶层字段 `path`、`context`、`board`、`monitor`、`getNodeState`、`setNodeState` 已稳定
+- `deviceContext` 不再构造 `eventContext` / `runtimeContext` 兼容视图
+- 工具代码应直接读取顶层字段与 `context`
 
-同一个 `signals` 数组里允许出现多条 `position` 等同类型信号；多触点输入应通过 `touchId`、`pointerId` 等字段区分来源。
+## Monitor
 
-### 8. 鼠标设备的当前路由约定
+当前建议依赖的 Monitor 输入接口有：
 
-当前鼠标设备采用多通道路由，而不是单选路由。一个输入包可以同时落到多个子节点：
+- `mountSubDAG(subDAGDefinition)`
+- `mountSubDAG(pathPrefix, subDAGDefinition)`
+- `mountWorkflow(path, workflow)`
+- `unmountWorkflow(path)`
+- 通过 `board.devicesDAG` 读取当前输入图
 
-- `/pointer`：所有位置类输入
-- `/primary`：左键相关输入
-- `/secondary`：右键相关输入
-- `/auxiliary`：中键相关输入
-- `/wheel`：滚轮输入
+稳定语义：
 
-这意味着：
+- Monitor 不拥有独立 `DevicesDAG`
+- 所有挂载最终都代理到 `Board.devicesDAG`
 
-- 左右键可以同时激活，并同时路由到多个按钮节点
-- 按住主键时滚动滚轮，当前包可以同时落到按钮节点和滚轮节点
-- 某个按键抬起时，结束包仍应继续落到该按键对应节点，以便同一工具完成一次完整手势
+## 配置事件
 
-## 当前不应依赖为稳定协议的部分
+`Board.signalsEventBus` 侧当前稳定的输入相关事件包括：
 
-- `Board.signalsEventBus.emit("input")` 的返回值
-- 设备定义对象上的 `name`、`meta`、生命周期钩子等扩展字段
-- Core -> UI 输出信号的消费层实现
-- 宿主侧输入绑定实现本身
-- 输入包中除最小结构外的具体字段细节
+- `input`：分发输入包到 `Board.devicesDAG.dispatch()`
+- `mount`：挂载设备或 workflow，支持 `edge.prefix` 注入信号转换
+- `umount`：卸载设备或 workflow
 
-## 变更要求
+这些事件的 `to` 仍然是绝对路径，但节点内部继续返回的 `packets.to` 应视为局部子路径。
 
-若需要修改上述稳定接口，建议至少同步更新以下内容：
+## 不再推荐继续使用的旧术语
 
-- 对应实现代码
-- 最小闭环样板
-- 集成测试
-- 相关说明文档
+以下旧接口名应视为已完成迁移，不应继续在新代码中引入：
 
-否则系统会很快回到“每加一个设备都重新解释一遍协议”的状态。
+- `processor`
+- `rewritePacket`
+- `defaultPath`
+- `defineNodes`
+- `nodeContext`
+- `providedObjectsContext`
+- `configure`（事件）
+- 子节点通过 `to: ".."` 或 `bubble` 向上协调的约定
+
+## 相关文档
+
+- [handler 上下文（ctx）用法](../devices-dag/docs/handler-context-document.md)
+- [设备图](../devices-dag/docs/devices-dag-document.md)
+- [设备定义](../devices-dag/docs/device-document.md)
+- [工具基类](../tools/tool-document.md)
+- [Core 输入流](./core-input-flow.md)

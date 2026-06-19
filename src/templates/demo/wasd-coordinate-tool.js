@@ -6,13 +6,19 @@
 
 import { Tool } from "../../core/tools/tool.js";
 import { Vector } from "../../core/utils/math.js";
+import { Logger } from "../../utils/log/logger.js";
+import { logBus } from "../../utils/log/log-bus.js";
 
 /**
  * Demo 专用 WASD 坐标工具
  * @class
  * @extends Tool
+ * @author Zhou Chenyu
  */
 class WasdCoordinateTool extends Tool {
+  /** @type {Logger} */
+  #log = new Logger("WasdCoord", "INFO", logBus);
+
   /**
    * 当前累计坐标
    * @type {Vector}
@@ -71,7 +77,7 @@ class WasdCoordinateTool extends Tool {
     }
 
     if (this.logPosition) {
-      console.log("WASD cursor:", this.position.serialize());
+      this.#log.info("WASD cursor:", this.position.serialize());
     }
 
     this.onPositionChange?.(this.position, signalPacket, deviceContext);

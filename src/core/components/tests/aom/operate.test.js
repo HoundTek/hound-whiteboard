@@ -1,4 +1,5 @@
 import { jest } from "@jest/globals";
+import { createChunk } from "../../../test-support/aom-fixtures.js";
 import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Chunk } from "../../chunk.js";
@@ -16,13 +17,6 @@ const { ActiveObjectManager, Layer } = await import("../../active-object-manager
 describe("ActiveObjectManager/operate", () => {
   let aom = new ActiveObjectManager();
   let chunk = createChunk(1);
-
-  function createChunk(id) {
-    const chunk = Chunk.fromId(id);
-    chunk.isLoad = true;
-    chunk.isTempLoad = false;
-    return chunk;
-  }
 
   function createObject(id, chunkId) {
     const object = new StrokeObject(new Vector(0, 0), id, chunkId);
@@ -151,7 +145,7 @@ describe("ActiveObjectManager/operate", () => {
         ]),
       );
       // 取消选择 5
-      aom.apply(new Set([object5]));
+      aom.discard(new Set([object5]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set()];
       const expectedInactiveGraph = [
@@ -191,7 +185,7 @@ describe("ActiveObjectManager/operate", () => {
         ]),
       );
       // 取消选择 5, 13
-      aom.apply(new Set([object5, object13]));
+      aom.discard(new Set([object5, object13]));
 
       const expectedActiveSet = [new Set([12]), new Set()];
       const expectedInactiveGraph = [
@@ -231,7 +225,7 @@ describe("ActiveObjectManager/operate", () => {
         ]),
       );
       // 取消选择 12, 13
-      aom.apply(new Set([object12, object13]));
+      aom.discard(new Set([object12, object13]));
 
       const expectedActiveSet = [new Set([5])];
       const expectedInactiveGraph = [

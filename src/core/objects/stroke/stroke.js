@@ -11,9 +11,28 @@ import { calcConvexHull, insertPoints } from "../../utils/math-algorithm.js";
 import { BasicObject } from "../basic-obj.js";
 
 const DEFAULT_STROKE_PROPERTY = Object.freeze({
+  /**
+   * 笔画颜色
+   * @default "#000000"
+   */
   color: "#000000",
+
+  /**
+   * 笔画宽度
+   * @default 1
+   */
   width: 1,
+
+  /**
+   * 线段连接处的样式
+   * @default "round"
+   */
   lineJoin: "round",
+
+  /**
+   * 线段端点的样式
+   * @default "round"
+   */
   lineCap: "round",
 });
 
@@ -108,17 +127,6 @@ class StrokeObject extends BasicObject {
     return this.worldPathRange;
   }
 
-  /**
-   * 笔画对象的颜色
-   * @type {string}
-   * @description
-   * 笔画的颜色，默认为黑色。
-   * 笔画的颜色属性主要用于渲染和擦除时的视觉效果。
-   * 当用户选择不同颜色的笔刷时，这个属性会被更新，以反映当前笔刷的颜色。
-   * 在渲染笔画时，系统会使用这个颜色属性来绘制笔画的外点，从而实现不同颜色的笔画效果。
-   * 在擦除笔画时，系统可能会根据这个颜色属性来决定如何处理被擦除部分的视觉效果，例如是否显示擦除痕迹等。
-   * 需要注意的是，虽然笔画对象具有颜色属性，但在某些情况下（例如使用特殊的笔刷或工具时），这个属性可能会被忽略或覆盖。
-   */
   render(ctx) {
     if (!this.localPathRange || this.localPathRange.points.length === 0) {
       return;
@@ -139,10 +147,16 @@ class StrokeObject extends BasicObject {
     ctx.lineCap = this.property.lineCap ?? DEFAULT_STROKE_PROPERTY.lineCap;
     ctx.beginPath();
     ctx.moveTo(transformedPoints[0].x, transformedPoints[0].y);
-    for (let i = 1; i < transformedPoints.length; i++) {
-      ctx.lineTo(transformedPoints[i].x, transformedPoints[i].y);
+    if (transformedPoints.length === 1) {
+      ctx.arc(0, 0, strokeWidth / 2, 0, Math.PI * 2);
+      ctx.fillStyle = this.property.color;
+      ctx.fill();
+    } else {
+      for (let i = 1; i < transformedPoints.length; i++) {
+        ctx.lineTo(transformedPoints[i].x, transformedPoints[i].y);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
     ctx.restore();
   }
 

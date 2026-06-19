@@ -1,14 +1,15 @@
 /**
  * @file 触摸屏设备
- * @description 提供触摸输入信号的设备树节点创建与处理接口。
+ * @description 提供触摸输入信号的设备图节点创建与处理接口。
  * @module core/devices/touchscreen-device
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "./signal.js";
+import { createSubDAG } from "../devices-dag/index.js";
+import { SignalPacket } from "../devices-dag/signal.js";
 
 /**
- * 触摸屏设备输出信号类型。
+ * 触摸屏设备输出信号类型
  * @type {{CONTACTS: string}}
  */
 const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
@@ -16,9 +17,9 @@ const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
 });
 
 /**
- * 创建一棵触摸屏设备子树。
+ * 创建一张触摸屏设备子图
  * @param {{onUpdate?: Function}} [options={}] - 触摸屏设备选项
- * @returns {import("./devices-tree.js").DeviceDefinition & {
+ * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
  *   clearTouches: () => void,
  *   getActiveTouches: () => Array<{touchId: string, position: any}>,
  * }}
@@ -30,15 +31,7 @@ function createTouchscreenDevice(options = {}) {
   let lastChangedTouchIds = [];
 
   /**
-   * 将节点处理结果规整为信号包数组。
-   * @param {any} result - 原始处理结果
-   * @returns {SignalPacket[]}
-   */
-  const normalizeProcessorResult = (result) =>
-    SignalPacket.normalizeResult(result);
-
-  /**
-   * 复制位置值，避免把可变对象直接暴露到设备外部。
+   * 复制位置值，避免把可变对象直接暴露到设备外部
    * @param {any} position - 原始位置值
    * @returns {any}
    */
@@ -50,7 +43,7 @@ function createTouchscreenDevice(options = {}) {
   };
 
   /**
-   * 从信号中解析触点 id。
+   * 从信号中解析触点 id
    * @param {{context?: Object}} signal - 输入信号
    * @returns {string|null}
    */
@@ -61,7 +54,7 @@ function createTouchscreenDevice(options = {}) {
   };
 
   /**
-   * 从信号中读取位置值。
+   * 从信号中读取位置值
    * @param {{context?: Object}} signal - 输入信号
    * @returns {any}
    */
@@ -71,7 +64,7 @@ function createTouchscreenDevice(options = {}) {
   };
 
   /**
-   * 获取当前活动触点列表。
+   * 获取当前活动触点列表
    * @returns {Array<{touchId: string, position: any}>}
    */
   const getActiveTouches = () =>
@@ -81,7 +74,7 @@ function createTouchscreenDevice(options = {}) {
     }));
 
   /**
-   * 根据输入包更新当前活动触点集合。
+   * 根据输入包更新当前活动触点集合
    * @param {SignalPacket} packet - 当前信号包
    * @returns {void}
    */
@@ -114,63 +107,50 @@ function createTouchscreenDevice(options = {}) {
     });
   };
 
-  const rootProcessor = (signalPacket) => {
+  /**
+   * 根节点处理器
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文
+   * @returns {Object}
+   */
+  const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     updateTouches(packet);
-    return normalizeProcessorResult({
-      signals: packet.signals,
-    });
+    return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
   };
 
-  const contactsPacketRewriter = (signalPacket, routeContext = {}) => {
+  /**
+   * 触点报告处理器
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 当前路由上下文
+   * @returns {Object}
+   */
+  const contactsHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const contacts = getActiveTouches();
-    return {
-      to: routeContext.path,
-      signals: [
-        {
-          type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
-          context: {
-            contacts,
-            changedTouchIds: [...lastChangedTouchIds],
-            activeTouchIds: contacts.map((contact) => contact.touchId),
-          },
-        },
-      ],
-    };
+    return ctx.routeToChild(ctx.defaultRoute || "", [
+      ctx.signal(TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS, undefined, {
+        contacts,
+        changedTouchIds: [...lastChangedTouchIds],
+        activeTouchIds: contacts.map((contact) => contact.touchId),
+      }),
+    ]);
   };
 
-  return {
-    /**
-     * 清空当前活动触点状态。
-     * @returns {void}
-     */
-    clearTouches() {
-      activeTouches.clear();
-      lastChangedTouchIds = [];
-    },
+  const builder = createSubDAG("/touchscreen");
+  const root = builder.node().handler(rootHandler).defaultRoute("contacts");
+  const contacts = builder.node().handler(contactsHandler);
+  builder.edge("contacts", root, contacts);
 
-    /**
-     * 获取当前活动触点列表。
-     * @returns {Array<{touchId: string, position: any}>}
-     */
-    getActiveTouches,
-
-    /**
-     * 定义触摸屏设备子树节点。
-     * @returns {Array<{path: string, processor: import("./devices-tree.js").DevicesTreeProcessor}>}
-     */
-    defineNodes() {
-      return [
-        {
-          path: "",
-          processor: rootProcessor,
-          defaultPath: "contacts",
-        },
-        { path: "/contacts", rewritePacket: contactsPacketRewriter },
-      ];
-    },
-  };
+  return builder
+    .expose({
+      clearTouches() {
+        activeTouches.clear();
+        lastChangedTouchIds = [];
+      },
+      getActiveTouches,
+    })
+    .build();
 }
 
 export { createTouchscreenDevice, TOUCHSCREEN_DEVICE_SIGNAL_TYPES };

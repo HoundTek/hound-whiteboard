@@ -87,4 +87,42 @@ describe("CircleObject", () => {
       ).toThrow(TypeError);
     });
   });
+
+  describe("边界条件", () => {
+    test("radius 为 0 时（falsy 值），constructor 不会初始化 boundingBox", () => {
+      const circle = new CircleObject(new Vector(5, 5), 10, 1, 0);
+
+      expect(circle.radius).toBe(0);
+      // radius=0 为 falsy，构造函数跳过 setRadius → boundingBox 未初始化
+      expect(circle.boundingBox).toBeUndefined();
+    });
+
+    test("未提供 radius 参数时 boundingBox 未初始化", () => {
+      const circle = new CircleObject(new Vector(10, 10), 20, 2);
+
+      expect(circle.radius).toBe(0);
+      expect(circle.boundingBox).toBeUndefined();
+    });
+
+    test("setRadius(0) 应正确将 boundingBox 收至 0", () => {
+      const circle = new CircleObject(new Vector(0, 0), 30, 1, 10);
+      expect(circle.radius).toBe(10);
+      expect(circle.boundingBox.width).toBeGreaterThan(0);
+
+      circle.setRadius(0);
+
+      expect(circle.radius).toBe(0);
+      expect(circle.boundingBox.width).toBe(0);
+      expect(circle.boundingBox.height).toBe(0);
+    });
+
+    test("transform 后 getRange 应返回正确的全局投影", () => {
+      const circle = new CircleObject(new Vector(10, 20), 40, 1, 3);
+      circle.setTransform(new Matrix(2, 0, 0, 2));
+
+      const range = circle.getRange();
+      expect(range).toBeInstanceOf(EllipseRange);
+      expect(Vector.nearlyEq(range.center, new Vector(0, 0))).toBe(true);
+    });
+  });
 });

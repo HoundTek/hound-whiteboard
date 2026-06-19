@@ -6,6 +6,10 @@
  */
 
 import { Tool } from "../tool.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
+import { intersectsRanges } from "../../range/index.js";
+import { Range } from "../../range/range.js";
+import { BasicObject } from "../../objects/basic-obj.js";
 
 /**
  * 对象选择工具基类
@@ -14,18 +18,220 @@ import { Tool } from "../tool.js";
  * @extends Tool
  * @description
  * 对象选择工具负责根据命中规则挑选对象，并输出选择结果或选择范围。
+ * @author Zhou Chenyu
  */
 class ObjectChooserTool extends Tool {
-	/**
-	 * 根据输入上下文执行对象选择。
-	 * @param {Object} selectionContext - 选择上下文
-	 * @returns {*}
-	 */
-	choose(selectionContext) {
-		throw new Error("Method not implemented.");
-	}
+  /**
+   * @param {{}} [options={}]
+   */
+  constructor(options = {}) {
+    super();
+  }
+
+  /**
+   * 从信号包构建选择上下文
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {Object}
+   */
+  buildSelectionContext(signalPacket, context = {}) {
+    const packet = SignalPacket.from(signalPacket);
+    return {
+      signalPacket: packet,
+      context,
+      signals: packet.signals,
+    };
+  }
+
+  /**
+   * 解析对象主判定范围在世界空间中的范围
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {BasicObject} objectEntry - 候选对象
+   * @returns {Range | undefined}
+   */
+  resolveObjectSelectionWorldRange(context = {}, objectEntry) {
+    if (!objectEntry || typeof objectEntry.getRange !== "function") {
+      return undefined;
+    }
+
+    const position = objectEntry.position;
+    if (!position) {
+      return undefined;
+    }
+
+    try {
+      const selectionRange = objectEntry.getRange();
+      if (
+        !selectionRange ||
+        typeof selectionRange.withPosition !== "function"
+      ) {
+        return undefined;
+      }
+
+      return selectionRange.withPosition(position);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 判断对象主判定范围是否与给定选择范围相交
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {BasicObject} objectEntry - 候选对象
+   * @param {Range} selectionWorldRange - 选择范围
+   * @returns {boolean}
+   */
+  objectIntersectsSelectionRange(
+    context = {},
+    objectEntry,
+    selectionWorldRange,
+  ) {
+    const objectWorldRange = this.resolveObjectSelectionWorldRange(
+      context,
+      objectEntry,
+    );
+    if (!objectWorldRange || !selectionWorldRange) {
+      return false;
+    }
+
+    return intersectsRanges(objectWorldRange, selectionWorldRange);
+  }
+
+  /**
+   * 收集 chooser 当前声明的兼容 ui overlay
+   * @param {{ deviceContext?: Object, renderer?: Object }} [overlayContext={}]
+   * @returns {Array<Object>}
+   */
+  collectUiOverlayEntries(overlayContext = {}) {
+    const context = overlayContext.deviceContext ?? {};
+    const renderer = overlayContext.renderer;
+    const objects = this.resolveContextObjects(context).filter(Boolean);
+
+    if (
+      objects.length === 0 ||
+      typeof renderer?.createCompatSelectionEntriesForObjects !== "function"
+    ) {
+      return [];
+    }
+
+    const defaultLeaf =
+      typeof context.dag?.resolveDefaultLeaf === "function" &&
+      typeof context.path === "string"
+        ? context.dag.resolveDefaultLeaf(context.path)
+        : null;
+
+    const childObjects =
+      defaultLeaf && defaultLeaf.path !== context.path
+        ? this.normalizeObjectCollection(
+            defaultLeaf.state?.objects ?? [],
+          ).filter(Boolean)
+        : [];
+
+    if (childObjects.length > 0) {
+      return [];
+    }
+
+    return renderer.createCompatSelectionEntriesForObjects(objects, "chooser");
+  }
+
+  /**
+   * 选择完成后的通知钩子
+   * @description
+   * 每次成功选择对象后触发，handoff 可通过 on('afterChoose', ...) 订阅。
+   * @param {Array<*>} objects - 被选中的对象
+   * @protected
+   */
+  afterChoose(objects) {
+    this._emit("afterChoose", objects);
+  }
+
+  /**
+   * 决定是否确认当前选择钩子
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @returns {boolean}
+   * @protected
+   */
+  beforeConfirmSelection(context) {
+    return true;
+  }
+
+  /**
+   * 确认选择后的通知钩子
+   * @description
+   * 子类在手势结束时调用，handoff 通过 on('afterConfirm', ...) 订阅。
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {Array<*>} objects - 已确认的对象
+   * @protected
+   */
+  afterConfirmSelection(context, objects) {
+    this._emit("afterConfirm", context, objects);
+  }
+
+  /**
+   * 显式确认当前选择
+   * @description
+   * 子类（如 RectangleObjectChooserTool）在手势完成（end 信号）时调用，
+   * 触发 beforeConfirm / afterConfirm 生命周期钩子。
+   * 与 creator 的 completeCreatedObject、modifier 的 applyModifiedObjects
+   * 构成统一的完成确认语义入口。
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {Array<*>} objects - 待确认的对象
+   * @returns {boolean}
+   */
+  confirmSelection(context, objects) {
+    if (this.beforeConfirmSelection(context) === false) return false;
+    this.afterConfirmSelection(context, objects);
+    return true;
+  }
+
+  /**
+   * 处理一个完整信号包
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {*}
+   */
+  process(signalPacket, context = {}) {
+    const packet = SignalPacket.from(signalPacket);
+    const selectionContext = this.buildSelectionContext(packet, context);
+    const selectedObjects = this.normalizeObjectCollection(
+      this.choose(selectionContext),
+    ).filter(Boolean);
+    if (selectedObjects.length === 0) {
+      return undefined;
+    }
+
+    selectionContext.context.acc?.board?.activeObjectManager?.choose?.(
+      new Set(selectedObjects),
+    );
+    this.setContextObjects(selectionContext.context, selectedObjects);
+    this.afterChoose(selectedObjects);
+    return undefined;
+  }
+
+  /**
+   * 根据输入上下文执行对象选择
+   * @param {Object} selectionContext - 选择上下文
+   * @returns {*}
+   */
+  choose(selectionContext) {
+    throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 工具节点被卸载时撤销当前选择
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   */
+  umount(context = {}) {
+    const selectedObjects = this.resolveContextObjects(context);
+    if (selectedObjects.length > 0) {
+      context?.acc?.board?.activeObjectManager?.discard?.(
+        new Set(selectedObjects),
+      );
+    }
+    this.clearContextObjects(context);
+    super.umount(context);
+  }
 }
 
-export {
-	ObjectChooserTool,
-};
+export { ObjectChooserTool };

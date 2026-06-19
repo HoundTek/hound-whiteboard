@@ -7,7 +7,6 @@
 
 import { GraphObject } from "./graph.js";
 import { Matrix, Vector } from "../../utils/math.js";
-import { calcConvexHull } from "../../utils/math-algorithm.js";
 import { EllipseRange, RectangleRange } from "../../range/index.js";
 
 const DEFAULT_CIRCLE_PROPERTY = Object.freeze({

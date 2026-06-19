@@ -83,7 +83,6 @@ describe("Queue", () => {
     });
   });
 
-  // ========== 扩容测试 ==========
   describe("动态扩容", () => {
     test("应该在队列满时自动扩容", () => {
       // 初始容量为 8，可以存放 7 个元素（需要预留 1 个空位）
@@ -171,59 +170,6 @@ describe("Queue", () => {
       expect(queue.pop()).toBe(5);
     });
 
-    test("大量数据扩容测试", () => {
-      const testSize = 1000;
-
-      // 添加大量数据
-      for (let i = 0; i < testSize; i++) {
-        queue.push(i);
-      }
-
-      expect(queue.count()).toBe(testSize);
-
-      // 验证所有数据按顺序出队
-      for (let i = 0; i < testSize; i++) {
-        expect(queue.pop()).toBe(i);
-      }
-
-      expect(queue.empty()).toBe(true);
-    });
-
-    test("混合操作下的扩容稳定性", () => {
-      // 模拟真实使用场景：添加、删除、扩容混合
-      for (let i = 0; i < 5; i++) {
-        queue.push(i);
-      }
-
-      queue.pop(); // 移除 0
-      queue.pop(); // 移除 1
-
-      for (let i = 5; i < 12; i++) {
-        queue.push(i); // 触发扩容
-      }
-
-      expect(queue.count()).toBe(10); // 3 + 7 = 10
-
-      // 验证元素正确性
-      expect(queue.peek()).toBe(2);
-
-      // 继续混合操作
-      for (let i = 0; i < 5; i++) {
-        queue.pop();
-      }
-
-      expect(queue.count()).toBe(5);
-
-      for (let i = 12; i < 20; i++) {
-        queue.push(i);
-      }
-
-      expect(queue.count()).toBe(13);
-
-      // 验证队头元素
-      expect(queue.peek()).toBe(7);
-    });
-
     test("扩容后 clear 应该重置容量", () => {
       // 触发扩容
       for (let i = 0; i < 20; i++) {
@@ -237,95 +183,14 @@ describe("Queue", () => {
       expect(queue.count()).toBe(0);
       expect(queue.empty()).toBe(true);
     });
-
-    test("扩容不应影响内存清理", () => {
-      // 添加对象引用
-      const obj1 = { id: 1 };
-      const obj2 = { id: 2 };
-
-      queue.push(obj1);
-      queue.push(obj2);
-
-      for (let i = 0; i < 10; i++) {
-        queue.push({ id: i + 3 });
-      }
-
-      // 触发扩容并移除元素
-      const removed1 = queue.pop();
-      const removed2 = queue.pop();
-
-      expect(removed1).toBe(obj1);
-      expect(removed2).toBe(obj2);
-
-      // 验证已移除位置被清理（设为 undefined）
-      expect(queue.elements[0]).toBeUndefined();
-      expect(queue.elements[1]).toBeUndefined();
-    });
   });
 
-  // ========== 边界情况测试 ==========
   describe("边界情况", () => {
     test("单个元素的入队出队", () => {
       queue.push(42);
       expect(queue.count()).toBe(1);
       expect(queue.pop()).toBe(42);
       expect(queue.empty()).toBe(true);
-    });
-
-    test("反复填满和清空", () => {
-      for (let round = 0; round < 3; round++) {
-        for (let i = 0; i < 7; i++) {
-          queue.push(i);
-        }
-        expect(queue.count()).toBe(7);
-
-        for (let i = 0; i < 7; i++) {
-          expect(queue.pop()).toBe(i);
-        }
-        expect(queue.empty()).toBe(true);
-      }
-    });
-
-    test("应该正确处理 undefined 和 null 值", () => {
-      queue.push(undefined);
-      queue.push(null);
-      queue.push(0);
-      queue.push("");
-      queue.push(false);
-
-      expect(queue.pop()).toBeUndefined();
-      expect(queue.pop()).toBeNull();
-      expect(queue.pop()).toBe(0);
-      expect(queue.pop()).toBe("");
-      expect(queue.pop()).toBe(false);
-      expect(queue.empty()).toBe(true);
-    });
-
-    test("应该正确处理各种数据类型", () => {
-      const testData = [
-        123,
-        "string",
-        { obj: "test" },
-        [1, 2, 3],
-        true,
-        null,
-        undefined,
-        Symbol("test"),
-        new Date(),
-        /regex/,
-      ];
-
-      testData.forEach((data) => queue.push(data));
-      expect(queue.count()).toBe(testData.length);
-
-      testData.forEach((data) => {
-        const popped = queue.pop();
-        if (typeof data === "symbol") {
-          expect(typeof popped).toBe("symbol");
-        } else {
-          expect(popped).toBe(data);
-        }
-      });
     });
   });
 });

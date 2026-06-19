@@ -30,26 +30,26 @@
 
 ### 主要方法
 
-| 名称                         | 描述                       | 类型                                    |
-| ---------------------------- | -------------------------- | --------------------------------------- |
-| `serialize()`                | 序列化为对象               | `void -> {x, y}`                        |
-| `serializeToArray()`         | 序列化为数组               | `void -> number[]`                      |
-| `applyTransform(matrix)`     | 原地应用矩阵变换           | `Matrix -> Vector`                      |
-| `clonePoint()`               | 克隆点                     | `void -> Vector`                        |
-| `add(other)`                 | 向量加法                   | `Vector -> Vector`                      |
-| `sub(other)`                 | 向量减法                   | `Vector -> Vector`                      |
-| `dotMul(other)`              | 向量点乘                   | `Vector -> number`                      |
-| `scale(factor)`              | 缩放向量（数乘）           | `number -> Vector`                      |
-| `rotate(radian)`             | 旋转向量                   | `number -> Vector`                      |
-| `normalize()`                | 将向量归一化为单位向量     | `void -> Vector`                        |
-| `length()`                   | 计算向量的模长             | `void -> number`                        |
-| `lengthSq()`                 | 计算向量的模长的平方       | `void -> number`                        |
-| `Vector.parse(obj)`          | 从对象构造向量             | `Object -> Vector`                      |
-| `Vector.parseFromArray(arr)` | 从数组构造向量             | `number[] -> Vector`                    |
-| `Vector.mulMatrix(m, p)`     | 计算矩阵与点乘积           | `Matrix -> Vector -> Vector`            |
-| `Vector.nearlyEq(a, b, eps)` | 判断两向量近似相等         | `Vector -> Vector -> number -> boolean` |
-| `Vector.distanceTo(a, b)`    | 计算两向量相减的模长       | `Vector -> Vector -> number`            |
-| `Vector.distanceSq(a, b)`    | 计算两向量相减的模长的平方 | `Vector -> Vector -> number`            |
+| 名称                         | 描述                       | 类型                                  |
+| ---------------------------- | -------------------------- | ------------------------------------- |
+| `serialize()`                | 序列化为对象               | `() => {x, y}`                        |
+| `serializeToArray()`         | 序列化为数组               | `() => number[]`                      |
+| `applyTransform(matrix)`     | 原地应用矩阵变换           | `(Matrix) => Vector`                  |
+| `clonePoint()`               | 克隆点                     | `() => Vector`                        |
+| `add(other)`                 | 向量加法                   | `(Vector) => Vector`                  |
+| `sub(other)`                 | 向量减法                   | `(Vector) => Vector`                  |
+| `dotMul(other)`              | 向量点乘                   | `(Vector) => number`                  |
+| `scale(factor)`              | 缩放向量（数乘）           | `(number) => Vector`                  |
+| `rotate(radian)`             | 旋转向量                   | `(number) => Vector`                  |
+| `normalize()`                | 将向量归一化为单位向量     | `() => Vector`                        |
+| `length()`                   | 计算向量的模长             | `() => number`                        |
+| `lengthSq()`                 | 计算向量的模长的平方       | `() => number`                        |
+| `Vector.parse(obj)`          | 从对象构造向量             | `(Object) => Vector`                  |
+| `Vector.parseFromArray(arr)` | 从数组构造向量             | `(number[]) => Vector`                |
+| `Vector.mulMatrix(m, p)`     | 计算矩阵与点乘积           | `(Matrix, Vector) => Vector`          |
+| `Vector.nearlyEq(a, b, eps)` | 判断两向量近似相等         | `(Vector, Vector, number) => boolean` |
+| `Vector.distanceTo(a, b)`    | 计算两向量相减的模长       | `(Vector, Vector) => number`          |
+| `Vector.distanceSq(a, b)`    | 计算两向量相减的模长的平方 | `(Vector, Vector) => number`          |
 
 ## Matrix
 
@@ -83,28 +83,28 @@ $$
 
 ### 主要方法
 
-| 名称                         | 描述               | 类型                                    |
-| ---------------------------- | ------------------ | --------------------------------------- |
-| `serialize()`                | 序列化为对象       | `void -> Object`                        |
-| `serializeToArray()`         | 序列化为二维数组   | `void -> number[][]`                    |
-| `clone()`                    | 克隆矩阵           | `void -> Matrix`                        |
-| `get(x, y)`                  | 读取矩阵元素       | `number -> number -> number`            |
-| `getFromArr(arr)`            | 用数组读取矩阵元素 | `number[] -> number`                    |
-| `applyToVector(point)`       | 对点应用矩阵       | `Vector -> Vector`                      |
-| `add(other)`                 | 矩阵加法           | `Matrix -> Matrix`                      |
-| `sub(other)`                 | 矩阵减法           | `Matrix -> Matrix`                      |
-| `mul(other)`                 | 矩阵乘法           | `Matrix -> Matrix`                      |
-| `mulVector(vector)`          | 矩阵与向量相乘     | `Vector -> Vector`                      |
-| `scale(scale)`               | 矩阵数乘           | `number -> Matrix`                      |
-| `rotate(radian)`             | 右乘旋转矩阵       | `number -> Matrix`                      |
-| `det()`                      | 行列式             | `void -> number`                        |
-| `inv()`                      | 逆矩阵             | `void -> Matrix`                        |
-| `svd()`                      | 奇异值分解         | `void -> {Matrix, Matrix, Matrix}`      |
-| `transpose()`                | 矩阵转置           | `void -> Matrix`                        |
-| `Matrix.identity()`          | 单位矩阵           | `void -> Matrix`                        |
-| `Matrix.parse(obj)`          | 从对象构造矩阵     | `Object -> Matrix`                      |
-| `Matrix.parseFromArray(arr)` | 从数组构造矩阵     | `number[][] -> Matrix`                  |
-| `Matrix.nearlyEq(a, b, eps)` | 近似相等判断       | `Matrix -> Matrix -> number -> boolean` |
+| 名称                         | 描述               | 类型                                  |
+| ---------------------------- | ------------------ | ------------------------------------- |
+| `serialize()`                | 序列化为对象       | `() => Object`                        |
+| `serializeToArray()`         | 序列化为二维数组   | `() => number[][]`                    |
+| `clone()`                    | 克隆矩阵           | `() => Matrix`                        |
+| `get(x, y)`                  | 读取矩阵元素       | `(number, number) => number`          |
+| `getFromArr(arr)`            | 用数组读取矩阵元素 | `(number[]) => number`                |
+| `applyToVector(point)`       | 对点应用矩阵       | `(Vector) => Vector`                  |
+| `add(other)`                 | 矩阵加法           | `(Matrix) => Matrix`                  |
+| `sub(other)`                 | 矩阵减法           | `(Matrix) => Matrix`                  |
+| `mul(other)`                 | 矩阵乘法           | `(Matrix) => Matrix`                  |
+| `mulVector(vector)`          | 矩阵与向量相乘     | `(Vector) => Vector`                  |
+| `scale(scale)`               | 矩阵数乘           | `(number) => Matrix`                  |
+| `rotate(radian)`             | 右乘旋转矩阵       | `(number) => Matrix`                  |
+| `det()`                      | 行列式             | `() => number`                        |
+| `inv()`                      | 逆矩阵             | `() => Matrix`                        |
+| `svd()`                      | 奇异值分解         | `() => {Matrix, Matrix, Matrix}`      |
+| `transpose()`                | 矩阵转置           | `() => Matrix`                        |
+| `Matrix.identity()`          | 单位矩阵           | `() => Matrix`                        |
+| `Matrix.parse(obj)`          | 从对象构造矩阵     | `(Object) => Matrix`                  |
+| `Matrix.parseFromArray(arr)` | 从数组构造矩阵     | `(number[][]) => Matrix`              |
+| `Matrix.nearlyEq(a, b, eps)` | 近似相等判断       | `(Matrix, Matrix, number) => boolean` |
 
 ## 在仓库中的典型用途
 

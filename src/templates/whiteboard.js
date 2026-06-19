@@ -1,5 +1,8 @@
 import { Vector } from "../core/utils/math.js";
 import { Board } from "../core/components/board.js";
+import { Logger } from "../utils/log/logger.js";
+import { logBus } from "../utils/log/log-bus.js";
+import { createConsolePrinter } from "../utils/log/console-printer.js";
 import {
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
@@ -7,30 +10,36 @@ import {
 import { MonitorViewportTool } from "./demo/monitor-viewport-tool.js";
 import { WasdCoordinateTool } from "./demo/wasd-coordinate-tool.js";
 
+// Demo 独立入口，需要手动注册控制台输出器
+createConsolePrinter(logBus, { timestamps: true });
+
 const board = new Board();
 board.width = 800;
 board.height = 600;
 
+const appLeft = document.getElementById("app-left");
 const foregroundLayer = document.getElementById("app-foreground-layer");
 const monitor = board.createMonitor(
   foregroundLayer,
   {
-    width: window.innerWidth,
+    width: appLeft.clientWidth,
     height: window.innerHeight,
   },
   "monitor",
 );
 monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
-monitor.canvas.tabIndex = 0;
+monitor.liveCanvas.tabIndex = 0;
+
+const demoLog = new Logger("Demo", "INFO", logBus);
 
 const logDemoStatus = (label, payload) => {
   if (payload === undefined) {
-    console.log(`[whiteboard-demo] ${label}`);
+    demoLog.info(label);
     return;
   }
 
-  console.log(`[whiteboard-demo] ${label}`, payload);
+  demoLog.info(label, payload);
 };
 
 const wasdCoordinateTool = new WasdCoordinateTool({
@@ -54,8 +63,8 @@ const monitorViewportTool = new MonitorViewportTool({
   },
 });
 
-logDemoStatus("左键工具", "黑色笔划对象");
-logDemoStatus("右键工具", "红色笔划对象");
+logDemoStatus("左键工具", "红色笔画对象");
+logDemoStatus("右键工具", "矩形框选 -> 修改对象");
 logDemoStatus("空格工具", "随机圆对象");
 logDemoStatus("WASD 初始坐标", { x: 0, y: 0 });
 logDemoStatus("视口快捷键", "方向键平移，+/- 缩放，R 全屏刷新");
@@ -65,7 +74,7 @@ configureWhiteboardDemo(board, monitor, {
 });
 
 const resizeMonitor = () => {
-  const width = window.innerWidth;
+  const width = appLeft.clientWidth;
   const height = window.innerHeight;
   monitor.rootElement.style.width = `${width}px`;
   monitor.rootElement.style.height = `${height}px`;
@@ -78,10 +87,11 @@ const emitMousePacket = (event) => {
   const signals = [];
 
   if (event.type === "mousedown") {
+    event.preventDefault();
     if (event.button === 0) {
-      logDemoStatus("当前输入", "左键黑笔");
+      logDemoStatus("当前输入", "左键红笔");
     } else if (event.button === 2) {
-      logDemoStatus("当前输入", "右键红笔");
+      logDemoStatus("当前输入", "右键选择-修改");
     } else {
       logDemoStatus("当前输入", "鼠标输入");
     }
@@ -124,7 +134,7 @@ const emitMousePacket = (event) => {
 
   if (event.type === "mouseleave") {
     signals.push({
-      type: "cancel",
+      type: "end",
       context: {
         buttons: event.buttons,
         domEvent: event.type,
@@ -140,11 +150,34 @@ const emitMousePacket = (event) => {
   });
 };
 
-monitor.canvas.addEventListener("mousedown", emitMousePacket);
-monitor.canvas.addEventListener("mousemove", emitMousePacket);
-window.addEventListener("mouseup", emitMousePacket);
-monitor.canvas.addEventListener("mouseleave", emitMousePacket);
-monitor.canvas.addEventListener("contextmenu", (event) => {
+const emitWindowMouseUpPacket = (event) => {
+  board.signalsEventBus.emit("input", {
+    to: `/${monitor.monitorId}/mouse`,
+    signals: [
+      {
+        type: "end",
+        context: {
+          button: event.button,
+          buttons: event.buttons,
+          domEvent: event.type,
+        },
+      },
+    ],
+  });
+};
+
+monitor.liveCanvas.addEventListener("mousedown", emitMousePacket);
+monitor.liveCanvas.addEventListener("mousemove", emitMousePacket);
+monitor.liveCanvas.addEventListener("mouseup", emitMousePacket);
+window.addEventListener("mouseup", emitWindowMouseUpPacket);
+monitor.liveCanvas.addEventListener("mouseleave", emitMousePacket);
+monitor.liveCanvas.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
+monitor.liveCanvas.addEventListener("dragstart", (event) => {
+  event.preventDefault();
+});
+monitor.liveCanvas.addEventListener("selectstart", (event) => {
   event.preventDefault();
 });
 
@@ -185,6 +218,10 @@ const emitKeyboardPacket = (event) => {
       event.code.startsWith("Digit")
     ) {
       logDemoStatus("当前输入", `debug ${event.code}`);
+    } else if (event.code === "Enter") {
+      logDemoStatus("当前输入", "handoff Enter");
+    } else if (event.code === "Escape") {
+      logDemoStatus("当前输入", "handoff Escape");
     } else {
       logDemoStatus("当前输入", `WASD ${event.code}`);
     }
@@ -213,16 +250,16 @@ const emitKeyboardPacket = (event) => {
 const emitKeyboardCancelPacket = () => {
   board.signalsEventBus.emit("input", {
     to: `/${monitor.monitorId}/keyboard`,
-    signals: [{ type: "cancel", context: { domEvent: "blur" } }],
+    signals: [{ type: "end", context: { domEvent: "blur" } }],
   });
 };
 
-monitor.canvas.addEventListener("mousedown", () => {
-  monitor.canvas.focus();
+monitor.liveCanvas.addEventListener("mousedown", () => {
+  monitor.liveCanvas.focus();
 });
-monitor.canvas.addEventListener("keydown", emitKeyboardPacket);
-monitor.canvas.addEventListener("keyup", emitKeyboardPacket);
-monitor.canvas.addEventListener("blur", emitKeyboardCancelPacket);
+monitor.liveCanvas.addEventListener("keydown", emitKeyboardPacket);
+monitor.liveCanvas.addEventListener("keyup", emitKeyboardPacket);
+monitor.liveCanvas.addEventListener("blur", emitKeyboardCancelPacket);
 window.addEventListener("resize", resizeMonitor);
 
-monitor.canvas.focus();
+monitor.liveCanvas.focus();

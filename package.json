@@ -20,9 +20,9 @@
     "hidefile": "3"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
-    "jest": "30.4.2",
-    "benchmark": "2.1.4"
+    "@tauri-apps/cli": "^2.11.2",
+    "benchmark": "2.1.4",
+    "jest": "30.4.2"
   },
   "jest": {
     "testEnvironment": "node"

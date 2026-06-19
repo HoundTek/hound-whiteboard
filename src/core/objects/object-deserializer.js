@@ -7,6 +7,7 @@
 
 import { BasicObject } from "./basic-obj.js";
 import { PolygonObject } from "./graph/polygon.js";
+import { CircleObject } from "./graph/circle.js";
 import { TextObject } from "./one-dim/text.js";
 import { StrokeObject } from "./stroke/stroke.js";
 
@@ -20,6 +21,7 @@ const parserRegistry = new Map([
   ["PolygonObject", PolygonObject],
   ["TextObject", TextObject],
   ["StrokeObject", StrokeObject],
+  ["CircleObject", CircleObject],
 ]);
 
 /**

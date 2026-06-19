@@ -1,125 +1,208 @@
 /**
- * @file demo 随机圆对象创建工具
+ * @file demo 随机圆修饰节点工作流
+ * @description 提供 createRandomCircleSubDAG 工厂函数，生成完整的随机圆 prefix 工作流。
  * @module templates/demo/random-circle-creator-tool
  * @author Zhou Chenyu
  */
 
-import { Tool } from "../../core/tools/tool.js";
-import {
-  CircleObject,
-  DEFAULT_CIRCLE_PROPERTY,
-} from "../../core/objects/graph/circle.js";
+import { createSubDAG } from "../../core/devices-dag/index.js";
+import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
+import { SignalPacket } from "../../core/devices-dag/signal.js";
+import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
+import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/tools/creator/obj-creator.js";
 import { Vector } from "../../core/utils/math.js";
+import { isPlainObject } from "../../core/prefixs/utils.js";
 
 /**
- * Demo 专用随机圆对象创建工具
- * @class
- * @extends Tool
+ * 随机圆 prefix 工作流信号类型
+ * @readonly
+ * @enum {string}
  */
-class RandomCircleCreatorTool extends Tool {
-  /**
-   * @param {{
-   *   random?: () => number,
-   *   minRadius?: number,
-   *   maxRadius?: number,
-   *   property?: Partial<typeof DEFAULT_CIRCLE_PROPERTY>,
-   * }} [options={}]
-   */
-  constructor(options = {}) {
-    super();
-    this.random =
-      typeof options.random === "function" ? options.random : Math.random;
-    this.minRadius = options.minRadius ?? 12;
-    this.maxRadius = options.maxRadius ?? 60;
-    this.property = {
-      fillColor: DEFAULT_CIRCLE_PROPERTY.fillColor,
-      strokeWidth: DEFAULT_CIRCLE_PROPERTY.strokeWidth,
-      ...(options.property ?? {}),
-    };
-    this.hasCustomStrokeColor = Boolean(
-      options.property && Object.hasOwn(options.property, "strokeColor"),
-    );
-  }
+const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
+  RADIUS: "radius",
+  PROPERTY: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+});
 
-  /**
-   * @type {() => number}
-   */
-  random;
+/**
+ * 创建随机圆修饰节点工作流
+ * @description
+ *   工厂函数，接收配置选项后一次性生成包含 random-circle-generator prefix、
+ *   circle-params prefix 和 CircleCreatorTool 的三层修饰节点子树。
+ *   无需手动实例化工具类，挂载后任意 trigger 信号即可生成随机圆。
+ * @param {{
+ *   rootPath: string,
+ *   random?: () => number,
+ *   minRadius?: number,
+ *   maxRadius?: number,
+ *   property?: Record<string, any>,
+ * }} [options={}] - 随机圆工作流配置
+ * @returns {import("../../core/devices-dag/dag.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subDAG) 的结构化子树定义
+ * @see CircleCreatorTool
+ * @example
+ * const subDAG = createRandomCircleSubDAG({
+ *   rootPath: "/workflows/random-circle",
+ *   minRadius: 20,
+ *   maxRadius: 80,
+ * });
+ * monitor.mountWorkflow("/workflows/random-circle", subDAG);
+ */
+function createRandomCircleSubDAG(options = {}) {
+  const rootPath = options.rootPath ?? "/workflows/create-circle";
+  const random =
+    typeof options.random === "function" ? options.random : Math.random;
+  const minRadius = options.minRadius ?? 12;
+  const maxRadius = options.maxRadius ?? 60;
+  const baseProperty = isPlainObject(options.property)
+    ? { ...options.property }
+    : {};
+  const hasCustomStrokeColor = Boolean(
+    options.property && Object.hasOwn(options.property, "strokeColor"),
+  );
+  const hasCustomFillColor = Boolean(
+    options.property && Object.hasOwn(options.property, "fillColor"),
+  );
 
-  /**
-   * @type {number}
-   */
-  minRadius;
+  const tool = new CircleCreatorTool({ property: baseProperty });
 
-  /**
-   * @type {number}
-   */
-  maxRadius;
+  const builder = createSubDAG(rootPath);
 
-  /**
-   * @type {Record<string, any>}
-   */
-  property;
+  // 生成随机圆 prefix 节点，接收 trigger 信号并计算随机圆参数后路由到 params prefix
+  const root = builder
+    .node()
+    .prefix(
+      createPrefixNodeHandler({
+        handle: (pkt, ctx = {}) => {
+          const packet = SignalPacket.from(pkt);
+          const hasTriggerSignal = packet.signals.some(
+            (signal) => signal.type === "trigger",
+          );
+          if (!hasTriggerSignal) {
+            return ctx.stop();
+          }
 
-  /**
-   * @type {boolean}
-   */
-  hasCustomStrokeColor;
+          const monitor = ctx.acc?.monitor;
+          const viewportWorldRect = monitor?.getViewportWorldRect?.();
+          if (!viewportWorldRect) {
+            return ctx.stop();
+          }
 
-  createCircle(deviceContext = {}) {
-    const monitor = deviceContext.monitor;
-    const viewportWorldRect = monitor?.getViewportWorldRect?.();
-    if (!viewportWorldRect) return undefined;
+          const radiusRange = Math.max(maxRadius - minRadius, 0);
+          const radius = minRadius + random() * radiusRange;
+          const centerX =
+            viewportWorldRect.left +
+            radius +
+            random() * Math.max(viewportWorldRect.width - radius * 2, 0);
+          const centerY =
+            viewportWorldRect.top +
+            radius +
+            random() * Math.max(viewportWorldRect.height - radius * 2, 0);
+          const hue = Math.floor(random() * 360);
+          const randomStrokeColor = `hsl(${hue}, 70%, 42%)`;
+          const randomFillColor = `hsla(${hue}, 75%, 60%, 0.22)`;
 
-    const radiusRange = Math.max(this.maxRadius - this.minRadius, 0);
-    const radius = this.minRadius + this.random() * radiusRange;
-    const centerX =
-      viewportWorldRect.left +
-      radius +
-      this.random() * Math.max(viewportWorldRect.width - radius * 2, 0);
-    const centerY =
-      viewportWorldRect.top +
-      radius +
-      this.random() * Math.max(viewportWorldRect.height - radius * 2, 0);
-    const position = new Vector(centerX, centerY);
-    const objectId = deviceContext.allocateObjectId?.();
-    const ownerChunkId = deviceContext.resolveOwnerChunkId?.(position);
+          return ctx.routeToChild("params", [
+            ctx.signal("position", { x: centerX, y: centerY }),
+            ctx.signal(RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS, radius),
+            ctx.signal(OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY, {
+              ...baseProperty,
+              strokeColor: hasCustomStrokeColor
+                ? baseProperty.strokeColor
+                : randomStrokeColor,
+              fillColor: hasCustomFillColor
+                ? baseProperty.fillColor
+                : randomFillColor,
+            }),
+          ]);
+        },
+      }),
+      {
+        prefixKind: "random-circle-generator",
+        routePolicy: "inject",
+      },
+    )
+    .defaultRoute("params");
 
-    if (objectId == null || ownerChunkId == null) return undefined;
+  // circle-params prefix 节点，接收随机圆参数信号并转换为工具输入信号路由到 CircleCreatorTool
+  const paramsNode = builder
+    .node()
+    .prefix(
+      createPrefixNodeHandler({
+        handle: (pkt, ctx = {}) => {
+          const packet = SignalPacket.from(pkt);
+          const positionSignal = packet.signals.find(
+            (signal) => signal.type === "position",
+          );
+          const radiusSignal = packet.signals.find(
+            (signal) =>
+              signal.type === RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS,
+          );
+          const propertySignal = packet.signals.find(
+            (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+          );
+          const position = positionSignal?.context?.value;
+          const radius = radiusSignal?.context?.value;
 
-    const circle = new CircleObject(position, objectId, ownerChunkId, radius);
-    const randomStrokeColor = `hsl(${Math.floor(this.random() * 360)}, 70%, 42%)`;
-    circle.setProperty({
-      ...this.property,
-      strokeColor: this.hasCustomStrokeColor
-        ? this.property.strokeColor
-        : randomStrokeColor,
-    });
-    return circle;
-  }
+          if (
+            !position ||
+            typeof position.x !== "number" ||
+            typeof position.y !== "number" ||
+            typeof radius !== "number"
+          ) {
+            return ctx.stop();
+          }
 
-  commitCircle(circle, deviceContext = {}) {
-    if (!circle) return;
+          const target = ctx.defaultRoute || "tool";
 
-    const board = deviceContext.board;
-    if (board?.activeObjectManager?.add && board?.activeObjectManager?.apply) {
-      const objects = new Set([circle]);
-      board.activeObjectManager.add(objects);
-      board.activeObjectManager.apply(objects);
-      return;
-    }
+          const signalsA = [
+            ctx.signal("position", position),
+            ctx.signal(
+              OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+              isPlainObject(propertySignal?.context?.value)
+                ? propertySignal.context.value
+                : { ...baseProperty },
+            ),
+          ];
 
-    board?.addObject?.(circle, circle.ownerChunkId);
-  }
+          const signalsB = [
+            ctx.signal("position", {
+              x: position.x + radius,
+              y: position.y,
+            }),
+          ];
 
-  process(signalPacket, deviceContext = {}) {
-    if ((signalPacket?.signals?.length ?? 0) === 0) return;
+          const signalsC = [
+            ctx.signal("position", {
+              x: position.x + radius,
+              y: position.y,
+            }),
+            ctx.signal("end", undefined, {
+              sourceType: "random-circle-prefix",
+            }),
+          ];
 
-    const circle = this.createCircle(deviceContext);
-    this.commitCircle(circle, deviceContext);
-  }
+          return {
+            packets: [
+              ...ctx.routeToChild(target, signalsA).packets,
+              ...ctx.routeToChild(target, signalsB).packets,
+              ...ctx.routeToChild(target, signalsC).packets,
+            ],
+          };
+        },
+      }),
+      {
+        prefixKind: "circle-params",
+        routePolicy: "transform",
+      },
+    )
+    .defaultRoute("tool");
 
-  reset() {}
+  // CircleCreatorTool 节点，接收信号并创建圆对象
+  const toolNode = builder.node().tool(tool);
+
+  builder.edge("params", root, paramsNode);
+  builder.edge("tool", paramsNode, toolNode);
+
+  return builder.build();
 }
 
-export { RandomCircleCreatorTool };
+export { createRandomCircleSubDAG };

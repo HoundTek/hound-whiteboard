@@ -244,7 +244,7 @@ function getTriFingerResult(
     covMat[1][0] += oMat[i].y * tMat[i].x;
     covMat[1][1] += oMat[i].y * tMat[i].y;
   }
-  const { u, v } = Matrix.parseFromArray(covMat).svd();
+  const { u, v } = Matrix.parse(covMat).svd();
   const rotMat = v.mul(u.transpose());
   const oDist = Math.sqrt(
     oMat.reduce((sum, vec) => sum + vec.x * vec.x + vec.y * vec.y, 0) / 3,

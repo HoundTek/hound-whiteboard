@@ -1,4 +1,5 @@
 import { jest } from "@jest/globals";
+import { createChunk, createChunkAt } from "../../../test-support/aom-fixtures.js";
 import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Chunk } from "../../chunk.js";
@@ -19,20 +20,6 @@ describe("ActiveObjectManager/pickup", () => {
   beforeEach(() => {
     aom = new ActiveObjectManager();
   });
-
-  function createChunk(id) {
-    const chunk = Chunk.fromId(id);
-    chunk.isLoad = true;
-    chunk.isTempLoad = false;
-    return chunk;
-  }
-
-  function createChunkAt(x, y) {
-    const chunk = Chunk.fromCoordinate(x, y);
-    chunk.isLoad = true;
-    chunk.isTempLoad = false;
-    return chunk;
-  }
 
   function createObject(id, chunkId) {
     return new BasicObject(new Vector(0, 0), id, chunkId);
@@ -448,6 +435,35 @@ describe("ActiveObjectManager/pickup", () => {
           ]),
         ),
       ).toBe(true);
+    });
+  });
+
+  describe("优先使用 Board.createChunkBlockLoader", () => {
+    test("pickup 应优先使用 Board.createChunkBlockLoader 且不再要求 Chunk 入参", () => {
+      const chunk = createChunk(1);
+      chunk.objectManager = new ChunkObjectManager(1);
+      chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
+
+      const board = {
+        createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+        getChunkById: jest.fn((chunkId) => (chunkId === 1 ? chunk : undefined)),
+      };
+      const aom = new ActiveObjectManager(board);
+
+      const pickup8 = aom.pickup(
+        new Set([new BasicObject(new Vector(0, 0), 8, 1)]),
+      );
+      const expected8 = DirectedGraph.parse([
+        [8, [4, 5]],
+        [4, [2]],
+        [5, [2, 3]],
+        [2, [1]],
+        [3, [1]],
+        [1, []],
+      ]);
+
+      expect(board.createChunkBlockLoader).toHaveBeenCalled();
+      expect(pickup8.equals(expected8)).toBe(true);
     });
   });
 });

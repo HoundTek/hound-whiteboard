@@ -2,24 +2,21 @@ import {
   createTouchscreenDevice,
   TOUCHSCREEN_DEVICE_SIGNAL_TYPES,
 } from "../touchscreen-device.js";
-import { DevicesTree } from "../devices-tree.js";
+import { DevicesDAG } from "../../devices-dag/index.js";
 
 describe("touchscreen-device", () => {
   test("应聚合同一包中的多个触点位置，并输出多指状态", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const touchscreenDevice = createTouchscreenDevice();
 
-    const mountedNodes = tree.mountDevice(
-      "/monitor/touchscreen",
-      touchscreenDevice,
-    );
+    const mountedNodes = dag.mountSubDAG("/monitor", touchscreenDevice);
 
-    expect(mountedNodes.map((node) => node.path)).toEqual([
+    expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
       "/monitor/touchscreen",
       "/monitor/touchscreen/contacts",
     ]);
 
-    const packets = tree.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         {
@@ -44,9 +41,9 @@ describe("touchscreen-device", () => {
       },
     ]);
 
-    expect(packets).toEqual([
+    expect(result.packets).toEqual([
       {
-        to: "/monitor/touchscreen/contacts",
+        to: "",
         signals: [
           {
             type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
@@ -71,12 +68,12 @@ describe("touchscreen-device", () => {
   });
 
   test("应在 end/cancel 后移除对应触点，并保留其余触点", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const touchscreenDevice = createTouchscreenDevice();
 
-    tree.mountDevice("/monitor/touchscreen", touchscreenDevice);
+    dag.mountSubDAG("/monitor", touchscreenDevice);
 
-    tree.dispatch({
+    dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         {
@@ -90,7 +87,7 @@ describe("touchscreen-device", () => {
       ],
     });
 
-    const packets = tree.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         { type: "end", context: { touchId: "finger-1" } },
@@ -108,9 +105,9 @@ describe("touchscreen-device", () => {
       },
     ]);
 
-    expect(packets).toEqual([
+    expect(result.packets).toEqual([
       {
-        to: "/monitor/touchscreen/contacts",
+        to: "",
         signals: [
           {
             type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
@@ -132,10 +129,10 @@ describe("touchscreen-device", () => {
 
   test("clearTouches 应清空所有当前触点", () => {
     const touchscreenDevice = createTouchscreenDevice();
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
 
-    tree.mountDevice("/monitor/touchscreen", touchscreenDevice);
-    tree.dispatch({
+    dag.mountSubDAG("/monitor", touchscreenDevice);
+    dag.dispatch({
       to: "/monitor/touchscreen",
       signals: [
         {

@@ -61,12 +61,12 @@
 
 ## 核心字段
 
-| 名称               | 描述                           | 类型                                      |
-| ------------------ | ------------------------------ | ----------------------------------------- |
-| `chunkLoader`      | 被包装的通用区块加载器         | `ChunkLoader`                              |
-| `chunksLoaded`      | 当前缓冲区中的区块 id 映射       | `Map<number, Chunk>`                       |
-| `bufferBounds`     | 当前缓冲区二维边界             | `{ minX, maxX, minY, maxY } \| undefined` |
-| `chunkNow`          | 当前区块引用                     | `Chunk`                                    |
+| 名称                | 描述                             | 类型                                      |
+| ------------------- | -------------------------------- | ----------------------------------------- |
+| `chunkLoader`       | 被包装的通用区块加载器           | `ChunkLoader`                             |
+| `chunksLoaded`      | 当前缓冲区中的区块 id 映射       | `Map<number, Chunk>`                      |
+| `bufferBounds`      | 当前缓冲区二维边界               | `{ minX, maxX, minY, maxY } \| undefined` |
+| `chunkNow`          | 当前区块引用                     | `Chunk`                                   |
 | `chunksLoadedLimit` | 缓冲区区块数上限，`0` 表示不限制 | `number`                                  |
 
 ## 缓冲区模型
@@ -206,29 +206,29 @@
 
 ## API
 
-| 名称                          | 描述                     | 类型              |
-| ----------------------------- | ------------------------ | ----------------- |
-| `moveCurrentRight()`          | 当前区块在缓冲区中右移     | `void -> void`    |
-| `moveCurrentLeft()`           | 当前区块在缓冲区中左移     | `void -> void`    |
-| `moveCurrentUp()`             | 当前区块在缓冲区中上移     | `void -> void`    |
-| `moveCurrentDown()`           | 当前区块在缓冲区中下移     | `void -> void`    |
-| `expandBufferRightTempLoad()` | 向右扩展缓冲区并临时加载 | `void -> void`    |
-| `expandBufferRightFullLoad()` | 向右扩展缓冲区并完整加载 | `void -> void`    |
-| `expandBufferLeftTempLoad()`  | 向左扩展缓冲区并临时加载 | `void -> void`    |
-| `expandBufferLeftFullLoad()`  | 向左扩展缓冲区并完整加载 | `void -> void`    |
-| `expandBufferUpTempLoad()`    | 向上扩展缓冲区并临时加载 | `void -> void`    |
-| `expandBufferUpFullLoad()`    | 向上扩展缓冲区并完整加载 | `void -> void`    |
-| `expandBufferDownTempLoad()`  | 向下扩展缓冲区并临时加载 | `void -> void`    |
-| `expandBufferDownFullLoad()`  | 向下扩展缓冲区并完整加载 | `void -> void`    |
-| `shrinkBufferRight()`         | 从右边界收缩缓冲区       | `void -> boolean` |
-| `shrinkBufferLeft()`          | 从左边界收缩缓冲区       | `void -> boolean` |
-| `shrinkBufferUp()`            | 从上边界收缩缓冲区       | `void -> boolean` |
-| `shrinkBufferDown()`          | 从下边界收缩缓冲区       | `void -> boolean` |
-| `initChunk(chunk)`              | 以指定区块初始化缓冲区     | `Chunk -> void`    |
-| `resetBuffer()`               | 重置缓冲区               | `void -> void`    |
-| `initChunkById(chunkId)`        | 以指定区块 id 初始化缓冲区 | `number -> Chunk`  |
-| `initChunkByCoordinate(x, y)`  | 以指定坐标初始化缓冲区   | `number -> number -> Chunk` |
-| `initChunksAroundCoordinate(...)` | 以指定邻域初始化缓冲区 | `number -> number -> number -> Chunk[]` |
+| 名称                              | 描述                       | 类型                                  |
+| --------------------------------- | -------------------------- | ------------------------------------- |
+| `moveCurrentRight()`              | 当前区块在缓冲区中右移     | `() => void`                          |
+| `moveCurrentLeft()`               | 当前区块在缓冲区中左移     | `() => void`                          |
+| `moveCurrentUp()`                 | 当前区块在缓冲区中上移     | `() => void`                          |
+| `moveCurrentDown()`               | 当前区块在缓冲区中下移     | `() => void`                          |
+| `expandBufferRightTempLoad()`     | 向右扩展缓冲区并临时加载   | `() => void`                          |
+| `expandBufferRightFullLoad()`     | 向右扩展缓冲区并完整加载   | `() => void`                          |
+| `expandBufferLeftTempLoad()`      | 向左扩展缓冲区并临时加载   | `() => void`                          |
+| `expandBufferLeftFullLoad()`      | 向左扩展缓冲区并完整加载   | `() => void`                          |
+| `expandBufferUpTempLoad()`        | 向上扩展缓冲区并临时加载   | `() => void`                          |
+| `expandBufferUpFullLoad()`        | 向上扩展缓冲区并完整加载   | `() => void`                          |
+| `expandBufferDownTempLoad()`      | 向下扩展缓冲区并临时加载   | `() => void`                          |
+| `expandBufferDownFullLoad()`      | 向下扩展缓冲区并完整加载   | `() => void`                          |
+| `shrinkBufferRight()`             | 从右边界收缩缓冲区         | `() => boolean`                       |
+| `shrinkBufferLeft()`              | 从左边界收缩缓冲区         | `() => boolean`                       |
+| `shrinkBufferUp()`                | 从上边界收缩缓冲区         | `() => boolean`                       |
+| `shrinkBufferDown()`              | 从下边界收缩缓冲区         | `() => boolean`                       |
+| `initChunk(chunk)`                | 以指定区块初始化缓冲区     | `(Chunk) => void`                     |
+| `resetBuffer()`                   | 重置缓冲区                 | `() => void`                          |
+| `initChunkById(chunkId)`          | 以指定区块 id 初始化缓冲区 | `(number) => Chunk`                   |
+| `initChunkByCoordinate(x, y)`     | 以指定坐标初始化缓冲区     | `(number, number) => Chunk`           |
+| `initChunksAroundCoordinate(...)` | 以指定邻域初始化缓冲区     | `(number, number, number) => Chunk[]` |
 
 ## 与其它组件的关系
 

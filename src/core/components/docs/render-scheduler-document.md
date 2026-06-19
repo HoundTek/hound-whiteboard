@@ -171,6 +171,7 @@
 - 已接入：`Monitor` 已使用 `RenderScheduler` 驱动 `LiveRenderer.flush(dirtyRects)`。
 - 已实现的默认聚合：重叠/相接矩形合并、近邻矩形的受控合并、非矩形输入透传。
 - 已实现的宿主参数化：base/live 可分别注入不同阈值；并支持“整视口 / 整 chunk”退化。
+- `collapseLargeRect`：当脏区覆盖某个 canonical rect（如 chunk 屏幕矩形）超过 `canonicalRectCoverageRatio` 时，该脏区退化为整 canonical rect；当覆盖率不足时不再丢弃，而是保留脏区与该 canonical rect 的交集，避免跨区块对象在低覆盖率 chunk 上丢失渲染。
 - 待完善：更强的聚类策略、按操作类型动态调整阈值、不同渲染层按真实代价模型继续细化参数。
 
 ## 相关文档

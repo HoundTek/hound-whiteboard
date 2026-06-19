@@ -1,57 +1,47 @@
-import { DevicesTree } from "../devices-tree.js";
+import { DevicesDAG, createSubDAG } from "../../devices-dag/index.js";
+import { createEdgePrefix } from "../../prefixs/index.js";
 import {
-  KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
+  KEYBOARD_DEVICE_SIGNAL_TYPES,
 } from "../keyboard-device.js";
-import { Tool } from "../../tools/tool.js";
+import { CollectingTool } from "../../test-support/mock-tools.js";
+
+function toPlainPackets(packets) {
+  return packets.map((packet) => ({
+    to: packet.to,
+    signals: packet.signals,
+  }));
+}
 
 describe("keyboard-device", () => {
   test("按键按下应更新状态，并路由到 event、keydown 与按键专属节点", () => {
-    const tree = new DevicesTree();
-    const keyboardDevice = createKeyboardDevice({
-      nodeConfigs: {
-        "/code/Space": {
-          rewritePacket(packet) {
-            const triggerSignals = packet.signals.filter(
-              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-            );
-
-            return triggerSignals.length === 0
-              ? []
-              : { to: "../../tools/create-circle", signals: triggerSignals };
-          },
-        },
-      },
-    });
-    class CollectingTool extends Tool {
-      calls = [];
-
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
-
+    const dag = new DevicesDAG();
+    const keyboardDevice = createKeyboardDevice();
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/tools/create-circle", tool);
+    const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountWorkflow("/monitor/workflows/space-tool", tool);
 
-    expect(mountedNodes.map((node) => node.path)).toEqual([
-      "/monitor/keyboard",
-      "/monitor/keyboard/event",
-      "/monitor/keyboard/keydown",
-      "/monitor/keyboard/keyup",
-      "/monitor/keyboard/repeat",
-      "/monitor/keyboard/cancel",
-      "/monitor/keyboard/tools",
+    const prefix = createEdgePrefix({
+      handler(packet) {
+        const triggerSignals = packet.signals.filter(
+          (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        );
+        return triggerSignals.length === 0 ? [] : { signals: triggerSignals };
+      },
+    });
+    const prefixNodes = dag.mountSubDAG(
       "/monitor/keyboard/code/Space",
-    ]);
+      { ...prefix, rootPath: "/default" },
+      {},
+    );
+    dag.addEdge(
+      prefixNodes[0].path,
+      "default",
+      "/monitor/workflows/space-tool",
+    );
 
-    const packets = tree.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -93,9 +83,9 @@ describe("keyboard-device", () => {
       },
     });
 
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/keyboard/event",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -112,7 +102,7 @@ describe("keyboard-device", () => {
         ],
       },
       {
-        to: "/monitor/keyboard/keydown",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -133,7 +123,7 @@ describe("keyboard-device", () => {
     expect(tool.calls).toHaveLength(1);
     expect(tool.calls[0]).toEqual({
       signalPacket: {
-        to: "/monitor/keyboard/tools/create-circle/tool",
+        to: "",
         signals: [
           {
             type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
@@ -150,19 +140,19 @@ describe("keyboard-device", () => {
           },
         ],
       },
-      deviceContext: expect.objectContaining({
-        path: "/monitor/keyboard/tools/create-circle/tool",
+      context: expect.objectContaining({
+        path: "/monitor/keyboard/code/Space/default/default",
       }),
     });
   });
 
   test("重复按键应路由到 repeat，并保留当前激活键", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountDevice("/monitor/keyboard", keyboardDevice);
+    dag.mountSubDAG("/monitor", keyboardDevice);
 
-    tree.dispatch({
+    dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -172,7 +162,7 @@ describe("keyboard-device", () => {
       ],
     });
 
-    const packets = tree.dispatch({
+    const result = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -182,9 +172,9 @@ describe("keyboard-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/keyboard/event",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -193,7 +183,7 @@ describe("keyboard-device", () => {
         ],
       },
       {
-        to: "/monitor/keyboard/repeat",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -217,12 +207,12 @@ describe("keyboard-device", () => {
   });
 
   test("按键抬起与取消应清理状态", () => {
-    const tree = new DevicesTree();
+    const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    tree.mountDevice("/monitor/keyboard", keyboardDevice);
+    dag.mountSubDAG("/monitor", keyboardDevice);
 
-    tree.dispatch({
+    dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -236,7 +226,7 @@ describe("keyboard-device", () => {
       ],
     });
 
-    const keyupPackets = tree.dispatch({
+    const keyupPackets = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -246,40 +236,11 @@ describe("keyboard-device", () => {
       ],
     });
 
-    expect(keyupPackets).toEqual([
-      {
-        to: "/monitor/keyboard/event",
-        signals: [
-          {
-            type: "keyup",
-            context: { code: "KeyW", key: "w", repeat: false },
-          },
-        ],
-      },
-      {
-        to: "/monitor/keyboard/keyup",
-        signals: [
-          {
-            type: "keyup",
-            context: { code: "KeyW", key: "w", repeat: false },
-          },
-        ],
-      },
-      {
-        to: "/monitor/keyboard/code/KeyW",
-        signals: [
-          {
-            type: KEYBOARD_DEVICE_SIGNAL_TYPES.RELEASE,
-            context: {
-              code: "KeyW",
-              key: "w",
-              repeat: false,
-              sourceType: "keyup",
-            },
-          },
-        ],
-      },
-    ]);
+    expect(
+      toPlainPackets(keyupPackets.packets)
+        .map((packet) => packet.signals[0].type)
+        .sort(),
+    ).toEqual(["keyup", "keyup"]);
 
     expect(keyboardDevice.getState().activeKeys).toEqual([
       {
@@ -293,7 +254,7 @@ describe("keyboard-device", () => {
       },
     ]);
 
-    tree.dispatch({
+    dag.dispatch({
       to: "/monitor/keyboard",
       signals: [{ type: "cancel", context: {} }],
     });
@@ -302,82 +263,51 @@ describe("keyboard-device", () => {
   });
 
   test("可在按键节点把信号改写为 position 并汇流到公共工具节点", () => {
-    const tree = new DevicesTree();
-    const keyboardDevice = createKeyboardDevice({
-      nodeConfigs: {
-        "/code/KeyW": {
-          rewritePacket(packet) {
-            const signals = packet.signals
-              .filter(
-                (signal) =>
-                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-              )
-              .map((signal) => ({
-                type: "position",
-                context: {
-                  value: { x: 0, y: -1 },
-                  code: "KeyW",
-                  sourceType: signal.type,
-                },
-              }));
-            return signals.length === 0
-              ? []
-              : { to: "../../tools/move", signals };
-          },
-        },
-        "/code/KeyD": {
-          rewritePacket(packet) {
-            const signals = packet.signals
-              .filter(
-                (signal) =>
-                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-              )
-              .map((signal) => ({
-                type: "position",
-                context: {
-                  value: { x: 1, y: 0 },
-                  code: "KeyD",
-                  sourceType: signal.type,
-                },
-              }));
-            return signals.length === 0
-              ? []
-              : { to: "../../tools/move", signals };
-          },
-        },
-      },
-    });
-
-    class CollectingTool extends Tool {
-      calls = [];
-
-      process(signalPacket, deviceContext) {
-        this.calls.push({ signalPacket, deviceContext });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
-
+    const dag = new DevicesDAG();
+    const keyboardDevice = createKeyboardDevice();
     const tool = new CollectingTool();
 
-    const mountedNodes = tree.mountDevice("/monitor/keyboard", keyboardDevice);
-    tree.mountTool("/monitor/keyboard/tools/move", tool);
+    const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountWorkflow("/monitor/workflows/move-tool", tool);
 
-    expect(mountedNodes.map((node) => node.path)).toEqual([
-      "/monitor/keyboard",
-      "/monitor/keyboard/event",
-      "/monitor/keyboard/keydown",
-      "/monitor/keyboard/keyup",
-      "/monitor/keyboard/repeat",
-      "/monitor/keyboard/cancel",
-      "/monitor/keyboard/tools",
-      "/monitor/keyboard/code/KeyW",
-      "/monitor/keyboard/code/KeyD",
-    ]);
+    // 用边级 prefix 替代旧 nodeConfigs handler
+    const wasdPrefix = (code, vector) =>
+      createEdgePrefix({
+        handler(packet) {
+          const signals = packet.signals
+            .filter(
+              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+            )
+            .map((signal) => ({
+              type: "position",
+              context: {
+                value: { ...vector },
+                code,
+                sourceType: signal.type,
+              },
+            }));
+          return signals.length === 0 ? [] : { signals };
+        },
+      });
 
-    const packets = tree.dispatch({
+    for (const [code, vector] of [
+      ["KeyW", { x: 0, y: -1 }],
+      ["KeyD", { x: 1, y: 0 }],
+    ]) {
+      const prefix = wasdPrefix(code, vector);
+      const prefixNodes = dag.mountSubDAG(
+        `/monitor/keyboard/code/${code}`,
+        { ...prefix, rootPath: "/default" },
+        {},
+      );
+      dag.addEdge(
+        prefixNodes[0].path,
+        "default",
+        "/monitor/workflows/move-tool",
+      );
+    }
+
+    const result = dag.dispatch({
       to: "/monitor/keyboard",
       signals: [
         {
@@ -391,9 +321,9 @@ describe("keyboard-device", () => {
       ],
     });
 
-    expect(packets).toEqual([
+    expect(toPlainPackets(result.packets)).toEqual([
       {
-        to: "/monitor/keyboard/event",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -406,7 +336,7 @@ describe("keyboard-device", () => {
         ],
       },
       {
-        to: "/monitor/keyboard/keydown",
+        to: "",
         signals: [
           {
             type: "keydown",
@@ -422,7 +352,7 @@ describe("keyboard-device", () => {
 
     expect(tool.calls).toHaveLength(2);
     expect(tool.calls[0].signalPacket).toEqual({
-      to: "/monitor/keyboard/tools/move/tool",
+      to: "",
       signals: [
         {
           type: "position",
@@ -435,7 +365,7 @@ describe("keyboard-device", () => {
       ],
     });
     expect(tool.calls[1].signalPacket).toEqual({
-      to: "/monitor/keyboard/tools/move/tool",
+      to: "",
       signals: [
         {
           type: "position",

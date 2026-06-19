@@ -111,11 +111,24 @@ class ActiveObjectManager {
   baseObjectSnapshotWorldRanges;
 
   /**
+   * 活动对象进入动态图前的覆盖区块快照
+   * @description
+   * 用于在 apply 时正确识别应从哪些旧区块中移除对象。
+   * 和 baseObjectSnapshotWorldRanges 不同，该快照不依赖 ownerChunk 的覆盖索引，
+   * 因此多次 apply 间移动对象时仍能定位到正确的旧覆盖区块。
+   * @type {Map<number, Set<number>>}
+   */
+  baseObjectSnapshotCoverChunks;
+
+  /**
    * 所属白板
    * @type {import("./board.js").Board | undefined}
    */
   board;
 
+  /**
+   * @param {import("./board.js").Board} [board] - 所属白板实例
+   */
   constructor(board) {
     this.board = board;
     this.layerPool = new RandomNumberPool(1, 10000000);
@@ -125,6 +138,7 @@ class ActiveObjectManager {
     this.activeObjects = new Set();
     this.activeObjectIndex = new Map();
     this.baseObjectSnapshotWorldRanges = new Map();
+    this.baseObjectSnapshotCoverChunks = new Map();
   }
 
   /**
@@ -147,6 +161,23 @@ class ActiveObjectManager {
   }
 
   /**
+   * 记录对象进入活动层前的覆盖区块快照
+   * @param {Iterable<BasicObject>} [objects = []] - 待记录对象集合
+   */
+  captureBaseObjectCoverChunks(objects = []) {
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      if (this.baseObjectSnapshotCoverChunks.has(objectInstance.id)) continue;
+
+      const coveredChunkIds = this.calculateCoveredChunkIds(objectInstance);
+      this.baseObjectSnapshotCoverChunks.set(
+        objectInstance.id,
+        new Set(coveredChunkIds),
+      );
+    }
+  }
+
+  /**
    * 清理对象的静态层旧范围快照
    * @param {Iterable<BasicObject>} [objects = []] - 待清理对象集合
    */
@@ -154,6 +185,7 @@ class ActiveObjectManager {
     for (const entry of objects ?? []) {
       const objectInstance = this.requireObjectInstance(entry);
       this.baseObjectSnapshotWorldRanges.delete(objectInstance.id);
+      this.baseObjectSnapshotCoverChunks.delete(objectInstance.id);
     }
   }
 
@@ -212,10 +244,11 @@ class ActiveObjectManager {
 
       if (typeof liveRenderer.invalidateObjects === "function") {
         liveRenderer.invalidateObjects([...dirtyObjectMap.values()]);
-        continue;
+      } else {
+        monitor?.renderScheduler?.invalidate?.();
       }
 
-      monitor?.renderScheduler?.invalidate?.();
+      monitor?.requestViewportUiRender?.();
     }
   }
 
@@ -265,6 +298,9 @@ class ActiveObjectManager {
       );
 
       if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
+        // 对象级失效成功后也要确保视口对应 chunk 缓冲区已同步，
+        // 避免 BaseRenderer 在收集静态对象时漏掉跨区块对象所在 chunk。
+        monitor?.syncChunkBufferWithViewport?.();
         continue;
       }
 
@@ -279,6 +315,38 @@ class ActiveObjectManager {
       }
 
       monitor?.baseRenderer?.flush?.();
+    }
+  }
+
+  /**
+   * 刷新能看到指定对象集合的那些 monitor 的静态层
+   * @description 为每个对象取世界范围，只 flush 视口与之相交的 monitor。
+   *   避免 flush 无关 monitor。
+   * @param {Array<BasicObject>} objects - 对象实例数组
+   * @private
+   */
+  _flushViewportForObjects(objects = []) {
+    if (!this.board?.monitors?.size) return;
+
+    const worldRanges = objects
+      .map((obj) => {
+        const range = this.getObjectWorldRange(obj);
+        return range ? RectangleRange.from(range) : null;
+      })
+      .filter(Boolean);
+
+    if (worldRanges.length === 0) return;
+
+    for (const monitor of this.board.monitors.values()) {
+      const viewportWorldRect = monitor.getViewportWorldRect?.();
+      if (!viewportWorldRect) continue;
+
+      const intersects = worldRanges.some((worldRange) =>
+        intersectsRanges(viewportWorldRect, worldRange),
+      );
+      if (intersects) {
+        monitor.flushViewportRender?.();
+      }
     }
   }
 
@@ -386,8 +454,8 @@ class ActiveObjectManager {
 
   /**
    * 获取对象世界坐标范围
-   * @param {BasicObject} obj
-   * @returns {Range | undefined}
+   * @param {BasicObject} obj - 要获取世界坐标范围的对象实例
+   * @returns {Range | undefined} 对象的世界坐标范围，若无法获取则返回 undefined
    */
   getObjectWorldRange(obj) {
     if (!(obj instanceof BasicObject)) return undefined;
@@ -399,9 +467,9 @@ class ActiveObjectManager {
 
   /**
    * 在当前白板中查找对象实例
-   * @param {number} objectId
-   * @param {Iterable<number>} [candidateChunkIds = []]
-   * @returns {BasicObject | undefined}
+   * @param {number} objectId - 要查找的对象 id
+   * @param {Iterable<number>} [candidateChunkIds = []] - 可能包含该对象的区块 id 集合，若提供则优先在这些区块中查找以提升性能
+   * @returns {BasicObject | undefined} 查找到的对象实例，若未找到则返回 undefined
    */
   findBoardObjectInstance(objectId, candidateChunkIds = []) {
     const activeObject = this.activeObjectIndex.get(objectId);
@@ -491,8 +559,8 @@ class ActiveObjectManager {
     }
 
     for (const chunkId of coveredChunkIds) {
-      const staticGraph = this.board.getChunkById(chunkId)?.objectManager
-        ?.staticGraph;
+      const staticGraph =
+        this.board.getChunkById(chunkId)?.objectManager?.staticGraph;
       for (const objectId of staticGraph?.getNodes?.() ?? []) {
         objectIds.add(objectId);
       }
@@ -503,6 +571,15 @@ class ActiveObjectManager {
 
   /**
    * 计算对象在静态图中的上下关系
+   * @description
+   * 遍历 AOM 所有层，对每层的非活动对象按层位置确定 below/above：
+   *
+   * - 低层 → `below`（在 applied 对象之下）
+   * - 同层 → `above`（因为 pickup 只遍历下游，同层非活动一定在 applied 之上）
+   * - 高层 → `above`（在 applied 对象之上）
+   *
+   * 此外，若 `includeUntrackedCoveredObjectsBelow` 为 true，
+   * 还会扫描覆盖区块中所有不在 AOM 中的静态对象，与 applied 对象相交的加入 `below`。
    * @param {BasicObject} obj - 要计算的对象实例
    * @param {Set<number>} coveredChunkIds - 该对象的覆盖区块集合
    * @param {Set<number>} applyingObjectIds - 正在被提交的对象 id 集合
@@ -541,6 +618,11 @@ class ActiveObjectManager {
           relation.below.add(nodeId);
         } else if (index > currentLayerIndex) {
           relation.above.add(nodeId);
+        } else {
+          // 同层 inactive：pickup 从活动对象出发只沿下游遍历（逆边缘方向），
+          // 因此同层 inactive 对象在原始静态图中一定处于活动对象的下游
+          // （即放在活动对象之上）。apply 时应恢复为 `above`。
+          relation.above.add(nodeId);
         }
       }
     }
@@ -564,7 +646,9 @@ class ActiveObjectManager {
     }
 
     if (includeUntrackedCoveredObjectsBelow) {
-      for (const nodeId of this.collectCoveredStaticObjectIds(coveredChunkIds)) {
+      for (const nodeId of this.collectCoveredStaticObjectIds(
+        coveredChunkIds,
+      )) {
         if (nodeId === obj.id) continue;
         if (applyingObjectIds.has(nodeId)) continue;
         if (this.onLayer.has(nodeId)) continue;
@@ -711,10 +795,14 @@ class ActiveObjectManager {
 
   /**
    * 选取非活动对象并加入活动对象管理器
+   * @description
+   * 通过 pickup 提取子图，按层依赖关系为对象分配动态层，
+   * 再将新层插入到 layerOrder 中的正确位置。
    * @param {Iterable<BasicObject>} startFrom - 要选择的对象集合
    */
   choose(startFrom) {
     // 提取出这些对象所构成的子图
+    // 随后遍历子图，按拓扑序 + 活动对象优先级分配层索引
     let graph = this.pickup(startFrom);
     const activeEntries = Array.from(startFrom, (item) =>
       this.requireObjectInstance(item),
@@ -724,6 +812,7 @@ class ActiveObjectManager {
       activeEntries.map((item) => [item.id, item]),
     );
     this.captureBaseObjectSnapshot(activeEntries);
+    this.captureBaseObjectCoverChunks(activeEntries);
     startFrom = null; // 释放内存
 
     // 获取对象所在层
@@ -868,6 +957,9 @@ class ActiveObjectManager {
     }
 
     this.requestLiveRender(activeEntries);
+    // 按对象范围刷新受影响的 monitor：对象已从静态图被拾取到 AOM，
+    // 需要让 BaseRenderer 通过 AOM 过滤将它们从静态层中隐藏。
+    this._flushViewportForObjects(activeEntries);
   }
 
   /**
@@ -897,20 +989,6 @@ class ActiveObjectManager {
     this.insertLayerToTop(newLayer);
     this.requestLiveRender(newObjectEntries);
     return newLayer;
-  }
-
-  /**
-   * 清理给定层的 `onLayer` 映射和 `layerPool`
-   * @param {Layer} layer - 要清理的层
-   */
-  purgeLayerMappings(layer) {
-    for (const objectId of layer.activeObjects) {
-      this.onLayer.delete(objectId);
-    }
-    for (const objectId of layer.inactiveGraph.getNodes()) {
-      this.onLayer.delete(objectId);
-    }
-    this.layerPool.remove(layer.id);
   }
 
   /**
@@ -993,6 +1071,10 @@ class ActiveObjectManager {
 
   /**
    * 应用活动对象并取消选择
+   * @description
+   * 将活动对象按当前动态层关系提交回白板区块静态结构，
+   * 清理旧覆盖区块中的残留边，重新计算静态图上下关系，
+   * 最后触发 base 层和 live 层渲染。
    * @param {Iterable<BasicObject>} objects
    */
   apply(objects) {
@@ -1014,9 +1096,9 @@ class ActiveObjectManager {
           const ownerChunk = this.resolveObjectChunk(obj);
           if (!ownerChunk) return undefined;
           const wasOnBoard =
-            this.board?.getObjectById?.(obj.id) instanceof
-            BasicObject;
+            this.board?.getObjectById?.(obj.id) instanceof BasicObject;
           const previousCoveredChunkIds =
+            this.baseObjectSnapshotCoverChunks.get(obj.id) ??
             ownerChunk.objectManager?.getObjectCoverChunks?.(obj.id) ??
             new Set([ownerChunk.id]);
           for (const chunkId of previousCoveredChunkIds) {
@@ -1026,15 +1108,34 @@ class ActiveObjectManager {
           for (const chunkId of coveredChunkIds) {
             affectedChunkIds.add(chunkId);
           }
+          // 在清理旧区块前收集旧邻接对象，避免清理后丢失
+          const previousNeighborIds = this.collectStaticGraphNeighborIds(
+            obj.id,
+            previousCoveredChunkIds,
+          );
           return {
             obj,
             ownerChunk,
             wasOnBoard,
             previousCoveredChunkIds,
             coveredChunkIds,
+            previousNeighborIds,
           };
         })
         .filter(Boolean);
+
+      // 从不再覆盖的旧区块中移除对象
+      for (const {
+        obj,
+        previousCoveredChunkIds,
+        coveredChunkIds,
+      } of applyContexts) {
+        for (const staleChunkId of previousCoveredChunkIds) {
+          if (coveredChunkIds.has(staleChunkId)) continue;
+          const staleChunk = this.board.getChunkById(staleChunkId);
+          staleChunk?.removeObject(obj.id);
+        }
+      }
 
       // 确保所有对象都被加入区块
       for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
@@ -1046,13 +1147,31 @@ class ActiveObjectManager {
         }
       }
 
+      // 清除对象在覆盖区块中的旧边，避免对象移动后残留之前的关系
+      for (const { obj, coveredChunkIds } of applyContexts) {
+        for (const chunkId of coveredChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          if (!chunk?.objectManager) continue;
+          const graph = chunk.objectManager.staticGraph;
+          if (graph.hasNode(obj.id)) {
+            graph.deleteNodeUnsafe(obj.id);
+            graph.addNodeUnsafe(obj.id);
+          }
+        }
+      }
+
       // 再计算它们在静态图中的上下关系
-      for (const { obj, ownerChunk, coveredChunkIds, wasOnBoard } of applyContexts) {
+      for (const {
+        obj,
+        ownerChunk,
+        coveredChunkIds,
+        wasOnBoard,
+      } of applyContexts) {
         const { below, above } = this.calculateStaticRelations(
           obj,
           coveredChunkIds,
           applyingObjectIds,
-          { includeUntrackedCoveredObjectsBelow: !wasOnBoard },
+          { includeUntrackedCoveredObjectsBelow: true },
         );
         for (const chunkId of coveredChunkIds) {
           const chunk = this.board.getChunkById(chunkId);
@@ -1072,13 +1191,18 @@ class ActiveObjectManager {
         activeBasicObjects.length,
         ...this.collectBaseInvalidationObjects(
           activeBasicObjects,
-          applyContexts.map(({ obj, coveredChunkIds }) => ({
-            coveredChunkIds,
-            relatedObjectIds: this.collectStaticGraphNeighborIds(
-              obj.id,
+          applyContexts.map(
+            ({ obj, coveredChunkIds, previousNeighborIds }) => ({
               coveredChunkIds,
-            ),
-          })),
+              relatedObjectIds: new Set([
+                ...(previousNeighborIds ?? []),
+                ...(this.collectStaticGraphNeighborIds(
+                  obj.id,
+                  coveredChunkIds,
+                ) ?? []),
+              ]),
+            }),
+          ),
         ),
       );
     }
@@ -1105,7 +1229,101 @@ class ActiveObjectManager {
   }
 
   /**
+   * 将对象从白板上移除并取消选择
+   * @description
+   * 从所有覆盖区块的 ChunkObjectManager 静态图中彻底删除对象，
+   * 同时清理活动对象索引和动态图层。
+   * 与 apply 不同，remove 不会把对象写回静态图，而是从静态图中移除。
+   * 与 discard 不同，remove 会同步修改白板区块静态结构。
+   * @param {Iterable<BasicObject>} objects
+   */
+  remove(objects) {
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+
+    const canAccessBoard = Boolean(this.board);
+    const affectedChunkIds = new Set();
+
+    // 收集受影响的区块和上下文信息
+    if (canAccessBoard && normalizedObjects.length > 0) {
+      const removeContexts = normalizedObjects
+        .map((obj) => {
+          const ownerChunk = this.resolveObjectChunk(obj);
+          const previousCoveredChunkIds =
+            this.baseObjectSnapshotCoverChunks.get(obj.id) ??
+            ownerChunk?.objectManager?.getObjectCoverChunks?.(obj.id) ??
+            (ownerChunk ? new Set([ownerChunk.id]) : new Set());
+          for (const chunkId of previousCoveredChunkIds) {
+            affectedChunkIds.add(chunkId);
+          }
+          const coveredChunkIds = this.calculateCoveredChunkIds(obj);
+          for (const chunkId of coveredChunkIds) {
+            affectedChunkIds.add(chunkId);
+          }
+          // 在清理静态图前收集邻接对象
+          const neighborIds = this.collectStaticGraphNeighborIds(
+            obj.id,
+            new Set([...previousCoveredChunkIds, ...coveredChunkIds]),
+          );
+          return {
+            obj,
+            ownerChunk,
+            coveredChunkIds,
+            neighborIds,
+          };
+        })
+        .filter(Boolean);
+
+      // 从所有覆盖区块的静态图中移除对象节点、关联边和覆盖索引
+      for (const { obj, coveredChunkIds } of removeContexts) {
+        for (const chunkId of coveredChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          chunk?.removeObject(obj.id);
+        }
+      }
+
+      // 构建 base 层失效对象集合
+      normalizedObjects.splice(
+        0,
+        normalizedObjects.length,
+        ...this.collectBaseInvalidationObjects(
+          normalizedObjects,
+          removeContexts.map(({ obj, coveredChunkIds, neighborIds }) => ({
+            coveredChunkIds,
+            relatedObjectIds: new Set([...(neighborIds ?? [])]),
+          })),
+        ),
+      );
+    }
+
+    // 将对象从活动层移除（仅处理原本就在活动集合中的对象）
+    for (const entry of normalizedObjects) {
+      const objId = entry.id;
+      if (!this.activeObjectIndex.has(objId)) {
+        continue;
+      }
+      this.unregisterActiveObject(objId);
+    }
+    this.tidyup();
+
+    // 请求静态层和活动层渲染
+    this.requestBaseRenderForObjects(
+      normalizedObjects,
+      [...affectedChunkIds]
+        .map((chunkId) => this.board?.getChunkById?.(chunkId))
+        .filter(Boolean),
+    );
+    this.requestLiveRender(normalizedObjects);
+    this.clearBaseObjectSnapshots(normalizedObjects);
+  }
+
+  /**
    * 取消活动对象而不提交回白板
+   * @description
+   * 仅从动态图活动层中移除对象，不修改区块静态结构。
+   * 适合临时取消选择、撤销等不需要同步静态图的场景。
+   * 会触发静态层局部重绘，使被丢弃的对象重新在 BaseRenderer 中显示。
    * @param {Iterable<BasicObject>} objects
    */
   discard(objects) {
@@ -1122,7 +1340,19 @@ class ActiveObjectManager {
 
     this.tidyup();
     this.requestLiveRender(normalizedObjects);
+    // 按对象范围刷新受影响的 monitor：对象从 AOM 被丢弃回静态图，
+    // 需要让 BaseRenderer 通过 AOM 过滤将它们重新渲染到静态层。
+    this._flushViewportForObjects(normalizedObjects);
     this.clearBaseObjectSnapshots(normalizedObjects);
+  }
+
+  /**
+   * 判断指定对象 id 是否当前在 AOM 中（不论活跃与否）
+   * @param {number} objectId - 对象 id
+   * @returns {boolean}
+   */
+  has(objectId) {
+    return this.onLayer.has(objectId);
   }
 
   /**
@@ -1133,6 +1363,20 @@ class ActiveObjectManager {
    */
   insertLayerUnder(layerNow, layerAbove) {
     this.insertLayerUnderById(layerNow, layerAbove ? layerAbove.id : undefined);
+  }
+
+  /**
+   * 清理给定层的 `onLayer` 映射和 `layerPool`
+   * @param {Layer} layer - 要清理的层
+   */
+  purgeLayerMappings(layer) {
+    for (const objectId of layer.activeObjects) {
+      this.onLayer.delete(objectId);
+    }
+    for (const objectId of layer.inactiveGraph.getNodes()) {
+      this.onLayer.delete(objectId);
+    }
+    this.layerPool.remove(layer.id);
   }
 
   /**
