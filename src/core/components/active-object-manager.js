@@ -909,6 +909,10 @@ class ActiveObjectManager {
     }
 
     this.requestLiveRender(activeEntries);
+    // 请求静态层刷新：对象已从静态图中被拾取到 AOM，
+    // 应通过之前捕获的 baseObjectSnapshotWorldRanges 失效对应区块，
+    // 避免 BaseRenderer 与 LiveRenderer 双渲染同一对象。
+    this.requestBaseRenderForObjects(activeEntries, []);
   }
 
   /**
@@ -1285,6 +1289,8 @@ class ActiveObjectManager {
 
     this.tidyup();
     this.requestLiveRender(normalizedObjects);
+    // 请求静态层刷新：对象已从 AOM 丢弃回静态图，需重新在 BaseRenderer 中出现
+    this.requestBaseRenderForObjects(normalizedObjects, []);
     this.clearBaseObjectSnapshots(normalizedObjects);
   }
 

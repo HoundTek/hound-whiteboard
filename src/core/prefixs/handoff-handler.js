@@ -439,10 +439,25 @@ function createHandoffSubDAG(options = {}) {
                 });
               }
             } else if (completedPhase === "second") {
+              // 清理 first / second 节点内的旧对象引用，防止 overlay 继续渲染旧选择框
+              // 使用 { objects: [] } 而非 {}：resolveContextObjects 读到 [] 后立即短路返回
+              const dag = prefixContext.dag;
+              if (handoffBasePath) {
+                dag?.setNodeState?.(`${handoffBasePath}/first`, {
+                  objects: [],
+                });
+                dag?.setNodeState?.(`${handoffBasePath}/second`, {
+                  objects: [],
+                });
+              }
+
               prefixContext.setState({
                 phase: "first",
                 activeChild: "first",
               });
+
+              // 触发 UI overlay 刷新，去除残留的 modifier / chooser 渲染条目
+              prefixContext.acc?.monitor?.requestViewportUiRender?.();
             }
           };
 
@@ -468,6 +483,7 @@ function createHandoffSubDAG(options = {}) {
 
   if (firstIsCreator) {
     // Creator 路径：handler 桥接 afterCreate 钩子 → onToolComplete 回调
+    let creatorProcessor = null;
     firstNode.handler((packet, context = {}) => {
       const onToolComplete = context.acc?.onToolComplete;
       let completed = false;
@@ -481,11 +497,13 @@ function createHandoffSubDAG(options = {}) {
             })
           : null;
 
-      const processor = first.createProcessor({
-        board: context.acc?.board,
-        monitor: context.acc?.monitor,
-      });
-      const rawResult = processor(packet, context);
+      if (!creatorProcessor) {
+        creatorProcessor = first.createProcessor({
+          board: context.acc?.board,
+          monitor: context.acc?.monitor,
+        });
+      }
+      const rawResult = creatorProcessor(packet, context);
 
       unsub?.();
 
@@ -513,9 +531,15 @@ function createHandoffSubDAG(options = {}) {
 
   if (secondIsModifier) {
     // Modifier 路径：handler 桥接 afterApply 钩子 → onToolComplete 回调
+    let modifierProcessor = null;
     secondNode.handler((packet, context = {}) => {
       const onToolComplete = context.acc?.onToolComplete;
       let completed = false;
+
+      // 检测 cancel 信号：modifier 取消时也回切到 first
+      const hasCancelSignal =
+        Array.isArray(packet.signals) &&
+        packet.signals.some((s) => s?.type === "cancel");
 
       // 临时订阅 afterApply：工具触发时桥接到 onToolComplete
       const unsub =
@@ -526,13 +550,29 @@ function createHandoffSubDAG(options = {}) {
             })
           : null;
 
-      const processor = second.createProcessor({
-        board: context.acc?.board,
-        monitor: context.acc?.monitor,
-      });
-      const rawResult = processor(packet, context);
+      if (!modifierProcessor) {
+        modifierProcessor = second.createProcessor({
+          board: context.acc?.board,
+          monitor: context.acc?.monitor,
+        });
+      }
+      const rawResult = modifierProcessor(packet, context);
 
       unsub?.();
+
+      // cancel 信号：丢弃 AOM 动态图中的对象，再切回 first
+      if (hasCancelSignal) {
+        const cancelState = context.getNodeState?.(context.path) ?? {};
+        const cancelObjects = cancelState?.objects ?? [];
+        if (
+          cancelObjects.length > 0 &&
+          context.acc?.board?.activeObjectManager?.discard
+        ) {
+          context.acc.board.activeObjectManager.discard(new Set(cancelObjects));
+        }
+
+        onToolComplete?.();
+      }
 
       if (completed) {
         return normalizeWrappedResult(rawResult);
@@ -544,12 +584,15 @@ function createHandoffSubDAG(options = {}) {
     secondSubDAGDef = second;
   } else if (isToolInstance(second)) {
     // 通用 Tool 路径：透传，工具通过 context.onToolComplete 自行通知完成
+    let genericSecondProcessor = null;
     secondNode.handler((packet, context = {}) => {
-      const processor = second.createProcessor({
-        board: context.acc?.board,
-        monitor: context.acc?.monitor,
-      });
-      return processor(packet, context);
+      if (!genericSecondProcessor) {
+        genericSecondProcessor = second.createProcessor({
+          board: context.acc?.board,
+          monitor: context.acc?.monitor,
+        });
+      }
+      return genericSecondProcessor(packet, context);
     });
   } else {
     throw new TypeError(

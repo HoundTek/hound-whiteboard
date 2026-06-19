@@ -346,19 +346,21 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 处理 cancel 信号：取消当前手势
+   * @description
+   * 无论手势是否激活，都尝试回退对象位置。
+   * 手势结束后（end 信号后）cancel 应仍然能回退到手势初始位置，
+   * 前提是子类的 completeModifyGesture 保留了 _initialPositions。
    * @param {Object} interaction - 当前交互上下文
    * @private
    */
   _handleCancel(interaction, context, objects) {
-    if (this.isModifyingGestureActive) {
-      this.withGeometryMutation(
-        context,
-        () => this.cancelModifyGesture(interaction),
-        objects,
-        { captureSnapshot: false },
-      );
-      this.isModifyingGestureActive = false;
-    }
+    this.withGeometryMutation(
+      context,
+      () => this.cancelModifyGesture(interaction),
+      objects,
+      { captureSnapshot: false },
+    );
+    this.isModifyingGestureActive = false;
   }
 
   /**

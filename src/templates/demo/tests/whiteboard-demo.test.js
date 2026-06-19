@@ -98,7 +98,7 @@ describe("whiteboard demo", () => {
     expect(object.property.color).toBe(DEMO_PRIMARY_STROKE_COLOR);
   });
 
-  test("demo 配置后右键应使用矩形框选工具选择覆盖对象", () => {
+  test("demo 配置后右键应通过 handoff 选择并桥接覆盖对象", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const stroke = new StrokeObject(new Vector(30, 40), 1, 1);
@@ -147,11 +147,20 @@ describe("whiteboard demo", () => {
       ],
     });
 
+    // 对象仍在 AOM 动态图（handoff 未提交到静态图）
     expect(board.activeObjectManager.activeObjectIndex.get(1)).toBe(stroke);
+    // handoff 已将对象桥接到 second 节点
     expect(
-      monitor.devicesDAG.getNode("/main/mouse/secondary/default")?.state
-        ?.objects?.[0],
+      monitor.devicesDAG.getNode("/main/workflows/secondary-chooser/second")
+        ?.state?.objects?.[0],
     ).toBe(stroke);
+    // handoff 状态机已切换到 second 阶段
+    expect(
+      monitor.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
+    ).toEqual({
+      phase: "second",
+      activeChild: "second",
+    });
   });
 
   test("demo 配置后连续两次左键应生成两条独立黑色笔画", () => {
@@ -248,7 +257,7 @@ describe("whiteboard demo", () => {
     expect(ownerChunk.getObject(1)).not.toBe(ownerChunk.getObject(2));
   });
 
-  test("demo 配置后连续两次右键应替换当前框选结果", () => {
+  test("demo 配置后 handoff 工作流应支持 chooser → modifier → 重新 chooser 的完整周期", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const firstStroke = new StrokeObject(new Vector(30, 40), 1, 1);
@@ -261,6 +270,7 @@ describe("whiteboard demo", () => {
 
     configureWhiteboardDemo(board, monitor);
 
+    // ── 阶段 1: 第一次右键选择 firstStroke ──
     board.signalsEventBus.emit("input", {
       to: "/main/mouse",
       signals: [
@@ -300,6 +310,86 @@ describe("whiteboard demo", () => {
       ],
     });
 
+    // firstStroke 被选择进入 AOM
+    expect(board.activeObjectManager.activeObjectIndex.get(1)).toBe(
+      firstStroke,
+    );
+    // handoff 切换到 second（modifier）阶段
+    expect(
+      monitor.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
+    ).toEqual({
+      phase: "second",
+      activeChild: "second",
+    });
+
+    // ── 阶段 2: 通过 modifier 拖拽修改 firstStroke ──
+    // firstStroke 世界矩形: (30, 40) 起，宽 20，高 10 → (30..50, 40..50)
+    // 首个 position (35, 45) 在合矩形内 → 准入通过，锚点=(35, 45)
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: new Vector(35, 45),
+            buttons: 2,
+            button: 2,
+          },
+        },
+      ],
+    });
+    // 第二个 position (45, 50) → 位移 (10, 5) → firstStroke 移至 (40, 45)
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: new Vector(45, 50),
+            buttons: 2,
+            button: 2,
+          },
+        },
+      ],
+    });
+    expect(firstStroke.position.serialize()).toEqual({ x: 40, y: 45 });
+
+    // end → 暂停手势，对象留在 AOM
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "end",
+          context: {
+            buttons: 0,
+            button: 2,
+          },
+        },
+      ],
+    });
+
+    // success 是应用层信号，绕过鼠标设备直接 dispatch 给 handoff workflow
+    // 触发 modifier.applyModifiedObjects → 提交到静态图 → handoff 切回 first(chooser)
+    monitor.devicesDAG.dispatch(
+      {
+        to: "/main/workflows/secondary-chooser",
+        signals: [{ type: "success", context: {} }],
+      },
+      { board, monitor },
+    );
+
+    // firstStroke 已提交到静态图，不在 AOM 中
+    expect(
+      board.activeObjectManager.activeObjectIndex.has(firstStroke.id),
+    ).toBe(false);
+    expect(
+      monitor.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
+    ).toEqual({
+      phase: "first",
+      activeChild: "first",
+    });
+
+    // ── 阶段 3: 第二次右键选择 secondStroke ──
     board.signalsEventBus.emit("input", {
       to: "/main/mouse",
       signals: [
@@ -340,11 +430,155 @@ describe("whiteboard demo", () => {
     });
 
     expect(
-      board.activeObjectManager.activeObjectIndex.has(firstStroke.id),
-    ).toBe(false);
-    expect(
       board.activeObjectManager.activeObjectIndex.get(secondStroke.id),
     ).toBe(secondStroke);
+  });
+
+  test("demo 配置后 handoff 中 Escape 应取消修改并回退对象位置", () => {
+    const board = createDemoBoard();
+    const monitor = createMonitor(board, "main");
+    const stroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    board.addObject(stroke, 1);
+
+    configureWhiteboardDemo(board, monitor);
+    const dag = monitor.devicesDAG;
+    const wp = "/main/workflows/secondary-chooser";
+    const emit = (signals) =>
+      board.signalsEventBus.emit("input", { to: "/main/mouse", signals });
+
+    // 选择对象
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(30, 40), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(45, 50), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([{ type: "end", context: { buttons: 0, button: 2 } }]);
+
+    // 拖拽修改
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(35, 45), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(50, 55), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([{ type: "end", context: { buttons: 0, button: 2 } }]);
+    expect(stroke.position.serialize()).toEqual({ x: 45, y: 50 });
+
+    // Escape → cancel → 位置回退 → handoff 切回 first
+    board.signalsEventBus.emit("input", {
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: { key: "Escape", code: "Escape", repeat: false },
+        },
+      ],
+    });
+
+    expect(stroke.position.serialize()).toEqual({ x: 30, y: 40 });
+    expect(dag.getNodeState(wp)).toEqual({
+      phase: "first",
+      activeChild: "first",
+    });
+    // cancel 已将对象从 AOM 丢弃，回到静态图
+    expect(board.activeObjectManager.activeObjectIndex.has(stroke.id)).toBe(
+      false,
+    );
+  });
+
+  test("demo 配置后 handoff 中连续多轮 modifier 手势后 Escape 应回退到首次手势前的位置", () => {
+    const board = createDemoBoard();
+    const monitor = createMonitor(board, "main");
+    const stroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    board.addObject(stroke, 1);
+
+    configureWhiteboardDemo(board, monitor);
+    const dag = monitor.devicesDAG;
+    const wp = "/main/workflows/secondary-chooser";
+    const emit = (signals) =>
+      board.signalsEventBus.emit("input", { to: "/main/mouse", signals });
+
+    // 选择对象
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(30, 40), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(45, 50), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([{ type: "end", context: { buttons: 0, button: 2 } }]);
+
+    // 第一轮 modifier 拖拽：锚点 (35,45) → (45,50)，位置 (30,40) → (40,45)
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(35, 45), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(45, 50), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([{ type: "end", context: { buttons: 0, button: 2 } }]);
+    expect(stroke.position.serialize()).toEqual({ x: 40, y: 45 });
+
+    // 第二轮 modifier 拖拽：锚点 (42,48) → (52,54)，位置 (40,45) → (50,51)
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(42, 48), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([
+      {
+        type: "position",
+        context: { value: new Vector(52, 54), buttons: 2, button: 2 },
+      },
+    ]);
+    emit([{ type: "end", context: { buttons: 0, button: 2 } }]);
+    expect(stroke.position.serialize()).toEqual({ x: 50, y: 51 });
+
+    // Escape → 回退到首次手势前的位置 (30, 40)，不是第二轮手势前 (40, 45)
+    board.signalsEventBus.emit("input", {
+      to: "/main/keyboard",
+      signals: [
+        {
+          type: "keydown",
+          context: { key: "Escape", code: "Escape", repeat: false },
+        },
+      ],
+    });
+
+    expect(stroke.position.serialize()).toEqual({ x: 30, y: 40 });
+    expect(dag.getNodeState(wp)).toEqual({
+      phase: "first",
+      activeChild: "first",
+    });
+    expect(board.activeObjectManager.activeObjectIndex.has(stroke.id)).toBe(
+      false,
+    );
   });
 
   test("requestViewportBaseRender 应让 base 层缓冲区覆盖当前视口并承接已提交笔画", () => {

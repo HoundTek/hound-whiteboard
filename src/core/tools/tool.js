@@ -136,7 +136,7 @@ class Tool {
       this.collectUiOverlayEntries({
         ...overlayContext,
         toolContext,
-        context: latestDeviceContext,
+        deviceContext: latestDeviceContext,
       });
 
     return {
@@ -233,12 +233,12 @@ class Tool {
    * @returns {Array<*>}
    */
   resolveContextObjects(context = {}) {
-    if (context.acc?.objects) {
-      return this.normalizeObjectCollection(context.acc.objects);
-    }
     const nodeState = this.resolveNodeState(context);
     if (nodeState.objects) {
       return this.normalizeObjectCollection(nodeState.objects);
+    }
+    if (context.acc?.objects) {
+      return this.normalizeObjectCollection(context.acc.objects);
     }
     return [];
   }

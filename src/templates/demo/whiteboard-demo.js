@@ -9,9 +9,13 @@ import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
 } from "../../core/devices/keyboard-device.js";
-import { createEdgePrefix } from "../../core/prefixs/index.js";
+import {
+  createEdgePrefix,
+  createHandoffSubDAG,
+} from "../../core/prefixs/index.js";
 import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-object-chooser.js";
+import { CommonObjectModifierTool } from "../../core/tools/modifier/common-object-modifier.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
 import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
@@ -44,6 +48,8 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "Digit2",
   "Digit3",
   "Digit4",
+  "Enter",
+  "Escape",
 ]);
 
 const DEMO_WORKFLOW_NAMES = Object.freeze({
@@ -310,11 +316,43 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     workflow: primaryStrokeTool,
     edges: [{ from: "/mouse/primary", edge: "default" }],
   });
+  const secondaryHandoffSubDAG = createHandoffSubDAG({
+    rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER}`,
+    first: secondarySelectionTool,
+    second: new CommonObjectModifierTool(),
+    autoBridgeObjects: true,
+  });
+
+  // Enter → success, Escape → cancel，路由到 handoff modifier
+  const signalForwardNodeConfig = (targetType) => ({
+    handler(packet, ctx = {}) {
+      const triggerSignals = packet.signals.filter(
+        (s) => s.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+      );
+      if (triggerSignals.length === 0) return ctx.stop();
+      return ctx.routeToChild(ctx.defaultRoute || "", [
+        ctx.signal(targetType, undefined, {}),
+      ]);
+    },
+  });
+
   effectiveBoard.signalsEventBus.emit("mount", {
     monitorId: monitor.monitorId,
     name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
-    workflow: secondarySelectionTool,
-    edges: [{ from: "/mouse/secondary", edge: "default" }],
+    workflow: secondaryHandoffSubDAG,
+    edges: [
+      { from: "/mouse/secondary", edge: "default" },
+      {
+        from: "/keyboard/code/Enter",
+        edge: "default",
+        prefix: createEdgePrefix(signalForwardNodeConfig("success")),
+      },
+      {
+        from: "/keyboard/code/Escape",
+        edge: "default",
+        prefix: createEdgePrefix(signalForwardNodeConfig("cancel")),
+      },
+    ],
   });
 
   // Space → prefix → random-circle
@@ -420,9 +458,22 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     });
   }
 
-  console.log(`[whiteboard-demo] viewport keys: arrows=pan, +/-=zoom, R=flush`);
   console.log(
-    `[whiteboard-demo] debug keys: C=chunkload, O=objectload, M=aom, B=board, T=devices-dag, Shift+T=devices-mermaid, 1/2/3/4=chunk detail`,
+    `[whiteboard-demo] ── 快捷键 ──\n` +
+      `左键 : 创建笔画\n` +
+      `右键 : 首次拖拽框选对象 → 再次拖拽修改位置\n` +
+      `Enter : 提交修改\n` +
+      `Escape : 取消修改\n` +
+      `Space : 随机圆\n` +
+      `W/A/S/D : 移动坐标\n` +
+      `方向键 : 平移视口\n` +
+      `+/- : 缩放视口\n` +
+      `R : 刷新视口\n` +
+      `C/O : 区块/对象加载调试\n` +
+      `M : AOM 调试\n` +
+      `B : 白板调试\n` +
+      `T : 设备图调试（Shift+T = mermaid）\n` +
+      `1-4 : 区块详情`,
   );
 
   return {

@@ -55,8 +55,8 @@ const monitorViewportTool = new MonitorViewportTool({
   },
 });
 
-logDemoStatus("左键工具", "黑色笔画对象");
-logDemoStatus("右键工具", "矩形框选对象");
+logDemoStatus("左键工具", "红色笔画对象");
+logDemoStatus("右键工具", "矩形框选 -> 修改对象");
 logDemoStatus("空格工具", "随机圆对象");
 logDemoStatus("WASD 初始坐标", { x: 0, y: 0 });
 logDemoStatus("视口快捷键", "方向键平移，+/- 缩放，R 全屏刷新");
@@ -81,9 +81,9 @@ const emitMousePacket = (event) => {
   if (event.type === "mousedown") {
     event.preventDefault();
     if (event.button === 0) {
-      logDemoStatus("当前输入", "左键黑笔");
+      logDemoStatus("当前输入", "左键红笔");
     } else if (event.button === 2) {
-      logDemoStatus("当前输入", "右键矩形框选");
+      logDemoStatus("当前输入", "右键选择-修改");
     } else {
       logDemoStatus("当前输入", "鼠标输入");
     }
@@ -210,6 +210,10 @@ const emitKeyboardPacket = (event) => {
       event.code.startsWith("Digit")
     ) {
       logDemoStatus("当前输入", `debug ${event.code}`);
+    } else if (event.code === "Enter") {
+      logDemoStatus("当前输入", "handoff Enter");
+    } else if (event.code === "Escape") {
+      logDemoStatus("当前输入", "handoff Escape");
     } else {
       logDemoStatus("当前输入", `WASD ${event.code}`);
     }

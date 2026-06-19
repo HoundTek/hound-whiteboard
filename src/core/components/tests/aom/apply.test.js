@@ -173,6 +173,9 @@ describe("ActiveObjectManager/apply", () => {
       const aom = new ActiveObjectManager(board);
 
       aom.choose(new Set([stroke]));
+      // choose() 现在也会触发 base render invalidation，清计数以便仅验证 apply 的调用
+      monitor.baseRenderer.invalidateObjects.mockClear();
+      monitor.baseRenderer.invalidateChunks.mockClear();
       stroke.position = new Vector(100, 0);
 
       aom.apply(new Set([stroke]));
@@ -229,6 +232,9 @@ describe("ActiveObjectManager/apply", () => {
 
       aom.choose(new Set([lower]));
       aom.liftup(new Set([lower]));
+      // choose() 现在也会触发 base render invalidation，清计数以便仅验证 apply 的调用
+      monitor.baseRenderer.invalidateObjects.mockClear();
+      monitor.baseRenderer.invalidateChunks.mockClear();
       aom.apply(new Set([lower]));
 
       expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);

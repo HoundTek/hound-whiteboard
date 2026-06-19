@@ -530,6 +530,212 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
     expect(object.position).toEqual(new Vector(15, 25));
   });
 
+  describe("cancel 多手势回退", () => {
+    test("多轮手势后 cancel 应回退到第一轮手势开始前的初始位置", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 第一轮手势：锚点 (12, 20)，对象从 (10, 20) 移到 (14, 22)
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 12, y: 20 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      // 锚点=(12,20)，dx=0 → (10, 20)
+      expect(object.position).toEqual(new Vector(10, 20));
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 16, y: 22 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      // dx=4, dy=2 → (14, 22)
+      expect(object.position).toEqual(new Vector(14, 22));
+
+      // end 结束第一轮手势
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+
+      // 第二轮手势：锚点 (18, 24)，对象从 (14, 22) 移到 (20, 26)
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 18, y: 24 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 24, y: 28 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      // dx=24-18=6, dy=28-24=4 → (20, 26)
+      expect(object.position).toEqual(new Vector(20, 26));
+
+      // end 结束第二轮手势
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+
+      // cancel → 应回退到第一轮手势开始前的初始位置 (10, 20)，不是 (14, 22)
+      tool.process(
+        { signals: [{ type: "cancel" }] },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(10, 20));
+    });
+
+    test("cancel 后新一轮手势应重新记录初始位置", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 第一轮：移动并 cancel
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 15, y: 25 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 20, y: 30 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      // dx=5, dy=5 → (15, 25)
+      expect(object.position).toEqual(new Vector(15, 25));
+
+      tool.process(
+        { signals: [{ type: "end" }] },
+        aomCtx(object),
+      );
+      tool.process(
+        { signals: [{ type: "cancel" }] },
+        aomCtx(object),
+      );
+      // cancel 回退到初始位置
+      expect(object.position).toEqual(new Vector(10, 20));
+
+      // 第二轮：cancel 后新的手势应能以新的当前位置为基准
+      // （_initialPositions 已在 cancelModifyGesture 中被清空）
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 12, y: 22 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      // 新锚点=(12,22)，新 initPos=(10,20)，dx=0 → (10,20)
+      expect(object.position).toEqual(new Vector(10, 20));
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 17, y: 27 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      // dx=17-12=5, dy=27-22=5 → (15, 25)
+      expect(object.position).toEqual(new Vector(15, 25));
+    });
+
+    test("success 后 _initialPositions 应被清空，新一组对象不以旧位置为 baseline", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+      const board = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[1, object]]),
+          apply: jest.fn(),
+        },
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 移动并 success
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 15, y: 25 } } },
+          ],
+        },
+        aomCtx(object, { board }),
+      );
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 20, y: 30 } } },
+          ],
+        },
+        aomCtx(object, { board }),
+      );
+      // dx=5, dy=5 → (15, 25)
+      expect(object.position).toEqual(new Vector(15, 25));
+
+      tool.process(
+        { signals: [{ type: "success", context: {} }] },
+        aomCtx(object, { board }),
+      );
+
+      // 模拟新对象（id=2）进入 modifier
+      const object2 = {
+        id: 2,
+        position: new Vector(50, 60),
+      };
+      const board2 = {
+        activeObjectManager: {
+          activeObjectIndex: new Map([[2, object2]]),
+          apply: jest.fn(),
+        },
+      };
+
+      // 新的手势：应从 object2 的位置开始记录
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 55, y: 65 } } },
+          ],
+        },
+        aomCtx(object2, { board: board2 }),
+      );
+      // 锚点=(55,65)，新 initPos=(50,60)，dx=0 → (50,60)
+      expect(object2.position).toEqual(new Vector(50, 60));
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 60, y: 70 } } },
+          ],
+        },
+        aomCtx(object2, { board: board2 }),
+      );
+      // dx=60-55=5, dy=70-65=5 → (55, 65)
+      expect(object2.position).toEqual(new Vector(55, 65));
+    });
+  });
+
   describe("手势准入检测——边缘场景", () => {
     function makeAomCtx(opts = {}) {
       const { objects, board, monitor } = opts;

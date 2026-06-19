@@ -10,8 +10,12 @@
 
 import { Vector } from "../../utils/math.js";
 import { RectangleRange } from "../../range/index.js";
-import { GestureBasedObjectModifierTool } from "./obj-modifier.js";
+import {
+  GestureBasedObjectModifierTool,
+  OBJECT_MODIFIER_SIGNAL_TYPES,
+} from "./obj-modifier.js";
 import { BasicObject } from "../../objects/basic-obj.js";
+import { SignalPacket } from "../../devices-dag/signal.js";
 
 /**
  * 通用对象修改工具类
@@ -39,7 +43,14 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   _anchorPosition;
 
   /**
-   * 手势开始时各对象的初始位置
+   * 当前手势开始时各对象的基准位置（供 updateModifyGesture 计算位移）
+   * @type {Map<number|object, { x: number, y: number }>|null}
+   * @private
+   */
+  _gestureBasePositions;
+
+  /**
+   * 首次手势开始时各对象的初始位置（永不覆盖，仅供 cancel 回退）
    * @type {Map<number|object, { x: number, y: number }>|null}
    * @private
    */
@@ -51,6 +62,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   constructor() {
     super();
     this._anchorPosition = null;
+    this._gestureBasePositions = null;
     this._initialPositions = null;
   }
 
@@ -74,12 +86,22 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   beginModifyGesture(interaction) {
     const { objects, position } = interaction;
     this._anchorPosition = { x: position.x, y: position.y };
-    this._initialPositions = new Map(
+    // 总是记录当前手势基准位置，供 updateModifyGesture 计算位移
+    this._gestureBasePositions = new Map(
       objects.map((obj) => [
         obj.id ?? obj,
         { x: obj.position.x, y: obj.position.y },
       ]),
     );
+    // 仅在首次手势时记录 cancel 回退用的初始位置
+    if (!this._initialPositions) {
+      this._initialPositions = new Map(
+        objects.map((obj) => [
+          obj.id ?? obj,
+          { x: obj.position.x, y: obj.position.y },
+        ]),
+      );
+    }
   }
 
   /**
@@ -94,9 +116,9 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     const dy = position.y - this._anchorPosition.y;
 
     for (const obj of objects) {
-      const initPos = this._initialPositions.get(obj.id ?? obj);
-      if (!initPos) continue;
-      obj.position = new Vector(initPos.x + dx, initPos.y + dy);
+      const basePos = this._gestureBasePositions.get(obj.id ?? obj);
+      if (!basePos) continue;
+      obj.position = new Vector(basePos.x + dx, basePos.y + dy);
     }
   }
 
@@ -106,7 +128,8 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    */
   completeModifyGesture(interaction) {
     this._anchorPosition = null;
-    this._initialPositions = null;
+    this._gestureBasePositions = null;
+    // 保留 _initialPositions，使手势结束后的 cancel 仍能回退到首次手势的初始位置
   }
 
   /**
@@ -125,15 +148,40 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
       obj.position = new Vector(initPos.x, initPos.y);
     }
     this._anchorPosition = null;
+    this._gestureBasePositions = null;
     this._initialPositions = null;
   }
 
   /**
-   * 重置工具状态，清除手势锚点
+   * 处理一个完整信号包
+   * @description 覆写基类 process，在 success 提交后清空初始位置缓存，
+   * 确保下一轮新对象的 handoff 中 beginModifyGesture 能重新记录。
+   * @param {SignalPacket|Object} signalPacket - 输入信号包
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   */
+  process(signalPacket, context = {}) {
+    const packet = SignalPacket.from(signalPacket);
+    const hasSuccess = packet.signals.some(
+      (s) => s?.type === OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS,
+    );
+
+    super.process(signalPacket, context);
+
+    // success 后提交已完成，不再需要保留开始位置用于回退
+    // （cancel 已在 cancelModifyGesture 中清空 _initialPositions）
+    if (hasSuccess) {
+      this._initialPositions = null;
+    }
+  }
+
+  /**
+   * 重置工具状态，清除手势锚点与位置缓存
    * @returns {void}
    */
   reset() {
     this._anchorPosition = null;
+    this._gestureBasePositions = null;
     this._initialPositions = null;
     super.reset();
   }
