@@ -27,7 +27,7 @@ const monitor = board.createMonitor(
 );
 monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
-monitor.renderCanvas.tabIndex = 0;
+monitor.canvas.tabIndex = 0;
 
 const demoLog = new Logger("Demo", "INFO", logBus);
 

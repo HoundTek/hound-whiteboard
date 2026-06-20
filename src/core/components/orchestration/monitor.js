@@ -41,13 +41,13 @@ class Monitor {
   rootElement;
 
   /**
-   * 静态内容画布（不可见）
+   * 静态内容画布
    * @type {HTMLCanvasElement | null}
    */
   baseCanvas;
 
   /**
-   * 活动内容画布（不可见）
+   * 活动内容画布
    * @type {HTMLCanvasElement | null}
    */
   liveCanvas;
@@ -57,12 +57,6 @@ class Monitor {
    * @type {HTMLCanvasElement | null}
    */
   uiCanvas;
-
-  /**
-   * 合成输出画布（可见，负责将 baseCanvas + liveCanvas 合成到屏幕）
-   * @type {HTMLCanvasElement | null}
-   */
-  renderCanvas;
 
   /**
    * 白板，用于查询区块顺序与区块尺寸
@@ -178,7 +172,6 @@ class Monitor {
    *   rootElement?: HTMLElement | null,
    *   baseCanvas?: HTMLCanvasElement | null,
    *   liveCanvas?: HTMLCanvasElement | null,
-   *   renderCanvas?: HTMLCanvasElement | null,
    *   uiCanvas?: HTMLCanvasElement | null,
    * }} htmlElements - 画布元素选项
    * @param {Board} board - 白板管理器
@@ -186,7 +179,7 @@ class Monitor {
    * @param {string} monitorId - 显示器 id
    */
   constructor(
-    { rootElement, baseCanvas, liveCanvas, renderCanvas, uiCanvas },
+    { rootElement, baseCanvas, liveCanvas, uiCanvas },
     board,
     { width, height },
     monitorId,
@@ -195,7 +188,6 @@ class Monitor {
       rootElement,
       baseCanvas,
       liveCanvas,
-      renderCanvas,
       uiCanvas,
     });
     this.board = board;
@@ -248,14 +240,12 @@ class Monitor {
     this.uiRenderScheduler = new RenderScheduler({
       mergeDirtyRects: this.createDirtyRectMerger("ui"),
     });
-    this.baseRenderScheduler.setFlushHandler((dirtyRects) => {
-      this.baseRenderer.flush(dirtyRects);
-      this.requestCompositeRender();
-    });
-    this.renderScheduler.setFlushHandler((dirtyRects) => {
-      this.liveRenderer.flush(dirtyRects);
-      this.requestCompositeRender();
-    });
+    this.baseRenderScheduler.setFlushHandler((dirtyRects) =>
+      this.baseRenderer.flush(dirtyRects),
+    );
+    this.renderScheduler.setFlushHandler((dirtyRects) =>
+      this.liveRenderer.flush(dirtyRects),
+    );
     this.uiRenderScheduler.setFlushHandler((dirtyRects) =>
       this.uiRenderer.flush(dirtyRects),
     );
@@ -311,11 +301,18 @@ class Monitor {
   }
 
   /**
-   * 当前显示器的可见画布（renderCanvas > liveCanvas > baseCanvas）
+   * 当前显示器的可见画布（liveCanvas）。
+   *
+   * @description
+   * canvas 是外部代码绑定事件、获取焦点、读取尺寸的入口。
+   * baseCanvas/liveCanvas 通过 CSS z-index 叠加，liveCanvas 位于上层并接收指针/键盘事件。
+   * 外部代码必须通过 `monitor.canvas` 访问，不得直接引用 liveCanvas，
+   * 以确保 monitor 在未来可以替换画布实现而不影响外部绑定。
+   *
    * @type {HTMLCanvasElement | null}
    */
   get canvas() {
-    return this.renderCanvas ?? this.liveCanvas ?? this.baseCanvas ?? null;
+    return this.liveCanvas ?? this.baseCanvas ?? null;
   }
 
   /**
@@ -445,7 +442,6 @@ class Monitor {
     this.baseRenderScheduler?.invalidate?.(viewportRect);
     this.renderScheduler?.invalidate?.(viewportRect);
     this.uiRenderScheduler?.invalidate?.(viewportRect);
-    this.requestCompositeRender();
   }
 
   /**
@@ -454,17 +450,10 @@ class Monitor {
    *   rootElement?: HTMLElement | null,
    *   baseCanvas?: HTMLCanvasElement | null,
    *   liveCanvas?: HTMLCanvasElement | null,
-   *   renderCanvas?: HTMLCanvasElement | null,
    *   uiCanvas?: HTMLCanvasElement | null,
    * }} renderLayers - 渲染层集合
    */
-  attachRenderLayers({
-    rootElement,
-    baseCanvas,
-    liveCanvas,
-    renderCanvas,
-    uiCanvas,
-  } = {}) {
+  attachRenderLayers({ rootElement, baseCanvas, liveCanvas, uiCanvas } = {}) {
     if (rootElement !== undefined) {
       this.rootElement = rootElement ?? null;
     }
@@ -475,10 +464,6 @@ class Monitor {
 
     if (liveCanvas !== undefined) {
       this.liveCanvas = liveCanvas ?? null;
-    }
-
-    if (renderCanvas !== undefined) {
-      this.renderCanvas = renderCanvas ?? null;
     }
 
     if (uiCanvas !== undefined) {
@@ -496,12 +481,9 @@ class Monitor {
   resizeRenderLayers(width, height) {
     const nextWidth = Number.isFinite(width) ? width : 0;
     const nextHeight = Number.isFinite(height) ? height : 0;
-    const canvases = [
-      this.baseCanvas,
-      this.liveCanvas,
-      this.renderCanvas,
-      this.uiCanvas,
-    ].filter(Boolean);
+    const canvases = [this.baseCanvas, this.liveCanvas, this.uiCanvas].filter(
+      Boolean,
+    );
     let resized = false;
 
     for (const layerCanvas of canvases) {
@@ -532,53 +514,6 @@ class Monitor {
     this.requestViewportBaseRender();
     this.renderScheduler?.invalidate?.(viewportRect);
     this.uiRenderScheduler?.invalidate?.(viewportRect);
-    this.requestCompositeRender();
-  }
-
-  /**
-   * 合成待处理标志
-   * @type {boolean}
-   */
-  _compositePending = false;
-
-  /**
-   * 请求一次合成渲染（异步去重）
-   */
-  requestCompositeRender() {
-    if (this._compositePending) return;
-    this._compositePending = true;
-
-    const scheduleFrame =
-      typeof globalThis.requestAnimationFrame === "function"
-        ? globalThis.requestAnimationFrame
-        : (cb) => globalThis.setTimeout(() => cb(Date.now()), 16);
-
-    scheduleFrame(() => {
-      this._compositePending = false;
-      this.compositeRenderCanvas();
-    });
-  }
-
-  /**
-   * 合成 baseCanvas + liveCanvas 到 renderCanvas
-   * @description 执行全量合成：clearRect → drawImage(baseCanvas) → drawImage(liveCanvas)
-   */
-  compositeRenderCanvas() {
-    const ctx = this.getContext("render");
-    if (!ctx || !this.renderCanvas) return;
-
-    const w = this.width;
-    const h = this.height;
-    if (w <= 0 || h <= 0) return;
-
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    // 清为透明
-    ctx.clearRect(0, 0, w, h);
-    // 合成：静态层 → 活动层（Canvas 2D source-over 是自洽的）
-    ctx.drawImage(this.baseCanvas, 0, 0);
-    ctx.drawImage(this.liveCanvas, 0, 0);
-    ctx.restore();
   }
 
   /**
@@ -863,14 +798,13 @@ class Monitor {
 
   /**
    * 获取指定渲染层的 2D 上下文
-   * @param {"base" | "live" | "ui" | "render"} [layer = "live"] - 渲染层名称
+   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
    * @returns {CanvasRenderingContext2D | null}
    */
   getContext(layer = "live") {
     const layerCanvas = {
       base: this.baseCanvas,
       live: this.liveCanvas,
-      render: this.renderCanvas,
       ui: this.uiCanvas,
     }[layer];
 

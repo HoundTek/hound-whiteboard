@@ -207,7 +207,7 @@ modifier 节点路径的 state。
 | 方法                                      | 职责                                                    |
 | ----------------------------------------- | ------------------------------------------------------- |
 | `onBeforeDisplacement(interaction)`       | 位移应用前调用，子类可在此记录初始位置供 cancel 回退    |
-| `onAfterDisplacement(interaction)`        | 位移应用后调用，子类可在此同步基准位置（锚点不动）            |
+| `onAfterDisplacement(interaction)`        | 位移应用后调用，子类可在此同步基准位置（锚点不动）      |
 | `applyDisplacementToObjects(interaction)` | 基类默认实现——直接累加 displacement 到各对象 `position` |
 
 ### 手势生命周期

@@ -51,6 +51,12 @@ describe("LiveRenderer", () => {
       fillRect(x, y, width, height) {
         calls.push({ type: "fillRect", args: [x, y, width, height] });
       },
+      drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh) {
+        calls.push({
+          type: "drawImage",
+          args: [sx, sy, sw, sh, dx, dy, dw, dh],
+        });
+      },
     };
   }
 
@@ -98,6 +104,13 @@ describe("LiveRenderer", () => {
       fillRect(x, y, width, height) {
         if (this !== ctx) throw new TypeError("Illegal invocation");
         calls.push({ type: "fillRect", args: [x, y, width, height] });
+      },
+      drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh) {
+        if (this !== ctx) throw new TypeError("Illegal invocation");
+        calls.push({
+          type: "drawImage",
+          args: [sx, sy, sw, sh, dx, dy, dw, dh],
+        });
       },
     };
 
@@ -170,10 +183,6 @@ describe("LiveRenderer", () => {
     const renderer = new LiveRenderer(monitor, aom);
     renderer.render();
 
-    expect(calls).toContainEqual({
-      type: "setTransform",
-      args: [1, 0, 0, 1, 0, 0],
-    });
     expect(calls).toContainEqual({
       type: "setTransform",
       args: [2, 0, 0, 2, 20, 40],
@@ -358,6 +367,7 @@ describe("LiveRenderer", () => {
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
+      baseCanvas: {},
       liveCanvas: { width: 320, height: 240 },
       getContext() {
         return ctx;
@@ -389,8 +399,12 @@ describe("LiveRenderer", () => {
     ]);
 
     expect(drawables).toEqual([leftObject, rightObject]);
+    // 先 clear 再 copyBase 再渲染活动对象
     expect(calls.filter((entry) => entry.type === "clearRect")).toEqual([
       { type: "clearRect", args: [-2, -2, 20, 20] },
+    ]);
+    expect(calls.filter((entry) => entry.type === "drawImage")).toEqual([
+      { type: "drawImage", args: [-2, -2, 20, 20, -2, -2, 20, 20] },
     ]);
     expect(calls).toContainEqual({
       type: "rect",
@@ -592,5 +606,244 @@ describe("LiveRenderer", () => {
     expect(renderer.getObjectScreenRect(stroke)).toEqual(
       new RectangleRange(8.5, 18.5, 3, 15),
     );
+  });
+
+  test("copyBase 应把整个 baseCanvas 拷贝到 liveCanvas", () => {
+    const calls = [];
+    const ctx = createContext(calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+
+    renderer.copyBase();
+
+    expect(calls.filter((entry) => entry.type === "setTransform")).toEqual([
+      { type: "setTransform", args: [1, 0, 0, 1, 0, 0] },
+    ]);
+    expect(calls.filter((entry) => entry.type === "drawImage")).toEqual([
+      { type: "drawImage", args: [0, 0, undefined, undefined, undefined, undefined, undefined, undefined] },
+    ]);
+  });
+
+  test("copyBase 应在 baseCanvas 不存在时静默返回", () => {
+    const calls = [];
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+
+    renderer.copyBase();
+
+    expect(calls.filter((entry) => entry.type === "drawImage")).toEqual([]);
+  });
+
+  test("copyBase 应在 context 不存在时静默返回", () => {
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return null;
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+
+    // 不应抛出异常
+    expect(() => renderer.copyBase()).not.toThrow();
+  });
+
+  test("copyBaseRects 应为每个脏区拷贝对应的 baseCanvas 区域", () => {
+    const calls = [];
+    const ctx = createContext(calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+
+    renderer.copyBaseRects([
+      new RectangleRange(10, 20, 30, 40),
+      new RectangleRange(50, 60, 70, 80),
+    ]);
+
+    expect(calls.filter((entry) => entry.type === "drawImage")).toEqual([
+      { type: "drawImage", args: [10, 20, 30, 40, 10, 20, 30, 40] },
+      { type: "drawImage", args: [50, 60, 70, 80, 50, 60, 70, 80] },
+    ]);
+  });
+
+  test("copyBaseRects 应在传入空数组时不产生 drawImage", () => {
+    const calls = [];
+    const ctx = createContext(calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+
+    renderer.copyBaseRects([]);
+
+    expect(calls.filter((entry) => entry.type === "drawImage")).toEqual([]);
+  });
+
+  test("copyBaseRects 应在 context 不存在时静默返回", () => {
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return null;
+      },
+    };
+    const renderer = new LiveRenderer(monitor, undefined);
+
+    expect(() =>
+      renderer.copyBaseRects([new RectangleRange(0, 0, 10, 10)]),
+    ).not.toThrow();
+  });
+
+  test("render 无参调用应执行 clear → copyBase → 渲染活动对象", () => {
+    const calls = [];
+    const object = new FakeObject(91, new Vector(10, 20), calls);
+    const ctx = createContext(calls);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+      worldRectToScreenRect(rect) {
+        return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(14, [91])],
+      activeObjectIndex: new Map([[91, object]]),
+      activeObjects: new Set([object]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    const drawables = renderer.render();
+
+    expect(drawables).toEqual([object]);
+    // 检查 clear → copyBase 的调用顺序
+    const clearCalls = calls.filter((entry) => entry.type === "clearRect");
+    const drawImageCalls = calls.filter((entry) => entry.type === "drawImage");
+    const renderCalls = calls.filter((entry) => entry.type === "render");
+    expect(clearCalls.length).toBe(1);
+    expect(drawImageCalls.length).toBe(1);
+    expect(renderCalls).toEqual([{ type: "render", id: 91 }]);
+    // clear 在 drawImage 之前
+    const clearIndex = calls.indexOf(clearCalls[0]);
+    const drawImageIndex = calls.indexOf(drawImageCalls[0]);
+    expect(clearIndex).toBeLessThan(drawImageIndex);
+  });
+
+  test("render 在 baseScheduler 有待处理帧时应同步 flush", () => {
+    const calls = [];
+    const flushCalls = [];
+    const object = new FakeObject(92, new Vector(0, 0), calls);
+    const ctx = createContext(calls);
+    const baseScheduler = {
+      framePending: true,
+      flush() {
+        flushCalls.push("flush");
+        this.framePending = false;
+      },
+    };
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      baseRenderScheduler: baseScheduler,
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+      worldRectToScreenRect(rect) {
+        return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(15, [92])],
+      activeObjectIndex: new Map([[92, object]]),
+      activeObjects: new Set([object]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    renderer.render();
+
+    expect(flushCalls).toEqual(["flush"]);
+  });
+
+  test("render 在 baseScheduler 无待处理帧时应不触发 flush", () => {
+    const calls = [];
+    const flushCalls = [];
+    const object = new FakeObject(93, new Vector(0, 0), calls);
+    const ctx = createContext(calls);
+    const baseScheduler = {
+      framePending: false,
+      flush() {
+        flushCalls.push("flush");
+      },
+    };
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseCanvas: {},
+      baseRenderScheduler: baseScheduler,
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return ctx;
+      },
+      worldRectToScreenRect(rect) {
+        return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
+      },
+    };
+    const aom = {
+      getObjectWorldRange(objectInstance) {
+        return objectInstance.getRange().withPosition(objectInstance.position);
+      },
+      layerOrder: [createLayer(16, [93])],
+      activeObjectIndex: new Map([[93, object]]),
+      activeObjects: new Set([object]),
+    };
+    const renderer = new LiveRenderer(monitor, aom);
+
+    renderer.render();
+
+    expect(flushCalls).toEqual([]);
   });
 });

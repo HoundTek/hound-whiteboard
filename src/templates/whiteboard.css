@@ -161,20 +161,15 @@ body {
 }
 
 .monitor-layer-base {
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
   opacity: 0;
 }
 
 .monitor-layer-live {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.monitor-layer-render {
   z-index: 1;
   pointer-events: auto;
-  background-color: transparent;
+  /* background-color: transparent; */
   cursor: default;
   user-select: none;
   -webkit-user-select: none;

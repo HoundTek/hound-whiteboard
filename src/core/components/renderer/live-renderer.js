@@ -9,7 +9,10 @@ import { BasicObject } from "../../objects/basic-obj.js";
 import { PathRange } from "../../range/path.js";
 import { RectangleRange } from "../../range/rectangle.js";
 import { Monitor } from "../orchestration/monitor.js";
-import { ActiveObjectManager, Layer } from "../orchestration/active-object-manager.js";
+import {
+  ActiveObjectManager,
+  Layer,
+} from "../orchestration/active-object-manager.js";
 
 const PATH_RASTERIZATION_SCREEN_PADDING = 1;
 
@@ -464,6 +467,7 @@ class LiveRenderer {
 
   /**
    * 清空 liveCanvas
+   * @description 在 clear → copyBase → render 三步流水线中用作第一步，抹掉所有旧像素。
    */
   clear() {
     const canvas = this.monitor?.liveCanvas;
@@ -473,6 +477,58 @@ class LiveRenderer {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  /**
+   * 全量拷贝 baseCanvas（静态缓存）到 liveCanvas
+   * @description
+   * 在 clear → copyBase → render 三步流水线中用作第二步。
+   * 将 baseCanvas 当前像素完整拷贝到 liveCanvas，
+   * 与 clear 配合替代浏览器 GPU 图层合成。
+   * baseCanvas 视为 liveCanvas 的预渲染缓存（CSS opacity: 0 隐藏）。
+   * baseCanvas 不存在时静默返回。
+   */
+  copyBase() {
+    const ctx = this.monitor?.getContext?.("live");
+    const baseCanvas = this.monitor?.baseCanvas;
+    if (!ctx || !baseCanvas) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(baseCanvas, 0, 0);
+    ctx.restore();
+  }
+
+  /**
+   * 将脏区对应的 baseCanvas 区域拷贝到 liveCanvas
+   * @description
+   * copyBase 的脏区版本，只拷贝 dirtyRects 指定的区域而非全量。
+   * 在 clear → copyBaseRects → render 三步流水线中用作第二步。
+   * 用于局部刷新场景，避免全量 drawImage 开销。
+   * @param {RectangleRange[]} rects - 脏区集合，只拷贝这些区域
+   */
+  copyBaseRects(rects) {
+    const ctx = this.monitor?.getContext?.("live");
+    const baseCanvas = this.monitor?.baseCanvas;
+    if (!ctx || !baseCanvas || !Array.isArray(rects)) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const rect of rects) {
+      if (!(rect instanceof RectangleRange)) continue;
+      ctx.drawImage(
+        baseCanvas,
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height,
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height,
+      );
+    }
     ctx.restore();
   }
 
@@ -519,13 +575,28 @@ class LiveRenderer {
 
   /**
    * 渲染当前所有活动对象
-   * @description 显式传入 dirtyRects 时只清理并重绘脏区命中的对象；无参调用保持全量清屏重绘语义。
+   * @description
+   * 按 clear → copyBase → render 三步流水线工作：
+   * 1. 清理脏区（抹掉旧像素和残留活动对象）
+   * 2. 从 baseCanvas（静态缓存）拷贝像素到 liveCanvas（替代 GPU 合成）
+   * 3. 将 AOM 活动对象绘制到 liveCanvas 上
+   *
+   * 显式传入 dirtyRects 时只处理脏区区域；无参调用做全量刷新。
+   *
+   * 在拷贝 baseCanvas 前会检查 baseRenderScheduler 是否有待处理帧，
+   * 有则同步 flush 以保证读到最新的缓存状态，防止时序竞争。
    * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
    * @returns {BasicObject[]} 当前渲染的对象集合
    */
   render(dirtyRects) {
     const ctx = this.monitor?.getContext?.("live");
     if (!ctx) return [];
+
+    // 同步 base 缓存：确保读到最新静态层，防止 base/live 两调度器时序竞争
+    const baseScheduler = this.monitor?.baseRenderScheduler;
+    if (baseScheduler?.framePending) {
+      baseScheduler.flush();
+    }
 
     const drawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(drawables);
@@ -542,10 +613,18 @@ class LiveRenderer {
         )
       : [];
 
+    // 先清理脏区，抹掉旧像素（包括上一帧残留的活动对象）
     if (hasExplicitDirtyRects) {
       this.clearDirtyRects(effectiveDirtyRects);
     } else {
       this.clear();
+    }
+
+    // 再从 baseCanvas（缓存）拷贝静态层到 liveCanvas
+    if (hasExplicitDirtyRects) {
+      this.copyBaseRects(effectiveDirtyRects);
+    } else {
+      this.copyBase();
     }
 
     for (const entry of drawableEntries) {

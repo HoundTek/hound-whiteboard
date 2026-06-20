@@ -2,7 +2,7 @@
 
 本文档提供 `LiveRenderer` 的概述。
 
-活动层渲染器用于把 `ActiveObjectManager` 当前持有的活动对象，按动态层顺序绘制到 `Monitor.liveCanvas`。
+`LiveRenderer` 负责把 `ActiveObjectManager` 当前持有的活动对象按动态层顺序绘制到 `Monitor.liveCanvas`。
 
 它不负责决定对象是否为活动对象，也不负责决定对象最终写回到哪个区块。它只负责当前视口里的活动层显示。
 
@@ -13,15 +13,60 @@
 - `ActiveObjectManager` 负责回答“当前哪些对象在活动层里，以及它们的层顺序是什么”
 - `Monitor` 负责回答“当前视口的缩放、原点和画布实例是什么”
 - `RenderScheduler` 负责回答“何时真正执行一次 flush”
-- `LiveRenderer` 负责回答“这一帧应把哪些活动对象画到 `liveCanvas` 上”
+- `BaseRenderer` 负责把静态对象渲染到 `baseCanvas`（作为 liveCanvas 的缓存）
+- `LiveRenderer` 负责回答“这一帧应把哪些活动对象画到 `liveCanvas` 上”，并负责把 baseCanvas 缓存合成到 liveCanvas
 
-这意味着 `LiveRenderer` 是一个视口侧渲染器，而不是活动对象语义管理器。
+这意味着 `LiveRenderer` 是最终的渲染出口，它的输出结果直接对应屏幕显示。
+
+## 渲染架构
+
+`LiveRenderer` 不再依赖浏览器 CSS `z-index` 图层合成，而是采用**手动合成流水线**：
+
+```
+baseCanvas (CSS opacity: 0, 作为静态缓存)
+     │
+     ├─ 全量: copyBase()
+     └─ 脏区: copyBaseRects(dirtyRects)
+     │
+     ▼
+liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
+     │
+     ▼
+  屏幕显示
+```
+
+`baseCanvas` 由 `BaseRenderer` 维护，视为 `liveCanvas` 的**预渲染缓存**。它的 `opacity: 0` CSS 属性使其不在屏幕上显示，但像素内容完整保留在 GPU 纹理中供 `drawImage` 读取。
+
+### 三步流水线
+
+每一帧 `render()` 按以下顺序执行：
+
+1. **清理** — `clear()` 或 `clearDirtyRects()` 清除 `liveCanvas` 上的旧像素
+2. **缓存回填** — `copyBase()` 或 `copyBaseRects()` 从 `baseCanvas` 拷贝静态层像素
+3. **活动对象绘制** — 按 AOM 层顺序将活动对象渲染到 `liveCanvas`
+
+三步流水线的设计原因：
+
+- `drawImage` 使用 Canvas 2D 默认 `source-over` 合成模式，源像素 alpha=0 时不会覆盖目标像素；不先 `clear` 会导致残留的活动对象像素层层叠加
+- `baseCanvas` 只包含静态对象（AOM 对象已被 `BaseRenderer` 过滤），因此拷贝结果天然不含活动对象
+- 活动对象最后绘制，确保它们始终在视觉顶层
+
+### 缓存时序保护
+
+由于 `baseRenderScheduler` 和 `renderScheduler` 是独立的 rAF 调度器，两者 flush 的执行顺序不确定。当对象进入 AOM 时：
+
+- base 调度器需清除该对象在 `baseCanvas` 上的旧像素
+- live 调度器需从 `baseCanvas` 拷贝时读到已清除的版本
+
+若 live 调度器先于 base 调度器 flush，`copyBase()` 会读到残留的活动对象像素，导致双重渲染。
+
+`render()` 在拷贝 `baseCanvas` 前检查 `baseRenderScheduler.framePending`，若有待处理帧则同步调用 `baseScheduler.flush()`，确保读到最新缓存状态。
 
 ## 输入与输出
 
-`LiveRenderer` 当前有两个核心输入：
+`LiveRenderer` 当前有三个核心输入：
 
-- `monitor`：提供 `liveCanvas`、2D context、`origin`、`zoom` 与世界到屏幕的矩形换算
+- `monitor`：提供 `liveCanvas`、`baseCanvas`、2D context、`origin`、`zoom`、`baseRenderScheduler` 与世界到屏幕的矩形换算
 - `activeObjectManager`：提供活动对象实例、层顺序、同层非活动对象图与对象范围查询能力
 
 它的输出只有一个：
@@ -80,33 +125,52 @@
 - `StrokeObject` 的圆角端点与默认描边半宽
 - `TextObject` 的文本框描边半宽
 
-## 局部重绘流程
+## 渲染流水线
 
 ### render(dirtyRects)
 
-`render()` 当前有两种工作模式。
+`render()` 采用 **clear → copyBase → render** 三步流水线，有两种工作模式。
 
-#### 无参调用
+#### 无参调用（全量刷新）
 
-无参调用表示“整层重绘”。当前行为是：
+1. 同步 `baseRenderScheduler`（若有待处理帧）
+2. 收集所有活动层 drawable
+3. `clear()` 清空整张 `liveCanvas`
+4. `copyBase()` 将整张 `baseCanvas` 拷贝到 `liveCanvas`（回填静态缓存）
+5. 按顺序重绘全部 drawable
+6. 更新 `previousDrawableEntries`
 
-1. 收集所有活动层 drawable
-2. 清空整张 `liveCanvas`
-3. 按顺序重绘全部 drawable
-4. 更新 `previousDrawableEntries`
+#### 显式传入 dirtyRects（局部刷新）
 
-这里保留全量清屏语义，是为了兼容旧调用方，避免把本来依赖整层重绘的路径静默改成局部补绘后引入漏清理。
+1. 同步 `baseRenderScheduler`（若有待处理帧）
+2. 规范化脏区为 `RectangleRange`
+3. `clearDirtyRects()` 只清理这些脏区
+4. `copyBaseRects()` 只将脏区对应的 `baseCanvas` 区域拷贝到 `liveCanvas`
+5. 只重绘与脏区相交的 drawable，并把补绘裁剪到这些脏区内部
+6. 更新 `previousDrawableEntries`
 
-#### 显式传入 dirtyRects
+### copyBase()
 
-显式传入脏区时，当前行为是：
+全量拷贝 `baseCanvas` 到 `liveCanvas`。在三步流水线中用作第二步，回填静态层。
 
-1. 规范化脏区为 `RectangleRange`
-2. 只清理这些脏区
-3. 只重绘与脏区相交的 drawable，并把补绘裁剪到这些脏区内部
-4. 更新 `previousDrawableEntries`
+- 调用 `ctx.drawImage(baseCanvas, 0, 0)`，重置 transform 后执行
+- `baseCanvas` 或 context 不存在时静默返回
 
-这条路径当前已经可用于活动层的局部刷新。
+### copyBaseRects(rects)
+
+脏区版本的缓存拷贝。在三步流水线中用作第二步，只回填脏区内的静态层像素。
+
+- 对 `rects` 中每个 `RectangleRange` 调用 `ctx.drawImage(baseCanvas, left, top, width, height, left, top, width, height)`
+- `baseCanvas`、context 或 `rects` 为空时静默返回
+- 非 `RectangleRange` 的条目会被跳过
+
+### 与 BaseRenderer 的缓存协作
+
+`BaseRenderer` 负责维护 `baseCanvas` 缓存，其行为与 liveRenderer 配合：
+
+- `BaseRenderer.render()` 过滤掉 AOM 中的对象，保证缓存中不含活动对象
+- 视口变化时先触发 `requestViewportBaseRender()` 更新缓存，再触发 `requestViewportLiveRender()` 使用缓存
+- 对象进入/离开 AOM 时，`baseRenderScheduler` 和 `renderScheduler` 都被 invalidate，由 `framePending` 机制保证时序
 
 ### invalidateObjects(objects)
 
@@ -154,10 +218,36 @@
 
 ## 当前实现状态
 
-- 已实现：按 `layerOrder` 读取对象、同层 `inactiveGraph` 拓扑序绘制、活动对象回退路径、世界矩形到屏幕矩形换算、显式 dirty rect 局部清理与局部重绘、局部补绘 clip、对象级 `getRenderPadding()` 动态留白、旧范围与新范围同时失效、显式旧几何快照协议。
-- 已接入：`Monitor` 已把 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`；`ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`；`stroke-creator` 与 `polygon-creator` 这类高频几何修改路径已会在变更前记录快照、变更后请求活动层刷新；`ObjectModifierTool` 已具备统一的几何变更包装钩子；同一批高频修改路径也会同步推动 ui 层刷新，使兼容选中框不会滞后。
-- 已兼容：无参 `render()` 仍保持整层重绘语义；传入普通矩形对象时仍会被兼容处理。
-- 待完善：调度器侧的 dirty rect 合并策略已得到更完整的近邻/退化支持，但对象级 padding 仍需要覆盖更完整的对象族；真实 modifier 子类尚未接入这套快照协议；`uiCanvas` 真实 overlay 语义与宿主边界仍需继续收敛。
+### 已实现
+
+- 按 `layerOrder` 读取对象、同层 `inactiveGraph` 拓扑序绘制、活动对象回退路径
+- 世界矩形到屏幕矩形换算、对象级 `getRenderPadding()` 动态留白
+- 显式 dirty rect 局部清理与局部重绘、局部补绘 clip
+- 旧范围与新范围同时失效、显式旧几何快照协议
+- **clear → copyBase → render 三步流水线**，替代浏览器 GPU 图层合成
+- **`copyBase()` / `copyBaseRects()`** 全量与脏区缓存拷贝
+- **`framePending` 时序保护**，防止 base/live 调度器竞争
+- **`baseCanvas` CSS opacity: 0** 使其作为不可见缓存，`liveCanvas` 为唯一可见显示面
+
+### 已接入
+
+- `Monitor` 已将 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`
+- `ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`
+- `stroke-creator` 与 `polygon-creator` 等高频几何修改路径已会在变更前记录快照、变更后请求活动层刷新
+- `ObjectModifierTool` 已具备统一的几何变更包装钩子
+- 同一批高频修改路径也会同步推动 ui 层刷新，使兼容选中框不会滞后
+
+### 已兼容
+
+- 无参 `render()` 保持全量清屏重绘语义
+- 传入普通矩形对象时仍会被兼容处理
+- `clear()` 和 `clearDirtyRects()` 保留为公开方法，供需要单独清理 `liveCanvas` 的场景使用
+
+### 待完善
+
+- 调度器侧的 dirty rect 合并策略已得到更完整的近邻/退化支持，但对象级 padding 仍需要覆盖更完整的对象族
+- 真实 modifier 子类尚未接入这套快照协议
+- `uiCanvas` 真实 overlay 语义与宿主边界仍需继续收敛
 
 ## 相关文档
 

@@ -520,7 +520,6 @@ class Board {
     const monitorRoot = document.createElement("div");
     const baseCanvas = document.createElement("canvas");
     const liveCanvas = document.createElement("canvas");
-    const renderCanvas = document.createElement("canvas");
     const uiCanvas = document.createElement("canvas");
 
     monitorRoot.id = `monitor-root-${monitorId}`;
@@ -532,14 +531,12 @@ class Board {
     baseCanvas.className = "monitor-layer monitor-layer-base";
     liveCanvas.id = `monitor-canvas-${monitorId}`;
     liveCanvas.className = "monitor-layer monitor-layer-live";
-    renderCanvas.id = `monitor-render-canvas-${monitorId}`;
-    renderCanvas.className = "monitor-layer monitor-layer-render";
+
     uiCanvas.id = `monitor-ui-canvas-${monitorId}`;
     uiCanvas.className = "monitor-layer monitor-layer-ui";
 
     monitorRoot.appendChild(baseCanvas);
     monitorRoot.appendChild(liveCanvas);
-    monitorRoot.appendChild(renderCanvas);
     monitorRoot.appendChild(uiCanvas);
     rootElement.appendChild(monitorRoot);
 
@@ -548,7 +545,6 @@ class Board {
         rootElement: monitorRoot,
         baseCanvas,
         liveCanvas,
-        renderCanvas,
         uiCanvas,
       },
       this,

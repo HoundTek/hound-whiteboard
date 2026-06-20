@@ -26,6 +26,7 @@ function createNoopCanvasContext2D() {
     fillRect() {},
     strokeRect() {},
     arc() {},
+    drawImage() {},
     fillText() {},
     measureText() {
       return { width: 0 };
