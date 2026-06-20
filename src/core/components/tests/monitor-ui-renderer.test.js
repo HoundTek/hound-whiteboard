@@ -1,6 +1,6 @@
 import { jest } from "@jest/globals";
-import { Monitor } from "../monitor.js";
-import { Chunk } from "../chunk.js";
+import { Monitor } from "../orchestration/monitor.js";
+import { Chunk } from "../chunk/chunk.js";
 import { DevicesDAG } from "../../devices-dag/index.js";
 import { RectangleRange } from "../../range/index.js";
 import {

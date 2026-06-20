@@ -1,8 +1,8 @@
 import { PolygonCreatorTool } from "../polygon-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/board.js";
-import { Monitor } from "../../../components/monitor.js";
-import { ChunkObjectManager } from "../../../components/chunk-object-manager.js";
+import { Board } from "../../../components/orchestration/board.js";
+import { Monitor } from "../../../components/orchestration/monitor.js";
+import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 import { OBJECT_CREATOR_SIGNAL_TYPES } from "../obj-creator.js";
 import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
 import { createMouseDevice } from "../../../devices/mouse-device.js";

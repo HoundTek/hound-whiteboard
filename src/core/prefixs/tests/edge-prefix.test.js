@@ -1,5 +1,5 @@
-import { Board } from "../../components/board.js";
-import { Monitor } from "../../components/monitor.js";
+import { Board } from "../../components/orchestration/board.js";
+import { Monitor } from "../../components/orchestration/monitor.js";
 import { createSubDAG } from "../../devices-dag/index.js";
 import { createKeyboardDevice } from "../../devices/keyboard-device.js";
 import { createNoopCanvas } from "../../test-support/noop-canvas.js";

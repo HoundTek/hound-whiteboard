@@ -14,7 +14,7 @@
 
 当前状态：
 
-- 字段与主要流程框架已在 `src/core/components/board.js` 建立。
+- 字段与主要流程框架已在 `src/core/components/orchestration/board.js` 建立。
 - 运行时区块状态已统一到 `chunkLoaded`。
 - 仍有明显 `todo`：创建文件结构、完整区块加载、历史状态回放、设备相关联动。
 

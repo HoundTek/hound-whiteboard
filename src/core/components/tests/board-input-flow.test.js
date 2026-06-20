@@ -1,5 +1,5 @@
-import { Board } from "../board.js";
-import { Monitor } from "../monitor.js";
+import { Board } from "../orchestration/board.js";
+import { Monitor } from "../orchestration/monitor.js";
 import { createSubDAG } from "../../devices-dag/index.js";
 import { createEdgePrefix } from "../../prefixs/index.js";
 import {

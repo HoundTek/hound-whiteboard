@@ -18,8 +18,8 @@
 
 ### 视口与输入上下文已经集中在 Monitor
 
-- src/core/components/board.js 中，Board.createMonitor(rootElement, options, monitorId) 会在传入根节点下创建 monitor canvas。
-- src/core/components/monitor.js 中，Monitor 已经统一管理：
+- src/core/components/orchestration/board.js 中，Board.createMonitor(rootElement, options, monitorId) 会在传入根节点下创建 monitor canvas。
+- src/core/components/orchestration/monitor.js 中，Monitor 已经统一管理：
   - canvas 尺寸
   - origin
   - zoom
@@ -31,7 +31,7 @@
 
 ### 活动对象已经和静态区块结构分离
 
-- src/core/components/active-object-manager.js 中，活动对象由 ActiveObjectManager 统一维护。
+- src/core/components/orchestration/active-object-manager.js 中，活动对象由 ActiveObjectManager 统一维护。
 - add(objects) 用于把尚未写回静态区块结构的新对象加入动态图。
 - choose(startFrom) 用于从静态图中提取活动子图并分层。
 - apply(objects) 才负责把活动对象重新提交回区块对象管理器与静态层关系。

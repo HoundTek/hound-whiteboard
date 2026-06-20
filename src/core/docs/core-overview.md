@@ -38,7 +38,7 @@
 
 ### 2.3 Core 介入点
 
-Core 层中的 `Board`（`src/core/components/board.js`）是领域管理器，目标负责：
+Core 层中的 `Board`（`src/core/components/orchestration/board.js`）是领域管理器，目标负责：
 
 - 区块生命周期与加载策略
 - 对象增删改与层叠关系

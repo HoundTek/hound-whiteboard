@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
-import { Board } from "../../../core/components/board.js";
+import { Board } from "../../../core/components/orchestration/board.js";
 import { boardFileOperateBridge } from "../../../core/bridges/file-operate-bridge-renderer.js";
-import { Monitor } from "../../../core/components/monitor.js";
+import { Monitor } from "../../../core/components/orchestration/monitor.js";
 import { RectangleRange } from "../../../core/range/index.js";
 import { Vector } from "../../../core/utils/math.js";
 import { CircleObject } from "../../../core/objects/graph/circle.js";
