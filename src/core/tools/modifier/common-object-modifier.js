@@ -133,6 +133,43 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   }
 
   /**
+   * 位移应用前确保 _initialPositions 已记录
+   * @description 当 displacement 到达且手势状态机未激活时，记录 cancel 回退用的初始位置。
+   * @param {Object} interaction - 当前交互上下文
+   * @override
+   */
+  onBeforeDisplacement(interaction) {
+    if (this._initialPositions) return;
+    this._initialPositions = new Map(
+      interaction.objects.map((obj) => [
+        obj.id ?? obj,
+        { x: obj.position.x, y: obj.position.y },
+      ]),
+    );
+  }
+
+  /**
+   * 位移应用后同步锚点与基准位置
+   * @description displacement 应用后，将手势锚点和各对象基准位置也平移同样位移，
+   * 使后续 position 信号不会因已叠加的 displacement 而产生跳跃。
+   * @param {Object} interaction - 当前交互上下文
+   * @override
+   */
+  onAfterDisplacement(interaction) {
+    if (!this._anchorPosition || !interaction.displacement) return;
+    const dx = interaction.displacement.x;
+    const dy = interaction.displacement.y;
+
+    this._anchorPosition.x += dx;
+    this._anchorPosition.y += dy;
+
+    for (const basePos of this._gestureBasePositions.values()) {
+      basePos.x += dx;
+      basePos.y += dy;
+    }
+  }
+
+  /**
    * 取消手势
    * @description
    * 将对象位置回滚到手势开始时的初始位置，清空锚点与缓存。

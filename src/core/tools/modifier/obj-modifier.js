@@ -18,6 +18,8 @@ import { BasicObject } from "../../objects/basic-obj.js";
 const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
   /** 世界坐标位置更新 */
   POSITION: "position",
+  /** 相对位移（增量） */
+  DISPLACEMENT: "displacement",
   /** 手势结束（对象留在动态图） */
   GESTURE_END: "end",
   /** 手势取消 */
@@ -229,16 +231,18 @@ class ObjectModifierTool extends Tool {
  * @abstract
  * @extends ObjectModifierTool
  * @description
- * 内置手势生命周期的对象修改工具。消费 position 信号（而非 displacement），
+ * 内置手势生命周期的对象修改工具，支持 position 与 displacement 双通道信号。
  * 子类只需覆写手势 hook 即可实现具体修改逻辑，无需关心 process() 调度细节。
  *
  * 手势模型：
  * 1. position 信号到达 → 手势开始（beginModifyGesture）或持续更新（updateModifyGesture）
- * 2. end 信号 → 手势结束（completeModifyGesture），对象保留在 AOM 动态图中
- * 3. success 信号 → 提交到静态图（applyModifiedObjects）
- * 4. cancel 信号 → 取消当前手势（cancelModifyGesture），将对象回滚到手势开始时的初始位置
+ * 2. displacement 信号到达 → 无状态增量，直接累加到对象位置（无需手势状态机）
+ *    手势锚点自动跟随位移同步，使后续 position 信号不产生跳跃
+ * 3. end 信号 → 手势结束（completeModifyGesture），对象保留在 AOM 动态图中
+ * 4. success 信号 → 提交到静态图（applyModifiedObjects）
+ * 5. cancel 信号 → 取消当前手势（cancelModifyGesture），将对象回滚到手势开始时的初始位置
  *
- * 该工具直接使用世界坐标 position 驱动，无需前置 prefix 计算位移。
+ * 该工具同时接受 world 坐标 position 和相对位移 displacement 驱动。
  * 子类可在 hook 内自行计算增量并更新对象几何。
  *
  * @author Zhou Chenyu
@@ -280,6 +284,22 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
+   * 从信号包中提取相对位移
+   * @param {SignalPacket} signalPacket - 输入信号包
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @returns {Vector|null}
+   * @protected
+   */
+  _extractDisplacement(signalPacket, context) {
+    const displacementSignal = signalPacket.signals.find(
+      (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.DISPLACEMENT,
+    );
+    if (!displacementSignal) return null;
+    const raw = displacementSignal?.context?.value;
+    return Vector.parse(raw);
+  }
+
+  /**
    * 从信号包中提取修改交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
@@ -294,6 +314,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       context,
       signals,
       position: this._extractPosition(signalPacket, context),
+      displacement: this._extractDisplacement(signalPacket, context),
       objects,
       hasEndSignal: signals.some(
         (s) => s.type === OBJECT_MODIFIER_SIGNAL_TYPES.GESTURE_END,
@@ -336,12 +357,12 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       return;
     }
 
-    if (!interaction.position) {
+    if (!interaction.position && !interaction.displacement) {
       this._handleOrphanEnd(interaction);
       return;
     }
 
-    this._handlePositionUpdate(interaction, context, objects);
+    this._handleSpatialUpdate(interaction, context, objects);
   }
 
   /**
@@ -391,39 +412,59 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   }
 
   /**
-   * 处理位置更新：首次启动手势或持续更新对象位置
+   * 处理空间更新：position / displacement 双通道
+   * @description
+   * 1. position 驱动手势状态机（begin → update → end/cancel）
+   * 2. displacement 作为无状态增量直接累加到对象位置
+   * 3. 两者可在同一帧并存：position 先算，displacement 再叠，锚点跟随位移
    * @param {Object} interaction - 当前交互上下文
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<*>} objects - 活动对象
    * @private
    */
-  _handlePositionUpdate(interaction, context, objects) {
-    if (!this.isModifyingGestureActive) {
-      // 首次位置：准入检测 → begin + update
-      if (this.canBeginModifyGesture(interaction) === false) return;
+  _handleSpatialUpdate(interaction, context, objects) {
+    // Step 1: Position 处理（手势状态机）
+    if (interaction.position) {
+      if (!this.isModifyingGestureActive) {
+        // 首次位置：准入检测 → begin + update
+        if (this.canBeginModifyGesture(interaction) === false) return;
+        this.withGeometryMutation(
+          context,
+          () => {
+            this.beginModifyGesture(interaction);
+            this.updateModifyGesture(interaction);
+          },
+          objects,
+        );
+        this.isModifyingGestureActive = true;
+      } else {
+        // 后续位置：仅 update，无需重复抓取快照
+        this.withGeometryMutation(
+          context,
+          () => {
+            this.updateModifyGesture(interaction);
+          },
+          objects,
+          { captureSnapshot: false },
+        );
+      }
+    }
+
+    // Step 2: Displacement 处理（无状态，直接累加）
+    if (interaction.displacement) {
       this.withGeometryMutation(
         context,
         () => {
-          this.beginModifyGesture(interaction);
-          this.updateModifyGesture(interaction);
-        },
-        objects,
-      );
-      this.isModifyingGestureActive = true;
-    } else {
-      // 后续位置：仅 update，无需重复抓取快照
-      this.withGeometryMutation(
-        context,
-        () => {
-          this.updateModifyGesture(interaction);
+          this.onBeforeDisplacement(interaction);
+          this.applyDisplacementToObjects(interaction);
         },
         objects,
         { captureSnapshot: false },
       );
+      this.onAfterDisplacement(interaction);
     }
 
-    // 同一信号包中附带的 end 信号
-    // completeModifyGesture 仅做状态清理，不修改几何，因此不包裹 withGeometryMutation
+    // Step 3: End 检查
     if (interaction.hasEndSignal) {
       this.completeModifyGesture(interaction);
       this.isModifyingGestureActive = false;
@@ -473,6 +514,43 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @param {Object} interaction - 当前交互上下文
    */
   cancelModifyGesture(interaction) {}
+
+  /**
+   * 位移应用前的 hook
+   * @description 在每次 displacement 应用到对象前调用。子类可在此记录初始位置供 cancel 回退。
+   * 已在 withGeometryMutation 的 snapshot 管理内，无需手动处理失效与渲染。
+   * @param {Object} interaction - 当前交互上下文
+   * @protected
+   */
+  onBeforeDisplacement(interaction) {}
+
+  /**
+   * 位移应用后的 hook
+   * @description 在 displacement 应用到对象后调用。子类可在此同步锚点与基准位置，
+   * 使后续 position 更新不因已叠加的位移而产生跳跃。
+   * 不包裹 withGeometryMutation，因此方法已在外层 snapshot 范围外。
+   * @param {Object} interaction - 当前交互上下文
+   * @protected
+   */
+  onAfterDisplacement(interaction) {}
+
+  /**
+   * 将 displacement 增量直接累加到各对象位置
+   * @description 基类默认实现：对每个活动对象，position 直接加上 displacement 向量。
+   * 子类可覆写以支持非平移类修改（如旋转、缩放）。
+   * @param {Object} interaction - 当前交互上下文
+   * @protected
+   */
+  applyDisplacementToObjects(interaction) {
+    const { objects, displacement } = interaction;
+    if (!displacement) return;
+    for (const obj of objects) {
+      obj.position = new Vector(
+        obj.position.x + displacement.x,
+        obj.position.y + displacement.y,
+      );
+    }
+  }
 
   /**
    * 工具节点被卸载时清理手势状态

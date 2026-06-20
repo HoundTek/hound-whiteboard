@@ -24,21 +24,27 @@ Tool（基类）
        ├─ umount() / collectUiOverlayEntries()
        └─ ...
        │
-       └─ GestureBasedObjectModifierTool（手势调度中间层）
+       └─ GestureBasedObjectModifierTool（手势调度中间层，双通道）
             ├─ process()                       ← 固定手势调度逻辑
-            ├─ buildModifyInteractionContext() ← 信号提取
-            ├─ canBeginModifyGesture()         ← hook（准入）
+            ├─ buildModifyInteractionContext() ← 信号提取（position + displacement）
+            ├─ _handleSpatialUpdate()          ← 三步编排：position → displacement → end
+            ├─ canBeginModifyGesture()         ← hook（准入，仅 position）
             ├─ beginModifyGesture()            ← hook（abstract）
             ├─ updateModifyGesture()           ← hook（abstract）
             ├─ completeModifyGesture()         ← hook
             ├─ cancelModifyGesture()           ← hook
+            ├─ onBeforeDisplacement()          ← hook（displacement 前置）
+            ├─ onAfterDisplacement()           ← hook（displacement 后置）
+            ├─ applyDisplacementToObjects()    ← 默认位移累加实现
             └─ reset() / umount()              ← 状态清理
                  │
-                 └─ CommonObjectModifierTool（具体实现：位置位移）
+                 └─ CommonObjectModifierTool（具体实现：位置位移 + 锚点同步）
                       ├─ canBeginModifyGesture → 合矩形命中检测
                       ├─ beginModifyGesture    → 记录锚点 + 初始位置
                       ├─ updateModifyGesture   → 锚点基准位移计算
                       ├─ completeModifyGesture → 清空缓存
+                      ├─ onBeforeDisplacement  → 记录 _initialPositions（供 cancel）
+                      ├─ onAfterDisplacement   → 同步锚点与基准位置
                       └─ reset()               → 清空缓存 + 调用 super
 ```
 
@@ -60,15 +66,19 @@ Tool（基类）
 
 ### GestureBasedObjectModifierTool（手势驱动中间层）
 
-| 方法                                                   | 职责                                     |
-| ------------------------------------------------------ | ---------------------------------------- |
-| `process(signalPacket, context)`                       | 固定手势调度逻辑，子类无需覆写           |
-| `buildModifyInteractionContext(signalPacket, context)` | 从信号包提取 position/end/cancel/success |
-| `canBeginModifyGesture(interaction)`                   | 准入检测 hook，子类可覆写                |
-| `beginModifyGesture(interaction)`                      | 手势开始 hook（abstract）                |
-| `updateModifyGesture(interaction)`                     | 手势更新 hook（abstract）                |
-| `completeModifyGesture(interaction)`                   | 手势完成 hook                            |
-| `cancelModifyGesture(interaction)`                     | 手势取消 hook                            |
+| 方法                                                   | 职责                                                  |
+| ------------------------------------------------------ | ----------------------------------------------------- |
+| `process(signalPacket, context)`                       | 固定手势调度逻辑，子类无需覆写                        |
+| `buildModifyInteractionContext(signalPacket, context)` | 从信号包提取 position/displacement/end/cancel/success |
+| `_handleSpatialUpdate(interaction, context, objects)`  | 三步编排：position → displacement → end               |
+| `canBeginModifyGesture(interaction)`                   | 准入检测 hook（仅 position），子类可覆写              |
+| `beginModifyGesture(interaction)`                      | 手势开始 hook（abstract）                             |
+| `updateModifyGesture(interaction)`                     | 手势更新 hook（abstract）                             |
+| `completeModifyGesture(interaction)`                   | 手势完成 hook                                         |
+| `cancelModifyGesture(interaction)`                     | 手势取消 hook                                         |
+| `onBeforeDisplacement(interaction)`                    | displacement 前置 hook                                |
+| `onAfterDisplacement(interaction)`                     | displacement 后置 hook                                |
+| `applyDisplacementToObjects(interaction)`              | 默认位移累加实现                                      |
 
 ## 上下文（context）
 
@@ -167,50 +177,79 @@ modifier 节点路径的 state。
 
 ### 信号类型
 
-| 信号类型 | 常量                       | 语义                                                   |
-| -------- | -------------------------- | ------------------------------------------------------ |
-| 位置更新 | `POSITION: "position"`     | 携带世界坐标 `{ x, y }`，内部以锚点为基准计算位移      |
-| 手势结束 | `GESTURE_END: "end"`       | 结束当前手势，对象保留在动态图中，后续可开始新一轮手势 |
-| 手势取消 | `GESTURE_CANCEL: "cancel"` | 取消当前手势并将对象回滚到手势开始时的初始位置         |
-| 提交修改 | `SUCCESS: "success"`       | 将修改完毕的对象 apply 到静态图，结束修改流程          |
+| 信号类型 | 常量                           | 语义                                                            |
+| -------- | ------------------------------ | --------------------------------------------------------------- |
+| 位置更新 | `POSITION: "position"`         | 携带世界坐标 `{ x, y }`，以锚点为基准计算位移（驱动手势状态机） |
+| 相对位移 | `DISPLACEMENT: "displacement"` | 携带相对增量 `{ x, y }`，无状态直接累加到对象位置               |
+| 手势结束 | `GESTURE_END: "end"`           | 结束当前手势，对象保留在动态图                                  |
+| 手势取消 | `GESTURE_CANCEL: "cancel"`     | 取消手势，对象回滚到手势开始时的初始位置                        |
+| 提交修改 | `SUCCESS: "success"`           | 将修改完毕的对象 apply 到静态图，结束修改流程                   |
+
+### 双通道信号处理
+
+`GestureBasedObjectModifierTool` 同时接受 `position` 和 `displacement` 两种空间信号，
+在 `_handleSpatialUpdate` 中按顺序处理：
+
+1. **position** 驱动手势状态机（begin → update → end/cancel），以锚点为基准计算位移
+2. **displacement** 作为无状态增量，在 position 之后直接累加到对象位置
+3. 两者可在同一帧并存：position 先算 → displacement 再叠 → 锚点跟随位移同步
+4. displacement 不参与手势状态机，不与 position 竞争的 `isModifyingGestureActive` 互斥
+
+#### displacement 信号特点
+
+- **无准入检测**：到达时跳过 `canBeginModifyGesture`
+- **可与 position 叠加**：锚点自动跟随位移，后续 position 不产生跳跃
+- **手势结束后仍可用**：end 之后 displacement 直接累加对象位置
+- **cancel 兼容**：`onBeforeDisplacement` hook 在首次 displacement 时记录初始位置
+
+#### 新增 hook
+
+| 方法                                      | 职责                                                    |
+| ----------------------------------------- | ------------------------------------------------------- |
+| `onBeforeDisplacement(interaction)`       | 位移应用前调用，子类可在此记录初始位置供 cancel 回退    |
+| `onAfterDisplacement(interaction)`        | 位移应用后调用，子类可在此同步锚点与基准位置            |
+| `applyDisplacementToObjects(interaction)` | 基类默认实现——直接累加 displacement 到各对象 `position` |
 
 ### 手势生命周期
 
 ```mermaid
 flowchart LR
-    P[position 信号] --> C{手势激活?}
-    C -->|否| H{准入检测}
-    H -->|通过| B[beginModifyGesture]
-    B --> U[updateModifyGesture]
-    C -->|是| U
-    U -->|位移计算| M[对象位置 = anchor + Δ]
-    M --> W[等待下一信号]
-    W -->|position| C
-    W -->|end 信号| E[completeModifyGesture]
-    W -->|cancel 信号| X[cancelModifyGesture]
-    E -->|新一轮 position| C
-    E -->|success 信号| A[completeModifyGesture]
-    A --> S[apply 到静态图]
-    S --> D[handoff 切回 first]
+    subgraph 手势状态机 [手势状态机]
+        P[position 信号] --> C{手势激活?}
+        C -->|否| H{准入检测}
+        H -->|通过| B[beginModifyGesture]
+        B --> U[updateModifyGesture]
+        C -->|是| U
+        U -->|anchor + Δ| M1[对象位置更新]
+        M1 --> W[等待下一信号]
+        W -->|position| C
+        W -->|end 信号| E[completeModifyGesture]
+        W -->|cancel 信号| X[cancelModifyGesture]
+        E -->|新一轮 position| C
+        E -->|success 信号| A[completeModifyGesture]
+        A --> S[apply 到静态图]
+        S --> D[handoff 切回 first]
+    end
+
+    D2[displacement 信号] -.->|无状态，直接累加| M2[对象位置 += Δ]
+    M2 -.->|锚点同步| M1
 ```
 
-### process() 调度流程
+#### \_handleSpatialUpdate 调度流程
 
-`GestureBasedObjectModifierTool.process()` 内部编排如下：
+`GestureBasedObjectModifierTool._handleSpatialUpdate()` 内部分三步：
 
-1. `SignalPacket.from(signalPacket)` 归一化信号包
-2. `resolveActiveModifiedObjects(context)` 解析 AOM 动态图中的对象
-3. `setContextObjects(context, objects)` 同步对象到上下文
-4. `buildModifyInteractionContext()` 提取 position、end、cancel、success 等信号
-5. cancel 信号 → `cancelModifyGesture()`，回滚对象到手势起始位置
-6. success 信号 → `completeModifyGesture()` → `applyModifiedObjects()`，提交到静态图
-7. 无 position → 仅处理孤立 end 信号
-8. 首个 position → `canBeginModifyGesture()` 准入检测 → `withGeometryMutation({ begin + update })`
-9. 后续 position → `withGeometryMutation({ update })`
-10. end 信号 → `completeModifyGesture()`，对象留在动态图
+**Step 1 — position 处理**
 
-所有 `begin/update` 调用包裹在 `withGeometryMutation` 中，自动执行
-`captureObjectSnapshot → mutate → invalidateObjects` 协议。
+1. 手势未激活 → `canBeginModifyGesture()` 准入检测 → `withGeometryMutation({ begin + update })`
+2. 手势已激活 → `withGeometryMutation({ update })`（锚点基准位移）
+
+**Step 2 — displacement 处理** 3. `onBeforeDisplacement(interaction)` — 记录初始位置等 4. `applyDisplacementToObjects(interaction)` — 累加到对象位置 5. `onAfterDisplacement(interaction)` — 子类同步锚点
+
+**Step 3 — end 检查** 6. 同包附带的 end 信号 → `completeModifyGesture()`
+
+所有 `begin/update` 及 `applyDisplacementToObjects` 调用包裹在 `withGeometryMutation` 中，
+自动执行 `captureObjectSnapshot → mutate → invalidateObjects` 协议。
 `mutate` 抛出异常时，`afterGeometryMutation` 由 `try-finally` 确保执行。
 
 ### CommonObjectModifierTool —— 通用位置位移修改器

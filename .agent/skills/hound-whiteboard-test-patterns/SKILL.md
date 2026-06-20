@@ -65,23 +65,37 @@ monitor.devicesDAG.dispatch(
 
 原因：通过 `builder.node().tool(tool)` 挂载的工具有 `toolContext = {}`，`board` 和 `monitor` 只能从 dispatch 的 accumulated context 获取。而 `board.signalsEventBus.emit("input", ...)` 内部已自动添加该上下文，不需要手动传递。
 
-### 3. modifier 使用 position 信号（不是 displacement）
+### 3. modifier 双通道：position + displacement
 
-`GestureBasedObjectModifierTool`（包括 `CommonObjectModifierTool`）**不再接受 `displacement` 信号**。使用 `position` 信号（绝对世界坐标）：
+`GestureBasedObjectModifierTool`（包括 `CommonObjectModifierTool`）同时接受 `position`（绝对坐标）和 `displacement`（相对位移）两种信号：
+
+| 信号           | 行为                                                 |
+| -------------- | ---------------------------------------------------- |
+| `position`     | 驱动手势状态机（begin → update → end/cancel）        |
+| `displacement` | 无状态增量，直接累加到对象位置，不参与手势状态机     |
+| 同一帧两者并存 | position 先算 → displacement 再叠 → 锚点跟随位移同步 |
 
 ```js
-// ✅ 正确
+// ✅ position 信号（绝对世界坐标）
 emit("input", {
   signals: [{ type: "position", context: { value: { x: 10, y: 10 } } }],
 });
 
-// ❌ 错误（被静默忽略，测试却可能伪通过）
+// ✅ displacement 信号（相对位移增量）
 emit("input", {
   signals: [{ type: "displacement", context: { value: { x: 3, y: 0 } } }],
 });
+
+// ✅ 两者并存
+emit("input", {
+  signals: [
+    { type: "position", context: { value: { x: 10, y: 10 } } },
+    { type: "displacement", context: { value: { x: 3, y: 0 } } },
+  ],
+});
 ```
 
-手势生命周期：
+手势生命周期（position 驱动）：
 
 | 信号            | 作用                               |
 | --------------- | ---------------------------------- |
@@ -90,7 +104,12 @@ emit("input", {
 | `end`           | 结束手势，对象保留在 AOM 动态图中  |
 | `success`       | 将修改提交到静态图                 |
 
-**例外**：`handoff-handler.test.js` 中有一个测试使用了 `displacement` 信号，但那是发给 **Mock Modifier** 的，不是发给 `CommonObjectModifierTool` 的，合法。
+Displacement 特性：
+
+- **无准入检测**：displacement 信号到达时跳过 `canBeginModifyGesture`
+- **可与 position 叠加**：同帧内先执行 position 手势更新，再累加 displacement 增量
+- **锚点同步**：`CommonObjectModifierTool.onAfterDisplacement` 自动平移锚点和基准位置，使后续 position 不产生跳跃
+- **cancel 兼容**：如果手势未激活，`onBeforeDisplacement` 会在首次 displacement 时记录 `_initialPositions`，确保 cancel 能正确回退
 
 ### 4. 断言要验证实际效果
 
