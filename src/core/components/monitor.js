@@ -41,14 +41,14 @@ class Monitor {
   rootElement;
 
   /**
-   * 静态内容画布
+   * 静态内容画布（不可见）
    * @type {HTMLCanvasElement | null}
    */
   baseCanvas;
 
   /**
-   * 活动内容画布
-   * @type {HTMLCanvasElement}
+   * 活动内容画布（不可见）
+   * @type {HTMLCanvasElement | null}
    */
   liveCanvas;
 
@@ -57,6 +57,12 @@ class Monitor {
    * @type {HTMLCanvasElement | null}
    */
   uiCanvas;
+
+  /**
+   * 合成输出画布（可见，负责将 baseCanvas + liveCanvas 合成到屏幕）
+   * @type {HTMLCanvasElement | null}
+   */
+  renderCanvas;
 
   /**
    * 白板，用于查询区块顺序与区块尺寸
@@ -172,6 +178,7 @@ class Monitor {
    *   rootElement?: HTMLElement | null,
    *   baseCanvas?: HTMLCanvasElement | null,
    *   liveCanvas?: HTMLCanvasElement | null,
+   *   renderCanvas?: HTMLCanvasElement | null,
    *   uiCanvas?: HTMLCanvasElement | null,
    * }} htmlElements - 画布元素选项
    * @param {Board} board - 白板管理器
@@ -179,7 +186,7 @@ class Monitor {
    * @param {string} monitorId - 显示器 id
    */
   constructor(
-    { rootElement, baseCanvas, liveCanvas, uiCanvas },
+    { rootElement, baseCanvas, liveCanvas, renderCanvas, uiCanvas },
     board,
     { width, height },
     monitorId,
@@ -188,6 +195,7 @@ class Monitor {
       rootElement,
       baseCanvas,
       liveCanvas,
+      renderCanvas,
       uiCanvas,
     });
     this.board = board;
@@ -240,12 +248,14 @@ class Monitor {
     this.uiRenderScheduler = new RenderScheduler({
       mergeDirtyRects: this.createDirtyRectMerger("ui"),
     });
-    this.baseRenderScheduler.setFlushHandler((dirtyRects) =>
-      this.baseRenderer.flush(dirtyRects),
-    );
-    this.renderScheduler.setFlushHandler((dirtyRects) =>
-      this.liveRenderer.flush(dirtyRects),
-    );
+    this.baseRenderScheduler.setFlushHandler((dirtyRects) => {
+      this.baseRenderer.flush(dirtyRects);
+      this.requestCompositeRender();
+    });
+    this.renderScheduler.setFlushHandler((dirtyRects) => {
+      this.liveRenderer.flush(dirtyRects);
+      this.requestCompositeRender();
+    });
     this.uiRenderScheduler.setFlushHandler((dirtyRects) =>
       this.uiRenderer.flush(dirtyRects),
     );
@@ -414,6 +424,7 @@ class Monitor {
     this.baseRenderScheduler?.invalidate?.(viewportRect);
     this.renderScheduler?.invalidate?.(viewportRect);
     this.uiRenderScheduler?.invalidate?.(viewportRect);
+    this.requestCompositeRender();
   }
 
   /**
@@ -421,11 +432,18 @@ class Monitor {
    * @param {{
    *   rootElement?: HTMLElement | null,
    *   baseCanvas?: HTMLCanvasElement | null,
-   *   liveCanvas?: HTMLCanvasElement,
+   *   liveCanvas?: HTMLCanvasElement | null,
+   *   renderCanvas?: HTMLCanvasElement | null,
    *   uiCanvas?: HTMLCanvasElement | null,
    * }} renderLayers - 渲染层集合
    */
-  attachRenderLayers({ rootElement, baseCanvas, liveCanvas, uiCanvas } = {}) {
+  attachRenderLayers({
+    rootElement,
+    baseCanvas,
+    liveCanvas,
+    renderCanvas,
+    uiCanvas,
+  } = {}) {
     if (rootElement !== undefined) {
       this.rootElement = rootElement ?? null;
     }
@@ -436,6 +454,10 @@ class Monitor {
 
     if (liveCanvas !== undefined) {
       this.liveCanvas = liveCanvas ?? null;
+    }
+
+    if (renderCanvas !== undefined) {
+      this.renderCanvas = renderCanvas ?? null;
     }
 
     if (uiCanvas !== undefined) {
@@ -453,9 +475,12 @@ class Monitor {
   resizeRenderLayers(width, height) {
     const nextWidth = Number.isFinite(width) ? width : 0;
     const nextHeight = Number.isFinite(height) ? height : 0;
-    const canvases = [this.baseCanvas, this.liveCanvas, this.uiCanvas].filter(
-      Boolean,
-    );
+    const canvases = [
+      this.baseCanvas,
+      this.liveCanvas,
+      this.renderCanvas,
+      this.uiCanvas,
+    ].filter(Boolean);
     let resized = false;
 
     for (const layerCanvas of canvases) {
@@ -486,6 +511,53 @@ class Monitor {
     this.requestViewportBaseRender();
     this.renderScheduler?.invalidate?.(viewportRect);
     this.uiRenderScheduler?.invalidate?.(viewportRect);
+    this.requestCompositeRender();
+  }
+
+  /**
+   * 合成待处理标志
+   * @type {boolean}
+   */
+  _compositePending = false;
+
+  /**
+   * 请求一次合成渲染（异步去重）
+   */
+  requestCompositeRender() {
+    if (this._compositePending) return;
+    this._compositePending = true;
+
+    const scheduleFrame =
+      typeof globalThis.requestAnimationFrame === "function"
+        ? globalThis.requestAnimationFrame
+        : (cb) => globalThis.setTimeout(() => cb(Date.now()), 16);
+
+    scheduleFrame(() => {
+      this._compositePending = false;
+      this.compositeRenderCanvas();
+    });
+  }
+
+  /**
+   * 合成 baseCanvas + liveCanvas 到 renderCanvas
+   * @description 执行全量合成：clearRect → drawImage(baseCanvas) → drawImage(liveCanvas)
+   */
+  compositeRenderCanvas() {
+    const ctx = this.getContext("render");
+    if (!ctx || !this.baseCanvas || !this.liveCanvas) return;
+
+    const w = this.renderCanvas?.width ?? 0;
+    const h = this.renderCanvas?.height ?? 0;
+    if (w <= 0 || h <= 0) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // 清为透明
+    ctx.clearRect(0, 0, w, h);
+    // 合成：静态层 → 活动层（Canvas 2D source-over 是自洽的）
+    ctx.drawImage(this.baseCanvas, 0, 0);
+    ctx.drawImage(this.liveCanvas, 0, 0);
+    ctx.restore();
   }
 
   /**
@@ -778,13 +850,14 @@ class Monitor {
 
   /**
    * 获取指定渲染层的 2D 上下文
-   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
+   * @param {"base" | "live" | "ui" | "render"} [layer = "live"] - 渲染层名称
    * @returns {CanvasRenderingContext2D | null}
    */
   getContext(layer = "live") {
     const layerCanvas = {
       base: this.baseCanvas,
       live: this.liveCanvas,
+      render: this.renderCanvas,
       ui: this.uiCanvas,
     }[layer];
 
@@ -896,13 +969,17 @@ class Monitor {
   /**
    * 在白板级设备图中运行时挂载 workflow。
    * @param {string} path - workflow 路径（相对于显示器根）
-    * @param {import("../tools/tool.js").Tool|import("../devices-dag/dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
+   * @param {import("../tools/tool.js").Tool|import("../devices-dag/dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
    */
   mountWorkflow(path, workflow) {
-    return this.devicesDAG.mountWorkflow(joinPath(this.monitorId, path), workflow, {
-      board: this.board,
-      monitor: this,
-    });
+    return this.devicesDAG.mountWorkflow(
+      joinPath(this.monitorId, path),
+      workflow,
+      {
+        board: this.board,
+        monitor: this,
+      },
+    );
   }
 
   /**

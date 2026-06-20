@@ -987,6 +987,7 @@ class ActiveObjectManager {
     }
 
     this.insertLayerToTop(newLayer);
+    this.requestBaseRenderForObjects(newObjectEntries);
     this.requestLiveRender(newObjectEntries);
     return newLayer;
   }

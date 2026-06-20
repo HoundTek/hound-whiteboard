@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Canvas 半透明合成测试</title>
+    <style>
+      body {
+        margin: 20px;
+        font-family: sans-serif;
+        background: #fff;
+      }
+      h2 {
+        margin: 24px 0 8px;
+        font-size: 16px;
+        color: #333;
+      }
+      p {
+        margin: 0 0 12px;
+        font-size: 13px;
+        color: #666;
+      }
+
+      /* 所有场景共用舞台 */
+      .stage {
+        position: relative;
+        width: 400px;
+        height: 300px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      .stage canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .stage .offscreen {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        z-index: -1;
+      }
+
+      /* 双 Canvas 叠加顺序 */
+      #dbl-lower {
+        z-index: 0;
+      }
+      #dbl-upper {
+        z-index: 1;
+      }
+
+      .legend {
+        display: flex;
+        gap: 16px;
+        margin: 4px 0;
+        font-size: 12px;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .swatch {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Canvas 半透明合成对比测试</h1>
+    <p>
+      下层 hsl(200,75%,60%) α=0.22,上层 hsl(0,75%,60%) α=0.22。重叠区一致 =
+      合成正确。
+    </p>
+
+    <div class="legend">
+      <span
+        ><span
+          class="swatch"
+          style="background: rgba(77, 166, 230, 0.22)"
+        ></span>
+        下层圆</span
+      >
+      <span
+        ><span
+          class="swatch"
+          style="background: rgba(230, 77, 77, 0.22)"
+        ></span>
+        上层圆</span
+      >
+    </div>
+
+    <h2>1. 双层 Canvas(CSS 叠加)</h2>
+    <p>两个可见 Canvas CSS 层叠,各画一个半透明圆。</p>
+    <div class="stage">
+      <canvas id="dbl-lower" width="400" height="300"></canvas>
+      <canvas id="dbl-upper" width="400" height="300"></canvas>
+    </div>
+
+    <h2>2. 隐藏双层 + drawImage 合成</h2>
+    <p>两个隐藏 Canvas 各画一个圆 → drawImage 合到可见 Canvas。</p>
+    <div class="stage">
+      <div class="offscreen">
+        <canvas id="cmp-base" width="400" height="300"></canvas>
+      </div>
+      <div class="offscreen">
+        <canvas id="cmp-live" width="400" height="300"></canvas>
+      </div>
+      <canvas id="cmp-out" width="400" height="300"></canvas>
+    </div>
+
+    <h2>3. 隐藏离屏 + 直接绘制</h2>
+    <p>一个隐藏 Canvas 画下层圆 → 可见 Canvas 先 drawImage 再画上层圆。</p>
+    <div class="stage">
+      <div class="offscreen">
+        <canvas id="dir-off" width="400" height="300"></canvas>
+      </div>
+      <canvas id="dir-out" width="400" height="300"></canvas>
+    </div>
+
+    <h2>4. 同 Canvas 直接绘制(基准)</h2>
+    <p>同一可见 Canvas 先后画两个半透明圆。</p>
+    <div class="stage">
+      <canvas id="ref-out" width="400" height="300"></canvas>
+    </div>
+
+    <script>
+      const W = 400,
+        H = 300,
+        CY = 150,
+        CR = 100;
+      const LOWER = "hsla(200,75%,60%,0.22)",
+        UPPER = "hsla(0,75%,60%,0.22)",
+        STROKE = "#333";
+
+      function drawLower(ctx) {
+        ctx.clearRect(0, 0, W, H);
+        ctx.beginPath();
+        ctx.arc(150, CY, CR, 0, Math.PI * 2);
+        ctx.fillStyle = LOWER;
+        ctx.fill();
+        ctx.strokeStyle = STROKE;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      function drawUpper(ctx) {
+        ctx.clearRect(0, 0, W, H);
+        ctx.beginPath();
+        ctx.arc(230, CY, CR, 0, Math.PI * 2);
+        ctx.fillStyle = UPPER;
+        ctx.fill();
+        ctx.strokeStyle = STROKE;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // 1
+      drawLower(document.getElementById("dbl-lower").getContext("2d"));
+      drawUpper(document.getElementById("dbl-upper").getContext("2d"));
+
+      // 2
+      const cmpBase = document.getElementById("cmp-base").getContext("2d");
+      const cmpLive = document.getElementById("cmp-live").getContext("2d");
+      drawLower(cmpBase);
+      drawUpper(cmpLive);
+      const cmpOut = document.getElementById("cmp-out").getContext("2d");
+      cmpOut.clearRect(0, 0, W, H);
+      cmpOut.drawImage(document.getElementById("cmp-base"), 0, 0);
+      cmpOut.drawImage(document.getElementById("cmp-live"), 0, 0);
+
+      // 3
+      drawLower(document.getElementById("dir-off").getContext("2d"));
+      const dirOut = document.getElementById("dir-out").getContext("2d");
+      dirOut.clearRect(0, 0, W, H);
+      dirOut.drawImage(document.getElementById("dir-off"), 0, 0);
+      dirOut.beginPath();
+      dirOut.arc(230, CY, CR, 0, Math.PI * 2);
+      dirOut.fillStyle = UPPER;
+      dirOut.fill();
+      dirOut.strokeStyle = STROKE;
+      dirOut.lineWidth = 2;
+      dirOut.stroke();
+
+      // 4
+      const refOut = document.getElementById("ref-out").getContext("2d");
+      refOut.clearRect(0, 0, W, H);
+      refOut.beginPath();
+      refOut.arc(150, CY, CR, 0, Math.PI * 2);
+      refOut.fillStyle = LOWER;
+      refOut.fill();
+      refOut.strokeStyle = STROKE;
+      refOut.lineWidth = 2;
+      refOut.stroke();
+      refOut.beginPath();
+      refOut.arc(230, CY, CR, 0, Math.PI * 2);
+      refOut.fillStyle = UPPER;
+      refOut.fill();
+      refOut.strokeStyle = STROKE;
+      refOut.lineWidth = 2;
+      refOut.stroke();
+
+      function sample(ctx, label, x, y) {
+        const p = ctx.getImageData(x, y, 1, 1).data;
+        console.log(
+          `${label.padEnd(20)} (${x},${y}): ${p[0]},${p[1]},${p[2]}  α=${(p[3] / 255).toFixed(2)}`,
+        );
+      }
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const OX = 190,
+            OY = 150,
+            LX = 110,
+            UX = 270;
+          console.log("\n=== 重叠区 ===");
+          sample(
+            document.getElementById("dbl-lower").getContext("2d"),
+            "1-CSS",
+            OX,
+            OY,
+          );
+          sample(cmpOut, "2-合成", OX, OY);
+          sample(dirOut, "3-离屏+直接", OX, OY);
+          sample(refOut, "4-基准", OX, OY);
+          console.log("\n=== 仅下层 ===");
+          sample(
+            document.getElementById("dbl-lower").getContext("2d"),
+            "1",
+            LX,
+            OY,
+          );
+          sample(cmpOut, "2", LX, OY);
+          sample(dirOut, "3", LX, OY);
+          sample(refOut, "4", LX, OY);
+          console.log("\n=== 仅上层 ===");
+          sample(
+            document.getElementById("dbl-upper").getContext("2d"),
+            "1(独)",
+            UX,
+            OY,
+          );
+          sample(cmpOut, "2", UX, OY);
+          sample(dirOut, "3", UX, OY);
+          sample(refOut, "4", UX, OY);
+        }),
+      );
+    </script>
+  </body>
+</html>
