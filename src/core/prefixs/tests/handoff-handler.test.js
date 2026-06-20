@@ -15,8 +15,8 @@ import {
   createMockChooser,
   createMockModifier,
 } from "../../test-support/mock-tools.js";
-import { Board } from "../../components/orchestration/board.js";
-import { Monitor } from "../../components/orchestration/monitor.js";
+import { Board } from "../../components/index.js";
+import { Monitor } from "../../components/index.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../tools/chooser/rectangle-object-chooser.js";
 import { StrokeObject } from "../../objects/stroke/stroke.js";

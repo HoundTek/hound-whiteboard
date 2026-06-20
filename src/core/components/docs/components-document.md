@@ -4,19 +4,54 @@
 
 components 目录下的模块用于管理白板运行时状态，负责把对象模型（objects）、历史模型（hit）与工具交互串联起来。
 
+## 目录结构
+
+```
+src/core/components/
+├── chunk/           # 区块子系统
+│   ├── chunk.js
+│   ├── chunk-loader.js
+│   ├── chunk-block-loader.js
+│   └── chunk-object-manager.js
+├── renderer/        # 渲染管线
+│   ├── base-renderer.js
+│   ├── live-renderer.js
+│   ├── ui-renderer.js
+│   ├── render-scheduler.js
+│   └── dirty-rect-strategy.js
+├── orchestration/   # 编排层
+│   ├── board.js
+│   ├── monitor.js
+│   └── active-object-manager.js
+├── index.js         # 统一导出（Board / Monitor）
+├── docs/
+└── tests/
+```
+
+外部代码统一通过 `src/core/components/index.js` 导入 `Board` 和 `Monitor`，不直接引用子目录内部路径。
+
 ## 组件列表
 
-- `Board`：白板级管理器，负责维护区块实例所有权、对象实例注册表与加载状态，持有全局活动对象管理器与历史树。
+### 区块子系统（`chunk/`）
+
 - `Chunk`：区块类，负责区块链关系、区块加载/卸载流程。
 - `ChunkLoader`：通用区块加载器，是区块对象的持有者，负责按 id/坐标访问与卸载区块。
-- `ChunkObjectManager`：区块对象管理器，负责静态层叠图与对象覆盖区块索引，并通过 `Board` 间接解析对象实例。
-- `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
 - `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
-- `Monitor`：显示器组件，负责视口坐标变换、设备图挂载，以及多层渲染画布的承载。
+- `ChunkObjectManager`：区块对象管理器，负责静态层叠图与对象覆盖区块索引，并通过 `Board` 间接解析对象实例。
+
+### 渲染管线（`renderer/`）
+
 - `BaseRenderer`：静态层渲染器，负责把已提交静态对象绘制到 `baseCanvas`。
-- `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。
 - `LiveRenderer`：活动层渲染器，负责把 AOM 当前活动对象按层顺序绘制到 `liveCanvas`。
 - `UiRenderer`：UI 覆盖层渲染器，负责把兼容 overlay 与注册的 UI overlay provider 绘制到 `uiCanvas`。
+- `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。
+- `DirtyRectStrategy`：脏区域策略模块，提供基于区域和缩放的脏区域处理策略。
+
+### 编排层（`orchestration/`）
+
+- `Board`：白板级管理器，负责维护区块实例所有权、对象实例注册表与加载状态，持有全局活动对象管理器与历史树。
+- `Monitor`：显示器组件，负责视口坐标变换、设备图挂载，以及多层渲染画布的承载。
+- `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
 
 ## 组件关系图
 

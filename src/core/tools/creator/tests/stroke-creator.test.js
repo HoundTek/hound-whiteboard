@@ -1,7 +1,7 @@
 import { StrokeCreatorTool } from "../stroke-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/orchestration/board.js";
-import { Monitor } from "../../../components/orchestration/monitor.js";
+import { Board } from "../../../components/index.js";
+import { Monitor } from "../../../components/index.js";
 import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
 import { createMouseDevice } from "../../../devices/mouse-device.js";

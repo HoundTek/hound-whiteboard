@@ -1,5 +1,5 @@
 import { Vector } from "../core/utils/math.js";
-import { Board } from "../core/components/board.js";
+import { Board } from "../core/components/index.js";
 import { Logger } from "../utils/log/logger.js";
 import { logBus } from "../utils/log/log-bus.js";
 import { createConsolePrinter } from "../utils/log/console-printer.js";

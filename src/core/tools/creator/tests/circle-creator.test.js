@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/orchestration/board.js";
+import { Board } from "../../../components/index.js";
 import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 
 describe("CircleCreatorTool", () => {

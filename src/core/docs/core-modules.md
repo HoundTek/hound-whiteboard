@@ -4,7 +4,21 @@
 
 ## 1. components/
 
-### 1.1 Board
+components 模块已按职责拆分为三个子目录，外部通过 `index.js` 统一导入。
+
+```
+src/core/components/
+├── chunk/          # 区块子系统（Chunk / ChunkLoader / ChunkBlockLoader / ChunkObjectManager）
+├── renderer/       # 渲染管线（BaseRenderer / LiveRenderer / UiRenderer / RenderScheduler / DirtyRectStrategy）
+├── orchestration/  # 编排层（Board / Monitor / ActiveObjectManager）
+├── index.js        # 统一导出入口
+├── docs/
+└── tests/
+```
+
+### 1.1 编排层（`orchestration/`）
+
+#### Board
 
 目标职责：
 
@@ -18,34 +32,7 @@
 - 运行时区块状态已统一到 `chunkLoaded`。
 - 仍有明显 `todo`：创建文件结构、完整区块加载、历史状态回放、设备相关联动。
 
-### 1.2 Chunk
-
-目标职责：
-
-- 管理单区块对象
-- 维护四向区块链
-- 提供完整加载/临时加载/卸载
-
-当前状态：
-
-- 基本字段和区块连接逻辑已存在。
-- 临时加载 (`loadTemp`) 可加载层叠图。
-- 完整对象加载、落盘、卸载清理仍待完成。
-
-### 1.3 ChunkObjectManager
-
-目标职责：
-
-- 管理区块级静态对象图（层叠关系）
-- 管理对象覆盖区块索引，并通过 Board 间接解析对象实例
-
-当前状态：
-
-- `staticGraph` 与 `objectCoverChunks` 数据结构已定义，对象实例所有权已上移到 `Board.objectLoaded`。
-- `loadTierGraph()` 能解析图结构。
-- 对象读写已改为经 `Board` 统一调度，图落盘与覆盖索引落盘已接通。
-
-### 1.4 ActiveObjectManager
+#### ActiveObjectManager
 
 目标职责：
 
@@ -61,6 +48,59 @@
   - 选择分层逻辑（按路径活动点数分层）
   - 层插入、层顺序比较、置顶与清理
 - 仍有待打磨：区块加载器与真实文件路径联动、性能优化、边界处理测试补全。
+
+### 1.2 区块子系统（`chunk/`）
+
+#### Chunk
+
+目标职责：
+
+- 管理单区块对象
+- 维护四向区块链
+- 提供完整加载/临时加载/卸载
+
+当前状态：
+
+- 基本字段和区块连接逻辑已存在。
+- 临时加载 (`loadTemp`) 可加载层叠图。
+- 完整对象加载、落盘、卸载清理仍待完成。
+
+#### ChunkObjectManager
+
+目标职责：
+
+- 管理区块级静态对象图（层叠关系）
+- 管理对象覆盖区块索引，并通过 Board 间接解析对象实例
+
+当前状态：
+
+- `staticGraph` 与 `objectCoverChunks` 数据结构已定义，对象实例所有权已上移到 `Board.objectLoaded`。
+- `loadTierGraph()` 能解析图结构。
+- 对象读写已改为经 `Board` 统一调度，图落盘与覆盖索引落盘已接通。
+
+#### ChunkLoader / ChunkBlockLoader
+
+目标职责：
+
+- `ChunkLoader`：通用区块加载器，是区块对象的持有者，负责按 id/坐标访问与卸载区块。
+- `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
+
+当前状态：
+
+- 基础缓存和引用计数已就绪。
+- 与 `Board` 的完整加载联动仍在进行中。
+
+### 1.3 渲染管线（`renderer/`）
+
+包含 `BaseRenderer`、`LiveRenderer`、`UiRenderer`、`RenderScheduler`、`DirtyRectStrategy`，负责脏区域计算、多层画布渲染调度与 UI 覆盖层渲染。
+
+当前状态：
+
+- `BaseRenderer` 已支持静态层整层重绘和 dirty rect 局部刷新。
+- `LiveRenderer` 已支持活动层整层重绘和 dirty rect 局部刷新。
+- `RenderScheduler` 已支持多次 invalidate 合并到单帧 flush。
+- `UiRenderer` 已提供兼容 overlay 渲染和 provider 扩展口。
+- 仍在向区块级补绘推进。
 
 ## 2. objects/
 
