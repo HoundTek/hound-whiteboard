@@ -38,11 +38,13 @@
 - `/workflows/create-circle/params`
 - `/workflows/create-circle/params/tool`
 
-### 4. WASD 坐标工具
+### 4. WASD 位移 → handoff modifier
 
-- `W`、`A`、`S`、`D` 键通过各自边级 prefix 将 trigger 转为 position 信号
-- 所有 prefix 汇聚到同一共享 workflow `/workflows/wasd-move`
-- 每次按键累加位移并打印当前坐标
+- `W`、`A`、`S`、`D` 键通过各自边级 prefix 将 trigger / trigger-repeat 转为 displacement 信号
+- displacement 信号作为边级 prefix 注入到 handoff 工作流（`/workflows/secondary-chooser`）
+- 当 handoff 处于 modifier 阶段时，displacement 信号由 GestureBasedObjectModifierTool 消费，无状态累加到选中对象位置
+- 锚点跟随位移同步，后续鼠标拖拽不产生跳跃
+- 长按触发系统 repeat 时，键盘设备发出 `trigger-repeat` 信号，WASD prefix 同样转为 displacement 持续移动对象
 
 ### 5. 视口控制
 
@@ -68,8 +70,8 @@
 | 按键          | 功能                           |
 | ------------- | ------------------------------ |
 | 鼠标左键      | 画红色笔迹                     |
-| 鼠标右键      | 框选对象                       |
-| W / A / S / D | 移动 WASD 光标坐标             |
+| 鼠标右键      | 首次框选对象 → 再次拖拽修改    |
+| W / A / S / D | 移动选中对象（右键激活后）     |
 | ↑ / ↓ / ← / → | 平移视口                       |
 | + / −         | 放大 / 缩小视口                |
 | R             | 刷新视口渲染                   |
@@ -102,7 +104,7 @@
 - 设备节点只负责信号产出（trigger / release / cancel）；信号转换由边级 `prefix` 完成
 - 修饰节点（`createEdgePrefix`）插在设备节点与 workflow 之间的 `"default"` 边上
 - creator / chooser 与 modifier 的上下文共享以当前节点 `state` 为边界，handoff 通过回调和对象桥接完成
-- 视口、调试、WASD 各 workflow 通过 `edge.prefix` 多前驱模式汇聚
+- 视口、调试各 workflow 通过 `edge.prefix` 多前驱模式汇聚；WASD 通过 `edge.prefix` 注入到 handoff 工作流
 - 屏幕坐标在 Monitor 层转换为世界坐标后进入工具链
 
 如果需要进一步丰富 demo，可继续增加更多 workflow 观测输出，以及 creator → modifier 同一路径的协同示例。

@@ -12,7 +12,6 @@ import {
   DEMO_PRIMARY_STROKE_COLOR,
 } from "../whiteboard-demo.js";
 import { DebuggerTool } from "../debugger-tool.js";
-import { WasdCoordinateTool } from "../wasd-coordinate-tool.js";
 import { RectangleObjectChooserTool } from "../../../core/tools/chooser/rectangle-object-chooser.js";
 import { createRandomCircleSubDAG } from "../random-circle-creator-tool.js";
 
@@ -680,43 +679,88 @@ describe("whiteboard demo", () => {
     expect(board.getObjectById(1)).toBeUndefined();
   });
 
-  test("demo 配置后 WASD 应路由到 demo 专用坐标工具", () => {
+  test("demo 配置后 WASD 应通过 handoff 发送 displacement 到 modifier", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const wasdCoordinateTool = new WasdCoordinateTool({
-      logPosition: false,
+    const target = new StrokeObject(new Vector(30, 40), 1, 1);
+    target.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    board.addObject(target, 1);
+
+    configureWhiteboardDemo(board, monitor);
+
+    // 右键拖拽选择 target 进入 modifier 阶段
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: { value: new Vector(30, 40), buttons: 2, button: 2 },
+        },
+      ],
+    });
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: { value: new Vector(45, 50), buttons: 2, button: 2 },
+        },
+      ],
+    });
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "end",
+          context: { buttons: 0, button: 2 },
+        },
+      ],
     });
 
-    configureWhiteboardDemo(board, monitor, { wasdCoordinateTool });
+    // 确认 handoff 已切换到 modifier 阶段
+    expect(
+      monitor.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
+    ).toEqual({
+      phase: "second",
+      activeChild: "second",
+    });
 
+    // 首个 position 启动手势（锚点 = 光标位置）
+    board.signalsEventBus.emit("input", {
+      to: "/main/mouse",
+      signals: [
+        {
+          type: "position",
+          context: { value: new Vector(35, 45), buttons: 2, button: 2 },
+        },
+      ],
+    });
+    // 对象位置锚点=(35,45)，dx=0 → (30,40)
+    expect(target.position.serialize()).toEqual({ x: 30, y: 40 });
+
+    // WASD: KeyD → displacement {x: 1, y: 0} → 对象移到 (31, 40)
     board.signalsEventBus.emit("input", {
       to: "/main/keyboard",
       signals: [
         {
           type: "keydown",
-          context: {
-            key: "d",
-            code: "KeyD",
-            repeat: false,
-          },
+          context: { key: "d", code: "KeyD", repeat: false },
         },
       ],
     });
+    expect(target.position.serialize()).toEqual({ x: 31, y: 40 });
+
+    // WASD: KeyW → displacement {x: 0, y: -1} → 对象移到 (31, 39)
     board.signalsEventBus.emit("input", {
       to: "/main/keyboard",
       signals: [
         {
           type: "keydown",
-          context: {
-            key: "w",
-            code: "KeyW",
-            repeat: false,
-          },
+          context: { key: "w", code: "KeyW", repeat: false },
         },
       ],
     });
-
-    expect(wasdCoordinateTool.position.serialize()).toEqual({ x: 1, y: -1 });
+    expect(target.position.serialize()).toEqual({ x: 31, y: 39 });
   });
 
   test("demo 配置后方向键应平移 Monitor 视口", () => {

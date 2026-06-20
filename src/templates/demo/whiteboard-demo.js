@@ -20,7 +20,6 @@ import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-o
 import { CommonObjectModifierTool } from "../../core/tools/modifier/common-object-modifier.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
-import { WasdCoordinateTool } from "./wasd-coordinate-tool.js";
 import { MonitorViewportTool } from "./monitor-viewport-tool.js";
 
 const DEMO_PRIMARY_STROKE_COLOR = "#ff0000";
@@ -58,7 +57,6 @@ const DEMO_WORKFLOW_NAMES = Object.freeze({
   PRIMARY_STROKE: "primary-stroke",
   SECONDARY_CHOOSER: "secondary-chooser",
   RANDOM_CIRCLE: "create-circle",
-  WASD_MOVE: "wasd-move",
   DEBUG: "debug",
   VIEWPORT: "viewport",
 });
@@ -201,11 +199,13 @@ function buildWasdNodeConfig(code, vector) {
     handler(packet, ctx = {}) {
       const movementSignals = packet.signals
         .filter(
-          (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+          (signal) =>
+            signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER ||
+            signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER_REPEAT,
         )
         .map((signal) =>
           ctx.signal(
-            "position",
+            "displacement",
             { ...vector },
             {
               code,
@@ -261,7 +261,6 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
  * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
  * @param {Object} [options.randomCircleSubDAG]
- * @param {WasdCoordinateTool} [options.wasdCoordinateTool]
  * @param {MonitorViewportTool} [options.monitorViewportTool]
  * @param {DebuggerTool} [options.debugTool]
  * @param {import("../../core/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
@@ -273,7 +272,6 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  *   monitorViewportTool: MonitorViewportTool,
  *   primaryStrokeTool: import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool,
  *   secondarySelectionTool: import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
- *   wasdCoordinateTool: WasdCoordinateTool,
  *   debugTool: DebuggerTool,
  * }}
  */
@@ -298,8 +296,6 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     createRandomCircleSubDAG({
       rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
     });
-  const wasdCoordinateTool =
-    options.wasdCoordinateTool ?? new WasdCoordinateTool();
   const monitorViewportTool =
     options.monitorViewportTool ?? new MonitorViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
@@ -356,6 +352,12 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
         edge: "default",
         prefix: createEdgePrefix(signalForwardNodeConfig("cancel")),
       },
+      // WASD → displacement 到 handoff modifier
+      ...Object.entries(wasdRoutePresets).map(([code, vector]) => ({
+        from: `/keyboard/code/${code}`,
+        edge: "default",
+        prefix: createEdgePrefix(buildWasdNodeConfig(code, vector)),
+      })),
     ],
   });
 
@@ -374,18 +376,6 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
       ],
     });
   }
-
-  // WASD → per-key prefix
-  effectiveBoard.signalsEventBus.emit("mount", {
-    monitorId: monitor.monitorId,
-    name: DEMO_WORKFLOW_NAMES.WASD_MOVE,
-    workflow: wasdCoordinateTool,
-    edges: Object.entries(wasdRoutePresets).map(([code, vector]) => ({
-      from: `/keyboard/code/${code}`,
-      edge: "default",
-      prefix: createEdgePrefix(buildWasdNodeConfig(code, vector)),
-    })),
-  });
 
   // Viewport：position / scale / flush 三类 prefix
   {
@@ -469,7 +459,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
       `Enter : 提交修改\n` +
       `Escape : 取消修改\n` +
       `Space : 随机圆\n` +
-      `W/A/S/D : 移动坐标\n` +
+      `W/A/S/D : 移动选中对象（二次拖拽激活后）\n` +
       `方向键 : 平移视口\n` +
       `+/- : 缩放视口\n` +
       `R : 刷新视口\n` +
@@ -486,7 +476,6 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     monitorViewportTool,
     primaryStrokeTool,
     secondarySelectionTool,
-    wasdCoordinateTool,
     debugTool,
   };
 }

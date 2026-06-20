@@ -8,8 +8,6 @@ import {
   DEMO_KEYBOARD_INPUT_CODES,
 } from "./demo/whiteboard-demo.js";
 import { MonitorViewportTool } from "./demo/monitor-viewport-tool.js";
-import { WasdCoordinateTool } from "./demo/wasd-coordinate-tool.js";
-
 // Demo 独立入口，需要手动注册控制台输出器
 createConsolePrinter(logBus, { timestamps: true });
 
@@ -42,12 +40,6 @@ const logDemoStatus = (label, payload) => {
   demoLog.info(label, payload);
 };
 
-const wasdCoordinateTool = new WasdCoordinateTool({
-  logPosition: false,
-  onPositionChange(position) {
-    logDemoStatus("WASD 坐标", position.serialize());
-  },
-});
 const monitorViewportTool = new MonitorViewportTool({
   onViewportChange(targetMonitor) {
     logDemoStatus("视口状态", {
@@ -66,10 +58,8 @@ const monitorViewportTool = new MonitorViewportTool({
 logDemoStatus("左键工具", "红色笔画对象");
 logDemoStatus("右键工具", "矩形框选 -> 修改对象");
 logDemoStatus("空格工具", "随机圆对象");
-logDemoStatus("WASD 初始坐标", { x: 0, y: 0 });
 logDemoStatus("视口快捷键", "方向键平移，+/- 缩放，R 全屏刷新");
 configureWhiteboardDemo(board, monitor, {
-  wasdCoordinateTool,
   monitorViewportTool,
 });
 
