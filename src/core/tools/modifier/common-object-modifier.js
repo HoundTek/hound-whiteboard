@@ -149,9 +149,10 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   }
 
   /**
-   * 位移应用后同步锚点与基准位置
-   * @description displacement 应用后，将手势锚点和各对象基准位置也平移同样位移，
-   * 使后续 position 信号不会因已叠加的 displacement 而产生跳跃。
+   * 位移应用后同步基准位置
+   * @description displacement 应用后，将各对象基准位置也平移同样位移。
+   * 锚点不动——保持光标-对象偏移不变（offset = anchor - basePos）。
+   * 若调整锚点，后续 position 更新会重置偏移导致对象瞬移。
    * @param {Object} interaction - 当前交互上下文
    * @override
    */
@@ -159,9 +160,6 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     if (!this._anchorPosition || !interaction.displacement) return;
     const dx = interaction.displacement.x;
     const dy = interaction.displacement.y;
-
-    this._anchorPosition.x += dx;
-    this._anchorPosition.y += dy;
 
     for (const basePos of this._gestureBasePositions.values()) {
       basePos.x += dx;

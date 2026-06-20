@@ -38,13 +38,13 @@ Tool（基类）
             ├─ applyDisplacementToObjects()    ← 默认位移累加实现
             └─ reset() / umount()              ← 状态清理
                  │
-                 └─ CommonObjectModifierTool（具体实现：位置位移 + 锚点同步）
+                 └─ CommonObjectModifierTool（具体实现：位置位移 + basePos 同步）
                       ├─ canBeginModifyGesture → 合矩形命中检测
                       ├─ beginModifyGesture    → 记录锚点 + 初始位置
                       ├─ updateModifyGesture   → 锚点基准位移计算
                       ├─ completeModifyGesture → 清空缓存
                       ├─ onBeforeDisplacement  → 记录 _initialPositions（供 cancel）
-                      ├─ onAfterDisplacement   → 同步锚点与基准位置
+                      ├─ onAfterDisplacement   → 同步基准位置（锚点不动）
                       └─ reset()               → 清空缓存 + 调用 super
 ```
 
@@ -192,13 +192,13 @@ modifier 节点路径的 state。
 
 1. **position** 驱动手势状态机（begin → update → end/cancel），以锚点为基准计算位移
 2. **displacement** 作为无状态增量，在 position 之后直接累加到对象位置
-3. 两者可在同一帧并存：position 先算 → displacement 再叠 → 锚点跟随位移同步
+3. 两者可在同一帧并存：position 先算 → displacement 再叠 → basePos 跟随位移同步
 4. displacement 不参与手势状态机，不与 position 竞争的 `isModifyingGestureActive` 互斥
 
 #### displacement 信号特点
 
 - **无准入检测**：到达时跳过 `canBeginModifyGesture`
-- **可与 position 叠加**：锚点自动跟随位移，后续 position 不产生跳跃
+- **可与 position 叠加**：basePos 跟随位移同步，锚点不动，保持光标-对象偏移不变
 - **手势结束后仍可用**：end 之后 displacement 直接累加对象位置
 - **cancel 兼容**：`onBeforeDisplacement` hook 在首次 displacement 时记录初始位置
 
@@ -207,7 +207,7 @@ modifier 节点路径的 state。
 | 方法                                      | 职责                                                    |
 | ----------------------------------------- | ------------------------------------------------------- |
 | `onBeforeDisplacement(interaction)`       | 位移应用前调用，子类可在此记录初始位置供 cancel 回退    |
-| `onAfterDisplacement(interaction)`        | 位移应用后调用，子类可在此同步锚点与基准位置            |
+| `onAfterDisplacement(interaction)`        | 位移应用后调用，子类可在此同步基准位置（锚点不动）            |
 | `applyDisplacementToObjects(interaction)` | 基类默认实现——直接累加 displacement 到各对象 `position` |
 
 ### 手势生命周期
@@ -232,7 +232,7 @@ flowchart LR
     end
 
     D2[displacement 信号] -.->|无状态，直接累加| M2[对象位置 += Δ]
-    M2 -.->|锚点同步| M1
+    M2 -.->|basePos 同步| M1
 ```
 
 #### \_handleSpatialUpdate 调度流程
@@ -244,7 +244,7 @@ flowchart LR
 1. 手势未激活 → `canBeginModifyGesture()` 准入检测 → `withGeometryMutation({ begin + update })`
 2. 手势已激活 → `withGeometryMutation({ update })`（锚点基准位移）
 
-**Step 2 — displacement 处理** 3. `onBeforeDisplacement(interaction)` — 记录初始位置等 4. `applyDisplacementToObjects(interaction)` — 累加到对象位置 5. `onAfterDisplacement(interaction)` — 子类同步锚点
+**Step 2 — displacement 处理** 3. `onBeforeDisplacement(interaction)` — 记录初始位置等 4. `applyDisplacementToObjects(interaction)` — 累加到对象位置 5. `onAfterDisplacement(interaction)` — 子类同步 basePos（锚点不动）
 
 **Step 3 — end 检查** 6. 同包附带的 end 信号 → `completeModifyGesture()`
 

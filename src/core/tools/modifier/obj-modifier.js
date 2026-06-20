@@ -237,7 +237,7 @@ class ObjectModifierTool extends Tool {
  * 手势模型：
  * 1. position 信号到达 → 手势开始（beginModifyGesture）或持续更新（updateModifyGesture）
  * 2. displacement 信号到达 → 无状态增量，直接累加到对象位置（无需手势状态机）
- *    手势锚点自动跟随位移同步，使后续 position 信号不产生跳跃
+ *    基准位置跟随位移同步，锚点不动，保持光标-对象偏移不变
  * 3. end 信号 → 手势结束（completeModifyGesture），对象保留在 AOM 动态图中
  * 4. success 信号 → 提交到静态图（applyModifiedObjects）
  * 5. cancel 信号 → 取消当前手势（cancelModifyGesture），将对象回滚到手势开始时的初始位置
@@ -526,8 +526,8 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 位移应用后的 hook
-   * @description 在 displacement 应用到对象后调用。子类可在此同步锚点与基准位置，
-   * 使后续 position 更新不因已叠加的位移而产生跳跃。
+   * @description 在 displacement 应用到对象后调用。子类可在此同步基准位置以保持光标-对象偏移不变。
+   * 不应调整锚点——锚点固定为手势起始光标位置，调锚点会重置偏移导致瞬移。
    * 不包裹 withGeometryMutation，因此方法已在外层 snapshot 范围外。
    * @param {Object} interaction - 当前交互上下文
    * @protected

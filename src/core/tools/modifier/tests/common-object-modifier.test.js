@@ -1024,7 +1024,7 @@ describe("CommonObjectModifierTool", () => {
       );
       expect(object.position).toEqual(new Vector(14, 22));
 
-      // displacement (3, -1) 到达：对象叠到 (17, 21)，锚点同步到 (19, 21)
+      // displacement (3, -1) 到达：对象叠到 (17, 21)，锚点不动，basePos 同步
       tool.process(
         {
           signals: [
@@ -1035,15 +1035,15 @@ describe("CommonObjectModifierTool", () => {
       );
       expect(object.position).toEqual(new Vector(17, 21));
 
-      // 后续 position (22, 25)：锚点已同步到(15,19)，不应有跳跃
-      // dx=22-15=7, dy=25-19=6 → basePos(13,19)+(7,6) = (20,25)
+      // 后续 position (22, 25)：锚点(12, 20)不动，基准偏移 = (13, 19)
+      // dx = 22 - 12 = 10, dy = 25 - 20 = 5 → basePos (13, 19) + (10, 5) = (23, 24)
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 22, y: 25 } } }],
         },
         aomCtx(object),
       );
-      expect(object.position).toEqual(new Vector(20, 25));
+      expect(object.position).toEqual(new Vector(23, 24));
     });
 
     test("同一信号包中 position + displacement 应先 position 再位移叠加", () => {
@@ -1064,14 +1064,8 @@ describe("CommonObjectModifierTool", () => {
       expect(object.position).toEqual(new Vector(10, 20));
 
       // 同一帧：position (16, 22) + displacement (3, -1)
-      // position: dx=16-12=4, dy=22-20=2 → (14, 22)
-      // displacement: (3, -1) → (17, 21)
-      // 锚点同步：base 从 (10,20) → (10+4+3, 20+2-1)？不对——
-      // base 在 beginModifyGesture 时记录为 (10,20)
-      // updateModifyGesture: base(10,20) + (16-12=4, 22-20=2) = (14,22)
-      // displacement: (14,22) + (3,-1) = (17,21)
-      // anchor: (12,20) → (12+4+3=19?, 20+2-1=21)
-      // 实际上 anchor 是被 updateModifyGesture → onAfterDisplacement 先后调整的
+      // Step 1 position: dx = 16 - 12 = 4, dy = 22 - 20 = 2 → basePos (10, 20) + (4, 2) = (14, 22)
+      // Step 2 displacement: (14, 22) + (3, -1) = (17, 21)，basePos 同步为 (13, 19)
       tool.process(
         {
           signals: [
@@ -1083,15 +1077,15 @@ describe("CommonObjectModifierTool", () => {
       );
       expect(object.position).toEqual(new Vector(17, 21));
 
-      // 后续 position (20, 26)：锚点已同步到(15,19)，不应有跳跃
-      // dx=20-15=5, dy=26-19=7 → basePos(13,19)+(5,7) = (18, 26)
+      // 后续 position (20, 26)：锚点(12, 20)不动，基准偏移 (13, 19)
+      // dx = 20 - 12 = 8, dy = 26 - 20 = 6 → basePos (13, 19) + (8, 6) = (21, 25)
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 20, y: 26 } } }],
         },
         aomCtx(object),
       );
-      expect(object.position).toEqual(new Vector(18, 26));
+      expect(object.position).toEqual(new Vector(21, 25));
     });
 
     test("end 之后 displacement 应直接累加，无需锚点", () => {
@@ -1102,14 +1096,14 @@ describe("CommonObjectModifierTool", () => {
 
       const tool = new CommonObjectModifierTool();
 
-      // 启动并移动：锚点(12,20) → 位置(10,20)
+      // 启动并移动：锚点(12, 20) → 位置(10, 20)
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
         },
         aomCtx(object),
       );
-      // position (16, 22)：dx=4, dy=2 → (14, 22)
+      // position (16, 22)：dx = 4, dy = 2 → (14, 22)
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
@@ -1145,7 +1139,7 @@ describe("CommonObjectModifierTool", () => {
 
       const tool = new CommonObjectModifierTool();
 
-      // 启动手势：锚点(12,20)，initialPos=(10,20)
+      // 启动手势：锚点(12, 20)，initialPos=(10, 20)
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
@@ -1154,7 +1148,7 @@ describe("CommonObjectModifierTool", () => {
       );
 
       // 移动 + displacement
-      // position (16, 22)：dx=4, dy=2 → (14, 22)
+      // position (16, 22)：dx = 16 - 12 = 4, dy = 22 - 20 = 2 → basePos (10, 20) + (4, 2) = (14, 22)
       // displacement (2, 0)：→ (16, 22)
       tool.process(
         {
@@ -1170,7 +1164,7 @@ describe("CommonObjectModifierTool", () => {
       // end 结束手势
       tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
 
-      // cancel → 回退到 initialPos=(10, 20)
+      // cancel → 回退到 initialPos = (10, 20)
       tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
       expect(object.position).toEqual(new Vector(10, 20));
     });
