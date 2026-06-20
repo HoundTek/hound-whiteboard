@@ -128,6 +128,7 @@ app-foreground-layer
 └── monitor-root
     ├── baseCanvas
     ├── liveCanvas
+    ├── renderCanvas
     └── uiCanvas
 ```
 
@@ -141,6 +142,10 @@ app-foreground-layer
   - 展示当前活动对象
   - 包含正在绘制、拖拽、修改控制点、尚未 apply 的对象
   - 高频刷新，但只做局部清理和重绘
+- renderCanvas
+  - 合成输出层，将 baseCanvas + liveCanvas 合成后输出到屏幕
+  - 对外可见的唯一画布
+  - 通过 `requestCompositeRender()` 异步去重调度
 - uiCanvas
   - 展示选框、控制点、辅助线、hover 高亮
   - 与对象本体绘制分离，避免污染 liveCanvas
@@ -316,8 +321,8 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 
 截至当前版本，渲染链路已经先落下了最小骨架：
 
-- `Board.createMonitor()` 已创建 monitor-root、`baseCanvas`、`liveCanvas`、`uiCanvas`。
-- `Monitor` 已持有多层画布引用，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
+- `Board.createMonitor()` 已创建 monitor-root、`baseCanvas`、`liveCanvas`、`renderCanvas`、`uiCanvas` 四层画布。
+- `Monitor` 已持有多层画布引用，并通过 `monitor.canvas` getter 提供可见画布的候选优先级：`renderCanvas > liveCanvas > baseCanvas`。所有坐标换算和尺寸访问统一通过此入口收口，不再直接依赖特定画布实例。
 - `BaseRenderer` 已挂在 `Monitor` 下，可把当前已加载区块的 `staticGraph` 合并成 monitor 级全局静态图，并按全局拓扑序把静态对象重绘到 `baseCanvas`。
 - `BaseRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
 - `BaseRenderer` 的局部重绘不会退化成“按脏区命中的对象临时排序”，而是先沿用全局静态图拓扑序，再过滤命中脏区的对象。
@@ -332,6 +337,8 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - `ObjectModifierTool` 已补齐统一的 `beforeGeometryMutation / afterGeometryMutation / withGeometryMutation` 钩子，为后续编辑工具预留同一套快照协议入口。
 - `ActiveObjectManager.add/choose/apply/discard` 已会主动通知各 `Monitor.liveRenderer` 发起活动层刷新。
 - `ActiveObjectManager.apply(objects)` 已会在静态结构写回后主动触发对象旧覆盖区块与新覆盖区块的并集刷新。
+- `Monitor` 新增 `renderCanvas` 合成输出层，`compositeRenderCanvas()` 通过 `requestAnimationFrame` 异步去重调度 baseCanvas + liveCanvas 的合成。
+- `Monitor` 新增 `width`/`height`/`canvas` 统一 getter，所有尺寸访问收口到 `width`/`height`，消除对 `liveCanvas` 的直接依赖。
 
 当前还没有完成的部分是：
 

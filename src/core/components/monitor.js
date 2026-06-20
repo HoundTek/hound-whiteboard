@@ -295,14 +295,35 @@ class Monitor {
   }
 
   /**
-   * 获取当前视口屏幕中心点
+   * 当前显示器画布宽度
+   * @type {number}
+   */
+  get width() {
+    return this.canvas?.width ?? 0;
+  }
+
+  /**
+   * 当前显示器画布高度
+   * @type {number}
+   */
+  get height() {
+    return this.canvas?.height ?? 0;
+  }
+
+  /**
+   * 当前显示器的可见画布（renderCanvas > liveCanvas > baseCanvas）
+   * @type {HTMLCanvasElement | null}
+   */
+  get canvas() {
+    return this.renderCanvas ?? this.liveCanvas ?? this.baseCanvas ?? null;
+  }
+
+  /**
+   * 当前视口屏幕中心点
    * @returns {Vector}
    */
   getViewportScreenCenter() {
-    return new Vector(
-      (this.liveCanvas?.width ?? 0) / 2,
-      (this.liveCanvas?.height ?? 0) / 2,
-    );
+    return new Vector(this.width / 2, this.height / 2);
   }
 
   /**
@@ -464,7 +485,7 @@ class Monitor {
       this.uiCanvas = uiCanvas ?? null;
     }
 
-    this.resizeRenderLayers(this.liveCanvas?.width, this.liveCanvas?.height);
+    this.resizeRenderLayers(this.width, this.height);
   }
 
   /**
@@ -544,10 +565,10 @@ class Monitor {
    */
   compositeRenderCanvas() {
     const ctx = this.getContext("render");
-    if (!ctx || !this.baseCanvas || !this.liveCanvas) return;
+    if (!ctx || !this.renderCanvas) return;
 
-    const w = this.renderCanvas?.width ?? 0;
-    const h = this.renderCanvas?.height ?? 0;
+    const w = this.width;
+    const h = this.height;
     if (w <= 0 || h <= 0) return;
 
     ctx.save();
@@ -642,12 +663,7 @@ class Monitor {
    * @returns {RectangleRange}
    */
   getViewportScreenRect() {
-    return new RectangleRange(
-      0,
-      0,
-      this.liveCanvas?.width ?? 0,
-      this.liveCanvas?.height ?? 0,
-    );
+    return new RectangleRange(0, 0, this.width, this.height);
   }
 
   /**
@@ -657,13 +673,10 @@ class Monitor {
    * @returns {RectangleRange}
    */
   getViewportWorldRect(origin = this.origin, zoom = this.zoom) {
-    const viewportWidth = (this.liveCanvas?.width ?? 0) / zoom;
-    const viewportHeight = (this.liveCanvas?.height ?? 0) / zoom;
-    return new RectangleRange(
-      origin.x,
-      origin.y,
-      viewportWidth,
-      viewportHeight,
+    const viewportWidth = this.width / zoom;
+    const viewportHeight = this.height / zoom;
+    return new RectangleRange(0, 0, viewportWidth, viewportHeight).withPosition(
+      origin,
     );
   }
 
@@ -903,9 +916,9 @@ class Monitor {
    * @returns {Vector | null}
    */
   screenToWorld(screenPos) {
-    if (!this.liveCanvas || !screenPos) return null;
+    if (!this.canvas || !screenPos) return null;
 
-    const rect = this.liveCanvas.getBoundingClientRect();
+    const rect = this.canvas.getBoundingClientRect();
     const canvasX = screenPos.x - rect.left;
     const canvasY = screenPos.y - rect.top;
 
@@ -948,7 +961,7 @@ class Monitor {
    * @returns {{ chunkId: number, x: number, y: number } | null}
    */
   screenToChunk(screenPos) {
-    if (!this.liveCanvas || !this.board) return null;
+    if (!this.canvas || !this.board) return null;
     const worldPos = this.screenToWorld(screenPos);
     if (!worldPos) return null;
     return this.worldToChunk(worldPos);

@@ -29,7 +29,7 @@ const monitor = board.createMonitor(
 );
 monitor.zoom = 1.0;
 monitor.origin = new Vector(0, 0);
-monitor.liveCanvas.tabIndex = 0;
+monitor.renderCanvas.tabIndex = 0;
 
 const demoLog = new Logger("Demo", "INFO", logBus);
 
@@ -166,18 +166,18 @@ const emitWindowMouseUpPacket = (event) => {
   });
 };
 
-monitor.liveCanvas.addEventListener("mousedown", emitMousePacket);
-monitor.liveCanvas.addEventListener("mousemove", emitMousePacket);
-monitor.liveCanvas.addEventListener("mouseup", emitMousePacket);
+monitor.canvas.addEventListener("mousedown", emitMousePacket);
+monitor.canvas.addEventListener("mousemove", emitMousePacket);
+monitor.canvas.addEventListener("mouseup", emitMousePacket);
 window.addEventListener("mouseup", emitWindowMouseUpPacket);
-monitor.liveCanvas.addEventListener("mouseleave", emitMousePacket);
-monitor.liveCanvas.addEventListener("contextmenu", (event) => {
+monitor.canvas.addEventListener("mouseleave", emitMousePacket);
+monitor.canvas.addEventListener("contextmenu", (event) => {
   event.preventDefault();
 });
-monitor.liveCanvas.addEventListener("dragstart", (event) => {
+monitor.canvas.addEventListener("dragstart", (event) => {
   event.preventDefault();
 });
-monitor.liveCanvas.addEventListener("selectstart", (event) => {
+monitor.canvas.addEventListener("selectstart", (event) => {
   event.preventDefault();
 });
 
@@ -254,12 +254,12 @@ const emitKeyboardCancelPacket = () => {
   });
 };
 
-monitor.liveCanvas.addEventListener("mousedown", () => {
-  monitor.liveCanvas.focus();
+monitor.canvas.addEventListener("mousedown", () => {
+  monitor.canvas.focus();
 });
-monitor.liveCanvas.addEventListener("keydown", emitKeyboardPacket);
-monitor.liveCanvas.addEventListener("keyup", emitKeyboardPacket);
-monitor.liveCanvas.addEventListener("blur", emitKeyboardCancelPacket);
+monitor.canvas.addEventListener("keydown", emitKeyboardPacket);
+monitor.canvas.addEventListener("keyup", emitKeyboardPacket);
+monitor.canvas.addEventListener("blur", emitKeyboardCancelPacket);
 window.addEventListener("resize", resizeMonitor);
 
-monitor.liveCanvas.focus();
+monitor.canvas.focus();
