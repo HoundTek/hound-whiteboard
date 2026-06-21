@@ -142,7 +142,7 @@ graph LR
 - `Board`、`Chunk`、`ChunkObjectManager` 已有骨架和关键字段；其中 `Board` 已收口到“根 `ChunkLoader` 持有区块对象 + `chunkLoaded` 维护加载状态”的模型，但仍存在较多 `todo`。
 - `ActiveObjectManager.add/choose/apply/discard` 已能主动触发活动层刷新，`LiveRenderer.invalidateObjects(...)` 也已覆盖对象前后两帧范围，避免拖拽残影。
 - `ActiveObjectManager.requestLiveRender(...)`、creator 和 modifier 的高频几何修改路径，现在还会同步推动 ui 层刷新，使选择框等兼容 overlay 能及时重绘；但默认选择框是否显示，仍取决于 chooser / modifier 工具当前是否声明了 overlay，而不是 AOM 成员关系本身。
-- `ActiveObjectManager.apply(objects)` 现在会主动请求 base 层整视口刷新；区块缓冲区变化和视口变化也会自动触发 base 层刷新。
+- `ActiveObjectManager.apply(objects)` 现在会优先请求 base 层对象级局部失效，并在必要时回退到区块并集刷新；区块缓冲区变化和视口变化也会自动触发 base 层刷新。
 - 当前仍处在“活动层已较稳定、静态层已进入第一版增量刷新，但还要继续往区块级补绘推进”的阶段。
 
 ## 相关文档

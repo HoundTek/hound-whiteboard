@@ -16,7 +16,10 @@ import { intersectsRanges, RectangleRange, Range } from "../../range/index.js";
 
 /**
  * 层类
- * @description 每一层包含一些活动对象和一些非活动对象，层与层之间有顺序关系。
+ * @description
+ * 每一层包含一个 `activeObjects` 集合、一个 `inactiveGraph` 子图，
+ * 以及一个表示该层当前是否仍为活动层的 `active` 标记。
+ * 当 `active === false` 时，`activeObjects` 中的对象按 inactive 语义处理。
  * @class
  * @author Zhou Chenyu
  */
@@ -29,6 +32,7 @@ class Layer {
 
   /**
    * 该层上的活动对象 id 集合
+   * @description 当 `active === false` 时，该集合中的对象按 inactive 语义处理
    * @type {Set<number>}
    */
   activeObjects;
@@ -40,6 +44,12 @@ class Layer {
   inactiveGraph;
 
   /**
+   * 该层当前是否仍是活动层
+   * @type {boolean}
+   */
+  active;
+
+  /**
    * @constructor
    * @param {number} id - 层 id
    */
@@ -47,14 +57,16 @@ class Layer {
     this.id = id;
     this.activeObjects = new Set();
     this.inactiveGraph = new DirectedGraph();
+    this.active = true;
   }
 
   /**
-   * 清空该层
+   * 清空该层并重置为默认 active 状态
    */
   clear() {
     this.activeObjects.clear();
     this.inactiveGraph.clear();
+    this.active = true;
   }
 }
 
@@ -92,7 +104,7 @@ class ActiveObjectManager {
   layerIndex;
 
   /**
-   * 当前所有活动对象 id 集合
+   * 当前所有活动对象实例集合
    * @type {Set<BasicObject>}
    */
   activeObjects;
@@ -409,21 +421,120 @@ class ActiveObjectManager {
   }
 
   /**
-   * 取消注册活动对象实例
-   * @param {number} objectId - 要取消注册的对象 id
+   * 从全局活动对象索引中移除对象实例
+   * @param {number} objectId - 要移除的对象 id
    */
-  unregisterActiveObject(objectId) {
+  unregisterTrackedActiveObject(objectId) {
     const activeObject = this.activeObjectIndex.get(objectId);
     if (activeObject) {
       this.activeObjects.delete(activeObject);
       this.activeObjectIndex.delete(objectId);
     }
+  }
 
-    const layer = this.onLayer.get(objectId);
-    if (layer) {
-      layer.activeObjects.delete(objectId);
+  /**
+   * 按当前全局活动对象索引刷新层的活动状态
+   * @param {Layer | undefined} layer - 目标层
+   * @returns {boolean}
+   */
+  updateLayerActiveState(layer) {
+    if (!(layer instanceof Layer)) return false;
+
+    layer.active = Array.from(layer.activeObjects).some((objectId) =>
+      this.activeObjectIndex.has(objectId),
+    );
+    return layer.active;
+  }
+
+  /**
+   * 从给定层的结构中移除对象
+   * @param {Layer | undefined} layer - 目标层
+   * @param {number} objectId - 对象 id
+   */
+  removeObjectFromLayerStorage(layer, objectId) {
+    if (!(layer instanceof Layer)) return;
+
+    layer.activeObjects.delete(objectId);
+    if (layer.inactiveGraph.hasNode(objectId)) {
+      layer.inactiveGraph.deleteNodeUnsafe(objectId);
     }
-    this.onLayer.delete(objectId);
+    if (this.onLayer.get(objectId) === layer) {
+      this.onLayer.delete(objectId);
+    }
+
+    this.updateLayerActiveState(layer);
+  }
+
+  /**
+   * 从对象所在层的结构中移除对象
+   * @param {number} objectId - 对象 id
+   */
+  removeObjectFromLayer(objectId) {
+    this.removeObjectFromLayerStorage(this.onLayer.get(objectId), objectId);
+  }
+
+  /**
+   * 将一组活动对象失活
+   * @description
+   * 若同层中仍有其它活动对象，则对象会直接离开该层；
+   * 若该层所有活动对象都被本次操作失活，则保留其 `activeObjects` 结构，
+   * 仅将层标记为 inactive，以便后续按 inactive 语义参与 duplicate 判断与层级恢复。
+   * @param {Iterable<BasicObject>} [objects = []] - 待失活对象集合
+   */
+  deactivateObjects(objects = []) {
+    /** @type {Map<Layer, Set<number>>} */
+    const deactivatingObjectIdsByLayer = new Map();
+
+    for (const entry of objects ?? []) {
+      const objectInstance = this.requireObjectInstance(entry);
+      if (!this.activeObjectIndex.has(objectInstance.id)) continue;
+
+      const layer = this.onLayer.get(objectInstance.id);
+      if (!(layer instanceof Layer)) {
+        this.unregisterTrackedActiveObject(objectInstance.id);
+        continue;
+      }
+
+      if (!deactivatingObjectIdsByLayer.has(layer)) {
+        deactivatingObjectIdsByLayer.set(layer, new Set());
+      }
+      deactivatingObjectIdsByLayer.get(layer).add(objectInstance.id);
+    }
+
+    for (const [layer, objectIds] of deactivatingObjectIdsByLayer) {
+      const hasRemainingTrackedActiveObjects = Array.from(
+        layer.activeObjects,
+      ).some(
+        (objectId) =>
+          !objectIds.has(objectId) && this.activeObjectIndex.has(objectId),
+      );
+
+      for (const objectId of objectIds) {
+        this.unregisterTrackedActiveObject(objectId);
+      }
+
+      if (hasRemainingTrackedActiveObjects) {
+        for (const objectId of objectIds) {
+          if (this.onLayer.get(objectId) === layer) {
+            this.onLayer.delete(objectId);
+          }
+          layer.activeObjects.delete(objectId);
+        }
+        layer.active = true;
+        continue;
+      }
+
+      layer.active = false;
+    }
+  }
+
+  /**
+   * 取消注册活动对象实例并从所在层移除
+   * @param {number} objectId - 要取消注册的对象 id
+   */
+  unregisterActiveObject(objectId) {
+    this.unregisterTrackedActiveObject(objectId);
+    this.removeObjectFromLayer(objectId);
   }
 
   /**
@@ -570,9 +681,26 @@ class ActiveObjectManager {
   }
 
   /**
+   * 收集某层按 inactive 语义参与计算的对象 id
+   * @param {Layer} layer
+   * @returns {Set<number>}
+   */
+  collectLayerSemanticInactiveObjectIds(layer) {
+    const objectIds = new Set(layer?.inactiveGraph?.getNodes?.() ?? []);
+
+    if (layer?.active === false) {
+      for (const objectId of layer.activeObjects ?? []) {
+        objectIds.add(objectId);
+      }
+    }
+
+    return objectIds;
+  }
+
+  /**
    * 计算对象在静态图中的上下关系
    * @description
-   * 遍历 AOM 所有层，对每层的非活动对象按层位置确定 below/above：
+   * 遍历 AOM 所有层，对每层按 inactive 语义参与计算的对象确定 below/above：
    *
    * - 低层 → `below`（在 applied 对象之下）
    * - 同层 → `above`（因为 pickup 只遍历下游，同层非活动一定在 applied 之上）
@@ -609,7 +737,7 @@ class ActiveObjectManager {
     for (let index = 0; index < this.layerOrder.length; index++) {
       const layer = this.layerOrder[index];
 
-      for (const nodeId of layer.inactiveGraph.getNodes()) {
+      for (const nodeId of this.collectLayerSemanticInactiveObjectIds(layer)) {
         const candidate = this.findBoardObjectInstance(nodeId, coveredChunkIds);
         if (!(candidate instanceof BasicObject)) continue;
         if (!this.intersectsObjects(obj, candidate)) continue;
@@ -620,8 +748,8 @@ class ActiveObjectManager {
           relation.above.add(nodeId);
         } else {
           // 同层 inactive：pickup 从活动对象出发只沿下游遍历（逆边缘方向），
-          // 因此同层 inactive 对象在原始静态图中一定处于活动对象的下游
-          // （即放在活动对象之上）。apply 时应恢复为 `above`。
+          // 因此同层 inactive 对象在原始静态图中一定处于活动对象的下游。
+          // inactive layer 中保留下来的 activeObjects 也按同样语义处理。
           relation.above.add(nodeId);
         }
       }
@@ -894,14 +1022,15 @@ class ActiveObjectManager {
 
     // 处理在旧层中的重复对象
     for (const node of duplicates.values()) {
-      // 如果新层应在旧层的上方，那旧层里的这个对象就应该被删去，该对象不再为重复对象
+      // 如果新层应在旧层的上方，那旧层里的这个对象就应该被删去，该对象不再为重复对象。
+      // 对 inactive layer 来说，activeObjects 也要按 inactive 语义处理。
       if (
         this.compareLayerOrderById(
           underWhich[layerIndex.get(node)],
           this.onLayer.get(node).id,
         ) > 0
       ) {
-        this.onLayer.get(node).inactiveGraph.deleteNodeUnsafe(node);
+        this.removeObjectFromLayerStorage(this.onLayer.get(node), node);
         duplicates.delete(node);
       }
     }
@@ -994,14 +1123,17 @@ class ActiveObjectManager {
 
   /**
    * 清理动态图
+   * @description
+   * 删除最下面一个 active 层之下的所有 inactive 层，并清理空层。
+   * 若当前已不存在 active 层，则删除全部层。
    */
   tidyup() {
     this.layerIndex.clear();
 
-    // 删除无法被访问到的层
+    // 删除最下面一个 active 层之下的所有 inactive 层。
     let count = 0;
     for (const layer of this.layerOrder) {
-      if (layer.activeObjects.size !== 0) break;
+      if (layer.active) break;
       this.purgeLayerMappings(layer);
       layer.clear();
       count++;
@@ -1049,6 +1181,7 @@ class ActiveObjectManager {
         }
         // 将对象从旧层移除
         oldLayer.activeObjects.delete(objId);
+        this.updateLayerActiveState(oldLayer);
       } else {
         layerIndex = this.layerOrder.length;
         if (!newLayers.has(layerIndex)) {
@@ -1084,7 +1217,8 @@ class ActiveObjectManager {
     );
 
     const canCommitToBoard = Boolean(this.board);
-    const activeBasicObjects = normalizedObjects;
+    const commitObjects = [...normalizedObjects];
+    const activeBasicObjects = [...normalizedObjects];
     const affectedChunkIds = new Set();
 
     // 计算出所有受影响的区块 id，以便后续请求静态层渲染时使用
@@ -1208,14 +1342,8 @@ class ActiveObjectManager {
       );
     }
 
-    // 将对象从活动层移除
-    for (const entry of normalizedObjects) {
-      const objId = entry.id;
-      if (!this.activeObjectIndex.has(objId)) {
-        continue;
-      }
-      this.unregisterActiveObject(objId);
-    }
+    // 将对象对应层失活
+    this.deactivateObjects(commitObjects);
     this.tidyup();
 
     // 请求静态层渲染
@@ -1243,6 +1371,7 @@ class ActiveObjectManager {
       this.requireObjectInstance(item),
     );
 
+    const removedObjects = [...normalizedObjects];
     const canAccessBoard = Boolean(this.board);
     const affectedChunkIds = new Set();
 
@@ -1298,13 +1427,13 @@ class ActiveObjectManager {
       );
     }
 
-    // 将对象从活动层移除（仅处理原本就在活动集合中的对象）
-    for (const entry of normalizedObjects) {
+    // 将对象从活动层移除（同时处理 active / inactive layer 中的对象）
+    for (const entry of removedObjects) {
       const objId = entry.id;
-      if (!this.activeObjectIndex.has(objId)) {
-        continue;
+      this.unregisterTrackedActiveObject(objId);
+      if (this.onLayer.has(objId)) {
+        this.removeObjectFromLayer(objId);
       }
-      this.unregisterActiveObject(objId);
     }
     this.tidyup();
 
@@ -1322,9 +1451,9 @@ class ActiveObjectManager {
   /**
    * 取消活动对象而不提交回白板
    * @description
-   * 仅从动态图活动层中移除对象，不修改区块静态结构。
-   * 适合临时取消选择、撤销等不需要同步静态图的场景。
-   * 会触发静态层局部重绘，使被丢弃的对象重新在 BaseRenderer 中显示。
+   * 将对象从全局活动对象索引中移除，不修改区块静态结构。
+   * 若对象所在层因此失去全部活动对象，则该层会被标记为 inactive，
+   * 并继续保留在动态图中，直到后续 `tidyup()` 将其清理。
    * @param {Iterable<BasicObject>} objects
    */
   discard(objects) {
@@ -1332,13 +1461,7 @@ class ActiveObjectManager {
       this.requireObjectInstance(item),
     );
 
-    for (const entry of normalizedObjects) {
-      if (!this.activeObjectIndex.has(entry.id)) {
-        continue;
-      }
-      this.unregisterActiveObject(entry.id);
-    }
-
+    this.deactivateObjects(normalizedObjects);
     this.tidyup();
     this.requestLiveRender(normalizedObjects);
     // 按对象范围刷新受影响的 monitor：对象从 AOM 被丢弃回静态图，

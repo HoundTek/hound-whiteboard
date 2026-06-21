@@ -2,7 +2,9 @@
 
 本文档提供 `LiveRenderer` 的概述。
 
-`LiveRenderer` 负责把 `ActiveObjectManager` 当前持有的活动对象按动态层顺序绘制到 `Monitor.liveCanvas`。
+`LiveRenderer` 负责把 `ActiveObjectManager` 当前持有的对象按动态层顺序绘制到 `Monitor.liveCanvas`。
+
+这里的“当前持有”不仅包括仍处于 active layer 的活动对象，也包括仍保留在 AOM 中、但所在层已经变为 inactive 的对象。只要对象还在 AOM 里，它就应由 `LiveRenderer` 负责绘制，而不会回退给 `BaseRenderer`。
 
 它不负责决定对象是否为活动对象，也不负责决定对象最终写回到哪个区块。它只负责当前视口里的活动层显示。
 
@@ -14,7 +16,7 @@
 - `Monitor` 负责回答“当前视口的缩放、原点和画布实例是什么”
 - `RenderScheduler` 负责回答“何时真正执行一次 flush”
 - `BaseRenderer` 负责把静态对象渲染到 `baseCanvas`（作为 liveCanvas 的缓存）
-- `LiveRenderer` 负责回答“这一帧应把哪些活动对象画到 `liveCanvas` 上”，并负责把 baseCanvas 缓存合成到 liveCanvas
+- `LiveRenderer` 负责回答“这一帧应把哪些 AOM 对象画到 `liveCanvas` 上”，并负责把 baseCanvas 缓存合成到 liveCanvas
 
 这意味着 `LiveRenderer` 是最终的渲染出口，它的输出结果直接对应屏幕显示。
 
@@ -29,7 +31,7 @@ baseCanvas (CSS opacity: 0, 作为静态缓存)
      └─ 脏区: copyBaseRects(dirtyRects)
      │
      ▼
-liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
+liveCanvas (唯一可见) ─── AOM 对象直接绘制在上层
      │
      ▼
   屏幕显示
@@ -43,13 +45,13 @@ liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
 
 1. **清理** — `clear()` 或 `clearDirtyRects()` 清除 `liveCanvas` 上的旧像素
 2. **缓存回填** — `copyBase()` 或 `copyBaseRects()` 从 `baseCanvas` 拷贝静态层像素
-3. **活动对象绘制** — 按 AOM 层顺序将活动对象渲染到 `liveCanvas`
+3. **AOM 对象绘制** — 按 AOM 层顺序将当前应显示的对象渲染到 `liveCanvas`
 
 三步流水线的设计原因：
 
-- `drawImage` 使用 Canvas 2D 默认 `source-over` 合成模式，源像素 alpha=0 时不会覆盖目标像素；不先 `clear` 会导致残留的活动对象像素层层叠加
-- `baseCanvas` 只包含静态对象（AOM 对象已被 `BaseRenderer` 过滤），因此拷贝结果天然不含活动对象
-- 活动对象最后绘制，确保它们始终在视觉顶层
+- `drawImage` 使用 Canvas 2D 默认 `source-over` 合成模式，源像素 alpha=0 时不会覆盖目标像素；不先 `clear` 会导致残留的 AOM 对象像素层层叠加
+- `baseCanvas` 只包含静态对象（AOM 对象已被 `BaseRenderer` 过滤），因此拷贝结果天然不含 AOM 对象
+- AOM 对象最后绘制，确保它们始终在视觉顶层
 
 ### 缓存时序保护
 
@@ -58,7 +60,7 @@ liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
 - base 调度器需清除该对象在 `baseCanvas` 上的旧像素
 - live 调度器需从 `baseCanvas` 拷贝时读到已清除的版本
 
-若 live 调度器先于 base 调度器 flush，`copyBase()` 会读到残留的活动对象像素，导致双重渲染。
+若 live 调度器先于 base 调度器 flush，`copyBase()` 会读到残留的 AOM 对象像素，导致双重渲染。
 
 `render()` 在拷贝 `baseCanvas` 前检查 `baseRenderScheduler.framePending`，若有待处理帧则同步调用 `baseScheduler.flush()`，确保读到最新缓存状态。
 
@@ -67,7 +69,7 @@ liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
 `LiveRenderer` 当前有三个核心输入：
 
 - `monitor`：提供 `liveCanvas`、`baseCanvas`、2D context、`origin`、`zoom`、`baseRenderScheduler` 与世界到屏幕的矩形换算
-- `activeObjectManager`：提供活动对象实例、层顺序、同层非活动对象图与对象范围查询能力
+- `activeObjectManager`：提供 AOM 对象实例、层顺序、同层非活动对象图与对象范围查询能力
 
 它的输出只有一个：
 
@@ -75,26 +77,27 @@ liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
 
 ## 绘制对象来源
 
-当前实现不会单独维护另一份“待绘制活动对象列表”。它直接从 AOM 读取当前状态。
+当前实现不会单独维护另一份“待绘制对象列表”。它直接从 AOM 读取当前状态。
 
 读取路径分三层：
 
-### 按层读取活动对象
+### 按层读取对象
 
 - 遍历 `layerOrder`
-- 每层先收集 `inactiveGraph` 中按拓扑序排列的非活动对象
-- 再收集该层 `activeObjects` 中的活动对象
+- 若该层是 active layer：先收集 `activeObjects` 中的活动对象，再收集 `inactiveGraph` 中按拓扑序排列的非活动对象
+- 若该层是 inactive layer：该层 `activeObjects` 中保留下来的对象也按 inactive 语义处理，并与 `inactiveGraph` 一起参与绘制
 
-这一点保证了当前活动层绘制顺序仍与 AOM 动态层语义一致。
+这一点保证了当前活动层绘制顺序仍与 AOM 动态层语义一致，同时也保证了“仍在 AOM 中但已失活的层”不会从屏幕上消失。
 
-### 处理同层非活动对象
+### 处理同层 inactive 语义对象
 
-当前实现中，同层非活动对象不是简单按集合遍历，而是依赖 `layer.inactiveGraph.getTopologicalOrder()`。
+当前实现中，`inactiveGraph` 中的对象不是简单按集合遍历，而是依赖 `layer.inactiveGraph.getTopologicalOrder()`。
 
 这意味着：
 
-- 同层中需要参与当前视觉表达的非活动对象，会先于同层活动对象绘制
-- 绘制顺序仍复用 tier graph 的拓扑关系，而不是重新发明一套排序规则
+- active layer 中，同层活动对象先绘制，同层 inactive 对象后绘制
+- inactive layer 中，保留在 `activeObjects` 里的对象也会按 inactive 语义参与绘制
+- 绘制顺序仍尽量复用 tier graph 的拓扑关系，而不是重新发明一套排序规则
 
 ### 回退路径
 
@@ -134,7 +137,7 @@ liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
 #### 无参调用（全量刷新）
 
 1. 同步 `baseRenderScheduler`（若有待处理帧）
-2. 收集所有活动层 drawable
+2. 收集所有 AOM 层 drawable
 3. `clear()` 清空整张 `liveCanvas`
 4. `copyBase()` 将整张 `baseCanvas` 拷贝到 `liveCanvas`（回填静态缓存）
 5. 按顺序重绘全部 drawable
@@ -168,7 +171,7 @@ liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
 
 `BaseRenderer` 负责维护 `baseCanvas` 缓存，其行为与 liveRenderer 配合：
 
-- `BaseRenderer.render()` 过滤掉 AOM 中的对象，保证缓存中不含活动对象
+- `BaseRenderer.render()` 过滤掉 AOM 中的对象，保证缓存中不含 AOM 对象
 - 视口变化时先触发 `requestViewportBaseRender()` 更新缓存，再触发 `requestViewportLiveRender()` 使用缓存
 - 对象进入/离开 AOM 时，`baseRenderScheduler` 和 `renderScheduler` 都被 invalidate，由 `framePending` 机制保证时序
 
@@ -220,7 +223,7 @@ liveCanvas (唯一可见) ─── 活动对象直接绘制在上层
 
 ### 已实现
 
-- 按 `layerOrder` 读取对象、同层 `inactiveGraph` 拓扑序绘制、活动对象回退路径
+- 按 `layerOrder` 读取对象、active layer 中“active 在前 / inactive 在后”的同层顺序、inactive layer 中 `activeObjects` 的 inactive 语义绘制、活动对象回退路径
 - 世界矩形到屏幕矩形换算、对象级 `getRenderPadding()` 动态留白
 - 显式 dirty rect 局部清理与局部重绘、局部补绘 clip
 - 旧范围与新范围同时失效、显式旧几何快照协议

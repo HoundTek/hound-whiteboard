@@ -1,6 +1,6 @@
 /**
  * @file 活动层渲染器
- * @description 提供白板活动层的渲染与交互更新能力。
+ * @description 提供白板动态图层的渲染与交互更新能力。
  * @module core/components/live-renderer
  * @author Zhou Chenyu
  */
@@ -36,7 +36,7 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
 
 /**
  * 活动层渲染器
- * @description 按 AOM 当前层顺序将活动对象渲染到 Monitor 的 liveCanvas。
+ * @description 按 AOM 当前层顺序将动态图对象渲染到 Monitor 的 liveCanvas。
  * @class
  * @author Zhou Chenyu
  */
@@ -110,18 +110,37 @@ class LiveRenderer {
   }
 
   /**
-   * 按拓扑序收集某层的非活动对象
+   * 收集某层按 inactive 语义参与绘制的对象 id
+   * @param {Layer} layer - 当前层
+   * @returns {number[]}
+   */
+  collectSemanticInactiveLayerObjectIds(layer) {
+    const objectIds = Array.from(
+      layer?.inactiveGraph?.getTopologicalOrder?.() ?? [],
+    );
+
+    if (layer?.active === false) {
+      for (const objectId of layer.activeObjects ?? []) {
+        if (objectIds.includes(objectId)) continue;
+        objectIds.push(objectId);
+      }
+    }
+
+    return objectIds;
+  }
+
+  /**
+   * 按 inactive 语义收集某层的对象
    * @param {Layer} layer - 当前层
    * @param {Set<number>} seenObjectIds - 已收集对象 id
    * @returns {BasicObject[]}
    */
   collectInactiveLayerDrawables(layer, seenObjectIds) {
-    const graph = layer?.inactiveGraph;
     const aom = this.activeObjectManager;
-    if (!graph || !aom) return [];
+    if (!aom) return [];
 
     return this.collectDrawablesByObjectIds(
-      graph.getTopologicalOrder(),
+      this.collectSemanticInactiveLayerObjectIds(layer),
       (objectId) => aom.findBoardObjectInstance?.(objectId),
       seenObjectIds,
     );
@@ -135,7 +154,7 @@ class LiveRenderer {
    */
   collectActiveLayerDrawables(layer, seenObjectIds) {
     const aom = this.activeObjectManager;
-    if (!aom) return [];
+    if (!aom || layer?.active === false) return [];
 
     return this.collectDrawablesByObjectIds(
       layer?.activeObjects,
@@ -146,6 +165,9 @@ class LiveRenderer {
 
   /**
    * 收集某层的可绘制对象
+   * @description
+   * active layer 中先绘制 activeObjects，再绘制 inactive 语义对象；
+   * inactive layer 中，activeObjects 也会按 inactive 语义参与绘制。
    * @param {Layer} layer - 当前层
    * @param {Set<number>} seenObjectIds - 已收集对象 id
    * @returns {BasicObject[]}
@@ -178,7 +200,7 @@ class LiveRenderer {
   }
 
   /**
-   * 收集应绘制的活动对象
+   * 收集应绘制的动态图对象
    * @returns {BasicObject[]}
    */
   collectActiveDrawables() {
@@ -574,12 +596,12 @@ class LiveRenderer {
   }
 
   /**
-   * 渲染当前所有活动对象
+   * 渲染当前所有动态图对象
    * @description
    * 按 clear → copyBase → render 三步流水线工作：
-   * 1. 清理脏区（抹掉旧像素和残留活动对象）
+   * 1. 清理脏区（抹掉旧像素和残留 AOM 对象像素）
    * 2. 从 baseCanvas（静态缓存）拷贝像素到 liveCanvas（替代 GPU 合成）
-   * 3. 将 AOM 活动对象绘制到 liveCanvas 上
+   * 3. 将 AOM 中当前应显示的对象绘制到 liveCanvas 上
    *
    * 显式传入 dirtyRects 时只处理脏区区域；无参调用做全量刷新。
    *
@@ -613,7 +635,7 @@ class LiveRenderer {
         )
       : [];
 
-    // 先清理脏区，抹掉旧像素（包括上一帧残留的活动对象）
+    // 先清理脏区，抹掉旧像素（包括上一帧残留的 AOM 对象）
     if (hasExplicitDirtyRects) {
       this.clearDirtyRects(effectiveDirtyRects);
     } else {

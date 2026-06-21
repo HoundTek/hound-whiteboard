@@ -15,6 +15,7 @@ describe("ActiveObjectManager/layer", () => {
       expect(layer.id).toBe(1);
       expect(layer.activeObjects).toEqual(new Set());
       expect(layer.inactiveGraph).toBeInstanceOf(DirectedGraph);
+      expect(layer.active).toBe(true);
     });
   });
 

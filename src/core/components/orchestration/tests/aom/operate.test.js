@@ -12,7 +12,8 @@ jest.unstable_mockModule("../../../chunk/chunk-block-loader.js", () => ({
   ChunkBlockLoader: MockChunkBlockLoader,
 }));
 
-const { ActiveObjectManager, Layer } = await import("../../active-object-manager.js");
+const { ActiveObjectManager, Layer } =
+  await import("../../active-object-manager.js");
 
 describe("ActiveObjectManager/operate", () => {
   let aom = new ActiveObjectManager();
@@ -47,13 +48,7 @@ describe("ActiveObjectManager/operate", () => {
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object5]));
       // 置顶 5
       aom.liftup(new Set([object5]));
 
@@ -88,13 +83,7 @@ describe("ActiveObjectManager/operate", () => {
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object5]));
       // 置顶 5, 13
       aom.liftup(new Set([object5, object13]));
 
@@ -137,17 +126,11 @@ describe("ActiveObjectManager/operate", () => {
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object5]));
       // 取消选择 5
       aom.discard(new Set([object5]));
 
-      const expectedActiveSet = [new Set([12, 13]), new Set()];
+      const expectedActiveSet = [new Set([12, 13]), new Set([5])];
       const expectedInactiveGraph = [
         DirectedGraph.parse([
           [7, [4]],
@@ -162,10 +145,12 @@ describe("ActiveObjectManager/operate", () => {
           [1, []],
         ]),
       ];
+      const expectedLayerActive = [true, false];
 
       expect(aom.layerOrder.length).toBe(2);
       for (let i = 0; i < aom.layerOrder.length; i++) {
         expect(aom.layerOrder[i].activeObjects).toEqual(expectedActiveSet[i]);
+        expect(aom.layerOrder[i].active).toBe(expectedLayerActive[i]);
         expect(
           aom.layerOrder[i].inactiveGraph.equals(expectedInactiveGraph[i]),
         ).toBe(true);
@@ -177,17 +162,11 @@ describe("ActiveObjectManager/operate", () => {
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object5]));
       // 取消选择 5, 13
       aom.discard(new Set([object5, object13]));
 
-      const expectedActiveSet = [new Set([12]), new Set()];
+      const expectedActiveSet = [new Set([12]), new Set([5])];
       const expectedInactiveGraph = [
         DirectedGraph.parse([
           [7, [4]],
@@ -202,10 +181,12 @@ describe("ActiveObjectManager/operate", () => {
           [1, []],
         ]),
       ];
+      const expectedLayerActive = [true, false];
 
       expect(aom.layerOrder.length).toBe(2);
       for (let i = 0; i < aom.layerOrder.length; i++) {
         expect(aom.layerOrder[i].activeObjects).toEqual(expectedActiveSet[i]);
+        expect(aom.layerOrder[i].active).toBe(expectedLayerActive[i]);
         expect(
           aom.layerOrder[i].inactiveGraph.equals(expectedInactiveGraph[i]),
         ).toBe(true);
@@ -217,13 +198,7 @@ describe("ActiveObjectManager/operate", () => {
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object5]));
       // 取消选择 12, 13
       aom.discard(new Set([object12, object13]));
 
@@ -254,15 +229,7 @@ describe("ActiveObjectManager/operate", () => {
       const object4 = createObject(4, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 7, 8, 4, 5
-      aom.choose(
-        new Set([
-          object12,
-          object7,
-          object8,
-          object4,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object7, object8, object4, object5]));
       // 置顶 7, 8
       aom.liftup(new Set([object7, object8]));
       const expectedActiveSet = [
@@ -294,13 +261,7 @@ describe("ActiveObjectManager/operate", () => {
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(
-        new Set([
-          object12,
-          object13,
-          object5,
-        ]),
-      );
+      aom.choose(new Set([object12, object13, object5]));
       // 置顶 12, 13
       aom.liftup(new Set([object12, object13]));
 
@@ -323,12 +284,14 @@ describe("ActiveObjectManager/operate", () => {
       }
     });
 
-    test("应在清理前缀不可达层时移除 stale onLayer 和 layerIndex", () => {
+    test("应在清理底部 inactive 前缀层时移除 stale onLayer 和 layerIndex", () => {
       const removedLayer = new Layer(1000);
       removedLayer.inactiveGraph.addNodeUnsafe(1);
       removedLayer.inactiveGraph.addNodeUnsafe(2);
+      removedLayer.active = false;
       const keptLayer = new Layer(2000);
       keptLayer.activeObjects.add(3);
+      keptLayer.active = true;
 
       aom.layerOrder = [removedLayer, keptLayer];
       aom.layerIndex.set(1000, 0);
@@ -348,12 +311,14 @@ describe("ActiveObjectManager/operate", () => {
       expect(aom.layerIndex.get(2000)).toBe(0);
     });
 
-    test("应释放被移除层的 layerPool id", () => {
+    test("应释放被清理的底部 inactive 层的 layerPool id", () => {
       const removedLayerId = aom.layerPool.generate();
       const removedLayer = new Layer(removedLayerId);
+      removedLayer.active = false;
       const keptLayerId = aom.layerPool.generate();
       const keptLayer = new Layer(keptLayerId);
       keptLayer.activeObjects.add(3);
+      keptLayer.active = true;
 
       aom.layerOrder = [removedLayer, keptLayer];
       aom.layerIndex.set(removedLayerId, 0);

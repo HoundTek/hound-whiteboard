@@ -119,7 +119,6 @@ graph BT
     subgraph "inactive: 2"
       B
       A
-      F
     end
     subgraph "active: 2"
       C
@@ -127,6 +126,9 @@ graph BT
   end
 
   subgraph "layer: 1 active"
+    subgraph "inactive: 1"
+      F
+    end
     subgraph "active: 1"
       H
       E
@@ -136,7 +138,7 @@ graph BT
 
 放入**动态图**中，**静态图**不变，**动态图**同上（已分层）。
 
-### 将 E 移走，H 移到 D 上，C 移到 A、B、F 之下，应用修改
+### 将 E 移走，H 移到 D 上，C 移到 A、B 之下 F 之上，应用修改
 
 **静态图**如下：
 
@@ -145,7 +147,7 @@ graph BT
   D --> H
   D --> C
   H --> C
-  C --> F
+  F --> C
   C --> B
   C --> A
   B --> A
@@ -191,7 +193,6 @@ graph BT
     subgraph "inactive: 2"
       B
       A
-      F
     end
     subgraph "active: 2"
       C
@@ -199,6 +200,9 @@ graph BT
   end
 
   subgraph "layer: 1 active"
+    subgraph "inactive: 1"
+      F
+    end
     subgraph "active: 1"
       H
       E
@@ -229,7 +233,6 @@ graph BT
     subgraph "inactive: 2"
       B
       A
-      F
     end
     subgraph "active: 2"
       C
@@ -237,6 +240,9 @@ graph BT
   end
 
   subgraph "layer: 1 active"
+    subgraph "inactive: 1"
+      F
+    end
     subgraph "active: 1"
       H
       E
@@ -266,7 +272,6 @@ graph BT
     subgraph "inactive: 2"
       B
       A
-      F
     end
     subgraph "active: 2"
       C
@@ -274,6 +279,9 @@ graph BT
   end
 
   subgraph "layer: 1 active"
+    subgraph "inactive: 1"
+      F
+    end
     subgraph "active: 1"
       H
       E
@@ -425,7 +433,6 @@ graph BT
     subgraph "inactive: 2"
       B
       A
-      F
     end
     subgraph "active: 2"
       C
@@ -433,6 +440,9 @@ graph BT
   end
 
   subgraph "layer: 1 active"
+    subgraph "inactive: 1"
+      F
+    end
     subgraph "active: 1"
       H
       E
@@ -457,7 +467,6 @@ graph BT
     subgraph "inactive: 3"
       B
       A
-      F
     end
     subgraph "active: 3"
       C
@@ -465,6 +474,9 @@ graph BT
   end
 
   subgraph "layer: 2 active"
+    subgraph "inactive: 2"
+      F
+    end
     subgraph "active: 2"
       H
       E

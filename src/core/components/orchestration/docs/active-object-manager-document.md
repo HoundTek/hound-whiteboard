@@ -25,8 +25,16 @@
 - `id`：层编号
 - `activeObjects`：本层活动对象 id 集合
 - `inactiveGraph`：本层非活动对象子图
+- `active`：该层当前是否还是活动层
 
-**层内渲染顺序**：同一层中，活动对象（`activeObjects`）先渲染（底部），非活动对象（`inactiveGraph` 按拓扑序）后渲染（顶部）。
+这里的 `active` 是层级别状态，不是对象级别状态：
+
+- `active === true`：`activeObjects` 中的对象按活动对象语义处理
+- `active === false`：`activeObjects` 中保留下来的对象按 `inactiveGraph` 语义处理
+
+后者主要用于 `discard` / `apply` 之后：对象虽然已经离开全局活动对象索引，但该层结构会暂时保留，直到 `tidyup()` 把位于最下面活动层之下的 inactive 层清走。
+
+**层内渲染顺序**：同一层中，活动对象（`activeObjects`）先渲染（底部），非活动对象（`inactiveGraph` 按拓扑序）后渲染（顶部）。当 layer 变为 inactive 时，保留在 `activeObjects` 中的对象会按 `inactiveGraph` 语义继续参与 `LiveRenderer` 绘制。
 
 ### ActiveObjectManager
 
@@ -46,11 +54,12 @@
 
 这里还要补一个当前实现中的渲染边界：
 
-- AOM 负责回答“哪些对象当前是活动对象，它们的层次顺序是什么”。
-- `Monitor` / `LiveRenderer` 负责回答“这些活动对象何时刷新，以及画到哪一层 canvas 上”。
+- AOM 负责回答“哪些对象当前仍在动态图中、它们的层次顺序是什么”。
+- `Monitor` / `LiveRenderer` 负责回答“这些对象何时刷新，以及画到哪一层 canvas 上”。
 
 也就是说，AOM 持有交互态语义，但不直接承担视口渲染职责。
 
+当前实现遵循一条明确原则：只要对象还在 AOM 中——不论它所在层当前是 active 还是 inactive——它都应由 `LiveRenderer` 负责绘制，而不应回退给 `BaseRenderer`。
 ## 主要流程
 
 ### 加入白板外对象 `add(objects)`
@@ -84,6 +93,13 @@
 3. 构造新层并处理与旧层的相对顺序约束。
 4. 插入新层到 `layerOrder`。
 
+这里要特别注意层数规则的一个直观结果：
+
+- 若某节点是被选中的活动对象，它的后继层数至少比它高一层。
+- 若某节点不是被选中的活动对象，它的后继层数只要求“不低于它”。
+
+因此像示例中的 `E -> F`，当只选中 `C / E / H` 而没有选中 `F` 时，`F` 会与 `E` 同层，而不会被抬到 `C` 所在层。
+
 这里的关键点是：`choose` 本身不负责判断对象跨越了哪些区块。它完全依赖 `pickup` 产出的子图，而 `pickup` 又完全依赖各区块 `ChunkObjectManager.objectCoverChunks` 中的当前索引。
 
 当前接口已经收敛为“对象实例驱动”：
@@ -111,12 +127,16 @@
 当前实现中，`discard` 会：
 
 - 从 `activeObjects` / `activeObjectIndex` 中移除对象实例。
-- 清理 `onLayer` 映射。
-- 调用 `tidyup()` 清理空层和不可达层。
+- 若某层仍有其它活动对象，则仅把本次对象从该层移除。
+- 若某层的活动对象被本次全部取消，则保留该层的 `activeObjects` 结构，并将 `layer.active` 置为 `false`。
+- 调用 `tidyup()`：仅删除位于最下面一个 active 层之下的 inactive 层；若已经没有任何 active 层，则删除全部层。
 - 调用 `requestLiveRender()` 通知活动层重绘。
+- 调用 `_flushViewportForObjects()` 触发静态层重新显示这些对象。
 - 调用 `clearBaseObjectSnapshots()` 清理旧范围快照。
 
-`discard` 与 `remove` 的关键区别：`discard` 不会修改白板区块静态结构，适合临时取消选择或撤销；`remove` 会从静态结构中彻底删除对象。`discard` 与 `apply` 的关键区别：`discard` 不会同步静态结构，不会触发 base 层刷新；`apply` 则会完成完整的提交同步路径。
+这意味着 `discard` 后对象不一定立刻离开动态图：如果它所在层变为一个位于其它 active 层之上的 inactive layer，该层仍会保留，并继续以 inactive 语义影响后续 choose / apply。
+
+`discard` 与 `remove` 的关键区别：`discard` 不会修改白板区块静态结构，适合临时取消选择或撤销；`remove` 会从静态结构中彻底删除对象。`discard` 与 `apply` 的关键区别：二者都会让对象所在层失活，但 `discard` 不会同步静态结构，而 `apply` 会完成完整的提交同步路径。
 
 ### 从白板删除并取消选择 `remove(objects)`
 
@@ -174,7 +194,8 @@
   - 与当前几何仍相交的静态对象（不论是否在动态图中）也会被纳入关系计算。
 - 收集受影响的静态邻接对象（**合并旧覆盖区块的邻接和新区块的邻接**），一并纳入对象级静态失效。
 - 请求 base 层渲染时优先走对象级局部失效，失败时退回到区块并集失效。
-- 清除活动对象实例索引，并清理动态图。
+- 从全局活动对象实例索引中移除这些对象；若某层已无剩余活动对象，则仅把该层标记为 inactive。
+- 调用 `tidyup()` 清理位于最下面 active 层之下的 inactive 层。
 
 关键设计点：
 
@@ -193,9 +214,16 @@
 
 ### 清理 `tidyup()`
 
-- 删除前缀不可达层（没有活动对象的前置层）
+`tidyup()` 的语义不是“删除所有 inactive 层”，而是：
+
+- 从下往上找到最下面一个 `layer.active === true` 的层
+- 删除它之下的所有 inactive 层
 - 删除空层
 - 重建 `layerIndex`
+
+如果当前已经没有任何 active 层，则会删除全部层。
+
+这也是示例中“上方 inactive layer 仍会暂时保留，并继续影响层级关系”的原因。
 
 ## 快照与对象级静态失效
 
@@ -278,7 +306,7 @@
 | `discard(objects)`  | 取消活动对象选择，不提交回白板                    | `(Iterable<BasicObject>) => void`          |
 | `remove(objects)`   | 从白板区块静态图中删除对象并取消活动状态          | `(Iterable<BasicObject>) => void`          |
 | `liftup(objs)`      | 将对象置顶                                        | `(Iterable<BasicObject>) => void`          |
-| `tidyup()`          | 清理动态图中的无效层和空层                        | `() => void`                               |
+| `tidyup()`          | 清理底部 inactive 前缀层与空层                    | `() => void`                               |
 | `has(objectId)`     | 判断指定对象 id 当前是否在 AOM 中（不论活跃与否） | `(number) => boolean`                      |
 
 ### 渲染请求
@@ -332,7 +360,7 @@
 
 ## 实现状态
 
-- 已实现：核心分层逻辑、层插入与顺序比较、白板外对象 `add()`、取消选择不提交 `discard()`、从白板永久删除 `remove()`、置顶、清理、基于二维覆盖区块索引的跨区块拾取、基于对象实例的活动对象索引、`apply()` 提交回写、对象级静态失效快照与邻接对象失效聚合、多级回退的 base 层渲染请求链。
+- 已实现：核心分层逻辑、层插入与顺序比较、`Layer.active` 层状态、白板外对象 `add()`、取消选择不提交 `discard()`、从白板永久删除 `remove()`、置顶、按“底部 inactive 前缀”规则执行的 `tidyup()`、基于二维覆盖区块索引的跨区块拾取、基于对象实例的活动对象索引、`apply()` 提交回写、对象级静态失效快照与邻接对象失效聚合、多级回退的 base 层渲染请求链。
 - 已验证：二维区块下的右上/左下组合移动、不可达覆盖区块跳过、覆盖区块索引更新后 `pickup` 与 `choose` 读取新结果、`pickup` 通过 `Board.createChunkBlockLoader()` 接入白板区块加载链、`add()` 将新对象注册进动态图顶层、`apply()` 回写区块对象和覆盖区块索引。
 - 已接入的渲染链路：`Monitor.liveRenderer` 已可直接读取 AOM 当前活动对象集合与层顺序，并将其绘制到 `liveCanvas`；AOM 的 `requestLiveRender(...)` 现在还会同步推动 `uiCanvas` 的兼容刷新；`requestBaseRenderForObjects(...)` 已接入 `BaseRenderer.invalidateObjects` 对象级失效路径。
 - 已接入的提交后静态层刷新：`apply(objects)` 完成静态结构写回后，会优先走对象级静态失效，把对象旧范围、新范围以及受静态层级变化影响的邻接对象一起送入 `BaseRenderer.invalidateObjects(...)`；无法走对象级路径时，才退回区块并集失效。

@@ -359,6 +359,37 @@ describe("LiveRenderer", () => {
     expect(drawables).toEqual([active, inactive]);
   });
 
+  test("inactive layer 中保留下来的 activeObjects 应按 inactive 语义参与绘制", () => {
+    const calls = [];
+    const retained = new FakeObject(43, new Vector(0, 0), calls);
+    const layer = createLayer(9, [43], DirectedGraph.parse([]));
+    layer.active = false;
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      liveCanvas: { width: 320, height: 240 },
+      getContext() {
+        return createContext(calls);
+      },
+    };
+    const aom = {
+      layerOrder: [layer],
+      activeObjectIndex: new Map(),
+      activeObjects: new Set(),
+      findBoardObjectInstance(objectId) {
+        return objectId === 43 ? retained : undefined;
+      },
+    };
+
+    const renderer = new LiveRenderer(monitor, aom);
+    const drawables = renderer.render();
+
+    expect(drawables).toEqual([retained]);
+    expect(calls.filter((entry) => entry.type === "render")).toEqual([
+      { type: "render", id: 43 },
+    ]);
+  });
+
   test("render 传入 dirtyRects 时应只清理并重绘命中的对象", () => {
     const calls = [];
     const leftObject = new FakeObject(51, new Vector(0, 0), calls);

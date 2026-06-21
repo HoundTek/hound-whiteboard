@@ -64,6 +64,33 @@ describe("ActiveObjectManager/apply", () => {
       expect(ownerChunk.objectManager.staticGraph.hasEdge(21, 22)).toBe(true);
     });
 
+    test("apply 单独提交上层对象后应保留一个 inactive layer", () => {
+      const board = new Board();
+      board.width = 10;
+      board.height = 10;
+
+      const lower = new StrokeObject(new Vector(0, 0), 23, 1);
+      lower.setPathPoints([new Vector(1, 1), new Vector(6, 6)]);
+      const upper = new StrokeObject(new Vector(0, 0), 24, 1);
+      upper.setPathPoints([new Vector(2, 2), new Vector(7, 7)]);
+
+      board.activeObjectManager.add(new Set([lower]));
+      board.activeObjectManager.add(new Set([upper]));
+      board.activeObjectManager.apply(new Set([upper]));
+
+      expect(board.activeObjectManager.activeObjectIndex.has(23)).toBe(true);
+      expect(board.activeObjectManager.activeObjectIndex.has(24)).toBe(false);
+      expect(board.activeObjectManager.layerOrder.length).toBe(2);
+      expect(board.activeObjectManager.layerOrder[0].active).toBe(true);
+      expect(board.activeObjectManager.layerOrder[0].activeObjects).toEqual(
+        new Set([23]),
+      );
+      expect(board.activeObjectManager.layerOrder[1].active).toBe(false);
+      expect(board.activeObjectManager.layerOrder[1].activeObjects).toEqual(
+        new Set([24]),
+      );
+    });
+
     test("apply 应为顺序创建的相交对象补上静态图连边", () => {
       const board = new Board();
       board.width = 10;

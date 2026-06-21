@@ -4,7 +4,7 @@
 
 静态层渲染器用于把 `Monitor.chunkBlockLoader` 当前已加载区块中的静态对象，按“已加载区块合并后的全局静态图拓扑序”绘制到 `Monitor.baseCanvas`。
 
-它和 `LiveRenderer` 的边界不同：`LiveRenderer` 负责活动对象，`BaseRenderer` 负责已经提交回白板静态结构的对象。
+它和 `LiveRenderer` 的边界不同：`LiveRenderer` 负责绘制当前仍在 AOM 中的对象，`BaseRenderer` 负责绘制已经脱离 AOM、稳定存在于白板静态结构中的对象。
 
 ## 模块定位
 
