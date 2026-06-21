@@ -9,7 +9,7 @@ import { RandomNumberPool } from "../../utils/random.js";
 import { Queue } from "../../utils/queue.js";
 import { DirectedGraph } from "../../utils/directed-graph.js";
 import { Chunk } from "../chunk/chunk.js";
-import { ChunkBlockLoader } from "../chunk/chunk-block-loader.js";
+import { ChunkLoader } from "../chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange, Range } from "../../range/index.js";
@@ -559,13 +559,13 @@ class ActiveObjectManager {
 
   /**
    * 创建与白板区块加载事件总线绑定的区块加载器
-   * @returns {ChunkBlockLoader}
+   * @returns {ChunkLoader}
    */
-  createChunkBlockLoader() {
-    if (this.board?.createChunkBlockLoader) {
-      return this.board.createChunkBlockLoader(undefined, `aom-${Date.now()}`);
+  createChunkLoader() {
+    if (this.board?.createChunkLoader) {
+      return this.board.createChunkLoader(`aom-${Date.now()}`);
     }
-    return new ChunkBlockLoader();
+    return new ChunkLoader();
   }
 
   /**
@@ -824,47 +824,42 @@ class ActiveObjectManager {
       visit.add(obj);
       graph.addNodeUnsafe(obj);
 
-      let chunkBlockLoader = this.createChunkBlockLoader();
-      // 初始化区块加载器，预加载当前区块
-      chunkBlockLoader.initChunk(chunk);
+      /** @type {Chunk} */
+      let chunkNow = chunk;
+
+      // 预创建一个临时加载器，供本次拾取中所有跨区块导航复用
+      const tempLoader = this.createChunkLoader();
 
       /**
-       * 将区块加载器移动到指定坐标
-       * @param {number} targetX - 目标区块坐标 x
-       * @param {number} targetY - 目标区块坐标 y
+       * 按区块坐标获取区块，临时加载未持有的区块
+       * @param {number} targetX
+       * @param {number} targetY
+       * @returns {Chunk|undefined}
+       */
+      const getChunkAt = (targetX, targetY) => {
+        const targetChunk =
+          this.board?.getChunkByCoordinate?.(targetX, targetY);
+        if (targetChunk) {
+          tempLoader.trackChunk(targetChunk);
+          tempLoader.emitLoadRequest(targetChunk, { strategy: "temp" });
+        }
+        return targetChunk;
+      };
+
+      /**
+       * 移动到指定坐标的区块
+       * @param {number} targetX
+       * @param {number} targetY
        * @returns {boolean}
        */
-      function moveChunkBlockLoaderTo(targetX, targetY) {
-        while (
-          chunkBlockLoader.chunkNow &&
-          chunkBlockLoader.chunkNow.x < targetX
-        ) {
-          if (!chunkBlockLoader.forceMoveCurrentRightTempLoad()) return false;
+      const moveToChunk = (targetX, targetY) => {
+        const target = getChunkAt(targetX, targetY);
+        if (target) {
+          chunkNow = target;
+          return true;
         }
-        while (
-          chunkBlockLoader.chunkNow &&
-          chunkBlockLoader.chunkNow.x > targetX
-        ) {
-          if (!chunkBlockLoader.forceMoveCurrentLeftTempLoad()) return false;
-        }
-        while (
-          chunkBlockLoader.chunkNow &&
-          chunkBlockLoader.chunkNow.y < targetY
-        ) {
-          if (!chunkBlockLoader.forceMoveCurrentUpTempLoad()) return false;
-        }
-        while (
-          chunkBlockLoader.chunkNow &&
-          chunkBlockLoader.chunkNow.y > targetY
-        ) {
-          if (!chunkBlockLoader.forceMoveCurrentDownTempLoad()) return false;
-        }
-
-        return (
-          chunkBlockLoader.chunkNow?.x === targetX &&
-          chunkBlockLoader.chunkNow?.y === targetY
-        );
-      }
+        return false;
+      };
 
       /**
        * DFS 遍历
@@ -872,7 +867,6 @@ class ActiveObjectManager {
        * @param {number} node - 对象 id
        */
       function dfs(node) {
-        const chunkNow = chunkBlockLoader.chunkNow;
         if (!chunkNow?.objectManager) return;
         const neighbors =
           chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
@@ -890,22 +884,21 @@ class ActiveObjectManager {
         }
 
         const currentChunkId = chunkNow.id;
-        const coveredChunks = chunkNow.objectManager.getObjectCoverChunks(node);
+        const coveredChunks =
+          chunkNow.objectManager.getObjectCoverChunks(node);
         for (const chunkId of coveredChunks) {
           if (chunkId === currentChunkId) continue;
 
-          const originalX = chunkBlockLoader.chunkNow.x;
-          const originalY = chunkBlockLoader.chunkNow.y;
+          const originalX = chunkNow.x;
+          const originalY = chunkNow.y;
           const { x: targetX, y: targetY } = Chunk.idToCoordinate(chunkId);
-          if (!moveChunkBlockLoaderTo(targetX, targetY)) {
-            moveChunkBlockLoaderTo(originalX, originalY);
+          if (!moveToChunk(targetX, targetY)) {
+            moveToChunk(originalX, originalY);
             continue;
           }
 
           const neighborsOnTarget =
-            chunkBlockLoader.chunkNow.objectManager.staticGraph.neighborsUnsafe(
-              node,
-            );
+            chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
           if (neighborsOnTarget) {
             for (const next of neighborsOnTarget) {
               if (!visit.has(next)) {
@@ -917,7 +910,7 @@ class ActiveObjectManager {
             }
           }
 
-          moveChunkBlockLoaderTo(originalX, originalY);
+          moveToChunk(originalX, originalY);
         }
       } // function dfs ends here
 

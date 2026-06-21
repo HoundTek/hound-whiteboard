@@ -6,7 +6,6 @@ import { ActiveObjectManager } from "../../active-object-manager.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
 import { StrokeObject } from "../../../../objects/stroke/stroke.js";
 import { CircleObject } from "../../../../objects/graph/circle.js";
-import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
 import { RectangleRange } from "../../../../range/index.js";
 import { oneChunkData } from "./data.js";
 
@@ -91,7 +90,7 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
       };
       const aom = new ActiveObjectManager(board);
 
@@ -152,7 +151,7 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
       };
       const aom = new ActiveObjectManager(board);
 
@@ -314,7 +313,7 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
       };
       const aom = new ActiveObjectManager(board);
 
@@ -481,7 +480,7 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
+        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
       };
       const aom = new ActiveObjectManager(board);
 

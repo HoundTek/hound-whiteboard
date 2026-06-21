@@ -64,10 +64,10 @@ benchmarks/                  # 性能基准
 
 ```javascript
 /**
- * @file 简短描述
+ * @file 简短描述，不加句号
  * @description 一句话职责说明，以句号结尾。
  * @module core/{path/to/module}
- * @author Zhou Chenyu
+ * @author {git config user.name}
  */
 ```
 
@@ -78,7 +78,7 @@ benchmarks/                  # 性能基准
 ```javascript
 // ✅ Good
 /**
- * 将修改后的对象提交回静态图。
+ * 将修改后的对象提交回静态图
  * @param {Object} modificationContext - 修改上下文
  * @param {Iterable<*>|*} [objects] - 显式传入的对象集合
  * @returns {boolean} 是否成功提交
@@ -86,6 +86,12 @@ benchmarks/                  # 性能基准
 applyModifiedObjects(modificationContext, objects) { ... }
 
 // ❌ Bad — 没有 JSDoc
+applyModifiedObjects(modificationContext, objects) { ... }
+
+// ❌ Bad — 简短描述中添加句号
+/**
+ * 将修改后的对象提交回静态图。
+ */
 applyModifiedObjects(modificationContext, objects) { ... }
 ```
 

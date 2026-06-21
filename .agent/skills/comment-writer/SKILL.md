@@ -63,6 +63,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 - `@description` 必须打句号
 - `@description` 如果一行能写完，就跟在标签后面；如果一行写不完，标签单独一行，正文从下一行开始
 - `@description` 之外的标签（`@param`、`@returns`、`@throws`、`@type`、`@todo` 等），一句话时不打句号，多句话时要打句号
+- 无标签的第一行描述（函数/类职责，紧接 `/**` 之后），**一律不打句号**。需多句描述时，改用 `@description` 标签承载详细内容。
 - 优先延续相邻代码既有写法
 
 ### 字段和属性
@@ -188,3 +189,7 @@ afterCompleteCreatedObject(interaction, completedObject) {
 - 不要把注释写成教程式长文
 - 不要引入和周边文件明显不一致的注释风格
 - 不要为了"完整"而补写未经代码证实的设计意图
+- 不要使用装饰性分隔线注释块。禁止任何形式的纯装饰分隔线，包括但不限于：
+  - 连续字符围栏：`// ----` / `// =====` / `// ****`
+  - 行首行尾装饰：`// -- xxx ----` / `// == xxx ===` / `// ** xxx **`
+  - 其他任何仅为视觉分割而无信息量的注释行

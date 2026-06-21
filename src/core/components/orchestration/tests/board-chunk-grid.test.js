@@ -37,21 +37,7 @@ describe("Board chunk grid", () => {
     expect(invalidChunk.isValid()).toBe(false);
   });
 
-  test("ChunkBlockLoader 应按区域初始化缓冲范围", () => {
-    const board = new Board();
-    const chunkBlockLoader = board.createChunkBlockLoader();
 
-    const neighborhood = chunkBlockLoader.initChunksAroundCoordinate(0, 0);
-    const currentChunk = chunkBlockLoader.chunkNow;
-
-    expect(currentChunk).toEqual(
-      expect.objectContaining({ id: 1, x: 0, y: 0 }),
-    );
-    expect(
-      neighborhood.map((chunk) => chunk.id).sort((left, right) => left - right),
-    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    expect(chunkBlockLoader.chunksLoadedCount).toBe(9);
-  });
 
   test("Board 的左右邻区块应基于二维坐标解析", () => {
     const board = new Board();
