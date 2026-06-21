@@ -1,4 +1,4 @@
-# 取景框模板（finder-template）
+# 取景框模板（frame-template）
 
 ## 概述
 
