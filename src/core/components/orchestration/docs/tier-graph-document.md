@@ -8,36 +8,43 @@
 
 - 所有集合均用大写黑板体表示，如集合 $\mathbb{A}$
 - 所有对象均用小写正粗体表示，如对象 $\mathbf{a}$，如未特殊说明，字母相同的对象与点被视为对应的，比如 $\mathbf{a}$ 在图上对应的点为 $A$
-- 所有的图均用大写手写体表示，如图 $\mathcal{G}$
+- 所有的图均用大写花体表示，如图 $\mathcal{G}$
 - 所有图上的点均用大写斜体表示，如点 $A$
-- 所有数组均用大写正粗体表示，如数组 $\mathbf{A}$
 - 所有函数和自然数变量均用小写斜体表示，如 $f(x)$
-- 函数 $p(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 的点集
-- 函数 $s(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 入度为 $0$ 的点的点集
-- 函数 $t(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 出度为 $0$ 的点的点集
-- $P \to Q$ 表示 $P$ 与 $Q$ 间有条 $P$ 到 $Q$ 的边
+- 函数 $V(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 的点集
+- 函数 $\operatorname{src}(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 入度为 $0$ 的点的点集
+- 函数 $\operatorname{sink}(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 出度为 $0$ 的点的点集
+- $P \to Q$ 表示 $P$ 与 $Q$ 间有一条从 $P$ 到 $Q$ 的边
+- $P \xrightarrow{*} Q$ 表示存在从 $P$ 到 $Q$ 的路径（$\to$ 的传递闭包）
 
 ## 层叠图概述
 
-对于一区块上的对象，我们可以用有向无环图来表示对象间的层级关系（可以不连通）。
+对于一个区块上的对象，我们可以用有向无环图来表示对象间的层级关系（可以不连通）。
 
-我们将维护一张有向无环图: 静态状态图 $\mathcal{S}$。还会维护一个有着 $n$ 个数组 $\mathbf{A}_i$ 和 $n$ 张有向无环图 $\mathcal{D}_i$ 的数组，称为动态状态图 $\mathbf{D}$。其中，每一区块都有一张静态状态图，而每一个白板都有一张动态状态图。它们并称层叠图。
+我们维护一张有向无环图：静态状态图 $\mathcal{S}$。还会维护一个由 $n$ 个有序对 $(\mathbb{A}_i, \mathcal{D}_i)$ 构成的有序序列，称为动态状态图 $\mathbf{D}$。它们并称层叠图。为方便起见，$P \in \mathbf{D}$ 表示点 $P$ 属于 $\mathbf{D}$ 中某一层的活动对象集或非活动子图。
 
-静态状态图表示最后一次刷新时对象间的层级关系。若 $P, Q \in p(\mathcal{S})$ 且存在边 $P \to Q$，则 $P$、$Q$ 间有交集，且 $\mathbf{p}$ 在 $\mathbf{q}$ 之下。
+静态状态图表示最后一次刷新时对象间的层级关系。若 $P, Q \in V(\mathcal{S})$ 且存在边 $P \to Q$，则表示 $P$、$Q$ 间有交集，且 $\mathbf{p}$ 在 $\mathbf{q}$ 之下。
 
-动态状态图表示下次刷新时对象额外应遵循的层级关系，主要是判断谁应在该对象之上。若 $P, Q \in \mathbf{D}$ 且 $P$ 能到达 $Q$，则在下次刷新时，若 $\mathbf{p}$、$\mathbf{q}$ 间有交集，则 $\mathbf{p}$ 应在 $\mathbf{q}$ 之下。
+动态状态图表示下次刷新时对象额外应遵循的层级关系，用于确定对象间谁应在谁之上。若 $P, Q \in \mathbf{D}$ 且 $P \xrightarrow{*} Q$，则在下次刷新时，若 $\mathbf{p}$、$\mathbf{q}$ 间有交集，则表示 $\mathbf{p}$ 应在 $\mathbf{q}$ 之下。
 
 ## 层叠图基础操作
 
 ### 注册某层
 
-动态状态图使用一个链表来管理层与层之间的上下（高低）关系。
+动态状态图 $\mathbf{D}$ 由若干层 $(\mathbb{A}_i, \mathcal{D}_i)$ 按序构成，层与层之间存在上下顺序关系。
 
-注册某层指的是给予这个层一个编号，并将它放在链表中合适的位置。
+注册某层即向 $\mathbf{D}$ 中添加一个新层 $(\mathbb{A}_{n+1}, \mathcal{D}_{n+1})$，并给定其在顺序中的位置。
+
+其实现见 [active-object-manager-document.md](./active-object-manager-document.md)。
 
 ### 清理动态图
 
-清理动态图是指将无法被被选择的对象到达的层以及空层删去。
+清理动态图是指从 $\mathbf{D}$ 中删去所有满足以下条件的层 $(\mathbb{A}_i, \mathcal{D}_i)$：
+
+- 该层不可达：$\forall P \in \mathbb{A}, \forall Q \in V(\mathcal{D}_i): \neg(P \xrightarrow{*} Q)$
+- 该层为空：$\mathbb{A}_i = \varnothing$ 且 $V(\mathcal{D}_i) = \varnothing$
+
+其实现见 [active-object-manager-document.md](./active-object-manager-document.md)。
 
 ## 层叠图操作逻辑
 
@@ -45,245 +52,83 @@
 
 默认情况下，越新的对象越应在最上层。
 
-在向白板中添加对象 $\mathbf{a}$ 的开始，即开始画这一笔时，将其添加到动态图中，并连接所有的 $T \in t(\mathcal{D}) \to A$。
+在向白板中添加对象 $\mathbf{a}$ 时，先将其加入动态状态图 $\mathbf{D}$：$\mathbf{D} \leftarrow \mathbf{D} \cup \{A\}$，并连接所有出度为 $0$ 的点到 $A$：
 
-在当前实现里，这一步由 `ActiveObjectManager.add(objects)` 表达。它的职责是把“白板外、尚未落入区块静态图”的新对象注册到动态图顶层。
+$$
+\forall T \in \operatorname{sink}(\mathcal{D}): T \to A
+$$
 
-在向白板中添加对象的结尾，即这一笔画完松手时，应先算出与之相交的对象集 $\mathbb{C}$，再连接所有的 $C \in \mathbb{A} \to A$
+在添加结束时，算出与 $\mathbf{a}$ 相交的对象集 $\mathbb{C}$，连接 $C \to A$（$\forall C \in \mathbb{C}$），在静态状态图 $\mathcal{S}$ 中添加对应的边，最后将 $A$ 从 $\mathbf{D}$ 中删去。
 
-再在静态图中添加对应的从与之相交的对象到新对象的边，最后将其从动态图中删去。
+其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“加入白板外对象”与“提交并取消选择”两节。
 
 ### 在白板中删除对象
 
-直接将其从动态图和静态图中删去即可，然后清理动态图。
+将指定对象 $\mathbf{a}$ 对应的点 $A$ 及所有关联边从 $\mathcal{S}$ 和 $\mathbf{D}$ 中同时移除，然后执行动态图清理。
 
-### 在白板上选择单个对象
+其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“从白板删除并取消选择”一节。
 
-将被选择的对象记为 $\mathbf{a}$。
+### 在白板上选择对象
 
-提取出一个 $\mathcal{S}$ 的子图 $\mathcal{G}$，满足
+将被选择的对象集记为 $\mathbb{A}$（活动点集）。
 
-1. $s(\mathcal{G}) = \mathbb{A}$
-2. $\forall P \in p(\mathcal{G})$，存在从 $A$ 到 $P$ 的路径
-3. $\forall P \in \complement_{p(\mathcal{S})}\mathcal{G}$，不存在从 $A$ 到 $P$ 的路径
+#### 提取子图
 
-则动态图就是图 $\complement_{\mathcal{G}}A$ 和数组 $\{A\}$ 的集合。
+提取 $\mathcal{S}$ 的最大子图 $\mathcal{G}$，满足：
 
-- 若下层存在，将 $V'$ 连向的对象集记为 $\mathbb{V}$，对 $\forall Q \in \mathbb{V}$，创建边 $V \to Q$，并删除边 $V' \to Q$。然后创建边 $V' \to A$ 即可。
-- 若下层不存在，则直接将 $V$ 连向这一层中入度为 $0$ 的对象。
+1. $\operatorname{src}(\mathcal{G}) \subseteq \mathbb{A}$
+2. $\forall P \in V(\mathcal{G}), \exists Q \in \mathbb{A}: Q \xrightarrow{*} P$
+3. $\forall P \in V(\mathcal{S}) \setminus V(\mathcal{G}), \forall Q \in \mathbb{A}: \neg(Q \xrightarrow{*} P)$
 
-这个操作称为插入某层。
+#### 计算层数
 
-最后将层注册到动态图中。
+对 $\mathcal{G}$ 中每个点 $P$，定义其层数为：
 
-### 在白板上选择多个对象
+$$
+\text{层数}(P) = \max_{\substack{S \in \operatorname{src}(\mathcal{G}) \\ \rho: S \xrightarrow{*} P}} \text{active\_count}(\rho)
+$$
 
-将被选择的对象集记为 $\mathbb{A}$。
+其中 $\text{active\_count}(\rho)$ 为路径 $\rho$ 中属于 $\mathbb{A}$ 的点的数量。层数为正整数。
 
-#### 首先，提取出一个 $\mathcal{S}$ 的子图 $\mathcal{G}$：
+该定义等价于：
 
-1. $s(\mathcal{G}) \subseteq \mathbb{A}$
-2. $\forall P \in p(\mathcal{G}), \exist Q \in \mathbb{A}$，存在从 $Q$ 到 $P$ 的路径
-3. $\forall P \in \complement_{p(\mathcal{S})}\mathcal{G}, \forall Q \in \mathbb{A}$，不存在从 $Q$ 到 $P$ 的路径
+- 活动点的后继 → 层数至少比前驱大 $1$
+- 非活动点的后继 → 层数至少与前驱相同
 
-#### 得到 $\mathcal{G}$ 后，将其分层并删除跨层边:
+#### 构造新层
 
-1. 定义某点所在的层为“从入度为 $0$ 的点到该点的所有链中拥有活动点数量的最大值”，层是一个正整数
-2. 定义某边的层差为“该边终点所在层与该边起点所在层之差”，层差是一个自然数
-3. 跨层边为“边终点为活动点且层差大于 $1$ 的边或边终点不为活动点且层差大于 $0$ 的边”
-4. 将所在跨层边删去，得到 $\mathcal{G'}$
+按层数将 $\mathcal{G}$ 中的点分配到新的层 $(\mathbb{A}_i, \mathcal{D}_i)$：
 
-#### 将 $\mathcal{G}'$ 分至数组 $\mathbf{G}$:
+1. 活动对象加入第 $i$ 层的活动对象集 $\mathbb{A}_i$
+2. 非活动对象加入第 $i$ 层的非活动子图 $\mathcal{D}_i$，仅保留同层非活动对象间的边（删去所有跨层边）
 
-1. 将所有活动对象按层 $i$ 加入 $\mathbf{G}$ 的数组 $\mathbf{A}_i$
-2. 将所有活动对象从 $\mathcal{G}'$ 中删去，并将属于层 $i$ 的子图加入 $\mathcal{D}_i$
+#### 合并入动态图
 
-#### 将 $\mathcal{G}'$ 的每一层按照以下规则插入:
+将新层按层数从小到大的顺序依次并入 $\mathbf{D}$，合并时需满足：
 
-1. 原来就在某一层之上的层，插入之后不会出现在这层之上
-2. 这层内的对象如果是以前被选择的对象，那这个对象的层一定不会在这层之下
+1. 若 $P \in \mathbb{A}$ 在 $\mathbf{D}$ 的旧层中已存在，则新层必须插入到该旧层**之下**
+2. 同一活动对象不能在多个层中同时出现
 
-在白板上选择单个对象是在白板上选择多个对象的特殊情况。
+选择单个对象（$|\mathbb{A}| = 1$）是此过程的特殊情况：子图 $\mathcal{G}$ 退化为以该对象为唯一源点的可达子图，层数退化为 $S \xrightarrow{*} P$ 中活动点的计数（其中 $S$ 为唯一源点）。
+
+其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“选择对象”一节。
 
 ### 提交活动对象
 
-当前实现不再把“取消选择”理解成单纯从动态图里删除对象，而是显式区分提交动作 `apply(objects)`。
+提交活动对象是指将活动点集 $\mathbb{A}$ 从动态状态图 $\mathbf{D}$ 移回静态状态图 $\mathcal{S}$。
 
-`apply(objects)` 的基本流程是：
+对每个 $\mathbf{a} \in \mathbb{A}$：
 
-1. 取出要提交的活动对象实例。
-2. 计算它们与白板对象的相交关系。
-3. 结合动态图层顺序，确定这些对象在静态图中的上下关系。
-4. 计算对象覆盖到的区块。
-5. 将对象及其覆盖区块索引写回对应 `ChunkObjectManager`。
-6. 将这些对象从动态图中删去并清理状态图。
+1. 算出与 $\mathbf{a}$ 相交的对象集 $\mathbb{C}$
+2. 结合 $\mathbf{D}$ 中层与层的上下关系，确定 $\mathbf{a}$ 在 $\mathcal{S}$ 中应处于哪些对象之上、哪些对象之下
+3. 将上述关系以边的形式写入 $\mathcal{S}$
+
+所有对象提交完毕后，将 $\mathbb{A}$ 从 $\mathbf{D}$ 中移除，并对 $\mathbf{D}$ 执行清理。
+
+其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“提交并取消选择”一节。
 
 ### 置顶选择的对象
 
-1. 直接将要置顶的对象从图中删去
-2. 清理状态图
-3. 将这些要置顶的对象按层级重新加入到状态图中
+将指定对象集 $\mathbb{A}$ 从 $\mathcal{S}$ 及 $\mathbf{D}$ 中所有现有层中移除，执行动态图清理，再为 $\mathbb{A}$ 中各对象按其原有层间关系在 $\mathbf{D}$ 中创建新层并置于顶部。
 
-## 层叠图实现
-
-在 [directed-graph.js](../utils/directed-graph.js) 中，选用邻接表来实现一个有向无环图。
-
-### API
-
-| 名称                                           | 描述                                         | 类型                                                   |
-| ---------------------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
-| `pickup(startFrom)`                            | 获取以指定对象集合为起点的子图               | `(Iterable<BasicObject>) => DirectedGraph`             |
-| `apply(objects)`                               | 将活动对象按当前动态层关系提交回静态图       | `(Iterable<BasicObject>) => void`                      |
-| `insertLayerUnder(layerNow, layerAbove)`       | 将某层插入到另一层之下                       | `(Layer, Layer \| Undefined) => void`                  |
-| `insertLayerUnderById(layerNow, LayerAboveId)` | 将某层插入到另一层之下，其中另一层用 id 表示 | `(Layer, number \| undefined) => void`                 |
-| `insertLayerToTop(layerNow)`                   | 将某层插至顶层                               | `(Layer) => void`                                      |
-| `compareLayerOrderById(layer1, layer2)`        | 比较两层的层次顺序，其中两层都用 id 表示     | `(number \| undefined, number \| undefined) => number` |
-| `compareLayerOrder(layer1, layer2)`            | 比较两层的层次顺序                           | `(Layer, Layer) => number`                             |
-
-## 层叠图示例
-
-下面将以几个示例来演示层叠图的工作方式。
-
-先统一说明一下示例中的图示约定：
-
-- 静态图用一整张图表示，动态图用多个子图表示。
-- 被选择的对象用红色表示。
-- 图中不显示对象的层级关系以外的边。
-- 单人意味着只有一个工具在操作，多人意味着有多个工具在操作，单对象或多对象指的是选择的对象数量。
-
-### 示例一: 单人单对象
-
-#### 原始状态
-
-静态图如下:
-
-```mermaid
-graph BT
-  D --> C
-  D --> E
-  H --> C
-  C --> B
-  B --> A
-  E --> A
-  E --> F
-  G
-```
-
-动态图为空。
-
-#### C 被选择
-
-静态图不变，动态图如下:
-
-```mermaid
-graph BT
-  C --> B
-  B --> A
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-```
-
-#### 将 C 移到 E、F 之上，A 之下，取消选择
-
-静态图如下:
-
-```mermaid
-graph BT
-  E --> F
-  E --> C
-  D --> E
-  B --> A
-  C --> A
-  E --> A
-  F --> C
-  G
-```
-
-动态图为空。
-
-### 示例二: 单人多对象
-
-#### 原始状态
-
-静态图如下:
-
-```mermaid
-graph BT
-  D --> C
-  D --> E
-  H --> C
-  C --> B
-  B --> A
-  E --> A
-  E --> F
-  G
-```
-
-动态图为空。
-
-#### C、E、H 被选择
-
-现在，我们提取出来的子图 $\mathcal{G}$ 如下:
-
-```mermaid
-graph BT
-  H --> C
-  C --> B
-  B --> A
-  E --> A
-  E --> F
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-```
-
-然后将其分层，$\mathcal{G'}$ 如下:
-
-```mermaid
-graph BT
-  B --> A
-
-  style C fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style E fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-  style H fill:#ff9999,stroke:#ff3333,stroke-width:2px,color:#fff
-
-  subgraph "layer: 2"
-    subgraph "active: 2"
-      C
-    end
-    subgraph "inactive: 2"
-      B
-      A
-      F
-    end
-  end
-
-  subgraph "layer: 1"
-    subgraph "active: 1"
-      H
-      E
-    end
-  end
-```
-
-注意层内的渲染顺序：`graph BT` 中先定义的活动对象（`active: 2`）渲染在底部，后定义的非活动对象（`inactive: 2`）渲染在顶部。同一层内，活动对象先画、非活动对象后画，使活动对象浮在相关非活动对象之上。
-
-放入动态图中，静态图不变，动态图同上。
-
-#### 将 E 移走，H 移到 D 上，C 移到 A、B、F 之下，取消选择
-
-静态图如下:
-
-```mermaid
-graph BT
-  D --> H
-  D --> C
-  H --> C
-  C --> F
-  C --> B
-  C --> A
-  B --> A
-  E
-  G
-```
-
-动态图为空。
+其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“置顶”一节。

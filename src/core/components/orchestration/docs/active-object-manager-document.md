@@ -84,8 +84,6 @@
 3. 构造新层并处理与旧层的相对顺序约束。
 4. 插入新层到 `layerOrder`。
 
-该流程对应 [tier-graph-document.md](./tier-graph-document.md) 中“选择单个/多个对象”章节。
-
 这里的关键点是：`choose` 本身不负责判断对象跨越了哪些区块。它完全依赖 `pickup` 产出的子图，而 `pickup` 又完全依赖各区块 `ChunkObjectManager.objectCoverChunks` 中的当前索引。
 
 当前接口已经收敛为“对象实例驱动”：
