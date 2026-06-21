@@ -512,8 +512,8 @@ describe("ActiveObjectManager/apply", () => {
       const chunkId00 = cid(0, 0);
 
       // 两个同心圆对象，circle2 在 circle1 之下
-      const circle1 = new CircleObject(new Vector(100, 100), 1, chunkId00, 50);
-      const circle2 = new CircleObject(new Vector(100, 100), 2, chunkId00, 25);
+      const circle1 = new CircleObject(new Vector(100, 100), 1, 50);
+      const circle2 = new CircleObject(new Vector(100, 100), 2, 25);
 
       // 建立初始静态图：circle2 在 circle1 之下（边 2→1）
       board.activeObjectManager.add(new Set([circle2]));
@@ -583,8 +583,8 @@ describe("ActiveObjectManager/apply", () => {
       board.width = 10;
       board.height = 10;
 
-      const circle = new CircleObject(new Vector(5, 5), 1, 1, 20);
-      const stroke = new StrokeObject(new Vector(0, 0), 2, 1);
+      const circle = new CircleObject(new Vector(5, 5), 1, 20);
+      const stroke = new StrokeObject(new Vector(0, 0), 2);
       stroke.setPathPoints([
         new Vector(0, 0),
         new Vector(9, 0),

@@ -545,8 +545,13 @@ class ActiveObjectManager {
   resolveObjectChunk(obj) {
     this.requireObjectInstance(obj);
 
-    if (Number.isInteger(obj?.ownerChunkId) && this.board) {
-      return this.board.getChunkById(obj.ownerChunkId);
+    if (obj && this.board && this.board.width > 0 && this.board.height > 0) {
+      const chunkId = Chunk.worldToChunkId(
+        obj.position,
+        this.board.width,
+        this.board.height,
+      );
+      if (chunkId != null) return this.board.getChunkById(chunkId);
     }
 
     return undefined;
@@ -636,14 +641,17 @@ class ActiveObjectManager {
    */
   calculateCoveredChunkIds(obj) {
     if (!(obj instanceof BasicObject) || !this.board) {
-      return new Set(
-        Number.isInteger(obj?.ownerChunkId) ? [obj.ownerChunkId] : [],
-      );
+      return new Set();
     }
 
     const worldRange = this.getObjectWorldRange(obj);
     if (!worldRange || this.board.width <= 0 || this.board.height <= 0) {
-      return new Set([obj.ownerChunkId]);
+      const chunkId = Chunk.worldToChunkId(
+        obj.position,
+        this.board.width,
+        this.board.height,
+      );
+      return new Set(chunkId != null ? [chunkId] : []);
     }
 
     const chunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
@@ -653,7 +661,12 @@ class ActiveObjectManager {
     );
 
     if (chunkIds.size === 0) {
-      chunkIds.add(obj.ownerChunkId);
+      const chunkId = Chunk.worldToChunkId(
+        obj.position,
+        this.board.width,
+        this.board.height,
+      );
+      if (chunkId != null) chunkIds.add(chunkId);
     }
     return chunkIds;
   }

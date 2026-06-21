@@ -46,7 +46,6 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj.id).toBe(100);
-    expect(tool.obj.ownerChunkId).toBe(2);
     expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
     expect(
       tool.obj.localPathRange.points.map((point) => point.serialize()),
@@ -127,7 +126,6 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(tool.obj.id).toBe(101);
-    expect(tool.obj.ownerChunkId).toBe(3);
     expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 6 });
     expect(
       tool.obj.localPathRange.points.map((point) => point.serialize()),

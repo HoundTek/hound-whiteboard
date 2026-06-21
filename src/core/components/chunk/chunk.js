@@ -241,6 +241,33 @@ class Chunk {
   }
 
   /**
+   * 世界坐标到区块 id
+   * @param {Vector|{x:number,y:number}} worldPos - 世界坐标
+   * @param {number} chunkWidth - 区块宽
+   * @param {number} chunkHeight - 区块高
+   * @returns {number|undefined}
+   */
+  static worldToChunkId(worldPos, chunkWidth, chunkHeight) {
+    if (
+      !worldPos ||
+      typeof chunkWidth !== "number" ||
+      !Number.isFinite(chunkWidth) ||
+      chunkWidth <= 0 ||
+      typeof chunkHeight !== "number" ||
+      !Number.isFinite(chunkHeight) ||
+      chunkHeight <= 0
+    ) {
+      return undefined;
+    }
+    if (typeof worldPos.x !== "number" || typeof worldPos.y !== "number") {
+      return undefined;
+    }
+    const x = Math.floor(worldPos.x / chunkWidth);
+    const y = Math.floor(worldPos.y / chunkHeight);
+    return Chunk.coordinateToId(x, y);
+  }
+
+  /**
    * 连接两区块
    * @param {Chunk | undefined} first - 第一区块
    * @param {Chunk | undefined} second - 第二区块
@@ -390,7 +417,7 @@ class Chunk {
     } else if (!this.objectManager.board && this.board) {
       this.objectManager.setBoard(this.board);
     }
-    await this.objectManager.loadTierGraph(boardRootPath);
+    await this.objectManager.loadChunkMetadata(boardRootPath);
     return true;
   }
 }

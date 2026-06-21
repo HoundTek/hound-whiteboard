@@ -6,7 +6,7 @@ import { Matrix, Vector } from "../../../utils/math.js";
 describe("CircleObject", () => {
   describe("构造与范围", () => {
     test("构造函数应正确初始化半径、凸包和边界框", () => {
-      const circle = new CircleObject(new Vector(3, 4), 1, 2, 5);
+      const circle = new CircleObject(new Vector(3, 4), 1, 5);
 
       expect(circle.radius).toBe(5);
       expect(circle.convexHullRange).toBeInstanceOf(EllipseRange);
@@ -26,7 +26,7 @@ describe("CircleObject", () => {
     });
 
     test("修改变换矩阵时应更新主范围和边界框", () => {
-      const circle = new CircleObject(new Vector(2, 3), 1, 2, 4);
+      const circle = new CircleObject(new Vector(2, 3), 1, 4);
       const mat = new Matrix(2, 0, 0, 3);
 
       circle.setTransform(mat);
@@ -46,7 +46,7 @@ describe("CircleObject", () => {
 
   describe("序列化与解析", () => {
     test("应能正确序列化并解析圆对象", () => {
-      const circle = new CircleObject(new Vector(1, 2), 7, 9, 6);
+      const circle = new CircleObject(new Vector(1, 2), 7, 6);
       circle.setProperty({
         strokeColor: "#123456",
         fillColor: "#abcdef",
@@ -59,7 +59,6 @@ describe("CircleObject", () => {
 
       expect(serialized).toEqual({
         id: 7,
-        ownerChunkId: 9,
         position: { x: 1, y: 2 },
         transform: circle.transform.serialize(),
         property: {
@@ -90,7 +89,7 @@ describe("CircleObject", () => {
 
   describe("边界条件", () => {
     test("radius 为 0 时（falsy 值），constructor 不会初始化 boundingBox", () => {
-      const circle = new CircleObject(new Vector(5, 5), 10, 1, 0);
+      const circle = new CircleObject(new Vector(5, 5), 10, 0);
 
       expect(circle.radius).toBe(0);
       // radius=0 为 falsy，构造函数跳过 setRadius → boundingBox 未初始化
@@ -98,14 +97,14 @@ describe("CircleObject", () => {
     });
 
     test("未提供 radius 参数时 boundingBox 未初始化", () => {
-      const circle = new CircleObject(new Vector(10, 10), 20, 2);
+      const circle = new CircleObject(new Vector(10, 10), 20);
 
       expect(circle.radius).toBe(0);
       expect(circle.boundingBox).toBeUndefined();
     });
 
     test("setRadius(0) 应正确将 boundingBox 收至 0", () => {
-      const circle = new CircleObject(new Vector(0, 0), 30, 1, 10);
+      const circle = new CircleObject(new Vector(0, 0), 30, 10);
       expect(circle.radius).toBe(10);
       expect(circle.boundingBox.width).toBeGreaterThan(0);
 
@@ -117,7 +116,7 @@ describe("CircleObject", () => {
     });
 
     test("transform 后 getRange 应返回正确的全局投影", () => {
-      const circle = new CircleObject(new Vector(10, 20), 40, 1, 3);
+      const circle = new CircleObject(new Vector(10, 20), 40, 3);
       circle.setTransform(new Matrix(2, 0, 0, 2));
 
       const range = circle.getRange();

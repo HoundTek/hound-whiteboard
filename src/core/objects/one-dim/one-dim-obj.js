@@ -32,11 +32,10 @@ class OneDimensionObject extends Container {
    * 创建一个新的一维对象
    * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, ownerChunkId) {
-    super(p, id, ownerChunkId);
+  constructor(p, id) {
+    super(p, id);
   }
 }
 

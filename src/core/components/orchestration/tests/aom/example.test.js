@@ -33,7 +33,7 @@ function createExampleBoard() {
 
   const objects = {};
   for (const [name, objectId] of Object.entries(ID)) {
-    const object = new CircleObject(positions[name], objectId, 1, 10);
+    const object = new CircleObject(positions[name], objectId, 10);
     objects[name] = object;
     board.addObject(object, 1);
     chunk.objectManager.setObjectCoverChunks(objectId, [1]);

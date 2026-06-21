@@ -19,12 +19,11 @@ const CORE_FILE_OPERATE_CHANNEL = "houndwhiteboard:core-file-operate";
  *   WRITE_CHUNK_CONNECTION: string,
  *   WRITE_TRACE: string,
  *   LOAD_BOARD_SNAPSHOT: string,
- *   LOAD_TIER_GRAPH: string,
- *   SAVE_TIER_GRAPH: string,
- *   LOAD_CHUNK_OBJECT_COVER_INDEX: string,
- *   SAVE_CHUNK_OBJECT_COVER_INDEX: string,
- *   LOAD_CHUNK_OBJECTS: string,
- *   SAVE_CHUNK_OBJECTS: string,
+ *   LOAD_CHUNK_METADATA: string,
+ *   SAVE_CHUNK_METADATA: string,
+ *   LOAD_OBJECTS: string,
+ *   SAVE_OBJECTS: string,
+ *   DELETE_OBJECT: string,
  * }}
  */
 const CORE_FILE_OPERATE_ACTIONS = {
@@ -33,12 +32,11 @@ const CORE_FILE_OPERATE_ACTIONS = {
   WRITE_CHUNK_CONNECTION: "write-chunk-connection",
   WRITE_TRACE: "write-trace",
   LOAD_BOARD_SNAPSHOT: "load-board-snapshot",
-  LOAD_TIER_GRAPH: "load-tier-graph",
-  SAVE_TIER_GRAPH: "save-tier-graph",
-  LOAD_CHUNK_OBJECT_COVER_INDEX: "load-chunk-object-cover-index",
-  SAVE_CHUNK_OBJECT_COVER_INDEX: "save-chunk-object-cover-index",
-  LOAD_CHUNK_OBJECTS: "load-chunk-objects",
-  SAVE_CHUNK_OBJECTS: "save-chunk-objects",
+  LOAD_CHUNK_METADATA: "load-chunk-metadata",
+  SAVE_CHUNK_METADATA: "save-chunk-metadata",
+  LOAD_OBJECTS: "load-objects",
+  SAVE_OBJECTS: "save-objects",
+  DELETE_OBJECT: "delete-object",
 };
 
 export { CORE_FILE_OPERATE_ACTIONS, CORE_FILE_OPERATE_CHANNEL };

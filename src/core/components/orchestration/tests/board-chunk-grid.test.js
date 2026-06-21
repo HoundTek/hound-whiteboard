@@ -142,13 +142,9 @@ describe("Board chunk grid", () => {
     const board = new Board();
     const chunkLoader = board.getChunkLoader();
     const chunk = chunkLoader.getChunkByCoordinate(0, 0);
-    const loadTierGraphSpy = jest.spyOn(
+    const loadMetadataSpy = jest.spyOn(
       boardFileOperateBridge,
-      "loadTierGraph",
-    );
-    const loadCoverIndexSpy = jest.spyOn(
-      boardFileOperateBridge,
-      "loadChunkObjectCoverIndex",
+      "loadChunkMetadata",
     );
 
     const results = board.chunkLoadEventBus.emit(
@@ -165,14 +161,12 @@ describe("Board chunk grid", () => {
 
     expect(results).toHaveLength(1);
     await new Promise((resolve) => setImmediate(resolve));
-    expect(loadTierGraphSpy).not.toHaveBeenCalled();
-    expect(loadCoverIndexSpy).not.toHaveBeenCalled();
+    expect(loadMetadataSpy).not.toHaveBeenCalled();
     expect(chunk.isLoad).toBe(true);
     expect(chunk.isTempLoad).toBe(false);
     expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount).toBe(1);
 
-    loadTierGraphSpy.mockRestore();
-    loadCoverIndexSpy.mockRestore();
+    loadMetadataSpy.mockRestore();
   });
 
   test("存在 rootPath 时应启用文件系统持久化", async () => {
@@ -181,12 +175,9 @@ describe("Board chunk grid", () => {
     });
     const chunkLoader = board.getChunkLoader();
     const chunk = chunkLoader.getChunkByCoordinate(0, 0);
-    const loadTierGraphSpy = jest
-      .spyOn(boardFileOperateBridge, "loadTierGraph")
-      .mockResolvedValue([]);
-    const loadCoverIndexSpy = jest
-      .spyOn(boardFileOperateBridge, "loadChunkObjectCoverIndex")
-      .mockResolvedValue([]);
+    const loadMetadataSpy = jest
+      .spyOn(boardFileOperateBridge, "loadChunkMetadata")
+      .mockResolvedValue({ tierGraph: [], objectCoverIndex: [] });
 
     const results = board.chunkLoadEventBus.emit(
       CHUNK_LOAD_EVENTS.REQUEST_LOAD,
@@ -203,14 +194,12 @@ describe("Board chunk grid", () => {
     expect(board.isPersistent()).toBe(true);
     expect(results).toHaveLength(1);
     await new Promise((resolve) => setImmediate(resolve));
-    expect(loadTierGraphSpy).toHaveBeenCalled();
-    expect(loadCoverIndexSpy).toHaveBeenCalled();
+    expect(loadMetadataSpy).toHaveBeenCalledWith(board.rootPath, 1);
     expect(chunk.isLoad).toBe(true);
     expect(chunk.isTempLoad).toBe(false);
     expect(board.chunkLoaded.get(chunk.id)?.fullLoadedCount).toBe(1);
 
-    loadTierGraphSpy.mockRestore();
-    loadCoverIndexSpy.mockRestore();
+    loadMetadataSpy.mockRestore();
   });
 
   test("Board 应响应根 ChunkLoader 直接发出的卸载请求", async () => {
@@ -315,16 +304,16 @@ describe("Board chunk grid", () => {
       loaderStrategy: new Map([["test-monitor", "full"]]),
     });
 
-    const stroke = new StrokeObject(new Vector(10, 20), 201, 1);
+    const stroke = new StrokeObject(new Vector(10, 20), 201);
     stroke.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
 
-    const loadChunkObjectsSpy = jest
-      .spyOn(boardFileOperateBridge, "loadChunkObjects")
+    const loadObjectsSpy = jest
+      .spyOn(boardFileOperateBridge, "loadObjects")
       .mockResolvedValue([stroke.serialize()]);
 
     const loadedEntries = await board.loadChunkObjectEntries(ownerChunk);
 
-    expect(loadChunkObjectsSpy).toHaveBeenCalledWith(board.rootPath, 1);
+    expect(loadObjectsSpy).toHaveBeenCalledWith(board.rootPath, [201]);
     expect(loadedEntries.get(201)).toBeInstanceOf(StrokeObject);
     expect(board.getObjectById(201)).toBeInstanceOf(StrokeObject);
     expect(ownerChunk.objectManager.getObject(201)).toBe(
@@ -332,32 +321,31 @@ describe("Board chunk grid", () => {
     );
     expect(board.getObjectLoadCount(201)).toBe(1);
 
-    loadChunkObjectsSpy.mockRestore();
+    loadObjectsSpy.mockRestore();
   });
 
-  test("Board.saveChunkObjectEntries 应只保存归属到该区块的对象", async () => {
+  test("Board.saveChunkObjectEntries 应按层叠图节点保存对象", async () => {
     const board = new Board();
     board.rootPath = "/tmp/hwb-board-test";
 
-    const ownerObject = new StrokeObject(new Vector(10, 20), 301, 1);
+    const chunk = board.getChunkById(1);
+    chunk.objectManager = new ChunkObjectManager(chunk.id, board);
+    chunk.objectManager.staticGraph.addNodeUnsafe(301);
+
+    const ownerObject = new StrokeObject(new Vector(10, 20), 301);
     ownerObject.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
-
-    const foreignObject = new StrokeObject(new Vector(20, 30), 302, 2);
-    foreignObject.setPathPoints([new Vector(0, 0), new Vector(3, 3)]);
-
     board.registerObjectInstance(ownerObject, { coveredChunkIds: [1] });
-    board.registerObjectInstance(foreignObject, { coveredChunkIds: [2] });
 
-    const saveChunkObjectsSpy = jest
-      .spyOn(boardFileOperateBridge, "saveChunkObjects")
+    const saveObjectsSpy = jest
+      .spyOn(boardFileOperateBridge, "saveObjects")
       .mockResolvedValue(true);
 
     await board.saveChunkObjectEntries(1);
 
-    expect(saveChunkObjectsSpy).toHaveBeenCalledWith(board.rootPath, 1, [
+    expect(saveObjectsSpy).toHaveBeenCalledWith(board.rootPath, [
       ownerObject.serialize(),
     ]);
 
-    saveChunkObjectsSpy.mockRestore();
+    saveObjectsSpy.mockRestore();
   });
 });

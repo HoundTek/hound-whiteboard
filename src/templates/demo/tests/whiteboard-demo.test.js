@@ -603,26 +603,20 @@ describe("whiteboard demo", () => {
 
     configureWhiteboardDemo(board, monitor);
 
-    const loadTierGraphSpy = jest.spyOn(
+    const loadMetadataSpy = jest.spyOn(
       boardFileOperateBridge,
-      "loadTierGraph",
-    );
-    const loadCoverIndexSpy = jest.spyOn(
-      boardFileOperateBridge,
-      "loadChunkObjectCoverIndex",
+      "loadChunkMetadata",
     );
 
     monitor.requestViewportBaseRender();
 
     await new Promise((resolve) => setImmediate(resolve));
-    expect(loadTierGraphSpy).not.toHaveBeenCalled();
-    expect(loadCoverIndexSpy).not.toHaveBeenCalled();
+    expect(loadMetadataSpy).not.toHaveBeenCalled();
     expect(
       monitor.chunkBlockLoader.getLoadedChunks().map((chunk) => chunk.id),
     ).toContain(1);
 
-    loadTierGraphSpy.mockRestore();
-    loadCoverIndexSpy.mockRestore();
+    loadMetadataSpy.mockRestore();
   });
 
   test("demo 配置后空格键应创建随机圆对象并提交到白板", () => {

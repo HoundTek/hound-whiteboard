@@ -18,13 +18,22 @@ describe("ActiveObjectManager/choose", () => {
   let aom = new ActiveObjectManager();
   let chunk = createChunk(1);
 
+  const CHUNK_SIZE = 100;
+
   function createObject(id, chunkId) {
-    return new BasicObject(new Vector(0, 0), id, chunkId);
+    const coord = Chunk.idToCoordinate(chunkId);
+    const pos = new Vector(
+      coord.x * CHUNK_SIZE + CHUNK_SIZE / 2,
+      coord.y * CHUNK_SIZE + CHUNK_SIZE / 2,
+    );
+    return new BasicObject(pos, id);
   }
 
   function createBoard(...chunks) {
     const chunkMap = new Map(chunks.map((chunk) => [chunk.id, chunk]));
     return {
+      width: CHUNK_SIZE,
+      height: CHUNK_SIZE,
       createChunkBlockLoader: () => new MockChunkBlockLoader(),
       getChunkById: (chunkId) => chunkMap.get(chunkId),
     };

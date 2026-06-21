@@ -62,7 +62,6 @@ function handleCreateChunkStorage(payload) {
   }
 
   directory.cd("chunks").cd(chunkId.toString()).rmWhenExist().make();
-  directory.cd("objects").cd(`chunk${chunkId.toString()}`).rmWhenExist().make();
 
   return true;
 }
@@ -155,36 +154,43 @@ function handleLoadBoardSnapshot(payload) {
 }
 
 /**
- * 读取指定区块的层叠图文件
+ * 读取指定区块的元数据（层叠图 + 覆盖索引）
  * @param {{rootPath: string, chunkId: number}} payload - 请求参数
- * @returns {any}
+ * @returns {{ tierGraph: any[], objectCoverIndex: any[] }}
  */
-function handleLoadTierGraph(payload) {
+function handleLoadChunkMetadata(payload) {
   const directory = getRootDirectory(payload?.rootPath);
   const chunkId = payload?.chunkId;
   if (!Number.isInteger(chunkId)) {
     throw new Error("Invalid chunk id.");
   }
 
-  const tierGraphFile = directory.cd("chunks").peek(chunkId.toString(), "json");
-  if (!tierGraphFile.exist()) {
-    throw new Error(`file ${tierGraphFile.getPath()} does not exist.`);
+  const metadataFile = directory.cd("chunks").peek(chunkId.toString(), "json");
+  if (!metadataFile.exist()) {
+    return { tierGraph: [], objectCoverIndex: [] };
   }
 
-  return tierGraphFile.catJSON();
+  const data = metadataFile.catJSON();
+  return {
+    tierGraph: Array.isArray(data?.tierGraph) ? data.tierGraph : data,
+    objectCoverIndex: Array.isArray(data?.objectCoverIndex)
+      ? data.objectCoverIndex
+      : [],
+  };
 }
 
 /**
- * 保存指定区块的层叠图文件
- * @param {{rootPath: string, chunkId: number, graphData: any[]}} payload - 请求参数
+ * 保存指定区块的元数据（层叠图 + 覆盖索引）
+ * @param {{rootPath: string, chunkId: number, tierGraph: any[], objectCoverIndex: any[]}} payload - 请求参数
  * @returns {boolean}
  */
-function handleSaveTierGraph(payload) {
+function handleSaveChunkMetadata(payload) {
   const directory = getRootDirectory(payload?.rootPath);
   const chunkId = payload?.chunkId;
-  const graphData = payload?.graphData;
-  if (!Number.isInteger(chunkId) || !Array.isArray(graphData)) {
-    throw new Error("Invalid save tier graph payload.");
+  const tierGraph = payload?.tierGraph;
+  const objectCoverIndex = payload?.objectCoverIndex;
+  if (!Number.isInteger(chunkId) || !Array.isArray(tierGraph)) {
+    throw new Error("Invalid save chunk metadata payload.");
   }
 
   directory
@@ -192,122 +198,80 @@ function handleSaveTierGraph(payload) {
     .peek(chunkId.toString(), "json")
     .rmWhenExist()
     .init()
-    .write(JSON.stringify(graphData));
+    .writeJSON({
+      tierGraph,
+      objectCoverIndex: Array.isArray(objectCoverIndex)
+        ? objectCoverIndex
+        : [],
+    });
 
   return true;
 }
 
 /**
- * 解析对象覆盖区块索引文件位置
- * @param {Directory} directory - 白板根目录
- * @param {number} chunkId - 区块 id
- * @returns {File}
- */
-function resolveChunkObjectCoverIndexFile(directory, chunkId) {
-  return directory
-    .cd("chunks")
-    .peek(`${chunkId.toString()}-object-cover`, "json");
-}
-
-/**
- * 读取指定区块的对象覆盖区块索引
- * @param {{rootPath: string, chunkId: number}} payload - 请求参数
- * @returns {any[]}
- */
-function handleLoadChunkObjectCoverIndex(payload) {
-  const directory = getRootDirectory(payload?.rootPath);
-  const chunkId = payload?.chunkId;
-  if (!Number.isInteger(chunkId)) {
-    throw new Error("Invalid chunk id.");
-  }
-
-  const coverIndexFile = resolveChunkObjectCoverIndexFile(directory, chunkId);
-  if (!coverIndexFile.exist()) {
-    return [];
-  }
-
-  return coverIndexFile.catJSON();
-}
-
-/**
- * 保存指定区块的对象覆盖区块索引
- * @param {{rootPath: string, chunkId: number, coverIndexData: any[]}} payload - 请求参数
- * @returns {boolean}
- */
-function handleSaveChunkObjectCoverIndex(payload) {
-  const directory = getRootDirectory(payload?.rootPath);
-  const chunkId = payload?.chunkId;
-  const coverIndexData = payload?.coverIndexData;
-  if (!Number.isInteger(chunkId) || !Array.isArray(coverIndexData)) {
-    throw new Error("Invalid save chunk object cover index payload.");
-  }
-
-  resolveChunkObjectCoverIndexFile(directory, chunkId)
-    .rmWhenExist()
-    .init()
-    .write(JSON.stringify(coverIndexData));
-
-  return true;
-}
-
-/**
- * 读取指定区块所有对象 JSON
- * @param {{rootPath: string, chunkId: number}} payload - 请求参数
+ * 按对象 ID 批量读取对象 JSON
+ * @param {{rootPath: string, objectIds: number[]}} payload - 请求参数
  * @returns {object[]}
  */
-function handleLoadChunkObjects(payload) {
+function handleLoadObjects(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const chunkId = payload?.chunkId;
-  if (!Number.isInteger(chunkId)) {
-    throw new Error("Invalid chunk id.");
+  const objectIds = payload?.objectIds;
+  if (!Array.isArray(objectIds)) {
+    throw new Error("Invalid load objects payload.");
   }
 
-  const objectsDir = directory.cd("objects").cd(`chunk${chunkId.toString()}`);
-  if (!objectsDir.exist()) {
-    return [];
-  }
-
-  return objectsDir
-    .lsFile()
-    .filter((file) => file.extension === "json")
-    .map((file) => file.catJSON());
+  const objectsDir = directory.cd("objects");
+  return objectIds
+    .filter((id) => Number.isInteger(id))
+    .map((id) => {
+      const file = objectsDir.peek(id.toString(), "json");
+      return file.exist() ? file.catJSON() : null;
+    })
+    .filter(Boolean);
 }
 
 /**
- * 保存指定区块全部对象 JSON
- * @description
- * 保存时会先删除该区块目录下已有的 json 文件，再按对象 id 写入，
- * 以确保磁盘状态和内存态一致。
- * @param {{rootPath: string, chunkId: number, objects: object[]}} payload - 请求参数
+ * 批量保存对象 JSON（扁平存储，每个对象一个文件）
+ * @param {{rootPath: string, objects: object[]}} payload - 请求参数
  * @returns {boolean}
  */
-function handleSaveChunkObjects(payload) {
+function handleSaveObjects(payload) {
   const directory = getRootDirectory(payload?.rootPath);
-  const chunkId = payload?.chunkId;
   const objects = payload?.objects;
-  if (!Number.isInteger(chunkId) || !Array.isArray(objects)) {
-    throw new Error("Invalid save chunk objects payload.");
+  if (!Array.isArray(objects)) {
+    throw new Error("Invalid save objects payload.");
   }
 
-  const objectsDir = directory.cd("objects").cd(`chunk${chunkId.toString()}`);
+  const objectsDir = directory.cd("objects");
   objectsDir.existOrMake();
 
-  // 先清理旧的对象文件，避免遗留脏数据
-  for (const file of objectsDir.lsFile()) {
-    if (file.extension === "json") {
-      file.rmWhenExist();
-    }
+  for (const objectData of objects) {
+    const objectId = objectData?.id;
+    if (!Number.isInteger(objectId)) continue;
+    objectsDir.peek(objectId.toString(), "json").writeJSON(objectData);
   }
 
-  // 按对象 id 写入，若缺失 id 则按顺序生成兜底文件名
-  objects.forEach((objectData, index) => {
-    const fileName = Number.isInteger(objectData?.id)
-      ? objectData.id.toString()
-      : `object-${index.toString()}`;
-    objectsDir.peek(fileName, "json").writeJSON(objectData);
-  });
-
   return true;
+}
+
+/**
+ * 删除指定对象 JSON
+ * @param {{rootPath: string, objectId: number}} payload - 请求参数
+ * @returns {boolean}
+ */
+function handleDeleteObject(payload) {
+  const directory = getRootDirectory(payload?.rootPath);
+  const objectId = payload?.objectId;
+  if (!Number.isInteger(objectId)) {
+    throw new Error("Invalid delete object payload.");
+  }
+
+  const file = directory.cd("objects").peek(objectId.toString(), "json");
+  if (file.exist()) {
+    file.rmWhenExist();
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -331,18 +295,16 @@ function handleCoreFileOperateRequest(_event, request) {
       return handleWriteTrace(payload);
     case CORE_FILE_OPERATE_ACTIONS.LOAD_BOARD_SNAPSHOT:
       return handleLoadBoardSnapshot(payload);
-    case CORE_FILE_OPERATE_ACTIONS.LOAD_TIER_GRAPH:
-      return handleLoadTierGraph(payload);
-    case CORE_FILE_OPERATE_ACTIONS.SAVE_TIER_GRAPH:
-      return handleSaveTierGraph(payload);
-    case CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECT_COVER_INDEX:
-      return handleLoadChunkObjectCoverIndex(payload);
-    case CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECT_COVER_INDEX:
-      return handleSaveChunkObjectCoverIndex(payload);
-    case CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECTS:
-      return handleLoadChunkObjects(payload);
-    case CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECTS:
-      return handleSaveChunkObjects(payload);
+    case CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_METADATA:
+      return handleLoadChunkMetadata(payload);
+    case CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_METADATA:
+      return handleSaveChunkMetadata(payload);
+    case CORE_FILE_OPERATE_ACTIONS.LOAD_OBJECTS:
+      return handleLoadObjects(payload);
+    case CORE_FILE_OPERATE_ACTIONS.SAVE_OBJECTS:
+      return handleSaveObjects(payload);
+    case CORE_FILE_OPERATE_ACTIONS.DELETE_OBJECT:
+      return handleDeleteObject(payload);
     default:
       throw new Error(`Unsupported core file operate action: ${action}`);
   }

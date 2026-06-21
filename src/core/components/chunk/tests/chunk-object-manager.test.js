@@ -54,10 +54,10 @@ describe("ChunkObjectManager", () => {
     chunkObjectManager.setObjectCoverChunks(15, [1, 2]);
     chunkObjectManager.setObjectCoverChunks(18, [1, 2, 3]);
 
-    await chunkObjectManager.saveTierGraph(boardRoot);
+    await chunkObjectManager.saveChunkMetadata(boardRoot);
 
     const restoredManager = new ChunkObjectManager(1);
-    await restoredManager.loadTierGraph(boardRoot);
+    await restoredManager.loadChunkMetadata(boardRoot);
 
     expect(
       restoredManager.staticGraph.equals(chunkObjectManager.staticGraph),
@@ -76,30 +76,20 @@ describe("ChunkObjectManager", () => {
     ]);
     chunkObjectManager.setObjectCoverChunks(15, [1, 2]);
 
-    const loadTierGraphSpy = jest.spyOn(
+    const loadMetadataSpy = jest.spyOn(
       boardFileOperateBridge,
-      "loadTierGraph",
+      "loadChunkMetadata",
     );
-    const loadCoverIndexSpy = jest.spyOn(
+    const saveMetadataSpy = jest.spyOn(
       boardFileOperateBridge,
-      "loadChunkObjectCoverIndex",
-    );
-    const saveTierGraphSpy = jest.spyOn(
-      boardFileOperateBridge,
-      "saveTierGraph",
-    );
-    const saveCoverIndexSpy = jest.spyOn(
-      boardFileOperateBridge,
-      "saveChunkObjectCoverIndex",
+      "saveChunkMetadata",
     );
 
-    await chunkObjectManager.loadTierGraph();
-    await chunkObjectManager.saveTierGraph();
+    await chunkObjectManager.loadChunkMetadata();
+    await chunkObjectManager.saveChunkMetadata();
 
-    expect(loadTierGraphSpy).not.toHaveBeenCalled();
-    expect(loadCoverIndexSpy).not.toHaveBeenCalled();
-    expect(saveTierGraphSpy).not.toHaveBeenCalled();
-    expect(saveCoverIndexSpy).not.toHaveBeenCalled();
+    expect(loadMetadataSpy).not.toHaveBeenCalled();
+    expect(saveMetadataSpy).not.toHaveBeenCalled();
     expect(
       chunkObjectManager.staticGraph.equals(
         DirectedGraph.parse([
@@ -112,15 +102,13 @@ describe("ChunkObjectManager", () => {
       [15, [1, 2]],
     ]);
 
-    loadTierGraphSpy.mockRestore();
-    loadCoverIndexSpy.mockRestore();
-    saveTierGraphSpy.mockRestore();
-    saveCoverIndexSpy.mockRestore();
+    loadMetadataSpy.mockRestore();
+    saveMetadataSpy.mockRestore();
   });
 
   test("应基于对象 range 精确计算覆盖区块，而不是仅按 bounding box 粗算", () => {
     const chunkObjectManager = new ChunkObjectManager(1);
-    const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
+    const stroke = new StrokeObject(new Vector(0, 0), 15);
     stroke.setPathPoints([
       new Vector(1, 1),
       new Vector(19, 1),

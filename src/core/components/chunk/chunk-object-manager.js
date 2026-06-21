@@ -183,7 +183,7 @@ class ChunkObjectManager {
     );
 
     if (chunkIds.size === 0) {
-      chunkIds.add(obj.ownerChunkId);
+      chunkIds.add(this.id);
     }
 
     this.setObjectCoverChunks(obj.id, chunkIds);
@@ -246,54 +246,41 @@ class ChunkObjectManager {
   }
 
   /**
-   * 加载层叠图
+   * 加载区块元数据（层叠图 + 覆盖索引）
    * @param {string} boardRootPath - 白板根目录
    * @returns {Promise<void>} 加载完成
    * @description
-   * 该方法只加载层叠图，不加载对象实例。
-   * @throws {Error} 如果文件不存在
+   * 一次 IPC 读取合并后的 chunks/{chunkId}.json。
    */
-  async loadTierGraph(boardRootPath) {
+  async loadChunkMetadata(boardRootPath) {
     if (typeof boardRootPath !== "string" || boardRootPath.trim() === "") {
       return;
     }
 
-    // 通过专用 IPC 从主进程读取层叠图数据。
-    const graphData = await boardFileOperateBridge.loadTierGraph(
-      boardRootPath,
-      this.id,
-    );
-    const coverIndexData =
-      await boardFileOperateBridge.loadChunkObjectCoverIndex(
+    const { tierGraph, objectCoverIndex } =
+      await boardFileOperateBridge.loadChunkMetadata(
         boardRootPath,
         this.id,
       );
-    // 渲染侧只负责把 plain object 转回 DirectedGraph。
-    this.staticGraph = DirectedGraph.parse(graphData);
-    this.loadObjectCoverChunksFromData(coverIndexData);
+
+    this.staticGraph = DirectedGraph.parse(tierGraph);
+    this.loadObjectCoverChunksFromData(objectCoverIndex);
   }
 
   /**
-   * 保存层叠图
+   * 保存区块元数据（层叠图 + 覆盖索引）
    * @param {string} boardRootPath - 白板根目录
    * @returns {Promise<void>} 保存完成
    */
-  async saveTierGraph(boardRootPath) {
+  async saveChunkMetadata(boardRootPath) {
     if (typeof boardRootPath !== "string" || boardRootPath.trim() === "") {
       return;
     }
 
-    // 统一以数组结构落盘，避免传输复杂实例对象。
-    await boardFileOperateBridge.saveTierGraph(
-      boardRootPath,
-      this.id,
-      this.staticGraph.toArray(),
-    );
-    await boardFileOperateBridge.saveChunkObjectCoverIndex(
-      boardRootPath,
-      this.id,
-      this.serializeObjectCoverChunks(),
-    );
+    await boardFileOperateBridge.saveChunkMetadata(boardRootPath, this.id, {
+      tierGraph: this.staticGraph.toArray(),
+      objectCoverIndex: this.serializeObjectCoverChunks(),
+    });
   }
 
   /**

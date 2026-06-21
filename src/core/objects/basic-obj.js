@@ -26,12 +26,6 @@ class BasicObject {
   id;
 
   /**
-   * 对象归属区块 id
-   * @type {number}
-   */
-  ownerChunkId;
-
-  /**
    * 对象的位置
    * @type {Vector}
    * @description 对象在画布上的位置坐标。
@@ -160,13 +154,11 @@ class BasicObject {
   /**
    * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, ownerChunkId) {
+  constructor(p, id) {
     this.position = p;
     this.id = id;
-    this.ownerChunkId = ownerChunkId;
   }
 
   /**
@@ -206,7 +198,6 @@ class BasicObject {
   serialize() {
     return {
       id: this.id,
-      ownerChunkId: this.ownerChunkId,
       position: this.position.serialize(),
       transform: this.transform.serialize(),
       property: { ...(this.property ?? {}) },

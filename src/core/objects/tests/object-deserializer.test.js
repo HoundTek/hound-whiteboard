@@ -6,7 +6,7 @@ import { Matrix, Vector } from "../../utils/math.js";
 
 describe("object deserializer", () => {
   test("应能还原 PolygonObject", () => {
-    const polygon = new PolygonObject(new Vector(3, 4), 12, 5, [
+    const polygon = new PolygonObject(new Vector(3, 4), 12, [
       new Vector(0, 0),
       new Vector(10, 0),
       new Vector(0, 20),
@@ -22,13 +22,12 @@ describe("object deserializer", () => {
     const restored = deserialize(serialized);
 
     expect(restored).toBeInstanceOf(PolygonObject);
-    expect(serialized.ownerChunkId).toBe(5);
     expect(serialized.chunkId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });
 
   test("应能还原 TextObject", () => {
-    const text = new TextObject(new Vector(8, 13), 2, 7);
+    const text = new TextObject(new Vector(8, 13), 2);
     text.setTransform(new Matrix(1, 0.2, 0, 1));
     text.setText("hello whiteboard");
     text.setProperty({
@@ -43,13 +42,12 @@ describe("object deserializer", () => {
     const restored = deserialize(JSON.stringify(serialized));
 
     expect(restored).toBeInstanceOf(TextObject);
-    expect(serialized.ownerChunkId).toBe(7);
     expect(serialized.chunkId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });
 
   test("应能还原 StrokeObject", () => {
-    const stroke = new StrokeObject(new Vector(1, 2), 9, 11);
+    const stroke = new StrokeObject(new Vector(1, 2), 9);
     stroke.setPathPoints([
       new Vector(0, 0),
       new Vector(5, 2),
@@ -62,7 +60,6 @@ describe("object deserializer", () => {
     const restored = deserialize(serialized);
 
     expect(restored).toBeInstanceOf(StrokeObject);
-    expect(serialized.ownerChunkId).toBe(11);
     expect(serialized.chunkId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });

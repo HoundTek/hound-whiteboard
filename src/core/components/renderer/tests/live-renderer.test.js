@@ -590,7 +590,7 @@ describe("LiveRenderer", () => {
   });
 
   test("真实对象应根据 property 动态提供渲染 padding", () => {
-    const circle = new CircleObject(new Vector(0, 0), 81, 1, 10);
+    const circle = new CircleObject(new Vector(0, 0), 81, 10);
     const stroke = new StrokeObject(new Vector(0, 0), 82, 1);
     const text = new TextObject(new Vector(0, 0), 83, 1);
     stroke.setPathPoints([new Vector(0, 0), new Vector(10, 0)]);

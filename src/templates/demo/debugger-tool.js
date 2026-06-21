@@ -194,13 +194,10 @@ class DebuggerTool extends Tool {
     const loadedObjects = Array.from(board.objectLoaded.entries()).map(
       ([objectId, objectState]) => {
         const obj = objectState?.obj;
-        const candidateChunkIds = Number.isInteger(obj?.ownerChunkId)
-          ? [obj.ownerChunkId]
-          : [];
+        const candidateChunkIds = [];
 
         return {
           objectId,
-          ownerChunkId: obj?.ownerChunkId,
           loadedCount: objectState?.loadedCount ?? 0,
           isActive: activeObjectIds.has(objectId),
           coveredChunkIds: Array.from(

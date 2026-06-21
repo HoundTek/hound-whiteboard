@@ -10,7 +10,7 @@ describe("PolygonObject", () => {
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
 
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
       expect(polygon.localPolygonRange.points).toEqual(points);
     });
 
@@ -20,7 +20,7 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, initialPoints);
 
       const newPoints = [
         { x: 0, y: 0 },
@@ -39,7 +39,7 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
 
       const mat = Matrix.identity().scale(2, 2);
       polygon.setTransform(mat);
@@ -53,7 +53,7 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
 
       const mat = Matrix.identity().rotate(Math.PI / 2);
       polygon.setTransform(mat);
@@ -77,7 +77,7 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, initialPoints);
 
       const mat = Matrix.identity().rotate(Math.PI / 4);
       polygon.setTransform(mat);
@@ -111,7 +111,7 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, initialPoints);
 
       const newPoints = [
         { x: 0, y: 0 },
@@ -161,7 +161,7 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
 
       const newPoints = [
         { x: 0, y: 0 },

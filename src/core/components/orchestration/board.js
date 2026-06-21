@@ -356,10 +356,10 @@ class Board {
 
     if (!chunk || !effectiveBoardRootPath) return loadedObjects;
 
-    const objectDataList = await boardFileOperateBridge.loadChunkObjects(
-      effectiveBoardRootPath,
-      chunk.id,
-    );
+    const objectIds = [...(chunk.objectManager?.staticGraph?.getNodes?.() ?? [])];
+    const objectDataList = objectIds.length > 0
+      ? await boardFileOperateBridge.loadObjects(effectiveBoardRootPath, objectIds)
+      : [];
 
     for (const objectData of objectDataList ?? []) {
       const obj = deserialize(objectData);
@@ -373,7 +373,7 @@ class Board {
 
   /**
    * 保存指定区块归属的对象
-   * @description 仅保存 `ownerChunkId === chunk.id` 的对象实例。
+   * @description 按层叠图节点保存对象到扁平存储。
    * @param {Chunk | number} chunkOrId - 区块实例或区块 id
    * @param {string} [boardRootPath = this.rootPath] - 白板根路径
    * @returns {Promise<void>}
@@ -385,18 +385,20 @@ class Board {
       this.resolvePersistenceRootPath(boardRootPath);
     if (!chunk || !effectiveBoardRootPath) return;
 
-    const serializedObjects = Array.from(this.objectLoaded.values())
-      .map((entry) => entry.obj)
-      .filter((obj) => obj?.ownerChunkId === chunk.id)
+    const objectIds = [...(chunk.objectManager?.staticGraph?.getNodes?.() ?? [])];
+    const serializedObjects = objectIds
+      .map((id) => this.getObjectById(id))
+      .filter(Boolean)
       .map((obj) =>
         obj && typeof obj.serialize === "function" ? obj.serialize() : obj,
       );
 
-    await boardFileOperateBridge.saveChunkObjects(
-      effectiveBoardRootPath,
-      chunk.id,
-      serializedObjects,
-    );
+    if (serializedObjects.length > 0) {
+      await boardFileOperateBridge.saveObjects(
+        effectiveBoardRootPath,
+        serializedObjects,
+      );
+    }
   }
 
   /**
@@ -561,14 +563,17 @@ class Board {
   }
 
   /**
-   * 添加对象到指定区块
-   * @description 会同步对象覆盖区块索引，并把对象实例注册到白板级对象表。
+   * 添加对象到白板
+   * @description 自动根据对象 position 计算归属区块，同步覆盖索引并注册到白板级对象表。
    * @param {BasicObject} obj - 要添加的对象
-   * @param {number} [chunkId = obj.ownerChunkId] - 要添加到的归属区块 id
    */
-  addObject(obj, chunkId = obj?.ownerChunkId) {
+  addObject(obj) {
     if (!(obj instanceof BasicObject)) {
       throw new TypeError("Invalid object instance.");
+    }
+    const chunkId = Chunk.worldToChunkId(obj.position, this.width, this.height);
+    if (chunkId == null) {
+      throw new Error("Cannot resolve chunk for object position.");
     }
     const chunk = this.getChunkById(chunkId);
     if (!chunk) {

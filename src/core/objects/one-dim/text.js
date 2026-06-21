@@ -39,11 +39,10 @@ class TextObject extends OneDimensionObject {
    * 创建一个新的文本对象
    * @param {Vector} p - 文本左上角的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 对象归属区块的 id
    * @constructor
    */
-  constructor(p, id, ownerChunkId) {
-    super(p, id, ownerChunkId);
+  constructor(p, id) {
+    super(p, id);
   }
 
   /**
@@ -188,7 +187,6 @@ class TextObject extends OneDimensionObject {
     let obj = new TextObject(
       Vector.parse(data.position),
       data.id,
-      data.ownerChunkId,
     );
     obj.setTransform(Matrix.parse(data.transform));
     obj.setProperty({

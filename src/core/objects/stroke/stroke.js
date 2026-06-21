@@ -47,8 +47,8 @@ const DEFAULT_STROKE_PROPERTY = Object.freeze({
  * @author Zhou Chenyu
  */
 class StrokeObject extends BasicObject {
-  constructor(p, id, ownerChunkId) {
-    super(p, id, ownerChunkId);
+  constructor(p, id) {
+    super(p, id);
   }
 
   property = { ...DEFAULT_STROKE_PROPERTY };
@@ -176,7 +176,6 @@ class StrokeObject extends BasicObject {
     const obj = new StrokeObject(
       Vector.parse(data.position),
       data.id,
-      data.ownerChunkId,
     );
 
     obj.setPathPoints((data.points ?? []).map((point) => Vector.parse(point)));

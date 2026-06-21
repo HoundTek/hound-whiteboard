@@ -28,12 +28,11 @@ class CircleObject extends GraphObject {
    * 创建一个新的圆对象
    * @param {Vector} p - 圆心的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 对象归属区块的 id
    * @param {number} radius - 圆的半径
    * @constructor
    */
-  constructor(p, id, ownerChunkId, radius) {
-    super(p, id, ownerChunkId);
+  constructor(p, id, radius) {
+    super(p, id);
     if (radius) {
       this.setRadius(radius);
     }
@@ -161,7 +160,6 @@ class CircleObject extends GraphObject {
     let obj = new CircleObject(
       Vector.parse(data.position),
       data.id,
-      data.ownerChunkId,
       data.radius,
     );
     obj.setTransform(Matrix.parse(data.transform));

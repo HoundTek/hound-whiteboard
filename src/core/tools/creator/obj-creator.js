@@ -146,10 +146,6 @@ class ObjectCreatorTool extends Tool {
         (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_CANCEL,
       ),
       objectId: positionSignal?.context?.objectId ?? context.acc?.objectId,
-      ownerChunkId:
-        positionSignal?.context?.ownerChunkId ??
-        context.acc?.ownerChunkId ??
-        context.acc?.resolveOwnerChunkId?.(position, signalPacket),
       injectedProperty: extractInjectedProperty(signals),
     };
   }
@@ -171,13 +167,12 @@ class ObjectCreatorTool extends Tool {
         }
       }
 
-      if (interaction.objectId == null || interaction.ownerChunkId == null) {
+      if (interaction.objectId == null) {
         return false;
       }
       this.create(
         interaction.position,
         interaction.objectId,
-        interaction.ownerChunkId,
       );
       if (
         this._pendingProperty &&
@@ -341,7 +336,7 @@ class ObjectCreatorTool extends Tool {
       this.clearContextObjects(context);
       return;
     }
-    board?.addObject?.(completedObject, completedObject.ownerChunkId);
+    board?.addObject?.(completedObject);
     this.clearContextObjects(context);
   }
 
@@ -414,11 +409,10 @@ class ObjectCreatorTool extends Tool {
    * 创建新的对象实例
    * @param {Vector} position - 新对象的位置
    * @param {number} id - 新对象的 id
-   * @param {number} ownerChunkId - 新对象归属区块 id
    * @description 在用户使用该工具创建新对象（而不是编辑正在创建的对象）时调用此方法以生成新的对象实例
    * @abstract
    */
-  create(position, id, ownerChunkId) {
+  create(position, id) {
     throw new Error("Method not implemented.");
   }
 }

@@ -21,13 +21,28 @@ describe("ActiveObjectManager/pickup", () => {
     aom = new ActiveObjectManager();
   });
 
+  const CHUNK_SIZE = 100;
+
+  /**
+   * 根据区块 id 计算对象位置，使 worldToChunkId 映射到该区块
+   * @param {number} id - 对象 id
+   * @param {number} chunkId - 目标区块 id
+   * @returns {BasicObject}
+   */
   function createObject(id, chunkId) {
-    return new BasicObject(new Vector(0, 0), id, chunkId);
+    const coord = Chunk.idToCoordinate(chunkId);
+    const pos = new Vector(
+      coord.x * CHUNK_SIZE + CHUNK_SIZE / 2,
+      coord.y * CHUNK_SIZE + CHUNK_SIZE / 2,
+    );
+    return new BasicObject(pos, id);
   }
 
   function createBoard(...chunks) {
     const chunkMap = new Map(chunks.map((chunk) => [chunk.id, chunk]));
     return {
+      width: CHUNK_SIZE,
+      height: CHUNK_SIZE,
       createChunkBlockLoader: () => new MockChunkBlockLoader(),
       getChunkById: (chunkId) => chunkMap.get(chunkId),
     };
@@ -445,6 +460,8 @@ describe("ActiveObjectManager/pickup", () => {
       chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
 
       const board = {
+        width: 100,
+        height: 100,
         createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
         getChunkById: jest.fn((chunkId) => (chunkId === 1 ? chunk : undefined)),
       };

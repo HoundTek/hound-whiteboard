@@ -71,8 +71,8 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       options.minDragDistanceScreen ?? DEFAULT_MIN_DRAG_DISTANCE_SCREEN;
   }
 
-  create(p, id, ownerChunkId) {
-    this.obj = new CircleObject(p, id, ownerChunkId);
+  create(p, id) {
+    this.obj = new CircleObject(p, id);
     this.obj.setProperty(this.property);
   }
 
