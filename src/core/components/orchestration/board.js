@@ -132,13 +132,13 @@ class Board {
   signalsEventBus;
 
   /**
-   * 白板级唯一设备图。
+   * 白板级唯一设备图
    * @type {DevicesDAG}
    */
   devicesDAG;
 
   /**
-   * 根区块加载器。
+   * 根区块加载器
    * @description
    * `Board` 通过根 `ChunkLoader` 持有白板级区块实例所有权。
    * `Board.getChunkById(...)`、`Board.getChunkByCoordinate(...)` 与 `Board.getChunkLoader()` 都委托到该实例。
@@ -185,7 +185,7 @@ class Board {
   }
 
   /**
-   * 是否使用内存模式。
+   * 是否使用内存模式
    * @description 当前实现仅通过 `rootPath` 是否可用来推导持久化模式。
    * @returns {boolean}
    */
@@ -194,7 +194,7 @@ class Board {
   }
 
   /**
-   * 当前白板是否启用文件系统持久化。
+   * 当前白板是否启用文件系统持久化
    * @returns {boolean}
    */
   isPersistent() {
@@ -202,7 +202,7 @@ class Board {
   }
 
   /**
-   * 解析当前白板可用的持久化根路径。
+   * 解析当前白板可用的持久化根路径
    * @description 内存模式下统一返回 `undefined`，用于让对象/区块文件读写逻辑短路。
    * @param {string} [boardRootPath = this.rootPath] - 候选根路径
    * @returns {string | undefined}
@@ -216,7 +216,7 @@ class Board {
   }
 
   /**
-   * 创建绑定到当前 Board 的区块加载器
+   * 创建绑定到当前 Board 的矩形区块加载器
    * @description
    * 这里创建的是矩形缓冲区包装器 `ChunkBlockLoader`。
    * 它内部会再持有一个独立的 `ChunkLoader`，用于保存本缓冲区视角下的区块对象集合；
@@ -241,7 +241,23 @@ class Board {
   }
 
   /**
-   * 获取白板根区块加载器。
+   * 创建绑定到当前 Board 的 ChunkLoader
+   * @description
+   * 创建直接使用 Board 事件总线与区块解析的 ChunkLoader，适合需要自行管理加载集合的消费者（如 Monitor）。
+   * @param {number | string} [requesterId] - 请求方 id
+   * @returns {ChunkLoader}
+   */
+  createChunkLoader(requesterId) {
+    return new ChunkLoader({
+      resolveChunkById: (chunkId) =>
+        this.rootChunkLoader.getChunkById(chunkId),
+      eventBus: this.chunkLoadEventBus,
+      requesterId,
+    });
+  }
+
+  /**
+   * 获取白板根区块加载器
    * @returns {ChunkLoader}
    */
   getChunkLoader() {

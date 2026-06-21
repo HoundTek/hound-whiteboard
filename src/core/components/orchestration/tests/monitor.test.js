@@ -382,7 +382,7 @@ describe("Monitor", () => {
     const monitor = createMonitor("epsilon-chunk-subset");
     const chunk1 = Chunk.fromId(1);
     const chunk2 = Chunk.fromId(2);
-    monitor.chunkBlockLoader = {
+    monitor.chunkLoader = {
       getLoadedChunks() {
         return [chunk1, chunk2];
       },
@@ -409,24 +409,7 @@ describe("Monitor", () => {
     ).toEqual([new RectangleRange(800, 0, 800, 600)]);
   });
 
-  test("chunkBlockLoader 缓冲区更新应触发 baseRenderScheduler.invalidate", () => {
-    const monitor = createMonitor("zeta");
-    const invalidateSpy = jest
-      .spyOn(monitor.baseRenderScheduler, "invalidate")
-      .mockImplementation(() => false);
-    const chunk = Chunk.fromId(1);
 
-    monitor.chunkBlockLoader.chunkLoader.emitBufferUpdated({
-      action: "expand",
-      direction: "right",
-      chunksLoaded: [chunk],
-    });
-
-    expect(invalidateSpy).toHaveBeenCalledWith(
-      new RectangleRange(0, 0, 800, 600),
-    );
-    invalidateSpy.mockRestore();
-  });
 
   test("设置 origin 或 zoom 应触发 baseRenderScheduler.invalidate", () => {
     const monitor = createMonitor("eta");
@@ -535,28 +518,17 @@ describe("Monitor", () => {
     };
 
     monitor.board.isPersistent = () => false;
-    monitor.chunkBlockLoader = {
-      chunkLoader: {
-        emitBufferUpdated() {
-          return true;
-        },
-      },
+    monitor.chunkLoader = {
       getLoadedChunks() {
         return bufferState.chunks;
       },
-      getBufferBounds() {
-        return { ...bufferState.bounds };
+      getChunkById(chunkId) {
+        const chunks = [chunk1, chunk2].filter(Boolean);
+        return chunks.find((c) => c.id === chunkId) ?? Chunk.fromId(chunkId);
       },
-      resetBuffer: jest.fn(),
-      initChunkByCoordinate: jest.fn(() => chunk1),
-      expandBufferLeftFullLoad: jest.fn(() => false),
-      expandBufferRightFullLoad: jest.fn(() => {
-        bufferState.bounds.maxX = 1;
-        bufferState.chunks = [chunk1, chunk2];
-        return true;
-      }),
-      expandBufferUpFullLoad: jest.fn(() => false),
-      expandBufferDownFullLoad: jest.fn(() => false),
+      emitLoadRequest: jest.fn(),
+      emitUnloadRequest: jest.fn(),
+      untrackChunkById: jest.fn(),
     };
 
     jest
@@ -566,9 +538,5 @@ describe("Monitor", () => {
     const currentChunks = monitor.syncChunkBufferWithViewport();
 
     expect(currentChunks).toEqual([chunk1, chunk2]);
-    expect(monitor.chunkBlockLoader.resetBuffer).not.toHaveBeenCalled();
-    expect(
-      monitor.chunkBlockLoader.expandBufferRightFullLoad,
-    ).toHaveBeenCalledTimes(1);
   });
 });

@@ -589,7 +589,7 @@ describe("whiteboard demo", () => {
     board.addObject(stroke, 1);
     monitor.requestViewportBaseRender();
 
-    const loadedChunkIds = monitor.chunkBlockLoader
+    const loadedChunkIds = monitor.chunkLoader
       .getLoadedChunks()
       .map((chunk) => chunk.id);
 
@@ -613,7 +613,7 @@ describe("whiteboard demo", () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(loadMetadataSpy).not.toHaveBeenCalled();
     expect(
-      monitor.chunkBlockLoader.getLoadedChunks().map((chunk) => chunk.id),
+      monitor.chunkLoader.getLoadedChunks().map((chunk) => chunk.id),
     ).toContain(1);
 
     loadMetadataSpy.mockRestore();

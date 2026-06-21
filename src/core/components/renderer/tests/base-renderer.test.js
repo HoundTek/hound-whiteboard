@@ -178,7 +178,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [chunk];
         },
@@ -209,7 +209,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createReceiverSensitiveContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [chunk];
         },
@@ -248,7 +248,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [rightChunk, leftChunk];
         },
@@ -281,7 +281,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [coveredChunk];
         },
@@ -314,7 +314,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [coveredChunk, ownerChunk];
         },
@@ -356,7 +356,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [chunk];
         },
@@ -415,7 +415,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [chunk];
         },
@@ -463,7 +463,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [rightChunk, leftChunk];
         },
@@ -516,7 +516,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [chunk3, chunk2, chunk1];
         },
@@ -571,7 +571,7 @@ describe("BaseRenderer", () => {
       getContext(layer) {
         return layer === "base" ? createContext(calls) : null;
       },
-      chunkBlockLoader: {
+      chunkLoader: {
         getLoadedChunks() {
           return [chunk3, chunk2, chunk1];
         },

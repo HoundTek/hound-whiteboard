@@ -281,7 +281,7 @@ class BaseRenderer {
    * @returns {BasicObject[]}
    */
   collectStaticDrawables() {
-    const chunks = this.monitor?.chunkBlockLoader?.getLoadedChunks?.() ?? [];
+    const chunks = this.monitor?.chunkLoader?.getLoadedChunks?.() ?? [];
     return this.mergeStaticGraphs(chunks);
   }
 

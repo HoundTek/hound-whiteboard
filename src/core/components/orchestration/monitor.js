@@ -6,7 +6,6 @@
  */
 
 import { Board } from "./board.js";
-import { ChunkBlockLoader } from "../chunk/chunk-block-loader.js";
 import { CounterPool } from "../../utils/counter-pool.js";
 import { Vector } from "../../utils/math.js";
 import { joinPath } from "../../utils/path.js";
@@ -66,9 +65,9 @@ class Monitor {
 
   /**
    * 区块加载器，用于按需加载区块内容
-   * @type {ChunkBlockLoader}
+   * @type {ChunkLoader}
    */
-  chunkBlockLoader;
+  chunkLoader;
 
   /**
    * 显示器 id
@@ -129,11 +128,7 @@ class Monitor {
    */
   _zoom;
 
-  /**
-   * 上一次缓冲区区块快照
-   * @type {Chunk[]}
-   */
-  baseBufferedChunks;
+
 
   /**
    * 静态层 dirty rect 阈值策略
@@ -191,10 +186,9 @@ class Monitor {
       uiCanvas,
     });
     this.board = board;
-    this.chunkBlockLoader = this.board.createChunkBlockLoader();
+    this.chunkLoader = board?.createChunkLoader?.(`monitor-${monitorId}`);
     this._zoom = 1;
     this.monitorId = monitorId;
-    this.baseBufferedChunks = [];
     const rect = this.liveCanvas?.getBoundingClientRect();
     const canvasWidth = rect?.width ?? 0;
     const canvasHeight = rect?.height ?? 0;
@@ -215,7 +209,7 @@ class Monitor {
     this.baseDirtyRectPolicyResolver = createBaseDirtyRectPolicyResolver({
       getOrigin: () => this.origin,
       getZoom: () => this.zoom,
-      getLoadedChunks: () => this.chunkBlockLoader?.getLoadedChunks?.() ?? [],
+      getLoadedChunks: () => this.chunkLoader?.getLoadedChunks?.() ?? [],
       getChunkById: (chunkId) => this.board?.getChunkById?.(chunkId),
       getChunkWidth: () => this.chunkWidth,
       getChunkHeight: () => this.chunkHeight,
@@ -249,7 +243,6 @@ class Monitor {
     this.uiRenderScheduler.setFlushHandler((dirtyRects) =>
       this.uiRenderer.flush(dirtyRects),
     );
-    this.bindChunkBlockLoaderRenderHook();
   }
 
   /**
@@ -639,118 +632,74 @@ class Monitor {
   }
 
   /**
-   * 让 chunkBlockLoader 至少覆盖当前视口可见区块
+   * 使 chunkLoader 覆盖 2x 视口的加载区域，目标与已加载的差异做集合运算
+   * @description
+   * 加载区 = 视口世界矩形向四周各扩展 50%（即面积 4 倍）的矩形。
+   * - 加载区内的区块 → 不在已加载集合中 → 发起加载
+   * - 加载区外的区块 → 在已加载集合中 → 发起卸载（仅持久化模式）
    * @param {Vector} [origin = this.origin] - 视口原点
    * @param {number} [zoom = this.zoom] - 缩放因子
    * @returns {Chunk[]} 当前视口可见区块
    */
   syncChunkBufferWithViewport(origin = this.origin, zoom = this.zoom) {
-    const visibleChunks = this.getVisibleChunksForViewport(origin, zoom);
-    const chunkBlockLoader = this.chunkBlockLoader;
-    const shouldPreserveLoadedChunks =
-      typeof this.board?.isPersistent === "function"
-        ? !this.board.isPersistent()
+    const board = this.board;
+    const chunkLoader = this.chunkLoader;
+    const chunkWidth = this.chunkWidth;
+    const chunkHeight = this.chunkHeight;
+
+    if (!board || chunkWidth <= 0 || chunkHeight <= 0) return [];
+
+    // 1. 计算视口世界矩形
+    const viewportRect = this.getViewportWorldRect(origin, zoom);
+
+    // 2. 计算加载区 = 视口向四周各扩展 50%
+    const loadRect = new RectangleRange(
+      viewportRect.left - viewportRect.width / 2,
+      viewportRect.top - viewportRect.height / 2,
+      viewportRect.width * 2,
+      viewportRect.height * 2,
+    );
+
+    // 3. 计算加载区覆盖的区块 id 集合（目标）
+    const targetChunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
+      loadRect,
+      chunkWidth,
+      chunkHeight,
+    );
+
+    if (targetChunkIds.size === 0) {
+      // 加载区未覆盖任何区块
+      return [];
+    }
+
+    // 4. 当前已加载集合
+    const loadedChunks = chunkLoader?.getLoadedChunks?.() ?? [];
+    const loadedChunkIds = new Set(loadedChunks.map((c) => c.id));
+
+    // 5. 集合差运算：需要加载的 = 目标 - 已加载
+    for (const chunkId of targetChunkIds) {
+      if (loadedChunkIds.has(chunkId)) continue;
+      const chunk = chunkLoader?.getChunkById?.(chunkId);
+      if (chunk) {
+        chunkLoader?.emitLoadRequest?.(chunk, { strategy: "full" });
+      }
+    }
+
+    // 6. 集合差运算：需要卸载的 = 已加载 - 目标（仅持久化模式）
+    const shouldPreserve =
+      typeof board.isPersistent === "function"
+        ? !board.isPersistent()
         : false;
 
-    if (
-      !chunkBlockLoader?.getLoadedChunks ||
-      !chunkBlockLoader?.resetBuffer ||
-      !chunkBlockLoader?.initChunkByCoordinate
-    ) {
-      return visibleChunks;
-    }
-
-    const visibleChunkIds = new Set(
-      visibleChunks
-        .map((chunk) => chunk?.id)
-        .filter((chunkId) => Number.isInteger(chunkId)),
-    );
-    const loadedChunkIds = new Set(
-      (chunkBlockLoader.getLoadedChunks?.() ?? [])
-        .map((chunk) => chunk?.id)
-        .filter((chunkId) => Number.isInteger(chunkId)),
-    );
-
-    if (
-      [...visibleChunkIds].every((chunkId) => loadedChunkIds.has(chunkId)) &&
-      (shouldPreserveLoadedChunks ||
-        visibleChunkIds.size === loadedChunkIds.size)
-    ) {
-      return visibleChunks;
-    }
-
-    if (visibleChunks.length === 0) {
-      if (!shouldPreserveLoadedChunks) {
-        chunkBlockLoader.resetBuffer();
+    if (!shouldPreserve) {
+      for (const chunk of loadedChunks) {
+        if (targetChunkIds.has(chunk.id)) continue;
+        chunkLoader?.emitUnloadRequest?.(chunk);
+        chunkLoader?.untrackChunkById?.(chunk.id);
       }
-      return visibleChunks;
     }
 
-    const chunkXs = visibleChunks.map((chunk) => chunk.x);
-    const chunkYs = visibleChunks.map((chunk) => chunk.y);
-    const minX = Math.min(...chunkXs);
-    const maxX = Math.max(...chunkXs);
-    const minY = Math.min(...chunkYs);
-    const maxY = Math.max(...chunkYs);
-
-    if (shouldPreserveLoadedChunks) {
-      const currentBounds = chunkBlockLoader.getBufferBounds?.();
-      const hasLoadedChunks =
-        (chunkBlockLoader.getLoadedChunks?.()?.length ?? 0) > 0;
-
-      if (!hasLoadedChunks || !currentBounds) {
-        const firstChunk = chunkBlockLoader.initChunkByCoordinate(minX, minY);
-        if (!firstChunk) {
-          return visibleChunks;
-        }
-
-        for (let currentX = minX + 1; currentX <= maxX; currentX += 1) {
-          chunkBlockLoader.expandBufferRightFullLoad?.();
-        }
-
-        for (let currentY = minY + 1; currentY <= maxY; currentY += 1) {
-          chunkBlockLoader.expandBufferUpFullLoad?.();
-        }
-
-        return visibleChunks;
-      }
-
-      let nextBounds = currentBounds;
-      while (nextBounds.minX > minX) {
-        chunkBlockLoader.expandBufferLeftFullLoad?.();
-        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
-      }
-      while (nextBounds.maxX < maxX) {
-        chunkBlockLoader.expandBufferRightFullLoad?.();
-        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
-      }
-      while (nextBounds.minY > minY) {
-        chunkBlockLoader.expandBufferDownFullLoad?.();
-        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
-      }
-      while (nextBounds.maxY < maxY) {
-        chunkBlockLoader.expandBufferUpFullLoad?.();
-        nextBounds = chunkBlockLoader.getBufferBounds?.() ?? nextBounds;
-      }
-
-      return visibleChunks;
-    }
-
-    chunkBlockLoader.resetBuffer();
-    const firstChunk = chunkBlockLoader.initChunkByCoordinate(minX, minY);
-    if (!firstChunk) {
-      return visibleChunks;
-    }
-
-    for (let currentX = minX + 1; currentX <= maxX; currentX += 1) {
-      chunkBlockLoader.expandBufferRightFullLoad?.();
-    }
-
-    for (let currentY = minY + 1; currentY <= maxY; currentY += 1) {
-      chunkBlockLoader.expandBufferUpFullLoad?.();
-    }
-
-    return visibleChunks;
+    return this.getVisibleChunksForViewport(origin, zoom);
   }
 
   /**
@@ -772,29 +721,7 @@ class Monitor {
     this.baseRenderScheduler?.invalidate?.(viewportRect);
   }
 
-  /**
-   * 将当前 chunkBlockLoader 的缓冲区更新接到 baseRenderer
-   */
-  bindChunkBlockLoaderRenderHook() {
-    const chunkLoader = this.chunkBlockLoader?.chunkLoader;
-    if (!chunkLoader || chunkLoader.__baseRenderHookBound) return;
 
-    const originalEmitBufferUpdated =
-      chunkLoader.emitBufferUpdated.bind(chunkLoader);
-    this.baseBufferedChunks = this.chunkBlockLoader?.getLoadedChunks?.() ?? [];
-
-    chunkLoader.emitBufferUpdated = (payload = {}) => {
-      const previousChunks = this.baseBufferedChunks;
-      const currentChunks =
-        payload.chunksLoaded ??
-        this.chunkBlockLoader?.getLoadedChunks?.() ??
-        [];
-      this.baseBufferedChunks = [...currentChunks];
-      this.baseRenderer?.invalidateChunks?.(currentChunks, previousChunks);
-      return originalEmitBufferUpdated(payload);
-    };
-    chunkLoader.__baseRenderHookBound = true;
-  }
 
   /**
    * 获取指定渲染层的 2D 上下文
