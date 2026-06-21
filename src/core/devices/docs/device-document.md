@@ -129,7 +129,7 @@ monitor.addEdge(
 
 ```mermaid
 flowchart LR
-  subgraph Device[Device e.g. keyboard]
+  subgraph Device["Device e.g. keyboard"]
     DR("keyboard #1 [handler]")
     CH2("code/Space #2 →default")
     CH3("code/KeyW #3 →default")
@@ -139,13 +139,13 @@ flowchart LR
     DR -->|"keydown"| CH1
   end
 
-  subgraph Mount[Edge + Prefix]
+  subgraph Mount["Edge + Prefix"]
     CH2 -->|"default"| P1
     CH3 -->|"default"| P2
     CH1 -->|"default"| W1
   end
 
-  subgraph Workflows[/workflows/]
+  subgraph Workflows["/workflows/"]
     W1("/workflows/event-log #1 [tool]")
     W2("/workflows/wasd-move #2 [tool]")
   end
