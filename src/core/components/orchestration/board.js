@@ -19,11 +19,7 @@ import { UndoTree } from "../../hit/undo-tree-core.js";
 import { DevicesDAG } from "../../devices-dag/index.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import { Monitor } from "./monitor.js";
-import {
-  ChunkBlockLoader,
-  CHUNK_LOAD_STRATEGIES,
-} from "../chunk/chunk-block-loader.js";
-import { CHUNK_LOAD_EVENTS, ChunkLoader } from "../chunk/chunk-loader.js";
+import { CHUNK_LOAD_EVENTS, CHUNK_LOAD_STRATEGIES, ChunkLoader } from "../chunk/chunk-loader.js";
 import { Chunk } from "../chunk/chunk.js";
 import { boardFileOperateBridge } from "../../bridges/file-operate-bridge-renderer.js";
 
@@ -36,7 +32,7 @@ function isValidBoardRootPath(boardRootPath) {
  * @property {Chunk} chunk - 当前区块实例
  * @property {number} tempLoadedCount - 临时加载计数
  * @property {number} fullLoadedCount - 完整加载计数
- * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 ChunkBlockLoader 当前持有策略
+ * @property {Map<number | string, "temp" | "full">} loaderStrategy - 各 ChunkLoader 当前持有策略
  */
 
 /**
@@ -74,7 +70,7 @@ class Board {
 
   /**
    * 当前已知区块的统一加载状态
-   * @description 区块 id -> 加载状态条目，记录根 `ChunkLoader` 与各 `ChunkBlockLoader` 的持有引用。
+   * @description 区块 id -> 加载状态条目，记录根 `ChunkLoader` 与各 `ChunkLoader` 的持有引用。
    * @type {Map<number, BoardChunkLoadedState>}
    */
   chunkLoaded;
@@ -113,7 +109,7 @@ class Board {
 
   /**
    * 区块加载事件总线
-   * @description 协调根 `ChunkLoader`、`ChunkBlockLoader` 与 `Board` 私有加载逻辑。
+   * @description 协调根 `ChunkLoader`、`ChunkLoader` 与 `Board` 私有加载逻辑。
    * @type {EventBus}
    */
   chunkLoadEventBus;
@@ -218,27 +214,14 @@ class Board {
   /**
    * 创建绑定到当前 Board 的矩形区块加载器
    * @description
-   * 这里创建的是矩形缓冲区包装器 `ChunkBlockLoader`。
+   * 这里创建的是矩形缓冲区包装器 `ChunkLoader`。
    * 它内部会再持有一个独立的 `ChunkLoader`，用于保存本缓冲区视角下的区块对象集合；
    * 区块实例本身仍由 `Board.rootChunkLoader` 统一解析。
    * @param {number} [limit = 0] - 缓冲区上限，为 0 则不限制
    * @param {number | string} [requesterId] - 请求方 id
-   * @returns {ChunkBlockLoader}
+   * @returns {ChunkLoader}
    */
-  createChunkBlockLoader(limit = 0, requesterId) {
-    return new ChunkBlockLoader(
-      limit,
-      this.chunkLoadEventBus,
-      requesterId,
-      (chunk, direction) => this.getNeighborChunk(chunk, direction),
-      new ChunkLoader({
-        resolveChunkById: (chunkId) =>
-          this.rootChunkLoader.getChunkById(chunkId),
-        eventBus: this.chunkLoadEventBus,
-        requesterId,
-      }),
-    );
-  }
+
 
   /**
    * 创建绑定到当前 Board 的 ChunkLoader

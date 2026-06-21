@@ -8,7 +8,7 @@ components 模块已按职责拆分为三个子目录，外部通过 `index.js` 
 
 ```
 src/core/components/
-├── chunk/          # 区块子系统（Chunk / ChunkLoader / ChunkBlockLoader / ChunkObjectManager）
+├── chunk/          # 区块子系统（Chunk / ChunkLoader / ChunkLoader / ChunkObjectManager）
 ├── renderer/       # 渲染管线（BaseRenderer / LiveRenderer / UiRenderer / RenderScheduler / DirtyRectStrategy）
 ├── orchestration/  # 编排层（Board / Monitor / ActiveObjectManager）
 ├── index.js        # 统一导出入口
@@ -78,12 +78,12 @@ src/core/components/
 - `loadTierGraph()` 能解析图结构。
 - 对象读写已改为经 `Board` 统一调度，图落盘与覆盖索引落盘已接通。
 
-#### ChunkLoader / ChunkBlockLoader
+#### ChunkLoader / ChunkLoader
 
 目标职责：
 
 - `ChunkLoader`：通用区块加载器，是区块对象的持有者，负责按 id/坐标访问与卸载区块。
-- `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
+- `ChunkLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
 
 当前状态：
 

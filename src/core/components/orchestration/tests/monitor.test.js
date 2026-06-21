@@ -78,7 +78,7 @@ describe("Monitor", () => {
       getChunkById(chunkId) {
         return Chunk.fromId(chunkId);
       },
-      createChunkBlockLoader() {
+      createChunkLoader() {
         return {
           chunkLoader: {
             emitBufferUpdated() {

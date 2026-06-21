@@ -11,7 +11,6 @@ src/core/components/
 ├── chunk/           # 区块子系统
 │   ├── chunk.js
 │   ├── chunk-loader.js
-│   ├── chunk-block-loader.js
 │   └── chunk-object-manager.js
 ├── renderer/        # 渲染管线
 │   ├── base-renderer.js
@@ -35,8 +34,7 @@ src/core/components/
 ### 区块子系统（`chunk/`）
 
 - `Chunk`：区块类，负责区块链关系、区块加载/卸载流程。
-- `ChunkLoader`：通用区块加载器，是区块对象的持有者，负责按 id/坐标访问与卸载区块。
-- `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
+- `ChunkLoader`：区块加载器，是区块对象的持有者，负责按 id/坐标访问与卸载区块，并对外发送加载/卸载请求。
 - `ChunkObjectManager`：区块对象管理器，负责静态层叠图与对象覆盖区块索引，并通过 `Board` 间接解析对象实例。
 
 ### 渲染管线（`renderer/`）
@@ -62,7 +60,6 @@ graph LR
   CL["ChunkLoader"]
   COM["ChunkObjectManager"]
   AOM["ActiveObjectManager"]
-  CBL["ChunkBlockLoader"]
   M["Monitor"]
   BR["BaseRenderer"]
   RS["RenderScheduler"]
@@ -76,8 +73,6 @@ graph LR
   B --> AOM
   B --> M
   B --> UT
-  CBL --> CL
-  AOM --> CBL
   M --> BR
   M --> RS
   M --> LR
@@ -89,19 +84,15 @@ graph LR
 
 ### 白板级与区块级分治
 
-`Board` 管白板级元信息、区块实例加载状态与对象实例注册表，根 `ChunkLoader` 管白板级区块实例所有权，`ChunkBlockLoader` 管连续矩形范围的缓冲区表达，`Chunk` 管单区块状态，`ChunkObjectManager` 管区块内静态图与覆盖索引。
+`Board` 管白板级元信息、区块实例加载状态与对象实例注册表，根 `ChunkLoader` 管白板级区块实例所有权，`ChunkLoader` 管连续矩形范围的缓冲区表达，`Chunk` 管单区块状态，`ChunkObjectManager` 管区块内静态图与覆盖索引。
 
 这种拆分让“翻区块/加载策略”和“对象关系维护”相互解耦。
 
-### 持有与包装分离
+### ChunkLoader 分层使用
 
-`ChunkLoader` 与 `ChunkBlockLoader` 的职责边界需要明确区分：
+`Board` 持有一个根 `ChunkLoader` 作为白板级区块实例所有权入口。消费者（Monitor、AOM）通过 `Board.createChunkLoader()` 创建独立的加载器自行管理加载集合，每个加载器的区块加载/卸载请求都通过 Board 事件总线路由。
 
-- `ChunkLoader` 负责持有区块对象
-- `ChunkBlockLoader` 不直接持有区块对象，而是包装一个 `ChunkLoader`
-- `ChunkBlockLoader` 只负责把这批区块组织成一个连续矩形范围，并表达当前区块和缓冲区扩缩行为
-
-这使得 `Board` 可以暴露一个根 `ChunkLoader` 作为通用区块访问入口，同时允许上层按需创建多个 `ChunkBlockLoader` 视角。
+这使得 `Board` 可以暴露一个根 `ChunkLoader` 作为通用区块访问入口，同时允许上层按需创建独立视角。
 
 ### 活动对象单独管理
 

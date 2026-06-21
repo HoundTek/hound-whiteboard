@@ -6,7 +6,7 @@
 
 ## 模块定位
 
-`ChunkLoader` 解决的是“谁持有区块对象”这个问题，而不是“当前视口需要一个什么形状的缓冲区”。
+`ChunkLoader` 解决的是"谁持有区块对象"这个问题。
 
 因此它的职责边界是：
 
@@ -18,12 +18,9 @@
 
 它不负责：
 
-- 表达“当前区块”
+- 表达"当前区块"
 - 维护连续矩形缓冲区边界
 - 决定完整加载还是临时加载
-- 决定具体的连续矩形缓冲区如何扩缩
-
-如果需要表达“连续矩形范围的区块缓冲区”，应由 `ChunkBlockLoader` 在其上层做包装。
 
 ## 核心职责
 
@@ -82,27 +79,11 @@
 
 遍历当前持有的全部区块，逐个调用卸载流程。
 
-它适合“需要真实执行卸载”的场景。
+它适合"需要真实执行卸载"的场景。
 
 ### `reset()`
 
 只清空当前持有关系，不触发 `unloadChunk` 钩子。
-
-它适合被 `ChunkBlockLoader` 这类包装器在自定义事件时序中使用。
-
-## 与 `ChunkBlockLoader` 的关系
-
-二者关系可以概括为：
-
-- `ChunkLoader` 持有区块对象
-- `ChunkBlockLoader` 包装 `ChunkLoader`
-- `ChunkBlockLoader` 只负责连续矩形范围、当前区块与缓冲区扩缩逻辑
-
-也就是说：
-
-- `ChunkLoader` 决定“当前这组区块对象由谁持有”
-- `ChunkLoader` 负责把加载、卸载、缓冲区更新这类事件真正发到事件总线
-- `ChunkBlockLoader` 决定“这组区块对象是否构成一个连续矩形范围，以及如何移动这个范围”
 
 ## 与 `Board` 的关系
 
@@ -111,9 +92,7 @@
 - `Board` 自己持有一个根 `ChunkLoader`
 - `Board.getChunkById(...)` 与 `Board.getChunkByCoordinate(...)` 都委托给根 `ChunkLoader`
 - `Board.getChunkLoader()` 用于暴露该根 loader
-- `Board.createChunkBlockLoader()` 会创建新的 `ChunkBlockLoader`，并为其注入独立的 `ChunkLoader`
-
-这意味着 `Board` 负责白板级区块实例所有权，而每个 `ChunkBlockLoader` 负责自己的矩形缓冲区视角。
+- `Board.createChunkLoader()` 会创建绑定到 Board 事件总线的新 `ChunkLoader`，适合需要自行管理加载集合的消费者（如 Monitor、AOM）
 
 ## API
 
@@ -132,11 +111,10 @@
 ## 实现状态
 
 - 已实现：区块实例持有、按 id/坐标获取、按 id/坐标卸载、清空持有集合、持有集合内部邻接同步，以及区块加载相关事件发射。
-- 已接线：`Board` 根区块加载器委托、`ChunkBlockLoader` 内部组合 `ChunkLoader`。
+- 已接线：`Board` 根区块加载器委托，Monitor/AOM 使用 `Board.createChunkLoader()` 创建独立加载器。
 - 待完善：更细粒度的生命周期统计、不同 loader 之间的区块共享策略，以及更完整的错误恢复路径。
 
 ## 相关文档
 
-- [chunk-block-loader-document.md](./chunk-block-loader-document.md)
 - [board-document.md](./board-document.md)
 - [components-document.md](./components-document.md)

@@ -1,6 +1,6 @@
 import { jest } from "@jest/globals";
 import { createChunk, createChunkAt } from "../../../../test-support/aom-fixtures.js";
-import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
+
 import { DirectedGraph } from "../../../../utils/directed-graph.js";
 import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
@@ -8,9 +8,7 @@ import { BasicObject } from "../../../../objects/basic-obj.js";
 import { Vector } from "../../../../utils/math.js";
 import { oneChunkData } from "./data.js";
 
-jest.unstable_mockModule("../../../chunk/chunk-block-loader.js", () => ({
-  ChunkBlockLoader: MockChunkBlockLoader,
-}));
+
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
 
@@ -34,8 +32,13 @@ describe("ActiveObjectManager/choose", () => {
     return {
       width: CHUNK_SIZE,
       height: CHUNK_SIZE,
-      createChunkBlockLoader: () => new MockChunkBlockLoader(),
       getChunkById: (chunkId) => chunkMap.get(chunkId),
+      getChunkByCoordinate: (x, y) =>
+        chunkMap.get(Chunk.coordinateToId(x, y)),
+      createChunkLoader: () => ({
+        trackChunk: jest.fn(),
+        emitLoadRequest: jest.fn(),
+      }),
     };
   }
 

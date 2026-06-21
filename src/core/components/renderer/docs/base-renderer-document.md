@@ -2,7 +2,7 @@
 
 本文档提供 `BaseRenderer` 的概述。
 
-静态层渲染器用于把 `Monitor.chunkBlockLoader` 当前已加载区块中的静态对象，按“已加载区块合并后的全局静态图拓扑序”绘制到 `Monitor.baseCanvas`。
+静态层渲染器用于把 `Monitor.chunkLoader` 当前已加载区块中的静态对象，按“已加载区块合并后的全局静态图拓扑序”绘制到 `Monitor.baseCanvas`。
 
 它和 `LiveRenderer` 的边界不同：`LiveRenderer` 负责绘制当前仍在 AOM 中的对象，`BaseRenderer` 负责绘制已经脱离 AOM、稳定存在于白板静态结构中的对象。
 
@@ -12,7 +12,7 @@
 
 - `ActiveObjectManager.apply(objects)` 负责把活动对象写回区块静态结构
 - `ChunkObjectManager` 负责维护静态图与对象覆盖区块索引，`Board` 负责持有对象实例
-- `Monitor.chunkBlockLoader` 负责回答“当前视口缓冲区里有哪些区块”
+- `Monitor.chunkLoader` 负责回答“当前视口缓冲区里有哪些区块”
 - `BaseRenderer` 负责回答“这些已加载区块里的静态对象，如何画到 `baseCanvas` 上”
 
 ## 当前职责
@@ -21,7 +21,7 @@
 
 当前行为是：
 
-1. 从 `chunkBlockLoader.getLoadedChunks()` 读取当前已加载区块
+1. 从 `chunkLoader.getLoadedChunks()` 读取当前已加载区块
 2. 把这些区块里的 `staticGraph` 合并成一个 monitor 级全局静态图
 3. 对合并后的全局静态图执行一次拓扑排序
 4. 通过 `ActiveObjectManager.findBoardObjectInstance(...)` 回查对象实例，并按对象 id 去重
@@ -50,7 +50,7 @@
 当前已接入三类触发时机：
 
 - `ActiveObjectManager.apply(objects)` 完成静态结构写回后，会优先请求“对象进入活动层前的旧世界范围 + 提交后的新世界范围”对应的静态层刷新；若本次提交还改动了静态层上下关系，则会把受影响的邻接静态对象一起纳入对象级失效；若当前 monitor 无法做对象级失效，再回退到“旧覆盖区块 + 新覆盖区块”并集
-- `ChunkBlockLoader` 缓冲区更新后，`Monitor` 会把“旧区块 + 新区块”的屏幕矩形送入 base 层调度器
+- `ChunkLoader` 缓冲区更新后，`Monitor` 会把“旧区块 + 新区块”的屏幕矩形送入 base 层调度器
 - `Monitor.origin / zoom` 变化后，会主动请求“旧视口可见区块 + 新视口可见区块”的静态层刷新
 
 其中第一条现在已经进入对象级静态脏区第一版。

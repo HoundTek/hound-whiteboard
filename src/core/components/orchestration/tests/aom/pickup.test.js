@@ -1,6 +1,6 @@
 import { jest } from "@jest/globals";
 import { createChunk, createChunkAt } from "../../../../test-support/aom-fixtures.js";
-import { MockChunkBlockLoader } from "./chunk-block-loader.mock.js";
+
 import { DirectedGraph } from "../../../../utils/directed-graph.js";
 import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
@@ -8,9 +8,7 @@ import { BasicObject } from "../../../../objects/basic-obj.js";
 import { Vector } from "../../../../utils/math.js";
 import { oneChunkData, twoChunkData, multiChunkData } from "./data.js";
 
-jest.unstable_mockModule("../../../chunk/chunk-block-loader.js", () => ({
-  ChunkBlockLoader: MockChunkBlockLoader,
-}));
+
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
 
@@ -43,8 +41,13 @@ describe("ActiveObjectManager/pickup", () => {
     return {
       width: CHUNK_SIZE,
       height: CHUNK_SIZE,
-      createChunkBlockLoader: () => new MockChunkBlockLoader(),
       getChunkById: (chunkId) => chunkMap.get(chunkId),
+      getChunkByCoordinate: (x, y) =>
+        chunkMap.get(Chunk.coordinateToId(x, y)),
+      createChunkLoader: () => ({
+        trackChunk: jest.fn(),
+        emitLoadRequest: jest.fn(),
+      }),
     };
   }
 
@@ -360,29 +363,28 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickupEmpty.equals(expectedEmpty)).toBe(true);
     });
 
-    test("当某个二维覆盖区块不可达时，应跳过该区块并继续处理其它可达覆盖区块", () => {
+    test("当某个覆盖区块不在 Board 的 chunkMap 中时，应跳过该区块并继续处理其它可达覆盖区块", () => {
       const centerChunk = createChunkAt(0, 0);
       const upChunk = createChunkAt(0, 1);
-      const unreachableChunk = createChunkAt(1, 1);
-      aom = new ActiveObjectManager(
-        createBoard(centerChunk, upChunk, unreachableChunk),
-      );
+      // (1,1) 区块不在 board 中
+      aom = new ActiveObjectManager(createBoard(centerChunk, upChunk));
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
       upChunk.objectManager = new ChunkObjectManager(upChunk.id);
-      unreachableChunk.objectManager = new ChunkObjectManager(unreachableChunk.id);
 
       centerChunk.objectManager.staticGraph = DirectedGraph.parse([[300, []]]);
       upChunk.objectManager.staticGraph = DirectedGraph.parse([
         [300, [302]],
         [302, []],
       ]);
-      unreachableChunk.objectManager.staticGraph = DirectedGraph.parse([
-        [300, [301]],
-        [301, []],
-      ]);
 
-      setObjectCoverage([centerChunk, upChunk, unreachableChunk], [300]);
+      setObjectCoverage([centerChunk, upChunk], [300]);
+      // 覆盖索引包含一个不存在的区块
+      centerChunk.objectManager.setObjectCoverChunks(300, [
+        centerChunk.id,
+        upChunk.id,
+        Chunk.coordinateToId(1, 1),
+      ]);
 
       verticalChunkConnect(centerChunk, upChunk);
 
@@ -453,8 +455,8 @@ describe("ActiveObjectManager/pickup", () => {
     });
   });
 
-  describe("优先使用 Board.createChunkBlockLoader", () => {
-    test("pickup 应优先使用 Board.createChunkBlockLoader 且不再要求 Chunk 入参", () => {
+  describe("优先使用 Board.createChunkLoader", () => {
+    test("pickup 应优先使用 Board.createChunkLoader", () => {
       const chunk = createChunk(1);
       chunk.objectManager = new ChunkObjectManager(1);
       chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
@@ -462,13 +464,19 @@ describe("ActiveObjectManager/pickup", () => {
       const board = {
         width: 100,
         height: 100,
-        createChunkBlockLoader: jest.fn(() => new MockChunkBlockLoader()),
         getChunkById: jest.fn((chunkId) => (chunkId === 1 ? chunk : undefined)),
+        getChunkByCoordinate: jest.fn((x, y) =>
+          x === 0 && y === 0 ? chunk : undefined,
+        ),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
       const aom = new ActiveObjectManager(board);
 
       const pickup8 = aom.pickup(
-        new Set([new BasicObject(new Vector(0, 0), 8, 1)]),
+        new Set([new BasicObject(new Vector(0, 0), 8)]),
       );
       const expected8 = DirectedGraph.parse([
         [8, [4, 5]],
@@ -479,7 +487,6 @@ describe("ActiveObjectManager/pickup", () => {
         [1, []],
       ]);
 
-      expect(board.createChunkBlockLoader).toHaveBeenCalled();
       expect(pickup8.equals(expected8)).toBe(true);
     });
   });

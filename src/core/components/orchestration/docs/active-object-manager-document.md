@@ -237,13 +237,12 @@
 
 在当前实现中，它的跨区块行为有几个约束：
 
-- 起点优先是对象实例集合；AOM 会先取对象 id，再通过对象自身的 `ownerChunkId` 解析起始区块。
-- 当 AOM 被挂在 `Board` 上时，会优先使用 `Board.createChunkBlockLoader()`，因此跨区块拾取会自动接入白板区块加载事件总线。
+- 起点优先是对象实例集合；AOM 会先取对象 id，再通过 `resolveObjectChunk` 根据对象位置解析起始区块。
+- 当 AOM 被挂在 `Board` 上时，会使用 `Board.createChunkLoader()` 创建临时加载器，并通过 `Board.getChunkByCoordinate()` 按坐标直接查找目标区块，跨区块拾取自动接入白板区块加载事件总线。
 - 对某个节点是否跨区块，读取 `chunk.objectManager.getObjectCoverChunks(node)`。
 - 覆盖区块用区块 id 描述，再通过 `Chunk.idToCoordinate(chunkId)` 转成二维坐标。
-- `ChunkBlockLoader` 会在二维坐标系中按需移动：先处理 x 方向，再处理 y 方向；因此同一次拾取中可以出现右上、左下这类组合路径。
-- 读取某个覆盖区块完成后，`pickup` 会把 `ChunkBlockLoader` 移回原区块，再继续处理剩余覆盖区块，避免把 DFS 的后续搜索留在错误区块上下文里。
-- 如果某个覆盖区块当前不可达，`pickup` 会跳过该区块，继续处理其它覆盖区块，不会让整次拾取失败。
+- `pickup` 读取某个覆盖区块完成后，会把当前区块指针移回原区块，再继续处理剩余覆盖区块，避免把 DFS 的后续搜索留在错误区块上下文里。
+- 如果某个覆盖区块不在 Board 的 chunkMap 中（不可达），`pickup` 会跳过该区块，继续处理其它覆盖区块，不会让整次拾取失败。
 
 这意味着：
 
@@ -302,7 +301,7 @@
 | `registerActiveObject(obj)`                            | 注册活动对象实例到索引                        | `(BasicObject) => void`                     |
 | `unregisterActiveObject(objectId)`                     | 从活动对象索引和 onLayer 映射中移除           | `(number) => void`                          |
 | `resolveObjectChunk(obj)`                              | 解析对象所属起始区块                          | `(BasicObject) => Chunk`                    |
-| `createChunkBlockLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `() => ChunkBlockLoader`                    |
+| `createChunkLoader()`                             | 创建与白板区块加载事件总线绑定的区块加载器    | `() => ChunkLoader`                    |
 | `getObjectWorldRange(obj)`                             | 获取对象世界坐标范围                          | `(BasicObject) => Range`                    |
 | `findBoardObjectInstance(objectId, candidateChunkIds)` | 在白板全局和覆盖区块中查找对象实例            | `(number, Iterable<number>) => BasicObject` |
 
@@ -328,4 +327,3 @@
 - [tier-graph-document.md](./tier-graph-document.md)
 - [chunk-document.md](./chunk-document.md)
 - [chunk-object-manager-document.md](./chunk-object-manager-document.md)
-- [chunk-block-loader-document.md](./chunk-block-loader-document.md)
