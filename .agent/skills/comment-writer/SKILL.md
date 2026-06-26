@@ -68,19 +68,23 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 
 ### 字段和属性
 
-```
-@type {类型} 属性名 - 这是什么（必要时再说明为什么存在）
-```
-
-示例：
+禁止单行 `/** @type {xxx} */` 格式。字段和属性的 JSDoc 必须使用多行格式，第一行写描述（不打句号），`@type` 单独一行：
 
 ```javascript
-/** @type {boolean} 当前修改手势是否激活 */
+/**
+ * 当前修改手势是否激活
+ * @type {boolean}
+ */
 isModifyingGestureActive = false;
 
-/** @type {{ x: number, y: number }|null} 手势锚点（世界坐标） */
+/**
+ * 手势锚点（世界坐标）
+ * @type {{ x: number, y: number } | null}
+ */
 _anchorPosition = null;
 ```
+
+`@type` 之前的描述行不可省略——即使变量名已能表达含义，仍需写中文描述。
 
 ### 方法
 
