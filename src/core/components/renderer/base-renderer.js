@@ -1,63 +1,66 @@
 /**
  * @file 静态层渲染器
  * @description 提供白板静态层的脏区域渲染与清理逻辑。
- * @module core/components/base-renderer
+ * @module core/components/renderer/base-renderer
  * @author Zhou Chenyu
  */
 
+import { Renderer } from "./renderer.js";
 import { BasicObject } from "../../objects/basic-obj.js";
-import { intersectsRanges, PathRange, RectangleRange } from "../../range/index.js";
+import { RectangleRange } from "../../range/rectangle.js";
 import { DirectedGraph } from "../../utils/directed-graph.js";
-import { Monitor } from "../orchestration/monitor.js";
-const PATH_RASTERIZATION_SCREEN_PADDING = 1;
-
-/**
- * 用于 clearRect 时对脏区做整数扩边，避免子像素残留
- * @param {RectangleRange | Object} rect - 原始脏区
- * @returns {RectangleRange | undefined}
- */
-function expandRectForClear(rect) {
-  const normalizedRect = RectangleRange.fromRectLike(rect);
-  if (!normalizedRect) return undefined;
-
-  const left = Math.floor(normalizedRect.left);
-  const top = Math.floor(normalizedRect.top);
-  const right = Math.ceil(normalizedRect.right);
-  const bottom = Math.ceil(normalizedRect.bottom);
-
-  return new RectangleRange(left, top, right - left, bottom - top);
-}
-
-/**
- * 规整脏区数组用于屏幕清理：扩边 + 过滤无效项
- * @param {any[]} [dirtyRects = []]
- * @returns {RectangleRange[]}
- */
-function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
-  return dirtyRects
-    .map((dirtyRect) => expandRectForClear(dirtyRect))
-    .filter(Boolean);
-}
 
 /**
  * 静态层渲染器
  * @description 按当前 Monitor 已加载区块中的静态图顺序，将静态对象渲染到 baseCanvas。
  * 当前已支持显式 dirty rect 驱动的局部清理与局部重绘。
  * @class
+ * @extends Renderer
  * @author Zhou Chenyu
  */
-class BaseRenderer {
+class BaseRenderer extends Renderer {
   /**
-   * 绑定的显示器
-   * @type {Monitor}
-   */
-  monitor;
-
-  /**
-   * @param {Monitor} monitor - 目标显示器
+   * @param {import("../orchestration/monitor.js").Monitor} monitor - 目标显示器
    */
   constructor(monitor) {
-    this.monitor = monitor;
+    super(monitor);
+  }
+
+  /**
+   * 获取 base 层 2D 上下文
+   * @returns {CanvasRenderingContext2D | null | undefined}
+   * @protected
+   */
+  _getContext() {
+    return this.monitor?.getContext?.("base");
+  }
+
+  /**
+   * 收集应在静态层绘制的对象
+   * @description 合并已加载区块的静态图，过滤掉当前 AOM 管理的对象。
+   * @returns {BasicObject[]}
+   * @protected
+   */
+  _collectDrawables() {
+    const allDrawables = this.collectStaticDrawables();
+    const aom = this.monitor?.board?.activeObjectManager;
+    return typeof aom?.has === "function"
+      ? allDrawables.filter((obj) => !aom.has(obj.id))
+      : allDrawables;
+  }
+
+  /**
+   * 全量清空 baseCanvas
+   */
+  clear() {
+    const canvas = this.monitor?.baseCanvas;
+    const ctx = this._getContext();
+    if (!canvas || !ctx) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
   }
 
   /**
@@ -126,84 +129,6 @@ class BaseRenderer {
       ) ?? this.monitor?.board?.getObjectById?.(objectId);
 
     return objectInstance instanceof BasicObject ? objectInstance : undefined;
-  }
-
-  /**
-   * 获取对象的世界矩形范围
-   * @param {BasicObject} objectInstance - 对象实例
-   * @returns {RectangleRange | undefined}
-   */
-  getObjectWorldRect(objectInstance) {
-    try {
-      const worldRange = objectInstance
-        ?.getRange?.()
-        ?.withPosition?.(objectInstance.position);
-      if (!worldRange) return undefined;
-      return RectangleRange.from(worldRange);
-    } catch {
-      return undefined;
-    }
-  }
-
-  /**
-   * 获取对象的屏幕留白
-   * @param {BasicObject} objectInstance - 对象实例
-   * @returns {number} 屏幕空间留白
-   */
-  getObjectScreenPadding(objectInstance) {
-    const objectPadding = objectInstance?.getRenderPadding?.();
-    const basePadding =
-      Number.isFinite(objectPadding) && objectPadding > 0
-        ? objectPadding * (this.monitor?.zoom ?? 1)
-        : 0;
-    const objectRange = objectInstance?.getRange?.();
-
-    if (objectRange instanceof PathRange) {
-      return basePadding + PATH_RASTERIZATION_SCREEN_PADDING;
-    }
-
-    return basePadding;
-  }
-
-  /**
-   * 将世界矩形换算为带留白的屏幕矩形
-   * @param {RectangleRange | import("../../range/range.js").Range | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} worldRect - 世界矩形
-   * @param {number} [padding = 0] - 屏幕空间留白
-   * @returns {RectangleRange | undefined}
-   */
-  getScreenRectForWorldRect(worldRect, padding = 0) {
-    const normalizedWorldRect = RectangleRange.fromRectLike(worldRect);
-    if (!normalizedWorldRect) return undefined;
-
-    const screenRect =
-      this.monitor?.worldRectToScreenRect?.(normalizedWorldRect);
-    if (!screenRect) return undefined;
-
-    return screenRect.inflate(padding);
-  }
-
-  /**
-   * 获取对象的屏幕矩形范围
-   * @param {BasicObject} objectInstance - 对象实例
-   * @returns {RectangleRange | undefined}
-   */
-  getObjectScreenRect(objectInstance) {
-    const worldRect = this.getObjectWorldRect(objectInstance);
-    if (!worldRect) return undefined;
-
-    return this.getScreenRectForWorldRect(
-      worldRect,
-      this.getObjectScreenPadding(objectInstance),
-    );
-  }
-
-  /**
-   * 规范化屏幕矩形
-   * @param {RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }} rect - 原始矩形
-   * @returns {RectangleRange | undefined}
-   */
-  normalizeScreenRect(rect) {
-    return RectangleRange.fromRectLike(rect);
   }
 
   /**
@@ -286,114 +211,6 @@ class BaseRenderer {
   }
 
   /**
-   * 创建 drawable 条目
-   * @param {BasicObject[]} drawables - 对象实例集合
-   * @returns {Array<{ objectId: number, object: BasicObject, screenRect?: RectangleRange }>}
-   */
-  createDrawableEntries(drawables) {
-    return drawables.map((objectInstance) => ({
-      objectId: objectInstance.id,
-      object: objectInstance,
-      screenRect: this.getObjectScreenRect(objectInstance),
-    }));
-  }
-
-  /**
-   * 收集待处理脏区
-   * @param {Array<RectangleRange | { left: number, top: number, width?: number, height?: number, right?: number, bottom?: number }>} [dirtyRects = []] - 外部传入脏区
-   * @returns {RectangleRange[]}
-   */
-  collectDirtyRects(dirtyRects = []) {
-    return dirtyRects
-      .map((rect) => this.normalizeScreenRect(rect))
-      .filter(Boolean);
-  }
-
-  /**
-   * 判断对象条目是否与任一脏区相交
-   * @param {{ screenRect?: RectangleRange }} entry - drawable 条目
-   * @param {RectangleRange[]} dirtyRects - 脏区集合
-   * @returns {boolean}
-   */
-  intersectsDirtyRects(entry, dirtyRects) {
-    const rect = entry?.screenRect;
-    if (!rect) return dirtyRects.length === 0;
-
-    return dirtyRects.some((dirtyRect) => intersectsRanges(rect, dirtyRect));
-  }
-
-  /**
-   * 收集与条目相交的脏区
-   * @param {{ screenRect?: RectangleRange }} entry - drawable 条目
-   * @param {RectangleRange[]} dirtyRects - 脏区集合
-   * @returns {RectangleRange[]} 相交脏区
-   */
-  getEntryDirtyRects(entry, dirtyRects) {
-    const rect = entry?.screenRect;
-    if (!rect) return dirtyRects;
-
-    return dirtyRects.filter((dirtyRect) => intersectsRanges(rect, dirtyRect));
-  }
-
-  /**
-   * 清理脏区
-   * @param {RectangleRange[]} dirtyRects - 脏区集合
-   */
-  clearDirtyRects(dirtyRects) {
-    const ctx = this.monitor?.getContext?.("base");
-    if (!ctx) return;
-
-    for (const dirtyRect of dirtyRects) {
-      const clearRect = expandRectForClear(dirtyRect);
-      if (!clearRect) continue;
-
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(
-        clearRect.left,
-        clearRect.top,
-        clearRect.width,
-        clearRect.height,
-      );
-      ctx.restore();
-    }
-  }
-
-  /**
-   * 在指定脏区裁剪下渲染对象
-   * @param {CanvasRenderingContext2D} ctx - 原始 2D 上下文
-   * @param {CanvasRenderingContext2D} viewportContext - 视口上下文
-   * @param {BasicObject} objectInstance - 待绘制对象
-   * @param {RectangleRange[]} dirtyRects - 裁剪脏区
-   */
-  renderObjectWithinDirtyRects(
-    ctx,
-    viewportContext,
-    objectInstance,
-    dirtyRects,
-  ) {
-    if (!Array.isArray(dirtyRects) || dirtyRects.length === 0) {
-      objectInstance.render(viewportContext);
-      return;
-    }
-
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.beginPath();
-    for (const dirtyRect of dirtyRects) {
-      ctx.rect(
-        dirtyRect.left,
-        dirtyRect.top,
-        dirtyRect.width,
-        dirtyRect.height,
-      );
-    }
-    ctx.clip();
-    objectInstance.render(viewportContext);
-    ctx.restore();
-  }
-
-  /**
    * 失效指定对象的静态层屏幕脏区
    * @param {Iterable<BasicObject>} [objects = []] - 待刷新的对象集合
    * @param {{ previousWorldRects?: Map<number, RectangleRange> }} [options = {}] - 旧世界范围快照
@@ -409,8 +226,11 @@ class BaseRenderer {
       const padding = this.getObjectScreenPadding(objectInstance);
       const currentRect = this.getObjectScreenRect(objectInstance);
       const previousWorldRect = previousWorldRects.get(objectInstance.id);
-      const previousRect = previousWorldRect
-        ? this.getScreenRectForWorldRect(previousWorldRect, padding)
+      const previousScreenRect = previousWorldRect
+        ? this.monitor?.worldRectToScreenRect?.(previousWorldRect)
+        : undefined;
+      const previousRect = previousScreenRect
+        ? previousScreenRect.inflate(padding)
         : undefined;
 
       if (currentRect) dirtyRects.push(currentRect);
@@ -457,119 +277,6 @@ class BaseRenderer {
     for (const dirtyRect of dirtyRectMap.values()) {
       this.monitor?.baseRenderScheduler?.invalidate?.(dirtyRect);
     }
-  }
-
-  /**
-   * 清空 baseCanvas
-   */
-  clear() {
-    const canvas = this.monitor?.baseCanvas;
-    const ctx = this.monitor?.getContext?.("base");
-    if (!canvas || !ctx) return;
-
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  }
-
-  /**
-   * 将世界坐标变换折算到屏幕坐标
-   * @param {CanvasRenderingContext2D} ctx - 原始 2D 上下文
-   * @returns {CanvasRenderingContext2D}
-   */
-  createViewportContext(ctx) {
-    const monitor = this.monitor;
-    const zoom = monitor?.zoom ?? 1;
-    const originX = monitor?.origin?.x ?? 0;
-    const originY = monitor?.origin?.y ?? 0;
-
-    return new Proxy(ctx, {
-      get(target, prop, receiver) {
-        if (prop === "setTransform") {
-          return (a, b, c, d, e, f) => {
-            const translatedE = (e - originX) * zoom;
-            const translatedF = (f - originY) * zoom;
-            return target.setTransform(
-              a * zoom,
-              b * zoom,
-              c * zoom,
-              d * zoom,
-              translatedE,
-              translatedF,
-            );
-          };
-        }
-
-        const value = Reflect.get(target, prop, target);
-        if (typeof value === "function") {
-          return value.bind(target);
-        }
-        return value;
-      },
-
-      set(target, prop, value) {
-        return Reflect.set(target, prop, value, target);
-      },
-    });
-  }
-
-  /**
-   * 渲染当前静态层对象
-   * @returns {BasicObject[]} 当前渲染的对象集合
-   */
-  render(dirtyRects) {
-    const ctx = this.monitor?.getContext?.("base");
-    if (!ctx) return [];
-
-    const allDrawables = this.collectStaticDrawables();
-    // 过滤掉当前在 AOM 中的对象（无论活跃与否），避免 BaseRenderer 与 LiveRenderer 双渲染
-    const aom = this.monitor?.board?.activeObjectManager;
-    const drawables =
-      typeof aom?.has === "function"
-        ? allDrawables.filter((obj) => !aom.has(obj.id))
-        : allDrawables;
-    const drawableEntries = this.createDrawableEntries(drawables);
-    const viewportContext = this.createViewportContext(ctx);
-    const hasExplicitDirtyRects =
-      Array.isArray(dirtyRects) && dirtyRects.length > 0;
-    const effectiveDirtyRects = hasExplicitDirtyRects
-      ? normalizeDirtyRectsForScreenUpdate(this.collectDirtyRects(dirtyRects))
-      : [];
-
-    if (hasExplicitDirtyRects) {
-      this.clearDirtyRects(effectiveDirtyRects);
-    } else {
-      this.clear();
-    }
-
-    for (const entry of drawableEntries) {
-      if (hasExplicitDirtyRects) {
-        if (!this.intersectsDirtyRects(entry, effectiveDirtyRects)) continue;
-      }
-      if (typeof entry.object.render !== "function") continue;
-
-      const entryDirtyRects = hasExplicitDirtyRects
-        ? this.getEntryDirtyRects(entry, effectiveDirtyRects)
-        : [];
-
-      this.renderObjectWithinDirtyRects(
-        ctx,
-        viewportContext,
-        entry.object,
-        entryDirtyRects,
-      );
-    }
-
-    return drawables;
-  }
-
-  /**
-   * 刷新入口
-   * @returns {BasicObject[]} 当前渲染的对象集合
-   */
-  flush(dirtyRects) {
-    return this.render(dirtyRects);
   }
 }
 
