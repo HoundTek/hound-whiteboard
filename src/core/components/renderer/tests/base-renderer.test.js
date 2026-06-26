@@ -72,6 +72,16 @@ describe("BaseRenderer", () => {
     };
   }
 
+  function createCanvas(width, height, contextResolver) {
+    return {
+      width,
+      height,
+      getContext() {
+        return contextResolver();
+      },
+    };
+  }
+
   function createReceiverSensitiveContext(calls) {
     const ctx = {
       save() {
@@ -170,14 +180,11 @@ describe("BaseRenderer", () => {
       [12, []],
     ]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([lower, upper]),
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
       chunkLoader: {
         getLoadedChunks() {
           return [chunk];
@@ -185,7 +192,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
     const drawables = renderer.render();
 
     expect(drawables).toEqual([lower, upper]);
@@ -201,14 +208,13 @@ describe("BaseRenderer", () => {
     chunk.objectManager = new ChunkObjectManager(1);
     chunk.objectManager.staticGraph = DirectedGraph.parse([[111, []]]);
 
+    const canvas = createCanvas(320, 240, () =>
+      createReceiverSensitiveContext(calls),
+    );
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([object]),
-      getContext(layer) {
-        return layer === "base" ? createReceiverSensitiveContext(calls) : null;
-      },
       chunkLoader: {
         getLoadedChunks() {
           return [chunk];
@@ -216,7 +222,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     expect(() => renderer.render()).not.toThrow();
     expect(calls).toContainEqual(["strokeStyle", "#000000"]);
@@ -240,14 +246,11 @@ describe("BaseRenderer", () => {
     rightChunk.objectManager = new ChunkObjectManager(2);
     rightChunk.objectManager.staticGraph = DirectedGraph.parse([[42, []]]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([lower, upper]),
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
       chunkLoader: {
         getLoadedChunks() {
           return [rightChunk, leftChunk];
@@ -255,7 +258,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     expect(renderer.render()).toEqual([lower, upper]);
   });
@@ -273,14 +276,11 @@ describe("BaseRenderer", () => {
     coveredChunk.objectManager = new ChunkObjectManager(2);
     coveredChunk.objectManager.staticGraph = DirectedGraph.parse([[21, []]]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([object]),
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
       chunkLoader: {
         getLoadedChunks() {
           return [coveredChunk];
@@ -288,7 +288,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     expect(renderer.render()).toEqual([object]);
   });
@@ -306,14 +306,11 @@ describe("BaseRenderer", () => {
     coveredChunk.objectManager = new ChunkObjectManager(2);
     coveredChunk.objectManager.staticGraph = DirectedGraph.parse([[51, []]]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([object]),
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
       chunkLoader: {
         getLoadedChunks() {
           return [coveredChunk, ownerChunk];
@@ -321,7 +318,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     expect(renderer.render()).toEqual([object]);
     expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
@@ -343,18 +340,15 @@ describe("BaseRenderer", () => {
       [32, []],
     ]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
       chunkWidth: 800,
       chunkHeight: 600,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([leftObject, rightObject]),
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
-      },
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
       },
       chunkLoader: {
         getLoadedChunks() {
@@ -363,7 +357,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     renderer.render([new RectangleRange(-1, -1, 20, 20)]);
 
@@ -377,15 +371,12 @@ describe("BaseRenderer", () => {
 
   test("clearDirtyRects 应把浮点脏区向外扩张到整像素清理矩形", () => {
     const calls = [];
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
     };
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     renderer.clearDirtyRects([new RectangleRange(10.2, 20.4, 5.1, 6.2)]);
 
@@ -402,18 +393,15 @@ describe("BaseRenderer", () => {
     chunk.objectManager = new ChunkObjectManager(1);
     chunk.objectManager.staticGraph = DirectedGraph.parse([[33, []]]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 2,
       chunkWidth: 800,
       chunkHeight: 600,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([object]),
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
-      },
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
       },
       chunkLoader: {
         getLoadedChunks() {
@@ -422,7 +410,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     renderer.render([new RectangleRange(-4, -4, 1, 1)]);
 
@@ -450,18 +438,15 @@ describe("BaseRenderer", () => {
     rightChunk.objectManager = new ChunkObjectManager(2);
     rightChunk.objectManager.staticGraph = DirectedGraph.parse([[62, []]]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
       chunkWidth: 800,
       chunkHeight: 600,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([lower, upper]),
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
-      },
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
       },
       chunkLoader: {
         getLoadedChunks() {
@@ -470,7 +455,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     renderer.render([new RectangleRange(-2, -2, 20, 10)]);
 
@@ -508,14 +493,11 @@ describe("BaseRenderer", () => {
     chunk3.objectManager = new ChunkObjectManager(3);
     chunk3.objectManager.staticGraph = DirectedGraph.parse([[73, []]]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([first, second, third]),
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
       chunkLoader: {
         getLoadedChunks() {
           return [chunk3, chunk2, chunk1];
@@ -523,7 +505,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     expect(renderer.render()).toEqual([first, second, third]);
     expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
@@ -563,14 +545,11 @@ describe("BaseRenderer", () => {
       [83, []],
     ]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseCanvas: { width: 320, height: 240 },
       board: createBoardWithObjects([first, second, third]),
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
       chunkLoader: {
         getLoadedChunks() {
           return [chunk3, chunk2, chunk1];
@@ -578,7 +557,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
 
     expect(renderer.render()).toEqual([first, second, third]);
     expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
@@ -588,36 +567,41 @@ describe("BaseRenderer", () => {
     ]);
   });
 
-  test("invalidateChunks 应把当前区块与旧区块都送入 baseRenderScheduler", () => {
-    const calls = [];
+  test("invalidateChunks 应把当前区块与旧区块都提交给调度器", () => {
     const currentChunk = Chunk.fromId(2);
     const previousChunk = Chunk.fromId(1);
 
+    const canvas = createCanvas(320, 240, () => ({
+      save() {},
+      restore() {},
+      setTransform() {},
+      clearRect() {},
+      beginPath() {},
+      rect() {},
+      clip() {},
+    }));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
       chunkWidth: 10,
       chunkHeight: 10,
       board: {},
-      baseCanvas: { width: 320, height: 240 },
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
       },
-      getContext(layer) {
-        return layer === "base" ? createContext(calls) : null;
-      },
-      baseRenderScheduler: {
-        invalidate: jest.fn(),
-      },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
+    const invalidateSpy = jest
+      .spyOn(renderer, "invalidate")
+      .mockImplementation(() => false);
+
     renderer.invalidateChunks([currentChunk], [previousChunk]);
 
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
+    expect(invalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(10, 0, 10, 10),
     );
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
+    expect(invalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(0, 0, 10, 10),
     );
   });
@@ -625,18 +609,24 @@ describe("BaseRenderer", () => {
   test("invalidateObjects 应同时失效对象当前范围与旧世界范围", () => {
     const object = new StrokeObject(new Vector(100, 0), 91, 1);
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
+    const canvas = createCanvas(1, 1, () => ({
+      save() {},
+      restore() {},
+      setTransform() {},
+      clearRect() {},
+    }));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseRenderScheduler: {
-        invalidate: jest.fn(),
-      },
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
+    const invalidateSpy = jest
+      .spyOn(renderer, "invalidate")
+      .mockImplementation(() => false);
     const oldWorldRect = RectangleRange.from(
       object.getRange().withPosition(new Vector(0, 0)),
     );
@@ -649,11 +639,11 @@ describe("BaseRenderer", () => {
       new RectangleRange(98.5, -1.5, 8, 3),
       new RectangleRange(-1.5, -1.5, 8, 3),
     ]);
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+    expect(invalidateSpy).toHaveBeenNthCalledWith(
       1,
       new RectangleRange(98.5, -1.5, 8, 3),
     );
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+    expect(invalidateSpy).toHaveBeenNthCalledWith(
       2,
       new RectangleRange(-1.5, -1.5, 8, 3),
     );
@@ -662,18 +652,24 @@ describe("BaseRenderer", () => {
   test("invalidateObjects 应将原始脏区逐一提交给调度器，由调度器统一合并", () => {
     const object = new StrokeObject(new Vector(1, 0), 92, 1);
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
+    const canvas = createCanvas(1, 1, () => ({
+      save() {},
+      restore() {},
+      setTransform() {},
+      clearRect() {},
+    }));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseRenderScheduler: {
-        invalidate: jest.fn(),
-      },
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
+    const invalidateSpy = jest
+      .spyOn(renderer, "invalidate")
+      .mockImplementation(() => false);
     const oldWorldRect = RectangleRange.from(
       object.getRange().withPosition(new Vector(0, 0)),
     );
@@ -682,18 +678,16 @@ describe("BaseRenderer", () => {
       previousWorldRects: new Map([[92, oldWorldRect]]),
     });
 
-    // 不再预合并：current 和 previous 各自单独提交给调度器，
-    // 合并由 RenderScheduler.flush 统一完成。
     expect(dirtyRects).toEqual([
       new RectangleRange(-0.5, -1.5, 8, 3),
       new RectangleRange(-1.5, -1.5, 8, 3),
     ]);
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledTimes(2);
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+    expect(invalidateSpy).toHaveBeenCalledTimes(2);
+    expect(invalidateSpy).toHaveBeenNthCalledWith(
       1,
       new RectangleRange(-0.5, -1.5, 8, 3),
     );
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenNthCalledWith(
+    expect(invalidateSpy).toHaveBeenNthCalledWith(
       2,
       new RectangleRange(-1.5, -1.5, 8, 3),
     );
@@ -702,22 +696,28 @@ describe("BaseRenderer", () => {
   test("PathRange 对象的静态层失效矩形应包含额外的抗锯齿安全留白", () => {
     const object = new StrokeObject(new Vector(0, 0), 93, 1);
     object.setPathPoints([new Vector(0, 0), new Vector(0, 10)]);
+    const canvas = createCanvas(1, 1, () => ({
+      save() {},
+      restore() {},
+      setTransform() {},
+      clearRect() {},
+    }));
     const monitor = {
       origin: new Vector(0, 0),
       zoom: 1,
-      baseRenderScheduler: {
-        invalidate: jest.fn(),
-      },
       worldRectToScreenRect(rect) {
         return RectangleRange.from(rect);
       },
     };
 
-    const renderer = new BaseRenderer(monitor);
+    const renderer = new BaseRenderer(monitor, { canvas });
+    const invalidateSpy = jest
+      .spyOn(renderer, "invalidate")
+      .mockImplementation(() => false);
     const dirtyRects = renderer.invalidateObjects([object]);
 
     expect(dirtyRects).toEqual([new RectangleRange(-1.5, -1.5, 3, 13)]);
-    expect(monitor.baseRenderScheduler.invalidate).toHaveBeenCalledWith(
+    expect(invalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(-1.5, -1.5, 3, 13),
     );
   });

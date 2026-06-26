@@ -1,34 +1,25 @@
 /**
  * @file 显示器组件
- * @description 负责画布视口、块加载和渲染输出的调度与管理。
+ * @description 负责画布视口、块加载和渲染协调。
  * @module core/components/monitor
  * @author Zhou Chenyu
  */
 
 import { Board } from "./board.js";
-import { CounterPool } from "../../utils/counter-pool.js";
 import { Vector } from "../../utils/math.js";
 import { joinPath } from "../../utils/path.js";
 import { Chunk } from "../chunk/chunk.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { BaseRenderer } from "../renderer/base-renderer.js";
-import {
-  createBaseDirtyRectPolicyResolver,
-  createBaseDirtyRectThresholdStrategy,
-  createLiveDirtyRectPolicyResolver,
-  createLiveDirtyRectThresholdStrategy,
-} from "../renderer/dirty-rect-strategy.js";
-import {
-  createRectangleDirtyRectMerger,
-  RenderScheduler,
-} from "../renderer/render-scheduler.js";
 import { LiveRenderer } from "../renderer/live-renderer.js";
-import { RectangleRange } from "../../range/index.js";
 import { UiRenderer } from "../renderer/ui-renderer.js";
+import { RectangleRange } from "../../range/index.js";
 
 /**
  * 显示器组件
- *
+ * @description
+ * 协调视口管理、chunk 加载与三层渲染器的调度入口。
+ * 渲染调度链（scheduler、dirty rect 策略、canvas 管理）已完全内聚到渲染器内部。
  * @class
  * @author Zhou Chenyu
  */
@@ -40,24 +31,6 @@ class Monitor {
   rootElement;
 
   /**
-   * 静态内容画布
-   * @type {HTMLCanvasElement | null}
-   */
-  baseCanvas;
-
-  /**
-   * 活动内容画布
-   * @type {HTMLCanvasElement | null}
-   */
-  liveCanvas;
-
-  /**
-   * UI 覆盖层画布
-   * @type {HTMLCanvasElement | null}
-   */
-  uiCanvas;
-
-  /**
    * 白板，用于查询区块顺序与区块尺寸
    * @type {Board}
    */
@@ -65,7 +38,7 @@ class Monitor {
 
   /**
    * 区块加载器，用于按需加载区块内容
-   * @type {ChunkLoader}
+   * @type {import("../chunk/chunk-loader.js").ChunkLoader}
    */
   chunkLoader;
 
@@ -74,24 +47,6 @@ class Monitor {
    * @type {string}
    */
   monitorId;
-
-  /**
-   * 当前显示器的静态层渲染调度器
-   * @type {RenderScheduler}
-   */
-  baseRenderScheduler;
-
-  /**
-   * 当前显示器的渲染调度器
-   * @type {RenderScheduler}
-   */
-  renderScheduler;
-
-  /**
-   * 当前显示器的 UI 层渲染调度器
-   * @type {RenderScheduler}
-   */
-  uiRenderScheduler;
 
   /**
    * 静态层渲染器
@@ -113,10 +68,7 @@ class Monitor {
 
   /**
    * canvas 左上角对应的世界坐标（可为负数）
-   * @description 翻区块、平移、缩放后需整体更新此字段。
-   * 初始值使第一区块在 canvas 中居中：
-   *   origin.x = chunkWidth/2 - canvasWidth/(2×zoom)
-   *   origin.y = chunkHeight/2 - canvasHeight/(2×zoom)
+   * @description 平移、缩放后需整体更新此字段。
    * @type {Vector}
    */
   _origin;
@@ -127,40 +79,6 @@ class Monitor {
    * @type {number}
    */
   _zoom;
-
-
-
-  /**
-   * 静态层 dirty rect 阈值策略
-   * @type {(zoom: number) => Record<string, number | undefined>}
-   */
-  baseDirtyRectThresholdStrategy;
-
-  /**
-   * 活动层 dirty rect 阈值策略
-   * @type {(zoom: number) => Record<string, number | undefined>}
-   */
-  liveDirtyRectThresholdStrategy;
-
-  /**
-   * 静态层 dirty rect policy 解析器
-   * @type {() => {
-   *   getThresholds?: () => Record<string, number | undefined>,
-   *   getViewportRect?: () => any,
-   *   getCanonicalRectsForRect?: (dirtyRect: any) => any[],
-   * }}
-   */
-  baseDirtyRectPolicyResolver;
-
-  /**
-   * 活动层 dirty rect policy 解析器
-   * @type {() => {
-   *   getThresholds?: () => Record<string, number | undefined>,
-   *   getViewportRect?: () => any,
-   *   getCanonicalRectsForRect?: (dirtyRect: any) => any[],
-   * }}
-   */
-  liveDirtyRectPolicyResolver;
 
   /**
    * @param {{
@@ -179,70 +97,32 @@ class Monitor {
     { width, height },
     monitorId,
   ) {
-    this.attachRenderLayers({
-      rootElement,
-      baseCanvas,
-      liveCanvas,
-      uiCanvas,
-    });
+    this.rootElement = rootElement ?? null;
     this.board = board;
     this.chunkLoader = board?.createChunkLoader?.(`monitor-${monitorId}`);
     this._zoom = 1;
     this.monitorId = monitorId;
-    const rect = this.liveCanvas?.getBoundingClientRect();
-    const canvasWidth = rect?.width ?? 0;
-    const canvasHeight = rect?.height ?? 0;
-    // 初始 origin 使第一区块居中显示。若 canvas 尚未布局，调用方应在布局后重新计算
+
+    this.baseRenderer = new BaseRenderer(this, {
+      canvas: baseCanvas,
+    });
+
+    this.liveRenderer = new LiveRenderer(this, board?.activeObjectManager, {
+      canvas: liveCanvas,
+    });
+
+    this.uiRenderer = new UiRenderer(this, board?.activeObjectManager, {
+      canvas: uiCanvas,
+    });
+
+    const liveCanvasRect = liveCanvas?.getBoundingClientRect();
+    const canvasWidth = liveCanvasRect?.width ?? 0;
+    const canvasHeight = liveCanvasRect?.height ?? 0;
     this._origin = new Vector(
       this.chunkWidth / 2 - canvasWidth / (2 * this._zoom),
       this.chunkHeight / 2 - canvasHeight / (2 * this._zoom),
     );
     this.resizeRenderLayers(width, height);
-
-    this.baseRenderer = new BaseRenderer(this);
-    this.liveRenderer = new LiveRenderer(this, this.board?.activeObjectManager);
-    this.uiRenderer = new UiRenderer(this, this.board?.activeObjectManager);
-    this.baseDirtyRectThresholdStrategy =
-      createBaseDirtyRectThresholdStrategy();
-    this.liveDirtyRectThresholdStrategy =
-      createLiveDirtyRectThresholdStrategy();
-    this.baseDirtyRectPolicyResolver = createBaseDirtyRectPolicyResolver({
-      getOrigin: () => this.origin,
-      getZoom: () => this.zoom,
-      getLoadedChunks: () => this.chunkLoader?.getLoadedChunks?.() ?? [],
-      getChunkById: (chunkId) => this.board?.getChunkById?.(chunkId),
-      getChunkWidth: () => this.chunkWidth,
-      getChunkHeight: () => this.chunkHeight,
-      getChunkScreenRect: (chunk) =>
-        this.baseRenderer?.getChunkScreenRect?.(chunk),
-      getThresholds: () =>
-        this.baseDirtyRectThresholdStrategy?.(this.zoom) ?? {},
-      getViewportRect: () => this.getViewportScreenRect(),
-    });
-    this.liveDirtyRectPolicyResolver = createLiveDirtyRectPolicyResolver({
-      getZoom: () => this.zoom,
-      getThresholds: () =>
-        this.liveDirtyRectThresholdStrategy?.(this.zoom) ?? {},
-      getViewportRect: () => this.getViewportScreenRect(),
-    });
-    this.baseRenderScheduler = new RenderScheduler({
-      mergeDirtyRects: this.createDirtyRectMerger("base"),
-    });
-    this.renderScheduler = new RenderScheduler({
-      mergeDirtyRects: this.createDirtyRectMerger("live"),
-    });
-    this.uiRenderScheduler = new RenderScheduler({
-      mergeDirtyRects: this.createDirtyRectMerger("ui"),
-    });
-    this.baseRenderScheduler.setFlushHandler((dirtyRects) =>
-      this.baseRenderer.flush(dirtyRects),
-    );
-    this.renderScheduler.setFlushHandler((dirtyRects) =>
-      this.liveRenderer.flush(dirtyRects),
-    );
-    this.uiRenderScheduler.setFlushHandler((dirtyRects) =>
-      this.uiRenderer.flush(dirtyRects),
-    );
   }
 
   /**
@@ -294,18 +174,11 @@ class Monitor {
   }
 
   /**
-   * 当前显示器的可见画布（liveCanvas）。
-   *
-   * @description
-   * canvas 是外部代码绑定事件、获取焦点、读取尺寸的入口。
-   * baseCanvas/liveCanvas 通过 CSS z-index 叠加，liveCanvas 位于上层并接收指针/键盘事件。
-   * 外部代码必须通过 `monitor.canvas` 访问，不得直接引用 liveCanvas，
-   * 以确保 monitor 在未来可以替换画布实现而不影响外部绑定。
-   *
+   * 当前显示器的可见画布（liveCanvas）
    * @type {HTMLCanvasElement | null}
    */
   get canvas() {
-    return this.liveCanvas ?? this.baseCanvas ?? null;
+    return this.liveRenderer?.canvas ?? null;
   }
 
   /**
@@ -336,7 +209,7 @@ class Monitor {
   }
 
   /**
-   * 统一更新视口状态，并触发 base/live 补绘
+   * 统一更新视口状态
    * @param {{ origin?: Vector | {x:number, y:number}, zoom?: number }} nextState - 新视口状态
    */
   setViewportState(nextState = {}) {
@@ -364,8 +237,8 @@ class Monitor {
     this._origin = nextOrigin;
     this._zoom = nextZoom;
     this.requestViewportBaseRender(previousChunks, previousViewportState);
-    this.requestViewportLiveRender();
-    this.requestViewportUiRender();
+    this.liveRenderer?.invalidateViewport();
+    this.uiRenderer?.invalidateViewport();
   }
 
   /**
@@ -410,60 +283,27 @@ class Monitor {
    * 请求一次视口范围内的活动层补绘
    */
   requestViewportLiveRender() {
-    const viewportRect = this.getViewportScreenRect();
-    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
-    this.renderScheduler?.invalidate?.(viewportRect);
+    this.liveRenderer?.invalidateViewport();
   }
 
   /**
    * 请求一次视口范围内的 UI 层补绘
    */
   requestViewportUiRender() {
-    const viewportRect = this.getViewportScreenRect();
-    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
-    this.uiRenderScheduler?.invalidate?.(viewportRect);
+    this.uiRenderer?.invalidateViewport();
   }
 
   /**
-   * 强制刷新当前视口的 base/live 全屏渲染
+   * 强制刷新当前视口的全屏渲染
    */
   flushViewportRender() {
     const viewportRect = this.getViewportScreenRect();
     if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
 
     this.syncChunkBufferWithViewport();
-    this.baseRenderScheduler?.invalidate?.(viewportRect);
-    this.renderScheduler?.invalidate?.(viewportRect);
-    this.uiRenderScheduler?.invalidate?.(viewportRect);
-  }
-
-  /**
-   * 绑定显示器的多层渲染画布
-   * @param {{
-   *   rootElement?: HTMLElement | null,
-   *   baseCanvas?: HTMLCanvasElement | null,
-   *   liveCanvas?: HTMLCanvasElement | null,
-   *   uiCanvas?: HTMLCanvasElement | null,
-   * }} renderLayers - 渲染层集合
-   */
-  attachRenderLayers({ rootElement, baseCanvas, liveCanvas, uiCanvas } = {}) {
-    if (rootElement !== undefined) {
-      this.rootElement = rootElement ?? null;
-    }
-
-    if (baseCanvas !== undefined) {
-      this.baseCanvas = baseCanvas ?? null;
-    }
-
-    if (liveCanvas !== undefined) {
-      this.liveCanvas = liveCanvas ?? null;
-    }
-
-    if (uiCanvas !== undefined) {
-      this.uiCanvas = uiCanvas ?? null;
-    }
-
-    this.resizeRenderLayers(this.width, this.height);
+    this.baseRenderer?.invalidate(viewportRect);
+    this.liveRenderer?.invalidate(viewportRect);
+    this.uiRenderer?.invalidate(viewportRect);
   }
 
   /**
@@ -472,25 +312,10 @@ class Monitor {
    * @param {number} height - 画布高度
    */
   resizeRenderLayers(width, height) {
-    const nextWidth = Number.isFinite(width) ? width : 0;
-    const nextHeight = Number.isFinite(height) ? height : 0;
-    const canvases = [this.baseCanvas, this.liveCanvas, this.uiCanvas].filter(
-      Boolean,
-    );
     let resized = false;
-
-    for (const layerCanvas of canvases) {
-      if (
-        layerCanvas.width === nextWidth &&
-        layerCanvas.height === nextHeight
-      ) {
-        continue;
-      }
-
-      layerCanvas.width = nextWidth;
-      layerCanvas.height = nextHeight;
-      resized = true;
-    }
+    if (this.baseRenderer?.resize(width, height)) resized = true;
+    if (this.liveRenderer?.resize(width, height)) resized = true;
+    if (this.uiRenderer?.resize(width, height)) resized = true;
 
     if (resized) {
       this.requestRenderLayersRefresh();
@@ -498,58 +323,12 @@ class Monitor {
   }
 
   /**
-   * 在渲染层尺寸变化后请求 base/live 补绘
+   * 在渲染层尺寸变化后请求补绘
    */
   requestRenderLayersRefresh() {
-    const viewportRect = this.getViewportScreenRect();
-    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
-
     this.requestViewportBaseRender();
-    this.renderScheduler?.invalidate?.(viewportRect);
-    this.uiRenderScheduler?.invalidate?.(viewportRect);
-  }
-
-  /**
-   * 创建指定渲染层的脏区聚合器
-   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
-   * @returns {(dirtyRects: any[]) => any[]}
-   */
-  createDirtyRectMerger(layer = "live") {
-    const getDirtyRectPolicy = () => this.getDirtyRectPolicy(layer);
-
-    return createRectangleDirtyRectMerger({
-      getThresholds: () => getDirtyRectPolicy().getThresholds?.() ?? {},
-      getViewportRect: () => getDirtyRectPolicy().getViewportRect?.(),
-      getCanonicalRectsForRect: (dirtyRect) =>
-        getDirtyRectPolicy().getCanonicalRectsForRect?.(dirtyRect),
-    });
-  }
-
-  /**
-   * 获取指定渲染层当前 dirty rect policy
-   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
-   * @returns {{
-   *   getThresholds?: () => Record<string, number | undefined>,
-   *   getViewportRect?: () => any,
-   *   getCanonicalRectsForRect?: (dirtyRect: any) => any[],
-   * }}
-   */
-  getDirtyRectPolicy(layer = "live") {
-    const resolver =
-      layer === "base"
-        ? this.baseDirtyRectPolicyResolver
-        : this.liveDirtyRectPolicyResolver;
-
-    return resolver?.() ?? {};
-  }
-
-  /**
-   * 获取指定渲染层当前 dirty rect 阈值
-   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
-   * @returns {Record<string, number | undefined>}
-   */
-  getDirtyRectThresholds(layer = "live") {
-    return this.getDirtyRectPolicy(layer).getThresholds?.() ?? {};
+    this.liveRenderer?.invalidateViewport();
+    this.uiRenderer?.invalidateViewport();
   }
 
   /**
@@ -563,7 +342,7 @@ class Monitor {
       this.uiRenderer?.registerOverlayProvider?.(provider);
 
     if (registeredProvider && options.invalidate !== false) {
-      this.requestViewportUiRender();
+      this.uiRenderer?.invalidateViewport();
     }
 
     return registeredProvider;
@@ -580,7 +359,7 @@ class Monitor {
       this.uiRenderer?.unregisterOverlayProvider?.(provider) ?? false;
 
     if (removed && options.invalidate !== false) {
-      this.requestViewportUiRender();
+      this.uiRenderer?.invalidateViewport();
     }
 
     return removed;
@@ -632,11 +411,8 @@ class Monitor {
   }
 
   /**
-   * 使 chunkLoader 覆盖 2x 视口的加载区域，目标与已加载的差异做集合运算
-   * @description
-   * 加载区 = 视口世界矩形向四周各扩展 50%（即面积 4 倍）的矩形。
-   * - 加载区内的区块 → 不在已加载集合中 → 发起加载
-   * - 加载区外的区块 → 在已加载集合中 → 发起卸载（仅持久化模式）
+   * 使 chunkLoader 覆盖 2x 视口的加载区域
+   * @description 加载区 = 视口世界矩形向四周各扩展 50%。
    * @param {Vector} [origin = this.origin] - 视口原点
    * @param {number} [zoom = this.zoom] - 缩放因子
    * @returns {Chunk[]} 当前视口可见区块
@@ -649,10 +425,8 @@ class Monitor {
 
     if (!board || chunkWidth <= 0 || chunkHeight <= 0) return [];
 
-    // 1. 计算视口世界矩形
     const viewportRect = this.getViewportWorldRect(origin, zoom);
 
-    // 2. 计算加载区 = 视口向四周各扩展 50%
     const loadRect = new RectangleRange(
       viewportRect.left - viewportRect.width / 2,
       viewportRect.top - viewportRect.height / 2,
@@ -660,7 +434,6 @@ class Monitor {
       viewportRect.height * 2,
     );
 
-    // 3. 计算加载区覆盖的区块 id 集合（目标）
     const targetChunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
       loadRect,
       chunkWidth,
@@ -668,15 +441,12 @@ class Monitor {
     );
 
     if (targetChunkIds.size === 0) {
-      // 加载区未覆盖任何区块
       return [];
     }
 
-    // 4. 当前已加载集合
     const loadedChunks = chunkLoader?.getLoadedChunks?.() ?? [];
     const loadedChunkIds = new Set(loadedChunks.map((c) => c.id));
 
-    // 5. 集合差运算：需要加载的 = 目标 - 已加载
     for (const chunkId of targetChunkIds) {
       if (loadedChunkIds.has(chunkId)) continue;
       const chunk = chunkLoader?.getChunkById?.(chunkId);
@@ -685,11 +455,8 @@ class Monitor {
       }
     }
 
-    // 6. 集合差运算：需要卸载的 = 已加载 - 目标（仅持久化模式）
     const shouldPreserve =
-      typeof board.isPersistent === "function"
-        ? !board.isPersistent()
-        : false;
+      typeof board.isPersistent === "function" ? !board.isPersistent() : false;
 
     if (!shouldPreserve) {
       for (const chunk of loadedChunks) {
@@ -705,6 +472,7 @@ class Monitor {
   /**
    * 请求一次视口范围内的静态层重绘
    * @param {Chunk[]} [previousChunks = []] - 视口变化前可见区块
+   * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState = {}] - 旧视口状态
    */
   requestViewportBaseRender(previousChunks = [], previousViewportState = {}) {
     const currentChunks = this.syncChunkBufferWithViewport();
@@ -716,26 +484,7 @@ class Monitor {
       return;
     }
 
-    const viewportRect = this.getViewportScreenRect();
-    if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
-    this.baseRenderScheduler?.invalidate?.(viewportRect);
-  }
-
-
-
-  /**
-   * 获取指定渲染层的 2D 上下文
-   * @param {"base" | "live" | "ui"} [layer = "live"] - 渲染层名称
-   * @returns {CanvasRenderingContext2D | null}
-   */
-  getContext(layer = "live") {
-    const layerCanvas = {
-      base: this.baseCanvas,
-      live: this.liveCanvas,
-      ui: this.uiCanvas,
-    }[layer];
-
-    return layerCanvas?.getContext?.("2d") ?? null;
+    this.baseRenderer?.invalidateViewport();
   }
 
   /**
@@ -813,11 +562,6 @@ class Monitor {
 
   /**
    * 将屏幕坐标映射到区块空间坐标
-   *
-   * @description
-   * 由 Monitor 提供给 DeviceContext，封装了 origin、zoom 与区块尺寸。
-   * 区块横向排列、无区块间空隙；触点超出所有区块的纵向范围时返回 null，Signal 管道自动短路。
-   *
    * @param {Vector} screenPos - 屏幕坐标（clientX/clientY）
    * @returns {{ chunkId: number, x: number, y: number } | null}
    */
@@ -841,7 +585,7 @@ class Monitor {
   }
 
   /**
-   * 在白板级设备图中运行时挂载 workflow。
+   * 在白板级设备图中运行时挂载 workflow
    * @param {string} path - workflow 路径（相对于显示器根）
    * @param {import("../../tools/tool.js").Tool|import("../../devices-dag/dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
    */
@@ -857,7 +601,7 @@ class Monitor {
   }
 
   /**
-   * 在白板级设备图中运行时卸载 workflow 节点。
+   * 在白板级设备图中运行时卸载 workflow 节点
    * @param {string} path - workflow 路径（相对于显示器根）
    * @returns {boolean}
    */
@@ -869,7 +613,7 @@ class Monitor {
   }
 
   /**
-   * 在白板级设备图中添加有向边。
+   * 在白板级设备图中添加有向边
    * @param {string} fromPath - 源节点路径（相对于显示器根）
    * @param {string} edgeName - 边名
    * @param {string} toPath - 目标节点路径（相对于显示器根）

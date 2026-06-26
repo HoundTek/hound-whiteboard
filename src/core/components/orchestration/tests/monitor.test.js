@@ -13,9 +13,6 @@ import {
 
 const REPORT_SIGNAL_TYPE = "debug-report";
 
-/**
- * 创建一个简单的报告子图（prefix 节点），用于验证 Monitor#mountSubDAG 行为。
- */
 function createReportSubDAG() {
   let lastReceivedAt = "/";
   let lastOriginalTo = "/";
@@ -70,7 +67,9 @@ describe("Monitor", () => {
   }
 
   function createMonitor(monitorId = "monitor") {
-    const canvas = createNoopCanvas();
+    const liveCanvas = createNoopCanvas();
+    const baseCanvas = createNoopCanvas();
+    const uiCanvas = createNoopCanvas({ width: 0, height: 0 });
     const board = {
       width: 800,
       height: 600,
@@ -95,7 +94,7 @@ describe("Monitor", () => {
     board.devicesDAG = new DevicesDAG();
 
     return new Monitor(
-      { liveCanvas: canvas },
+      { baseCanvas, liveCanvas, uiCanvas },
       board,
       { width: 800, height: 600 },
       monitorId,
@@ -193,62 +192,16 @@ describe("Monitor", () => {
     });
   });
 
-  test("attachRenderLayers 同步层尺寸", () => {
+  test("构造后应初始化三个渲染器及其内部调度器", () => {
     const monitor = createMonitor("delta");
-    const baseCanvas = createNoopCanvas({ width: 0, height: 0 });
-    const liveCanvas = createNoopCanvas({ width: 320, height: 240 });
-    const uiCanvas = createNoopCanvas({ width: 0, height: 0 });
-    const rootElement = {};
 
-    monitor.attachRenderLayers({
-      rootElement,
-      baseCanvas,
-      liveCanvas,
-      uiCanvas,
-    });
-
-    expect(monitor.rootElement).toBe(rootElement);
-    expect(monitor.liveCanvas).toBe(liveCanvas);
-    expect(monitor.baseCanvas).toBe(baseCanvas);
-    expect(monitor.uiCanvas).toBe(uiCanvas);
-    expect(baseCanvas.width).toBe(320);
-    expect(baseCanvas.height).toBe(240);
-    expect(uiCanvas.width).toBe(320);
-    expect(uiCanvas.height).toBe(240);
-    expect(monitor.getContext("base")?.save).toBeDefined();
-    expect(monitor.getContext("live")?.save).toBeDefined();
-    expect(monitor.getContext("ui")?.save).toBeDefined();
-    expect(monitor.renderScheduler).toBeDefined();
-    expect(monitor.uiRenderScheduler).toBeDefined();
     expect(monitor.baseRenderer).toBeDefined();
     expect(monitor.liveRenderer).toBeDefined();
     expect(monitor.uiRenderer).toBeDefined();
-  });
-
-  test("renderScheduler.flush 应调用 liveRenderer.flush", () => {
-    const monitor = createMonitor("epsilon");
-    const flushSpy = jest
-      .spyOn(monitor.liveRenderer, "flush")
-      .mockImplementation(() => []);
-
-    monitor.renderScheduler.invalidate({ type: "dirty" });
-    monitor.renderScheduler.flush();
-
-    expect(flushSpy).toHaveBeenCalledTimes(1);
-    flushSpy.mockRestore();
-  });
-
-  test("uiRenderScheduler.flush 应调用 uiRenderer.flush", () => {
-    const monitor = createMonitor("epsilon-ui");
-    const flushSpy = jest
-      .spyOn(monitor.uiRenderer, "flush")
-      .mockImplementation(() => []);
-
-    monitor.uiRenderScheduler.invalidate({ type: "dirty" });
-    monitor.uiRenderScheduler.flush();
-
-    expect(flushSpy).toHaveBeenCalledTimes(1);
-    flushSpy.mockRestore();
+    expect(monitor.baseRenderer._scheduler).toBeDefined();
+    expect(monitor.liveRenderer._scheduler).toBeDefined();
+    expect(monitor.uiRenderer._scheduler).toBeDefined();
+    expect(monitor.canvas).toBe(monitor.liveRenderer.canvas);
   });
 
   test("base/live 调度器应使用不同的 dirty rect 聚合参数", () => {
@@ -258,13 +211,14 @@ describe("Monitor", () => {
       new RectangleRange(20, 0, 10, 10),
     ];
 
-    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+    const baseMerger = monitor.baseRenderer._scheduler.mergeDirtyRects;
+    const liveMerger = monitor.liveRenderer._scheduler.mergeDirtyRects;
+
+    expect(baseMerger(dirtyRects)).toEqual([
       new RectangleRange(0, 0, 10, 10),
       new RectangleRange(20, 0, 10, 10),
     ]);
-    expect(monitor.renderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 30, 10),
-    ]);
+    expect(liveMerger(dirtyRects)).toEqual([new RectangleRange(0, 0, 30, 10)]);
   });
 
   test("dirty rect 聚合阈值应随 zoom 放大而同步放宽", () => {
@@ -274,147 +228,25 @@ describe("Monitor", () => {
       new RectangleRange(18, 0, 10, 10),
     ];
 
-    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
+    const baseMerger = monitor.baseRenderer._scheduler.mergeDirtyRects;
+    const liveMerger = monitor.liveRenderer._scheduler.mergeDirtyRects;
+
+    expect(baseMerger(dirtyRects)).toEqual([
       new RectangleRange(0, 0, 10, 10),
       new RectangleRange(18, 0, 10, 10),
     ]);
-    expect(monitor.renderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 28, 10),
-    ]);
+    expect(liveMerger(dirtyRects)).toEqual([new RectangleRange(0, 0, 28, 10)]);
 
     monitor.zoom = 2;
 
-    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 28, 10),
-    ]);
-    expect(monitor.renderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 28, 10),
-    ]);
+    expect(baseMerger(dirtyRects)).toEqual([new RectangleRange(0, 0, 28, 10)]);
+    expect(liveMerger(dirtyRects)).toEqual([new RectangleRange(0, 0, 28, 10)]);
   });
-
-  test("coverage ratio 阈值应随 zoom 提高而变得更严格", () => {
-    const monitor = createMonitor("epsilon-zoom-coverage");
-    const baseThresholds = monitor.getDirtyRectThresholds("base");
-    const liveThresholds = monitor.getDirtyRectThresholds("live");
-
-    expect(baseThresholds.viewportCoverageRatio).toBeCloseTo(0.92);
-    expect(baseThresholds.canonicalRectCoverageRatio).toBeCloseTo(0.55);
-    expect(liveThresholds.viewportCoverageRatio).toBeCloseTo(0.72);
-
-    monitor.zoom = 2;
-
-    expect(
-      monitor.getDirtyRectThresholds("base").viewportCoverageRatio,
-    ).toBeCloseTo(0.95);
-    expect(
-      monitor.getDirtyRectThresholds("base").canonicalRectCoverageRatio,
-    ).toBeCloseTo(0.65);
-    expect(
-      monitor.getDirtyRectThresholds("live").viewportCoverageRatio,
-    ).toBeCloseTo(0.8);
-  });
-
-  test("应允许通过替换策略函数调整 dirty rect 聚合阈值", () => {
-    const monitor = createMonitor("epsilon-custom-threshold-strategy");
-    const dirtyRects = [
-      new RectangleRange(0, 0, 10, 10),
-      new RectangleRange(30, 0, 10, 10),
-    ];
-
-    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 10, 10),
-      new RectangleRange(30, 0, 10, 10),
-    ]);
-
-    monitor.baseDirtyRectThresholdStrategy = () => ({
-      axisNearGap: 20,
-      diagonalNearGap: 10,
-      maxExtraArea: 400,
-      maxGrowthRatio: 1.5,
-      viewportCoverageRatio: 0.92,
-      canonicalRectCoverageRatio: 0.55,
-    });
-
-    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 40, 10),
-    ]);
-  });
-
-  test("应允许通过替换 policy resolver 调整整组 dirty rect 行为", () => {
-    const monitor = createMonitor("epsilon-custom-policy-resolver");
-    const defaultBasePolicy = monitor.getDirtyRectPolicy("base");
-    const dirtyRects = [
-      new RectangleRange(0, 0, 10, 10),
-      new RectangleRange(22, 0, 10, 10),
-    ];
-
-    expect(monitor.getDirtyRectPolicy("base").getThresholds().axisNearGap).toBe(
-      6,
-    );
-    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 10, 10),
-      new RectangleRange(22, 0, 10, 10),
-    ]);
-
-    monitor.baseDirtyRectPolicyResolver = () => ({
-      getThresholds: () => ({
-        axisNearGap: 12,
-        diagonalNearGap: 6,
-        maxExtraArea: 256,
-        maxGrowthRatio: 1.35,
-        viewportCoverageRatio: 0.92,
-        canonicalRectCoverageRatio: 0.55,
-      }),
-      getViewportRect: () => monitor.getViewportScreenRect(),
-      getCanonicalRectsForRect: (dirtyRect) =>
-        defaultBasePolicy.getCanonicalRectsForRect?.(dirtyRect),
-    });
-
-    expect(monitor.getDirtyRectPolicy("base").getThresholds().axisNearGap).toBe(
-      12,
-    );
-    expect(monitor.baseRenderScheduler.mergeDirtyRects(dirtyRects)).toEqual([
-      new RectangleRange(0, 0, 32, 10),
-    ]);
-  });
-
-  test("base policy 应收窄到 dirty rect 真正命中的已加载 chunk 子集", () => {
-    const monitor = createMonitor("epsilon-chunk-subset");
-    const chunk1 = Chunk.fromId(1);
-    const chunk2 = Chunk.fromId(2);
-    monitor.chunkLoader = {
-      getLoadedChunks() {
-        return [chunk1, chunk2];
-      },
-    };
-    monitor.baseRenderer = {
-      getChunkScreenRect(chunk) {
-        const rectMap = new Map([
-          [1, new RectangleRange(0, 0, 800, 600)],
-          [2, new RectangleRange(800, 0, 800, 600)],
-        ]);
-        return rectMap.get(chunk.id);
-      },
-    };
-
-    expect(
-      monitor
-        .getDirtyRectPolicy("base")
-        .getCanonicalRectsForRect(new RectangleRange(10, 10, 100, 100)),
-    ).toEqual([new RectangleRange(0, 0, 800, 600)]);
-    expect(
-      monitor
-        .getDirtyRectPolicy("base")
-        .getCanonicalRectsForRect(new RectangleRange(810, 10, 100, 100)),
-    ).toEqual([new RectangleRange(800, 0, 800, 600)]);
-  });
-
-
 
   test("设置 origin 或 zoom 应触发 baseRenderScheduler.invalidate", () => {
     const monitor = createMonitor("eta");
     const invalidateSpy = jest
-      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .spyOn(monitor.baseRenderer, "invalidate")
       .mockImplementation(() => false);
 
     monitor.zoom = 2;
@@ -445,10 +277,10 @@ describe("Monitor", () => {
   test("resizeRenderLayers 应在尺寸变化后触发 base/live 补绘请求", () => {
     const monitor = createMonitor("theta");
     const baseInvalidateSpy = jest
-      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .spyOn(monitor.baseRenderer, "invalidate")
       .mockImplementation(() => false);
     const liveInvalidateSpy = jest
-      .spyOn(monitor.renderScheduler, "invalidate")
+      .spyOn(monitor.liveRenderer, "invalidate")
       .mockImplementation(() => false);
 
     monitor.resizeRenderLayers(640, 480);
@@ -467,7 +299,7 @@ describe("Monitor", () => {
   test("setViewportScaleAroundCenter 应以视口中心为锚点更新 origin 与 zoom", () => {
     const monitor = createMonitor("iota-scale-center");
     const liveInvalidateSpy = jest
-      .spyOn(monitor.renderScheduler, "invalidate")
+      .spyOn(monitor.liveRenderer, "invalidate")
       .mockImplementation(() => false);
 
     monitor.setViewportScaleAroundCenter(2);
@@ -487,10 +319,10 @@ describe("Monitor", () => {
       .spyOn(monitor, "syncChunkBufferWithViewport")
       .mockImplementation(() => []);
     const baseInvalidateSpy = jest
-      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .spyOn(monitor.baseRenderer, "invalidate")
       .mockImplementation(() => false);
     const liveInvalidateSpy = jest
-      .spyOn(monitor.renderScheduler, "invalidate")
+      .spyOn(monitor.liveRenderer, "invalidate")
       .mockImplementation(() => false);
 
     monitor.flushViewportRender();

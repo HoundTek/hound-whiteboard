@@ -12,10 +12,12 @@ import {
   ActiveObjectManager,
   Layer,
 } from "../orchestration/active-object-manager.js";
+import { createLiveDirtyRectThresholdStrategy } from "./dirty-rect-strategy.js";
 
 /**
  * 活动层渲染器
  * @description 按 AOM 当前层顺序将动态图对象渲染到 Monitor 的 liveCanvas。
+ * 自管理 liveCanvas、渲染调度器与脏区合并策略。
  * @class
  * @extends Renderer
  * @author Zhou Chenyu
@@ -42,14 +44,24 @@ class LiveRenderer extends Renderer {
   objectSnapshotRects;
 
   /**
+   * live 层缩放感知的脏区合并阈值策略
+   * @type {(zoom: number) => Record<string, number | undefined>}
+   * @private
+   */
+  _resolveThresholds;
+
+  /**
    * @param {import("../orchestration/monitor.js").Monitor} monitor - 目标显示器
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
+   * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(monitor, activeObjectManager) {
-    super(monitor);
+  constructor(monitor, activeObjectManager, options = {}) {
+    super(monitor, options);
     this.activeObjectManager = activeObjectManager;
     this.previousDrawableEntries = [];
     this.objectSnapshotRects = new Map();
+    this._resolveThresholds = createLiveDirtyRectThresholdStrategy();
+    this._initScheduler();
   }
 
   /**
@@ -61,12 +73,12 @@ class LiveRenderer extends Renderer {
   }
 
   /**
-   * 获取 live 层 2D 上下文
-   * @returns {CanvasRenderingContext2D | null | undefined}
+   * 获取当前脏区合并阈值
+   * @returns {Record<string, number | undefined>}
    * @protected
    */
-  _getContext() {
-    return this.monitor?.getContext?.("live");
+  _getThresholds() {
+    return this._resolveThresholds(this.monitor?.zoom ?? 1) ?? {};
   }
 
   /**
@@ -76,7 +88,7 @@ class LiveRenderer extends Renderer {
    * @protected
    */
   _beforeRender(ctx) {
-    const baseScheduler = this.monitor?.baseRenderScheduler;
+    const baseScheduler = this.monitor?.baseRenderer?._scheduler;
     if (baseScheduler?.framePending) {
       baseScheduler.flush();
     }
@@ -95,8 +107,8 @@ class LiveRenderer extends Renderer {
    * 全量清空 liveCanvas
    */
   clear() {
-    const canvas = this.monitor?.liveCanvas;
-    const ctx = this._getContext();
+    const canvas = this._canvas;
+    const ctx = canvas?.getContext?.("2d") ?? null;
     if (!canvas || !ctx) return;
 
     ctx.save();
@@ -311,16 +323,14 @@ class LiveRenderer extends Renderer {
   }
 
   /**
-   * 全量拷贝 baseCanvas（静态缓存）到 liveCanvas
+   * 全量拷贝 baseCanvas 到 liveCanvas
    * @description
    * 在 clear → copyBase → render 三步流水线中用作第二步。
-   * 将 baseCanvas 当前像素完整拷贝到 liveCanvas，
-   * 与 clear 配合替代浏览器 GPU 图层合成。
    * baseCanvas 不存在时静默返回。
    */
   copyBase() {
-    const ctx = this._getContext();
-    const baseCanvas = this.monitor?.baseCanvas;
+    const ctx = this._canvas?.getContext?.("2d") ?? null;
+    const baseCanvas = this.monitor?.baseRenderer?.canvas;
     if (!ctx || !baseCanvas) return;
 
     ctx.save();
@@ -331,15 +341,12 @@ class LiveRenderer extends Renderer {
 
   /**
    * 将脏区对应的 baseCanvas 区域拷贝到 liveCanvas
-   * @description
-   * copyBase 的脏区版本，只拷贝 dirtyRects 指定的区域而非全量。
-   * 在 clear → copyBaseRects → render 三步流水线中用作第二步。
-   * 用于局部刷新场景，避免全量 drawImage 开销。
+   * @description copyBase 的脏区版本，只拷贝 dirtyRects 指定的区域。
    * @param {RectangleRange[]} rects - 脏区集合，只拷贝这些区域
    */
   copyBaseRects(rects) {
-    const ctx = this._getContext();
-    const baseCanvas = this.monitor?.baseCanvas;
+    const ctx = this._canvas?.getContext?.("2d") ?? null;
+    const baseCanvas = this.monitor?.baseRenderer?.canvas;
     if (!ctx || !baseCanvas || !Array.isArray(rects)) return;
 
     ctx.save();
@@ -396,7 +403,7 @@ class LiveRenderer extends Renderer {
             .filter(Boolean);
 
     for (const dirtyRect of targetDirtyRects) {
-      this.monitor?.renderScheduler?.invalidate?.(dirtyRect);
+      this.invalidate(dirtyRect);
     }
   }
 }

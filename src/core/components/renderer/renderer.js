@@ -1,13 +1,17 @@
 /**
  * @file 渲染器基类
- * @description 提供 BaseRenderer 与 LiveRenderer 共用的视口变换、脏区裁剪与渲染管线骨架。
- * @module core/components/renderer
+ * @description 提供视口变换、脏区裁剪、渲染调度与渲染管线骨架的通用抽象。
+ * @module core/components/renderer/renderer
  * @author Zhou Chenyu
  */
 
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange } from "../../range/index.js";
 import { PathRange } from "../../range/path.js";
+import {
+  createRectangleDirtyRectMerger,
+  RenderScheduler,
+} from "./render-scheduler.js";
 
 const PATH_RASTERIZATION_SCREEN_PADDING = 1;
 
@@ -41,9 +45,9 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
 
 /**
  * 渲染器基类
- * @description 封装视口坐标变换、脏区清理与裁剪渲染的通用逻辑。
- * 子类需实现 _getContext、_collectDrawables、clear 三个抽象方法，
- * 并可按需重写 _beforeRender、_afterClear、_afterRender 钩子。
+ * @description 封装视口坐标变换、脏区清理、裁剪渲染与渲染调度的通用逻辑。
+ * 子类需实现 clear、_collectDrawables 抽象方法并可按需重写
+ * _beforeRender、_afterClear、_afterRender、_getThresholds、_getCanonicalRectsForRect 钩子。
  * @class
  * @author Zhou Chenyu
  */
@@ -55,19 +59,136 @@ class Renderer {
   monitor;
 
   /**
-   * @param {import("../orchestration/monitor.js").Monitor} monitor - 目标显示器
+   * 目标渲染层画布
+   * @type {HTMLCanvasElement | null}
+   * @protected
    */
-  constructor(monitor) {
+  _canvas;
+
+  /**
+   * 渲染调度器
+   * @type {RenderScheduler | null}
+   * @protected
+   */
+  _scheduler;
+
+  /**
+   * @param {import("../orchestration/monitor.js").Monitor} monitor - 目标显示器
+   * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
+   */
+  constructor(monitor, options = {}) {
     this.monitor = monitor;
+    this._canvas = options.canvas ?? null;
+    this._scheduler = null;
+  }
+
+  /**
+   * 目标渲染层画布
+   * @type {HTMLCanvasElement | null}
+   */
+  get canvas() {
+    return this._canvas;
   }
 
   /**
    * 获取目标渲染层的 2D 上下文
-   * @returns {CanvasRenderingContext2D | null | undefined}
+   * @returns {CanvasRenderingContext2D | null}
    * @protected
    */
   _getContext() {
-    throw new Error("Not implemented: _getContext");
+    return this._canvas?.getContext?.("2d") ?? null;
+  }
+
+  /**
+   * 初始化渲染调度器
+   * @description 子类在完成自身构造后调用，确保阈值策略等依赖已就位。
+   * @protected
+   */
+  _initScheduler() {
+    this._scheduler = new RenderScheduler({
+      mergeDirtyRects: this._createDirtyRectMerger(),
+      flushHandler: (dirtyRects) => this.flush(dirtyRects),
+    });
+  }
+
+  /**
+   * 创建脏区合并器
+   * @returns {(dirtyRects: any[]) => any[]}
+   * @protected
+   */
+  _createDirtyRectMerger() {
+    return createRectangleDirtyRectMerger({
+      getThresholds: () => this._getThresholds(),
+      getViewportRect: () => this._getViewportRect(),
+      getCanonicalRectsForRect: (dirtyRect) =>
+        this._getCanonicalRectsForRect(dirtyRect),
+    });
+  }
+
+  /**
+   * 获取当前脏区合并阈值
+   * @returns {Record<string, number | undefined>}
+   * @protected
+   */
+  _getThresholds() {
+    return {};
+  }
+
+  /**
+   * 获取视口矩形
+   * @returns {RectangleRange | undefined}
+   * @protected
+   */
+  _getViewportRect() {
+    return this.monitor?.getViewportScreenRect?.();
+  }
+
+  /**
+   * 获取脏区对应的 canonical rect 集合
+   * @param {any} dirtyRect - 脏区
+   * @returns {any[]}
+   * @protected
+   */
+  _getCanonicalRectsForRect(dirtyRect) {
+    return [];
+  }
+
+  /**
+   * 提交一次失效请求
+   * @param {any} [rect] - 失效脏区
+   * @returns {boolean}
+   */
+  invalidate(rect) {
+    if (!this._scheduler) return false;
+    return this._scheduler.invalidate(rect);
+  }
+
+  /**
+   * 失效整个视口
+   */
+  invalidateViewport() {
+    const viewportRect = this._getViewportRect();
+    if (viewportRect?.width > 0 && viewportRect?.height > 0) {
+      this.invalidate(viewportRect);
+    }
+  }
+
+  /**
+   * 调整画布尺寸
+   * @param {number} width - 画布宽度
+   * @param {number} height - 画布高度
+   * @returns {boolean} 是否发生了尺寸变化
+   */
+  resize(width, height) {
+    const canvas = this._canvas;
+    if (!canvas) return false;
+    const nextWidth = Number.isFinite(width) ? width : 0;
+    const nextHeight = Number.isFinite(height) ? height : 0;
+    if (canvas.width === nextWidth && canvas.height === nextHeight)
+      return false;
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+    return true;
   }
 
   /**

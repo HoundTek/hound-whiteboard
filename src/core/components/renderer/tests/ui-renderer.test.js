@@ -6,7 +6,13 @@ import { createNoopCanvasContext2D } from "../../../test-support/noop-canvas.js"
 import { Vector } from "../../../utils/math.js";
 
 class TestOverlayObject extends BasicObject {
-  constructor({ id = 1, ownerChunkId = 1, position, localRect, property } = {}) {
+  constructor({
+    id = 1,
+    ownerChunkId = 1,
+    position,
+    localRect,
+    property,
+  } = {}) {
     super(position ?? new Vector(0, 0), id, ownerChunkId);
     this.boundingBox = RectangleRange.from(
       localRect ?? new RectangleRange(0, 0, 0, 0),
@@ -41,14 +47,21 @@ describe("UiRenderer", () => {
     };
   }
 
-  function createMonitor(context, board = {}) {
+  function createCanvas(context) {
+    return {
+      width: 800,
+      height: 600,
+      getContext() {
+        return context;
+      },
+    };
+  }
+
+  function createMonitor(board = {}) {
     return {
       monitorId: "main",
       zoom: 1,
       board,
-      getContext(layer) {
-        return layer === "ui" ? context : null;
-      },
       worldRectToScreenRect(rect, padding = 0) {
         return RectangleRange.from(rect)?.inflate?.(padding);
       },
@@ -61,7 +74,8 @@ describe("UiRenderer", () => {
   test("flush 应绘制 provider 主动声明的选择框与组合大框", () => {
     const context = createContext();
     const board = {};
-    const monitor = createMonitor(context, board);
+    const monitor = createMonitor(board);
+    const canvas = createCanvas(context);
     const object1 = new TestOverlayObject({
       id: 7,
       position: new Vector(10, 20),
@@ -80,7 +94,7 @@ describe("UiRenderer", () => {
         return new RectangleRange(60, 80, 20, 10);
       },
     };
-    const renderer = new UiRenderer(monitor, aom);
+    const renderer = new UiRenderer(monitor, aom, { canvas });
     renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
       overlayRenderer.createCompatSelectionEntriesForObjects(
         [object1, object2],
@@ -96,13 +110,14 @@ describe("UiRenderer", () => {
       [56, 76, 28, 18],
       [6, 16, 78, 78],
     ]);
-    expect(context.setLineDash.mock.calls).toEqual([[[ ]], [[ ]], [[10, 4]]]);
+    expect(context.setLineDash.mock.calls).toEqual([[[]], [[]], [[10, 4]]]);
   });
 
   test("对象只在 AOM 中但不在 chooser/modifier 当前上下文时，不应显示选择框", () => {
     const context = createContext();
     const board = {};
-    const monitor = createMonitor(context, board);
+    const monitor = createMonitor(board);
+    const canvas2 = createCanvas(context);
     const object = new TestOverlayObject({
       id: 7,
       position: new Vector(10, 20),
@@ -114,7 +129,7 @@ describe("UiRenderer", () => {
         return new RectangleRange(10, 20, 30, 40);
       },
     };
-    const renderer = new UiRenderer(monitor, aom);
+    const renderer = new UiRenderer(monitor, aom, { canvas: canvas2 });
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
 
@@ -124,8 +139,9 @@ describe("UiRenderer", () => {
   test("flush 应执行已注册的自定义 overlay provider", () => {
     const context = createContext();
     const board = {};
-    const monitor = createMonitor(context, board);
-    const renderer = new UiRenderer(monitor, undefined);
+    const monitor = createMonitor(board);
+    const canvas3 = createCanvas(context);
+    const renderer = new UiRenderer(monitor, undefined, { canvas: canvas3 });
     const draw = jest.fn();
     const provider = jest.fn(() => ({
       type: "draw",

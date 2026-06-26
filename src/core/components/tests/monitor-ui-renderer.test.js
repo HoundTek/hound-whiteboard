@@ -69,17 +69,17 @@ describe("Monitor/ui renderer", () => {
     return { monitor, uiContext };
   }
 
-  test("构造后应接上 uiRenderer 与 uiRenderScheduler", () => {
+  test("构造后应接上 uiRenderer 并初始化内部调度器", () => {
     const { monitor } = createMonitorWithUi();
 
     expect(monitor.uiRenderer).toBeDefined();
-    expect(monitor.uiRenderScheduler).toBeDefined();
+    expect(monitor.uiRenderer._scheduler).toBeDefined();
   });
 
   test("视口变化与 flushViewportRender 应触发 ui 层补绘", () => {
     const { monitor } = createMonitorWithUi();
     const invalidateSpy = jest
-      .spyOn(monitor.uiRenderScheduler, "invalidate")
+      .spyOn(monitor.uiRenderer, "invalidate")
       .mockImplementation(() => false);
 
     monitor.setViewportPosition(new Vector(10, 20));
@@ -101,7 +101,7 @@ describe("Monitor/ui renderer", () => {
     const { monitor } = createMonitorWithUi();
     const provider = () => undefined;
     const invalidateSpy = jest
-      .spyOn(monitor, "requestViewportUiRender")
+      .spyOn(monitor.uiRenderer, "invalidateViewport")
       .mockImplementation(() => undefined);
 
     expect(monitor.registerUiOverlayProvider(provider)).toBe(provider);
@@ -169,9 +169,15 @@ describe("Monitor/ui renderer", () => {
     expect(goodDraw).toHaveBeenCalledTimes(1);
   });
 
-  test("flush 在 getContext 返回 falsy 时应安全返回空数组", () => {
+  test("flush 在 canvas context 返回 falsy 时应安全返回空数组", () => {
     const { monitor } = createMonitorWithUi();
-    jest.spyOn(monitor, "getContext").mockReturnValue(null);
+    monitor.uiRenderer._canvas = {
+      width: 100,
+      height: 100,
+      getContext() {
+        return null;
+      },
+    };
 
     const result = monitor.uiRenderer.flush([
       new RectangleRange(0, 0, 100, 100),

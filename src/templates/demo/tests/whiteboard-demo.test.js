@@ -825,10 +825,10 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const baseInvalidateSpy = jest
-      .spyOn(monitor.baseRenderScheduler, "invalidate")
+      .spyOn(monitor.baseRenderer, "invalidate")
       .mockImplementation(() => false);
     const liveInvalidateSpy = jest
-      .spyOn(monitor.renderScheduler, "invalidate")
+      .spyOn(monitor.liveRenderer, "invalidate")
       .mockImplementation(() => false);
 
     configureWhiteboardDemo(board, monitor);

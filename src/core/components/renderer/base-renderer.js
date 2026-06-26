@@ -9,30 +9,77 @@ import { Renderer } from "./renderer.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { RectangleRange } from "../../range/rectangle.js";
 import { DirectedGraph } from "../../utils/directed-graph.js";
+import {
+  createBaseDirtyRectCanonicalRectsResolver,
+  createBaseDirtyRectThresholdStrategy,
+} from "./dirty-rect-strategy.js";
 
 /**
  * 静态层渲染器
  * @description 按当前 Monitor 已加载区块中的静态图顺序，将静态对象渲染到 baseCanvas。
- * 当前已支持显式 dirty rect 驱动的局部清理与局部重绘。
+ * 自管理 baseCanvas、渲染调度器与脏区合并策略。
  * @class
  * @extends Renderer
  * @author Zhou Chenyu
  */
 class BaseRenderer extends Renderer {
   /**
-   * @param {import("../orchestration/monitor.js").Monitor} monitor - 目标显示器
+   * base 层缩放感知的脏区合并阈值策略
+   * @type {(zoom: number) => Record<string, number | undefined>}
+   * @private
    */
-  constructor(monitor) {
-    super(monitor);
+  _resolveThresholds;
+
+  /**
+   * @param {import("../orchestration/monitor.js").Monitor} monitor - 目标显示器
+   * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
+   */
+  constructor(monitor, options = {}) {
+    super(monitor, options);
+    this._resolveThresholds = createBaseDirtyRectThresholdStrategy();
+    this._initScheduler();
   }
 
   /**
-   * 获取 base 层 2D 上下文
-   * @returns {CanvasRenderingContext2D | null | undefined}
+   * 全量清空 baseCanvas
+   */
+  clear() {
+    const canvas = this._canvas;
+    const ctx = canvas?.getContext?.("2d") ?? null;
+    if (!canvas || !ctx) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  /**
+   * 获取当前脏区合并阈值
+   * @returns {Record<string, number | undefined>}
    * @protected
    */
-  _getContext() {
-    return this.monitor?.getContext?.("base");
+  _getThresholds() {
+    return this._resolveThresholds(this.monitor?.zoom ?? 1) ?? {};
+  }
+
+  /**
+   * 获取脏区对应的已加载区块的屏幕矩形集合
+   * @param {any} dirtyRect - 脏区
+   * @returns {any[]}
+   * @protected
+   */
+  _getCanonicalRectsForRect(dirtyRect) {
+    return createBaseDirtyRectCanonicalRectsResolver({
+      getOrigin: () => this.monitor?.origin,
+      getZoom: () => this.monitor?.zoom,
+      getLoadedChunks: () =>
+        this.monitor?.chunkLoader?.getLoadedChunks?.() ?? [],
+      getChunkById: (chunkId) => this.monitor?.board?.getChunkById?.(chunkId),
+      getChunkWidth: () => this.monitor?.chunkWidth,
+      getChunkHeight: () => this.monitor?.chunkHeight,
+      getChunkScreenRect: (chunk) => this.getChunkScreenRect(chunk),
+    })(dirtyRect);
   }
 
   /**
@@ -47,20 +94,6 @@ class BaseRenderer extends Renderer {
     return typeof aom?.has === "function"
       ? allDrawables.filter((obj) => !aom.has(obj.id))
       : allDrawables;
-  }
-
-  /**
-   * 全量清空 baseCanvas
-   */
-  clear() {
-    const canvas = this.monitor?.baseCanvas;
-    const ctx = this._getContext();
-    if (!canvas || !ctx) return;
-
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
   }
 
   /**
@@ -242,7 +275,7 @@ class BaseRenderer extends Renderer {
     );
 
     for (const dirtyRect of normalizedRects) {
-      this.monitor?.baseRenderScheduler?.invalidate?.(dirtyRect);
+      this.invalidate(dirtyRect);
     }
 
     return normalizedRects;
@@ -252,6 +285,7 @@ class BaseRenderer extends Renderer {
    * 失效指定区块对应的屏幕脏区
    * @param {Iterable<*>} [chunks = []] - 当前区块集合
    * @param {Iterable<*>} [previousChunks = []] - 变更前区块集合
+   * @param {{ previousViewportState?: { origin?: { x: number, y: number }, zoom?: number } }} [options = {}] - 旧视口状态
    */
   invalidateChunks(chunks = [], previousChunks = [], options = {}) {
     const dirtyRectMap = new Map();
@@ -275,7 +309,7 @@ class BaseRenderer extends Renderer {
     }
 
     for (const dirtyRect of dirtyRectMap.values()) {
-      this.monitor?.baseRenderScheduler?.invalidate?.(dirtyRect);
+      this.invalidate(dirtyRect);
     }
   }
 }

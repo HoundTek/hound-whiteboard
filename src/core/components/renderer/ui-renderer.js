@@ -1,7 +1,7 @@
 /**
  * @file UI 覆盖层渲染器
  * @description 提供 Monitor.uiCanvas 的兼容渲染实现。
- * @module core/components/ui-renderer
+ * @module core/components/renderer/ui-renderer
  * @author Zhou Chenyu
  */
 
@@ -11,6 +11,11 @@ import { Monitor } from "../orchestration/monitor.js";
 import { ActiveObjectManager } from "../orchestration/active-object-manager.js";
 import { Logger } from "../../../utils/log/logger.js";
 import { logBus } from "../../../utils/log/log-bus.js";
+import {
+  createRectangleDirtyRectMerger,
+  RenderScheduler,
+} from "./render-scheduler.js";
+import { createLiveDirtyRectThresholdStrategy } from "./dirty-rect-strategy.js";
 
 const COMPAT_SELECTION_FRAME_MARGIN = 4;
 const COMPAT_SELECTION_FRAME_STROKE_STYLE = "#33a1ff";
@@ -50,11 +55,8 @@ function normalizeDirtyRectsForScreenUpdate(
 /**
  * UI 覆盖层渲染器
  * @description
- * 当前实现是 Core 侧的兼容层：
- * - 默认只渲染 Core 已知 overlay，如当前 chooser/modifier 的对象选择框
- * - 通过 overlay provider 暴露扩展口，供 chooser 轨迹、控制杆、激光笔等未来 UI 覆盖层接入
- *
- * 这不代表最终边界一定属于 Core；更长期看，uiCanvas 仍可能上移到宿主 UI 管理。
+ * 当前实现是 Core 侧的兼容层，负责绘制 chooser/modifier 的选择框等 UI 覆盖元素。
+ * 自管理 uiCanvas、渲染调度器与脏区合并策略。
  * @class
  * @author Zhou Chenyu
  */
@@ -78,6 +80,27 @@ class UiRenderer {
   overlayProviders;
 
   /**
+   * 目标渲染层画布
+   * @type {HTMLCanvasElement | null}
+   * @private
+   */
+  _canvas;
+
+  /**
+   * 渲染调度器
+   * @type {RenderScheduler | null}
+   * @private
+   */
+  _scheduler;
+
+  /**
+   * UI 层缩放感知的脏区合并阈值策略
+   * @type {(zoom: number) => Record<string, number | undefined>}
+   * @private
+   */
+  _resolveThresholds;
+
+  /**
    * 日志 Logger
    * @type {Logger}
    */
@@ -86,14 +109,32 @@ class UiRenderer {
   /**
    * @param {Monitor} monitor - 目标显示器
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
+   * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(monitor, activeObjectManager) {
+  constructor(monitor, activeObjectManager, options = {}) {
     this.monitor = monitor;
     this.activeObjectManager = activeObjectManager;
     this.overlayProviders = new Set();
+    this._canvas = options.canvas ?? null;
+    this._resolveThresholds = createLiveDirtyRectThresholdStrategy();
+    this._scheduler = new RenderScheduler({
+      mergeDirtyRects: createRectangleDirtyRectMerger({
+        getThresholds: () => this._resolveThresholds(monitor?.zoom ?? 1) ?? {},
+        getViewportRect: () => monitor?.getViewportScreenRect?.(),
+      }),
+      flushHandler: (dirtyRects) => this.flush(dirtyRects),
+    });
 
     /** @type {Logger} */
     this.#log = new Logger("UiRenderer", "WARN", logBus);
+  }
+
+  /**
+   * 目标渲染层画布
+   * @type {HTMLCanvasElement | null}
+   */
+  get canvas() {
+    return this._canvas;
   }
 
   /**
@@ -102,6 +143,44 @@ class UiRenderer {
    */
   setActiveObjectManager(activeObjectManager) {
     this.activeObjectManager = activeObjectManager;
+  }
+
+  /**
+   * 提交一次失效请求
+   * @param {any} [rect] - 失效脏区
+   * @returns {boolean}
+   */
+  invalidate(rect) {
+    if (!this._scheduler) return false;
+    return this._scheduler.invalidate(rect);
+  }
+
+  /**
+   * 失效整个视口
+   */
+  invalidateViewport() {
+    const viewportRect = this.monitor?.getViewportScreenRect?.();
+    if (viewportRect?.width > 0 && viewportRect?.height > 0) {
+      this.invalidate(viewportRect);
+    }
+  }
+
+  /**
+   * 调整画布尺寸
+   * @param {number} width - 画布宽度
+   * @param {number} height - 画布高度
+   * @returns {boolean} 是否发生了尺寸变化
+   */
+  resize(width, height) {
+    const canvas = this._canvas;
+    if (!canvas) return false;
+    const nextWidth = Number.isFinite(width) ? width : 0;
+    const nextHeight = Number.isFinite(height) ? height : 0;
+    if (canvas.width === nextWidth && canvas.height === nextHeight)
+      return false;
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+    return true;
   }
 
   /**
@@ -399,7 +478,7 @@ class UiRenderer {
    * @returns {RectangleRange[]} 本次实际处理的脏区
    */
   flush(dirtyRects = []) {
-    const context = this.monitor?.getContext?.("ui");
+    const context = this._canvas?.getContext?.("2d") ?? null;
     if (!context) return [];
 
     const normalizedDirtyRects = normalizeDirtyRectsForScreenUpdate(

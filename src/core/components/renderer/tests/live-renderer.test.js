@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import { LiveRenderer } from "../live-renderer.js";
 import { Layer } from "../../orchestration/active-object-manager.js";
 import { BasicObject } from "../../../objects/basic-obj.js";
@@ -56,6 +57,16 @@ describe("LiveRenderer", () => {
           type: "drawImage",
           args: [sx, sy, sw, sh, dx, dy, dw, dh],
         });
+      },
+    };
+  }
+
+  function createCanvas(width, height, contextResolver) {
+    return {
+      width,
+      height,
+      getContext() {
+        return contextResolver();
       },
     };
   }
@@ -135,13 +146,10 @@ describe("LiveRenderer", () => {
     const lower = new FakeObject(1, new Vector(10, 20), calls);
     const upper = new FakeObject(2, new Vector(30, 40), calls);
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
     };
     const aom = {
       layerOrder: [createLayer(1, [1]), createLayer(2, [2])],
@@ -152,7 +160,7 @@ describe("LiveRenderer", () => {
       activeObjects: new Set([lower, upper]),
     };
 
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
     const drawables = renderer.render();
 
     expect(drawables).toEqual([lower, upper]);
@@ -166,13 +174,10 @@ describe("LiveRenderer", () => {
     const calls = [];
     const object = new FakeObject(7, new Vector(110, 70), calls);
     const ctx = createContext(calls);
+    const canvas = createCanvas(400, 300, () => ctx);
     const monitor = {
       zoom: 2,
       origin: new Vector(100, 50),
-      liveCanvas: { width: 400, height: 300 },
-      getContext() {
-        return ctx;
-      },
     };
     const aom = {
       layerOrder: [createLayer(7, [7])],
@@ -180,7 +185,7 @@ describe("LiveRenderer", () => {
       activeObjects: new Set([object]),
     };
 
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
     renderer.render();
 
     expect(calls).toContainEqual({
@@ -208,13 +213,10 @@ describe("LiveRenderer", () => {
 
     const object = new StyledFakeObject();
     const ctx = createReceiverSensitiveContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 2,
       origin: new Vector(5, 10),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
     };
     const aom = {
       layerOrder: [createLayer(1, [301])],
@@ -222,7 +224,7 @@ describe("LiveRenderer", () => {
       activeObjects: new Set([object]),
     };
 
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     expect(() => renderer.render()).not.toThrow();
     expect(calls).toContainEqual({ type: "fillStyle", value: "#ff0000" });
@@ -238,6 +240,7 @@ describe("LiveRenderer", () => {
     const inactiveUpper = new FakeObject(12, new Vector(5, 5), calls);
     const active = new FakeObject(13, new Vector(10, 10), calls);
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const inactiveGraph = DirectedGraph.parse([
       [11, [12]],
       [12, []],
@@ -245,10 +248,6 @@ describe("LiveRenderer", () => {
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
     };
     const layer = createLayer(3, [13], inactiveGraph);
     const aom = {
@@ -263,7 +262,7 @@ describe("LiveRenderer", () => {
       },
     };
 
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
     const drawables = renderer.render();
 
     expect(drawables).toEqual([active, inactiveLower, inactiveUpper]);
@@ -278,13 +277,10 @@ describe("LiveRenderer", () => {
     const calls = [];
     const object = new FakeObject(21, new Vector(15, 25), calls);
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
     };
     const aom = {
       layerOrder: [createLayer(4, [])],
@@ -292,7 +288,7 @@ describe("LiveRenderer", () => {
       activeObjects: new Set([object]),
     };
 
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
     const drawables = renderer.render();
 
     expect(drawables).toEqual([object]);
@@ -305,15 +301,12 @@ describe("LiveRenderer", () => {
     const calls = [];
     const first = new FakeObject(31, new Vector(0, 0), calls);
     const second = new FakeObject(32, new Vector(5, 5), calls);
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
     const seenObjectIds = new Set([31]);
     const resolveObject = (objectId) =>
       new Map([
@@ -338,13 +331,10 @@ describe("LiveRenderer", () => {
     const active = new FakeObject(42, new Vector(10, 10), calls);
     const inactiveGraph = DirectedGraph.parse([[41, []]]);
     const layer = createLayer(8, [42], inactiveGraph);
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
     };
     const aom = {
       activeObjectIndex: new Map([[42, active]]),
@@ -352,7 +342,7 @@ describe("LiveRenderer", () => {
         return new Map([[41, inactive]]).get(objectId);
       },
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     const drawables = renderer.collectLayerDrawables(layer, new Set());
 
@@ -364,13 +354,10 @@ describe("LiveRenderer", () => {
     const retained = new FakeObject(43, new Vector(0, 0), calls);
     const layer = createLayer(9, [43], DirectedGraph.parse([]));
     layer.active = false;
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
     };
     const aom = {
       layerOrder: [layer],
@@ -381,7 +368,7 @@ describe("LiveRenderer", () => {
       },
     };
 
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
     const drawables = renderer.render();
 
     expect(drawables).toEqual([retained]);
@@ -395,14 +382,11 @@ describe("LiveRenderer", () => {
     const leftObject = new FakeObject(51, new Vector(0, 0), calls);
     const rightObject = new FakeObject(52, new Vector(100, 0), calls);
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      baseCanvas: {},
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
+      baseRenderer: { canvas: {} },
       worldRectToScreenRect(rect, padding = 0) {
         return new RectangleRange(
           rect.left - padding,
@@ -423,14 +407,13 @@ describe("LiveRenderer", () => {
       ]),
       activeObjects: new Set([leftObject, rightObject]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     const drawables = renderer.render([
       { left: -2, top: -2, width: 20, height: 20, right: 18, bottom: 18 },
     ]);
 
     expect(drawables).toEqual([leftObject, rightObject]);
-    // 先 clear 再 copyBase 再渲染活动对象
     expect(calls.filter((entry) => entry.type === "clearRect")).toEqual([
       { type: "clearRect", args: [-2, -2, 20, 20] },
     ]);
@@ -449,15 +432,12 @@ describe("LiveRenderer", () => {
 
   test("clearDirtyRects 应把浮点脏区向外扩张到整像素清理矩形", () => {
     const calls = [];
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
 
     renderer.clearDirtyRects([new RectangleRange(10.2, 20.4, 5.1, 6.2)]);
 
@@ -469,21 +449,13 @@ describe("LiveRenderer", () => {
 
   test("invalidateObjects 应同时失效对象变更前后的屏幕范围", () => {
     const calls = [];
-    const invalidateCalls = [];
     const object = new FakeObject(61, new Vector(0, 0), calls);
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
+    const invalidateSpy = jest.fn().mockReturnValue(false);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
-      renderScheduler: {
-        invalidate(rect) {
-          invalidateCalls.push(rect);
-        },
-      },
       worldRectToScreenRect(rect, padding = 0) {
         return new RectangleRange(
           rect.left - padding,
@@ -501,35 +473,30 @@ describe("LiveRenderer", () => {
       activeObjectIndex: new Map([[61, object]]),
       activeObjects: new Set([object]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
+    jest.spyOn(renderer, "invalidate").mockImplementation(invalidateSpy);
 
     renderer.render();
     object.position = new Vector(100, 0);
 
     renderer.invalidateObjects([object]);
 
-    expect(invalidateCalls).toEqual([
+    expect(invalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(100, 0, 10, 10),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(0, 0, 10, 10),
-    ]);
+    );
   });
 
   test("captureObjectSnapshot 应在未经历上一帧 render 时保留旧几何范围", () => {
     const calls = [];
-    const invalidateCalls = [];
     const object = new FakeObject(62, new Vector(0, 0), calls);
+    const canvas = createCanvas(320, 240, () => createContext(calls));
+    const invalidateSpy = jest.fn().mockReturnValue(false);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
-      renderScheduler: {
-        invalidate(rect) {
-          invalidateCalls.push(rect);
-        },
-      },
       worldRectToScreenRect(rect, padding = 0) {
         return new RectangleRange(
           rect.left - padding,
@@ -547,29 +514,29 @@ describe("LiveRenderer", () => {
       activeObjectIndex: new Map([[62, object]]),
       activeObjects: new Set([object]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
+    jest.spyOn(renderer, "invalidate").mockImplementation(invalidateSpy);
 
     renderer.captureObjectSnapshot([object]);
     object.position = new Vector(100, 0);
     renderer.invalidateObjects([object]);
 
-    expect(invalidateCalls).toEqual([
+    expect(invalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(100, 0, 10, 10),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith(
       new RectangleRange(0, 0, 10, 10),
-    ]);
+    );
   });
 
   test("getObjectScreenRect 应应用对象级渲染 padding", () => {
     const calls = [];
     const object = new FakeObject(71, new Vector(0, 0), calls);
     object.getRenderPadding = () => 2;
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
       worldRectToScreenRect(rect) {
         return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
       },
@@ -582,7 +549,7 @@ describe("LiveRenderer", () => {
       activeObjectIndex: new Map([[71, object]]),
       activeObjects: new Set([object]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     expect(renderer.getObjectScreenRect(object)).toEqual(
       new RectangleRange(-2, -2, 14, 14),
@@ -613,13 +580,10 @@ describe("LiveRenderer", () => {
     const stroke = new StrokeObject(new Vector(10, 20), 84, 1);
     stroke.setPathPoints([new Vector(0, 0), new Vector(0, 12)]);
 
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
       worldRectToScreenRect(rect) {
         return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
       },
@@ -632,7 +596,7 @@ describe("LiveRenderer", () => {
       activeObjectIndex: new Map([[84, stroke]]),
       activeObjects: new Set([stroke]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     expect(renderer.getObjectScreenRect(stroke)).toEqual(
       new RectangleRange(8.5, 18.5, 3, 15),
@@ -642,16 +606,13 @@ describe("LiveRenderer", () => {
   test("copyBase 应把整个 baseCanvas 拷贝到 liveCanvas", () => {
     const calls = [];
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      baseCanvas: {},
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
+      baseRenderer: { canvas: {} },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
 
     renderer.copyBase();
 
@@ -659,21 +620,31 @@ describe("LiveRenderer", () => {
       { type: "setTransform", args: [1, 0, 0, 1, 0, 0] },
     ]);
     expect(calls.filter((entry) => entry.type === "drawImage")).toEqual([
-      { type: "drawImage", args: [0, 0, undefined, undefined, undefined, undefined, undefined, undefined] },
+      {
+        type: "drawImage",
+        args: [
+          0,
+          0,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ],
+      },
     ]);
   });
 
   test("copyBase 应在 baseCanvas 不存在时静默返回", () => {
     const calls = [];
+    const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return createContext(calls);
-      },
+      baseRenderer: { canvas: null },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
 
     renderer.copyBase();
 
@@ -681,34 +652,33 @@ describe("LiveRenderer", () => {
   });
 
   test("copyBase 应在 context 不存在时静默返回", () => {
-    const monitor = {
-      zoom: 1,
-      origin: new Vector(0, 0),
-      baseCanvas: {},
-      liveCanvas: { width: 320, height: 240 },
+    const canvas = {
+      width: 320,
+      height: 240,
       getContext() {
         return null;
       },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseRenderer: { canvas: {} },
+    };
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
 
-    // 不应抛出异常
     expect(() => renderer.copyBase()).not.toThrow();
   });
 
   test("copyBaseRects 应为每个脏区拷贝对应的 baseCanvas 区域", () => {
     const calls = [];
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      baseCanvas: {},
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
+      baseRenderer: { canvas: {} },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
 
     renderer.copyBaseRects([
       new RectangleRange(10, 20, 30, 40),
@@ -724,16 +694,13 @@ describe("LiveRenderer", () => {
   test("copyBaseRects 应在传入空数组时不产生 drawImage", () => {
     const calls = [];
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      baseCanvas: {},
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
+      baseRenderer: { canvas: {} },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
 
     renderer.copyBaseRects([]);
 
@@ -741,16 +708,19 @@ describe("LiveRenderer", () => {
   });
 
   test("copyBaseRects 应在 context 不存在时静默返回", () => {
-    const monitor = {
-      zoom: 1,
-      origin: new Vector(0, 0),
-      baseCanvas: {},
-      liveCanvas: { width: 320, height: 240 },
+    const canvas = {
+      width: 320,
+      height: 240,
       getContext() {
         return null;
       },
     };
-    const renderer = new LiveRenderer(monitor, undefined);
+    const monitor = {
+      zoom: 1,
+      origin: new Vector(0, 0),
+      baseRenderer: { canvas: {} },
+    };
+    const renderer = new LiveRenderer(monitor, undefined, { canvas });
 
     expect(() =>
       renderer.copyBaseRects([new RectangleRange(0, 0, 10, 10)]),
@@ -761,14 +731,11 @@ describe("LiveRenderer", () => {
     const calls = [];
     const object = new FakeObject(91, new Vector(10, 20), calls);
     const ctx = createContext(calls);
+    const canvas = createCanvas(320, 240, () => ctx);
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      baseCanvas: {},
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
+      baseRenderer: { canvas: {} },
       worldRectToScreenRect(rect) {
         return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
       },
@@ -781,19 +748,17 @@ describe("LiveRenderer", () => {
       activeObjectIndex: new Map([[91, object]]),
       activeObjects: new Set([object]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     const drawables = renderer.render();
 
     expect(drawables).toEqual([object]);
-    // 检查 clear → copyBase 的调用顺序
     const clearCalls = calls.filter((entry) => entry.type === "clearRect");
     const drawImageCalls = calls.filter((entry) => entry.type === "drawImage");
     const renderCalls = calls.filter((entry) => entry.type === "render");
     expect(clearCalls.length).toBe(1);
     expect(drawImageCalls.length).toBe(1);
     expect(renderCalls).toEqual([{ type: "render", id: 91 }]);
-    // clear 在 drawImage 之前
     const clearIndex = calls.indexOf(clearCalls[0]);
     const drawImageIndex = calls.indexOf(drawImageCalls[0]);
     expect(clearIndex).toBeLessThan(drawImageIndex);
@@ -804,22 +769,22 @@ describe("LiveRenderer", () => {
     const flushCalls = [];
     const object = new FakeObject(92, new Vector(0, 0), calls);
     const ctx = createContext(calls);
-    const baseScheduler = {
-      framePending: true,
-      flush() {
-        flushCalls.push("flush");
-        this.framePending = false;
+    const canvas = createCanvas(320, 240, () => ctx);
+    const baseRenderer = {
+      canvas: {},
+      _scheduler: {
+        framePending: true,
+        flush() {
+          flushCalls.push("flush");
+          this.framePending = false;
+        },
+        invalidate() {},
       },
     };
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      baseCanvas: {},
-      baseRenderScheduler: baseScheduler,
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
+      baseRenderer,
       worldRectToScreenRect(rect) {
         return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
       },
@@ -832,7 +797,7 @@ describe("LiveRenderer", () => {
       activeObjectIndex: new Map([[92, object]]),
       activeObjects: new Set([object]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     renderer.render();
 
@@ -844,21 +809,21 @@ describe("LiveRenderer", () => {
     const flushCalls = [];
     const object = new FakeObject(93, new Vector(0, 0), calls);
     const ctx = createContext(calls);
-    const baseScheduler = {
-      framePending: false,
-      flush() {
-        flushCalls.push("flush");
+    const canvas = createCanvas(320, 240, () => ctx);
+    const baseRenderer = {
+      canvas: {},
+      _scheduler: {
+        framePending: false,
+        flush() {
+          flushCalls.push("flush");
+        },
+        invalidate() {},
       },
     };
     const monitor = {
       zoom: 1,
       origin: new Vector(0, 0),
-      baseCanvas: {},
-      baseRenderScheduler: baseScheduler,
-      liveCanvas: { width: 320, height: 240 },
-      getContext() {
-        return ctx;
-      },
+      baseRenderer,
       worldRectToScreenRect(rect) {
         return new RectangleRange(rect.left, rect.top, rect.width, rect.height);
       },
@@ -871,7 +836,7 @@ describe("LiveRenderer", () => {
       activeObjectIndex: new Map([[93, object]]),
       activeObjects: new Set([object]),
     };
-    const renderer = new LiveRenderer(monitor, aom);
+    const renderer = new LiveRenderer(monitor, aom, { canvas });
 
     renderer.render();
 
