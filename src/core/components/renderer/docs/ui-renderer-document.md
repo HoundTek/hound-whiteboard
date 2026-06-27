@@ -27,7 +27,7 @@
 
 - 它先在 Core 内提供一个可工作的 `uiCanvas` 渲染链
 - 它只承接 Core 当前已经知道、且确实需要跟随视口刷新的 overlay
-- 它同时保留 provider 扩展口，避免现在就把所有 UI 语义钉死在 Core 中
+- 它同时保留 provider 扩展口，避免将所有 UI 语义钉死在 Core 中
 
 这里“兼容层”的含义不是“最终 UI 设计”，而是“当前版本的兼容方案 / 适配层”：
 
@@ -81,20 +81,14 @@ provider 的职责是：
 
 ## 与 Monitor 的关系
 
-`UiRenderer` 本身不管理画布尺寸，也不决定何时 flush。
+`UiRenderer` 自管理 uiCanvas、渲染调度器与缩放感知阈值策略。
 
 当前分工是：
 
-- `Monitor` 持有 `uiCanvas`
-- `Monitor.uiRenderScheduler` 负责合并 ui 层脏区并调度 flush
-- `UiRenderer` 负责实际清理与绘制
-
-当前 `Monitor` 会在这些时机推动 ui 层刷新：
-
-- 视口平移或缩放
-- 渲染层尺寸变化
-- 显式 `flushViewportRender()`
-- 注册或注销 overlay provider
+- `Monitor` 在构造时传入 `uiCanvas` 实例
+- `UiRenderer` 内部持有 `_canvas`、`_scheduler`、`_resolveThresholds`（复用 live 层的 zoom 感知阈值）
+- `UiRenderer` 的 `flush(dirtyRects)` 内部通过 `_canvas.getContext("2d")` 获取上下文
+- `invalidate(rect)` / `invalidateViewport()` / `resize(width, height)` 由 UiRenderer 直接管理
 
 ## 与 AOM / 工具链的关系
 
@@ -109,7 +103,7 @@ provider 的职责是：
 - `AOM`、creator、modifier 当前都可以推动 ui 层重绘
 - 真正决定当前默认选择框是否出现的，是 chooser / modifier 工具当前是否声明了对应 overlay
 - chooser / modifier 工具当前仍主要从自己的节点上下文里取对象集合
-- 因此，“对象在 AOM 中”只说明它处于动态图，不再自动等于“应该显示选择框”
+- 因此，“对象在 AOM 中”只说明它处于动态图，不自动等于“应该显示选择框”
 
 这样做的原因是：
 
@@ -118,7 +112,7 @@ provider 的职责是：
 
 ## 当前实现状态
 
-- 已实现：`Monitor.uiRenderScheduler`、`UiRenderer.flush(dirtyRects)`、基于 chooser / modifier tool provider 的兼容选择框、对象多选组合大矩形、自定义 overlay provider 注册口。
+- 已实现：自管理 uiCanvas、`RenderScheduler`、脏区合并策略；`UiRenderer.flush(dirtyRects)`、基于 chooser / modifier tool provider 的兼容选择框、对象多选组合大矩形、自定义 overlay provider 注册口。
 - 已接入：视口变化、渲染层 resize、AOM 活动对象刷新、creator/modifier 高频几何修改后的 ui 层补绘。
 - 已兼容：provider 条目既可给出 `screenRect/worldRect`，也可直接提供 `draw(...)` 回调。
 - 待完善：对象选择轨迹、控制杆、激光笔等真实 overlay 语义仍未在 Core 中定型；ui 层最终归属 Core 还是宿主 UI，当前仍未最终定案。

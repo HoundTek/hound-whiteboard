@@ -6,7 +6,7 @@
 
 ## 模块定位
 
-`RenderScheduler` 当前是 `Monitor` 侧的通用调度层。
+`RenderScheduler` 当前是各渲染器内部的通用调度层。每个 `BaseRenderer`、`LiveRenderer`、`UiRenderer` 在构造时各自创建自己的 `_scheduler` 实例。
 
 它的边界是：
 
@@ -91,7 +91,7 @@
 - base 层可使用更保守的近邻合并阈值，并额外支持“覆盖足够多时退化为整 chunk”
 - 两层都可以在脏区已经接近整视口时，直接退化为整视口重绘，避免继续维护大量碎片矩形
 
-这些参数现在还可以按调用时动态读取，例如直接绑定到当前 `monitor.zoom`：
+这些参数可以按调用时动态读取，例如直接绑定到 `monitor.zoom`：
 
 - 近邻距离阈值可随 `zoom` 线性放大
 - 额外扫描面积阈值可随 `zoom^2` 放大
@@ -150,28 +150,30 @@
 
 这说明当前调度器没有引入更复杂的“取消帧”或“替换帧任务”语义，而是保持最小实现。
 
-## 与 Monitor / LiveRenderer 的关系
+## 与各渲染器之间的关系
 
-当前接入方式是：
+当前接入方式是每个渲染器在构造时创建自己的 `_scheduler`：
 
-- `Monitor` 持有一个 `RenderScheduler`
-- `Monitor` 在构造时把 `flushHandler` 绑定到 `liveRenderer.flush(dirtyRects)`
-- `LiveRenderer.invalidateObjects(...)` 或其它调用方通过 `monitor.renderScheduler.invalidate(rect)` 提交脏区
+- `BaseRenderer._initScheduler()` 创建 `_scheduler`，flush handler 绑定到 `this.flush`
+- `LiveRenderer._initScheduler()` 创建 `_scheduler`，flush handler 绑定到 `this.flush`
+- `UiRenderer` 构造时直接创建 `_scheduler`，flush handler 绑定到 `this.flush`
+
+各渲染器通过 `this.invalidate(rect)` 提交脏区到自己的调度器。
 
 这里的职责边界很明确：
 
 - `RenderScheduler` 决定何时 flush
-- `LiveRenderer` 决定 flush 时画什么
-- `Monitor` 决定这套调度归属哪个视口实例
+- 渲染器决定 flush 时画什么
+- Monitor 负责触发时机（视口变化、区块变化等），由 Monitor 调用渲染器的 `invalidate()` / `invalidateViewport()` 推动渲染
 
 ## 当前实现状态
 
 - 已实现：多次 `invalidate(...)` 合并到单次调度、可替换的 `scheduleFrame`、可替换的 `mergeDirtyRects`、可替换的 `flushHandler`、手动 `flush()` 与 `clear()`。
 - 已验证：同一帧周期内的多次失效请求只会触发一次调度；`flush()` 会先走 `mergeDirtyRects(...)` 再调用处理器。
-- 已接入：`Monitor` 已使用 `RenderScheduler` 驱动 `LiveRenderer.flush(dirtyRects)`。
+- 已接入：`BaseRenderer`、`LiveRenderer`、`UiRenderer` 均在内部持有 `_scheduler` 实例，各渲染器的 `invalidate()` 直接委托给 `_scheduler.invalidate()`。
 - 已实现的默认聚合：重叠/相接矩形合并、近邻矩形的受控合并、非矩形输入透传。
 - 已实现的宿主参数化：base/live 可分别注入不同阈值；并支持“整视口 / 整 chunk”退化。
-- `collapseLargeRect`：当脏区覆盖某个 canonical rect（如 chunk 屏幕矩形）超过 `canonicalRectCoverageRatio` 时，该脏区退化为整 canonical rect；当覆盖率不足时不再丢弃，而是保留脏区与该 canonical rect 的交集，避免跨区块对象在低覆盖率 chunk 上丢失渲染。
+- `collapseLargeRect`：当脏区覆盖某个 canonical rect（如 chunk 屏幕矩形）超过 `canonicalRectCoverageRatio` 时，该脏区退化为整 canonical rect；覆盖率不足时保留脏区与该 canonical rect 的交集，避免跨区块对象在低覆盖率 chunk 上丢失渲染。
 - 待完善：更强的聚类策略、按操作类型动态调整阈值、不同渲染层按真实代价模型继续细化参数。
 
 ## 相关文档

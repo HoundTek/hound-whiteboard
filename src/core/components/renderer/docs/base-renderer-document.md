@@ -45,30 +45,49 @@
 - 区块级脏区裁剪
 - 区块增量补绘
 
-## 当前触发时机
+## 架构变化
+
+`BaseRenderer` 继承自 `Renderer` 基类，自管理 baseCanvas、渲染调度器与脏区合并策略。
+
+### 构造参数
+
+```javascript
+const renderer = new BaseRenderer(monitor, { canvas: baseCanvas });
+```
+
+- 第二参数传入 `canvas` 实例
+- 基类构造函数存储 `_canvas` 引用
+- 构造函数内部调用 `_initScheduler()` 创建 `_scheduler`
+
+### 内部结构
+
+- `_canvas`：baseCanvas 引用，所有绘制操作直接读写
+- `_scheduler`：`RenderScheduler` 实例，flush handler 绑定到 `this.flush`
+- `_resolveThresholds`：缩放感知的脏区合并阈值策略，由 `createBaseDirtyRectThresholdStrategy()` 创建
+- `_getThresholds()`：返回当前 zoom 下的阈值
+- `_getCanonicalRectsForRect()`：将屏幕脏区反算为世界矩形，再找到命中的已加载 chunk 的屏幕矩形，用于合并时的 chunk 塌缩
+
+### 渲染入口
+
+- `invalidate(rect)`：提交脏区到 `_scheduler.invalidate()`
+- `invalidateViewport()`：提交整视口到调度器
+- `invalidateObjects(objects, options?)`：计算对象当前/旧世界范围并通过 `this.invalidate()` 提交脏区
+- `invalidateChunks(chunks, previousChunks, options?)`：计算新旧区块的屏幕矩形并逐个提交脏区（同样通过 `this.invalidate()`）
+- `flush(dirtyRects?)` → `render(dirtyRects?)`：基类模板方法，`_collectDrawables()` 由 BaseRenderer 实现
+
+## 触发时机
 
 当前已接入三类触发时机：
 
-- `ActiveObjectManager.apply(objects)` 完成静态结构写回后，会优先请求“对象进入活动层前的旧世界范围 + 提交后的新世界范围”对应的静态层刷新；若本次提交还改动了静态层上下关系，则会把受影响的邻接静态对象一起纳入对象级失效；若当前 monitor 无法做对象级失效，再回退到“旧覆盖区块 + 新覆盖区块”并集
-- `ChunkLoader` 缓冲区更新后，`Monitor` 会把“旧区块 + 新区块”的屏幕矩形送入 base 层调度器
-- `Monitor.origin / zoom` 变化后，会主动请求“旧视口可见区块 + 新视口可见区块”的静态层刷新
-
-其中第一条现在已经进入对象级静态脏区第一版。
-
-原因是 `apply()` 属于低频、语义明确的提交点；对象提交回静态结构后，至少要同时覆盖它进入活动层前的旧静态像素和提交后的新静态像素，所以这里现在优先按对象旧/新范围失效，只在缺少对象级能力时才退回区块并集。
-
-`BaseRenderer.invalidateObjects(...)` 不再在提交给 `baseRenderScheduler` 前做批内脏区合并，而是把每个对象的当前屏幕范围和旧世界快照范围直接提交给调度器。由调度器统一在 `flush()` 时执行合并与 canonical rect 塌缩。
-
-而后两条则已经开始走脏区驱动：
-
-- 区块缓冲区变化时，按区块矩形失效
-- 视口变化时，同时按旧视口坐标系下的旧区块矩形和新视口坐标系下的新区块矩形失效
+- `ActiveObjectManager.apply(objects)` 完成静态结构写回后，优先请求对象级失效（`baseRenderer.invalidateObjects(...)`）；若无法做对象级失效，再回退到"旧覆盖区块 + 新覆盖区块"并集
+- `ChunkLoader` 缓冲区更新后，`Monitor.requestViewportBaseRender()` 调用 `baseRenderer.invalidateChunks()`，将新旧区块的屏幕矩形送入 base 调度器
+- `Monitor.origin / zoom` 变化后，同样通过 `requestViewportBaseRender` 触发区块级失效
 
 ## 当前实现状态
 
 - 已实现：按已加载区块收集静态对象、按已加载区块合并后的全局静态图拓扑序绘制、跨区块重复对象去重、显式 dirty rect 局部清理与局部重绘、局部补绘 clip、对象级 `getRenderPadding()` 动态留白、对象级静态失效。
-- 已接入：`Monitor` 已持有 `baseRenderer` 与专用 `baseRenderScheduler`；`ActiveObjectManager.apply(objects)` 已会优先按对象旧/新范围触发 base 层刷新，并在必要时回退到旧/新区块并集；区块缓冲区变化与视口变化也会自动触发 base 层刷新。
-- 对象级失效的屏幕脏区不再在 `invalidateObjects` 中预合并，而是原样提交给调度器，由 `RenderScheduler.flush()` 统一合并与 canonical rect 塌缩，避免预合并时的区域丢失。
+- 已接入：自管理 baseCanvas、`RenderScheduler`、脏区合并策略；`Monitor` 持有 `baseRenderer` 实例，通过 `requestViewportBaseRender()` / `flushViewportRender()` 触发 base 层刷新；`ActiveObjectManager.apply(objects)` 已会优先按对象旧/新范围触发 base 层刷新；区块缓冲区变化与视口变化也会自动触发 base 层刷新。
+- 对象级失效的屏幕脏区不在 `invalidateObjects` 中预合并，而是原样提交给调度器，由 `RenderScheduler.flush()` 统一合并与 canonical rect 塌缩，避免预合并时的区域丢失。
 - 待完善：按对象真实像素进一步细化静态层脏区、按区块裁剪重绘、区块增量补绘、缩放平移下更细粒度的静态层缓存策略。
 
 ## 相关文档

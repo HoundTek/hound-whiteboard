@@ -39,11 +39,12 @@ src/core/components/
 
 ### 渲染管线（`renderer/`）
 
-- `BaseRenderer`：静态层渲染器，负责把已提交静态对象绘制到 `baseCanvas`。
-- `LiveRenderer`：活动层渲染器，负责把 AOM 当前活动对象按层顺序绘制到 `liveCanvas`。
-- `UiRenderer`：UI 覆盖层渲染器，负责把兼容 overlay 与注册的 UI overlay provider 绘制到 `uiCanvas`。
-- `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。
-- `DirtyRectStrategy`：脏区域策略模块，提供基于区域和缩放的脏区域处理策略。
+- `BaseRenderer`：静态层渲染器，自管理 baseCanvas、渲染调度器与脏区合并策略。从已加载区块收集静态对象绘制到 baseCanvas。
+- `LiveRenderer`：活动层渲染器，自管理 liveCanvas、渲染调度器与脏区合并策略。从 AOM 读取活动对象绘制到 liveCanvas，并通过 copyBase 合成 baseCanvas 缓存。
+- `UiRenderer`：UI 覆盖层渲染器，自管理 uiCanvas、渲染调度器。把兼容 overlay 与注册的 UI overlay provider 绘制到 uiCanvas。
+- `Renderer`：渲染器基类，封装视口变换、脏区裁剪与渲染管线骨架。BaseRenderer 与 LiveRenderer 继承此类。
+- `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。由各渲染器自行持有。
+- `DirtyRectStrategy`：脏区域策略模块，提供基于区域和缩放的脏区域处理策略。在渲染器内部使用。
 
 ### 编排层（`orchestration/`）
 
@@ -61,10 +62,9 @@ graph LR
   COM["ChunkObjectManager"]
   AOM["ActiveObjectManager"]
   M["Monitor"]
-  BR["BaseRenderer"]
-  RS["RenderScheduler"]
-  LR["LiveRenderer"]
-  UR["UiRenderer"]
+  BR["BaseRenderer\n(自管 canvas + scheduler + strategy)"]
+  LR["LiveRenderer\n(自管 canvas + scheduler + strategy)"]
+  UR["UiRenderer\n(自管 canvas + scheduler)"]
   UT["UndoTree"]
 
   B --> CL
@@ -74,7 +74,6 @@ graph LR
   B --> M
   B --> UT
   M --> BR
-  M --> RS
   M --> LR
   M --> UR
   LR --> AOM
@@ -104,10 +103,9 @@ graph LR
 
 当前渲染职责开始向 `Monitor` 视口层收敛。
 
-- `Monitor` 承载 `baseCanvas`、`liveCanvas`、`uiCanvas` 三层画布。
+- `Monitor` 承载三个渲染器实例：`baseRenderer`、`liveRenderer`、`uiRenderer`。每个渲染器自管理自己的画布、渲染调度器和脏区策略。
 - `BaseRenderer` 负责把已提交静态对象重绘到 `baseCanvas`，并已支持显式 dirty rect 局部刷新。
-- `RenderScheduler` 负责把多次 invalidate 合并到单次 flush。
-- `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`。
+- `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，按层顺序重绘到 `liveCanvas`，并通过 `copyBase()` 把 `baseCanvas` 缓存合成到屏幕上。
 - `UiRenderer` 负责把 chooser / modifier 工具主动声明的选择框等兼容 overlay 绘制到 `uiCanvas`，并为 chooser 轨迹、控制杆、激光笔等未来 UI overlay 提供 provider 扩展口。
 - 活动层和静态层的对象驱动刷新、视口矩形换算与 dirty rect 局部重绘，也开始沿这条链路收口。
 
@@ -128,12 +126,12 @@ graph LR
 ## 当前实现状态
 
 - `ActiveObjectManager` 算法实现相对完整，已具备拾取、分层、置顶、清理等核心逻辑。
-- `Monitor` 已收口到多层画布骨架，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
-- `BaseRenderer`、`RenderScheduler`、`LiveRenderer` 与 `UiRenderer` 已接入 `Monitor`；其中 `BaseRenderer` 已支持静态层整层重绘和显式 dirty rect 局部刷新，`LiveRenderer` 已支持活动层整层重绘和显式 dirty rect 局部刷新，`UiRenderer` 已提供兼容 overlay 渲染和 provider 扩展口。
+- `Monitor` 持有三层 renderer 引用；保留 `monitor.canvas -> liveRenderer.canvas` 的兼容入口。
+- `BaseRenderer`、`LiveRenderer` 继承 `Renderer` 基类，各渲染器自管理 canvas、`RenderScheduler` 与脏区合并策略；其中 `BaseRenderer` 已支持静态层整层重绘和显式 dirty rect 局部刷新，`LiveRenderer` 已支持活动层整层重绘和显式 dirty rect 局部刷新，`UiRenderer` 已提供兼容 overlay 渲染和 provider 扩展口。
 - `Board`、`Chunk`、`ChunkObjectManager` 已有骨架和关键字段；其中 `Board` 已收口到“根 `ChunkLoader` 持有区块对象 + `chunkLoaded` 维护加载状态”的模型，但仍存在较多 `todo`。
 - `ActiveObjectManager.add/choose/apply/discard` 已能主动触发活动层刷新，`LiveRenderer.invalidateObjects(...)` 也已覆盖对象前后两帧范围，避免拖拽残影。
-- `ActiveObjectManager.requestLiveRender(...)`、creator 和 modifier 的高频几何修改路径，现在还会同步推动 ui 层刷新，使选择框等兼容 overlay 能及时重绘；但默认选择框是否显示，仍取决于 chooser / modifier 工具当前是否声明了 overlay，而不是 AOM 成员关系本身。
-- `ActiveObjectManager.apply(objects)` 现在会优先请求 base 层对象级局部失效，并在必要时回退到区块并集刷新；区块缓冲区变化和视口变化也会自动触发 base 层刷新。
+- `ActiveObjectManager.requestLiveRender(...)`、creator 和 modifier 的高频几何修改路径，也会同步推动 ui 层刷新，使选择框等兼容 overlay 能及时重绘；但默认选择框是否显示，仍取决于 chooser / modifier 工具是否声明了 overlay，而不是 AOM 成员关系本身。
+- `ActiveObjectManager.apply(objects)` 会优先请求 base 层对象级局部失效，并在必要时回退到区块并集刷新；区块缓冲区变化和视口变化也会自动触发 base 层刷新。
 - 当前仍处在“活动层已较稳定、静态层已进入第一版增量刷新，但还要继续往区块级补绘推进”的阶段。
 
 ## 相关文档

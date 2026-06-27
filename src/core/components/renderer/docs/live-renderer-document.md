@@ -20,9 +20,39 @@
 
 这意味着 `LiveRenderer` 是最终的渲染出口，它的输出结果直接对应屏幕显示。
 
+## 架构变化
+
+`LiveRenderer` 继承自 `Renderer` 基类，自管理 liveCanvas、渲染调度器与脏区合并策略。
+
+### 构造参数
+
+```javascript
+const renderer = new LiveRenderer(monitor, activeObjectManager, {
+  canvas: liveCanvas,
+});
+```
+
+- 第二参数传入 AOM 实例
+- 第三参数传入 `canvas` 实例
+- 构造函数内部调用 `_initScheduler()` 创建 `_scheduler`
+
+### 内部结构
+
+- `_canvas`：liveCanvas 引用，所有绘制操作直接读写
+- `_scheduler`：`RenderScheduler` 实例，flush handler 绑定到 `this.flush`
+- `_resolveThresholds`：缩放感知的脏区合并阈值策略，由 `createLiveDirtyRectThresholdStrategy()` 创建
+- `_getThresholds()`：返回当前 zoom 下的阈值
+
+### 渲染入口
+
+- `invalidate(rect)`：提交脏区到 `_scheduler.invalidate()`
+- `invalidateViewport()`：提交整视口到调度器
+- `invalidateObjects(objects)`：计算对象当前/上一帧/快照的屏幕范围并通过 `this.invalidate()` 提交脏区
+- `flush(dirtyRects?)` → `render(dirtyRects?)`：基类模板方法
+
 ## 渲染架构
 
-`LiveRenderer` 不再依赖浏览器 CSS `z-index` 图层合成，而是采用**手动合成流水线**：
+`LiveRenderer` 采用**手动合成流水线**替代浏览器 CSS `z-index` 图层合成：
 
 ```
 baseCanvas (CSS opacity: 0, 作为静态缓存)
@@ -38,6 +68,17 @@ liveCanvas (唯一可见) ─── AOM 对象直接绘制在上层
 ```
 
 `baseCanvas` 由 `BaseRenderer` 维护，视为 `liveCanvas` 的**预渲染缓存**。它的 `opacity: 0` CSS 属性使其不在屏幕上显示，但像素内容完整保留在 GPU 纹理中供 `drawImage` 读取。
+
+LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
+
+### 缓存时序保护
+
+由于 base 和 live 的调度器是彼此独立的 rAF 调度器，`render()` 在拷贝 `baseCanvas` 前会检查 `monitor.baseRenderer._scheduler.framePending`，若有待处理帧则同步调用 `flush()`，确保读到最新的缓存状态。这替代了之前通过 `monitor.baseRenderScheduler` 的检查。
+
+### 与 BaseRenderer 的数据依赖
+
+- 构造时通过 Monitor 获取 baseCanvas：`monitor.baseRenderer.canvas`
+- 时序同步通过 `baseRenderer._scheduler.framePending` 判断
 
 ### 三步流水线
 
@@ -122,7 +163,7 @@ liveCanvas (唯一可见) ─── AOM 对象直接绘制在上层
 
 当前实现仍兼容普通 `{ left, top, width, height }` 风格的输入矩形，但进入 `LiveRenderer` 后会立刻被规范化为 `RectangleRange`。
 
-对象屏幕矩形在换算完成后，还会叠加对象自身的 `getRenderPadding()` 留白。当前这条入口已经接到真实对象上，而且 padding 已不再依赖对象类里写死的常量，而是从对象当前 `property` 里的宽度属性动态推导。当前至少覆盖了：
+对象屏幕矩形在换算完成后，还会叠加对象自身的 `getRenderPadding()` 留白。padding 从对象 `property` 里的宽度属性动态推导，而非对象类里的写死常量。当前至少覆盖了：
 
 - `CircleObject` 的描边半宽
 - `StrokeObject` 的圆角端点与默认描边半宽
@@ -192,7 +233,7 @@ liveCanvas (唯一可见) ─── AOM 对象直接绘制在上层
 - 拖拽、平移、控制点修改等操作会让对象从旧位置移动到新位置
 - 某些修改可能发生在对象尚未经历上一帧 render 之前
 - 如果只失效新位置，旧位置上的像素不会被清除
-- 因此当前协议同时依赖“显式旧几何快照”和“上一帧 drawable 缓存”两条来源，而不再只押注后一者
+- 因此当前协议同时依赖“显式旧几何快照”和“上一帧 drawable 缓存”两条来源
 
 ### captureObjectSnapshot(objects)
 
@@ -209,15 +250,16 @@ liveCanvas (唯一可见) ─── AOM 对象直接绘制在上层
 
 ## 与 RenderScheduler 的关系
 
-`LiveRenderer` 本身不负责任务节流，也不自己调度 `requestAnimationFrame`。
+`LiveRenderer` 内部持有自己的 `_scheduler`。
 
 当前关系是：
 
-- `invalidateObjects()` 把脏区提交给 `monitor.renderScheduler`
+- `invalidateObjects()` 把脏区提交给 `this._scheduler.invalidate()`
+- `invalidateViewport()` 提交整视口到调度器
 - `RenderScheduler` 在合适时机调用 `LiveRenderer.flush(dirtyRects)`
-- `flush()` 只是 `render()` 的薄入口，不再额外持有另一套状态
+- `flush()` 是 `render()` 的薄入口
 
-这让“调度”和“绘制”边界保持清晰。
+这让"调度"和"绘制"边界保持清晰，且调度器生命周期完全由渲染器管理。
 
 ## 当前实现状态
 
@@ -234,7 +276,7 @@ liveCanvas (唯一可见) ─── AOM 对象直接绘制在上层
 
 ### 已接入
 
-- `Monitor` 已将 `RenderScheduler.flush()` 透传到 `LiveRenderer.flush(dirtyRects)`
+- `LiveRenderer` 自管理 liveCanvas、`RenderScheduler`、脏区合并策略
 - `ActiveObjectManager.add/choose/apply/discard` 已会主动触发 `LiveRenderer.invalidateObjects(...)`
 - `stroke-creator` 与 `polygon-creator` 等高频几何修改路径已会在变更前记录快照、变更后请求活动层刷新
 - `ObjectModifierTool` 已具备统一的几何变更包装钩子
