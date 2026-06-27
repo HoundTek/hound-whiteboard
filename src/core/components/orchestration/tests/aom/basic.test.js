@@ -23,32 +23,34 @@ describe("ActiveObjectManager/basic", () => {
   });
 
   describe("活动层刷新", () => {
-    test("add 与 discard 应触发 monitor.liveRenderer.invalidateObjects", () => {
-      const monitor = {
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+    test("add 与 discard 应通过 renderHooks 触发刷新", () => {
+      const requestLiveRender = jest.fn();
+      const requestBaseRenderForObjects = jest.fn();
+      const flushViewportForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender,
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects,
       };
-      const board = { monitors: new Map([["main", monitor]]) };
-      aom = new ActiveObjectManager(board);
+      aom = new ActiveObjectManager(undefined, { renderHooks });
 
       const stroke = new StrokeObject(new Vector(0, 0), 100, 1);
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       aom.add(new Set([stroke]));
-      aom.discard(new Set([stroke]));
+      expect(requestLiveRender).toHaveBeenCalledTimes(1);
+      expect(requestLiveRender).toHaveBeenNthCalledWith(1, [stroke]);
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
 
-      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(2);
-      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenNthCalledWith(
-        1,
-        [stroke],
-      );
-      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenNthCalledWith(
-        2,
-        [stroke],
-      );
+      // discard again: 第二次 flush 和 live render
+      requestLiveRender.mockClear();
+      requestBaseRenderForObjects.mockClear();
+      flushViewportForObjects.mockClear();
+
+      aom.discard(new Set([stroke]));
+      expect(requestLiveRender).toHaveBeenCalledTimes(1);
+      expect(flushViewportForObjects).toHaveBeenCalledTimes(1);
     });
 
     test("add 应将白板外新对象注册到动态图顶层", () => {

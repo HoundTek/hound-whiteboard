@@ -1,5 +1,8 @@
 import { jest } from "@jest/globals";
-import { createChunk, createChunkAt } from "../../../../test-support/aom-fixtures.js";
+import {
+  createChunk,
+  createChunkAt,
+} from "../../../../test-support/aom-fixtures.js";
 
 import { DirectedGraph } from "../../../../utils/directed-graph.js";
 import { Chunk } from "../../../chunk/chunk.js";
@@ -7,8 +10,6 @@ import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
 import { BasicObject } from "../../../../objects/basic-obj.js";
 import { Vector } from "../../../../utils/math.js";
 import { oneChunkData } from "./data.js";
-
-
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
 
@@ -33,8 +34,7 @@ describe("ActiveObjectManager/choose", () => {
       width: CHUNK_SIZE,
       height: CHUNK_SIZE,
       getChunkById: (chunkId) => chunkMap.get(chunkId),
-      getChunkByCoordinate: (x, y) =>
-        chunkMap.get(Chunk.coordinateToId(x, y)),
+      getChunkByCoordinate: (x, y) => chunkMap.get(Chunk.coordinateToId(x, y)),
       createChunkLoader: () => ({
         trackChunk: jest.fn(),
         emitLoadRequest: jest.fn(),
@@ -77,24 +77,25 @@ describe("ActiveObjectManager/choose", () => {
   });
 
   describe("单次选择对象", () => {
-    test("choose 应触发 monitor.liveRenderer.invalidateObjects", () => {
+    test("choose 应通过 renderHooks 触发刷新", () => {
       const selected = createObject(12, chunk.id);
-      const monitor = {
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+      const requestLiveRender = jest.fn();
+      const flushViewportForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender,
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects: jest.fn(),
+        flushViewportForObjects,
       };
-      const board = createBoard(chunk);
-      board.monitors = new Map([["main", monitor]]);
-      aom = new ActiveObjectManager(board);
+      aom = new ActiveObjectManager(undefined, { renderHooks });
+      aom.layerPool.generate = () => {
+        return 1;
+      };
 
       aom.choose(new Set([selected]));
 
-      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
-        selected,
-      ]);
+      expect(requestLiveRender).toHaveBeenCalledWith([selected]);
+      expect(flushViewportForObjects).toHaveBeenCalledTimes(1);
     });
 
     test("应正确选择单个对象", () => {

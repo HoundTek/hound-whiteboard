@@ -13,6 +13,7 @@ import { ChunkLoader } from "../chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange, Range } from "../../range/index.js";
+import { createDefaultAomRenderHooks } from "./aom-render-hooks.js";
 
 /**
  * 层类
@@ -133,16 +134,25 @@ class ActiveObjectManager {
   baseObjectSnapshotCoverChunks;
 
   /**
-   * 所属白板
-   * @type {import("./board.js").Board | undefined}
+   * 所属白板（Core 实例）
+   * @type {import("./board-core.js").BoardCore | import("./board.js").Board | undefined}
    */
   board;
 
   /**
-   * @param {import("./board.js").Board} [board] - 所属白板实例
+   * AOM 渲染钩子
+   * @description 注入式渲染钩子，替代直接访问 board.monitors / monitor.liveRenderer / monitor.baseRenderer。
+   * @type {import("./aom-render-hooks.js").AomRenderHooks}
    */
-  constructor(board) {
+  renderHooks;
+
+  /**
+   * @param {import("./board-core.js").BoardCore | import("./board.js").Board} [board] - 所属白板实例
+   * @param {{ renderHooks?: import("./aom-render-hooks.js").AomRenderHooks }} [options={}] - 附加选项
+   */
+  constructor(board, options = {}) {
     this.board = board;
+    this.renderHooks = options.renderHooks ?? createDefaultAomRenderHooks();
     this.layerPool = new RandomNumberPool(1, 10000000);
     this.layerOrder = [];
     this.onLayer = new Map();
@@ -231,135 +241,56 @@ class ActiveObjectManager {
 
   /**
    * 请求所有 monitor 刷新活动层
+   * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
    */
   requestLiveRender(objects = []) {
-    const board = this.board;
-    if (!board?.monitors?.values) return;
-
     const changedObjects = Array.from(objects, (item) =>
       this.requireObjectInstance(item),
     );
-
-    for (const monitor of board.monitors.values()) {
-      const liveRenderer = monitor?.liveRenderer;
-      if (!liveRenderer) continue;
-
-      const dirtyObjectMap = new Map();
-      for (const objectInstance of changedObjects) {
-        dirtyObjectMap.set(objectInstance.id, objectInstance);
-      }
-      for (const objectInstance of liveRenderer.collectActiveDrawables?.() ??
-        []) {
-        dirtyObjectMap.set(objectInstance.id, objectInstance);
-      }
-
-      if (typeof liveRenderer.invalidateObjects === "function") {
-        liveRenderer.invalidateObjects([...dirtyObjectMap.values()]);
-      } else {
-        monitor?.renderScheduler?.invalidate?.();
-      }
-
-      monitor?.requestViewportUiRender?.();
-    }
+    this.renderHooks.requestLiveRender(changedObjects);
   }
 
   /**
    * 请求所有 monitor 刷新静态层
+   * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    */
   requestBaseRender(chunks = []) {
-    const board = this.board;
-    if (!board?.monitors?.values) return;
-
     const normalizedChunks = Array.from(chunks).filter(Boolean);
-
-    for (const monitor of board.monitors.values()) {
-      if (normalizedChunks.length > 0) {
-        monitor?.baseRenderer?.invalidateChunks?.(normalizedChunks);
-        continue;
-      }
-      if (typeof monitor?.requestViewportBaseRender === "function") {
-        monitor.requestViewportBaseRender();
-        continue;
-      }
-      monitor?.baseRenderer?.flush?.();
-    }
+    this.renderHooks.requestBaseRender(normalizedChunks);
   }
 
   /**
    * 请求所有 monitor 按对象范围刷新静态层
+   * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
    * @param {Iterable<Chunk>} [fallbackChunks = []] - 无法走对象级失效时的回退区块集合
    */
   requestBaseRenderForObjects(objects = [], fallbackChunks = []) {
-    const board = this.board;
-    if (!board?.monitors?.values) return;
-
     const normalizedObjects = Array.from(objects, (item) =>
       this.requireObjectInstance(item),
     );
     const normalizedChunks = Array.from(fallbackChunks).filter(Boolean);
     const previousWorldRects = new Map(this.baseObjectSnapshotWorldRanges);
 
-    for (const monitor of board.monitors.values()) {
-      const dirtyRects = monitor?.baseRenderer?.invalidateObjects?.(
-        normalizedObjects,
-        {
-          previousWorldRects,
-        },
-      );
-
-      if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
-        // 对象级失效成功后也要确保视口对应 chunk 缓冲区已同步，
-        // 避免 BaseRenderer 在收集静态对象时漏掉跨区块对象所在 chunk。
-        monitor?.syncChunkBufferWithViewport?.();
-        continue;
-      }
-
-      if (normalizedChunks.length > 0) {
-        monitor?.baseRenderer?.invalidateChunks?.(normalizedChunks);
-        continue;
-      }
-
-      if (typeof monitor?.requestViewportBaseRender === "function") {
-        monitor.requestViewportBaseRender();
-        continue;
-      }
-
-      monitor?.baseRenderer?.flush?.();
-    }
+    this.renderHooks.requestBaseRenderForObjects(
+      normalizedObjects,
+      normalizedChunks,
+      previousWorldRects,
+    );
   }
 
   /**
-   * 刷新能看到指定对象集合的那些 monitor 的静态层
-   * @description 为每个对象取世界范围，只 flush 视口与之相交的 monitor。
-   *   避免 flush 无关 monitor。
+   * 刷新能看到指定对象集合的那些 monitor 的视口
+   * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Array<BasicObject>} objects - 对象实例数组
    * @private
    */
   _flushViewportForObjects(objects = []) {
-    if (!this.board?.monitors?.size) return;
-
-    const worldRanges = objects
-      .map((obj) => {
-        const range = this.getObjectWorldRange(obj);
-        return range ? RectangleRange.from(range) : null;
-      })
-      .filter(Boolean);
-
-    if (worldRanges.length === 0) return;
-
-    for (const monitor of this.board.monitors.values()) {
-      const viewportWorldRect = monitor.getViewportWorldRect?.();
-      if (!viewportWorldRect) continue;
-
-      const intersects = worldRanges.some((worldRange) =>
-        intersectsRanges(viewportWorldRect, worldRange),
-      );
-      if (intersects) {
-        monitor.flushViewportRender?.();
-      }
-    }
+    const normalizedObjects = Array.from(objects, (item) =>
+      this.requireObjectInstance(item),
+    );
+    this.renderHooks.flushViewportForObjects(normalizedObjects);
   }
 
   /**
@@ -837,8 +768,10 @@ class ActiveObjectManager {
        * @returns {Chunk|undefined}
        */
       const getChunkAt = (targetX, targetY) => {
-        const targetChunk =
-          this.board?.getChunkByCoordinate?.(targetX, targetY);
+        const targetChunk = this.board?.getChunkByCoordinate?.(
+          targetX,
+          targetY,
+        );
         if (targetChunk) {
           tempLoader.trackChunk(targetChunk);
           tempLoader.emitLoadRequest(targetChunk, { strategy: "temp" });
@@ -884,8 +817,7 @@ class ActiveObjectManager {
         }
 
         const currentChunkId = chunkNow.id;
-        const coveredChunks =
-          chunkNow.objectManager.getObjectCoverChunks(node);
+        const coveredChunks = chunkNow.objectManager.getObjectCoverChunks(node);
         for (const chunkId of coveredChunks) {
           if (chunkId === currentChunkId) continue;
 

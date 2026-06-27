@@ -114,54 +114,51 @@ describe("ActiveObjectManager/apply", () => {
       expect(ownerChunk.objectManager.staticGraph.hasEdge(42, 41)).toBe(false);
     });
 
-    test("apply 应触发 monitor.liveRenderer.invalidateObjects", () => {
-      const invalidatedChunks = [];
-      const monitor = {
-        baseRenderer: {
-          invalidateChunks: jest.fn((chunks) => {
-            invalidatedChunks.push(...chunks);
-          }),
-        },
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
-      };
+    test("apply 应通过 renderHooks 触发刷新", () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.setObjectCoverChunks(201, [1, 2]);
       const coveredChunk = createChunk(2);
       coveredChunk.objectManager = new ChunkObjectManager(2);
+
+      const requestBaseRenderForObjects = jest.fn();
+      const requestLiveRender = jest.fn();
+      const requestBaseRender = jest.fn();
+      const renderHooks = {
+        requestLiveRender,
+        requestBaseRender,
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
+      };
+
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getObjectById: jest.fn((objectId) =>
-          objectId === 201 ? stroke : undefined,
+          objectId === 201 ? undefined : undefined,
         ),
         getChunkById: jest.fn((chunkId) => {
           if (chunkId === 1) return ownerChunk;
           if (chunkId === 2) return coveredChunk;
           return undefined;
         }),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
       const stroke = new StrokeObject(new Vector(0, 0), 201, 1);
       stroke.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
 
       aom.add(new Set([stroke]));
-      monitor.liveRenderer.invalidateObjects.mockClear();
+      requestLiveRender.mockClear();
+      requestBaseRenderForObjects.mockClear();
 
       aom.apply(new Set([stroke]));
 
-      expect(monitor.baseRenderer.invalidateChunks).toHaveBeenCalledTimes(1);
-      expect(
-        invalidatedChunks.map((chunk) => chunk.id).sort((a, b) => a - b),
-      ).toEqual([1, 2]);
-      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
-        stroke,
-      ]);
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      expect(requestLiveRender).toHaveBeenCalledWith([stroke]);
     });
 
     test("apply 应优先按对象旧范围与新范围触发静态层局部失效", () => {
@@ -173,43 +170,41 @@ describe("ActiveObjectManager/apply", () => {
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[301, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(301, [1]);
 
-      const monitor = {
-        baseRenderer: {
-          invalidateObjects: jest.fn(() => [new RectangleRange(0, 0, 4, 4)]),
-          invalidateChunks: jest.fn(),
-        },
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+      const requestBaseRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender: jest.fn(),
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
+
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getObjectById: jest.fn((objectId) =>
           objectId === 301 ? stroke : undefined,
         ),
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
 
       aom.choose(new Set([stroke]));
-      // choose() 现在也会触发 base render invalidation，清计数以便仅验证 apply 的调用
-      monitor.baseRenderer.invalidateObjects.mockClear();
-      monitor.baseRenderer.invalidateChunks.mockClear();
+      // choose() 也会触发 base render invalidation，清计数以便仅验证 apply 的调用
+      requestBaseRenderForObjects.mockClear();
       stroke.position = new Vector(100, 0);
 
       aom.apply(new Set([stroke]));
 
-      expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
-      const [, options] = monitor.baseRenderer.invalidateObjects.mock.calls[0];
-      expect(monitor.baseRenderer.invalidateChunks).not.toHaveBeenCalled();
-      expect(options.previousWorldRects.get(301)).toEqual(
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      const [objects, fallbackChunks, previousWorldRects] =
+        requestBaseRenderForObjects.mock.calls[0];
+      expect(previousWorldRects.get(301)).toEqual(
         RectangleRange.from(stroke.getRange().withPosition(new Vector(0, 0))),
       );
     });
@@ -229,16 +224,12 @@ describe("ActiveObjectManager/apply", () => {
       ownerChunk.objectManager.setObjectCoverChunks(401, [1]);
       ownerChunk.objectManager.setObjectCoverChunks(402, [1]);
 
-      const monitor = {
-        baseRenderer: {
-          invalidateObjects: jest.fn(() => [new RectangleRange(0, 0, 10, 10)]),
-          invalidateChunks: jest.fn(),
-        },
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+      const requestBaseRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender: jest.fn(),
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       const objectMap = new Map([
         [401, lower],
@@ -247,25 +238,24 @@ describe("ActiveObjectManager/apply", () => {
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getObjectById: jest.fn((objectId) => objectMap.get(objectId)),
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
 
       aom.choose(new Set([lower]));
       aom.liftup(new Set([lower]));
-      // choose() 现在也会触发 base render invalidation，清计数以便仅验证 apply 的调用
-      monitor.baseRenderer.invalidateObjects.mockClear();
-      monitor.baseRenderer.invalidateChunks.mockClear();
+      requestBaseRenderForObjects.mockClear();
       aom.apply(new Set([lower]));
 
-      expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
-      const [invalidatedObjects] =
-        monitor.baseRenderer.invalidateObjects.mock.calls[0];
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      const [invalidatedObjects] = requestBaseRenderForObjects.mock.calls[0];
       expect(
         invalidatedObjects
           .map((objectInstance) => objectInstance.id)

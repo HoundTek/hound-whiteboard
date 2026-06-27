@@ -32,7 +32,9 @@ describe("ActiveObjectManager/remove", () => {
       aom.remove(new Set([stroke]));
 
       expect(ownerChunk.objectManager.staticGraph.hasNode(101)).toBe(false);
-      expect(ownerChunk.objectManager.getObjectCoverChunks(101)).toEqual(new Set());
+      expect(ownerChunk.objectManager.getObjectCoverChunks(101)).toEqual(
+        new Set(),
+      );
     });
 
     test("remove 应从所有覆盖区块中移除对象", () => {
@@ -44,16 +46,20 @@ describe("ActiveObjectManager/remove", () => {
 
       const coveredChunkA = createChunk(2);
       coveredChunkA.objectManager = new ChunkObjectManager(2);
-      coveredChunkA.objectManager.staticGraph = DirectedGraph.parse([[102, []]]);
+      coveredChunkA.objectManager.staticGraph = DirectedGraph.parse([
+        [102, []],
+      ]);
       coveredChunkA.objectManager.setObjectCoverChunks(102, new Set([1, 2, 3]));
 
       const coveredChunkB = createChunk(3);
       coveredChunkB.objectManager = new ChunkObjectManager(3);
-      coveredChunkB.objectManager.staticGraph = DirectedGraph.parse([[102, []]]);
+      coveredChunkB.objectManager.staticGraph = DirectedGraph.parse([
+        [102, []],
+      ]);
       coveredChunkB.objectManager.setObjectCoverChunks(102, new Set([1, 2, 3]));
 
       const board = {
-        width: 5,  // 小尺寸确保横跨多个区块
+        width: 5, // 小尺寸确保横跨多个区块
         height: 5,
         getChunkById: jest.fn((chunkId) => {
           if (chunkId === 1) return ownerChunk;
@@ -71,11 +77,17 @@ describe("ActiveObjectManager/remove", () => {
       aom.remove(new Set([stroke]));
 
       expect(ownerChunk.objectManager.staticGraph.hasNode(102)).toBe(false);
-      expect(ownerChunk.objectManager.getObjectCoverChunks(102)).toEqual(new Set());
+      expect(ownerChunk.objectManager.getObjectCoverChunks(102)).toEqual(
+        new Set(),
+      );
       expect(coveredChunkA.objectManager.staticGraph.hasNode(102)).toBe(false);
-      expect(coveredChunkA.objectManager.getObjectCoverChunks(102)).toEqual(new Set());
+      expect(coveredChunkA.objectManager.getObjectCoverChunks(102)).toEqual(
+        new Set(),
+      );
       expect(coveredChunkB.objectManager.staticGraph.hasNode(102)).toBe(false);
-      expect(coveredChunkB.objectManager.getObjectCoverChunks(102)).toEqual(new Set());
+      expect(coveredChunkB.objectManager.getObjectCoverChunks(102)).toEqual(
+        new Set(),
+      );
     });
 
     test("remove 应将对象从活动集合中移除", () => {
@@ -90,7 +102,10 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
       const aom = new ActiveObjectManager(board);
 
@@ -133,7 +148,9 @@ describe("ActiveObjectManager/remove", () => {
       aom.remove(new Set([stroke]));
 
       expect(ownerChunk.objectManager.staticGraph.hasNode(201)).toBe(false);
-      expect(ownerChunk.objectManager.getObjectCoverChunks(201)).toEqual(new Set());
+      expect(ownerChunk.objectManager.getObjectCoverChunks(201)).toEqual(
+        new Set(),
+      );
       expect(aom.activeObjects.size).toBe(0);
     });
 
@@ -151,7 +168,10 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
       const aom = new ActiveObjectManager(board);
 
@@ -167,9 +187,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(aom.layerOrder.length).toBeGreaterThanOrEqual(2);
 
       // 移除全部活动对象
-      aom.remove(
-        new Set([objects.get(12), objects.get(13), objects.get(5)]),
-      );
+      aom.remove(new Set([objects.get(12), objects.get(13), objects.get(5)]));
 
       // 空层应被 tidyup 清理
       expect(aom.layerOrder.length).toBe(0);
@@ -180,14 +198,14 @@ describe("ActiveObjectManager/remove", () => {
   });
 
   describe("渲染触发", () => {
-    test("remove 应触发 liveRenderer.invalidateObjects", () => {
-      const liveRenderer = {
-        collectActiveDrawables: jest.fn(() => []),
-        invalidateObjects: jest.fn(),
-      };
-      const monitor = {
-        liveRenderer,
-        renderScheduler: { invalidate: jest.fn() },
+    test("remove 应通过 renderHooks 触发 live 层刷新", () => {
+      const requestLiveRender = jest.fn();
+      const requestBaseRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender,
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -197,38 +215,35 @@ describe("ActiveObjectManager/remove", () => {
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(new Vector(0, 0), 301, 1);
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
-      aom.add(new Set([stroke]));
-      liveRenderer.invalidateObjects.mockClear();
+      requestLiveRender.mockClear();
+      requestBaseRenderForObjects.mockClear();
 
       aom.remove(new Set([stroke]));
 
-      expect(liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
-      expect(liveRenderer.invalidateObjects).toHaveBeenCalledWith([stroke]);
+      expect(requestLiveRender).toHaveBeenCalledTimes(1);
+      expect(requestLiveRender).toHaveBeenCalledWith([stroke]);
     });
 
-    test("remove 应触发 base 层区块级渲染请求", () => {
-      const invalidatedChunks = [];
-      const monitor = {
-        baseRenderer: {
-          invalidateChunks: jest.fn((chunks) => {
-            invalidatedChunks.push(...chunks);
-          }),
-        },
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+    test("remove 应通过 renderHooks 触发 base 层区块级渲染请求", () => {
+      const requestBaseRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender: jest.fn(),
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -243,24 +258,24 @@ describe("ActiveObjectManager/remove", () => {
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getChunkById: jest.fn((chunkId) => {
           if (chunkId === 1) return ownerChunk;
           if (chunkId === 2) return coveredChunk;
           return undefined;
         }),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(new Vector(0, 0), 302, 1);
       stroke.setPathPoints([new Vector(1, 1), new Vector(15, 15)]);
 
       aom.remove(new Set([stroke]));
 
-      expect(monitor.baseRenderer.invalidateChunks).toHaveBeenCalledTimes(1);
-      expect(
-        invalidatedChunks.map((chunk) => chunk.id).sort((a, b) => a - b),
-      ).toEqual([1, 2]);
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
     });
 
     test("remove 应优先触发对象级静态层局部失效", () => {
@@ -269,34 +284,32 @@ describe("ActiveObjectManager/remove", () => {
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[303, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(303, new Set([1]));
 
-      const monitor = {
-        baseRenderer: {
-          invalidateObjects: jest.fn(() => [new RectangleRange(0, 0, 10, 10)]),
-          invalidateChunks: jest.fn(),
-        },
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+      const requestBaseRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender: jest.fn(),
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(new Vector(0, 0), 303, 1);
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       aom.remove(new Set([stroke]));
 
-      expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
-      expect(monitor.baseRenderer.invalidateChunks).not.toHaveBeenCalled();
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -313,7 +326,10 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
       const aom = new ActiveObjectManager(board);
 
@@ -378,28 +394,27 @@ describe("ActiveObjectManager/remove", () => {
       ownerChunk.objectManager.setObjectCoverChunks(501, new Set([1]));
       ownerChunk.objectManager.setObjectCoverChunks(502, new Set([1]));
 
-      const monitor = {
-        baseRenderer: {
-          invalidateObjects: jest.fn(() => [new RectangleRange(0, 0, 10, 10)]),
-          invalidateChunks: jest.fn(),
-        },
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+      const requestBaseRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender: jest.fn(),
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       const objectMap = new Map();
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
         getObjectById: jest.fn((objectId) => objectMap.get(objectId)),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
 
       const lower = new StrokeObject(new Vector(0, 0), 501, 1);
       lower.setPathPoints([new Vector(1, 1), new Vector(7, 7)]);
@@ -410,14 +425,11 @@ describe("ActiveObjectManager/remove", () => {
 
       aom.remove(new Set([lower]));
 
-      expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
-      const [invalidatedObjects] =
-        monitor.baseRenderer.invalidateObjects.mock.calls[0];
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      const [invalidatedObjects] = requestBaseRenderForObjects.mock.calls[0];
       // 被移除的对象 501 和它的邻接对象 502 都应纳入失效
       expect(
-        invalidatedObjects
-          .map((obj) => obj.id)
-          .sort((a, b) => a - b),
+        invalidatedObjects.map((obj) => obj.id).sort((a, b) => a - b),
       ).toEqual([501, 502]);
     });
 
@@ -427,36 +439,34 @@ describe("ActiveObjectManager/remove", () => {
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[601, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(601, new Set([1]));
 
-      const monitor = {
-        baseRenderer: {
-          invalidateObjects: jest.fn(() => [new RectangleRange(0, 0, 10, 10)]),
-          invalidateChunks: jest.fn(),
-        },
-        liveRenderer: {
-          collectActiveDrawables: jest.fn(() => []),
-          invalidateObjects: jest.fn(),
-        },
-        renderScheduler: { invalidate: jest.fn() },
+      const requestBaseRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestLiveRender: jest.fn(),
+        requestBaseRender: jest.fn(),
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       const board = {
         width: 10,
         height: 10,
-        monitors: new Map([["main", monitor]]),
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
         getObjectById: jest.fn(() => undefined),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
-      const aom = new ActiveObjectManager(board);
+      const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(new Vector(0, 0), 601, 1);
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       aom.remove(new Set([stroke]));
 
-      expect(monitor.baseRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
-      const [invalidatedObjects] =
-        monitor.baseRenderer.invalidateObjects.mock.calls[0];
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      const [invalidatedObjects] = requestBaseRenderForObjects.mock.calls[0];
       expect(invalidatedObjects.map((obj) => obj.id)).toEqual([601]);
     });
   });
@@ -480,7 +490,10 @@ describe("ActiveObjectManager/remove", () => {
         getChunkById: jest.fn((chunkId) =>
           chunkId === 1 ? ownerChunk : undefined,
         ),
-        createChunkLoader: jest.fn(() => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() })),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
       };
       const aom = new ActiveObjectManager(board);
 
@@ -603,11 +616,17 @@ describe("ActiveObjectManager/remove", () => {
       aom.remove(new Set([stroke]));
 
       expect(chunk00.objectManager.staticGraph.hasNode(1001)).toBe(false);
-      expect(chunk00.objectManager.getObjectCoverChunks(1001)).toEqual(new Set());
+      expect(chunk00.objectManager.getObjectCoverChunks(1001)).toEqual(
+        new Set(),
+      );
       expect(chunk10.objectManager.staticGraph.hasNode(1001)).toBe(false);
-      expect(chunk10.objectManager.getObjectCoverChunks(1001)).toEqual(new Set());
+      expect(chunk10.objectManager.getObjectCoverChunks(1001)).toEqual(
+        new Set(),
+      );
       expect(chunk20.objectManager.staticGraph.hasNode(1001)).toBe(false);
-      expect(chunk20.objectManager.getObjectCoverChunks(1001)).toEqual(new Set());
+      expect(chunk20.objectManager.getObjectCoverChunks(1001)).toEqual(
+        new Set(),
+      );
     });
 
     test("remove 应正确处理部分区块不存在的场景", () => {

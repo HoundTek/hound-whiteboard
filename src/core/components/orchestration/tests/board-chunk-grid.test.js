@@ -37,8 +37,6 @@ describe("Board chunk grid", () => {
     expect(invalidChunk.isValid()).toBe(false);
   });
 
-
-
   test("Board 的左右邻区块应基于二维坐标解析", () => {
     const board = new Board();
 
@@ -275,8 +273,17 @@ describe("Board chunk grid", () => {
   });
 
   test("Board.loadChunkObjectEntries 应通过桥接加载对象并写入 Board 注册表", async () => {
-    const board = new Board();
-    board.rootPath = "/tmp/hwb-board-test";
+    const stroke = new StrokeObject(new Vector(10, 20), 201);
+    stroke.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
+
+    // spy 必须先于 Board 构造（因 persistence adapter 在构造时捕获桥引用）
+    const loadObjectsSpy = jest
+      .spyOn(boardFileOperateBridge, "loadObjects")
+      .mockResolvedValue([stroke.serialize()]);
+
+    const board = new Board({
+      rootPath: "/tmp/hwb-board-test",
+    });
 
     const ownerChunk = board.getChunkById(1);
     ownerChunk.objectManager = new ChunkObjectManager(ownerChunk.id, board);
@@ -290,16 +297,9 @@ describe("Board chunk grid", () => {
       loaderStrategy: new Map([["test-monitor", "full"]]),
     });
 
-    const stroke = new StrokeObject(new Vector(10, 20), 201);
-    stroke.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
-
-    const loadObjectsSpy = jest
-      .spyOn(boardFileOperateBridge, "loadObjects")
-      .mockResolvedValue([stroke.serialize()]);
-
     const loadedEntries = await board.loadChunkObjectEntries(ownerChunk);
 
-    expect(loadObjectsSpy).toHaveBeenCalledWith(board.rootPath, [201]);
+    expect(loadObjectsSpy).toHaveBeenCalledWith("/tmp/hwb-board-test", [201]);
     expect(loadedEntries.get(201)).toBeInstanceOf(StrokeObject);
     expect(board.getObjectById(201)).toBeInstanceOf(StrokeObject);
     expect(ownerChunk.objectManager.getObject(201)).toBe(
@@ -311,24 +311,27 @@ describe("Board chunk grid", () => {
   });
 
   test("Board.saveChunkObjectEntries 应按层叠图节点保存对象", async () => {
-    const board = new Board();
-    board.rootPath = "/tmp/hwb-board-test";
+    const ownerObject = new StrokeObject(new Vector(10, 20), 301);
+    ownerObject.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
+
+    // spy 必须先于 Board 构造
+    const saveObjectsSpy = jest
+      .spyOn(boardFileOperateBridge, "saveObjects")
+      .mockResolvedValue(true);
+
+    const board = new Board({
+      rootPath: "/tmp/hwb-board-test",
+    });
 
     const chunk = board.getChunkById(1);
     chunk.objectManager = new ChunkObjectManager(chunk.id, board);
     chunk.objectManager.staticGraph.addNodeUnsafe(301);
 
-    const ownerObject = new StrokeObject(new Vector(10, 20), 301);
-    ownerObject.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
     board.registerObjectInstance(ownerObject, { coveredChunkIds: [1] });
-
-    const saveObjectsSpy = jest
-      .spyOn(boardFileOperateBridge, "saveObjects")
-      .mockResolvedValue(true);
 
     await board.saveChunkObjectEntries(1);
 
-    expect(saveObjectsSpy).toHaveBeenCalledWith(board.rootPath, [
+    expect(saveObjectsSpy).toHaveBeenCalledWith("/tmp/hwb-board-test", [
       ownerObject.serialize(),
     ]);
 
