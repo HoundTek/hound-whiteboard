@@ -35,18 +35,10 @@ class CircleObject extends GraphObject {
   constructor(id, position, property = {}, data = {}) {
     super(id, position, property, data);
     this.property = { ...DEFAULT_CIRCLE_PROPERTY, ...this.property };
-    if (data?.radius) {
+    if (data?.radius != null) {
       this.setRadius(data.radius);
     }
   }
-
-  /**
-   * 圆对象的半径
-   * @type {number}
-   * @description 圆的半径，属于基础数据。
-   * 外界不应直接修改它，应使用 setRadius 方法。
-   */
-  radius = 0;
 
   /**
    * 设置圆的半径
@@ -54,14 +46,14 @@ class CircleObject extends GraphObject {
    * @param {number} radius - 新的半径
    */
   setRadius(radius) {
-    this.radius = radius;
+    this.data.radius = radius;
     this.calculateConvexHull();
     this.calculateRectangle();
   }
 
   calculateRectangle() {
-    this.boundingBox = RectangleRange.from(
-      this.convexHullRange.transform(this.transform),
+    this.rich.boundingBox = RectangleRange.from(
+      this.rich.convexHullRange.transform(this.transform),
     );
   }
 
@@ -69,10 +61,10 @@ class CircleObject extends GraphObject {
    * @description 在进行矩阵变换前的凸包。当且仅当 radius 发生变化时才会更新它。
    */
   calculateConvexHull() {
-    this.convexHullRange = new EllipseRange(
+    this.rich.convexHullRange = new EllipseRange(
       new Vector(0, 0),
-      this.radius,
-      this.radius,
+      this.data.radius,
+      this.data.radius,
     );
   }
 
@@ -88,13 +80,13 @@ class CircleObject extends GraphObject {
   getRange() {
     return new EllipseRange(
       new Vector(0, 0),
-      this.radius,
-      this.radius,
+      this.data.radius,
+      this.data.radius,
     ).transform(this.transform);
   }
 
   render(ctx) {
-    if (this.radius <= 0) {
+    if (this.data.radius <= 0) {
       return;
     }
 
@@ -120,7 +112,7 @@ class CircleObject extends GraphObject {
     );
     ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, this.data.radius, 0, Math.PI * 2);
 
     if (shouldFill) {
       ctx.fillStyle = this.property.fillColor;
@@ -140,7 +132,7 @@ class CircleObject extends GraphObject {
     return {
       ...super.serialize(),
       type: "CircleObject",
-      data: { radius: this.radius },
+      data: { ...this.data },
     };
   }
 

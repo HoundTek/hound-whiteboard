@@ -646,7 +646,7 @@ describe("whiteboard demo", () => {
     const object = board.getChunkById(1).objectManager.getObject(1);
     expect(object).toBeInstanceOf(CircleObject);
     expect(object.position.serialize()).toEqual({ x: 400, y: 300 });
-    expect(object.radius).toBe(36);
+    expect(object.data.radius).toBe(36);
     expect(object.property.strokeColor).toBe("hsl(180, 70%, 42%)");
   });
 

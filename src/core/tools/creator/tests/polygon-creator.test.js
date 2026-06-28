@@ -47,7 +47,7 @@ describe("PolygonCreatorTool", () => {
     ).toBeUndefined();
 
     expect(
-      tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
     ).toEqual([{ x: 5, y: 7 }]);
     expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 5 });
     expect(tool.count).toBe(1);
@@ -108,7 +108,7 @@ describe("PolygonCreatorTool", () => {
     ).toBeUndefined();
 
     expect(
-      tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
     ).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
@@ -180,7 +180,7 @@ describe("PolygonCreatorTool", () => {
     ).toBeUndefined();
 
     expect(
-      tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
     ).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
@@ -369,7 +369,9 @@ describe("PolygonCreatorTool", () => {
       expect(ownerChunk.objectManager.getObject(tool.obj.id)).toBe(tool.obj);
       expect(tool.obj.position.serialize()).toEqual({ x: 125, y: 80 });
       expect(
-        tool.obj.localPolygonRange.points.map((point) => point.serialize()),
+        tool.obj.rich.localPolygonRange.points.map((point) =>
+          point.serialize(),
+        ),
       ).toEqual([{ x: 0, y: 0 }]);
     });
   });

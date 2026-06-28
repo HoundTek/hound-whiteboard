@@ -30,7 +30,7 @@ describe("CircleCreatorTool", () => {
 
     expect(tool.obj).toBeDefined();
     expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(tool.obj.radius).toBeCloseTo(Math.sqrt(145));
+    expect(tool.obj.data.radius).toBeCloseTo(Math.sqrt(145));
   });
 
   test("结束点过近时使用固定半径，固定半径由 monitor.zoom 决定", () => {
@@ -58,7 +58,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.radius).toBeCloseTo(8);
+    expect(tool.obj.data.radius).toBeCloseTo(8);
   });
 
   test("生成对象时应使用 board.activeObjectManager.apply 完成提交", () => {
@@ -121,7 +121,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.radius).toBeCloseTo(16);
+    expect(tool.obj.data.radius).toBeCloseTo(16);
   });
 
   test("真实 Board 上结束手势后应将对象写回归属区块", () => {
@@ -237,7 +237,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.radius).toBeCloseTo(16);
+    expect(tool.obj.data.radius).toBeCloseTo(16);
     expect(tool.obj.position.serialize()).toEqual({ x: 10, y: 10 });
   });
 });

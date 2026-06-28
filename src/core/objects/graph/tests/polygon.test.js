@@ -16,7 +16,7 @@ describe("PolygonObject", () => {
         {},
         { points: points },
       );
-      expect(polygon.localPolygonRange.points).toEqual(points);
+      expect(polygon.rich.localPolygonRange.points).toEqual(points);
     });
 
     test("应能正确修改顶点", () => {
@@ -40,7 +40,7 @@ describe("PolygonObject", () => {
       ].map((p) => Vector.parse(p));
       polygon.setPolygonPoints(newPoints);
 
-      expect(polygon.localPolygonRange.points).toEqual(newPoints);
+      expect(polygon.rich.localPolygonRange.points).toEqual(newPoints);
     });
 
     test("应能正确修改变换矩阵", () => {
@@ -82,10 +82,10 @@ describe("PolygonObject", () => {
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
-        expect(polygon.worldPolygonRange.points[i].x).toBeCloseTo(
+        expect(polygon.rich.worldPolygonRange.points[i].x).toBeCloseTo(
           expectedTransformedPoints[i].x,
         );
-        expect(polygon.worldPolygonRange.points[i].y).toBeCloseTo(
+        expect(polygon.rich.worldPolygonRange.points[i].y).toBeCloseTo(
           expectedTransformedPoints[i].y,
         );
       }
@@ -121,7 +121,7 @@ describe("PolygonObject", () => {
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
         expect(
           Vector.nearlyEq(
-            polygon.worldPolygonRange.points[i],
+            polygon.rich.worldPolygonRange.points[i],
             expectedTransformedPoints[i],
           ),
         ).toBe(true);
@@ -183,7 +183,7 @@ describe("PolygonObject", () => {
         { x: 0, y: 2 },
       ].map((p) => Vector.parse(p));
 
-      expect(polygon.convexHullRange.points).toEqual(expectedConvexHull);
+      expect(polygon.rich.convexHullRange.points).toEqual(expectedConvexHull);
     });
 
     test("当顶点少于3个时，凸包应等于顶点本身", () => {
@@ -204,8 +204,8 @@ describe("PolygonObject", () => {
       ].map((p) => Vector.parse(p));
       polygon.setPolygonPoints(newPoints);
 
-      expect(polygon.localPolygonRange.points).toEqual(newPoints);
-      expect(polygon.convexHullRange.points).toEqual(newPoints);
+      expect(polygon.rich.localPolygonRange.points).toEqual(newPoints);
+      expect(polygon.rich.convexHullRange.points).toEqual(newPoints);
     });
   });
 });

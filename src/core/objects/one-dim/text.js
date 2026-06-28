@@ -24,14 +24,16 @@ const DEFAULT_TEXT_PROPERTY = Object.freeze({
  */
 class TextObject extends OneDimensionObject {
   syncRanges() {
-    if (this.localTextRange.points.length === 0) {
-      this.worldTextRange = new PolygonRange([]);
-      this.boundingBox = new RectangleRange(0, 0, 0, 0);
-      this.convexHullRange = new PolygonRange([]);
+    if (this.rich.localTextRange.points.length === 0) {
+      this.rich.worldTextRange = new PolygonRange([]);
+      this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
+      this.rich.convexHullRange = new PolygonRange([]);
       return;
     }
-    this.worldTextRange = this.localTextRange.transform(this.transform);
-    this.boundingBox = RectangleRange.from(this.worldTextRange);
+    this.rich.worldTextRange = this.rich.localTextRange.transform(
+      this.transform,
+    );
+    this.rich.boundingBox = RectangleRange.from(this.rich.worldTextRange);
     this.calculateConvexHull();
   }
 
@@ -46,12 +48,8 @@ class TextObject extends OneDimensionObject {
   constructor(id, position, property = {}, data = {}) {
     super(id, position, property, data);
     this.property = { ...DEFAULT_TEXT_PROPERTY, ...this.property };
-    if (data?.text != null) {
-      this.text = data.text;
-    }
-    if (data?.ihatLength != null) {
-      this.ihatLength = data.ihatLength;
-    }
+    this.rich.localTextRange = new PolygonRange([]);
+    this.rich.worldTextRange = new PolygonRange([]);
     this.divideText();
   }
 
@@ -59,20 +57,8 @@ class TextObject extends OneDimensionObject {
    * @description 文本对象的凸包就是其矩形边界。
    */
   calculateConvexHull() {
-    this.convexHullRange = PolygonRange.from(this.localTextRange);
+    this.rich.convexHullRange = PolygonRange.from(this.rich.localTextRange);
   }
-
-  /**
-   * 文本主判定范围
-   * @type {PolygonRange}
-   */
-  localTextRange = new PolygonRange([]);
-
-  /**
-   * 变换后的文本主判定范围
-   * @type {PolygonRange}
-   */
-  worldTextRange = new PolygonRange([]);
 
   setProperty(property = {}, ctx) {
     super.setProperty(property);
@@ -80,24 +66,10 @@ class TextObject extends OneDimensionObject {
     return this.property;
   }
 
-  /**
-   * 文本内容
-   * @type {string}
-   * @default ""
-   */
-  text = "";
-
   setText(text, ctx) {
-    this.text = text;
+    this.data.text = text;
     this.divideText(ctx);
   }
-
-  /**
-   * 分行后的文本内容
-   * @type {string[]}
-   * @description 根据主轴长度和文本自身内容分行后的文本内容数组
-   */
-  dividedText;
 
   /**
    * 将文本根据最大宽度进行分行处理，支持中英文混合分词。
@@ -106,27 +78,19 @@ class TextObject extends OneDimensionObject {
    * @todo 实现文本分行功能
    */
   divideText(ctx) {
-    this.dividedText = [this.text];
-    const height = this.property.size * 1.2 * this.dividedText.length;
-    this.localTextRange = new PolygonRange([
+    this.rich.dividedText = [this.data.text ?? ""];
+    const height = this.property.size * 1.2 * this.rich.dividedText.length;
+    this.rich.localTextRange = new PolygonRange([
       new Vector(0, 0),
-      new Vector(this.ihatLength, 0),
-      new Vector(this.ihatLength, height),
+      new Vector(this.data.ihatLength ?? 400, 0),
+      new Vector(this.data.ihatLength ?? 400, height),
       new Vector(0, height),
     ]);
     this.syncRanges();
   }
 
-  /**
-   * 文本框的主轴长度
-   * @type {number}
-   * @description 目前仅支持水平文本框。
-   * @default 400
-   */
-  ihatLength = 400;
-
   setIhatLength(length, ctx) {
-    this.ihatLength = length;
+    this.data.ihatLength = length;
     this.divideText(ctx);
   }
 
@@ -136,7 +100,7 @@ class TextObject extends OneDimensionObject {
   }
 
   getRange() {
-    return this.worldTextRange;
+    return this.rich.worldTextRange;
   }
 
   /**
@@ -156,9 +120,9 @@ class TextObject extends OneDimensionObject {
     ctx.fillStyle = this.property.color;
     ctx.font = `${this.property.size}px ${this.property.font}`;
     ctx.globalCompositeOperation = "source-over";
-    const rectangle = RectangleRange.from(this.localTextRange);
-    if (this.dividedText) {
-      this.dividedText.forEach((line, index) => {
+    const rectangle = RectangleRange.from(this.rich.localTextRange);
+    if (this.rich.dividedText) {
+      this.rich.dividedText.forEach((line, index) => {
         ctx.fillText(line, 0, (index + 1 / 1.2) * this.property.size * 1.2);
       });
       if (
@@ -182,7 +146,7 @@ class TextObject extends OneDimensionObject {
     return {
       ...super.serialize(),
       type: "TextObject",
-      data: { text: this.text, ihatLength: this.ihatLength },
+      data: { ...this.data },
     };
   }
 

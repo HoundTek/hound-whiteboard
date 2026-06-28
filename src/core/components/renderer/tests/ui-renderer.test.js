@@ -6,14 +6,9 @@ import { createNoopCanvasContext2D } from "../../../test-support/noop-canvas.js"
 import { Vector } from "../../../utils/math.js";
 
 class TestOverlayObject extends BasicObject {
-  constructor({
-    id = 1,
-    position,
-    localRect,
-    property,
-  } = {}) {
+  constructor({ id = 1, position, localRect, property } = {}) {
     super(id, position ?? new Vector(0, 0));
-    this.boundingBox = RectangleRange.from(
+    this.rich.boundingBox = RectangleRange.from(
       localRect ?? new RectangleRange(0, 0, 0, 0),
     );
     this.setProperty(property);

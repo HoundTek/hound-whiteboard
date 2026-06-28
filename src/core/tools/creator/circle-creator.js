@@ -113,7 +113,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
     const zoom = interaction.context?.acc?.monitor?.zoom ?? 1;
     if (
       this.count <= 2 &&
-      this.obj.radius < this.minDragDistanceScreen / zoom
+      this.obj.data.radius < this.minDragDistanceScreen / zoom
     ) {
       this.obj.setRadius(this.fixedRadiusScreen / zoom);
     }

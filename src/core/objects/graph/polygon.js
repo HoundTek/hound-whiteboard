@@ -36,19 +36,15 @@ class PolygonObject extends GraphObject {
   constructor(id, position, property = {}, data = {}) {
     super(id, position, property, data);
     this.property = { ...DEFAULT_POLYGON_PROPERTY, ...this.property };
+    this.rich.localPolygonRange = new PolygonRange([]);
+    this.rich.worldPolygonRange = new PolygonRange([]);
     if (Array.isArray(data?.points)) {
-      this.setPolygonPoints(data.points);
+      const vecs = data.points.map((p) =>
+        p instanceof Vector ? p : new Vector(p.x, p.y),
+      );
+      this.setPolygonPoints(vecs);
     }
   }
-
-  /**
-   * 多边形对象的顶点集
-   * @type {PolygonRange}
-   * @description
-   * 每一个点在变换前，相对 position 的位置数组，属于基础数据。
-   * 外界不应直接修改它，应使用 setPolygonPoints 方法。
-   */
-  localPolygonRange = new PolygonRange([]);
 
   /**
    * 设置对象的顶点集
@@ -56,10 +52,13 @@ class PolygonObject extends GraphObject {
    * @param {Vector[]} points - 新的顶点集
    */
   setPolygonPoints(points) {
-    this.localPolygonRange = new PolygonRange(points);
-    this.worldPolygonRange = this.localPolygonRange.transform(this.transform);
+    this.rich.localPolygonRange = new PolygonRange(points);
+    this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(
+      this.transform,
+    );
     this.calculateConvexHull();
     this.calculateRectangle();
+    this.data.points = points.map((p) => ({ x: p.x, y: p.y }));
   }
 
   /**
@@ -69,10 +68,10 @@ class PolygonObject extends GraphObject {
    */
   replacePolygonPoint(index, points) {
     // 修改指定索引的顶点，并更新变换后的顶点集和凸包。
-    if (index < 0 || index >= this.localPolygonRange.points.length) {
+    if (index < 0 || index >= this.rich.localPolygonRange.points.length) {
       throw new RangeError("Index out of bounds");
     }
-    const nextPoints = [...this.localPolygonRange.points];
+    const nextPoints = [...this.rich.localPolygonRange.points];
     nextPoints[index] = points;
     this.setPolygonPoints(nextPoints);
   }
@@ -82,12 +81,12 @@ class PolygonObject extends GraphObject {
    * @param {Vector} point - 新的顶点坐标
    */
   appendPolygonPoint(point) {
-    this.setPolygonPoints(this.localPolygonRange.points.concat([point]));
+    this.setPolygonPoints(this.rich.localPolygonRange.points.concat([point]));
   }
 
   calculateRectangle() {
-    this.boundingBox = RectangleRange.from(
-      this.convexHullRange.transform(this.transform),
+    this.rich.boundingBox = RectangleRange.from(
+      this.rich.convexHullRange.transform(this.transform),
     );
   }
 
@@ -95,17 +94,10 @@ class PolygonObject extends GraphObject {
    * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。
    */
   calculateConvexHull() {
-    this.convexHullRange = new PolygonRange(
-      calcConvexHull(this.localPolygonRange.points),
+    this.rich.convexHullRange = new PolygonRange(
+      calcConvexHull(this.rich.localPolygonRange.points),
     );
   }
-
-  /**
-   * 多边形对象经变换的顶点
-   * @type {PolygonRange}
-   * @description 每一个点在变换后，相对 position 的位置数组，属于富数据。
-   */
-  worldPolygonRange = new PolygonRange([]);
 
   /**
    * @param {Matrix} trans - 新的变换矩阵
@@ -113,12 +105,12 @@ class PolygonObject extends GraphObject {
    */
   setTransform(trans) {
     this.transform = trans;
-    this.worldPolygonRange = this.localPolygonRange.transform(trans);
+    this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(trans);
     this.calculateRectangle();
   }
 
   getRange() {
-    return this.worldPolygonRange;
+    return this.rich.worldPolygonRange;
   }
 
   /**
@@ -131,7 +123,10 @@ class PolygonObject extends GraphObject {
    * @param {CanvasRenderingContext2D} ctx
    */
   render(ctx) {
-    if (!this.localPolygonRange || this.localPolygonRange.points.length === 0) {
+    if (
+      !this.rich.localPolygonRange ||
+      this.rich.localPolygonRange.points.length === 0
+    ) {
       return;
     }
 
@@ -146,7 +141,7 @@ class PolygonObject extends GraphObject {
       return;
     }
 
-    const points = this.localPolygonRange.points;
+    const points = this.rich.localPolygonRange.points;
     ctx.save();
     ctx.setTransform(
       this.transform.a,
@@ -182,7 +177,7 @@ class PolygonObject extends GraphObject {
     return {
       ...super.serialize(),
       type: "PolygonObject",
-      data: { points: this.localPolygonRange.points.map((p) => p.serialize()) },
+      data: { ...this.data },
     };
   }
 
@@ -194,10 +189,7 @@ class PolygonObject extends GraphObject {
       serialized.id,
       Vector.parse(serialized.position),
       { ...DEFAULT_POLYGON_PROPERTY, ...(serialized.property ?? {}) },
-      {
-        ...(serialized.data ?? {}),
-        points: (serialized.data?.points ?? []).map((p) => Vector.parse(p)),
-      },
+      serialized.data ?? {},
     );
     obj.setTransform(Matrix.parse(serialized.transform));
     return obj;

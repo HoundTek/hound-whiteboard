@@ -43,30 +43,6 @@ class BasicObject {
   transform = Matrix.identity();
 
   /**
-   * 对象的矩形边界范围
-   * @type {RectangleRange}
-   * @description
-   * 存储对象的边界矩形，用于碰撞检测和选择。
-   * 边界矩形是相对于变换后的坐标而言的。
-   */
-  boundingBox;
-
-  /**
-   * 计算对象的边界矩形
-   * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
-   */
-  calculateRectangle() {
-    this.boundingBox = new RectangleRange(0, 0, 0, 0);
-  }
-
-  /**
-   * 对象的凸包
-   * @type {Range}
-   * @description 用于更迅速的碰撞检测，存储凸包的顶点坐标。
-   */
-  convexHullRange;
-
-  /**
    * 对象属性
    * @type {Record<string, any>}
    * @description 存放对象的渲染与行为属性，如颜色、描边宽度、字体等。
@@ -74,11 +50,33 @@ class BasicObject {
   property = {};
 
   /**
+   * 对象类型专属的持久化数据
+   * @type {Record<string, any>}
+   * @description 存放对象类型专属的原始数据，如圆的半径、多边形的顶点集、文本内容等。此字段直接参与序列化与反序列化。
+   */
+  data = {};
+
+  /**
+   * 运行时计算派生的富数据
+   * @type {Record<string, any>}
+   * @description 存放从原始数据计算派生的运行时结构，如边界矩形、凸包、变换后的路径等。此字段不参与持久化。
+   */
+  rich = {};
+
+  /**
+   * 计算对象的边界矩形
+   * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
+   */
+  calculateRectangle() {
+    this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
+  }
+
+  /**
    * 计算对象的凸包
    * @description 统一 API，子类可重写此方法以计算对象的凸包。默认是矩形边界。
    */
   calculateConvexHull() {
-    this.convexHullRange = RectangleRange.from(this.boundingBox);
+    this.rich.convexHullRange = RectangleRange.from(this.rich.boundingBox);
   }
 
   /**
@@ -87,7 +85,7 @@ class BasicObject {
    * @returns {Range} 主判定范围
    */
   getRange() {
-    return this.boundingBox;
+    return this.rich.boundingBox;
   }
 
   /**
@@ -162,6 +160,8 @@ class BasicObject {
     this.id = id;
     this.position = position;
     this.property = { ...this.property, ...property };
+    this.data = data;
+    this.rich = {};
   }
 
   /**

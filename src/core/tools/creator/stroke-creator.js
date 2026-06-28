@@ -65,7 +65,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   appendPathPoint(point) {
-    const points = this.obj.localPathRange.points;
+    const points = this.obj.rich.localPathRange.points;
     const lastPoint = points[points.length - 1];
     if (lastPoint && Vector.nearlyEq(lastPoint, point)) {
       return;

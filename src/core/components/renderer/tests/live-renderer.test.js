@@ -14,7 +14,7 @@ describe("LiveRenderer", () => {
     constructor(id, position, calls) {
       super(id, position);
       this.calls = calls;
-      this.boundingBox = new RectangleRange(0, 0, 10, 10);
+      this.rich.boundingBox = new RectangleRange(0, 0, 10, 10);
     }
 
     render(ctx) {
@@ -199,7 +199,7 @@ describe("LiveRenderer", () => {
     class StyledFakeObject extends BasicObject {
       constructor() {
         super(301, new Vector(10, 20));
-        this.boundingBox = new RectangleRange(0, 0, 10, 10);
+        this.rich.boundingBox = new RectangleRange(0, 0, 10, 10);
       }
 
       render(ctx) {

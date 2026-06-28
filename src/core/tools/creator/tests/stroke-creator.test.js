@@ -48,7 +48,7 @@ describe("StrokeCreatorTool", () => {
     expect(tool.obj.id).toBe(100);
     expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
     expect(
-      tool.obj.localPathRange.points.map((point) => point.serialize()),
+      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
     ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -94,7 +94,7 @@ describe("StrokeCreatorTool", () => {
     ).toBeUndefined();
 
     expect(
-      tool.obj.localPathRange.points.map((point) => point.serialize()),
+      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
     ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -128,7 +128,7 @@ describe("StrokeCreatorTool", () => {
     expect(tool.obj.id).toBe(101);
     expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 6 });
     expect(
-      tool.obj.localPathRange.points.map((point) => point.serialize()),
+      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
     ).toEqual([{ x: 0, y: 0 }]);
   });
 
@@ -456,7 +456,7 @@ describe("StrokeCreatorTool", () => {
       expect(ownerChunk.objectManager.getObject(tool.obj.id)).toBe(tool.obj);
       expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
       expect(
-        tool.obj.localPathRange.points.map((point) => point.serialize()),
+        tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
       ).toEqual([
         { x: 0, y: 0 },
         { x: 5, y: 5 },

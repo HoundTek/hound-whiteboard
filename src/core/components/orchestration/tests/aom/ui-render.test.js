@@ -7,7 +7,7 @@ import { Vector } from "../../../../utils/math.js";
 class TestActiveObject extends BasicObject {
   constructor(id = 1) {
     super(id, new Vector(0, 0));
-    this.boundingBox = new RectangleRange(0, 0, 10, 10);
+    this.rich.boundingBox = new RectangleRange(0, 0, 10, 10);
   }
 
   isDirected() {
