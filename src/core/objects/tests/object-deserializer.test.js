@@ -1,6 +1,5 @@
 import { deserialize } from "../object-deserializer.js";
 import { PolygonObject } from "../graph/polygon.js";
-import { TextObject } from "../one-dim/text.js";
 import { StrokeObject } from "../stroke/stroke.js";
 import { Matrix, Vector } from "../../utils/math.js";
 
@@ -23,26 +22,6 @@ describe("object deserializer", () => {
     const restored = deserialize(serialized);
 
     expect(restored).toBeInstanceOf(PolygonObject);
-    expect(serialized.chunkId).toBeUndefined();
-    expect(restored.serialize()).toEqual(serialized);
-  });
-
-  test("应能还原 TextObject", () => {
-    const text = new TextObject(2, new Vector(8, 13));
-    text.setTransform(new Matrix(1, 0.2, 0, 1));
-    text.setText("hello whiteboard");
-    text.setProperty({
-      color: "#123456",
-      size: 24,
-      font: "HarmonyOS Sans",
-      strokeWidth: 2,
-    });
-    text.setIhatLength(320);
-
-    const serialized = text.serialize();
-    const restored = deserialize(JSON.stringify(serialized));
-
-    expect(restored).toBeInstanceOf(TextObject);
     expect(serialized.chunkId).toBeUndefined();
     expect(restored.serialize()).toEqual(serialized);
   });

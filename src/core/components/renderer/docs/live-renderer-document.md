@@ -167,7 +167,6 @@ LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
 
 - `CircleObject` 的描边半宽
 - `StrokeObject` 的圆角端点与默认描边半宽
-- `TextObject` 的文本框描边半宽
 
 ## 渲染流水线
 

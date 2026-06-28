@@ -111,7 +111,7 @@ src/core/components/
 - `BasicObject`
 - `Container`
 - `OneDimensionObject` / `TwoDimensionObject`
-- 具体对象（如 `TextObject`、`PolygonObject`、`StrokeObject`）
+- 具体对象（如 `CircleObject`、`PolygonObject`、`StrokeObject`）
 
 `BasicObject` 已定义关键通用能力：
 
@@ -126,8 +126,6 @@ src/core/components/
   - 已实现局部/世界多边形范围管理、凸包范围/包围盒更新、命中判断、渲染，以及 `setPolygonPoints()`、`replacePolygonPoint()`、`appendPolygonPoint()` 等对象语义接口。
 - `StrokeObject`
   - 已实现局部/世界路径范围管理、平滑插点、凸包范围与包围盒更新、渲染，以及 `setPathPoints()` 等路径语义接口。
-- `TextObject`
-  - 已有基础文本属性、四点文本范围与渲染；自动分行逻辑仍是占位实现。
 
 ## 3. tools/
 

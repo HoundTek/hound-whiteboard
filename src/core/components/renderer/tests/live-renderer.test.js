@@ -3,7 +3,6 @@ import { LiveRenderer } from "../live-renderer.js";
 import { Layer } from "../../orchestration/active-object-manager.js";
 import { BasicObject } from "../../../objects/basic-obj.js";
 import { CircleObject } from "../../../objects/graph/circle.js";
-import { TextObject } from "../../../objects/one-dim/text.js";
 import { StrokeObject } from "../../../objects/stroke/stroke.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { RectangleRange } from "../../../range/rectangle.js";
@@ -559,20 +558,16 @@ describe("LiveRenderer", () => {
   test("真实对象应根据 property 动态提供渲染 padding", () => {
     const circle = new CircleObject(81, new Vector(0, 0), {}, { radius: 10 });
     const stroke = new StrokeObject(82, new Vector(0, 0));
-    const text = new TextObject(83, new Vector(0, 0));
     stroke.setPathPoints([new Vector(0, 0), new Vector(10, 0)]);
 
     expect(circle.getRenderPadding()).toBe(1.5);
     expect(stroke.getRenderPadding()).toBe(0.5);
-    expect(text.getRenderPadding()).toBe(0.5);
 
     circle.setProperty({ strokeWidth: 6 });
     stroke.setProperty({ width: 4 });
-    text.setProperty({ strokeWidth: 2 });
 
     expect(circle.getRenderPadding()).toBe(3);
     expect(stroke.getRenderPadding()).toBe(2);
-    expect(text.getRenderPadding()).toBe(1);
   });
 
   test("PathRange 对象的屏幕矩形应包含额外的抗锯齿安全留白", () => {

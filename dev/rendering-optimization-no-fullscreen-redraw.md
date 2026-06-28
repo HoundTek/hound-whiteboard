@@ -332,7 +332,7 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - `LiveRenderer` 已挂在 `Monitor` 下，可按 `ActiveObjectManager.layerOrder` 顺序读取活动对象并重绘到 `liveCanvas`。
 - `LiveRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
 - `LiveRenderer.invalidateObjects(objects)` 已支持同时失效对象上一帧范围与当前范围，避免对象移动后旧位置残影。
-- `LiveRenderer` 已接入对象级 `getRenderPadding()`，当前至少覆盖 `CircleObject`、`StrokeObject`、`TextObject` 这几类高频对象。
+- `LiveRenderer` 已接入对象级 `getRenderPadding()`，当前至少覆盖 `CircleObject`、`StrokeObject`、`PolygonObject` 这几类高频对象。
 - `LiveRenderer.captureObjectSnapshot(objects)` 已落地，creator 高频几何修改路径现在会在变更前记录旧几何、变更后请求活动层刷新。
 - `ObjectModifierTool` 已补齐统一的 `beforeGeometryMutation / afterGeometryMutation / withGeometryMutation` 钩子，为后续编辑工具预留同一套快照协议入口。
 - `ActiveObjectManager.add/choose/apply/discard` 已会主动通知各 `Monitor.liveRenderer` 发起活动层刷新。
