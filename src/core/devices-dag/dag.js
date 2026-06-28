@@ -96,7 +96,6 @@ import { dagToString } from "./dag-debug.js";
  * @property {Object} [semantics] - 节点语义元数据
  * @property {string} [defaultRoute] - 默认出边名
  * @property {import("../tools/tool.js").Tool} [tool] - 工具实例
- * @property {Object} [toolContext] - 工具固定上下文
  * @property {DevicesDAGNodeUmountHandler|null} [umount] - 卸载钩子
  */
 
@@ -577,19 +576,14 @@ class DevicesDAG {
    * 在指定路径节点挂载一个 workflow 入口。
    * @param {string} path - 节点路径
    * @param {import("../tools/tool.js").Tool|SubDAGDefinition} workflow - workflow 入口实例或单源 workflow 子图
-   * @param {Object} [workflowContext={}] - workflow 固定上下文
    * @returns {DevicesDAGNode|DevicesDAGNode[]} 挂载后的节点或节点列表
    */
-  mountWorkflow(path, workflow, workflowContext = {}) {
+  mountWorkflow(path, workflow) {
     if (isSubDAGDefinition(workflow)) {
-      return this.mountSubDAG(
-        "/",
-        {
-          ...workflow,
-          rootPath: path,
-        },
-        workflowContext,
-      );
+      return this.mountSubDAG("/", {
+        ...workflow,
+        rootPath: path,
+      });
     }
 
     const node = this.ensureNode(path);
@@ -602,7 +596,7 @@ class DevicesDAG {
 
     this._registerToolInstance(workflow);
 
-    const processor = workflow.createProcessor(workflowContext);
+    const processor = workflow.createProcessor();
 
     node.handler = processor;
     node.semantics = { ...node.semantics, tool: true };
@@ -616,9 +610,7 @@ class DevicesDAG {
         // 静默吞掉 dispose 错误
       }
       try {
-        workflow.umount?.(
-          workflow.createDeviceContext(handlerContext, workflowContext),
-        );
+        workflow.umount?.(workflow.createDeviceContext(handlerContext));
       } catch {
         // 静默吞掉 umount 错误
       }
@@ -709,7 +701,7 @@ class DevicesDAG {
     }
     if (def.tool) {
       this._registerToolInstance(def.tool);
-      const processor = def.tool.createProcessor(def.toolContext ?? {});
+      const processor = def.tool.createProcessor();
       node.handler = processor;
       node.semantics = { ...node.semantics, tool: true };
       node._toolInstance = def.tool;
@@ -722,9 +714,7 @@ class DevicesDAG {
           // 静默吞掉 dispose 错误
         }
         try {
-          def.tool.umount?.(
-            def.tool.createDeviceContext(handlerContext, def.toolContext ?? {}),
-          );
+          def.tool.umount?.(def.tool.createDeviceContext(handlerContext));
         } catch {
           // 静默吞掉 umount 错误
         }

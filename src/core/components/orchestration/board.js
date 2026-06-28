@@ -495,7 +495,6 @@ class Board {
             const prefixNodes = this.devicesDAG.mountSubDAG(
               sourcePath,
               prefixSubDAG,
-              { board: this, monitor },
             );
             const sinkNode = findPrefixSink(prefixNodes);
             if (sinkNode?.path) {

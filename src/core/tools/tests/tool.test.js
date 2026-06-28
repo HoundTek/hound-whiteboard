@@ -16,13 +16,14 @@ describe("Tool", () => {
     }
 
     const tool = new TestTool();
-    const processor = tool.createProcessor({ board: "board-context" });
+    const processor = tool.createProcessor();
 
     const result = processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
         path: "/monitor/s-pen/pen",
         context: {},
+        acc: { board: "board-context" },
       },
     );
 
@@ -63,13 +64,14 @@ describe("Tool", () => {
         return 7;
       },
     };
-    const processor = tool.createProcessor({ board });
+    const processor = tool.createProcessor();
 
     processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
         path: "/monitor/s-pen/pen",
         context: {},
+        acc: { board },
       },
     );
 
@@ -98,13 +100,14 @@ describe("Tool", () => {
         return null;
       },
     };
-    const processor = tool.createProcessor({ monitor });
+    const processor = tool.createProcessor();
 
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
       {
         path: "/monitor/s-pen/pen",
         context: {},
+        acc: { monitor },
       },
     );
 
@@ -141,10 +144,7 @@ describe("Tool", () => {
       },
     };
 
-    tool.createProcessor({
-      board: { allocateObjectId: () => 99 },
-      monitor: { worldToChunk: () => ({ chunkId: 77 }) },
-    })(
+    tool.createProcessor()(
       { signals: [{ type: "trigger", context: {} }] },
       {
         path: "/monitor/s-pen/pen",
@@ -189,7 +189,7 @@ describe("Tool", () => {
     }
 
     const tool = new TestTool();
-    const processor = tool.createProcessor({});
+    const processor = tool.createProcessor();
 
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
@@ -221,7 +221,7 @@ describe("Tool", () => {
       },
     };
 
-    tool.createProcessor({ board: "board-context" })(
+    tool.createProcessor()(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       handlerContext,
     );

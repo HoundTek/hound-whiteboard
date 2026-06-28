@@ -593,10 +593,6 @@ class Monitor {
     return this.devicesDAG.mountWorkflow(
       joinPath(this.monitorId, path),
       workflow,
-      {
-        board: this.board,
-        monitor: this,
-      },
     );
   }
 

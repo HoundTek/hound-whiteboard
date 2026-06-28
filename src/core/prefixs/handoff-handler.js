@@ -216,10 +216,7 @@ function wrapChooserForHandoff(tool) {
 
   return (packet, context = {}) => {
     if (!processor) {
-      processor = tool.createProcessor({
-        board: context.acc?.board,
-        monitor: context.acc?.monitor,
-      });
+      processor = tool.createProcessor();
     }
 
     const onToolComplete = context.acc?.onToolComplete;
@@ -498,10 +495,7 @@ function createHandoffSubDAG(options = {}) {
           : null;
 
       if (!creatorProcessor) {
-        creatorProcessor = first.createProcessor({
-          board: context.acc?.board,
-          monitor: context.acc?.monitor,
-        });
+        creatorProcessor = first.createProcessor();
       }
       const rawResult = creatorProcessor(packet, context);
 
@@ -551,10 +545,7 @@ function createHandoffSubDAG(options = {}) {
           : null;
 
       if (!modifierProcessor) {
-        modifierProcessor = second.createProcessor({
-          board: context.acc?.board,
-          monitor: context.acc?.monitor,
-        });
+        modifierProcessor = second.createProcessor();
       }
       const rawResult = modifierProcessor(packet, context);
 
@@ -587,10 +578,7 @@ function createHandoffSubDAG(options = {}) {
     let genericSecondProcessor = null;
     secondNode.handler((packet, context = {}) => {
       if (!genericSecondProcessor) {
-        genericSecondProcessor = second.createProcessor({
-          board: context.acc?.board,
-          monitor: context.acc?.monitor,
-        });
+        genericSecondProcessor = second.createProcessor();
       }
       return genericSecondProcessor(packet, context);
     });
