@@ -21,22 +21,6 @@
  */
 
 /**
- * 对象查询参数
- * @typedef {Object} QueryObjectsOptions
- * @property {number[]} [ids] - 显式查询的对象 id 列表
- * @property {import("../range/range.js").Range | import("./types.js").Rect} [range] - 空间范围
- * @property {number[]} [chunkIds] - 显式查询的 chunk id 列表
- */
-
-/**
- * 命中查询参数
- * @typedef {Object} HitTestOptions
- * @property {import("./types.js").Point2D} [position] - 命中点
- * @property {import("../range/range.js").Range | import("./types.js").Rect} [range] - 命中范围
- * @property {string} [mode] - 命中模式
- */
-
-/**
  * 创建 MonitorCore 的参数
  * @typedef {Object} CreateMonitorOptions
  * @property {string | number} monitorId - monitor 标识
@@ -47,7 +31,7 @@
 /**
  * BoardApi 接口摘要
  * @typedef {Object} BoardApi
- * @property {(type: string, props: Record<string, any>) => Promise<number>} createObject - 创建对象并返回 objectId
+ * @property {(type: string, props: { position: import("./types.js").Point2D, property?: Record<string, any>, data?: Record<string, any> }) => Promise<number>} createObject - 创建对象并返回 objectId
  * @property {(objectId: number, patch: ObjectPatch) => Promise<void>} modifyObject - 修改单个对象
  * @property {(patches: ObjectPatchEntry[]) => Promise<void>} modifyObjects - 批量修改多个对象
  * @property {(objectId: number, key: string, items: any[]) => Promise<void>} appendListItem - 追加列表属性元素
@@ -57,8 +41,9 @@
  * @property {(objectIds: number[]) => Promise<void>} commitObjects - 提交活动对象集合
  * @property {(objectIds: number[]) => Promise<void>} addActiveObjects - 将对象加入 AOM
  * @property {(objectIds: number[]) => Promise<void>} discardActiveObjects - 将对象从 AOM 丢弃
- * @property {(options: QueryObjectsOptions) => Promise<import("./types.js").ObjectSummary[]>} queryObjects - 查询对象摘要
- * @property {(options: HitTestOptions) => Promise<number[]>} hitTest - 执行命中查询
+ * @property {(ids: number[]) => Promise<import("./types.js").ObjectSummary[]>} queryObjects - 按 id 查询对象摘要
+ * @property {(chunkIds: number[]) => Promise<number[]>} queryChunkObjects - 按区块查询对象 id
+ * @property {(range: import("../range/range.js").Range | import("./types.js").Rect, mode?: string) => Promise<number[]>} hitTest - 执行命中查询
  * @property {(options: CreateMonitorOptions) => Promise<void>} createMonitor - 创建 MonitorCore
  * @property {(monitorId: string | number) => Promise<void>} destroyMonitor - 销毁 MonitorCore
  * @property {() => Promise<void>} undo - 执行撤销

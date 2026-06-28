@@ -94,37 +94,31 @@ class BasicObject {
    * @returns {Record<string, any>} 最新属性
    */
   setProperty(property = {}) {
-    if (!property || typeof property !== "object" || Array.isArray(property)) {
-      return this.property;
-    }
-
-    this.property = {
-      ...(this.property ?? {}),
-      ...property,
-    };
-
+    Object.assign(this.property, property);
     return this.property;
   }
 
   /**
    * 批量更新持久化数据，自动触发派生重算
    * @param {Record<string, any>} data - 待合并的字段
+   * @returns {Record<string, any>} 最新 data
    */
   setData(data) {
     Object.assign(this.data, data);
     this._onDataChange(Object.keys(data));
+    return this.data;
   }
 
   /**
-   * 向列表型字段追加一项
+   * 向列表型字段追加一项或多项
    * @param {string} key - 字段名
-   * @param {*} item - 待追加项
+   * @param {...*} items - 待追加项
    */
-  appendListItem(key, item) {
+  appendListItem(key, ...items) {
     if (!Array.isArray(this.data[key])) {
       this.data[key] = [];
     }
-    this.data[key].push(item);
+    this.data[key].push(...items);
     this._onDataChange([key]);
   }
 

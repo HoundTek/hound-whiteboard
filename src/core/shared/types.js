@@ -15,10 +15,10 @@
 /**
  * 2D 变换矩阵（不含平移）
  * @typedef {Object} TransformMatrix2D
- * @property {number} a - 矩阵 a 分量
- * @property {number} b - 矩阵 b 分量
- * @property {number} c - 矩阵 c 分量
- * @property {number} d - 矩阵 d 分量
+ * @property {number} a - 矩阵 [[**a**, c], [b, d]] 中的 a 分量
+ * @property {number} b - 矩阵 [[a, c], [**b**, d]] 中的 b 分量
+ * @property {number} c - 矩阵 [[a, **c**], [b, d]] 中的 c 分量
+ * @property {number} d - 矩阵 [[a, c], [b, **d**]] 中的 d 分量
  */
 
 /**
@@ -48,6 +48,7 @@
  * @property {import("../range/rectangle.js").RectangleRange} boundingBox - 外接矩形
  * @property {import("../range/range.js").Range} range - 主判定范围
  * @property {Record<string, any>} property - 属性快照
+ * @property {Record<string, any>} data - 类型专属几何数据快照（如 points、radius、text）
  */
 
 export {};
