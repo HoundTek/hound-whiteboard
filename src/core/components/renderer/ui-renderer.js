@@ -15,7 +15,7 @@ import {
   createRectangleDirtyRectMerger,
   RenderScheduler,
 } from "./render-scheduler.js";
-import { createLiveDirtyRectThresholdStrategy } from "./dirty-rect-strategy.js";
+import { createLiveDirtyRectThresholdStrategy } from "./dirty-rect-strategy-shared.js";
 
 const COMPAT_SELECTION_FRAME_MARGIN = 4;
 const COMPAT_SELECTION_FRAME_STROKE_STYLE = "#33a1ff";

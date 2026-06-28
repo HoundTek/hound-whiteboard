@@ -12,7 +12,7 @@ import {
   ActiveObjectManager,
   Layer,
 } from "../orchestration/active-object-manager.js";
-import { createLiveDirtyRectThresholdStrategy } from "./dirty-rect-strategy.js";
+import { createLiveDirtyRectThresholdStrategy } from "./dirty-rect-strategy-shared.js";
 
 /**
  * 活动层渲染器
