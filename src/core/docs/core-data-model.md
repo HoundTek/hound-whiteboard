@@ -57,7 +57,9 @@
 
 - `id`、`ownerChunkId`
 - `position`、`transform`
-- `boundingBox`、`convexHullRange`
+- `property`（渲染属性字典）
+- `data`（类型专属持久化数据，如 `points`、`radius`）
+- `rich`（运行时派生富数据，如 `boundingBox`、`convexHullRange`）
 - `getRange()` 暴露的主判定范围
 
 典型派生：
@@ -68,8 +70,8 @@
 
 当前对象级范围语义：
 
-- `PolygonObject`：`localPolygonRange` / `worldPolygonRange`
-- `StrokeObject`：`localPathRange` / `worldPathRange`
+- `PolygonObject`：`rich.localPolygonRange` / `rich.worldPolygonRange`
+- `StrokeObject`：`rich.localPathRange` / `rich.worldPathRange`
 
 这些字段代表对象的局部几何、世界几何与主判定范围，不再把普通点数组当成核心富数据结构。
 

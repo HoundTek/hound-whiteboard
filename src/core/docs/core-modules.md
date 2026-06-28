@@ -123,9 +123,9 @@ src/core/components/
 ### 2.2 代表对象
 
 - `PolygonObject`
-  - 已实现局部/世界多边形范围管理、凸包范围/包围盒更新、命中判断、渲染，以及 `setPolygonPoints()`、`replacePolygonPoint()`、`appendPolygonPoint()` 等对象语义接口。
+  - 已实现局部/世界多边形范围管理、凸包范围/包围盒更新、命中判断、渲染，以及 `setData()`、`appendListItem()`、`replaceListItem()` 等数据变更接口。
 - `StrokeObject`
-  - 已实现局部/世界路径范围管理、平滑插点、凸包范围与包围盒更新、渲染，以及 `setPathPoints()` 等路径语义接口。
+  - 已实现局部/世界路径范围管理、平滑插点、凸包范围与包围盒更新、渲染，以及 `setData()` 等数据变更接口。
 
 ## 3. tools/
 
