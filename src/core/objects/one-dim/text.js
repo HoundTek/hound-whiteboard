@@ -172,10 +172,9 @@ class TextObject extends OneDimensionObject {
 
   serialize() {
     return {
-      type: "TextObject",
       ...super.serialize(),
-      text: this.text,
-      ihatLength: this.ihatLength,
+      type: "TextObject",
+      data: { text: this.text, ihatLength: this.ihatLength },
     };
   }
 
@@ -191,10 +190,10 @@ class TextObject extends OneDimensionObject {
     obj.setTransform(Matrix.parse(data.transform));
     obj.setProperty({
       ...DEFAULT_TEXT_PROPERTY,
-      ...(data.property ?? data.textProperty ?? {}),
+      ...(data.property ?? {}),
     });
-    obj.setText(data.text);
-    obj.setIhatLength(data.ihatLength ?? obj.ihatLength);
+    obj.setText(data.data?.text ?? "");
+    obj.setIhatLength(data.data?.ihatLength ?? obj.ihatLength);
     return obj;
   }
 }

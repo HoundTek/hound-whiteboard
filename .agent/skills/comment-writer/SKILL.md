@@ -37,16 +37,31 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 
 作者名可执行 `git config user.name`、`git config --global user.name` 获取。
 
-示例：
+单行示例：
 
 ```javascript
 /**
  * @file 白板组件
- * @description Board 类是白板在面向对象设计中的抽象核心，负责维护白板级区块实例所有权、对象实例注册表、区块加载引用计数、活动对象管理器以及 monitor/设备事件入口。
+ * @description Board 类是白板在面向对象设计中的抽象核心。
  * @module core/components/board
  * @author ...
  */
 ```
+
+多行示例：
+
+```javascript
+/**
+ * @file BoardApi 同线程实现
+ * @description
+ * 提供 BoardApi 接口的同线程实现，直接调用 BoardCore 的同步/异步方法。
+ * P2 阶段保持同步封装，P3 切为 RPC 实现后保持相同方法签名。
+ * @module core/bridges/board-api
+ * @author Zhou Chenyu
+ */
+```
+
+注意多行时 `@description` 之后不可跟文字，正文从下一行开始。
 
 ## JSDoc 规范
 
@@ -61,7 +76,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 
 - JSDoc 正文使用中文，类型名、术语按代码原名保留
 - `@description` 必须打句号
-- `@description` 如果一行能写完，就跟在标签后面；如果一行写不完，标签单独一行，正文从下一行开始
+- `@description` 只有一行时，正文跟在标签后面；如果正文有多行（含一段以上的描述），标签必须单独一行，正文从下一行开始，不可在 `@description` 后直接跟文字
 - `@description` 之外的标签（`@param`、`@returns`、`@throws`、`@type`、`@todo` 等），一句话时不打句号，多句话时要打句号
 - 无标签的第一行描述（函数/类职责，紧接 `/**` 之后），**一律不打句号**。需多句描述时，改用 `@description` 标签承载详细内容。
 - 优先延续相邻代码既有写法

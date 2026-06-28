@@ -164,7 +164,7 @@ class StrokeObject extends BasicObject {
     return {
       ...super.serialize(),
       type: "StrokeObject",
-      points: this.localPathRange.points.map((point) => point.serialize()),
+      data: { points: this.localPathRange.points.map((point) => point.serialize()) },
     };
   }
 
@@ -178,7 +178,7 @@ class StrokeObject extends BasicObject {
       data.id,
     );
 
-    obj.setPathPoints((data.points ?? []).map((point) => Vector.parse(point)));
+    obj.setPathPoints((data.data?.points ?? []).map((point) => Vector.parse(point)));
     obj.setTransform(Matrix.parse(data.transform));
     obj.setProperty({
       ...DEFAULT_STROKE_PROPERTY,

@@ -201,6 +201,7 @@ class BasicObject {
       position: this.position.serialize(),
       transform: this.transform.serialize(),
       property: { ...(this.property ?? {}) },
+      data: {},
     };
   }
 

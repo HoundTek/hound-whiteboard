@@ -67,7 +67,7 @@ describe("CircleObject", () => {
           strokeWidth: 5,
         },
         type: "CircleObject",
-        radius: 6,
+        data: { radius: 6 },
       });
       expect(parsed).toBeInstanceOf(CircleObject);
       expect(parsed.radius).toBe(6);

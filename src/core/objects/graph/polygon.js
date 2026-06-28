@@ -182,7 +182,7 @@ class PolygonObject extends GraphObject {
     return {
       ...super.serialize(),
       type: "PolygonObject",
-      points: this.localPolygonRange.points.map((p) => p.serialize()),
+      data: { points: this.localPolygonRange.points.map((p) => p.serialize()) },
     };
   }
 
@@ -193,7 +193,7 @@ class PolygonObject extends GraphObject {
     let obj = new PolygonObject(
       Vector.parse(data.position),
       data.id,
-      data.points.map((p) => Vector.parse(p)),
+      (data.data?.points ?? []).map((p) => Vector.parse(p)),
     );
     obj.setTransform(Matrix.parse(data.transform));
     obj.setProperty({

@@ -149,7 +149,7 @@ class CircleObject extends GraphObject {
     return {
       ...super.serialize(),
       type: "CircleObject",
-      radius: this.radius,
+      data: { radius: this.radius },
     };
   }
 
@@ -160,7 +160,7 @@ class CircleObject extends GraphObject {
     let obj = new CircleObject(
       Vector.parse(data.position),
       data.id,
-      data.radius,
+      data.data?.radius,
     );
     obj.setTransform(Matrix.parse(data.transform));
     obj.setProperty({
