@@ -93,14 +93,14 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
 
   beginCreationGesture(interaction) {
     this.count = 0;
-    this.obj.setRadius(0);
+    this.obj.setData({ radius: 0 });
   }
 
   updateCreationGesture(interaction) {
     this.count++;
     const localPoint = this.toLocalPoint(interaction.position);
     const radius = localPoint.length();
-    this.obj.setRadius(radius);
+    this.obj.setData({ radius });
   }
 
   completeCreationGesture(interaction) {
@@ -108,14 +108,14 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       this.count++;
       const localPoint = this.toLocalPoint(interaction.position);
       const radius = localPoint.length();
-      this.obj.setRadius(radius);
+      this.obj.setData({ radius });
     }
     const zoom = interaction.context?.acc?.monitor?.zoom ?? 1;
     if (
       this.count <= 2 &&
       this.obj.data.radius < this.minDragDistanceScreen / zoom
     ) {
-      this.obj.setRadius(this.fixedRadiusScreen / zoom);
+      this.obj.setData({ radius: this.fixedRadiusScreen / zoom });
     }
   }
 }

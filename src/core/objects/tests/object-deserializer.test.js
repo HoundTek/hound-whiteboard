@@ -28,11 +28,11 @@ describe("object deserializer", () => {
 
   test("应能还原 StrokeObject", () => {
     const stroke = new StrokeObject(9, new Vector(1, 2));
-    stroke.setPathPoints([
+    stroke.setData({ points: [
       new Vector(0, 0),
       new Vector(5, 2),
       new Vector(7, 8),
-    ]);
+    ].map(p => ({ x: p.x, y: p.y })) });
     stroke.setTransform(new Matrix(2, 0, 0, 2));
     stroke.setProperty({ color: "#00aaee", width: 5 });
 

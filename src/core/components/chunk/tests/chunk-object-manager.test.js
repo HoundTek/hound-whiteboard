@@ -109,11 +109,11 @@ describe("ChunkObjectManager", () => {
   test("应基于对象 range 精确计算覆盖区块，而不是仅按 bounding box 粗算", () => {
     const chunkObjectManager = new ChunkObjectManager(1);
     const stroke = new StrokeObject(15, new Vector(0, 0));
-    stroke.setPathPoints([
+    stroke.setData({ points: [
       new Vector(1, 1),
       new Vector(19, 1),
       new Vector(19, 19),
-    ]);
+    ].map(p => ({ x: p.x, y: p.y })) });
 
     const coveredChunks = chunkObjectManager.syncObjectCoverChunksForObject(
       stroke,

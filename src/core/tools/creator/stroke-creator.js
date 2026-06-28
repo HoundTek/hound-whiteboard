@@ -70,7 +70,8 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     if (lastPoint && Vector.nearlyEq(lastPoint, point)) {
       return;
     }
-    this.obj.setPathPoints(points.concat([point]));
+    const pts = points.concat([point]);
+    this.obj.setData({ points: pts.map((p) => ({ x: p.x, y: p.y })) });
   }
 
   beginCreationGesture(interaction) {

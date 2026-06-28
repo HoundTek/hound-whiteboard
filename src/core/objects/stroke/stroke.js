@@ -53,12 +53,7 @@ class StrokeObject extends BasicObject {
     this.rich.localPathRange = new PathRange([]);
     this.rich.worldPathRange = new PathRange([]);
     this.rich.convexHullRange = new PolygonRange([]);
-    if (Array.isArray(data?.points)) {
-      const vecs = data.points.map((p) =>
-        p instanceof Vector ? p : new Vector(p.x, p.y),
-      );
-      this.setPathPoints(vecs);
-    }
+    this._onDataChange(Object.keys(data));
   }
 
   isDirected() {
@@ -87,11 +82,20 @@ class StrokeObject extends BasicObject {
     );
   }
 
-  setPathPoints(points) {
-    this.rich.localPathRange = new PathRange(points);
-    this.calculateRichDatas();
-    this.data.points = points.map((p) => ({ x: p.x, y: p.y }));
+  /**
+   * 数据变更回调
+   * @param {string[]} keys - 变更的字段名列表
+   * @protected
+   */
+  _onDataChange(keys) {
+    if (keys.includes('points') && Array.isArray(this.data.points)) {
+      const vecs = this.data.points.map((p) => new Vector(p.x, p.y));
+      this.rich.localPathRange = new PathRange(vecs);
+      this.calculateRichDatas();
+    }
   }
+
+
 
   setTransform(trans) {
     this.transform = trans;

@@ -107,6 +107,59 @@ class BasicObject {
   }
 
   /**
+   * 批量更新持久化数据，自动触发派生重算
+   * @param {Record<string, any>} data - 待合并的字段
+   */
+  setData(data) {
+    Object.assign(this.data, data);
+    this._onDataChange(Object.keys(data));
+  }
+
+  /**
+   * 向列表型字段追加一项
+   * @param {string} key - 字段名
+   * @param {*} item - 待追加项
+   */
+  appendListItem(key, item) {
+    if (!Array.isArray(this.data[key])) {
+      this.data[key] = [];
+    }
+    this.data[key].push(item);
+    this._onDataChange([key]);
+  }
+
+  /**
+   * 替换列表型字段中指定索引的项
+   * @param {string} key - 字段名
+   * @param {number} index - 索引
+   * @param {*} item - 新值
+   */
+  replaceListItem(key, index, item) {
+    if (!Array.isArray(this.data[key])) return;
+    if (index < 0 || index >= this.data[key].length) return;
+    this.data[key][index] = item;
+    this._onDataChange([key]);
+  }
+
+  /**
+   * 移除列表型字段中指定索引的项
+   * @param {string} key - 字段名
+   * @param {number} index - 索引
+   */
+  removeListItem(key, index) {
+    if (!Array.isArray(this.data[key])) return;
+    this.data[key].splice(index, 1);
+    this._onDataChange([key]);
+  }
+
+  /**
+   * 数据变更回调，子类重写以触发派生重算
+   * @param {string[]} keys - 变更的字段名列表
+   * @protected
+   */
+  _onDataChange(keys) {}
+
+  /**
    * 获取对象渲染额外留白
    * @description
    * 返回值单位为对象空间中的长度，供活动层 dirty rect 在换算到屏幕空间后补足描边、端点与抗锯齿留白。

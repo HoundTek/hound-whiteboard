@@ -116,7 +116,8 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   beginCreationGesture(interaction) {
-    this.obj.appendPolygonPoint(this.toLocalPoint(interaction.position));
+    const addPt = this.toLocalPoint(interaction.position);
+    this.obj.appendListItem('points', { x: addPt.x, y: addPt.y });
     this.lastPoint = interaction.position;
     this.count++;
   }
@@ -128,10 +129,8 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   updateCreationGesture(interaction) {
     if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
       this.lastPoint = interaction.position;
-      this.obj.replacePolygonPoint(
-        this.count - 1,
-        this.toLocalPoint(interaction.position),
-      );
+      const upPt = this.toLocalPoint(interaction.position);
+      this.obj.replaceListItem('points', this.count - 1, { x: upPt.x, y: upPt.y });
     }
   }
 
@@ -145,10 +144,8 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
       !Vector.nearlyEq(this.lastPoint, interaction.position)
     ) {
       this.lastPoint = interaction.position;
-      this.obj.replacePolygonPoint(
-        this.count - 1,
-        this.toLocalPoint(interaction.position),
-      );
+      const compPt = this.toLocalPoint(interaction.position);
+      this.obj.replaceListItem('points', this.count - 1, { x: compPt.x, y: compPt.y });
     }
 
     this.lastPoint = null;

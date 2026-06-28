@@ -112,7 +112,7 @@ describe("CircleObject", () => {
       expect(circle.data.radius).toBe(10);
       expect(circle.rich.boundingBox.width).toBeGreaterThan(0);
 
-      circle.setRadius(0);
+      circle.setData({ radius: 0 });
 
       expect(circle.data.radius).toBe(0);
       expect(circle.rich.boundingBox.width).toBe(0);

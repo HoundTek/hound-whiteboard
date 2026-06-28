@@ -35,21 +35,28 @@ class CircleObject extends GraphObject {
   constructor(id, position, property = {}, data = {}) {
     super(id, position, property, data);
     this.property = { ...DEFAULT_CIRCLE_PROPERTY, ...this.property };
-    if (data?.radius != null) {
-      this.setRadius(data.radius);
-    }
+    this._onDataChange(Object.keys(data));
   }
 
   /**
-   * 设置圆的半径
-   * @description 设置新的半径时，会自动更新变换后的顶点集和凸包。
-   * @param {number} radius - 新的半径
+   * 数据变更回调
+   * @param {string[]} keys - 变更的字段名列表
+   * @protected
    */
-  setRadius(radius) {
-    this.data.radius = radius;
-    this.calculateConvexHull();
-    this.calculateRectangle();
+  _onDataChange(keys) {
+    if (keys.includes('radius') && this.data.radius != null) {
+      this.rich.convexHullRange = new EllipseRange(
+        new Vector(0, 0),
+        this.data.radius,
+        this.data.radius,
+      );
+      this.rich.boundingBox = RectangleRange.from(
+        this.rich.convexHullRange.transform(this.transform),
+      );
+    }
   }
+
+
 
   calculateRectangle() {
     this.rich.boundingBox = RectangleRange.from(

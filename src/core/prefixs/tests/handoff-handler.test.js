@@ -1578,11 +1578,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       board.height = 600;
       const chooserTool = new RectangleObjectChooserTool();
       const targetObject = new StrokeObject(41, new Vector(10, 10));
-      targetObject.setPathPoints([
+      targetObject.setData({ points: [
         new Vector(0, 0),
         new Vector(8, 0),
         new Vector(8, 8),
-      ]);
+      ].map(p => ({ x: p.x, y: p.y })) });
       board.addObject(targetObject, 1);
 
       monitor.mountSubDAG(

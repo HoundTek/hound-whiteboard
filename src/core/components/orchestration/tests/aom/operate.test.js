@@ -16,7 +16,7 @@ describe("ActiveObjectManager/operate", () => {
 
   function createObject(id, chunkId) {
     const object = new StrokeObject(id, new Vector(0, 0));
-    object.setPathPoints([new Vector(1, 1), new Vector(2, 2)]);
+    object.setData({ points: [new Vector(1, 1), new Vector(2, 2)].map(p => ({ x: p.x, y: p.y })) });
     return object;
   }
 

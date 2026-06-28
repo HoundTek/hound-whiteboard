@@ -38,7 +38,7 @@ describe("PolygonObject", () => {
         { x: 0, y: 2 },
         { x: 1, y: 1 },
       ].map((p) => Vector.parse(p));
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
       expect(polygon.rich.localPolygonRange.points).toEqual(newPoints);
     });
@@ -112,7 +112,7 @@ describe("PolygonObject", () => {
         { x: 2, y: 0 },
         { x: 0, y: 2 },
       ].map((p) => Vector.parse(p));
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
       const expectedTransformedPoints = newPoints.map((p) =>
         Vector.mulMatrix(mat, p),
@@ -170,7 +170,7 @@ describe("PolygonObject", () => {
       ].map((p) => Vector.parse(p));
 
       // Powered by Graham scan algorithm
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
       // Powered by Geogebra & eyes
       const expectedConvexHull = [
@@ -202,7 +202,7 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 2, y: 0 },
       ].map((p) => Vector.parse(p));
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
       expect(polygon.rich.localPolygonRange.points).toEqual(newPoints);
       expect(polygon.rich.convexHullRange.points).toEqual(newPoints);

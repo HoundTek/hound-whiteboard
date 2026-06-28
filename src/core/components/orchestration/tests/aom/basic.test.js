@@ -36,7 +36,7 @@ describe("ActiveObjectManager/basic", () => {
       aom = new ActiveObjectManager(undefined, { renderHooks });
 
       const stroke = new StrokeObject(100, new Vector(0, 0));
-      stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
+      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
 
       aom.add(new Set([stroke]));
       expect(requestLiveRender).toHaveBeenCalledTimes(1);
@@ -56,9 +56,9 @@ describe("ActiveObjectManager/basic", () => {
     test("add 应将白板外新对象注册到动态图顶层", () => {
       const aom = new ActiveObjectManager();
       const lower = new StrokeObject(30, new Vector(0, 0));
-      lower.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
+      lower.setData({ points: [new Vector(1, 1), new Vector(5, 5)].map(p => ({ x: p.x, y: p.y })) });
       const upper = new StrokeObject(31, new Vector(0, 0));
-      upper.setPathPoints([new Vector(2, 2), new Vector(6, 6)]);
+      upper.setData({ points: [new Vector(2, 2), new Vector(6, 6)].map(p => ({ x: p.x, y: p.y })) });
 
       const firstLayer = aom.add(new Set([lower]));
       const secondLayer = aom.add(new Set([upper]));

@@ -101,7 +101,7 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const stroke = new StrokeObject(1, new Vector(30, 40));
-    stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    stroke.setData({ points: [new Vector(0, 0), new Vector(20, 10)].map(p => ({ x: p.x, y: p.y })) });
     board.addObject(stroke, 1);
     const { secondarySelectionTool } = configureWhiteboardDemo(board, monitor);
 
@@ -260,9 +260,9 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const firstStroke = new StrokeObject(1, new Vector(30, 40));
-    firstStroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    firstStroke.setData({ points: [new Vector(0, 0), new Vector(20, 10)].map(p => ({ x: p.x, y: p.y })) });
     const secondStroke = new StrokeObject(2, new Vector(90, 100));
-    secondStroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    secondStroke.setData({ points: [new Vector(0, 0), new Vector(20, 10)].map(p => ({ x: p.x, y: p.y })) });
 
     board.addObject(firstStroke, 1);
     board.addObject(secondStroke, 1);
@@ -437,7 +437,7 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const stroke = new StrokeObject(1, new Vector(30, 40));
-    stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    stroke.setData({ points: [new Vector(0, 0), new Vector(20, 10)].map(p => ({ x: p.x, y: p.y })) });
     board.addObject(stroke, 1);
 
     configureWhiteboardDemo(board, monitor);
@@ -503,7 +503,7 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const stroke = new StrokeObject(1, new Vector(30, 40));
-    stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    stroke.setData({ points: [new Vector(0, 0), new Vector(20, 10)].map(p => ({ x: p.x, y: p.y })) });
     board.addObject(stroke, 1);
 
     configureWhiteboardDemo(board, monitor);
@@ -584,7 +584,7 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const stroke = new StrokeObject(1, new Vector(10, 20));
-    stroke.setPathPoints([new Vector(0, 0), new Vector(0, 30)]);
+    stroke.setData({ points: [new Vector(0, 0), new Vector(0, 30)].map(p => ({ x: p.x, y: p.y })) });
 
     board.addObject(stroke, 1);
     monitor.requestViewportBaseRender();
@@ -677,7 +677,7 @@ describe("whiteboard demo", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
     const target = new StrokeObject(1, new Vector(30, 40));
-    target.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
+    target.setData({ points: [new Vector(0, 0), new Vector(20, 10)].map(p => ({ x: p.x, y: p.y })) });
     board.addObject(target, 1);
 
     configureWhiteboardDemo(board, monitor);

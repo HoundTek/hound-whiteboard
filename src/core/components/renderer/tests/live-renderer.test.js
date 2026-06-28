@@ -558,7 +558,7 @@ describe("LiveRenderer", () => {
   test("真实对象应根据 property 动态提供渲染 padding", () => {
     const circle = new CircleObject(81, new Vector(0, 0), {}, { radius: 10 });
     const stroke = new StrokeObject(82, new Vector(0, 0));
-    stroke.setPathPoints([new Vector(0, 0), new Vector(10, 0)]);
+    stroke.setData({ points: [new Vector(0, 0), new Vector(10, 0)].map(p => ({ x: p.x, y: p.y })) });
 
     expect(circle.getRenderPadding()).toBe(1.5);
     expect(stroke.getRenderPadding()).toBe(0.5);
@@ -573,7 +573,7 @@ describe("LiveRenderer", () => {
   test("PathRange 对象的屏幕矩形应包含额外的抗锯齿安全留白", () => {
     const calls = [];
     const stroke = new StrokeObject(84, new Vector(10, 20));
-    stroke.setPathPoints([new Vector(0, 0), new Vector(0, 12)]);
+    stroke.setData({ points: [new Vector(0, 0), new Vector(0, 12)].map(p => ({ x: p.x, y: p.y })) });
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
     const monitor = {

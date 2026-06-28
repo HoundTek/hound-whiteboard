@@ -18,11 +18,11 @@ describe("ActiveObjectManager/apply", () => {
       board.height = 10;
 
       const stroke = new StrokeObject(15, new Vector(0, 0));
-      stroke.setPathPoints([
+      stroke.setData({ points: [
         new Vector(1, 1),
         new Vector(19, 1),
         new Vector(19, 19),
-      ]);
+      ].map(p => ({ x: p.x, y: p.y })) });
 
       board.activeObjectManager.choose(new Set([stroke]));
       board.activeObjectManager.apply(new Set([stroke]));
@@ -48,10 +48,10 @@ describe("ActiveObjectManager/apply", () => {
       board.height = 10;
 
       const lower = new StrokeObject(21, new Vector(0, 0));
-      lower.setPathPoints([new Vector(1, 1), new Vector(8, 8)]);
+      lower.setData({ points: [new Vector(1, 1), new Vector(8, 8)].map(p => ({ x: p.x, y: p.y })) });
 
       const upper = new StrokeObject(22, new Vector(0, 0));
-      upper.setPathPoints([new Vector(2, 2), new Vector(9, 9)]);
+      upper.setData({ points: [new Vector(2, 2), new Vector(9, 9)].map(p => ({ x: p.x, y: p.y })) });
 
       board.activeObjectManager.choose(new Set([lower]));
       board.activeObjectManager.choose(new Set([upper]));
@@ -69,9 +69,9 @@ describe("ActiveObjectManager/apply", () => {
       board.height = 10;
 
       const lower = new StrokeObject(23, new Vector(0, 0));
-      lower.setPathPoints([new Vector(1, 1), new Vector(6, 6)]);
+      lower.setData({ points: [new Vector(1, 1), new Vector(6, 6)].map(p => ({ x: p.x, y: p.y })) });
       const upper = new StrokeObject(24, new Vector(0, 0));
-      upper.setPathPoints([new Vector(2, 2), new Vector(7, 7)]);
+      upper.setData({ points: [new Vector(2, 2), new Vector(7, 7)].map(p => ({ x: p.x, y: p.y })) });
 
       board.activeObjectManager.add(new Set([lower]));
       board.activeObjectManager.add(new Set([upper]));
@@ -96,10 +96,10 @@ describe("ActiveObjectManager/apply", () => {
       board.height = 10;
 
       const vertical = new StrokeObject(41, new Vector(0, 0));
-      vertical.setPathPoints([new Vector(5, 1), new Vector(5, 9)]);
+      vertical.setData({ points: [new Vector(5, 1), new Vector(5, 9)].map(p => ({ x: p.x, y: p.y })) });
 
       const horizontal = new StrokeObject(42, new Vector(0, 0));
-      horizontal.setPathPoints([new Vector(1, 5), new Vector(9, 5)]);
+      horizontal.setData({ points: [new Vector(1, 5), new Vector(9, 5)].map(p => ({ x: p.x, y: p.y })) });
 
       board.activeObjectManager.add(new Set([vertical]));
       board.activeObjectManager.apply(new Set([vertical]));
@@ -149,7 +149,7 @@ describe("ActiveObjectManager/apply", () => {
       };
       const aom = new ActiveObjectManager(board, { renderHooks });
       const stroke = new StrokeObject(201, new Vector(0, 0));
-      stroke.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
+      stroke.setData({ points: [new Vector(1, 1), new Vector(5, 5)].map(p => ({ x: p.x, y: p.y })) });
 
       aom.add(new Set([stroke]));
       requestLiveRender.mockClear();
@@ -163,7 +163,7 @@ describe("ActiveObjectManager/apply", () => {
 
     test("apply 应优先按对象旧范围与新范围触发静态层局部失效", () => {
       const stroke = new StrokeObject(301, new Vector(0, 0));
-      stroke.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
+      stroke.setData({ points: [new Vector(1, 1), new Vector(5, 5)].map(p => ({ x: p.x, y: p.y })) });
 
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -211,9 +211,9 @@ describe("ActiveObjectManager/apply", () => {
 
     test("apply 在层级变化但几何不变时也应把受影响的静态邻接对象纳入局部失效", () => {
       const lower = new StrokeObject(401, new Vector(0, 0));
-      lower.setPathPoints([new Vector(1, 1), new Vector(8, 8)]);
+      lower.setData({ points: [new Vector(1, 1), new Vector(8, 8)].map(p => ({ x: p.x, y: p.y })) });
       const upper = new StrokeObject(402, new Vector(0, 0));
-      upper.setPathPoints([new Vector(2, 2), new Vector(9, 9)]);
+      upper.setData({ points: [new Vector(2, 2), new Vector(9, 9)].map(p => ({ x: p.x, y: p.y })) });
 
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -278,7 +278,7 @@ describe("ActiveObjectManager/apply", () => {
      */
     function strokeInChunk00(id) {
       const stroke = new StrokeObject(id, new Vector(0, 0));
-      stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
+      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
       return stroke;
     }
 
@@ -287,7 +287,7 @@ describe("ActiveObjectManager/apply", () => {
      */
     function strokeCrossingChunk00And01(id) {
       const stroke = new StrokeObject(id, new Vector(0, 0));
-      stroke.setPathPoints([new Vector(1, 1), new Vector(4, 19)]);
+      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 19)].map(p => ({ x: p.x, y: p.y })) });
       return stroke;
     }
 
@@ -296,7 +296,7 @@ describe("ActiveObjectManager/apply", () => {
      */
     function strokeCrossingThreeChunks(id) {
       const stroke = new StrokeObject(id, new Vector(0, 0));
-      stroke.setPathPoints([new Vector(1, 1), new Vector(25, 4)]);
+      stroke.setData({ points: [new Vector(1, 1), new Vector(25, 4)].map(p => ({ x: p.x, y: p.y })) });
       return stroke;
     }
 
@@ -362,7 +362,7 @@ describe("ActiveObjectManager/apply", () => {
       // 选中 → 收缩到只覆盖 (0, 0) → 提交
       board.activeObjectManager.choose(new Set([stroke]));
       stroke.position = new Vector(0, 0);
-      stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
+      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
       board.activeObjectManager.apply(new Set([stroke]));
 
       expect(chunk10.objectManager.staticGraph.hasNode(102)).toBe(false);
@@ -584,11 +584,11 @@ describe("ActiveObjectManager/apply", () => {
 
       const circle = new CircleObject(1, new Vector(5, 5), {}, { radius: 20 });
       const stroke = new StrokeObject(2, new Vector(0, 0));
-      stroke.setPathPoints([
+      stroke.setData({ points: [
         new Vector(0, 0),
         new Vector(9, 0),
         new Vector(9, 9),
-      ]);
+      ].map(p => ({ x: p.x, y: p.y })) });
 
       board.addObject(circle, 1);
       board.addObject(stroke, 1);

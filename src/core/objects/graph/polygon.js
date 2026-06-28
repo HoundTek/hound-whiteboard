@@ -38,51 +38,31 @@ class PolygonObject extends GraphObject {
     this.property = { ...DEFAULT_POLYGON_PROPERTY, ...this.property };
     this.rich.localPolygonRange = new PolygonRange([]);
     this.rich.worldPolygonRange = new PolygonRange([]);
-    if (Array.isArray(data?.points)) {
-      const vecs = data.points.map((p) =>
-        p instanceof Vector ? p : new Vector(p.x, p.y),
+    this._onDataChange(Object.keys(data));
+  }
+
+  /**
+   * 数据变更回调
+   * @param {string[]} keys - 变更的字段名列表
+   * @protected
+   */
+  _onDataChange(keys) {
+    if (keys.includes('points') && Array.isArray(this.data.points)) {
+      const vecs = this.data.points.map((p) => new Vector(p.x, p.y));
+      this.rich.localPolygonRange = new PolygonRange(vecs);
+      this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(
+        this.transform,
       );
-      this.setPolygonPoints(vecs);
+      this.calculateConvexHull();
+      this.calculateRectangle();
     }
   }
 
   /**
    * 设置对象的顶点集
-   * @description 设置新的顶点集时，会自动更新变换后的顶点集和凸包。
    * @param {Vector[]} points - 新的顶点集
    */
-  setPolygonPoints(points) {
-    this.rich.localPolygonRange = new PolygonRange(points);
-    this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(
-      this.transform,
-    );
-    this.calculateConvexHull();
-    this.calculateRectangle();
-    this.data.points = points.map((p) => ({ x: p.x, y: p.y }));
-  }
 
-  /**
-   * 修改指定索引的顶点
-   * @param {number} index - 要修改的顶点索引
-   * @param {Vector} points - 新的顶点坐标
-   */
-  replacePolygonPoint(index, points) {
-    // 修改指定索引的顶点，并更新变换后的顶点集和凸包。
-    if (index < 0 || index >= this.rich.localPolygonRange.points.length) {
-      throw new RangeError("Index out of bounds");
-    }
-    const nextPoints = [...this.rich.localPolygonRange.points];
-    nextPoints[index] = points;
-    this.setPolygonPoints(nextPoints);
-  }
-
-  /**
-   * 在末尾添加一个新的顶点
-   * @param {Vector} point - 新的顶点坐标
-   */
-  appendPolygonPoint(point) {
-    this.setPolygonPoints(this.rich.localPolygonRange.points.concat([point]));
-  }
 
   calculateRectangle() {
     this.rich.boundingBox = RectangleRange.from(
