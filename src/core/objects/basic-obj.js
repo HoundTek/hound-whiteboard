@@ -152,13 +152,16 @@ class BasicObject {
   }
 
   /**
-   * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
+   * @param {Vector} position - 对象的初始位置
+   * @param {Record<string, any>} [property={}] - 对象属性
+   * @param {Record<string, any>} [data={}] - 对象类型专属数据
    * @constructor
    */
-  constructor(p, id) {
-    this.position = p;
+  constructor(id, position, property = {}, data = {}) {
     this.id = id;
+    this.position = position;
+    this.property = { ...this.property, ...property };
   }
 
   /**

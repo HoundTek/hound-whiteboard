@@ -1,5 +1,8 @@
 import { jest } from "@jest/globals";
-import { createChunk, createChunkAt } from "../../../../test-support/aom-fixtures.js";
+import {
+  createChunk,
+  createChunkAt,
+} from "../../../../test-support/aom-fixtures.js";
 
 import { DirectedGraph } from "../../../../utils/directed-graph.js";
 import { Chunk } from "../../../chunk/chunk.js";
@@ -7,8 +10,6 @@ import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
 import { BasicObject } from "../../../../objects/basic-obj.js";
 import { Vector } from "../../../../utils/math.js";
 import { oneChunkData, twoChunkData, multiChunkData } from "./data.js";
-
-
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
 
@@ -33,7 +34,7 @@ describe("ActiveObjectManager/pickup", () => {
       coord.x * CHUNK_SIZE + CHUNK_SIZE / 2,
       coord.y * CHUNK_SIZE + CHUNK_SIZE / 2,
     );
-    return new BasicObject(pos, id);
+    return new BasicObject(id, pos);
   }
 
   function createBoard(...chunks) {
@@ -42,8 +43,7 @@ describe("ActiveObjectManager/pickup", () => {
       width: CHUNK_SIZE,
       height: CHUNK_SIZE,
       getChunkById: (chunkId) => chunkMap.get(chunkId),
-      getChunkByCoordinate: (x, y) =>
-        chunkMap.get(Chunk.coordinateToId(x, y)),
+      getChunkByCoordinate: (x, y) => chunkMap.get(Chunk.coordinateToId(x, y)),
       createChunkLoader: () => ({
         trackChunk: jest.fn(),
         emitLoadRequest: jest.fn(),
@@ -110,10 +110,7 @@ describe("ActiveObjectManager/pickup", () => {
 
     test("应能选取多对象为起点且无跨区块对象的子图", () => {
       const pickup8n15 = aom.pickup(
-        new Set([
-          createObject(8, chunk.id),
-          createObject(15, chunk.id),
-        ]),
+        new Set([createObject(8, chunk.id), createObject(15, chunk.id)]),
       );
 
       const expected8n15 = DirectedGraph.parse([
@@ -183,10 +180,7 @@ describe("ActiveObjectManager/pickup", () => {
 
     test("应能选取多对象为起点且含跨区块对象的子图", () => {
       const pickup8n10 = aom.pickup(
-        new Set([
-          createObject(8, chunk1.id),
-          createObject(10, chunk1.id),
-        ]),
+        new Set([createObject(8, chunk1.id), createObject(10, chunk1.id)]),
       );
 
       const expected8n10 = DirectedGraph.parse([
@@ -219,7 +213,9 @@ describe("ActiveObjectManager/pickup", () => {
       chunk3 = createChunkAt(2, 0);
       chunk4 = createChunkAt(3, 0);
       chunk5 = createChunkAt(4, 0);
-      aom = new ActiveObjectManager(createBoard(chunk1, chunk2, chunk3, chunk4, chunk5));
+      aom = new ActiveObjectManager(
+        createBoard(chunk1, chunk2, chunk3, chunk4, chunk5),
+      );
 
       chunk1.objectManager = new ChunkObjectManager(chunk1.id);
       chunk2.objectManager = new ChunkObjectManager(chunk2.id);
@@ -246,10 +242,7 @@ describe("ActiveObjectManager/pickup", () => {
 
     test("应能选取多对象为起点且含多区块跨区块对象链的子图", () => {
       const pickup6n19 = aom.pickup(
-        new Set([
-          createObject(6, chunk3.id),
-          createObject(19, chunk1.id),
-        ]),
+        new Set([createObject(6, chunk3.id), createObject(19, chunk1.id)]),
       );
 
       const expected6n19 = DirectedGraph.parse([
@@ -324,7 +317,9 @@ describe("ActiveObjectManager/pickup", () => {
       const centerChunk = createChunkAt(0, 0);
       const upperChunk = createChunkAt(0, 1);
       const startChunk = createChunkAt(1, 1);
-      aom = new ActiveObjectManager(createBoard(centerChunk, upperChunk, startChunk));
+      aom = new ActiveObjectManager(
+        createBoard(centerChunk, upperChunk, startChunk),
+      );
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
       upperChunk.objectManager = new ChunkObjectManager(upperChunk.id);
@@ -401,7 +396,9 @@ describe("ActiveObjectManager/pickup", () => {
       const centerChunk = createChunkAt(0, 0);
       const rightChunk = createChunkAt(1, 0);
       const upChunk = createChunkAt(0, 1);
-      aom = new ActiveObjectManager(createBoard(centerChunk, rightChunk, upChunk));
+      aom = new ActiveObjectManager(
+        createBoard(centerChunk, rightChunk, upChunk),
+      );
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
       rightChunk.objectManager = new ChunkObjectManager(rightChunk.id);
@@ -438,7 +435,10 @@ describe("ActiveObjectManager/pickup", () => {
         centerChunk.id,
         upChunk.id,
       ]);
-      upChunk.objectManager.setObjectCoverChunks(400, [centerChunk.id, upChunk.id]);
+      upChunk.objectManager.setObjectCoverChunks(400, [
+        centerChunk.id,
+        upChunk.id,
+      ]);
       rightChunk.objectManager.setObjectCoverChunks(400, [centerChunk.id]);
 
       const pickupAfterMove = aom.pickup(
@@ -476,7 +476,7 @@ describe("ActiveObjectManager/pickup", () => {
       const aom = new ActiveObjectManager(board);
 
       const pickup8 = aom.pickup(
-        new Set([new BasicObject(new Vector(0, 0), 8)]),
+        new Set([new BasicObject(8, new Vector(0, 0))]),
       );
       const expected8 = DirectedGraph.parse([
         [8, [4, 5]],

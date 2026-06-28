@@ -72,7 +72,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   create(p, id) {
-    this.obj = new CircleObject(p, id);
+    this.obj = new CircleObject(id, p);
     this.obj.setProperty(this.property);
   }
 

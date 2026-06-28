@@ -6,11 +6,12 @@ import { Matrix, Vector } from "../../utils/math.js";
 
 describe("object deserializer", () => {
   test("应能还原 PolygonObject", () => {
-    const polygon = new PolygonObject(new Vector(3, 4), 12, [
-      new Vector(0, 0),
-      new Vector(10, 0),
-      new Vector(0, 20),
-    ]);
+    const polygon = new PolygonObject(
+      12,
+      new Vector(3, 4),
+      {},
+      { points: [new Vector(0, 0), new Vector(10, 0), new Vector(0, 20)] },
+    );
     polygon.setTransform(new Matrix(0, 1, -1, 0));
     polygon.setProperty({
       fillColor: "#ff8800",
@@ -27,7 +28,7 @@ describe("object deserializer", () => {
   });
 
   test("应能还原 TextObject", () => {
-    const text = new TextObject(new Vector(8, 13), 2);
+    const text = new TextObject(2, new Vector(8, 13));
     text.setTransform(new Matrix(1, 0.2, 0, 1));
     text.setText("hello whiteboard");
     text.setProperty({
@@ -47,7 +48,7 @@ describe("object deserializer", () => {
   });
 
   test("应能还原 StrokeObject", () => {
-    const stroke = new StrokeObject(new Vector(1, 2), 9);
+    const stroke = new StrokeObject(9, new Vector(1, 2));
     stroke.setPathPoints([
       new Vector(0, 0),
       new Vector(5, 2),

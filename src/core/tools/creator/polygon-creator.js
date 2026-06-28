@@ -98,7 +98,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {number} id - 对象 id
    */
   create(position, id) {
-    this.obj = new PolygonObject(position, id);
+    this.obj = new PolygonObject(id, position);
     this.obj.setProperty(this.property);
   }
 

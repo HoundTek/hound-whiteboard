@@ -35,7 +35,7 @@ describe("ActiveObjectManager/basic", () => {
       };
       aom = new ActiveObjectManager(undefined, { renderHooks });
 
-      const stroke = new StrokeObject(new Vector(0, 0), 100, 1);
+      const stroke = new StrokeObject(100, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       aom.add(new Set([stroke]));
@@ -55,9 +55,9 @@ describe("ActiveObjectManager/basic", () => {
 
     test("add 应将白板外新对象注册到动态图顶层", () => {
       const aom = new ActiveObjectManager();
-      const lower = new StrokeObject(new Vector(0, 0), 30, 1);
+      const lower = new StrokeObject(30, new Vector(0, 0));
       lower.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
-      const upper = new StrokeObject(new Vector(0, 0), 31, 1);
+      const upper = new StrokeObject(31, new Vector(0, 0));
       upper.setPathPoints([new Vector(2, 2), new Vector(6, 6)]);
 
       const firstLayer = aom.add(new Set([lower]));

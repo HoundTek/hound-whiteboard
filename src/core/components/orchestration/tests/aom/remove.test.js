@@ -26,7 +26,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 101, 1);
+      const stroke = new StrokeObject(101, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       aom.remove(new Set([stroke]));
@@ -70,7 +70,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 102, 1);
+      const stroke = new StrokeObject(102, new Vector(0, 0));
       // 覆盖从 (0,0) 到 (6,6)，在 5x5 的区块尺寸下会跨区块 (0,0)=1, (1,0)=2, (1,1)=3
       stroke.setPathPoints([new Vector(1, 1), new Vector(6, 6)]);
 
@@ -109,9 +109,9 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke12 = new StrokeObject(new Vector(0, 0), 12, 1);
+      const stroke12 = new StrokeObject(12, new Vector(0, 0));
       stroke12.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
-      const stroke13 = new StrokeObject(new Vector(0, 0), 13, 1);
+      const stroke13 = new StrokeObject(13, new Vector(0, 0));
       stroke13.setPathPoints([new Vector(2, 2), new Vector(5, 5)]);
 
       aom.choose(new Set([stroke12, stroke13]));
@@ -141,7 +141,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 201, 1);
+      const stroke = new StrokeObject(201, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       // 对象不在活动集合中，仅存在于静态图
@@ -177,7 +177,7 @@ describe("ActiveObjectManager/remove", () => {
 
       const objects = new Map();
       for (const nodeId of [12, 13, 5]) {
-        const obj = new StrokeObject(new Vector(0, 0), nodeId, 1);
+        const obj = new StrokeObject(nodeId, new Vector(0, 0));
         obj.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
         objects.set(nodeId, obj);
       }
@@ -225,7 +225,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board, { renderHooks });
 
-      const stroke = new StrokeObject(new Vector(0, 0), 301, 1);
+      const stroke = new StrokeObject(301, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       requestLiveRender.mockClear();
@@ -270,7 +270,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board, { renderHooks });
 
-      const stroke = new StrokeObject(new Vector(0, 0), 302, 1);
+      const stroke = new StrokeObject(302, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(15, 15)]);
 
       aom.remove(new Set([stroke]));
@@ -304,7 +304,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board, { renderHooks });
 
-      const stroke = new StrokeObject(new Vector(0, 0), 303, 1);
+      const stroke = new StrokeObject(303, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       aom.remove(new Set([stroke]));
@@ -333,7 +333,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 401, 1);
+      const stroke = new StrokeObject(401, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       // choose 会调用 captureBaseObjectSnapshot，填充快照
@@ -362,7 +362,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 402, 1);
+      const stroke = new StrokeObject(402, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       // add 不产生快照，apply 后才产生
@@ -416,9 +416,9 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board, { renderHooks });
 
-      const lower = new StrokeObject(new Vector(0, 0), 501, 1);
+      const lower = new StrokeObject(501, new Vector(0, 0));
       lower.setPathPoints([new Vector(1, 1), new Vector(7, 7)]);
-      const upper = new StrokeObject(new Vector(0, 0), 502, 1);
+      const upper = new StrokeObject(502, new Vector(0, 0));
       upper.setPathPoints([new Vector(2, 2), new Vector(8, 8)]);
       objectMap.set(501, lower);
       objectMap.set(502, upper);
@@ -460,7 +460,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board, { renderHooks });
 
-      const stroke = new StrokeObject(new Vector(0, 0), 601, 1);
+      const stroke = new StrokeObject(601, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       aom.remove(new Set([stroke]));
@@ -497,11 +497,11 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const activeObj = new StrokeObject(new Vector(0, 0), 701, 1);
+      const activeObj = new StrokeObject(701, new Vector(0, 0));
       activeObj.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
-      const staticObjA = new StrokeObject(new Vector(0, 0), 702, 1);
+      const staticObjA = new StrokeObject(702, new Vector(0, 0));
       staticObjA.setPathPoints([new Vector(2, 2), new Vector(5, 5)]);
-      const staticObjB = new StrokeObject(new Vector(0, 0), 703, 1);
+      const staticObjB = new StrokeObject(703, new Vector(0, 0));
       staticObjB.setPathPoints([new Vector(3, 3), new Vector(6, 6)]);
 
       // 只有 701 是活动对象
@@ -532,7 +532,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 801, 1);
+      const stroke = new StrokeObject(801, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       // add 将对象注册为活动对象，但未写入区块静态图
@@ -566,7 +566,7 @@ describe("ActiveObjectManager/remove", () => {
     test("remove 应能处理无 board 挂载的 AOM", () => {
       const aom = new ActiveObjectManager();
 
-      const stroke = new StrokeObject(new Vector(0, 0), 901, 1);
+      const stroke = new StrokeObject(901, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
 
       // 无 board 时仅从活动集合中移除
@@ -610,7 +610,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 1001, 1);
+      const stroke = new StrokeObject(1001, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(25, 4)]);
 
       aom.remove(new Set([stroke]));
@@ -646,7 +646,7 @@ describe("ActiveObjectManager/remove", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const stroke = new StrokeObject(new Vector(0, 0), 1101, 1);
+      const stroke = new StrokeObject(1101, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(15, 15)]);
 
       expect(() => aom.remove(new Set([stroke]))).not.toThrow();

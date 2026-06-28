@@ -12,7 +12,7 @@ import { Vector } from "../../../utils/math.js";
 describe("LiveRenderer", () => {
   class FakeObject extends BasicObject {
     constructor(id, position, calls) {
-      super(position, id, 1);
+      super(id, position);
       this.calls = calls;
       this.boundingBox = new RectangleRange(0, 0, 10, 10);
     }
@@ -198,7 +198,7 @@ describe("LiveRenderer", () => {
     const calls = [];
     class StyledFakeObject extends BasicObject {
       constructor() {
-        super(new Vector(10, 20), 301, 1);
+        super(301, new Vector(10, 20));
         this.boundingBox = new RectangleRange(0, 0, 10, 10);
       }
 
@@ -557,9 +557,9 @@ describe("LiveRenderer", () => {
   });
 
   test("真实对象应根据 property 动态提供渲染 padding", () => {
-    const circle = new CircleObject(new Vector(0, 0), 81, 10);
-    const stroke = new StrokeObject(new Vector(0, 0), 82, 1);
-    const text = new TextObject(new Vector(0, 0), 83, 1);
+    const circle = new CircleObject(81, new Vector(0, 0), {}, { radius: 10 });
+    const stroke = new StrokeObject(82, new Vector(0, 0));
+    const text = new TextObject(83, new Vector(0, 0));
     stroke.setPathPoints([new Vector(0, 0), new Vector(10, 0)]);
 
     expect(circle.getRenderPadding()).toBe(1.5);
@@ -577,7 +577,7 @@ describe("LiveRenderer", () => {
 
   test("PathRange 对象的屏幕矩形应包含额外的抗锯齿安全留白", () => {
     const calls = [];
-    const stroke = new StrokeObject(new Vector(10, 20), 84, 1);
+    const stroke = new StrokeObject(84, new Vector(10, 20));
     stroke.setPathPoints([new Vector(0, 0), new Vector(0, 12)]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));

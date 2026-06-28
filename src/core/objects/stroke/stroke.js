@@ -47,11 +47,13 @@ const DEFAULT_STROKE_PROPERTY = Object.freeze({
  * @author Zhou Chenyu
  */
 class StrokeObject extends BasicObject {
-  constructor(p, id) {
-    super(p, id);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
+    this.property = { ...DEFAULT_STROKE_PROPERTY, ...this.property };
+    if (Array.isArray(data?.points)) {
+      this.setPathPoints(data.points);
+    }
   }
-
-  property = { ...DEFAULT_STROKE_PROPERTY };
 
   isDirected() {
     return false;
@@ -164,26 +166,30 @@ class StrokeObject extends BasicObject {
     return {
       ...super.serialize(),
       type: "StrokeObject",
-      data: { points: this.localPathRange.points.map((point) => point.serialize()) },
+      data: {
+        points: this.localPathRange.points.map((point) => point.serialize()),
+      },
     };
   }
 
-  static parse(data) {
-    if (data.type !== "StrokeObject") {
+  static parse(serialized) {
+    if (serialized.type !== "StrokeObject") {
       throw new TypeError("Invalid type for StrokeObject parsing");
     }
 
     const obj = new StrokeObject(
-      Vector.parse(data.position),
-      data.id,
+      serialized.id,
+      Vector.parse(serialized.position),
+      { ...DEFAULT_STROKE_PROPERTY, ...(serialized.property ?? {}) },
+      {
+        ...(serialized.data ?? {}),
+        points: (serialized.data?.points ?? []).map((point) =>
+          Vector.parse(point),
+        ),
+      },
     );
 
-    obj.setPathPoints((data.data?.points ?? []).map((point) => Vector.parse(point)));
-    obj.setTransform(Matrix.parse(data.transform));
-    obj.setProperty({
-      ...DEFAULT_STROKE_PROPERTY,
-      ...(data.property ?? {}),
-    });
+    obj.setTransform(Matrix.parse(serialized.transform));
     return obj;
   }
 }

@@ -100,7 +100,7 @@ describe("whiteboard demo", () => {
   test("demo 配置后右键应通过 handoff 选择并桥接覆盖对象", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const stroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    const stroke = new StrokeObject(1, new Vector(30, 40));
     stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
     board.addObject(stroke, 1);
     const { secondarySelectionTool } = configureWhiteboardDemo(board, monitor);
@@ -259,9 +259,9 @@ describe("whiteboard demo", () => {
   test("demo 配置后 handoff 工作流应支持 chooser → modifier → 重新 chooser 的完整周期", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const firstStroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    const firstStroke = new StrokeObject(1, new Vector(30, 40));
     firstStroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
-    const secondStroke = new StrokeObject(new Vector(90, 100), 2, 1);
+    const secondStroke = new StrokeObject(2, new Vector(90, 100));
     secondStroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
 
     board.addObject(firstStroke, 1);
@@ -436,7 +436,7 @@ describe("whiteboard demo", () => {
   test("demo 配置后 handoff 中 Escape 应取消修改并回退对象位置", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const stroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    const stroke = new StrokeObject(1, new Vector(30, 40));
     stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
     board.addObject(stroke, 1);
 
@@ -502,7 +502,7 @@ describe("whiteboard demo", () => {
   test("demo 配置后 handoff 中连续多轮 modifier 手势后 Escape 应回退到首次手势前的位置", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const stroke = new StrokeObject(new Vector(30, 40), 1, 1);
+    const stroke = new StrokeObject(1, new Vector(30, 40));
     stroke.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
     board.addObject(stroke, 1);
 
@@ -583,7 +583,7 @@ describe("whiteboard demo", () => {
   test("requestViewportBaseRender 应让 base 层缓冲区覆盖当前视口并承接已提交笔画", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const stroke = new StrokeObject(new Vector(10, 20), 1, 1);
+    const stroke = new StrokeObject(1, new Vector(10, 20));
     stroke.setPathPoints([new Vector(0, 0), new Vector(0, 30)]);
 
     board.addObject(stroke, 1);
@@ -676,7 +676,7 @@ describe("whiteboard demo", () => {
   test("demo 配置后 WASD 应通过 handoff 发送 displacement 到 modifier", () => {
     const board = createDemoBoard();
     const monitor = createMonitor(board, "main");
-    const target = new StrokeObject(new Vector(30, 40), 1, 1);
+    const target = new StrokeObject(1, new Vector(30, 40));
     target.setPathPoints([new Vector(0, 0), new Vector(20, 10)]);
     board.addObject(target, 1);
 

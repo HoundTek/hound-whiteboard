@@ -37,12 +37,22 @@ class TextObject extends OneDimensionObject {
 
   /**
    * 创建一个新的文本对象
-   * @param {Vector} p - 文本左上角的绝对位置
    * @param {number} id - 对象 id
+   * @param {Vector} position - 文本左上角的绝对位置
+   * @param {Record<string, any>} [property={}] - 对象属性
+   * @param {Record<string, any>} [data={}] - 对象类型专属数据
    * @constructor
    */
-  constructor(p, id) {
-    super(p, id);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
+    this.property = { ...DEFAULT_TEXT_PROPERTY, ...this.property };
+    if (data?.text != null) {
+      this.text = data.text;
+    }
+    if (data?.ihatLength != null) {
+      this.ihatLength = data.ihatLength;
+    }
+    this.divideText();
   }
 
   /**
@@ -63,8 +73,6 @@ class TextObject extends OneDimensionObject {
    * @type {PolygonRange}
    */
   worldTextRange = new PolygonRange([]);
-
-  property = { ...DEFAULT_TEXT_PROPERTY };
 
   setProperty(property = {}, ctx) {
     super.setProperty(property);
@@ -178,22 +186,20 @@ class TextObject extends OneDimensionObject {
     };
   }
 
-  static parse(data) {
-    if (data.type !== "TextObject") {
+  static parse(serialized) {
+    if (serialized.type !== "TextObject") {
       throw new TypeError("Invalid type for TextObject parsing");
     }
 
     let obj = new TextObject(
-      Vector.parse(data.position),
-      data.id,
+      serialized.id,
+      Vector.parse(serialized.position),
+      { ...DEFAULT_TEXT_PROPERTY, ...(serialized.property ?? {}) },
+      {
+        ...(serialized.data ?? {}),
+      },
     );
-    obj.setTransform(Matrix.parse(data.transform));
-    obj.setProperty({
-      ...DEFAULT_TEXT_PROPERTY,
-      ...(data.property ?? {}),
-    });
-    obj.setText(data.data?.text ?? "");
-    obj.setIhatLength(data.data?.ihatLength ?? obj.ihatLength);
+    obj.setTransform(Matrix.parse(serialized.transform));
     return obj;
   }
 }

@@ -25,7 +25,7 @@ describe("ActiveObjectManager/choose", () => {
       coord.x * CHUNK_SIZE + CHUNK_SIZE / 2,
       coord.y * CHUNK_SIZE + CHUNK_SIZE / 2,
     );
-    return new BasicObject(pos, id);
+    return new BasicObject(id, pos);
   }
 
   function createBoard(...chunks) {

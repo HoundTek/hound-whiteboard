@@ -1577,7 +1577,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       board.width = 800;
       board.height = 600;
       const chooserTool = new RectangleObjectChooserTool();
-      const targetObject = new StrokeObject(new Vector(10, 10), 41, 1);
+      const targetObject = new StrokeObject(41, new Vector(10, 10));
       targetObject.setPathPoints([
         new Vector(0, 0),
         new Vector(8, 0),

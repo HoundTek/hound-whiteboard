@@ -21,8 +21,8 @@ import { Matrix3D } from "../../utils/math3d.js";
  * @author Zhou Chenyu
  */
 class Graph3DObject extends GraphObject {
-  constructor(p, id) {
-    super(p, id);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
   }
 
   /**

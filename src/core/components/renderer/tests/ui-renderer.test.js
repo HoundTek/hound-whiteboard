@@ -8,12 +8,11 @@ import { Vector } from "../../../utils/math.js";
 class TestOverlayObject extends BasicObject {
   constructor({
     id = 1,
-    ownerChunkId = 1,
     position,
     localRect,
     property,
   } = {}) {
-    super(position ?? new Vector(0, 0), id, ownerChunkId);
+    super(id, position ?? new Vector(0, 0));
     this.boundingBox = RectangleRange.from(
       localRect ?? new RectangleRange(0, 0, 0, 0),
     );

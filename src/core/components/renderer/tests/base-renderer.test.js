@@ -168,9 +168,9 @@ describe("BaseRenderer", () => {
 
   test("应按已加载区块的静态图拓扑序渲染静态对象", () => {
     const calls = [];
-    const lower = new StrokeObject(new Vector(0, 0), 11, 1);
+    const lower = new StrokeObject(11, new Vector(0, 0));
     lower.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
-    const upper = new StrokeObject(new Vector(0, 0), 12, 1);
+    const upper = new StrokeObject(12, new Vector(0, 0));
     upper.setPathPoints([new Vector(0, 1), new Vector(5, 1)]);
 
     const chunk = Chunk.fromId(1);
@@ -201,7 +201,7 @@ describe("BaseRenderer", () => {
 
   test("viewportContext 应保持原生 context accessor 的合法 receiver", () => {
     const calls = [];
-    const object = new StrokeObject(new Vector(0, 0), 111, 1);
+    const object = new StrokeObject(111, new Vector(0, 0));
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
 
     const chunk = Chunk.fromId(1);
@@ -230,9 +230,9 @@ describe("BaseRenderer", () => {
 
   test("应按多区块合并后的全局静态图拓扑序渲染静态对象", () => {
     const calls = [];
-    const lower = new StrokeObject(new Vector(0, 0), 41, 1);
+    const lower = new StrokeObject(41, new Vector(0, 0));
     lower.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
-    const upper = new StrokeObject(new Vector(20, 0), 42, 1);
+    const upper = new StrokeObject(42, new Vector(20, 0));
     upper.setPathPoints([new Vector(0, 1), new Vector(5, 1)]);
 
     const leftChunk = Chunk.fromId(1);
@@ -265,7 +265,7 @@ describe("BaseRenderer", () => {
 
   test("应能从覆盖区块回查 owner chunk 的静态对象实例", () => {
     const calls = [];
-    const object = new StrokeObject(new Vector(0, 0), 21, 1);
+    const object = new StrokeObject(21, new Vector(0, 0));
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
 
     const ownerChunk = Chunk.fromId(1);
@@ -295,7 +295,7 @@ describe("BaseRenderer", () => {
 
   test("同一静态对象跨多个已加载覆盖区块时应只绘制一次", () => {
     const calls = [];
-    const object = new StrokeObject(new Vector(0, 0), 51, 1);
+    const object = new StrokeObject(51, new Vector(0, 0));
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
 
     const ownerChunk = Chunk.fromId(1);
@@ -328,9 +328,9 @@ describe("BaseRenderer", () => {
 
   test("render(dirtyRects) 应只清理并重绘命中脏区的静态对象", () => {
     const calls = [];
-    const leftObject = new StrokeObject(new Vector(0, 0), 31, 1);
+    const leftObject = new StrokeObject(31, new Vector(0, 0));
     leftObject.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
-    const rightObject = new StrokeObject(new Vector(100, 0), 32, 1);
+    const rightObject = new StrokeObject(32, new Vector(100, 0));
     rightObject.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
 
     const chunk = Chunk.fromId(1);
@@ -385,7 +385,7 @@ describe("BaseRenderer", () => {
 
   test("render(dirtyRects) 应把对象级渲染留白计入静态层局部重绘命中判断", () => {
     const calls = [];
-    const object = new StrokeObject(new Vector(0, 0), 33, 1);
+    const object = new StrokeObject(33, new Vector(0, 0));
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
     object.getRenderPadding = () => 2;
 
@@ -422,9 +422,9 @@ describe("BaseRenderer", () => {
 
   test("多区块局部重绘时也应保持全局静态图拓扑序", () => {
     const calls = [];
-    const lower = new StrokeObject(new Vector(0, 0), 61, 1);
+    const lower = new StrokeObject(61, new Vector(0, 0));
     lower.setPathPoints([new Vector(0, 0), new Vector(8, 0)]);
-    const upper = new StrokeObject(new Vector(0, 0), 62, 1);
+    const upper = new StrokeObject(62, new Vector(0, 0));
     upper.setPathPoints([new Vector(0, 2), new Vector(8, 2)]);
 
     const leftChunk = Chunk.fromId(1);
@@ -468,11 +468,11 @@ describe("BaseRenderer", () => {
 
   test("三个已加载区块形成链式依赖时应按全局拓扑序渲染", () => {
     const calls = [];
-    const first = new StrokeObject(new Vector(0, 0), 71, 1);
+    const first = new StrokeObject(71, new Vector(0, 0));
     first.setPathPoints([new Vector(0, 0), new Vector(6, 0)]);
-    const second = new StrokeObject(new Vector(20, 0), 72, 1);
+    const second = new StrokeObject(72, new Vector(20, 0));
     second.setPathPoints([new Vector(0, 1), new Vector(6, 1)]);
-    const third = new StrokeObject(new Vector(40, 0), 73, 1);
+    const third = new StrokeObject(73, new Vector(40, 0));
     third.setPathPoints([new Vector(0, 2), new Vector(6, 2)]);
 
     const chunk1 = Chunk.fromId(1);
@@ -517,11 +517,11 @@ describe("BaseRenderer", () => {
 
   test("不同区块提供同一批对象的不同边信息时应合并成稳定全局顺序", () => {
     const calls = [];
-    const first = new StrokeObject(new Vector(0, 0), 81, 1);
+    const first = new StrokeObject(81, new Vector(0, 0));
     first.setPathPoints([new Vector(0, 0), new Vector(6, 0)]);
-    const second = new StrokeObject(new Vector(20, 0), 82, 1);
+    const second = new StrokeObject(82, new Vector(20, 0));
     second.setPathPoints([new Vector(0, 1), new Vector(6, 1)]);
-    const third = new StrokeObject(new Vector(40, 0), 83, 1);
+    const third = new StrokeObject(83, new Vector(40, 0));
     third.setPathPoints([new Vector(0, 2), new Vector(6, 2)]);
 
     const chunk1 = Chunk.fromId(1);
@@ -607,7 +607,7 @@ describe("BaseRenderer", () => {
   });
 
   test("invalidateObjects 应同时失效对象当前范围与旧世界范围", () => {
-    const object = new StrokeObject(new Vector(100, 0), 91, 1);
+    const object = new StrokeObject(91, new Vector(100, 0));
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
     const canvas = createCanvas(1, 1, () => ({
       save() {},
@@ -650,7 +650,7 @@ describe("BaseRenderer", () => {
   });
 
   test("invalidateObjects 应将原始脏区逐一提交给调度器，由调度器统一合并", () => {
-    const object = new StrokeObject(new Vector(1, 0), 92, 1);
+    const object = new StrokeObject(92, new Vector(1, 0));
     object.setPathPoints([new Vector(0, 0), new Vector(5, 0)]);
     const canvas = createCanvas(1, 1, () => ({
       save() {},
@@ -694,7 +694,7 @@ describe("BaseRenderer", () => {
   });
 
   test("PathRange 对象的静态层失效矩形应包含额外的抗锯齿安全留白", () => {
-    const object = new StrokeObject(new Vector(0, 0), 93, 1);
+    const object = new StrokeObject(93, new Vector(0, 0));
     object.setPathPoints([new Vector(0, 0), new Vector(0, 10)]);
     const canvas = createCanvas(1, 1, () => ({
       save() {},

@@ -26,15 +26,17 @@ const DEFAULT_CIRCLE_PROPERTY = Object.freeze({
 class CircleObject extends GraphObject {
   /**
    * 创建一个新的圆对象
-   * @param {Vector} p - 圆心的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} radius - 圆的半径
+   * @param {Vector} position - 圆心的绝对位置
+   * @param {Record<string, any>} [property={}] - 对象属性
+   * @param {Record<string, any>} [data={}] - 对象类型专属数据
    * @constructor
    */
-  constructor(p, id, radius) {
-    super(p, id);
-    if (radius) {
-      this.setRadius(radius);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
+    this.property = { ...DEFAULT_CIRCLE_PROPERTY, ...this.property };
+    if (data?.radius) {
+      this.setRadius(data.radius);
     }
   }
 
@@ -45,8 +47,6 @@ class CircleObject extends GraphObject {
    * 外界不应直接修改它，应使用 setRadius 方法。
    */
   radius = 0;
-
-  property = { ...DEFAULT_CIRCLE_PROPERTY };
 
   /**
    * 设置圆的半径
@@ -93,15 +93,6 @@ class CircleObject extends GraphObject {
     ).transform(this.transform);
   }
 
-  /**
-   * 圆对象的颜色
-   * @type {string}
-   * @default "#000000"
-   */
-  /**
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   */
   render(ctx) {
     if (this.radius <= 0) {
       return;
@@ -153,20 +144,17 @@ class CircleObject extends GraphObject {
     };
   }
 
-  static parse(data) {
-    if (data.type !== "CircleObject") {
+  static parse(serialized) {
+    if (serialized.type !== "CircleObject") {
       throw new TypeError("Invalid type for CircleObject parsing");
     }
     let obj = new CircleObject(
-      Vector.parse(data.position),
-      data.id,
-      data.data?.radius,
+      serialized.id,
+      Vector.parse(serialized.position),
+      { ...DEFAULT_CIRCLE_PROPERTY, ...(serialized.property ?? {}) },
+      serialized.data ?? {},
     );
-    obj.setTransform(Matrix.parse(data.transform));
-    obj.setProperty({
-      ...DEFAULT_CIRCLE_PROPERTY,
-      ...(data.property ?? {}),
-    });
+    obj.setTransform(Matrix.parse(serialized.transform));
     return obj;
   }
 }

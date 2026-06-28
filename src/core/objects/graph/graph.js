@@ -16,8 +16,8 @@ import { BasicObject } from "../basic-obj.js";
  * @author Zhou Chenyu
  */
 class GraphObject extends BasicObject {
-  constructor(p, id) {
-    super(p, id);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
   }
 
   isDirected() {

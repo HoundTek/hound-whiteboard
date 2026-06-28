@@ -51,7 +51,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   create(p, id) {
-    this.obj = new StrokeObject(p, id);
+    this.obj = new StrokeObject(id, p);
     this.obj.setProperty(this.property);
   }
 

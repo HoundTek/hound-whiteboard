@@ -255,7 +255,7 @@ describe("Board chunk grid", () => {
     board.width = 10;
     board.height = 10;
 
-    const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
+    const stroke = new StrokeObject(15, new Vector(0, 0));
     stroke.setPathPoints([
       new Vector(1, 1),
       new Vector(19, 1),
@@ -273,7 +273,7 @@ describe("Board chunk grid", () => {
   });
 
   test("Board.loadChunkObjectEntries 应通过桥接加载对象并写入 Board 注册表", async () => {
-    const stroke = new StrokeObject(new Vector(10, 20), 201);
+    const stroke = new StrokeObject(201, new Vector(10, 20));
     stroke.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
 
     // spy 必须先于 Board 构造（因 persistence adapter 在构造时捕获桥引用）
@@ -311,7 +311,7 @@ describe("Board chunk grid", () => {
   });
 
   test("Board.saveChunkObjectEntries 应按层叠图节点保存对象", async () => {
-    const ownerObject = new StrokeObject(new Vector(10, 20), 301);
+    const ownerObject = new StrokeObject(301, new Vector(10, 20));
     ownerObject.setPathPoints([new Vector(0, 0), new Vector(5, 5)]);
 
     // spy 必须先于 Board 构造

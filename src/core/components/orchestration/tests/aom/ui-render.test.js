@@ -6,7 +6,7 @@ import { Vector } from "../../../../utils/math.js";
 
 class TestActiveObject extends BasicObject {
   constructor(id = 1) {
-    super(new Vector(0, 0), id, 1);
+    super(id, new Vector(0, 0));
     this.boundingBox = new RectangleRange(0, 0, 10, 10);
   }
 

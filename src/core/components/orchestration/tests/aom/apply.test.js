@@ -17,7 +17,7 @@ describe("ActiveObjectManager/apply", () => {
       board.width = 10;
       board.height = 10;
 
-      const stroke = new StrokeObject(new Vector(0, 0), 15, 1);
+      const stroke = new StrokeObject(15, new Vector(0, 0));
       stroke.setPathPoints([
         new Vector(1, 1),
         new Vector(19, 1),
@@ -47,10 +47,10 @@ describe("ActiveObjectManager/apply", () => {
       board.width = 10;
       board.height = 10;
 
-      const lower = new StrokeObject(new Vector(0, 0), 21, 1);
+      const lower = new StrokeObject(21, new Vector(0, 0));
       lower.setPathPoints([new Vector(1, 1), new Vector(8, 8)]);
 
-      const upper = new StrokeObject(new Vector(0, 0), 22, 1);
+      const upper = new StrokeObject(22, new Vector(0, 0));
       upper.setPathPoints([new Vector(2, 2), new Vector(9, 9)]);
 
       board.activeObjectManager.choose(new Set([lower]));
@@ -68,9 +68,9 @@ describe("ActiveObjectManager/apply", () => {
       board.width = 10;
       board.height = 10;
 
-      const lower = new StrokeObject(new Vector(0, 0), 23, 1);
+      const lower = new StrokeObject(23, new Vector(0, 0));
       lower.setPathPoints([new Vector(1, 1), new Vector(6, 6)]);
-      const upper = new StrokeObject(new Vector(0, 0), 24, 1);
+      const upper = new StrokeObject(24, new Vector(0, 0));
       upper.setPathPoints([new Vector(2, 2), new Vector(7, 7)]);
 
       board.activeObjectManager.add(new Set([lower]));
@@ -95,10 +95,10 @@ describe("ActiveObjectManager/apply", () => {
       board.width = 10;
       board.height = 10;
 
-      const vertical = new StrokeObject(new Vector(0, 0), 41, 1);
+      const vertical = new StrokeObject(41, new Vector(0, 0));
       vertical.setPathPoints([new Vector(5, 1), new Vector(5, 9)]);
 
-      const horizontal = new StrokeObject(new Vector(0, 0), 42, 1);
+      const horizontal = new StrokeObject(42, new Vector(0, 0));
       horizontal.setPathPoints([new Vector(1, 5), new Vector(9, 5)]);
 
       board.activeObjectManager.add(new Set([vertical]));
@@ -148,7 +148,7 @@ describe("ActiveObjectManager/apply", () => {
         })),
       };
       const aom = new ActiveObjectManager(board, { renderHooks });
-      const stroke = new StrokeObject(new Vector(0, 0), 201, 1);
+      const stroke = new StrokeObject(201, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
 
       aom.add(new Set([stroke]));
@@ -162,7 +162,7 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("apply 应优先按对象旧范围与新范围触发静态层局部失效", () => {
-      const stroke = new StrokeObject(new Vector(0, 0), 301, 1);
+      const stroke = new StrokeObject(301, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(5, 5)]);
 
       const ownerChunk = createChunk(1);
@@ -210,9 +210,9 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("apply 在层级变化但几何不变时也应把受影响的静态邻接对象纳入局部失效", () => {
-      const lower = new StrokeObject(new Vector(0, 0), 401, 1);
+      const lower = new StrokeObject(401, new Vector(0, 0));
       lower.setPathPoints([new Vector(1, 1), new Vector(8, 8)]);
-      const upper = new StrokeObject(new Vector(0, 0), 402, 1);
+      const upper = new StrokeObject(402, new Vector(0, 0));
       upper.setPathPoints([new Vector(2, 2), new Vector(9, 9)]);
 
       const ownerChunk = createChunk(1);
@@ -277,7 +277,7 @@ describe("ActiveObjectManager/apply", () => {
      * 创建只覆盖 (0, 0) 区块的笔划对象
      */
     function strokeInChunk00(id) {
-      const stroke = new StrokeObject(new Vector(0, 0), id, cid(0, 0));
+      const stroke = new StrokeObject(id, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 4)]);
       return stroke;
     }
@@ -286,7 +286,7 @@ describe("ActiveObjectManager/apply", () => {
      * 创建横跨 (0, 0) 和 (0, 1) 两个区块的笔划对象
      */
     function strokeCrossingChunk00And01(id) {
-      const stroke = new StrokeObject(new Vector(0, 0), id, cid(0, 0));
+      const stroke = new StrokeObject(id, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(4, 19)]);
       return stroke;
     }
@@ -295,7 +295,7 @@ describe("ActiveObjectManager/apply", () => {
      * 创建横跨 (0, 0)、(1, 0)、(2, 0) 三个横向区块的笔划对象
      */
     function strokeCrossingThreeChunks(id) {
-      const stroke = new StrokeObject(new Vector(0, 0), id, cid(0, 0));
+      const stroke = new StrokeObject(id, new Vector(0, 0));
       stroke.setPathPoints([new Vector(1, 1), new Vector(25, 4)]);
       return stroke;
     }
@@ -501,8 +501,18 @@ describe("ActiveObjectManager/apply", () => {
       const chunkId00 = cid(0, 0);
 
       // 两个同心圆对象，circle2 在 circle1 之下
-      const circle1 = new CircleObject(new Vector(100, 100), 1, 50);
-      const circle2 = new CircleObject(new Vector(100, 100), 2, 25);
+      const circle1 = new CircleObject(
+        1,
+        new Vector(100, 100),
+        {},
+        { radius: 50 },
+      );
+      const circle2 = new CircleObject(
+        2,
+        new Vector(100, 100),
+        {},
+        { radius: 25 },
+      );
 
       // 建立初始静态图：circle2 在 circle1 之下（边 2→1）
       board.activeObjectManager.add(new Set([circle2]));
@@ -572,8 +582,8 @@ describe("ActiveObjectManager/apply", () => {
       board.width = 10;
       board.height = 10;
 
-      const circle = new CircleObject(new Vector(5, 5), 1, 20);
-      const stroke = new StrokeObject(new Vector(0, 0), 2);
+      const circle = new CircleObject(1, new Vector(5, 5), {}, { radius: 20 });
+      const stroke = new StrokeObject(2, new Vector(0, 0));
       stroke.setPathPoints([
         new Vector(0, 0),
         new Vector(9, 0),

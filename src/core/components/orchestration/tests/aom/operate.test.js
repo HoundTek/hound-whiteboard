@@ -7,7 +7,6 @@ import { StrokeObject } from "../../../../objects/stroke/stroke.js";
 import { Vector } from "../../../../utils/math.js";
 import { oneChunkData } from "./data.js";
 
-
 const { ActiveObjectManager, Layer } =
   await import("../../active-object-manager.js");
 
@@ -16,7 +15,7 @@ describe("ActiveObjectManager/operate", () => {
   let chunk = createChunk(1);
 
   function createObject(id, chunkId) {
-    const object = new StrokeObject(new Vector(0, 0), id, chunkId);
+    const object = new StrokeObject(id, new Vector(0, 0));
     object.setPathPoints([new Vector(1, 1), new Vector(2, 2)]);
     return object;
   }
@@ -26,7 +25,10 @@ describe("ActiveObjectManager/operate", () => {
     return {
       width: 10,
       height: 10,
-      createChunkLoader: () => ({ trackChunk: jest.fn(), emitLoadRequest: jest.fn() }),
+      createChunkLoader: () => ({
+        trackChunk: jest.fn(),
+        emitLoadRequest: jest.fn(),
+      }),
       getChunkById: (chunkId) => chunkMap.get(chunkId),
     };
   }

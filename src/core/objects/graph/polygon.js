@@ -27,15 +27,17 @@ const DEFAULT_POLYGON_PROPERTY = Object.freeze({
 class PolygonObject extends GraphObject {
   /**
    * 创建一个新的多边形对象
-   * @param {Vector} p - 多边形逻辑左上角的绝对位置
    * @param {number} id - 对象 id
-   * @param {Vector[]} points - 多边形各顶点相对其左上角的相对位置
+   * @param {Vector} position - 多边形逻辑左上角的绝对位置
+   * @param {Record<string, any>} [property={}] - 对象属性
+   * @param {Record<string, any>} [data={}] - 对象类型专属数据
    * @constructor
    */
-  constructor(p, id, points) {
-    super(p, id);
-    if (points) {
-      this.setPolygonPoints(points);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
+    this.property = { ...DEFAULT_POLYGON_PROPERTY, ...this.property };
+    if (Array.isArray(data?.points)) {
+      this.setPolygonPoints(data.points);
     }
   }
 
@@ -47,8 +49,6 @@ class PolygonObject extends GraphObject {
    * 外界不应直接修改它，应使用 setPolygonPoints 方法。
    */
   localPolygonRange = new PolygonRange([]);
-
-  property = { ...DEFAULT_POLYGON_PROPERTY };
 
   /**
    * 设置对象的顶点集
@@ -186,20 +186,20 @@ class PolygonObject extends GraphObject {
     };
   }
 
-  static parse(data) {
-    if (data.type !== "PolygonObject") {
+  static parse(serialized) {
+    if (serialized.type !== "PolygonObject") {
       throw new TypeError("Invalid type for PolygonObject parsing");
     }
     let obj = new PolygonObject(
-      Vector.parse(data.position),
-      data.id,
-      (data.data?.points ?? []).map((p) => Vector.parse(p)),
+      serialized.id,
+      Vector.parse(serialized.position),
+      { ...DEFAULT_POLYGON_PROPERTY, ...(serialized.property ?? {}) },
+      {
+        ...(serialized.data ?? {}),
+        points: (serialized.data?.points ?? []).map((p) => Vector.parse(p)),
+      },
     );
-    obj.setTransform(Matrix.parse(data.transform));
-    obj.setProperty({
-      ...DEFAULT_POLYGON_PROPERTY,
-      ...(data.property ?? {}),
-    });
+    obj.setTransform(Matrix.parse(serialized.transform));
     return obj;
   }
 }

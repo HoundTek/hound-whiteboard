@@ -10,7 +10,12 @@ describe("PolygonObject", () => {
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
 
-      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
       expect(polygon.localPolygonRange.points).toEqual(points);
     });
 
@@ -20,7 +25,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, initialPoints);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: initialPoints },
+      );
 
       const newPoints = [
         { x: 0, y: 0 },
@@ -39,7 +49,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
 
       const mat = Matrix.identity().scale(2, 2);
       polygon.setTransform(mat);
@@ -53,20 +68,25 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
 
       const mat = Matrix.identity().rotate(Math.PI / 2);
       polygon.setTransform(mat);
       const expectedTransformedPoints = points.map((p) =>
-        Vector.mulMatrix(mat, p)
+        Vector.mulMatrix(mat, p),
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
         expect(polygon.worldPolygonRange.points[i].x).toBeCloseTo(
-          expectedTransformedPoints[i].x
+          expectedTransformedPoints[i].x,
         );
         expect(polygon.worldPolygonRange.points[i].y).toBeCloseTo(
-          expectedTransformedPoints[i].y
+          expectedTransformedPoints[i].y,
         );
       }
     });
@@ -77,7 +97,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, initialPoints);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: initialPoints },
+      );
 
       const mat = Matrix.identity().rotate(Math.PI / 4);
       polygon.setTransform(mat);
@@ -90,15 +115,15 @@ describe("PolygonObject", () => {
       polygon.setPolygonPoints(newPoints);
 
       const expectedTransformedPoints = newPoints.map((p) =>
-        Vector.mulMatrix(mat, p)
+        Vector.mulMatrix(mat, p),
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
         expect(
           Vector.nearlyEq(
             polygon.worldPolygonRange.points[i],
-            expectedTransformedPoints[i]
-          )
+            expectedTransformedPoints[i],
+          ),
         ).toBe(true);
       }
     });
@@ -111,7 +136,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, initialPoints);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: initialPoints },
+      );
 
       const newPoints = [
         { x: 0, y: 0 },
@@ -161,7 +191,12 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
 
       const newPoints = [
         { x: 0, y: 0 },
