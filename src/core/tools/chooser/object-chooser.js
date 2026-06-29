@@ -1,14 +1,15 @@
 /**
  * @file 对象选择工具
  * @description 提供对象命中选择与选择结果输出的工具基类。
- * @module core/tools/chooser/obj-chooser
+ * @module core/tools/chooser/object-chooser
  * @author Zhou Chenyu
  */
 
 import { Tool } from "../tool.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
-import { intersectsRanges } from "../../range/index.js";
+import { RectangleRange, intersectsRanges } from "../../range/index.js";
 import { Range } from "../../range/range.js";
+import { Vector } from "../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 
 /**
@@ -44,34 +45,105 @@ class ObjectChooserTool extends Tool {
   }
 
   /**
+   * 解析选择条目的 objectId
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {number|null} objectId
+   * @protected
+   */
+  resolveSelectedObjectId(objectEntry) {
+    return typeof objectEntry?.id === "number" ? objectEntry.id : null;
+  }
+
+  /**
+   * 将选择条目回填为真实对象实例（若可解析）
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {*}
+   * @protected
+   */
+  resolveSelectedObjectReference(context = {}, objectEntry) {
+    if (objectEntry instanceof BasicObject) {
+      return objectEntry;
+    }
+
+    const objectId = this.resolveSelectedObjectId(objectEntry);
+    if (objectId == null) {
+      return objectEntry;
+    }
+
+    return (
+      context?.acc?.boardApi?.getBoardCore?.()?.getObjectById?.(objectId) ??
+      context?.acc?.board?.getObjectById?.(objectId) ??
+      objectEntry
+    );
+  }
+
+  /**
+   * 批量解析选择条目的 objectId
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {Iterable<*>|*} objects - 对象或对象集合
+   * @returns {number[]} 去重后的 objectId 列表
+   * @protected
+   */
+  resolveSelectedObjectIds(context = {}, objects) {
+    return [
+      ...new Set(
+        this.normalizeObjectCollection(objects)
+          .map((objectEntry) => this.resolveSelectedObjectId(objectEntry))
+          .filter((objectId) => objectId != null),
+      ),
+    ];
+  }
+
+  /**
+   * 批量回填选择条目为真实对象实例（若可解析）
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {Iterable<*>|*} objects - 对象或对象集合
+   * @returns {Array<*>}
+   * @protected
+   */
+  resolveSelectedObjectReferences(context = {}, objects) {
+    return this.normalizeObjectCollection(objects)
+      .map((objectEntry) =>
+        this.resolveSelectedObjectReference(context, objectEntry),
+      )
+      .filter(Boolean);
+  }
+
+  /**
    * 解析对象主判定范围在世界空间中的范围
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {BasicObject} objectEntry - 候选对象
    * @returns {Range | undefined}
    */
   resolveObjectSelectionWorldRange(context = {}, objectEntry) {
-    if (!objectEntry || typeof objectEntry.getRange !== "function") {
-      return undefined;
-    }
-
-    const position = objectEntry.position;
+    const position = Vector.parse(objectEntry?.position);
     if (!position) {
       return undefined;
     }
 
-    try {
-      const selectionRange = objectEntry.getRange();
-      if (
-        !selectionRange ||
-        typeof selectionRange.withPosition !== "function"
-      ) {
-        return undefined;
-      }
-
-      return selectionRange.withPosition(position);
-    } catch {
-      return undefined;
+    const localRange =
+      objectEntry?.range ??
+      (typeof objectEntry?.getRange === "function"
+        ? objectEntry.getRange()
+        : undefined);
+    if (localRange && typeof localRange.withPosition === "function") {
+      return localRange.withPosition(position);
     }
+
+    const localBoundingBoxSource =
+      objectEntry?.boundingBox ?? objectEntry?.rich?.boundingBox;
+    const localBoundingBox = localBoundingBoxSource
+      ? RectangleRange.from(localBoundingBoxSource)
+      : undefined;
+    if (
+      localBoundingBox &&
+      typeof localBoundingBox.withPosition === "function"
+    ) {
+      return localBoundingBox.withPosition(position);
+    }
+
+    return undefined;
   }
 
   /**
@@ -193,16 +265,26 @@ class ObjectChooserTool extends Tool {
   process(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
     const selectionContext = this.buildSelectionContext(packet, context);
-    const selectedObjects = this.normalizeObjectCollection(
+    const selectedObjects = this.resolveSelectedObjectReferences(
+      selectionContext.context,
       this.choose(selectionContext),
-    ).filter(Boolean);
+    );
     if (selectedObjects.length === 0) {
       return undefined;
     }
 
-    selectionContext.context.acc?.board?.activeObjectManager?.choose?.(
-      new Set(selectedObjects),
+    const boardApi = selectionContext.context.acc?.boardApi;
+    const objectIds = this.resolveSelectedObjectIds(
+      selectionContext.context,
+      selectedObjects,
     );
+    if (boardApi && objectIds.length > 0) {
+      boardApi.addActiveObjects(objectIds);
+    } else {
+      selectionContext.context.acc?.board?.activeObjectManager?.choose?.(
+        new Set(selectedObjects),
+      );
+    }
     this.setContextObjects(selectionContext.context, selectedObjects);
     this.afterChoose(selectedObjects);
     return undefined;
@@ -224,7 +306,11 @@ class ObjectChooserTool extends Tool {
    */
   umount(context = {}) {
     const selectedObjects = this.resolveContextObjects(context);
-    if (selectedObjects.length > 0) {
+    const boardApi = context?.acc?.boardApi;
+    const objectIds = this.resolveSelectedObjectIds(context, selectedObjects);
+    if (boardApi && objectIds.length > 0) {
+      boardApi.discardActiveObjects(objectIds);
+    } else if (selectedObjects.length > 0) {
       context?.acc?.board?.activeObjectManager?.discard?.(
         new Set(selectedObjects),
       );

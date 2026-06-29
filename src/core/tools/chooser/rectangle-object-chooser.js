@@ -8,7 +8,7 @@
 import { SignalPacket } from "../../devices-dag/signal.js";
 import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
-import { ObjectChooserTool } from "./obj-chooser.js";
+import { ObjectChooserTool } from "./object-chooser.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 
 const RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE = "#33a1ff";
@@ -119,17 +119,21 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @returns {Array<BasicObject>}
    */
   collectSelectableObjects(context = {}) {
+    const boardCore = context.acc?.boardApi?.getBoardCore?.();
     const board = context.acc?.board;
+    const objectLoaded = boardCore?.objectLoaded ?? board?.objectLoaded;
+    const activeObjectIndex =
+      boardCore?.activeObjectManager?.activeObjectIndex ??
+      board?.activeObjectManager?.activeObjectIndex;
     const objectMap = new Map();
 
-    for (const entry of board?.objectLoaded?.values?.() ?? []) {
+    for (const entry of objectLoaded?.values?.() ?? []) {
       const objectInstance = entry?.obj;
       if (!objectInstance?.id) continue;
       objectMap.set(objectInstance.id, objectInstance);
     }
 
-    for (const objectInstance of board?.activeObjectManager?.activeObjectIndex?.values?.() ??
-      []) {
+    for (const objectInstance of activeObjectIndex?.values?.() ?? []) {
       if (!objectInstance?.id) continue;
       objectMap.set(objectInstance.id, objectInstance);
     }
@@ -166,7 +170,11 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    */
   replaceSelection(context = {}, nextObjects = []) {
     const previousObjects = this.resolveContextObjects(context).filter(Boolean);
-    if (previousObjects.length > 0) {
+    const boardApi = context.acc?.boardApi;
+    const previousIds = this.resolveSelectedObjectIds(context, previousObjects);
+    if (boardApi && previousIds.length > 0) {
+      boardApi.discardActiveObjects(previousIds);
+    } else if (previousObjects.length > 0) {
       context.acc?.board?.activeObjectManager?.discard?.(
         new Set(previousObjects),
       );
@@ -174,12 +182,23 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
     this.clearContextObjects(context);
 
-    if (nextObjects.length === 0) {
+    const resolvedNextObjects = this.resolveSelectedObjectReferences(
+      context,
+      nextObjects,
+    );
+    if (resolvedNextObjects.length === 0) {
       return [];
     }
 
-    context.acc?.board?.activeObjectManager?.choose?.(new Set(nextObjects));
-    return this.setContextObjects(context, nextObjects);
+    const nextIds = this.resolveSelectedObjectIds(context, resolvedNextObjects);
+    if (boardApi && nextIds.length > 0) {
+      boardApi.addActiveObjects(nextIds);
+    } else {
+      context.acc?.board?.activeObjectManager?.choose?.(
+        new Set(resolvedNextObjects),
+      );
+    }
+    return this.setContextObjects(context, resolvedNextObjects);
   }
 
   /**
