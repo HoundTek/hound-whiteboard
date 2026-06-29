@@ -1,14 +1,14 @@
 /**
  * @file 对象修改工具
  * @description 提供对象几何和属性修改的基础工具实现。
- * @module core/tools/modifier/obj-modifier
+ * @module core/tools/modifier/object-modifier
  * @author Zhou Chenyu
  */
 
 import { Tool } from "../tool.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
+import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
-import { BasicObject } from "../../objects/basic-obj.js";
 
 /**
  * 对象修改工具相关信号类型常量
@@ -72,6 +72,119 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
+   * 解析对象条目的 objectId
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {number|null} 解析出的 objectId
+   * @protected
+   */
+  resolveModifiedObjectId(objectEntry) {
+    return typeof objectEntry?.id === "number" ? objectEntry.id : null;
+  }
+
+  /**
+   * 解析对象条目的当前位置
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {Vector|null} 当前位置
+   * @protected
+   */
+  resolveModifiedObjectPosition(objectEntry) {
+    return Vector.parse(objectEntry?.position);
+  }
+
+  /**
+   * 解析对象条目的局部判定范围
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {*|null} 局部 range
+   * @protected
+   */
+  resolveModifiedObjectRange(objectEntry) {
+    if (objectEntry?.range) {
+      return objectEntry.range;
+    }
+    if (typeof objectEntry?.getRange === "function") {
+      return objectEntry.getRange();
+    }
+    return null;
+  }
+
+  /**
+   * 解析对象条目的世界矩形
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {RectangleRange|null} 世界矩形
+   * @protected
+   */
+  resolveModifiedObjectWorldRect(objectEntry) {
+    const position = this.resolveModifiedObjectPosition(objectEntry);
+    const localRange = this.resolveModifiedObjectRange(objectEntry);
+    if (
+      position &&
+      localRange &&
+      typeof localRange.withPosition === "function"
+    ) {
+      return RectangleRange.from(localRange.withPosition(position));
+    }
+
+    const localBoundingBoxSource =
+      objectEntry?.boundingBox ?? objectEntry?.rich?.boundingBox;
+    const localBoundingBox = localBoundingBoxSource
+      ? RectangleRange.from(localBoundingBoxSource)
+      : null;
+    if (
+      position &&
+      localBoundingBox &&
+      typeof localBoundingBox.withPosition === "function"
+    ) {
+      return RectangleRange.from(localBoundingBox.withPosition(position));
+    }
+
+    return null;
+  }
+
+  /**
+   * 规整本次修改涉及的对象 id 集合
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
+   * @returns {number[]} 去重后的 objectId 列表
+   * @protected
+   */
+  resolveModifiedObjectIds(context, objects) {
+    return [
+      ...new Set(
+        this.resolveModifiedObjects(context, objects)
+          .map((objectEntry) => this.resolveModifiedObjectId(objectEntry))
+          .filter((objectId) => objectId != null),
+      ),
+    ];
+  }
+
+  /**
+   * 在 BoardApi 或本地对象上写入绝对位置
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {*} objectEntry - 当前对象条目
+   * @param {{ x: number, y: number }} position - 新位置
+   * @returns {void}
+   * @protected
+   */
+  setModifiedObjectPosition(context, objectEntry, position) {
+    const normalizedPosition = Vector.parse(position);
+    if (!normalizedPosition || !objectEntry) return;
+
+    const nextPosition = new Vector(normalizedPosition.x, normalizedPosition.y);
+    const objectId = this.resolveModifiedObjectId(objectEntry);
+    const boardApi = context?.acc?.boardApi;
+    if (boardApi && objectId != null) {
+      boardApi.modifyObject(objectId, {
+        position: {
+          x: normalizedPosition.x,
+          y: normalizedPosition.y,
+        },
+      });
+    }
+
+    objectEntry.position = nextPosition;
+  }
+
+  /**
    * 解析当前仍处于 AOM 动态图中的对象集合
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
@@ -80,16 +193,18 @@ class ObjectModifierTool extends Tool {
   resolveActiveModifiedObjects(context, objects) {
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
     const activeObjectIndex =
+      context?.acc?.boardApi?.getBoardCore?.()?.activeObjectManager
+        ?.activeObjectIndex ??
       context?.acc?.board?.activeObjectManager?.activeObjectIndex;
 
     if (typeof activeObjectIndex?.has !== "function") {
-      // 无法确认对象是否仍在 AOM 动态图中 → 返回空，不做任何修改
-      return [];
+      return context?.acc?.boardApi ? normalizedObjects : [];
     }
 
-    return normalizedObjects.filter(
-      (objectEntry) => objectEntry && activeObjectIndex.has(objectEntry.id),
-    );
+    return normalizedObjects.filter((objectEntry) => {
+      const objectId = this.resolveModifiedObjectId(objectEntry);
+      return objectId != null && activeObjectIndex.has(objectId);
+    });
   }
 
   /**
@@ -101,6 +216,7 @@ class ObjectModifierTool extends Tool {
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
 
     if (normalizedObjects.length === 0) return;
+    if (context?.acc?.boardApi) return;
 
     context?.acc?.monitor?.liveRenderer?.captureObjectSnapshot?.(
       normalizedObjects,
@@ -116,6 +232,11 @@ class ObjectModifierTool extends Tool {
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
 
     if (normalizedObjects.length === 0) return;
+
+    if (context?.acc?.boardApi) {
+      this.requestUiOverlayRefresh(context);
+      return;
+    }
 
     context?.acc?.monitor?.liveRenderer?.invalidateObjects?.(normalizedObjects);
     context?.acc?.monitor?.requestViewportUiRender?.();
@@ -188,9 +309,15 @@ class ObjectModifierTool extends Tool {
       return false;
     }
 
-    context?.acc?.board?.activeObjectManager?.apply?.(
-      new Set(normalizedObjects),
-    );
+    const boardApi = context?.acc?.boardApi;
+    const objectIds = this.resolveModifiedObjectIds(context, normalizedObjects);
+    if (boardApi && objectIds.length > 0) {
+      boardApi.commitObjects(objectIds);
+    } else {
+      context?.acc?.board?.activeObjectManager?.apply?.(
+        new Set(normalizedObjects),
+      );
+    }
     this.clearContextObjects(context);
 
     const autoUmount = context.acc?.autoUmountOnApply !== false;
@@ -213,8 +340,12 @@ class ObjectModifierTool extends Tool {
    */
   umount(context = {}) {
     const normalizedObjects = this.resolveActiveModifiedObjects(context);
+    const boardApi = context?.acc?.boardApi;
+    const objectIds = this.resolveModifiedObjectIds(context, normalizedObjects);
 
-    if (normalizedObjects.length > 0) {
+    if (boardApi && objectIds.length > 0) {
+      boardApi.discardActiveObjects(objectIds);
+    } else if (normalizedObjects.length > 0) {
       context?.acc?.board?.activeObjectManager?.discard?.(
         new Set(normalizedObjects),
       );
@@ -542,13 +673,15 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @protected
    */
   applyDisplacementToObjects(interaction) {
-    const { objects, displacement } = interaction;
+    const { context, objects, displacement } = interaction;
     if (!displacement) return;
     for (const obj of objects) {
-      obj.position = new Vector(
-        obj.position.x + displacement.x,
-        obj.position.y + displacement.y,
-      );
+      const currentPos = this.resolveModifiedObjectPosition(obj);
+      if (!currentPos) continue;
+      this.setModifiedObjectPosition(context, obj, {
+        x: currentPos.x + displacement.x,
+        y: currentPos.y + displacement.y,
+      });
     }
   }
 

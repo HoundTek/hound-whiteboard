@@ -15,6 +15,33 @@
 5. 根据手势状态进入 `beginCreationGesture`、`updateCreationGesture`、`completeCreationGesture` 或 `cancelCreationGesture`
 6. 结束时进入 `completeCreatedObject(interaction)` 或 `cancelCreatedObject(interaction)`
 
+## BoardApi 双路径
+
+P2 迁移后，ObjectCreatorTool 支持两条创建路径，通过 `context.acc.boardApi` 是否注入来决定：
+
+- **BoardApi 路径**：工具通过 `boardApi.createObject(type, props)` 创建对象，通过 `boardApi.commitObjects()` / `boardApi.discardActiveObjects()` 提交或撤销。渲染脏区由 BoardApi 内部自动触发。
+- **Legacy 路径**：工具直接 `new CircleObject(id, pos)`、`AOM.add()`、`monitor.liveRenderer.invalidateObjects()`。用于未接入 boardApi 的上下文。
+
+两条路径的切换细节：
+
+| 阶段            | BoardApi 路径                                                   | Legacy 路径                                                              |
+| --------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 创建            | `boardApi.createObject(type, { id, position, property, data })` | `this.create(id, position)` + `AOM.add()` + `syncCreatedObjectContext()` |
+| 提交            | `boardApi.commitObjects([objectId])`                            | `AOM.apply(new Set([obj]))`                                              |
+| 取消            | `boardApi.discardActiveObjects([objectId])`                     | `AOM.discard(new Set([obj]))`                                            |
+| 几何脏区        | Core 自动触发 `aomRenderHooks.requestLiveRender`                | `monitor.liveRenderer.captureObjectSnapshot` + `invalidateObjects`       |
+| UI overlay 刷新 | 保留 `requestUiOverlayRefresh`                                  | 保留 `requestUiOverlayRefresh`                                           |
+
+BoardApi 路径下，工具仍然保留 `this.obj` 作为兼容对象引用，handoff / `context.acc.objects` 等下游依赖不受影响。
+
+### 子类接入点
+
+子类通过以下钩子为 BoardApi 路径提供必要信息：
+
+- `getCreatedObjectType()`：返回对象类型名字符串（如 `"CircleObject"`）。返回 `undefined` 时强制走 Legacy 路径。
+- `resolveCreatedObjectProperty(interaction)`：返回初始属性合并块，默认合并 `this.property` 与注入属性。
+- `resolveCreatedObjectData(interaction)`：返回初始专属数据（如 Circle 的 `{ radius: 0 }`）。
+
 ## 创建完成生命周期
 
 `completeCreatedObject(interaction)` 是创建流程的统一入口，内部按生命周期钩子编排：
@@ -25,7 +52,7 @@ completeCreatedObject(interaction)
   ├─ ① finalizeCreatedObject()        ← 总是执行（同步上下文、标记完成）
   │
   ├─ ② beforeCommitCreatedObject()    ← 控制型钩子，返回 bool
-  │     ├─ true (默认) → commitCreatedObject()  → AOM.apply → 进入静态图
+  │     ├─ true (默认) → commitCreatedObject()  → BoardApi.commitObjects / AOM.apply → 进入静态图
   │     └─ false (handoff 模式) → 跳过提交，对象留在 AOM 动态图中
   │
   └─ ③ afterCompleteCreatedObject()   ← 通知型钩子，触发 "afterCreate" 事件
@@ -73,14 +100,25 @@ handoff 模式下，`autoBridgeObjects` 会把对象从 creator 节点 state 复
 
 对象创建工具在创建过程中也需要处理几何刷新：
 
-- `beforeGeometryMutation(interaction)`：在几何变更前记录旧快照
-- `afterGeometryMutation(interaction)`：在几何变更后请求活动层刷新，并同步推动 UI 层兼容 overlay 刷新
+- `beforeGeometryMutation(interaction)`：在几何变更前记录旧快照。BoardApi 路径下跳过（由 Core 自动处理）。
+- `afterGeometryMutation(interaction)`：在几何变更后请求渲染刷新。BoardApi 路径下仅保留 UI overlay 刷新，渲染脏区由 Core 自动处理。
 
 与 ObjectModifierTool 的不同点在于：
 
 - 创建流程包含对象实例创建、id 分配、ownerChunkId 解析、活动对象管理和手势生命周期
 - 因此不适合简单包装成一次 `withGeometryMutation(...)`
 - 创建工具会在不同阶段显式调用几何刷新钩子
+
+## 状态字段
+
+ObjectCreatorTool 基类新增以下字段用于 BoardApi 路径：
+
+| 字段                           | 类型             | 说明                                   |
+| ------------------------------ | ---------------- | -------------------------------------- |
+| `objectId`                     | `number \| null` | 当前创建对象的 id 令牌                 |
+| `_usesBoardApiObjectLifecycle` | `boolean`        | 当前对象是否通过 BoardApi 生命周期创建 |
+
+Legacy 路径下 `_usesBoardApiObjectLifecycle` 保持 `false`，`objectId` 仍写为 `interaction.objectId` 但不影响行为。
 
 ## 上下文共享模型
 
@@ -108,3 +146,4 @@ handoff 工作流中由 `createHandoffSubDAG()` 的 `autoBridgeObjects` 读取 f
 - 两者都复用对象创建工具基类的几何刷新钩子
 - creator / modifier 衔接由 `createHandoffSubDAG()` 统一管理，creator 不再内建 modifier 挂载逻辑
 - `umount()` 时 creator 会撤销未提交对象并清理上下文
+- P2 BoardApi 迁移已完成：CircleCreatorTool、StrokeCreatorTool、PolygonCreatorTool 均已接入 BoardApi 双路径

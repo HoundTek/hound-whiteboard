@@ -8,12 +8,10 @@
  * @author Zhou Chenyu
  */
 
-import { Vector } from "../../utils/math.js";
-import { RectangleRange } from "../../range/index.js";
 import {
   GestureBasedObjectModifierTool,
   OBJECT_MODIFIER_SIGNAL_TYPES,
-} from "./obj-modifier.js";
+} from "./object-modifier.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
 
@@ -88,18 +86,23 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     this._anchorPosition = { x: position.x, y: position.y };
     // 总是记录当前手势基准位置，供 updateModifyGesture 计算位移
     this._gestureBasePositions = new Map(
-      objects.map((obj) => [
-        obj.id ?? obj,
-        { x: obj.position.x, y: obj.position.y },
-      ]),
+      objects.map((obj) => {
+        const objectId = this.resolveModifiedObjectId(obj) ?? obj;
+        const basePosition = this.resolveModifiedObjectPosition(obj);
+        return [objectId, { x: basePosition?.x ?? 0, y: basePosition?.y ?? 0 }];
+      }),
     );
     // 仅在首次手势时记录 cancel 回退用的初始位置
     if (!this._initialPositions) {
       this._initialPositions = new Map(
-        objects.map((obj) => [
-          obj.id ?? obj,
-          { x: obj.position.x, y: obj.position.y },
-        ]),
+        objects.map((obj) => {
+          const objectId = this.resolveModifiedObjectId(obj) ?? obj;
+          const initialPosition = this.resolveModifiedObjectPosition(obj);
+          return [
+            objectId,
+            { x: initialPosition?.x ?? 0, y: initialPosition?.y ?? 0 },
+          ];
+        }),
       );
     }
   }
@@ -109,16 +112,21 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * @param {Object} interaction - 当前交互上下文
    */
   updateModifyGesture(interaction) {
-    const { objects, position } = interaction;
+    const { context, objects, position } = interaction;
     if (!this._anchorPosition) return;
 
     const dx = position.x - this._anchorPosition.x;
     const dy = position.y - this._anchorPosition.y;
 
     for (const obj of objects) {
-      const basePos = this._gestureBasePositions.get(obj.id ?? obj);
+      const basePos = this._gestureBasePositions.get(
+        this.resolveModifiedObjectId(obj) ?? obj,
+      );
       if (!basePos) continue;
-      obj.position = new Vector(basePos.x + dx, basePos.y + dy);
+      this.setModifiedObjectPosition(context, obj, {
+        x: basePos.x + dx,
+        y: basePos.y + dy,
+      });
     }
   }
 
@@ -141,10 +149,14 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   onBeforeDisplacement(interaction) {
     if (this._initialPositions) return;
     this._initialPositions = new Map(
-      interaction.objects.map((obj) => [
-        obj.id ?? obj,
-        { x: obj.position.x, y: obj.position.y },
-      ]),
+      interaction.objects.map((obj) => {
+        const objectId = this.resolveModifiedObjectId(obj) ?? obj;
+        const initialPosition = this.resolveModifiedObjectPosition(obj);
+        return [
+          objectId,
+          { x: initialPosition?.x ?? 0, y: initialPosition?.y ?? 0 },
+        ];
+      }),
     );
   }
 
@@ -172,15 +184,20 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * @description
    * 将对象位置回滚到手势开始时的初始位置，清空锚点与缓存。
    * 由基类 _handleCancel 在 withGeometryMutation 内调用，
-   * 回滚后基层会自动触发 invalidateObjects 刷新活动层。
+   * 回滚后基类会统一处理渲染刷新与 overlay 更新。
    * @param {Object} interaction - 当前交互上下文
    */
   cancelModifyGesture(interaction) {
     if (!this._initialPositions) return;
     for (const obj of interaction.objects) {
-      const initPos = this._initialPositions.get(obj.id ?? obj);
+      const initPos = this._initialPositions.get(
+        this.resolveModifiedObjectId(obj) ?? obj,
+      );
       if (!initPos) continue;
-      obj.position = new Vector(initPos.x, initPos.y);
+      this.setModifiedObjectPosition(interaction.context, obj, {
+        x: initPos.x,
+        y: initPos.y,
+      });
     }
     this._anchorPosition = null;
     this._gestureBasePositions = null;
@@ -230,15 +247,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   _computeCombinedWorldRect(objects) {
     let combined = null;
     for (const obj of objects) {
-      let worldRect;
-      if (obj && typeof obj.getRange === "function" && obj.position) {
-        const range = obj.getRange();
-        if (range && typeof range.withPosition === "function") {
-          worldRect = range.withPosition(obj.position);
-        }
-      }
-      if (!worldRect) continue;
-      const rect = RectangleRange.from(worldRect);
+      const rect = this.resolveModifiedObjectWorldRect(obj);
       if (!rect) continue;
       if (!combined) {
         combined = rect;

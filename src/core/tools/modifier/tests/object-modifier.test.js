@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { ObjectModifierTool } from "../obj-modifier.js";
+import { ObjectModifierTool } from "../object-modifier.js";
 
 describe("ObjectModifierTool", () => {
   test("withGeometryMutation 应按快照再失效的顺序包装一次几何修改", () => {
@@ -76,6 +76,43 @@ describe("ObjectModifierTool", () => {
     expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
       objects,
     );
+    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+  });
+
+  test("显式提供 boardApi 时 withGeometryMutation 应跳过 liveRenderer 并仅刷新 overlay", () => {
+    class TestModifierTool extends ObjectModifierTool {
+      modify(modificationContext) {
+        return this.withGeometryMutation(modificationContext, () => {
+          modificationContext.object.changed = true;
+          return "done";
+        }, [modificationContext.object]);
+      }
+    }
+
+    const tool = new TestModifierTool();
+    const object = { id: 21, changed: false };
+    const monitor = {
+      liveRenderer: {
+        captureObjectSnapshot: jest.fn(),
+        invalidateObjects: jest.fn(),
+      },
+      requestViewportUiRender: jest.fn(),
+    };
+    const modificationContext = {
+      acc: {
+        boardApi: {},
+        monitor,
+        objects: [object],
+      },
+      object,
+    };
+
+    const result = tool.modify(modificationContext);
+
+    expect(result).toBe("done");
+    expect(object.changed).toBe(true);
+    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
     expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
@@ -212,6 +249,41 @@ describe("ObjectModifierTool", () => {
       );
 
       expect(unmount).toHaveBeenCalledWith("/test");
+    });
+
+    test("显式提供 boardApi 时 applyModifiedObjects 和 umount 应走 BoardApi 生命周期", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() {}
+      }
+
+      const tool = new TestModifier();
+      const object = { id: 14 };
+      const commitObjects = jest.fn();
+      const discardActiveObjects = jest.fn();
+      const activeObjectIndex = new Map([[object.id, object]]);
+      const boardApi = {
+        commitObjects,
+        discardActiveObjects,
+        getBoardCore: () => ({
+          activeObjectManager: {
+            activeObjectIndex,
+          },
+        }),
+      };
+      const unmount = jest.fn();
+      const context = {
+        acc: { boardApi, objects: [object] },
+        dag: { unmount },
+        path: "/test",
+      };
+
+      expect(tool.applyModifiedObjects(context, [object])).toBe(true);
+      expect(commitObjects).toHaveBeenCalledWith([object.id]);
+      expect(unmount).toHaveBeenCalledWith("/test");
+
+      tool.setContextObjects(context, [object]);
+      tool.umount(context);
+      expect(discardActiveObjects).toHaveBeenCalledWith([object.id]);
     });
   });
 });

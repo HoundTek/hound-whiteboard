@@ -1,8 +1,10 @@
 import { jest } from "@jest/globals";
 import { Vector } from "../../../utils/math.js";
 import { RectangleRange } from "../../../range/rectangle.js";
+import { Board } from "../../../components/index.js";
+import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 import { CommonObjectModifierTool } from "../common-object-modifier.js";
-import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../obj-modifier.js";
+import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../object-modifier.js";
 
 /**
  * 构造包含 AOM 的测试上下文
@@ -234,6 +236,124 @@ describe("CommonObjectModifierTool", () => {
       "/monitor/mouse/primary/tool/tool",
     );
     expect(nodeState.objects).toBeUndefined();
+  });
+
+  test("显式提供 boardApi 时应通过 modifyObject 更新位置并在 success 后提交", () => {
+    const tool = new CommonObjectModifierTool();
+    const board = new Board();
+    board.width = 100;
+    board.height = 100;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
+    const createPromise = boardApi.createObject("CircleObject", {
+      id: 501,
+      position: { x: 10, y: 20 },
+      data: { radius: 5 },
+    });
+    const object = board.getObjectById(501);
+    const modifySpy = jest.spyOn(boardApi, "modifyObject");
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
+    const mockDag = { unmount: jest.fn() };
+    const monitor = { requestViewportUiRender: jest.fn() };
+    let nodeState = {};
+    const context = {
+      acc: { board, boardApi, monitor, objects: [object] },
+      dag: mockDag,
+      path: "/monitor/mouse/primary/tool/tool",
+      getNodeState() {
+        return nodeState;
+      },
+      setNodeState(path, nextState) {
+        nodeState = nextState ?? {};
+        return nodeState;
+      },
+    };
+
+    expect(createPromise).toBeInstanceOf(Promise);
+    expect(object.position).toEqual(new Vector(10, 20));
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }],
+      },
+      context,
+    );
+    expect(object.position).toEqual(new Vector(10, 20));
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 13, y: 24 } } }],
+      },
+      context,
+    );
+    expect(object.position).toEqual(new Vector(13, 24));
+    expect(modifySpy).toHaveBeenCalledWith(501, {
+      position: { x: 13, y: 24 },
+    });
+
+    tool.process(
+      {
+        signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
+      },
+      context,
+    );
+
+    expect(commitSpy).toHaveBeenCalledWith([501]);
+    expect(mockDag.unmount).toHaveBeenCalledWith(
+      "/monitor/mouse/primary/tool/tool",
+    );
+    expect(nodeState.objects).toBeUndefined();
+    expect(monitor.requestViewportUiRender).toHaveBeenCalled();
+  });
+
+  test("显式提供 boardApi 时应支持 summary-like 上下文对象完成准入与位移", () => {
+    const tool = new CommonObjectModifierTool();
+    const board = new Board();
+    board.width = 100;
+    board.height = 100;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
+    boardApi.createObject("CircleObject", {
+      id: 502,
+      position: { x: 30, y: 40 },
+      data: { radius: 5 },
+    });
+    const liveObject = board.getObjectById(502);
+    const summaryLikeObject = {
+      id: 502,
+      type: "CircleObject",
+      position: { x: 30, y: 40 },
+      range: new RectangleRange(-5, -5, 10, 10),
+      boundingBox: new RectangleRange(-5, -5, 10, 10),
+      property: {},
+      data: { radius: 5 },
+    };
+    const context = {
+      acc: {
+        board,
+        boardApi,
+        monitor: { requestViewportUiRender: jest.fn() },
+        objects: [summaryLikeObject],
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 30, y: 40 } } }],
+      },
+      context,
+    );
+    expect(liveObject.position).toEqual(new Vector(30, 40));
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 34, y: 43 } } }],
+      },
+      context,
+    );
+
+    expect(liveObject.position).toEqual(new Vector(34, 43));
+    expect(summaryLikeObject.position).toEqual(new Vector(34, 43));
   });
 
   test("不传 position 信号时应保持原状态", () => {
