@@ -15,6 +15,7 @@ import { BoardCore } from "./board-core.js";
 import { createBoardRenderHooks } from "./board-render-hooks.js";
 import { createRendererPersistenceAdapter } from "../../bridges/persistence-adapter.js";
 import { boardFileOperateBridge } from "../../bridges/file-operate-bridge-renderer.js";
+import { BoardApi } from "../../bridges/board-api.js";
 import { Monitor } from "./monitor.js";
 
 function isValidBoardRootPath(boardRootPath) {
@@ -43,6 +44,12 @@ class Board {
    * @type {BoardCore}
    */
   #boardCore;
+
+  /**
+   * BoardApi 实例
+   * @type {BoardApi}
+   */
+  #boardApi;
 
   /**
    * 时间回溯树（委托至 BoardCore）
@@ -183,7 +190,10 @@ class Board {
     this.rootChunkLoader = this.#boardCore.rootChunkLoader;
     this.activeObjectManager = this.#boardCore.activeObjectManager;
 
-    // 5. UI 专用初始化
+    // 5. 创建 BoardApi 实例
+    this.#boardApi = new BoardApi(this.#boardCore);
+
+    // 6. UI 专用初始化
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
     this.devicesDAG = new DevicesDAG({
@@ -434,7 +444,10 @@ class Board {
     );
     this.monitors.set(monitorId, monitor);
     // 在设备图中标记 monitor 语义
-    this.devicesDAG.configureNode(monitorId, { semantics: { monitor: true } });
+    this.devicesDAG.configureNode(monitorId, {
+      handler: () => ({ acc: { monitor } }),
+      semantics: { monitor: true },
+    });
     return monitor;
   }
 
@@ -448,7 +461,7 @@ class Board {
       const monitorId = to.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (monitor) {
-        this.devicesDAG.dispatch({ to, signals }, { board: this, monitor });
+        this.devicesDAG.dispatch({ to, signals }, { board: this, boardApi: this.#boardApi });
       }
     });
 
@@ -522,8 +535,7 @@ class Board {
         }
 
         return this.devicesDAG.unmountWorkflow(workflowPath, {
-          board: this,
-          monitor,
+          acc: { board: this, boardApi: this.#boardApi, monitor },
         });
       },
     );
@@ -551,6 +563,14 @@ class Board {
    */
   getBoardCore() {
     return this.#boardCore;
+  }
+
+  /**
+   * 获取 BoardApi 实例
+   * @returns {BoardApi}
+   */
+  getBoardApi() {
+    return this.#boardApi;
   }
 }
 

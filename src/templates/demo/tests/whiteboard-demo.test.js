@@ -37,6 +37,9 @@ describe("whiteboard demo", () => {
       monitorId,
     );
     board.monitors.set(monitorId, monitor);
+    board.devicesDAG.configureNode(monitorId, {
+      handler: () => ({ acc: { monitor } }),
+    });
     return monitor;
   }
 
@@ -369,13 +372,10 @@ describe("whiteboard demo", () => {
 
     // success 是应用层信号，绕过鼠标设备直接 dispatch 给 handoff workflow
     // 触发 modifier.applyModifiedObjects → 提交到静态图 → handoff 切回 first(chooser)
-    monitor.devicesDAG.dispatch(
-      {
-        to: "/main/workflows/secondary-chooser",
-        signals: [{ type: "success", context: {} }],
-      },
-      { board, monitor },
-    );
+    monitor.devicesDAG.dispatch({
+      to: "/main/workflows/secondary-chooser",
+      signals: [{ type: "success", context: {} }],
+    }, { board });
 
     // firstStroke 已提交到静态图，不在 AOM 中
     expect(

@@ -1432,6 +1432,10 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         "main",
       );
       board.monitors.set("main", monitor);
+      board.devicesDAG.configureNode("main", {
+        handler: () => ({ acc: { monitor } }),
+      });
+      const accumulatedContext = { board };
       board.width = 800;
       board.height = 600;
       const creatorTool = new StrokeCreatorTool();
@@ -1446,27 +1450,19 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         }),
       );
 
-      const accumulatedContext = { board, monitor };
-
       // 创建阶段
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/workflow",
-          signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
-        },
-        accumulatedContext,
-      );
+      monitor.devicesDAG.dispatch({
+        to: "/main/workflow",
+        signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
+      }, accumulatedContext);
 
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/workflow",
-          signals: [
-            { type: "position", context: { value: { x: 2, y: 2 } } },
-            { type: "end", context: {} },
-          ],
-        },
-        accumulatedContext,
-      );
+      monitor.devicesDAG.dispatch({
+        to: "/main/workflow",
+        signals: [
+          { type: "position", context: { value: { x: 2, y: 2 } } },
+          { type: "end", context: {} },
+        ],
+      }, accumulatedContext);
 
       expect(creatorTool.obj).not.toBeNull();
       expect(creatorTool.obj.id).toBe(1);
@@ -1477,37 +1473,35 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const createdPosition = creatorTool.obj.position.serialize();
 
       // 修改阶段：首个 position 启动手势
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/workflow",
-          signals: [
-            {
-              type: "position",
-              context: {
-                value: { x: createdPosition.x, y: createdPosition.y },
-              },
+      monitor.devicesDAG.dispatch({
+        to: "/main/workflow",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: { x: createdPosition.x, y: createdPosition.y },
             },
-          ],
-        },
-        accumulatedContext,
-      );
+          },
+        ],
+      },
+      accumulatedContext,
+    );
 
       // 第二个 position + end 应用位移
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/workflow",
-          signals: [
-            {
-              type: "position",
-              context: {
-                value: { x: createdPosition.x + 3, y: createdPosition.y },
-              },
+      monitor.devicesDAG.dispatch({
+        to: "/main/workflow",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: { x: createdPosition.x + 3, y: createdPosition.y },
             },
-            { type: "end", context: {} },
-          ],
-        },
-        accumulatedContext,
-      );
+          },
+          { type: "end", context: {} },
+        ],
+      },
+      accumulatedContext,
+    );
 
       expect(creatorTool.obj.position.serialize()).toEqual({
         x: createdPosition.x + 3,
@@ -1515,13 +1509,12 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       });
 
       // 提交
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/workflow",
-          signals: [{ type: "success", context: {} }],
-        },
-        accumulatedContext,
-      );
+      monitor.devicesDAG.dispatch({
+        to: "/main/workflow",
+        signals: [{ type: "success", context: {} }],
+      },
+      accumulatedContext,
+    );
 
       const ownerChunk = board.getChunkById(1);
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
@@ -1537,24 +1530,22 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       ).not.toBeNull();
 
       // 再次进入 creator，验证 handoff 周期可重复
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/workflow",
-          signals: [{ type: "position", context: { value: { x: 4, y: 4 } } }],
-        },
-        accumulatedContext,
-      );
+      monitor.devicesDAG.dispatch({
+        to: "/main/workflow",
+        signals: [{ type: "position", context: { value: { x: 4, y: 4 } } }],
+      },
+      accumulatedContext,
+    );
 
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/workflow",
-          signals: [
-            { type: "position", context: { value: { x: 5, y: 5 } } },
-            { type: "end", context: {} },
-          ],
-        },
-        accumulatedContext,
-      );
+      monitor.devicesDAG.dispatch({
+        to: "/main/workflow",
+        signals: [
+          { type: "position", context: { value: { x: 5, y: 5 } } },
+          { type: "end", context: {} },
+        ],
+      },
+      accumulatedContext,
+    );
 
       expect(creatorTool.obj).not.toBeNull();
       expect(creatorTool.obj.id).not.toBe(firstObjectId);
@@ -1574,8 +1565,12 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         "main",
       );
       board.monitors.set("main", monitor);
+      board.devicesDAG.configureNode("main", {
+        handler: () => ({ acc: { monitor } }),
+      });
       board.width = 800;
       board.height = 600;
+      const accumulatedContext = { board };
       const chooserTool = new RectangleObjectChooserTool();
       const targetObject = new StrokeObject(41, new Vector(10, 10));
       targetObject.setData({ points: [
@@ -1594,26 +1589,18 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         }),
       );
 
-      const accumulatedContext = { board, monitor };
+      monitor.devicesDAG.dispatch({
+        to: "/main/choose-and-modify",
+        signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
+      }, accumulatedContext);
 
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/choose-and-modify",
-          signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
-        },
-        accumulatedContext,
-      );
-
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/choose-and-modify",
-          signals: [
-            { type: "position", context: { value: { x: 25, y: 25 } } },
-            { type: "end", context: {} },
-          ],
-        },
-        accumulatedContext,
-      );
+      monitor.devicesDAG.dispatch({
+        to: "/main/choose-and-modify",
+        signals: [
+          { type: "position", context: { value: { x: 25, y: 25 } } },
+          { type: "end", context: {} },
+        ],
+      }, accumulatedContext);
 
       expect(board.activeObjectManager.activeObjects.size).toBe(1);
       expect(

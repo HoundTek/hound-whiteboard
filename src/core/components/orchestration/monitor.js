@@ -603,8 +603,7 @@ class Monitor {
    */
   unmountWorkflow(path) {
     return this.devicesDAG.unmountWorkflow(joinPath(this.monitorId, path), {
-      board: this.board,
-      monitor: this,
+      acc: { board: this.board, boardApi: this.board?.getBoardApi?.(), monitor: this },
     });
   }
 

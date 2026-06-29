@@ -18,6 +18,9 @@ describe("Board input flow", () => {
       monitorId,
     );
     board.monitors.set(monitorId, monitor);
+    board.devicesDAG.configureNode(monitorId, {
+      handler: () => ({ acc: { monitor } }),
+    });
     return monitor;
   }
 
@@ -30,7 +33,7 @@ describe("Board input flow", () => {
     const sampleRoot = sampleBuilder.node().defaultRoute("tool");
     const sampleTool = sampleBuilder
       .node()
-      .handler(tool.createProcessor({ board, monitor }));
+      .handler(tool.createProcessor());
     sampleBuilder.edge("tool", sampleRoot, sampleTool);
 
     monitor.mountSubDAG("", sampleBuilder.build());
