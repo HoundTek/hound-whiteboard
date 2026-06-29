@@ -239,6 +239,31 @@ class Tool {
   }
 
   /**
+   * 解析对象条目的数字 id
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {number|null} objectId
+   */
+  resolveObjectId(objectEntry) {
+    return typeof objectEntry?.id === "number" ? objectEntry.id : null;
+  }
+
+  /**
+   * 批量解析对象条目的数字 id
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {Iterable<*>|*} objects - 对象或对象集合
+   * @returns {number[]} 去重后的 objectId 列表
+   */
+  resolveObjectIds(context, objects) {
+    return [
+      ...new Set(
+        this.normalizeObjectCollection(objects)
+          .map((objectEntry) => this.resolveObjectId(objectEntry))
+          .filter((objectId) => objectId != null),
+      ),
+    ];
+  }
+
+  /**
    * 将对象集合写回设备上下文与节点上下文。
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合

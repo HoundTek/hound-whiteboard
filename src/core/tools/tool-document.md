@@ -73,6 +73,8 @@ Tool 现在提供一组围绕节点 `state` 的对象上下文工具：
 - `resolveContextObjects(deviceContext)`
 - `setContextObjects(deviceContext, objects)`
 - `clearContextObjects(deviceContext)`
+- `resolveObjectId(objectEntry)` — 从对象条目提取数字 id
+- `resolveObjectIds(deviceContext, objects)` — 批量提取去重 id 列表
 - `resolveNodeState(deviceContext, statePath)`
 - `writeNodeState(deviceContext, nextState, statePath)`
 

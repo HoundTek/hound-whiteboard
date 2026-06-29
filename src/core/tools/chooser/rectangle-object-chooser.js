@@ -171,7 +171,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   replaceSelection(context = {}, nextObjects = []) {
     const previousObjects = this.resolveContextObjects(context).filter(Boolean);
     const boardApi = context.acc?.boardApi;
-    const previousIds = this.resolveSelectedObjectIds(context, previousObjects);
+    const previousIds = this.resolveObjectIds(context, previousObjects);
     if (boardApi && previousIds.length > 0) {
       boardApi.discardActiveObjects(previousIds);
     } else if (previousObjects.length > 0) {
@@ -190,7 +190,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       return [];
     }
 
-    const nextIds = this.resolveSelectedObjectIds(context, resolvedNextObjects);
+    const nextIds = this.resolveObjectIds(context, resolvedNextObjects);
     if (boardApi && nextIds.length > 0) {
       boardApi.addActiveObjects(nextIds);
     } else {

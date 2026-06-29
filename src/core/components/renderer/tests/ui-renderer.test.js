@@ -149,4 +149,59 @@ describe("UiRenderer", () => {
     expect(provider).toHaveBeenCalledTimes(1);
     expect(draw).toHaveBeenCalledTimes(1);
   });
+
+  test("createCompatSelectionEntriesForSummaries 应生成对象级与组合选择框", () => {
+    const context = createContext();
+    const monitor = createMonitor({});
+    const canvas = createCanvas(context);
+    const renderer = new UiRenderer(monitor, undefined, { canvas });
+    const summary1 = {
+      id: 17,
+      position: { x: 10, y: 20 },
+      range: new RectangleRange(0, 0, 30, 40),
+      property: {},
+    };
+    const summary2 = {
+      id: 18,
+      position: { x: 60, y: 80 },
+      range: new RectangleRange(0, 0, 20, 10),
+      property: {},
+    };
+
+    renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
+      overlayRenderer.createCompatSelectionEntriesForSummaries(
+        [summary1, summary2],
+        "chooser",
+      ),
+    );
+
+    renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+
+    expect(context.strokeRect.mock.calls).toEqual([
+      [6, 16, 38, 48],
+      [56, 76, 28, 18],
+      [6, 16, 78, 78],
+    ]);
+    expect(context.setLineDash.mock.calls).toEqual([[[]], [[]], [[10, 4]]]);
+  });
+
+  test("normalizeOverlayEntry 应支持 summary-like 条目直接生成矩形 overlay", () => {
+    const context = createContext();
+    const monitor = createMonitor({});
+    const canvas = createCanvas(context);
+    const renderer = new UiRenderer(monitor, undefined, { canvas });
+    renderer.registerOverlayProvider(() => ({
+      source: "summary-like-entry",
+      objectId: 77,
+      type: "rect",
+      position: { x: 10, y: 20 },
+      boundingBox: new RectangleRange(0, 0, 30, 40),
+      strokeStyle: "#ff0000",
+      lineWidth: 1,
+    }));
+
+    renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+
+    expect(context.strokeRect).toHaveBeenCalledWith(6, 16, 38, 48);
+  });
 });

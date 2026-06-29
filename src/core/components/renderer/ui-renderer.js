@@ -239,6 +239,88 @@ class UiRenderer {
   }
 
   /**
+   * 从 summary-like 条目推导兼容选中框留白
+   * @param {Object} summaryEntry - 摘要或兼容条目
+   * @returns {number}
+   */
+  getCompatSelectionPaddingForSummary(summaryEntry) {
+    const strokeWidthCandidates = [
+      summaryEntry?.property?.strokeWidth,
+      summaryEntry?.property?.width,
+      summaryEntry?.property?.outlineWidth,
+    ].filter((value) => Number.isFinite(value) && value > 0);
+
+    const renderPadding =
+      strokeWidthCandidates.length > 0
+        ? Math.max(...strokeWidthCandidates) / 2
+        : 0;
+    const screenPadding =
+      Number.isFinite(renderPadding) && renderPadding > 0
+        ? renderPadding * (this.monitor?.zoom ?? 1)
+        : 0;
+
+    return Math.max(COMPAT_SELECTION_FRAME_MARGIN, Math.ceil(screenPadding));
+  }
+
+  /**
+   * 解析 summary-like 条目的世界矩形范围
+   * @param {Object} summaryEntry - 摘要或兼容条目
+   * @returns {RectangleRange | undefined}
+   */
+  getSummaryWorldRect(summaryEntry) {
+    if (!summaryEntry || typeof summaryEntry !== "object") {
+      return undefined;
+    }
+
+    if (summaryEntry.worldRect) {
+      return RectangleRange.from(summaryEntry.worldRect);
+    }
+
+    const position = summaryEntry.position;
+    if (
+      !position ||
+      typeof position.x !== "number" ||
+      typeof position.y !== "number"
+    ) {
+      return undefined;
+    }
+
+    const localRange = summaryEntry.range;
+    if (localRange && typeof localRange.withPosition === "function") {
+      return RectangleRange.from(localRange.withPosition(position));
+    }
+
+    const localBoundingBoxSource =
+      summaryEntry.boundingBox ?? summaryEntry.rich?.boundingBox;
+    const localBoundingBox = localBoundingBoxSource
+      ? RectangleRange.from(localBoundingBoxSource)
+      : undefined;
+    if (
+      localBoundingBox &&
+      typeof localBoundingBox.withPosition === "function"
+    ) {
+      return RectangleRange.from(localBoundingBox.withPosition(position));
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 获取 summary-like 条目的兼容选中框屏幕矩形
+   * @param {Object} summaryEntry - 摘要或兼容条目
+   * @returns {RectangleRange | undefined}
+   */
+  getSummaryScreenRect(summaryEntry) {
+    const worldRect = this.getSummaryWorldRect(summaryEntry);
+    if (!worldRect) return undefined;
+
+    return this.monitor?.worldRectToScreenRect?.(
+      worldRect,
+      this.getCompatSelectionPaddingForSummary(summaryEntry),
+    );
+  }
+
+  /**
    * 获取对象兼容选中框的屏幕矩形
    * @param {BasicObject} objectInstance - 对象实例
    * @returns {RectangleRange | undefined}
@@ -266,6 +348,35 @@ class UiRenderer {
     return {
       source,
       objectId: objectInstance.id,
+      type: "rect",
+      screenRect,
+      strokeStyle: COMPAT_SELECTION_FRAME_STROKE_STYLE,
+      lineWidth: COMPAT_SELECTION_FRAME_LINE_WIDTH,
+      lineDash: [...COMPAT_SELECTION_FRAME_LINE_DASH],
+      draw: (context) => {
+        this.drawRectEntry(context, {
+          screenRect,
+          strokeStyle: COMPAT_SELECTION_FRAME_STROKE_STYLE,
+          lineWidth: COMPAT_SELECTION_FRAME_LINE_WIDTH,
+          lineDash: [...COMPAT_SELECTION_FRAME_LINE_DASH],
+        });
+      },
+    };
+  }
+
+  /**
+   * 生成 summary-like 条目级兼容选中框 overlay 条目
+   * @param {Object} summaryEntry - 摘要或兼容条目
+   * @param {string} source - 条目来源
+   * @returns {{ source: string, objectId: number|undefined, type: string, screenRect: RectangleRange, draw: Function } | undefined}
+   */
+  createCompatSummarySelectionEntry(summaryEntry, source) {
+    const screenRect = this.getSummaryScreenRect(summaryEntry);
+    if (!screenRect) return undefined;
+
+    return {
+      source,
+      objectId: summaryEntry?.id,
       type: "rect",
       screenRect,
       strokeStyle: COMPAT_SELECTION_FRAME_STROKE_STYLE,
@@ -349,6 +460,47 @@ class UiRenderer {
   }
 
   /**
+   * 基于 summary-like 条目生成兼容选择框条目
+   * @param {Object[]} summaries - 摘要或兼容条目集合
+   * @param {string} role - 当前角色
+   * @returns {Array<Object>}
+   */
+  createCompatSelectionEntriesForSummaries(summaries, role) {
+    const objectEntries = summaries
+      .map((summaryEntry) =>
+        this.createCompatSummarySelectionEntry(
+          summaryEntry,
+          `compat-selection-object-frame:${role}`,
+        ),
+      )
+      .filter(Boolean);
+
+    if (objectEntries.length <= 1) {
+      return objectEntries;
+    }
+
+    const groupScreenRect = objectEntries.reduce((combinedRect, entry) => {
+      const screenRect = RectangleRange.from(entry.screenRect);
+      if (!screenRect) {
+        return combinedRect;
+      }
+      return combinedRect ? combinedRect.union(screenRect) : screenRect;
+    }, undefined);
+
+    if (!groupScreenRect) {
+      return objectEntries;
+    }
+
+    return [
+      ...objectEntries,
+      this.createCompatGroupSelectionEntry(
+        groupScreenRect,
+        `compat-selection-group-frame:${role}`,
+      ),
+    ];
+  }
+
+  /**
    * 规范化单个 overlay 条目
    * @param {Object} entry - 原始条目
    * @returns {Object | undefined}
@@ -375,6 +527,15 @@ class UiRenderer {
         }
       } else if (objectInstance) {
         normalizedEntry.screenRect = this.getObjectScreenRect(objectInstance);
+      } else {
+        const worldRect = this.getSummaryWorldRect(normalizedEntry);
+        if (worldRect) {
+          normalizedEntry.screenRect = this.monitor?.worldRectToScreenRect?.(
+            worldRect,
+            normalizedEntry.padding ??
+              this.getCompatSelectionPaddingForSummary(normalizedEntry),
+          );
+        }
       }
     }
 

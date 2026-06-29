@@ -7,6 +7,7 @@
 
 import { Tool } from "../tool.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
+import { BasicObject } from "../../objects/basic-obj.js";
 import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
 
@@ -49,12 +50,15 @@ class ObjectModifierTool extends Tool {
 
     if (
       objects.length === 0 ||
-      typeof renderer?.createCompatSelectionEntriesForObjects !== "function"
+      typeof renderer?.createCompatSelectionEntriesForSummaries !== "function"
     ) {
       return [];
     }
 
-    return renderer.createCompatSelectionEntriesForObjects(objects, "modifier");
+    return renderer.createCompatSelectionEntriesForSummaries(
+      objects,
+      "modifier",
+    );
   }
 
   /**
@@ -69,16 +73,6 @@ class ObjectModifierTool extends Tool {
     }
 
     return this.normalizeObjectCollection(objects);
-  }
-
-  /**
-   * 解析对象条目的 objectId
-   * @param {*} objectEntry - 对象实例或兼容条目
-   * @returns {number|null} 解析出的 objectId
-   * @protected
-   */
-  resolveModifiedObjectId(objectEntry) {
-    return typeof objectEntry?.id === "number" ? objectEntry.id : null;
   }
 
   /**
@@ -141,23 +135,6 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
-   * 规整本次修改涉及的对象 id 集合
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
-   * @returns {number[]} 去重后的 objectId 列表
-   * @protected
-   */
-  resolveModifiedObjectIds(context, objects) {
-    return [
-      ...new Set(
-        this.resolveModifiedObjects(context, objects)
-          .map((objectEntry) => this.resolveModifiedObjectId(objectEntry))
-          .filter((objectId) => objectId != null),
-      ),
-    ];
-  }
-
-  /**
    * 在 BoardApi 或本地对象上写入绝对位置
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {*} objectEntry - 当前对象条目
@@ -170,7 +147,7 @@ class ObjectModifierTool extends Tool {
     if (!normalizedPosition || !objectEntry) return;
 
     const nextPosition = new Vector(normalizedPosition.x, normalizedPosition.y);
-    const objectId = this.resolveModifiedObjectId(objectEntry);
+    const objectId = this.resolveObjectId(objectEntry);
     const boardApi = context?.acc?.boardApi;
     if (boardApi && objectId != null) {
       boardApi.modifyObject(objectId, {
@@ -202,7 +179,7 @@ class ObjectModifierTool extends Tool {
     }
 
     return normalizedObjects.filter((objectEntry) => {
-      const objectId = this.resolveModifiedObjectId(objectEntry);
+      const objectId = this.resolveObjectId(objectEntry);
       return objectId != null && activeObjectIndex.has(objectId);
     });
   }
@@ -310,7 +287,7 @@ class ObjectModifierTool extends Tool {
     }
 
     const boardApi = context?.acc?.boardApi;
-    const objectIds = this.resolveModifiedObjectIds(context, normalizedObjects);
+    const objectIds = this.resolveObjectIds(context, normalizedObjects);
     if (boardApi && objectIds.length > 0) {
       boardApi.commitObjects(objectIds);
     } else {
@@ -341,7 +318,7 @@ class ObjectModifierTool extends Tool {
   umount(context = {}) {
     const normalizedObjects = this.resolveActiveModifiedObjects(context);
     const boardApi = context?.acc?.boardApi;
-    const objectIds = this.resolveModifiedObjectIds(context, normalizedObjects);
+    const objectIds = this.resolveObjectIds(context, normalizedObjects);
 
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);

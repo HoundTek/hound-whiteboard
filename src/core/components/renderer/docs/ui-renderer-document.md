@@ -64,6 +64,21 @@
 
 这并不意味着 chooser / modifier 节点 state 就是最终 UI overlay 协议。当前只是让 chooser / modifier 工具先复用自己已有的上下文状态，把它们主动声明成 provider 条目，先把 `uiCanvas` 链路兼容起来。
 
+## Summary 兼容 overlay 入口
+
+P2 迁移后，所有工具的 `collectUiOverlayEntries` 统一走 `createCompatSelectionEntriesForSummaries(summaries, role)`，而非旧的 `createCompatSelectionEntriesForObjects(objects, role)`。
+
+新增的方法：
+
+- `getSummaryWorldRect(summaryEntry)` — 从 summary-like 条目的 `range` 或 `boundingBox` 计算世界矩形
+- `getSummaryScreenRect(summaryEntry)` — 计算对应的屏幕矩形（含留白）
+- `createCompatSummarySelectionEntry(summaryEntry, source)` — 生成单条目矩形选择框
+- `createCompatSelectionEntriesForSummaries(summaries, role)` — 批量生成选择框条目（含多对象组合大矩形）
+
+`normalizeOverlayEntry` 现支持第三类数据来源：条目如带有 `position + range` 或 `position + boundingBox` 但无 `worldRect`、无 `BasicObject` 实例，也能自动合成屏幕矩形。
+
+这样所有工具可以传入 summary-like 条目而不需真实 `BasicObject` 实例，同时 `createCompatSelectionEntriesForObjects` 保留不动供向后兼容。
+
 ## Overlay Provider 扩展口
 
 为了兼容未来的 chooser 轨迹、控制杆、激光笔等 UI 覆盖层，`UiRenderer` 当前提供 provider 注册口：

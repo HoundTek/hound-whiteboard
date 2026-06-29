@@ -126,7 +126,7 @@ describe("ObjectModifierTool", () => {
     const tool = new TestModifierTool();
     const object = { id: 3 };
     const renderer = {
-      createCompatSelectionEntriesForObjects: jest.fn(() => [
+      createCompatSelectionEntriesForSummaries: jest.fn(() => [
         "modifier-overlay",
       ]),
     };
@@ -138,7 +138,7 @@ describe("ObjectModifierTool", () => {
       }),
     ).toEqual(["modifier-overlay"]);
     expect(
-      renderer.createCompatSelectionEntriesForObjects,
+      renderer.createCompatSelectionEntriesForSummaries,
     ).toHaveBeenCalledWith([object], "modifier");
   });
 

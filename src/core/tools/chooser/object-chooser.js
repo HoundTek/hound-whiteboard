@@ -45,16 +45,6 @@ class ObjectChooserTool extends Tool {
   }
 
   /**
-   * 解析选择条目的 objectId
-   * @param {*} objectEntry - 对象实例或兼容条目
-   * @returns {number|null} objectId
-   * @protected
-   */
-  resolveSelectedObjectId(objectEntry) {
-    return typeof objectEntry?.id === "number" ? objectEntry.id : null;
-  }
-
-  /**
    * 将选择条目回填为真实对象实例（若可解析）
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {*} objectEntry - 对象实例或兼容条目
@@ -66,7 +56,7 @@ class ObjectChooserTool extends Tool {
       return objectEntry;
     }
 
-    const objectId = this.resolveSelectedObjectId(objectEntry);
+    const objectId = this.resolveObjectId(objectEntry);
     if (objectId == null) {
       return objectEntry;
     }
@@ -76,23 +66,6 @@ class ObjectChooserTool extends Tool {
       context?.acc?.board?.getObjectById?.(objectId) ??
       objectEntry
     );
-  }
-
-  /**
-   * 批量解析选择条目的 objectId
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @param {Iterable<*>|*} objects - 对象或对象集合
-   * @returns {number[]} 去重后的 objectId 列表
-   * @protected
-   */
-  resolveSelectedObjectIds(context = {}, objects) {
-    return [
-      ...new Set(
-        this.normalizeObjectCollection(objects)
-          .map((objectEntry) => this.resolveSelectedObjectId(objectEntry))
-          .filter((objectId) => objectId != null),
-      ),
-    ];
   }
 
   /**
@@ -179,10 +152,7 @@ class ObjectChooserTool extends Tool {
     const renderer = overlayContext.renderer;
     const objects = this.resolveContextObjects(context).filter(Boolean);
 
-    if (
-      objects.length === 0 ||
-      typeof renderer?.createCompatSelectionEntriesForObjects !== "function"
-    ) {
+    if (objects.length === 0) {
       return [];
     }
 
@@ -203,7 +173,16 @@ class ObjectChooserTool extends Tool {
       return [];
     }
 
-    return renderer.createCompatSelectionEntriesForObjects(objects, "chooser");
+    if (
+      typeof renderer?.createCompatSelectionEntriesForSummaries !== "function"
+    ) {
+      return [];
+    }
+
+    return renderer.createCompatSelectionEntriesForSummaries(
+      objects,
+      "chooser",
+    );
   }
 
   /**
@@ -274,7 +253,7 @@ class ObjectChooserTool extends Tool {
     }
 
     const boardApi = selectionContext.context.acc?.boardApi;
-    const objectIds = this.resolveSelectedObjectIds(
+    const objectIds = this.resolveObjectIds(
       selectionContext.context,
       selectedObjects,
     );
@@ -307,7 +286,7 @@ class ObjectChooserTool extends Tool {
   umount(context = {}) {
     const selectedObjects = this.resolveContextObjects(context);
     const boardApi = context?.acc?.boardApi;
-    const objectIds = this.resolveSelectedObjectIds(context, selectedObjects);
+    const objectIds = this.resolveObjectIds(context, selectedObjects);
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);
     } else if (selectedObjects.length > 0) {

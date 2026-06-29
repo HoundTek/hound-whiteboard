@@ -141,7 +141,7 @@ describe("ObjectChooserTool", () => {
     const chosenObject = { id: 5 };
     const tool = new TestChooserTool();
     const renderer = {
-      createCompatSelectionEntriesForObjects: jest.fn(() => [
+      createCompatSelectionEntriesForSummaries: jest.fn(() => [
         "chooser-overlay",
       ]),
     };
@@ -161,9 +161,6 @@ describe("ObjectChooserTool", () => {
     });
 
     expect(suppressed).toEqual([]);
-    expect(
-      renderer.createCompatSelectionEntriesForObjects,
-    ).not.toHaveBeenCalled();
 
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
@@ -181,7 +178,40 @@ describe("ObjectChooserTool", () => {
 
     expect(visible).toEqual(["chooser-overlay"]);
     expect(
-      renderer.createCompatSelectionEntriesForObjects,
+      renderer.createCompatSelectionEntriesForSummaries,
+    ).toHaveBeenCalledWith([chosenObject], "chooser");
+  });
+
+  test("collectUiOverlayEntries 在 summary-like 条目时应走 summaries 入口", () => {
+    const chosenObject = {
+      id: 51,
+      position: { x: 10, y: 20 },
+      range: new RectangleRange(0, 0, 5, 5),
+    };
+    const tool = new TestChooserTool();
+    const renderer = {
+      createCompatSelectionEntriesForSummaries: jest.fn(() => [
+        "chooser-summary-overlay",
+      ]),
+    };
+
+    const visible = tool.collectUiOverlayEntries({
+      deviceContext: {
+        acc: { objects: [chosenObject] },
+        path: "/monitor/chooser/tool",
+        dag: {
+          resolveDefaultLeaf: () => ({
+            path: "/monitor/chooser/tool",
+            state: {},
+          }),
+        },
+      },
+      renderer,
+    });
+
+    expect(visible).toEqual(["chooser-summary-overlay"]);
+    expect(
+      renderer.createCompatSelectionEntriesForSummaries,
     ).toHaveBeenCalledWith([chosenObject], "chooser");
   });
 

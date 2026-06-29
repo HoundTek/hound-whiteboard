@@ -204,7 +204,7 @@ describe("RectangleObjectChooserTool", () => {
       objects: [{ id: 1 }],
     });
     const renderer = {
-      createCompatSelectionEntriesForObjects: jest.fn(() => [
+      createCompatSelectionEntriesForSummaries: jest.fn(() => [
         "selection-frame",
       ]),
     };

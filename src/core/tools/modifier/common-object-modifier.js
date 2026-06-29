@@ -87,7 +87,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     // 总是记录当前手势基准位置，供 updateModifyGesture 计算位移
     this._gestureBasePositions = new Map(
       objects.map((obj) => {
-        const objectId = this.resolveModifiedObjectId(obj) ?? obj;
+        const objectId = this.resolveObjectId(obj) ?? obj;
         const basePosition = this.resolveModifiedObjectPosition(obj);
         return [objectId, { x: basePosition?.x ?? 0, y: basePosition?.y ?? 0 }];
       }),
@@ -96,7 +96,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     if (!this._initialPositions) {
       this._initialPositions = new Map(
         objects.map((obj) => {
-          const objectId = this.resolveModifiedObjectId(obj) ?? obj;
+          const objectId = this.resolveObjectId(obj) ?? obj;
           const initialPosition = this.resolveModifiedObjectPosition(obj);
           return [
             objectId,
@@ -120,7 +120,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
 
     for (const obj of objects) {
       const basePos = this._gestureBasePositions.get(
-        this.resolveModifiedObjectId(obj) ?? obj,
+        this.resolveObjectId(obj) ?? obj,
       );
       if (!basePos) continue;
       this.setModifiedObjectPosition(context, obj, {
@@ -150,7 +150,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     if (this._initialPositions) return;
     this._initialPositions = new Map(
       interaction.objects.map((obj) => {
-        const objectId = this.resolveModifiedObjectId(obj) ?? obj;
+        const objectId = this.resolveObjectId(obj) ?? obj;
         const initialPosition = this.resolveModifiedObjectPosition(obj);
         return [
           objectId,
@@ -191,7 +191,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     if (!this._initialPositions) return;
     for (const obj of interaction.objects) {
       const initPos = this._initialPositions.get(
-        this.resolveModifiedObjectId(obj) ?? obj,
+        this.resolveObjectId(obj) ?? obj,
       );
       if (!initPos) continue;
       this.setModifiedObjectPosition(interaction.context, obj, {
