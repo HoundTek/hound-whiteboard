@@ -13,25 +13,21 @@ import { BasicObject } from "../basic-obj.js";
 const DEFAULT_STROKE_PROPERTY = Object.freeze({
   /**
    * 笔画颜色
-   * @default "#000000"
    */
   color: "#000000",
 
   /**
    * 笔画宽度
-   * @default 1
    */
   width: 1,
 
   /**
    * 线段连接处的样式
-   * @default "round"
    */
   lineJoin: "round",
 
   /**
    * 线段端点的样式
-   * @default "round"
    */
   lineCap: "round",
 });
@@ -39,11 +35,7 @@ const DEFAULT_STROKE_PROPERTY = Object.freeze({
 /**
  * 笔画类
  * @class
- * @description
- * 笔画是由一系列点组成的对象，通常用于表示手写输入的轨迹。
- * 值得一提的是，笔画是可擦除的无向对象，这与多边形对象正好相反。
- * @todo
- * 现在的这个笔画类的结构是不支持更换笔刷的。要想有这个功能，必须重构。
+ * @todo 现在的这个笔画类的结构是不支持更换笔刷的。要想有这个功能，必须重构。
  * @author Zhou Chenyu
  */
 class StrokeObject extends BasicObject {
@@ -65,6 +57,13 @@ class StrokeObject extends BasicObject {
   }
 
   calculateRichDatas() {
+    if (this.rich.localPathRange.points.length === 0) {
+      this.rich.worldPathRange = new PathRange([]);
+      this.rich.convexHullRange = new PolygonRange([]);
+      this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
+      return;
+    }
+
     let transformedPoints = this.rich.localPathRange.points.map((p) =>
       Vector.mulMatrix(this.transform, p),
     );
@@ -82,20 +81,13 @@ class StrokeObject extends BasicObject {
     );
   }
 
-  /**
-   * 数据变更回调
-   * @param {string[]} keys - 变更的字段名列表
-   * @protected
-   */
   _onDataChange(keys) {
-    if (keys.includes('points') && Array.isArray(this.data.points)) {
+    if (keys.includes("points") && Array.isArray(this.data.points)) {
       const vecs = this.data.points.map((p) => new Vector(p.x, p.y));
       this.rich.localPathRange = new PathRange(vecs);
       this.calculateRichDatas();
     }
   }
-
-
 
   setTransform(trans) {
     this.transform = trans;

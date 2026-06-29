@@ -20,8 +20,6 @@ const DEFAULT_POLYGON_PROPERTY = Object.freeze({
  * 多边形类
  * @class
  * @extends GraphObject
- * @description
- * 多边形是图形的一种，由多个顶点组成。
  * @author Zhou Chenyu
  */
 class PolygonObject extends GraphObject {
@@ -38,16 +36,12 @@ class PolygonObject extends GraphObject {
     this.property = { ...DEFAULT_POLYGON_PROPERTY, ...this.property };
     this.rich.localPolygonRange = new PolygonRange([]);
     this.rich.worldPolygonRange = new PolygonRange([]);
+    this.rich.convexHullRange = new PolygonRange([]);
     this._onDataChange(Object.keys(data));
   }
 
-  /**
-   * 数据变更回调
-   * @param {string[]} keys - 变更的字段名列表
-   * @protected
-   */
   _onDataChange(keys) {
-    if (keys.includes('points') && Array.isArray(this.data.points)) {
+    if (keys.includes("points") && Array.isArray(this.data.points)) {
       const vecs = this.data.points.map((p) => new Vector(p.x, p.y));
       this.rich.localPolygonRange = new PolygonRange(vecs);
       this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(
@@ -58,21 +52,19 @@ class PolygonObject extends GraphObject {
     }
   }
 
-  /**
-   * 设置对象的顶点集
-   * @param {Vector[]} points - 新的顶点集
-   */
-
-
   calculateRectangle() {
+    if (
+      !this.rich.convexHullRange ||
+      this.rich.convexHullRange.points.length === 0
+    ) {
+      this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
+      return;
+    }
     this.rich.boundingBox = RectangleRange.from(
       this.rich.convexHullRange.transform(this.transform),
     );
   }
 
-  /**
-   * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。
-   */
   calculateConvexHull() {
     this.rich.convexHullRange = new PolygonRange(
       calcConvexHull(this.rich.localPolygonRange.points),
@@ -93,15 +85,6 @@ class PolygonObject extends GraphObject {
     return this.rich.worldPolygonRange;
   }
 
-  /**
-   * 多边形对象的颜色
-   * @type {string}
-   * @default "#000000"
-   */
-  /**
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   */
   render(ctx) {
     if (
       !this.rich.localPolygonRange ||

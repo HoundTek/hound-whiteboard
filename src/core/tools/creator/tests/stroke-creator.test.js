@@ -235,6 +235,68 @@ describe("StrokeCreatorTool", () => {
     expect(deviceContext.acc.objects).toEqual([tool.obj]);
   });
 
+  test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {
+    const tool = new StrokeCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
+    const createSpy = jest.spyOn(boardApi, "createObject");
+    const appendSpy = jest.spyOn(boardApi, "appendListItem");
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
+    const deviceContext = {
+      acc: { board, boardApi, objectId: 20, ownerChunkId: 1 },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+      },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [
+          { type: "position", context: { value: new Vector(3, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(createSpy).toHaveBeenCalledWith(
+      "StrokeObject",
+      expect.objectContaining({
+        id: 20,
+        position: new Vector(1, 2),
+      }),
+    );
+    expect(appendSpy).toHaveBeenCalled();
+    expect(commitSpy).toHaveBeenCalledWith([20]);
+    expect(
+      board
+        .getChunkById(1)
+        .objectManager.getObject(20)
+        .rich.localPathRange.points.map((point) => point.serialize()),
+    ).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+  });
+
   test("创建手势更新前后应记录旧几何快照并请求活动层刷新", () => {
     const tool = new StrokeCreatorTool();
     const monitor = {
@@ -280,13 +342,14 @@ describe("StrokeCreatorTool", () => {
     board.width = 10;
     board.height = 10;
     board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, objectId: 21, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 21, ownerChunkId: 1 } },
     );
 
     const createdObject = tool.obj;
@@ -296,7 +359,7 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, objectId: 21, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 21, ownerChunkId: 1 } },
     );
 
     const ownerChunk = board.getChunkById(1);
@@ -310,13 +373,14 @@ describe("StrokeCreatorTool", () => {
     board.width = 10;
     board.height = 10;
     board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, objectId: 22, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 22, ownerChunkId: 1 } },
     );
 
     tool.process(
@@ -324,12 +388,13 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
-      { acc: { board, objectId: 22, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 22, ownerChunkId: 1 } },
     );
 
     const ownerChunk = board.getChunkById(1);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     expect(ownerChunk.objectManager.getObject(22)).toBeUndefined();
+    expect(board.getObjectById(22)).toBeUndefined();
   });
 
   test("连续两次创建应生成两个不同笔画对象", () => {

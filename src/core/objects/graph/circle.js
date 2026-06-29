@@ -19,8 +19,6 @@ const DEFAULT_CIRCLE_PROPERTY = Object.freeze({
  * 圆类
  * @class
  * @extends GraphObject
- * @description
- * 圆是图形的一种，由中心点和半径定义。
  * @author Zhou Chenyu
  */
 class CircleObject extends GraphObject {
@@ -35,16 +33,12 @@ class CircleObject extends GraphObject {
   constructor(id, position, property = {}, data = {}) {
     super(id, position, property, data);
     this.property = { ...DEFAULT_CIRCLE_PROPERTY, ...this.property };
+    this.rich.convexHullRange = new EllipseRange(new Vector(0, 0), 0, 0);
     this._onDataChange(Object.keys(data));
   }
 
-  /**
-   * 数据变更回调
-   * @param {string[]} keys - 变更的字段名列表
-   * @protected
-   */
   _onDataChange(keys) {
-    if (keys.includes('radius') && this.data.radius != null) {
+    if (keys.includes("radius") && this.data.radius != null) {
       this.rich.convexHullRange = new EllipseRange(
         new Vector(0, 0),
         this.data.radius,
@@ -56,32 +50,18 @@ class CircleObject extends GraphObject {
     }
   }
 
-
-
   calculateRectangle() {
     this.rich.boundingBox = RectangleRange.from(
       this.rich.convexHullRange.transform(this.transform),
     );
   }
 
-  /**
-   * @description 在进行矩阵变换前的凸包。当且仅当 radius 发生变化时才会更新它。
-   */
   calculateConvexHull() {
     this.rich.convexHullRange = new EllipseRange(
       new Vector(0, 0),
       this.data.radius,
       this.data.radius,
     );
-  }
-
-  /**
-   * @param {Matrix} trans - 新的变换矩阵
-   * @description 设置变换矩阵时，它会直接修改其富数据中的顶点坐标，但不会修改基础数据。
-   */
-  setTransform(trans) {
-    this.transform = trans;
-    this.calculateRectangle();
   }
 
   getRange() {

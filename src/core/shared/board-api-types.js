@@ -11,6 +11,16 @@
  * @property {import("./types.js").Point2D} [position] - 新的绝对位置
  * @property {import("./types.js").TransformMatrix2D} [transform] - 新的变换矩阵
  * @property {Record<string, any>} [property] - 样式属性合并块
+ * @property {Record<string, any>} [data] - 对象专属数据合并块
+ */
+
+/**
+ * 创建对象参数
+ * @typedef {Object} CreateObjectProps
+ * @property {number} [id] - 可选显式 objectId，供 P2 同线程兼容路径复用既有 id 分配逻辑
+ * @property {import("./types.js").Point2D} position - 新对象位置
+ * @property {Record<string, any>} [property] - 初始样式属性
+ * @property {Record<string, any>} [data] - 初始对象专属数据
  */
 
 /**
@@ -31,7 +41,7 @@
 /**
  * BoardApi 接口摘要
  * @typedef {Object} BoardApi
- * @property {(type: string, props: { position: import("./types.js").Point2D, property?: Record<string, any>, data?: Record<string, any> }) => Promise<number>} createObject - 创建对象并返回 objectId
+ * @property {(type: string, props: CreateObjectProps) => Promise<number>} createObject - 创建对象并返回 objectId
  * @property {(objectId: number, patch: ObjectPatch) => Promise<void>} modifyObject - 修改单个对象
  * @property {(patches: ObjectPatchEntry[]) => Promise<void>} modifyObjects - 批量修改多个对象
  * @property {(objectId: number, key: string, items: any[]) => Promise<void>} appendListItem - 追加列表属性元素

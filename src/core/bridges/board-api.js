@@ -45,14 +45,34 @@ class BoardApi {
   }
 
   /**
+   * 判断对象是否已进入区块静态图
+   * @param {number} objectId - 对象 id
+   * @returns {boolean}
+   */
+  hasStaticBoardObject(objectId) {
+    for (const { chunk } of this.#boardCore.chunkLoaded.values()) {
+      if (chunk?.objectManager?.staticGraph?.hasNode?.(objectId)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * 在 Core 侧创建对象实例，注册到 AOM 动态图
    * @param {string} type - 对象类型名（如 "StrokeObject" | "CircleObject"）
-   * @param {Record<string, any>} props - 创建属性（含 position、property、对象级几何标量）
+   * @param {import("../shared/board-api-types.js").CreateObjectProps} props - 创建属性（含可选显式 id、position、property、对象级几何数据）
    * @returns {Promise<number>} 新对象的 objectId
    * @throws {TypeError} 不支持的对象类型或缺少 id
    */
   async createObject(type, props) {
-    const objectId = this.#boardCore.allocateObjectId();
+    const objectId = props?.id ?? this.#boardCore.allocateObjectId();
+    const existingObject = this.#boardCore.getObjectById(objectId);
+    if (existingObject) {
+      return objectId;
+    }
+
     const obj = deserialize({
       type,
       id: objectId,
@@ -62,7 +82,7 @@ class BoardApi {
       data: { ...(props?.data ?? {}) },
     });
 
-    this.#boardCore.addObject(obj);
+    this.#boardCore.registerObjectInstance(obj);
     this.#boardCore.activeObjectManager.add(new Set([obj]));
 
     return objectId;
@@ -322,7 +342,15 @@ class BoardApi {
       .filter(Boolean);
     if (objects.length === 0) return;
 
+    const transientObjectIds = objects
+      .map((obj) => obj.id)
+      .filter((objectId) => !this.hasStaticBoardObject(objectId));
+
     this.#boardCore.activeObjectManager.discard(new Set(objects));
+
+    for (const objectId of transientObjectIds) {
+      this.#boardCore.objectLoaded.delete(objectId);
+    }
   }
 
   /**

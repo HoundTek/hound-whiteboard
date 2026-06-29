@@ -97,6 +97,51 @@ describe("CircleCreatorTool", () => {
     );
   });
 
+  test("显式提供 boardApi 时应通过 BoardApi 创建并提交圆对象", () => {
+    const tool = new CircleCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
+    const createSpy = jest.spyOn(boardApi, "createObject");
+    const modifySpy = jest.spyOn(boardApi, "modifyObject");
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
+    const deviceContext = {
+      acc: { board, boardApi, objectId: 104, ownerChunkId: 1 },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/circle",
+        signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
+      },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/circle",
+        signals: [
+          { type: "position", context: { value: new Vector(6, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(createSpy).toHaveBeenCalledWith(
+      "CircleObject",
+      expect.objectContaining({
+        id: 104,
+        position: new Vector(2, 1),
+      }),
+    );
+    expect(modifySpy).toHaveBeenCalled();
+    expect(commitSpy).toHaveBeenCalledWith([104]);
+    expect(board.getChunkById(1).objectManager.getObject(104)).toBe(tool.obj);
+  });
+
   test("未提供 monitor 时应以默认 zoom=1 计算固定半径", () => {
     const tool = new CircleCreatorTool();
     const deviceContext = { acc: { objectId: 401, ownerChunkId: 1 } };
@@ -130,13 +175,14 @@ describe("CircleCreatorTool", () => {
     board.width = 10;
     board.height = 10;
     board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
 
     tool.process(
       {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
-      { acc: { board, objectId: 110, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 110, ownerChunkId: 1 } },
     );
 
     tool.process(
@@ -144,7 +190,7 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, objectId: 110, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 110, ownerChunkId: 1 } },
     );
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);

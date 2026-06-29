@@ -3,7 +3,7 @@ import { Vector } from "../../../utils/math.js";
 import { Board } from "../../../components/index.js";
 import { Monitor } from "../../../components/index.js";
 import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
-import { OBJECT_CREATOR_SIGNAL_TYPES } from "../obj-creator.js";
+import { OBJECT_CREATOR_SIGNAL_TYPES } from "../object-creator.js";
 import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
 import { createMouseDevice } from "../../../devices/mouse-device.js";
 import { jest } from "@jest/globals";
@@ -274,12 +274,19 @@ describe("PolygonCreatorTool", () => {
     expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
-  test("真实 Board 上 object-end 后应经由 AOM.apply 落回归属区块", () => {
+  test("显式提供 boardApi 时应通过 BoardApi 创建并提交多边形对象", () => {
     const tool = new PolygonCreatorTool();
     const board = new Board();
     board.width = 10;
     board.height = 10;
     board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
+    const createSpy = jest.spyOn(boardApi, "createObject");
+    const appendSpy = jest.spyOn(boardApi, "appendListItem");
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
+    const deviceContext = {
+      acc: { board, boardApi, objectId: 24, ownerChunkId: 1 },
+    };
 
     tool.process(
       {
@@ -292,7 +299,54 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
         ],
       },
-      { acc: { board, objectId: 23, ownerChunkId: 1 } },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(createSpy).toHaveBeenCalledWith(
+      "PolygonObject",
+      expect.objectContaining({
+        id: 24,
+        position: new Vector(5, 5),
+      }),
+    );
+    expect(appendSpy).toHaveBeenCalled();
+    expect(commitSpy).toHaveBeenCalledWith([24]);
+
+    const ownerChunk = board.getChunkById(1);
+    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(ownerChunk.objectManager.getObject(24)).toBe(tool.obj);
+  });
+
+  test("真实 Board 上 object-end 后应经由 AOM.apply 落回归属区块", () => {
+    const tool = new PolygonCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(5, 5) },
+          },
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+        ],
+      },
+      { acc: { board, boardApi, objectId: 23, ownerChunkId: 1 } },
     );
 
     const createdObject = tool.obj;
@@ -304,7 +358,7 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
       },
-      { acc: { board, objectId: 23, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 23, ownerChunkId: 1 } },
     );
 
     const ownerChunk = board.getChunkById(1);

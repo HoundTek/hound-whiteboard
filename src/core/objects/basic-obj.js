@@ -214,10 +214,13 @@ class BasicObject {
   /**
    * 设置对象的变换矩阵
    * @param {Matrix} trans - 新的变换矩阵
-   * @description 你应该使用此方法而不是直接修改 transform 字段。
+   * @description
+   * 你应该使用此方法而不是直接修改 transform 字段。
+   * 因为默认实现中，设置变换矩阵会触发边界矩形的重新计算。
    */
   setTransform(trans) {
     this.transform = trans;
+    this.calculateRectangle();
   }
 
   /**
@@ -226,7 +229,7 @@ class BasicObject {
    * @description 将变换矩阵与当前变换矩阵相乘。
    */
   applyTransform(trans) {
-    this.transform = this.transform.mul(trans);
+    this.setTransform(this.transform.mul(trans));
   }
 
   /**

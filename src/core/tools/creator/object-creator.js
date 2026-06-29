@@ -1,7 +1,7 @@
 /**
  * @file 对象创建工具
  * @description 提供对象创建流程与信号类型定义的工具基类。
- * @module core/tools/creator/obj-creator
+ * @module core/tools/creator/object-creator
  * @author Zhou Chenyu
  */
 
@@ -63,9 +63,12 @@ class ObjectCreatorTool extends Tool {
    */
   constructor() {
     super();
+    this.obj = null;
+    this.objectId = null;
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
     this._pendingProperty = null;
+    this._usesBoardApiObjectLifecycle = false;
   }
 
   /**
@@ -90,9 +93,22 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 当前正在创建的对象
-   * @type {BasicObject}
+   * @type {BasicObject | null}
    */
   obj;
+
+  /**
+   * 当前创建对象的 id
+   * @type {number | null}
+   */
+  objectId;
+
+  /**
+   * 当前对象是否通过 BoardApi 生命周期创建
+   * @type {boolean}
+   * @private
+   */
+  _usesBoardApiObjectLifecycle;
 
   /**
    * 当前创建手势是否仍在持续
@@ -151,6 +167,117 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
+   * 返回当前 Creator 对应的对象类型名
+   * @returns {string} 对象类型名；未接入 BoardApi 创建路径时返回 undefined
+   * @protected
+   */
+  getCreatedObjectType() {
+    throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 解析新对象的初始属性
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {Record<string, any>} 初始属性快照
+   * @protected
+   */
+  resolveCreatedObjectProperty(interaction) {
+    const baseProperty =
+      this.property &&
+      typeof this.property === "object" &&
+      !Array.isArray(this.property)
+        ? this.property
+        : {};
+
+    return {
+      ...baseProperty,
+      ...(interaction?.injectedProperty ?? {}),
+    };
+  }
+
+  /**
+   * 解析新对象的初始专属数据
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {Record<string, any>} 初始数据快照
+   * @protected
+   */
+  resolveCreatedObjectData(interaction) {
+    return {};
+  }
+
+  /**
+   * 解析当前创建对象的兼容实例引用
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {number | null} [objectId=this.objectId] - 对象 id
+   * @returns {BasicObject | undefined} 当前对象实例
+   * @protected
+   */
+  resolveCreatedObjectReference(context = {}, objectId = this.objectId) {
+    if (objectId == null) {
+      return undefined;
+    }
+
+    const boardObject = context?.acc?.board?.getObjectById?.(objectId);
+    if (boardObject instanceof BasicObject) {
+      return boardObject;
+    }
+
+    const boardCoreObject = context?.acc?.boardApi
+      ?.getBoardCore?.()
+      ?.getObjectById?.(objectId);
+    if (boardCoreObject instanceof BasicObject) {
+      return boardCoreObject;
+    }
+
+    if (this.obj instanceof BasicObject && this.obj.id === objectId) {
+      return this.obj;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 通过 BoardApi 创建对象并回填兼容实例引用
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {boolean} 是否成功走 BoardApi 创建路径
+   * @protected
+   */
+  createObjectThroughBoardApi(interaction) {
+    const boardApi = interaction?.context?.acc?.boardApi;
+    const objectType = this.getCreatedObjectType();
+
+    if (
+      !boardApi ||
+      typeof objectType !== "string" ||
+      interaction?.objectId == null
+    ) {
+      return false;
+    }
+
+    boardApi.createObject(objectType, {
+      id: interaction.objectId,
+      position: interaction.position,
+      property: this.resolveCreatedObjectProperty(interaction),
+      data: this.resolveCreatedObjectData(interaction),
+    });
+
+    const createdObject = this.resolveCreatedObjectReference(
+      interaction?.context,
+      interaction.objectId,
+    );
+    if (!(createdObject instanceof BasicObject)) {
+      throw new Error(
+        `Failed to resolve created object reference: ${interaction.objectId}`,
+      );
+    }
+
+    this.objectId = interaction.objectId;
+    this.obj = createdObject;
+    this._usesBoardApiObjectLifecycle = true;
+    return true;
+  }
+
+  /**
    * 确保当前交互已拥有对象实例
    * @param {Object} interaction - 当前交互上下文
    * @returns {boolean} 是否已拥有对象实例
@@ -161,7 +288,11 @@ class ObjectCreatorTool extends Tool {
 
       // 惰性分配 objectId：仅当需要创建新对象时才调用 allocateObjectId
       if (interaction.objectId == null) {
-        const allocatedId = interaction?.context?.acc?.allocateObjectId?.();
+        const allocatedId =
+          interaction?.context?.acc?.allocateObjectId?.() ??
+          interaction?.context?.acc?.boardApi
+            ?.getBoardCore?.()
+            ?.allocateObjectId?.();
         if (allocatedId != null) {
           interaction.objectId = allocatedId;
         }
@@ -170,23 +301,30 @@ class ObjectCreatorTool extends Tool {
       if (interaction.objectId == null) {
         return false;
       }
-      this.create(
-        interaction.position,
-        interaction.objectId,
-      );
-      if (
-        this._pendingProperty &&
-        this.obj &&
-        typeof this.obj.setProperty === "function"
-      ) {
-        this.obj.setProperty(this._pendingProperty);
+
+      this.objectId = interaction.objectId;
+      this._usesBoardApiObjectLifecycle = false;
+
+      if (!this.createObjectThroughBoardApi(interaction)) {
+        this.create(interaction.position, interaction.objectId);
+        if (
+          this._pendingProperty &&
+          this.obj &&
+          typeof this.obj.setProperty === "function"
+        ) {
+          this.obj.setProperty(this._pendingProperty);
+        }
       }
+
       this._pendingProperty = null;
       this.isObjectCreationCompleted = false;
       this.syncCreatedObjectContext(interaction?.context);
-      interaction?.context?.acc?.board?.activeObjectManager?.add?.(
-        new Set([this.obj]),
-      );
+
+      if (!this._usesBoardApiObjectLifecycle) {
+        interaction?.context?.acc?.board?.activeObjectManager?.add?.(
+          new Set([this.obj]),
+        );
+      }
     }
 
     return true;
@@ -208,6 +346,16 @@ class ObjectCreatorTool extends Tool {
    * @returns {void}
    */
   discardCreatedObjects(context = {}) {
+    const boardApi = context?.acc?.boardApi;
+    if (
+      this._usesBoardApiObjectLifecycle &&
+      boardApi &&
+      this.objectId != null
+    ) {
+      boardApi.discardActiveObjects([this.objectId]);
+      return;
+    }
+
     const normalizedObjects =
       this.resolveContextObjects(context).filter(Boolean);
     const activeObjectIndex =
@@ -247,10 +395,11 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 在对象几何变更前记录旧快照
+   * @description BoardApi 路径下由 Core 自动处理脏区，不在此处重复触发。
    * @param {Object} interaction - 当前交互上下文
    */
   beforeGeometryMutation(interaction) {
-    if (!this.obj) return;
+    if (!this.obj || this._usesBoardApiObjectLifecycle) return;
     interaction?.context?.acc?.monitor?.liveRenderer?.captureObjectSnapshot?.([
       this.obj,
     ]);
@@ -258,10 +407,17 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 在对象几何变更后请求活动层刷新
+   * @description BoardApi 路径下仅保留 UI overlay 刷新，渲染脏区由 Core 自动处理。
    * @param {Object} interaction - 当前交互上下文
    */
   afterGeometryMutation(interaction) {
     if (!this.obj) return;
+
+    if (this._usesBoardApiObjectLifecycle) {
+      this.requestUiOverlayRefresh(interaction?.context ?? {});
+      return;
+    }
+
     interaction?.context?.acc?.monitor?.liveRenderer?.invalidateObjects?.([
       this.obj,
     ]);
@@ -329,7 +485,18 @@ class ObjectCreatorTool extends Tool {
   commitCreatedObject(interaction) {
     const context = interaction?.context ?? {};
     const board = context.acc?.board;
+    const boardApi = context.acc?.boardApi;
     const completedObject = this.obj;
+
+    if (
+      this._usesBoardApiObjectLifecycle &&
+      boardApi &&
+      this.objectId != null
+    ) {
+      boardApi.commitObjects([this.objectId]);
+      this.clearContextObjects(context);
+      return;
+    }
 
     if (board?.activeObjectManager?.apply) {
       board.activeObjectManager.apply(new Set([completedObject]));
@@ -359,16 +526,16 @@ class ObjectCreatorTool extends Tool {
     if (!this.obj) return undefined;
     const completedObject = this.obj;
 
-    // ① Finalize：总是执行（同步上下文 + 标记完成）
+    // 1. Finalize：总是执行（同步上下文 + 标记完成）
     this.finalizeCreatedObject(interaction);
 
-    // ② beforeCommit 钩子决定是否进入静态图
+    // 2. beforeCommit 钩子决定是否进入静态图
     //    handoff 返回 false → 对象留在 AOM 动态图中
     if (this.beforeCommitCreatedObject(interaction) !== false) {
       this.commitCreatedObject(interaction);
     }
 
-    // ③ 通知钩子（无论是否 commit）
+    // 3. afterComplete 钩子通知（无论是否 commit）
     this.afterCompleteCreatedObject(interaction, completedObject);
     return undefined;
   }
@@ -379,8 +546,15 @@ class ObjectCreatorTool extends Tool {
    */
   cancelCreatedObject(interaction) {
     const board = interaction?.context?.acc?.board;
+    const boardApi = interaction?.context?.acc?.boardApi;
     if (this.obj) {
-      if (board?.activeObjectManager?.discard) {
+      if (
+        this._usesBoardApiObjectLifecycle &&
+        boardApi &&
+        this.objectId != null
+      ) {
+        boardApi.discardActiveObjects([this.objectId]);
+      } else if (board?.activeObjectManager?.discard) {
         board.activeObjectManager.discard(new Set([this.obj]));
       } else if (board?.activeObjectManager?.unregisterActiveObject) {
         board.activeObjectManager.unregisterActiveObject(this.obj.id);
@@ -388,6 +562,8 @@ class ObjectCreatorTool extends Tool {
     }
     this.clearContextObjects(interaction?.context ?? {});
     this.reset();
+    this.objectId = null;
+    this._usesBoardApiObjectLifecycle = false;
     this.isObjectCreationCompleted = false;
     return undefined;
   }
@@ -400,6 +576,8 @@ class ObjectCreatorTool extends Tool {
   umount(context = {}) {
     this.discardCreatedObjects(context);
     this.clearContextObjects(context);
+    this.objectId = null;
+    this._usesBoardApiObjectLifecycle = false;
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
     super.umount(context);

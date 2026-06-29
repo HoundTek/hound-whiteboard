@@ -9,7 +9,7 @@ import {
   CircleObject,
   DEFAULT_CIRCLE_PROPERTY,
 } from "../../objects/graph/circle.js";
-import { SingleGestureObjectCreatorTool } from "./obj-creator.js";
+import { SingleGestureObjectCreatorTool } from "./object-creator.js";
 import { Vector } from "../../utils/math.js";
 
 const DEFAULT_FIXED_RADIUS_SCREEN = 16;
@@ -71,9 +71,23 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       options.minDragDistanceScreen ?? DEFAULT_MIN_DRAG_DISTANCE_SCREEN;
   }
 
+  getCreatedObjectType() {
+    return "CircleObject";
+  }
+
   create(p, id) {
     this.obj = new CircleObject(id, p);
     this.obj.setProperty(this.property);
+  }
+
+  /**
+   * 解析新圆对象的初始专属数据
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {Record<string, any>} 初始圆数据
+   * @protected
+   */
+  resolveCreatedObjectData(interaction) {
+    return { radius: 0 };
   }
 
   /**
@@ -91,16 +105,37 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
    */
   count;
 
+  /**
+   * 在 BoardApi 或本地对象上设置半径
+   * @param {number} radius - 新半径
+   * @param {Object} interaction - 当前交互上下文
+   */
+  setRadius(radius, interaction) {
+    const boardApi = interaction?.context?.acc?.boardApi;
+    if (
+      this._usesBoardApiObjectLifecycle &&
+      boardApi &&
+      this.objectId != null
+    ) {
+      boardApi.modifyObject(this.objectId, {
+        data: { radius },
+      });
+      return;
+    }
+
+    this.obj?.setData({ radius });
+  }
+
   beginCreationGesture(interaction) {
     this.count = 0;
-    this.obj.setData({ radius: 0 });
+    this.setRadius(0, interaction);
   }
 
   updateCreationGesture(interaction) {
     this.count++;
     const localPoint = this.toLocalPoint(interaction.position);
     const radius = localPoint.length();
-    this.obj.setData({ radius });
+    this.setRadius(radius, interaction);
   }
 
   completeCreationGesture(interaction) {
@@ -108,15 +143,25 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       this.count++;
       const localPoint = this.toLocalPoint(interaction.position);
       const radius = localPoint.length();
-      this.obj.setData({ radius });
+      this.setRadius(radius, interaction);
     }
     const zoom = interaction.context?.acc?.monitor?.zoom ?? 1;
     if (
       this.count <= 2 &&
       this.obj.data.radius < this.minDragDistanceScreen / zoom
     ) {
-      this.obj.setData({ radius: this.fixedRadiusScreen / zoom });
+      this.setRadius(this.fixedRadiusScreen / zoom, interaction);
     }
+  }
+
+  /**
+   * 重置创建器运行时状态
+   */
+  reset() {
+    this.obj = null;
+    this.objectId = null;
+    this.count = 0;
+    this._usesBoardApiObjectLifecycle = false;
   }
 }
 

@@ -9,7 +9,7 @@ import {
   DEFAULT_STROKE_PROPERTY,
   StrokeObject,
 } from "../../objects/stroke/stroke.js";
-import { SingleGestureObjectCreatorTool } from "./obj-creator.js";
+import { SingleGestureObjectCreatorTool } from "./object-creator.js";
 import { Vector } from "../../utils/math.js";
 
 /**
@@ -37,6 +37,12 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   property;
 
   /**
+   * 最近一次追加的局部路径点
+   * @type {Vector | null}
+   */
+  _lastLocalPoint;
+
+  /**
    * @param {{
    *   property?: Partial<typeof DEFAULT_STROKE_PROPERTY>,
    * }} [options={}]
@@ -48,6 +54,11 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
       ...DEFAULT_STROKE_PROPERTY,
       ...(options.property ?? {}),
     };
+    this._lastLocalPoint = null;
+  }
+
+  getCreatedObjectType() {
+    return "StrokeObject";
   }
 
   create(p, id) {
@@ -64,32 +75,65 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     return position.sub(this.obj.position);
   }
 
-  appendPathPoint(point) {
-    const points = this.obj.rich.localPathRange.points;
-    const lastPoint = points[points.length - 1];
-    if (lastPoint && Vector.nearlyEq(lastPoint, point)) {
+  /**
+   * 追加一个局部路径点
+   * @param {Vector} point - 待追加的局部路径点
+   * @param {Object} interaction - 当前交互上下文
+   */
+  appendPathPoint(point, interaction) {
+    const currentLastPoint =
+      this.obj?.rich?.localPathRange?.points?.[
+        this.obj.rich.localPathRange.points.length - 1
+      ];
+    if (
+      (this._lastLocalPoint && Vector.nearlyEq(this._lastLocalPoint, point)) ||
+      (currentLastPoint && Vector.nearlyEq(currentLastPoint, point))
+    ) {
       return;
     }
+
+    const boardApi = interaction?.context?.acc?.boardApi;
+    if (
+      this._usesBoardApiObjectLifecycle &&
+      boardApi &&
+      this.objectId != null
+    ) {
+      boardApi.appendListItem(this.objectId, "points", [
+        { x: point.x, y: point.y },
+      ]);
+      this._lastLocalPoint = new Vector(point.x, point.y);
+      return;
+    }
+
+    const points = this.obj.rich.localPathRange.points;
     const pts = points.concat([point]);
     this.obj.setData({ points: pts.map((p) => ({ x: p.x, y: p.y })) });
+    this._lastLocalPoint = new Vector(point.x, point.y);
   }
 
   beginCreationGesture(interaction) {
-    this.appendPathPoint(this.toLocalPoint(interaction.position));
+    this._lastLocalPoint = null;
+    this.appendPathPoint(this.toLocalPoint(interaction.position), interaction);
   }
 
   updateCreationGesture(interaction) {
-    this.appendPathPoint(this.toLocalPoint(interaction.position));
+    this.appendPathPoint(this.toLocalPoint(interaction.position), interaction);
   }
 
   completeCreationGesture(interaction) {
     if (interaction.position) {
-      this.appendPathPoint(this.toLocalPoint(interaction.position));
+      this.appendPathPoint(
+        this.toLocalPoint(interaction.position),
+        interaction,
+      );
     }
   }
 
   reset() {
     this.obj = null;
+    this.objectId = null;
+    this._lastLocalPoint = null;
+    this._usesBoardApiObjectLifecycle = false;
   }
 }
 

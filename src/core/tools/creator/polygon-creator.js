@@ -10,7 +10,7 @@ import {
   PolygonObject,
 } from "../../objects/graph/polygon.js";
 import { Vector } from "../../utils/math.js";
-import { MultiGestureObjectCreatorTool } from "./obj-creator.js";
+import { MultiGestureObjectCreatorTool } from "./object-creator.js";
 
 /**
  * 多边形创建工具类
@@ -39,6 +39,10 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
       ...DEFAULT_POLYGON_PROPERTY,
       ...(options.property ?? {}),
     };
+  }
+
+  getCreatedObjectType() {
+    return "PolygonObject";
   }
 
   /**
@@ -112,12 +116,59 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   }
 
   /**
+   * 追加顶点到多边形
+   * @param {Vector} localPoint - 局部坐标
+   * @param {Object} interaction - 当前交互上下文
+   */
+  appendPoint(localPoint, interaction) {
+    const boardApi = interaction?.context?.acc?.boardApi;
+    if (
+      this._usesBoardApiObjectLifecycle &&
+      boardApi &&
+      this.objectId != null
+    ) {
+      boardApi.appendListItem(this.objectId, "points", [
+        { x: localPoint.x, y: localPoint.y },
+      ]);
+      return;
+    }
+
+    this.obj.appendListItem("points", { x: localPoint.x, y: localPoint.y });
+  }
+
+  /**
+   * 替换多边形当前顶点
+   * @param {Vector} localPoint - 新的局部坐标
+   * @param {number} index - 顶点索引
+   * @param {Object} interaction - 当前交互上下文
+   */
+  replacePoint(localPoint, index, interaction) {
+    const boardApi = interaction?.context?.acc?.boardApi;
+    if (
+      this._usesBoardApiObjectLifecycle &&
+      boardApi &&
+      this.objectId != null
+    ) {
+      boardApi.replaceListItem(this.objectId, "points", index, {
+        x: localPoint.x,
+        y: localPoint.y,
+      });
+      return;
+    }
+
+    this.obj.replaceListItem("points", index, {
+      x: localPoint.x,
+      y: localPoint.y,
+    });
+  }
+
+  /**
    * @description 创建手势开始时，添加一个新的顶点。
    * @param {Object} interaction - 当前交互上下文
    */
   beginCreationGesture(interaction) {
     const addPt = this.toLocalPoint(interaction.position);
-    this.obj.appendListItem('points', { x: addPt.x, y: addPt.y });
+    this.appendPoint(addPt, interaction);
     this.lastPoint = interaction.position;
     this.count++;
   }
@@ -130,7 +181,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
       this.lastPoint = interaction.position;
       const upPt = this.toLocalPoint(interaction.position);
-      this.obj.replaceListItem('points', this.count - 1, { x: upPt.x, y: upPt.y });
+      this.replacePoint(upPt, this.count - 1, interaction);
     }
   }
 
@@ -145,7 +196,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     ) {
       this.lastPoint = interaction.position;
       const compPt = this.toLocalPoint(interaction.position);
-      this.obj.replaceListItem('points', this.count - 1, { x: compPt.x, y: compPt.y });
+      this.replacePoint(compPt, this.count - 1, interaction);
     }
 
     this.lastPoint = null;
@@ -157,8 +208,10 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
 
   reset() {
     this.obj = null;
+    this.objectId = null;
     this.count = 0;
     this.lastPoint = null;
+    this._usesBoardApiObjectLifecycle = false;
   }
 }
 

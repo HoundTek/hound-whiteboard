@@ -1,7 +1,9 @@
 import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
-import { SingleGestureObjectCreatorTool } from "../obj-creator.js";
+import { SingleGestureObjectCreatorTool } from "../object-creator.js";
 import { Vector } from "../../../utils/math.js";
+import { Board } from "../../../components/index.js";
+import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 
 describe("ObjectCreatorTool — property 信号", () => {
   test("Phase 1 带 property 信号 → 对象使用注入属性覆盖默认属性", () => {
@@ -110,6 +112,30 @@ describe("ObjectCreatorTool — property 信号", () => {
     );
 
     expect(interaction.injectedProperty).toBeNull();
+  });
+
+  test("显式提供 boardApi 时仍应将真实对象实例写回上下文", () => {
+    const tool = new CircleCreatorTool();
+    const board = new Board();
+    board.width = 10;
+    board.height = 10;
+    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const boardApi = board.getBoardApi();
+    const deviceContext = {
+      acc: { board, boardApi, objectId: 206, ownerChunkId: 1 },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/circle",
+        signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
+      },
+      deviceContext,
+    );
+
+    expect(deviceContext.acc.objects).toEqual([tool.obj]);
+    expect(board.activeObjectManager.activeObjects.size).toBe(1);
+    expect(board.getChunkById(1).objectManager.getObject(206)).toBeUndefined();
   });
 
   describe("生命周期钩子", () => {
