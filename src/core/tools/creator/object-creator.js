@@ -68,7 +68,6 @@ class ObjectCreatorTool extends Tool {
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
     this._pendingProperty = null;
-    this._usesBoardApiObjectLifecycle = false;
   }
 
   /**
@@ -102,13 +101,6 @@ class ObjectCreatorTool extends Tool {
    * @type {number | null}
    */
   objectId;
-
-  /**
-   * 当前对象是否通过 BoardApi 生命周期创建
-   * @type {boolean}
-   * @private
-   */
-  _usesBoardApiObjectLifecycle;
 
   /**
    * 当前创建手势是否仍在持续
@@ -273,7 +265,6 @@ class ObjectCreatorTool extends Tool {
 
     this.objectId = interaction.objectId;
     this.obj = createdObject;
-    this._usesBoardApiObjectLifecycle = true;
     return true;
   }
 
@@ -303,28 +294,15 @@ class ObjectCreatorTool extends Tool {
       }
 
       this.objectId = interaction.objectId;
-      this._usesBoardApiObjectLifecycle = false;
 
       if (!this.createObjectThroughBoardApi(interaction)) {
-        this.create(interaction.position, interaction.objectId);
-        if (
-          this._pendingProperty &&
-          this.obj &&
-          typeof this.obj.setProperty === "function"
-        ) {
-          this.obj.setProperty(this._pendingProperty);
-        }
+        this._pendingProperty = null;
+        return false;
       }
 
       this._pendingProperty = null;
       this.isObjectCreationCompleted = false;
       this.syncCreatedObjectContext(interaction?.context);
-
-      if (!this._usesBoardApiObjectLifecycle) {
-        interaction?.context?.acc?.board?.activeObjectManager?.add?.(
-          new Set([this.obj]),
-        );
-      }
     }
 
     return true;
@@ -347,30 +325,8 @@ class ObjectCreatorTool extends Tool {
    */
   discardCreatedObjects(context = {}) {
     const boardApi = context?.acc?.boardApi;
-    if (
-      this._usesBoardApiObjectLifecycle &&
-      boardApi &&
-      this.objectId != null
-    ) {
+    if (boardApi && this.objectId != null) {
       boardApi.discardActiveObjects([this.objectId]);
-      return;
-    }
-
-    const normalizedObjects =
-      this.resolveContextObjects(context).filter(Boolean);
-    const activeObjectIndex =
-      context?.acc?.board?.activeObjectManager?.activeObjectIndex;
-    const activeObjects =
-      typeof activeObjectIndex?.has === "function"
-        ? normalizedObjects.filter((objectEntry) =>
-            activeObjectIndex.has(objectEntry.id),
-          )
-        : [];
-
-    if (activeObjects.length > 0) {
-      context?.acc?.board?.activeObjectManager?.discard?.(
-        new Set(activeObjects),
-      );
     }
   }
 
@@ -394,34 +350,22 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 在对象几何变更前记录旧快照
-   * @description BoardApi 路径下由 Core 自动处理脏区，不在此处重复触发。
+   * 在对象几何变更前执行钩子
+   * @description Creator 的几何脏区与快照由 Core 侧自动处理，此处保留为空钩子。
    * @param {Object} interaction - 当前交互上下文
    */
   beforeGeometryMutation(interaction) {
-    if (!this.obj || this._usesBoardApiObjectLifecycle) return;
-    interaction?.context?.acc?.monitor?.liveRenderer?.captureObjectSnapshot?.([
-      this.obj,
-    ]);
+    return undefined;
   }
 
   /**
    * 在对象几何变更后请求活动层刷新
-   * @description BoardApi 路径下仅保留 UI overlay 刷新，渲染脏区由 Core 自动处理。
+   * @description Creator 的渲染脏区由 Core 自动处理，这里仅触发 UI overlay 刷新。
    * @param {Object} interaction - 当前交互上下文
    */
   afterGeometryMutation(interaction) {
     if (!this.obj) return;
-
-    if (this._usesBoardApiObjectLifecycle) {
-      this.requestUiOverlayRefresh(interaction?.context ?? {});
-      return;
-    }
-
-    interaction?.context?.acc?.monitor?.liveRenderer?.invalidateObjects?.([
-      this.obj,
-    ]);
-    interaction?.context?.acc?.monitor?.requestViewportUiRender?.();
+    this.requestUiOverlayRefresh(interaction?.context ?? {});
   }
 
   /**
@@ -484,26 +428,12 @@ class ObjectCreatorTool extends Tool {
    */
   commitCreatedObject(interaction) {
     const context = interaction?.context ?? {};
-    const board = context.acc?.board;
     const boardApi = context.acc?.boardApi;
-    const completedObject = this.obj;
 
-    if (
-      this._usesBoardApiObjectLifecycle &&
-      boardApi &&
-      this.objectId != null
-    ) {
+    if (boardApi && this.objectId != null) {
       boardApi.commitObjects([this.objectId]);
-      this.clearContextObjects(context);
-      return;
     }
 
-    if (board?.activeObjectManager?.apply) {
-      board.activeObjectManager.apply(new Set([completedObject]));
-      this.clearContextObjects(context);
-      return;
-    }
-    board?.addObject?.(completedObject);
     this.clearContextObjects(context);
   }
 
@@ -545,25 +475,13 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   cancelCreatedObject(interaction) {
-    const board = interaction?.context?.acc?.board;
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (this.obj) {
-      if (
-        this._usesBoardApiObjectLifecycle &&
-        boardApi &&
-        this.objectId != null
-      ) {
-        boardApi.discardActiveObjects([this.objectId]);
-      } else if (board?.activeObjectManager?.discard) {
-        board.activeObjectManager.discard(new Set([this.obj]));
-      } else if (board?.activeObjectManager?.unregisterActiveObject) {
-        board.activeObjectManager.unregisterActiveObject(this.obj.id);
-      }
+    if (this.obj && boardApi && this.objectId != null) {
+      boardApi.discardActiveObjects([this.objectId]);
     }
     this.clearContextObjects(interaction?.context ?? {});
     this.reset();
     this.objectId = null;
-    this._usesBoardApiObjectLifecycle = false;
     this.isObjectCreationCompleted = false;
     return undefined;
   }
@@ -577,7 +495,6 @@ class ObjectCreatorTool extends Tool {
     this.discardCreatedObjects(context);
     this.clearContextObjects(context);
     this.objectId = null;
-    this._usesBoardApiObjectLifecycle = false;
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
     super.umount(context);

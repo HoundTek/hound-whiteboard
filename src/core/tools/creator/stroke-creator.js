@@ -93,21 +93,13 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     }
 
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (
-      this._usesBoardApiObjectLifecycle &&
-      boardApi &&
-      this.objectId != null
-    ) {
-      boardApi.appendListItem(this.objectId, "points", [
-        { x: point.x, y: point.y },
-      ]);
-      this._lastLocalPoint = new Vector(point.x, point.y);
+    if (!boardApi || this.objectId == null) {
       return;
     }
 
-    const points = this.obj.rich.localPathRange.points;
-    const pts = points.concat([point]);
-    this.obj.setData({ points: pts.map((p) => ({ x: p.x, y: p.y })) });
+    boardApi.appendListItem(this.objectId, "points", [
+      { x: point.x, y: point.y },
+    ]);
     this._lastLocalPoint = new Vector(point.x, point.y);
   }
 
@@ -133,7 +125,6 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     this.obj = null;
     this.objectId = null;
     this._lastLocalPoint = null;
-    this._usesBoardApiObjectLifecycle = false;
   }
 }
 

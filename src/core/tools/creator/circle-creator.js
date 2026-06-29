@@ -106,24 +106,19 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   count;
 
   /**
-   * 在 BoardApi 或本地对象上设置半径
+   * 通过 BoardApi 设置半径
    * @param {number} radius - 新半径
    * @param {Object} interaction - 当前交互上下文
    */
   setRadius(radius, interaction) {
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (
-      this._usesBoardApiObjectLifecycle &&
-      boardApi &&
-      this.objectId != null
-    ) {
-      boardApi.modifyObject(this.objectId, {
-        data: { radius },
-      });
+    if (!boardApi || this.objectId == null) {
       return;
     }
 
-    this.obj?.setData({ radius });
+    boardApi.modifyObject(this.objectId, {
+      data: { radius },
+    });
   }
 
   beginCreationGesture(interaction) {
@@ -161,7 +156,6 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
     this.obj = null;
     this.objectId = null;
     this.count = 0;
-    this._usesBoardApiObjectLifecycle = false;
   }
 }
 

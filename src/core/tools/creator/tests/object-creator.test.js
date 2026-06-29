@@ -5,12 +5,34 @@ import { Vector } from "../../../utils/math.js";
 import { Board } from "../../../components/index.js";
 import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 
+function createBoardDeviceContext(objectId, { monitor } = {}) {
+  const board = new Board();
+  board.width = 10;
+  board.height = 10;
+  board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+  const boardApi = board.getBoardApi();
+
+  return {
+    board,
+    boardApi,
+    deviceContext: {
+      acc: {
+        board,
+        boardApi,
+        monitor,
+        objectId,
+        ownerChunkId: 1,
+      },
+    },
+  };
+}
+
 describe("ObjectCreatorTool — property 信号", () => {
   test("Phase 1 带 property 信号 → 对象使用注入属性覆盖默认属性", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#000", fillColor: "#fff" },
     });
-    const deviceContext = { acc: { objectId: 201, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(201);
 
     tool.process(
       {
@@ -34,7 +56,6 @@ describe("ObjectCreatorTool — property 信号", () => {
     expect(tool.obj).toBeDefined();
     expect(tool.obj.property.strokeColor).toBe("hsl(120, 70%, 42%)");
     expect(tool.obj.property.width).toBe(3);
-    // fillColor 无覆盖，保持默认
     expect(tool.obj.property.fillColor).toBe("#fff");
   });
 
@@ -42,7 +63,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#000" },
     });
-    const deviceContext = { acc: { objectId: 202, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(202);
 
     tool.process(
       {
@@ -63,7 +84,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     const tool = new CircleCreatorTool({
       property: { strokeColor: "#abc" },
     });
-    const deviceContext = { acc: { objectId: 203, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(203);
 
     tool.process(
       {
@@ -79,7 +100,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
   test("buildInteractionContext 在基类中提取 injectedProperty", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: { objectId: 204, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(204);
 
     const interaction = tool.buildInteractionContext(
       {
@@ -98,7 +119,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
   test("property 为数组值 → injectedProperty 为 null", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: { objectId: 205, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(205);
 
     const interaction = tool.buildInteractionContext(
       {
@@ -116,14 +137,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
   test("显式提供 boardApi 时仍应将真实对象实例写回上下文", () => {
     const tool = new CircleCreatorTool();
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-    const boardApi = board.getBoardApi();
-    const deviceContext = {
-      acc: { board, boardApi, objectId: 206, ownerChunkId: 1 },
-    };
+    const { board, deviceContext } = createBoardDeviceContext(206);
 
     tool.process(
       {
@@ -151,13 +165,14 @@ describe("ObjectCreatorTool — property 信号", () => {
       const afterCreate = jest.fn();
       tool.on("afterCreate", afterCreate);
 
+      tool.objectId = 1;
       tool.obj = { id: 1, type: "test" };
       tool.completeCreatedObject({ context: { acc: {} } });
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
     });
 
-    test("beforeCommitCreatedObject 返回 false 时阻止 AOM.apply", () => {
+    test("beforeCommitCreatedObject 返回 false 时阻止 commitObjects", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
         beginCreationGesture() {}
@@ -166,18 +181,18 @@ describe("ObjectCreatorTool — property 信号", () => {
       }
 
       const tool = new TestCreator();
-      const apply = jest.fn();
-      const board = { activeObjectManager: { apply } };
+      const boardApi = { commitObjects: jest.fn() };
 
       tool.beforeCommitCreatedObject = () => false;
+      tool.objectId = 2;
       tool.obj = { id: 2 };
-      tool.completeCreatedObject({ context: { acc: { board } } });
+      tool.completeCreatedObject({ context: { acc: { boardApi } } });
 
-      expect(apply).not.toHaveBeenCalled();
+      expect(boardApi.commitObjects).not.toHaveBeenCalled();
       expect(tool.isObjectCreationCompleted).toBe(true);
     });
 
-    test("beforeCommitCreatedObject 默认返回 true → 对象进入静态图", () => {
+    test("beforeCommitCreatedObject 默认返回 true → 对象通过 boardApi 提交", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
         beginCreationGesture() {}
@@ -186,13 +201,13 @@ describe("ObjectCreatorTool — property 信号", () => {
       }
 
       const tool = new TestCreator();
-      const apply = jest.fn();
-      const board = { activeObjectManager: { apply } };
+      const boardApi = { commitObjects: jest.fn() };
 
+      tool.objectId = 3;
       tool.obj = { id: 3 };
-      tool.completeCreatedObject({ context: { acc: { board } } });
+      tool.completeCreatedObject({ context: { acc: { boardApi } } });
 
-      expect(apply).toHaveBeenCalledWith(new Set([tool.obj]));
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([3]);
       expect(tool.isObjectCreationCompleted).toBe(true);
     });
 
@@ -208,6 +223,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       const afterCreate = jest.fn();
       tool.on("afterCreate", afterCreate);
       tool.beforeCommitCreatedObject = () => false;
+      tool.objectId = 4;
       tool.obj = { id: 4 };
 
       tool.completeCreatedObject({ context: { acc: {} } });
@@ -218,6 +234,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     test("process 完整周期（position → end）触发 afterCreate", () => {
       const tool = new CircleCreatorTool();
       const afterCreate = jest.fn();
+      const { deviceContext } = createBoardDeviceContext(301);
       tool.on("afterCreate", afterCreate);
 
       tool.process(
@@ -226,15 +243,12 @@ describe("ObjectCreatorTool — property 信号", () => {
             { type: "position", context: { value: new Vector(10, 10) } },
           ],
         },
-        { acc: { objectId: 301, ownerChunkId: 1 } },
+        deviceContext,
       );
 
       expect(afterCreate).not.toHaveBeenCalled();
 
-      tool.process(
-        { signals: [{ type: "end" }] },
-        { acc: { objectId: 302, ownerChunkId: 1 } },
-      );
+      tool.process({ signals: [{ type: "end" }] }, deviceContext);
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
     });

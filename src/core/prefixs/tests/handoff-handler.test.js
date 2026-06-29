@@ -1435,7 +1435,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       board.devicesDAG.configureNode("main", {
         handler: () => ({ acc: { monitor } }),
       });
-      const accumulatedContext = { board };
+      const accumulatedContext = { board, boardApi: board.getBoardApi() };
       board.width = 800;
       board.height = 600;
       const creatorTool = new StrokeCreatorTool();
@@ -1468,7 +1468,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(creatorTool.obj.id).toBe(1);
       firstObjectId = creatorTool.obj.id;
       expect(board.activeObjectManager.activeObjects.size).toBe(1);
-      expect(board.getObjectById(creatorTool.obj.id)).toBeUndefined();
+      expect(board.getObjectById(creatorTool.obj.id)).toBe(creatorTool.obj);
 
       const createdPosition = creatorTool.obj.position.serialize();
 
@@ -1570,7 +1570,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       });
       board.width = 800;
       board.height = 600;
-      const accumulatedContext = { board };
+      const accumulatedContext = { board, boardApi: board.getBoardApi() };
       const chooserTool = new RectangleObjectChooserTool();
       const targetObject = new StrokeObject(41, new Vector(10, 10));
       targetObject.setData({ points: [

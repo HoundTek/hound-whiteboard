@@ -1,50 +1,65 @@
+import { jest } from "@jest/globals";
 import { PolygonCreatorTool } from "../polygon-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/index.js";
-import { Monitor } from "../../../components/index.js";
+import { Board, Monitor } from "../../../components/index.js";
 import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 import { OBJECT_CREATOR_SIGNAL_TYPES } from "../object-creator.js";
 import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
 import { createMouseDevice } from "../../../devices/mouse-device.js";
-import { jest } from "@jest/globals";
+
+function createBoardDeviceContext(objectId, { monitor } = {}) {
+  const board = new Board();
+  board.width = 10;
+  board.height = 10;
+  board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+  const boardApi = board.getBoardApi();
+
+  return {
+    board,
+    boardApi,
+    deviceContext: {
+      acc: {
+        board,
+        boardApi,
+        monitor,
+        objectId,
+        ownerChunkId: 1,
+      },
+    },
+  };
+}
 
 describe("PolygonCreatorTool", () => {
   test("PolygonCreatorTool 应在同一手势内更新当前顶点，并在 end 时固化", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { acc: { objectId: 10, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(10);
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
+      },
+      deviceContext,
+    );
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [{ type: "position", context: { value: new Vector(8, 9) } }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [{ type: "position", context: { value: new Vector(8, 9) } }],
+      },
+      deviceContext,
+    );
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [
-            { type: "position", context: { value: new Vector(10, 12) } },
-            { type: "end", context: {} },
-          ],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          { type: "position", context: { value: new Vector(10, 12) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
 
     expect(
       tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
@@ -62,13 +77,14 @@ describe("PolygonCreatorTool", () => {
         strokeWidth: 3,
       },
     });
+    const { deviceContext } = createBoardDeviceContext(99);
 
     tool.process(
       {
         to: "/monitor/polygon",
         signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
       },
-      { acc: { objectId: 99, ownerChunkId: 1 } },
+      deviceContext,
     );
 
     expect(tool.obj.property).toMatchObject({
@@ -80,32 +96,28 @@ describe("PolygonCreatorTool", () => {
 
   test("cancel 信号应重置当前手势", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { acc: { objectId: 10, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(10);
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [
-            { type: "position", context: { value: new Vector(5, 5) } },
-            { type: "end", context: {} },
-          ],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          { type: "position", context: { value: new Vector(5, 5) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
 
     expect(tool.count).toBe(1);
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [{ type: "cancel", context: {} }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [{ type: "cancel", context: {} }],
+      },
+      deviceContext,
+    );
 
     expect(
       tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
@@ -114,70 +126,59 @@ describe("PolygonCreatorTool", () => {
     expect(tool.lastPoint).toBeNull();
   });
 
-  test("object-cancel 信号应取消整个多边形对象并撤销 AOM 注册", () => {
+  test("object-cancel 信号应取消整个多边形对象并撤销 transient 对象", () => {
     const tool = new PolygonCreatorTool();
-    const board = {
-      activeObjectManager: { add: jest.fn(), discard: jest.fn() },
-    };
-    const deviceContext = { acc: { board, objectId: 10, ownerChunkId: 1 } };
+    const { board, boardApi, deviceContext } = createBoardDeviceContext(10);
+    const discardSpy = jest.spyOn(boardApi, "discardActiveObjects");
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [
-            { type: "position", context: { value: new Vector(5, 5) } },
-            { type: "end", context: {} },
-          ],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [{ type: "object-cancel", context: {} }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
-
-    expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
-      new Set([expect.anything()]),
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          { type: "position", context: { value: new Vector(5, 5) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
     );
+
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [{ type: "object-cancel", context: {} }],
+      },
+      { acc: { board, boardApi, objectId: 10, ownerChunkId: 1 } },
+    );
+
+    expect(discardSpy).toHaveBeenCalledWith([10]);
     expect(tool.obj).toBeNull();
     expect(tool.count).toBe(0);
     expect(tool.lastPoint).toBeNull();
+    expect(board.getObjectById(10)).toBeUndefined();
   });
 
   test("object-end 信号应固化整个多边形对象", () => {
     const tool = new PolygonCreatorTool();
-    const deviceContext = { acc: { objectId: 10, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(10);
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [
-            { type: "position", context: { value: new Vector(5, 5) } },
-            { type: "end", context: {} },
-          ],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [
+          { type: "position", context: { value: new Vector(5, 5) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
 
-    expect(
-      tool.process(
-        {
-          to: "/monitor/polygon",
-          signals: [{ type: "object-end", context: {} }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
+    tool.process(
+      {
+        to: "/monitor/polygon",
+        signals: [{ type: "object-end", context: {} }],
+      },
+      deviceContext,
+    );
 
     expect(
       tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
@@ -186,12 +187,10 @@ describe("PolygonCreatorTool", () => {
     expect(tool.lastPoint).toBeNull();
   });
 
-  test("object-end 后应将对象交给 activeObjectManager.apply", () => {
+  test("object-end 后应通过 boardApi.commitObjects 提交对象", () => {
     const tool = new PolygonCreatorTool();
-    const board = {
-      addObject: jest.fn(),
-      activeObjectManager: { apply: jest.fn() },
-    };
+    const { boardApi, deviceContext } = createBoardDeviceContext(10);
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
       {
@@ -204,10 +203,8 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
         ],
       },
-      { acc: { board, objectId: 10, ownerChunkId: 1 } },
+      deviceContext,
     );
-
-    const createdObject = tool.obj;
 
     tool.process(
       {
@@ -216,16 +213,13 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
       },
-      { acc: { board, objectId: 10, ownerChunkId: 1 } },
+      deviceContext,
     );
 
-    expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-      new Set([createdObject]),
-    );
-    expect(board.addObject).not.toHaveBeenCalled();
+    expect(commitSpy).toHaveBeenCalledWith([10]);
   });
 
-  test("顶点更新前后应记录旧几何快照并请求活动层刷新", () => {
+  test("顶点更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
     const tool = new PolygonCreatorTool();
     const monitor = {
       liveRenderer: {
@@ -234,6 +228,7 @@ describe("PolygonCreatorTool", () => {
       },
       requestViewportUiRender: jest.fn(),
     };
+    const { deviceContext } = createBoardDeviceContext(31, { monitor });
 
     tool.process(
       {
@@ -245,7 +240,7 @@ describe("PolygonCreatorTool", () => {
           },
         ],
       },
-      { acc: { monitor, objectId: 31, ownerChunkId: 1 } },
+      deviceContext,
     );
 
     monitor.liveRenderer.captureObjectSnapshot.mockClear();
@@ -262,31 +257,20 @@ describe("PolygonCreatorTool", () => {
           },
         ],
       },
-      { acc: { monitor, objectId: 31, ownerChunkId: 1 } },
+      deviceContext,
     );
 
-    // 后续 update 不再重复抓取初始快照（仅在 begin 时抓一次）
     expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
-      tool.obj,
-    ]);
-
+    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
     expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("显式提供 boardApi 时应通过 BoardApi 创建并提交多边形对象", () => {
     const tool = new PolygonCreatorTool();
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-    const boardApi = board.getBoardApi();
+    const { board, boardApi, deviceContext } = createBoardDeviceContext(24);
     const createSpy = jest.spyOn(boardApi, "createObject");
     const appendSpy = jest.spyOn(boardApi, "appendListItem");
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
-    const deviceContext = {
-      acc: { board, boardApi, objectId: 24, ownerChunkId: 1 },
-    };
 
     tool.process(
       {
@@ -327,13 +311,9 @@ describe("PolygonCreatorTool", () => {
     expect(ownerChunk.objectManager.getObject(24)).toBe(tool.obj);
   });
 
-  test("真实 Board 上 object-end 后应经由 AOM.apply 落回归属区块", () => {
+  test("真实 Board 上 object-end 后应写回归属区块", () => {
     const tool = new PolygonCreatorTool();
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-    const boardApi = board.getBoardApi();
+    const { board, deviceContext } = createBoardDeviceContext(23);
 
     tool.process(
       {
@@ -346,7 +326,7 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
         ],
       },
-      { acc: { board, boardApi, objectId: 23, ownerChunkId: 1 } },
+      deviceContext,
     );
 
     const createdObject = tool.obj;
@@ -358,7 +338,7 @@ describe("PolygonCreatorTool", () => {
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
       },
-      { acc: { board, boardApi, objectId: 23, ownerChunkId: 1 } },
+      deviceContext,
     );
 
     const ownerChunk = board.getChunkById(1);

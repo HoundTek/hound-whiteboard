@@ -1,5 +1,5 @@
+import { jest } from "@jest/globals";
 import { Tool } from "../tool.js";
-import { SignalPacket } from "../../devices-dag/signal.js";
 
 describe("Tool", () => {
   test("createProcessor 应把输入规整后交给工具消费", () => {
@@ -23,7 +23,7 @@ describe("Tool", () => {
       {
         path: "/monitor/s-pen/pen",
         context: {},
-        acc: { board: "board-context" },
+        acc: { customFlag: true },
       },
     );
 
@@ -37,7 +37,7 @@ describe("Tool", () => {
         context: expect.objectContaining({
           path: "/monitor/s-pen/pen",
           acc: expect.objectContaining({
-            board: "board-context",
+            customFlag: true,
           }),
         }),
       },
@@ -45,7 +45,7 @@ describe("Tool", () => {
     expect(tool.calls[0].context.acc.allocateObjectId).toBeUndefined();
   });
 
-  test("createProcessor 应默认暴露来自 Board 的 allocateObjectId", () => {
+  test("createProcessor 应默认暴露来自 BoardApi/BoardCore 的 allocateObjectId", () => {
     class TestTool extends Tool {
       calls = [];
 
@@ -58,12 +58,17 @@ describe("Tool", () => {
       }
     }
 
-    const tool = new TestTool();
-    const board = {
+    const boardCore = {
       allocateObjectId() {
         return 7;
       },
     };
+    const boardApi = {
+      getBoardCore() {
+        return boardCore;
+      },
+    };
+    const tool = new TestTool();
     const processor = tool.createProcessor();
 
     processor(
@@ -71,11 +76,52 @@ describe("Tool", () => {
       {
         path: "/monitor/s-pen/pen",
         context: {},
-        acc: { board },
+        acc: { boardApi },
       },
     );
 
     expect(tool.calls[0].context.acc.allocateObjectId()).toBe(7);
+  });
+
+  test("createProcessor 应优先使用累积 context 中显式提供的 allocateObjectId", () => {
+    class TestTool extends Tool {
+      calls = [];
+
+      process(signalPacket, context) {
+        this.calls.push({ signalPacket, context });
+      }
+
+      reset() {
+        this.calls = [];
+      }
+    }
+
+    const boardCore = {
+      allocateObjectId() {
+        return 7;
+      },
+    };
+    const boardApi = {
+      getBoardCore() {
+        return boardCore;
+      },
+    };
+    const explicitAllocateObjectId = jest.fn(() => 11);
+    const tool = new TestTool();
+
+    tool.createProcessor()(
+      { signals: [{ type: "pressure", context: { value: 0.5 } }] },
+      {
+        path: "/monitor/s-pen/pen",
+        acc: {
+          boardApi,
+          allocateObjectId: explicitAllocateObjectId,
+        },
+      },
+    );
+
+    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(11);
+    expect(explicitAllocateObjectId).toHaveBeenCalledTimes(1);
   });
 
   test("createProcessor 应默认暴露来自 Monitor 的 resolveOwnerChunkId", () => {
@@ -119,7 +165,7 @@ describe("Tool", () => {
     ).toBe(3);
   });
 
-  test("createProcessor 应优先使用累积 context 中的 board/monitor 并保留平面上下文", () => {
+  test("createProcessor 应保留传入的 board/monitor 与平面上下文", () => {
     class TestTool extends Tool {
       calls = [];
 
@@ -132,25 +178,31 @@ describe("Tool", () => {
       }
     }
 
-    const tool = new TestTool();
-    const boardFromContext = {
-      allocateObjectId() {
-        return 11;
-      },
-    };
-    const monitorFromContext = {
+    const board = { id: "board-context" };
+    const monitor = {
       worldToChunk() {
         return { chunkId: 9 };
       },
     };
+    const boardApi = {
+      getBoardCore() {
+        return {
+          allocateObjectId() {
+            return 13;
+          },
+        };
+      },
+    };
+    const tool = new TestTool();
 
     tool.createProcessor()(
       { signals: [{ type: "trigger", context: {} }] },
       {
         path: "/monitor/s-pen/pen",
         acc: {
-          board: boardFromContext,
-          monitor: monitorFromContext,
+          board,
+          boardApi,
+          monitor,
           customFlag: true,
         },
       },
@@ -159,13 +211,14 @@ describe("Tool", () => {
     expect(tool.calls[0].context).toEqual(
       expect.objectContaining({
         acc: expect.objectContaining({
-          board: boardFromContext,
-          monitor: monitorFromContext,
+          board,
+          boardApi,
+          monitor,
           customFlag: true,
         }),
       }),
     );
-    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(11);
+    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(13);
     expect(tool.calls[0].context.acc.resolveOwnerChunkId({ x: 1, y: 2 })).toBe(
       9,
     );

@@ -122,18 +122,13 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    */
   appendPoint(localPoint, interaction) {
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (
-      this._usesBoardApiObjectLifecycle &&
-      boardApi &&
-      this.objectId != null
-    ) {
-      boardApi.appendListItem(this.objectId, "points", [
-        { x: localPoint.x, y: localPoint.y },
-      ]);
+    if (!boardApi || this.objectId == null) {
       return;
     }
 
-    this.obj.appendListItem("points", { x: localPoint.x, y: localPoint.y });
+    boardApi.appendListItem(this.objectId, "points", [
+      { x: localPoint.x, y: localPoint.y },
+    ]);
   }
 
   /**
@@ -144,19 +139,11 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    */
   replacePoint(localPoint, index, interaction) {
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (
-      this._usesBoardApiObjectLifecycle &&
-      boardApi &&
-      this.objectId != null
-    ) {
-      boardApi.replaceListItem(this.objectId, "points", index, {
-        x: localPoint.x,
-        y: localPoint.y,
-      });
+    if (!boardApi || this.objectId == null) {
       return;
     }
 
-    this.obj.replaceListItem("points", index, {
+    boardApi.replaceListItem(this.objectId, "points", index, {
       x: localPoint.x,
       y: localPoint.y,
     });
@@ -211,7 +198,6 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     this.objectId = null;
     this.count = 0;
     this.lastPoint = null;
-    this._usesBoardApiObjectLifecycle = false;
   }
 }
 
