@@ -12,7 +12,7 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "aischat-client"
+name = "hound-whiteboard"
 path = "src/main.rs"
 
 [dependencies]
