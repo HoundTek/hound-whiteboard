@@ -63,6 +63,17 @@
  */
 
 /**
+ * Worker 日志消息
+ * @typedef {Object} WorkerLogMessage
+ * @property {"worker-log"} type - 消息类型
+ * @property {string} level - 日志级别
+ * @property {string} logger - 日志命名空间
+ * @property {any[]} [args] - 原始日志参数
+ * @property {object} [meta] - 日志元数据
+ * @property {number} [timestamp] - 日志时间戳
+ */
+
+/**
  * 对象结构变更推送消息
  * @typedef {Object} ObjectChangedMessage
  * @property {"object-changed"} type - 消息类型

@@ -855,9 +855,30 @@ class DevicesDAG {
         depth,
       );
 
-      const result = handler
-        ? normalizeHandlerResult(handler(currentPacket, handlerContext))
-        : { packets: [new SignalPacket("", currentPacket.signals)] };
+      let rawResult;
+      if (typeof handler === "function") {
+        try {
+          rawResult = handler(currentPacket, handlerContext);
+        } catch (error) {
+          console.error(`[DevicesDAG] handler error at "${childPath}":`, error);
+          rawResult = undefined;
+        }
+
+        if (rawResult instanceof Promise) {
+          rawResult.catch((error) => {
+            console.error(
+              `[DevicesDAG] async handler rejection at "${childPath}":`,
+              error,
+            );
+          });
+          rawResult = undefined;
+        }
+      }
+
+      const result =
+        typeof handler === "function"
+          ? normalizeHandlerResult(rawResult)
+          : { packets: [new SignalPacket("", currentPacket.signals)] };
 
       // 累积上下文合并（禁止覆盖已有键）
       if (result.acc && isPlainObject(result.acc)) {
