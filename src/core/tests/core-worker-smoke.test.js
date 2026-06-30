@@ -3,6 +3,7 @@
  */
 
 import { createCoreWorkerRuntime } from "../../core-worker.js";
+import { installNoopOffscreenCanvas } from "../test-support/noop-canvas.js";
 
 /**
  * 测试用假 Worker 宿主
@@ -14,6 +15,7 @@ class FakeWorkerHost {
    */
   constructor() {
     this.postedMessages = [];
+    this.postedTransfers = [];
     this.listeners = new Map();
   }
 
@@ -28,6 +30,12 @@ class FakeWorkerHost {
    * @type {Map<string, Set<Function>>}
    */
   listeners;
+
+  /**
+   * 已发送消息的 transferList 列表
+   * @type {Array<Transferable[]>}
+   */
+  postedTransfers;
 
   /**
    * 注册事件监听器
@@ -57,8 +65,9 @@ class FakeWorkerHost {
    * @param {Object} message - 消息体
    * @returns {void}
    */
-  postMessage(message) {
+  postMessage(message, transferList = []) {
     this.postedMessages.push(message);
+    this.postedTransfers.push(transferList);
   }
 
   /**
@@ -74,6 +83,21 @@ class FakeWorkerHost {
 }
 
 describe("core-worker", () => {
+  /**
+   * OffscreenCanvas 恢复函数
+   * @type {Function | null}
+   */
+  let restoreOffscreenCanvas = null;
+
+  beforeEach(() => {
+    restoreOffscreenCanvas = installNoopOffscreenCanvas();
+  });
+
+  afterEach(() => {
+    restoreOffscreenCanvas?.();
+    restoreOffscreenCanvas = null;
+  });
+
   test("runtime.start 应发送 ready 消息", () => {
     const host = new FakeWorkerHost();
     const runtime = createCoreWorkerRuntime(host);
@@ -145,6 +169,70 @@ describe("core-worker", () => {
         ],
       }),
     );
+
+    runtime.stop();
+  });
+
+  test("应能创建 MonitorCore 并通过 render flush 输出 render-frame", async () => {
+    const host = new FakeWorkerHost();
+    const runtime = createCoreWorkerRuntime(host).start();
+
+    host.emit({
+      type: "rpc",
+      msgId: "create-board",
+      method: "createBoard",
+      params: { width: 800, height: 600 },
+    });
+    await Promise.resolve();
+
+    host.emit({
+      type: "rpc",
+      msgId: "create-monitor",
+      method: "createMonitor",
+      params: {
+        options: {
+          monitorId: "main",
+          width: 400,
+          height: 300,
+        },
+      },
+    });
+    await Promise.resolve();
+
+    expect(host.postedMessages).toContainEqual({
+      type: "rpc-response",
+      msgId: "create-monitor",
+      result: undefined,
+    });
+
+    host.emit({
+      type: "viewport-change",
+      monitorId: "main",
+      origin: { x: 10, y: 20 },
+      zoom: 1.5,
+      viewportSize: { width: 400, height: 300 },
+    });
+    host.emit({
+      type: "request-render-flush",
+      monitorId: "main",
+    });
+    await Promise.resolve();
+
+    const renderFrameIndex = host.postedMessages.findIndex(
+      (message) => message?.type === "render-frame",
+    );
+
+    expect(renderFrameIndex).toBeGreaterThanOrEqual(0);
+    expect(host.postedMessages[renderFrameIndex]).toEqual(
+      expect.objectContaining({
+        type: "render-frame",
+        monitorId: "main",
+        frameId: 1,
+        baseBitmap: expect.any(Object),
+        liveBitmap: expect.any(Object),
+      }),
+    );
+    expect(host.postedTransfers[renderFrameIndex]).toHaveLength(2);
 
     runtime.stop();
   });
