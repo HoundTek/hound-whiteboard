@@ -1,10 +1,19 @@
 [package]
 name = "hound-whiteboard"
-version = "0.0.0"
+version = "0.0.1"
 description = "A whiteboard app"
 authors = ["Frank Steven"]
 license = "MIT"
 edition = "2021"
+
+[lib]
+name = "hound_whiteboard_lib"
+crate-type = ["cdylib", "staticlib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "aischat-client"
+path = "src/main.rs"
 
 [dependencies]
 tauri = { version = "2", features = ["devtools"] }

@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "Hound Whiteboard",
   "identifier": "com.hound.whiteboard",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "build": {
     "beforeBuildCommand": "",
     "beforeDevCommand": "",
@@ -33,6 +33,28 @@
     }
   },
   "bundle": {
-    "resources": []
+    "active": true,
+    "targets": "all",
+    "android": {
+      "minSdkVersion": 24
+    },
+    "iOS": {
+      "minimumSystemVersion": "14.0"
+    },
+    "windows": {
+      "nsis": null,
+      "wix": null
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "hardenedRuntime": true
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": false
+      },
+      "deb": {},
+      "rpm": {}
+    }
   }
 }
