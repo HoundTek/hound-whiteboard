@@ -44,6 +44,7 @@
  * @property {import("./types.js").Point2D} origin - 视口原点
  * @property {number} zoom - 当前缩放因子
  * @property {import("./types.js").ViewportSize} [viewportSize] - 当前视口尺寸
+ * @property {boolean} [force] - 是否强制 Worker 侧按当前视口参数重绘
  */
 
 /**

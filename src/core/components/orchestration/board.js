@@ -15,8 +15,9 @@ import { BoardCore } from "./board-core.js";
 import { createBoardRenderHooks } from "./board-render-hooks.js";
 import { createRendererPersistenceAdapter } from "../../bridges/persistence-adapter.js";
 import { boardFileOperateBridge } from "../../bridges/file-operate-bridge-renderer.js";
-import { BoardApi } from "../../bridges/board-api.js";
+import { BoardApi, BoardApiRpc } from "../../bridges/board-api.js";
 import { Monitor } from "./monitor.js";
+import { MonitorProxy } from "./monitor-proxy.js";
 
 function isValidBoardRootPath(boardRootPath) {
   return typeof boardRootPath === "string" && boardRootPath.trim() !== "";
@@ -47,9 +48,21 @@ class Board {
 
   /**
    * BoardApi 实例
-   * @type {BoardApi}
+   * @type {BoardApi | BoardApiRpc}
    */
   #boardApi;
+
+  /**
+   * 当前是否启用 Worker 模式
+   * @type {boolean}
+   */
+  #useWorker;
+
+  /**
+   * 当前绑定的 Worker 端点
+   * @type {{ postMessage: Function, addEventListener: Function, removeEventListener: Function } | null}
+   */
+  #worker;
 
   /**
    * 时间回溯树（委托至 BoardCore）
@@ -131,7 +144,7 @@ class Board {
 
   /**
    * 显示器列表
-   * @type {Map<string, Monitor>}
+   * @type {Map<string, Monitor | MonitorProxy>}
    */
   monitors;
 
@@ -194,6 +207,8 @@ class Board {
     this.#boardApi = new BoardApi(this.#boardCore);
 
     // 6. UI 专用初始化
+    this.#useWorker = false;
+    this.#worker = null;
     this.monitors = new Map();
     this.signalsEventBus = new EventBus();
     this.devicesDAG = new DevicesDAG({
@@ -394,13 +409,56 @@ class Board {
   }
 
   /**
+   * 启用 Worker 模式
+   * @description
+   * 该方法会创建 BoardApiRpc 并在 Worker 中初始化 BoardCore。
+   * 当前实现要求在创建任何 monitor 之前调用，避免运行中切换 monitor 实现。
+   * @param {{ postMessage: Function, addEventListener: Function, removeEventListener: Function }} worker - Worker 或兼容端点
+   * @param {{ timeoutMs?: number, readyTimeoutMs?: number }} [options={}] - RPC 选项
+   * @returns {Promise<BoardApiRpc>} 已就绪的 BoardApiRpc
+   */
+  async enableWorkerMode(worker, options = {}) {
+    if (this.#useWorker) {
+      if (this.#boardApi instanceof BoardApiRpc) {
+        return this.#boardApi;
+      }
+      throw new Error("Worker mode is already enabled.");
+    }
+
+    if (this.monitors.size > 0) {
+      throw new Error(
+        "enableWorkerMode must be called before createMonitor.",
+      );
+    }
+
+    const boardApi = new BoardApiRpc(worker, options);
+
+    try {
+      await boardApi.waitUntilReady(options.readyTimeoutMs ?? options.timeoutMs);
+      await boardApi.createBoard({
+        width: this.width,
+        height: this.height,
+        rootPath: this.rootPath,
+      });
+    } catch (error) {
+      boardApi.destroy(error?.message ?? "Failed to enable worker mode.");
+      throw error;
+    }
+
+    this.#boardApi = boardApi;
+    this.#useWorker = true;
+    this.#worker = worker;
+    return boardApi;
+  }
+
+  /**
    * 创建绑定到当前 Board 的 Monitor
    * @description 会同时创建 base/live/ui 三层 canvas，并把 monitor 注册到 `Board.monitors`。
-   *   该方法是 UI 线程 DOM 工厂，不进入 BoardCore / Worker。
+   *   默认返回同线程 Monitor；启用 Worker 模式后返回 MonitorProxy。
    * @param {HTMLElement} rootElement - Monitor 的根元素
    * @param {{ width: number, height: number }} options - Monitor 尺寸选项
    * @param {string} monitorId - Monitor id
-   * @returns {Monitor}
+   * @returns {Monitor | MonitorProxy}
    */
   createMonitor(rootElement, { width, height }, monitorId) {
     const monitorWidth = width ?? this.chunkWidth;
@@ -428,26 +486,58 @@ class Board {
     monitorRoot.appendChild(uiCanvas);
     rootElement.appendChild(monitorRoot);
 
-    const monitor = new Monitor(
-      {
-        rootElement: monitorRoot,
-        baseCanvas,
-        liveCanvas,
-        uiCanvas,
-      },
-      this,
-      {
-        width: monitorWidth,
-        height: monitorHeight,
-      },
-      monitorId,
-    );
+    const monitor = this.#useWorker
+      ? new MonitorProxy(
+          {
+            rootElement: monitorRoot,
+            baseCanvas,
+            liveCanvas,
+            uiCanvas,
+            worker: this.#worker,
+          },
+          this,
+          {
+            width: monitorWidth,
+            height: monitorHeight,
+          },
+          monitorId,
+        )
+      : new Monitor(
+          {
+            rootElement: monitorRoot,
+            baseCanvas,
+            liveCanvas,
+            uiCanvas,
+          },
+          this,
+          {
+            width: monitorWidth,
+            height: monitorHeight,
+          },
+          monitorId,
+        );
+
     this.monitors.set(monitorId, monitor);
-    // 在设备图中标记 monitor 语义
     this.devicesDAG.configureNode(monitorId, {
       handler: () => ({ acc: { monitor } }),
       semantics: { monitor: true },
     });
+
+    if (this.#useWorker) {
+      this.#boardApi
+        .createMonitor({
+          monitorId,
+          width: monitorWidth,
+          height: monitorHeight,
+        })
+        .then(() => {
+          monitor.startWorkerSync?.();
+        })
+        .catch((error) => {
+          console.error("[Board] Failed to create worker monitor:", error);
+        });
+    }
+
     return monitor;
   }
 
@@ -567,7 +657,7 @@ class Board {
 
   /**
    * 获取 BoardApi 实例
-   * @returns {BoardApi}
+   * @returns {BoardApi | BoardApiRpc}
    */
   getBoardApi() {
     return this.#boardApi;

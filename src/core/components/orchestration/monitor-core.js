@@ -488,6 +488,7 @@ class MonitorCore {
    *   origin?: Vector | { x: number, y: number },
    *   zoom?: number,
    *   viewportSize?: { width?: number, height?: number },
+   *   force?: boolean,
    * }} [nextState={}] - 新视口状态
    * @returns {boolean} 是否实际触发了视口更新
    */
@@ -503,6 +504,7 @@ class MonitorCore {
           nextState.viewportSize?.height,
         )
       : false;
+    const forceRefresh = nextState.force === true;
     const nextOrigin =
       nextState.origin === undefined
         ? this.origin
@@ -526,7 +528,7 @@ class MonitorCore {
     this.#origin = nextOrigin;
     this.#zoom = nextZoom;
 
-    if (!resized && originUnchanged && zoomUnchanged) {
+    if (!forceRefresh && !resized && originUnchanged && zoomUnchanged) {
       return false;
     }
 
