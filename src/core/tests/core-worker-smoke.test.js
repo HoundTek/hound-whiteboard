@@ -236,4 +236,66 @@ describe("core-worker", () => {
 
     runtime.stop();
   });
+
+  test("force viewport-change 在视口参数未变化时仍应触发新帧", async () => {
+    const host = new FakeWorkerHost();
+    const runtime = createCoreWorkerRuntime(host).start();
+
+    host.emit({
+      type: "rpc",
+      msgId: "create-board",
+      method: "createBoard",
+      params: { width: 800, height: 600 },
+    });
+    await Promise.resolve();
+
+    host.emit({
+      type: "rpc",
+      msgId: "create-monitor",
+      method: "createMonitor",
+      params: {
+        options: {
+          monitorId: "main",
+          width: 400,
+          height: 300,
+        },
+      },
+    });
+    await Promise.resolve();
+
+    host.emit({
+      type: "viewport-change",
+      monitorId: "main",
+      origin: { x: 10, y: 20 },
+      zoom: 1.5,
+      viewportSize: { width: 400, height: 300 },
+    });
+    host.emit({ type: "request-render-flush", monitorId: "main" });
+    await Promise.resolve();
+
+    host.emit({
+      type: "viewport-change",
+      monitorId: "main",
+      origin: { x: 10, y: 20 },
+      zoom: 1.5,
+      force: true,
+    });
+    host.emit({ type: "request-render-flush", monitorId: "main" });
+    await Promise.resolve();
+
+    const renderFrames = host.postedMessages.filter(
+      (message) => message?.type === "render-frame",
+    );
+
+    expect(renderFrames).toHaveLength(2);
+    expect(renderFrames[1]).toEqual(
+      expect.objectContaining({
+        type: "render-frame",
+        monitorId: "main",
+        frameId: 2,
+      }),
+    );
+
+    runtime.stop();
+  });
 });

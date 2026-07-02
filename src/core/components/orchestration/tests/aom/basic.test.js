@@ -26,12 +26,11 @@ describe("ActiveObjectManager/basic", () => {
     test("add 与 discard 应通过 renderHooks 触发刷新", () => {
       const requestLiveRender = jest.fn();
       const requestBaseRenderForObjects = jest.fn();
-      const flushViewportForObjects = jest.fn();
       const renderHooks = {
         requestLiveRender,
         requestBaseRender: jest.fn(),
         requestBaseRenderForObjects,
-        flushViewportForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       aom = new ActiveObjectManager(undefined, { renderHooks });
 
@@ -46,11 +45,10 @@ describe("ActiveObjectManager/basic", () => {
       // discard again: 第二次 flush 和 live render
       requestLiveRender.mockClear();
       requestBaseRenderForObjects.mockClear();
-      flushViewportForObjects.mockClear();
 
       aom.discard(new Set([stroke]));
       expect(requestLiveRender).toHaveBeenCalledTimes(1);
-      expect(flushViewportForObjects).toHaveBeenCalledTimes(1);
+      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
     });
 
     test("add 应将白板外新对象注册到动态图顶层", () => {

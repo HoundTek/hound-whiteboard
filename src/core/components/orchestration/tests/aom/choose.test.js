@@ -80,12 +80,12 @@ describe("ActiveObjectManager/choose", () => {
     test("choose 应通过 renderHooks 触发刷新", () => {
       const selected = createObject(12, chunk.id);
       const requestLiveRender = jest.fn();
-      const flushViewportForObjects = jest.fn();
+      const requestBaseRenderForObjects = jest.fn();
       const renderHooks = {
         requestLiveRender,
         requestBaseRender: jest.fn(),
-        requestBaseRenderForObjects: jest.fn(),
-        flushViewportForObjects,
+        requestBaseRenderForObjects,
+        flushViewportForObjects: jest.fn(),
       };
       aom = new ActiveObjectManager(undefined, { renderHooks });
       aom.layerPool.generate = () => {
@@ -95,7 +95,11 @@ describe("ActiveObjectManager/choose", () => {
       aom.choose(new Set([selected]));
 
       expect(requestLiveRender).toHaveBeenCalledWith([selected]);
-      expect(flushViewportForObjects).toHaveBeenCalledTimes(1);
+      expect(requestBaseRenderForObjects).toHaveBeenCalledWith(
+        [selected],
+        [],
+        expect.any(Map),
+      );
     });
 
     test("应正确选择单个对象", () => {

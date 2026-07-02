@@ -613,6 +613,7 @@ class CoreWorkerRuntime {
       origin: message?.origin,
       zoom: message?.zoom,
       viewportSize: message?.viewportSize,
+      force: message?.force,
     });
   }
 

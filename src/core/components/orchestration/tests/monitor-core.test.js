@@ -8,7 +8,11 @@ import { BoardCore } from "../board-core.js";
 import { MonitorCore } from "../monitor-core.js";
 import { RectangleRange } from "../../../range/index.js";
 import { Vector } from "../../../utils/math.js";
-import { installNoopOffscreenCanvas } from "../../../test-support/noop-canvas.js";
+import {
+  createNoopCanvasContext2D,
+  createNoopImageBitmap,
+  installNoopOffscreenCanvas,
+} from "../../../test-support/noop-canvas.js";
 
 describe("MonitorCore", () => {
   /**
@@ -94,8 +98,27 @@ describe("MonitorCore", () => {
     expect(monitorCore.zoom).toBe(2);
   });
 
-  test("flushRenderFrame 应输出 render-frame 消息并转移 base/live 位图", () => {
+  test("flushRenderFrame 应输出 render-frame 消息并将位图画回源 OffscreenCanvas", () => {
     const { monitorCore, postedFrames } = createMonitorCoreContext();
+    const baseCanvas = monitorCore.baseRenderer.canvas;
+    const liveCanvas = monitorCore.liveRenderer.canvas;
+    const baseBitmap = createNoopImageBitmap({ width: 800, height: 600 });
+    const liveBitmap = createNoopImageBitmap({ width: 800, height: 600 });
+    const baseContext = {
+      ...createNoopCanvasContext2D(),
+      clearRect: jest.fn(),
+      drawImage: jest.fn(),
+    };
+    const liveContext = {
+      ...createNoopCanvasContext2D(),
+      clearRect: jest.fn(),
+      drawImage: jest.fn(),
+    };
+
+    baseCanvas.getContext = jest.fn(() => baseContext);
+    liveCanvas.getContext = jest.fn(() => liveContext);
+    baseCanvas.transferToImageBitmap = jest.fn(() => baseBitmap);
+    liveCanvas.transferToImageBitmap = jest.fn(() => liveBitmap);
 
     monitorCore.requestRenderLayersRefresh();
     const flushed = monitorCore.flushRenderFrame();
@@ -107,11 +130,15 @@ describe("MonitorCore", () => {
         type: "render-frame",
         monitorId: "worker-monitor",
         frameId: 1,
-        baseBitmap: expect.any(Object),
-        liveBitmap: expect.any(Object),
+        baseBitmap,
+        liveBitmap,
       }),
     );
-    expect(postedFrames[0].transferList).toHaveLength(2);
+    expect(postedFrames[0].transferList).toEqual([baseBitmap, liveBitmap]);
+    expect(baseContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
+    expect(baseContext.drawImage).toHaveBeenCalledWith(baseBitmap, 0, 0);
+    expect(liveContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
+    expect(liveContext.drawImage).toHaveBeenCalledWith(liveBitmap, 0, 0);
   });
 
   test("worldToChunk 应按 BoardCore 的区块尺寸解析目标区块", () => {

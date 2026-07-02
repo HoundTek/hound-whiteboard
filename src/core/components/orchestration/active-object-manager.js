@@ -1024,9 +1024,9 @@ class ActiveObjectManager {
     }
 
     this.requestLiveRender(activeEntries);
-    // 按对象范围刷新受影响的 monitor：对象已从静态图被拾取到 AOM，
-    // 需要让 BaseRenderer 通过 AOM 过滤将它们从静态层中隐藏。
-    this._flushViewportForObjects(activeEntries);
+    // 对象已从静态图被拾取到 AOM，需要按对象范围重绘静态层，
+    // 让 BaseRenderer 通过 AOM 过滤将它们从 base 层中隐藏，避免整视口重绘。
+    this.requestBaseRenderForObjects(activeEntries);
   }
 
   /**
@@ -1401,10 +1401,8 @@ class ActiveObjectManager {
 
     this.deactivateObjects(normalizedObjects);
     this.tidyup();
+    this.requestBaseRenderForObjects(normalizedObjects);
     this.requestLiveRender(normalizedObjects);
-    // 按对象范围刷新受影响的 monitor：对象从 AOM 被丢弃回静态图，
-    // 需要让 BaseRenderer 通过 AOM 过滤将它们重新渲染到静态层。
-    this._flushViewportForObjects(normalizedObjects);
     this.clearBaseObjectSnapshots(normalizedObjects);
   }
 

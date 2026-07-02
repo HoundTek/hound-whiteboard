@@ -538,6 +538,34 @@ class MonitorCore {
   }
 
   /**
+   * 将刚转出的位图立即画回源 OffscreenCanvas
+   * @description
+   * `transferToImageBitmap()` 会把当前像素内容转移给 `ImageBitmap`，
+   * 之后源 canvas 可能变为新的空底图。
+   * 若不立刻恢复，下一帧仅按脏区补绘时就会丢失未命中的旧像素。
+   * @param {OffscreenCanvas | null | undefined} canvas - 源 OffscreenCanvas
+   * @param {ImageBitmap | null | undefined} bitmap - 刚转出的位图
+   * @returns {void}
+   * @private
+   */
+  #restoreTransferredBitmapToCanvas(canvas, bitmap) {
+    if (!canvas || !bitmap) {
+      return;
+    }
+
+    const context = canvas.getContext?.("2d") ?? null;
+    if (!context) {
+      return;
+    }
+
+    context.save?.();
+    context.setTransform?.(1, 0, 0, 1, 0, 0);
+    context.clearRect?.(0, 0, canvas.width, canvas.height);
+    context.drawImage?.(bitmap, 0, 0);
+    context.restore?.();
+  }
+
+  /**
    * 输出当前渲染帧
    * @description
    * 该方法会在回传位图前主动 flush 当前两个渲染器的待处理脏区，
@@ -556,8 +584,14 @@ class MonitorCore {
       this.#liveRenderer._scheduler.flush();
     }
 
-    const baseBitmap = this.#baseRenderer?.canvas?.transferToImageBitmap?.();
-    const liveBitmap = this.#liveRenderer?.canvas?.transferToImageBitmap?.();
+    const baseCanvas = this.#baseRenderer?.canvas;
+    const liveCanvas = this.#liveRenderer?.canvas;
+    const baseBitmap = baseCanvas?.transferToImageBitmap?.();
+    const liveBitmap = liveCanvas?.transferToImageBitmap?.();
+
+    this.#restoreTransferredBitmapToCanvas(baseCanvas, baseBitmap);
+    this.#restoreTransferredBitmapToCanvas(liveCanvas, liveBitmap);
+
     const transferList = [baseBitmap, liveBitmap].filter(Boolean);
     const frameId = ++this.#frameId;
 
