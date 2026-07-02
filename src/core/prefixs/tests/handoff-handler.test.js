@@ -215,6 +215,92 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         activeChild: "second",
       });
     });
+
+    test("handoff 中 async chooser 的 afterConfirm 仍可触发切换", async () => {
+      const dag = new DevicesDAG();
+      const chooser = new RectangleObjectChooserTool();
+      const modifier = createMockModifier();
+      const selectedSummary = {
+        id: 199,
+        type: "CircleObject",
+        position: { x: 12, y: 12 },
+        range: new RectangleRange(-8, -8, 16, 16),
+        boundingBox: new RectangleRange(-8, -8, 16, 16),
+        property: {},
+        data: { radius: 8 },
+      };
+      const boardApi = {
+        hitTest: jest.fn(async () => [199]),
+        queryObjects: jest.fn(async () => [selectedSummary]),
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+      const staleBoardObject = {
+        id: 199,
+        position: new Vector(999, 999),
+        getRange() {
+          return new RectangleRange(0, 0, 1, 1);
+        },
+      };
+
+      const subDAG = createHandoffSubDAG({
+        rootPath: "/chooser-async-hook",
+        first: chooser,
+        second: modifier,
+      });
+
+      const accumulatedContext = {
+        board: {
+          objectLoaded: new Map([[199, { obj: staleBoardObject }]]),
+          activeObjectManager: {
+            choose: jest.fn(),
+            discard: jest.fn(),
+            activeObjectIndex: new Map([[199, staleBoardObject]]),
+          },
+          getObjectById: jest.fn(() => staleBoardObject),
+        },
+        boardApi,
+        monitor: { requestViewportUiRender: jest.fn() },
+      };
+
+      dag.mountSubDAG("/monitor", subDAG, accumulatedContext);
+
+      dag.dispatch(
+        {
+          to: "/monitor/chooser-async-hook",
+          signals: [
+            { type: "position", context: { value: { x: 0, y: 0 } } },
+          ],
+        },
+        accumulatedContext,
+      );
+      dag.dispatch(
+        {
+          to: "/monitor/chooser-async-hook",
+          signals: [
+            { type: "position", context: { value: { x: 30, y: 30 } } },
+            { type: "end", context: {} },
+          ],
+        },
+        accumulatedContext,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(dag.getNodeState("/monitor/chooser-async-hook")).toEqual({
+        phase: "second",
+        activeChild: "second",
+      });
+      expect(boardApi.hitTest).toHaveBeenCalled();
+      expect(boardApi.queryObjects).toHaveBeenCalledWith([199]);
+      expect(
+        dag.getNodeState("/monitor/chooser-async-hook/second"),
+      ).toEqual(
+        expect.objectContaining({
+          objects: [selectedSummary],
+        }),
+      );
+    });
   });
 
   describe("createHandoffSubDAG", () => {

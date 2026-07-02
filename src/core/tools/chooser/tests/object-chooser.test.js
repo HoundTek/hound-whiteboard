@@ -111,6 +111,43 @@ describe("ObjectChooserTool", () => {
     expect(stateAccess.getState()).toEqual({ objects: [liveObject] });
   });
 
+  test("显式提供 RPC boardApi 时不应回填到本地 stale board 对象", () => {
+    const rpcSummary = {
+      id: 32,
+      position: { x: 12, y: 24 },
+      range: new RectangleRange(0, 0, 6, 6),
+    };
+    const staleBoardObject = { id: 32, stale: true };
+    const boardApi = {
+      addActiveObjects: jest.fn(),
+    };
+    const stateAccess = createStateAccess();
+    const deviceContext = {
+      acc: {
+        boardApi,
+        board: {
+          getObjectById: jest.fn(() => staleBoardObject),
+        },
+      },
+      path: "/monitor/chooser/tool",
+      getNodeState: stateAccess.getState,
+      setNodeState: stateAccess.setState,
+    };
+    const tool = new TestChooserTool({
+      chosenObjects: [rpcSummary],
+    });
+
+    tool.process(
+      { signals: [{ type: "trigger", context: {} }] },
+      deviceContext,
+    );
+
+    expect(boardApi.addActiveObjects).toHaveBeenCalledWith([32]);
+    expect(deviceContext.acc.objects).toEqual([rpcSummary]);
+    expect(deviceContext.acc.board.getObjectById).not.toHaveBeenCalled();
+    expect(stateAccess.getState()).toEqual({ objects: [rpcSummary] });
+  });
+
   test("显式提供 boardApi 时 umount 应走 discardActiveObjects", () => {
     const chosenObject = { id: 41 };
     const discardActiveObjects = jest.fn();

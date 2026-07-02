@@ -356,6 +356,54 @@ describe("CommonObjectModifierTool", () => {
     expect(summaryLikeObject.position).toEqual(new Vector(34, 43));
   });
 
+  test("显式提供 RPC boardApi 时不应读取本地 stale activeObjectIndex", () => {
+    const tool = new CommonObjectModifierTool();
+    const summaryLikeObject = {
+      id: 503,
+      type: "CircleObject",
+      position: { x: 30, y: 40 },
+      range: new RectangleRange(-5, -5, 10, 10),
+      boundingBox: new RectangleRange(-5, -5, 10, 10),
+      property: {},
+      data: { radius: 5 },
+    };
+    const modifyObject = jest.fn();
+    const context = {
+      acc: {
+        board: {
+          activeObjectManager: {
+            activeObjectIndex: new Map(),
+          },
+        },
+        boardApi: {
+          modifyObject,
+          commitObjects: jest.fn(),
+          discardActiveObjects: jest.fn(),
+        },
+        monitor: { requestViewportUiRender: jest.fn() },
+        objects: [summaryLikeObject],
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 30, y: 40 } } }],
+      },
+      context,
+    );
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 34, y: 43 } } }],
+      },
+      context,
+    );
+
+    expect(summaryLikeObject.position).toEqual(new Vector(34, 43));
+    expect(modifyObject).toHaveBeenCalledWith(503, {
+      position: { x: 34, y: 43 },
+    });
+  });
+
   test("不传 position 信号时应保持原状态", () => {
     const object = {
       id: 1,

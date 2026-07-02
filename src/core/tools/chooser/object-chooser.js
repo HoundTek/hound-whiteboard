@@ -61,11 +61,19 @@ class ObjectChooserTool extends Tool {
       return objectEntry;
     }
 
-    return (
-      context?.acc?.boardApi?.getBoardCore?.()?.getObjectById?.(objectId) ??
-      context?.acc?.board?.getObjectById?.(objectId) ??
-      objectEntry
+    const boardApi = context?.acc?.boardApi;
+    const boardCoreObject = boardApi?.getBoardCore?.()?.getObjectById?.(
+      objectId,
     );
+    if (boardCoreObject) {
+      return boardCoreObject;
+    }
+
+    if (this.canUseLegacyBoardCompat(context)) {
+      return context?.acc?.board?.getObjectById?.(objectId) ?? objectEntry;
+    }
+
+    return objectEntry;
   }
 
   /**

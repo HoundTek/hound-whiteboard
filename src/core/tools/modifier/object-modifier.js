@@ -169,13 +169,15 @@ class ObjectModifierTool extends Tool {
    */
   resolveActiveModifiedObjects(context, objects) {
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
+    const boardApi = context?.acc?.boardApi;
     const activeObjectIndex =
-      context?.acc?.boardApi?.getBoardCore?.()?.activeObjectManager
-        ?.activeObjectIndex ??
-      context?.acc?.board?.activeObjectManager?.activeObjectIndex;
+      boardApi?.getBoardCore?.()?.activeObjectManager?.activeObjectIndex ??
+      (this.canUseLegacyBoardCompat(context)
+        ? context?.acc?.board?.activeObjectManager?.activeObjectIndex
+        : undefined);
 
     if (typeof activeObjectIndex?.has !== "function") {
-      return context?.acc?.boardApi ? normalizedObjects : [];
+      return boardApi ? normalizedObjects : [];
     }
 
     return normalizedObjects.filter((objectEntry) => {

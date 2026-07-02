@@ -290,6 +290,84 @@ describe("RectangleObjectChooserTool", () => {
     expect(stateAccess.getState()).toEqual({ objects: [selectedObject] });
   });
 
+  test("显式提供 RPC boardApi 时应通过 hitTest/queryObjects 完成异步框选", async () => {
+    const tool = new RectangleObjectChooserTool();
+    const stateAccess = createStateAccess();
+    const selectedSummary = {
+      id: 121,
+      type: "CircleObject",
+      position: { x: 12, y: 12 },
+      range: new RectangleRange(-10, -10, 20, 20),
+      boundingBox: new RectangleRange(-10, -10, 20, 20),
+      property: {},
+      data: { radius: 10 },
+    };
+    const boardApi = {
+      hitTest: jest.fn(async () => [121]),
+      queryObjects: jest.fn(async () => [selectedSummary]),
+      addActiveObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const staleBoardObject = {
+      id: 121,
+      stale: true,
+      position: new Vector(999, 999),
+      getRange() {
+        return new RectangleRange(0, 0, 1, 1);
+      },
+    };
+    const deviceContext = {
+      acc: {
+        board: {
+          objectLoaded: new Map([[121, { obj: staleBoardObject }]]),
+          activeObjectManager: {
+            choose: jest.fn(),
+            discard: jest.fn(),
+            activeObjectIndex: new Map([[121, staleBoardObject]]),
+          },
+          getObjectById: jest.fn(() => staleBoardObject),
+        },
+        boardApi,
+        monitor: { requestViewportUiRender: jest.fn() },
+      },
+      path: "/main/mouse/secondary/tool",
+      getNodeState: stateAccess.getState,
+      setNodeState: stateAccess.setState,
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(0, 0) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(30, 30) } }],
+      },
+      deviceContext,
+    );
+    await tool.process(
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(30, 30) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(boardApi.hitTest).toHaveBeenCalledWith(
+      new RectangleRange(0, 0, 30, 30),
+      "intersect",
+    );
+    expect(boardApi.queryObjects).toHaveBeenCalledWith([121]);
+    expect(boardApi.addActiveObjects).toHaveBeenCalledWith([121]);
+    expect(deviceContext.acc.objects).toEqual([selectedSummary]);
+    expect(deviceContext.acc.board.getObjectById).not.toHaveBeenCalled();
+    expect(stateAccess.getState()).toEqual({ objects: [selectedSummary] });
+  });
+
   test("显式提供 boardApi 时空框选应通过 discardActiveObjects 清空上一轮选择", () => {
     const tool = new RectangleObjectChooserTool();
     const board = new Board();
