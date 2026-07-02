@@ -6,7 +6,6 @@
  */
 
 import { Vector } from "../../utils/math.js";
-import { BasicObject } from "../../objects/basic-obj.js";
 import { SignalPacket } from "../../devices-dag/signal.js";
 import { Tool } from "../tool.js";
 
@@ -198,38 +197,46 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 解析当前创建对象的兼容实例引用
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @param {number | null} [objectId=this.objectId] - 对象 id
-   * @returns {BasicObject | undefined} 当前对象实例
+   * 初始化当前创建对象的本地草稿状态
+   * @param {Object} interaction - 当前交互上下文
+   * @param {Record<string, any>} property - 初始属性快照
+   * @param {Record<string, any>} data - 初始数据快照
+   * @returns {Object} 本地草稿对象
    * @protected
    */
-  resolveCreatedObjectReference(context = {}, objectId = this.objectId) {
-    if (objectId == null) {
-      return undefined;
+  initializeCreatedObjectDraft(interaction, property, data) {
+    this.create(interaction.position, interaction.objectId);
+    const createdObject = this.obj;
+
+    if (!createdObject) {
+      throw new Error(
+        `Failed to create local draft object: ${interaction.objectId}`,
+      );
     }
 
-    const boardObject = context?.acc?.board?.getObjectById?.(objectId);
-    if (boardObject instanceof BasicObject) {
-      return boardObject;
+    if (typeof createdObject.setProperty === "function") {
+      createdObject.setProperty(property ?? {});
+    } else {
+      createdObject.property = {
+        ...(createdObject.property ?? {}),
+        ...(property ?? {}),
+      };
     }
 
-    const boardCoreObject = context?.acc?.boardApi
-      ?.getBoardCore?.()
-      ?.getObjectById?.(objectId);
-    if (boardCoreObject instanceof BasicObject) {
-      return boardCoreObject;
+    if (typeof createdObject.setData === "function") {
+      createdObject.setData(data ?? {});
+    } else {
+      createdObject.data = {
+        ...(createdObject.data ?? {}),
+        ...(data ?? {}),
+      };
     }
 
-    if (this.obj instanceof BasicObject && this.obj.id === objectId) {
-      return this.obj;
-    }
-
-    return undefined;
+    return createdObject;
   }
 
   /**
-   * 通过 BoardApi 创建对象并回填兼容实例引用
+   * 通过 BoardApi 创建对象并初始化本地草稿
    * @param {Object} interaction - 当前交互上下文
    * @returns {boolean} 是否成功走 BoardApi 创建路径
    * @protected
@@ -241,27 +248,26 @@ class ObjectCreatorTool extends Tool {
     if (
       !boardApi ||
       typeof objectType !== "string" ||
-      interaction?.objectId == null
+      interaction?.objectId == null ||
+      !interaction?.position
     ) {
       return false;
     }
 
+    const property = this.resolveCreatedObjectProperty(interaction);
+    const data = this.resolveCreatedObjectData(interaction);
+    const createdObject = this.initializeCreatedObjectDraft(
+      interaction,
+      property,
+      data,
+    );
+
     boardApi.createObject(objectType, {
       id: interaction.objectId,
       position: interaction.position,
-      property: this.resolveCreatedObjectProperty(interaction),
-      data: this.resolveCreatedObjectData(interaction),
+      property,
+      data,
     });
-
-    const createdObject = this.resolveCreatedObjectReference(
-      interaction?.context,
-      interaction.objectId,
-    );
-    if (!(createdObject instanceof BasicObject)) {
-      throw new Error(
-        `Failed to resolve created object reference: ${interaction.objectId}`,
-      );
-    }
 
     this.objectId = interaction.objectId;
     this.obj = createdObject;
@@ -281,9 +287,7 @@ class ObjectCreatorTool extends Tool {
       if (interaction.objectId == null) {
         const allocatedId =
           interaction?.context?.acc?.allocateObjectId?.() ??
-          interaction?.context?.acc?.boardApi
-            ?.getBoardCore?.()
-            ?.allocateObjectId?.();
+          interaction?.context?.acc?.board?.allocateObjectId?.();
         if (allocatedId != null) {
           interaction.objectId = allocatedId;
         }
@@ -501,10 +505,12 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 创建新的对象实例
+   * 创建当前交互使用的本地草稿对象
    * @param {Vector} position - 新对象的位置
    * @param {number} id - 新对象的 id
-   * @description 在用户使用该工具创建新对象（而不是编辑正在创建的对象）时调用此方法以生成新的对象实例
+   * @description
+   * Creator 通过本地草稿对象维护手势期的几何状态，再并行将修改推送到 BoardApi。
+   * 本地草稿不要求与 BoardCore / Worker 内的真实对象实例保持引用同一性。
    * @abstract
    */
   create(position, id) {

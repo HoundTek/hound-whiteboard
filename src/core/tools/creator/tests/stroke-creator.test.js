@@ -257,6 +257,64 @@ describe("StrokeCreatorTool", () => {
     ]);
   });
 
+  test("RPC 风格 boardApi 下应维护本地草稿路径点并提交", () => {
+    const tool = new StrokeCreatorTool();
+    const board = {
+      allocateObjectId: jest.fn(() => 701),
+    };
+    const boardApi = {
+      createObject: jest.fn(),
+      appendListItem: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const deviceContext = {
+      acc: {
+        board,
+        boardApi,
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(3, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "StrokeObject",
+      expect.objectContaining({
+        id: 701,
+        position: new Vector(1, 2),
+      }),
+    );
+    expect(boardApi.appendListItem).toHaveBeenCalled();
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([701]);
+    expect(
+      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
+    ).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+  });
+
   test("创建手势更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
     const tool = new StrokeCreatorTool();
     const monitor = {
@@ -316,8 +374,10 @@ describe("StrokeCreatorTool", () => {
     );
 
     const ownerChunk = board.getChunkById(1);
+    const committedObject = ownerChunk.objectManager.getObject(21);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.getObject(21)).toBe(createdObject);
+    expect(committedObject).not.toBe(createdObject);
+    expect(committedObject.serialize()).toEqual(createdObject.serialize());
   });
 
   test("真实 Board 上取消创建后不应写回区块静态结构", () => {
@@ -387,11 +447,15 @@ describe("StrokeCreatorTool", () => {
     );
 
     const ownerChunk = board.getChunkById(1);
+    const firstCommittedObject = ownerChunk.objectManager.getObject(31);
+    const secondCommittedObject = ownerChunk.objectManager.getObject(32);
     expect(firstObject).not.toBe(secondObject);
     expect(firstObject.id).toBe(31);
     expect(secondObject.id).toBe(32);
-    expect(ownerChunk.objectManager.getObject(31)).toBe(firstObject);
-    expect(ownerChunk.objectManager.getObject(32)).toBe(secondObject);
+    expect(firstCommittedObject).not.toBe(firstObject);
+    expect(secondCommittedObject).not.toBe(secondObject);
+    expect(firstCommittedObject.serialize()).toEqual(firstObject.serialize());
+    expect(secondCommittedObject.serialize()).toEqual(secondObject.serialize());
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
   });
 
@@ -461,10 +525,12 @@ describe("StrokeCreatorTool", () => {
       });
 
       const ownerChunk = board.getChunkById(1);
+      const committedObject = ownerChunk.objectManager.getObject(tool.obj.id);
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
       expect(tool.obj.id).toBe(1);
       expect(board.objectCounterPool.counter).toBe(1);
-      expect(ownerChunk.objectManager.getObject(tool.obj.id)).toBe(tool.obj);
+      expect(committedObject).not.toBe(tool.obj);
+      expect(committedObject.serialize()).toEqual(tool.obj.serialize());
       expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
       expect(
         tool.obj.rich.localPathRange.points.map((point) => point.serialize()),

@@ -135,7 +135,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     expect(interaction.injectedProperty).toBeNull();
   });
 
-  test("显式提供 boardApi 时仍应将真实对象实例写回上下文", () => {
+  test("显式提供 boardApi 时仍应将本地草稿对象写回上下文", () => {
     const tool = new CircleCreatorTool();
     const { board, deviceContext } = createBoardDeviceContext(206);
 
@@ -150,6 +150,47 @@ describe("ObjectCreatorTool — property 信号", () => {
     expect(deviceContext.acc.objects).toEqual([tool.obj]);
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
     expect(board.getChunkById(1).objectManager.getObject(206)).toBeUndefined();
+  });
+
+  test("RPC 风格 boardApi 下应直接创建本地草稿对象，不再回填 board 实例", () => {
+    const tool = new CircleCreatorTool();
+    const board = {
+      allocateObjectId: jest.fn(() => 901),
+      getObjectById: jest.fn(() => undefined),
+    };
+    const boardApi = {
+      createObject: jest.fn(),
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const deviceContext = {
+      acc: {
+        board,
+        boardApi,
+      },
+    };
+
+    tool.process(
+      {
+        to: "/monitor/circle",
+        signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+      },
+      deviceContext,
+    );
+
+    expect(board.allocateObjectId).toHaveBeenCalledTimes(1);
+    expect(board.getObjectById).not.toHaveBeenCalled();
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "CircleObject",
+      expect.objectContaining({
+        id: 901,
+        position: new Vector(2, 3),
+      }),
+    );
+    expect(tool.obj.position.serialize()).toEqual({ x: 2, y: 3 });
+    expect(tool.obj.data.radius).toBe(0);
+    expect(deviceContext.acc.objects).toEqual([tool.obj]);
   });
 
   describe("生命周期钩子", () => {

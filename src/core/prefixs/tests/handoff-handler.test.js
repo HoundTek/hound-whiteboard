@@ -1554,7 +1554,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(creatorTool.obj.id).toBe(1);
       firstObjectId = creatorTool.obj.id;
       expect(board.activeObjectManager.activeObjects.size).toBe(1);
-      expect(board.getObjectById(creatorTool.obj.id)).toBe(creatorTool.obj);
+      const activeBoardObject = board.getObjectById(creatorTool.obj.id);
+      expect(activeBoardObject).not.toBe(creatorTool.obj);
+      expect(activeBoardObject.serialize()).toEqual(creatorTool.obj.serialize());
 
       const createdPosition = creatorTool.obj.position.serialize();
 
@@ -1603,9 +1605,13 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     );
 
       const ownerChunk = board.getChunkById(1);
+      const committedBoardObject = ownerChunk.objectManager.getObject(
+        creatorTool.obj.id,
+      );
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
-      expect(ownerChunk.objectManager.getObject(creatorTool.obj.id)).toBe(
-        creatorTool.obj,
+      expect(committedBoardObject).not.toBe(creatorTool.obj);
+      expect(committedBoardObject.serialize()).toEqual(
+        creatorTool.obj.serialize(),
       );
       expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
         phase: "first",

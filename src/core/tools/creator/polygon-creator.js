@@ -121,6 +121,11 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   appendPoint(localPoint, interaction) {
+    this.obj?.appendListItem?.("points", {
+      x: localPoint.x,
+      y: localPoint.y,
+    });
+
     const boardApi = interaction?.context?.acc?.boardApi;
     if (!boardApi || this.objectId == null) {
       return;
@@ -138,6 +143,11 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   replacePoint(localPoint, index, interaction) {
+    this.obj?.replaceListItem?.("points", index, {
+      x: localPoint.x,
+      y: localPoint.y,
+    });
+
     const boardApi = interaction?.context?.acc?.boardApi;
     if (!boardApi || this.objectId == null) {
       return;

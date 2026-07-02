@@ -307,8 +307,64 @@ describe("PolygonCreatorTool", () => {
     expect(commitSpy).toHaveBeenCalledWith([24]);
 
     const ownerChunk = board.getChunkById(1);
+    const committedObject = ownerChunk.objectManager.getObject(24);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.getObject(24)).toBe(tool.obj);
+    expect(committedObject).not.toBe(tool.obj);
+    expect(committedObject.serialize()).toEqual(tool.obj.serialize());
+  });
+
+  test("RPC 风格 boardApi 下应维护本地草稿顶点并提交", () => {
+    const tool = new PolygonCreatorTool();
+    const board = {
+      allocateObjectId: jest.fn(() => 703),
+    };
+    const boardApi = {
+      createObject: jest.fn(),
+      appendListItem: jest.fn(),
+      replaceListItem: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const deviceContext = {
+      acc: {
+        board,
+        boardApi,
+      },
+    };
+
+    tool.process(
+      {
+        signals: [
+          {
+            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            context: { value: new Vector(5, 5) },
+          },
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+        ],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [
+          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "PolygonObject",
+      expect.objectContaining({
+        id: 703,
+        position: new Vector(5, 5),
+      }),
+    );
+    expect(boardApi.appendListItem).toHaveBeenCalled();
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([703]);
+    expect(
+      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
+    ).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("真实 Board 上 object-end 后应写回归属区块", () => {
@@ -342,8 +398,10 @@ describe("PolygonCreatorTool", () => {
     );
 
     const ownerChunk = board.getChunkById(1);
+    const committedObject = ownerChunk.objectManager.getObject(23);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.getObject(23)).toBe(createdObject);
+    expect(committedObject).not.toBe(createdObject);
+    expect(committedObject.serialize()).toEqual(createdObject.serialize());
   });
 
   describe("端到端集成（通过 Board 输入链路）", () => {
@@ -397,10 +455,12 @@ describe("PolygonCreatorTool", () => {
       });
 
       const ownerChunk = board.getChunkById(1);
+      const committedObject = ownerChunk.objectManager.getObject(tool.obj.id);
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
       expect(tool.obj.id).toBe(1);
       expect(board.objectCounterPool.counter).toBe(1);
-      expect(ownerChunk.objectManager.getObject(tool.obj.id)).toBe(tool.obj);
+      expect(committedObject).not.toBe(tool.obj);
+      expect(committedObject.serialize()).toEqual(tool.obj.serialize());
       expect(tool.obj.position.serialize()).toEqual({ x: 125, y: 80 });
       expect(
         tool.obj.rich.localPolygonRange.points.map((point) =>

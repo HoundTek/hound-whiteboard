@@ -111,6 +111,8 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   setRadius(radius, interaction) {
+    this.obj?.setData?.({ radius });
+
     const boardApi = interaction?.context?.acc?.boardApi;
     if (!boardApi || this.objectId == null) {
       return;

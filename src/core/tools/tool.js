@@ -63,9 +63,11 @@ class Tool {
     const accumulatedContext = handlerContext.acc ?? {};
     const boardApi = accumulatedContext.boardApi;
     const boardCore = boardApi?.getBoardCore?.();
+    const board = accumulatedContext.board;
     const monitor = accumulatedContext.monitor;
     const allocateObjectId =
       accumulatedContext.allocateObjectId ??
+      board?.allocateObjectId?.bind(board) ??
       boardCore?.allocateObjectId?.bind(boardCore);
     const resolveOwnerChunkId =
       accumulatedContext.resolveOwnerChunkId ??

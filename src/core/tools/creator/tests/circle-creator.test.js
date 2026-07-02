@@ -118,7 +118,55 @@ describe("CircleCreatorTool", () => {
     );
     expect(modifySpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([104]);
-    expect(board.getChunkById(1).objectManager.getObject(104)).toBe(tool.obj);
+    const committedObject = board.getChunkById(1).objectManager.getObject(104);
+    expect(committedObject).not.toBe(tool.obj);
+    expect(committedObject.serialize()).toEqual(tool.obj.serialize());
+  });
+
+  test("RPC 风格 boardApi 下应维护本地草稿半径并提交", () => {
+    const tool = new CircleCreatorTool();
+    const board = {
+      allocateObjectId: jest.fn(() => 702),
+    };
+    const boardApi = {
+      createObject: jest.fn(),
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const deviceContext = {
+      acc: {
+        board,
+        boardApi,
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(6, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "CircleObject",
+      expect.objectContaining({
+        id: 702,
+        position: new Vector(2, 1),
+      }),
+    );
+    expect(boardApi.modifyObject).toHaveBeenCalled();
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([702]);
+    expect(tool.obj.data.radius).toBeCloseTo(5);
   });
 
   test("结束手势时应通过 boardApi.commitObjects 提交对象", () => {
@@ -192,7 +240,9 @@ describe("CircleCreatorTool", () => {
     );
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(board.getChunkById(1).objectManager.getObject(110)).toBe(tool.obj);
+    const committedObject = board.getChunkById(1).objectManager.getObject(110);
+    expect(committedObject).not.toBe(tool.obj);
+    expect(committedObject.serialize()).toEqual(tool.obj.serialize());
   });
 
   test("连续两次创建应生成两个不同圆对象", () => {
@@ -244,12 +294,16 @@ describe("CircleCreatorTool", () => {
     expect(firstObject).not.toBe(secondObject);
     expect(firstObject.id).toBe(201);
     expect(secondObject.id).toBe(202);
-    expect(board.getChunkById(1).objectManager.getObject(201)).toBe(
-      firstObject,
+    const firstCommittedObject = board.getChunkById(1).objectManager.getObject(
+      201,
     );
-    expect(board.getChunkById(1).objectManager.getObject(202)).toBe(
-      secondObject,
+    const secondCommittedObject = board.getChunkById(1).objectManager.getObject(
+      202,
     );
+    expect(firstCommittedObject).not.toBe(firstObject);
+    expect(secondCommittedObject).not.toBe(secondObject);
+    expect(firstCommittedObject.serialize()).toEqual(firstObject.serialize());
+    expect(secondCommittedObject.serialize()).toEqual(secondObject.serialize());
   });
 
   test("起始点与结束点完全相同时应使用固定半径（默认 zoom=1）", () => {

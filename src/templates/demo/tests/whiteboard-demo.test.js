@@ -96,7 +96,8 @@ describe("whiteboard demo", () => {
     });
 
     const object = board.getChunkById(1).objectManager.getObject(1);
-    expect(object).toBe(primaryStrokeTool.obj);
+    expect(object).not.toBe(primaryStrokeTool.obj);
+    expect(object.serialize()).toEqual(primaryStrokeTool.obj.serialize());
     expect(object.property.color).toBe(DEMO_PRIMARY_STROKE_COLOR);
   });
 

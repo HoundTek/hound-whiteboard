@@ -92,14 +92,15 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
       return;
     }
 
+    this.obj?.appendListItem?.("points", { x: point.x, y: point.y });
+
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (!boardApi || this.objectId == null) {
-      return;
+    if (boardApi && this.objectId != null) {
+      boardApi.appendListItem(this.objectId, "points", [
+        { x: point.x, y: point.y },
+      ]);
     }
 
-    boardApi.appendListItem(this.objectId, "points", [
-      { x: point.x, y: point.y },
-    ]);
     this._lastLocalPoint = new Vector(point.x, point.y);
   }
 
