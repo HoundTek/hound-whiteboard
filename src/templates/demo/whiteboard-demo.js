@@ -256,7 +256,7 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * prefix handler 不再指定 to:，依赖 defaultRoute 自动走边。
  *
  * @param {import("../../core/components/index.js").Board} board - 白板实例
- * @param {import("../../core/components/index.js").Monitor} monitor - 显示器实例
+ * @param {import("../../core/components/index.js").Monitor|import("../../core/components/index.js").MonitorProxy} monitor - 显示器实例
  * @param {Object} [options={}] - 可选覆盖配置
  * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
  * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
