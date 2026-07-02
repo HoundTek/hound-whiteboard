@@ -1445,5 +1445,41 @@ describe("CommonObjectModifierTool", () => {
         new Set([object]),
       );
     });
+
+    test("Worker mode 下 summary-like 对象应能基于 plain boundingBox 启动 modifier 手势", () => {
+      const object = {
+        id: 1,
+        position: { x: 30, y: 40 },
+        boundingBox: { left: 0, top: 0, width: 20, height: 10 },
+      };
+      const boardApi = {
+        modifyObject: jest.fn(),
+      };
+      const tool = new CommonObjectModifierTool();
+      const context = {
+        acc: {
+          objects: [object],
+          boardApi,
+        },
+      };
+
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 35, y: 45 } } }],
+        },
+        context,
+      );
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 45, y: 50 } } }],
+        },
+        context,
+      );
+
+      expect(boardApi.modifyObject).toHaveBeenLastCalledWith(1, {
+        position: { x: 40, y: 45 },
+      });
+      expect(object.position).toEqual(new Vector(40, 45));
+    });
   });
 });

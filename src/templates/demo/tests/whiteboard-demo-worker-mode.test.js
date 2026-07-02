@@ -315,4 +315,170 @@ describe("whiteboard demo worker mode", () => {
       restoreAnimationFrame();
     }
   });
+
+  test("demo 配置在 Worker mode 下应支持 chooser → modifier 修改已有对象", async () => {
+    const restoreAnimationFrame = installMockAnimationFrame();
+    const restoreDocument = installMockDocument();
+    const { uiEndpoint, workerHost } = createLoopbackWorkerPair();
+    const board = new Board({ width: 800, height: 600 });
+    let runtime = null;
+    let monitor = null;
+
+    try {
+      const enablePromise = board.enableWorkerMode(uiEndpoint);
+      runtime = createCoreWorkerRuntime(workerHost).start();
+      await enablePromise;
+
+      const rootElement = document.createElement("div");
+      monitor = board.createMonitor(
+        rootElement,
+        { width: 800, height: 600 },
+        "main",
+      );
+      await flushMicrotasks();
+
+      configureWhiteboardDemo(board, monitor);
+
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(10, 20),
+              buttons: 1,
+              button: 0,
+            },
+          },
+        ],
+      });
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(20, 30),
+              buttons: 1,
+              button: 0,
+            },
+          },
+        ],
+      });
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "end",
+            context: {
+              buttons: 0,
+              button: 0,
+            },
+          },
+        ],
+      });
+      await flushMicrotasks();
+
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(10, 20),
+              buttons: 2,
+              button: 2,
+            },
+          },
+        ],
+      });
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(20, 30),
+              buttons: 2,
+              button: 2,
+            },
+          },
+        ],
+      });
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "end",
+            context: {
+              buttons: 0,
+              button: 2,
+            },
+          },
+        ],
+      });
+      await flushMicrotasks();
+
+      expect(
+        monitor.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
+      ).toEqual({
+        phase: "second",
+        activeChild: "second",
+      });
+
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(15, 25),
+              buttons: 2,
+              button: 2,
+            },
+          },
+        ],
+      });
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "position",
+            context: {
+              value: new Vector(25, 30),
+              buttons: 2,
+              button: 2,
+            },
+          },
+        ],
+      });
+      board.signalsEventBus.emit("input", {
+        to: "/main/mouse",
+        signals: [
+          {
+            type: "end",
+            context: {
+              buttons: 0,
+              button: 2,
+            },
+          },
+        ],
+      });
+      await flushMicrotasks();
+
+      expect(board.getObjectById(1)).toBeUndefined();
+      await expect(board.getBoardApi().queryObjects([1])).resolves.toEqual([
+        expect.objectContaining({
+          id: 1,
+          position: { x: 20, y: 25 },
+        }),
+      ]);
+    } finally {
+      monitor?.destroy?.();
+      board.getBoardApi()?.destroy?.();
+      runtime?.stop?.();
+      restoreDocument();
+      restoreAnimationFrame();
+    }
+  });
 });

@@ -115,7 +115,7 @@ class ObjectChooserTool extends Tool {
     const localBoundingBoxSource =
       objectEntry?.boundingBox ?? objectEntry?.rich?.boundingBox;
     const localBoundingBox = localBoundingBoxSource
-      ? RectangleRange.from(localBoundingBoxSource)
+      ? RectangleRange.fromRectLike(localBoundingBoxSource)
       : undefined;
     if (
       localBoundingBox &&

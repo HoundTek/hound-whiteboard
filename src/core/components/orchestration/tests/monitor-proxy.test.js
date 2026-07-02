@@ -169,10 +169,12 @@ describe("MonitorProxy", () => {
     const { restore } = installMockAnimationFrame();
     const baseContext = {
       ...createNoopCanvasContext2D(),
+      clearRect: jest.fn(),
       drawImage: jest.fn(),
     };
     const liveContext = {
       ...createNoopCanvasContext2D(),
+      clearRect: jest.fn(),
       drawImage: jest.fn(),
     };
     const worker = new FakeWorkerEndpoint();
@@ -214,6 +216,8 @@ describe("MonitorProxy", () => {
         liveBitmap,
       });
 
+      expect(baseContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
+      expect(liveContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
       expect(baseContext.drawImage).toHaveBeenCalledWith(baseBitmap, 0, 0);
       expect(liveContext.drawImage).toHaveBeenCalledWith(liveBitmap, 0, 0);
       expect(baseBitmap.closed).toBe(true);

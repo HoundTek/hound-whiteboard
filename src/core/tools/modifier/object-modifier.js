@@ -121,7 +121,7 @@ class ObjectModifierTool extends Tool {
     const localBoundingBoxSource =
       objectEntry?.boundingBox ?? objectEntry?.rich?.boundingBox;
     const localBoundingBox = localBoundingBoxSource
-      ? RectangleRange.from(localBoundingBoxSource)
+      ? RectangleRange.fromRectLike(localBoundingBoxSource)
       : null;
     if (
       position &&

@@ -185,6 +185,30 @@ describe("UiRenderer", () => {
     expect(context.setLineDash.mock.calls).toEqual([[[]], [[]], [[10, 4]]]);
   });
 
+  test("createCompatSelectionEntriesForSummaries 应支持 RPC 风格的 plain boundingBox", () => {
+    const context = createContext();
+    const monitor = createMonitor({});
+    const canvas = createCanvas(context);
+    const renderer = new UiRenderer(monitor, undefined, { canvas });
+    const summary = {
+      id: 17,
+      position: { x: 10, y: 20 },
+      boundingBox: { left: 0, top: 0, width: 30, height: 40 },
+      property: {},
+    };
+
+    renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
+      overlayRenderer.createCompatSelectionEntriesForSummaries(
+        [summary],
+        "chooser",
+      ),
+    );
+
+    renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+
+    expect(context.strokeRect).toHaveBeenCalledWith(6, 16, 38, 48);
+  });
+
   test("normalizeOverlayEntry 应支持 summary-like 条目直接生成矩形 overlay", () => {
     const context = createContext();
     const monitor = createMonitor({});
@@ -195,7 +219,7 @@ describe("UiRenderer", () => {
       objectId: 77,
       type: "rect",
       position: { x: 10, y: 20 },
-      boundingBox: new RectangleRange(0, 0, 30, 40),
+      boundingBox: { left: 0, top: 0, width: 30, height: 40 },
       strokeStyle: "#ff0000",
       lineWidth: 1,
     }));

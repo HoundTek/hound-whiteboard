@@ -653,10 +653,12 @@ class MonitorProxy {
     const { baseBitmap, liveBitmap } = frameData ?? {};
 
     if (baseBitmap && this.#baseCtx) {
+      this.#baseCtx.clearRect?.(0, 0, this.width, this.height);
       this.#baseCtx.drawImage(baseBitmap, 0, 0);
       baseBitmap.close?.();
     }
     if (liveBitmap && this.#liveCtx) {
+      this.#liveCtx.clearRect?.(0, 0, this.width, this.height);
       this.#liveCtx.drawImage(liveBitmap, 0, 0);
       liveBitmap.close?.();
     }

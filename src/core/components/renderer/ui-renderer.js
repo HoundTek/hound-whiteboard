@@ -273,7 +273,7 @@ class UiRenderer {
     }
 
     if (summaryEntry.worldRect) {
-      return RectangleRange.from(summaryEntry.worldRect);
+      return RectangleRange.fromRectLike(summaryEntry.worldRect);
     }
 
     const position = summaryEntry.position;
@@ -293,7 +293,7 @@ class UiRenderer {
     const localBoundingBoxSource =
       summaryEntry.boundingBox ?? summaryEntry.rich?.boundingBox;
     const localBoundingBox = localBoundingBoxSource
-      ? RectangleRange.from(localBoundingBoxSource)
+      ? RectangleRange.fromRectLike(localBoundingBoxSource)
       : undefined;
     if (
       localBoundingBox &&
@@ -439,7 +439,7 @@ class UiRenderer {
     }
 
     const groupScreenRect = objectEntries.reduce((combinedRect, entry) => {
-      const screenRect = RectangleRange.from(entry.screenRect);
+      const screenRect = RectangleRange.fromRectLike(entry.screenRect);
       if (!screenRect) {
         return combinedRect;
       }
@@ -480,7 +480,7 @@ class UiRenderer {
     }
 
     const groupScreenRect = objectEntries.reduce((combinedRect, entry) => {
-      const screenRect = RectangleRange.from(entry.screenRect);
+      const screenRect = RectangleRange.fromRectLike(entry.screenRect);
       if (!screenRect) {
         return combinedRect;
       }
@@ -518,7 +518,7 @@ class UiRenderer {
 
     if (!normalizedEntry.screenRect) {
       if (normalizedEntry.worldRect) {
-        const worldRect = RectangleRange.from(normalizedEntry.worldRect);
+        const worldRect = RectangleRange.fromRectLike(normalizedEntry.worldRect);
         if (worldRect) {
           normalizedEntry.screenRect = this.monitor?.worldRectToScreenRect?.(
             worldRect,
@@ -540,7 +540,7 @@ class UiRenderer {
     }
 
     if (normalizedEntry.screenRect) {
-      normalizedEntry.screenRect = RectangleRange.from(
+      normalizedEntry.screenRect = RectangleRange.fromRectLike(
         normalizedEntry.screenRect,
       );
     }
@@ -602,7 +602,7 @@ class UiRenderer {
    * @param {{ screenRect?: RectangleRange, fillStyle?: string, strokeStyle?: string, lineWidth?: number, lineDash?: number[] }} entry - 条目
    */
   drawRectEntry(context, entry = {}) {
-    const screenRect = RectangleRange.from(entry.screenRect);
+    const screenRect = RectangleRange.fromRectLike(entry.screenRect);
     if (!screenRect) return;
 
     context.save?.();
