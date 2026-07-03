@@ -62,7 +62,7 @@ class ObjectCreatorTool extends Tool {
    */
   constructor() {
     super();
-    this.obj = null;
+    this._local = null;
     this.objectId = null;
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
@@ -90,10 +90,13 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 当前正在创建的对象
-   * @type {BasicObject | null}
+   * 当前正在创建对象的本地状态
+   * @description
+   * 纯数据对象 { id, position, property, data }，不再持有 BasicObject 实例。
+   * 手势期几何读写均通过此对象完成，Worker 侧同步通过 RPC fire-and-forget 平行维护。
+   * @type {{ id: number, position: Vector, property: Record<string,any>, data: Record<string,any> } | null}
    */
-  obj;
+  _local;
 
   /**
    * 当前创建对象的 id
@@ -206,7 +209,7 @@ class ObjectCreatorTool extends Tool {
    */
   initializeCreatedObjectDraft(interaction, property, data) {
     this.create(interaction.position, interaction.objectId);
-    const createdObject = this.obj;
+    const createdObject = this._local;
 
     if (!createdObject) {
       throw new Error(
@@ -214,22 +217,11 @@ class ObjectCreatorTool extends Tool {
       );
     }
 
-    if (typeof createdObject.setProperty === "function") {
-      createdObject.setProperty(property ?? {});
-    } else {
-      createdObject.property = {
-        ...(createdObject.property ?? {}),
-        ...(property ?? {}),
-      };
+    if (property) {
+      Object.assign(createdObject.property, property);
     }
-
-    if (typeof createdObject.setData === "function") {
-      createdObject.setData(data ?? {});
-    } else {
-      createdObject.data = {
-        ...(createdObject.data ?? {}),
-        ...(data ?? {}),
-      };
+    if (data) {
+      Object.assign(createdObject.data, data);
     }
 
     return createdObject;
@@ -270,7 +262,7 @@ class ObjectCreatorTool extends Tool {
     });
 
     this.objectId = interaction.objectId;
-    this.obj = createdObject;
+    this._local = createdObject;
     return true;
   }
 
@@ -280,7 +272,7 @@ class ObjectCreatorTool extends Tool {
    * @returns {boolean} 是否已拥有对象实例
    */
   ensureObject(interaction) {
-    if (!this.obj || this.isObjectCreationCompleted) {
+    if (!this._local || this.isObjectCreationCompleted) {
       this._pendingProperty = interaction?.injectedProperty ?? null;
 
       // 惰性分配 objectId：仅当需要创建新对象时才调用 allocateObjectId
@@ -318,8 +310,8 @@ class ObjectCreatorTool extends Tool {
    * @param {BasicObject} [objectEntry=this.obj] - 当前对象
    * @returns {Array<BasicObject>}
    */
-  syncCreatedObjectContext(context = {}, objectEntry = this.obj) {
-    return this.setContextObjects(context, objectEntry ? [objectEntry] : []);
+  syncCreatedObjectContext(context = {}, localState = this._local) {
+    return this.setContextObjects(context, localState ? [localState] : []);
   }
 
   /**
@@ -368,7 +360,7 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   afterGeometryMutation(interaction) {
-    if (!this.obj) return;
+    if (!this._local) return;
     this.requestUiOverlayRefresh(interaction?.context ?? {});
   }
 
@@ -418,7 +410,7 @@ class ObjectCreatorTool extends Tool {
    */
   finalizeCreatedObject(interaction) {
     const context = interaction?.context ?? {};
-    this.syncCreatedObjectContext(context, this.obj);
+    this.syncCreatedObjectContext(context, this._local);
     this.isObjectCreationCompleted = true;
   }
 
@@ -445,7 +437,7 @@ class ObjectCreatorTool extends Tool {
    * 对象创建生命周期完成通知。
    * handoff 通过 {@link Tool#on|on('afterCreate', ...)} 订阅。
    * @param {Object} interaction - 当前交互上下文
-   * @param {BasicObject} completedObject - 已完成的对象
+   * @param {{ id: number, position: Vector, property: Record<string,any>, data: Record<string,any> }} completedObject - 已完成的对象
    * @protected
    */
   afterCompleteCreatedObject(interaction, completedObject) {
@@ -457,8 +449,8 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreatedObject(interaction) {
-    if (!this.obj) return undefined;
-    const completedObject = this.obj;
+    if (!this._local) return undefined;
+    const completedObject = this._local;
 
     // 1. Finalize：总是执行（同步上下文 + 标记完成）
     this.finalizeCreatedObject(interaction);
@@ -480,7 +472,7 @@ class ObjectCreatorTool extends Tool {
    */
   cancelCreatedObject(interaction) {
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (this.obj && boardApi && this.objectId != null) {
+    if (this._local && boardApi && this.objectId != null) {
       boardApi.discardActiveObjects([this.objectId]);
     }
     this.clearContextObjects(interaction?.context ?? {});
@@ -505,12 +497,13 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 创建当前交互使用的本地草稿对象
+   * 创建当前手势使用的本地状态对象
    * @param {Vector} position - 新对象的位置
    * @param {number} id - 新对象的 id
    * @description
-   * Creator 通过本地草稿对象维护手势期的几何状态，再并行将修改推送到 BoardApi。
-   * 本地草稿不要求与 BoardCore / Worker 内的真实对象实例保持引用同一性。
+   * 子类应初始化 this._local 为纯数据对象 { id, position, property, data }。
+   * 不再创建 BasicObject 子类实例——手势期几何读写仅需纯数据。
+   * Worker 侧真实对象通过 RPC fire-and-forget 平行维护。
    * @abstract
    */
   create(position, id) {

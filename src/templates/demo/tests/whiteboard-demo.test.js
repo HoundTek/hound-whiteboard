@@ -65,7 +65,7 @@ describe("whiteboard demo", () => {
     expect(board.activeObjectManager.layerOrder.length).toBe(1);
     expect(
       board.activeObjectManager.layerOrder[0].activeObjects.has(
-        primaryStrokeTool.obj.id,
+        primaryStrokeTool._local.id,
       ),
     ).toBe(true);
 
@@ -96,8 +96,13 @@ describe("whiteboard demo", () => {
     });
 
     const object = board.getChunkById(1).objectManager.getObject(1);
-    expect(object).not.toBe(primaryStrokeTool.obj);
-    expect(object.serialize()).toEqual(primaryStrokeTool.obj.serialize());
+    expect(object).not.toBe(primaryStrokeTool._local);
+    expect(object).toMatchObject({
+      id: primaryStrokeTool._local.id,
+      position: { x: primaryStrokeTool._local.position.x, y: primaryStrokeTool._local.position.y },
+      property: primaryStrokeTool._local.property,
+      data: primaryStrokeTool._local.data,
+    });
     expect(object.property.color).toBe(DEMO_PRIMARY_STROKE_COLOR);
   });
 

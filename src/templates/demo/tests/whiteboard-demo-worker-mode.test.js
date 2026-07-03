@@ -286,8 +286,8 @@ describe("whiteboard demo worker mode", () => {
       });
       await flushMicrotasks();
 
-      expect(primaryStrokeTool.obj).toBeDefined();
-      expect(primaryStrokeTool.obj.id).toBe(1);
+      expect(primaryStrokeTool._local).toBeDefined();
+      expect(primaryStrokeTool._local.id).toBe(1);
       expect(board.getObjectById(1)).toBeUndefined();
 
       const summaries = await board.getBoardApi().queryObjects([1]);

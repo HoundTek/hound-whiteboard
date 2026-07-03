@@ -62,9 +62,9 @@ describe("PolygonCreatorTool", () => {
     );
 
     expect(
-      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([{ x: 5, y: 7 }]);
-    expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 5 });
+    expect(tool._local.position.serialize()).toEqual({ x: 5, y: 5 });
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -87,7 +87,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.property).toMatchObject({
+    expect(tool._local.property).toMatchObject({
       fillColor: "#ff0000",
       strokeColor: "#0000ff",
       strokeWidth: 3,
@@ -120,7 +120,7 @@ describe("PolygonCreatorTool", () => {
     );
 
     expect(
-      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
@@ -151,7 +151,7 @@ describe("PolygonCreatorTool", () => {
     );
 
     expect(discardSpy).toHaveBeenCalledWith([10]);
-    expect(tool.obj).toBeNull();
+    expect(tool._local).toBeNull();
     expect(tool.count).toBe(0);
     expect(tool.lastPoint).toBeNull();
     expect(board.getObjectById(10)).toBeUndefined();
@@ -181,7 +181,7 @@ describe("PolygonCreatorTool", () => {
     );
 
     expect(
-      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
@@ -309,8 +309,13 @@ describe("PolygonCreatorTool", () => {
     const ownerChunk = board.getChunkById(1);
     const committedObject = ownerChunk.objectManager.getObject(24);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(committedObject).not.toBe(tool.obj);
-    expect(committedObject.serialize()).toEqual(tool.obj.serialize());
+    expect(committedObject).not.toBe(tool._local);
+    expect(committedObject).toMatchObject({
+      id: tool._local.id,
+      position: { x: tool._local.position.x, y: tool._local.position.y },
+      property: tool._local.property,
+      data: tool._local.data,
+    });
   });
 
   test("RPC 风格 boardApi 下应维护本地草稿顶点并提交", () => {
@@ -363,7 +368,7 @@ describe("PolygonCreatorTool", () => {
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([703]);
     expect(
-      tool.obj.rich.localPolygonRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([{ x: 0, y: 0 }]);
   });
 
@@ -385,7 +390,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    const createdObject = tool.obj;
+    const createdObject = tool._local;
 
     tool.process(
       {
@@ -401,7 +406,12 @@ describe("PolygonCreatorTool", () => {
     const committedObject = ownerChunk.objectManager.getObject(23);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     expect(committedObject).not.toBe(createdObject);
-    expect(committedObject.serialize()).toEqual(createdObject.serialize());
+    expect(committedObject).toMatchObject({
+      id: createdObject.id,
+      position: { x: createdObject.position.x, y: createdObject.position.y },
+      property: createdObject.property,
+      data: createdObject.data,
+    });
   });
 
   describe("端到端集成（通过 Board 输入链路）", () => {
@@ -455,18 +465,19 @@ describe("PolygonCreatorTool", () => {
       });
 
       const ownerChunk = board.getChunkById(1);
-      const committedObject = ownerChunk.objectManager.getObject(tool.obj.id);
+      const committedObject = ownerChunk.objectManager.getObject(tool._local.id);
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
-      expect(tool.obj.id).toBe(1);
+      expect(tool._local.id).toBe(1);
       expect(board.objectCounterPool.counter).toBe(1);
-      expect(committedObject).not.toBe(tool.obj);
-      expect(committedObject.serialize()).toEqual(tool.obj.serialize());
-      expect(tool.obj.position.serialize()).toEqual({ x: 125, y: 80 });
-      expect(
-        tool.obj.rich.localPolygonRange.points.map((point) =>
-          point.serialize(),
-        ),
-      ).toEqual([{ x: 0, y: 0 }]);
+      expect(committedObject).not.toBe(tool._local);
+      expect(committedObject).toMatchObject({
+        id: tool._local.id,
+        position: { x: tool._local.position.x, y: tool._local.position.y },
+        property: tool._local.property,
+        data: tool._local.data,
+      });
+      expect(tool._local.position.serialize()).toEqual({ x: 125, y: 80 });
+      expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
     });
   });
 });

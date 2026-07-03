@@ -50,9 +50,9 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj).toBeDefined();
-    expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(tool.obj.data.radius).toBeCloseTo(Math.sqrt(145));
+    expect(tool._local).toBeDefined();
+    expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
+    expect(tool._local.data.radius).toBeCloseTo(Math.sqrt(145));
   });
 
   test("结束点过近时使用固定半径，固定半径由 monitor.zoom 决定", () => {
@@ -80,7 +80,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.data.radius).toBeCloseTo(8);
+    expect(tool._local.data.radius).toBeCloseTo(8);
   });
 
   test("显式提供 boardApi 时应通过 BoardApi 创建并提交圆对象", () => {
@@ -119,8 +119,13 @@ describe("CircleCreatorTool", () => {
     expect(modifySpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([104]);
     const committedObject = board.getChunkById(1).objectManager.getObject(104);
-    expect(committedObject).not.toBe(tool.obj);
-    expect(committedObject.serialize()).toEqual(tool.obj.serialize());
+    expect(committedObject).not.toBe(tool._local);
+    expect(committedObject).toMatchObject({
+      id: tool._local.id,
+      position: { x: tool._local.position.x, y: tool._local.position.y },
+      property: tool._local.property,
+      data: tool._local.data,
+    });
   });
 
   test("RPC 风格 boardApi 下应维护本地草稿半径并提交", () => {
@@ -166,7 +171,7 @@ describe("CircleCreatorTool", () => {
     );
     expect(boardApi.modifyObject).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([702]);
-    expect(tool.obj.data.radius).toBeCloseTo(5);
+    expect(tool._local.data.radius).toBeCloseTo(5);
   });
 
   test("结束手势时应通过 boardApi.commitObjects 提交对象", () => {
@@ -216,7 +221,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.data.radius).toBeCloseTo(16);
+    expect(tool._local.data.radius).toBeCloseTo(16);
   });
 
   test("真实 Board 上结束手势后应将对象写回归属区块", () => {
@@ -241,8 +246,13 @@ describe("CircleCreatorTool", () => {
 
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     const committedObject = board.getChunkById(1).objectManager.getObject(110);
-    expect(committedObject).not.toBe(tool.obj);
-    expect(committedObject.serialize()).toEqual(tool.obj.serialize());
+    expect(committedObject).not.toBe(tool._local);
+    expect(committedObject).toMatchObject({
+      id: tool._local.id,
+      position: { x: tool._local.position.x, y: tool._local.position.y },
+      property: tool._local.property,
+      data: tool._local.data,
+    });
   });
 
   test("连续两次创建应生成两个不同圆对象", () => {
@@ -257,7 +267,7 @@ describe("CircleCreatorTool", () => {
       { acc: { board, boardApi, objectId: 201, ownerChunkId: 1 } },
     );
 
-    const firstObject = tool.obj;
+    const firstObject = tool._local;
 
     tool.process(
       {
@@ -278,7 +288,7 @@ describe("CircleCreatorTool", () => {
       { acc: { board, boardApi, objectId: 202, ownerChunkId: 1 } },
     );
 
-    const secondObject = tool.obj;
+    const secondObject = tool._local;
 
     tool.process(
       {
@@ -302,8 +312,18 @@ describe("CircleCreatorTool", () => {
     );
     expect(firstCommittedObject).not.toBe(firstObject);
     expect(secondCommittedObject).not.toBe(secondObject);
-    expect(firstCommittedObject.serialize()).toEqual(firstObject.serialize());
-    expect(secondCommittedObject.serialize()).toEqual(secondObject.serialize());
+    expect(firstCommittedObject).toMatchObject({
+      id: firstObject.id,
+      position: { x: firstObject.position.x, y: firstObject.position.y },
+      property: firstObject.property,
+      data: firstObject.data,
+    });
+    expect(secondCommittedObject).toMatchObject({
+      id: secondObject.id,
+      position: { x: secondObject.position.x, y: secondObject.position.y },
+      property: secondObject.property,
+      data: secondObject.data,
+    });
   });
 
   test("起始点与结束点完全相同时应使用固定半径（默认 zoom=1）", () => {
@@ -329,7 +349,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.data.radius).toBeCloseTo(16);
-    expect(tool.obj.position.serialize()).toEqual({ x: 10, y: 10 });
+    expect(tool._local.data.radius).toBeCloseTo(16);
+    expect(tool._local.position.serialize()).toEqual({ x: 10, y: 10 });
   });
 });

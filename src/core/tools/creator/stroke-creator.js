@@ -5,10 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import {
-  DEFAULT_STROKE_PROPERTY,
-  StrokeObject,
-} from "../../objects/stroke/stroke.js";
+import { DEFAULT_STROKE_PROPERTY } from "../../objects/stroke/stroke.js";
 import { SingleGestureObjectCreatorTool } from "./object-creator.js";
 import { Vector } from "../../utils/math.js";
 
@@ -25,10 +22,10 @@ import { Vector } from "../../utils/math.js";
  */
 class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   /**
-   * 当前正在创建的笔画对象
-   * @type {StrokeObject}
+   * 当前正在创建笔画对象的本地状态
+   * @type {{ id: number, position: Vector, property: Record<string,any>, data: { points: Array<{x:number, y:number}> } } | null}
    */
-  obj;
+  _local;
 
   /**
    * 笔画对象的属性
@@ -62,8 +59,12 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   create(p, id) {
-    this.obj = new StrokeObject(id, p);
-    this.obj.setProperty(this.property);
+    this._local = {
+      id,
+      position: new Vector(p.x, p.y),
+      property: { ...this.property },
+      data: { points: [] },
+    };
   }
 
   /**
@@ -72,7 +73,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
    * @returns {Vector}
    */
   toLocalPoint(position) {
-    return position.sub(this.obj.position);
+    return position.sub(this._local.position);
   }
 
   /**
@@ -81,10 +82,9 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   appendPathPoint(point, interaction) {
+    const points = this._local?.data?.points;
     const currentLastPoint =
-      this.obj?.rich?.localPathRange?.points?.[
-        this.obj.rich.localPathRange.points.length - 1
-      ];
+      points?.length > 0 ? points[points.length - 1] : undefined;
     if (
       (this._lastLocalPoint && Vector.nearlyEq(this._lastLocalPoint, point)) ||
       (currentLastPoint && Vector.nearlyEq(currentLastPoint, point))
@@ -92,7 +92,9 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
       return;
     }
 
-    this.obj?.appendListItem?.("points", { x: point.x, y: point.y });
+    if (this._local) {
+      this._local.data.points.push({ x: point.x, y: point.y });
+    }
 
     const boardApi = interaction?.context?.acc?.boardApi;
     if (boardApi && this.objectId != null) {
@@ -123,7 +125,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   reset() {
-    this.obj = null;
+    this._local = null;
     this.objectId = null;
     this._lastLocalPoint = null;
   }

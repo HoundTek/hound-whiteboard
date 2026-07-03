@@ -66,10 +66,10 @@ describe("StrokeCreatorTool", () => {
       ),
     ).toBeUndefined();
 
-    expect(tool.obj.id).toBe(100);
-    expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
+    expect(tool._local.id).toBe(100);
+    expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
     expect(
-      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -109,7 +109,7 @@ describe("StrokeCreatorTool", () => {
     );
 
     expect(
-      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -136,10 +136,10 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.id).toBe(101);
-    expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 6 });
+    expect(tool._local.id).toBe(101);
+    expect(tool._local.position.serialize()).toEqual({ x: 5, y: 6 });
     expect(
-      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([{ x: 0, y: 0 }]);
   });
 
@@ -157,7 +157,7 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.property).toMatchObject({ color: "#ff0000", width: 4 });
+    expect(tool._local.property).toMatchObject({ color: "#ff0000", width: 4 });
   });
 
   test("cancel 信号应重置正在创建的对象并撤销 transient 对象", () => {
@@ -182,7 +182,7 @@ describe("StrokeCreatorTool", () => {
     );
 
     expect(discardSpy).toHaveBeenCalledWith([1]);
-    expect(tool.obj).toBeNull();
+    expect(tool._local).toBeNull();
     expect(board.getObjectById(1)).toBeUndefined();
   });
 
@@ -199,7 +199,7 @@ describe("StrokeCreatorTool", () => {
     );
 
     expect(board.activeObjectManager.activeObjects.size).toBe(1);
-    expect(deviceContext.acc.objects).toEqual([tool.obj]);
+    expect(deviceContext.acc.objects).toEqual([tool._local]);
   });
 
   test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {
@@ -249,7 +249,7 @@ describe("StrokeCreatorTool", () => {
       board
         .getChunkById(1)
         .objectManager.getObject(20)
-        .rich.localPathRange.points.map((point) => point.serialize()),
+        .data.points,
     ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -307,7 +307,7 @@ describe("StrokeCreatorTool", () => {
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([701]);
     expect(
-      tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
+      tool._local.data.points,
     ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -363,7 +363,7 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    const createdObject = tool.obj;
+    const createdObject = tool._local;
 
     tool.process(
       {
@@ -377,7 +377,12 @@ describe("StrokeCreatorTool", () => {
     const committedObject = ownerChunk.objectManager.getObject(21);
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
     expect(committedObject).not.toBe(createdObject);
-    expect(committedObject.serialize()).toEqual(createdObject.serialize());
+    expect(committedObject).toMatchObject({
+      id: createdObject.id,
+      position: { x: createdObject.position.x, y: createdObject.position.y },
+      property: createdObject.property,
+      data: createdObject.data,
+    });
   });
 
   test("真实 Board 上取消创建后不应写回区块静态结构", () => {
@@ -418,7 +423,7 @@ describe("StrokeCreatorTool", () => {
       { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
     );
 
-    const firstObject = tool.obj;
+    const firstObject = tool._local;
 
     tool.process(
       {
@@ -436,7 +441,7 @@ describe("StrokeCreatorTool", () => {
       { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
     );
 
-    const secondObject = tool.obj;
+    const secondObject = tool._local;
 
     tool.process(
       {
@@ -454,8 +459,18 @@ describe("StrokeCreatorTool", () => {
     expect(secondObject.id).toBe(32);
     expect(firstCommittedObject).not.toBe(firstObject);
     expect(secondCommittedObject).not.toBe(secondObject);
-    expect(firstCommittedObject.serialize()).toEqual(firstObject.serialize());
-    expect(secondCommittedObject.serialize()).toEqual(secondObject.serialize());
+    expect(firstCommittedObject).toMatchObject({
+      id: firstObject.id,
+      position: { x: firstObject.position.x, y: firstObject.position.y },
+      property: firstObject.property,
+      data: firstObject.data,
+    });
+    expect(secondCommittedObject).toMatchObject({
+      id: secondObject.id,
+      position: { x: secondObject.position.x, y: secondObject.position.y },
+      property: secondObject.property,
+      data: secondObject.data,
+    });
     expect(board.activeObjectManager.activeObjects.size).toBe(0);
   });
 
@@ -525,15 +540,20 @@ describe("StrokeCreatorTool", () => {
       });
 
       const ownerChunk = board.getChunkById(1);
-      const committedObject = ownerChunk.objectManager.getObject(tool.obj.id);
+      const committedObject = ownerChunk.objectManager.getObject(tool._local.id);
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
-      expect(tool.obj.id).toBe(1);
+      expect(tool._local.id).toBe(1);
       expect(board.objectCounterPool.counter).toBe(1);
-      expect(committedObject).not.toBe(tool.obj);
-      expect(committedObject.serialize()).toEqual(tool.obj.serialize());
-      expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
+      expect(committedObject).not.toBe(tool._local);
+      expect(committedObject).toMatchObject({
+        id: tool._local.id,
+        position: { x: tool._local.position.x, y: tool._local.position.y },
+        property: tool._local.property,
+        data: tool._local.data,
+      });
+      expect(tool._local.position.serialize()).toEqual({ x: 105, y: 60 });
       expect(
-        tool.obj.rich.localPathRange.points.map((point) => point.serialize()),
+        tool._local.data.points,
       ).toEqual([
         { x: 0, y: 0 },
         { x: 5, y: 5 },
@@ -581,7 +601,7 @@ describe("StrokeCreatorTool", () => {
       expect(board.activeObjectManager.activeObjects.size).toBe(1);
       expect(board.activeObjectManager.layerOrder.length).toBe(1);
       expect(
-        board.activeObjectManager.layerOrder[0].activeObjects.has(tool.obj.id),
+        board.activeObjectManager.layerOrder[0].activeObjects.has(tool._local.id),
       ).toBe(true);
     });
   });

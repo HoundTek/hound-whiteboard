@@ -74,7 +74,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       };
 
       // 默认 beforeCommitCreatedObject 返回 true
-      creator.obj = { id: 1, type: "rect" };
+      creator._local = { id: 1, type: "rect" };
       creator.completeCreatedObject?.({
         context: { acc: { board } },
       });
@@ -98,7 +98,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // Override 钩子：阻止 commit
       creator.beforeCommitCreatedObject = () => false;
-      creator.obj = { id: 1, type: "rect" };
+      creator._local = { id: 1, type: "rect" };
 
       creator.process({ signals: [{ type: "position" }] }, { acc: { board } });
 
@@ -115,7 +115,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const afterCreate = jest.fn();
 
       creator.on("afterCreate", afterCreate);
-      creator.obj = { id: 1 };
+      creator._local = { id: 1 };
       creator.process({ signals: [{ type: "position" }] }, {});
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
@@ -137,7 +137,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       creator.on("afterCreate", afterCreate);
       creator.beforeCommitCreatedObject = () => false;
-      creator.obj = { id: 1 };
+      creator._local = { id: 1 };
       creator.process({ signals: [{ type: "position" }] }, {});
 
       // afterCreate 无论是否 commit 都应触发（finalize 总是执行）
@@ -355,7 +355,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         }
       });
 
-      first.obj = { id: 42, type: "circle" };
+      first._local = { id: 42, type: "circle" };
 
       const subDAG = createHandoffSubDAG({
         rootPath: "/ce",
@@ -444,7 +444,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [object],
         });
       });
-      first.obj = object;
+      first._local = object;
       const second = new CommonObjectModifierTool();
 
       const subDAG = createHandoffSubDAG({
@@ -598,7 +598,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 42 }],
         });
       });
-      first.obj = { id: 42 };
+      first._local = { id: 42 };
       const second = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -918,7 +918,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const tool = createMockCreator();
       const originalBeforeCommit = tool.beforeCommitCreatedObject.bind(tool);
 
-      tool.obj = { id: 1 };
+      tool._local = { id: 1 };
       const modifier = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -1086,7 +1086,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [object],
         });
       });
-      first.obj = object;
+      first._local = object;
 
       const { accumulatedContext } = mountModifierWorkflow(
         dag,
@@ -1271,7 +1271,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const first = createMockCreator((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, { objects: [object] });
       });
-      first.obj = object;
+      first._local = object;
 
       const { accumulatedContext } = mountModifierWorkflow(
         dag,
@@ -1352,7 +1352,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const first = createMockCreator((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, { objects: [object] });
       });
-      first.obj = object;
+      first._local = object;
 
       const modifier = new CommonObjectModifierTool();
       modifier.on("afterApply", () => calls.push(["afterApply"]));
@@ -1550,15 +1550,20 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         ],
       }, accumulatedContext);
 
-      expect(creatorTool.obj).not.toBeNull();
-      expect(creatorTool.obj.id).toBe(1);
-      firstObjectId = creatorTool.obj.id;
+      expect(creatorTool._local).not.toBeNull();
+      expect(creatorTool._local.id).toBe(1);
+      firstObjectId = creatorTool._local.id;
       expect(board.activeObjectManager.activeObjects.size).toBe(1);
-      const activeBoardObject = board.getObjectById(creatorTool.obj.id);
-      expect(activeBoardObject).not.toBe(creatorTool.obj);
-      expect(activeBoardObject.serialize()).toEqual(creatorTool.obj.serialize());
+      const activeBoardObject = board.getObjectById(creatorTool._local.id);
+      expect(activeBoardObject).not.toBe(creatorTool._local);
+      expect(activeBoardObject).toMatchObject({
+        id: creatorTool._local.id,
+        position: { x: creatorTool._local.position.x, y: creatorTool._local.position.y },
+        property: creatorTool._local.property,
+        data: creatorTool._local.data,
+      });
 
-      const createdPosition = creatorTool.obj.position.serialize();
+      const createdPosition = creatorTool._local.position.serialize();
 
       // 修改阶段：首个 position 启动手势
       monitor.devicesDAG.dispatch({
@@ -1591,7 +1596,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       accumulatedContext,
     );
 
-      expect(creatorTool.obj.position.serialize()).toEqual({
+      expect(creatorTool._local.position.serialize()).toEqual({
         x: createdPosition.x + 3,
         y: createdPosition.y,
       });
@@ -1606,13 +1611,16 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       const ownerChunk = board.getChunkById(1);
       const committedBoardObject = ownerChunk.objectManager.getObject(
-        creatorTool.obj.id,
+        creatorTool._local.id,
       );
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
-      expect(committedBoardObject).not.toBe(creatorTool.obj);
-      expect(committedBoardObject.serialize()).toEqual(
-        creatorTool.obj.serialize(),
-      );
+      expect(committedBoardObject).not.toBe(creatorTool._local);
+      expect(committedBoardObject).toMatchObject({
+        id: creatorTool._local.id,
+        position: { x: creatorTool._local.position.x, y: creatorTool._local.position.y },
+        property: creatorTool._local.property,
+        data: creatorTool._local.data,
+      });
       expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
         phase: "first",
         activeChild: "first",
@@ -1639,8 +1647,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       accumulatedContext,
     );
 
-      expect(creatorTool.obj).not.toBeNull();
-      expect(creatorTool.obj.id).not.toBe(firstObjectId);
+      expect(creatorTool._local).not.toBeNull();
+      expect(creatorTool._local.id).not.toBe(firstObjectId);
       expect(board.activeObjectManager.activeObjects.size).toBe(1);
       expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
         phase: "second",

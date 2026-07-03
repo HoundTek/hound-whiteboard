@@ -5,10 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import {
-  DEFAULT_POLYGON_PROPERTY,
-  PolygonObject,
-} from "../../objects/graph/polygon.js";
+import { DEFAULT_POLYGON_PROPERTY } from "../../objects/graph/polygon.js";
 import { Vector } from "../../utils/math.js";
 import { MultiGestureObjectCreatorTool } from "./object-creator.js";
 
@@ -56,7 +53,9 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     let tool = new PolygonCreatorTool({ property: toolData?.property });
     if (!toolData || toolData.type !== "PolygonTool")
       throw new Error("Invalid tool data for PolygonTool.");
-    tool.obj = toolData.obj ? PolygonObject.parse(toolData.obj) : null;
+    if (toolData._local) {
+      tool._local = { ...toolData._local };
+    }
     return tool;
   }
 
@@ -69,15 +68,22 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     return {
       type: "PolygonTool",
       property: { ...(this.property ?? {}) },
-      obj: this.obj?.serialize(),
+      _local: this._local
+        ? {
+            id: this._local.id,
+            position: { x: this._local.position.x, y: this._local.position.y },
+            property: { ...this._local.property },
+            data: { ...this._local.data },
+          }
+        : null,
     };
   }
 
   /**
-   * @type {PolygonObject}
-   * @description 当前正在绘制的多边形对象
+   * 当前正在创建多边形对象的本地状态
+   * @type {{ id: number, position: Vector, property: Record<string,any>, data: { points: Array<{x:number, y:number}> } } | null}
    */
-  obj;
+  _local;
 
   /**
    * 当前顶点数量
@@ -102,8 +108,12 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {number} id - 对象 id
    */
   create(position, id) {
-    this.obj = new PolygonObject(id, position);
-    this.obj.setProperty(this.property);
+    this._local = {
+      id,
+      position: new Vector(position.x, position.y),
+      property: { ...this.property },
+      data: { points: [] },
+    };
   }
 
   /**
@@ -112,7 +122,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @returns {Vector}
    */
   toLocalPoint(position) {
-    return position.sub(this.obj.position);
+    return position.sub(this._local.position);
   }
 
   /**
@@ -121,10 +131,9 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   appendPoint(localPoint, interaction) {
-    this.obj?.appendListItem?.("points", {
-      x: localPoint.x,
-      y: localPoint.y,
-    });
+    if (this._local) {
+      this._local.data.points.push({ x: localPoint.x, y: localPoint.y });
+    }
 
     const boardApi = interaction?.context?.acc?.boardApi;
     if (!boardApi || this.objectId == null) {
@@ -143,10 +152,9 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   replacePoint(localPoint, index, interaction) {
-    this.obj?.replaceListItem?.("points", index, {
-      x: localPoint.x,
-      y: localPoint.y,
-    });
+    if (this._local) {
+      this._local.data.points[index] = { x: localPoint.x, y: localPoint.y };
+    }
 
     const boardApi = interaction?.context?.acc?.boardApi;
     if (!boardApi || this.objectId == null) {
@@ -204,7 +212,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
   }
 
   reset() {
-    this.obj = null;
+    this._local = null;
     this.objectId = null;
     this.count = 0;
     this.lastPoint = null;
