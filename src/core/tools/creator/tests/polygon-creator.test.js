@@ -61,9 +61,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(
-      tool._local.data.points,
-    ).toEqual([{ x: 5, y: 7 }]);
+    expect(tool._local.data.points).toEqual([{ x: 5, y: 7 }]);
     expect(tool._local.position.serialize()).toEqual({ x: 5, y: 5 });
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
@@ -119,9 +117,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(
-      tool._local.data.points,
-    ).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -180,9 +176,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(
-      tool._local.data.points,
-    ).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -367,9 +361,7 @@ describe("PolygonCreatorTool", () => {
     );
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([703]);
-    expect(
-      tool._local.data.points,
-    ).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("真实 Board 上 object-end 后应写回归属区块", () => {
@@ -465,10 +457,11 @@ describe("PolygonCreatorTool", () => {
       });
 
       const ownerChunk = board.getChunkById(1);
-      const committedObject = ownerChunk.objectManager.getObject(tool._local.id);
+      const committedObject = ownerChunk.objectManager.getObject(
+        tool._local.id,
+      );
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
       expect(tool._local.id).toBe(1);
-      expect(board.objectCounterPool.counter).toBe(1);
       expect(committedObject).not.toBe(tool._local);
       expect(committedObject).toMatchObject({
         id: tool._local.id,

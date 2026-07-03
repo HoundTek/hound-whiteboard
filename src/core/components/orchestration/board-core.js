@@ -10,7 +10,6 @@
 
 import { BasicObject } from "../../objects/basic-obj.js";
 import { deserialize } from "../../objects/object-deserializer.js";
-import { CounterPool } from "../../utils/counter-pool.js";
 import { EventBus } from "../../utils/event-bus.js";
 import { Logger } from "../../../utils/log/logger.js";
 import { logBus } from "../../../utils/log/log-bus.js";
@@ -111,12 +110,6 @@ class BoardCore {
   rootPath;
 
   /**
-   * 对象 id 池
-   * @type {CounterPool}
-   */
-  objectCounterPool;
-
-  /**
    * 区块加载事件总线
    * @type {EventBus}
    */
@@ -166,7 +159,6 @@ class BoardCore {
     this.undoTree = new UndoTree();
     this.chunkLoaded = new Map();
     this.objectLoaded = new Map();
-    this.objectCounterPool = new CounterPool();
     this.chunkLoadEventBus = new EventBus();
     this.rootChunkLoader = new ChunkLoader({
       resolveChunkById: (chunkId) =>
@@ -282,14 +274,6 @@ class BoardCore {
     const chunkState = this.chunkLoaded.get(chunkId);
     if (!chunkState) return 0;
     return chunkState.tempLoadedCount + chunkState.fullLoadedCount;
-  }
-
-  /**
-   * 申请新的对象 id
-   * @returns {number}
-   */
-  allocateObjectId() {
-    return this.objectCounterPool.generate();
   }
 
   /**

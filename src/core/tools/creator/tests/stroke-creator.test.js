@@ -68,9 +68,7 @@ describe("StrokeCreatorTool", () => {
 
     expect(tool._local.id).toBe(100);
     expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(
-      tool._local.data.points,
-    ).toEqual([
+    expect(tool._local.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -108,9 +106,7 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(
-      tool._local.data.points,
-    ).toEqual([
+    expect(tool._local.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
     ]);
@@ -138,9 +134,7 @@ describe("StrokeCreatorTool", () => {
 
     expect(tool._local.id).toBe(101);
     expect(tool._local.position.serialize()).toEqual({ x: 5, y: 6 });
-    expect(
-      tool._local.data.points,
-    ).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("构造参数应允许通过 property 指定新建笔画属性", () => {
@@ -246,10 +240,7 @@ describe("StrokeCreatorTool", () => {
     expect(appendSpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([20]);
     expect(
-      board
-        .getChunkById(1)
-        .objectManager.getObject(20)
-        .data.points,
+      board.getChunkById(1).objectManager.getObject(20).data.points,
     ).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
@@ -306,9 +297,7 @@ describe("StrokeCreatorTool", () => {
     );
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([701]);
-    expect(
-      tool._local.data.points,
-    ).toEqual([
+    expect(tool._local.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -540,10 +529,11 @@ describe("StrokeCreatorTool", () => {
       });
 
       const ownerChunk = board.getChunkById(1);
-      const committedObject = ownerChunk.objectManager.getObject(tool._local.id);
+      const committedObject = ownerChunk.objectManager.getObject(
+        tool._local.id,
+      );
       expect(board.activeObjectManager.activeObjects.size).toBe(0);
       expect(tool._local.id).toBe(1);
-      expect(board.objectCounterPool.counter).toBe(1);
       expect(committedObject).not.toBe(tool._local);
       expect(committedObject).toMatchObject({
         id: tool._local.id,
@@ -552,9 +542,7 @@ describe("StrokeCreatorTool", () => {
         data: tool._local.data,
       });
       expect(tool._local.position.serialize()).toEqual({ x: 105, y: 60 });
-      expect(
-        tool._local.data.points,
-      ).toEqual([
+      expect(tool._local.data.points).toEqual([
         { x: 0, y: 0 },
         { x: 5, y: 5 },
       ]);
@@ -601,7 +589,9 @@ describe("StrokeCreatorTool", () => {
       expect(board.activeObjectManager.activeObjects.size).toBe(1);
       expect(board.activeObjectManager.layerOrder.length).toBe(1);
       expect(
-        board.activeObjectManager.layerOrder[0].activeObjects.has(tool._local.id),
+        board.activeObjectManager.layerOrder[0].activeObjects.has(
+          tool._local.id,
+        ),
       ).toBe(true);
     });
   });

@@ -3,9 +3,6 @@ import { Logger } from "./utils/log/logger.js";
 import { logBus } from "./utils/log/log-bus.js";
 import { createConsolePrinter } from "./utils/log/console-printer.js";
 
-// ── 初始化全局日志系统 ──────────────────────────────────────────
-
-/** @type {Logger} */
 const log = new Logger("HWB", "INFO", logBus);
 
 // 挂载默认控制台输出器

@@ -9,6 +9,7 @@
  */
 
 import { BasicObject } from "../../objects/basic-obj.js";
+import { CounterPool } from "../../utils/counter-pool.js";
 import { EventBus } from "../../utils/event-bus.js";
 import { DevicesDAG } from "../../devices-dag/index.js";
 import { BoardCore } from "./board-core.js";
@@ -87,12 +88,6 @@ class Board {
    * @type {Map<number, BoardObjectLoadedState>}
    */
   objectLoaded;
-
-  /**
-   * 对象 id 池（委托至 BoardCore）
-   * @type {import("../../utils/counter-pool.js").CounterPool}
-   */
-  objectCounterPool;
 
   /**
    * 区块加载事件总线（委托至 BoardCore）
@@ -198,7 +193,6 @@ class Board {
     this.undoTree = this.#boardCore.undoTree;
     this.chunkLoaded = this.#boardCore.chunkLoaded;
     this.objectLoaded = this.#boardCore.objectLoaded;
-    this.objectCounterPool = this.#boardCore.objectCounterPool;
     this.chunkLoadEventBus = this.#boardCore.chunkLoadEventBus;
     this.rootChunkLoader = this.#boardCore.rootChunkLoader;
     this.activeObjectManager = this.#boardCore.activeObjectManager;
@@ -306,14 +300,6 @@ class Board {
    */
   getChunkLoadCount(chunkId) {
     return this.#boardCore.getChunkLoadCount(chunkId);
-  }
-
-  /**
-   * 申请新的对象 id
-   * @returns {number}
-   */
-  allocateObjectId() {
-    return this.#boardCore.allocateObjectId();
   }
 
   /**
@@ -426,15 +412,15 @@ class Board {
     }
 
     if (this.monitors.size > 0) {
-      throw new Error(
-        "enableWorkerMode must be called before createMonitor.",
-      );
+      throw new Error("enableWorkerMode must be called before createMonitor.");
     }
 
     const boardApi = new BoardApiRpc(worker, options);
 
     try {
-      await boardApi.waitUntilReady(options.readyTimeoutMs ?? options.timeoutMs);
+      await boardApi.waitUntilReady(
+        options.readyTimeoutMs ?? options.timeoutMs,
+      );
       await boardApi.createBoard({
         width: this.width,
         height: this.height,
@@ -551,7 +537,10 @@ class Board {
       const monitorId = to.split("/")[1];
       const monitor = this.monitors.get(monitorId);
       if (monitor) {
-        this.devicesDAG.dispatch({ to, signals }, { board: this, boardApi: this.#boardApi });
+        this.devicesDAG.dispatch(
+          { to, signals },
+          { board: this, boardApi: this.#boardApi },
+        );
       }
     });
 
@@ -629,6 +618,21 @@ class Board {
         });
       },
     );
+  }
+
+  /**
+   * 对象 id 池
+   * @type {CounterPool}
+   * @private
+   */
+  #counterPool = new CounterPool();
+
+  /**
+   * 申请新的对象 id
+   * @returns {number}
+   */
+  allocateObjectId() {
+    return this.#counterPool.generate();
   }
 
   /**

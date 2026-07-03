@@ -254,11 +254,18 @@ class ObjectCreatorTool extends Tool {
       data,
     );
 
-    boardApi.createObject(objectType, {
-      id: interaction.objectId,
-      position: interaction.position,
-      property,
-      data,
+    Promise.resolve(
+      boardApi.createObject(objectType, {
+        id: interaction.objectId,
+        position: interaction.position,
+        property,
+        data,
+      }),
+    ).catch((error) => {
+      console.error(
+        `[Creator] Failed to create object ${interaction.objectId} via RPC:`,
+        error,
+      );
     });
 
     this.objectId = interaction.objectId;
@@ -275,7 +282,7 @@ class ObjectCreatorTool extends Tool {
     if (!this._local || this.isObjectCreationCompleted) {
       this._pendingProperty = interaction?.injectedProperty ?? null;
 
-      // 惰性分配 objectId：仅当需要创建新对象时才调用 allocateObjectId
+      // 惰性分配 objectId：走 board.allocateObjectId()（Board 自持 CounterPool，同步分配）
       if (interaction.objectId == null) {
         const allocatedId =
           interaction?.context?.acc?.allocateObjectId?.() ??
@@ -288,7 +295,6 @@ class ObjectCreatorTool extends Tool {
       if (interaction.objectId == null) {
         return false;
       }
-
       this.objectId = interaction.objectId;
 
       if (!this.createObjectThroughBoardApi(interaction)) {

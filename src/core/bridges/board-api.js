@@ -67,10 +67,15 @@ class BoardApi {
    * @throws {TypeError} 不支持的对象类型或缺少 id
    */
   async createObject(type, props) {
-    const objectId = props?.id ?? this.#boardCore.allocateObjectId();
+    const objectId = props?.id;
+    if (objectId == null) {
+      throw new TypeError("createObject requires an explicit object id.");
+    }
     const existingObject = this.#boardCore.getObjectById(objectId);
     if (existingObject) {
-      return objectId;
+      throw new Error(
+        `Duplicate object id ${objectId}: an object with this id already exists.`,
+      );
     }
 
     const obj = deserialize({
