@@ -1,135 +1,236 @@
 # Core 数据模型与术语统一
 
-本文把散落在多个文档中的术语与数据结构做统一整理。
+本文档整理 `src/core/` 当前运行时中的核心数据模型。
 
-## 1. `.hwb` 的数据视角
+## 数据权威划分
 
-依据 `src/core/docs/file-document.md` 与当前代码，可将 `.hwb` 理解为：
+### UI 线程
 
-1. 白板元数据与配置（`meta.json`、`config.json`）
-2. 区块组织（`chunks/connection.json` 与区块文件）
-3. 对象数据（`objects/`）
-4. 历史数据（`history/trash`、`history/edition`、`history/hit`）
-5. 打开轨迹（`trace.json`）
+UI 线程持有：
 
-主进程侧在打开/保存时使用“解压到临时目录再回写”的策略。
+- `Board` façade
+- `DevicesDAG`
+- `signalsEventBus`
+- `Monitor` / `MonitorProxy`
+- tools / prefixs / devices
+- creator 的 `_local` 纯数据状态
+- chooser / modifier 的 summary-like 条目
 
-## 2. 内存对象模型
+### Worker 线程
 
-### 2.1 白板级
+Worker 线程持有真正的 Core 数据权威：
 
-`Board` 持有：
+- `BoardCore`
+- `MonitorCore`
+- `ActiveObjectManager`
+- `Chunk` / `ChunkObjectManager`
+- base / live 渲染结果
+- `UndoTree`
 
-- `chunkLoaded`: 区块 id -> `{ chunk, tempLoadedCount, fullLoadedCount, loaderStrategy }`
-- `rootChunkLoader`: 白板根区块加载器
-- `activeObjectManager`: 活动对象层管理
-- `undoTree`: 历史树
+### Shared 纯模型层
 
-补充说明：
+Worker 与 UI 共用：
 
-- `chunks/connection.json` 中的 `count/order/size` 属于白板文件格式快照，不等同于 `Board` 的运行时字段。
-- 运行时的区块实例所有权由根 `ChunkLoader` 持有；`chunkLoaded` 负责记录加载状态；连续矩形范围的区块缓冲区移动与扩缩由 `ChunkLoader` 表达。
+- `objects/`
+- `range/`
+- `utils/`
+- `chunk/`
+- `renderer/`（除 `UiRenderer` 外）
+- `shared/`
 
-### 2.2 区块级
+## 白板级模型
 
-`Chunk` 持有：
+### `Board`
 
-- 四向链接：`leftChunk` / `rightChunk` / `upChunk` / `downChunk`
-- `objectManager`（`ChunkObjectManager`）
+`Board` 是 UI façade，负责：
 
-`ChunkObjectManager` 持有：
+- 持有 `DevicesDAG` 与 `signalsEventBus`
+- 管理 `monitors`
+- 决定 same-thread / Worker mode
+- 通过 `BoardApi` / `BoardApiRpc` 与 Core 侧交互
+- 持有本地 `CounterPool`，同步分配 objectId
 
-- `staticGraph`: 区块内对象层叠图（有向图）
-- `objectCoverChunks`: 对象覆盖区块索引
+### `BoardCore`
 
-`Board` 持有：
+`BoardCore` 是 Core 侧真实白板状态，负责：
 
-- `objectLoaded`: 对象实例注册表，结构为 `Map<number, { obj, loadedCount }>`
+- `chunkLoaded`
+- `objectLoaded`
+- `rootChunkLoader`
+- `activeObjectManager`
+- `undoTree`
+- `persistenceAdapter`
+- `aomRenderHooks`
 
-其中：
+在 Worker mode 下，业务语义上的对象、区块与提交关系都以 Worker 中的 `BoardCore` 为准。
 
-- `loadedCount` 只统计对象覆盖区块上的完整加载持有数
-- `loadedCount === 0` 不必然立刻删除对象；若对象仍在活动层，实例仍会保留在 `Board.objectLoaded` 中
+## objectId 模型
 
-### 2.3 对象级
+当前 objectId 分配规则：
 
-`BasicObject` 的统一字段：
+1. creator 在 UI 线程通过 `Board.allocateObjectId()` 申请 id
+2. `Board` 使用本地 `CounterPool` 同步递增
+3. `boardApi.createObject(type, { id, ... })` 把显式 id 发往 Worker
+4. Worker 侧 `BoardApi.createObject()` 要求必须收到显式 id
+5. 若 Worker 侧发现重复 id，会抛错并通过 `rpc-response` 返回错误
 
-- `id`、`ownerChunkId`
-- `position`、`transform`
-- `property`（渲染属性字典）
-- `data`（类型专属持久化数据，如 `points`、`radius`）
-- `rich`（运行时派生富数据，如 `boundingBox`、`convexHullRange`）
-- `getRange()` 暴露的主判定范围
+这意味着：
 
-典型派生：
+- UI 线程是 id 分配者
+- Worker 线程是 id 使用者与校验者
+- `BoardCore` 不再承担 id 分配职责
 
-- `StrokeObject`（可擦、无向）
-- `PolygonObject`（不可擦、有向）
-- `Container` 与一/二维对象层
+## 区块级模型
 
-当前对象级范围语义：
+### `Chunk`
 
-- `PolygonObject`：`rich.localPolygonRange` / `rich.worldPolygonRange`
-- `StrokeObject`：`rich.localPathRange` / `rich.worldPathRange`
+单个区块的运行时实体，包含：
 
-这些字段代表对象的局部几何、世界几何与主判定范围，不再把普通点数组当成核心富数据结构。
+- 区块坐标 / 区块 id
+- `objectManager: ChunkObjectManager`
+- 与邻区块的连接关系
 
-## 3. 层级关系模型
+### `ChunkObjectManager`
 
-按设计文档，存在两类图：
+区块静态图管理器，包含：
 
-1. 静态图：稳定层叠关系
-2. 动态状态图（按层拆分）：用于活动对象交互期间的临时关系
+- `staticGraph`：区块内静态层叠图
+- `objectCoverChunks`：对象覆盖到的区块索引
 
-`ActiveObjectManager` 当前已经把“活动层 + 非活动子图 + 层顺序”这一模型落到代码。
+### `chunkLoaded`
 
-## 4. 工具与设备模型
+`BoardCore.chunkLoaded` 结构：
 
-- 工具：后续消费单元，负责解释或变换设备节点送出的信号
-- 设备：挂载在 Monitor 下的一棵设备子树
-- 节点：设备子树中的信号处理单元，只挂 `processor`
-- 控制杆：对象上的可拖拽控制点
+```js
+Map<chunkId, {
+  chunk,
+  tempLoadedCount,
+  fullLoadedCount,
+  loaderStrategy,
+}>
+```
 
-当前实现里，设备不再被理解为单个输入对象，而是由若干节点组成的子树：
+其语义是“这个区块当前被多少加载器以什么策略持有”，不是对象几何信息本身。
 
-- 节点负责接收、处理、转发信号包
-- 设备负责定义这棵子树包含哪些节点
-- 工具负责消费设备节点继续传下来的信号
+## 对象级模型
 
-真正的输出信号属于 Core -> UI 方向。只有当信号跨越 Core-UI Interface 时，才进入事件总线或其它边界通道。
+### 真实对象实例
 
-## 5. 历史模型（Undo Tree）
+Worker 侧真实对象实例是 `BasicObject` 及其子类：
 
-设计上区分：
+- `StrokeObject`
+- `CircleObject`
+- `PolygonObject`
+- 其它图形 / 容器对象
 
-- 原子操作（对象/区块增删改）
-- 分子操作（原子组合）
-- 树状历史（支持回到已撤销分支）
+统一字段：
 
-现状是术语和结构已定义，核心执行逻辑尚在建设阶段。
+- `id`
+- `position`
+- `transform`
+- `property`
+- `data`
+- `rich`
 
-## 6. 术语对照表
+### UI 侧交互态对象条目
 
-- 活动对象（Active Object）: 当前被选择或被操作的对象
-- 层叠图（Tier Graph）: 表示遮挡关系的有向图
-- 静态图（Static Graph）: 稳定层叠关系
-- 动态层（Dynamic Layers）: 活动阶段临时层关系
-- 当前点（Current Node）: Undo Tree 中当前状态对应节点
-- 焦点链（Focus Chain）: 从根沿后继点的主链
+UI 线程里有两类轻量对象条目：
 
-## 7. 开发时的认知边界
+#### creator `_local`
 
-为了减少误解，建议把 Core 内容分成三类看待：
+creator 当前使用：
 
-1. 已稳定基础设施
-   - `DirectedGraph`
-   - 几何算法与范围工具
-   - 基础对象抽象
-2. 已有算法但待联调
-   - 活动对象分层管理
-   - 区块加载器与跨区块访问策略
-3. 设计先行、实现待补
-   - Undo Tree 细节
-   - 工具消费链完整闭环
-   - 区块对象持久化全链路
+```js
+{
+  id,
+  position: Vector,
+  property: Record<string, any>,
+  data: Record<string, any>,
+}
+```
+
+这是纯数据对象，不是 `BasicObject` 实例。
+
+#### chooser / modifier summary-like 条目
+
+chooser 与 modifier 常见条目形态：
+
+```js
+{
+  id,
+  position: { x, y },
+  boundingBox,
+  range,
+  property,
+  data,
+}
+```
+
+这些条目用于：
+
+- Worker mode 下的 hitTest / queryObjects 结果
+- handoff 桥接
+- UI overlay
+
+## 动态图与静态图
+
+### 静态图
+
+- 分布在各 `ChunkObjectManager.staticGraph`
+- 表示稳定层叠关系
+- `apply()` / `remove()` / `discard()` 会影响其显示结果
+
+### 动态图（AOM）
+
+- 由 `ActiveObjectManager` 管理
+- 用于选择、创建、修改期间的临时层关系
+- 对象一旦进入 AOM，应由 live 层负责绘制
+
+AOM 内部关键结构：
+
+- `activeObjects`
+- `activeObjectIndex`
+- `layerOrder`
+- `onLayer`
+- `baseObjectSnapshotWorldRanges`
+- `baseObjectSnapshotCoverChunks`
+
+## 视口与渲染模型
+
+### Worker 侧
+
+- `MonitorCore` 持有 `origin`、`zoom`、`width`、`height`
+- base / live 两层通过 OffscreenCanvas 输出
+- `flushRenderFrame()` 回传 `render-frame`
+
+### UI 侧
+
+- `MonitorProxy` 接收位图并合成到 DOM canvas
+- `UiRenderer` 独立维护 overlay
+- same-thread compat 路径仍可使用 `Monitor`
+
+## 持久化模型
+
+持久化通过 `persistenceAdapter` 接入。
+
+当前稳定语义：
+
+- 对象主存储位置由 `ownerChunkId` 描述
+- 覆盖区块由 `objectCoverChunks` 单独索引
+- Worker / UI 运行时分层不改变 `.hwb` 的对象 / 区块语义
+
+## 关键术语
+
+- **same-thread compat**：未启用 Worker mode 时，本地 `BoardCore` 直接承担全部职责
+- **summary-like 条目**：用于 UI 侧交互和 overlay 的纯数据对象
+- **静态图**：区块级稳定层叠图
+- **动态图 / AOM**：交互态动态层关系
+- **renderHooks**：AOM 到具体渲染链的注入式桥接
+
+## 相关文档
+
+- [core-overview.md](./core-overview.md)
+- [file-structure.md](./file-structure.md)
+- [board-document.md](../components/orchestration/docs/board-document.md)
+- [active-object-manager-document.md](../components/orchestration/docs/active-object-manager-document.md)
+- [core-runtime-boundaries.md](./core-runtime-boundaries.md)

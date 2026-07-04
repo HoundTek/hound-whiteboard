@@ -2,60 +2,102 @@
 
 ## 概述
 
-`RectangleObjectChooserTool` 是基于拖拽矩形范围的对象选择工具。
+`RectangleObjectChooserTool` 是当前 demo 默认使用的 chooser 实现。
 
-它当前提供了一条可工作的 chooser 实现：
+它提供一条完整链路：
 
-- 收到第一帧位置输入后开始记录框选起点
-- 拖拽过程中持续更新矩形范围
-- 抬起时按矩形范围选择对象
-- 新一轮框选会替换上一轮选择
+1. 按下后记录拖拽起点
+2. 拖拽过程中持续维护当前框选矩形
+3. 抬起时按矩形范围命中对象
+4. 用新结果替换上一轮选择
 
-## BoardApi 双路径
+## 拖拽状态
 
-与基类一致，`RectangleObjectChooserTool` 在 BoardApi 路径下通过 `addActiveObjects / discardActiveObjects` 管理生命周期：
+工具通过节点 state 维护：
 
-| 操作     | BoardApi 路径                                  | Legacy 路径                                |
-| -------- | ---------------------------------------------- | ------------------------------------------ |
-| 选择对象 | `boardApi.addActiveObjects(objectIds)`         | `AOM.choose(new Set(objects))`             |
-| 清空选择 | `boardApi.discardActiveObjects(previousIds)`   | `AOM.discard(new Set(previousObjects))`    |
-| 对象来源 | `boardCore.objectLoaded` + `activeObjectIndex` | `board.objectLoaded` + `activeObjectIndex` |
+- `isSelecting`
+- `selectionStart`
+- `selectionCurrent`
+- `selectionWorldRect`
 
-`replaceSelection()` 方法在 BoardApi 路径下：
+这些状态用于：
 
-1. 先 `discardActiveObjects(previousIds)` 清空上一轮
-2. 再 `addActiveObjects(nextIds)` 添加新一轮
-3. 通过 `resolveSelectedObjectReferences()` 回填真实实例后写回上下文
+- 驱动 end/cancel 时的行为
+- 声明拖拽中的矩形 overlay
 
-## 当前选择语义
+## Worker mode 下的命中读取
 
-矩形框选工具：
+### 拖拽中
 
-- 从 `objectLoaded` 与 `activeObjectIndex` 汇总候选对象（BoardApi 路径下优先从 `boardApi.getBoardCore()` 读取）
-- 通过基类的 `resolveObjectSelectionWorldRange()` 解析对象主判定范围对应的世界范围
-- 用对象主判定范围与框选矩形做相交判断
-- 把命中的对象通过 `replaceSelection()` 替换当前选择
+拖拽中只有本地 state 更新，不发 RPC。
 
-它当前不使用 `boardApi.hitTest()`，因为 P2 保持同步兼容层。
+### 抬起时
 
-## 与 UiRenderer 的关系
+Worker mode 下的读路径：
 
-`RectangleObjectChooserTool` 除了继承基类的选择框 provider，还会额外声明拖拽中的矩形 overlay。
+```js
+boardApi.hitTest(selectionWorldRect, "intersect")
+  -> objectIds[]
+  -> boardApi.queryObjects(objectIds)
+  -> summaries[]
+```
 
-因此在 `uiCanvas` 上当前可以同时看到两类内容：
+因此：
 
-- 已经选中对象的兼容选择框
-- 正在拖拽时的半透明矩形框选框
+- `process()` 在 Worker mode 下可能返回 Promise
+- `finalizeSelection()` 会在 Promise resolve 后执行
 
-其中默认样式：
+## same-thread compat 路径
 
-- 单对象选择框使用实线
-- 多对象组合大矩形使用虚线
-- 拖拽中的矩形框选框使用独立样式（半透明蓝色）
+same-thread 路径下：
+
+1. 从 `objectLoaded` 与 `activeObjectIndex` 汇总候选对象
+2. 用 `resolveObjectSelectionWorldRange()` 判断与框选矩形是否相交
+3. 直接返回命中的对象实例
+
+## `replaceSelection()` 语义
+
+`replaceSelection()` 用于替换当前选择：
+
+1. 丢弃上一轮选择
+2. 清空当前 context objects
+3. 解析新选择条目
+4. 将新选择加入 AOM
+5. 把新条目写回 context
+
+Worker mode 下：
+
+- 丢弃：`boardApi.discardActiveObjects(previousIds)`
+- 选择：`boardApi.addActiveObjects(nextIds)`
+
+## overlay
+
+`RectangleObjectChooserTool.collectUiOverlayEntries()` 会在基类默认选择框之外，再附加一条矩形 overlay：
+
+- `type: "rect"`
+- `worldRect: dragState.worldRect`
+- 半透明蓝色填充 + 边框
+
+## handoff 协作
+
+`finalizeSelection()` 内部会：
+
+1. `replaceSelection()`
+2. `clearSelectionDragState()`
+3. `afterChoose()`
+4. `confirmSelection()`
+5. `requestUiOverlayRefresh()`
+
+handoff 通常通过 `afterConfirm` 事件切到 modifier。
 
 ## 当前状态
 
-- 已用于 demo 的 mouse secondary 工具
-- 已支持空框选清空上一轮选择
-- 已支持 BoardApi 双路径
-- P2 读路径保持同步；P3 可引入 `hitTest` 做命中查询
+- Worker mode 下已接通 `hitTest + queryObjects` 异步读路径
+- 选择替换仍是 fire-and-forget 写路径
+- 拖拽框与选中框都已接通 `UiRenderer`
+
+## 相关文档
+
+- [object-chooser-document.md](./object-chooser-document.md)
+- [ui-renderer-document.md](../../../components/renderer/docs/ui-renderer-document.md)
+- [core-input-flow.md](../../../docs/core-input-flow.md)

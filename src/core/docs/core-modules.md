@@ -1,211 +1,177 @@
-# Core 模块详解（含实现状态）
+# Core 模块详解
 
-本文按模块总结“职责、关键类、现状”。
+本文档按 `src/core/` 当前目录划分总结各模块职责与运行边界。
 
-## 1. components/
+更细的 Worker / UI / Shared 归属见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
 
-components 模块已按职责拆分为三个子目录，外部通过 `index.js` 统一导入。
+## `components/`
 
-```
-src/core/components/
-├── chunk/          # 区块子系统（Chunk / ChunkLoader / ChunkLoader / ChunkObjectManager）
-├── renderer/       # 渲染管线（BaseRenderer / LiveRenderer / UiRenderer / RenderScheduler / DirtyRectStrategy）
-├── orchestration/  # 编排层（Board / Monitor / ActiveObjectManager）
-├── index.js        # 统一导出入口
-├── docs/
-└── tests/
-```
+`components/` 负责白板运行时的对象、区块、渲染与编排。
 
-### 1.1 编排层（`orchestration/`）
+### `components/orchestration/`
 
-#### Board
+| 文件                       | 运行边界 | 职责                                                                   |
+| -------------------------- | -------- | ---------------------------------------------------------------------- |
+| `board-core.js`            | Worker   | 真实白板核心，持有对象、区块、AOM、UndoTree、持久化协调                |
+| `board.js`                 | UI       | UI façade，持有 DAG、signalsEventBus、monitors，并负责 Worker 模式切换 |
+| `monitor-core.js`          | Worker   | Worker 侧视口、ChunkLoader、base/live 渲染输出                         |
+| `monitor-proxy.js`         | UI       | Worker 模式下的 monitor 代理，接收 `render-frame`                      |
+| `monitor.js`               | UI       | same-thread compat Monitor                                             |
+| `active-object-manager.js` | Shared   | 动态层关系、活动对象生命周期与静态图回写                               |
+| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                                       |
+| `board-render-hooks.js`    | UI       | AOM 渲染请求到 monitor 渲染器的桥接层                                  |
 
-目标职责：
+### `components/chunk/`
 
-- 管理白板级状态（宽高、根目录、块实例所有权与加载状态）
-- 管理块加载与对象写入
-- 管理 `UndoTree` 与 `ActiveObjectManager`
+- `chunk.js`：区块实体
+- `chunk-loader.js`：加载器与引用计数
+- `chunk-object-manager.js`：区块静态图与对象覆盖区块索引
 
-当前状态：
+这一层属于 Shared：Worker 侧主用，same-thread compat 路径复用。
 
-- 字段与主要流程框架已在 `src/core/components/orchestration/board.js` 建立。
-- 运行时区块状态已统一到 `chunkLoaded`。
-- 仍有明显 `todo`：创建文件结构、完整区块加载、历史状态回放、设备相关联动。
+### `components/renderer/`
 
-#### ActiveObjectManager
+| 文件                      | 运行边界 | 职责         |
+| ------------------------- | -------- | ------------ |
+| `renderer.js`             | Shared   | 渲染器基类   |
+| `base-renderer.js`        | Shared   | base 层渲染  |
+| `live-renderer.js`        | Shared   | live 层渲染  |
+| `ui-renderer.js`          | UI       | overlay 渲染 |
+| `render-scheduler.js`     | Shared   | 脏区调度     |
+| `dirty-rect-strategy*.js` | Shared   | 脏区策略     |
 
-目标职责：
+## `bridges/`
 
-- 管理当前活动对象
-- 以层结构维护活动对象与非活动对象子图
-- 支持选择、取消选择、置顶、整理层
+- `board-api.js`
+  - `BoardApi`：Core 语义的同线程实现，当前在 Worker 中作为 RPC 目标执行
+  - `BoardApiRpc`：UI 线程 RPC 客户端
+- `persistence-adapter.js`：持久化接口与默认内存适配
+- `file-operate-bridge-*`：宿主文件 I/O 桥接，运行在 UI / preload 相关边界
 
-当前状态：
+## `devices/`
 
-- 是 Core 中实现最完整的复杂模块之一。
-- 已包含：
-  - 子图拾取（含跨区块访问）
-  - 选择分层逻辑（按路径活动点数分层）
-  - 层插入、层顺序比较、置顶与清理
-- 仍有待打磨：区块加载器与真实文件路径联动、性能优化、边界处理测试补全。
+输入设备定义，全部运行在 UI 线程。
 
-### 1.2 区块子系统（`chunk/`）
+- `mouse-device.js`
+- `keyboard-device.js`
+- `touchscreen-device.js`
 
-#### Chunk
+它们把宿主输入编码成稳定的 `SignalPacket`，再交给 `DevicesDAG`。
 
-目标职责：
+## `devices-dag/`
 
-- 管理单区块对象
-- 维护四向区块链
-- 提供完整加载/临时加载/卸载
+设备图、节点状态和信号路由系统，全部运行在 UI 线程。
 
-当前状态：
+核心职责：
 
-- 基本字段和区块连接逻辑已存在。
-- 临时加载 (`loadTemp`) 可加载层叠图。
-- 完整对象加载、落盘、卸载清理仍待完成。
+- 保存节点与边
+- `dispatch(signalPacket, accumulatedContext)`
+- 节点 state 读写
+- workflow / subDAG 的挂载与卸载
+- 异步 handler rejection 保护
 
-#### ChunkObjectManager
+## `tools/`
 
-目标职责：
+所有工具都在 UI 线程执行。
 
-- 管理区块级静态对象图（层叠关系）
-- 管理对象覆盖区块索引，并通过 Board 间接解析对象实例
+### `tools/creator/`
 
-当前状态：
+- 使用 `_local` 纯数据状态维护手势期对象几何
+- 通过 `BoardApi` / `BoardApiRpc` fire-and-forget 同步 Worker 侧真实对象
+- 当前 demo 已接通 `StrokeCreatorTool`、`CircleCreatorTool`、`PolygonCreatorTool`
 
-- `staticGraph` 与 `objectCoverChunks` 数据结构已定义，对象实例所有权已上移到 `Board.objectLoaded`。
-- `loadTierGraph()` 能解析图结构。
-- 对象读写已改为经 `Board` 统一调度，图落盘与覆盖索引落盘已接通。
+### `tools/chooser/`
 
-#### ChunkLoader / ChunkLoader
+- `ObjectChooserTool`：选择工具基类
+- `RectangleObjectChooserTool`：矩形框选实现
+- Worker mode 下读路径通过 `hitTest + queryObjects` 异步完成
 
-目标职责：
+### `tools/modifier/`
 
-- `ChunkLoader`：通用区块加载器，是区块对象的持有者，负责按 id/坐标访问与卸载区块。
-- `ChunkLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
+- `ObjectModifierTool`：修改工具基础设施
+- `GestureBasedObjectModifierTool`：position / displacement 双通道手势调度
+- `CommonObjectModifierTool`：通用位置修改实现
 
-当前状态：
+## `prefixs/`
 
-- 基础缓存和引用计数已就绪。
-- 与 `Board` 的完整加载联动仍在进行中。
+UI 侧输入编排层。
 
-### 1.3 渲染管线（`renderer/`）
+- `handoff-handler.js`：creator / chooser → modifier 两阶段工作流
+- `edge-prefix.js`、`prefix-node.js` 等：信号转换、注入和局部状态机
 
-包含 `BaseRenderer`、`LiveRenderer`、`UiRenderer`、`RenderScheduler`、`DirtyRectStrategy`，负责脏区域计算、多层画布渲染调度与 UI 覆盖层渲染。
+## `objects/`
 
-当前状态：
+对象模型层，属于 Shared。
 
-- `BaseRenderer` 已支持静态层整层重绘和 dirty rect 局部刷新。
-- `LiveRenderer` 已支持活动层整层重绘和 dirty rect 局部刷新。
-- `RenderScheduler` 已支持多次 invalidate 合并到单帧 flush。
-- `UiRenderer` 已提供兼容 overlay 渲染和 provider 扩展口。
-- 仍在向区块级补绘推进。
+- `basic-obj.js`：基础对象抽象
+- `stroke/`：笔画对象
+- `graph/`：Circle / Polygon 等几何对象
+- `object-deserializer.js`：反序列化入口
 
-## 2. objects/
+对象在 Worker 与 UI 两边都可能被使用：
 
-### 2.1 基础层次
+- Worker 侧用于真实状态、渲染与命中
+- UI 侧用于 same-thread compat、测试与局部纯数据 helper
 
-对象继承链主干：
+## `range/`
 
-- `BasicObject`
-- `Container`
-- `OneDimensionObject` / `TwoDimensionObject`
-- 具体对象（如 `CircleObject`、`PolygonObject`、`StrokeObject`）
+几何范围抽象层，属于 Shared。
 
-`BasicObject` 已定义关键通用能力：
+- `RectangleRange`
+- `PathRange`
+- `PolygonRange`
+- `EllipseRange`
+- `RopeRange`
 
-- 位置、变换矩阵
-- 包围盒、凸包范围与主判定范围
-- 点命中判断
-- 序列化/渲染抽象接口
+chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
 
-### 2.2 代表对象
+## `utils/`
 
-- `PolygonObject`
-  - 已实现局部/世界多边形范围管理、凸包范围/包围盒更新、命中判断、渲染，以及 `setData()`、`appendListItem()`、`replaceListItem()` 等数据变更接口。
-- `StrokeObject`
-  - 已实现局部/世界路径范围管理、平滑插点、凸包范围与包围盒更新、渲染，以及 `setData()` 等数据变更接口。
+纯工具层，属于 Shared。
 
-## 3. tools/
+包含：
 
-### 3.1 设计定位
+- `math.js` / `math3d.js`
+- `math-algorithm.js`
+- `directed-graph.js`
+- `event-bus.js`
+- `queue.js` / `deque.js`
+- `random.js`
+- `counter-pool.js`
 
-工具是设备节点之后的消费单元。它接收整包信号，并对这些信号执行创建、修改、选择、擦除或白板操作等逻辑。
+当前 `CounterPool` 由 UI 侧 `Board` 自持，用于同步分配 objectId。
 
-### 3.2 当前代码状态
+## `hit/`
 
-- 基类 `Tool`、创建工具基类 `ObjectCreatorTool` 已具备。
-- 已有可用子类：
-  - `StrokeCreatorTool`
-  - `PolygonCreatorTool`
-- 仍未完整：
-  - chooser/eraser/board 工具大多为空或仅占位
-  - 多个工具文档为空，尚未与实现同速更新
-  - 其它工具族仍在裁剪与补线中
+历史结构层，属于 Shared。
 
-当前已接通的一条核心纵向链路是：
+- `undo-tree-core.js` 已作为运行时骨架接入 `BoardCore`
+- 更完整的 operation 语义与历史回放仍属于后续完善项
 
-- 设备输入进入 `SignalPacket`
-- `Board.signalsEventBus` 分发到目标 `Monitor`
-- `DevicesDAG` 路由到末端 workflow 节点
-- creator 工具默认从 `Board` 申请 `objectId`
-- creator 工具直接消费输入包中的世界坐标，并默认从 `Monitor` 解析 `ownerChunkId`
-- 新对象先进入 `ActiveObjectManager.add()`，完成后再通过 `apply()` 回写白板
+## `shared/`
 
-## 4. hit/
+跨线程共享类型定义，属于 Shared。
 
-### 4.1 设计目标
+- `types.js`
+- `board-api-types.js`
+- `message-types.js`
 
-`operation-document.md` 与 `undo-tree-document.md` 规划了：
+这些文件只提供 JSDoc typedef 与协议约定，不承载业务逻辑。
 
-- 原子操作 / 分子操作
-- 支持分支撤销的 Undo Tree
-- attempt 与 vip 等扩展概念
+## `test-support/`
 
-### 4.2 当前状态
+测试支撑模块，提供 canvas / OffscreenCanvas / ImageBitmap mock 等 helper。
 
-- `operation.js` 与 `undo-tree-core.js` 仅有类骨架。
-- 实际历史操作记录、回放、压缩与落盘逻辑尚未实现。
+## 当前状态
 
-## 5. devices/
+- Core Worker 架构已落地：BoardCore / MonitorCore / BoardApiRpc / MonitorProxy 全部接通
+- tools 保持在 UI 线程
+- objects / range / utils / chunk / renderer / AOM 作为共享层复用
+- P4 主要剩余项集中在性能优化与基准测试
 
-- `DevicesDAG` 负责保存节点与边的结构，并按路径把信号包送到节点 handler。
-- `DevicesDAGNode` 只表示信号处理单元，核心字段是 `handler`、`defaultRoute`、`umount` 与 `state`。
-- 结构化输入子图已经统一为 `rootPath + nodes + edges` 结构，推荐通过 `createSubDAG(rootPath).build()` 生成。
-- 业务侧挂载设备时应优先从 `Monitor` 的 `mountSubDAG()` 进入，再由 `Monitor` 代理到 `Board` 持有的唯一 `DevicesDAG`。
-- 输入从 Board 到 Monitor、再到 DevicesDAG 与 workflow 节点的完整链路，见 `core-input-flow.md`。
-- DOM/Pointer/Touch 到 `SignalPacket` 的编码约定，见 `core-input-encoding.md`。
-- 当前建议冻结的阶段性稳定接口，见 `core-stable-interfaces.md`。
+## 相关文档
 
-当前状态：
-
-- 节点级 `processor` 路由模型已经建立。
-- 设备子图定义可展开并挂载到设备图。
-- Core 内部信号通过节点处理器递归传递；处理器可来自闭包、工厂函数或对象方法。
-- 跨 Core-UI Interface 的信号边界已经在文档层明确。
-
-## 6. utils/ 与 range/
-
-### 6.1 DirectedGraph
-
-`DirectedGraph` 是当前 Core 最稳定的底层模块之一，包含：
-
-- 节点/边增删改查
-- 入度出度与零入度/零出度查询
-- DAG 判定
-- 序列化与反序列化
-- 图等价比较
-
-### 6.2 几何算法
-
-`math-algorithm.js` 包含：
-
-- 凸包计算（Graham 扫描）
-- 曲线插点（用于笔画平滑）
-- 绳钉求交（点在多边形内判断）
-
-### 6.3 其他
-
-- `CounterPool`：对象 id 递增池
-- `RectangleRange`：矩形范围抽象，以及 range 子系统中的统一包围盒表示
+- [core-overview.md](./core-overview.md)
+- [core-data-model.md](./core-data-model.md)
+- [components-document.md](../components/docs/components-document.md)
+- [core-runtime-boundaries.md](./core-runtime-boundaries.md)

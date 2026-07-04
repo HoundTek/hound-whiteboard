@@ -4,6 +4,8 @@
 
 这一页记录当前输入系统已经收敛、可被业务代码依赖的最小接口面。
 
+模块运行边界见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
+
 这里的“稳定”指的是：
 
 - 当前重构已经完成迁移
@@ -154,6 +156,8 @@
 
 - [handler 上下文（ctx）用法](../devices-dag/docs/handler-context-document.md)
 - [设备图](../devices-dag/docs/devices-dag-document.md)
-- [设备定义](../devices-dag/docs/device-document.md)
-- [工具基类](../tools/tool-document.md)
+- [设备定义](../devices/docs/device-document.md)
+- [对象创建工具](../tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../tools/modifier/docs/object-modifier-document.md)
 - [Core 输入流](./core-input-flow.md)

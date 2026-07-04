@@ -13,6 +13,8 @@
 - 修饰节点按职责执行记录、参数注入、路由、状态机或回调注入
 - 显式工具叶子消费最终信号
 
+本文涉及的模块运行边界见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
+
 ## 关系图
 
 ```mermaid
@@ -123,6 +125,8 @@ handler 不应显式指定 `to:`——路由依靠 `defaultRoute: "default"` 自
 
 ## 相关文档
 
-- [设备图](../devices/docs/devices-dag-document.md)
-- [工具基类](../tools/tool-document.md)
+- [设备图](../devices-dag/docs/devices-dag-document.md)
+- [对象创建工具](../tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../tools/modifier/docs/object-modifier-document.md)
 - [阶段性稳定接口](./core-stable-interfaces.md)

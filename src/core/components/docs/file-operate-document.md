@@ -1,235 +1,103 @@
 # 组件文件操作文档
 
-本文档整理 `src/core/components/` 内涉及文件系统读写的实现，重点说明：
+本文档整理 `src/core/components/` 当前涉及文件系统读写的实现边界。
 
-- 哪些组件会触发文件操作
-- 读写哪些路径
-- 通过什么方式执行 I/O（本地/IPC）
-- 当前状态与注意事项
+## 概述
 
-## 模块范围
+当前文件 I/O 通过两层抽象完成：
 
-本文件仅覆盖 components 层直接发起的文件操作，不覆盖 tools/devices 或 utils 层通用 I/O 细节。
+1. `persistenceAdapter`：Core 侧持有的持久化接口
+2. host bridge：UI / preload / Tauri 宿主负责的真实文件访问实现
 
-当前涉及文件操作的组件：
+这意味着：
 
-- `Board`
-- `ChunkObjectManager`
-- `Chunk`（通过 `ChunkObjectManager` 间接触发）
+- `BoardCore` / `ChunkObjectManager` 只依赖持久化接口，不直接依赖宿主 API
+- UI 线程在启用文件模式时，为 `BoardCore` 注入 `createRendererPersistenceAdapter(rootPath, bridge)`
+- Worker / same-thread 的运行边界不会改变持久化语义本身
 
-## 白板目录结构约定
+## 当前涉及的组件
 
-根据当前 `Board.create(...)` 的实现，白板根目录至少包含：
+- `Board`：选择并注入持久化适配器
+- `BoardCore`：通过 `persistenceAdapter` 协调对象与区块元数据读写
+- `ChunkObjectManager`：读写区块静态图与对象覆盖区块索引
 
-- `meta.json`
-- `config.json`
-- `trace.json`
-- `chunks/`
-- `objects/`
-- `devices/`
-- `history/`
-- `templates/`
+## 持久化模式
 
-核心运行数据主要在：
+### `filesystem`
 
-- `chunks/connection.json`：文件格式层的区块组织快照；当前桥接层仍按 `count/order/size` 读写
-- `chunks/{chunkId}.json`：区块层叠图（tier graph）
-- `objects/chunk{chunkId}/*.json`：区块对象数据
+- 传入有效 `rootPath`
+- `Board` 为 `BoardCore` 注入 renderer/host 持久化适配器
+- 区块层叠图、对象条目、覆盖区块索引可以落到文件系统
 
-需要区分：
+### `memory`
 
-- `connection.json` 是磁盘格式的一部分。
-- `Board` 运行时已不再以 `chunkMap/chunkOrder/loadedChunks` 作为主状态，而是统一到 `chunkLoaded`。
+- 没有有效 `rootPath`
+- `BoardCore` 使用默认内存适配器
+- 不访问真实文件系统
 
-## IPC 过桥约定（Renderer Core -> Main）
+## 当前稳定文件语义
 
-Core 运行在渲染进程，因此 components 的关键文件操作通过专用 IPC API 转发到主进程执行。
+### 区块层叠图
 
-桥接入口：
+- 路径：`chunks/{chunkId}.json`
+- 内容：`staticGraph` 的数组化结果
 
-- 渲染侧：`boardFileOperateBridge`（`file-operate-bridge-renderer.js`）
-- 主进程：`handleCoreFileOperateRequest`（`file-operate-bridge-main.js`）
-- 通道：`houndwhiteboard:core-file-operate`
+### 覆盖区块索引
 
-当前已桥接动作：
+- 路径：`chunks/{chunkId}-object-cover.json`
+- 内容：`Array<[objectId, number[]]>`
 
-- `create-board-root`
-- `create-chunk-storage`
-- `write-chunk-connection`
-- `write-trace`
-- `load-board-snapshot`
-- `load-tier-graph`
-- `save-tier-graph`
-- `load-chunk-objects`
-- `save-chunk-objects`
+### 对象条目
 
-## Board 文件操作
+- 路径：`objects/chunk{ownerChunkId}/{objectId}.json`
+- 内容：对象序列化结果
+- 关键字段：`ownerChunkId`
 
-### 1. 新建白板
+## 当前实现边界
 
-对应 API：`Board.create(directory, boardInfo)`
+### `Board`
 
-主要行为：
+`Board` 的职责不是直接操作文件，而是：
 
-- 通过 `createBoardRoot(...)` 重建根目录并写入 `meta.json`、`config.json`
-- 创建 `devices/history/objects/chunks/templates` 子目录
-- 通过 `appendChunk(...)` 创建首个区块存储
-- 通过 `writeTrace(...)` 写入 `trace.json`
+- 解析 `rootPath`
+- 决定 `filesystem` / `memory` 模式
+- 构造 `BoardCore`
+- 注入合适的 `persistenceAdapter`
 
-涉及路径：
+### `BoardCore`
 
-- `{root}/meta.json`
-- `{root}/config.json`
-- `{root}/trace.json`
-- `{root}/chunks/connection.json`
+`BoardCore` 负责：
 
-### 2. 添加区块
+- 读取区块静态图
+- 读取对象条目
+- 协调区块加载 / 卸载与对象注册表
+- 调用适配器完成保存与删除
 
-对应 API：`appendChunk(templateId)`
+### `ChunkObjectManager`
 
-主要行为：
+`ChunkObjectManager` 负责：
 
-- 通过 `createChunkStorage(...)` 重建该区块目录：`{root}/chunks/{chunkId}`
-- 通过 `createChunkStorage(...)` 重建该区块对象目录：`{root}/objects/chunk{chunkId}`
-- 更新白板文件格式所需的区块连接信息
-- 通过 `#persistChunkConnection()` 写入 `chunks/connection.json`
+- 区块静态图的读写
+- 覆盖区块索引的读写
 
-### 3. 加载白板
+## Worker 模式说明
 
-对应 API：`load(directory)`
+Worker mode 下：
 
-主要行为：
+- 真实 `BoardCore` 位于 Worker
+- 文件访问仍经由注入的持久化适配器完成
+- `BoardApiRpc` 只负责对象 / 区块语义读写，不直接承担文件桥语义
 
-- 通过 `loadBoardSnapshot(...)` 一次获取 `meta/config/connection/trace`
-- 渲染侧恢复 `width/height/chunkCounterPool`，并根据 `trace.onChunk` 或 `connection.order[0]` 选定初始区块
-- `trace` 缺失时由主进程桥接层回退到 `connection.order[0]`
+当前默认 demo 主要运行在内存模式；完整文件模式属于宿主集成路径。
 
-失败行为：
+## 已知约束
 
-- 缺失 `meta.json` 或类型不匹配：抛出 `Not a board file`
-- 缺失 `config.json` 或 `chunks/connection.json`：抛出 `Corrupted board file`
+- `.hwb` 历史结构与快照恢复仍有后续完善空间
+- objectId 计数池恢复未从持久化层接通
+- 更复杂的并发写入与原子替换策略仍属于后续优化范围
 
-### 4. 区块连接持久化
+## 相关文档
 
-对应 API：`#persistChunkConnection()`
-
-写入路径：
-
-- `{root}/chunks/connection.json`
-
-写入字段：
-
-- `count`（区块计数池）
-- `order`（文件格式中的区块组织顺序）
-- `size`（文件格式中的区块数量）
-
-说明：这些字段属于磁盘快照，不代表 `Board` 运行时一定保留同名字段。
-
-### 5. 区块目录解析
-
-对应 API：`#resolveChunkDirectory(chunkId)`
-
-读取策略：
-
-- 优先使用 `{root}/chunks/{chunkId}`
-- 若不存在，回退到 `{root}/chunks`
-
-该策略用于兼容当前过渡期的目录/文件布局。
-
-## ChunkObjectManager 文件操作
-
-`ChunkObjectManager` 是区块级数据读写的核心组件，负责层叠图和对象文件。
-
-说明：当前 `loadTierGraph/saveTierGraph/loadObjects` 已迁移到专用 IPC API。
-
-### 1. 层叠图读取
-
-对应 API：`loadTierGraph(boardRootPath)`
-
-路径：
-
-- `{root}/chunks/{chunkId}.json`
-
-行为：
-
-- 通过 `loadTierGraph(...)` 从主进程读取 `{root}/chunks/{chunkId}.json`
-- 渲染侧 `DirectedGraph.parse(...)` 反序列化
-- 文件不存在时抛错
-
-### 2. 层叠图写入
-
-对应 API：`saveTierGraph(boardRootPath)`
-
-路径：
-
-- `{root}/chunks/{chunkId}.json`
-
-行为：
-
-- 通过 `saveTierGraph(...)` 写回 `{root}/chunks/{chunkId}.json`
-- 写入内容为 `staticGraph.toArray()`
-
-### 3. 对象覆盖区块索引读写
-
-对应 API：`loadTierGraph(boardRootPath)` / `saveTierGraph(boardRootPath)`
-
-路径：
-
-- `{root}/chunks/{chunkId}-object-cover.json`
-
-行为：
-
-- 通过 `loadChunkObjectCoverIndex(...)` 读取当前区块对象覆盖区块索引
-- 通过 `saveChunkObjectCoverIndex(...)` 写回对象覆盖区块索引
-- 文件内容为 `Array<[objectId, number[]]>`，表示对象 id 到覆盖区块 id 集合的映射
-
-### 4. 对象读取
-
-对应 API：`Board.loadChunkObjectEntries(chunkId)` / `ChunkObjectManager.loadObjects(boardRootPath)`
-
-路径：
-
-- `{root}/objects/chunk{chunkId}/`
-
-行为：
-
-- 通过 `loadChunkObjects(...)` 读取 `{root}/objects/chunk{chunkId}/` 下对象 JSON
-- 渲染侧逐个反序列化对象 JSON，并写入 `Board.objectLoaded`
-- 单个对象 JSON 以 `ownerChunkId` 描述对象归属区块 id
-
-### 5. 未完成项
-
-当前已实现：
-
-- `Board.saveChunkObjectEntries(chunkId)`：通过 `saveChunkObjects(...)` 只回写 `ownerChunkId === chunkId` 的对象
-- `unloadObjects()`：通知 `Board` 清理该区块相关对象实例
-- `unload()`：统一清理层叠图与对象索引
-
-其中对象持久化协议遵循：
-
-- 区块目录与区块层叠图路径使用区块 id
-- 对象 JSON 内部使用 `ownerChunkId` 表示对象归属区块 id
-- 对象覆盖区块索引使用独立区块级文件保存
-
-## Chunk 与文件操作关系
-
-`Chunk` 本身不直接操作磁盘路径，它通过 `Board` 和 `ChunkObjectManager` 间接触发文件 I/O。
-
-关键行为：
-
-- `loadTemp(root)`：触发 `objectManager.loadTierGraph(root)`
-- `loadFull(root)`：在临时加载基础上切换为完整加载；对象实例的实际加载由 `Board` 负责
-
-区块加载策略（临时/完整）会直接影响真实文件读取量。
-
-## 风险与约束
-
-- 目录布局兼容：当前区块目录存在嵌套目录与平铺文件并存的过渡逻辑，后续应统一。
-- 写入原子性：`saveTierGraph()` 使用先删再写模式，异常中断时可能产生短时间空窗。
-- 并发安全：components 层默认单进程调用，不含文件锁。
-- 错误恢复：`load(...)` 遇到关键文件缺失直接抛错，调用方需要负责兜底。
-
-## 建议演进方向
-
-- 将 `saveTierGraph()` 迁移为 `writeJSON(...)`，减少手工序列化分支。
-- 为 `chunks/{chunkId}` 与 `chunks/{chunkId}.json` 统一一套最终路径规范。
+- [board-document.md](../orchestration/docs/board-document.md)
+- [chunk-object-manager-document.md](../chunk/docs/chunk-object-manager-document.md)
+- [file-structure.md](../../docs/file-structure.md)

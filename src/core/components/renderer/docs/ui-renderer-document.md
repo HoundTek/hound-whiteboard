@@ -4,137 +4,113 @@
 
 ## 概述
 
-`UiRenderer` 用于把视口相关、非对象实体、短生命周期的覆盖内容绘制到 `Monitor.uiCanvas`。
+`UiRenderer` 运行在 UI 线程，负责把 overlay 绘制到 `uiCanvas`。
 
-这类内容的共同点是：
+它处理的内容包括：
 
-- 它们通常不属于白板静态对象本体
-- 它们经常跟随当前视口、输入态或临时交互态变化
-- 它们更接近“正在交互的提示层”，而不是静态内容层或活动对象层
+- chooser / modifier 的兼容选择框
+- 拖拽中的矩形框选框
+- 通过 provider 注册的自定义 overlay
 
-当前较典型的承载对象包括：
+`UiRenderer` 不参与 Worker 侧 base/live 渲染，只负责 UI 线程中的提示层。
 
-- 已选中对象的矩形框
-- 对象选择工具的轨迹
-- 控制杆
-- 激光笔轨迹
+## 运行边界
 
-## 边界说明
-
-当前还不能完全确定 `uiCanvas` 最终应由 Core 管理还是由宿主 UI 管理。
-
-因此，当前这份 `UiRenderer` 实现应理解为一层 **兼容实现**：
-
-- 它先在 Core 内提供一个可工作的 `uiCanvas` 渲染链
-- 它只承接 Core 当前已经知道、且确实需要跟随视口刷新的 overlay
-- 它同时保留 provider 扩展口，避免将所有 UI 语义钉死在 Core 中
-
-这里“兼容层”的含义不是“最终 UI 设计”，而是“当前版本的兼容方案 / 适配层”：
-
-- 它不是最终的 UI 系统主责方
-- 它只是让 Core 侧暂时能兼容地渲染一部分 UI overlay
-- 它优先服务当前已有的 Core 状态和需求，而不是提前定义未来全部 overlay 协议
-
-如果后续宿主 UI 已经拥有更稳定的 overlay 系统，这层兼容实现可以继续缩薄，甚至整体上移。
+- **UI only**：`UiRenderer` 直接操作 `Monitor.uiCanvas` 或 `MonitorProxy.uiCanvas`
+- **不进入 Worker**：Worker 侧没有 `UiRenderer`
+- **输入来源**：工具节点 state、summary-like 条目、provider 回调
 
 ## 当前职责
 
-当前 `UiRenderer` 负责三件事：
+### 兼容选择框
 
-- 从已注册 provider 收集兼容 overlay
-- 把 overlay 统一规整到屏幕矩形语义上
-- 在 `uiCanvas` 上执行局部清理、裁剪和补绘
+`UiRenderer` 当前提供两类兼容入口：
 
-其中默认接入的一类兼容 overlay 是：
+- `createCompatSelectionEntriesForObjects(objects, role)`
+- `createCompatSelectionEntriesForSummaries(summaries, role)`
 
-- chooser / modifier 工具主动声明的兼容选择框
+其中 Worker mode 下的主入口是 `createCompatSelectionEntriesForSummaries()`。
 
-也就是说，当前兼容层不会再简单使用“对象在 AOM 中”作为选择框出现条件。
+### rect-like 规整
 
-当前默认规则是：
+`UiRenderer` 当前可接受：
 
-- 若当前工具是对象选择工具，则 chooser tool provider 会声明当前上下文对象的选择框
-- 若当前工具是对象修改工具，则 modifier tool provider 会声明当前上下文对象的选择框
-- 对于多对象场景，除了每个对象自己的矩形框，还会额外绘制这些对象矩形的最小外接大矩形
+- `BasicObject` 实例
+- summary-like 条目
+- 纯 rect-like 对象（`{ left, top, width, height }` 或 `{ left, top, right, bottom }`）
 
-当前默认样式也有一条固定约定：
+所有 `worldRect` / `boundingBox` / `screenRect` 都通过 `RectangleRange.fromRectLike()` 统一规整。
 
-- 每个对象自己的选择框使用实线
-- 多对象组合大矩形继续使用虚线
+这保证了：
 
-这并不意味着 chooser / modifier 节点 state 就是最终 UI overlay 协议。当前只是让 chooser / modifier 工具先复用自己已有的上下文状态，把它们主动声明成 provider 条目，先把 `uiCanvas` 链路兼容起来。
+- Worker RPC 返回的 plain `boundingBox` 可直接参与 overlay
+- chooser / modifier 不需要真实 `BasicObject` 实例也能生成选框
 
-## Summary 兼容 overlay 入口
-
-P2 迁移后，所有工具的 `collectUiOverlayEntries` 统一走 `createCompatSelectionEntriesForSummaries(summaries, role)`，而非旧的 `createCompatSelectionEntriesForObjects(objects, role)`。
-
-新增的方法：
-
-- `getSummaryWorldRect(summaryEntry)` — 从 summary-like 条目的 `range` 或 `boundingBox` 计算世界矩形
-- `getSummaryScreenRect(summaryEntry)` — 计算对应的屏幕矩形（含留白）
-- `createCompatSummarySelectionEntry(summaryEntry, source)` — 生成单条目矩形选择框
-- `createCompatSelectionEntriesForSummaries(summaries, role)` — 批量生成选择框条目（含多对象组合大矩形）
-
-`normalizeOverlayEntry` 现支持第三类数据来源：条目如带有 `position + range` 或 `position + boundingBox` 但无 `worldRect`、无 `BasicObject` 实例，也能自动合成屏幕矩形。
-
-这样所有工具可以传入 summary-like 条目而不需真实 `BasicObject` 实例，同时 `createCompatSelectionEntriesForObjects` 保留不动供向后兼容。
-
-## Overlay Provider 扩展口
-
-为了兼容未来的 chooser 轨迹、控制杆、激光笔等 UI 覆盖层，`UiRenderer` 当前提供 provider 注册口：
+### provider 扩展口
 
 - `registerOverlayProvider(provider)`
 - `unregisterOverlayProvider(provider)`
 
-provider 的职责是：
+provider 可返回：
 
-- 在 flush 前根据当前 `monitor`、`activeObjectManager` 和外部状态返回 overlay 条目
-- 条目可直接给出 `screenRect` 或 `worldRect`
-- 条目可通过 `draw(context, runtime)` 自定义绘制逻辑
+- `screenRect`
+- `worldRect`
+- `position + range`
+- `position + boundingBox`
+- 或自定义 `draw(context, runtime)`
 
-当前这条扩展口更像一个兼容桥，而不是最终 UI 协议。
+## 当前默认 overlay 来源
 
-## 与 Monitor 的关系
+### chooser
 
-`UiRenderer` 自管理 uiCanvas、渲染调度器与缩放感知阈值策略。
+`ObjectChooserTool.collectUiOverlayEntries()` 会把当前上下文对象交给：
 
-当前分工是：
+```js
+renderer.createCompatSelectionEntriesForSummaries(objects, "chooser");
+```
 
-- `Monitor` 在构造时传入 `uiCanvas` 实例
-- `UiRenderer` 内部持有 `_canvas`、`_scheduler`、`_resolveThresholds`（复用 live 层的 zoom 感知阈值）
-- `UiRenderer` 的 `flush(dirtyRects)` 内部通过 `_canvas.getContext("2d")` 获取上下文
-- `invalidate(rect)` / `invalidateViewport()` / `resize(width, height)` 由 UiRenderer 直接管理
+### modifier
 
-## 与 AOM / 工具链的关系
+`ObjectModifierTool.collectUiOverlayEntries()` 也走同一入口：
 
-当前 Core 里，ui 覆盖层和活动对象链路已经接上：
+```js
+renderer.createCompatSelectionEntriesForSummaries(objects, "modifier");
+```
 
-- `ActiveObjectManager.requestLiveRender(...)` 在请求 live 层刷新时，也会同步请求 ui 层刷新
-- creator 工具在高频几何修改后，除了请求 `LiveRenderer.invalidateObjects(...)`，也会请求 ui 层刷新
-- `ObjectModifierTool` 基类在高频几何修改后，也会同步请求 ui 层刷新
+### rectangle chooser drag rect
 
-但这里要区分“谁推动刷新”和“谁决定显示内容”：
+`RectangleObjectChooserTool` 额外声明拖拽矩形 overlay：
 
-- `AOM`、creator、modifier 当前都可以推动 ui 层重绘
-- 真正决定当前默认选择框是否出现的，是 chooser / modifier 工具当前是否声明了对应 overlay
-- chooser / modifier 工具当前仍主要从自己的节点上下文里取对象集合
-- 因此，“对象在 AOM 中”只说明它处于动态图，不自动等于“应该显示选择框”
+- 半透明填充
+- 矩形边框
+- 独立于已选对象的兼容选择框
 
-这样做的原因是：
+## 与 Monitor / MonitorProxy 的关系
 
-- 选中框之类的 overlay 会跟随对象位置和几何变化移动
-- 如果 ui 层只响应 `add/choose/apply/discard` 这些低频状态点，拖拽和控制点修改时就会滞后
+- `Monitor` / `MonitorProxy` 持有 `UiRenderer`
+- `requestViewportUiRender()` 通过 `UiRenderer.invalidateViewport()` 请求刷新
+- `resizeRenderLayers()` 时会同步调整 `uiCanvas` 尺寸
 
-## 当前实现状态
+## 与 AOM / tools 的关系
 
-- 已实现：自管理 uiCanvas、`RenderScheduler`、脏区合并策略；`UiRenderer.flush(dirtyRects)`、基于 chooser / modifier tool provider 的兼容选择框、对象多选组合大矩形、自定义 overlay provider 注册口。
-- 已接入：视口变化、渲染层 resize、AOM 活动对象刷新、creator/modifier 高频几何修改后的 ui 层补绘。
-- 已兼容：provider 条目既可给出 `screenRect/worldRect`，也可直接提供 `draw(...)` 回调。
-- 待完善：对象选择轨迹、控制杆、激光笔等真实 overlay 语义仍未在 Core 中定型；ui 层最终归属 Core 还是宿主 UI，当前仍未最终定案。
+`UiRenderer` 自身不管理 AOM 状态，它只消费调用方提供的条目。
+
+AOM、creator、chooser、modifier 当前都可能推动 ui 层刷新，但真正决定“画什么”的是：
+
+- tool 当前写入的 node state
+- tool 注册的 overlay provider
+- `UiRenderer` 对 summary-like / rect-like 数据的规整逻辑
+
+## 当前状态
+
+- `UiRenderer` 已稳定作为 UI overlay 层运行
+- Worker mode 下 chooser / modifier 选框已全面依赖 summary-like 路径
+- plain `boundingBox` / `worldRect` 已可直接参与 overlay
+- 更复杂的控制杆、激光笔等 overlay 仍属于后续扩展空间
 
 ## 相关文档
 
-- [monitor-document.md](./monitor-document.md)
-- [components-document.md](./components-document.md)
-- [active-object-manager-document.md](./active-object-manager-document.md)
-- [live-renderer-document.md](./live-renderer-document.md)
+- [monitor-document.md](../../orchestration/docs/monitor-document.md)
+- [object-chooser-document.md](../../../tools/chooser/docs/object-chooser-document.md)
+- [object-modifier-document.md](../../../tools/modifier/docs/object-modifier-document.md)
+- [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)

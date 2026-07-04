@@ -84,7 +84,7 @@
 
 ## 关键设计点
 
-### 1. `from()` 只处理“本类构造”
+### `from()` 只处理“本类构造”
 
 各个 `Range` 子类的 `from()` 现在只做一件事：
 
@@ -93,7 +93,7 @@
 
 这比把所有类型判断塞进每个 `from()` 更稳定，也更容易扩展新范围类型。
 
-### 2. 椭圆保留仿射表达
+### 椭圆保留仿射表达
 
 `EllipseRange` 使用“中心点 + 两条半轴向量”表示，而不是只存 `rx`、`ry`。
 
@@ -103,7 +103,7 @@
 - 不需要把旋转椭圆退化成多边形或包围盒。
 - `containsPoint()` 可以直接在局部参数空间里判定。
 
-### 3. 路径与面积范围分离
+### 路径与面积范围分离
 
 `PathRange` 默认是折线路径，不天然具有面积。
 
@@ -113,7 +113,7 @@
 - 闭合语义通过 `closed` 显式声明。
 - 与面积范围相交时，仍通过 `geometry.intersectsRanges()` 统一入口，但内部会按具体 range 类型走特化算法。
 
-### 4. 相交判断留在算法层
+### 相交判断留在算法层
 
 “两范围是否相交”是跨类型逻辑，不属于某一个范围类的私有行为。
 
@@ -124,7 +124,7 @@
 - 这些特化算法集中放在内部文件 `intersections.js` 中，不通过 `index.js` 暴露。
 - 包围盒快速排除的共享实现集中放在内部文件 `bounds.js` 中，供 `geometry.js` 与 `intersections.js` 复用；`computeBounds()` 与 `getRangeBounds()` 都统一返回 `RectangleRange`。
 
-### 5. `PolygonRange` 与 `RopeRange` 的区域语义不同
+### `PolygonRange` 与 `RopeRange` 的区域语义不同
 
 `PolygonRange` 和 `RopeRange` 都是闭合区域，不同点只在“内部”的数学定义：
 
@@ -133,7 +133,7 @@
 
 这意味着对于重复绕圈或自交轮廓，两者的包含结果可能不同。
 
-### 6. 相交定义
+### 相交定义
 
 `geometry.intersectsRanges()` 的定义是：
 

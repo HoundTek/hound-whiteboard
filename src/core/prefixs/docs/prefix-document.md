@@ -60,7 +60,7 @@ flowchart TD
     Prefix --> Tool[Tool Leaf]
 ```
 
-## 1. 基础处理器：`createPrefixNodeHandler`
+## 基础处理器：`createPrefixNodeHandler`
 
 `createPrefixNodeHandler` 是最轻量的 handler 工厂。它的唯一额外职责是提供 `initialState` 默认值合并——使 `ctx.state` 自动包含初始默认值。
 
@@ -80,7 +80,7 @@ const handler = createPrefixNodeHandler({
 
 若不需要 `initialState`，可以直接用裸 handler，拿到的 ctx 也有同样的 helper。
 
-## 2. 多工具状态机：`createMultiToolPrefixHandler`
+## 多工具状态机：`createMultiToolPrefixHandler`
 
 基于基础处理器构建，通过 `resolveTransition` 回调实现状态驱动的子节点路由。
 
@@ -108,7 +108,7 @@ const handler = createMultiToolPrefixHandler({
 
 `transition.acc` 是 prefix 把回调或只读数据传给当前活动子链的关键途径。
 
-## 3. 信号复制分发：`createRepeatorPrefixHandler`
+## 信号复制分发：`createRepeatorPrefixHandler`
 
 `repeator` 会把输入信号复制为多份，分别发给不同子节点，或同一个子节点的多份副本。
 
@@ -120,7 +120,7 @@ const handler = createRepeatorPrefixHandler({
 
 若未显式提供 `toChildren`，它会回退到当前节点的 `defaultRoute`。
 
-## 4. Handoff 工作流：`createHandoffSubDAG`
+## Handoff 工作流：`createHandoffSubDAG`
 
 `createHandoffSubDAG` 把 `first → second` 的两阶段工作流封装成一棵结构化子树。
 
@@ -171,7 +171,7 @@ flowchart LR
 
 handoff 子图构建后会保存 `beforeCommitCreatedObject` 的原始引用，并通过 `subDAG.resetHandoff()` 暴露清理入口，在卸载 handoff 时恢复工具原始行为。
 
-## 5. 拖拽位移转换：`createDragAnchorPrefixHandler`
+## 拖拽位移转换：`createDragAnchorPrefixHandler`
 
 `createDragAnchorPrefixHandler` 将位置序列转换为累计位移 `{ x, y }`，并输出 `displacement` 信号。
 
@@ -217,6 +217,8 @@ monitor.mountSubDAG("", builder.build());
 ## 相关文档
 
 - [handler 上下文（ctx）用法](../../devices-dag/docs/handler-context-document.md)
-- [设备图](../devices/docs/devices-dag-document.md)
-- [工具基类](../tools/tool-document.md)
-- [Core 输入流](../docs/core-input-flow.md)
+- [设备图](../../devices-dag/docs/devices-dag-document.md)
+- [对象创建工具](../../tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../../tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../../tools/modifier/docs/object-modifier-document.md)
+- [Core 输入流](../../docs/core-input-flow.md)

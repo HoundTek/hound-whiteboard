@@ -1,80 +1,94 @@
 # HoundWhiteboard Core 总览
 
-## 1. App 分层概览
+本文档提供 `src/core/` 当前架构的总览。
 
-当前工程可以粗分为三层：
+## 运行时分层
 
-1. Electron 主进程层
-2. 模板/渲染层
-3. Core 领域层
+当前应用可分为四层：
 
-其中：
+1. **宿主层**：Tauri shell 与 `src-tauri/` 后端
+2. **UI 线程层**：模板、DOM canvas、输入设备、DevicesDAG、tools、MonitorProxy
+3. **Core Worker 层**：`src/core-worker.js`、BoardCore、MonitorCore、AOM、渲染器
+4. **共享纯模块层**：objects / range / utils / chunk / renderer / hit / shared
 
-- 主进程入口在 `src/main.js`，负责窗口生命周期、IPC 注册、白板文件打开/保存调度。
-- 业务管理组件在 `src/components/`（如板文件管理、模板管理、设置管理）。
-- Core 在 `src/core/`，负责白板领域模型本身（区块、对象、工具、层级关系、历史结构）。
+`src/core/` 主要覆盖后 3 层，其中：
 
-## 2. 主流程（从启动到打开白板）
+- UI 线程侧保留设备图、工具编排与 overlay
+- Worker 侧承载对象、区块、AOM 与 base/live 渲染
+- Shared 层为两边提供统一的数据结构与算法
 
-### 2.1 启动
+更细的运行边界见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
 
-应用启动后，主进程会初始化：
+## 当前主链路
 
-- 设置管理器
-- 白板类（主进程版本）
-- 模板管理器
+### 白板初始化
 
-随后创建主菜单窗口，并挂载 IPC 通道。
+1. UI 线程创建 `Board`
+2. `Board` 先构造本地 `BoardCore`（same-thread compat 状态）
+3. 若启用 Worker mode，则 `Board.enableWorkerMode(worker)` 创建 `BoardApiRpc`
+4. `BoardApiRpc.createBoard(...)` 在 Worker 中创建真正的 `BoardCore`
+5. `Board.createMonitor(...)` 在 Worker mode 下返回 `MonitorProxy`
+6. `MonitorProxy` 通过 `createMonitor` RPC 在 Worker 中创建 `MonitorCore`
 
-### 2.2 新建/打开白板
+### 输入与工具
 
-主进程侧 `board` 负责：
+1. 宿主输入先归属到某个 monitor
+2. `Board.signalsEventBus.emit("input", ...)` 把信号送到 `Board.devicesDAG`
+3. `devices/` 节点做输入规整与分流
+4. `prefixs/` 负责 handoff、信号转换和局部状态机
+5. `tools/` 作为叶子消费信号，并通过 `boardApi` 读写 Worker 状态
 
-- 创建 `.hwb` 结构（meta/config/chunks/templates 等）
-- 打开 `.hwb`（解压到临时目录）
-- 保存白板（压缩回 `.hwb`）
+### 渲染
 
-这部分以文件系统与窗口切换为主，属于“宿主调度层”。
+1. Worker 侧 `BoardCore` / `AOM` / renderHooks 触发 `MonitorCore` 的 base/live 补绘
+2. `MonitorCore.flushRenderFrame()` 输出 `render-frame`
+3. UI 侧 `MonitorProxy` 接收位图并合成到 DOM canvas
+4. `UiRenderer` 在 UI 线程独立绘制 overlay
 
-### 2.3 Core 介入点
+## Core 的职责范围
 
-Core 层中的 `Board`（`src/core/components/orchestration/board.js`）是领域管理器，目标负责：
+### Worker 侧核心职责
 
-- 区块生命周期与加载策略
-- 对象增删改与层叠关系
-- 活动对象状态
-- Undo Tree 历史
+- `BoardCore`：对象注册表、区块加载状态、AOM、UndoTree、持久化协调
+- `MonitorCore`：Worker 视口状态、ChunkLoader、OffscreenCanvas 渲染
+- `BoardApi`：create / modify / commit / query / hitTest 等核心操作实现
 
-当前代码中，该类骨架与主要字段已建立，部分流程仍在实现中。
+### UI 侧核心职责
 
-## 3. Core 目录职责
+- `Board`：UI façade，持有 signalsEventBus、DevicesDAG、monitor 集合与 Worker 模式切换逻辑
+- `MonitorProxy`：Worker 视口代理，承载 DOM canvas 与 overlay
+- `devices/`、`devices-dag/`、`tools/`、`prefixs/`：输入编排与交互工具
+- `UiRenderer`：UI overlay 渲染
 
-- `components/`: 白板、区块、活动对象等管理器（按职责拆分为 `chunk/`、`renderer/`、`orchestration/` 三个子目录，通过 `index.js` 统一导出）
-- `objects/`: 各类领域对象（笔画、多边形、文本、容器）
-- `tools/`: 工具体系，作为设备节点之后的信号消费单元
-- `hit/`: 历史与回溯树（Undo Tree）
-- `devices/`: 设备子图定义、设备图节点处理与 Core-UI Interface 信号边界
-- `utils/`: 核心专用算法与数据结构（图、几何算法、计数池）
-- `range/`: 选择与碰撞相关范围抽象
-- `docs/`: 核心说明文档
+### 共享职责
 
-## 4. 设计与实现的差异（现状）
+- `objects/`：对象模型与反序列化
+- `range/`：几何范围抽象与碰撞判定
+- `utils/`：数学、图结构、事件总线等基础设施
+- `chunk/`：区块、覆盖索引与加载器
+- `renderer/`：base/live 渲染器与调度器
+- `hit/`：Undo Tree 核心结构
+- `shared/`：跨线程共享类型定义
 
-当前 Core 特征：
+## 当前实现状态
 
-- 设计文档较完整：
-  - 设备子图、设备图节点与工具消费链模型
-  - 活动对象层叠图（静态图 + 动态层）
-  - Undo Tree 与历史组织
-  - `.hwb` 文件结构
-- 实现完成度不均：
-  - 已具备：`DirectedGraph`、基础对象体系、部分创建工具、活动对象管理核心算法、设备图节点处理模型
-  - 待完善：区块对象持久化细节、Undo Tree 具体操作、工具消费链落地、多模块联调
+- `BoardCore` / `MonitorCore` / `MonitorProxy` / `BoardApiRpc` 已全部接通
+- demo 默认启用 Worker mode
+- creator / chooser / modifier 已全部适配 Worker mode
+- creator 本地状态使用 `_local` 纯数据对象，不再持有本地 `BasicObject` 实例
+- objectId 在 UI 侧由 `Board` 自持 `CounterPool` 同步分配，Worker 侧要求显式传入 id
+- Worker 若收到重复 objectId，会通过 RPC 抛错返回
 
-当前对象模型还有一个关键变化：`PolygonObject`、`StrokeObject` 已统一转向 range-first 表达。对象内部不再把普通点数组当作主判定结构，而是分别维护局部范围、世界范围、凸包范围与包围盒。
+## 关键术语
 
-## 5. 相关流程文档
+- **same-thread compat**：未启用 Worker mode 时，`Board` 与 `Monitor` 直接使用本地 `BoardCore`
+- **summary-like 条目**：UI 侧在 chooser / modifier / overlay 中流转的纯数据对象，例如 `{ id, position, boundingBox, property, data }`
+- **静态图**：各 `ChunkObjectManager.staticGraph` 维护的稳定层叠关系
+- **动态图 / AOM**：`ActiveObjectManager` 维护的交互态对象与临时层关系
 
-- 输入信号从 Board 进入 Monitor、DevicesDAG，再进入 workflow 节点的路径，见 `core-input-flow.md`。
-- DOM/Pointer/Touch 到 `SignalPacket` 的编码约定，见 `core-input-encoding.md`。
-- 当前阶段建议冻结的核心接口，见 `core-stable-interfaces.md`。
+## 相关文档
+
+- [core-modules.md](./core-modules.md)
+- [core-data-model.md](./core-data-model.md)
+- [core-input-flow.md](./core-input-flow.md)
+- [core-runtime-boundaries.md](./core-runtime-boundaries.md)
