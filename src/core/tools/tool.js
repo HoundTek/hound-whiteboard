@@ -61,14 +61,11 @@ class Tool {
    */
   createDeviceContext(handlerContext = {}) {
     const accumulatedContext = handlerContext.acc ?? {};
-    const boardApi = accumulatedContext.boardApi;
-    const boardCore = boardApi?.getBoardCore?.();
     const board = accumulatedContext.board;
     const monitor = accumulatedContext.monitor;
     const allocateObjectId =
       accumulatedContext.allocateObjectId ??
-      board?.allocateObjectId?.bind(board) ??
-      boardCore?.allocateObjectId?.bind(boardCore);
+      board?.allocateObjectId?.bind(board);
     const resolveOwnerChunkId =
       accumulatedContext.resolveOwnerChunkId ??
       (typeof monitor?.worldToChunk === "function"
@@ -94,15 +91,7 @@ class Tool {
     };
   }
 
-  /**
-   * 判断当前上下文是否仍可使用同线程 board 兼容层
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @returns {boolean} 是否允许读取 `context.acc.board` 上的同线程 compat 状态
-   */
-  canUseLegacyBoardCompat(context = {}) {
-    const boardApi = context?.acc?.boardApi;
-    return !boardApi || typeof boardApi.getBoardCore === "function";
-  }
+
 
   /**
    * 创建一个可直接挂载到设备图节点上的处理器

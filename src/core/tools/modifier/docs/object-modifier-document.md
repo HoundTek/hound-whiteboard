@@ -18,12 +18,7 @@
 
 ## 当前数据形态
 
-modifier 当前接收的对象条目可能是：
-
-1. `BasicObject` 实例（same-thread compat）
-2. summary-like 纯数据条目（Worker mode，通常来自 chooser / creator handoff）
-
-因此，modifier 的读路径统一走兼容 helper：
+modifier 接收 summary-like 纯数据条目（通常来自 chooser / creator handoff），通过以下 helper 读取：
 
 - `resolveModifiedObjectPosition()`
 - `resolveModifiedObjectRange()`
@@ -101,10 +96,8 @@ modifier 同时接受：
 
 ## `resolveActiveModifiedObjects()`
 
-modifier 当前只会修改仍在 AOM 中的对象。
-
-- same-thread 路径可从 `boardApi.getBoardCore()?.activeObjectManager.activeObjectIndex` 读取
-- Worker mode 下不依赖本地 stale board compat 状态；summary-like 条目本身即作为有效输入继续向下流转
+modifier 通过 `boardApi` 的 `commitObjects` / `discardActiveObjects` 与 Worker 侧 AOM 交互。
+summary-like 条目本身即作为有效输入继续向下流转。
 
 ## overlay
 
@@ -136,7 +129,7 @@ handoff 通过：
 
 1. `resolveActiveModifiedObjects()`
 2. `beforeApplyModifiedObjects()`
-3. `boardApi.commitObjects(objectIds)` 或 same-thread compat `AOM.apply()`
+3. `boardApi.commitObjects(objectIds)`
 4. `afterApplyModifiedObjects()`
 
 ## 当前状态

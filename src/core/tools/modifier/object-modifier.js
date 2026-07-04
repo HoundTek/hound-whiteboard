@@ -170,20 +170,13 @@ class ObjectModifierTool extends Tool {
   resolveActiveModifiedObjects(context, objects) {
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
     const boardApi = context?.acc?.boardApi;
-    const activeObjectIndex =
-      boardApi?.getBoardCore?.()?.activeObjectManager?.activeObjectIndex ??
-      (this.canUseLegacyBoardCompat(context)
-        ? context?.acc?.board?.activeObjectManager?.activeObjectIndex
-        : undefined);
 
-    if (typeof activeObjectIndex?.has !== "function") {
-      return boardApi ? normalizedObjects : [];
+    // Worker mode 下不维护本地 AOM 索引，直接返回全部传入对象
+    if (boardApi) {
+      return normalizedObjects;
     }
 
-    return normalizedObjects.filter((objectEntry) => {
-      const objectId = this.resolveObjectId(objectEntry);
-      return objectId != null && activeObjectIndex.has(objectId);
-    });
+    return [];
   }
 
   /**

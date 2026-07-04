@@ -25,7 +25,7 @@
 - 驱动 end/cancel 时的行为
 - 声明拖拽中的矩形 overlay
 
-## Worker mode 下的命中读取
+## 命中读取
 
 ### 拖拽中
 
@@ -33,7 +33,7 @@
 
 ### 抬起时
 
-Worker mode 下的读路径：
+读路径：
 
 ```js
 boardApi.hitTest(selectionWorldRect, "intersect")
@@ -42,18 +42,7 @@ boardApi.hitTest(selectionWorldRect, "intersect")
   -> summaries[]
 ```
 
-因此：
-
-- `process()` 在 Worker mode 下可能返回 Promise
-- `finalizeSelection()` 会在 Promise resolve 后执行
-
-## same-thread compat 路径
-
-same-thread 路径下：
-
-1. 从 `objectLoaded` 与 `activeObjectIndex` 汇总候选对象
-2. 用 `resolveObjectSelectionWorldRange()` 判断与框选矩形是否相交
-3. 直接返回命中的对象实例
+因此 `process()` 可能返回 Promise，`finalizeSelection()` 会在 Promise resolve 后执行。
 
 ## `replaceSelection()` 语义
 

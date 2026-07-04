@@ -52,27 +52,6 @@ class ObjectChooserTool extends Tool {
    * @protected
    */
   resolveSelectedObjectReference(context = {}, objectEntry) {
-    if (objectEntry instanceof BasicObject) {
-      return objectEntry;
-    }
-
-    const objectId = this.resolveObjectId(objectEntry);
-    if (objectId == null) {
-      return objectEntry;
-    }
-
-    const boardApi = context?.acc?.boardApi;
-    const boardCoreObject = boardApi?.getBoardCore?.()?.getObjectById?.(
-      objectId,
-    );
-    if (boardCoreObject) {
-      return boardCoreObject;
-    }
-
-    if (this.canUseLegacyBoardCompat(context)) {
-      return context?.acc?.board?.getObjectById?.(objectId) ?? objectEntry;
-    }
-
     return objectEntry;
   }
 

@@ -18,12 +18,7 @@ chooser 本身不修改对象几何。它的职责是：
 
 ## 当前数据形态
 
-chooser 当前可处理两类条目：
-
-1. `BasicObject` 实例（same-thread compat）
-2. summary-like 纯数据条目（Worker mode）
-
-基类通过以下 helper 兼容两类输入：
+chooser 统一使用 summary-like 纯数据条目，通过以下 helper 处理：
 
 - `resolveSelectedObjectReference()`
 - `resolveSelectedObjectReferences()`
@@ -77,14 +72,9 @@ handoff 常通过 `afterConfirm` 事件切到 modifier 阶段。
 
 ## `resolveSelectedObjectReference()`
 
-当前规则：
+所有条目均为 summary-like 纯数据对象，直接透传。
 
-- 若条目本身是 `BasicObject`，直接返回
-- 若是 summary-like 条目，则优先通过 `objectId` 回填
-- 在 Worker mode 下禁止回退到本地 stale `board.getObjectById()`
-- 若无法回填真实实例，则保留 summary-like 条目继续向下游传递
-
-因此 modifier / overlay 不再依赖“必须拿到真实 `BasicObject` 实例”。
+modifier / overlay 不依赖真实 `BasicObject` 实例。
 
 ## overlay
 
@@ -96,7 +86,6 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "chooser");
 
 这条路径兼容：
 
-- `BasicObject`
 - summary-like 条目
 - plain `boundingBox` / `worldRect`
 
@@ -104,7 +93,7 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "chooser");
 
 `umount(context)` 会：
 
-1. 丢弃当前活动对象（`discardActiveObjects` 或 `AOM.discard`）
+1. 丢弃当前活动对象（`discardActiveObjects`）
 2. 清空节点 context 中的对象集合
 3. 调用 `super.umount()`
 

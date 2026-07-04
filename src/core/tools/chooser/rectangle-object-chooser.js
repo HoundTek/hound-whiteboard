@@ -118,30 +118,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Array<BasicObject>}
    */
-  collectSelectableObjects(context = {}) {
-    const boardCore = context.acc?.boardApi?.getBoardCore?.();
-    const board = this.canUseLegacyBoardCompat(context)
-      ? context.acc?.board
-      : undefined;
-    const objectLoaded = boardCore?.objectLoaded ?? board?.objectLoaded;
-    const activeObjectIndex =
-      boardCore?.activeObjectManager?.activeObjectIndex ??
-      board?.activeObjectManager?.activeObjectIndex;
-    const objectMap = new Map();
 
-    for (const entry of objectLoaded?.values?.() ?? []) {
-      const objectInstance = entry?.obj;
-      if (!objectInstance?.id) continue;
-      objectMap.set(objectInstance.id, objectInstance);
-    }
-
-    for (const objectInstance of activeObjectIndex?.values?.() ?? []) {
-      if (!objectInstance?.id) continue;
-      objectMap.set(objectInstance.id, objectInstance);
-    }
-
-    return [...objectMap.values()].sort((left, right) => left.id - right.id);
-  }
 
   /**
    * 从候选对象里筛出与当前框选矩形相交的对象
@@ -156,26 +133,17 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     }
 
     const boardApi = context.acc?.boardApi;
-    const shouldUseRpcReadPath =
-      boardApi && typeof boardApi.getBoardCore !== "function";
-    if (shouldUseRpcReadPath) {
-      return boardApi
-        .hitTest(normalizedSelectionRect, "intersect")
-        .then((objectIds) => {
-          if (!Array.isArray(objectIds) || objectIds.length === 0) {
-            return [];
-          }
-          return boardApi.queryObjects(objectIds);
-        });
+    if (!boardApi) {
+      return [];
     }
-
-    return this.collectSelectableObjects(context).filter((objectInstance) =>
-      this.objectIntersectsSelectionRange(
-        context,
-        objectInstance,
-        normalizedSelectionRect,
-      ),
-    );
+    return boardApi
+      .hitTest(normalizedSelectionRect, "intersect")
+      .then((objectIds) => {
+        if (!Array.isArray(objectIds) || objectIds.length === 0) {
+          return [];
+        }
+        return boardApi.queryObjects(objectIds);
+      });
   }
 
   /**
@@ -190,13 +158,6 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     const previousIds = this.resolveObjectIds(context, previousObjects);
     if (boardApi && previousIds.length > 0) {
       boardApi.discardActiveObjects(previousIds);
-    } else if (
-      this.canUseLegacyBoardCompat(context) &&
-      previousObjects.length > 0
-    ) {
-      context.acc?.board?.activeObjectManager?.discard?.(
-        new Set(previousObjects),
-      );
     }
 
     this.clearContextObjects(context);
@@ -212,10 +173,6 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     const nextIds = this.resolveObjectIds(context, resolvedNextObjects);
     if (boardApi && nextIds.length > 0) {
       boardApi.addActiveObjects(nextIds);
-    } else if (this.canUseLegacyBoardCompat(context)) {
-      context.acc?.board?.activeObjectManager?.choose?.(
-        new Set(resolvedNextObjects),
-      );
     }
     return this.setContextObjects(context, resolvedNextObjects);
   }

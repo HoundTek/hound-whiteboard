@@ -2,12 +2,12 @@
 
 ## 概述
 
-对象创建工具负责把输入手势转换为“一个正在创建中的对象”。
+对象创建工具负责把输入手势转换为"一个正在创建中的对象"。
 
 当前 creator 族运行在 UI 线程，但真实对象创建发生在 Worker 侧：
 
 - UI 线程维护手势期本地状态 `_local`
-- Worker 侧通过 `BoardApi` / `BoardApiRpc` 创建真实对象并进入 AOM
+- Worker 侧通过 `BoardApiRpc` 创建真实对象并进入 AOM
 - 完成后由 creator 自己决定提交到静态图，或交给 handoff 中的 modifier 继续处理
 
 ## 当前本地状态模型
@@ -44,9 +44,7 @@ creator 在 `ensureObject(interaction)` 中按需分配 `objectId`：
 
 Worker 侧若发现重复 id，会通过 RPC 抛错返回。
 
-## BoardApi 路径
-
-当前 creator 族主路径如下：
+## 创建与修改路径
 
 ### 创建
 
