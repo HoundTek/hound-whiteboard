@@ -244,13 +244,11 @@ class ObjectChooserTool extends Tool {
       selectionContext.context,
       selectedObjects,
     );
-    if (boardApi && objectIds.length > 0) {
-      boardApi.addActiveObjects(objectIds);
-    } else {
-      selectionContext.context.acc?.board?.activeObjectManager?.choose?.(
-        new Set(selectedObjects),
-      );
+    if (!boardApi || objectIds.length === 0) {
+      return undefined;
     }
+
+    boardApi.addActiveObjects(objectIds);
     this.setContextObjects(selectionContext.context, selectedObjects);
     this.afterChoose(selectedObjects);
     return undefined;
@@ -276,10 +274,6 @@ class ObjectChooserTool extends Tool {
     const objectIds = this.resolveObjectIds(context, selectedObjects);
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);
-    } else if (selectedObjects.length > 0) {
-      context?.acc?.board?.activeObjectManager?.discard?.(
-        new Set(selectedObjects),
-      );
     }
     this.clearContextObjects(context);
     super.umount(context);

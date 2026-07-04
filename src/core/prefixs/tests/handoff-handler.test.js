@@ -15,12 +15,12 @@ import {
   createMockChooser,
   createMockModifier,
 } from "../../test-support/mock-tools.js";
-import { Board } from "../../components/index.js";
-import { Monitor } from "../../components/index.js";
 import { StrokeCreatorTool } from "../../tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../tools/chooser/rectangle-object-chooser.js";
-import { StrokeObject } from "../../objects/stroke/stroke.js";
-import { createNoopCanvas } from "../../test-support/noop-canvas.js";
+import {
+  createWorkerBoardContext,
+  flushMicrotasks,
+} from "../../test-support/worker-mode-fixtures.js";
 
 describe("handoff-handler（生命周期钩子模式）", () => {
   describe("钩子系统（Tool.on / off / _emit）", () => {
@@ -268,9 +268,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       dag.dispatch(
         {
           to: "/monitor/chooser-async-hook",
-          signals: [
-            { type: "position", context: { value: { x: 0, y: 0 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 0, y: 0 } } }],
         },
         accumulatedContext,
       );
@@ -293,9 +291,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       });
       expect(boardApi.hitTest).toHaveBeenCalled();
       expect(boardApi.queryObjects).toHaveBeenCalledWith([199]);
-      expect(
-        dag.getNodeState("/monitor/chooser-async-hook/second"),
-      ).toEqual(
+      expect(dag.getNodeState("/monitor/chooser-async-hook/second")).toEqual(
         expect.objectContaining({
           objects: [selectedSummary],
         }),
@@ -438,7 +434,12 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           apply: jest.fn(),
         },
       };
-      const accumulatedContext = { board, monitor: {} };
+      const boardApi = {
+        modifyObject: jest.fn(),
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+      const accumulatedContext = { board, boardApi, monitor: {} };
       const first = createMockCreator((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, {
           objects: [object],
@@ -491,9 +492,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         accumulatedContext,
       );
 
-      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-        new Set([object]),
-      );
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([object.id]);
       // dx=8-5=3, dy=6-5=1 → (8, 6)
       expect(object.position).toEqual(new Vector(8, 6));
       expect(dag.getNodeState("/monitor/modifier-cycle")).toEqual({
@@ -950,9 +949,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     function mountModifierWorkflow(
       dag,
       basePath,
-      { creator, modifier, board, monitor },
+      { creator, modifier, board, boardApi, monitor },
     ) {
-      const accumulatedContext = { board, monitor };
+      const accumulatedContext = { board, boardApi, monitor };
       const subDAG = createSubDAG(basePath);
 
       // ── 根节点：multi-tool prefix，负责 first ↔ second 切换 ──
@@ -1080,6 +1079,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           apply: jest.fn(),
         },
       };
+      const boardApi = {
+        modifyObject: jest.fn(),
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
 
       const first = createMockCreator((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, {
@@ -1095,6 +1099,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           creator: first,
           modifier: new CommonObjectModifierTool(),
           board,
+          boardApi,
           monitor: {},
         },
       );
@@ -1184,9 +1189,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         accumulatedContext,
       );
 
-      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-        new Set([object]),
-      );
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([object.id]);
       expect(object.position).toEqual(new Vector(35, 30));
       expect(dag.getNodeState("/monitor/modifier-flow")).toEqual({
         phase: "first",
@@ -1246,9 +1249,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         },
         accumulatedContext,
       );
-      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-        new Set([object2]),
-      );
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([object2.id]);
       expect(dag.getNodeState("/monitor/modifier-flow")).toEqual({
         phase: "first",
         activeChild: "first",
@@ -1267,6 +1268,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           apply: jest.fn(),
         },
       };
+      const boardApi = {
+        modifyObject: jest.fn(),
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
 
       const first = createMockCreator((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, { objects: [object] });
@@ -1280,6 +1286,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           creator: first,
           modifier: new CommonObjectModifierTool(),
           board,
+          boardApi,
           monitor: {},
         },
       );
@@ -1338,6 +1345,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           apply: jest.fn(),
         },
       };
+      const boardApi = {
+        modifyObject: jest.fn(),
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
       const monitor = {
         liveRenderer: {
           captureObjectSnapshot: jest.fn((objs) =>
@@ -1360,7 +1372,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const { accumulatedContext } = mountModifierWorkflow(
         dag,
         "/modifier-flow",
-        { creator: first, modifier, board, monitor },
+        { creator: first, modifier, board, boardApi, monitor },
       );
 
       // 进入 second 阶段
@@ -1445,7 +1457,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         accumulatedContext,
       );
 
-      expect(board.activeObjectManager.apply).toHaveBeenCalled();
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([object.id]);
       expect(calls.filter((c) => c[0] === "afterApply")).toHaveLength(1);
       expect(dag.getNodeState("/monitor/modifier-flow")).toEqual({
         phase: "first",
@@ -1509,257 +1521,301 @@ describe("handoff-handler（生命周期钩子模式）", () => {
   });
 
   describe("handoff + 真实工具端到端集成（通过 Board 输入链路）", () => {
-    test("挂载后的 StrokeCreatorTool 与 CommonObjectModifierTool 同一路径中共享上下文并修改对象", () => {
-      const board = new Board();
-      const monitor = new Monitor(
-        createNoopCanvas(),
-        board,
-        { width: 800, height: 600 },
-        "main",
-      );
-      board.monitors.set("main", monitor);
-      board.devicesDAG.configureNode("main", {
-        handler: () => ({ acc: { monitor } }),
-      });
-      const accumulatedContext = { board, boardApi: board.getBoardApi() };
-      board.width = 800;
-      board.height = 600;
-      const creatorTool = new StrokeCreatorTool();
-      let firstObjectId = null;
-
-      monitor.mountSubDAG(
-        "",
-        createHandoffSubDAG({
-          rootPath: "workflow",
-          first: creatorTool,
-          second: new CommonObjectModifierTool(),
-        }),
-      );
-
-      // 创建阶段
-      monitor.devicesDAG.dispatch({
-        to: "/main/workflow",
-        signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
-      }, accumulatedContext);
-
-      monitor.devicesDAG.dispatch({
-        to: "/main/workflow",
-        signals: [
-          { type: "position", context: { value: { x: 2, y: 2 } } },
-          { type: "end", context: {} },
-        ],
-      }, accumulatedContext);
-
-      expect(creatorTool._local).not.toBeNull();
-      expect(creatorTool._local.id).toBe(1);
-      firstObjectId = creatorTool._local.id;
-      expect(board.activeObjectManager.activeObjects.size).toBe(1);
-      const activeBoardObject = board.getObjectById(creatorTool._local.id);
-      expect(activeBoardObject).not.toBe(creatorTool._local);
-      expect(activeBoardObject).toMatchObject({
-        id: creatorTool._local.id,
-        position: { x: creatorTool._local.position.x, y: creatorTool._local.position.y },
-        property: creatorTool._local.property,
-        data: creatorTool._local.data,
+    test("挂载后的 StrokeCreatorTool 与 CommonObjectModifierTool 同一路径中共享上下文并修改对象", async () => {
+      const { board, monitor, cleanup } = await createWorkerBoardContext({
+        boardWidth: 800,
+        boardHeight: 600,
+        monitorId: "main",
+        monitorWidth: 800,
+        monitorHeight: 600,
       });
 
-      const createdPosition = creatorTool._local.position.serialize();
+      try {
+        const boardApi = board.getBoardApi();
+        const accumulatedContext = { board, boardApi };
+        const creatorTool = new StrokeCreatorTool();
+        let firstObjectId = null;
 
-      // 修改阶段：首个 position 启动手势
-      monitor.devicesDAG.dispatch({
-        to: "/main/workflow",
-        signals: [
+        monitor.mountSubDAG(
+          "",
+          createHandoffSubDAG({
+            rootPath: "workflow",
+            first: creatorTool,
+            second: new CommonObjectModifierTool(),
+          }),
+        );
+
+        monitor.devicesDAG.dispatch(
           {
-            type: "position",
-            context: {
-              value: { x: createdPosition.x, y: createdPosition.y },
-            },
+            to: "/main/workflow",
+            signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
           },
-        ],
-      },
-      accumulatedContext,
-    );
-
-      // 第二个 position + end 应用位移
-      monitor.devicesDAG.dispatch({
-        to: "/main/workflow",
-        signals: [
+          accumulatedContext,
+        );
+        monitor.devicesDAG.dispatch(
           {
-            type: "position",
-            context: {
-              value: { x: createdPosition.x + 3, y: createdPosition.y },
-            },
+            to: "/main/workflow",
+            signals: [
+              { type: "position", context: { value: { x: 2, y: 2 } } },
+              { type: "end", context: {} },
+            ],
           },
-          { type: "end", context: {} },
-        ],
-      },
-      accumulatedContext,
-    );
+          accumulatedContext,
+        );
+        await flushMicrotasks();
 
-      expect(creatorTool._local.position.serialize()).toEqual({
-        x: createdPosition.x + 3,
-        y: createdPosition.y,
-      });
+        expect(creatorTool._local).not.toBeNull();
+        expect(creatorTool._local.id).toBe(1);
+        firstObjectId = creatorTool._local.id;
+        await expect(boardApi.queryObjects([firstObjectId])).resolves.toEqual([
+          expect.objectContaining({
+            id: firstObjectId,
+            isActive: true,
+            position: { x: 1, y: 1 },
+            data: expect.objectContaining({
+              points: [
+                { x: 0, y: 0 },
+                { x: 1, y: 1 },
+              ],
+            }),
+          }),
+        ]);
 
-      // 提交
-      monitor.devicesDAG.dispatch({
-        to: "/main/workflow",
-        signals: [{ type: "success", context: {} }],
-      },
-      accumulatedContext,
-    );
+        const createdPosition = creatorTool._local.position.serialize();
 
-      const ownerChunk = board.getChunkById(1);
-      const committedBoardObject = ownerChunk.objectManager.getObject(
-        creatorTool._local.id,
-      );
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
-      expect(committedBoardObject).not.toBe(creatorTool._local);
-      expect(committedBoardObject).toMatchObject({
-        id: creatorTool._local.id,
-        position: { x: creatorTool._local.position.x, y: creatorTool._local.position.y },
-        property: creatorTool._local.property,
-        data: creatorTool._local.data,
-      });
-      expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
-        phase: "first",
-        activeChild: "first",
-      });
-      expect(
-        monitor.devicesDAG.getNode("/main/workflow/second"),
-      ).not.toBeNull();
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/workflow",
+            signals: [
+              {
+                type: "position",
+                context: {
+                  value: { x: createdPosition.x, y: createdPosition.y },
+                },
+              },
+            ],
+          },
+          accumulatedContext,
+        );
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/workflow",
+            signals: [
+              {
+                type: "position",
+                context: {
+                  value: { x: createdPosition.x + 3, y: createdPosition.y },
+                },
+              },
+              { type: "end", context: {} },
+            ],
+          },
+          accumulatedContext,
+        );
+        await flushMicrotasks();
 
-      // 再次进入 creator，验证 handoff 周期可重复
-      monitor.devicesDAG.dispatch({
-        to: "/main/workflow",
-        signals: [{ type: "position", context: { value: { x: 4, y: 4 } } }],
-      },
-      accumulatedContext,
-    );
+        expect(creatorTool._local.position.serialize()).toEqual({
+          x: createdPosition.x + 3,
+          y: createdPosition.y,
+        });
 
-      monitor.devicesDAG.dispatch({
-        to: "/main/workflow",
-        signals: [
-          { type: "position", context: { value: { x: 5, y: 5 } } },
-          { type: "end", context: {} },
-        ],
-      },
-      accumulatedContext,
-    );
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/workflow",
+            signals: [{ type: "success", context: {} }],
+          },
+          accumulatedContext,
+        );
+        await flushMicrotasks();
 
-      expect(creatorTool._local).not.toBeNull();
-      expect(creatorTool._local.id).not.toBe(firstObjectId);
-      expect(board.activeObjectManager.activeObjects.size).toBe(1);
-      expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
-        phase: "second",
-        activeChild: "second",
-      });
+        await expect(boardApi.queryObjects([firstObjectId])).resolves.toEqual([
+          expect.objectContaining({
+            id: firstObjectId,
+            isActive: false,
+            position: { x: createdPosition.x + 3, y: createdPosition.y },
+          }),
+        ]);
+        await expect(boardApi.queryChunkObjects([1])).resolves.toEqual(
+          expect.arrayContaining([firstObjectId]),
+        );
+        expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
+          phase: "first",
+          activeChild: "first",
+        });
+        expect(
+          monitor.devicesDAG.getNode("/main/workflow/second"),
+        ).not.toBeNull();
+
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/workflow",
+            signals: [{ type: "position", context: { value: { x: 4, y: 4 } } }],
+          },
+          accumulatedContext,
+        );
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/workflow",
+            signals: [
+              { type: "position", context: { value: { x: 5, y: 5 } } },
+              { type: "end", context: {} },
+            ],
+          },
+          accumulatedContext,
+        );
+        await flushMicrotasks();
+
+        expect(creatorTool._local).not.toBeNull();
+        expect(creatorTool._local.id).not.toBe(firstObjectId);
+        await expect(
+          boardApi.queryObjects([creatorTool._local.id]),
+        ).resolves.toEqual([
+          expect.objectContaining({
+            id: creatorTool._local.id,
+            isActive: true,
+          }),
+        ]);
+        expect(monitor.devicesDAG.getNodeState("/main/workflow")).toEqual({
+          phase: "second",
+          activeChild: "second",
+        });
+      } finally {
+        cleanup();
+      }
     });
 
-    test("挂载后的 RectangleObjectChooserTool 与 CommonObjectModifierTool 应可完成 chooser -> modifier -> apply 周期", () => {
-      const board = new Board();
-      const monitor = new Monitor(
-        createNoopCanvas(),
-        board,
-        { width: 800, height: 600 },
-        "main",
-      );
-      board.monitors.set("main", monitor);
-      board.devicesDAG.configureNode("main", {
-        handler: () => ({ acc: { monitor } }),
+    test("挂载后的 RectangleObjectChooserTool 与 CommonObjectModifierTool 应可完成 chooser -> modifier -> apply 周期", async () => {
+      const { board, monitor, cleanup } = await createWorkerBoardContext({
+        boardWidth: 800,
+        boardHeight: 600,
+        monitorId: "main",
+        monitorWidth: 800,
+        monitorHeight: 600,
       });
-      board.width = 800;
-      board.height = 600;
-      const accumulatedContext = { board, boardApi: board.getBoardApi() };
-      const chooserTool = new RectangleObjectChooserTool();
-      const targetObject = new StrokeObject(41, new Vector(10, 10));
-      targetObject.setData({ points: [
-        new Vector(0, 0),
-        new Vector(8, 0),
-        new Vector(8, 8),
-      ].map(p => ({ x: p.x, y: p.y })) });
-      board.addObject(targetObject, 1);
 
-      monitor.mountSubDAG(
-        "",
-        createHandoffSubDAG({
-          rootPath: "choose-and-modify",
-          first: chooserTool,
-          second: new CommonObjectModifierTool(),
-        }),
-      );
+      try {
+        const boardApi = board.getBoardApi();
+        const accumulatedContext = { board, boardApi };
+        const chooserTool = new RectangleObjectChooserTool();
 
-      monitor.devicesDAG.dispatch({
-        to: "/main/choose-and-modify",
-        signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
-      }, accumulatedContext);
+        await boardApi.createObject("StrokeObject", {
+          id: 41,
+          position: { x: 10, y: 10 },
+          data: {
+            points: [
+              { x: 0, y: 0 },
+              { x: 8, y: 0 },
+              { x: 8, y: 8 },
+            ],
+          },
+        });
+        await boardApi.commitObjects([41]);
+        await flushMicrotasks();
 
-      monitor.devicesDAG.dispatch({
-        to: "/main/choose-and-modify",
-        signals: [
-          { type: "position", context: { value: { x: 25, y: 25 } } },
-          { type: "end", context: {} },
-        ],
-      }, accumulatedContext);
+        monitor.mountSubDAG(
+          "",
+          createHandoffSubDAG({
+            rootPath: "choose-and-modify",
+            first: chooserTool,
+            second: new CommonObjectModifierTool(),
+          }),
+        );
 
-      expect(board.activeObjectManager.activeObjects.size).toBe(1);
-      expect(
-        board.activeObjectManager.activeObjectIndex.has(targetObject.id),
-      ).toBe(true);
-      expect(
-        monitor.devicesDAG.getNodeState("/main/choose-and-modify"),
-      ).toEqual({
-        phase: "second",
-        activeChild: "second",
-      });
-      expect(
-        monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
-      ).toEqual(
-        expect.objectContaining({
-          objects: [targetObject],
-        }),
-      );
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/choose-and-modify",
+            signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
+          },
+          accumulatedContext,
+        );
+        await monitor.devicesDAG.dispatch(
+          {
+            to: "/main/choose-and-modify",
+            signals: [
+              { type: "position", context: { value: { x: 25, y: 25 } } },
+              { type: "end", context: {} },
+            ],
+          },
+          accumulatedContext,
+        );
+        await flushMicrotasks();
 
-      // 首个 position → 启动手势（对象暂不动）
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/choose-and-modify",
-          signals: [{ type: "position", context: { value: { x: 10, y: 10 } } }],
-        },
-        accumulatedContext,
-      );
+        await expect(boardApi.queryObjects([41])).resolves.toEqual([
+          expect.objectContaining({
+            id: 41,
+            isActive: true,
+          }),
+        ]);
+        expect(
+          monitor.devicesDAG.getNodeState("/main/choose-and-modify"),
+        ).toEqual({
+          phase: "second",
+          activeChild: "second",
+        });
+        expect(
+          monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
+        ).toEqual(
+          expect.objectContaining({
+            objects: [expect.objectContaining({ id: 41 })],
+          }),
+        );
 
-      // 第二个 position → 应用位移
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/choose-and-modify",
-          signals: [{ type: "position", context: { value: { x: 14, y: 8 } } }],
-        },
-        accumulatedContext,
-      );
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/choose-and-modify",
+            signals: [
+              { type: "position", context: { value: { x: 10, y: 10 } } },
+            ],
+          },
+          accumulatedContext,
+        );
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/choose-and-modify",
+            signals: [
+              { type: "position", context: { value: { x: 14, y: 8 } } },
+            ],
+          },
+          accumulatedContext,
+        );
+        await flushMicrotasks();
 
-      expect(targetObject.position.serialize()).toEqual({ x: 14, y: 8 });
-      expect(board.activeObjectManager.activeObjects.size).toBe(1);
+        await expect(boardApi.queryObjects([41])).resolves.toEqual([
+          expect.objectContaining({
+            id: 41,
+            isActive: true,
+            position: { x: 14, y: 8 },
+          }),
+        ]);
 
-      monitor.devicesDAG.dispatch(
-        {
-          to: "/main/choose-and-modify",
-          signals: [{ type: "success", context: {} }],
-        },
-        accumulatedContext,
-      );
+        monitor.devicesDAG.dispatch(
+          {
+            to: "/main/choose-and-modify",
+            signals: [{ type: "success", context: {} }],
+          },
+          accumulatedContext,
+        );
+        await flushMicrotasks();
 
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
-      expect(board.getObjectById(targetObject.id)).toBe(targetObject);
-      expect(
-        monitor.devicesDAG.getNodeState("/main/choose-and-modify"),
-      ).toEqual({
-        phase: "first",
-        activeChild: "first",
-      });
-      expect(
-        monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
-      ).toEqual({ objects: [] });
+        await expect(boardApi.queryObjects([41])).resolves.toEqual([
+          expect.objectContaining({
+            id: 41,
+            isActive: false,
+            position: { x: 14, y: 8 },
+          }),
+        ]);
+        expect(
+          monitor.devicesDAG.getNodeState("/main/choose-and-modify"),
+        ).toEqual({
+          phase: "first",
+          activeChild: "first",
+        });
+        expect(
+          monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
+        ).toEqual({ objects: [] });
+      } finally {
+        cleanup();
+      }
     });
   });
 });

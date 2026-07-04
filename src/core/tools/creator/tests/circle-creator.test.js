@@ -1,15 +1,17 @@
 import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/index.js";
-import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
-
 function createBoardDeviceContext(objectId, { monitor } = {}) {
-  const board = new Board();
-  board.width = 10;
-  board.height = 10;
-  board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-  const boardApi = board.getBoardApi();
+  const board = {
+    allocateObjectId: jest.fn(() => objectId),
+    getObjectById: jest.fn(() => undefined),
+  };
+  const boardApi = {
+    createObject: jest.fn(async () => objectId),
+    modifyObject: jest.fn(),
+    commitObjects: jest.fn(),
+    discardActiveObjects: jest.fn(),
+  };
 
   return {
     board,
@@ -83,9 +85,9 @@ describe("CircleCreatorTool", () => {
     expect(tool._local.data.radius).toBeCloseTo(8);
   });
 
-  test("显式提供 boardApi 时应通过 BoardApi 创建并提交圆对象", () => {
+  test("显式提供 boardApi 时应通过 RPC 创建并提交圆对象", () => {
     const tool = new CircleCreatorTool();
-    const { board, boardApi, deviceContext } = createBoardDeviceContext(104);
+    const { boardApi, deviceContext } = createBoardDeviceContext(104);
     const createSpy = jest.spyOn(boardApi, "createObject");
     const modifySpy = jest.spyOn(boardApi, "modifyObject");
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -118,13 +120,9 @@ describe("CircleCreatorTool", () => {
     );
     expect(modifySpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([104]);
-    const committedObject = board.getChunkById(1).objectManager.getObject(104);
-    expect(committedObject).not.toBe(tool._local);
-    expect(committedObject).toMatchObject({
-      id: tool._local.id,
-      position: { x: tool._local.position.x, y: tool._local.position.y },
-      property: tool._local.property,
-      data: tool._local.data,
+    expect(tool._local).toMatchObject({
+      id: 104,
+      position: new Vector(2, 1),
     });
   });
 
@@ -224,9 +222,10 @@ describe("CircleCreatorTool", () => {
     expect(tool._local.data.radius).toBeCloseTo(16);
   });
 
-  test("真实 Board 上结束手势后应将对象写回归属区块", () => {
+  test("结束手势后应通过 commitObjects 提交圆对象", () => {
     const tool = new CircleCreatorTool();
-    const { board, deviceContext } = createBoardDeviceContext(110);
+    const { boardApi, deviceContext } = createBoardDeviceContext(110);
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
       {
@@ -244,20 +243,14 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    const committedObject = board.getChunkById(1).objectManager.getObject(110);
-    expect(committedObject).not.toBe(tool._local);
-    expect(committedObject).toMatchObject({
-      id: tool._local.id,
-      position: { x: tool._local.position.x, y: tool._local.position.y },
-      property: tool._local.property,
-      data: tool._local.data,
-    });
+    expect(commitSpy).toHaveBeenCalledWith([110]);
+    expect(tool._local.id).toBe(110);
   });
 
   test("连续两次创建应生成两个不同圆对象", () => {
     const tool = new CircleCreatorTool();
     const { board, boardApi } = createBoardDeviceContext(201);
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
       {
@@ -304,26 +297,8 @@ describe("CircleCreatorTool", () => {
     expect(firstObject).not.toBe(secondObject);
     expect(firstObject.id).toBe(201);
     expect(secondObject.id).toBe(202);
-    const firstCommittedObject = board.getChunkById(1).objectManager.getObject(
-      201,
-    );
-    const secondCommittedObject = board.getChunkById(1).objectManager.getObject(
-      202,
-    );
-    expect(firstCommittedObject).not.toBe(firstObject);
-    expect(secondCommittedObject).not.toBe(secondObject);
-    expect(firstCommittedObject).toMatchObject({
-      id: firstObject.id,
-      position: { x: firstObject.position.x, y: firstObject.position.y },
-      property: firstObject.property,
-      data: firstObject.data,
-    });
-    expect(secondCommittedObject).toMatchObject({
-      id: secondObject.id,
-      position: { x: secondObject.position.x, y: secondObject.position.y },
-      property: secondObject.property,
-      data: secondObject.data,
-    });
+    expect(commitSpy).toHaveBeenNthCalledWith(1, [201]);
+    expect(commitSpy).toHaveBeenNthCalledWith(2, [202]);
   });
 
   test("起始点与结束点完全相同时应使用固定半径（默认 zoom=1）", () => {

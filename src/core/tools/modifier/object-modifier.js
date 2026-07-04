@@ -168,15 +168,7 @@ class ObjectModifierTool extends Tool {
    * @returns {Array<BasicObject>}
    */
   resolveActiveModifiedObjects(context, objects) {
-    const normalizedObjects = this.resolveModifiedObjects(context, objects);
-    const boardApi = context?.acc?.boardApi;
-
-    // Worker mode 下不维护本地 AOM 索引，直接返回全部传入对象
-    if (boardApi) {
-      return normalizedObjects;
-    }
-
-    return [];
+    return this.resolveModifiedObjects(context, objects);
   }
 
   /**
@@ -283,13 +275,12 @@ class ObjectModifierTool extends Tool {
 
     const boardApi = context?.acc?.boardApi;
     const objectIds = this.resolveObjectIds(context, normalizedObjects);
-    if (boardApi && objectIds.length > 0) {
-      boardApi.commitObjects(objectIds);
-    } else {
-      context?.acc?.board?.activeObjectManager?.apply?.(
-        new Set(normalizedObjects),
-      );
+    if (!boardApi || objectIds.length === 0) {
+      this.clearContextObjects(context);
+      return false;
     }
+
+    boardApi.commitObjects(objectIds);
     this.clearContextObjects(context);
 
     const autoUmount = context.acc?.autoUmountOnApply !== false;
@@ -317,10 +308,6 @@ class ObjectModifierTool extends Tool {
 
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);
-    } else if (normalizedObjects.length > 0) {
-      context?.acc?.board?.activeObjectManager?.discard?.(
-        new Set(normalizedObjects),
-      );
     }
 
     this.clearContextObjects(context);

@@ -45,7 +45,7 @@ describe("Tool", () => {
     expect(tool.calls[0].context.acc.allocateObjectId).toBeUndefined();
   });
 
-  test("createProcessor 应默认暴露来自 BoardApi/BoardCore 的 allocateObjectId", () => {
+  test("createProcessor 应默认暴露来自 Board 的 allocateObjectId", () => {
     class TestTool extends Tool {
       calls = [];
 
@@ -58,14 +58,9 @@ describe("Tool", () => {
       }
     }
 
-    const boardCore = {
+    const board = {
       allocateObjectId() {
         return 7;
-      },
-    };
-    const boardApi = {
-      getBoardCore() {
-        return boardCore;
       },
     };
     const tool = new TestTool();
@@ -76,7 +71,7 @@ describe("Tool", () => {
       {
         path: "/monitor/s-pen/pen",
         context: {},
-        acc: { boardApi },
+        acc: { board },
       },
     );
 
@@ -96,14 +91,9 @@ describe("Tool", () => {
       }
     }
 
-    const boardCore = {
+    const board = {
       allocateObjectId() {
         return 7;
-      },
-    };
-    const boardApi = {
-      getBoardCore() {
-        return boardCore;
       },
     };
     const explicitAllocateObjectId = jest.fn(() => 11);
@@ -114,7 +104,7 @@ describe("Tool", () => {
       {
         path: "/monitor/s-pen/pen",
         acc: {
-          boardApi,
+          board,
           allocateObjectId: explicitAllocateObjectId,
         },
       },
@@ -178,21 +168,18 @@ describe("Tool", () => {
       }
     }
 
-    const board = { id: "board-context" };
+    const board = {
+      id: "board-context",
+      allocateObjectId() {
+        return 13;
+      },
+    };
     const monitor = {
       worldToChunk() {
         return { chunkId: 9 };
       },
     };
-    const boardApi = {
-      getBoardCore() {
-        return {
-          allocateObjectId() {
-            return 13;
-          },
-        };
-      },
-    };
+    const boardApi = { queryObjects: jest.fn() };
     const tool = new TestTool();
 
     tool.createProcessor()(

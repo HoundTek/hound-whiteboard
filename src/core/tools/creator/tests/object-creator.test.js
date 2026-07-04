@@ -2,15 +2,17 @@ import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { SingleGestureObjectCreatorTool } from "../object-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/index.js";
-import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
-
 function createBoardDeviceContext(objectId, { monitor } = {}) {
-  const board = new Board();
-  board.width = 10;
-  board.height = 10;
-  board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-  const boardApi = board.getBoardApi();
+  const board = {
+    allocateObjectId: jest.fn(() => objectId),
+    getObjectById: jest.fn(() => undefined),
+  };
+  const boardApi = {
+    createObject: jest.fn(async () => objectId),
+    modifyObject: jest.fn(),
+    commitObjects: jest.fn(),
+    discardActiveObjects: jest.fn(),
+  };
 
   return {
     board,
@@ -137,7 +139,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
   test("显式提供 boardApi 时仍应将本地草稿对象写回上下文", () => {
     const tool = new CircleCreatorTool();
-    const { board, deviceContext } = createBoardDeviceContext(206);
+    const { boardApi, deviceContext } = createBoardDeviceContext(206);
 
     tool.process(
       {
@@ -148,8 +150,13 @@ describe("ObjectCreatorTool — property 信号", () => {
     );
 
     expect(deviceContext.acc.objects).toEqual([tool._local]);
-    expect(board.activeObjectManager.activeObjects.size).toBe(1);
-    expect(board.getChunkById(1).objectManager.getObject(206)).toBeUndefined();
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "CircleObject",
+      expect.objectContaining({
+        id: 206,
+        position: new Vector(1, 1),
+      }),
+    );
   });
 
   test("RPC 风格 boardApi 下应直接创建本地草稿对象，不再回填 board 实例", () => {

@@ -19,16 +19,15 @@ describe("ObjectChooserTool", () => {
     reset() {}
   }
 
-  test("process 应将选择结果加入 AOM 并写回上下文", () => {
+  test("process 应通过 boardApi.addActiveObjects 写回选择结果", () => {
     const chosenObject = { id: 1 };
-    const board = {
-      activeObjectManager: {
-        choose: jest.fn(),
-      },
+    const boardApi = {
+      addActiveObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
     };
     const stateAccess = createStateAccess();
     const deviceContext = {
-      acc: { board },
+      acc: { boardApi },
       path: "/monitor/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -40,28 +39,25 @@ describe("ObjectChooserTool", () => {
       deviceContext,
     );
 
-    expect(board.activeObjectManager.choose).toHaveBeenCalledWith(
-      new Set([chosenObject]),
-    );
+    expect(boardApi.addActiveObjects).toHaveBeenCalledWith([1]);
     expect(deviceContext.acc.objects).toEqual([chosenObject]);
     expect(stateAccess.getState()).toEqual({
       objects: [chosenObject],
     });
   });
 
-  test("umount 应撤销当前选择并清理上下文", () => {
+  test("umount 应通过 boardApi.discardActiveObjects 撤销当前选择并清理上下文", () => {
     const chosenObject = { id: 4 };
-    const board = {
-      activeObjectManager: {
-        discard: jest.fn(),
-      },
+    const boardApi = {
+      addActiveObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
     };
     const tool = new TestChooserTool();
     const stateAccess = createStateAccess({
       objects: [chosenObject],
     });
     const deviceContext = {
-      acc: { board, objects: [chosenObject] },
+      acc: { boardApi, objects: [chosenObject] },
       path: "/monitor/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -69,20 +65,15 @@ describe("ObjectChooserTool", () => {
 
     tool.umount(deviceContext);
 
-    expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
-      new Set([chosenObject]),
-    );
+    expect(boardApi.discardActiveObjects).toHaveBeenCalledWith([4]);
     expect(deviceContext.acc.objects).toBeUndefined();
     expect(stateAccess.getState()).toEqual({});
   });
 
-  test("显式提供 boardApi 时 process 应走 addActiveObjects 并将真实对象实例写回上下文", () => {
-    const liveObject = { id: 31, live: true };
+  test("显式提供 boardApi 时 process 应走 addActiveObjects 并保留 summary-like 条目", () => {
     const boardApi = {
       addActiveObjects: jest.fn(),
-      getBoardCore: () => ({
-        getObjectById: (objectId) => (objectId === 31 ? liveObject : undefined),
-      }),
+      discardActiveObjects: jest.fn(),
     };
     const stateAccess = createStateAccess();
     const deviceContext = {
@@ -107,8 +98,22 @@ describe("ObjectChooserTool", () => {
     );
 
     expect(boardApi.addActiveObjects).toHaveBeenCalledWith([31]);
-    expect(deviceContext.acc.objects).toEqual([liveObject]);
-    expect(stateAccess.getState()).toEqual({ objects: [liveObject] });
+    expect(deviceContext.acc.objects).toEqual([
+      {
+        id: 31,
+        position: { x: 10, y: 20 },
+        range: new RectangleRange(0, 0, 5, 5),
+      },
+    ]);
+    expect(stateAccess.getState()).toEqual({
+      objects: [
+        {
+          id: 31,
+          position: { x: 10, y: 20 },
+          range: new RectangleRange(0, 0, 5, 5),
+        },
+      ],
+    });
   });
 
   test("显式提供 RPC boardApi 时不应回填到本地 stale board 对象", () => {
@@ -284,12 +289,13 @@ describe("ObjectChooserTool", () => {
   describe("生命周期钩子", () => {
     test("afterChoose 在有选中对象时触发", () => {
       const chosenObject = { id: 10 };
-      const board = {
-        activeObjectManager: { choose: jest.fn() },
+      const boardApi = {
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        acc: { board },
+        acc: { boardApi },
         path: "/test",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
@@ -305,8 +311,9 @@ describe("ObjectChooserTool", () => {
     });
 
     test("afterChoose 在无选中对象时不触发", () => {
-      const board = {
-        activeObjectManager: { choose: jest.fn() },
+      const boardApi = {
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
       };
       const tool = new TestChooserTool({ chosenObjects: [] });
       const afterChoose = jest.fn();
@@ -315,7 +322,7 @@ describe("ObjectChooserTool", () => {
       tool.process(
         { signals: [{ type: "trigger" }] },
         {
-          acc: { board },
+          acc: { boardApi },
           path: "/test",
           getNodeState: () => ({}),
           setNodeState: () => {},
@@ -364,24 +371,24 @@ describe("ObjectChooserTool", () => {
 
     test("RectangleObjectChooserTool 在 end 信号时调用 confirmSelection", () => {
       // 准备一个虚拟对象用于框选命中
-      const objectInBoard = {
+      const selectedSummary = {
         id: 20,
-        position: new Vector(50, 50),
-        getRange() {
-          return new RectangleRange(0, 0, 10, 10);
-        },
+        type: "CircleObject",
+        position: { x: 50, y: 50 },
+        range: new RectangleRange(0, 0, 10, 10),
+        boundingBox: new RectangleRange(0, 0, 10, 10),
+        property: {},
+        data: {},
       };
-      const board = {
-        objectLoaded: new Map([["chunk-1", { obj: objectInBoard }]]),
-        activeObjectManager: {
-          activeObjectIndex: new Map(),
-          choose: jest.fn(),
-          discard: jest.fn(),
-        },
+      const boardApi = {
+        hitTest: jest.fn(async () => [20]),
+        queryObjects: jest.fn(async () => [selectedSummary]),
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        acc: { board },
+        acc: { boardApi },
         path: "/monitor/chooser",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
@@ -407,27 +414,29 @@ describe("ObjectChooserTool", () => {
       );
 
       // 发送 end 信号，携带最终位置 → 框选命中 → confirmSelection
-      tool.process(
-        {
-          signals: [
-            { type: "end" },
-            {
-              type: "position",
-              context: { value: new Vector(200, 200) },
-            },
-          ],
-        },
-        deviceContext,
-      );
+      return tool
+        .process(
+          {
+            signals: [
+              { type: "end" },
+              {
+                type: "position",
+                context: { value: new Vector(200, 200) },
+              },
+            ],
+          },
+          deviceContext,
+        )
+        .then(() => {
+          // afterChoose 触发（setContextObjects 后）
+          expect(afterChoose).toHaveBeenCalledTimes(1);
+          // afterConfirm 触发（confirmSelection 后）
+          expect(afterConfirm).toHaveBeenCalledTimes(1);
 
-      // afterChoose 触发（setContextObjects 后）
-      expect(afterChoose).toHaveBeenCalledTimes(1);
-      // afterConfirm 触发（confirmSelection 后）
-      expect(afterConfirm).toHaveBeenCalledTimes(1);
-
-      const confirmCall = afterConfirm.mock.calls[0];
-      expect(confirmCall[0]).toMatchObject({ path: "/monitor/chooser" });
-      expect(confirmCall[1]).toEqual([objectInBoard]);
+          const confirmCall = afterConfirm.mock.calls[0];
+          expect(confirmCall[0]).toMatchObject({ path: "/monitor/chooser" });
+          expect(confirmCall[1]).toEqual([selectedSummary]);
+        });
     });
   });
 });

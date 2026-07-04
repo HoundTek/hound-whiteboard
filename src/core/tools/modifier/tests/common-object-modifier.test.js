@@ -1,8 +1,6 @@
 import { jest } from "@jest/globals";
 import { Vector } from "../../../utils/math.js";
 import { RectangleRange } from "../../../range/rectangle.js";
-import { Board } from "../../../components/index.js";
-import { ChunkObjectManager } from "../../../components/chunk/chunk-object-manager.js";
 import { CommonObjectModifierTool } from "../common-object-modifier.js";
 import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../object-modifier.js";
 
@@ -163,17 +161,16 @@ describe("CommonObjectModifierTool", () => {
     expect(object.position).toEqual(new Vector(19, 22));
   });
 
-  test("success 信号应将对象提交到静态图并卸载", () => {
+  test("success 信号应通过 commitObjects 提交对象并卸载", () => {
     const object = {
       id: 7,
       position: new Vector(5, 5),
     };
 
-    const board = {
-      activeObjectManager: {
-        activeObjectIndex: new Map([[object.id, object]]),
-        apply: jest.fn(),
-      },
+    const boardApi = {
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
     };
     const mockDag = {
       unmount: jest.fn(),
@@ -181,31 +178,28 @@ describe("CommonObjectModifierTool", () => {
     let nodeState = { object };
     const tool = new CommonObjectModifierTool();
 
-    // 首个 position → 启动手势，对象不动
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 7, y: 5 } } }],
       },
       {
-        acc: { objects: [object], board },
+        acc: { objects: [object], boardApi },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
     );
     expect(object.position).toEqual(new Vector(5, 5));
 
-    // 第二个 position → 应用位移
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 10, y: 6 } } }],
       },
       {
-        acc: { objects: [object], board },
+        acc: { objects: [object], boardApi },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
     );
-    // dx=10-7=3, dy=6-5=1 → (8, 6)
     expect(object.position).toEqual(new Vector(8, 6));
 
     const result = tool.process(
@@ -213,7 +207,7 @@ describe("CommonObjectModifierTool", () => {
         signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
       },
       {
-        acc: { objects: [object], board },
+        acc: { objects: [object], boardApi },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
         getNodeState() {
@@ -227,11 +221,8 @@ describe("CommonObjectModifierTool", () => {
     );
 
     expect(result).toBeUndefined();
-    // 对象位置保留在最后修改状态
     expect(object.position).toEqual(new Vector(8, 6));
-    expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-      new Set([object]),
-    );
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([7]);
     expect(mockDag.unmount).toHaveBeenCalledWith(
       "/monitor/mouse/primary/tool/tool",
     );
@@ -240,24 +231,23 @@ describe("CommonObjectModifierTool", () => {
 
   test("显式提供 boardApi 时应通过 modifyObject 更新位置并在 success 后提交", () => {
     const tool = new CommonObjectModifierTool();
-    const board = new Board();
-    board.width = 100;
-    board.height = 100;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-    const boardApi = board.getBoardApi();
-    const createPromise = boardApi.createObject("CircleObject", {
+    const object = {
       id: 501,
-      position: { x: 10, y: 20 },
+      position: new Vector(10, 20),
       data: { radius: 5 },
-    });
-    const object = board.getObjectById(501);
-    const modifySpy = jest.spyOn(boardApi, "modifyObject");
-    const commitSpy = jest.spyOn(boardApi, "commitObjects");
+    };
+    const boardApi = {
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const modifySpy = boardApi.modifyObject;
+    const commitSpy = boardApi.commitObjects;
     const mockDag = { unmount: jest.fn() };
     const monitor = { requestViewportUiRender: jest.fn() };
     let nodeState = {};
     const context = {
-      acc: { board, boardApi, monitor, objects: [object] },
+      acc: { boardApi, monitor, objects: [object] },
       dag: mockDag,
       path: "/monitor/mouse/primary/tool/tool",
       getNodeState() {
@@ -269,7 +259,6 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    expect(createPromise).toBeInstanceOf(Promise);
     expect(object.position).toEqual(new Vector(10, 20));
 
     tool.process(
@@ -308,17 +297,11 @@ describe("CommonObjectModifierTool", () => {
 
   test("显式提供 boardApi 时应支持 summary-like 上下文对象完成准入与位移", () => {
     const tool = new CommonObjectModifierTool();
-    const board = new Board();
-    board.width = 100;
-    board.height = 100;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-    const boardApi = board.getBoardApi();
-    boardApi.createObject("CircleObject", {
-      id: 502,
-      position: { x: 30, y: 40 },
-      data: { radius: 5 },
-    });
-    const liveObject = board.getObjectById(502);
+    const boardApi = {
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
     const summaryLikeObject = {
       id: 502,
       type: "CircleObject",
@@ -330,7 +313,6 @@ describe("CommonObjectModifierTool", () => {
     };
     const context = {
       acc: {
-        board,
         boardApi,
         monitor: { requestViewportUiRender: jest.fn() },
         objects: [summaryLikeObject],
@@ -343,7 +325,7 @@ describe("CommonObjectModifierTool", () => {
       },
       context,
     );
-    expect(liveObject.position).toEqual(new Vector(30, 40));
+    expect(summaryLikeObject.position).toEqual(new Vector(30, 40));
 
     tool.process(
       {
@@ -352,8 +334,10 @@ describe("CommonObjectModifierTool", () => {
       context,
     );
 
-    expect(liveObject.position).toEqual(new Vector(34, 43));
     expect(summaryLikeObject.position).toEqual(new Vector(34, 43));
+    expect(boardApi.modifyObject).toHaveBeenCalledWith(502, {
+      position: { x: 34, y: 43 },
+    });
   });
 
   test("显式提供 RPC boardApi 时不应读取本地 stale activeObjectIndex", () => {
@@ -1416,34 +1400,29 @@ describe("CommonObjectModifierTool", () => {
         id: 1,
         position: new Vector(10, 20),
       };
-      const board = {
-        activeObjectManager: {
-          activeObjectIndex: new Map([[object.id, object]]),
-          apply: jest.fn(),
-        },
+      const boardApi = {
+        modifyObject: jest.fn(),
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
       };
 
       const tool = new CommonObjectModifierTool();
 
-      // displacement 移动
       tool.process(
         {
           signals: [
             { type: "displacement", context: { value: { x: 7, y: 3 } } },
           ],
         },
-        aomCtx(object, { board }),
+        aomCtx(object, { boardApi }),
       );
       expect(object.position).toEqual(new Vector(17, 23));
 
-      // success 提交
       tool.process(
         { signals: [{ type: "success", context: {} }] },
-        aomCtx(object, { board }),
+        aomCtx(object, { boardApi }),
       );
-      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-        new Set([object]),
-      );
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([1]);
     });
 
     test("Worker mode 下 summary-like 对象应能基于 plain boundingBox 启动 modifier 手势", () => {

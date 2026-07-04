@@ -153,18 +153,17 @@ describe("ObjectModifierTool", () => {
       tool.on("afterApply", afterApply);
 
       const object = { id: 10 };
-      const board = {
-        activeObjectManager: {
-          activeObjectIndex: new Map([[object.id, object]]),
-          apply: jest.fn(),
-        },
+      const boardApi = {
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
       };
 
-      tool.applyModifiedObjects({ acc: { board }, path: "/test" }, [object]);
-
-      expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-        new Set([object]),
+      tool.applyModifiedObjects(
+        { acc: { boardApi, objects: [object] }, path: "/test" },
+        [object],
       );
+
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([10]);
       expect(afterApply).toHaveBeenCalledTimes(1);
       expect(afterApply.mock.calls[0][2]).toBe(true);
     });
@@ -180,21 +179,19 @@ describe("ObjectModifierTool", () => {
       tool.beforeApplyModifiedObjects = () => false;
 
       const object = { id: 11 };
-      const apply = jest.fn();
-      const board = {
-        activeObjectManager: {
-          activeObjectIndex: new Map([[object.id, object]]),
-          apply,
-        },
+      const commitObjects = jest.fn();
+      const boardApi = {
+        commitObjects,
+        discardActiveObjects: jest.fn(),
       };
 
       const result = tool.applyModifiedObjects(
-        { acc: { board }, path: "/test" },
+        { acc: { boardApi, objects: [object] }, path: "/test" },
         [object],
       );
 
       expect(result).toBe(false);
-      expect(apply).not.toHaveBeenCalled();
+      expect(commitObjects).not.toHaveBeenCalled();
       expect(afterApply).not.toHaveBeenCalled();
     });
 
@@ -206,16 +203,14 @@ describe("ObjectModifierTool", () => {
       const tool = new TestModifier();
       const object = { id: 12 };
       const unmount = jest.fn();
-      const board = {
-        activeObjectManager: {
-          activeObjectIndex: new Map([[object.id, object]]),
-          apply: jest.fn(),
-        },
+      const boardApi = {
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
       };
 
       tool.applyModifiedObjects(
         {
-          acc: { board, autoUmountOnApply: false },
+          acc: { boardApi, objects: [object], autoUmountOnApply: false },
           dag: { unmount },
           path: "/test",
         },
@@ -223,7 +218,7 @@ describe("ObjectModifierTool", () => {
       );
 
       // apply 正常执行
-      expect(board.activeObjectManager.apply).toHaveBeenCalled();
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([12]);
       // 但 unmount 不应被调用
       expect(unmount).not.toHaveBeenCalled();
     });
@@ -236,18 +231,21 @@ describe("ObjectModifierTool", () => {
       const tool = new TestModifier();
       const object = { id: 13 };
       const unmount = jest.fn();
-      const board = {
-        activeObjectManager: {
-          activeObjectIndex: new Map([[object.id, object]]),
-          apply: jest.fn(),
-        },
+      const boardApi = {
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
       };
 
       tool.applyModifiedObjects(
-        { acc: { board }, dag: { unmount }, path: "/test" },
+        {
+          acc: { boardApi, objects: [object] },
+          dag: { unmount },
+          path: "/test",
+        },
         [object],
       );
 
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([13]);
       expect(unmount).toHaveBeenCalledWith("/test");
     });
 
@@ -260,15 +258,9 @@ describe("ObjectModifierTool", () => {
       const object = { id: 14 };
       const commitObjects = jest.fn();
       const discardActiveObjects = jest.fn();
-      const activeObjectIndex = new Map([[object.id, object]]);
       const boardApi = {
         commitObjects,
         discardActiveObjects,
-        getBoardCore: () => ({
-          activeObjectManager: {
-            activeObjectIndex,
-          },
-        }),
       };
       const unmount = jest.fn();
       const context = {
