@@ -13,7 +13,7 @@
 
 - `BoardCore` / `ChunkObjectManager` 只依赖持久化接口，不直接依赖宿主 API
 - UI 线程在启用文件模式时，为 `BoardCore` 注入 `createRendererPersistenceAdapter(rootPath, bridge)`
-- Worker / same-thread 的运行边界不会改变持久化语义本身
+- Worker / UI 的运行边界不会改变持久化语义本身
 
 ## 当前涉及的组件
 

@@ -12,13 +12,13 @@
 - chooser 选中的对象
 - modifier 正在编辑的对象
 
-AOM 本身不依赖 DOM，也不直接持有 monitor 列表。它通过 `renderHooks` 把渲染副作用注入到调用方，因此既能在 same-thread 模式使用，也能在 Worker 中作为真实语义核心运行。
+AOM 本身不依赖 DOM，也不直接持有 monitor 列表。它通过 `renderHooks` 把渲染副作用注入到调用方，因此既能在测试环境使用，也能在 Worker 中作为真实语义核心运行。
 
 ## 运行边界
 
 - **Shared 模块**：AOM 的数据结构与算法本身属于 Shared
 - **Worker 主运行位点**：在 Worker mode 下，真实 AOM 位于 Worker 的 `BoardCore` 中
-- **UI same-thread compat**：本地 `BoardCore` 仍可在测试或兼容路径中使用同一实现
+- **UI（测试/兼容）**：本地 `BoardCore` 可在测试路径中使用同一实现
 
 ## 核心数据结构
 
@@ -86,11 +86,11 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 - `BoardCore` 注入的 hooks 最终驱动 `MonitorCore` 的 base/live 渲染
 - AOM 自身不关心 DOM canvas
 
-### UI same-thread mode
+### UI（测试/兼容）
 
-在 same-thread 路径下：
+在测试路径下：
 
-- `Board` 注入的 `board-render-hooks` 最终驱动本地 `Monitor` 渲染器
+- `Board` 注入的 `board-render-hooks` 直接驱动本地 `BoardCore` 渲染器
 
 ## 主要流程
 

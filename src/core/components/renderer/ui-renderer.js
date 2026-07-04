@@ -7,7 +7,7 @@
 
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange } from "../../range/index.js";
-import { Monitor } from "../orchestration/monitor.js";
+/** @typedef {import("../orchestration/monitor-proxy.js").MonitorProxy} Monitor */
 import { ActiveObjectManager } from "../orchestration/active-object-manager.js";
 import { Logger } from "../../../utils/log/logger.js";
 import { logBus } from "../../../utils/log/log-bus.js";

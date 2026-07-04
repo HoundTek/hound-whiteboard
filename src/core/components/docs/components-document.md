@@ -12,7 +12,7 @@
 
 当前组件层的一个关键特点是：**UI façade 与 Worker core 已拆分**。
 
-- UI 线程持有 `Board`、`Monitor` / `MonitorProxy`
+- UI 线程持有 `Board`、`MonitorProxy`
 - Worker 线程持有 `BoardCore`、`MonitorCore`
 - `ActiveObjectManager`、chunk、base/live renderer 等位于共享层
 
@@ -59,7 +59,7 @@ src/core/components/
 | -------------------------- | -------- | -------------------------------------------------- |
 | `board.js`                 | UI       | UI façade，持有 DAG、signalsEventBus、monitor 集合 |
 | `board-core.js`            | Worker   | 真实白板核心                                       |
-| `monitor.js`               | UI       | same-thread compat Monitor                         |
+
 | `monitor-proxy.js`         | UI       | Worker 模式下的 monitor 代理                       |
 | `monitor-core.js`          | Worker   | Worker 侧视口与渲染核心                            |
 | `active-object-manager.js` | Shared   | 交互态动态图与层关系                               |
@@ -71,7 +71,6 @@ src/core/components/
 `src/core/components/index.js` 当前只导出 UI 侧宿主入口：
 
 - `Board`
-- `Monitor`
 - `MonitorProxy`
 
 Worker 侧 `BoardCore` / `MonitorCore` 不经由该 barrel 导出，而是由 `src/core-worker.js` 直接引用。
@@ -85,7 +84,6 @@ Worker 侧 `BoardCore` / `MonitorCore` 不经由该 barrel 导出，而是由 `s
 
 ### `Monitor` 家族拆分
 
-- `Monitor`：same-thread compat 路径
 - `MonitorProxy`：Worker 模式下的 UI 视口代理
 - `MonitorCore`：Worker 侧真实渲染核心
 
@@ -103,7 +101,6 @@ AOM 自身不直接依赖 DOM canvas 或 monitor 列表。
 
 - Worker 架构已接通
 - demo 默认启用 Worker mode
-- UI 线程仍保留 same-thread compat 路径，主要服务测试与兼容入口
 - Shared 组件层已形成稳定边界
 
 ## 相关文档

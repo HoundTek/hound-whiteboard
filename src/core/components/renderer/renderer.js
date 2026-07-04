@@ -54,7 +54,7 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
 class Renderer {
   /**
    * 绑定的显示器
-   * @type {import("../orchestration/monitor.js").Monitor}
+   * @type {import("../orchestration/monitor-proxy.js").MonitorProxy}
    */
   monitor;
 
@@ -73,7 +73,7 @@ class Renderer {
   _scheduler;
 
   /**
-   * @param {import("../orchestration/monitor.js").Monitor} monitor - 目标显示器
+   * @param {import("../orchestration/monitor-proxy.js").MonitorProxy} monitor - 目标显示器
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
   constructor(monitor, options = {}) {

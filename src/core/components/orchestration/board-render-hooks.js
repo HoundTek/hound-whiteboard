@@ -11,8 +11,8 @@ import { RectangleRange, intersectsRanges } from "../../range/index.js";
 
 /**
  * 解析 monitors 引用
- * @param {Map<string, import("./monitor.js").Monitor> | (() => Map<string, import("./monitor.js").Monitor>)} monitorsOrFn - monitors Map 或返回 Map 的函数
- * @returns {Map<string, import("./monitor.js").Monitor> | undefined}
+ * @param {Map<string, import("./monitor-proxy.js").MonitorProxy> | (() => Map<string, import("./monitor-proxy.js").MonitorProxy>)} monitorsOrFn - monitors Map 或返回 Map 的函数
+ * @returns {Map<string, import("./monitor-proxy.js").MonitorProxy> | undefined}
  */
 function _resolveMonitors(monitorsOrFn) {
   if (typeof monitorsOrFn === "function") {
@@ -27,14 +27,14 @@ function _resolveMonitors(monitorsOrFn) {
  * AOM 不再直接访问 board.monitors，而是通过这组钩子间接发起到各 monitor 的渲染请求。
  * `monitors` 参数支持传入直接的 Map 引用或返回 Map 的惰性函数（适合 Board 构造时 monitors 尚未就绪的场景）。
  *
- * @param {Map<string, import("./monitor.js").Monitor> | (() => Map<string, import("./monitor.js").Monitor>)} monitorsOrFn - 显示器 Map 或惰性获取函数
+ * @param {Map<string, import("./monitor-proxy.js").MonitorProxy> | (() => Map<string, import("./monitor-proxy.js").MonitorProxy>)} monitorsOrFn - 显示器 Map 或惰性获取函数
  * @param {() => import("../../objects/basic-obj.js").BasicObject[]} [collectAllActiveDrawables] - 收集所有活跃可绘制对象的函数（可选）
  * @returns {import("./aom-render-hooks.js").AomRenderHooks}
  */
 function createBoardRenderHooks(monitorsOrFn, collectAllActiveDrawables) {
   /**
    * 获取当前 monitors Map
-   * @returns {Map<string, import("./monitor.js").Monitor> | undefined}
+   * @returns {Map<string, import("./monitor-proxy.js").MonitorProxy> | undefined}
    */
   const getMonitors = () => _resolveMonitors(monitorsOrFn);
 

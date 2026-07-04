@@ -46,8 +46,7 @@ Worker 与 UI 共用：
 
 - 持有 `DevicesDAG` 与 `signalsEventBus`
 - 管理 `monitors`
-- 决定 same-thread / Worker mode
-- 通过 `BoardApi` / `BoardApiRpc` 与 Core 侧交互
+- 通过 `BoardApiRpc` 与 Worker 侧 Core 交互
 - 持有本地 `CounterPool`，同步分配 objectId
 
 ### `BoardCore`
@@ -71,7 +70,7 @@ Worker 与 UI 共用：
 1. creator 在 UI 线程通过 `Board.allocateObjectId()` 申请 id
 2. `Board` 使用本地 `CounterPool` 同步递增
 3. `boardApi.createObject(type, { id, ... })` 把显式 id 发往 Worker
-4. Worker 侧 `BoardApi.createObject()` 要求必须收到显式 id
+4. Worker 侧 createObject 要求必须收到显式 id
 5. 若 Worker 侧发现重复 id，会抛错并通过 `rpc-response` 返回错误
 
 这意味着：
@@ -207,7 +206,7 @@ AOM 内部关键结构：
 
 - `MonitorProxy` 接收位图并合成到 DOM canvas
 - `UiRenderer` 独立维护 overlay
-- same-thread compat 路径仍可使用 `Monitor`
+- 全部 monitor 走 `MonitorProxy` 路径
 
 ## 持久化模型
 
@@ -221,7 +220,7 @@ AOM 内部关键结构：
 
 ## 关键术语
 
-- **same-thread compat**：未启用 Worker mode 时，本地 `BoardCore` 直接承担全部职责
+- **Worker 模式**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
 - **summary-like 条目**：用于 UI 侧交互和 overlay 的纯数据对象
 - **静态图**：区块级稳定层叠图
 - **动态图 / AOM**：交互态动态层关系

@@ -24,10 +24,9 @@
 ### 白板初始化
 
 1. UI 线程创建 `Board`
-2. `Board` 先构造本地 `BoardCore`（same-thread compat 状态）
-3. 若启用 Worker mode，则 `Board.enableWorkerMode(worker)` 创建 `BoardApiRpc`
-4. `BoardApiRpc.createBoard(...)` 在 Worker 中创建真正的 `BoardCore`
-5. `Board.createMonitor(...)` 在 Worker mode 下返回 `MonitorProxy`
+2. `Board.enableWorkerMode(worker)` 初始化 `BoardApiRpc`
+3. `BoardApiRpc.createBoard(...)` 在 Worker 中创建真正的 `BoardCore`
+4. `Board.createMonitor(...)` 返回 `MonitorProxy`
 6. `MonitorProxy` 通过 `createMonitor` RPC 在 Worker 中创建 `MonitorCore`
 
 ### 输入与工具
@@ -51,7 +50,7 @@
 
 - `BoardCore`：对象注册表、区块加载状态、AOM、UndoTree、持久化协调
 - `MonitorCore`：Worker 视口状态、ChunkLoader、OffscreenCanvas 渲染
-- `BoardApi`：create / modify / commit / query / hitTest 等核心操作实现
+- `BoardCore`（通过 RPC 暴露）：create / modify / commit / query / hitTest 等核心操作实现
 
 ### UI 侧核心职责
 
@@ -81,7 +80,7 @@
 
 ## 关键术语
 
-- **same-thread compat**：未启用 Worker mode 时，`Board` 与 `Monitor` 直接使用本地 `BoardCore`
+- **RPC 通信**：UI 侧 `BoardApiRpc` 通过 postMessage 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
 - **summary-like 条目**：UI 侧在 chooser / modifier / overlay 中流转的纯数据对象，例如 `{ id, position, boundingBox, property, data }`
 - **静态图**：各 `ChunkObjectManager.staticGraph` 维护的稳定层叠关系
 - **动态图 / AOM**：`ActiveObjectManager` 维护的交互态对象与临时层关系

@@ -16,7 +16,7 @@
 | `board.js`                 | UI       | UI façade，持有 DAG、signalsEventBus、monitors，并负责 Worker 模式切换 |
 | `monitor-core.js`          | Worker   | Worker 侧视口、ChunkLoader、base/live 渲染输出                         |
 | `monitor-proxy.js`         | UI       | Worker 模式下的 monitor 代理，接收 `render-frame`                      |
-| `monitor.js`               | UI       | same-thread compat Monitor                                             |
+
 | `active-object-manager.js` | Shared   | 动态层关系、活动对象生命周期与静态图回写                               |
 | `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                                       |
 | `board-render-hooks.js`    | UI       | AOM 渲染请求到 monitor 渲染器的桥接层                                  |
@@ -27,7 +27,7 @@
 - `chunk-loader.js`：加载器与引用计数
 - `chunk-object-manager.js`：区块静态图与对象覆盖区块索引
 
-这一层属于 Shared：Worker 侧主用，same-thread compat 路径复用。
+这一层属于 Shared：Worker 侧主用。
 
 ### `components/renderer/`
 
@@ -43,8 +43,7 @@
 ## `bridges/`
 
 - `board-api.js`
-  - `BoardApi`：Core 语义的同线程实现，当前在 Worker 中作为 RPC 目标执行
-  - `BoardApiRpc`：UI 线程 RPC 客户端
+  - `BoardApiRpc`：UI 线程 RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信
 - `persistence-adapter.js`：持久化接口与默认内存适配
 - `file-operate-bridge-*`：宿主文件 I/O 桥接，运行在 UI / preload 相关边界
 
@@ -111,7 +110,7 @@ UI 侧输入编排层。
 对象在 Worker 与 UI 两边都可能被使用：
 
 - Worker 侧用于真实状态、渲染与命中
-- UI 侧用于 same-thread compat、测试与局部纯数据 helper
+- UI 侧用于测试与局部纯数据 helper
 
 ## `range/`
 
