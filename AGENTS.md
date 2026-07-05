@@ -122,8 +122,10 @@ applyModifiedObjects(modificationContext, objects) { ... }
 
 ## 项目技能
 
-| 技能                             | 何时使用                     |
-| -------------------------------- | ---------------------------- |
-| `comment-writer`                 | 写 JSDoc / 行内注释 / 文件头 |
-| `doc-writer`                     | 写 `docs/` 下的模块文档      |
-| `hound-whiteboard-test-patterns` | 添加/迁移/审查测试           |
+| 技能                                  | 何时使用                     |
+| ------------------------------------- | ---------------------------- |
+| `comment-writer`                      | 写 JSDoc / 行内注释 / 文件头 |
+| `doc-writer`                          | 写 `docs/` 下的模块文档      |
+| `hound-whiteboard-test-patterns`      | 添加/迁移/审查测试           |
+| `hound-whiteboard-benchmark-patterns` | 添加/迁移/审查 benchmark     |
+| `hound-whiteboard-git-convention`     | 准备提交时加载，确保格式一致 |
