@@ -618,14 +618,6 @@ class Board {
   }
 
   /**
-   * 获取 BoardCore 实例（仅用于兼容/调试）
-   * @returns {BoardCore}
-   */
-  getBoardCore() {
-    return this.#boardCore;
-  }
-
-  /**
    * 获取 BoardApiRpc 实例
    * @description 返回通过 enableWorkerMode 初始化的 RPC 端点。
    * 调用方通过该接口以 objectId 令牌与 Worker 侧 BoardCore 交互。

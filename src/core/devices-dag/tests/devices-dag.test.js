@@ -438,9 +438,6 @@ describe("DevicesDAG", () => {
           fn.dispose = jest.fn();
           return fn;
         },
-        createDeviceContext(hc) {
-          return hc;
-        },
         umount: jest.fn(),
       };
 
@@ -1042,9 +1039,6 @@ describe("DevicesDAG", () => {
       createProcessor() {
         return () => {};
       },
-      createDeviceContext(hc) {
-        return hc;
-      },
     });
 
     test("同一 tool 实例重复 mountWorkflow 应抛错", () => {
@@ -1207,9 +1201,6 @@ describe("DevicesDAG", () => {
         createProcessor() {
           return () => {};
         },
-        createDeviceContext(hc) {
-          return hc;
-        },
       };
       expect(() => dag.mountWorkflow("/occupied", tool)).toThrow(
         /already has a handler/i,
@@ -1270,9 +1261,6 @@ describe("DevicesDAG", () => {
       const tool = {
         createProcessor() {
           return () => {};
-        },
-        createDeviceContext(hc) {
-          return hc;
         },
       };
       dag.mountWorkflow("/wf/tool", tool);
