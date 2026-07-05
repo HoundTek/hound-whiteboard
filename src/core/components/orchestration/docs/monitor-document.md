@@ -6,10 +6,10 @@
 
 显示器层拆分为两类角色：
 
-| 类             | 线程   | 职责                                             |
-| -------------- | ------ | ------------------------------------------------ |
-| `MonitorProxy` | UI     | Worker 模式下的视口代理，持有 DOM canvas         |
-| `MonitorCore`  | Worker | Worker 侧视口、ChunkLoader 与 base/live 渲染核心 |
+| 类             | 线程   | 职责                                                  |
+| -------------- | ------ | ----------------------------------------------------- |
+| `MonitorProxy` | UI     | Worker 模式下的视口代理，持有 DOM canvas              |
+| `MonitorCore`  | Worker | Worker 侧视口、ChunkLoader、base 渲染与 live 合成核心 |
 
 运行链路：
 
@@ -36,11 +36,11 @@ flowchart LR
 
 `MonitorProxy` 是 Worker 模式下的 UI 侧代理，职责包括：
 
-- 创建并持有 DOM `baseCanvas` / `liveCanvas` / `uiCanvas`
+- 创建并持有 DOM `canvas`（接收 Worker 合成帧）与 `uiCanvas`（overlay 层）
 - 持有 `UiRenderer`
 - 维护本地视口状态副本（`origin` / `zoom` / `width` / `height`）
 - 发送 `viewport-change` 与 `request-render-flush` 到 Worker
-- 接收 `render-frame` 后先清空对应 canvas，再 `drawImage` 合成位图
+- 接收 `render-frame` 后清空 canvas 并 `drawImage` 绘制 Worker 侧合成后的位图
 - 暴露与 `Monitor` 兼容的挂载接口与坐标换算接口
 
 ### `MonitorCore`
@@ -50,10 +50,10 @@ flowchart LR
 - 持有 `ChunkLoader`
 - 持有 `BaseRenderer` 与 `LiveRenderer`
 - 根据视口变化同步 chunk buffer
-- 在 OffscreenCanvas 上执行 base/live 渲染
-- 输出 `render-frame`
+- 在 OffscreenCanvas 上先渲染 base 层，再到 live 层合成 active 对象
+- 输出仅包含 `liveBitmap` 的 `render-frame`
 
-`MonitorCore.flushRenderFrame()` 当前会在 `transferToImageBitmap()` 后把位图立即画回源 OffscreenCanvas，以保持 Worker 侧 base/live 底图完整，避免下一帧只剩脏区补绘。
+`LiveRenderer` 的渲染管线会在 `_afterClear` 阶段将 base 内容拷贝到 live 画布上，因此 `liveBitmap` 已是包含静态层与活动层的合成帧。`flushRenderFrame()` 在 `transferToImageBitmap()` 后把位图立即画回源 OffscreenCanvas，保持 Worker 侧底图完整，避免下一帧只剩脏区补绘。
 
 ## 渲染层分工
 
@@ -65,11 +65,11 @@ flowchart LR
 ### UI 侧
 
 - `UiRenderer`：overlay 渲染
-- `MonitorProxy`：位图合成与 DOM canvas 管理
+- `MonitorProxy`：Worker 合成帧的接收与显示
 
 这意味着：
 
-- base/live 的真实像素内容来自 Worker
+- base/live 的合成像素内容来自 Worker（`liveBitmap` 已合成两层）
 - overlay 始终留在 UI 线程
 - 视口刷新由 `MonitorProxy` 协调，Worker 只负责渲染与回帧
 
@@ -88,7 +88,7 @@ flowchart LR
 差异在于：
 
 - `MonitorProxy` 通过消息驱动 `MonitorCore`
-- `MonitorCore` 真正执行 base/live 刷新
+- `MonitorCore` 真正执行 base 渲染与 live 合成
 
 ## 设备图挂载
 
@@ -113,8 +113,7 @@ monitor 家族向业务层提供统一的挂载入口：
 - `render-frame`
   - `monitorId`
   - `frameId`
-  - `baseBitmap`
-  - `liveBitmap`
+  - `liveBitmap`（已包含 base 层与 live 层的合成结果）
 
 `viewport-change.force` 已接通到 `MonitorCore.onViewportChange()`，因此 `flushViewportRender()` 可以在视口参数未变化时仍强制产出新帧。
 
@@ -122,7 +121,7 @@ monitor 家族向业务层提供统一的挂载入口：
 
 - `MonitorCore` / `MonitorProxy` 已落地并接通
 - demo 默认走 `MonitorProxy` 路径
-- Worker 侧 base/live 与 UI 侧 overlay 的边界已稳定
+- Worker 侧 base/live 合成后在 UI 侧单 canvas 显示，overlay 边界已稳定
 
 ## 相关文档
 

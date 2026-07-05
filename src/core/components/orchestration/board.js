@@ -433,8 +433,7 @@ class Board {
     const monitorWidth = width ?? this.chunkWidth;
     const monitorHeight = height ?? this.chunkHeight;
     const monitorRoot = document.createElement("div");
-    const baseCanvas = document.createElement("canvas");
-    const liveCanvas = document.createElement("canvas");
+    const canvas = document.createElement("canvas");
     const uiCanvas = document.createElement("canvas");
 
     monitorRoot.id = `monitor-root-${monitorId}`;
@@ -442,24 +441,20 @@ class Board {
     monitorRoot.style.width = `${monitorWidth}px`;
     monitorRoot.style.height = `${monitorHeight}px`;
 
-    baseCanvas.id = `monitor-base-canvas-${monitorId}`;
-    baseCanvas.className = "monitor-layer monitor-layer-base";
-    liveCanvas.id = `monitor-canvas-${monitorId}`;
-    liveCanvas.className = "monitor-layer monitor-layer-live";
+    canvas.id = `monitor-canvas-${monitorId}`;
+    canvas.className = "monitor-layer monitor-layer-live";
 
     uiCanvas.id = `monitor-ui-canvas-${monitorId}`;
     uiCanvas.className = "monitor-layer monitor-layer-ui";
 
-    monitorRoot.appendChild(baseCanvas);
-    monitorRoot.appendChild(liveCanvas);
+    monitorRoot.appendChild(canvas);
     monitorRoot.appendChild(uiCanvas);
     rootElement.appendChild(monitorRoot);
 
     const monitor = new MonitorProxy(
       {
         rootElement: monitorRoot,
-        baseCanvas,
-        liveCanvas,
+        canvas,
         uiCanvas,
         worker: this.#worker,
       },

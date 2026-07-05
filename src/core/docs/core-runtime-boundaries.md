@@ -23,8 +23,8 @@
 | `components/orchestration/aom-render-hooks.js`      | Shared              | renderHooks 接口与默认空实现                                      |
 | `components/orchestration/board-render-hooks.js`    | UI                  | AOM 请求到 UI monitor 渲染器的桥接层                              |
 | `components/renderer/ui-renderer.js`                | UI                  | UI overlay 渲染                                                   |
-| `components/renderer/base-renderer.js`              | Shared              | Base 层渲染器，兼容 DOM canvas / OffscreenCanvas                  |
-| `components/renderer/live-renderer.js`              | Shared              | Live 层渲染器，兼容 DOM canvas / OffscreenCanvas                  |
+| `components/renderer/base-renderer.js`              | Worker              | Base 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）          |
+| `components/renderer/live-renderer.js`              | Worker              | Live 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）          |
 | `components/renderer/renderer.js`                   | Shared              | 渲染器基类                                                        |
 | `components/renderer/render-scheduler.js`           | Shared              | 脏区调度                                                          |
 | `components/renderer/dirty-rect-*.js`               | Shared              | 脏区策略                                                          |
@@ -96,7 +96,7 @@
 ### 视口与渲染
 
 - **Worker 侧 `MonitorCore`** 负责 base/live 两层的真实补绘与帧输出
-- **UI 侧 `MonitorProxy`** 负责接收 `render-frame` 并把位图合成到 DOM canvas
+- **UI 侧 `MonitorProxy`** 负责接收 `render-frame` 并把合成位图绘制到 DOM canvas
 - **UI 侧 `UiRenderer`** 负责 overlay
 - mutation RPC（`modifyObject` 等）在 Core 侧自动调用 `requestLiveRender` 触发
   live 层失效并安排立即 flush，Tool 层无需自行处理 live 渲染

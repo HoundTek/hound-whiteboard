@@ -100,24 +100,15 @@ describe("MonitorCore", () => {
 
   test("flushRenderFrame 应输出 render-frame 消息并将位图画回源 OffscreenCanvas", () => {
     const { monitorCore, postedFrames } = createMonitorCoreContext();
-    const baseCanvas = monitorCore.baseRenderer.canvas;
     const liveCanvas = monitorCore.liveRenderer.canvas;
-    const baseBitmap = createNoopImageBitmap({ width: 800, height: 600 });
     const liveBitmap = createNoopImageBitmap({ width: 800, height: 600 });
-    const baseContext = {
-      ...createNoopCanvasContext2D(),
-      clearRect: jest.fn(),
-      drawImage: jest.fn(),
-    };
     const liveContext = {
       ...createNoopCanvasContext2D(),
       clearRect: jest.fn(),
       drawImage: jest.fn(),
     };
 
-    baseCanvas.getContext = jest.fn(() => baseContext);
     liveCanvas.getContext = jest.fn(() => liveContext);
-    baseCanvas.transferToImageBitmap = jest.fn(() => baseBitmap);
     liveCanvas.transferToImageBitmap = jest.fn(() => liveBitmap);
 
     monitorCore.requestRenderLayersRefresh();
@@ -130,13 +121,10 @@ describe("MonitorCore", () => {
         type: "render-frame",
         monitorId: "worker-monitor",
         frameId: 1,
-        baseBitmap,
         liveBitmap,
       }),
     );
-    expect(postedFrames[0].transferList).toEqual([baseBitmap, liveBitmap]);
-    expect(baseContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
-    expect(baseContext.drawImage).toHaveBeenCalledWith(baseBitmap, 0, 0);
+    expect(postedFrames[0].transferList).toEqual([liveBitmap]);
     expect(liveContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
     expect(liveContext.drawImage).toHaveBeenCalledWith(liveBitmap, 0, 0);
   });

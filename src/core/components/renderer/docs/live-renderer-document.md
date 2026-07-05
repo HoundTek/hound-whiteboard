@@ -2,7 +2,7 @@
 
 本文档提供 `LiveRenderer` 的概述。
 
-`LiveRenderer` 负责把 `ActiveObjectManager` 当前持有的对象按动态层顺序绘制到 `Monitor.liveCanvas`。
+`LiveRenderer` 负责把 `ActiveObjectManager` 当前持有的对象按动态层顺序绘制到 MonitorCore 的 live OffscreenCanvas 上。
 
 这里的“当前持有”不仅包括仍处于 active layer 的活动对象，也包括仍保留在 AOM 中、但所在层已经变为 inactive 的对象。只要对象还在 AOM 里，它就应由 `LiveRenderer` 负责绘制，而不会回退给 `BaseRenderer`。
 
@@ -13,9 +13,9 @@
 `LiveRenderer` 处在一条明确的边界中：
 
 - `ActiveObjectManager` 负责回答“当前哪些对象在活动层里，以及它们的层顺序是什么”
-- `Monitor` 负责回答“当前视口的缩放、原点和画布实例是什么”
+- `MonitorCore` 负责回答“当前视口的缩放、原点和画布实例是什么”
 - `RenderScheduler` 负责回答“何时真正执行一次 flush”
-- `BaseRenderer` 负责把静态对象渲染到 `baseCanvas`（作为 liveCanvas 的缓存）
+- `BaseRenderer` 负责把静态对象渲染到 base OffscreenCanvas（作为 live 的缓存）
 - `LiveRenderer` 负责回答“这一帧应把哪些 AOM 对象画到 `liveCanvas` 上”，并负责把 baseCanvas 缓存合成到 liveCanvas
 
 这意味着 `LiveRenderer` 是最终的渲染出口，它的输出结果直接对应屏幕显示。
@@ -271,7 +271,7 @@ LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
 - **clear → copyBase → render 三步流水线**，替代浏览器 GPU 图层合成
 - **`copyBase()` / `copyBaseRects()`** 全量与脏区缓存拷贝
 - **`framePending` 时序保护**，防止 base/live 调度器竞争
-- **`baseCanvas` CSS opacity: 0** 使其作为不可见缓存，`liveCanvas` 为唯一可见显示面
+- **base/live 均在 Worker 侧 OffscreenCanvas 上完成合成**，`liveBitmap` 经 `transferToImageBitmap()` 回传后在 UI 侧单 canvas 显示
 
 ### 已接入
 

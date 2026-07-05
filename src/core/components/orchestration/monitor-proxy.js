@@ -33,7 +33,7 @@ function resolveAnimationFrameHost() {
  * @class
  * @description
  * 持有 DOM canvas、UiRenderer 与本地视口状态副本。
- * base/live 图层由 Worker 侧渲染后通过 render-frame 消息回传，再由本类合成到 DOM canvas。
+ * 最终显示帧由 Worker 侧合成后通过 render-frame 消息回传，再由本类绘制到 DOM canvas。
  * @author Zhou Chenyu
  */
 class MonitorProxy {
@@ -83,18 +83,18 @@ class MonitorProxy {
   #worker;
 
   /**
-   * base 层 DOM canvas
+   * 显示层 DOM canvas
    * @type {HTMLCanvasElement | null}
    * @private
    */
-  #baseCanvas;
+  #canvas;
 
   /**
-   * live 层 DOM canvas
-   * @type {HTMLCanvasElement | null}
+   * 显示层 2D 上下文
+   * @type {CanvasRenderingContext2D | null}
    * @private
    */
-  #liveCanvas;
+  #canvasCtx;
 
   /**
    * ui 层 DOM canvas
@@ -102,20 +102,6 @@ class MonitorProxy {
    * @private
    */
   #uiCanvas;
-
-  /**
-   * base 层 2D 上下文
-   * @type {CanvasRenderingContext2D | null}
-   * @private
-   */
-  #baseCtx;
-
-  /**
-   * live 层 2D 上下文
-   * @type {CanvasRenderingContext2D | null}
-   * @private
-   */
-  #liveCtx;
 
   /**
    * 当前画布宽度缓存
@@ -176,8 +162,7 @@ class MonitorProxy {
   /**
    * @param {{
    *   rootElement?: HTMLElement | null,
-   *   baseCanvas?: HTMLCanvasElement | null,
-   *   liveCanvas?: HTMLCanvasElement | null,
+   *   canvas?: HTMLCanvasElement | null,
    *   uiCanvas?: HTMLCanvasElement | null,
    *   worker: { postMessage: Function, addEventListener: Function, removeEventListener: Function },
    * }} htmlElements - 画布元素与 Worker 选项
@@ -186,7 +171,7 @@ class MonitorProxy {
    * @param {string} monitorId - 显示器 id
    */
   constructor(
-    { rootElement, baseCanvas, liveCanvas, uiCanvas, worker },
+    { rootElement, canvas, uiCanvas, worker },
     board,
     { width, height },
     monitorId,
@@ -195,11 +180,9 @@ class MonitorProxy {
     this.board = board;
     this.monitorId = monitorId;
     this.#worker = worker;
-    this.#baseCanvas = baseCanvas ?? null;
-    this.#liveCanvas = liveCanvas ?? null;
+    this.#canvas = canvas ?? null;
     this.#uiCanvas = uiCanvas ?? null;
-    this.#baseCtx = this.#baseCanvas?.getContext?.("2d") ?? null;
-    this.#liveCtx = this.#liveCanvas?.getContext?.("2d") ?? null;
+    this.#canvasCtx = this.#canvas?.getContext?.("2d") ?? null;
     this.#width = Number.isFinite(width) ? width : 0;
     this.#height = Number.isFinite(height) ? height : 0;
     this._zoom = 1;
@@ -214,7 +197,7 @@ class MonitorProxy {
       canvas: this.#uiCanvas,
     });
 
-    const liveCanvasRect = this.#liveCanvas?.getBoundingClientRect?.();
+    const liveCanvasRect = this.#canvas?.getBoundingClientRect?.();
     const canvasWidth = liveCanvasRect?.width ?? this.#width;
     const canvasHeight = liveCanvasRect?.height ?? this.#height;
     this._origin = new Vector(
@@ -277,7 +260,7 @@ class MonitorProxy {
    * @type {HTMLCanvasElement | null}
    */
   get canvas() {
-    return this.#liveCanvas ?? null;
+    return this.#canvas ?? null;
   }
 
   /**
@@ -442,8 +425,8 @@ class MonitorProxy {
     this.#height = nextHeight;
 
     let resized = false;
-    resized = this.#resizeCanvas(this.#baseCanvas, nextWidth, nextHeight) || resized;
-    resized = this.#resizeCanvas(this.#liveCanvas, nextWidth, nextHeight) || resized;
+    resized =
+      this.#resizeCanvas(this.#canvas, nextWidth, nextHeight) || resized;
     resized = this.uiRenderer?.resize(nextWidth, nextHeight) || resized;
 
     if (resized) {
@@ -475,7 +458,8 @@ class MonitorProxy {
    * @returns {Function | undefined}
    */
   registerUiOverlayProvider(provider, options = {}) {
-    const registeredProvider = this.uiRenderer?.registerOverlayProvider?.(provider);
+    const registeredProvider =
+      this.uiRenderer?.registerOverlayProvider?.(provider);
 
     if (registeredProvider && options.invalidate !== false) {
       this.uiRenderer?.invalidateViewport();
@@ -491,7 +475,8 @@ class MonitorProxy {
    * @returns {boolean}
    */
   unregisterUiOverlayProvider(provider, options = {}) {
-    const removed = this.uiRenderer?.unregisterOverlayProvider?.(provider) ?? false;
+    const removed =
+      this.uiRenderer?.unregisterOverlayProvider?.(provider) ?? false;
 
     if (removed && options.invalidate !== false) {
       this.uiRenderer?.invalidateViewport();
@@ -647,19 +632,14 @@ class MonitorProxy {
 
   /**
    * 处理来自 Worker 的一帧渲染结果
-   * @param {{ monitorId?: string | number, baseBitmap?: ImageBitmap, liveBitmap?: ImageBitmap }} frameData - 渲染帧消息
+   * @param {{ monitorId?: string | number, liveBitmap?: ImageBitmap }} frameData - 渲染帧消息
    */
   onRenderFrame(frameData) {
-    const { baseBitmap, liveBitmap } = frameData ?? {};
+    const { liveBitmap } = frameData ?? {};
 
-    if (baseBitmap && this.#baseCtx) {
-      this.#baseCtx.clearRect?.(0, 0, this.width, this.height);
-      this.#baseCtx.drawImage(baseBitmap, 0, 0);
-      baseBitmap.close?.();
-    }
-    if (liveBitmap && this.#liveCtx) {
-      this.#liveCtx.clearRect?.(0, 0, this.width, this.height);
-      this.#liveCtx.drawImage(liveBitmap, 0, 0);
+    if (liveBitmap && this.#canvasCtx) {
+      this.#canvasCtx.clearRect?.(0, 0, this.width, this.height);
+      this.#canvasCtx.drawImage(liveBitmap, 0, 0);
       liveBitmap.close?.();
     }
 
@@ -683,8 +663,7 @@ class MonitorProxy {
     }
 
     this.#worker.removeEventListener("message", this.#workerMessageListener);
-    this.#baseCtx?.clearRect?.(0, 0, this.width, this.height);
-    this.#liveCtx?.clearRect?.(0, 0, this.width, this.height);
+    this.#canvasCtx?.clearRect?.(0, 0, this.width, this.height);
   }
 
   /**

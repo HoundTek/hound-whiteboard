@@ -59,9 +59,7 @@
  * @typedef {Object} RenderFrameMessage
  * @property {"render-frame"} type - 消息类型
  * @property {string | number} monitorId - 目标 monitor 标识
- * @property {ImageBitmap} [baseBitmap] - base 层位图
- * @property {ImageBitmap} [liveBitmap] - live 层位图
- * @property {import("./types.js").Rect[]} [baseDirtyRects] - base 层脏区集合
+ * @property {ImageBitmap} [liveBitmap] - 合成后显示层位图
  * @property {import("./types.js").Rect[]} [liveDirtyRects] - live 层脏区集合
  * @property {number} [frameId] - 帧序号
  */

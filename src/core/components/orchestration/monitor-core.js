@@ -584,15 +584,12 @@ class MonitorCore {
       this.#liveRenderer._scheduler.flush();
     }
 
-    const baseCanvas = this.#baseRenderer?.canvas;
     const liveCanvas = this.#liveRenderer?.canvas;
-    const baseBitmap = baseCanvas?.transferToImageBitmap?.();
     const liveBitmap = liveCanvas?.transferToImageBitmap?.();
 
-    this.#restoreTransferredBitmapToCanvas(baseCanvas, baseBitmap);
     this.#restoreTransferredBitmapToCanvas(liveCanvas, liveBitmap);
 
-    const transferList = [baseBitmap, liveBitmap].filter(Boolean);
+    const transferList = liveBitmap ? [liveBitmap] : [];
     const frameId = ++this.#frameId;
 
     this.#postRenderFrame(
@@ -600,7 +597,6 @@ class MonitorCore {
         type: "render-frame",
         monitorId: this.#monitorId,
         frameId,
-        baseBitmap,
         liveBitmap,
       },
       transferList,

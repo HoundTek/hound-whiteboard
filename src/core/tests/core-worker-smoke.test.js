@@ -228,11 +228,10 @@ describe("core-worker", () => {
         type: "render-frame",
         monitorId: "main",
         frameId: 1,
-        baseBitmap: expect.any(Object),
         liveBitmap: expect.any(Object),
       }),
     );
-    expect(host.postedTransfers[renderFrameIndex]).toHaveLength(2);
+    expect(host.postedTransfers[renderFrameIndex]).toHaveLength(1);
 
     runtime.stop();
   });

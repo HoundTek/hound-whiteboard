@@ -5,7 +5,11 @@
 import { jest } from "@jest/globals";
 
 import { DevicesDAG } from "../../../devices-dag/index.js";
-import { createNoopCanvas, createNoopCanvasContext2D, createNoopImageBitmap } from "../../../test-support/noop-canvas.js";
+import {
+  createNoopCanvas,
+  createNoopCanvasContext2D,
+  createNoopImageBitmap,
+} from "../../../test-support/noop-canvas.js";
 import { MonitorProxy } from "../monitor-proxy.js";
 
 /**
@@ -121,8 +125,7 @@ describe("MonitorProxy", () => {
   test("startWorkerSync 应发送初始 viewport-change 消息", () => {
     const { flushNextFrame, restore } = installMockAnimationFrame();
     const worker = new FakeWorkerEndpoint();
-    const baseCanvas = createNoopCanvas();
-    const liveCanvas = createNoopCanvas();
+    const canvas = createNoopCanvas();
     const uiCanvas = createNoopCanvas();
     const board = {
       width: 800,
@@ -137,8 +140,7 @@ describe("MonitorProxy", () => {
       const monitor = new MonitorProxy(
         {
           rootElement: {},
-          baseCanvas,
-          liveCanvas,
+          canvas,
           uiCanvas,
           worker,
         },
@@ -165,21 +167,15 @@ describe("MonitorProxy", () => {
     }
   });
 
-  test("onRenderFrame 应将 base/live 位图绘制到对应 canvas 并关闭位图", () => {
+  test("onRenderFrame 应将合成位图绘制到 canvas 并关闭位图", () => {
     const { restore } = installMockAnimationFrame();
-    const baseContext = {
-      ...createNoopCanvasContext2D(),
-      clearRect: jest.fn(),
-      drawImage: jest.fn(),
-    };
-    const liveContext = {
+    const context = {
       ...createNoopCanvasContext2D(),
       clearRect: jest.fn(),
       drawImage: jest.fn(),
     };
     const worker = new FakeWorkerEndpoint();
-    const baseCanvas = createNoopCanvas({ context: baseContext });
-    const liveCanvas = createNoopCanvas({ context: liveContext });
+    const canvas = createNoopCanvas({ context });
     const uiCanvas = createNoopCanvas();
     const board = {
       width: 800,
@@ -194,8 +190,7 @@ describe("MonitorProxy", () => {
       const monitor = new MonitorProxy(
         {
           rootElement: {},
-          baseCanvas,
-          liveCanvas,
+          canvas,
           uiCanvas,
           worker,
         },
@@ -207,20 +202,15 @@ describe("MonitorProxy", () => {
         monitor.uiRenderer,
         "invalidateViewport",
       );
-      const baseBitmap = createNoopImageBitmap({ width: 800, height: 600 });
       const liveBitmap = createNoopImageBitmap({ width: 800, height: 600 });
 
       monitor.onRenderFrame({
         monitorId: "main",
-        baseBitmap,
         liveBitmap,
       });
 
-      expect(baseContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
-      expect(liveContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
-      expect(baseContext.drawImage).toHaveBeenCalledWith(baseBitmap, 0, 0);
-      expect(liveContext.drawImage).toHaveBeenCalledWith(liveBitmap, 0, 0);
-      expect(baseBitmap.closed).toBe(true);
+      expect(context.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
+      expect(context.drawImage).toHaveBeenCalledWith(liveBitmap, 0, 0);
       expect(liveBitmap.closed).toBe(true);
       expect(invalidateViewportSpy).toHaveBeenCalledTimes(1);
 
