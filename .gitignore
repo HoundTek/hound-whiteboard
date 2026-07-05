@@ -1,26 +1,15 @@
-# Editor
-.idea
-
-coverage
-release
-
 # Dependencies
 node_modules/
 
 # Build outputs
 dist/
-target/
-build/
+coverage
+release
 
-# Rust
-**/*.rs.bk
-Cargo.lock
-*.pdb
-
-# Tauri
-src-tauri/target/
-src-tauri/gen/
-src-tauri/icons/
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 # Node.js
 npm-debug.log*
@@ -29,21 +18,11 @@ yarn-error.log*
 .npm
 .yarn-integrity
 
-# Environment variables
-.env
-.env.local
-.env.*.local
-
 # IDEs and editors
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
-
-# Logs
-logs/
-*.log
 
 # OS generated files
 .DS_Store
@@ -53,6 +32,10 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Logs
+logs/
+*.log
 
 # Temporary files
 *.tmp
