@@ -17,12 +17,14 @@ describe("RectangleObjectChooserTool", () => {
       property: {},
       data: { radius: 10 },
     };
+
     const boardApi = {
       hitTest: jest.fn(async () => [1]),
       queryObjects: jest.fn(async () => [selectedSummary]),
       addActiveObjects: jest.fn(),
       discardActiveObjects: jest.fn(),
     };
+
     const deviceContext = {
       acc: { boardApi, monitor: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
@@ -41,6 +43,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
+
     tool.process(
       {
         signals: [
@@ -52,6 +55,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
+
     await tool.process(
       {
         signals: [

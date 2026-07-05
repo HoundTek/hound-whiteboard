@@ -10,9 +10,26 @@ describe("ObjectChooserTool", () => {
     constructor(options = {}) {
       super(options);
       this.chosenObjects = options.chosenObjects ?? [];
+      this._hasRegion = false;
     }
 
-    choose() {
+    updateSelectionRegion(position, context) {
+      this._hasRegion = true;
+    }
+
+    hasSelectionRegion(context) {
+      return this._hasRegion;
+    }
+
+    clearSelectionRegion(context = {}) {
+      this._hasRegion = false;
+    }
+
+    getSelectionRegion(context) {
+      return null;
+    }
+
+    submitSelection(context) {
       return this.chosenObjects;
     }
 
@@ -35,7 +52,12 @@ describe("ObjectChooserTool", () => {
     const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
 
     tool.process(
-      { signals: [{ type: "trigger", context: {} }] },
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(0, 0) } },
+          { type: "end" },
+        ],
+      },
       deviceContext,
     );
 
@@ -93,7 +115,12 @@ describe("ObjectChooserTool", () => {
     });
 
     tool.process(
-      { signals: [{ type: "trigger", context: {} }] },
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(0, 0) } },
+          { type: "end" },
+        ],
+      },
       deviceContext,
     );
 
@@ -143,7 +170,12 @@ describe("ObjectChooserTool", () => {
     });
 
     tool.process(
-      { signals: [{ type: "trigger", context: {} }] },
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(0, 0) } },
+          { type: "end" },
+        ],
+      },
       deviceContext,
     );
 
@@ -257,15 +289,13 @@ describe("ObjectChooserTool", () => {
     ).toHaveBeenCalledWith([chosenObject], "chooser");
   });
 
-  test("resolveObjectSelectionWorldRange 应使用对象主判定范围而不是 boundingBox", () => {
+  test("resolveObjectSelectionWorldRange 应优先使用 range 而非 boundingBox", () => {
     const tool = new TestChooserTool();
     const objectEntry = {
       id: 6,
       position: new Vector(100, 200),
+      range: new RectangleRange(10, 20, 5, 6),
       boundingBox: new RectangleRange(0, 0, 40, 50),
-      getRange() {
-        return new RectangleRange(10, 20, 5, 6);
-      },
     };
 
     expect(tool.resolveObjectSelectionWorldRange({}, objectEntry)).toEqual(
@@ -304,7 +334,15 @@ describe("ObjectChooserTool", () => {
       const afterChoose = jest.fn();
       tool.on("afterChoose", afterChoose);
 
-      tool.process({ signals: [{ type: "trigger" }] }, deviceContext);
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
+        deviceContext,
+      );
 
       expect(afterChoose).toHaveBeenCalledTimes(1);
       expect(afterChoose).toHaveBeenCalledWith([chosenObject]);
@@ -320,7 +358,12 @@ describe("ObjectChooserTool", () => {
       tool.on("afterChoose", afterChoose);
 
       tool.process(
-        { signals: [{ type: "trigger" }] },
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
         {
           acc: { boardApi },
           path: "/test",

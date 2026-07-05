@@ -28,6 +28,7 @@ class Tool {
   _hooks;
 
   /**
+   * 初始化工具实例
    * @constructor
    */
   constructor() {
@@ -46,7 +47,7 @@ class Tool {
 
   /**
    * 序列化工具实例以保存工具数据
-   * @return {Object} 序列化后的工具数据
+   * @returns {Object} 序列化后的工具数据
    * @abstract
    */
   serialize() {
@@ -132,9 +133,9 @@ class Tool {
   }
 
   /**
-   * 读取当前路径关联的节点状态。
+   * 读取当前路径关联的节点状态
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @param {string} [statePath=deviceContext.path] - 节点路径
+   * @param {string} [statePath=context.path] - 节点路径
    * @returns {Object}
    */
   resolveNodeState(context = {}, statePath = context.path) {
@@ -146,10 +147,10 @@ class Tool {
   }
 
   /**
-   * 写入当前路径关联的节点状态。
+   * 写入当前路径关联的节点状态
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Object} nextState - 新状态
-   * @param {string} [statePath=deviceContext.path] - 节点路径
+   * @param {string} [statePath=context.path] - 节点路径
    * @returns {Object}
    */
   writeNodeState(context = {}, nextState, statePath = context.path) {
@@ -161,7 +162,7 @@ class Tool {
   }
 
   /**
-   * 将单对象或对象集合规整为数组。
+   * 将单对象或对象集合规整为数组
    * @param {Iterable<*>|*} objects - 原始对象或对象集合
    * @returns {Array<*>}
    */
@@ -179,7 +180,7 @@ class Tool {
   }
 
   /**
-   * 从设备上下文中解析当前对象集合。
+   * 从设备上下文中解析当前对象集合
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Array<*>}
    */
@@ -220,7 +221,7 @@ class Tool {
   }
 
   /**
-   * 将对象集合写回设备上下文与节点上下文。
+   * 将对象集合写回设备上下文与节点上下文
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合
    * @returns {Array<*>}
@@ -246,7 +247,7 @@ class Tool {
   }
 
   /**
-   * 清理设备上下文中的对象引用。
+   * 清理设备上下文中的对象引用
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
@@ -271,7 +272,7 @@ class Tool {
   }
 
   /**
-   * 主动请求 ui overlay 重绘。
+   * 主动请求 ui overlay 重绘
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
@@ -306,8 +307,8 @@ class Tool {
 
   /**
    * 触发钩子（仅用于通知型钩子，不涉及控制流）
-   * @param {string} hookName
-   * @param  {...any} args
+   * @param {string} hookName - 钩子名称
+   * @param {...any} args - 传递给监听器的参数
    * @protected
    */
   _emit(hookName, ...args) {
@@ -328,7 +329,7 @@ class Tool {
   }
 
   /**
-   * 工具节点被卸载时执行清理。
+   * 工具节点被卸载时执行清理
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
