@@ -43,7 +43,7 @@
 ## `bridges/`
 
 - `board-api.js`
-  - `BoardApiRpc`：UI 线程 RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信
+  - `BoardApiRpc`：UI 线程 RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信。高频写入（modifyObject / appendListItem / replaceListItem / removeListItem）使用微任务级批处理，同 id 自动合并为单次 `rpc-batch` 消息
 - `persistence-adapter.js`：持久化接口与默认内存适配
 - `file-operate-bridge-*`：宿主文件 I/O 桥接，运行在 UI / preload 相关边界
 
@@ -76,7 +76,7 @@
 ### `tools/creator/`
 
 - 使用 `_local` 纯数据状态维护手势期对象几何
-- 通过 `BoardApi` / `BoardApiRpc` fire-and-forget 同步 Worker 侧真实对象
+- 通过 `BoardApiRpc` fire-and-forget 同步 Worker 侧真实对象（高频写入经微任务批处理合并）
 - 当前 demo 已接通 `StrokeCreatorTool`、`CircleCreatorTool`、`PolygonCreatorTool`
 
 ### `tools/chooser/`

@@ -100,6 +100,18 @@ class BoardApiRpc {
   #messageListener;
 
   /**
+   * 当前帧内待合并发送的 RPC 条目缓冲
+   * @type {Map<string, { method: string, objectId: number, patch?: Object, key?: string, items?: any[], index?: number, item?: any }>}
+   */
+  #batchBuffer;
+
+  /**
+   * 当前是否已有待 flush 的微任务
+   * @type {boolean}
+   */
+  #batchPending;
+
+  /**
    * @param {{ postMessage: Function, addEventListener: Function, removeEventListener: Function }} endpoint - Worker 或 MessagePort 端点
    * @param {{ timeoutMs?: number }} [options={}] - RPC 配置选项
    */
@@ -122,6 +134,8 @@ class BoardApiRpc {
     });
     this.#readyPromise.catch(() => {});
     this.#messageListener = this.#handleEndpointMessage.bind(this);
+    this.#batchBuffer = new Map();
+    this.#batchPending = false;
     this.#endpoint.addEventListener("message", this.#messageListener);
   }
 
@@ -218,6 +232,8 @@ class BoardApiRpc {
    * @returns {Promise<any>} RPC 响应结果
    */
   #call(method, params = {}, timeoutMs = this.#timeoutMs) {
+    this.#flushBatchNow();
+
     const msgId = createRpcMessageId();
 
     return new Promise((resolve, reject) => {
@@ -279,7 +295,19 @@ class BoardApiRpc {
    * @returns {Promise<void>}
    */
   async modifyObject(objectId, patch) {
-    return this.#call("modifyObject", { objectId, patch });
+    const batchKey = `modifyObject:${objectId}`;
+    const existing = this.#batchBuffer.get(batchKey);
+    if (existing) {
+      existing.patch = this.#mergePatches(existing.patch, patch);
+    } else {
+      this.#batchBuffer.set(batchKey, {
+        method: "modifyObject",
+        objectId,
+        patch: { ...patch },
+      });
+    }
+    this.#scheduleBatchFlush();
+    return Promise.resolve();
   }
 
   /**
@@ -299,7 +327,20 @@ class BoardApiRpc {
    * @returns {Promise<void>}
    */
   async appendListItem(objectId, key, items) {
-    return this.#call("appendListItem", { objectId, key, items });
+    const batchKey = `appendListItem:${objectId}:${key}`;
+    const existing = this.#batchBuffer.get(batchKey);
+    if (existing) {
+      existing.items.push(...items);
+    } else {
+      this.#batchBuffer.set(batchKey, {
+        method: "appendListItem",
+        objectId,
+        key,
+        items: [...items],
+      });
+    }
+    this.#scheduleBatchFlush();
+    return Promise.resolve();
   }
 
   /**
@@ -311,7 +352,16 @@ class BoardApiRpc {
    * @returns {Promise<void>}
    */
   async replaceListItem(objectId, key, index, item) {
-    return this.#call("replaceListItem", { objectId, key, index, item });
+    const batchKey = `replaceListItem:${objectId}:${key}:${index}`;
+    this.#batchBuffer.set(batchKey, {
+      method: "replaceListItem",
+      objectId,
+      key,
+      index,
+      item,
+    });
+    this.#scheduleBatchFlush();
+    return Promise.resolve();
   }
 
   /**
@@ -322,7 +372,15 @@ class BoardApiRpc {
    * @returns {Promise<void>}
    */
   async removeListItem(objectId, key, index) {
-    return this.#call("removeListItem", { objectId, key, index });
+    const batchKey = `removeListItem:${objectId}:${key}:${index}`;
+    this.#batchBuffer.set(batchKey, {
+      method: "removeListItem",
+      objectId,
+      key,
+      index,
+    });
+    this.#scheduleBatchFlush();
+    return Promise.resolve();
   }
 
   /**
@@ -444,6 +502,101 @@ class BoardApiRpc {
       pendingEntry.reject(createRpcError(reason, "RPC_DESTROYED"));
       this.#pending.delete(msgId);
     }
+  }
+
+  /**
+   * 合并两次 modifyObject 的 patch
+   * @param {Object} existing - 已有 patch
+   * @param {Object} next - 新增 patch
+   * @returns {Object} 合并后的 patch
+   * @private
+   */
+  #mergePatches(existing, next) {
+    const merged = { ...existing };
+
+    if (next.position != null) {
+      merged.position = next.position;
+    }
+    if (next.transform != null) {
+      merged.transform = next.transform;
+    }
+    if (next.property != null) {
+      merged.property = { ...(merged.property ?? {}), ...next.property };
+    }
+    if (next.data != null) {
+      merged.data = { ...(merged.data ?? {}), ...next.data };
+    }
+
+    return merged;
+  }
+
+  /**
+   * 安排下一次微任务 flush
+   * @returns {void}
+   * @private
+   */
+  #scheduleBatchFlush() {
+    if (this.#batchPending) {
+      return;
+    }
+
+    this.#batchPending = true;
+    Promise.resolve().then(() => this.#flushBatchNow());
+  }
+
+  /**
+   * 同步 flush 当前批处理缓冲
+   * @returns {void}
+   * @private
+   */
+  #flushBatchNow() {
+    if (this.#batchBuffer.size === 0) {
+      return;
+    }
+
+    const entries = [...this.#batchBuffer.values()];
+    this.#batchBuffer.clear();
+    this.#batchPending = false;
+
+    const paramsList = entries.map((entry) => {
+      switch (entry.method) {
+        case "modifyObject":
+          return {
+            method: entry.method,
+            objectId: entry.objectId,
+            patch: entry.patch,
+          };
+        case "appendListItem":
+          return {
+            method: entry.method,
+            objectId: entry.objectId,
+            key: entry.key,
+            items: entry.items,
+          };
+        case "replaceListItem":
+          return {
+            method: entry.method,
+            objectId: entry.objectId,
+            key: entry.key,
+            index: entry.index,
+            item: entry.item,
+          };
+        case "removeListItem":
+          return {
+            method: entry.method,
+            objectId: entry.objectId,
+            key: entry.key,
+            index: entry.index,
+          };
+        default:
+          return entry;
+      }
+    });
+
+    this.#endpoint.postMessage({
+      type: "rpc-batch",
+      items: paramsList,
+    });
   }
 }
 

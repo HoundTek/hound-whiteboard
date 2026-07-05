@@ -202,6 +202,9 @@ class CoreWorkerRuntime {
       case "rpc":
         this.#handleRpcMessage(message);
         return;
+      case "rpc-batch":
+        this.#handleBatchMessage(message);
+        return;
       case "viewport-change":
         this.#handleViewportChange(message);
         return;
@@ -266,6 +269,31 @@ class CoreWorkerRuntime {
           message: error?.message ?? String(error),
         },
       });
+    }
+  }
+
+  /**
+   * 处理批量 RPC 请求
+   * @description 批量消息为 fire-and-forget，不产生 rpc-response。
+   * @param {{ items?: Array<{ method: string } & Record<string, any>> }} message - 批量请求消息
+   * @returns {void}
+   */
+  #handleBatchMessage(message) {
+    const items = message?.items;
+    if (!Array.isArray(items) || items.length === 0) {
+      return;
+    }
+
+    for (const item of items) {
+      try {
+        const { method, ...params } = item;
+        this.#dispatchCoreMethod(method, params);
+      } catch (error) {
+        this.#log.error(
+          `Batch item failed: ${item?.method ?? "unknown"}`,
+          error,
+        );
+      }
     }
   }
 

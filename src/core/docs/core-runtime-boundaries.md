@@ -12,7 +12,7 @@
 
 | 目录 / 文件                                         | 运行边界            | 说明                                                           |
 | --------------------------------------------------- | ------------------- | -------------------------------------------------------------- |
-| `bridges/board-api.js`                              | UI（`BoardApiRpc`） | UI 侧 RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信 |
+| `bridges/board-api.js`                              | UI（`BoardApiRpc`） | UI 侧 RPC 客户端，高频写入使用微任务批处理合并为 `rpc-batch` 消息 |
 | `bridges/persistence-adapter.js`                    | Shared              | 持久化接口与默认内存适配                                       |
 | `components/chunk/`                                 | Shared              | 区块、区块加载器、区块静态图管理                               |
 | `components/orchestration/board-core.js`            | Worker              | Core 侧真实白板数据与协调中心                                  |
@@ -43,7 +43,7 @@
 
 ### `bridges/`
 
-- `BoardApiRpc` 是 **UI 线程 RPC 客户端**，负责把工具读写请求发往 Worker
+- `BoardApiRpc` 是 **UI 线程 RPC 客户端**，负责把工具读写请求发往 Worker。`modifyObject` / `appendListItem` / `replaceListItem` / `removeListItem` 四类高频调用使用微任务缓冲，同 id 自动合并，非批处理调用（如 `commitObjects`）会先同步 flush 当前队列以保证时序
 - `persistence-adapter.js` 只定义接口和默认适配，不直接决定运行线程
 
 ### `components/`
@@ -90,7 +90,7 @@
 ### 对象与区块
 
 - **Worker 侧 `BoardCore`** 是对象、区块、AOM 与提交关系的真实权威
-- **UI 侧工具** 通过 `BoardApiRpc` 读写 Worker 状态
+- **UI 侧工具** 通过 `BoardApiRpc` 读写 Worker 状态（高频写入经微任务批处理合并后发送）
 - creator 的本地 `_local`、chooser / modifier 的 summary-like 条目都只是 **交互态镜像**，不是权威数据源
 
 ### 视口与渲染
