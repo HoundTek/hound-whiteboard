@@ -67,6 +67,11 @@ boardApi.createObject(type, {
 
 这些调用也保持 fire-and-forget。
 
+### 渲染失效
+
+Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏区失效与立即 flush，
+使帧回传与 UI overlay 保持同步。creator 的 `afterGeometryMutation` 仅负责 UI overlay 刷新。
+
 ### 提交 / 撤销
 
 - 提交：`boardApi.commitObjects([objectId])`

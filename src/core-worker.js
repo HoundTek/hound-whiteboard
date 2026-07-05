@@ -105,6 +105,12 @@ class CoreWorkerRuntime {
   #started;
 
   /**
+   * 渲染帧 flush 是否已调度
+   * @type {boolean}
+   */
+  #flushScheduled;
+
+  /**
    * @param {{ postMessage: Function, addEventListener: Function, removeEventListener: Function }} host - Worker 消息宿主
    */
   constructor(host) {
@@ -121,6 +127,7 @@ class CoreWorkerRuntime {
     this.#log = new Logger("CoreWorker", "INFO", logBus);
     this.#offWorkerLogs = null;
     this.#started = false;
+    this.#flushScheduled = false;
   }
 
   /**
@@ -394,6 +401,8 @@ class CoreWorkerRuntime {
     return {
       /**
        * 刷新所有 MonitorCore 的活动层
+       * @description
+       * 仅失效显式传入的对象。未传对象时刷新全部活动 drawable。
        * @param {import("./core/objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
        */
       requestLiveRender: (objectInstances = []) => {
@@ -403,16 +412,13 @@ class CoreWorkerRuntime {
           const liveRenderer = monitorCore.liveRenderer;
           if (!liveRenderer) continue;
 
-          const dirtyObjectMap = new Map();
-          for (const obj of objectInstances) {
-            dirtyObjectMap.set(obj.id, obj);
-          }
-          for (const obj of liveRenderer.collectActiveDrawables?.() ?? []) {
-            dirtyObjectMap.set(obj.id, obj);
-          }
+          const targetObjects =
+            objectInstances.length > 0
+              ? objectInstances
+              : (liveRenderer.collectActiveDrawables?.() ?? []);
 
           if (typeof liveRenderer.invalidateObjects === "function") {
-            liveRenderer.invalidateObjects([...dirtyObjectMap.values()]);
+            liveRenderer.invalidateObjects(targetObjects);
           }
           monitorCore.markFrameDirty();
         }
@@ -514,6 +520,34 @@ class CoreWorkerRuntime {
   }
 
   /**
+   * 安排一次渲染帧 flush（同周期去重）
+   * @description
+   * 在对象 mutation RPC 完成后安排渲染回传，消除 rAF 等待延迟。
+   * 同一 microtask 周期内多次调用只执行一次 flush。
+   * @returns {void}
+   */
+  #scheduleFlushRenderFrames() {
+    if (this.#flushScheduled) return;
+    this.#flushScheduled = true;
+    queueMicrotask(() => {
+      this.#flushScheduled = false;
+      for (const monitorCore of this.#monitorCores.values()) {
+        monitorCore.flushRenderFrame();
+      }
+    });
+  }
+
+  /**
+   * 立即刷新所有 MonitorCore 的渲染帧（无去重，直接执行）
+   * @returns {void}
+   */
+  #flushRenderFrames() {
+    for (const monitorCore of this.#monitorCores.values()) {
+      monitorCore.flushRenderFrame();
+    }
+  }
+
+  /**
    * 将 RPC 方法转发到 Worker 内的 BoardCore
    * @param {string} method - RPC 方法名
    * @param {Record<string, any>} params - RPC 参数
@@ -568,10 +602,13 @@ class CoreWorkerRuntime {
         if (patch.data != null) {
           obj.setData(patch.data);
         }
+        boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+        this.#scheduleFlushRenderFrames();
         return;
       }
       case "modifyObjects": {
         const patches = Array.isArray(params.patches) ? params.patches : [];
+        const modifiedObjects = [];
         for (const { objectId, patch } of patches) {
           if (objectId == null || !patch) continue;
           const obj = boardCore.getObjectById(objectId);
@@ -589,6 +626,11 @@ class CoreWorkerRuntime {
           if (patch.data != null) {
             obj.setData(patch.data);
           }
+          modifiedObjects.push(obj);
+        }
+        if (modifiedObjects.length > 0) {
+          boardCore.aomRenderHooks?.requestLiveRender?.(modifiedObjects);
+          this.#scheduleFlushRenderFrames();
         }
         return;
       }
@@ -596,6 +638,8 @@ class CoreWorkerRuntime {
         const obj = boardCore.getObjectById(params.objectId);
         if (obj) {
           obj.appendListItem(params.key, ...(params.items ?? []));
+          boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+          this.#scheduleFlushRenderFrames();
         }
         return;
       }
@@ -603,6 +647,8 @@ class CoreWorkerRuntime {
         const obj = boardCore.getObjectById(params.objectId);
         if (obj) {
           obj.replaceListItem(params.key, params.index, params.item);
+          boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+          this.#scheduleFlushRenderFrames();
         }
         return;
       }
@@ -610,6 +656,8 @@ class CoreWorkerRuntime {
         const obj = boardCore.getObjectById(params.objectId);
         if (obj) {
           obj.removeListItem(params.key, params.index);
+          boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+          this.#scheduleFlushRenderFrames();
         }
         return;
       }

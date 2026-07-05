@@ -51,16 +51,13 @@ function createBoardRenderHooks(monitorsOrFn, collectAllActiveDrawables) {
         const liveRenderer = monitor?.liveRenderer;
         if (!liveRenderer) continue;
 
-        const dirtyObjectMap = new Map();
-        for (const obj of objectInstances) {
-          dirtyObjectMap.set(obj.id, obj);
-        }
-        for (const obj of liveRenderer.collectActiveDrawables?.() ?? []) {
-          dirtyObjectMap.set(obj.id, obj);
-        }
+        const targetObjects =
+          objectInstances.length > 0
+            ? objectInstances
+            : (liveRenderer.collectActiveDrawables?.() ?? []);
 
         if (typeof liveRenderer.invalidateObjects === "function") {
-          liveRenderer.invalidateObjects([...dirtyObjectMap.values()]);
+          liveRenderer.invalidateObjects(targetObjects);
         }
         monitor?.requestViewportUiRender?.();
       }

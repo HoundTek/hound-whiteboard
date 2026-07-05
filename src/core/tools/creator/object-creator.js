@@ -361,7 +361,9 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 在对象几何变更后请求活动层刷新
-   * @description Creator 的渲染脏区由 Core 自动处理，这里仅触发 UI overlay 刷新。
+   * @description
+   * boardApi 存在时 Creator 通过 RPC 修改对象，Core 侧 RPC handler 已自动
+   * 触发 liveRenderer 重绘。此处仅刷新 UI overlay。
    * @param {Object} interaction - 当前交互上下文
    */
   afterGeometryMutation(interaction) {

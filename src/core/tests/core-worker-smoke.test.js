@@ -298,4 +298,111 @@ describe("core-worker", () => {
 
     runtime.stop();
   });
+
+  test("modifyObject / appendListItem / replaceListItem RPC 应触发 live 渲染失效", async () => {
+    const host = new FakeWorkerHost();
+    const runtime = createCoreWorkerRuntime(host).start();
+
+    host.emit({
+      type: "rpc",
+      msgId: "create-board",
+      method: "createBoard",
+      params: { width: 800, height: 600 },
+    });
+    await Promise.resolve();
+
+    host.emit({
+      type: "rpc",
+      msgId: "create-monitor",
+      method: "createMonitor",
+      params: {
+        options: { monitorId: "main", width: 400, height: 300 },
+      },
+    });
+    await Promise.resolve();
+
+    // 创建对象并产生初始帧
+    host.emit({
+      type: "rpc",
+      msgId: "create-object",
+      method: "createObject",
+      params: {
+        type: "CircleObject",
+        props: { id: 100, position: { x: 10, y: 20 }, data: { radius: 5 } },
+      },
+    });
+    await Promise.resolve();
+
+    host.emit({
+      type: "viewport-change",
+      monitorId: "main",
+      origin: { x: 0, y: 0 },
+      zoom: 1,
+      viewportSize: { width: 400, height: 300 },
+      force: true,
+    });
+    host.emit({ type: "request-render-flush", monitorId: "main" });
+    await Promise.resolve();
+
+    expect(
+      host.postedMessages.filter((m) => m?.type === "render-frame"),
+    ).toHaveLength(1);
+
+    // modifyObject 应让下一帧变为 dirty
+    host.emit({
+      type: "rpc",
+      msgId: "modify-obj",
+      method: "modifyObject",
+      params: {
+        objectId: 100,
+        patch: { position: { x: 30, y: 40 } },
+      },
+    });
+    await Promise.resolve();
+
+    host.emit({ type: "request-render-flush", monitorId: "main" });
+    await Promise.resolve();
+
+    const renderFrames = host.postedMessages.filter(
+      (m) => m?.type === "render-frame",
+    );
+    expect(renderFrames).toHaveLength(2);
+    expect(renderFrames[1]).toEqual(
+      expect.objectContaining({ type: "render-frame", frameId: 2 }),
+    );
+
+    // appendListItem 也应触发新帧
+    host.emit({
+      type: "rpc",
+      msgId: "append-pt",
+      method: "appendListItem",
+      params: { objectId: 100, key: "points", items: [{ x: 1, y: 2 }] },
+    });
+    await Promise.resolve();
+
+    host.emit({ type: "request-render-flush", monitorId: "main" });
+    await Promise.resolve();
+
+    expect(
+      host.postedMessages.filter((m) => m?.type === "render-frame"),
+    ).toHaveLength(3);
+
+    // replaceListItem 也应触发新帧
+    host.emit({
+      type: "rpc",
+      msgId: "replace-pt",
+      method: "replaceListItem",
+      params: { objectId: 100, key: "points", index: 0, item: { x: 5, y: 6 } },
+    });
+    await Promise.resolve();
+
+    host.emit({ type: "request-render-flush", monitorId: "main" });
+    await Promise.resolve();
+
+    expect(
+      host.postedMessages.filter((m) => m?.type === "render-frame"),
+    ).toHaveLength(4);
+
+    runtime.stop();
+  });
 });
