@@ -279,7 +279,7 @@ class CoreWorkerRuntime {
       case "destroyMonitor":
         return this.destroyMonitor(params.monitorId);
       default:
-        return this.#dispatchBoardApiMethod(method, params);
+        return this.#dispatchCoreMethod(method, params);
     }
   }
 
@@ -385,8 +385,6 @@ class CoreWorkerRuntime {
 
     return this.#boardCore;
   }
-
-
 
   /**
    * 创建绑定到 MonitorCore 集合的 AOM 渲染钩子
@@ -521,7 +519,7 @@ class CoreWorkerRuntime {
    * @param {Record<string, any>} params - RPC 参数
    * @returns {*}
    */
-  #dispatchBoardApiMethod(method, params = {}) {
+  #dispatchCoreMethod(method, params = {}) {
     const boardCore = this.#requireBoardCore();
 
     switch (method) {
@@ -645,7 +643,10 @@ class CoreWorkerRuntime {
           aom.discard(new Set(activeToDiscard));
         }
 
-        if (affectedChunks.size > 0 && boardCore.aomRenderHooks?.requestBaseRender) {
+        if (
+          affectedChunks.size > 0 &&
+          boardCore.aomRenderHooks?.requestBaseRender
+        ) {
           boardCore.aomRenderHooks.requestBaseRender([...affectedChunks]);
         }
         return;

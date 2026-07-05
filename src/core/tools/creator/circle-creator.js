@@ -107,7 +107,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   count;
 
   /**
-   * 通过 BoardApi 设置半径
+   * 通过 RPC 设置半径
    * @param {number} radius - 新半径
    * @param {Object} interaction - 当前交互上下文
    */

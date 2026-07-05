@@ -162,7 +162,7 @@ class ObjectCreatorTool extends Tool {
 
   /**
    * 返回当前 Creator 对应的对象类型名
-   * @returns {string} 对象类型名；未接入 BoardApi 创建路径时返回 undefined
+   * @returns {string} 对象类型名；未接入创建路径时返回 undefined
    * @protected
    */
   getCreatedObjectType() {
@@ -228,12 +228,12 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
-   * 通过 BoardApi 创建对象并初始化本地草稿
+   * 通过 RPC 创建对象并初始化本地草稿
    * @param {Object} interaction - 当前交互上下文
-   * @returns {boolean} 是否成功走 BoardApi 创建路径
+   * @returns {boolean} 是否成功通过 RPC 创建对象
    * @protected
    */
-  createObjectThroughBoardApi(interaction) {
+  createObjectViaRpc(interaction) {
     const boardApi = interaction?.context?.acc?.boardApi;
     const objectType = this.getCreatedObjectType();
 
@@ -285,7 +285,6 @@ class ObjectCreatorTool extends Tool {
       // 惰性分配 objectId：走 board.allocateObjectId()（Board 自持 CounterPool，同步分配）
       if (interaction.objectId == null) {
         const allocatedId =
-          interaction?.context?.acc?.allocateObjectId?.() ??
           interaction?.context?.acc?.board?.allocateObjectId?.();
         if (allocatedId != null) {
           interaction.objectId = allocatedId;
@@ -297,7 +296,7 @@ class ObjectCreatorTool extends Tool {
       }
       this.objectId = interaction.objectId;
 
-      if (!this.createObjectThroughBoardApi(interaction)) {
+      if (!this.createObjectViaRpc(interaction)) {
         this._pendingProperty = null;
         return false;
       }

@@ -54,60 +54,18 @@ class Tool {
   }
 
   /**
-   * 将设备图上下文规整为工具上下文
-   * @description 直接透传 handlerContext 全集，仅补齐工具仍需使用的 helper 字段。
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [handlerContext={}] - 设备图处理上下文
-   * @returns {import("../devices-dag/dag.js").DevicesDAGHandlerContext}
-   */
-  createDeviceContext(handlerContext = {}) {
-    const accumulatedContext = handlerContext.acc ?? {};
-    const board = accumulatedContext.board;
-    const monitor = accumulatedContext.monitor;
-    const allocateObjectId =
-      accumulatedContext.allocateObjectId ??
-      board?.allocateObjectId?.bind(board);
-    const resolveOwnerChunkId =
-      accumulatedContext.resolveOwnerChunkId ??
-      (typeof monitor?.worldToChunk === "function"
-        ? (position) => {
-            if (
-              !position ||
-              typeof position.x !== "number" ||
-              typeof position.y !== "number"
-            ) {
-              return undefined;
-            }
-            return monitor.worldToChunk(position)?.chunkId;
-          }
-        : undefined);
-
-    return {
-      ...handlerContext,
-      acc: {
-        ...accumulatedContext,
-        allocateObjectId,
-        resolveOwnerChunkId,
-      },
-    };
-  }
-
-
-
-  /**
    * 创建一个可直接挂载到设备图节点上的处理器
    * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
    */
   createProcessor() {
     const uiOverlayBinding = this.createUiOverlayBinding();
     const processor = (signalPacket, handlerContext = {}) => {
-      const context = this.createDeviceContext(handlerContext);
-      uiOverlayBinding?.sync(context);
-      return this.process(SignalPacket.from(signalPacket), context);
+      uiOverlayBinding?.sync(handlerContext);
+      return this.process(SignalPacket.from(signalPacket), handlerContext);
     };
 
     processor.dispose = (handlerContext = {}) => {
-      const context = this.createDeviceContext(handlerContext);
-      uiOverlayBinding?.cleanup(context);
+      uiOverlayBinding?.cleanup(handlerContext);
     };
 
     return processor;

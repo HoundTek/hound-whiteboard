@@ -135,7 +135,7 @@ class ObjectModifierTool extends Tool {
   }
 
   /**
-   * 在 BoardApi 或本地对象上写入绝对位置
+   * 通过 RPC 写入对象绝对位置
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {*} objectEntry - 当前对象条目
    * @param {{ x: number, y: number }} position - 新位置

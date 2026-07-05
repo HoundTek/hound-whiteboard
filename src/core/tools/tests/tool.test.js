@@ -75,7 +75,7 @@ describe("Tool", () => {
       },
     );
 
-    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(7);
+    expect(tool.calls[0].context.acc.board.allocateObjectId()).toBe(7);
   });
 
   test("createProcessor 应优先使用累积 context 中显式提供的 allocateObjectId", () => {
@@ -112,47 +112,6 @@ describe("Tool", () => {
 
     expect(tool.calls[0].context.acc.allocateObjectId()).toBe(11);
     expect(explicitAllocateObjectId).toHaveBeenCalledTimes(1);
-  });
-
-  test("createProcessor 应默认暴露来自 Monitor 的 resolveOwnerChunkId", () => {
-    class TestTool extends Tool {
-      calls = [];
-
-      process(signalPacket, context) {
-        this.calls.push({ signalPacket, context });
-      }
-
-      reset() {
-        this.calls = [];
-      }
-    }
-
-    const tool = new TestTool();
-    const monitor = {
-      worldToChunk(position) {
-        if (position.x === 10 && position.y === 20) {
-          return { chunkId: 3, x: 10, y: 20 };
-        }
-        return null;
-      },
-    };
-    const processor = tool.createProcessor();
-
-    processor(
-      { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
-      {
-        path: "/monitor/s-pen/pen",
-        context: {},
-        acc: { monitor },
-      },
-    );
-
-    expect(
-      tool.calls[0].context.acc.resolveOwnerChunkId({
-        x: 10,
-        y: 20,
-      }),
-    ).toBe(3);
   });
 
   test("createProcessor 应保留传入的 board/monitor 与平面上下文", () => {
@@ -205,10 +164,7 @@ describe("Tool", () => {
         }),
       }),
     );
-    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(13);
-    expect(tool.calls[0].context.acc.resolveOwnerChunkId({ x: 1, y: 2 })).toBe(
-      9,
-    );
+    expect(tool.calls[0].context.acc.board.allocateObjectId()).toBe(13);
     expect(tool.calls[0].context.path).toBe("/monitor/s-pen/pen");
     expect(tool.calls[0].context.semantics).toBeUndefined();
     expect(tool.calls[0].context.eventContext).toBeUndefined();

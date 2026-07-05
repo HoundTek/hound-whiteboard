@@ -190,7 +190,7 @@ class Board {
     this.rootChunkLoader = this.#boardCore.rootChunkLoader;
     this.activeObjectManager = this.#boardCore.activeObjectManager;
 
-    // 5. 创建 BoardApi 实例（Worker 模式，通过 enableWorkerMode 初始化）
+    // 5. BoardApiRpc 实例初始为 null，通过 enableWorkerMode 初始化
     this.#boardApi = null;
 
     // 6. UI 专用初始化

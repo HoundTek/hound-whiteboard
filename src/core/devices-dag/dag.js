@@ -586,7 +586,7 @@ class DevicesDAG {
         // 静默吞掉 dispose 错误
       }
       try {
-        workflow.umount?.(workflow.createDeviceContext(handlerContext));
+        workflow.umount?.(handlerContext);
       } catch {
         // 静默吞掉 umount 错误
       }
@@ -686,7 +686,7 @@ class DevicesDAG {
           // 静默吞掉 dispose 错误
         }
         try {
-          def.tool.umount?.(def.tool.createDeviceContext(handlerContext));
+          def.tool.umount?.(handlerContext);
         } catch {
           // 静默吞掉 umount 错误
         }
