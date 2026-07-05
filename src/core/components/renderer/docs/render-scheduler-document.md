@@ -178,5 +178,5 @@
 
 ## 相关文档
 
-- [monitor-document.md](./monitor-document.md)
+- [monitor-document.md](../../orchestration/docs/monitor-document.md)
 - [live-renderer-document.md](./live-renderer-document.md)

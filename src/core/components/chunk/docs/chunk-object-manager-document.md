@@ -103,7 +103,7 @@
 ## 与其它组件的关系
 
 - 被 [chunk-document.md](./chunk-document.md) 持有并调度。
-- 其静态图与 `objectCoverChunks` 都会被 [active-object-manager-document.md](./active-object-manager-document.md) 的跨区块拾取逻辑读取。
+- 其静态图与 `objectCoverChunks` 都会被 [active-object-manager-document.md](../../orchestration/docs/active-object-manager-document.md) 的跨区块拾取逻辑读取。
 - 当活动对象提交回白板时，AOM 会把对象重新写回相关 `ChunkObjectManager`。
 - 底层依赖 `src/core/utils/directed-graph.js`。
 

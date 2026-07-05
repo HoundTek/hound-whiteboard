@@ -295,7 +295,7 @@ LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
 
 ## 相关文档
 
-- [monitor-document.md](./monitor-document.md)
+- [monitor-document.md](../../orchestration/docs/monitor-document.md)
 - [ui-renderer-document.md](./ui-renderer-document.md)
-- [active-object-manager-document.md](./active-object-manager-document.md)
-- [tier-graph-document.md](./tier-graph-document.md)
+- [active-object-manager-document.md](../../orchestration/docs/active-object-manager-document.md)
+- [tier-graph-document.md](../../orchestration/docs/tier-graph-document.md)

@@ -25,7 +25,7 @@ Container 类是用来包装一、二维对象的容器类。派生于 [BasicObj
 
 ## Graph
 
-见 [graph-classes-document.md](./graph/graph-classes-document.md)
+见 [graph-classes-document.md](../graph/graph-classes-document.md)
 
 ## 对象持久化
 

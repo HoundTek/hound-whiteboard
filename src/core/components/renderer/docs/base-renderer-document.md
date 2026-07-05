@@ -94,6 +94,6 @@ const renderer = new BaseRenderer(monitor, { canvas: baseCanvas });
 
 ## 相关文档
 
-- [monitor-document.md](./monitor-document.md)
+- [monitor-document.md](../../orchestration/docs/monitor-document.md)
 - [live-renderer-document.md](./live-renderer-document.md)
-- [active-object-manager-document.md](./active-object-manager-document.md)
+- [active-object-manager-document.md](../../orchestration/docs/active-object-manager-document.md)

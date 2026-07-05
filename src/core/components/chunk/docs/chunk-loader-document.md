@@ -116,5 +116,5 @@
 
 ## 相关文档
 
-- [board-document.md](./board-document.md)
-- [components-document.md](./components-document.md)
+- [board-document.md](../../orchestration/docs/board-document.md)
+- [components-document.md](../../docs/components-document.md)
