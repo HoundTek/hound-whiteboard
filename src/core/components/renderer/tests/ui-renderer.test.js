@@ -65,48 +65,6 @@ describe("UiRenderer", () => {
     };
   }
 
-  test("flush 应绘制 provider 主动声明的选择框与组合大框", () => {
-    const context = createContext();
-    const board = {};
-    const monitor = createMonitor(board);
-    const canvas = createCanvas(context);
-    const object1 = new TestOverlayObject({
-      id: 7,
-      position: new Vector(10, 20),
-      localRect: new RectangleRange(0, 0, 30, 40),
-    });
-    const object2 = new TestOverlayObject({
-      id: 8,
-      position: new Vector(60, 80),
-      localRect: new RectangleRange(0, 0, 20, 10),
-    });
-    const aom = {
-      getObjectWorldRange(objectInstance) {
-        if (objectInstance.id === 7) {
-          return new RectangleRange(10, 20, 30, 40);
-        }
-        return new RectangleRange(60, 80, 20, 10);
-      },
-    };
-    const renderer = new UiRenderer(monitor, aom, { canvas });
-    renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
-      overlayRenderer.createCompatSelectionEntriesForObjects(
-        [object1, object2],
-        "chooser",
-      ),
-    );
-
-    renderer.flush([new RectangleRange(0, 0, 800, 600)]);
-
-    expect(context.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
-    expect(context.strokeRect.mock.calls).toEqual([
-      [6, 16, 38, 48],
-      [56, 76, 28, 18],
-      [6, 16, 78, 78],
-    ]);
-    expect(context.setLineDash.mock.calls).toEqual([[[]], [[]], [[10, 4]]]);
-  });
-
   test("对象只在 AOM 中但不在 chooser/modifier 当前上下文时，不应显示选择框", () => {
     const context = createContext();
     const board = {};

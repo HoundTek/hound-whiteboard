@@ -336,35 +336,6 @@ class UiRenderer {
   }
 
   /**
-   * 生成对象级兼容选中框 overlay 条目
-   * @param {BasicObject} objectInstance - 对象实例
-   * @param {string} source - 条目来源
-   * @returns {{ source: string, objectId: number, type: string, screenRect: RectangleRange, draw: Function } | undefined}
-   */
-  createCompatObjectSelectionEntry(objectInstance, source) {
-    const screenRect = this.getObjectScreenRect(objectInstance);
-    if (!screenRect) return undefined;
-
-    return {
-      source,
-      objectId: objectInstance.id,
-      type: "rect",
-      screenRect,
-      strokeStyle: COMPAT_SELECTION_FRAME_STROKE_STYLE,
-      lineWidth: COMPAT_SELECTION_FRAME_LINE_WIDTH,
-      lineDash: [...COMPAT_SELECTION_FRAME_LINE_DASH],
-      draw: (context) => {
-        this.drawRectEntry(context, {
-          screenRect,
-          strokeStyle: COMPAT_SELECTION_FRAME_STROKE_STYLE,
-          lineWidth: COMPAT_SELECTION_FRAME_LINE_WIDTH,
-          lineDash: [...COMPAT_SELECTION_FRAME_LINE_DASH],
-        });
-      },
-    };
-  }
-
-  /**
    * 生成 summary-like 条目级兼容选中框 overlay 条目
    * @param {Object} summaryEntry - 摘要或兼容条目
    * @param {string} source - 条目来源
@@ -416,47 +387,6 @@ class UiRenderer {
         });
       },
     };
-  }
-
-  /**
-   * 基于对象集合生成兼容选择框条目
-   * @param {BasicObject[]} objects - 对象集合
-   * @param {string} role - 当前角色
-   * @returns {Array<Object>}
-   */
-  createCompatSelectionEntriesForObjects(objects, role) {
-    const objectEntries = objects
-      .map((objectInstance) =>
-        this.createCompatObjectSelectionEntry(
-          objectInstance,
-          `compat-selection-object-frame:${role}`,
-        ),
-      )
-      .filter(Boolean);
-
-    if (objectEntries.length <= 1) {
-      return objectEntries;
-    }
-
-    const groupScreenRect = objectEntries.reduce((combinedRect, entry) => {
-      const screenRect = RectangleRange.fromRectLike(entry.screenRect);
-      if (!screenRect) {
-        return combinedRect;
-      }
-      return combinedRect ? combinedRect.union(screenRect) : screenRect;
-    }, undefined);
-
-    if (!groupScreenRect) {
-      return objectEntries;
-    }
-
-    return [
-      ...objectEntries,
-      this.createCompatGroupSelectionEntry(
-        groupScreenRect,
-        `compat-selection-group-frame:${role}`,
-      ),
-    ];
   }
 
   /**
@@ -518,7 +448,9 @@ class UiRenderer {
 
     if (!normalizedEntry.screenRect) {
       if (normalizedEntry.worldRect) {
-        const worldRect = RectangleRange.fromRectLike(normalizedEntry.worldRect);
+        const worldRect = RectangleRange.fromRectLike(
+          normalizedEntry.worldRect,
+        );
         if (worldRect) {
           normalizedEntry.screenRect = this.monitor?.worldRectToScreenRect?.(
             worldRect,

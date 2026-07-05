@@ -580,11 +580,6 @@ function createHandoffSubDAG(options = {}) {
 
         if (boardApi && cancelObjectIds.length > 0) {
           boardApi.discardActiveObjects(cancelObjectIds);
-        } else if (
-          cancelObjects.length > 0 &&
-          context.acc?.board?.activeObjectManager?.discard
-        ) {
-          context.acc.board.activeObjectManager.discard(new Set(cancelObjects));
         }
 
         onToolComplete?.();
