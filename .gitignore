@@ -56,3 +56,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Android signing key (DO NOT COMMIT)
+*.jks
+*.keystore
+*.pkcs12
+debug.keystore
