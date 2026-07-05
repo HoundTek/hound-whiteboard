@@ -3,7 +3,7 @@ name = "hound-whiteboard"
 version = "0.0.1"
 description = "A whiteboard app"
 authors = ["Frank Steven"]
-license = "MIT"
+license = "GPL-3.0"
 edition = "2021"
 
 [lib]
