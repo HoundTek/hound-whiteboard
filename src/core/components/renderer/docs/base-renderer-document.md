@@ -3,6 +3,7 @@
 本文档提供 `BaseRenderer` 的概述。
 
 静态层渲染器用于把 `Monitor.chunkLoader` 当前已加载区块中的静态对象，按“已加载区块合并后的全局静态图拓扑序”绘制到 `Monitor.baseCanvas`。
+静态层渲染器用于把 `Monitor.chunkLoader` 当前已加载区块中的静态对象，按“已加载区块合并后的全局静态图拓扑序”绘制到 `Monitor.baseCanvas`。
 
 它和 `LiveRenderer` 的边界不同：`LiveRenderer` 负责绘制当前仍在 AOM 中的对象，`BaseRenderer` 负责绘制已经脱离 AOM、稳定存在于白板静态结构中的对象。
 
@@ -12,6 +13,7 @@
 
 - `ActiveObjectManager.apply(objects)` 负责把活动对象写回区块静态结构
 - `ChunkObjectManager` 负责维护静态图与对象覆盖区块索引，`Board` 负责持有对象实例
+- `Monitor.chunkLoader` 负责回答“当前视口缓冲区里有哪些区块”
 - `Monitor.chunkLoader` 负责回答“当前视口缓冲区里有哪些区块”
 - `BaseRenderer` 负责回答“这些已加载区块里的静态对象，如何画到 `baseCanvas` 上”
 

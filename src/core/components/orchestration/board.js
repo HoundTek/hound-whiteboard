@@ -229,17 +229,6 @@ class Board {
   }
 
   /**
-   * 创建绑定到当前 Board 的矩形区块加载器
-   * @deprecated 请直接使用 createChunkLoader
-   * @param {number} [_limit=0] - 缓冲区上限
-   * @param {number | string} [requesterId] - 请求方 id
-   * @returns {import("../chunk/chunk-loader.js").ChunkLoader}
-   */
-  createBoundChunkLoader(_limit = 0, requesterId) {
-    return this.createChunkLoader(requesterId);
-  }
-
-  /**
    * 创建绑定到当前 Board 的 ChunkLoader
    * @param {number | string} [requesterId] - 请求方 id
    * @returns {import("../chunk/chunk-loader.js").ChunkLoader}

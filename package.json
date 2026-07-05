@@ -1,11 +1,21 @@
 {
   "name": "hound-whiteboard",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "description": "A whiteboard app",
   "scripts": {
+    "init:android": "tauri android init",
+    "icon": "tauri icon ./icon.png",
     "dev": "tauri dev",
     "build": "tauri build",
+    "build:win": "tauri build --bundles nsis msi",
+    "build:mac": "tauri build --bundles dmg app",
+    "build:mac-universal": "tauri build --target universal-apple-darwin",
+    "build:linux": "tauri build --bundles deb appimage rpm",
+    "dev:android": "tauri android dev",
+    "build:android": "tauri android build",
+    "dev:ios": "tauri ios dev",
+    "build:ios": "tauri ios build",
     "test": "NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' jest --passWithNoTests",
     "bench": "node benchmarks/all.bench.js",
     "bench:io": "node benchmarks/io-bridge.bench.js",
@@ -15,7 +25,7 @@
     "bench:render": "node benchmarks/worker-render.bench.js"
   },
   "author": "Frank Steven",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "adm-zip": "0.5.17",
