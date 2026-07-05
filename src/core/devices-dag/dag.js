@@ -96,7 +96,6 @@ import { dagToString } from "./dag-debug.js";
  * @property {Object} [semantics] - 节点语义元数据
  * @property {string} [defaultRoute] - 默认出边名
  * @property {import("../tools/tool.js").Tool} [tool] - 工具实例
- * @property {Object} [toolContext] - 工具固定上下文
  * @property {DevicesDAGNodeUmountHandler|null} [umount] - 卸载钩子
  */
 
@@ -217,10 +216,6 @@ class DevicesDAG {
     this._root.path = "/";
   }
 
-  // -----------------------------------------------------------------------
-  // 内部方法
-  // -----------------------------------------------------------------------
-
   /**
    * 注册 tool 实例到 DAG（禁止重复注册）
    * @param {import("../tools/tool.js").Tool} tool
@@ -322,10 +317,6 @@ class DevicesDAG {
     this._nodes.delete(node.id);
   }
 
-  // -----------------------------------------------------------------------
-  // 路径解析
-  // -----------------------------------------------------------------------
-
   /**
    * 从根节点沿路径解析到目标节点
    * @param {string} path - 绝对或相对路径（相对路径相对于根）
@@ -424,10 +415,6 @@ class DevicesDAG {
     return undefined; // 不可达
   }
 
-  // -----------------------------------------------------------------------
-  // 边管理
-  // -----------------------------------------------------------------------
-
   /**
    * 添加一条有向边
    * @param {string} fromPath - 源节点路径
@@ -469,10 +456,6 @@ class DevicesDAG {
     return true;
   }
 
-  // -----------------------------------------------------------------------
-  // 节点状态
-  // -----------------------------------------------------------------------
-
   /**
    * 读取节点状态
    * @param {string|number} pathOrId - 节点路径或节点 id
@@ -500,10 +483,6 @@ class DevicesDAG {
     node.state = isPlainObject(state) ? { ...state } : {};
     return { ...node.state };
   }
-
-  // -----------------------------------------------------------------------
-  // 节点配置
-  // -----------------------------------------------------------------------
 
   /**
    * 运行时更新节点配置
@@ -569,27 +548,18 @@ class DevicesDAG {
     return node;
   }
 
-  // -----------------------------------------------------------------------
-  // Workflow 挂载
-  // -----------------------------------------------------------------------
-
   /**
    * 在指定路径节点挂载一个 workflow 入口。
    * @param {string} path - 节点路径
    * @param {import("../tools/tool.js").Tool|SubDAGDefinition} workflow - workflow 入口实例或单源 workflow 子图
-   * @param {Object} [workflowContext={}] - workflow 固定上下文
    * @returns {DevicesDAGNode|DevicesDAGNode[]} 挂载后的节点或节点列表
    */
-  mountWorkflow(path, workflow, workflowContext = {}) {
+  mountWorkflow(path, workflow) {
     if (isSubDAGDefinition(workflow)) {
-      return this.mountSubDAG(
-        "/",
-        {
-          ...workflow,
-          rootPath: path,
-        },
-        workflowContext,
-      );
+      return this.mountSubDAG("/", {
+        ...workflow,
+        rootPath: path,
+      });
     }
 
     const node = this.ensureNode(path);
@@ -602,7 +572,7 @@ class DevicesDAG {
 
     this._registerToolInstance(workflow);
 
-    const processor = workflow.createProcessor(workflowContext);
+    const processor = workflow.createProcessor();
 
     node.handler = processor;
     node.semantics = { ...node.semantics, tool: true };
@@ -616,9 +586,7 @@ class DevicesDAG {
         // 静默吞掉 dispose 错误
       }
       try {
-        workflow.umount?.(
-          workflow.createDeviceContext(handlerContext, workflowContext),
-        );
+        workflow.umount?.(handlerContext);
       } catch {
         // 静默吞掉 umount 错误
       }
@@ -629,10 +597,6 @@ class DevicesDAG {
 
     return node;
   }
-
-  // -----------------------------------------------------------------------
-  // 子图挂载
-  // -----------------------------------------------------------------------
 
   /**
    * 挂载结构化子图
@@ -709,7 +673,7 @@ class DevicesDAG {
     }
     if (def.tool) {
       this._registerToolInstance(def.tool);
-      const processor = def.tool.createProcessor(def.toolContext ?? {});
+      const processor = def.tool.createProcessor();
       node.handler = processor;
       node.semantics = { ...node.semantics, tool: true };
       node._toolInstance = def.tool;
@@ -722,9 +686,7 @@ class DevicesDAG {
           // 静默吞掉 dispose 错误
         }
         try {
-          def.tool.umount?.(
-            def.tool.createDeviceContext(handlerContext, def.toolContext ?? {}),
-          );
+          def.tool.umount?.(handlerContext);
         } catch {
           // 静默吞掉 umount 错误
         }
@@ -796,10 +758,6 @@ class DevicesDAG {
       },
     };
   }
-
-  // -----------------------------------------------------------------------
-  // 分发
-  // -----------------------------------------------------------------------
 
   /**
    * 统一的图走法引擎
@@ -897,9 +855,30 @@ class DevicesDAG {
         depth,
       );
 
-      const result = handler
-        ? normalizeHandlerResult(handler(currentPacket, handlerContext))
-        : { packets: [new SignalPacket("", currentPacket.signals)] };
+      let rawResult;
+      if (typeof handler === "function") {
+        try {
+          rawResult = handler(currentPacket, handlerContext);
+        } catch (error) {
+          console.error(`[DevicesDAG] handler error at "${childPath}":`, error);
+          rawResult = undefined;
+        }
+
+        if (rawResult instanceof Promise) {
+          rawResult.catch((error) => {
+            console.error(
+              `[DevicesDAG] async handler rejection at "${childPath}":`,
+              error,
+            );
+          });
+          rawResult = undefined;
+        }
+      }
+
+      const result =
+        typeof handler === "function"
+          ? normalizeHandlerResult(rawResult)
+          : { packets: [new SignalPacket("", currentPacket.signals)] };
 
       // 累积上下文合并（禁止覆盖已有键）
       if (result.acc && isPlainObject(result.acc)) {
@@ -1071,10 +1050,6 @@ class DevicesDAG {
     });
   }
 
-  // -----------------------------------------------------------------------
-  // 调试 / 序列化
-  // -----------------------------------------------------------------------
-
   /**
    * 生成设备图的树状字符串表示（委托 dag-debug.js）
    * @see {@link module:core/devices-dag/dag-debug.dagToString}
@@ -1083,10 +1058,6 @@ class DevicesDAG {
   toString() {
     return dagToString(this);
   }
-
-  // -----------------------------------------------------------------------
-  // 卸载
-  // -----------------------------------------------------------------------
 
   /**
    * 卸载指定路径的 workflow 节点（便捷方法）
@@ -1202,9 +1173,5 @@ class DevicesDAG {
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// 导出
-// ---------------------------------------------------------------------------
 
 export { DevicesDAG };

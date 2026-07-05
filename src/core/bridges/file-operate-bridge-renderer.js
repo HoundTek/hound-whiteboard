@@ -106,93 +106,70 @@ const boardFileOperateBridge = {
   },
 
   /**
-   * 加载指定区块的层叠图
+   * 加载指定区块的元数据（层叠图 + 覆盖索引）
    * @param {string} rootPath - 白板根目录路径
    * @param {number} chunkId - 区块 id
-   * @returns {Promise<any>} 层叠图数据
+   * @returns {Promise<{ tierGraph: any[], objectCoverIndex: any[] }>}
    */
-  loadTierGraph(rootPath, chunkId) {
-    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.LOAD_TIER_GRAPH, {
+  loadChunkMetadata(rootPath, chunkId) {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_METADATA, {
       rootPath,
       chunkId,
     });
   },
 
   /**
-   * 保存指定区块的层叠图
+   * 保存指定区块的元数据（层叠图 + 覆盖索引）
    * @param {string} rootPath - 白板根目录路径
    * @param {number} chunkId - 区块 id
-   * @param {any[]} graphData - 层叠图数据
+   * @param {{ tierGraph: any[], objectCoverIndex: any[] }} metadata - 区块元数据
    * @returns {Promise<boolean>} 是否成功保存
    */
-  saveTierGraph(rootPath, chunkId, graphData) {
-    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.SAVE_TIER_GRAPH, {
+  saveChunkMetadata(rootPath, chunkId, metadata) {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_METADATA, {
       rootPath,
       chunkId,
-      graphData,
+      tierGraph: metadata?.tierGraph ?? [],
+      objectCoverIndex: metadata?.objectCoverIndex ?? [],
     });
   },
 
   /**
-   * 加载指定区块的对象覆盖区块索引
+   * 按对象 ID 批量加载对象 JSON
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} chunkId - 区块 id
-   * @returns {Promise<any[]>} 覆盖索引数据
-   */
-  loadChunkObjectCoverIndex(rootPath, chunkId) {
-    return callCoreFileOperate(
-      CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECT_COVER_INDEX,
-      {
-        rootPath,
-        chunkId,
-      },
-    );
-  },
-
-  /**
-   * 保存指定区块的对象覆盖区块索引
-   * @param {string} rootPath - 白板根目录路径
-   * @param {number} chunkId - 区块 id
-   * @param {any[]} coverIndexData - 覆盖索引数据
-   * @returns {Promise<boolean>} 是否成功保存
-   */
-  saveChunkObjectCoverIndex(rootPath, chunkId, coverIndexData) {
-    return callCoreFileOperate(
-      CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECT_COVER_INDEX,
-      {
-        rootPath,
-        chunkId,
-        coverIndexData,
-      },
-    );
-  },
-
-  /**
-   * 加载指定区块的所有对象 JSON
-   * @param {string} rootPath - 白板根目录路径
-   * @param {number} chunkId - 区块 id
+   * @param {number[]} objectIds - 对象 ID 数组
    * @returns {Promise<object[]>} 对象数组
    */
-  loadChunkObjects(rootPath, chunkId) {
-    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECTS, {
+  loadObjects(rootPath, objectIds) {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.LOAD_OBJECTS, {
       rootPath,
-      chunkId,
+      objectIds,
     });
   },
 
   /**
-   * 保存指定区块的所有对象 JSON
+   * 批量保存对象 JSON（扁平存储，每个对象一个文件）
    * @param {string} rootPath - 白板根目录路径
-   * @param {number} chunkId - 区块 id
-   * @param {object[]} objects - 对象数组
+   * @param {object[]} objects - 对象 plain object 数组，每项必须含 id
    * @returns {Promise<boolean>} 是否成功保存
    */
-  saveChunkObjects(rootPath, chunkId, objects) {
-    // 此处要求 objects 是可序列化的 plain object 数组。
-    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECTS, {
+  saveObjects(rootPath, objects) {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.SAVE_OBJECTS, {
       rootPath,
-      chunkId,
       objects,
+    });
+  },
+
+  /**
+   * 删除指定对象 JSON
+   * @param {string} rootPath - 白板根目录路径
+   * @param {number} objectId - 对象 id
+   * @returns {Promise<boolean>} 是否成功删除
+   */
+  deleteObject(rootPath, objectId) {
+    return callCoreFileOperate(CORE_FILE_OPERATE_ACTIONS.DELETE_OBJECT, {
+      rootPath,
+      objectId,
     });
   },
 };

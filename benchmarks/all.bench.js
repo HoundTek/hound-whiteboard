@@ -21,7 +21,13 @@ const benchmarks = [
   { name: "IO Direct", file: "io-direct.bench.js" },
   { name: "IO File Granularity", file: "io-file-granularity.bench.js" },
   { name: "IO Roundtrip", file: "io-roundtrip.bench.js", runner: "electron" },
-  { name: "IO Accumulatable", file: "io-accumulatable.bench.js", runner: "electron" },
+  {
+    name: "IO Accumulatable",
+    file: "io-accumulatable.bench.js",
+    runner: "electron",
+  },
+  { name: "Worker RPC", file: "worker-rpc.bench.js" },
+  { name: "Worker Render", file: "worker-render.bench.js" },
 ];
 
 benchmarks.forEach((bench, index) => {
@@ -31,14 +37,15 @@ benchmarks.forEach((bench, index) => {
 
   try {
     const benchPath = path.join(__dirname, bench.file);
-    const runner = bench.runner === "electron"
-      ? path.join(
-          process.cwd(),
-          "node_modules",
-          ".bin",
-          process.platform === "win32" ? "electron.cmd" : "electron",
-        )
-      : "node";
+    const runner =
+      bench.runner === "electron"
+        ? path.join(
+            process.cwd(),
+            "node_modules",
+            ".bin",
+            process.platform === "win32" ? "electron.cmd" : "electron",
+          )
+        : "node";
     execSync(`"${runner}" "${benchPath}"`, { stdio: "inherit" });
   } catch (error) {
     console.error(`\n❌ ${bench.name} 测试失败:`, error.message);

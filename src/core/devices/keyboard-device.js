@@ -10,6 +10,7 @@ import { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";
 
 const KEYBOARD_DEVICE_SIGNAL_TYPES = {
   TRIGGER: "trigger",
+  TRIGGER_REPEAT: "trigger-repeat",
   RELEASE: "release",
   CANCEL: "cancel",
 };
@@ -75,6 +76,16 @@ function createKeyboardDevice() {
     if (descriptor.type === "keydown" && !descriptor.repeat) {
       return {
         type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        context: {
+          ...signal.context,
+          sourceType: descriptor.type,
+        },
+      };
+    }
+
+    if (descriptor.type === "keydown" && descriptor.repeat) {
+      return {
+        type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER_REPEAT,
         context: {
           ...signal.context,
           sourceType: descriptor.type,

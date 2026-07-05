@@ -1,13 +1,35 @@
 import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/board.js";
-import { ChunkObjectManager } from "../../../components/chunk-object-manager.js";
+function createBoardDeviceContext(objectId, { monitor } = {}) {
+  const board = {
+    allocateObjectId: jest.fn(() => objectId),
+    getObjectById: jest.fn(() => undefined),
+  };
+  const boardApi = {
+    createObject: jest.fn(async () => objectId),
+    modifyObject: jest.fn(),
+    commitObjects: jest.fn(),
+    discardActiveObjects: jest.fn(),
+  };
+
+  return {
+    deviceContext: {
+      acc: {
+        board,
+        boardApi,
+        monitor,
+        objectId,
+        ownerChunkId: 1,
+      },
+    },
+  };
+}
 
 describe("CircleCreatorTool", () => {
   test("单手势起点为圆心，终点决定半径", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: { objectId: 101, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(101);
 
     tool.process(
       {
@@ -28,16 +50,16 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj).toBeDefined();
-    expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(tool.obj.radius).toBeCloseTo(Math.sqrt(145));
+    expect(tool._local).toBeDefined();
+    expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
+    expect(tool._local.data.radius).toBeCloseTo(Math.sqrt(145));
   });
 
   test("结束点过近时使用固定半径，固定半径由 monitor.zoom 决定", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = {
-      acc: { monitor: { zoom: 2 }, objectId: 102, ownerChunkId: 2 },
-    };
+    const { deviceContext } = createBoardDeviceContext(102, {
+      monitor: { zoom: 2 },
+    });
 
     tool.process(
       {
@@ -58,18 +80,16 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.radius).toBeCloseTo(8);
+    expect(tool._local.data.radius).toBeCloseTo(8);
   });
 
-  test("生成对象时应使用 board.activeObjectManager.apply 完成提交", () => {
+  test("显式提供 boardApi 时应通过 RPC 创建并提交圆对象", () => {
     const tool = new CircleCreatorTool();
-    const board = {
-      activeObjectManager: {
-        add: jest.fn(),
-        apply: jest.fn(),
-      },
-    };
-    const deviceContext = { acc: { board, objectId: 103, ownerChunkId: 3 } };
+    const { deviceContext } = createBoardDeviceContext(104);
+    const boardApi = deviceContext.acc.boardApi;
+    const createSpy = jest.spyOn(boardApi, "createObject");
+    const modifySpy = jest.spyOn(boardApi, "modifyObject");
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
       {
@@ -79,9 +99,90 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    const createdObject = tool.obj;
-    expect(board.activeObjectManager.add).toHaveBeenCalledWith(
-      new Set([createdObject]),
+    tool.process(
+      {
+        to: "/monitor/circle",
+        signals: [
+          { type: "position", context: { value: new Vector(6, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(createSpy).toHaveBeenCalledWith(
+      "CircleObject",
+      expect.objectContaining({
+        id: 104,
+        position: new Vector(2, 1),
+      }),
+    );
+    expect(modifySpy).toHaveBeenCalled();
+    expect(commitSpy).toHaveBeenCalledWith([104]);
+    expect(tool._local).toMatchObject({
+      id: 104,
+      position: new Vector(2, 1),
+    });
+  });
+
+  test("RPC 风格 boardApi 下应维护本地草稿半径并提交", () => {
+    const tool = new CircleCreatorTool();
+    const board = {
+      allocateObjectId: jest.fn(() => 702),
+    };
+    const boardApi = {
+      createObject: jest.fn(),
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const deviceContext = {
+      acc: {
+        board,
+        boardApi,
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(6, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "CircleObject",
+      expect.objectContaining({
+        id: 702,
+        position: new Vector(2, 1),
+      }),
+    );
+    expect(boardApi.modifyObject).toHaveBeenCalled();
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([702]);
+    expect(tool._local.data.radius).toBeCloseTo(5);
+  });
+
+  test("结束手势时应通过 boardApi.commitObjects 提交对象", () => {
+    const tool = new CircleCreatorTool();
+    const { deviceContext } = createBoardDeviceContext(103);
+    const boardApi = deviceContext.acc.boardApi;
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
+
+    tool.process(
+      {
+        to: "/monitor/circle",
+        signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
+      },
+      deviceContext,
     );
 
     tool.process(
@@ -92,16 +193,13 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-      new Set([createdObject]),
-    );
+    expect(commitSpy).toHaveBeenCalledWith([103]);
   });
 
   test("未提供 monitor 时应以默认 zoom=1 计算固定半径", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: { objectId: 401, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(401);
 
-    // 起始点与结束点距离仅 1 像素，小于 minDragDistanceScreen=4 → 应用固定半径
     tool.process(
       {
         to: "/monitor/circle",
@@ -121,22 +219,21 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.radius).toBeCloseTo(16);
+    expect(tool._local.data.radius).toBeCloseTo(16);
   });
 
-  test("真实 Board 上结束手势后应将对象写回归属区块", () => {
+  test("结束手势后应通过 commitObjects 提交圆对象", () => {
     const tool = new CircleCreatorTool();
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const { deviceContext } = createBoardDeviceContext(110);
+    const boardApi = deviceContext.acc.boardApi;
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
       {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
-      { acc: { board, objectId: 110, ownerChunkId: 1 } },
+      deviceContext,
     );
 
     tool.process(
@@ -144,31 +241,29 @@ describe("CircleCreatorTool", () => {
         to: "/monitor/circle",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, objectId: 110, ownerChunkId: 1 } },
+      deviceContext,
     );
 
-    expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(board.getChunkById(1).objectManager.getObject(110)).toBe(tool.obj);
+    expect(commitSpy).toHaveBeenCalledWith([110]);
+    expect(tool._local.id).toBe(110);
   });
 
   test("连续两次创建应生成两个不同圆对象", () => {
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
-
     const tool = new CircleCreatorTool();
+    const { deviceContext } = createBoardDeviceContext(201);
+    const board = deviceContext.acc.board;
+    const boardApi = deviceContext.acc.boardApi;
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
-    // 第一次创建
     tool.process(
       {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, objectId: 201, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 201, ownerChunkId: 1 } },
     );
 
-    const firstObject = tool.obj;
+    const firstObject = tool._local;
 
     tool.process(
       {
@@ -178,19 +273,18 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { acc: { board, objectId: 201, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 201, ownerChunkId: 1 } },
     );
 
-    // 第二次创建
     tool.process(
       {
         to: "/monitor/circle",
         signals: [{ type: "position", context: { value: new Vector(6, 7) } }],
       },
-      { acc: { board, objectId: 202, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 202, ownerChunkId: 1 } },
     );
 
-    const secondObject = tool.obj;
+    const secondObject = tool._local;
 
     tool.process(
       {
@@ -200,23 +294,19 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { acc: { board, objectId: 202, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 202, ownerChunkId: 1 } },
     );
 
     expect(firstObject).not.toBe(secondObject);
     expect(firstObject.id).toBe(201);
     expect(secondObject.id).toBe(202);
-    expect(board.getChunkById(1).objectManager.getObject(201)).toBe(
-      firstObject,
-    );
-    expect(board.getChunkById(1).objectManager.getObject(202)).toBe(
-      secondObject,
-    );
+    expect(commitSpy).toHaveBeenNthCalledWith(1, [201]);
+    expect(commitSpy).toHaveBeenNthCalledWith(2, [202]);
   });
 
   test("起始点与结束点完全相同时应使用固定半径（默认 zoom=1）", () => {
     const tool = new CircleCreatorTool();
-    const deviceContext = { acc: { objectId: 301, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(301);
 
     tool.process(
       {
@@ -237,7 +327,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool.obj.radius).toBeCloseTo(16);
-    expect(tool.obj.position.serialize()).toEqual({ x: 10, y: 10 });
+    expect(tool._local.data.radius).toBeCloseTo(16);
+    expect(tool._local.position.serialize()).toEqual({ x: 10, y: 10 });
   });
 });

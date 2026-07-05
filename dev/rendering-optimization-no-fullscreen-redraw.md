@@ -18,8 +18,8 @@
 
 ### 视口与输入上下文已经集中在 Monitor
 
-- src/core/components/board.js 中，Board.createMonitor(rootElement, options, monitorId) 会在传入根节点下创建 monitor canvas。
-- src/core/components/monitor.js 中，Monitor 已经统一管理：
+- src/core/components/orchestration/board.js 中，Board.createMonitor(rootElement, options, monitorId) 会在传入根节点下创建 monitor canvas。
+- src/core/components/orchestration/monitor.js 中，Monitor 已经统一管理：
   - canvas 尺寸
   - origin
   - zoom
@@ -31,7 +31,7 @@
 
 ### 活动对象已经和静态区块结构分离
 
-- src/core/components/active-object-manager.js 中，活动对象由 ActiveObjectManager 统一维护。
+- src/core/components/orchestration/active-object-manager.js 中，活动对象由 ActiveObjectManager 统一维护。
 - add(objects) 用于把尚未写回静态区块结构的新对象加入动态图。
 - choose(startFrom) 用于从静态图中提取活动子图并分层。
 - apply(objects) 才负责把活动对象重新提交回区块对象管理器与静态层关系。
@@ -128,6 +128,7 @@ app-foreground-layer
 └── monitor-root
     ├── baseCanvas
     ├── liveCanvas
+    ├── renderCanvas
     └── uiCanvas
 ```
 
@@ -141,6 +142,10 @@ app-foreground-layer
   - 展示当前活动对象
   - 包含正在绘制、拖拽、修改控制点、尚未 apply 的对象
   - 高频刷新，但只做局部清理和重绘
+- renderCanvas
+  - 合成输出层，将 baseCanvas + liveCanvas 合成后输出到屏幕
+  - 对外可见的唯一画布
+  - 通过 `requestCompositeRender()` 异步去重调度
 - uiCanvas
   - 展示选框、控制点、辅助线、hover 高亮
   - 与对象本体绘制分离，避免污染 liveCanvas
@@ -316,8 +321,8 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 
 截至当前版本，渲染链路已经先落下了最小骨架：
 
-- `Board.createMonitor()` 已创建 monitor-root、`baseCanvas`、`liveCanvas`、`uiCanvas`。
-- `Monitor` 已持有多层画布引用，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
+- `Board.createMonitor()` 已创建 monitor-root、`baseCanvas`、`liveCanvas`、`renderCanvas`、`uiCanvas` 四层画布。
+- `Monitor` 已持有多层画布引用，并通过 `monitor.canvas` getter 提供可见画布的候选优先级：`renderCanvas > liveCanvas > baseCanvas`。所有坐标换算和尺寸访问统一通过此入口收口，不再直接依赖特定画布实例。
 - `BaseRenderer` 已挂在 `Monitor` 下，可把当前已加载区块的 `staticGraph` 合并成 monitor 级全局静态图，并按全局拓扑序把静态对象重绘到 `baseCanvas`。
 - `BaseRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
 - `BaseRenderer` 的局部重绘不会退化成“按脏区命中的对象临时排序”，而是先沿用全局静态图拓扑序，再过滤命中脏区的对象。
@@ -327,11 +332,13 @@ dirty rect 的第一落点应当是 liveCanvas，而不是一开始就改 baseCa
 - `LiveRenderer` 已挂在 `Monitor` 下，可按 `ActiveObjectManager.layerOrder` 顺序读取活动对象并重绘到 `liveCanvas`。
 - `LiveRenderer` 已支持显式 dirty rect 驱动的局部清理与局部重绘。
 - `LiveRenderer.invalidateObjects(objects)` 已支持同时失效对象上一帧范围与当前范围，避免对象移动后旧位置残影。
-- `LiveRenderer` 已接入对象级 `getRenderPadding()`，当前至少覆盖 `CircleObject`、`StrokeObject`、`TextObject` 这几类高频对象。
+- `LiveRenderer` 已接入对象级 `getRenderPadding()`，当前至少覆盖 `CircleObject`、`StrokeObject`、`PolygonObject` 这几类高频对象。
 - `LiveRenderer.captureObjectSnapshot(objects)` 已落地，creator 高频几何修改路径现在会在变更前记录旧几何、变更后请求活动层刷新。
 - `ObjectModifierTool` 已补齐统一的 `beforeGeometryMutation / afterGeometryMutation / withGeometryMutation` 钩子，为后续编辑工具预留同一套快照协议入口。
 - `ActiveObjectManager.add/choose/apply/discard` 已会主动通知各 `Monitor.liveRenderer` 发起活动层刷新。
 - `ActiveObjectManager.apply(objects)` 已会在静态结构写回后主动触发对象旧覆盖区块与新覆盖区块的并集刷新。
+- `Monitor` 新增 `renderCanvas` 合成输出层，`compositeRenderCanvas()` 通过 `requestAnimationFrame` 异步去重调度 baseCanvas + liveCanvas 的合成。
+- `Monitor` 新增 `width`/`height`/`canvas` 统一 getter，所有尺寸访问收口到 `width`/`height`，消除对 `liveCanvas` 的直接依赖。
 
 当前还没有完成的部分是：
 

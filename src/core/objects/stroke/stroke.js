@@ -13,25 +13,21 @@ import { BasicObject } from "../basic-obj.js";
 const DEFAULT_STROKE_PROPERTY = Object.freeze({
   /**
    * 笔画颜色
-   * @default "#000000"
    */
   color: "#000000",
 
   /**
    * 笔画宽度
-   * @default 1
    */
   width: 1,
 
   /**
    * 线段连接处的样式
-   * @default "round"
    */
   lineJoin: "round",
 
   /**
    * 线段端点的样式
-   * @default "round"
    */
   lineCap: "round",
 });
@@ -39,19 +35,18 @@ const DEFAULT_STROKE_PROPERTY = Object.freeze({
 /**
  * 笔画类
  * @class
- * @description
- * 笔画是由一系列点组成的对象，通常用于表示手写输入的轨迹。
- * 值得一提的是，笔画是可擦除的无向对象，这与多边形对象正好相反。
- * @todo
- * 现在的这个笔画类的结构是不支持更换笔刷的。要想有这个功能，必须重构。
+ * @todo 现在的这个笔画类的结构是不支持更换笔刷的。要想有这个功能，必须重构。
  * @author Zhou Chenyu
  */
 class StrokeObject extends BasicObject {
-  constructor(p, id, ownerChunkId) {
-    super(p, id, ownerChunkId);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
+    this.property = { ...DEFAULT_STROKE_PROPERTY, ...this.property };
+    this.rich.localPathRange = new PathRange([]);
+    this.rich.worldPathRange = new PathRange([]);
+    this.rich.convexHullRange = new PolygonRange([]);
+    this._onDataChange(Object.keys(data));
   }
-
-  property = { ...DEFAULT_STROKE_PROPERTY };
 
   isDirected() {
     return false;
@@ -61,34 +56,15 @@ class StrokeObject extends BasicObject {
     return true;
   }
 
-  /**
-   * 内点曲线
-   * @type {PathRange}
-   * @description
-   * 笔画的内点曲线。笔画沿着这些点绘制。
-   *
-   * 内点是用来判断笔画位置的。
-   */
-  localPathRange = new PathRange([]);
-
-  /**
-   * 平滑和变换后的内点曲线
-   * @type {PathRange}
-   * @description
-   * 经过平滑和变换后的路径范围。这个属性是根据原始局部路径通过应用当前的变换矩阵计算得出的。
-   *
-   * 这个属性主要用于渲染和碰撞检测等需要考虑对象变换的场景。它反映了笔画在当前变换状态下的实际位置和形状。
-   * 当笔画的变换发生变化时（例如缩放、旋转或平移），worldPathRange 会自动更新以反映新的位置和形状。
-   *
-   * 需要注意的是，worldPathRange 是一个计算属性，通常不应直接修改它，而是通过修改 localPathRange 和变换矩阵来间接更新它。
-   * 这样可以确保数据的一致性和正确性。
-   * 在渲染笔画时，系统会使用 worldPathRange 来绘制笔画路径，从而实现正确的视觉效果。
-   * 在碰撞检测时，系统也会使用 worldPathRange 来判断笔画与其他对象之间的交互。
-   */
-  worldPathRange = new PathRange([]);
-
   calculateRichDatas() {
-    let transformedPoints = this.localPathRange.points.map((p) =>
+    if (this.rich.localPathRange.points.length === 0) {
+      this.rich.worldPathRange = new PathRange([]);
+      this.rich.convexHullRange = new PolygonRange([]);
+      this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
+      return;
+    }
+
+    let transformedPoints = this.rich.localPathRange.points.map((p) =>
       Vector.mulMatrix(this.transform, p),
     );
     // 将其平滑（插点或删点）
@@ -98,16 +74,19 @@ class StrokeObject extends BasicObject {
     } else if (scale < 1) {
       // [todo] 删点
     }
-    this.worldPathRange = new PathRange(transformedPoints);
+    this.rich.worldPathRange = new PathRange(transformedPoints);
     this.calculateConvexHull();
-    this.boundingBox = RectangleRange.from(
-      this.convexHullRange.transform(this.transform),
+    this.rich.boundingBox = RectangleRange.from(
+      this.rich.convexHullRange.transform(this.transform),
     );
   }
 
-  setPathPoints(points) {
-    this.localPathRange = new PathRange(points);
-    this.calculateRichDatas();
+  _onDataChange(keys) {
+    if (keys.includes("points") && Array.isArray(this.data.points)) {
+      const vecs = this.data.points.map((p) => new Vector(p.x, p.y));
+      this.rich.localPathRange = new PathRange(vecs);
+      this.calculateRichDatas();
+    }
   }
 
   setTransform(trans) {
@@ -115,20 +94,21 @@ class StrokeObject extends BasicObject {
     this.calculateRichDatas();
   }
 
-  convexHullRange = new PolygonRange([]);
-
   calculateConvexHull() {
-    this.convexHullRange = new PolygonRange(
-      calcConvexHull(this.localPathRange.points),
+    this.rich.convexHullRange = new PolygonRange(
+      calcConvexHull(this.rich.localPathRange.points),
     );
   }
 
   getRange() {
-    return this.worldPathRange;
+    return this.rich.worldPathRange;
   }
 
   render(ctx) {
-    if (!this.localPathRange || this.localPathRange.points.length === 0) {
+    if (
+      !this.rich.localPathRange ||
+      this.rich.localPathRange.points.length === 0
+    ) {
       return;
     }
 
@@ -137,7 +117,7 @@ class StrokeObject extends BasicObject {
       return;
     }
 
-    const transformedPoints = this.worldPathRange.points;
+    const transformedPoints = this.rich.worldPathRange.points;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, this.position.x, this.position.y);
     ctx.strokeStyle = this.property.color;
@@ -164,27 +144,23 @@ class StrokeObject extends BasicObject {
     return {
       ...super.serialize(),
       type: "StrokeObject",
-      points: this.localPathRange.points.map((point) => point.serialize()),
+      data: { ...this.data },
     };
   }
 
-  static parse(data) {
-    if (data.type !== "StrokeObject") {
+  static parse(serialized) {
+    if (serialized.type !== "StrokeObject") {
       throw new TypeError("Invalid type for StrokeObject parsing");
     }
 
     const obj = new StrokeObject(
-      Vector.parse(data.position),
-      data.id,
-      data.ownerChunkId,
+      serialized.id,
+      Vector.parse(serialized.position),
+      { ...DEFAULT_STROKE_PROPERTY, ...(serialized.property ?? {}) },
+      serialized.data ?? {},
     );
 
-    obj.setPathPoints((data.points ?? []).map((point) => Vector.parse(point)));
-    obj.setTransform(Matrix.parse(data.transform));
-    obj.setProperty({
-      ...DEFAULT_STROKE_PROPERTY,
-      ...(data.property ?? {}),
-    });
+    obj.setTransform(Matrix.parse(serialized.transform));
     return obj;
   }
 }

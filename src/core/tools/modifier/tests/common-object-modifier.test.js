@@ -2,7 +2,7 @@ import { jest } from "@jest/globals";
 import { Vector } from "../../../utils/math.js";
 import { RectangleRange } from "../../../range/rectangle.js";
 import { CommonObjectModifierTool } from "../common-object-modifier.js";
-import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../obj-modifier.js";
+import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../object-modifier.js";
 
 /**
  * 构造包含 AOM 的测试上下文
@@ -29,8 +29,8 @@ function aomCtx(objects, extra = {}) {
   };
 }
 
-describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () => {
-  test("首个 position 应启动手势（对象暂不动），第二个 position 才应用位移", () => {
+describe("CommonObjectModifierTool", () => {
+  test("首个 position 应启动手势，对象不动，第二个 position 才应用位移", () => {
     const object = {
       id: 1,
       position: new Vector(10, 20),
@@ -161,17 +161,16 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
     expect(object.position).toEqual(new Vector(19, 22));
   });
 
-  test("success 信号应将对象提交到静态图并卸载", () => {
+  test("success 信号应通过 commitObjects 提交对象并卸载", () => {
     const object = {
       id: 7,
       position: new Vector(5, 5),
     };
 
-    const board = {
-      activeObjectManager: {
-        activeObjectIndex: new Map([[object.id, object]]),
-        apply: jest.fn(),
-      },
+    const boardApi = {
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
     };
     const mockDag = {
       unmount: jest.fn(),
@@ -179,31 +178,28 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
     let nodeState = { object };
     const tool = new CommonObjectModifierTool();
 
-    // 首个 position → 启动手势，对象不动
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 7, y: 5 } } }],
       },
       {
-        acc: { objects: [object], board },
+        acc: { objects: [object], boardApi },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
     );
     expect(object.position).toEqual(new Vector(5, 5));
 
-    // 第二个 position → 应用位移
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 10, y: 6 } } }],
       },
       {
-        acc: { objects: [object], board },
+        acc: { objects: [object], boardApi },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
       },
     );
-    // dx=10-7=3, dy=6-5=1 → (8, 6)
     expect(object.position).toEqual(new Vector(8, 6));
 
     const result = tool.process(
@@ -211,7 +207,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
         signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
       },
       {
-        acc: { objects: [object], board },
+        acc: { objects: [object], boardApi },
         dag: mockDag,
         path: "/monitor/mouse/primary/tool/tool",
         getNodeState() {
@@ -225,15 +221,171 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
     );
 
     expect(result).toBeUndefined();
-    // 对象位置保留在最后修改状态
     expect(object.position).toEqual(new Vector(8, 6));
-    expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-      new Set([object]),
-    );
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([7]);
     expect(mockDag.unmount).toHaveBeenCalledWith(
       "/monitor/mouse/primary/tool/tool",
     );
     expect(nodeState.objects).toBeUndefined();
+  });
+
+  test("显式提供 boardApi 时应通过 modifyObject 更新位置并在 success 后提交", () => {
+    const tool = new CommonObjectModifierTool();
+    const object = {
+      id: 501,
+      position: new Vector(10, 20),
+      data: { radius: 5 },
+    };
+    const boardApi = {
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const modifySpy = boardApi.modifyObject;
+    const commitSpy = boardApi.commitObjects;
+    const mockDag = { unmount: jest.fn() };
+    const monitor = { requestViewportUiRender: jest.fn() };
+    let nodeState = {};
+    const context = {
+      acc: { boardApi, monitor, objects: [object] },
+      dag: mockDag,
+      path: "/monitor/mouse/primary/tool/tool",
+      getNodeState() {
+        return nodeState;
+      },
+      setNodeState(path, nextState) {
+        nodeState = nextState ?? {};
+        return nodeState;
+      },
+    };
+
+    expect(object.position).toEqual(new Vector(10, 20));
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }],
+      },
+      context,
+    );
+    expect(object.position).toEqual(new Vector(10, 20));
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 13, y: 24 } } }],
+      },
+      context,
+    );
+    expect(object.position).toEqual(new Vector(13, 24));
+    expect(modifySpy).toHaveBeenCalledWith(501, {
+      position: { x: 13, y: 24 },
+    });
+
+    tool.process(
+      {
+        signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
+      },
+      context,
+    );
+
+    expect(commitSpy).toHaveBeenCalledWith([501]);
+    expect(mockDag.unmount).toHaveBeenCalledWith(
+      "/monitor/mouse/primary/tool/tool",
+    );
+    expect(nodeState.objects).toBeUndefined();
+    expect(monitor.requestViewportUiRender).toHaveBeenCalled();
+  });
+
+  test("显式提供 boardApi 时应支持 summary-like 上下文对象完成准入与位移", () => {
+    const tool = new CommonObjectModifierTool();
+    const boardApi = {
+      modifyObject: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const summaryLikeObject = {
+      id: 502,
+      type: "CircleObject",
+      position: { x: 30, y: 40 },
+      range: new RectangleRange(-5, -5, 10, 10),
+      boundingBox: new RectangleRange(-5, -5, 10, 10),
+      property: {},
+      data: { radius: 5 },
+    };
+    const context = {
+      acc: {
+        boardApi,
+        monitor: { requestViewportUiRender: jest.fn() },
+        objects: [summaryLikeObject],
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 30, y: 40 } } }],
+      },
+      context,
+    );
+    expect(summaryLikeObject.position).toEqual(new Vector(30, 40));
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 34, y: 43 } } }],
+      },
+      context,
+    );
+
+    expect(summaryLikeObject.position).toEqual(new Vector(34, 43));
+    expect(boardApi.modifyObject).toHaveBeenCalledWith(502, {
+      position: { x: 34, y: 43 },
+    });
+  });
+
+  test("显式提供 RPC boardApi 时不应读取本地 stale activeObjectIndex", () => {
+    const tool = new CommonObjectModifierTool();
+    const summaryLikeObject = {
+      id: 503,
+      type: "CircleObject",
+      position: { x: 30, y: 40 },
+      range: new RectangleRange(-5, -5, 10, 10),
+      boundingBox: new RectangleRange(-5, -5, 10, 10),
+      property: {},
+      data: { radius: 5 },
+    };
+    const modifyObject = jest.fn();
+    const context = {
+      acc: {
+        board: {
+          activeObjectManager: {
+            activeObjectIndex: new Map(),
+          },
+        },
+        boardApi: {
+          modifyObject,
+          commitObjects: jest.fn(),
+          discardActiveObjects: jest.fn(),
+        },
+        monitor: { requestViewportUiRender: jest.fn() },
+        objects: [summaryLikeObject],
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 30, y: 40 } } }],
+      },
+      context,
+    );
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: { x: 34, y: 43 } } }],
+      },
+      context,
+    );
+
+    expect(summaryLikeObject.position).toEqual(new Vector(34, 43));
+    expect(modifyObject).toHaveBeenCalledWith(503, {
+      position: { x: 34, y: 43 },
+    });
   });
 
   test("不传 position 信号时应保持原状态", () => {
@@ -542,9 +694,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       // 第一轮手势：锚点 (12, 20)，对象从 (10, 20) 移到 (14, 22)
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 12, y: 20 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
         },
         aomCtx(object),
       );
@@ -553,9 +703,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
 
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 16, y: 22 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
         },
         aomCtx(object),
       );
@@ -568,17 +716,13 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       // 第二轮手势：锚点 (18, 24)，对象从 (14, 22) 移到 (20, 26)
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 18, y: 24 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 18, y: 24 } } }],
         },
         aomCtx(object),
       );
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 24, y: 28 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 24, y: 28 } } }],
         },
         aomCtx(object),
       );
@@ -589,10 +733,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
 
       // cancel → 应回退到第一轮手势开始前的初始位置 (10, 20)，不是 (14, 22)
-      tool.process(
-        { signals: [{ type: "cancel" }] },
-        aomCtx(object),
-      );
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
       expect(object.position).toEqual(new Vector(10, 20));
     });
 
@@ -607,31 +748,21 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       // 第一轮：移动并 cancel
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 15, y: 25 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 15, y: 25 } } }],
         },
         aomCtx(object),
       );
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 20, y: 30 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 20, y: 30 } } }],
         },
         aomCtx(object),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
 
-      tool.process(
-        { signals: [{ type: "end" }] },
-        aomCtx(object),
-      );
-      tool.process(
-        { signals: [{ type: "cancel" }] },
-        aomCtx(object),
-      );
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
       // cancel 回退到初始位置
       expect(object.position).toEqual(new Vector(10, 20));
 
@@ -639,9 +770,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       // （_initialPositions 已在 cancelModifyGesture 中被清空）
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 12, y: 22 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 12, y: 22 } } }],
         },
         aomCtx(object),
       );
@@ -650,9 +779,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
 
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 17, y: 27 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 17, y: 27 } } }],
         },
         aomCtx(object),
       );
@@ -677,17 +804,13 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       // 移动并 success
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 15, y: 25 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 15, y: 25 } } }],
         },
         aomCtx(object, { board }),
       );
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 20, y: 30 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 20, y: 30 } } }],
         },
         aomCtx(object, { board }),
       );
@@ -714,9 +837,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       // 新的手势：应从 object2 的位置开始记录
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 55, y: 65 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 55, y: 65 } } }],
         },
         aomCtx(object2, { board: board2 }),
       );
@@ -725,9 +846,7 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
 
       tool.process(
         {
-          signals: [
-            { type: "position", context: { value: { x: 60, y: 70 } } },
-          ],
+          signals: [{ type: "position", context: { value: { x: 60, y: 70 } } }],
         },
         aomCtx(object2, { board: board2 }),
       );
@@ -991,6 +1110,355 @@ describe("CommonObjectModifierTool（手势驱动，保持光标偏移）", () =
       expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
         1,
       );
+    });
+  });
+
+  describe("displacement 信号支持", () => {
+    test("位移信号单独到达时应直接移动对象，不启动手势状态机", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const monitor = {
+        liveRenderer: {
+          captureObjectSnapshot: jest.fn(),
+          invalidateObjects: jest.fn(),
+        },
+        requestViewportUiRender: jest.fn(),
+      };
+
+      const tool = new CommonObjectModifierTool();
+      // displacement (3, 5)：直接累加
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 3, y: 5 } } },
+          ],
+        },
+        aomCtx(object, { monitor }),
+      );
+      expect(object.position).toEqual(new Vector(13, 25));
+      // 手势不应激活
+      expect(tool.isModifyingGestureActive).toBe(false);
+      // withGeometryMutation 带 captureSnapshot: false → 仅触发 after
+      expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+      expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
+        0,
+      );
+      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
+    });
+
+    test("手势激活期间位移到达：对象位置叠加、锚点跟随同步", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 启动手势：锚点=(12, 20)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
+        },
+        aomCtx(object),
+      );
+      // dx=0 → (10, 20)
+      expect(object.position).toEqual(new Vector(10, 20));
+
+      // 第二个 position (16, 22)：dx=4, dy=2 → (14, 22)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(14, 22));
+
+      // displacement (3, -1) 到达：对象叠到 (17, 21)，锚点不动，basePos 同步
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 3, y: -1 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(17, 21));
+
+      // 后续 position (22, 25)：锚点(12, 20)不动，基准偏移 = (13, 19)
+      // dx = 22 - 12 = 10, dy = 25 - 20 = 5 → basePos (13, 19) + (10, 5) = (23, 24)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 22, y: 25 } } }],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(23, 24));
+    });
+
+    test("同一信号包中 position + displacement 应先 position 再位移叠加", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 启动手势：锚点=(12, 20)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(10, 20));
+
+      // 同一帧：position (16, 22) + displacement (3, -1)
+      // Step 1 position: dx = 16 - 12 = 4, dy = 22 - 20 = 2 → basePos (10, 20) + (4, 2) = (14, 22)
+      // Step 2 displacement: (14, 22) + (3, -1) = (17, 21)，basePos 同步为 (13, 19)
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 16, y: 22 } } },
+            { type: "displacement", context: { value: { x: 3, y: -1 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(17, 21));
+
+      // 后续 position (20, 26)：锚点(12, 20)不动，基准偏移 (13, 19)
+      // dx = 20 - 12 = 8, dy = 26 - 20 = 6 → basePos (13, 19) + (8, 6) = (21, 25)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 20, y: 26 } } }],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(21, 25));
+    });
+
+    test("end 之后 displacement 应直接累加，无需锚点", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 启动并移动：锚点(12, 20) → 位置(10, 20)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
+        },
+        aomCtx(object),
+      );
+      // position (16, 22)：dx = 4, dy = 2 → (14, 22)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(14, 22));
+
+      // end 结束手势
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+      expect(tool.isModifyingGestureActive).toBe(false);
+
+      // displacement 在 end 后到达：直接累加
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 5, y: 3 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(19, 25));
+
+      // 没有锚点可调，手势仍不活跃
+      expect(tool.isModifyingGestureActive).toBe(false);
+    });
+
+    test("cancel 应回退到手势开始时的初始位置（含 displacement 修正）", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 启动手势：锚点(12, 20)，initialPos=(10, 20)
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
+        },
+        aomCtx(object),
+      );
+
+      // 移动 + displacement
+      // position (16, 22)：dx = 16 - 12 = 4, dy = 22 - 20 = 2 → basePos (10, 20) + (4, 2) = (14, 22)
+      // displacement (2, 0)：→ (16, 22)
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: { x: 16, y: 22 } } },
+            { type: "displacement", context: { value: { x: 2, y: 0 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(16, 22));
+
+      // end 结束手势
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+
+      // cancel → 回退到 initialPos = (10, 20)
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
+      expect(object.position).toEqual(new Vector(10, 20));
+    });
+
+    test("纯 displacement 多次累加后 cancel 应回退到首次 displacement 前的位置", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // 位移 1：对象 → (13, 25)，onBeforeDisplacement 记录 _initialPositions
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 3, y: 5 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(13, 25));
+
+      // 位移 2：对象 → (15, 28)
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 2, y: 3 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(15, 28));
+
+      // cancel → 回退到 (10, 20)
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
+      expect(object.position).toEqual(new Vector(10, 20));
+    });
+
+    test("displacement 不应触发准入检测（即使 position 在合矩形外）", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+        getRange: () => new RectangleRange(0, 0, 50, 30),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      // displacement 直接移动，不经过 canBeginModifyGesture
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 100, y: 200 } } },
+          ],
+        },
+        aomCtx(object),
+      );
+      expect(object.position).toEqual(new Vector(110, 220));
+    });
+
+    test("多对象 displacement 应移动所有对象", () => {
+      const objectA = { id: 1, position: new Vector(10, 20) };
+      const objectB = { id: 2, position: new Vector(30, 40) };
+
+      const tool = new CommonObjectModifierTool();
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 5, y: -2 } } },
+          ],
+        },
+        aomCtx([objectA, objectB]),
+      );
+
+      expect(objectA.position).toEqual(new Vector(15, 18));
+      expect(objectB.position).toEqual(new Vector(35, 38));
+    });
+
+    test("success 应提交纯 displacement 修改后的对象", () => {
+      const object = {
+        id: 1,
+        position: new Vector(10, 20),
+      };
+      const boardApi = {
+        modifyObject: jest.fn(),
+        commitObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+
+      const tool = new CommonObjectModifierTool();
+
+      tool.process(
+        {
+          signals: [
+            { type: "displacement", context: { value: { x: 7, y: 3 } } },
+          ],
+        },
+        aomCtx(object, { boardApi }),
+      );
+      expect(object.position).toEqual(new Vector(17, 23));
+
+      tool.process(
+        { signals: [{ type: "success", context: {} }] },
+        aomCtx(object, { boardApi }),
+      );
+      expect(boardApi.commitObjects).toHaveBeenCalledWith([1]);
+    });
+
+    test("Worker mode 下 summary-like 对象应能基于 plain boundingBox 启动 modifier 手势", () => {
+      const object = {
+        id: 1,
+        position: { x: 30, y: 40 },
+        boundingBox: { left: 0, top: 0, width: 20, height: 10 },
+      };
+      const boardApi = {
+        modifyObject: jest.fn(),
+      };
+      const tool = new CommonObjectModifierTool();
+      const context = {
+        acc: {
+          objects: [object],
+          boardApi,
+        },
+      };
+
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 35, y: 45 } } }],
+        },
+        context,
+      );
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: { x: 45, y: 50 } } }],
+        },
+        context,
+      );
+
+      expect(boardApi.modifyObject).toHaveBeenLastCalledWith(1, {
+        position: { x: 40, y: 45 },
+      });
+      expect(object.position).toEqual(new Vector(40, 45));
     });
   });
 });

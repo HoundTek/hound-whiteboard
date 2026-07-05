@@ -27,11 +27,11 @@ description: Write module documentation, technical overviews, and API docs follo
 
 JSDoc 中的 `@module` 路径与源码路径对应，前缀为 `core/`：
 
-| 源文件路径                                 | `@module`                           |
-| ------------------------------------------ | ----------------------------------- |
-| `src/core/components/board.js`             | `core/components/board`             |
-| `src/core/devices-dag/dag.js`              | `core/devices-dag/dag`              |
-| `src/core/tools/creator/stroke-creator.js` | `core/tools/creator/stroke-creator` |
+| 源文件路径                                   | `@module`                             |
+| -------------------------------------------- | ------------------------------------- |
+| `src/core/components/orchestration/board.js` | `core/components/orchestration/board` |
+| `src/core/devices-dag/dag.js`                | `core/devices-dag/dag`                |
+| `src/core/tools/creator/stroke-creator.js`   | `core/tools/creator/stroke-creator`   |
 
 ## 文档文风
 
@@ -42,6 +42,7 @@ JSDoc 中的 `@module` 路径与源码路径对应，前缀为 `core/`：
 - 句子偏短，语气偏工程化，少修辞，少宣传式表达
 - 优先写职责、关系、流程、约束、状态，不写空泛背景
 - 术语需要稳定，命名尽量与代码中的类名、字段名、方法名保持一致
+- 避免使用“不再”“现在”等前后对比措辞。直接描述当前情况即可。例如用“各渲染器自管理调度器”而非“渲染器现在自管理调度器，不再依赖 Monitor”
 
 ### 文档结构（参考）
 

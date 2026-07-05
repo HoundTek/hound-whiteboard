@@ -14,10 +14,13 @@ PolygonObject 类是白板上的多边形对象类，是图形的一种，由多
 
 ### 属性
 
-| 名称                | 描述                   | 类型             |
-| ------------------- | ---------------------- | ---------------- |
-| `localPolygonRange` | 多边形对象的局部主范围 | `PolygonRange`   |
-| `worldPolygonRange` | 多边形对象的世界主范围 | `PolygonRange`   |
-| `convexHullRange`   | 多边形对象的凸包范围   | `PolygonRange`   |
-| `boundingBox`       | 多边形对象的包围盒     | `RectangleRange` |
-| `color`             | 多边形对象的颜色       | `string`         |
+| 名称                     | 描述                   | 类型                         |
+| ------------------------ | ---------------------- | ---------------------------- |
+| `data.points`            | 多边形顶点集           | `{ x: number, y: number }[]` |
+| `rich.localPolygonRange` | 多边形对象的局部主范围 | `PolygonRange`               |
+| `rich.worldPolygonRange` | 多边形对象的世界主范围 | `PolygonRange`               |
+| `rich.convexHullRange`   | 多边形对象的凸包范围   | `PolygonRange`               |
+| `rich.boundingBox`       | 多边形对象的包围盒     | `RectangleRange`             |
+| `property.fillColor`     | 填充色                 | `string`                     |
+| `property.strokeColor`   | 描边色                 | `string`                     |
+| `property.strokeWidth`   | 描边宽度               | `number`                     |

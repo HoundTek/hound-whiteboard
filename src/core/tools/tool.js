@@ -54,76 +54,28 @@ class Tool {
   }
 
   /**
-   * 将设备图上下文规整为工具上下文。
-   * 直接透传 handlerContext 全集，仅对 context 累积上下文集成了
-   * toolContext 提供的 board / monitor 等 fallback。
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [handlerContext={}] - 设备图处理上下文
-   * @param {Object} [toolContext={}] - 工具固定上下文
-   * @returns {import("../devices-dag/dag.js").DevicesDAGHandlerContext}
-   */
-  createDeviceContext(handlerContext = {}, toolContext = {}) {
-    const accumulatedContext = handlerContext.acc ?? {};
-    const board = accumulatedContext.board ?? toolContext.board;
-    const monitor = accumulatedContext.monitor ?? toolContext.monitor;
-    const allocateObjectId =
-      accumulatedContext.allocateObjectId ??
-      toolContext.allocateObjectId ??
-      board?.allocateObjectId?.bind(board);
-    const resolveOwnerChunkId =
-      accumulatedContext.resolveOwnerChunkId ??
-      toolContext.resolveOwnerChunkId ??
-      (typeof monitor?.worldToChunk === "function"
-        ? (position) => {
-            if (
-              !position ||
-              typeof position.x !== "number" ||
-              typeof position.y !== "number"
-            ) {
-              return undefined;
-            }
-            return monitor.worldToChunk(position)?.chunkId;
-          }
-        : undefined);
-
-    return {
-      ...handlerContext,
-      acc: {
-        ...accumulatedContext,
-        board,
-        monitor,
-        allocateObjectId,
-        resolveOwnerChunkId,
-      },
-    };
-  }
-
-  /**
-   * 创建一个可直接挂载到设备图节点上的处理器。
-   * @param {Object} [toolContext = {}] - 工具固定上下文
+   * 创建一个可直接挂载到设备图节点上的处理器
    * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
    */
-  createProcessor(toolContext = {}) {
-    const uiOverlayBinding = this.createUiOverlayBinding(toolContext);
+  createProcessor() {
+    const uiOverlayBinding = this.createUiOverlayBinding();
     const processor = (signalPacket, handlerContext = {}) => {
-      const context = this.createDeviceContext(handlerContext, toolContext);
-      uiOverlayBinding?.sync(context);
-      return this.process(SignalPacket.from(signalPacket), context);
+      uiOverlayBinding?.sync(handlerContext);
+      return this.process(SignalPacket.from(signalPacket), handlerContext);
     };
 
     processor.dispose = (handlerContext = {}) => {
-      const context = this.createDeviceContext(handlerContext, toolContext);
-      uiOverlayBinding?.cleanup(context);
+      uiOverlayBinding?.cleanup(handlerContext);
     };
 
     return processor;
   }
 
   /**
-   * 为当前工具处理器创建 ui overlay 绑定。
-   * @param {Object} [toolContext={}] - 工具固定上下文
+   * 为当前工具处理器创建 ui overlay 绑定
    * @returns {{ sync: Function, cleanup: Function } | null}
    */
-  createUiOverlayBinding(toolContext = {}) {
+  createUiOverlayBinding() {
     if (
       this.collectUiOverlayEntries === Tool.prototype.collectUiOverlayEntries
     ) {
@@ -135,7 +87,6 @@ class Tool {
     const provider = (overlayContext = {}) =>
       this.collectUiOverlayEntries({
         ...overlayContext,
-        toolContext,
         deviceContext: latestDeviceContext,
       });
 
@@ -244,6 +195,31 @@ class Tool {
   }
 
   /**
+   * 解析对象条目的数字 id
+   * @param {*} objectEntry - 对象实例或兼容条目
+   * @returns {number|null} objectId
+   */
+  resolveObjectId(objectEntry) {
+    return typeof objectEntry?.id === "number" ? objectEntry.id : null;
+  }
+
+  /**
+   * 批量解析对象条目的数字 id
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {Iterable<*>|*} objects - 对象或对象集合
+   * @returns {number[]} 去重后的 objectId 列表
+   */
+  resolveObjectIds(context, objects) {
+    return [
+      ...new Set(
+        this.normalizeObjectCollection(objects)
+          .map((objectEntry) => this.resolveObjectId(objectEntry))
+          .filter((objectId) => objectId != null),
+      ),
+    ];
+  }
+
+  /**
    * 将对象集合写回设备上下文与节点上下文。
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合
@@ -286,8 +262,8 @@ class Tool {
   }
 
   /**
-   * 收集当前工具声明的 ui overlay 条目。
-   * @param {{ deviceContext?: Object, monitor?: Object, activeObjectManager?: Object, renderer?: Object, toolContext?: Object }} [_overlayContext={}] - overlay 上下文
+   * 收集当前工具声明的 ui overlay 条目
+   * @param {{ deviceContext?: Object, monitor?: Object, activeObjectManager?: Object, renderer?: Object }} [_overlayContext={}] - overlay 上下文
    * @returns {Array<*>}
    */
   collectUiOverlayEntries(_overlayContext = {}) {

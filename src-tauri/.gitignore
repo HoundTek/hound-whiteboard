@@ -1,0 +1,14 @@
+# Rust build output
+target/
+
+# Tauri generated project files
+gen/
+
+# Generated platform icons (regenerate with `yarn icon`)
+icons/
+
+# Rust backup files
+*.rs.bk
+
+# Windows debug symbols
+*.pdb

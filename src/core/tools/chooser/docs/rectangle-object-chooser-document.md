@@ -2,56 +2,91 @@
 
 ## 概述
 
-`RectangleObjectChooserTool` 是一个简单的拖拽矩形框选工具。
+`RectangleObjectChooserTool` 是当前 demo 默认使用的 chooser 实现。
 
-它的目标不是定义最终的高性能框选协议，而是先提供一条可工作的 chooser 实现：
+它提供一条完整链路：
 
-- 收到第一帧位置输入后开始记录框选起点
-- 拖拽过程中持续更新矩形范围
-- 抬起时按矩形范围选择对象
-- 新一轮框选会替换上一轮选择
+1. 按下后记录拖拽起点
+2. 拖拽过程中持续维护当前框选矩形
+3. 抬起时按矩形范围命中对象
+4. 用新结果替换上一轮选择
 
-## 当前选择语义
+## 拖拽状态
 
-当前实现里，矩形框选工具会：
+工具通过节点 state 维护：
 
-- 从 `Board.objectLoaded` 与 `ActiveObjectManager.activeObjectIndex` 汇总候选对象
-- 通过 chooser 基类的辅助方法解析对象主判定范围 `getRange()` 对应的世界范围
-- 用对象主判定范围与框选矩形做相交判断
-- 把命中的对象交给 `AOM.choose(...)`
+- `isSelecting`
+- `selectionStart`
+- `selectionCurrent`
+- `selectionWorldRect`
 
-这意味着它当前不再使用对象的包围盒作为框选命中依据。
+这些状态用于：
 
-它还不是：
+- 驱动 end/cancel 时的行为
+- 声明拖拽中的矩形 overlay
 
-- 基于几何轮廓的精细命中
-- 基于区块索引的高性能大范围筛选
-- 最终版宿主 UI 框选协议
+## 命中读取
 
-## 与 UiRenderer 的关系
+### 拖拽中
 
-`RectangleObjectChooserTool` 除了继承 chooser 基类已有的选择框 provider，还会额外声明一层拖拽中的矩形 overlay。
+拖拽中只有本地 state 更新，不发 RPC。
 
-因此在 `uiCanvas` 上，当前可以同时看到两类内容：
+### 抬起时
 
-- 已经选中对象的兼容选择框
-- 正在拖拽时的半透明矩形框选框
+读路径：
 
-其中默认样式当前约定为：
+```js
+boardApi.hitTest(selectionWorldRect, "intersect")
+  -> objectIds[]
+  -> boardApi.queryObjects(objectIds)
+  -> summaries[]
+```
 
-- 单对象选择框使用实线
-- 多对象组合大矩形使用虚线
-- 拖拽中的矩形框选框继续使用独立的拖拽样式
+因此 `process()` 可能返回 Promise，`finalizeSelection()` 会在 Promise resolve 后执行。
 
-这里仍然遵循当前兼容层边界：
+## `replaceSelection()` 语义
 
-- 由工具主动声明自己要画什么
-- `UiRenderer` 只消费 provider 条目并负责统一补绘
+`replaceSelection()` 用于替换当前选择：
+
+1. 丢弃上一轮选择
+2. 清空当前 context objects
+3. 解析新选择条目
+4. 将新选择加入 AOM
+5. 把新条目写回 context
+
+Worker mode 下：
+
+- 丢弃：`boardApi.discardActiveObjects(previousIds)`
+- 选择：`boardApi.addActiveObjects(nextIds)`
+
+## overlay
+
+`RectangleObjectChooserTool.collectUiOverlayEntries()` 会在基类默认选择框之外，再附加一条矩形 overlay：
+
+- `type: "rect"`
+- `worldRect: dragState.worldRect`
+- 半透明蓝色填充 + 边框
+
+## handoff 协作
+
+`finalizeSelection()` 内部会：
+
+1. `replaceSelection()`
+2. `clearSelectionDragState()`
+3. `afterChoose()`
+4. `confirmSelection()`
+5. `requestUiOverlayRefresh()`
+
+handoff 通常通过 `afterConfirm` 事件切到 modifier。
 
 ## 当前状态
 
-- 已用于 demo 的 mouse secondary 工具，替换了原先的 secondary stroke tool
-- 已支持空框选清空上一轮选择
-- 已补工具级测试与 demo 接入测试
+- Worker mode 下已接通 `hitTest + queryObjects` 异步读路径
+- 选择替换仍是 fire-and-forget 写路径
+- 拖拽框与选中框都已接通 `UiRenderer`
 
-后续若需要更复杂的命中规则，应优先增强工具自己的筛选策略，而不是把这套选择逻辑重新塞回 `UiRenderer`。
+## 相关文档
+
+- [object-chooser-document.md](./object-chooser-document.md)
+- [ui-renderer-document.md](../../../components/renderer/docs/ui-renderer-document.md)
+- [core-input-flow.md](../../../docs/core-input-flow.md)

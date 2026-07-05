@@ -19,92 +19,61 @@ const DEFAULT_CIRCLE_PROPERTY = Object.freeze({
  * 圆类
  * @class
  * @extends GraphObject
- * @description
- * 圆是图形的一种，由中心点和半径定义。
  * @author Zhou Chenyu
  */
 class CircleObject extends GraphObject {
   /**
    * 创建一个新的圆对象
-   * @param {Vector} p - 圆心的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 对象归属区块的 id
-   * @param {number} radius - 圆的半径
+   * @param {Vector} position - 圆心的绝对位置
+   * @param {Record<string, any>} [property={}] - 对象属性
+   * @param {Record<string, any>} [data={}] - 对象类型专属数据
    * @constructor
    */
-  constructor(p, id, ownerChunkId, radius) {
-    super(p, id, ownerChunkId);
-    if (radius) {
-      this.setRadius(radius);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
+    this.property = { ...DEFAULT_CIRCLE_PROPERTY, ...this.property };
+    this.rich.convexHullRange = new EllipseRange(new Vector(0, 0), 0, 0);
+    this._onDataChange(Object.keys(data));
+  }
+
+  _onDataChange(keys) {
+    if (keys.includes("radius") && this.data.radius != null) {
+      this.rich.convexHullRange = new EllipseRange(
+        new Vector(0, 0),
+        this.data.radius,
+        this.data.radius,
+      );
+      this.rich.boundingBox = RectangleRange.from(
+        this.rich.convexHullRange.transform(this.transform),
+      );
     }
   }
 
-  /**
-   * 圆对象的半径
-   * @type {number}
-   * @description 圆的半径，属于基础数据。
-   * 外界不应直接修改它，应使用 setRadius 方法。
-   */
-  radius = 0;
-
-  property = { ...DEFAULT_CIRCLE_PROPERTY };
-
-  /**
-   * 设置圆的半径
-   * @description 设置新的半径时，会自动更新变换后的顶点集和凸包。
-   * @param {number} radius - 新的半径
-   */
-  setRadius(radius) {
-    this.radius = radius;
-    this.calculateConvexHull();
-    this.calculateRectangle();
-  }
-
   calculateRectangle() {
-    this.boundingBox = RectangleRange.from(
-      this.convexHullRange.transform(this.transform),
+    this.rich.boundingBox = RectangleRange.from(
+      this.rich.convexHullRange.transform(this.transform),
     );
   }
 
-  /**
-   * @description 在进行矩阵变换前的凸包。当且仅当 radius 发生变化时才会更新它。
-   */
   calculateConvexHull() {
-    this.convexHullRange = new EllipseRange(
+    this.rich.convexHullRange = new EllipseRange(
       new Vector(0, 0),
-      this.radius,
-      this.radius,
+      this.data.radius,
+      this.data.radius,
     );
-  }
-
-  /**
-   * @param {Matrix} trans - 新的变换矩阵
-   * @description 设置变换矩阵时，它会直接修改其富数据中的顶点坐标，但不会修改基础数据。
-   */
-  setTransform(trans) {
-    this.transform = trans;
-    this.calculateRectangle();
   }
 
   getRange() {
     return new EllipseRange(
       new Vector(0, 0),
-      this.radius,
-      this.radius,
+      this.data.radius,
+      this.data.radius,
     ).transform(this.transform);
   }
 
-  /**
-   * 圆对象的颜色
-   * @type {string}
-   * @default "#000000"
-   */
-  /**
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   */
   render(ctx) {
-    if (this.radius <= 0) {
+    if (this.data.radius <= 0) {
       return;
     }
 
@@ -130,7 +99,7 @@ class CircleObject extends GraphObject {
     );
     ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, this.data.radius, 0, Math.PI * 2);
 
     if (shouldFill) {
       ctx.fillStyle = this.property.fillColor;
@@ -150,25 +119,21 @@ class CircleObject extends GraphObject {
     return {
       ...super.serialize(),
       type: "CircleObject",
-      radius: this.radius,
+      data: { ...this.data },
     };
   }
 
-  static parse(data) {
-    if (data.type !== "CircleObject") {
+  static parse(serialized) {
+    if (serialized.type !== "CircleObject") {
       throw new TypeError("Invalid type for CircleObject parsing");
     }
     let obj = new CircleObject(
-      Vector.parse(data.position),
-      data.id,
-      data.ownerChunkId,
-      data.radius,
+      serialized.id,
+      Vector.parse(serialized.position),
+      { ...DEFAULT_CIRCLE_PROPERTY, ...(serialized.property ?? {}) },
+      serialized.data ?? {},
     );
-    obj.setTransform(Matrix.parse(data.transform));
-    obj.setProperty({
-      ...DEFAULT_CIRCLE_PROPERTY,
-      ...(data.property ?? {}),
-    });
+    obj.setTransform(Matrix.parse(serialized.transform));
     return obj;
   }
 }

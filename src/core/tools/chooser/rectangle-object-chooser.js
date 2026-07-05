@@ -8,7 +8,7 @@
 import { SignalPacket } from "../../devices-dag/signal.js";
 import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
-import { ObjectChooserTool } from "./obj-chooser.js";
+import { ObjectChooserTool } from "./object-chooser.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 
 const RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE = "#33a1ff";
@@ -118,30 +118,13 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Array<BasicObject>}
    */
-  collectSelectableObjects(context = {}) {
-    const board = context.acc?.board;
-    const objectMap = new Map();
 
-    for (const entry of board?.objectLoaded?.values?.() ?? []) {
-      const objectInstance = entry?.obj;
-      if (!objectInstance?.id) continue;
-      objectMap.set(objectInstance.id, objectInstance);
-    }
-
-    for (const objectInstance of board?.activeObjectManager?.activeObjectIndex?.values?.() ??
-      []) {
-      if (!objectInstance?.id) continue;
-      objectMap.set(objectInstance.id, objectInstance);
-    }
-
-    return [...objectMap.values()].sort((left, right) => left.id - right.id);
-  }
 
   /**
    * 从候选对象里筛出与当前框选矩形相交的对象
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {RectangleRange} worldRect - 当前框选矩形
-   * @returns {Array<BasicObject>}
+   * @returns {Array<BasicObject>|Promise<Array<BasicObject|Object>>} 命中的对象或其 summary-like 条目
    */
   selectObjectsInWorldRect(context = {}, worldRect) {
     const normalizedSelectionRect = RectangleRange.fromRectLike(worldRect);
@@ -149,37 +132,49 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       return [];
     }
 
-    return this.collectSelectableObjects(context).filter((objectInstance) =>
-      this.objectIntersectsSelectionRange(
-        context,
-        objectInstance,
-        normalizedSelectionRect,
-      ),
-    );
+    const boardApi = context.acc?.boardApi;
+    if (!boardApi) {
+      return [];
+    }
+    return boardApi
+      .hitTest(normalizedSelectionRect, "intersect")
+      .then((objectIds) => {
+        if (!Array.isArray(objectIds) || objectIds.length === 0) {
+          return [];
+        }
+        return boardApi.queryObjects(objectIds);
+      });
   }
 
   /**
    * 用新的框选结果替换当前选择
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @param {Array<BasicObject>} [nextObjects=[]] - 新选择结果
-   * @returns {Array<BasicObject>}
+   * @param {Array<BasicObject|Object>} [nextObjects=[]] - 新选择结果
+   * @returns {Array<BasicObject|Object>}
    */
   replaceSelection(context = {}, nextObjects = []) {
     const previousObjects = this.resolveContextObjects(context).filter(Boolean);
-    if (previousObjects.length > 0) {
-      context.acc?.board?.activeObjectManager?.discard?.(
-        new Set(previousObjects),
-      );
+    const boardApi = context.acc?.boardApi;
+    const previousIds = this.resolveObjectIds(context, previousObjects);
+    if (boardApi && previousIds.length > 0) {
+      boardApi.discardActiveObjects(previousIds);
     }
 
     this.clearContextObjects(context);
 
-    if (nextObjects.length === 0) {
+    const resolvedNextObjects = this.resolveSelectedObjectReferences(
+      context,
+      nextObjects,
+    );
+    if (resolvedNextObjects.length === 0) {
       return [];
     }
 
-    context.acc?.board?.activeObjectManager?.choose?.(new Set(nextObjects));
-    return this.setContextObjects(context, nextObjects);
+    const nextIds = this.resolveObjectIds(context, resolvedNextObjects);
+    if (boardApi && nextIds.length > 0) {
+      boardApi.addActiveObjects(nextIds);
+    }
+    return this.setContextObjects(context, resolvedNextObjects);
   }
 
   /**
@@ -211,10 +206,25 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   }
 
   /**
+   * 完成一次框选提交
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {Array<BasicObject|Object>} selectedObjects - 命中的对象或其 summary-like 条目
+   * @returns {void}
+   * @protected
+   */
+  finalizeSelection(context, selectedObjects) {
+    const resolvedSelection = this.replaceSelection(context, selectedObjects);
+    this.clearSelectionDragState(context);
+    this.afterChoose(resolvedSelection);
+    this.confirmSelection(context, resolvedSelection);
+    this.requestUiOverlayRefresh(context);
+  }
+
+  /**
    * 处理矩形框选手势
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @returns {void}
+   * @returns {void|Promise<void>}
    */
   process(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
@@ -269,12 +279,13 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       context,
       selectionWorldRect,
     );
+    if (selectedObjects instanceof Promise) {
+      return selectedObjects.then((resolvedObjects) => {
+        this.finalizeSelection(context, resolvedObjects);
+      });
+    }
 
-    this.replaceSelection(context, selectedObjects);
-    this.clearSelectionDragState(context);
-    this.afterChoose(selectedObjects);
-    this.confirmSelection(context, selectedObjects);
-    this.requestUiOverlayRefresh(context);
+    this.finalizeSelection(context, selectedObjects);
   }
 
   /**

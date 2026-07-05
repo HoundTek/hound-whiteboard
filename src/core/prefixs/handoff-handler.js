@@ -69,6 +69,36 @@ function normalizeWrappedResult(rawResult) {
 }
 
 /**
+ * 规整 tool handler 返回值，并在异步完成后安全释放生命周期订阅
+ * @param {*} rawResult - tool handler 原始返回值
+ * @param {() => boolean} isCompleted - 当前分发期间是否已触发完成通知
+ * @param {Function|null} unsub - 生命周期订阅取消函数
+ * @returns {*}
+ */
+function finalizeLifecycleWrappedResult(rawResult, isCompleted, unsub) {
+  if (rawResult instanceof Promise) {
+    return rawResult
+      .then((resolvedResult) => {
+        if (isCompleted()) {
+          return normalizeWrappedResult(resolvedResult);
+        }
+        return resolvedResult;
+      })
+      .finally(() => {
+        unsub?.();
+      });
+  }
+
+  unsub?.();
+
+  if (isCompleted()) {
+    return normalizeWrappedResult(rawResult);
+  }
+
+  return rawResult;
+}
+
+/**
  * 克隆 DAG 节点定义，避免共享可变结构
  * @param {Object} nodeDef
  * @returns {Object}
@@ -216,10 +246,7 @@ function wrapChooserForHandoff(tool) {
 
   return (packet, context = {}) => {
     if (!processor) {
-      processor = tool.createProcessor({
-        board: context.acc?.board,
-        monitor: context.acc?.monitor,
-      });
+      processor = tool.createProcessor();
     }
 
     const onToolComplete = context.acc?.onToolComplete;
@@ -234,14 +261,7 @@ function wrapChooserForHandoff(tool) {
         : null;
 
     const rawResult = processor(packet, context);
-
-    unsub?.();
-
-    if (completed) {
-      return normalizeWrappedResult(rawResult);
-    }
-
-    return rawResult;
+    return finalizeLifecycleWrappedResult(rawResult, () => completed, unsub);
   };
 }
 
@@ -498,20 +518,10 @@ function createHandoffSubDAG(options = {}) {
           : null;
 
       if (!creatorProcessor) {
-        creatorProcessor = first.createProcessor({
-          board: context.acc?.board,
-          monitor: context.acc?.monitor,
-        });
+        creatorProcessor = first.createProcessor();
       }
       const rawResult = creatorProcessor(packet, context);
-
-      unsub?.();
-
-      if (completed) {
-        return normalizeWrappedResult(rawResult);
-      }
-
-      return rawResult;
+      return finalizeLifecycleWrappedResult(rawResult, () => completed, unsub);
     });
   } else if (firstIsChooser) {
     // Chooser 路径：使用信号检测 handler
@@ -551,34 +561,31 @@ function createHandoffSubDAG(options = {}) {
           : null;
 
       if (!modifierProcessor) {
-        modifierProcessor = second.createProcessor({
-          board: context.acc?.board,
-          monitor: context.acc?.monitor,
-        });
+        modifierProcessor = second.createProcessor();
       }
       const rawResult = modifierProcessor(packet, context);
-
-      unsub?.();
 
       // cancel 信号：丢弃 AOM 动态图中的对象，再切回 first
       if (hasCancelSignal) {
         const cancelState = context.getNodeState?.(context.path) ?? {};
-        const cancelObjects = cancelState?.objects ?? [];
-        if (
-          cancelObjects.length > 0 &&
-          context.acc?.board?.activeObjectManager?.discard
-        ) {
-          context.acc.board.activeObjectManager.discard(new Set(cancelObjects));
+        const cancelObjects = Array.isArray(cancelState?.objects)
+          ? cancelState.objects
+          : [];
+        const boardApi = context.acc?.boardApi;
+        const cancelObjectIds = cancelObjects
+          .map((objectEntry) =>
+            typeof objectEntry?.id === "number" ? objectEntry.id : null,
+          )
+          .filter((objectId) => objectId != null);
+
+        if (boardApi && cancelObjectIds.length > 0) {
+          boardApi.discardActiveObjects(cancelObjectIds);
         }
 
         onToolComplete?.();
       }
 
-      if (completed) {
-        return normalizeWrappedResult(rawResult);
-      }
-
-      return rawResult;
+      return finalizeLifecycleWrappedResult(rawResult, () => completed, unsub);
     });
   } else if (secondIsSubDAG) {
     secondSubDAGDef = second;
@@ -587,10 +594,7 @@ function createHandoffSubDAG(options = {}) {
     let genericSecondProcessor = null;
     secondNode.handler((packet, context = {}) => {
       if (!genericSecondProcessor) {
-        genericSecondProcessor = second.createProcessor({
-          board: context.acc?.board,
-          monitor: context.acc?.monitor,
-        });
+        genericSecondProcessor = second.createProcessor();
       }
       return genericSecondProcessor(packet, context);
     });

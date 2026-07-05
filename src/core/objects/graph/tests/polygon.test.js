@@ -10,8 +10,13 @@ describe("PolygonObject", () => {
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
 
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
-      expect(polygon.localPolygonRange.points).toEqual(points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
+      expect(polygon.rich.localPolygonRange.points).toEqual(points);
     });
 
     test("应能正确修改顶点", () => {
@@ -20,7 +25,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: initialPoints },
+      );
 
       const newPoints = [
         { x: 0, y: 0 },
@@ -28,9 +38,9 @@ describe("PolygonObject", () => {
         { x: 0, y: 2 },
         { x: 1, y: 1 },
       ].map((p) => Vector.parse(p));
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
-      expect(polygon.localPolygonRange.points).toEqual(newPoints);
+      expect(polygon.rich.localPolygonRange.points).toEqual(newPoints);
     });
 
     test("应能正确修改变换矩阵", () => {
@@ -39,7 +49,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
 
       const mat = Matrix.identity().scale(2, 2);
       polygon.setTransform(mat);
@@ -53,20 +68,25 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
 
       const mat = Matrix.identity().rotate(Math.PI / 2);
       polygon.setTransform(mat);
       const expectedTransformedPoints = points.map((p) =>
-        Vector.mulMatrix(mat, p)
+        Vector.mulMatrix(mat, p),
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
-        expect(polygon.worldPolygonRange.points[i].x).toBeCloseTo(
-          expectedTransformedPoints[i].x
+        expect(polygon.rich.worldPolygonRange.points[i].x).toBeCloseTo(
+          expectedTransformedPoints[i].x,
         );
-        expect(polygon.worldPolygonRange.points[i].y).toBeCloseTo(
-          expectedTransformedPoints[i].y
+        expect(polygon.rich.worldPolygonRange.points[i].y).toBeCloseTo(
+          expectedTransformedPoints[i].y,
         );
       }
     });
@@ -77,7 +97,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: initialPoints },
+      );
 
       const mat = Matrix.identity().rotate(Math.PI / 4);
       polygon.setTransform(mat);
@@ -87,18 +112,18 @@ describe("PolygonObject", () => {
         { x: 2, y: 0 },
         { x: 0, y: 2 },
       ].map((p) => Vector.parse(p));
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
       const expectedTransformedPoints = newPoints.map((p) =>
-        Vector.mulMatrix(mat, p)
+        Vector.mulMatrix(mat, p),
       );
 
       for (let i = 0; i < expectedTransformedPoints.length; i++) {
         expect(
           Vector.nearlyEq(
-            polygon.worldPolygonRange.points[i],
-            expectedTransformedPoints[i]
-          )
+            polygon.rich.worldPolygonRange.points[i],
+            expectedTransformedPoints[i],
+          ),
         ).toBe(true);
       }
     });
@@ -111,7 +136,12 @@ describe("PolygonObject", () => {
         { x: 1, y: 0 },
         { x: 0, y: 1 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, initialPoints);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: initialPoints },
+      );
 
       const newPoints = [
         { x: 0, y: 0 },
@@ -140,7 +170,7 @@ describe("PolygonObject", () => {
       ].map((p) => Vector.parse(p));
 
       // Powered by Graham scan algorithm
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
       // Powered by Geogebra & eyes
       const expectedConvexHull = [
@@ -153,7 +183,7 @@ describe("PolygonObject", () => {
         { x: 0, y: 2 },
       ].map((p) => Vector.parse(p));
 
-      expect(polygon.convexHullRange.points).toEqual(expectedConvexHull);
+      expect(polygon.rich.convexHullRange.points).toEqual(expectedConvexHull);
     });
 
     test("当顶点少于3个时，凸包应等于顶点本身", () => {
@@ -161,16 +191,21 @@ describe("PolygonObject", () => {
         { x: 0, y: 0 },
         { x: 1, y: 0 },
       ].map((p) => Vector.parse(p));
-      const polygon = new PolygonObject(new Vector(0, 0), 1, 1, points);
+      const polygon = new PolygonObject(
+        1,
+        new Vector(0, 0),
+        {},
+        { points: points },
+      );
 
       const newPoints = [
         { x: 0, y: 0 },
         { x: 2, y: 0 },
       ].map((p) => Vector.parse(p));
-      polygon.setPolygonPoints(newPoints);
+      polygon.setData({ points: newPoints.map(p => ({ x: p.x, y: p.y })) });
 
-      expect(polygon.localPolygonRange.points).toEqual(newPoints);
-      expect(polygon.convexHullRange.points).toEqual(newPoints);
+      expect(polygon.rich.localPolygonRange.points).toEqual(newPoints);
+      expect(polygon.rich.convexHullRange.points).toEqual(newPoints);
     });
   });
 });

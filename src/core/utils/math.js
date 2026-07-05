@@ -352,7 +352,7 @@ class Matrix {
 
   /**
    * 将此对象序列化为普通 JSON 对象
-   * @returns {{x: number, y: number}} 包含 x 和 y 坐标的对象
+   * @returns {{a: number, b: number, c: number, d: number}} 包含 a, b, c, d 的对象
    * @example
    * const mat = new Matrix(10, 30, 20, 40);
    * console.log(mat.serialize()); // { a: 10, b: 20, c: 30, d: 40 }
@@ -363,7 +363,7 @@ class Matrix {
 
   /**
    * 将此对象序列化为数组对象
-   * @returns {number[]} 包含 x 和 y 坐标的数组
+   * @returns {number[][]} 包含矩阵元素的二维数组
    * @example
    * const mat = new Matrix(10, 30, 20, 40);
    * console.log(mat.serializeToArray()); // [[10, 20], [30, 40]]

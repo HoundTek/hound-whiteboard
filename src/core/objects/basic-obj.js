@@ -26,12 +26,6 @@ class BasicObject {
   id;
 
   /**
-   * 对象归属区块 id
-   * @type {number}
-   */
-  ownerChunkId;
-
-  /**
    * 对象的位置
    * @type {Vector}
    * @description 对象在画布上的位置坐标。
@@ -49,30 +43,6 @@ class BasicObject {
   transform = Matrix.identity();
 
   /**
-   * 对象的矩形边界范围
-   * @type {RectangleRange}
-   * @description
-   * 存储对象的边界矩形，用于碰撞检测和选择。
-   * 边界矩形是相对于变换后的坐标而言的。
-   */
-  boundingBox;
-
-  /**
-   * 计算对象的边界矩形
-   * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
-   */
-  calculateRectangle() {
-    this.boundingBox = new RectangleRange(0, 0, 0, 0);
-  }
-
-  /**
-   * 对象的凸包
-   * @type {Range}
-   * @description 用于更迅速的碰撞检测，存储凸包的顶点坐标。
-   */
-  convexHullRange;
-
-  /**
    * 对象属性
    * @type {Record<string, any>}
    * @description 存放对象的渲染与行为属性，如颜色、描边宽度、字体等。
@@ -80,11 +50,33 @@ class BasicObject {
   property = {};
 
   /**
+   * 对象类型专属的持久化数据
+   * @type {Record<string, any>}
+   * @description 存放对象类型专属的原始数据，如圆的半径、多边形的顶点集、文本内容等。此字段直接参与序列化与反序列化。
+   */
+  data = {};
+
+  /**
+   * 运行时计算派生的富数据
+   * @type {Record<string, any>}
+   * @description 存放从原始数据计算派生的运行时结构，如边界矩形、凸包、变换后的路径等。此字段不参与持久化。
+   */
+  rich = {};
+
+  /**
+   * 计算对象的边界矩形
+   * @description 计算对象的边界矩形，子类应重写此方法以提供具体的计算逻辑。
+   */
+  calculateRectangle() {
+    this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
+  }
+
+  /**
    * 计算对象的凸包
    * @description 统一 API，子类可重写此方法以计算对象的凸包。默认是矩形边界。
    */
   calculateConvexHull() {
-    this.convexHullRange = RectangleRange.from(this.boundingBox);
+    this.rich.convexHullRange = RectangleRange.from(this.rich.boundingBox);
   }
 
   /**
@@ -93,7 +85,7 @@ class BasicObject {
    * @returns {Range} 主判定范围
    */
   getRange() {
-    return this.boundingBox;
+    return this.rich.boundingBox;
   }
 
   /**
@@ -102,17 +94,64 @@ class BasicObject {
    * @returns {Record<string, any>} 最新属性
    */
   setProperty(property = {}) {
-    if (!property || typeof property !== "object" || Array.isArray(property)) {
-      return this.property;
-    }
-
-    this.property = {
-      ...(this.property ?? {}),
-      ...property,
-    };
-
+    Object.assign(this.property, property);
     return this.property;
   }
+
+  /**
+   * 批量更新持久化数据，自动触发派生重算
+   * @param {Record<string, any>} data - 待合并的字段
+   * @returns {Record<string, any>} 最新 data
+   */
+  setData(data) {
+    Object.assign(this.data, data);
+    this._onDataChange(Object.keys(data));
+    return this.data;
+  }
+
+  /**
+   * 向列表型字段追加一项或多项
+   * @param {string} key - 字段名
+   * @param {...*} items - 待追加项
+   */
+  appendListItem(key, ...items) {
+    if (!Array.isArray(this.data[key])) {
+      this.data[key] = [];
+    }
+    this.data[key].push(...items);
+    this._onDataChange([key]);
+  }
+
+  /**
+   * 替换列表型字段中指定索引的项
+   * @param {string} key - 字段名
+   * @param {number} index - 索引
+   * @param {*} item - 新值
+   */
+  replaceListItem(key, index, item) {
+    if (!Array.isArray(this.data[key])) return;
+    if (index < 0 || index >= this.data[key].length) return;
+    this.data[key][index] = item;
+    this._onDataChange([key]);
+  }
+
+  /**
+   * 移除列表型字段中指定索引的项
+   * @param {string} key - 字段名
+   * @param {number} index - 索引
+   */
+  removeListItem(key, index) {
+    if (!Array.isArray(this.data[key])) return;
+    this.data[key].splice(index, 1);
+    this._onDataChange([key]);
+  }
+
+  /**
+   * 数据变更回调，子类重写以触发派生重算
+   * @param {string[]} keys - 变更的字段名列表
+   * @protected
+   */
+  _onDataChange(keys) {}
 
   /**
    * 获取对象渲染额外留白
@@ -158,24 +197,30 @@ class BasicObject {
   }
 
   /**
-   * @param {Vector} p - 对象的初始位置
    * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 对象归属区块的 id
+   * @param {Vector} position - 对象的初始位置
+   * @param {Record<string, any>} [property={}] - 对象属性
+   * @param {Record<string, any>} [data={}] - 对象类型专属数据
    * @constructor
    */
-  constructor(p, id, ownerChunkId) {
-    this.position = p;
+  constructor(id, position, property = {}, data = {}) {
     this.id = id;
-    this.ownerChunkId = ownerChunkId;
+    this.position = position;
+    this.property = { ...this.property, ...property };
+    this.data = data;
+    this.rich = {};
   }
 
   /**
    * 设置对象的变换矩阵
    * @param {Matrix} trans - 新的变换矩阵
-   * @description 你应该使用此方法而不是直接修改 transform 字段。
+   * @description
+   * 你应该使用此方法而不是直接修改 transform 字段。
+   * 因为默认实现中，设置变换矩阵会触发边界矩形的重新计算。
    */
   setTransform(trans) {
     this.transform = trans;
+    this.calculateRectangle();
   }
 
   /**
@@ -184,7 +229,7 @@ class BasicObject {
    * @description 将变换矩阵与当前变换矩阵相乘。
    */
   applyTransform(trans) {
-    this.transform = this.transform.mul(trans);
+    this.setTransform(this.transform.mul(trans));
   }
 
   /**
@@ -206,10 +251,10 @@ class BasicObject {
   serialize() {
     return {
       id: this.id,
-      ownerChunkId: this.ownerChunkId,
       position: this.position.serialize(),
       transform: this.transform.serialize(),
       property: { ...(this.property ?? {}) },
+      data: {},
     };
   }
 

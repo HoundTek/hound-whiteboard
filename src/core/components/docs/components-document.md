@@ -1,120 +1,111 @@
 # 组件文档
 
-本文档提供 Core 层组件（components）的总览。
+本文档提供 `src/core/components/` 当前结构的总览。
 
-components 目录下的模块用于管理白板运行时状态，负责把对象模型（objects）、历史模型（hit）与工具交互串联起来。
+## 概述
 
-## 组件列表
+`components/` 承载白板运行时中的三类能力：
 
-- `Board`：白板级管理器，负责维护区块实例所有权、对象实例注册表与加载状态，持有全局活动对象管理器与历史树。
-- `Chunk`：区块类，负责区块链关系、区块加载/卸载流程。
-- `ChunkLoader`：通用区块加载器，是区块对象的持有者，负责按 id/坐标访问与卸载区块。
-- `ChunkObjectManager`：区块对象管理器，负责静态层叠图与对象覆盖区块索引，并通过 `Board` 间接解析对象实例。
-- `ActiveObjectManager`：全局活动对象管理器，负责选择、分层、置顶与取消选择。
-- `ChunkBlockLoader`：`ChunkLoader` 的包装器，负责连续矩形范围的区块缓冲区与当前区块位置管理。
-- `Monitor`：显示器组件，负责视口坐标变换、设备图挂载，以及多层渲染画布的承载。
-- `BaseRenderer`：静态层渲染器，负责把已提交静态对象绘制到 `baseCanvas`。
-- `RenderScheduler`：渲染调度器，负责把多次失效请求合并到单帧 flush 中执行。
-- `LiveRenderer`：活动层渲染器，负责把 AOM 当前活动对象按层顺序绘制到 `liveCanvas`。
-- `UiRenderer`：UI 覆盖层渲染器，负责把兼容 overlay 与注册的 UI overlay provider 绘制到 `uiCanvas`。
+1. **区块与对象组织**：`chunk/`
+2. **渲染执行链**：`renderer/`
+3. **白板编排层**：`orchestration/`
 
-## 组件关系图
+当前组件层的一个关键特点是：**UI façade 与 Worker core 已拆分**。
 
-```mermaid
-graph LR
-  B["Board"]
-  C["Chunk"]
-  CL["ChunkLoader"]
-  COM["ChunkObjectManager"]
-  AOM["ActiveObjectManager"]
-  CBL["ChunkBlockLoader"]
-  M["Monitor"]
-  BR["BaseRenderer"]
-  RS["RenderScheduler"]
-  LR["LiveRenderer"]
-  UR["UiRenderer"]
-  UT["UndoTree"]
+- UI 线程持有 `Board`、`MonitorProxy`
+- Worker 线程持有 `BoardCore`、`MonitorCore`
+- `ActiveObjectManager`、chunk、base/live renderer 等位于共享层
 
-  B --> CL
-  CL --> C
-  C --> COM
-  B --> AOM
-  B --> M
-  B --> UT
-  CBL --> CL
-  AOM --> CBL
-  M --> BR
-  M --> RS
-  M --> LR
-  M --> UR
-  LR --> AOM
+## 目录结构
+
 ```
+src/core/components/
+├── chunk/
+├── renderer/
+├── orchestration/
+├── index.js
+├── docs/
+└── tests/
+```
+
+## 组件分层
+
+### `chunk/`
+
+区块系统，属于 Shared。
+
+- `Chunk`：单区块实体
+- `ChunkLoader`：区块加载器与持有策略
+- `ChunkObjectManager`：区块静态图与对象覆盖区块索引
+
+### `renderer/`
+
+渲染执行链。
+
+| 文件                      | 运行边界 | 说明                    |
+| ------------------------- | -------- | ----------------------- |
+| `renderer.js`             | Shared   | 渲染器基类              |
+| `base-renderer.js`        | Shared   | base 层静态渲染         |
+| `live-renderer.js`        | Shared   | live 层动态图渲染       |
+| `ui-renderer.js`          | UI       | overlay 渲染            |
+| `render-scheduler.js`     | Shared   | invalidate / flush 调度 |
+| `dirty-rect-strategy*.js` | Shared   | 脏区策略                |
+
+### `orchestration/`
+
+编排层。
+
+| 文件                       | 运行边界 | 说明                                               |
+| -------------------------- | -------- | -------------------------------------------------- |
+| `board.js`                 | UI       | UI façade，持有 DAG、signalsEventBus、monitor 集合 |
+| `board-core.js`            | Worker   | 真实白板核心                                       |
+
+| `monitor-proxy.js`         | UI       | Worker 模式下的 monitor 代理                       |
+| `monitor-core.js`          | Worker   | Worker 侧视口与渲染核心                            |
+| `active-object-manager.js` | Shared   | 交互态动态图与层关系                               |
+| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                   |
+| `board-render-hooks.js`    | UI       | AOM → monitor 渲染桥接                             |
+
+## 当前导出入口
+
+`src/core/components/index.js` 当前只导出 UI 侧宿主入口：
+
+- `Board`
+- `MonitorProxy`
+
+Worker 侧 `BoardCore` / `MonitorCore` 不经由该 barrel 导出，而是由 `src/core-worker.js` 直接引用。
 
 ## 关键设计点
 
-### 白板级与区块级分治
+### `Board` / `BoardCore` 拆分
 
-`Board` 管白板级元信息、区块实例加载状态与对象实例注册表，根 `ChunkLoader` 管白板级区块实例所有权，`ChunkBlockLoader` 管连续矩形范围的缓冲区表达，`Chunk` 管单区块状态，`ChunkObjectManager` 管区块内静态图与覆盖索引。
+- `Board` 负责 UI 运行时
+- `BoardCore` 负责对象、区块、AOM、UndoTree、持久化协调
 
-这种拆分让“翻区块/加载策略”和“对象关系维护”相互解耦。
+### `Monitor` 家族拆分
 
-### 持有与包装分离
+- `MonitorProxy`：Worker 模式下的 UI 视口代理
+- `MonitorCore`：Worker 侧真实渲染核心
 
-`ChunkLoader` 与 `ChunkBlockLoader` 的职责边界需要明确区分：
+### AOM 渲染副作用抽离
 
-- `ChunkLoader` 负责持有区块对象
-- `ChunkBlockLoader` 不直接持有区块对象，而是包装一个 `ChunkLoader`
-- `ChunkBlockLoader` 只负责把这批区块组织成一个连续矩形范围，并表达当前区块和缓冲区扩缩行为
+`ActiveObjectManager` 通过 `renderHooks` 间接请求：
 
-这使得 `Board` 可以暴露一个根 `ChunkLoader` 作为通用区块访问入口，同时允许上层按需创建多个 `ChunkBlockLoader` 视角。
+- live 层刷新
+- base 层对象级 / 区块级刷新
+- 视口范围刷新
 
-### 活动对象单独管理
+AOM 自身不直接依赖 DOM canvas 或 monitor 列表。
 
-活动对象不直接写入区块静态图，而是由 `ActiveObjectManager` 维护动态层关系。这样可以在拖拽、框选等频繁操作期间减少对静态关系的破坏。
+## 当前状态
 
-层叠图细节见 [tier-graph-document.md](./tier-graph-document.md)。
-
-### 视口层承接交互态渲染
-
-当前渲染职责开始向 `Monitor` 视口层收敛。
-
-- `Monitor` 承载 `baseCanvas`、`liveCanvas`、`uiCanvas` 三层画布。
-- `BaseRenderer` 负责把已提交静态对象重绘到 `baseCanvas`，并已支持显式 dirty rect 局部刷新。
-- `RenderScheduler` 负责把多次 invalidate 合并到单次 flush。
-- `LiveRenderer` 负责从 `ActiveObjectManager` 读取活动对象，并按层顺序重绘到 `liveCanvas`。
-- `UiRenderer` 负责把 chooser / modifier 工具主动声明的选择框等兼容 overlay 绘制到 `uiCanvas`，并为 chooser 轨迹、控制杆、激光笔等未来 UI overlay 提供 provider 扩展口。
-- 活动层和静态层的对象驱动刷新、视口矩形换算与 dirty rect 局部重绘，也开始沿这条链路收口。
-
-这里需要额外强调一条边界：
-
-- 当前 `UiRenderer` 只是 Core 侧的兼容实现
-- `uiCanvas` 最终应继续留在 Core，还是迁移到宿主 UI，当前仍未最终定案
-
-这让活动对象的语义仍留在 AOM，而把“何时画、画到哪一层”收口到 Monitor 一侧。
-
-## 与其它目录的关系
-
-- 与 `src/core/objects/`：对象实例由区块对象管理器持有。
-- 与 `src/core/hit/`：白板类持有 `UndoTree`，用于后续历史记录与回放。
-- 与 `src/core/tools/`：工具操作会驱动活动对象选择与区块对象变更。
-- 与 `src/core/utils/`：大量依赖 `DirectedGraph`、队列/双端队列、计数池等基础结构。
-
-## 当前实现状态
-
-- `ActiveObjectManager` 算法实现相对完整，已具备拾取、分层、置顶、清理等核心逻辑。
-- `Monitor` 已收口到多层画布骨架，并保留 `monitor.canvas -> liveCanvas` 的兼容入口。
-- `BaseRenderer`、`RenderScheduler`、`LiveRenderer` 与 `UiRenderer` 已接入 `Monitor`；其中 `BaseRenderer` 已支持静态层整层重绘和显式 dirty rect 局部刷新，`LiveRenderer` 已支持活动层整层重绘和显式 dirty rect 局部刷新，`UiRenderer` 已提供兼容 overlay 渲染和 provider 扩展口。
-- `Board`、`Chunk`、`ChunkObjectManager` 已有骨架和关键字段；其中 `Board` 已收口到“根 `ChunkLoader` 持有区块对象 + `chunkLoaded` 维护加载状态”的模型，但仍存在较多 `todo`。
-- `ActiveObjectManager.add/choose/apply/discard` 已能主动触发活动层刷新，`LiveRenderer.invalidateObjects(...)` 也已覆盖对象前后两帧范围，避免拖拽残影。
-- `ActiveObjectManager.requestLiveRender(...)`、creator 和 modifier 的高频几何修改路径，现在还会同步推动 ui 层刷新，使选择框等兼容 overlay 能及时重绘；但默认选择框是否显示，仍取决于 chooser / modifier 工具当前是否声明了 overlay，而不是 AOM 成员关系本身。
-- `ActiveObjectManager.apply(objects)` 现在会主动请求 base 层整视口刷新；区块缓冲区变化和视口变化也会自动触发 base 层刷新。
-- 当前仍处在“活动层已较稳定、静态层已进入第一版增量刷新，但还要继续往区块级补绘推进”的阶段。
+- Worker 架构已接通
+- demo 默认启用 Worker mode
+- Shared 组件层已形成稳定边界
 
 ## 相关文档
 
-- [monitor-document.md](./monitor-document.md)
-- [base-renderer-document.md](./base-renderer-document.md)
-- [render-scheduler-document.md](./render-scheduler-document.md)
-- [live-renderer-document.md](./live-renderer-document.md)
-- [ui-renderer-document.md](./ui-renderer-document.md)
-- [active-object-manager-document.md](./active-object-manager-document.md)
+- [core-runtime-boundaries.md](../../docs/core-runtime-boundaries.md)
+- [board-document.md](../orchestration/docs/board-document.md)
+- [monitor-document.md](../orchestration/docs/monitor-document.md)
+- [active-object-manager-document.md](../orchestration/docs/active-object-manager-document.md)

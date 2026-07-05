@@ -20,93 +20,56 @@ const DEFAULT_POLYGON_PROPERTY = Object.freeze({
  * 多边形类
  * @class
  * @extends GraphObject
- * @description
- * 多边形是图形的一种，由多个顶点组成。
  * @author Zhou Chenyu
  */
 class PolygonObject extends GraphObject {
   /**
    * 创建一个新的多边形对象
-   * @param {Vector} p - 多边形逻辑左上角的绝对位置
    * @param {number} id - 对象 id
-   * @param {number} ownerChunkId - 对象归属区块的 id
-   * @param {Vector[]} points - 多边形各顶点相对其左上角的相对位置
+   * @param {Vector} position - 多边形逻辑左上角的绝对位置
+   * @param {Record<string, any>} [property={}] - 对象属性
+   * @param {Record<string, any>} [data={}] - 对象类型专属数据
    * @constructor
    */
-  constructor(p, id, ownerChunkId, points) {
-    super(p, id, ownerChunkId);
-    if (points) {
-      this.setPolygonPoints(points);
+  constructor(id, position, property = {}, data = {}) {
+    super(id, position, property, data);
+    this.property = { ...DEFAULT_POLYGON_PROPERTY, ...this.property };
+    this.rich.localPolygonRange = new PolygonRange([]);
+    this.rich.worldPolygonRange = new PolygonRange([]);
+    this.rich.convexHullRange = new PolygonRange([]);
+    this._onDataChange(Object.keys(data));
+  }
+
+  _onDataChange(keys) {
+    if (keys.includes("points") && Array.isArray(this.data.points)) {
+      const vecs = this.data.points.map((p) => new Vector(p.x, p.y));
+      this.rich.localPolygonRange = new PolygonRange(vecs);
+      this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(
+        this.transform,
+      );
+      this.calculateConvexHull();
+      this.calculateRectangle();
     }
-  }
-
-  /**
-   * 多边形对象的顶点集
-   * @type {PolygonRange}
-   * @description
-   * 每一个点在变换前，相对 position 的位置数组，属于基础数据。
-   * 外界不应直接修改它，应使用 setPolygonPoints 方法。
-   */
-  localPolygonRange = new PolygonRange([]);
-
-  property = { ...DEFAULT_POLYGON_PROPERTY };
-
-  /**
-   * 设置对象的顶点集
-   * @description 设置新的顶点集时，会自动更新变换后的顶点集和凸包。
-   * @param {Vector[]} points - 新的顶点集
-   */
-  setPolygonPoints(points) {
-    this.localPolygonRange = new PolygonRange(points);
-    this.worldPolygonRange = this.localPolygonRange.transform(this.transform);
-    this.calculateConvexHull();
-    this.calculateRectangle();
-  }
-
-  /**
-   * 修改指定索引的顶点
-   * @param {number} index - 要修改的顶点索引
-   * @param {Vector} points - 新的顶点坐标
-   */
-  replacePolygonPoint(index, points) {
-    // 修改指定索引的顶点，并更新变换后的顶点集和凸包。
-    if (index < 0 || index >= this.localPolygonRange.points.length) {
-      throw new RangeError("Index out of bounds");
-    }
-    const nextPoints = [...this.localPolygonRange.points];
-    nextPoints[index] = points;
-    this.setPolygonPoints(nextPoints);
-  }
-
-  /**
-   * 在末尾添加一个新的顶点
-   * @param {Vector} point - 新的顶点坐标
-   */
-  appendPolygonPoint(point) {
-    this.setPolygonPoints(this.localPolygonRange.points.concat([point]));
   }
 
   calculateRectangle() {
-    this.boundingBox = RectangleRange.from(
-      this.convexHullRange.transform(this.transform),
+    if (
+      !this.rich.convexHullRange ||
+      this.rich.convexHullRange.points.length === 0
+    ) {
+      this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
+      return;
+    }
+    this.rich.boundingBox = RectangleRange.from(
+      this.rich.convexHullRange.transform(this.transform),
     );
   }
 
-  /**
-   * @description 在进行矩阵变换前的凸包。当且仅当 points 发生变化时才会更新它。
-   */
   calculateConvexHull() {
-    this.convexHullRange = new PolygonRange(
-      calcConvexHull(this.localPolygonRange.points),
+    this.rich.convexHullRange = new PolygonRange(
+      calcConvexHull(this.rich.localPolygonRange.points),
     );
   }
-
-  /**
-   * 多边形对象经变换的顶点
-   * @type {PolygonRange}
-   * @description 每一个点在变换后，相对 position 的位置数组，属于富数据。
-   */
-  worldPolygonRange = new PolygonRange([]);
 
   /**
    * @param {Matrix} trans - 新的变换矩阵
@@ -114,25 +77,19 @@ class PolygonObject extends GraphObject {
    */
   setTransform(trans) {
     this.transform = trans;
-    this.worldPolygonRange = this.localPolygonRange.transform(trans);
+    this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(trans);
     this.calculateRectangle();
   }
 
   getRange() {
-    return this.worldPolygonRange;
+    return this.rich.worldPolygonRange;
   }
 
-  /**
-   * 多边形对象的颜色
-   * @type {string}
-   * @default "#000000"
-   */
-  /**
-   *
-   * @param {CanvasRenderingContext2D} ctx
-   */
   render(ctx) {
-    if (!this.localPolygonRange || this.localPolygonRange.points.length === 0) {
+    if (
+      !this.rich.localPolygonRange ||
+      this.rich.localPolygonRange.points.length === 0
+    ) {
       return;
     }
 
@@ -147,7 +104,7 @@ class PolygonObject extends GraphObject {
       return;
     }
 
-    const points = this.localPolygonRange.points;
+    const points = this.rich.localPolygonRange.points;
     ctx.save();
     ctx.setTransform(
       this.transform.a,
@@ -183,25 +140,21 @@ class PolygonObject extends GraphObject {
     return {
       ...super.serialize(),
       type: "PolygonObject",
-      points: this.localPolygonRange.points.map((p) => p.serialize()),
+      data: { ...this.data },
     };
   }
 
-  static parse(data) {
-    if (data.type !== "PolygonObject") {
+  static parse(serialized) {
+    if (serialized.type !== "PolygonObject") {
       throw new TypeError("Invalid type for PolygonObject parsing");
     }
     let obj = new PolygonObject(
-      Vector.parse(data.position),
-      data.id,
-      data.ownerChunkId,
-      data.points.map((p) => Vector.parse(p)),
+      serialized.id,
+      Vector.parse(serialized.position),
+      { ...DEFAULT_POLYGON_PROPERTY, ...(serialized.property ?? {}) },
+      serialized.data ?? {},
     );
-    obj.setTransform(Matrix.parse(data.transform));
-    obj.setProperty({
-      ...DEFAULT_POLYGON_PROPERTY,
-      ...(data.property ?? {}),
-    });
+    obj.setTransform(Matrix.parse(serialized.transform));
     return obj;
   }
 }

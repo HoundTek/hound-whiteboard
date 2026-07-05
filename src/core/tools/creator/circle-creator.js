@@ -5,11 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import {
-  CircleObject,
-  DEFAULT_CIRCLE_PROPERTY,
-} from "../../objects/graph/circle.js";
-import { SingleGestureObjectCreatorTool } from "./obj-creator.js";
+import { DEFAULT_CIRCLE_PROPERTY } from "../../objects/graph/circle.js";
+import { SingleGestureObjectCreatorTool } from "./object-creator.js";
 import { Vector } from "../../utils/math.js";
 
 const DEFAULT_FIXED_RADIUS_SCREEN = 16;
@@ -28,10 +25,10 @@ const DEFAULT_MIN_DRAG_DISTANCE_SCREEN = 4;
  */
 class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   /**
-   * 当前正在创建的圆对象
-   * @type {CircleObject}
+   * 当前正在创建圆对象的本地状态
+   * @type {{ id: number, position: Vector, property: Record<string,any>, data: { radius: number } } | null}
    */
-  obj;
+  _local;
 
   /**
    * 圆对象的属性
@@ -71,9 +68,27 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       options.minDragDistanceScreen ?? DEFAULT_MIN_DRAG_DISTANCE_SCREEN;
   }
 
-  create(p, id, ownerChunkId) {
-    this.obj = new CircleObject(p, id, ownerChunkId);
-    this.obj.setProperty(this.property);
+  getCreatedObjectType() {
+    return "CircleObject";
+  }
+
+  create(p, id) {
+    this._local = {
+      id,
+      position: new Vector(p.x, p.y),
+      property: { ...this.property },
+      data: { radius: 0 },
+    };
+  }
+
+  /**
+   * 解析新圆对象的初始专属数据
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {Record<string, any>} 初始圆数据
+   * @protected
+   */
+  resolveCreatedObjectData(interaction) {
+    return { radius: 0 };
   }
 
   /**
@@ -82,7 +97,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
    * @returns {Vector}
    */
   toLocalPoint(position) {
-    return position.sub(this.obj.position);
+    return position.sub(this._local.position);
   }
 
   /**
@@ -91,16 +106,36 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
    */
   count;
 
+  /**
+   * 通过 RPC 设置半径
+   * @param {number} radius - 新半径
+   * @param {Object} interaction - 当前交互上下文
+   */
+  setRadius(radius, interaction) {
+    if (this._local) {
+      this._local.data.radius = radius;
+    }
+
+    const boardApi = interaction?.context?.acc?.boardApi;
+    if (!boardApi || this.objectId == null) {
+      return;
+    }
+
+    boardApi.modifyObject(this.objectId, {
+      data: { radius },
+    });
+  }
+
   beginCreationGesture(interaction) {
     this.count = 0;
-    this.obj.setRadius(0);
+    this.setRadius(0, interaction);
   }
 
   updateCreationGesture(interaction) {
     this.count++;
     const localPoint = this.toLocalPoint(interaction.position);
     const radius = localPoint.length();
-    this.obj.setRadius(radius);
+    this.setRadius(radius, interaction);
   }
 
   completeCreationGesture(interaction) {
@@ -108,15 +143,24 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       this.count++;
       const localPoint = this.toLocalPoint(interaction.position);
       const radius = localPoint.length();
-      this.obj.setRadius(radius);
+      this.setRadius(radius, interaction);
     }
     const zoom = interaction.context?.acc?.monitor?.zoom ?? 1;
     if (
       this.count <= 2 &&
-      this.obj.radius < this.minDragDistanceScreen / zoom
+      (this._local?.data?.radius ?? 0) < this.minDragDistanceScreen / zoom
     ) {
-      this.obj.setRadius(this.fixedRadiusScreen / zoom);
+      this.setRadius(this.fixedRadiusScreen / zoom, interaction);
     }
+  }
+
+  /**
+   * 重置创建器运行时状态
+   */
+  reset() {
+    this._local = null;
+    this.objectId = null;
+    this.count = 0;
   }
 }
 

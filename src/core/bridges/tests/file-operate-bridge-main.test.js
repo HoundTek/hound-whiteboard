@@ -75,7 +75,7 @@ describe("file-operate-bridge-main", () => {
     });
 
     expect(fs.existsSync(path.join(boardRoot, "chunks", "1"))).toBe(true);
-    expect(fs.existsSync(path.join(boardRoot, "objects", "chunk1"))).toBe(true);
+    expect(fs.existsSync(path.join(boardRoot, "objects"))).toBe(true);
     expect(
       fs.existsSync(path.join(boardRoot, "chunks", "connection.json")),
     ).toBe(true);
@@ -115,7 +115,7 @@ describe("file-operate-bridge-main", () => {
     expect(snapshot.trace).toEqual({ onChunk: 2, offset: 0 });
   });
 
-  test("应能保存并读取层叠图", () => {
+  test("应能保存并读取区块元数据（层叠图 + 覆盖索引合并）", () => {
     const boardRoot = path.join(tempRoot, "board");
 
     handleCoreFileOperateRequest(null, {
@@ -127,28 +127,32 @@ describe("file-operate-bridge-main", () => {
       },
     });
 
-    const graphData = [[1, [2, 3]]];
+    const metadata = {
+      tierGraph: [[1, [2, 3]]],
+      objectCoverIndex: [[15, [1, 2]]],
+    };
     handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.SAVE_TIER_GRAPH,
+      action: CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_METADATA,
       payload: {
         rootPath: boardRoot,
         chunkId: 1,
-        graphData,
+        tierGraph: metadata.tierGraph,
+        objectCoverIndex: metadata.objectCoverIndex,
       },
     });
 
-    const loadedGraph = handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.LOAD_TIER_GRAPH,
+    const loaded = handleCoreFileOperateRequest(null, {
+      action: CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_METADATA,
       payload: {
         rootPath: boardRoot,
         chunkId: 1,
       },
     });
 
-    expect(loadedGraph).toEqual(graphData);
+    expect(loaded).toEqual(metadata);
   });
 
-  test("应能保存并读取区块对象覆盖索引", () => {
+  test("应能按 ID 批量读取扁平对象 JSON", () => {
     const boardRoot = path.join(tempRoot, "board");
 
     handleCoreFileOperateRequest(null, {
@@ -160,67 +164,23 @@ describe("file-operate-bridge-main", () => {
       },
     });
 
-    const coverIndexData = [
-      [15, [1, 2]],
-      [18, [1, 2, 3]],
-    ];
-
-    handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECT_COVER_INDEX,
-      payload: {
-        rootPath: boardRoot,
-        chunkId: 1,
-        coverIndexData,
-      },
-    });
-
-    const loadedCoverIndex = handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECT_COVER_INDEX,
-      payload: {
-        rootPath: boardRoot,
-        chunkId: 1,
-      },
-    });
-
-    expect(loadedCoverIndex).toEqual(coverIndexData);
-  });
-
-  test("应能读取区块对象 JSON 列表", () => {
-    const boardRoot = path.join(tempRoot, "board");
-
-    handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.CREATE_BOARD_ROOT,
-      payload: {
-        rootPath: boardRoot,
-        boardMeta: { type: "board", version: "0.1.0" },
-        config: { width: 800, height: 600 },
-      },
-    });
-
-    handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.CREATE_CHUNK_STORAGE,
-      payload: {
-        rootPath: boardRoot,
-        chunkId: 1,
-      },
-    });
-
+    fs.mkdirSync(path.join(boardRoot, "objects"), { recursive: true });
     fs.writeFileSync(
-      path.join(boardRoot, "objects", "chunk1", "100.json"),
+      path.join(boardRoot, "objects", "100.json"),
       JSON.stringify({ id: 100, type: "basic" }),
       "utf8",
     );
     fs.writeFileSync(
-      path.join(boardRoot, "objects", "chunk1", "101.json"),
+      path.join(boardRoot, "objects", "101.json"),
       JSON.stringify({ id: 101, type: "basic" }),
       "utf8",
     );
 
     const objects = handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECTS,
+      action: CORE_FILE_OPERATE_ACTIONS.LOAD_OBJECTS,
       payload: {
         rootPath: boardRoot,
-        chunkId: 1,
+        objectIds: [100, 101],
       },
     });
 
@@ -230,7 +190,7 @@ describe("file-operate-bridge-main", () => {
     ]);
   });
 
-  test("应能覆盖式保存区块对象 JSON 列表", () => {
+  test("应能批量保存对象到扁平存储", () => {
     const boardRoot = path.join(tempRoot, "board");
 
     handleCoreFileOperateRequest(null, {
@@ -243,24 +203,9 @@ describe("file-operate-bridge-main", () => {
     });
 
     handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.CREATE_CHUNK_STORAGE,
+      action: CORE_FILE_OPERATE_ACTIONS.SAVE_OBJECTS,
       payload: {
         rootPath: boardRoot,
-        chunkId: 1,
-      },
-    });
-
-    fs.writeFileSync(
-      path.join(boardRoot, "objects", "chunk1", "legacy.json"),
-      JSON.stringify({ id: 999, type: "legacy" }),
-      "utf8",
-    );
-
-    handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.SAVE_CHUNK_OBJECTS,
-      payload: {
-        rootPath: boardRoot,
-        chunkId: 1,
         objects: [
           { id: 200, type: "basic" },
           { id: 201, type: "basic" },
@@ -269,15 +214,15 @@ describe("file-operate-bridge-main", () => {
     });
 
     const objectFiles = fs
-      .readdirSync(path.join(boardRoot, "objects", "chunk1"))
+      .readdirSync(path.join(boardRoot, "objects"))
       .sort();
     expect(objectFiles).toEqual(["200.json", "201.json"]);
 
     const objects = handleCoreFileOperateRequest(null, {
-      action: CORE_FILE_OPERATE_ACTIONS.LOAD_CHUNK_OBJECTS,
+      action: CORE_FILE_OPERATE_ACTIONS.LOAD_OBJECTS,
       payload: {
         rootPath: boardRoot,
-        chunkId: 1,
+        objectIds: [200, 201],
       },
     });
     expect(objects).toEqual([

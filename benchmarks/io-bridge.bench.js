@@ -1,23 +1,26 @@
 /**
  * @file I/O Bridge 性能测试
+ * @description 测量 I/O 桥接层各路径（Direct/IPC/Renderer）的性能。
  * @module benchmarks/io-bridge
  */
 
 import fs from "fs";
 import os from "os";
 import path from "path";
-import Benchmark from "benchmark";
 
 import { Directory, File } from "../src/utils/filesys/io.js";
 import { handleIOBridgeRequest } from "../src/io-bridge-main.js";
+import {
+  printHeader,
+  printFooter,
+  benchmarkSync,
+  benchmarkAsync,
+} from "./helpers.js";
 
-const suite = new Benchmark.Suite("IO Bridge Benchmarks");
+const ROUNDS = 5;
 
 function toDirectoryPayload(directory) {
-  return {
-    __houndType: "Directory",
-    paths: [...directory.paths],
-  };
+  return { __houndType: "Directory", paths: [...directory.paths] };
 }
 
 function toFilePayload(file) {
@@ -34,15 +37,10 @@ function createFixture() {
   const rootDir = Directory.parse(rootPath);
   const docsDir = rootDir.cd("docs").make();
   const noteFile = docsDir.peek("note", "txt").write("hello benchmark");
-  const jsonFile = docsDir.peek("config", "json").writeJSON({ ok: true, size: 3 });
-
-  return {
-    rootPath,
-    rootDir,
-    docsDir,
-    noteFile,
-    jsonFile,
-  };
+  const jsonFile = docsDir
+    .peek("config", "json")
+    .writeJSON({ ok: true, size: 3 });
+  return { rootPath, rootDir, docsDir, noteFile, jsonFile };
 }
 
 function destroyFixture(rootPath) {
@@ -55,120 +53,100 @@ globalThis.__houndIOBridge = {
   },
 };
 
-const { Directory: RendererDirectory, File: RendererFile } = await import("../src/utils/filesys/renderer-io.js");
+const { Directory: RendererDirectory, File: RendererFile } =
+  await import("../src/utils/filesys/renderer-io.js");
 
-suite.add("Direct File#cat", function () {
-  const fixture = createFixture();
-  fixture.noteFile.cat();
-  destroyFixture(fixture.rootPath);
+printHeader("I/O Bridge 性能测试");
+
+// Direct File#cat (sync)
+benchmarkSync("Direct File#cat", 80, ROUNDS, () => {
+  const f = createFixture();
+  f.noteFile.cat();
+  destroyFixture(f.rootPath);
 });
 
-suite.add("IPC handler File#cat", function () {
-  const fixture = createFixture();
+// IPC handler File#cat (sync)
+benchmarkSync("IPC handler File#cat", 80, ROUNDS, () => {
+  const f = createFixture();
   handleIOBridgeRequest(null, {
-    target: toFilePayload(fixture.noteFile),
+    target: toFilePayload(f.noteFile),
     method: "cat",
     args: [],
   });
-  destroyFixture(fixture.rootPath);
+  destroyFixture(f.rootPath);
 });
 
-suite.add("Renderer File#cat", {
-  defer: true,
-  fn(deferred) {
-    const fixture = createFixture();
-    const rendererFile = new RendererFile(fixture.docsDir.getPath(), "note", "txt");
-    rendererFile
-      .cat()
-      .then(() => {
-        destroyFixture(fixture.rootPath);
-        deferred.resolve();
-      })
-      .catch((error) => {
-        destroyFixture(fixture.rootPath);
-        deferred.benchmark.emit("error", error);
-      });
-  },
+// Renderer File#cat (async)
+benchmarkAsync("Renderer File#cat", 80, ROUNDS, async () => {
+  const f = createFixture();
+  try {
+    const rendererFile = new RendererFile(f.docsDir.getPath(), "note", "txt");
+    await rendererFile.cat();
+  } finally {
+    destroyFixture(f.rootPath);
+  }
 });
 
-suite.add("Direct Directory#lsFile", function () {
-  const fixture = createFixture();
-  fixture.docsDir.lsFile();
-  destroyFixture(fixture.rootPath);
+// Direct Directory#lsFile (sync)
+benchmarkSync("Direct Directory#lsFile", 80, ROUNDS, () => {
+  const f = createFixture();
+  f.docsDir.lsFile();
+  destroyFixture(f.rootPath);
 });
 
-suite.add("IPC handler Directory#lsFile", function () {
-  const fixture = createFixture();
+// IPC handler Directory#lsFile (sync)
+benchmarkSync("IPC handler Directory#lsFile", 80, ROUNDS, () => {
+  const f = createFixture();
   handleIOBridgeRequest(null, {
-    target: toDirectoryPayload(fixture.docsDir),
+    target: toDirectoryPayload(f.docsDir),
     method: "lsFile",
     args: [],
   });
-  destroyFixture(fixture.rootPath);
+  destroyFixture(f.rootPath);
 });
 
-suite.add("Renderer Directory#lsFile", {
-  defer: true,
-  fn(deferred) {
-    const fixture = createFixture();
-    const rendererDir = new RendererDirectory(fixture.docsDir.getPath());
-    rendererDir
-      .lsFile()
-      .then(() => {
-        destroyFixture(fixture.rootPath);
-        deferred.resolve();
-      })
-      .catch((error) => {
-        destroyFixture(fixture.rootPath);
-        deferred.benchmark.emit("error", error);
-      });
-  },
+// Renderer Directory#lsFile (async)
+benchmarkAsync("Renderer Directory#lsFile", 80, ROUNDS, async () => {
+  const f = createFixture();
+  try {
+    const rendererDir = new RendererDirectory(f.docsDir.getPath());
+    await rendererDir.lsFile();
+  } finally {
+    destroyFixture(f.rootPath);
+  }
 });
 
-suite.add("Direct File#writeJSON", function () {
-  const fixture = createFixture();
-  fixture.jsonFile.writeJSON({ ok: true, size: 4 });
-  destroyFixture(fixture.rootPath);
+// Direct File#writeJSON (sync)
+benchmarkSync("Direct File#writeJSON", 80, ROUNDS, () => {
+  const f = createFixture();
+  f.jsonFile.writeJSON({ ok: true, size: 4 });
+  destroyFixture(f.rootPath);
 });
 
-suite.add("IPC handler File#writeJSON", function () {
-  const fixture = createFixture();
+// IPC handler File#writeJSON (sync)
+benchmarkSync("IPC handler File#writeJSON", 80, ROUNDS, () => {
+  const f = createFixture();
   handleIOBridgeRequest(null, {
-    target: toFilePayload(fixture.jsonFile),
+    target: toFilePayload(f.jsonFile),
     method: "writeJSON",
     args: [{ ok: true, size: 4 }],
   });
-  destroyFixture(fixture.rootPath);
+  destroyFixture(f.rootPath);
 });
 
-suite.add("Renderer File#writeJSON", {
-  defer: true,
-  fn(deferred) {
-    const fixture = createFixture();
-    const rendererFile = new RendererFile(fixture.docsDir.getPath(), "config", "json");
-    rendererFile
-      .writeJSON({ ok: true, size: 4 })
-      .then(() => {
-        destroyFixture(fixture.rootPath);
-        deferred.resolve();
-      })
-      .catch((error) => {
-        destroyFixture(fixture.rootPath);
-        deferred.benchmark.emit("error", error);
-      });
-  },
+// Renderer File#writeJSON (async)
+benchmarkAsync("Renderer File#writeJSON", 80, ROUNDS, async () => {
+  const f = createFixture();
+  try {
+    const rendererFile = new RendererFile(
+      f.docsDir.getPath(),
+      "config",
+      "json",
+    );
+    await rendererFile.writeJSON({ ok: true, size: 4 });
+  } finally {
+    destroyFixture(f.rootPath);
+  }
 });
 
-suite.on("cycle", function (event) {
-  console.log(String(event.target));
-});
-
-suite.on("complete", function () {
-  console.log("\n性能测试完成！");
-  console.log("═══════════════════════════════════════════════════");
-  console.log(`最快项: ${this.filter("fastest").map("name")}`);
-});
-
-console.log("开始 I/O Bridge 性能测试...\n");
-console.log("═══════════════════════════════════════════════════");
-suite.run({ async: true });
+printFooter();

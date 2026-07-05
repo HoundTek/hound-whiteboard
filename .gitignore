@@ -1,17 +1,48 @@
-# Node.js
-node_modules
-package-lock.json
-yarn.lock
+# Dependencies
+node_modules/
 
-# Editor
-.idea
-
-# MacOS
-.ds_store
-**/.ds_store
-
+# Build outputs
+dist/
 coverage
 release
 
-# Tauri
-src-tauri/target
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Node.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# IDEs and editors
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._/
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Android signing key (DO NOT COMMIT)
+*.jks
+*.keystore
+*.pkcs12
+debug.keystore

@@ -1,16 +1,41 @@
+import { jest } from "@jest/globals";
 import { StrokeCreatorTool } from "../stroke-creator.js";
 import { Vector } from "../../../utils/math.js";
-import { Board } from "../../../components/board.js";
-import { Monitor } from "../../../components/monitor.js";
-import { ChunkObjectManager } from "../../../components/chunk-object-manager.js";
-import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
 import { createMouseDevice } from "../../../devices/mouse-device.js";
-import { jest } from "@jest/globals";
+import {
+  createWorkerBoardContext,
+  flushMicrotasks,
+} from "../../../test-support/worker-mode-fixtures.js";
+
+function createBoardDeviceContext(objectId, { monitor } = {}) {
+  const board = {
+    allocateObjectId: jest.fn(() => objectId),
+    getObjectById: jest.fn(() => undefined),
+  };
+  const boardApi = {
+    createObject: jest.fn(async () => objectId),
+    appendListItem: jest.fn(),
+    commitObjects: jest.fn(),
+    discardActiveObjects: jest.fn(),
+  };
+
+  return {
+    deviceContext: {
+      acc: {
+        board,
+        boardApi,
+        monitor,
+        objectId,
+        ownerChunkId: 1,
+      },
+    },
+  };
+}
 
 describe("StrokeCreatorTool", () => {
   test("StrokeCreatorTool 应消费 position/end 信号并累计点列", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { acc: { objectId: 100, ownerChunkId: 2 } };
+    const { deviceContext } = createBoardDeviceContext(100);
 
     expect(
       tool.process(
@@ -45,12 +70,9 @@ describe("StrokeCreatorTool", () => {
       ),
     ).toBeUndefined();
 
-    expect(tool.obj.id).toBe(100);
-    expect(tool.obj.ownerChunkId).toBe(2);
-    expect(tool.obj.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(
-      tool.obj.localPathRange.points.map((point) => point.serialize()),
-    ).toEqual([
+    expect(tool._local.id).toBe(100);
+    expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
+    expect(tool._local.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -59,169 +81,7 @@ describe("StrokeCreatorTool", () => {
 
   test("连续重复位置不应产生重复路径点", () => {
     const tool = new StrokeCreatorTool();
-    const deviceContext = { acc: { objectId: 200, ownerChunkId: 2 } };
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/stroke",
-          signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/stroke",
-          signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/stroke",
-          signals: [
-            { type: "position", context: { value: new Vector(2, 3) } },
-            { type: "end", context: {} },
-          ],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
-
-    expect(
-      tool.obj.localPathRange.points.map((point) => point.serialize()),
-    ).toEqual([
-      { x: 0, y: 0 },
-      { x: 1, y: 1 },
-    ]);
-  });
-
-  test("单 end 信号应能被正确处理", () => {
-    const tool = new StrokeCreatorTool();
-    const deviceContext = { acc: { objectId: 101, ownerChunkId: 3 } };
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/stroke",
-          signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/stroke",
-          signals: [{ type: "end", context: {} }],
-        },
-        deviceContext,
-      ),
-    ).toBeUndefined();
-
-    expect(tool.obj.id).toBe(101);
-    expect(tool.obj.ownerChunkId).toBe(3);
-    expect(tool.obj.position.serialize()).toEqual({ x: 5, y: 6 });
-    expect(
-      tool.obj.localPathRange.points.map((point) => point.serialize()),
-    ).toEqual([{ x: 0, y: 0 }]);
-  });
-
-  test("构造参数应允许通过 property 指定新建笔画属性", () => {
-    const tool = new StrokeCreatorTool({
-      property: { color: "#ff0000", width: 4 },
-    });
-
-    tool.process(
-      {
-        to: "/monitor/stroke",
-        signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
-      },
-      { acc: { objectId: 102, ownerChunkId: 3 } },
-    );
-
-    expect(tool.obj.property).toMatchObject({ color: "#ff0000", width: 4 });
-  });
-
-  test("cancel 信号应重置正在创建的对象并撤销 AOM 注册", () => {
-    const tool = new StrokeCreatorTool();
-    const board = {
-      activeObjectManager: { discard: jest.fn() },
-    };
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/stroke",
-          signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
-        },
-        { acc: { board, objectId: 1, ownerChunkId: 1 } },
-      ),
-    ).toBeUndefined();
-
-    const activeObject = tool.obj;
-
-    expect(
-      tool.process(
-        {
-          to: "/monitor/stroke",
-          signals: [{ type: "cancel", context: {} }],
-        },
-        { acc: { board } },
-      ),
-    ).toBeUndefined();
-
-    expect(board.activeObjectManager.discard).toHaveBeenCalledWith(
-      new Set([activeObject]),
-    );
-    expect(tool.obj).toBeNull();
-  });
-
-  test("创建完成后应将对象交给 activeObjectManager.apply", () => {
-    const tool = new StrokeCreatorTool();
-    const board = {
-      addObject: jest.fn(),
-      activeObjectManager: { apply: jest.fn() },
-    };
-
-    tool.process(
-      {
-        to: "/monitor/stroke",
-        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
-      },
-      { acc: { board, objectId: 5, ownerChunkId: 1 } },
-    );
-
-    const createdObject = tool.obj;
-
-    tool.process(
-      {
-        to: "/monitor/stroke",
-        signals: [{ type: "end", context: {} }],
-      },
-      { acc: { board, objectId: 5, ownerChunkId: 1 } },
-    );
-
-    expect(board.activeObjectManager.apply).toHaveBeenCalledWith(
-      new Set([createdObject]),
-    );
-    expect(board.addObject).not.toHaveBeenCalled();
-  });
-
-  test("首次创建对象时应注册到 activeObjectManager.add", () => {
-    const tool = new StrokeCreatorTool();
-    const board = {
-      activeObjectManager: { add: jest.fn() },
-    };
-
-    const deviceContext = { acc: { board, objectId: 9, ownerChunkId: 1 } };
+    const { deviceContext } = createBoardDeviceContext(200);
 
     tool.process(
       {
@@ -231,13 +91,232 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(board.activeObjectManager.add).toHaveBeenCalledWith(
-      new Set([tool.obj]),
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+      },
+      deviceContext,
     );
-    expect(deviceContext.acc.objects).toEqual([tool.obj]);
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [
+          { type: "position", context: { value: new Vector(2, 3) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(tool._local.data.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ]);
   });
 
-  test("创建手势更新前后应记录旧几何快照并请求活动层刷新", () => {
+  test("单 end 信号应能被正确处理", () => {
+    const tool = new StrokeCreatorTool();
+    const { deviceContext } = createBoardDeviceContext(101);
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
+      },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "end", context: {} }],
+      },
+      deviceContext,
+    );
+
+    expect(tool._local.id).toBe(101);
+    expect(tool._local.position.serialize()).toEqual({ x: 5, y: 6 });
+    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  test("构造参数应允许通过 property 指定新建笔画属性", () => {
+    const tool = new StrokeCreatorTool({
+      property: { color: "#ff0000", width: 4 },
+    });
+    const { deviceContext } = createBoardDeviceContext(102);
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
+      },
+      deviceContext,
+    );
+
+    expect(tool._local.property).toMatchObject({ color: "#ff0000", width: 4 });
+  });
+
+  test("cancel 信号应重置正在创建的对象并撤销 transient 对象", () => {
+    const tool = new StrokeCreatorTool();
+    const { deviceContext } = createBoardDeviceContext(1);
+    const board = deviceContext.acc.board;
+    const boardApi = deviceContext.acc.boardApi;
+    const discardSpy = jest.spyOn(boardApi, "discardActiveObjects");
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "cancel", context: {} }],
+      },
+      { acc: { board, boardApi, objectId: 1, ownerChunkId: 1 } },
+    );
+
+    expect(discardSpy).toHaveBeenCalledWith([1]);
+    expect(tool._local).toBeNull();
+    expect(board.getObjectById).not.toHaveBeenCalled();
+  });
+
+  test("首次创建对象时应写回本地草稿并调用 createObject", () => {
+    const tool = new StrokeCreatorTool();
+    const { deviceContext } = createBoardDeviceContext(9);
+    const boardApi = deviceContext.acc.boardApi;
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      deviceContext,
+    );
+
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "StrokeObject",
+      expect.objectContaining({
+        id: 9,
+        position: new Vector(1, 2),
+      }),
+    );
+    expect(deviceContext.acc.objects).toEqual([tool._local]);
+  });
+
+  test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {
+    const tool = new StrokeCreatorTool();
+    const { deviceContext } = createBoardDeviceContext(20);
+    const boardApi = deviceContext.acc.boardApi;
+    const createSpy = jest.spyOn(boardApi, "createObject");
+    const appendSpy = jest.spyOn(boardApi, "appendListItem");
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+      },
+      deviceContext,
+    );
+
+    tool.process(
+      {
+        to: "/monitor/stroke",
+        signals: [
+          { type: "position", context: { value: new Vector(3, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(createSpy).toHaveBeenCalledWith(
+      "StrokeObject",
+      expect.objectContaining({
+        id: 20,
+        position: new Vector(1, 2),
+      }),
+    );
+    expect(appendSpy).toHaveBeenCalled();
+    expect(commitSpy).toHaveBeenCalledWith([20]);
+    expect(tool._local.data.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+  });
+
+  test("RPC 风格 boardApi 下应维护本地草稿路径点并提交", () => {
+    const tool = new StrokeCreatorTool();
+    const board = {
+      allocateObjectId: jest.fn(() => 701),
+    };
+    const boardApi = {
+      createObject: jest.fn(),
+      appendListItem: jest.fn(),
+      commitObjects: jest.fn(),
+      discardActiveObjects: jest.fn(),
+    };
+    const deviceContext = {
+      acc: {
+        board,
+        boardApi,
+      },
+    };
+
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(3, 4) } },
+          { type: "end", context: {} },
+        ],
+      },
+      deviceContext,
+    );
+
+    expect(boardApi.createObject).toHaveBeenCalledWith(
+      "StrokeObject",
+      expect.objectContaining({
+        id: 701,
+        position: new Vector(1, 2),
+      }),
+    );
+    expect(boardApi.appendListItem).toHaveBeenCalled();
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([701]);
+    expect(tool._local.data.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+  });
+
+  test("创建手势更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
     const tool = new StrokeCreatorTool();
     const monitor = {
       liveRenderer: {
@@ -246,13 +325,14 @@ describe("StrokeCreatorTool", () => {
       },
       requestViewportUiRender: jest.fn(),
     };
+    const { deviceContext } = createBoardDeviceContext(30, { monitor });
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { monitor, objectId: 30, ownerChunkId: 1 } },
+      deviceContext,
     );
 
     monitor.liveRenderer.captureObjectSnapshot.mockClear();
@@ -264,61 +344,49 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
-      { acc: { monitor, objectId: 30, ownerChunkId: 1 } },
+      deviceContext,
     );
 
-    // 后续 update 不再重复抓取初始快照（仅在 begin 时抓一次）
     expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith([
-      tool.obj,
-    ]);
-
+    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
     expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
-  test("真实 Board 上创建完成后应经由 AOM.apply 落回归属区块", () => {
+  test("创建完成后应通过 commitObjects 提交笔画对象", () => {
     const tool = new StrokeCreatorTool();
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const { deviceContext } = createBoardDeviceContext(21);
+    const boardApi = deviceContext.acc.boardApi;
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, objectId: 21, ownerChunkId: 1 } },
+      deviceContext,
     );
-
-    const createdObject = tool.obj;
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, objectId: 21, ownerChunkId: 1 } },
+      deviceContext,
     );
 
-    const ownerChunk = board.getChunkById(1);
-    expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.getObject(21)).toBe(createdObject);
+    expect(boardApi.commitObjects).toHaveBeenCalledWith([21]);
   });
 
-  test("真实 Board 上取消创建后不应写回区块静态结构", () => {
+  test("取消创建后不应提交对象", () => {
     const tool = new StrokeCreatorTool();
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const { deviceContext } = createBoardDeviceContext(22);
+    const boardApi = deviceContext.acc.boardApi;
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, objectId: 22, ownerChunkId: 1 } },
+      deviceContext,
     );
 
     tool.process(
@@ -326,37 +394,36 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
-      { acc: { board, objectId: 22, ownerChunkId: 1 } },
+      deviceContext,
     );
 
-    const ownerChunk = board.getChunkById(1);
-    expect(board.activeObjectManager.activeObjects.size).toBe(0);
-    expect(ownerChunk.objectManager.getObject(22)).toBeUndefined();
+    expect(boardApi.commitObjects).not.toHaveBeenCalled();
+    expect(boardApi.discardActiveObjects).toHaveBeenCalledWith([22]);
   });
 
   test("连续两次创建应生成两个不同笔画对象", () => {
     const tool = new StrokeCreatorTool();
-    const board = new Board();
-    board.width = 10;
-    board.height = 10;
-    board.getChunkById(1).objectManager = new ChunkObjectManager(1);
+    const { deviceContext } = createBoardDeviceContext(31);
+    const board = deviceContext.acc.board;
+    const boardApi = deviceContext.acc.boardApi;
+    const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, objectId: 31, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
     );
 
-    const firstObject = tool.obj;
+    const firstObject = tool._local;
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, objectId: 31, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
     );
 
     tool.process(
@@ -364,150 +431,166 @@ describe("StrokeCreatorTool", () => {
         to: "/monitor/stroke",
         signals: [{ type: "position", context: { value: new Vector(4, 5) } }],
       },
-      { acc: { board, objectId: 32, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
     );
 
-    const secondObject = tool.obj;
+    const secondObject = tool._local;
 
     tool.process(
       {
         to: "/monitor/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, objectId: 32, ownerChunkId: 1 } },
+      { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
     );
 
-    const ownerChunk = board.getChunkById(1);
     expect(firstObject).not.toBe(secondObject);
     expect(firstObject.id).toBe(31);
     expect(secondObject.id).toBe(32);
-    expect(ownerChunk.objectManager.getObject(31)).toBe(firstObject);
-    expect(ownerChunk.objectManager.getObject(32)).toBe(secondObject);
-    expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    expect(commitSpy).toHaveBeenNthCalledWith(1, [31]);
+    expect(commitSpy).toHaveBeenNthCalledWith(2, [32]);
   });
 
   describe("端到端集成（通过 Board 输入链路）", () => {
-    test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", () => {
-      const board = new Board();
-      const monitor = new Monitor(
-        createNoopCanvas(),
-        board,
-        { width: 800, height: 600 },
-        "main",
-      );
-      board.monitors.set("main", monitor);
-      board.width = 800;
-      board.height = 600;
-      const tool = new StrokeCreatorTool();
-      monitor.origin = new Vector(100, 50);
-      monitor.zoom = 2;
-
-      monitor.mountSubDAG("", createMouseDevice());
-      board.signalsEventBus.emit("mount", {
+    test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", async () => {
+      const { board, monitor, cleanup } = await createWorkerBoardContext({
+        boardWidth: 800,
+        boardHeight: 600,
         monitorId: "main",
-        name: "primary-stroke",
-        workflow: tool,
-        edges: [{ from: "/mouse/primary", edge: "default" }],
+        monitorWidth: 800,
+        monitorHeight: 600,
       });
 
-      board.signalsEventBus.emit("input", {
-        to: "/main/mouse",
-        signals: [
-          {
-            type: "position",
-            context: {
-              value: new Vector(105, 60),
-              buttons: 1,
-              button: 0,
+      try {
+        const tool = new StrokeCreatorTool();
+        monitor.origin = new Vector(100, 50);
+        monitor.zoom = 2;
+
+        monitor.mountSubDAG("", createMouseDevice());
+        board.signalsEventBus.emit("mount", {
+          monitorId: "main",
+          name: "primary-stroke",
+          workflow: tool,
+          edges: [{ from: "/mouse/primary", edge: "default" }],
+        });
+
+        board.signalsEventBus.emit("input", {
+          to: "/main/mouse",
+          signals: [
+            {
+              type: "position",
+              context: {
+                value: new Vector(105, 60),
+                buttons: 1,
+                button: 0,
+              },
             },
-          },
-        ],
-      });
+          ],
+        });
 
-      board.signalsEventBus.emit("input", {
-        to: "/main/mouse",
-        signals: [
-          {
-            type: "position",
-            context: {
-              value: new Vector(110, 65),
-              buttons: 1,
-              button: 0,
+        board.signalsEventBus.emit("input", {
+          to: "/main/mouse",
+          signals: [
+            {
+              type: "position",
+              context: {
+                value: new Vector(110, 65),
+                buttons: 1,
+                button: 0,
+              },
             },
-          },
-        ],
-      });
+          ],
+        });
 
-      board.signalsEventBus.emit("input", {
-        to: "/main/mouse",
-        signals: [
-          {
-            type: "end",
-            context: {
-              buttons: 0,
-              button: 0,
+        board.signalsEventBus.emit("input", {
+          to: "/main/mouse",
+          signals: [
+            {
+              type: "end",
+              context: {
+                buttons: 0,
+                button: 0,
+              },
             },
-          },
-        ],
-      });
+          ],
+        });
+        await flushMicrotasks();
 
-      const ownerChunk = board.getChunkById(1);
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
-      expect(tool.obj.id).toBe(1);
-      expect(board.objectCounterPool.counter).toBe(1);
-      expect(ownerChunk.objectManager.getObject(tool.obj.id)).toBe(tool.obj);
-      expect(tool.obj.position.serialize()).toEqual({ x: 105, y: 60 });
-      expect(
-        tool.obj.localPathRange.points.map((point) => point.serialize()),
-      ).toEqual([
-        { x: 0, y: 0 },
-        { x: 5, y: 5 },
-      ]);
+        await expect(
+          board.getBoardApi().queryObjects([tool._local.id]),
+        ).resolves.toEqual([
+          expect.objectContaining({
+            id: tool._local.id,
+            isActive: false,
+            position: { x: 105, y: 60 },
+            data: expect.objectContaining({
+              points: [
+                { x: 0, y: 0 },
+                { x: 5, y: 5 },
+              ],
+            }),
+          }),
+        ]);
+        expect(tool._local.id).toBe(1);
+        expect(tool._local.position.serialize()).toEqual({ x: 105, y: 60 });
+        expect(tool._local.data.points).toEqual([
+          { x: 0, y: 0 },
+          { x: 5, y: 5 },
+        ]);
+      } finally {
+        cleanup();
+      }
     });
 
-    test("挂载后的 StrokeCreatorTool 在绘制中应将对象加入 activeObjectManager 层", () => {
-      const board = new Board();
-      const monitor = new Monitor(
-        createNoopCanvas(),
-        board,
-        { width: 800, height: 600 },
-        "main",
-      );
-      board.monitors.set("main", monitor);
-      board.width = 800;
-      board.height = 600;
-      const tool = new StrokeCreatorTool();
-      monitor.origin = new Vector(100, 50);
-      monitor.zoom = 2;
-
-      monitor.mountSubDAG("", createMouseDevice());
-
-      board.signalsEventBus.emit("mount", {
+    test("挂载后的 StrokeCreatorTool 在绘制中应将对象保持在 Worker 的活动态", async () => {
+      const { board, monitor, cleanup } = await createWorkerBoardContext({
+        boardWidth: 800,
+        boardHeight: 600,
         monitorId: "main",
-        name: "primary-stroke",
-        workflow: tool,
-        edges: [{ from: "/mouse/primary", edge: "default" }],
+        monitorWidth: 800,
+        monitorHeight: 600,
       });
 
-      board.signalsEventBus.emit("input", {
-        to: "/main/mouse",
-        signals: [
-          {
-            type: "position",
-            context: {
-              value: new Vector(105, 60),
-              buttons: 1,
-              button: 0,
+      try {
+        const tool = new StrokeCreatorTool();
+        monitor.origin = new Vector(100, 50);
+        monitor.zoom = 2;
+
+        monitor.mountSubDAG("", createMouseDevice());
+
+        board.signalsEventBus.emit("mount", {
+          monitorId: "main",
+          name: "primary-stroke",
+          workflow: tool,
+          edges: [{ from: "/mouse/primary", edge: "default" }],
+        });
+
+        board.signalsEventBus.emit("input", {
+          to: "/main/mouse",
+          signals: [
+            {
+              type: "position",
+              context: {
+                value: new Vector(105, 60),
+                buttons: 1,
+                button: 0,
+              },
             },
-          },
-        ],
-      });
+          ],
+        });
+        await flushMicrotasks();
 
-      expect(board.activeObjectManager.activeObjects.size).toBe(1);
-      expect(board.activeObjectManager.layerOrder.length).toBe(1);
-      expect(
-        board.activeObjectManager.layerOrder[0].activeObjects.has(tool.obj.id),
-      ).toBe(true);
+        await expect(
+          board.getBoardApi().queryObjects([tool._local.id]),
+        ).resolves.toEqual([
+          expect.objectContaining({
+            id: tool._local.id,
+            isActive: true,
+          }),
+        ]);
+      } finally {
+        cleanup();
+      }
     });
   });
 });
