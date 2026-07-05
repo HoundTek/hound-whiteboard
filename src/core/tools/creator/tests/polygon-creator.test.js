@@ -22,8 +22,6 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
   };
 
   return {
-    board,
-    boardApi,
     deviceContext: {
       acc: {
         board,
@@ -131,7 +129,9 @@ describe("PolygonCreatorTool", () => {
 
   test("object-cancel 信号应取消整个多边形对象并撤销 transient 对象", () => {
     const tool = new PolygonCreatorTool();
-    const { board, boardApi, deviceContext } = createBoardDeviceContext(10);
+    const { deviceContext } = createBoardDeviceContext(10);
+    const board = deviceContext.acc.board;
+    const boardApi = deviceContext.acc.boardApi;
     const discardSpy = jest.spyOn(boardApi, "discardActiveObjects");
 
     tool.process(
@@ -190,7 +190,8 @@ describe("PolygonCreatorTool", () => {
 
   test("object-end 后应通过 boardApi.commitObjects 提交对象", () => {
     const tool = new PolygonCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(10);
+    const { deviceContext } = createBoardDeviceContext(10);
+    const boardApi = deviceContext.acc.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -268,7 +269,8 @@ describe("PolygonCreatorTool", () => {
 
   test("显式提供 boardApi 时应通过 RPC 创建并提交多边形对象", () => {
     const tool = new PolygonCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(24);
+    const { deviceContext } = createBoardDeviceContext(24);
+    const boardApi = deviceContext.acc.boardApi;
     const createSpy = jest.spyOn(boardApi, "createObject");
     const appendSpy = jest.spyOn(boardApi, "appendListItem");
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -366,7 +368,8 @@ describe("PolygonCreatorTool", () => {
 
   test("object-end 后应通过 commitObjects 提交对象", () => {
     const tool = new PolygonCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(23);
+    const { deviceContext } = createBoardDeviceContext(23);
+    const boardApi = deviceContext.acc.boardApi;
 
     tool.process(
       {

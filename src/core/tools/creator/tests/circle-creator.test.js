@@ -14,8 +14,6 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
   };
 
   return {
-    board,
-    boardApi,
     deviceContext: {
       acc: {
         board,
@@ -87,7 +85,8 @@ describe("CircleCreatorTool", () => {
 
   test("显式提供 boardApi 时应通过 RPC 创建并提交圆对象", () => {
     const tool = new CircleCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(104);
+    const { deviceContext } = createBoardDeviceContext(104);
+    const boardApi = deviceContext.acc.boardApi;
     const createSpy = jest.spyOn(boardApi, "createObject");
     const modifySpy = jest.spyOn(boardApi, "modifyObject");
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -174,7 +173,8 @@ describe("CircleCreatorTool", () => {
 
   test("结束手势时应通过 boardApi.commitObjects 提交对象", () => {
     const tool = new CircleCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(103);
+    const { deviceContext } = createBoardDeviceContext(103);
+    const boardApi = deviceContext.acc.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -224,7 +224,8 @@ describe("CircleCreatorTool", () => {
 
   test("结束手势后应通过 commitObjects 提交圆对象", () => {
     const tool = new CircleCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(110);
+    const { deviceContext } = createBoardDeviceContext(110);
+    const boardApi = deviceContext.acc.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -249,7 +250,9 @@ describe("CircleCreatorTool", () => {
 
   test("连续两次创建应生成两个不同圆对象", () => {
     const tool = new CircleCreatorTool();
-    const { board, boardApi } = createBoardDeviceContext(201);
+    const { deviceContext } = createBoardDeviceContext(201);
+    const board = deviceContext.acc.board;
+    const boardApi = deviceContext.acc.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(

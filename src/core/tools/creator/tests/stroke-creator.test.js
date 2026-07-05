@@ -20,8 +20,6 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
   };
 
   return {
-    board,
-    boardApi,
     deviceContext: {
       acc: {
         board,
@@ -162,7 +160,9 @@ describe("StrokeCreatorTool", () => {
 
   test("cancel 信号应重置正在创建的对象并撤销 transient 对象", () => {
     const tool = new StrokeCreatorTool();
-    const { board, boardApi, deviceContext } = createBoardDeviceContext(1);
+    const { deviceContext } = createBoardDeviceContext(1);
+    const board = deviceContext.acc.board;
+    const boardApi = deviceContext.acc.boardApi;
     const discardSpy = jest.spyOn(boardApi, "discardActiveObjects");
 
     tool.process(
@@ -188,7 +188,8 @@ describe("StrokeCreatorTool", () => {
 
   test("首次创建对象时应写回本地草稿并调用 createObject", () => {
     const tool = new StrokeCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(9);
+    const { deviceContext } = createBoardDeviceContext(9);
+    const boardApi = deviceContext.acc.boardApi;
 
     tool.process(
       {
@@ -210,7 +211,8 @@ describe("StrokeCreatorTool", () => {
 
   test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {
     const tool = new StrokeCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(20);
+    const { deviceContext } = createBoardDeviceContext(20);
+    const boardApi = deviceContext.acc.boardApi;
     const createSpy = jest.spyOn(boardApi, "createObject");
     const appendSpy = jest.spyOn(boardApi, "appendListItem");
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -352,7 +354,8 @@ describe("StrokeCreatorTool", () => {
 
   test("创建完成后应通过 commitObjects 提交笔画对象", () => {
     const tool = new StrokeCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(21);
+    const { deviceContext } = createBoardDeviceContext(21);
+    const boardApi = deviceContext.acc.boardApi;
 
     tool.process(
       {
@@ -375,7 +378,8 @@ describe("StrokeCreatorTool", () => {
 
   test("取消创建后不应提交对象", () => {
     const tool = new StrokeCreatorTool();
-    const { boardApi, deviceContext } = createBoardDeviceContext(22);
+    const { deviceContext } = createBoardDeviceContext(22);
+    const boardApi = deviceContext.acc.boardApi;
 
     tool.process(
       {
@@ -399,7 +403,9 @@ describe("StrokeCreatorTool", () => {
 
   test("连续两次创建应生成两个不同笔画对象", () => {
     const tool = new StrokeCreatorTool();
-    const { board, boardApi } = createBoardDeviceContext(31);
+    const { deviceContext } = createBoardDeviceContext(31);
+    const board = deviceContext.acc.board;
+    const boardApi = deviceContext.acc.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(

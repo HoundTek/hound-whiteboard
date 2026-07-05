@@ -150,7 +150,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     );
 
     expect(deviceContext.acc.objects).toEqual([tool._local]);
-    expect(boardApi.createObject).toHaveBeenCalledWith(
+    expect(deviceContext.acc.boardApi.createObject).toHaveBeenCalledWith(
       "CircleObject",
       expect.objectContaining({
         id: 206,

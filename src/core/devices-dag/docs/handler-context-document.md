@@ -191,14 +191,14 @@ createPrefixNodeHandler({
 
 ## 适用于所有 handler
 
-以上接口适用于 **所有** DevicesDAG handler，包括：
+以上接口适用于**所有** DevicesDAG handler，包括：
 
 - 设备根节点（`mouse-device`、`keyboard-device`、`touchscreen-device`）
 - prefix handler（`drag-anchor`、`signal-log`、`multi-tool`、`repeator`、`handoff`）
-- 工具 processor（`Tool.createProcessor` → `createDeviceContext`）
+- 工具 processor（`Tool.createProcessor`）
 - 裸 handler（直接挂在 DAG 节点上的任意函数）
 
-工具 processor 拿到的同样是标准 handler context 全集。`createDeviceContext` 仅在 `acc` 累积上下文中注入 `board` / `monitor` 等 toolContext fallback，不增删平级键。
+工具 processor 拿到的同样是标准 handler context 全集，`ctx.acc` 中的 `board`、`boardApi`、`monitor` 等由 DAG 上游节点在 dispatch 或 mount 时注入。
 
 ---
 
