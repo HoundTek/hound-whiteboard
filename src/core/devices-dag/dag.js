@@ -743,6 +743,13 @@ class DevicesDAG {
       },
       getNodeState: (pathOrId = path) => this.getNodeState(pathOrId),
       setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
+      delNodeState(pathOrId = path, ...keys) {
+        const current = this.getNodeState(pathOrId);
+        for (const key of keys) {
+          delete current[key];
+        }
+        this.setNodeState(pathOrId, current);
+      },
       routeToChild(to, signals = signalPacket?.signals) {
         return { packets: [new SignalPacket(to, signals)] };
       },

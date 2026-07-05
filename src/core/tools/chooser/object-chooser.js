@@ -117,7 +117,12 @@ class ObjectChooserTool extends Tool {
   collectUiOverlayEntries(overlayContext = {}) {
     const context = overlayContext.deviceContext ?? {};
     const renderer = overlayContext.renderer;
-    const objects = this.resolveContextObjects(context).filter(Boolean);
+
+    // 只读当前 node state，不 fallthrough 到 stale context.acc.objects
+    const nodeState = this.resolveNodeState(context);
+    const objects = nodeState.objects
+      ? this.normalizeObjectCollection(nodeState.objects).filter(Boolean)
+      : [];
 
     if (objects.length === 0) {
       return [];

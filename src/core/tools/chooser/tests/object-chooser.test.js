@@ -220,10 +220,16 @@ describe("ObjectChooserTool", () => {
       ]),
     };
 
+    const stateAccess = createStateAccess({ objects: [chosenObject] });
+    const baseCtx = {
+      path: "/monitor/chooser/tool",
+      getNodeState: stateAccess.getState,
+      setNodeState: stateAccess.setState,
+    };
+
     const suppressed = tool.collectUiOverlayEntries({
       deviceContext: {
-        acc: { objects: [chosenObject] },
-        path: "/monitor/chooser/tool",
+        ...baseCtx,
         dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool/tool",
@@ -238,8 +244,7 @@ describe("ObjectChooserTool", () => {
 
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
-        acc: { objects: [chosenObject] },
-        path: "/monitor/chooser/tool",
+        ...baseCtx,
         dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool",
@@ -269,10 +274,12 @@ describe("ObjectChooserTool", () => {
       ]),
     };
 
+    const stateAccess = createStateAccess({ objects: [chosenObject] });
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
-        acc: { objects: [chosenObject] },
         path: "/monitor/chooser/tool",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
         dag: {
           resolveDefaultLeaf: () => ({
             path: "/monitor/chooser/tool",

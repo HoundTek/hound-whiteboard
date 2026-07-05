@@ -59,14 +59,15 @@ process(signalPacket, ctx) {
 
 ### 状态管理
 
-| 成员                                | 类型                                 | 说明                                                                   |
-| ----------------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
-| `ctx.state`                         | `Object`                             | 当前节点状态快照。若走 `createPrefixNodeHandler` 已合并 `initialState` |
-| `ctx.getState()`                    | `() => Object`                       | 重读节点最新状态                                                       |
-| `ctx.setState(nextState)`           | `(Object) => Object`                 | 全量覆盖节点状态                                                       |
-| `ctx.patchState(partial)`           | `(Object) => Object`                 | 浅合并 `{ ...current, ...partial }`                                    |
-| `ctx.getNodeState(pathOrId?)`       | `(string\|number?) => Object`        | 读取任意节点（默认为当前节点）状态                                     |
-| `ctx.setNodeState(pathOrId, state)` | `(string\|number, Object) => Object` | 写入任意节点状态                                                       |
+| 成员                                  | 类型                                  | 说明                                                                   |
+| ------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| `ctx.state`                           | `Object`                              | 当前节点状态快照。若走 `createPrefixNodeHandler` 已合并 `initialState` |
+| `ctx.getState()`                      | `() => Object`                        | 重读节点最新状态                                                       |
+| `ctx.setState(nextState)`             | `(Object) => Object`                  | 全量覆盖节点状态                                                       |
+| `ctx.patchState(partial)`             | `(Object) => Object`                  | 浅合并 `{ ...current, ...partial }`                                    |
+| `ctx.getNodeState(pathOrId?)`         | `(string\|number?) => Object`         | 读取任意节点（默认为当前节点）状态                                     |
+| `ctx.setNodeState(pathOrId, state)`   | `(string\|number, Object) => Object`  | 写入任意节点状态                                                       |
+| `ctx.delNodeState(pathOrId, ...keys)` | `(string\|number, ...string) => void` | 删除指定节点的状态键                                                   |
 
 ### 路由
 

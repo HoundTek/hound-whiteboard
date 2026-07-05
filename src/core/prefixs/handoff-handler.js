@@ -100,7 +100,7 @@ function finalizeLifecycleWrappedResult(rawResult, isCompleted, unsub) {
 
 /**
  * 克隆 DAG 节点定义，避免共享可变结构
- * @param {Object} nodeDef
+ * @param {Object} nodeDef - 原始节点定义
  * @returns {Object}
  */
 function cloneDAGNodeDefinition(nodeDef = {}) {
@@ -119,8 +119,8 @@ function cloneDAGNodeDefinition(nodeDef = {}) {
 
 /**
  * 将 source 节点定义合并到 target 节点定义
- * @param {Object} targetNodeDef
- * @param {Object} sourceNodeDef
+ * @param {Object} targetNodeDef - 目标节点定义
+ * @param {Object} sourceNodeDef - 源节点定义
  * @returns {Object}
  */
 function mergeDAGNodeDefinition(targetNodeDef = {}, sourceNodeDef = {}) {
@@ -219,7 +219,7 @@ const registeredHandoffTools = new WeakSet();
 
 /**
  * 将 tool 标记为已参与某个 handoff 工作流
- * @param {Tool} tool
+ * @param {Tool} tool - 待注册的工具实例
  * @throws {TypeError} 如果 tool 已在另一个 handoff 中
  */
 function registerHandoffTool(tool) {
@@ -396,18 +396,18 @@ function createHandoffSubDAG(options = {}) {
   let handoffObjects = [];
   let handoffExplicitlySet = false;
 
-  // ── 判断 first 类型 ──
+  // 判断 first 类型
   const firstIsCreator =
     isToolInstance(first) && typeof first.completeCreatedObject === "function";
   const firstIsChooser = isToolInstance(first) && !firstIsCreator;
   const firstIsSubDAG = isSubDAGDefinition(first);
 
-  // ── 判断 second 类型 ──
+  // 判断 second 类型
   const secondIsModifier =
     isToolInstance(second) && typeof second.applyModifiedObjects === "function";
   const secondIsSubDAG = isSubDAGDefinition(second);
 
-  // ── 为 creator-first 配置钩子 ──
+  // 为 creator-first 配置钩子
   /** @type {Function[]} */
   const handoffCleanups = [];
 
@@ -427,7 +427,7 @@ function createHandoffSubDAG(options = {}) {
     });
   }
 
-  // ── 构建子树 ──
+  // 构建子树
   const builder = createSubDAG(rootPath);
   const root = builder
     .node()
@@ -456,14 +456,16 @@ function createHandoffSubDAG(options = {}) {
               });
             } else if (completedPhase === "second") {
               // 清理 first / second 节点内的旧对象引用，防止 overlay 继续渲染旧选择框
-              const dag = prefixContext.dag;
+              // 使用 delNodeState 而非设为 []，避免 resolveContextObjects 读到 truthy 空数组
               if (handoffBasePath) {
-                dag?.setNodeState?.(`${handoffBasePath}/first`, {
-                  objects: [],
-                });
-                dag?.setNodeState?.(`${handoffBasePath}/second`, {
-                  objects: [],
-                });
+                prefixContext.delNodeState?.(
+                  `${handoffBasePath}/first`,
+                  "objects",
+                );
+                prefixContext.delNodeState?.(
+                  `${handoffBasePath}/second`,
+                  "objects",
+                );
               }
 
               prefixContext.setState({
@@ -504,7 +506,7 @@ function createHandoffSubDAG(options = {}) {
       },
     );
 
-  // ── first 子节点 ──
+  // first 子节点
   const firstNode = builder.node();
   let firstSubDAGDef = null;
 
@@ -548,7 +550,7 @@ function createHandoffSubDAG(options = {}) {
     );
   }
 
-  // ── second 子节点 ──
+  // second 子节点
   const secondNode = builder.node();
   let secondSubDAGDef = null;
 
@@ -622,7 +624,7 @@ function createHandoffSubDAG(options = {}) {
 
   const handoffSubDAG = builder.build();
 
-  // ── 附着 SubDAGDefinition ──
+  // 附着 SubDAGDefinition
   if (
     firstSubDAGDef &&
     !attachDAGSubDAG(handoffSubDAG, firstNode._localId, firstSubDAGDef)

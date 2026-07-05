@@ -503,9 +503,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         activeChild: "first",
       });
       expect(dag.getNode("/monitor/modifier-cycle/second")).not.toBeNull();
-      expect(dag.getNodeState("/monitor/modifier-cycle/second")).toEqual({
-        objects: [],
-      });
+      expect(dag.getNodeState("/monitor/modifier-cycle/second")).toEqual({});
     });
 
     test("应支持 chooser 作为 first", () => {
@@ -1808,7 +1806,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         });
         expect(
           monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
-        ).toEqual({ objects: [] });
+        ).toEqual({});
       } finally {
         cleanup();
       }
