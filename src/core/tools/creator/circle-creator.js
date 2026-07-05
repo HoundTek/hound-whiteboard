@@ -26,9 +26,9 @@ const DEFAULT_MIN_DRAG_DISTANCE_SCREEN = 4;
 class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   /**
    * 当前正在创建圆对象的本地状态
-   * @type {{ id: number, position: Vector, property: Record<string,any>, data: { radius: number } } | null}
+   * @type {import("../../shared/types.js").LightweightObjectEntry & { data: { radius: number } } | null}
    */
-  _local;
+  _entry;
 
   /**
    * 圆对象的属性
@@ -73,8 +73,9 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   create(p, id) {
-    this._local = {
+    this._entry = {
       id,
+      type: "CircleObject",
       position: new Vector(p.x, p.y),
       property: { ...this.property },
       data: { radius: 0 },
@@ -97,7 +98,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
    * @returns {Vector}
    */
   toLocalPoint(position) {
-    return position.sub(this._local.position);
+    return position.sub(this._entry.position);
   }
 
   /**
@@ -112,8 +113,8 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   setRadius(radius, interaction) {
-    if (this._local) {
-      this._local.data.radius = radius;
+    if (this._entry) {
+      this._entry.data.radius = radius;
     }
 
     const boardApi = interaction?.context?.acc?.boardApi;
@@ -148,17 +149,29 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
     const zoom = interaction.context?.acc?.monitor?.zoom ?? 1;
     if (
       this.count <= 2 &&
-      (this._local?.data?.radius ?? 0) < this.minDragDistanceScreen / zoom
+      (this._entry?.data?.radius ?? 0) < this.minDragDistanceScreen / zoom
     ) {
       this.setRadius(this.fixedRadiusScreen / zoom, interaction);
     }
   }
 
   /**
+   * 根据半径计算局部外接矩形
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {{ left: number, top: number, width: number, height: number }}
+   * @protected
+   */
+  resolveCreatedObjectBoundingBox(interaction) {
+    const radius = this._entry?.data?.radius ?? 0;
+    const size = radius * 2;
+    return { left: -radius, top: -radius, width: size, height: size };
+  }
+
+  /**
    * 重置创建器运行时状态
    */
   reset() {
-    this._local = null;
+    this._entry = null;
     this.objectId = null;
     this.count = 0;
   }

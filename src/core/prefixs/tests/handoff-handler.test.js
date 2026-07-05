@@ -74,7 +74,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       };
 
       // 默认 beforeCommitCreatedObject 返回 true
-      creator._local = { id: 1, type: "rect" };
+      creator._entry = { id: 1, type: "rect" };
       creator.completeCreatedObject?.({
         context: { acc: { board } },
       });
@@ -98,7 +98,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // Override 钩子：阻止 commit
       creator.beforeCommitCreatedObject = () => false;
-      creator._local = { id: 1, type: "rect" };
+      creator._entry = { id: 1, type: "rect" };
 
       creator.process({ signals: [{ type: "position" }] }, { acc: { board } });
 
@@ -115,7 +115,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const afterCreate = jest.fn();
 
       creator.on("afterCreate", afterCreate);
-      creator._local = { id: 1 };
+      creator._entry = { id: 1 };
       creator.process({ signals: [{ type: "position" }] }, {});
 
       expect(afterCreate).toHaveBeenCalledTimes(1);
@@ -137,7 +137,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       creator.on("afterCreate", afterCreate);
       creator.beforeCommitCreatedObject = () => false;
-      creator._local = { id: 1 };
+      creator._entry = { id: 1 };
       creator.process({ signals: [{ type: "position" }] }, {});
 
       // afterCreate 无论是否 commit 都应触发（finalize 总是执行）
@@ -291,11 +291,6 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       });
       expect(boardApi.hitTest).toHaveBeenCalled();
       expect(boardApi.queryObjects).toHaveBeenCalledWith([199]);
-      expect(dag.getNodeState("/monitor/chooser-async-hook/second")).toEqual(
-        expect.objectContaining({
-          objects: [selectedSummary],
-        }),
-      );
     });
   });
 
@@ -307,6 +302,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 1 }],
         });
       });
+      first._entry = { id: 1 };
       const second = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -344,14 +340,18 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 42, type: "circle" }],
         });
       });
+      // 新桥接机制：modifier 从 acc.objects 读取，不再依赖 nodeState
       const second = createMockModifier((_pkt, ctx) => {
-        const st = ctx.getNodeState?.(ctx.path);
-        if (st?.objects) {
-          ctx.setNodeState?.(ctx.path, { ...st, touched: true });
+        const objects = ctx.acc?.objects ?? [];
+        if (objects.length > 0) {
+          ctx.setNodeState?.(ctx.path, {
+            objects: [...objects],
+            touched: true,
+          });
         }
       });
 
-      first._local = { id: 42, type: "circle" };
+      first._entry = { id: 42, type: "circle" };
 
       const subDAG = createHandoffSubDAG({
         rootPath: "/ce",
@@ -369,8 +369,10 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(dag.getNodeState("/monitor/ce/first")).toEqual({
         objects: [{ id: 42, type: "circle" }],
       });
-      expect(dag.getNodeState("/monitor/ce/second")).toEqual({
-        objects: [{ id: 42, type: "circle" }],
+      // 新机制：对象在 acc 中，不在 second 的 nodeState
+      expect(dag.getNodeState("/monitor/ce")).toEqual({
+        phase: "second",
+        activeChild: "second",
       });
 
       dag.dispatch({
@@ -390,6 +392,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 1 }],
         });
       });
+      first._entry = { id: 1 };
 
       // second：手动触发 onToolComplete 来模拟 modifier 完成
       const second = new (class extends Tool {
@@ -445,7 +448,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [object],
         });
       });
-      first._local = object;
+      first._entry = object;
       const second = new CommonObjectModifierTool();
 
       const subDAG = createHandoffSubDAG({
@@ -538,9 +541,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         phase: "second",
         activeChild: "second",
       });
-      expect(dag.getNodeState("/monitor/chooser-flow/second")).toEqual({
-        objects: [{ id: 7, type: "stroke" }],
-      });
+      // 新桥接机制：对象走 acc.objects，不再写入 second 的 nodeState
     });
 
     test("应支持 SubDAGDefinition 作为 first", () => {
@@ -555,6 +556,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
               ctx.setNodeState?.(ctx.path, {
                 objects: [{ id: 99 }],
               });
+              // 新桥接机制：需要写 acc.objects 供 handoff wrapper 读取
+              ctx.acc.objects = [{ id: 99 }];
               ctx.acc?.onToolComplete?.();
               return ctx.routeToChild("tool");
             },
@@ -585,9 +588,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         phase: "second",
         activeChild: "second",
       });
-      expect(dag.getNodeState("/monitor/nested/second")).toEqual({
-        objects: [{ id: 99 }],
-      });
+      // 新桥接机制：对象走 acc.objects，不在 second 的 nodeState
     });
 
     test("autoBridgeObjects = false 时应跳过对象桥接", () => {
@@ -597,7 +598,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 42 }],
         });
       });
-      first._local = { id: 42 };
+      first._entry = { id: 42 };
       const second = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -917,7 +918,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const tool = createMockCreator();
       const originalBeforeCommit = tool.beforeCommitCreatedObject.bind(tool);
 
-      tool._local = { id: 1 };
+      tool._entry = { id: 1 };
       const modifier = createMockModifier();
 
       const subDAG = createHandoffSubDAG({
@@ -1090,7 +1091,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [object],
         });
       });
-      first._local = object;
+      first._entry = object;
 
       const { accumulatedContext } = mountModifierWorkflow(
         dag,
@@ -1277,7 +1278,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const first = createMockCreator((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, { objects: [object] });
       });
-      first._local = object;
+      first._entry = object;
 
       const { accumulatedContext } = mountModifierWorkflow(
         dag,
@@ -1364,7 +1365,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const first = createMockCreator((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, { objects: [object] });
       });
-      first._local = object;
+      first._entry = object;
 
       const modifier = new CommonObjectModifierTool();
       modifier.on("afterApply", () => calls.push(["afterApply"]));
@@ -1474,6 +1475,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 1 }],
         });
       });
+      first._entry = { id: 1 };
       const mockUnmount = jest.fn();
 
       // 创建一个真实的 modifier，有 dag.unmount 能力
@@ -1564,9 +1566,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         );
         await flushMicrotasks();
 
-        expect(creatorTool._local).not.toBeNull();
-        expect(creatorTool._local.id).toBe(1);
-        firstObjectId = creatorTool._local.id;
+        expect(creatorTool._entry).not.toBeNull();
+        expect(creatorTool._entry.id).toBe(1);
+        firstObjectId = creatorTool._entry.id;
         await expect(boardApi.queryObjects([firstObjectId])).resolves.toEqual([
           expect.objectContaining({
             id: firstObjectId,
@@ -1581,7 +1583,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           }),
         ]);
 
-        const createdPosition = creatorTool._local.position.serialize();
+        const createdPosition = creatorTool._entry.position.serialize();
 
         monitor.devicesDAG.dispatch(
           {
@@ -1614,7 +1616,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         );
         await flushMicrotasks();
 
-        expect(creatorTool._local.position.serialize()).toEqual({
+        expect(creatorTool._entry.position.serialize()).toEqual({
           x: createdPosition.x + 3,
           y: createdPosition.y,
         });
@@ -1665,13 +1667,13 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         );
         await flushMicrotasks();
 
-        expect(creatorTool._local).not.toBeNull();
-        expect(creatorTool._local.id).not.toBe(firstObjectId);
+        expect(creatorTool._entry).not.toBeNull();
+        expect(creatorTool._entry.id).not.toBe(firstObjectId);
         await expect(
-          boardApi.queryObjects([creatorTool._local.id]),
+          boardApi.queryObjects([creatorTool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
-            id: creatorTool._local.id,
+            id: creatorTool._entry.id,
             isActive: true,
           }),
         ]);
@@ -1752,13 +1754,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           phase: "second",
           activeChild: "second",
         });
-        expect(
-          monitor.devicesDAG.getNodeState("/main/choose-and-modify/second"),
-        ).toEqual(
-          expect.objectContaining({
-            objects: [expect.objectContaining({ id: 41 })],
-          }),
-        );
+        // 新桥接机制：对象走 acc.objects，不再写入 second 的 nodeState
 
         monitor.devicesDAG.dispatch(
           {

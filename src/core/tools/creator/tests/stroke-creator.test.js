@@ -70,9 +70,9 @@ describe("StrokeCreatorTool", () => {
       ),
     ).toBeUndefined();
 
-    expect(tool._local.id).toBe(100);
-    expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.id).toBe(100);
+    expect(tool._entry.position.serialize()).toEqual({ x: 1, y: 2 });
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -110,7 +110,7 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
     ]);
@@ -136,9 +136,9 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.id).toBe(101);
-    expect(tool._local.position.serialize()).toEqual({ x: 5, y: 6 });
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.id).toBe(101);
+    expect(tool._entry.position.serialize()).toEqual({ x: 5, y: 6 });
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("构造参数应允许通过 property 指定新建笔画属性", () => {
@@ -155,7 +155,7 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.property).toMatchObject({ color: "#ff0000", width: 4 });
+    expect(tool._entry.property).toMatchObject({ color: "#ff0000", width: 4 });
   });
 
   test("cancel 信号应重置正在创建的对象并撤销 transient 对象", () => {
@@ -182,7 +182,7 @@ describe("StrokeCreatorTool", () => {
     );
 
     expect(discardSpy).toHaveBeenCalledWith([1]);
-    expect(tool._local).toBeNull();
+    expect(tool._entry).toBeNull();
     expect(board.getObjectById).not.toHaveBeenCalled();
   });
 
@@ -206,7 +206,7 @@ describe("StrokeCreatorTool", () => {
         position: new Vector(1, 2),
       }),
     );
-    expect(deviceContext.acc.objects).toEqual([tool._local]);
+    expect(deviceContext.acc.objects).toEqual([tool._entry]);
   });
 
   test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {
@@ -253,7 +253,7 @@ describe("StrokeCreatorTool", () => {
     );
     expect(appendSpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([20]);
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -309,7 +309,7 @@ describe("StrokeCreatorTool", () => {
     );
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([701]);
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -416,7 +416,7 @@ describe("StrokeCreatorTool", () => {
       { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
     );
 
-    const firstObject = tool._local;
+    const firstObject = tool._entry;
 
     tool.process(
       {
@@ -434,7 +434,7 @@ describe("StrokeCreatorTool", () => {
       { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
     );
 
-    const secondObject = tool._local;
+    const secondObject = tool._entry;
 
     tool.process(
       {
@@ -517,10 +517,10 @@ describe("StrokeCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._local.id]),
+          board.getBoardApi().queryObjects([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
-            id: tool._local.id,
+            id: tool._entry.id,
             isActive: false,
             position: { x: 105, y: 60 },
             data: expect.objectContaining({
@@ -531,9 +531,9 @@ describe("StrokeCreatorTool", () => {
             }),
           }),
         ]);
-        expect(tool._local.id).toBe(1);
-        expect(tool._local.position.serialize()).toEqual({ x: 105, y: 60 });
-        expect(tool._local.data.points).toEqual([
+        expect(tool._entry.id).toBe(1);
+        expect(tool._entry.position.serialize()).toEqual({ x: 105, y: 60 });
+        expect(tool._entry.data.points).toEqual([
           { x: 0, y: 0 },
           { x: 5, y: 5 },
         ]);
@@ -581,10 +581,10 @@ describe("StrokeCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._local.id]),
+          board.getBoardApi().queryObjects([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
-            id: tool._local.id,
+            id: tool._entry.id,
             isActive: true,
           }),
         ]);

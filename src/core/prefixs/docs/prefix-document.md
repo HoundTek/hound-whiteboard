@@ -122,54 +122,16 @@ const handler = createRepeatorPrefixHandler({
 
 ## Handoff 工作流：`createHandoffSubDAG`
 
-`createHandoffSubDAG` 把 `first → second` 的两阶段工作流封装成一棵结构化子树。
+详细文档见 [handoff-handler-document.md](./handoff-handler-document.md)。
 
-典型场景包括：
+`createHandoffSubDAG` 把 first → second 的两阶段工作流封装成一棵结构化子树。典型场景包括 creator → modifier、chooser → modifier、SubDAGDefinition → modifier。
 
-- creator → modifier
-- chooser → modifier
-- 任意 SubDAGDefinition → modifier
+辅助函数：
 
-### 当前工作方式
+- `wrapSubDAGForHandoff(subDAGDef, options)`：子树根节点满足条件时调用 `onToolComplete`
+- handler 内部桥接：在 first / second 节点 handler 中临时订阅工具钩子，触发时调用累计 context 中的 `onToolComplete`
 
-采用生命周期钩子，handoff 不再替换工具方法，而是通过钩子订阅实现非侵入的完成通知与流程控制：
-
-- 根节点是一个 `multi-tool prefix`，根据 `state.activeChild` 路由
-- 根 prefix 通过 `transition.acc` 向当前活动子链注入 `onToolComplete` 回调和 `autoUmountOnApply: false`
-- **creator 的 first**：handoff 覆盖 `beforeCommitCreatedObject` 返回 `false`（阻止进入静态图），订阅 `"afterCreate"` 钩子
-- **modifier 的 second**：handoff 订阅 `"afterApply"` 钩子，通过 context 注入 `autoUmountOnApply: false` 阻止自卸载
-- **chooser 的 first**：通过 `confirmSelection → afterConfirmSelection` 钩子宣告完成
-
-```mermaid
-flowchart LR
-    A[输入进入 handoff 根节点] --> B{activeChild}
-    B -->|"first (creator)"| C[first 处理]
-    C -->|"beforeCommit→false"| C1[跳过 AOM.apply]
-    C1 -->|"afterCreate 钩子"| D[autoBridgeObjects]
-    D --> E[切换 activeChild = second]
-    E --> F[second 处理]
-    F -->|"afterApply 钩子"| G[切换 activeChild = first]
-    G --> B
-```
-
-### 控制流与钩子对照
-
-| 步骤          | 独立模式                                     | handoff 模式                                   |
-| ------------- | -------------------------------------------- | ---------------------------------------------- |
-| Creator 完成  | `beforeCommit→true` → AOM.apply              | `beforeCommit→false` → 对象留在 AOM            |
-| Creator 通知  | `afterCreate` 无人订阅                       | handoff handler 订阅 `afterCreate`             |
-| Chooser 确认  | `confirmSelection` → `afterConfirm` 无人订阅 | handoff handler 订阅 `afterConfirm`            |
-| Modifier 提交 | AOM.apply → 自卸载                           | AOM.apply → `autoUmountOnApply:false` 阻止卸载 |
-| Modifier 通知 | `afterApply` 无人订阅                        | handoff handler 订阅 `afterApply`              |
-
-### 辅助函数
-
-- `wrapSubDAGForHandoff(subDAGDef, options)`：在子树根节点满足 `shouldComplete` 或收到 `end` 时调用 `onToolComplete`
-- handler 内部桥接：在 first / second 节点 handler 中临时订阅工具钩子，触发时调用累积 context 中的 `onToolComplete` 回调
-
-### 钩子清理
-
-handoff 子图构建后会保存 `beforeCommitCreatedObject` 的原始引用，并通过 `subDAG.resetHandoff()` 暴露清理入口，在卸载 handoff 时恢复工具原始行为。
+钩子清理：handoff 保存 `beforeCommitCreatedObject` 原始引用，通过 `subDAG.resetHandoff()` 恢复。
 
 ## 拖拽位移转换：`createDragAnchorPrefixHandler`
 
@@ -216,6 +178,7 @@ monitor.mountSubDAG("", builder.build());
 
 ## 相关文档
 
+- [handoff-handler-document.md](./handoff-handler-document.md)
 - [handler 上下文（ctx）用法](../../devices-dag/docs/handler-context-document.md)
 - [设备图](../../devices-dag/docs/devices-dag-document.md)
 - [对象创建工具](../../tools/creator/docs/object-creator-document.md)

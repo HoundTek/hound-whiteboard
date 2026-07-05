@@ -254,8 +254,12 @@ function wrapChooserForHandoff(tool) {
 
     const unsub =
       typeof tool.on === "function"
-        ? tool.on("afterConfirm", () => {
+        ? tool.on("afterConfirm", (_ctx, objects) => {
             completed = true;
+            // 优先取事件参数 objects（mock chooser 提供），fallback acc.objects
+            context.acc?.setHandoffObjects?.(
+              objects ?? context.acc?.objects ?? [],
+            );
             onToolComplete?.();
           })
         : null;
@@ -285,6 +289,9 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
 
     if (!should) return rawResult;
 
+    // 将子图写入 acc.objects 的对象桥接到 handoff root 状态
+    const objects = context.acc?.objects ?? [];
+    context.acc?.setHandoffObjects?.(objects);
     context.acc?.onToolComplete?.();
     return normalizeWrappedResult(rawResult);
   };
@@ -384,6 +391,11 @@ function createHandoffSubDAG(options = {}) {
   // 保存 handoff 根节点路径用于状态桥接
   let handoffBasePath = "";
 
+  // 闭包变量：存储 first 完成时桥接的对象集合
+  // 不写入 DAG state，避免污染 nodeState 的形状
+  let handoffObjects = [];
+  let handoffExplicitlySet = false;
+
   // ── 判断 first 类型 ──
   const firstIsCreator =
     isToolInstance(first) && typeof first.completeCreatedObject === "function";
@@ -433,34 +445,17 @@ function createHandoffSubDAG(options = {}) {
           // 构建 onToolComplete 回调
           const createCompleteCallback = (completedPhase) => () => {
             if (completedPhase === "first") {
-              // 判断是否能安全切换到 second
-              let canSwitchToSecond = true;
+              // 仅当 setHandoffObjects 被显式调用且对象为空时才阻止切换
+              //   （如 creator 创建失败无对象场景）
+              // 未调用 setHandoffObjects（直接 onToolComplete）时始终切换
+              if (handoffExplicitlySet && handoffObjects.length === 0) return;
 
-              if (autoBridgeObjects) {
-                const dag = prefixContext.dag;
-                const firstState = dag?.getNodeState?.(
-                  `${handoffBasePath}/first`,
-                );
-                const objects = firstState?.objects ?? [];
-                if (objects.length > 0) {
-                  dag?.setNodeState?.(`${handoffBasePath}/second`, {
-                    objects,
-                  });
-                } else {
-                  // autoBridgeObjects 开启但无对象可桥接 → 不切到 second
-                  canSwitchToSecond = false;
-                }
-              }
-
-              if (canSwitchToSecond) {
-                prefixContext.setState({
-                  phase: "second",
-                  activeChild: "second",
-                });
-              }
+              prefixContext.setState({
+                phase: "second",
+                activeChild: "second",
+              });
             } else if (completedPhase === "second") {
               // 清理 first / second 节点内的旧对象引用，防止 overlay 继续渲染旧选择框
-              // 使用 { objects: [] } 而非 {}：resolveContextObjects 读到 [] 后立即短路返回
               const dag = prefixContext.dag;
               if (handoffBasePath) {
                 dag?.setNodeState?.(`${handoffBasePath}/first`, {
@@ -476,6 +471,10 @@ function createHandoffSubDAG(options = {}) {
                 activeChild: "first",
               });
 
+              // 清空闭包中的桥接对象
+              handoffObjects = [];
+              handoffExplicitlySet = false;
+
               // 触发 UI overlay 刷新，去除残留的 modifier / chooser 渲染条目
               prefixContext.acc?.monitor?.requestViewportUiRender?.();
             }
@@ -487,6 +486,14 @@ function createHandoffSubDAG(options = {}) {
               onToolComplete: createCompleteCallback(fromPhase || "first"),
               // 阻止 modifier 在 handoff 中自卸载
               autoUmountOnApply: false,
+              // 当前阶段持有的对象，供 modifier 直接从 acc 读取
+              objects: handoffObjects,
+              handoffObjects,
+              // first tool 调用此回调将对象写入 handoff 闭包变量
+              setHandoffObjects: (objects) => {
+                handoffObjects = Array.isArray(objects) ? [...objects] : [];
+                handoffExplicitlySet = true;
+              },
             },
           };
         },
@@ -511,8 +518,14 @@ function createHandoffSubDAG(options = {}) {
       // 临时订阅 afterCreate：工具触发时桥接到 onToolComplete
       const unsub =
         typeof first.on === "function"
-          ? first.on("afterCreate", () => {
+          ? first.on("afterCreate", (_interaction, completedObject) => {
               completed = true;
+              // 优先取事件参数中的 completedObject，fallback 取 acc.objects
+              const objects =
+                completedObject != null
+                  ? [completedObject]
+                  : (context.acc?.objects ?? []);
+              context.acc?.setHandoffObjects?.(objects);
               onToolComplete?.();
             })
           : null;

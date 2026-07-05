@@ -62,7 +62,7 @@ class ObjectCreatorTool extends Tool {
    */
   constructor() {
     super();
-    this._local = null;
+    this._entry = null;
     this.objectId = null;
     this.isCreatingGestureActive = false;
     this.isObjectCreationCompleted = false;
@@ -92,11 +92,12 @@ class ObjectCreatorTool extends Tool {
   /**
    * 当前正在创建对象的本地状态
    * @description
-   * 纯数据对象 { id, position, property, data }，不再持有 BasicObject 实例。
+   * 纯数据对象，遵循 {@link LightweightObjectEntry} 协议，不再持有 BasicObject 实例。
    * 手势期几何读写均通过此对象完成，Worker 侧同步通过 RPC fire-and-forget 平行维护。
-   * @type {{ id: number, position: Vector, property: Record<string,any>, data: Record<string,any> } | null}
+   * 子类的 `create()` 实现应设置 `type` 字段与其 `getCreatedObjectType()` 返回值一致。
+   * @type {import("../../shared/types.js").LightweightObjectEntry | null}
    */
-  _local;
+  _entry;
 
   /**
    * 当前创建对象的 id
@@ -209,7 +210,7 @@ class ObjectCreatorTool extends Tool {
    */
   initializeCreatedObjectDraft(interaction, property, data) {
     this.create(interaction.position, interaction.objectId);
-    const createdObject = this._local;
+    const createdObject = this._entry;
 
     if (!createdObject) {
       throw new Error(
@@ -269,7 +270,7 @@ class ObjectCreatorTool extends Tool {
     });
 
     this.objectId = interaction.objectId;
-    this._local = createdObject;
+    this._entry = createdObject;
     return true;
   }
 
@@ -279,7 +280,7 @@ class ObjectCreatorTool extends Tool {
    * @returns {boolean} 是否已拥有对象实例
    */
   ensureObject(interaction) {
-    if (!this._local || this.isObjectCreationCompleted) {
+    if (!this._entry || this.isObjectCreationCompleted) {
       this._pendingProperty = interaction?.injectedProperty ?? null;
 
       // 惰性分配 objectId：走 board.allocateObjectId()（Board 自持 CounterPool，同步分配）
@@ -315,7 +316,7 @@ class ObjectCreatorTool extends Tool {
    * @param {BasicObject} [objectEntry=this.obj] - 当前对象
    * @returns {Array<BasicObject>}
    */
-  syncCreatedObjectContext(context = {}, localState = this._local) {
+  syncCreatedObjectContext(context = {}, localState = this._entry) {
     return this.setContextObjects(context, localState ? [localState] : []);
   }
 
@@ -367,7 +368,7 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   afterGeometryMutation(interaction) {
-    if (!this._local) return;
+    if (!this._entry) return;
     this.requestUiOverlayRefresh(interaction?.context ?? {});
   }
 
@@ -396,6 +397,20 @@ class ObjectCreatorTool extends Tool {
   }
 
   /**
+   * 解析已完成对象的局部外接矩形
+   * @description
+   * 子类覆写此方法，在 `finalizeCreatedObject` 中被调用，
+   * 将计算结果回填到 `this._entry.boundingBox`，使创建态条目
+   * 可以被 modifier 直接消费（准入检测、overlay 渲染）。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {{ left: number, top: number, width: number, height: number }|undefined} 局部外接矩形
+   * @protected
+   */
+  resolveCreatedObjectBoundingBox(interaction) {
+    return undefined;
+  }
+
+  /**
    * 决定 finalize 之后是否将对象提交到静态图
    * @description
    * handoff 工作流 override 此钩子返回 false 以阻止提交，
@@ -412,12 +427,21 @@ class ObjectCreatorTool extends Tool {
    * 固化对象上下文（同步到 node state、标记完成）
    * @description
    * 无论后续是否 commit，此步骤始终执行。
+   * 同时回填 `boundingBox`，确保条目在后续 handoff 桥接时
+   * 携带完整的几何边界信息。
    * @param {Object} interaction - 当前交互上下文
    * @protected
    */
   finalizeCreatedObject(interaction) {
     const context = interaction?.context ?? {};
-    this.syncCreatedObjectContext(context, this._local);
+
+    // 回填 boundingBox，使创建态条目可被 modifier 直接消费
+    const boundingBox = this.resolveCreatedObjectBoundingBox(interaction);
+    if (boundingBox && this._entry) {
+      this._entry.boundingBox = boundingBox;
+    }
+
+    this.syncCreatedObjectContext(context, this._entry);
     this.isObjectCreationCompleted = true;
   }
 
@@ -456,8 +480,8 @@ class ObjectCreatorTool extends Tool {
    * @param {Object} interaction - 当前交互上下文
    */
   completeCreatedObject(interaction) {
-    if (!this._local) return undefined;
-    const completedObject = this._local;
+    if (!this._entry) return undefined;
+    const completedObject = this._entry;
 
     // 1. Finalize：总是执行（同步上下文 + 标记完成）
     this.finalizeCreatedObject(interaction);
@@ -479,7 +503,7 @@ class ObjectCreatorTool extends Tool {
    */
   cancelCreatedObject(interaction) {
     const boardApi = interaction?.context?.acc?.boardApi;
-    if (this._local && boardApi && this.objectId != null) {
+    if (this._entry && boardApi && this.objectId != null) {
       boardApi.discardActiveObjects([this.objectId]);
     }
     this.clearContextObjects(interaction?.context ?? {});
@@ -508,7 +532,8 @@ class ObjectCreatorTool extends Tool {
    * @param {Vector} position - 新对象的位置
    * @param {number} id - 新对象的 id
    * @description
-   * 子类应初始化 this._local 为纯数据对象 { id, position, property, data }。
+   * 子类应初始化 this._entry 为纯数据对象，遵循 {@link LightweightObjectEntry} 协议。
+   * 其中 `type` 字段应与 {@link getCreatedObjectType} 的返回值一致。
    * 不再创建 BasicObject 子类实例——手势期几何读写仅需纯数据。
    * Worker 侧真实对象通过 RPC fire-and-forget 平行维护。
    * @abstract

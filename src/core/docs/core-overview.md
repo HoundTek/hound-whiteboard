@@ -27,7 +27,7 @@
 2. `Board.enableWorkerMode(worker)` 初始化 `BoardApiRpc`
 3. `BoardApiRpc.createBoard(...)` 在 Worker 中创建真正的 `BoardCore`
 4. `Board.createMonitor(...)` 返回 `MonitorProxy`
-6. `MonitorProxy` 通过 `createMonitor` RPC 在 Worker 中创建 `MonitorCore`
+5. `MonitorProxy` 通过 `createMonitor` RPC 在 Worker 中创建 `MonitorCore`
 
 ### 输入与工具
 
@@ -74,14 +74,13 @@
 - `BoardCore` / `MonitorCore` / `MonitorProxy` / `BoardApiRpc` 已全部接通
 - demo 默认启用 Worker mode
 - creator / chooser / modifier 已全部适配 Worker mode
-- creator 本地状态使用 `_local` 纯数据对象，不再持有本地 `BasicObject` 实例
+- creator 本地状态使用 `_entry` 纯数据对象（遵循 `LightweightObjectEntry` 协议）
 - objectId 在 UI 侧由 `Board` 自持 `CounterPool` 同步分配，Worker 侧要求显式传入 id
 - Worker 若收到重复 objectId，会通过 RPC 抛错返回
 
 ## 关键术语
 
 - **RPC 通信**：UI 侧 `BoardApiRpc` 通过 postMessage 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
-- **summary-like 条目**：UI 侧在 chooser / modifier / overlay 中流转的纯数据对象，例如 `{ id, position, boundingBox, property, data }`
 - **静态图**：各 `ChunkObjectManager.staticGraph` 维护的稳定层叠关系
 - **动态图 / AOM**：`ActiveObjectManager` 维护的交互态对象与临时层关系
 

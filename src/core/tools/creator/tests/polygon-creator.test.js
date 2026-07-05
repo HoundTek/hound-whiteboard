@@ -66,8 +66,8 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([{ x: 5, y: 7 }]);
-    expect(tool._local.position.serialize()).toEqual({ x: 5, y: 5 });
+    expect(tool._entry.data.points).toEqual([{ x: 5, y: 7 }]);
+    expect(tool._entry.position.serialize()).toEqual({ x: 5, y: 5 });
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -90,7 +90,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.property).toMatchObject({
+    expect(tool._entry.property).toMatchObject({
       fillColor: "#ff0000",
       strokeColor: "#0000ff",
       strokeWidth: 3,
@@ -122,7 +122,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -154,7 +154,7 @@ describe("PolygonCreatorTool", () => {
     );
 
     expect(discardSpy).toHaveBeenCalledWith([10]);
-    expect(tool._local).toBeNull();
+    expect(tool._entry).toBeNull();
     expect(tool.count).toBe(0);
     expect(tool.lastPoint).toBeNull();
     expect(board.getObjectById).not.toHaveBeenCalled();
@@ -183,7 +183,7 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -308,7 +308,7 @@ describe("PolygonCreatorTool", () => {
     );
     expect(appendSpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([24]);
-    expect(tool._local).toMatchObject({
+    expect(tool._entry).toMatchObject({
       id: 24,
       position: new Vector(5, 5),
     });
@@ -363,7 +363,7 @@ describe("PolygonCreatorTool", () => {
     );
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([703]);
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("object-end 后应通过 commitObjects 提交对象", () => {
@@ -449,10 +449,10 @@ describe("PolygonCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._local.id]),
+          board.getBoardApi().queryObjects([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
-            id: tool._local.id,
+            id: tool._entry.id,
             isActive: false,
             position: { x: 125, y: 80 },
             data: expect.objectContaining({
@@ -460,9 +460,9 @@ describe("PolygonCreatorTool", () => {
             }),
           }),
         ]);
-        expect(tool._local.id).toBe(1);
-        expect(tool._local.position.serialize()).toEqual({ x: 125, y: 80 });
-        expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+        expect(tool._entry.id).toBe(1);
+        expect(tool._entry.position.serialize()).toEqual({ x: 125, y: 80 });
+        expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
       } finally {
         cleanup();
       }

@@ -119,7 +119,6 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @returns {Array<BasicObject>}
    */
 
-
   /**
    * 从候选对象里筛出与当前框选矩形相交的对象
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文

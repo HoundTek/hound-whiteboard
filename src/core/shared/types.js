@@ -38,6 +38,26 @@
  */
 
 /**
+ * 轻量对象条目
+ * @description
+ * UI 侧（creator / chooser / modifier）统一使用的纯数据对象协议，代替 BasicObject 实例在工具间传递。
+ * 两种场景：
+ * - **创建态**（creator `_entry`）：对象正在创建中，几何未定型，不包含 `range` / `boundingBox`。
+ * - **摘要态**（summary-like）：已有对象的轻量快照，从 Worker 侧反序列化回来，包含 `range` / `boundingBox`。
+ *
+ * 消费端（如 modifier 的 `resolveModifiedObjectPosition`）通过 `Vector.parse()` 统一处理
+ * `position` 的 `Vector` 和 `{ x, y }` 两种形态。
+ * @typedef {Object} LightweightObjectEntry
+ * @property {number} id - 对象 id
+ * @property {string} type - 对象类型名（如 "StrokeObject"、"CircleObject"）
+ * @property {Vector|Point2D} position - 世界坐标位置，创建态可为 Vector 实例，摘要态为 { x, y } 纯对象
+ * @property {import("../range/rectangle.js").RectangleRange} [boundingBox] - 外接矩形（摘要态有，创建态无）
+ * @property {import("../range/range.js").Range} [range] - 主判定范围（摘要态有，创建态无）
+ * @property {Record<string, any>} property - 样式属性
+ * @property {Record<string, any>} data - 类型专属几何数据（如 points、radius）
+ */
+
+/**
  * 跨线程对象摘要
  * @typedef {Object} ObjectSummary
  * @property {number} id - 对象 id

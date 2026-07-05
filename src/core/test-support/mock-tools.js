@@ -57,6 +57,7 @@ function createMockCreator(onProcess) {
      * 被 handoff 通过钩子（beforeCommit / afterCreate）拦截。
      */
     completeCreatedObject(interaction) {
+      const draft = this._entry ?? this.obj;
       if (this.beforeCommitCreatedObject?.(interaction) === false) {
         // handoff 模式：只 finalize，不 commit
         this.isObjectCreationCompleted = true;
@@ -64,10 +65,10 @@ function createMockCreator(onProcess) {
         // 独立模式：commit 到静态图
         this.isObjectCreationCompleted = true;
         interaction?.context?.acc?.board?.activeObjectManager?.apply?.(
-          new Set([this.obj].filter(Boolean)),
+          new Set([draft].filter(Boolean)),
         );
       }
-      this.afterCompleteCreatedObject?.(interaction, this.obj);
+      this.afterCompleteCreatedObject?.(interaction, draft);
     }
 
     beforeCommitCreatedObject(_interaction) {
