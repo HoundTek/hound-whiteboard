@@ -10,7 +10,9 @@
     "bench": "node benchmarks/all.bench.js",
     "bench:io": "node benchmarks/io-bridge.bench.js",
     "bench:io:direct": "node benchmarks/io-direct.bench.js",
-    "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js"
+    "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js",
+    "bench:worker": "node benchmarks/worker-rpc.bench.js",
+    "bench:render": "node benchmarks/worker-render.bench.js"
   },
   "author": "Frank Steven",
   "license": "MIT",
