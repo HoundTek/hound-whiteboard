@@ -485,18 +485,6 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 当前修改手势是否激活
    * @type {boolean}
    */
-  get isModifyingGestureActive() {
-    return this.isGestureActive;
-  }
-
-  /**
-   * 当前修改手势是否激活
-   * @param {boolean} value - 新的激活状态
-   */
-  set isModifyingGestureActive(value) {
-    this.isGestureActive = Boolean(value);
-  }
-
   constructor() {
     super();
     this.autoActionOnGestureEnd = false;
@@ -615,11 +603,11 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   _handleCancel(interaction, context, objects) {
     this.withGeometryMutation(
       context,
-      () => this.cancelModifyGesture(interaction),
+      () => this.cancelGesture(interaction),
       objects,
       { captureSnapshot: false },
     );
-    this.isModifyingGestureActive = false;
+    this.isGestureActive = false;
     this._overlayModifiedObjects = [];
   }
 
@@ -631,9 +619,9 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @private
    */
   _handleSuccess(interaction, context, objects) {
-    if (this.isModifyingGestureActive) {
-      this.completeModifyGesture(interaction);
-      this.isModifyingGestureActive = false;
+    if (this.isGestureActive) {
+      this.completeGesture(interaction);
+      this.isGestureActive = false;
     }
     this.applyModifiedObjects(context, objects);
     this._overlayModifiedObjects = [];
@@ -645,9 +633,9 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @private
    */
   _handleOrphanEnd(interaction) {
-    if (interaction.hasEndSignal && this.isModifyingGestureActive) {
-      this.completeModifyGesture(interaction);
-      this.isModifyingGestureActive = false;
+    if (interaction.hasEndSignal && this.isGestureActive) {
+      this.completeGesture(interaction);
+      this.isGestureActive = false;
     }
   }
 
@@ -665,24 +653,24 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   _handleSpatialUpdate(interaction, context, objects) {
     // Step 1: Position 处理（手势状态机）
     if (interaction.position) {
-      if (!this.isModifyingGestureActive) {
+      if (!this.isGestureActive) {
         // 首次位置：准入检测 → begin + update
-        if (this.canBeginModifyGesture(interaction) === false) return;
+        if (this.canBeginGesture(interaction) === false) return;
         this.withGeometryMutation(
           context,
           () => {
-            this.beginModifyGesture(interaction);
-            this.updateModifyGesture(interaction);
+            this.beginGesture(interaction);
+            this.updateGesture(interaction);
           },
           objects,
         );
-        this.isModifyingGestureActive = true;
+        this.isGestureActive = true;
       } else {
         // 后续位置：仅 update，无需重复抓取快照
         this.withGeometryMutation(
           context,
           () => {
-            this.updateModifyGesture(interaction);
+            this.updateGesture(interaction);
           },
           objects,
           { captureSnapshot: false },
@@ -706,80 +694,44 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
     // Step 3: End 检查
     if (interaction.hasEndSignal) {
-      this.completeModifyGesture(interaction);
-      this.isModifyingGestureActive = false;
+      this.completeGesture(interaction);
+      this.isGestureActive = false;
     }
   }
 
   /**
    * 手势准入检查，决定是否允许开始修改手势，子类可覆写以添加区域命中检测等限制
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
+   * @param {Object} interaction - 当前交互上下文
    * @returns {boolean}
    * @protected
    */
   canBeginGesture(interaction) {
-    return this.canBeginModifyGesture(interaction);
-  }
-
-  /**
-   * GestureTool 生命周期适配：修改手势准入检测
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
-   * @returns {boolean}
-   * @protected
-   */
-  canBeginModifyGesture(interaction) {
     return true;
   }
 
   /**
    * 修改手势开始
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
+   * @param {Object} interaction - 当前交互上下文
    * @abstract
    */
   beginGesture(interaction) {
-    return this.beginModifyGesture(interaction);
-  }
-
-  /**
-   * 修改手势开始
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
-   * @abstract
-   */
-  beginModifyGesture(interaction) {
     throw new Error("Method not implemented.");
   }
 
   /**
    * 修改手势更新
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
+   * @param {Object} interaction - 当前交互上下文
    * @abstract
    */
   updateGesture(interaction) {
-    return this.updateModifyGesture(interaction);
-  }
-
-  /**
-   * 修改手势更新
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
-   * @abstract
-   */
-  updateModifyGesture(interaction) {
     throw new Error("Method not implemented.");
   }
 
   /**
    * 修改手势完成
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
+   * @param {Object} interaction - 当前交互上下文
    */
-  completeGesture(interaction) {
-    return this.completeModifyGesture(interaction);
-  }
-
-  /**
-   * 修改手势完成
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
-   */
-  completeModifyGesture(interaction) {}
+  completeGesture(interaction) {}
 
   /**
    * 修改手势取消
@@ -787,21 +739,9 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 子类应覆写此方法将对象回滚到手势开始时的初始状态。
    * 基类 _handleCancel 已包裹 withGeometryMutation，
    * 覆写时只需恢复几何，无需关心引用失效与渲染刷新。
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
+   * @param {Object} interaction - 当前交互上下文
    */
-  cancelGesture(interaction) {
-    return this.cancelModifyGesture(interaction);
-  }
-
-  /**
-   * 修改手势取消
-   * @description
-   * 子类应覆写此方法将对象回滚到手势开始时的初始状态。
-   * 基类 _handleCancel 已包裹 withGeometryMutation，
-   * 覆写时只需恢复几何，无需关心引用失效与渲染刷新。
-   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
-   */
-  cancelModifyGesture(interaction) {}
+  cancelGesture(interaction) {}
 
   /**
    * 位移应用前的 hook
@@ -848,7 +788,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @returns {void}
    */
   umount(context = {}) {
-    this.isModifyingGestureActive = false;
+    this.isGestureActive = false;
     super.umount(context);
   }
 
@@ -857,7 +797,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @returns {void}
    */
   reset() {
-    this.isModifyingGestureActive = false;
+    this.isGestureActive = false;
     super.reset();
   }
 }

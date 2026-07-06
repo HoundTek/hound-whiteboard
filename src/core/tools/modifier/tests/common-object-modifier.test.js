@@ -1140,7 +1140,7 @@ describe("CommonObjectModifierTool", () => {
       );
       expect(object.position).toEqual(new Vector(13, 25));
       // 手势不应激活
-      expect(tool.isModifyingGestureActive).toBe(false);
+      expect(tool.isGestureActive).toBe(false);
       // withGeometryMutation 带 captureSnapshot: false → 仅触发 after
       expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
       expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
@@ -1266,7 +1266,7 @@ describe("CommonObjectModifierTool", () => {
 
       // end 结束手势
       tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
-      expect(tool.isModifyingGestureActive).toBe(false);
+      expect(tool.isGestureActive).toBe(false);
 
       // displacement 在 end 后到达：直接累加
       tool.process(
@@ -1280,7 +1280,7 @@ describe("CommonObjectModifierTool", () => {
       expect(object.position).toEqual(new Vector(19, 25));
 
       // 没有锚点可调，手势仍不活跃
-      expect(tool.isModifyingGestureActive).toBe(false);
+      expect(tool.isGestureActive).toBe(false);
     });
 
     test("cancel 应回退到手势开始时的初始位置（含 displacement 修正）", () => {

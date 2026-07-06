@@ -69,7 +69,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * @param {Object} interaction - 当前交互上下文
    * @returns {boolean}
    */
-  canBeginModifyGesture(interaction) {
+  canBeginGesture(interaction) {
     const { objects, position } = interaction;
     const result = this._isPositionInsideCombinedRect(objects, position);
     return result;
@@ -82,7 +82,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * 从而保持光标与对象之间的相对偏移不变（光标拖哪，对象跟哪）。
    * @param {Object} interaction - 当前交互上下文
    */
-  beginModifyGesture(interaction) {
+  beginGesture(interaction) {
     const { objects, position } = interaction;
     this._anchorPosition = { x: position.x, y: position.y };
     // 总是记录当前手势基准位置，供 updateModifyGesture 计算位移
@@ -112,7 +112,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * 以锚点为基准计算位移，更新各对象位置
    * @param {Object} interaction - 当前交互上下文
    */
-  updateModifyGesture(interaction) {
+  updateGesture(interaction) {
     const { context, objects, position } = interaction;
     if (!this._anchorPosition) return;
 
@@ -135,7 +135,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * 清空手势锚点与初始位置缓存
    * @param {Object} interaction - 当前交互上下文
    */
-  completeModifyGesture(interaction) {
+  completeGesture(interaction) {
     this._anchorPosition = null;
     this._gestureBasePositions = null;
     // 保留 _initialPositions，使手势结束后的 cancel 仍能回退到首次手势的初始位置
@@ -188,7 +188,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * 回滚后基类会统一处理渲染刷新与 overlay 更新。
    * @param {Object} interaction - 当前交互上下文
    */
-  cancelModifyGesture(interaction) {
+  cancelGesture(interaction) {
     if (!this._initialPositions) return;
     for (const obj of interaction.objects) {
       const initPos = this._initialPositions.get(

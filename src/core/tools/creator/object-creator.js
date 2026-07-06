@@ -92,22 +92,6 @@ class ObjectCreatorTool extends GestureTool {
   _pendingActionInteraction;
 
   /**
-   * 当前创建手势是否仍在持续
-   * @type {boolean}
-   */
-  get isCreatingGestureActive() {
-    return this.isGestureActive;
-  }
-
-  /**
-   * 当前创建手势是否仍在持续
-   * @param {boolean} value - 新的激活状态
-   */
-  set isCreatingGestureActive(value) {
-    this.isGestureActive = Boolean(value);
-  }
-
-  /**
    * @constructor
    */
   constructor() {
@@ -389,21 +373,12 @@ class ObjectCreatorTool extends GestureTool {
   }
 
   /**
-   * GestureTool 生命周期适配：开始一次创建手势
+   * 开始一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
   beginGesture(interaction) {
     this.beforeGeometryMutation(interaction);
-    this.beginCreationGesture(interaction);
     this.afterGeometryMutation(interaction);
-  }
-
-  /**
-   * 开始一次创建手势
-   * @param {Object} interaction - 当前交互上下文
-   */
-  beginCreationGesture(interaction) {
-    throw new Error("Method not implemented.");
   }
 
   /**
@@ -428,28 +403,10 @@ class ObjectCreatorTool extends GestureTool {
   }
 
   /**
-   * GestureTool 生命周期适配：更新一次创建手势
-   * @param {Object} interaction - 当前交互上下文
-   */
-  updateGesture(interaction) {
-    this.updateCreationGesture(interaction);
-    this.afterGeometryMutation(interaction);
-  }
-
-  /**
    * 更新一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
-  updateCreationGesture(interaction) {
-    throw new Error("Method not implemented.");
-  }
-
-  /**
-   * GestureTool 生命周期适配：完成一次创建手势
-   * @param {Object} interaction - 当前交互上下文
-   */
-  completeGesture(interaction) {
-    this.completeCreationGesture(interaction);
+  updateGesture(interaction) {
     this.afterGeometryMutation(interaction);
   }
 
@@ -457,23 +414,16 @@ class ObjectCreatorTool extends GestureTool {
    * 完成一次创建手势
    * @param {Object} interaction - 当前交互上下文
    */
-  completeCreationGesture(interaction) {
+  completeGesture(interaction) {
+    this.afterGeometryMutation(interaction);
     return undefined;
-  }
-
-  /**
-   * GestureTool 生命周期适配：取消当前创建手势
-   * @param {Object} interaction - 当前交互上下文
-   */
-  cancelGesture(interaction) {
-    this.cancelCreationGesture(interaction);
   }
 
   /**
    * 取消当前创建手势
    * @param {Object} interaction - 当前交互上下文
    */
-  cancelCreationGesture(interaction) {
+  cancelGesture(interaction) {
     return undefined;
   }
 
@@ -553,51 +503,48 @@ class ObjectCreatorTool extends GestureTool {
   afterCompleteCreatedObject(interaction, completedObject) {}
 
   /**
-   * 执行 Creator 的完整提交流程
+   * 完成整个对象创建（编排钩子流程）
+   * @description completeCreatedObject 是旧版入口，保持对外兼容。
+   * 它将 interaction 桥接到 completeAction 后由 GestureTool 统一编排。
    * @param {Object} interaction - 当前交互上下文
    * @returns {undefined}
-   * @protected
    */
-  _finalizeAction(interaction) {
+  completeCreatedObject(interaction) {
+    this._pendingActionInteraction = interaction;
+    try {
+      return this.completeAction(interaction?.context);
+    } finally {
+      this._pendingActionInteraction = null;
+    }
+  }
+
+  /**
+   * GestureTool 生命周期适配：完成 Creator 动作
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @returns {undefined}
+   */
+  completeAction(context) {
     if (!this._entry) {
       return undefined;
     }
 
-    const completedObject = this._entry;
+    const interaction = this._pendingActionInteraction ?? {
+      context,
+      signalPacket: SignalPacket.from({ signals: [] }),
+      signals: [],
+      position: null,
+    };
+
+    // finalize 总是执行，beforeCommit 决定是否 commit
     this.finalizeCreatedObject(interaction);
 
     if (this.beforeCommitCreatedObject(interaction) !== false) {
       this.commitCreatedObject(interaction);
     }
 
-    this.afterCompleteCreatedObject(interaction, completedObject);
-    super.afterAction(interaction?.context ?? {}, completedObject);
+    this.afterCompleteCreatedObject(interaction, this._entry);
+    super.afterAction(context, this._entry);
     return undefined;
-  }
-
-  /**
-   * 完成整个对象创建（编排钩子流程）
-   * @param {Object} interaction - 当前交互上下文
-   * @returns {undefined}
-   */
-  completeCreatedObject(interaction) {
-    return this._finalizeAction(interaction);
-  }
-
-  /**
-   * GestureTool 生命周期适配：完成动作
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @returns {undefined}
-   */
-  completeAction(context) {
-    return this._finalizeAction(
-      this._pendingActionInteraction ?? {
-        context,
-        signalPacket: SignalPacket.from({ signals: [] }),
-        signals: [],
-        position: null,
-      },
-    );
   }
 
   /**
@@ -674,7 +621,7 @@ class ObjectCreatorTool extends GestureTool {
     this.discardCreatedObjects(context);
     this.clearContextObjects(context);
     this.objectId = null;
-    this.isCreatingGestureActive = false;
+    this.isGestureActive = false;
     this.isObjectCreationCompleted = false;
     this._pendingActionInteraction = null;
     super.umount(context);

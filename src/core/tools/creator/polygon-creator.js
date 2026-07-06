@@ -173,7 +173,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @description 创建手势开始时，添加一个新的顶点。
    * @param {Object} interaction - 当前交互上下文
    */
-  beginCreationGesture(interaction) {
+  beginGesture(interaction) {
     const addPt = this.toLocalPoint(interaction.position);
     this.appendPoint(addPt, interaction);
     this.lastPoint = interaction.position;
@@ -184,19 +184,20 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @description 创建手势更新时，修改当前顶点位置。
    * @param {Object} interaction - 当前交互上下文
    */
-  updateCreationGesture(interaction) {
+  updateGesture(interaction) {
     if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
       this.lastPoint = interaction.position;
       const upPt = this.toLocalPoint(interaction.position);
       this.replacePoint(upPt, this.count - 1, interaction);
     }
+    this.afterGeometryMutation(interaction);
   }
 
   /**
    * @description 创建手势结束时，固定当前顶点并追加控制点。
    * @param {Object} interaction - 当前交互上下文
    */
-  completeCreationGesture(interaction) {
+  completeGesture(interaction) {
     if (
       interaction.position &&
       !Vector.nearlyEq(this.lastPoint, interaction.position)
@@ -209,7 +210,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     this.lastPoint = null;
   }
 
-  cancelCreationGesture(interaction) {
+  cancelGesture(interaction) {
     return undefined;
   }
 

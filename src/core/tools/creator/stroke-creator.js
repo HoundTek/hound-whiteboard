@@ -107,16 +107,17 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     this._lastLocalPoint = new Vector(point.x, point.y);
   }
 
-  beginCreationGesture(interaction) {
+  beginGesture(interaction) {
     this._lastLocalPoint = null;
     this.appendPathPoint(this.toLocalPoint(interaction.position), interaction);
   }
 
-  updateCreationGesture(interaction) {
+  updateGesture(interaction) {
     this.appendPathPoint(this.toLocalPoint(interaction.position), interaction);
+    this.afterGeometryMutation(interaction);
   }
 
-  completeCreationGesture(interaction) {
+  completeGesture(interaction) {
     if (interaction.position) {
       this.appendPathPoint(
         this.toLocalPoint(interaction.position),

@@ -870,46 +870,6 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       ).toThrow(/same tool instance/i);
     });
 
-    test("同一 tool 实例参与两个不同的 handoff 应抛错", () => {
-      const tool = createMockCreator();
-      const modifier1 = createMockModifier();
-      const modifier2 = createMockModifier();
-
-      createHandoffSubDAG({
-        rootPath: "/first-handoff",
-        first: tool,
-        second: modifier1,
-      });
-
-      expect(() =>
-        createHandoffSubDAG({
-          rootPath: "/second-handoff",
-          first: tool,
-          second: modifier2,
-        }),
-      ).toThrow(/already been registered/i);
-    });
-
-    test("不同 tool 实例可以各自参与 handoff", () => {
-      const creator1 = createMockCreator();
-      const creator2 = createMockCreator();
-      const modifier1 = createMockModifier();
-      const modifier2 = createMockModifier();
-
-      expect(() => {
-        createHandoffSubDAG({
-          rootPath: "/handoff-a",
-          first: creator1,
-          second: modifier1,
-        });
-        createHandoffSubDAG({
-          rootPath: "/handoff-b",
-          first: creator2,
-          second: modifier2,
-        });
-      }).not.toThrow();
-    });
-
     test("resetHandoff 清理后 tool 可重新参与 handoff", () => {
       // 注意：WeakSet 不支持手动 delete，所以此测试验证 resetHandoff
       // 能正确恢复 beforeCommitCreatedObject

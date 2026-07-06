@@ -204,9 +204,9 @@ describe("ObjectCreatorTool — property 信号", () => {
     test("completeCreatedObject 后触发 action:complete 通知", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();
@@ -227,9 +227,9 @@ describe("ObjectCreatorTool — property 信号", () => {
     test("beforeCommitCreatedObject 返回 false 时阻止 commitObjects", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();
@@ -247,9 +247,9 @@ describe("ObjectCreatorTool — property 信号", () => {
     test("beforeCommitCreatedObject 默认返回 true → 对象通过 boardApi 提交", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();
@@ -266,9 +266,9 @@ describe("ObjectCreatorTool — property 信号", () => {
     test("beforeCommit 返回 false 时 action:complete 仍然触发", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();

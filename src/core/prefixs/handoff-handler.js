@@ -211,28 +211,6 @@ function isToolInstance(value) {
 }
 
 /**
- * 已注册到 handoff 的 tool 实例集合
- * 使用 WeakSet 避免内存泄漏，tool 被 GC 后自动清理。
- * @type {WeakSet<object>}
- */
-const registeredHandoffTools = new WeakSet();
-
-/**
- * 将 tool 标记为已参与某个 handoff 工作流
- * @param {Tool} tool - 待注册的工具实例
- * @throws {TypeError} 如果 tool 已在另一个 handoff 中
- */
-function registerHandoffTool(tool) {
-  if (registeredHandoffTools.has(tool)) {
-    throw new TypeError(
-      "Tool instance has already been registered in a handoff workflow. " +
-        "Each tool instance can only participate in one handoff workflow.",
-    );
-  }
-  registeredHandoffTools.add(tool);
-}
-
-/**
  * 将动作完成结果规整为 handoff 可桥接的对象数组
  * @param {*} result - `action:complete` 事件的结果载荷
  * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
@@ -463,10 +441,6 @@ function createHandoffSubDAG(options = {}) {
       "createHandoffSubDAG: first and second cannot be the same tool instance.",
     );
   }
-
-  // 注册 tool 实例，防止同一实例参与多个 handoff
-  if (isToolInstance(first)) registerHandoffTool(first);
-  if (isToolInstance(second)) registerHandoffTool(second);
 
   // 保存 handoff 根节点路径用于状态桥接
   let handoffBasePath = "";

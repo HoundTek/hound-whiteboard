@@ -127,19 +127,19 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
     });
   }
 
-  beginCreationGesture(interaction) {
+  beginGesture(interaction) {
     this.count = 0;
     this.setRadius(0, interaction);
   }
 
-  updateCreationGesture(interaction) {
+  updateGesture(interaction) {
     this.count++;
     const localPoint = this.toLocalPoint(interaction.position);
     const radius = localPoint.length();
     this.setRadius(radius, interaction);
   }
 
-  completeCreationGesture(interaction) {
+  completeGesture(interaction) {
     if (interaction.position) {
       this.count++;
       const localPoint = this.toLocalPoint(interaction.position);
