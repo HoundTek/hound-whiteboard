@@ -535,10 +535,13 @@ class ObjectCreatorTool extends GestureTool {
       position: null,
     };
 
-    // finalize 总是执行，beforeCommit 决定是否 commit
+    // finalize 总是执行
     this.finalizeCreatedObject(interaction);
 
-    if (this.beforeCommitCreatedObject(interaction) !== false) {
+    // handoff 通过注入 autoCommit: false 阻止提前 commit
+    // 除此之外通过 beforeCommitCreatedObject 判断
+    const autoCommit = context?.acc?.autoCommit !== false;
+    if (autoCommit && this.beforeCommitCreatedObject(interaction) !== false) {
       this.commitCreatedObject(interaction);
     }
 

@@ -24,10 +24,10 @@ import { SignalPacket } from "../../devices-dag/signal.js";
  * 手势驱动的对象位置修改工具，适用于所有对象类型。
  *
  * 手势生命周期（由基类 GestureBasedObjectModifierTool 编排）：
- * 1. 首个 position 信号 → canBeginModifyGesture 准入检测 → beginModifyGesture 记录锚点
- * 2. 后续 position 信号 → updateModifyGesture 以锚点为基准更新对象位置
- * 3. end 信号 → completeModifyGesture 清空锚点，对象留在动态图
- * 4. cancel 信号 → cancelModifyGesture 将对象回滚到手势初始位置
+ * 1. 首个 position 信号 → canBeginGesture 准入检测 → beginGesture 记录锚点
+ * 2. 后续 position 信号 → updateGesture 以锚点为基准更新对象位置
+ * 3. end 信号 → completeGesture 清空锚点，对象留在动态图
+ * 4. cancel 信号 → cancelGesture 将对象回滚到手势初始位置
  * 5. success 信号 → 对象提交到静态图
  *
  * @author Zhou Chenyu
@@ -41,7 +41,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   _anchorPosition;
 
   /**
-   * 当前手势开始时各对象的基准位置（供 updateModifyGesture 计算位移）
+   * 当前手势开始时各对象的基准位置（供 updateGesture 计算位移）
    * @type {Map<number|object, { x: number, y: number }>|null}
    * @private
    */
@@ -85,7 +85,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   beginGesture(interaction) {
     const { objects, position } = interaction;
     this._anchorPosition = { x: position.x, y: position.y };
-    // 总是记录当前手势基准位置，供 updateModifyGesture 计算位移
+    // 总是记录当前手势基准位置，供 updateGesture 计算位移
     this._gestureBasePositions = new Map(
       objects.map((obj) => {
         const objectId = this.resolveObjectId(obj) ?? obj;
@@ -208,7 +208,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   /**
    * 处理一个完整信号包
    * @description 覆写基类 process，在 success 提交后清空初始位置缓存，
-   * 确保下一轮新对象的 handoff 中 beginModifyGesture 能重新记录。
+   * 确保下一轮新对象的 handoff 中 beginGesture 能重新记录。
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
@@ -222,7 +222,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
     super.process(signalPacket, context);
 
     // success 后提交已完成，不再需要保留开始位置用于回退
-    // （cancel 已在 cancelModifyGesture 中清空 _initialPositions）
+    // （cancel 已在 cancelGesture 中清空 _initialPositions）
     if (hasSuccess) {
       this._initialPositions = null;
     }

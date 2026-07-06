@@ -15,88 +15,6 @@ import { createSubDAG, isSubDAGDefinition } from "../devices-dag/index.js";
 import { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
 import { isPlainObject } from "./utils.js";
 import { Tool } from "../tools/tool.js";
-import { SignalPacket } from "../devices-dag/signal.js";
-
-/**
- * 规整 handler 输出中的继续路由包列表
- * @param {*} rawResult - handler 原始返回值
- * @returns {Array<SignalPacket>}
- */
-function normalizeResultPackets(rawResult) {
-  if (Array.isArray(rawResult)) {
-    return rawResult.map((result) => SignalPacket.from(result));
-  }
-
-  if (
-    rawResult != null &&
-    typeof rawResult === "object" &&
-    (Array.isArray(rawResult.packets) ||
-      "stop" in rawResult ||
-      "redirect" in rawResult ||
-      "context" in rawResult)
-  ) {
-    return SignalPacket.normalizeResult(rawResult.packets ?? []);
-  }
-
-  if (rawResult != null) {
-    return [SignalPacket.from(rawResult)];
-  }
-
-  return [];
-}
-
-/**
- * 规整 wrapper 返回值，同时保留结构化字段（packets、stop、redirect、context）
- * @param {*} rawResult - wrapper 原始返回值
- * @returns {{packets: SignalPacket[], stop?: boolean, redirect?: string, context?: Object}}
- */
-function normalizeWrappedResult(rawResult) {
-  if (
-    rawResult != null &&
-    typeof rawResult === "object" &&
-    (Array.isArray(rawResult.packets) ||
-      "stop" in rawResult ||
-      "redirect" in rawResult ||
-      "context" in rawResult)
-  ) {
-    return {
-      ...rawResult,
-      packets: SignalPacket.normalizeResult(rawResult.packets ?? []),
-    };
-  }
-
-  return { packets: normalizeResultPackets(rawResult) };
-}
-
-/**
- * 规整 tool handler 返回值，并在异步完成后安全释放生命周期订阅
- * @param {*} rawResult - tool handler 原始返回值
- * @param {() => boolean} isCompleted - 当前分发期间是否已触发完成通知
- * @param {Function|null} unsub - 生命周期订阅取消函数
- * @returns {*}
- */
-function finalizeLifecycleWrappedResult(rawResult, isCompleted, unsub) {
-  if (rawResult instanceof Promise) {
-    return rawResult
-      .then((resolvedResult) => {
-        if (isCompleted()) {
-          return normalizeWrappedResult(resolvedResult);
-        }
-        return resolvedResult;
-      })
-      .finally(() => {
-        unsub?.();
-      });
-  }
-
-  unsub?.();
-
-  if (isCompleted()) {
-    return normalizeWrappedResult(rawResult);
-  }
-
-  return rawResult;
-}
 
 /**
  * 克隆 DAG 节点定义，避免共享可变结构
@@ -313,17 +231,22 @@ function wrapToolForHandoff(tool, options = {}) {
       onToolComplete?.();
     }
 
-    const unsubscribeAll = () => {
-      for (const unsub of unsubs) {
-        unsub?.();
-      }
-    };
+    // 异步 case：延迟清理 subscription，等 Promise resolve 后再移除监听
+    if (rawResult instanceof Promise) {
+      return rawResult.then((resolvedResult) => {
+        for (const unsub of unsubs) {
+          unsub?.();
+        }
+        return resolvedResult;
+      });
+    }
 
-    return finalizeLifecycleWrappedResult(
-      rawResult,
-      () => completed,
-      unsubscribeAll,
-    );
+    // 同步 case：直接清理
+    for (const unsub of unsubs) {
+      unsub?.();
+    }
+
+    return rawResult;
   };
 }
 
@@ -351,7 +274,7 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
     const objects = context.acc?.objects ?? [];
     context.acc?.setHandoffObjects?.(objects);
     context.acc?.onToolComplete?.();
-    return normalizeWrappedResult(rawResult);
+    return rawResult;
   };
 
   if (subDAGDef?.nodes instanceof Map) {
@@ -395,7 +318,7 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
  *
  * 采用统一动作完成事件：
  * - first / second 的 Tool 优先通过 `action:complete` 通知 handoff 切换
- * - creator 的 first 仍保留 `beforeCommitCreatedObject → false` 拦截，用于阻止提前进入静态图
+ * - first 的 creator 通过注入 `autoCommit: false` 阻止提前进入静态图
  * - second 的 modifier cancel 路径保留显式对象丢弃逻辑
  *
  * @param {{
@@ -450,35 +373,10 @@ function createHandoffSubDAG(options = {}) {
   let handoffObjects = [];
   let handoffExplicitlySet = false;
 
-  // 判断 first 类型
-  const firstIsCreator =
-    isToolInstance(first) && typeof first.completeCreatedObject === "function";
-  const firstIsSubDAG = isSubDAGDefinition(first);
-
   // 判断 second 类型
   const secondIsModifier =
     isToolInstance(second) && typeof second.applyModifiedObjects === "function";
   const secondIsSubDAG = isSubDAGDefinition(second);
-
-  // 为 creator-first 配置钩子
-  /** @type {Function[]} */
-  const handoffCleanups = [];
-
-  if (firstIsCreator) {
-    // 保存原始 beforeCommit，准备 override
-    const originalBeforeCommit = first.beforeCommitCreatedObject?.bind(first);
-
-    // 阻止 creator 将对象提交到静态图（由 modifier 最终提交）
-    first.beforeCommitCreatedObject = () => false;
-
-    handoffCleanups.push(() => {
-      if (originalBeforeCommit) {
-        first.beforeCommitCreatedObject = originalBeforeCommit;
-      } else {
-        delete first.beforeCommitCreatedObject;
-      }
-    });
-  }
 
   // 构建子树
   const builder = createSubDAG(rootPath);
@@ -541,6 +439,8 @@ function createHandoffSubDAG(options = {}) {
               onToolComplete: createCompleteCallback(fromPhase || "first"),
               // 阻止 modifier 在 handoff 中自卸载
               autoUmountOnApply: false,
+              // 阻止 creator 在 handoff 中提前 commit
+              autoCommit: false,
               // 当前阶段持有的对象，供 modifier 直接从 acc 读取
               objects: handoffObjects,
               handoffObjects,
@@ -562,6 +462,8 @@ function createHandoffSubDAG(options = {}) {
   // first 子节点
   const firstNode = builder.node();
   let firstSubDAGDef = null;
+
+  const firstIsSubDAG = isSubDAGDefinition(first);
 
   if (isToolInstance(first)) {
     firstNode.handler(
@@ -617,18 +519,6 @@ function createHandoffSubDAG(options = {}) {
       "createHandoffSubDAG: second must be a DAG SubDAGDefinition after migration.",
     );
   }
-
-  // 将钩子清理函数挂到子图上，供外部在卸载 handoff 时恢复 tool 状态
-  handoffSubDAG.resetHandoff = () => {
-    for (const cleanup of handoffCleanups) {
-      try {
-        cleanup();
-      } catch {
-        // 静默吞掉清理错误
-      }
-    }
-    handoffCleanups.length = 0;
-  };
 
   return handoffSubDAG;
 }

@@ -870,30 +870,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       ).toThrow(/same tool instance/i);
     });
 
-    test("resetHandoff 清理后 tool 可重新参与 handoff", () => {
-      // 注意：WeakSet 不支持手动 delete，所以此测试验证 resetHandoff
-      // 能正确恢复 beforeCommitCreatedObject
-      const tool = createMockCreator();
-      const originalBeforeCommit = tool.beforeCommitCreatedObject.bind(tool);
 
-      tool._entry = { id: 1 };
-      const modifier = createMockModifier();
-
-      const subDAG = createHandoffSubDAG({
-        rootPath: "/test",
-        first: tool,
-        second: modifier,
-      });
-
-      // beforeCommitCreatedObject 已被 handoff override
-      expect(tool.beforeCommitCreatedObject()).toBe(false);
-
-      // 执行清理
-      subDAG.resetHandoff();
-
-      // 应恢复原始行为
-      expect(tool.beforeCommitCreatedObject()).toBe(true);
-    });
   });
 
   describe("modifier + handoff 完整工作流集成", () => {

@@ -468,12 +468,12 @@ class ObjectModifierTool extends GestureTool {
  * 子类只需覆写手势 hook 即可实现具体修改逻辑，无需关心 process() 调度细节。
  *
  * 手势模型：
- * 1. position 信号到达 → 手势开始（beginModifyGesture）或持续更新（updateModifyGesture）
+ * 1. position 信号到达 → 手势开始（beginGesture）或持续更新（updateGesture）
  * 2. displacement 信号到达 → 无状态增量，直接累加到对象位置（无需手势状态机）
  *    基准位置跟随位移同步，锚点不动，保持光标-对象偏移不变
- * 3. end 信号 → 手势结束（completeModifyGesture），对象保留在 AOM 动态图中
+ * 3. end 信号 → 手势结束（completeGesture），对象保留在 AOM 动态图中
  * 4. success 信号 → 提交到静态图（applyModifiedObjects）
- * 5. cancel 信号 → 取消当前手势（cancelModifyGesture），将对象回滚到手势开始时的初始位置
+ * 5. cancel 信号 → 取消当前手势（cancelGesture），将对象回滚到手势开始时的初始位置
  *
  * 该工具同时接受 world 坐标 position 和相对位移 displacement 驱动。
  * 子类可在 hook 内自行计算增量并更新对象几何。
@@ -596,7 +596,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @description
    * 无论手势是否激活，都尝试回退对象位置。
    * 手势结束后（end 信号后）cancel 应仍然能回退到手势初始位置，
-   * 前提是子类的 completeModifyGesture 保留了 _initialPositions。
+   * 前提是子类的 completeGesture 保留了 _initialPositions。
    * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @private
    */

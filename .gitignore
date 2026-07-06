@@ -40,8 +40,10 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+temp-icon-gen/
 
 # Android signing key (DO NOT COMMIT)
+keys/
 *.jks
 *.keystore
 *.pkcs12
