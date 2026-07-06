@@ -18,11 +18,11 @@
 
 ## 运行边界
 
-| 类            | 线程   | 职责                                                  |
-| ------------- | ------ | ----------------------------------------------------- |
-| `Board`       | UI     | façade、输入分发、monitor 管理、Worker 模式初始化     |
-| `BoardCore`   | Worker | 对象、区块、AOM、UndoTree、持久化协调                 |
-| `BoardApiRpc` | UI     | RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信 |
+| 类            | 线程   | 职责                                                       |
+| ------------- | ------ | ---------------------------------------------------------- |
+| `Board`       | UI     | façade、输入分发、monitor 管理、Worker 侧 BoardCore 初始化 |
+| `BoardCore`   | Worker | 对象、区块、AOM、UndoTree、持久化协调                      |
+| `BoardApiRpc` | UI     | RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信   |
 
 ## 当前职责
 
@@ -40,7 +40,7 @@
 
 ### Core API 选择
 
-所有工具通过 `getBoardApi()` 获取的 `BoardApiRpc` 实例与 Worker 交互。Worker 模式必须在创建任何 monitor 之前启用。
+所有工具通过 `getBoardApi()` 获取的 `BoardApiRpc` 实例与 Worker 交互。`enableWorkerMode()` 必须在创建任何 monitor 之前调用。
 
 ### objectId 分配
 
@@ -66,7 +66,7 @@
 | `#boardCore`                            | 本地 `BoardCore` 实例                                 |
 | `#counterPool`                          | UI 侧 objectId 分配器                                 |
 
-## Worker 模式初始化
+## `enableWorkerMode()` 初始化
 
 `enableWorkerMode(worker, options)` 的流程：
 
@@ -98,7 +98,7 @@
 - `createChunkLoader()`
 - `activeObjectManager` / `chunkLoaded` / `objectLoaded`
 
-在 Worker 模式下应优先通过 `boardApi` 访问真实状态。
+tools 应优先通过 `boardApi` 访问真实状态。
 
 ## 当前状态
 

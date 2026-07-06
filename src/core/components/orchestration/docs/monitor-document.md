@@ -8,7 +8,7 @@
 
 | 类             | 线程   | 职责                                                  |
 | -------------- | ------ | ----------------------------------------------------- |
-| `MonitorProxy` | UI     | Worker 模式下的视口代理，持有 DOM canvas              |
+| `MonitorProxy` | UI     | UI 侧视口代理，持有 DOM canvas，接收 Worker 侧渲染帧  |
 | `MonitorCore`  | Worker | Worker 侧视口、ChunkLoader、base 渲染与 live 合成核心 |
 
 运行链路：
@@ -34,7 +34,7 @@ flowchart LR
 
 ### `MonitorProxy`
 
-`MonitorProxy` 是 Worker 模式下的 UI 侧代理，职责包括：
+`MonitorProxy` 是 UI 侧 monitor 代理，职责包括：
 
 - 创建并持有 DOM `canvas`（接收 Worker 合成帧）与 `uiCanvas`（overlay 层）
 - 持有 `UiRenderer`
@@ -101,7 +101,7 @@ monitor 家族向业务层提供统一的挂载入口：
 
 这些接口都代理到 `Board.devicesDAG`，显示器本身不持有独立 DAG。
 
-## Worker 模式下的 frame 协议
+## Frame 协议
 
 ### UI → Worker
 

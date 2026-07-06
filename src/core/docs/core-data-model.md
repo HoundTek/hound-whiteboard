@@ -211,7 +211,7 @@ AOM 内部关键结构：
 
 ## 关键术语
 
-- **Worker 模式**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
+- **运行时分层**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
 - **轻量对象条目（LightweightObjectEntry）**：UI 侧所有工具统一使用的纯数据对象协议，替代 `BasicObject` 实例在工具间传递
 - **静态图**：区块级稳定层叠图
 - **动态图 / AOM**：交互态动态层关系

@@ -3,7 +3,6 @@
  * @description
  * BoardCore 是白板在 Worker 中的纯数据实现，承载对象注册、区块加载、AOM、UndoTree、持久化协调等职责。
  * 不依赖 DevicesDAG、DOM、signalsEventBus。
- * P0 阶段先同线程存在，P3 后进入 Worker。
  * @module core/components/orchestration/board-core
  * @author Zhou Chenyu
  */

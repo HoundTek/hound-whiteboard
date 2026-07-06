@@ -54,8 +54,8 @@
 
 ### UI 侧核心职责
 
-- `Board`：UI façade，持有 signalsEventBus、DevicesDAG、monitor 集合与 Worker 模式切换逻辑
-- `MonitorProxy`：Worker 视口代理，承载 DOM canvas 与 overlay
+- `Board`：UI façade，持有 signalsEventBus、DevicesDAG、monitor 集合，通过 Worker 与 BoardCore 通信
+- `MonitorProxy`：UI 视口代理，承载 DOM canvas 与 overlay，接收 Worker 侧渲染帧
 - `devices/`、`devices-dag/`、`tools/`、`prefixs/`：输入编排与交互工具
 - `UiRenderer`：UI overlay 渲染
 

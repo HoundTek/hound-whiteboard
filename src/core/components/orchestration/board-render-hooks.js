@@ -2,7 +2,7 @@
  * @file 白板 UI 渲染钩子工厂
  * @description
  * 创建与 UI 侧 monitor/renderer 连通的 AOM render hooks 实现。
- * 替代 AOM 直接访问 board.monitors，使 AOM 在 P3 可无修改迁入 Worker。
+ * AOM 通过这组钩子间接发起到各 monitor 的渲染请求，不再直接访问 board.monitors。
  * @module core/components/orchestration/board-render-hooks
  * @author Zhou Chenyu
  */

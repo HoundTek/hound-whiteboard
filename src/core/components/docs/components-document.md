@@ -59,8 +59,7 @@ src/core/components/
 | -------------------------- | -------- | -------------------------------------------------- |
 | `board.js`                 | UI       | UI façade，持有 DAG、signalsEventBus、monitor 集合 |
 | `board-core.js`            | Worker   | 真实白板核心                                       |
-
-| `monitor-proxy.js`         | UI       | Worker 模式下的 monitor 代理                       |
+| `monitor-proxy.js`         | UI       | UI 侧 monitor 代理                                 |
 | `monitor-core.js`          | Worker   | Worker 侧视口与渲染核心                            |
 | `active-object-manager.js` | Shared   | 交互态动态图与层关系                               |
 | `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                   |
@@ -84,7 +83,7 @@ Worker 侧 `BoardCore` / `MonitorCore` 不经由该 barrel 导出，而是由 `s
 
 ### `Monitor` 家族拆分
 
-- `MonitorProxy`：Worker 模式下的 UI 视口代理
+- `MonitorProxy`：UI 侧视口代理，接收 Worker 渲染帧
 - `MonitorCore`：Worker 侧真实渲染核心
 
 ### AOM 渲染副作用抽离

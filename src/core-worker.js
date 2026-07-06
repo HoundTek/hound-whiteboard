@@ -58,7 +58,7 @@ function normalizeMonitorKey(monitorId) {
  * @class
  * @description
  * 封装 Worker 线程的消息分发、BoardCore 生命周期与 RPC 路由。
- * 在 P3.3 阶段进一步接通 MonitorCore、viewport-change / request-render-flush 与 render-frame 回传。
+ * 接通 MonitorCore、viewport-change / request-render-flush 与 render-frame 回传。
  * @author Zhou Chenyu
  */
 class CoreWorkerRuntime {

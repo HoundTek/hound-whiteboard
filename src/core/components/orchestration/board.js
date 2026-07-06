@@ -376,10 +376,10 @@ class Board {
   }
 
   /**
-   * 启用 Worker 模式
+   * 通过 Worker 初始化 BoardApiRpc 与 BoardCore
    * @description
-   * 该方法会创建 BoardApiRpc 并在 Worker 中初始化 BoardCore。
-   * 当前实现要求在创建任何 monitor 之前调用，避免运行中切换 monitor 实现。
+   * 创建 BoardApiRpc 并在 Worker 中初始化 BoardCore。
+   * 必须在创建任何 monitor 之前调用。
    * @param {{ postMessage: Function, addEventListener: Function, removeEventListener: Function }} worker - Worker 或兼容端点
    * @param {{ timeoutMs?: number, readyTimeoutMs?: number }} [options={}] - RPC 选项
    * @returns {Promise<BoardApiRpc>} 已就绪的 BoardApiRpc
@@ -417,7 +417,7 @@ class Board {
   /**
    * 创建绑定到当前 Board 的 MonitorProxy
    * @description 会同时创建 base/live/ui 三层 canvas，并把 monitor 注册到 `Board.monitors`。
-   *   必须启用 Worker 模式后方可调用。
+   *   必须在 `enableWorkerMode` 之后调用。
    * @param {HTMLElement} rootElement - Monitor 的根元素
    * @param {{ width: number, height: number }} options - Monitor 尺寸选项
    * @param {string} monitorId - Monitor id

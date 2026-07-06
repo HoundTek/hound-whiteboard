@@ -1,6 +1,6 @@
 /**
  * @file whiteboard demo 浏览器入口
- * @description 初始化 whiteboard demo 页面并默认启用 Core Worker 模式。
+ * @description 初始化 whiteboard demo 页面，通过 Worker 与 BoardCore 通信。
  * @module templates/whiteboard
  * @author Zhou Chenyu
  */

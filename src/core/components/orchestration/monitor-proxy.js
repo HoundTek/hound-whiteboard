@@ -1,8 +1,8 @@
 /**
  * @file UI 侧显示器代理
  * @description
- * MonitorProxy 是 Worker 模式下的 UI 侧 monitor façade，负责本地视口状态、UiRenderer、
- * workflow/overlay 挂载以及与 Core Worker 间的渲染帧与视口消息通信。
+ * MonitorProxy 是 UI 侧的 monitor 代理，负责本地视口状态、UiRenderer、
+ * workflow/overlay 挂载以及与 Worker 侧 MonitorCore 间的渲染帧与视口消息通信。
  * @module core/components/orchestration/monitor-proxy
  * @author Zhou Chenyu
  */

@@ -17,7 +17,7 @@
 /**
  * 创建对象参数
  * @typedef {Object} CreateObjectProps
- * @property {number} [id] - 可选显式 objectId，供 P2 同线程兼容路径复用既有 id 分配逻辑
+ * @property {number} [id] - 可选显式 objectId，供同步分配复用既有 id 分配逻辑
  * @property {import("./types.js").Point2D} position - 新对象位置
  * @property {Record<string, any>} [property] - 初始样式属性
  * @property {Record<string, any>} [data] - 初始对象专属数据

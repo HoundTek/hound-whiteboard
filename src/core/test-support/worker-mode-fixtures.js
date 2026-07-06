@@ -1,6 +1,6 @@
 /**
- * @file Worker 模式测试辅助
- * @description 提供 Worker 模式测试所需的回环端点、DOM mock 与白板初始化辅助。
+ * @file 跨线程 Worker 测试辅助
+ * @description 提供 UI ↔ Worker 通信测试所需的回环端点、DOM mock 与白板初始化辅助。
  * @module core/test-support/worker-mode-fixtures
  * @author Zhou Chenyu
  */
@@ -204,7 +204,7 @@ async function flushMicrotasks(count = 6) {
 }
 
 /**
- * 创建 Worker 模式白板测试上下文
+ * 创建跨线程白板测试上下文
  * @param {{
  *   boardWidth?: number,
  *   boardHeight?: number,

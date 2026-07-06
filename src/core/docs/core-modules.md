@@ -10,12 +10,12 @@
 
 ### `components/orchestration/`
 
-| 文件               | 运行边界 | 职责                                                                   |
-| ------------------ | -------- | ---------------------------------------------------------------------- |
-| `board-core.js`    | Worker   | 真实白板核心，持有对象、区块、AOM、UndoTree、持久化协调                |
-| `board.js`         | UI       | UI façade，持有 DAG、signalsEventBus、monitors，并负责 Worker 模式切换 |
-| `monitor-core.js`  | Worker   | Worker 侧视口、ChunkLoader、base/live 渲染输出                         |
-| `monitor-proxy.js` | UI       | Worker 模式下的 monitor 代理，接收 `render-frame`                      |
+| 文件               | 运行边界 | 职责                                                                          |
+| ------------------ | -------- | ----------------------------------------------------------------------------- |
+| `board-core.js`    | Worker   | 真实白板核心，持有对象、区块、AOM、UndoTree、持久化协调                       |
+| `board.js`         | UI       | UI façade，持有 DAG、signalsEventBus、monitors，通过 Worker 与 BoardCore 通信 |
+| `monitor-core.js`  | Worker   | Worker 侧视口、ChunkLoader、base/live 渲染输出                                |
+| `monitor-proxy.js` | UI       | UI 侧 monitor 代理，接收 Worker 侧回传的 `render-frame`                       |
 
 | `active-object-manager.js` | Shared | 动态层关系、活动对象生命周期与静态图回写 |
 | `aom-render-hooks.js` | Shared | AOM 渲染钩子接口 |
@@ -166,7 +166,7 @@ chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
 - Core Worker 架构已落地：BoardCore / MonitorCore / BoardApiRpc / MonitorProxy 全部接通
 - tools 保持在 UI 线程
 - objects / range / utils / chunk / renderer / AOM 作为共享层复用
-- P4 主要剩余项集中在性能优化与基准测试
+- 主要剩余项集中在性能优化与基准测试
 
 ## 相关文档
 

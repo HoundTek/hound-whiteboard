@@ -2,7 +2,7 @@
 
 /**
  * @file shared module smoke test
- * @description 验证 P1 共享模块在 Node 环境下可被 import，且无 DOM/Worker/Tauri IPC 隐式依赖。
+ * @description 验证共享模块在 Node 环境下可被 import，且无 DOM/Worker/Tauri IPC 隐式依赖。
  * @module core/tests/shared-module-smoke.test
  * @author Zhou Chenyu
  */

@@ -9,7 +9,7 @@
  * AOM Render Hooks — 默认空实现
  * @description
  * 所有方法均为空操作。Board/UI 侧通过注入具体实现来接通实际渲染管线。
- * 这是 P0 解耦的关键适配层：AOM 不再直接访问 `board.monitors` 或 renderer。
+ * 这是 AOM 与渲染器的解耦适配层：AOM 不再直接访问 `board.monitors` 或 renderer。
  *
  * @example
  * ```js
