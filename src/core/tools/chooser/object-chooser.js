@@ -237,7 +237,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 自定义 cancel 语义
-   * @description 选择工具的 cancel 仅清理当前拖拽区域，不撤销上一轮已确认的选择。
+   * @description 取消当前拖拽区域和上一轮已确认的选择，重置选择状态。
    * @param {Object} interaction - 当前交互上下文
    * @returns {void}
    * @protected
@@ -250,6 +250,7 @@ class ObjectChooserTool extends GestureTool {
     }
 
     this.clearOverlayState(interaction.context);
+    this.discardAction(interaction.context);
   }
 
   /**

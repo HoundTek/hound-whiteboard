@@ -490,5 +490,43 @@ describe("ObjectChooserTool", () => {
           expect(completeCall[1]).toEqual([selectedSummary]);
         });
     });
+
+    test("cancel 信号应撤销上一轮已确认的选择", () => {
+      const chosenObject = { id: 15 };
+      const boardApi = {
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+      const stateAccess = createStateAccess();
+      const deviceContext = {
+        acc: { boardApi },
+        path: "/test",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
+      };
+      const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
+
+      // 先选择对象
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
+        deviceContext,
+      );
+
+      expect(boardApi.addActiveObjects).toHaveBeenCalledWith([15]);
+      expect(deviceContext.acc.objects).toEqual([chosenObject]);
+
+      // cancel 应撤销已选中的对象
+      tool.process({ signals: [{ type: "cancel" }] }, deviceContext);
+
+      expect(boardApi.discardActiveObjects).toHaveBeenCalledWith([15]);
+      expect(deviceContext.acc.objects).toBeUndefined();
+      // nodeState 中 objects 应被清理
+      expect(stateAccess.getState()).toEqual({});
+    });
   });
 });
