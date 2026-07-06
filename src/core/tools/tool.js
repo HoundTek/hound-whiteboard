@@ -259,8 +259,11 @@ class Tool {
 
   /**
    * 收集当前工具声明的 ui overlay 条目
-   * @param {{ viewport?: Object, renderer?: Object }} [_overlayContext={}] - overlay 上下文
-   * @returns {Array<*>}
+   * @param {{
+   *   viewport?: import("../components/orchestration/viewport.js").Viewport,
+   *   renderer?: import("../components/renderer/ui-renderer.js").UiRenderer,
+   * }} [_overlayContext={}] - overlay 上下文
+   * @returns {import("../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(_overlayContext = {}) {
     return [];

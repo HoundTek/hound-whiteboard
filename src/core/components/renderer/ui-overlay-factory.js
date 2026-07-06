@@ -8,8 +8,53 @@
 import { BasicObject } from "../../objects/basic-obj.js";
 import { RectangleRange } from "../../range/index.js";
 
-/** 兼容选中框的最小留白（屏幕像素） */
+/**
+ * 兼容选中框的最小留白（屏幕像素）
+ * @type {number}
+ */
 const COMPAT_SELECTION_FRAME_MARGIN = 4;
+
+/**
+ * UI overlay 条目
+ * @typedef {Object} UiOverlayEntry
+ * @property {string} source - 条目来源标识（如 "compat-selection-object-frame:chooser"）
+ * @property {number} [objectId] - 关联的白板对象 id
+ * @property {string} type - 条目类型（当前仅 "rect"）
+ * @property {RectangleRange} [screenRect] - 屏幕空间的矩形范围
+ * @property {RectangleRange} [worldRect] - 世界空间的矩形范围（归一化前使用）
+ * @property {string} [fillStyle] - 填充色
+ * @property {string} [strokeStyle] - 描边色
+ * @property {number} [lineWidth] - 描边线宽
+ * @property {number[]} [lineDash] - 描边虚线模式
+ * @property {number} [padding] - world→screen 转换时的额外留白
+ * @property {BasicObject} [object] - BasicObject 实例（provider 直接传入时使用）
+ * @property {{ x: number, y: number }} [position] - 条目所属对象的世界坐标
+ * @property {Object} [range] - 条目所属对象的局部范围
+ * @property {Object} [boundingBox] - 条目所属对象的包围盒
+ * @property {Object} [property] - 条目所属对象的属性
+ * @property {(context: CanvasRenderingContext2D, runtime: UiOverlayDrawRuntime) => void} draw - 绘制函数
+ */
+
+/**
+ * UI overlay 绘制运行时上下文
+ * @typedef {Object} UiOverlayDrawRuntime
+ * @property {RectangleRange} dirtyRect - 当前裁剪脏区
+ * @property {UiOverlayEntry} entry - 当前绘制的条目
+ * @property {import("../orchestration/viewport.js").Viewport} viewport - 当前视口
+ * @property {import("./ui-renderer.js").UiRenderer} renderer - 当前渲染器
+ */
+
+/**
+ * Summary-like 条目
+ * @typedef {Object} SummaryLikeEntry
+ * @property {number} [id] - 对象 id
+ * @property {{ x: number, y: number }} [position] - 对象世界坐标
+ * @property {Object} [range] - 带 withPosition 方法的局部范围
+ * @property {Object} [boundingBox] - 局部包围盒（left, top, width, height 或 left, top, right, bottom）
+ * @property {Object} [worldRect] - 世界矩形（绕过 position+range 计算）
+ * @property {Object} [rich] - 富数据，内含 boundingBox
+ * @property {Object} [property] - 属性，可含 strokeWidth/width/outlineWidth
+ */
 
 /**
  * 获取对象世界矩形范围
@@ -46,7 +91,7 @@ function getCompatSelectionPadding(objectInstance, zoom) {
 
 /**
  * 从 summary-like 条目推导兼容选中框留白
- * @param {Object} summaryEntry - 摘要或兼容条目
+ * @param {SummaryLikeEntry} summaryEntry - 摘要或兼容条目
  * @param {number} zoom - 当前缩放比例
  * @returns {number}
  */
@@ -71,7 +116,7 @@ function getCompatSelectionPaddingForSummary(summaryEntry, zoom) {
 
 /**
  * 解析 summary-like 条目的世界矩形范围
- * @param {Object} summaryEntry - 摘要或兼容条目
+ * @param {SummaryLikeEntry} summaryEntry - 摘要或兼容条目
  * @returns {RectangleRange | undefined}
  */
 function getSummaryWorldRect(summaryEntry) {
@@ -111,7 +156,7 @@ function getSummaryWorldRect(summaryEntry) {
 
 /**
  * 获取 summary-like 条目的兼容选中框屏幕矩形
- * @param {Object} summaryEntry - 摘要或兼容条目
+ * @param {SummaryLikeEntry} summaryEntry - 摘要或兼容条目
  * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {RectangleRange | undefined}
  */
@@ -143,11 +188,11 @@ function getObjectScreenRect(objectInstance, viewport) {
 
 /**
  * 生成 summary-like 条目级兼容选中框 overlay 条目
- * @param {Object} summaryEntry - 摘要或兼容条目
+ * @param {SummaryLikeEntry} summaryEntry - 摘要或兼容条目
  * @param {string} source - 条目来源
  * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
- * @param {(context: CanvasRenderingContext2D, entry: Object) => void} drawRectEntry - 矩形绘制函数
- * @returns {Object | undefined}
+ * @param {(context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void} drawRectEntry - 矩形绘制函数
+ * @returns {UiOverlayEntry | undefined}
  */
 function createCompatSummarySelectionEntry(
   summaryEntry,
@@ -181,8 +226,8 @@ function createCompatSummarySelectionEntry(
  * 生成组合大矩形 overlay 条目
  * @param {RectangleRange} screenRect - 组合屏幕矩形
  * @param {string} source - 条目来源
- * @param {(context: CanvasRenderingContext2D, entry: Object) => void} drawRectEntry - 矩形绘制函数
- * @returns {Object}
+ * @param {(context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void} drawRectEntry - 矩形绘制函数
+ * @returns {UiOverlayEntry}
  */
 function createCompatGroupSelectionEntry(screenRect, source, drawRectEntry) {
   return {
@@ -205,11 +250,11 @@ function createCompatGroupSelectionEntry(screenRect, source, drawRectEntry) {
 
 /**
  * 基于 summary-like 条目生成兼容选择框条目
- * @param {Object[]} summaries - 摘要或兼容条目集合
- * @param {string} role - 当前角色
+ * @param {SummaryLikeEntry[]} summaries - 摘要或兼容条目集合
+ * @param {string} role - 当前角色（如 "chooser"、"modifier"）
  * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
- * @param {(context: CanvasRenderingContext2D, entry: Object) => void} drawRectEntry - 矩形绘制函数
- * @returns {Array<Object>}
+ * @param {(context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void} drawRectEntry - 矩形绘制函数
+ * @returns {UiOverlayEntry[]}
  */
 function createCompatSelectionEntriesForSummaries(
   summaries,
@@ -256,10 +301,11 @@ function createCompatSelectionEntriesForSummaries(
 
 /**
  * 规范化单个 overlay 条目
- * @param {Object} entry - 原始条目
+ * @description 补全 screenRect、为 rect 类型条目注入默认 draw 函数。
+ * @param {Object} entry - 原始条目（provider 返回的未归一化条目）
  * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
- * @param {(context: CanvasRenderingContext2D, entry: Object) => void} drawRectEntry - 矩形绘制函数
- * @returns {Object | undefined}
+ * @param {(context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void} drawRectEntry - 矩形绘制函数
+ * @returns {UiOverlayEntry | undefined}
  */
 function normalizeOverlayEntry(entry, viewport, drawRectEntry) {
   if (!entry || typeof entry !== "object") {

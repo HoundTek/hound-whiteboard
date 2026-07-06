@@ -119,10 +119,11 @@ class ObjectChooserTool extends Tool {
   /**
    * 收集 chooser 当前声明的兼容 ui overlay
    * @param {{
+   *   viewport?: import("../../components/orchestration/viewport.js").Viewport,
+   *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer,
    *   deviceContext?: import("../../devices-dag/dag.js").DevicesDAGHandlerContext,
-   *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer
    * }} [overlayContext={}] - overlay 上下文
-   * @returns {Array<Object>}
+   * @returns {import("../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(overlayContext = {}) {
     const { viewport, renderer } = overlayContext;

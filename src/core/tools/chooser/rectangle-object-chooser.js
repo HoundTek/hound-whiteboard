@@ -124,8 +124,11 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 收集矩形框选工具当前声明的 overlay
-   * @param {{ deviceContext?: Object }} [overlayContext={}] - overlay 上下文
-   * @returns {Array<Object>}
+   * @param {{
+   *   viewport?: import("../../components/orchestration/viewport.js").Viewport,
+   *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer,
+   * }} [overlayContext={}] - overlay 上下文
+   * @returns {import("../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(overlayContext = {}) {
     const entries = [...super.collectUiOverlayEntries(overlayContext)];

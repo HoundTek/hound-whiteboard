@@ -62,8 +62,11 @@ class ObjectModifierTool extends Tool {
 
   /**
    * 收集 modifier 当前声明的兼容 ui overlay
-   * @param {{ renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer }} [overlayContext={}] - overlay 上下文
-   * @returns {Array<Object>}
+   * @param {{
+   *   viewport?: import("../../components/orchestration/viewport.js").Viewport,
+   *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer,
+   * }} [overlayContext={}] - overlay 上下文
+   * @returns {import("../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(overlayContext = {}) {
     const { viewport, renderer } = overlayContext;

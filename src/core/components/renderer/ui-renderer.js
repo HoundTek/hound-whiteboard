@@ -16,6 +16,13 @@ import { expandRectForClear } from "./renderer.js";
 import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "./ui-overlay-factory.js";
 
 /**
+ * UI overlay provider
+ * @callback UiOverlayProvider
+ * @param {{ viewport: Viewport, renderer: UiRenderer }} context - provider 上下文
+ * @returns {import("./ui-overlay-factory.js").UiOverlayEntry | import("./ui-overlay-factory.js").UiOverlayEntry[] | undefined}
+ */
+
+/**
  * UI 覆盖层渲染器
  * @description
  * 负责绘制 chooser/modifier 的选择框等 UI 覆盖元素。
@@ -27,7 +34,7 @@ import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "./ui-over
 class UiRenderer extends CanvasHost {
   /**
    * 自定义 overlay provider 集合
-   * @type {Set<(context: { viewport: Viewport, renderer: UiRenderer }) => any>}
+   * @type {Set<UiOverlayProvider>}
    */
   overlayProviders;
 
@@ -68,8 +75,8 @@ class UiRenderer extends CanvasHost {
 
   /**
    * 注册自定义 overlay provider
-   * @param {(context: { viewport: Viewport, renderer: UiRenderer }) => any} provider
-   * @returns {Function | undefined}
+   * @param {UiOverlayProvider} provider - overlay 条目提供函数
+   * @returns {UiOverlayProvider | undefined}
    */
   registerOverlayProvider(provider) {
     if (typeof provider !== "function") {
@@ -82,8 +89,8 @@ class UiRenderer extends CanvasHost {
 
   /**
    * 注销自定义 overlay provider
-   * @param {Function} provider
-   * @returns {boolean}
+   * @param {UiOverlayProvider} provider - 已注册的 provider
+   * @returns {boolean} 是否成功移除
    */
   unregisterOverlayProvider(provider) {
     return this.overlayProviders.delete(provider);
@@ -91,7 +98,8 @@ class UiRenderer extends CanvasHost {
 
   /**
    * 收集自定义 overlay 条目
-   * @returns {Array<Object>}
+   * @description 遍历所有 provider，归一化后合并返回。单个 provider 异常不中断其他 provider 的收集。
+   * @returns {import("./ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectProviderOverlayEntries() {
     const overlayEntries = [];
@@ -124,7 +132,7 @@ class UiRenderer extends CanvasHost {
 
   /**
    * 收集当前应绘制的 overlay
-   * @returns {Array<Object>}
+   * @returns {import("./ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectOverlayEntries() {
     return this.collectProviderOverlayEntries();
@@ -133,7 +141,7 @@ class UiRenderer extends CanvasHost {
   /**
    * 绘制矩形 overlay 条目
    * @param {CanvasRenderingContext2D} context - 画布上下文
-   * @param {{ screenRect?: RectangleRange, fillStyle?: string, strokeStyle?: string, lineWidth?: number, lineDash?: number[] }} entry - 条目
+   * @param {import("./ui-overlay-factory.js").UiOverlayEntry} entry - 矩形条目
    */
   drawRectEntry(context, entry = {}) {
     const screenRect = RectangleRange.fromRectLike(entry.screenRect);
