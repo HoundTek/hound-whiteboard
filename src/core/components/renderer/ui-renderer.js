@@ -8,7 +8,6 @@
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange } from "../../range/index.js";
 import { Viewport } from "../orchestration/viewport.js";
-import { ActiveObjectManager } from "../orchestration/active-object-manager.js";
 import { Logger } from "../../../utils/log/logger.js";
 import { logBus } from "../../../utils/log/log-bus.js";
 import {
@@ -68,14 +67,8 @@ class UiRenderer {
   viewport;
 
   /**
-   * 活动对象管理器
-   * @type {ActiveObjectManager | undefined}
-   */
-  activeObjectManager;
-
-  /**
    * 自定义 overlay provider 集合
-   * @type {Set<(context: { viewport: Viewport, activeObjectManager?: ActiveObjectManager, renderer: UiRenderer }) => any>}
+   * @type {Set<(context: { viewport: Viewport, renderer: UiRenderer }) => any>}
    */
   overlayProviders;
 
@@ -108,12 +101,10 @@ class UiRenderer {
 
   /**
    * @param {Viewport} viewport - 目标视口
-   * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(viewport, activeObjectManager, options = {}) {
+  constructor(viewport, options = {}) {
     this.viewport = viewport;
-    this.activeObjectManager = activeObjectManager;
     this.overlayProviders = new Set();
     this._canvas = options.canvas ?? null;
     this._resolveThresholds = createLiveDirtyRectThresholdStrategy();
@@ -135,14 +126,6 @@ class UiRenderer {
    */
   get canvas() {
     return this._canvas;
-  }
-
-  /**
-   * 更新活动对象管理器引用
-   * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
-   */
-  setActiveObjectManager(activeObjectManager) {
-    this.activeObjectManager = activeObjectManager;
   }
 
   /**
@@ -185,7 +168,7 @@ class UiRenderer {
 
   /**
    * 注册自定义 overlay provider
-   * @param {(context: { viewport: Viewport, activeObjectManager?: ActiveObjectManager, renderer: UiRenderer }) => any} provider - provider
+   * @param {(context: { viewport: Viewport, renderer: UiRenderer }) => any} provider - provider
    * @returns {Function | undefined}
    */
   registerOverlayProvider(provider) {
@@ -213,9 +196,9 @@ class UiRenderer {
    */
   getObjectWorldRect(objectInstance) {
     try {
-      const worldRange =
-        this.activeObjectManager?.getObjectWorldRange?.(objectInstance) ??
-        objectInstance?.getRange?.()?.withPosition?.(objectInstance.position);
+      const worldRange = objectInstance
+        ?.getRange?.()
+        ?.withPosition?.(objectInstance.position);
       if (!worldRange) return undefined;
       return RectangleRange.from(worldRange);
     } catch {
@@ -501,7 +484,6 @@ class UiRenderer {
       try {
         const result = provider({
           viewport: this.viewport,
-          activeObjectManager: this.activeObjectManager,
           renderer: this,
         });
         const entries = Array.isArray(result) ? result : [result];
@@ -618,7 +600,6 @@ class UiRenderer {
           dirtyRect,
           entry,
           viewport: this.viewport,
-          activeObjectManager: this.activeObjectManager,
           renderer: this,
         });
       }

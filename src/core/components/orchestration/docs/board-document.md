@@ -53,18 +53,18 @@
 
 ## 核心字段
 
-| 名称                                    | 描述                                                  |
-| --------------------------------------- | ----------------------------------------------------- |
-| `signalsEventBus`                       | 输入、挂载、卸载事件总线                              |
-| `devicesDAG`                            | 白板级唯一设备图                                      |
-| `viewports`                             | `Map<string, Viewport>`                               |
-| `activeObjectManager`                   | 指向本地 `BoardCore` 的 AOM 引用（compat / 测试使用） |
-| `chunkLoaded` / `objectLoaded`          | 指向本地 `BoardCore` 的 compat 引用                   |
-| `undoTree`                              | 指向本地 `BoardCore` 的 UndoTree 引用                 |
-| `rootChunkLoader` / `chunkLoadEventBus` | 指向本地 `BoardCore` 的 compat 引用                   |
-| `#boardApi`                             | `BoardApiRpc` 实例                                    |
-| `#boardCore`                            | 本地 `BoardCore` 实例                                 |
-| `#counterPool`                          | UI 侧 objectId 分配器                                 |
+| 名称                                    | 描述                                                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `signalsEventBus`                       | 输入、挂载、卸载事件总线                                                                                               |
+| `devicesDAG`                            | 白板级唯一设备图                                                                                                       |
+| `viewports`                             | `Map<string, Viewport>`                                                                                                |
+| `activeObjectManager` (getter)          | 委托到 `#boardCore.activeObjectManager`。AOM 为纯 Worker 侧模块，UI 侧通过此 getter 只读访问 BoardCore 持有的 AOM 引用 |
+| `chunkLoaded` / `objectLoaded`          | 指向本地 `BoardCore` 的 compat 引用                                                                                    |
+| `undoTree`                              | 指向本地 `BoardCore` 的 UndoTree 引用                                                                                  |
+| `rootChunkLoader` / `chunkLoadEventBus` | 指向本地 `BoardCore` 的 compat 引用                                                                                    |
+| `#boardApi`                             | `BoardApiRpc` 实例                                                                                                     |
+| `#boardCore`                            | 本地 `BoardCore` 实例                                                                                                  |
+| `#counterPool`                          | UI 侧 objectId 分配器                                                                                                  |
 
 ## `enableWorkerMode()` 初始化
 

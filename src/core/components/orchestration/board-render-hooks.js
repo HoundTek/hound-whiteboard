@@ -28,10 +28,9 @@ function _resolveViewports(viewportsOrFn) {
  * `viewports` 参数支持传入直接的 Map 引用或返回 Map 的惰性函数（适合 Board 构造时 viewports 尚未就绪的场景）。
  *
  * @param {Map<string, import("./viewport.js").Viewport> | (() => Map<string, import("./viewport.js").Viewport>)} viewportsOrFn - 视口 Map 或惰性获取函数
- * @param {() => import("../../objects/basic-obj.js").BasicObject[]} [collectAllActiveDrawables] - 收集所有活跃可绘制对象的函数（可选）
  * @returns {import("./aom-render-hooks.js").AomRenderHooks
  */
-function createBoardRenderHooks(viewportsOrFn, collectAllActiveDrawables) {
+function createBoardRenderHooks(viewportsOrFn) {
   /**
    * 获取当前 viewports Map
    * @returns {Map<string, import("./viewport.js").Viewport> | undefined}

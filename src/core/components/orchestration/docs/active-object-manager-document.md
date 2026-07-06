@@ -16,9 +16,8 @@ AOM 本身不依赖 DOM，也不直接持有 viewport 列表。它通过 `render
 
 ## 运行边界
 
-- **Shared 模块**：AOM 的数据结构与算法本身属于 Shared
-- **Worker 主运行位点**：在 Worker mode 下，真实 AOM 位于 Worker 的 `BoardCore` 中
-- **UI（测试/兼容）**：本地 `BoardCore` 可在测试路径中使用同一实现
+- **Worker 模块**：AOM 是纯 Worker 侧模块，真实实例位于 Worker 的 `BoardCore` 中
+- **UI（测试/兼容）**：本地 `BoardCore` 在测试路径中仍创建 AOM 实例，但 UI 侧的 `Board` facade 不直接持有 AOM，`UiRenderer` 也不引用 AOM
 
 ## 核心数据结构
 

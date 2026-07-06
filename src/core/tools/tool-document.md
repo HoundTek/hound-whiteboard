@@ -196,7 +196,7 @@ unsub();
 
 如果工具需要在 `uiCanvas` 上声明兼容 overlay，可额外覆写：
 
-- `collectUiOverlayEntries({ deviceContext, viewport, renderer, activeObjectManager })`
+- `collectUiOverlayEntries({ deviceContext, viewport, renderer })`
 
 该方法返回的条目会通过 viewport 上注册的 provider 交给 `UiRenderer`。
 

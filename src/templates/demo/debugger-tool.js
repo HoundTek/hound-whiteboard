@@ -187,10 +187,20 @@ class DebuggerTool extends Tool {
     };
   }
 
-  summarizeObjectLoad(board) {
-    const activeObjectIds = new Set(
+  /**
+   * AOM 在 Worker 侧，UI 侧不直接持有
+   * @param {import("../../core/components/orchestration/board.js").Board} board
+   * @returns {{ activeObjectIds: Set<number> }}
+   * @private
+   */
+  #resolveActiveObjectIds(board) {
+    return new Set(
       Array.from(board.activeObjectManager?.activeObjectIndex?.keys?.() ?? []),
     );
+  }
+
+  summarizeObjectLoad(board) {
+    const activeObjectIds = this.#resolveActiveObjectIds(board);
     const loadedObjects = Array.from(board.objectLoaded.entries()).map(
       ([objectId, objectState]) => {
         const obj = objectState?.obj;
@@ -224,9 +234,7 @@ class DebuggerTool extends Tool {
   summarizeBoard(board) {
     const chunkEntries = Array.from(board.chunkLoaded.entries());
     const objectIds = Array.from(board.objectLoaded.keys?.() ?? []);
-    const activeObjectIds = Array.from(
-      board.activeObjectManager?.activeObjectIndex?.keys?.() ?? [],
-    );
+    const activeObjectIds = Array.from(this.#resolveActiveObjectIds(board));
     const viewportIds = Array.from(board.viewports?.keys?.() ?? []);
 
     return {
@@ -317,33 +325,13 @@ class DebuggerTool extends Tool {
   }
 
   logActiveObjectManager(board) {
-    const aom = board.activeObjectManager ?? {};
-    const activeObjects = Array.from(aom.activeObjects ?? []).map(
-      (obj) => obj.id,
-    );
-    const activeObjectIndexIds = Array.from(
-      aom.activeObjectIndex?.keys?.() ?? [],
-    );
-    const layers = Array.from(aom.layerOrder ?? []).map((layer) => ({
-      id: layer.id,
-      activeObjects: Array.from(layer.activeObjects ?? []),
-      inactiveNodes: layer.inactiveGraph?.getNodes?.() ?? [],
-    }));
-    const onLayer = Array.from(aom.onLayer?.entries?.() ?? []).map(
-      ([objectId, layer]) => ({
-        objectId,
-        layerId: layer?.id,
-      }),
-    );
+    const activeObjectIds = this.#resolveActiveObjectIds(board);
+    const activeObjects = Array.from(activeObjectIds);
 
     this.#log.info("activeObjectManager summary:", {
-      manager: this.cloneSnapshot(aom),
+      note: "AOM lives on Worker side; UI only sees activeObjectIndex keys",
       activeObjectCount: activeObjects.length,
       activeObjectIds: activeObjects,
-      activeObjectIndexIds,
-      layerCount: layers.length,
-      layers,
-      onLayer,
     });
   }
 

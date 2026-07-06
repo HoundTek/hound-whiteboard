@@ -65,12 +65,6 @@ class Board {
   undoTree;
 
   /**
-   * 活动对象管理器（委托至 BoardCore）
-   * @type {import("./active-object-manager.js").ActiveObjectManager}
-   */
-  activeObjectManager;
-
-  /**
    * 当前已知区块的统一加载状态（委托至 BoardCore）
    * @type {Map<number, BoardChunkLoadedState>}
    */
@@ -81,6 +75,15 @@ class Board {
    * @type {Map<number, BoardObjectLoadedState>}
    */
   objectLoaded;
+
+  /**
+   * AOM 在 Worker 侧运行，UI 侧可通过本 getter 访问 BoardCore 持有的 AOM 引用。
+   * Worker 模式下此引用为本地镜像，真实活跃对象状态在 Worker 侧。
+   * @type {import("./active-object-manager.js").ActiveObjectManager | undefined}
+   */
+  get activeObjectManager() {
+    return this.#boardCore?.activeObjectManager;
+  }
 
   /**
    * 区块加载事件总线（委托至 BoardCore）
@@ -157,10 +160,7 @@ class Board {
    */
   constructor(options = {}) {
     // 1. 创建 UI 侧渲染钩子（在 viewports Map 准备好之前先创建，实际连接在 createViewport 后生效）
-    const renderHooks = createBoardRenderHooks(
-      () => this.viewports,
-      () => this.activeObjectManager?.activeObjects,
-    );
+    const renderHooks = createBoardRenderHooks(() => this.viewports);
 
     // 2. 创建持久化适配器
     const effectiveRootPath = isValidBoardRootPath(options.rootPath)
@@ -188,8 +188,6 @@ class Board {
     this.objectLoaded = this.#boardCore.objectLoaded;
     this.chunkLoadEventBus = this.#boardCore.chunkLoadEventBus;
     this.rootChunkLoader = this.#boardCore.rootChunkLoader;
-    this.activeObjectManager = this.#boardCore.activeObjectManager;
-
     // 5. BoardApiRpc 实例初始为 null，通过 enableWorkerMode 初始化
     this.#boardApi = null;
 
@@ -519,10 +517,6 @@ class Board {
         const mountedNode = this.devicesDAG.mountWorkflow(
           workflowPath,
           workflow,
-          {
-            board: this,
-            viewport,
-          },
         );
 
         /**

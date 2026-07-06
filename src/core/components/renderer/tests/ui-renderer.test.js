@@ -81,7 +81,7 @@ describe("UiRenderer", () => {
         return new RectangleRange(10, 20, 30, 40);
       },
     };
-    const renderer = new UiRenderer(viewport, aom, { canvas: canvas2 });
+    const renderer = new UiRenderer(viewport, { canvas: canvas2 });
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
 
@@ -93,7 +93,7 @@ describe("UiRenderer", () => {
     const board = {};
     const viewport = createViewport(board);
     const canvas3 = createCanvas(context);
-    const renderer = new UiRenderer(viewport, undefined, { canvas: canvas3 });
+    const renderer = new UiRenderer(viewport, { canvas: canvas3 });
     const draw = jest.fn();
     const provider = jest.fn(() => ({
       type: "draw",
@@ -112,7 +112,7 @@ describe("UiRenderer", () => {
     const context = createContext();
     const viewport = createViewport({});
     const canvas = createCanvas(context);
-    const renderer = new UiRenderer(viewport, undefined, { canvas });
+    const renderer = new UiRenderer(viewport, { canvas });
     const summary1 = {
       id: 17,
       position: { x: 10, y: 20 },
@@ -147,7 +147,7 @@ describe("UiRenderer", () => {
     const context = createContext();
     const viewport = createViewport({});
     const canvas = createCanvas(context);
-    const renderer = new UiRenderer(viewport, undefined, { canvas });
+    const renderer = new UiRenderer(viewport, { canvas });
     const summary = {
       id: 17,
       position: { x: 10, y: 20 },
@@ -171,7 +171,7 @@ describe("UiRenderer", () => {
     const context = createContext();
     const viewport = createViewport({});
     const canvas = createCanvas(context);
-    const renderer = new UiRenderer(viewport, undefined, { canvas });
+    const renderer = new UiRenderer(viewport, { canvas });
     renderer.registerOverlayProvider(() => ({
       source: "summary-like-entry",
       objectId: 77,

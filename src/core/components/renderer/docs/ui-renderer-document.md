@@ -18,6 +18,7 @@
 
 - **UI only**：`UiRenderer` 直接操作 `Viewport.uiCanvas`
 - **不进入 Worker**：Worker 侧没有 `UiRenderer`
+- **不持有 AOM**：`ActiveObjectManager` 是 Worker 侧模块，`UiRenderer` 不引用 AOM。overlay 所需的对象信息通过工具节点 state 或 provider 回调传入
 - **输入来源**：工具节点 state、summary-like 条目、provider 回调
 
 ## 当前职责
@@ -50,6 +51,8 @@
 
 - `registerOverlayProvider(provider)`
 - `unregisterOverlayProvider(provider)`
+
+provider 签名：`(context: { viewport: Viewport, renderer: UiRenderer }) => any`。
 
 provider 可返回：
 
@@ -91,15 +94,15 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "modifier");
 - `requestViewportUiRender()` 通过 `UiRenderer.invalidateViewport()` 请求刷新
 - `resizeRenderLayers()` 时会同步调整 `uiCanvas` 尺寸
 
-## 与 AOM / tools 的关系
+## 与 tools 的关系
 
-`UiRenderer` 自身不管理 AOM 状态，它只消费调用方提供的条目。
+`UiRenderer` 不持有 AOM（AOM 为纯 Worker 侧模块）。overlay 所需的对象信息通过以下渠道传入：
 
-AOM、creator、chooser、modifier 当前都可能推动 ui 层刷新，但真正决定“画什么”的是：
-
-- tool 当前写入的 node state
+- tool 当前写入的 node state（通过 `deviceContext` 读取）
 - tool 注册的 overlay provider
 - `UiRenderer` 对 summary-like / rect-like 数据的规整逻辑
+
+creator、chooser、modifier 都可能推动 ui 层刷新，但 `UiRenderer` 仅消费 provider 产出的条目，不关心数据来源。
 
 ## 当前状态
 

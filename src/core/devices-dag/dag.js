@@ -153,7 +153,7 @@ import { dagToString } from "./dag-debug.js";
  * });
  *
  * // 挂载 workflow 工具实例
- * dag.mountWorkflow("/viewport/workflows/pen", myPenTool, { board });
+ * dag.mountWorkflow("/viewport/workflows/pen", myPenTool);
  *
  * // 分发信号
  * dag.dispatch({
@@ -602,9 +602,8 @@ class DevicesDAG {
    * 挂载结构化子图
    * @param {string} basePath - 挂载基准路径
    * @param {SubDAGDefinition} subDAGDef - 子图定义
-   * @param {Object} [context={}] - 挂载时累积上下文
    */
-  mountSubDAG(basePath, subDAGDef, context = {}) {
+  mountSubDAG(basePath, subDAGDef) {
     if (!subDAGDef || typeof subDAGDef !== "object") return [];
 
     const { rootPath = "/", rootNodeId = 0, nodes, edges = [] } = subDAGDef;

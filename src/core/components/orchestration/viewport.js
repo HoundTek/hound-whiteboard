@@ -197,7 +197,7 @@ class Viewport {
     this.#pendingViewportSizeSync = false;
     this.#workerMessageListener = this.#handleWorkerMessage.bind(this);
     this.#worker.addEventListener("message", this.#workerMessageListener);
-    this.uiRenderer = new UiRenderer(this, undefined, {
+    this.uiRenderer = new UiRenderer(this, {
       canvas: this.#uiCanvas,
     });
 
