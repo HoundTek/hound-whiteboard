@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import { ObjectModifierTool } from "../object-modifier.js";
+import { RectangleRange } from "../../../range/index.js";
 
 describe("ObjectModifierTool", () => {
   test("withGeometryMutation 应按快照再失效的顺序包装一次几何修改", () => {
@@ -124,20 +125,29 @@ describe("ObjectModifierTool", () => {
     }
 
     const tool = new TestModifierTool();
-    const object = { id: 3 };
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "modifier-overlay",
-      ]),
+    const object = {
+      id: 3,
+      position: { x: 10, y: 20 },
+      range: new RectangleRange(0, 0, 30, 40),
+      property: {},
     };
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
+      },
+    };
+    const drawRectEntry = jest.fn();
 
     tool._overlayModifiedObjects = [object];
-    expect(tool.collectUiOverlayEntries({ renderer })).toEqual([
-      "modifier-overlay",
-    ]);
-    expect(
-      renderer.createCompatSelectionEntriesForSummaries,
-    ).toHaveBeenCalledWith([object], "modifier");
+    const entries = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].objectId).toBe(3);
+    expect(entries[0].type).toBe("rect");
   });
 
   describe("生命周期钩子", () => {

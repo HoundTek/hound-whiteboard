@@ -4,6 +4,7 @@ import { BasicObject } from "../../../objects/basic-obj.js";
 import { RectangleRange } from "../../../range/index.js";
 import { createNoopCanvasContext2D } from "../../../test-support/noop-canvas.js";
 import { Vector } from "../../../utils/math.js";
+import { createCompatSelectionEntriesForSummaries } from "../ui-overlay-factory.js";
 
 class TestOverlayObject extends BasicObject {
   constructor({ id = 1, position, localRect, property } = {}) {
@@ -126,11 +127,14 @@ describe("UiRenderer", () => {
       property: {},
     };
 
-    renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
-      overlayRenderer.createCompatSelectionEntriesForSummaries(
-        [summary1, summary2],
-        "chooser",
-      ),
+    renderer.registerOverlayProvider(
+      ({ viewport, renderer: overlayRenderer }) =>
+        createCompatSelectionEntriesForSummaries(
+          [summary1, summary2],
+          "chooser",
+          viewport,
+          (ctx, entry) => overlayRenderer.drawRectEntry(ctx, entry),
+        ),
     );
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -155,11 +159,14 @@ describe("UiRenderer", () => {
       property: {},
     };
 
-    renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
-      overlayRenderer.createCompatSelectionEntriesForSummaries(
-        [summary],
-        "chooser",
-      ),
+    renderer.registerOverlayProvider(
+      ({ viewport, renderer: overlayRenderer }) =>
+        createCompatSelectionEntriesForSummaries(
+          [summary],
+          "chooser",
+          viewport,
+          (ctx, entry) => overlayRenderer.drawRectEntry(ctx, entry),
+        ),
     );
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);

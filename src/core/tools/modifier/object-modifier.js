@@ -10,6 +10,7 @@ import { SignalPacket } from "../../devices-dag/signal.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
+import { createCompatSelectionEntriesForSummaries } from "../../components/renderer/ui-overlay-factory.js";
 
 /**
  * 对象修改工具相关信号类型常量
@@ -30,6 +31,20 @@ const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
 });
 
 /**
+ * 修改手势交互上下文
+ * @typedef {Object} ModifyGestureInteraction
+ * @property {SignalPacket} signalPacket - 输入信号包
+ * @property {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+ * @property {Array<{type: string, context?: *}>} signals - 信号列表
+ * @property {Vector|null} position - 世界坐标位置
+ * @property {Vector|null} displacement - 相对位移
+ * @property {import("../../shared/types.js").LightweightObjectEntry[]} objects - 当前活动的修改对象
+ * @property {boolean} hasEndSignal - 是否包含结束信号
+ * @property {boolean} hasCancelSignal - 是否包含取消信号
+ * @property {boolean} hasSuccessSignal - 是否包含提交信号
+ */
+
+/**
  * 对象修改工具基类
  * @class
  * @abstract
@@ -40,30 +55,29 @@ const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
 class ObjectModifierTool extends Tool {
   /**
    * overlay 渲染用——当前编辑中的对象集合
-   * @type {Array<*>}
+   * @type {import("../../shared/types.js").LightweightObjectEntry[]}
    * @protected
    */
   _overlayModifiedObjects = [];
 
   /**
    * 收集 modifier 当前声明的兼容 ui overlay
-   * @param {{ renderer?: Object }} [overlayContext={}]
+   * @param {{ renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer }} [overlayContext={}] - overlay 上下文
    * @returns {Array<Object>}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const renderer = overlayContext.renderer;
+    const { viewport, renderer } = overlayContext;
     const objects = this._overlayModifiedObjects;
 
-    if (
-      objects.length === 0 ||
-      typeof renderer?.createCompatSelectionEntriesForSummaries !== "function"
-    ) {
+    if (objects.length === 0 || !renderer?.drawRectEntry) {
       return [];
     }
 
-    return renderer.createCompatSelectionEntriesForSummaries(
+    return createCompatSelectionEntriesForSummaries(
       objects,
       "modifier",
+      viewport,
+      (ctx, entry) => renderer.drawRectEntry(ctx, entry),
     );
   }
 
@@ -83,7 +97,7 @@ class ObjectModifierTool extends Tool {
 
   /**
    * 解析对象条目的当前位置
-   * @param {*} objectEntry - 对象实例或兼容条目
+   * @param {import("../../shared/types.js").LightweightObjectEntry} objectEntry - 对象实例或兼容条目
    * @returns {Vector|null} 当前位置
    * @protected
    */
@@ -93,8 +107,8 @@ class ObjectModifierTool extends Tool {
 
   /**
    * 解析对象条目的局部判定范围
-   * @param {*} objectEntry - 对象实例或兼容条目
-   * @returns {*|null} 局部 range
+   * @param {import("../../shared/types.js").LightweightObjectEntry} objectEntry - 对象实例或兼容条目
+   * @returns {import("../../range/range.js").Range|null} 局部 range
    * @protected
    */
   resolveModifiedObjectRange(objectEntry) {
@@ -109,7 +123,7 @@ class ObjectModifierTool extends Tool {
 
   /**
    * 解析对象条目的世界矩形
-   * @param {*} objectEntry - 对象实例或兼容条目
+   * @param {import("../../shared/types.js").LightweightObjectEntry} objectEntry - 对象实例或兼容条目
    * @returns {RectangleRange|null} 世界矩形
    * @protected
    */
@@ -143,7 +157,7 @@ class ObjectModifierTool extends Tool {
   /**
    * 通过 RPC 写入对象绝对位置
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @param {*} objectEntry - 当前对象条目
+   * @param {import("../../shared/types.js").LightweightObjectEntry} objectEntry - 当前对象条目
    * @param {{ x: number, y: number }} position - 新位置
    * @returns {void}
    * @protected
@@ -222,7 +236,7 @@ class ObjectModifierTool extends Tool {
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Function} mutate - 实际执行修改的回调
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
-   * @param {Object} [options={}] - 选项对象
+   * @param {{ captureSnapshot?: boolean }} [options={}] - 选项对象
    * @returns {*}
    */
   withGeometryMutation(context, mutate, objects, options = {}) {
@@ -404,8 +418,8 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 从信号包中提取修改交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @param {Array<*>} objects - 当前活动的修改对象
-   * @returns {Object} 交互上下文
+   * @param {import("../../shared/types.js").LightweightObjectEntry[]} objects - 当前活动的修改对象
+   * @returns {ModifyGestureInteraction} 交互上下文
    * @protected
    */
   buildModifyInteractionContext(signalPacket, context = {}, objects = []) {
@@ -473,7 +487,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 无论手势是否激活，都尝试回退对象位置。
    * 手势结束后（end 信号后）cancel 应仍然能回退到手势初始位置，
    * 前提是子类的 completeModifyGesture 保留了 _initialPositions。
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @private
    */
   _handleCancel(interaction, context, objects) {
@@ -488,9 +502,9 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 处理 success 信号：结束手势并提交修改到静态图
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @param {Array<*>} objects - 活动对象
+   * @param {import("../../shared/types.js").LightweightObjectEntry[]} objects - 活动对象
    * @private
    */
   _handleSuccess(interaction, context, objects) {
@@ -503,7 +517,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 处理无位置信号时孤立的 end 信号
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @private
    */
   _handleOrphanEnd(interaction) {
@@ -519,9 +533,9 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 1. position 驱动手势状态机（begin → update → end/cancel）
    * 2. displacement 作为无状态增量直接累加到对象位置
    * 3. 两者可在同一帧并存：position 先算，displacement 再叠，锚点跟随位移
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @param {Array<*>} objects - 活动对象
+   * @param {import("../../shared/types.js").LightweightObjectEntry[]} objects - 活动对象
    * @private
    */
   _handleSpatialUpdate(interaction, context, objects) {
@@ -575,7 +589,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 手势准入检查，决定是否允许开始修改手势，子类可覆写以添加区域命中检测等限制
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @returns {boolean}
    * @protected
    */
@@ -585,7 +599,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 修改手势开始
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @abstract
    */
   beginModifyGesture(interaction) {
@@ -594,7 +608,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 修改手势更新
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @abstract
    */
   updateModifyGesture(interaction) {
@@ -603,7 +617,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 修改手势完成
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    */
   completeModifyGesture(interaction) {}
 
@@ -613,7 +627,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 子类应覆写此方法将对象回滚到手势开始时的初始状态。
    * 基类 _handleCancel 已包裹 withGeometryMutation，
    * 覆写时只需恢复几何，无需关心引用失效与渲染刷新。
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    */
   cancelModifyGesture(interaction) {}
 
@@ -621,7 +635,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 位移应用前的 hook
    * @description 在每次 displacement 应用到对象前调用。子类可在此记录初始位置供 cancel 回退。
    * 已在 withGeometryMutation 的 snapshot 管理内，无需手动处理失效与渲染。
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @protected
    */
   onBeforeDisplacement(interaction) {}
@@ -631,7 +645,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @description 在 displacement 应用到对象后调用。子类可在此同步基准位置以保持光标-对象偏移不变。
    * 不应调整锚点——锚点固定为手势起始光标位置，调锚点会重置偏移导致瞬移。
    * 不包裹 withGeometryMutation，因此方法已在外层 snapshot 范围外。
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @protected
    */
   onAfterDisplacement(interaction) {}
@@ -640,7 +654,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 将 displacement 增量直接累加到各对象位置
    * @description 基类默认实现：对每个活动对象，position 直接加上 displacement 向量。
    * 子类可覆写以支持非平移类修改（如旋转、缩放）。
-   * @param {Object} interaction - 当前交互上下文
+   * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @protected
    */
   applyDisplacementToObjects(interaction) {

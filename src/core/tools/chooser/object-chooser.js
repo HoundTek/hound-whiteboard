@@ -10,6 +10,7 @@ import { SignalPacket } from "../../devices-dag/signal.js";
 import { RectangleRange, intersectsRanges } from "../../range/index.js";
 import { Range } from "../../range/range.js";
 import { Vector } from "../../utils/math.js";
+import { createCompatSelectionEntriesForSummaries } from "../../components/renderer/ui-overlay-factory.js";
 
 /**
  * 对象选择工具基类
@@ -117,23 +118,25 @@ class ObjectChooserTool extends Tool {
 
   /**
    * 收集 chooser 当前声明的兼容 ui overlay
-   * @param {{ deviceContext?: Object, renderer?: Object }} [overlayContext={}] - overlay 上下文
+   * @param {{
+   *   deviceContext?: import("../../devices-dag/dag.js").DevicesDAGHandlerContext,
+   *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer
+   * }} [overlayContext={}] - overlay 上下文
    * @returns {Array<Object>}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const renderer = overlayContext.renderer;
+    const { viewport, renderer } = overlayContext;
     const objects = this._overlaySelectedObjects;
 
-    if (
-      objects.length === 0 ||
-      typeof renderer?.createCompatSelectionEntriesForSummaries !== "function"
-    ) {
+    if (objects.length === 0 || !renderer?.drawRectEntry) {
       return [];
     }
 
-    return renderer.createCompatSelectionEntriesForSummaries(
+    return createCompatSelectionEntriesForSummaries(
       objects,
       "chooser",
+      viewport,
+      (ctx, entry) => renderer.drawRectEntry(ctx, entry),
     );
   }
 
@@ -364,7 +367,7 @@ class ObjectChooserTool extends Tool {
   /**
    * 获取当前选择区域（供默认 submitSelection 使用）
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @returns {Object|null}
+   * @returns {RectangleRange|null}
    * @abstract
    */
   getSelectionRegion(context) {

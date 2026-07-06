@@ -22,10 +22,12 @@
 | `components/orchestration/active-object-manager.js` | Worker              | AOM 纯语义核心，通过 renderHooks 接入具体渲染链。UI 侧不持有 AOM                            |
 | `components/orchestration/aom-render-hooks.js`      | Shared              | renderHooks 接口与默认空实现                                                                |
 | `components/orchestration/board-render-hooks.js`    | UI                  | UI 侧渲染钩子（Worker mode 下为本地 BoardCore 的占位实现，实际 AOM 渲染走 Worker 侧 hooks） |
+| `components/renderer/canvas-lifecycle.js`           | Shared              | 画布生命周期基类（CanvasHost），所有渲染器共用                                              |
 | `components/renderer/ui-renderer.js`                | UI                  | UI overlay 渲染                                                                             |
+| `components/renderer/ui-overlay-factory.js`         | Shared              | UI overlay 条目工厂纯函数                                                                   |
 | `components/renderer/base-renderer.js`              | Worker              | Base 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                                    |
 | `components/renderer/live-renderer.js`              | Worker              | Live 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                                    |
-| `components/renderer/renderer.js`                   | Shared              | 渲染器基类                                                                                  |
+| `components/renderer/renderer.js`                   | Shared              | 渲染器基类（继承 CanvasHost）                                                               |
 | `components/renderer/render-scheduler.js`           | Shared              | 脏区调度                                                                                    |
 | `components/renderer/dirty-rect-*.js`               | Shared              | 脏区策略                                                                                    |
 | `devices/`                                          | UI                  | 鼠标 / 键盘 / 触屏输入设备定义                                                              |

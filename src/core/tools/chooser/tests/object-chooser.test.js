@@ -211,34 +211,42 @@ describe("ObjectChooserTool", () => {
     expect(stateAccess.getState()).toEqual({});
   });
 
-  test("collectUiOverlayEntries 应读取 _overlaySelectedObjects 并委托 renderer", () => {
-    const chosenObject = { id: 5 };
-    const tool = new TestChooserTool();
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "chooser-overlay",
-      ]),
+  test("collectUiOverlayEntries 应调用 factory 生成选择框条目", () => {
+    const chosenObject = {
+      id: 5,
+      position: { x: 10, y: 20 },
+      range: new RectangleRange(0, 0, 30, 40),
+      property: {},
     };
+    const tool = new TestChooserTool();
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
+      },
+    };
+    const drawRectEntry = jest.fn();
 
     tool._overlaySelectedObjects = [chosenObject];
-    const entries = tool.collectUiOverlayEntries({ renderer });
+    const entries = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
+    });
 
-    expect(entries).toEqual(["chooser-overlay"]);
-    expect(
-      renderer.createCompatSelectionEntriesForSummaries,
-    ).toHaveBeenCalledWith([chosenObject], "chooser");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].objectId).toBe(5);
+    expect(entries[0].type).toBe("rect");
+    expect(entries[0].source).toBe("compat-selection-object-frame:chooser");
   });
 
   test("collectUiOverlayEntries 无选中对象时应返回空数组", () => {
     const tool = new TestChooserTool();
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "chooser-overlay",
-      ]),
-    };
 
     tool._overlaySelectedObjects = [];
-    const entries = tool.collectUiOverlayEntries({ renderer });
+    const entries = tool.collectUiOverlayEntries({
+      viewport: {},
+      renderer: { drawRectEntry: jest.fn() },
+    });
 
     expect(entries).toEqual([]);
   });
@@ -250,19 +258,22 @@ describe("ObjectChooserTool", () => {
       range: new RectangleRange(0, 0, 5, 5),
     };
     const tool = new TestChooserTool();
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "chooser-summary-overlay",
-      ]),
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
+      },
     };
+    const drawRectEntry = jest.fn();
 
     tool._overlaySelectedObjects = [chosenObject];
-    const visible = tool.collectUiOverlayEntries({ renderer });
+    const visible = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
+    });
 
-    expect(visible).toEqual(["chooser-summary-overlay"]);
-    expect(
-      renderer.createCompatSelectionEntriesForSummaries,
-    ).toHaveBeenCalledWith([chosenObject], "chooser");
+    expect(visible).toHaveLength(1);
+    expect(visible[0].objectId).toBe(51);
   });
 
   test("resolveObjectSelectionWorldRange 应优先使用 range 而非 boundingBox", () => {

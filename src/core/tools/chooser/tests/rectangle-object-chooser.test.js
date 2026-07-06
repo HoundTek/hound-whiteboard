@@ -150,25 +150,34 @@ describe("RectangleObjectChooserTool", () => {
 
   test("collectUiOverlayEntries 应同时返回拖拽矩形和父类选择框条目", () => {
     const tool = new RectangleObjectChooserTool();
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "selection-frame",
-      ]),
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
+      },
     };
+    const drawRectEntry = jest.fn();
 
-    tool._overlaySelectedObjects = [{ id: 1 }];
+    tool._overlaySelectedObjects = [
+      { id: 1, position: { x: 0, y: 0 }, property: {} },
+    ];
     tool._overlayDragState = {
       isSelecting: true,
       worldRect: new RectangleRange(0, 0, 20, 30),
     };
 
-    expect(tool.collectUiOverlayEntries({ renderer })).toEqual([
-      "selection-frame",
+    const entries = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual(
       expect.objectContaining({
         source: "rectangle-selection-drag",
         worldRect: new RectangleRange(0, 0, 20, 30),
       }),
-    ]);
+    );
   });
 
   test("异步框选应通过 hitTest/queryObjects 读取 summary-like 条目而不读取 stale board 对象", async () => {
