@@ -456,7 +456,10 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
     const packet = SignalPacket.from(signalPacket);
 
     const objects = this.resolveActiveModifiedObjects(context);
-    if (objects.length === 0) return;
+    if (objects.length === 0) {
+      this._overlayModifiedObjects = [];
+      return;
+    }
 
     this.setContextObjects(context, objects);
     this._overlayModifiedObjects = objects;
@@ -501,6 +504,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       { captureSnapshot: false },
     );
     this.isModifyingGestureActive = false;
+    this._overlayModifiedObjects = [];
   }
 
   /**
@@ -516,6 +520,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       this.isModifyingGestureActive = false;
     }
     this.applyModifiedObjects(context, objects);
+    this._overlayModifiedObjects = [];
   }
 
   /**

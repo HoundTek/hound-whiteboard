@@ -200,6 +200,15 @@ class ObjectChooserTool extends Tool {
   process(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
 
+    // 如果 nodeState 中的对象已被清理（handoff 完成时 delNodeState），
+    // 同步清理 overlay 状态，避免 handoff 切换回 first 阶段后显示旧的选中框
+    if (
+      this._overlaySelectedObjects.length > 0 &&
+      !this.resolveNodeState(context).objects
+    ) {
+      this._overlaySelectedObjects = [];
+    }
+
     if (packet.signals.some((s) => s.type === "cancel")) {
       this.clearSelectionRegion(context);
       this._overlaySelectedObjects = [];
