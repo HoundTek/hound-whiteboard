@@ -735,7 +735,7 @@ class CoreWorkerRuntime {
           .map((id) => boardCore.getObjectById(id))
           .filter(Boolean);
         if (objects.length > 0) {
-          boardCore.activeObjectManager.apply(new Set(objects));
+          return boardCore.activeObjectManager.apply(new Set(objects));
         }
         return;
       }
@@ -747,7 +747,7 @@ class CoreWorkerRuntime {
           .map((id) => boardCore.getObjectById(id))
           .filter(Boolean);
         if (objects.length > 0) {
-          boardCore.activeObjectManager.choose(new Set(objects));
+          return boardCore.activeObjectManager.choose(new Set(objects));
         }
         return;
       }

@@ -16,7 +16,12 @@ describe("ActiveObjectManager/operate", () => {
 
   function createObject(id, chunkId) {
     const object = new StrokeObject(id, new Vector(0, 0));
-    object.setData({ points: [new Vector(1, 1), new Vector(2, 2)].map(p => ({ x: p.x, y: p.y })) });
+    object.setData({
+      points: [new Vector(1, 1), new Vector(2, 2)].map((p) => ({
+        x: p.x,
+        y: p.y,
+      })),
+    });
     return object;
   }
 
@@ -41,12 +46,12 @@ describe("ActiveObjectManager/operate", () => {
   });
 
   describe("置顶选择对象", () => {
-    test("应正确置顶选择对象", () => {
+    test("应正确置顶选择对象", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(new Set([object12, object13, object5]));
+      await aom.choose(new Set([object12, object13, object5]));
       // 置顶 5
       aom.liftup(new Set([object5]));
 
@@ -76,12 +81,12 @@ describe("ActiveObjectManager/operate", () => {
       }
     });
 
-    test("应正确置顶多个对象", () => {
+    test("应正确置顶多个对象", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(new Set([object12, object13, object5]));
+      await aom.choose(new Set([object12, object13, object5]));
       // 置顶 5, 13
       aom.liftup(new Set([object5, object13]));
 
@@ -119,12 +124,12 @@ describe("ActiveObjectManager/operate", () => {
   });
 
   describe("取消选择对象", () => {
-    test("应正确取消选择单个对象", () => {
+    test("应正确取消选择单个对象", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(new Set([object12, object13, object5]));
+      await aom.choose(new Set([object12, object13, object5]));
       // 取消选择 5
       aom.discard(new Set([object5]));
 
@@ -155,12 +160,12 @@ describe("ActiveObjectManager/operate", () => {
       }
     });
 
-    test("应正确取消选择多个对象 #1", () => {
+    test("应正确取消选择多个对象 #1", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(new Set([object12, object13, object5]));
+      await aom.choose(new Set([object12, object13, object5]));
       // 取消选择 5, 13
       aom.discard(new Set([object5, object13]));
 
@@ -191,12 +196,12 @@ describe("ActiveObjectManager/operate", () => {
       }
     });
 
-    test("应正确取消选择多个对象 #2", () => {
+    test("应正确取消选择多个对象 #2", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(new Set([object12, object13, object5]));
+      await aom.choose(new Set([object12, object13, object5]));
       // 取消选择 12, 13
       aom.discard(new Set([object12, object13]));
 
@@ -220,14 +225,14 @@ describe("ActiveObjectManager/operate", () => {
   });
 
   describe("清理动态图", () => {
-    test("应能正确去除空层", () => {
+    test("应能正确去除空层", async () => {
       const object12 = createObject(12, chunk.id);
       const object7 = createObject(7, chunk.id);
       const object8 = createObject(8, chunk.id);
       const object4 = createObject(4, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 7, 8, 4, 5
-      aom.choose(new Set([object12, object7, object8, object4, object5]));
+      await aom.choose(new Set([object12, object7, object8, object4, object5]));
       // 置顶 7, 8
       aom.liftup(new Set([object7, object8]));
       const expectedActiveSet = [
@@ -254,12 +259,12 @@ describe("ActiveObjectManager/operate", () => {
       }
     });
 
-    test("应能正确去除不能被活动对象到达的层", () => {
+    test("应能正确去除不能被活动对象到达的层", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       // 选 12, 13, 5
-      aom.choose(new Set([object12, object13, object5]));
+      await aom.choose(new Set([object12, object13, object5]));
       // 置顶 12, 13
       aom.liftup(new Set([object12, object13]));
 
@@ -282,7 +287,7 @@ describe("ActiveObjectManager/operate", () => {
       }
     });
 
-    test("应在清理底部 inactive 前缀层时移除 stale onLayer 和 layerIndex", () => {
+    test("应在清理底部 inactive 前缀层时移除 stale onLayer 和 layerIndex", async () => {
       const removedLayer = new Layer(1000);
       removedLayer.inactiveGraph.addNodeUnsafe(1);
       removedLayer.inactiveGraph.addNodeUnsafe(2);
@@ -309,7 +314,7 @@ describe("ActiveObjectManager/operate", () => {
       expect(aom.layerIndex.get(2000)).toBe(0);
     });
 
-    test("应释放被清理的底部 inactive 层的 layerPool id", () => {
+    test("应释放被清理的底部 inactive 层的 layerPool id", async () => {
       const removedLayerId = aom.layerPool.generate();
       const removedLayer = new Layer(removedLayerId);
       removedLayer.active = false;

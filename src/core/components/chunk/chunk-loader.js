@@ -12,6 +12,7 @@ const CHUNK_LOAD_EVENTS = Object.freeze({
   REQUEST_LOAD: "chunk-loader:request-load",
   REQUEST_UNLOAD: "chunk-loader:request-unload",
   BUFFER_UPDATED: "chunk-loader:buffer-updated",
+  LOAD_COMPLETE: "chunk-loader:load-complete",
 });
 
 const CHUNK_LOAD_STRATEGIES = Object.freeze({

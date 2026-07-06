@@ -199,10 +199,8 @@ function installMockDocument() {
  * @param {number} [count=6] - 冲刷轮数
  * @returns {Promise<void>}
  */
-async function flushMicrotasks(count = 6) {
-  for (let index = 0; index < count; index += 1) {
-    await Promise.resolve();
-  }
+async function flushMicrotasks(_count = 6) {
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 describe("whiteboard demo worker mode", () => {

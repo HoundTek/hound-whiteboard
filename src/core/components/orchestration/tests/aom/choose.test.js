@@ -77,7 +77,7 @@ describe("ActiveObjectManager/choose", () => {
   });
 
   describe("单次选择对象", () => {
-    test("choose 应通过 renderHooks 触发刷新", () => {
+    test("choose 应通过 renderHooks 触发刷新", async () => {
       const selected = createObject(12, chunk.id);
       const requestLiveRender = jest.fn();
       const requestBaseRenderForObjects = jest.fn();
@@ -92,7 +92,7 @@ describe("ActiveObjectManager/choose", () => {
         return 1;
       };
 
-      aom.choose(new Set([selected]));
+      await aom.choose(new Set([selected]));
 
       expect(requestLiveRender).toHaveBeenCalledWith([selected]);
       expect(requestBaseRenderForObjects).toHaveBeenCalledWith(
@@ -102,8 +102,8 @@ describe("ActiveObjectManager/choose", () => {
       );
     });
 
-    test("应正确选择单个对象", () => {
-      aom.choose(new Set([createObject(12, chunk.id)]));
+    test("应正确选择单个对象", async () => {
+      await aom.choose(new Set([createObject(12, chunk.id)]));
 
       const expectedActiveSet = new Set([12]);
       const expectedInactiveGraph = DirectedGraph.parse([
@@ -123,8 +123,8 @@ describe("ActiveObjectManager/choose", () => {
       ).toBe(true);
     });
 
-    test("应正确选择多个对象", () => {
-      aom.choose(
+    test("应正确选择多个对象", async () => {
+      await aom.choose(
         new Set([
           createObject(12, chunk.id),
           createObject(13, chunk.id),
@@ -159,14 +159,14 @@ describe("ActiveObjectManager/choose", () => {
   });
 
   describe("多次选择对象", () => {
-    test("应正确在已有选择的对象上再次选择单个对象", () => {
+    test("应正确在已有选择的对象上再次选择单个对象", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object8 = createObject(8, chunk.id);
       const object5 = createObject(5, chunk.id);
-      aom.choose(new Set([object12, object13, object8]));
+      await aom.choose(new Set([object12, object13, object8]));
 
-      aom.choose(new Set([object5]));
+      await aom.choose(new Set([object5]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set([8]), new Set([5])];
       const expectedInactiveGraph = [
@@ -192,12 +192,12 @@ describe("ActiveObjectManager/choose", () => {
       }
     });
 
-    test("应正确在已有选择的对象间再次选择单个对象", () => {
+    test("应正确在已有选择的对象间再次选择单个对象", async () => {
       const object12 = createObject(12, chunk.id);
       const object13 = createObject(13, chunk.id);
       const object5 = createObject(5, chunk.id);
       const object8 = createObject(8, chunk.id);
-      aom.choose(new Set([object12, object13, object5]));
+      await aom.choose(new Set([object12, object13, object5]));
 
       const expectedActiveSet1 = [new Set([12, 13]), new Set([5])];
       const expectedInactiveGraph1 = [
@@ -223,7 +223,7 @@ describe("ActiveObjectManager/choose", () => {
         ).toBe(true);
       }
 
-      aom.choose(new Set([object8]));
+      await aom.choose(new Set([object8]));
 
       const expectedActiveSet = [new Set([12, 13]), new Set([8]), new Set([5])];
       const expectedInactiveGraph = [
@@ -251,7 +251,7 @@ describe("ActiveObjectManager/choose", () => {
   });
 
   describe("二维跨区块选择对象", () => {
-    test("应能基于二维覆盖区块子图正确分层", () => {
+    test("应能基于二维覆盖区块子图正确分层", async () => {
       const centerChunk = createChunkAt(0, 0);
       const rightChunk = createChunkAt(1, 0);
       const upChunk = createChunkAt(0, 1);
@@ -286,7 +286,7 @@ describe("ActiveObjectManager/choose", () => {
       verticalChunkConnect(centerChunk, upChunk);
       verticalChunkConnect(rightChunk, rightUpChunk);
 
-      aom.choose(new Set([createObject(100, centerChunk.id)]));
+      await aom.choose(new Set([createObject(100, centerChunk.id)]));
 
       expect(aom.layerOrder.length).toBe(1);
       expect(aom.layerOrder[0].activeObjects).toEqual(new Set([100]));

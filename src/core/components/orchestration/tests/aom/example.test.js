@@ -67,13 +67,13 @@ function expectLayer(layer, { active, activeObjects, inactiveGraphData }) {
 }
 
 describe("ActiveObjectManager/example", () => {
-  test("示例三：discard 后保留的 inactive layer 仍会影响后续 apply", () => {
+  test("示例三：discard 后保留的 inactive layer 仍会影响后续 apply", async () => {
     const { board, chunk, objects } = createExampleBoard();
 
-    board.activeObjectManager.choose(
+    await board.activeObjectManager.choose(
       new Set([objects.C, objects.E, objects.H]),
     );
-    board.activeObjectManager.choose(new Set([objects.G]));
+    await board.activeObjectManager.choose(new Set([objects.G]));
     board.activeObjectManager.discard(new Set([objects.G]));
 
     expect(board.activeObjectManager.layerOrder.length).toBe(3);
@@ -106,11 +106,11 @@ describe("ActiveObjectManager/example", () => {
     ).toBe(true);
   });
 
-  test("示例四：先选 C 再选 B，discard C 后应清掉底部 inactive 前缀层", () => {
+  test("示例四：先选 C 再选 B，discard C 后应清掉底部 inactive 前缀层", async () => {
     const { board, objects } = createExampleBoard();
 
-    board.activeObjectManager.choose(new Set([objects.C]));
-    board.activeObjectManager.choose(new Set([objects.B]));
+    await board.activeObjectManager.choose(new Set([objects.C]));
+    await board.activeObjectManager.choose(new Set([objects.B]));
 
     expect(board.activeObjectManager.layerOrder.length).toBe(2);
     expectLayer(board.activeObjectManager.layerOrder[0], {
@@ -137,13 +137,13 @@ describe("ActiveObjectManager/example", () => {
     expect(board.activeObjectManager.layerOrder.length).toBe(0);
   });
 
-  test("示例五：先选 C、E、H，再选 D 时应在最下方插入新的活动层", () => {
+  test("示例五：先选 C、E、H，再选 D 时应在最下方插入新的活动层", async () => {
     const { board, objects } = createExampleBoard();
 
-    board.activeObjectManager.choose(
+    await board.activeObjectManager.choose(
       new Set([objects.C, objects.E, objects.H]),
     );
-    board.activeObjectManager.choose(new Set([objects.D]));
+    await board.activeObjectManager.choose(new Set([objects.D]));
 
     expect(board.activeObjectManager.layerOrder.length).toBe(3);
     expectLayer(board.activeObjectManager.layerOrder[0], {
@@ -166,10 +166,10 @@ describe("ActiveObjectManager/example", () => {
     });
   });
 
-  test("示例二：选择 C、E、H 时，F 应与 E、H 同层", () => {
+  test("示例二：选择 C、E、H 时，F 应与 E、H 同层", async () => {
     const { board, objects } = createExampleBoard();
 
-    board.activeObjectManager.choose(
+    await board.activeObjectManager.choose(
       new Set([objects.C, objects.E, objects.H]),
     );
 

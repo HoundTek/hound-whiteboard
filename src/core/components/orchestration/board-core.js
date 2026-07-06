@@ -548,14 +548,24 @@ class BoardCore {
       ) {
         await this.syncChunkObjectEntries(chunk);
       }
+      this.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, {
+        chunkId: chunk.id,
+      });
       return changed;
     }
 
     if (chunk.isLoad && !chunk.isTempLoad) {
+      this.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, {
+        chunkId: chunk.id,
+      });
       return false;
     }
 
-    return chunk.loadTemp(boardRootPath);
+    const changed = await chunk.loadTemp(boardRootPath);
+    this.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, {
+      chunkId: chunk.id,
+    });
+    return changed;
   }
 
   /**

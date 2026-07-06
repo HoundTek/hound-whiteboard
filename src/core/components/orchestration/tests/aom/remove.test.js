@@ -11,7 +11,7 @@ import { oneChunkData } from "./data.js";
 
 describe("ActiveObjectManager/remove", () => {
   describe("基础删除", () => {
-    test("remove 应将对象从区块静态图中移除", () => {
+    test("remove 应将对象从区块静态图中移除", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[101, []]]);
@@ -27,7 +27,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke = new StrokeObject(101, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       aom.remove(new Set([stroke]));
 
@@ -37,7 +42,7 @@ describe("ActiveObjectManager/remove", () => {
       );
     });
 
-    test("remove 应从所有覆盖区块中移除对象", () => {
+    test("remove 应从所有覆盖区块中移除对象", async () => {
       // 使用螺旋 id：(0,0)=1, (1,0)=2, (1,1)=3
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
@@ -72,7 +77,12 @@ describe("ActiveObjectManager/remove", () => {
 
       const stroke = new StrokeObject(102, new Vector(0, 0));
       // 覆盖从 (0,0) 到 (6,6)，在 5x5 的区块尺寸下会跨区块 (0,0)=1, (1,0)=2, (1,1)=3
-      stroke.setData({ points: [new Vector(1, 1), new Vector(6, 6)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(6, 6)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       aom.remove(new Set([stroke]));
 
@@ -90,7 +100,7 @@ describe("ActiveObjectManager/remove", () => {
       );
     });
 
-    test("remove 应将对象从活动集合中移除", () => {
+    test("remove 应将对象从活动集合中移除", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
@@ -110,11 +120,21 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke12 = new StrokeObject(12, new Vector(0, 0));
-      stroke12.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke12.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
       const stroke13 = new StrokeObject(13, new Vector(0, 0));
-      stroke13.setData({ points: [new Vector(2, 2), new Vector(5, 5)].map(p => ({ x: p.x, y: p.y })) });
+      stroke13.setData({
+        points: [new Vector(2, 2), new Vector(5, 5)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
-      aom.choose(new Set([stroke12, stroke13]));
+      await aom.choose(new Set([stroke12, stroke13]));
       aom.remove(new Set([stroke12]));
 
       expect(aom.activeObjects.has(stroke12)).toBe(false);
@@ -126,7 +146,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(aom.onLayer.has(13)).toBe(true);
     });
 
-    test("remove 应能处理不在活动集合中的对象", () => {
+    test("remove 应能处理不在活动集合中的对象", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[201, []]]);
@@ -142,7 +162,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke = new StrokeObject(201, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       // 对象不在活动集合中，仅存在于静态图
       aom.remove(new Set([stroke]));
@@ -154,7 +179,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(aom.activeObjects.size).toBe(0);
     });
 
-    test("remove 应清理所有被移除对象后的空层", () => {
+    test("remove 应清理所有被移除对象后的空层", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
@@ -178,12 +203,19 @@ describe("ActiveObjectManager/remove", () => {
       const objects = new Map();
       for (const nodeId of [12, 13, 5]) {
         const obj = new StrokeObject(nodeId, new Vector(0, 0));
-        obj.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+        obj.setData({
+          points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+            x: p.x,
+            y: p.y,
+          })),
+        });
         objects.set(nodeId, obj);
       }
 
       // select 12, 13, 5 会创建多层
-      aom.choose(new Set([objects.get(12), objects.get(13), objects.get(5)]));
+      await aom.choose(
+        new Set([objects.get(12), objects.get(13), objects.get(5)]),
+      );
       expect(aom.layerOrder.length).toBeGreaterThanOrEqual(2);
 
       // 移除全部活动对象
@@ -198,7 +230,7 @@ describe("ActiveObjectManager/remove", () => {
   });
 
   describe("渲染触发", () => {
-    test("remove 应通过 renderHooks 触发 live 层刷新", () => {
+    test("remove 应通过 renderHooks 触发 live 层刷新", async () => {
       const requestLiveRender = jest.fn();
       const requestBaseRenderForObjects = jest.fn();
       const renderHooks = {
@@ -226,7 +258,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(301, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       requestLiveRender.mockClear();
       requestBaseRenderForObjects.mockClear();
@@ -237,7 +274,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(requestLiveRender).toHaveBeenCalledWith([stroke]);
     });
 
-    test("remove 应通过 renderHooks 触发 base 层区块级渲染请求", () => {
+    test("remove 应通过 renderHooks 触发 base 层区块级渲染请求", async () => {
       const requestBaseRenderForObjects = jest.fn();
       const renderHooks = {
         requestLiveRender: jest.fn(),
@@ -271,14 +308,19 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(302, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(15, 15)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(15, 15)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       aom.remove(new Set([stroke]));
 
       expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
     });
 
-    test("remove 应优先触发对象级静态层局部失效", () => {
+    test("remove 应优先触发对象级静态层局部失效", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[303, []]]);
@@ -305,7 +347,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(303, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       aom.remove(new Set([stroke]));
 
@@ -314,7 +361,7 @@ describe("ActiveObjectManager/remove", () => {
   });
 
   describe("快照清理", () => {
-    test("remove 应清理 baseObjectSnapshotWorldRanges", () => {
+    test("remove 应清理 baseObjectSnapshotWorldRanges", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[401, []]]);
@@ -334,10 +381,15 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke = new StrokeObject(401, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       // choose 会调用 captureBaseObjectSnapshot，填充快照
-      aom.choose(new Set([stroke]));
+      await aom.choose(new Set([stroke]));
       expect(aom.baseObjectSnapshotWorldRanges.has(401)).toBe(true);
       expect(aom.baseObjectSnapshotCoverChunks.has(401)).toBe(true);
 
@@ -347,7 +399,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(aom.baseObjectSnapshotCoverChunks.has(401)).toBe(false);
     });
 
-    test("remove 应清理 add 产生的快照", () => {
+    test("remove 应清理 add 产生的快照", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[402, []]]);
@@ -363,7 +415,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke = new StrokeObject(402, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       // add 不产生快照，apply 后才产生
       aom.add(new Set([stroke]));
@@ -374,7 +431,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(aom.baseObjectSnapshotCoverChunks.has(402)).toBe(false);
 
       // choose 后再 remove
-      aom.choose(new Set([stroke]));
+      await aom.choose(new Set([stroke]));
       expect(aom.baseObjectSnapshotWorldRanges.has(402)).toBe(true);
 
       aom.remove(new Set([stroke]));
@@ -384,7 +441,7 @@ describe("ActiveObjectManager/remove", () => {
   });
 
   describe("静态图邻接清理", () => {
-    test("remove 应将邻接对象纳入 base 层失效", () => {
+    test("remove 应将邻接对象纳入 base 层失效", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
@@ -417,9 +474,19 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board, { renderHooks });
 
       const lower = new StrokeObject(501, new Vector(0, 0));
-      lower.setData({ points: [new Vector(1, 1), new Vector(7, 7)].map(p => ({ x: p.x, y: p.y })) });
+      lower.setData({
+        points: [new Vector(1, 1), new Vector(7, 7)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
       const upper = new StrokeObject(502, new Vector(0, 0));
-      upper.setData({ points: [new Vector(2, 2), new Vector(8, 8)].map(p => ({ x: p.x, y: p.y })) });
+      upper.setData({
+        points: [new Vector(2, 2), new Vector(8, 8)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
       objectMap.set(501, lower);
       objectMap.set(502, upper);
 
@@ -433,7 +500,7 @@ describe("ActiveObjectManager/remove", () => {
       ).toEqual([501, 502]);
     });
 
-    test("remove 删除无邻接的孤立对象时只纳入自身", () => {
+    test("remove 删除无邻接的孤立对象时只纳入自身", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[601, []]]);
@@ -461,7 +528,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board, { renderHooks });
 
       const stroke = new StrokeObject(601, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       aom.remove(new Set([stroke]));
 
@@ -472,7 +544,7 @@ describe("ActiveObjectManager/remove", () => {
   });
 
   describe("混合场景", () => {
-    test("remove 应支持同时移除活动和静态对象", () => {
+    test("remove 应支持同时移除活动和静态对象", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
@@ -498,14 +570,29 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const activeObj = new StrokeObject(701, new Vector(0, 0));
-      activeObj.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      activeObj.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
       const staticObjA = new StrokeObject(702, new Vector(0, 0));
-      staticObjA.setData({ points: [new Vector(2, 2), new Vector(5, 5)].map(p => ({ x: p.x, y: p.y })) });
+      staticObjA.setData({
+        points: [new Vector(2, 2), new Vector(5, 5)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
       const staticObjB = new StrokeObject(703, new Vector(0, 0));
-      staticObjB.setData({ points: [new Vector(3, 3), new Vector(6, 6)].map(p => ({ x: p.x, y: p.y })) });
+      staticObjB.setData({
+        points: [new Vector(3, 3), new Vector(6, 6)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       // 只有 701 是活动对象
-      aom.choose(new Set([activeObj]));
+      await aom.choose(new Set([activeObj]));
       expect(aom.activeObjectIndex.has(701)).toBe(true);
 
       aom.remove(new Set([activeObj, staticObjA, staticObjB]));
@@ -519,7 +606,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(aom.activeObjects.size).toBe(0);
     });
 
-    test("remove 应能处理由 add 加入但未 apply 的对象", () => {
+    test("remove 应能处理由 add 加入但未 apply 的对象", async () => {
       const ownerChunk = createChunk(1);
       ownerChunk.objectManager = new ChunkObjectManager(1);
 
@@ -533,7 +620,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke = new StrokeObject(801, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       // add 将对象注册为活动对象，但未写入区块静态图
       aom.add(new Set([stroke]));
@@ -548,14 +640,14 @@ describe("ActiveObjectManager/remove", () => {
       expect(ownerChunk.objectManager.staticGraph.hasNode(801)).toBe(false);
     });
 
-    test("remove 应用于空集合时不应抛错", () => {
+    test("remove 应用于空集合时不应抛错", async () => {
       const aom = new ActiveObjectManager();
 
       expect(() => aom.remove(new Set([]))).not.toThrow();
       expect(() => aom.remove([])).not.toThrow();
     });
 
-    test("remove 传入非 BasicObject 实例时应抛 TypeError", () => {
+    test("remove 传入非 BasicObject 实例时应抛 TypeError", async () => {
       const aom = new ActiveObjectManager();
 
       expect(() => aom.remove(new Set([{}]))).toThrow(TypeError);
@@ -563,11 +655,16 @@ describe("ActiveObjectManager/remove", () => {
       expect(() => aom.remove(new Set(["not-an-object"]))).toThrow(TypeError);
     });
 
-    test("remove 应能处理无 board 挂载的 AOM", () => {
+    test("remove 应能处理无 board 挂载的 AOM", async () => {
       const aom = new ActiveObjectManager();
 
       const stroke = new StrokeObject(901, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(4, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       // 无 board 时仅从活动集合中移除
       aom.add(new Set([stroke]));
@@ -581,7 +678,7 @@ describe("ActiveObjectManager/remove", () => {
   });
 
   describe("跨区块删除", () => {
-    test("remove 应能从多个区块中正确移除跨区块对象", () => {
+    test("remove 应能从多个区块中正确移除跨区块对象", async () => {
       // 螺旋 id：(0,0)=1, (1,0)=2, (2,0)=11
       const chunk00 = createChunk(1);
       chunk00.objectManager = new ChunkObjectManager(1);
@@ -611,7 +708,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke = new StrokeObject(1001, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(25, 4)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(25, 4)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       aom.remove(new Set([stroke]));
 
@@ -629,7 +731,7 @@ describe("ActiveObjectManager/remove", () => {
       );
     });
 
-    test("remove 应正确处理部分区块不存在的场景", () => {
+    test("remove 应正确处理部分区块不存在的场景", async () => {
       const chunk00 = createChunk(1);
       chunk00.objectManager = new ChunkObjectManager(1);
       chunk00.objectManager.staticGraph = DirectedGraph.parse([[1101, []]]);
@@ -647,7 +749,12 @@ describe("ActiveObjectManager/remove", () => {
       const aom = new ActiveObjectManager(board);
 
       const stroke = new StrokeObject(1101, new Vector(0, 0));
-      stroke.setData({ points: [new Vector(1, 1), new Vector(15, 15)].map(p => ({ x: p.x, y: p.y })) });
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(15, 15)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
 
       expect(() => aom.remove(new Set([stroke]))).not.toThrow();
       expect(chunk00.objectManager.staticGraph.hasNode(1101)).toBe(false);

@@ -81,8 +81,8 @@ describe("ActiveObjectManager/pickup", () => {
       aom = new ActiveObjectManager(createBoard(chunk));
     });
 
-    test("应能选取单对象为起点且无跨区块对象的子图", () => {
-      const pickup8 = aom.pickup(new Set([createObject(8, chunk.id)]));
+    test("应能选取单对象为起点且无跨区块对象的子图", async () => {
+      const pickup8 = await aom.pickup(new Set([createObject(8, chunk.id)]));
 
       const expected8 = DirectedGraph.parse([
         [8, [4, 5]],
@@ -95,7 +95,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       expect(pickup8.equals(expected8)).toBe(true);
 
-      const pickup11 = aom.pickup(new Set([createObject(11, chunk.id)]));
+      const pickup11 = await aom.pickup(new Set([createObject(11, chunk.id)]));
 
       const expected11 = DirectedGraph.parse([
         [11, [7]],
@@ -108,8 +108,8 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup11.equals(expected11)).toBe(true);
     });
 
-    test("应能选取多对象为起点且无跨区块对象的子图", () => {
-      const pickup8n15 = aom.pickup(
+    test("应能选取多对象为起点且无跨区块对象的子图", async () => {
+      const pickup8n15 = await aom.pickup(
         new Set([createObject(8, chunk.id), createObject(15, chunk.id)]),
       );
 
@@ -150,8 +150,8 @@ describe("ActiveObjectManager/pickup", () => {
       setObjectCoverage([chunk1, chunk2], [15, 17, 18]);
     });
 
-    test("应能选取单对象为起点且含跨区块对象的子图", () => {
-      const pickup18 = aom.pickup(new Set([createObject(18, chunk2.id)]));
+    test("应能选取单对象为起点且含跨区块对象的子图", async () => {
+      const pickup18 = await aom.pickup(new Set([createObject(18, chunk2.id)]));
 
       const expected18 = DirectedGraph.parse([
         [18, [6]],
@@ -162,7 +162,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       expect(pickup18.equals(expected18)).toBe(true);
 
-      const pickup15 = aom.pickup(new Set([createObject(15, chunk1.id)]));
+      const pickup15 = await aom.pickup(new Set([createObject(15, chunk1.id)]));
 
       const expected15 = DirectedGraph.parse([
         [15, [10, 16]],
@@ -178,8 +178,8 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup15.equals(expected15)).toBe(true);
     });
 
-    test("应能选取多对象为起点且含跨区块对象的子图", () => {
-      const pickup8n10 = aom.pickup(
+    test("应能选取多对象为起点且含跨区块对象的子图", async () => {
+      const pickup8n10 = await aom.pickup(
         new Set([createObject(8, chunk1.id), createObject(10, chunk1.id)]),
       );
 
@@ -240,8 +240,8 @@ describe("ActiveObjectManager/pickup", () => {
       chunkConnect(chunk4, chunk5);
     });
 
-    test("应能选取多对象为起点且含多区块跨区块对象链的子图", () => {
-      const pickup6n19 = aom.pickup(
+    test("应能选取多对象为起点且含多区块跨区块对象链的子图", async () => {
+      const pickup6n19 = await aom.pickup(
         new Set([createObject(6, chunk3.id), createObject(19, chunk1.id)]),
       );
 
@@ -268,7 +268,7 @@ describe("ActiveObjectManager/pickup", () => {
   });
 
   describe("特殊情况与边界条件", () => {
-    test("应能在二维区块中先横向后纵向移动，并在回到原区块后继续遍历其它覆盖区块", () => {
+    test("应能在二维区块中先横向后纵向移动，并在回到原区块后继续遍历其它覆盖区块", async () => {
       const centerChunk = createChunkAt(0, 0);
       const rightChunk = createChunkAt(1, 0);
       const upChunk = createChunkAt(0, 1);
@@ -302,7 +302,9 @@ describe("ActiveObjectManager/pickup", () => {
       verticalChunkConnect(centerChunk, upChunk);
       verticalChunkConnect(rightChunk, rightUpChunk);
 
-      const pickup = aom.pickup(new Set([createObject(100, centerChunk.id)]));
+      const pickup = await aom.pickup(
+        new Set([createObject(100, centerChunk.id)]),
+      );
       const expected = DirectedGraph.parse([
         [100, [101, 103, 104]],
         [101, []],
@@ -313,7 +315,7 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup.equals(expected)).toBe(true);
     });
 
-    test("应能在二维区块中向左下方向移动到覆盖区块", () => {
+    test("应能在二维区块中向左下方向移动到覆盖区块", async () => {
       const centerChunk = createChunkAt(0, 0);
       const upperChunk = createChunkAt(0, 1);
       const startChunk = createChunkAt(1, 1);
@@ -340,7 +342,9 @@ describe("ActiveObjectManager/pickup", () => {
       chunkConnect(upperChunk, startChunk);
       verticalChunkConnect(centerChunk, upperChunk);
 
-      const pickup = aom.pickup(new Set([createObject(200, startChunk.id)]));
+      const pickup = await aom.pickup(
+        new Set([createObject(200, startChunk.id)]),
+      );
       const expected = DirectedGraph.parse([
         [200, [201, 202]],
         [201, []],
@@ -350,15 +354,15 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup.equals(expected)).toBe(true);
     });
 
-    test("应能选取空集的子图", () => {
-      const pickupEmpty = aom.pickup(new Set());
+    test("应能选取空集的子图", async () => {
+      const pickupEmpty = await aom.pickup(new Set());
 
       const expectedEmpty = DirectedGraph.parse([]);
 
       expect(pickupEmpty.equals(expectedEmpty)).toBe(true);
     });
 
-    test("当某个覆盖区块不在 Board 的 chunkMap 中时，应跳过该区块并继续处理其它可达覆盖区块", () => {
+    test("当某个覆盖区块不在 Board 的 chunkMap 中时，应跳过该区块并继续处理其它可达覆盖区块", async () => {
       const centerChunk = createChunkAt(0, 0);
       const upChunk = createChunkAt(0, 1);
       // (1,1) 区块不在 board 中
@@ -383,7 +387,9 @@ describe("ActiveObjectManager/pickup", () => {
 
       verticalChunkConnect(centerChunk, upChunk);
 
-      const pickup = aom.pickup(new Set([createObject(300, centerChunk.id)]));
+      const pickup = await aom.pickup(
+        new Set([createObject(300, centerChunk.id)]),
+      );
       const expected = DirectedGraph.parse([
         [300, [302]],
         [302, []],
@@ -392,7 +398,7 @@ describe("ActiveObjectManager/pickup", () => {
       expect(pickup.equals(expected)).toBe(true);
     });
 
-    test("覆盖区块集合更新后，应按新的二维覆盖区块索引拾取而不是沿用旧结果", () => {
+    test("覆盖区块集合更新后，应按新的二维覆盖区块索引拾取而不是沿用旧结果", async () => {
       const centerChunk = createChunkAt(0, 0);
       const rightChunk = createChunkAt(1, 0);
       const upChunk = createChunkAt(0, 1);
@@ -419,7 +425,7 @@ describe("ActiveObjectManager/pickup", () => {
 
       setObjectCoverage([centerChunk, rightChunk], [400]);
 
-      const pickupBeforeMove = aom.pickup(
+      const pickupBeforeMove = await aom.pickup(
         new Set([createObject(400, centerChunk.id)]),
       );
       expect(
@@ -441,7 +447,7 @@ describe("ActiveObjectManager/pickup", () => {
       ]);
       rightChunk.objectManager.setObjectCoverChunks(400, [centerChunk.id]);
 
-      const pickupAfterMove = aom.pickup(
+      const pickupAfterMove = await aom.pickup(
         new Set([createObject(400, centerChunk.id)]),
       );
       expect(
@@ -456,7 +462,7 @@ describe("ActiveObjectManager/pickup", () => {
   });
 
   describe("优先使用 Board.createChunkLoader", () => {
-    test("pickup 应优先使用 Board.createChunkLoader", () => {
+    test("pickup 应优先使用 Board.createChunkLoader", async () => {
       const chunk = createChunk(1);
       chunk.objectManager = new ChunkObjectManager(1);
       chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
@@ -475,7 +481,7 @@ describe("ActiveObjectManager/pickup", () => {
       };
       const aom = new ActiveObjectManager(board);
 
-      const pickup8 = aom.pickup(
+      const pickup8 = await aom.pickup(
         new Set([new BasicObject(8, new Vector(0, 0))]),
       );
       const expected8 = DirectedGraph.parse([

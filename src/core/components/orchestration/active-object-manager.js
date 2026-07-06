@@ -9,7 +9,7 @@ import { RandomNumberPool } from "../../utils/random.js";
 import { Queue } from "../../utils/queue.js";
 import { DirectedGraph } from "../../utils/directed-graph.js";
 import { Chunk } from "../chunk/chunk.js";
-import { ChunkLoader } from "../chunk/chunk-loader.js";
+import { ChunkLoader, CHUNK_LOAD_EVENTS } from "../chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange, Range } from "../../range/index.js";
@@ -135,7 +135,7 @@ class ActiveObjectManager {
 
   /**
    * 所属白板（Core 实例）
-   * @type {import("./board-core.js").BoardCore | import("./board.js").Board | undefined}
+   * @type {import("./board-core.js").BoardCore}
    */
   board;
 
@@ -147,13 +147,20 @@ class ActiveObjectManager {
   renderHooks;
 
   /**
-   * @param {import("./board-core.js").BoardCore | import("./board.js").Board} [board] - 所属白板实例
+   * 区块加载器 id 池
+   * @type {RandomNumberPool}
+   */
+  ChunkLoaderIdPool;
+
+  /**
+   * @param {import("./board-core.js").BoardCore} [board] - 所属白板实例
    * @param {{ renderHooks?: import("./aom-render-hooks.js").AomRenderHooks }} [options={}] - 附加选项
    */
   constructor(board, options = {}) {
     this.board = board;
     this.renderHooks = options.renderHooks ?? createDefaultAomRenderHooks();
     this.layerPool = new RandomNumberPool(1, 10000000);
+    this.ChunkLoaderIdPool = new RandomNumberPool(1, 10000000);
     this.layerOrder = [];
     this.onLayer = new Map();
     this.layerIndex = new Map();
@@ -490,13 +497,15 @@ class ActiveObjectManager {
 
   /**
    * 创建与白板区块加载事件总线绑定的区块加载器
-   * @returns {ChunkLoader}
+   * @returns {ChunkLoader | undefined}
    */
   createChunkLoader() {
     if (this.board?.createChunkLoader) {
-      return this.board.createChunkLoader(`aom-${Date.now()}`);
+      return this.board.createChunkLoader(
+        `aom-${this.ChunkLoaderIdPool.generate()}`,
+      );
     }
-    return new ChunkLoader();
+    return undefined;
   }
 
   /**
@@ -738,11 +747,10 @@ class ActiveObjectManager {
 
   /**
    * 获取以指定对象集合为起点的子图
-   * @description 内部使用 BFS 来遍历图，跨区块对象（尤其是反复横跳的）会造成较大的性能损失
    * @param {Iterable<BasicObject>} startFrom - 作为起点的对象集合
    * @returns {DirectedGraph}
    */
-  pickup(startFrom) {
+  async pickup(startFrom) {
     const visit = new Set();
     const graph = new DirectedGraph();
 
@@ -750,7 +758,7 @@ class ActiveObjectManager {
      * @param {number} obj - 要拾取的对象 id
      * @param {Chunk} chunk - 该对象所在的区块
      */
-    const pickupSingle = (obj, chunk) => {
+    const pickupSingle = async (obj, chunk) => {
       if (visit.has(obj)) return;
       visit.add(obj);
       graph.addNodeUnsafe(obj);
@@ -767,7 +775,7 @@ class ActiveObjectManager {
        * @param {number} targetY
        * @returns {Chunk|undefined}
        */
-      const getChunkAt = (targetX, targetY) => {
+      const getChunkAt = async (targetX, targetY) => {
         const targetChunk = this.board?.getChunkByCoordinate?.(
           targetX,
           targetY,
@@ -775,6 +783,19 @@ class ActiveObjectManager {
         if (targetChunk) {
           tempLoader.trackChunk(targetChunk);
           tempLoader.emitLoadRequest(targetChunk, { strategy: "temp" });
+          // 等待 TempLoad 完成再继续遍历
+          if (!targetChunk.isLoad) {
+            await new Promise((resolve) => {
+              const unsub = this.board.chunkLoadEventBus.once(
+                CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
+                (payload) => {
+                  if (payload.chunkId === targetChunk.id) {
+                    resolve();
+                  }
+                },
+              );
+            });
+          }
         }
         return targetChunk;
       };
@@ -785,8 +806,8 @@ class ActiveObjectManager {
        * @param {number} targetY
        * @returns {boolean}
        */
-      const moveToChunk = (targetX, targetY) => {
-        const target = getChunkAt(targetX, targetY);
+      const moveToChunk = async (targetX, targetY) => {
+        const target = await getChunkAt(targetX, targetY);
         if (target) {
           chunkNow = target;
           return true;
@@ -799,7 +820,7 @@ class ActiveObjectManager {
        * @description 由于我们的图是薄薄的一层水，所以此处 DFS 不必担心栈溢出的问题。
        * @param {number} node - 对象 id
        */
-      function dfs(node) {
+      const dfs = async (node) => {
         if (!chunkNow?.objectManager) return;
         const neighbors =
           chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
@@ -810,7 +831,7 @@ class ActiveObjectManager {
             if (!visit.has(next)) {
               visit.add(next);
               graph.addNodeUnsafe(next);
-              dfs(next);
+              await dfs(next);
             }
             graph.addEdgeUnsafe(node, next);
           }
@@ -824,8 +845,8 @@ class ActiveObjectManager {
           const originalX = chunkNow.x;
           const originalY = chunkNow.y;
           const { x: targetX, y: targetY } = Chunk.idToCoordinate(chunkId);
-          if (!moveToChunk(targetX, targetY)) {
-            moveToChunk(originalX, originalY);
+          if (!(await moveToChunk(targetX, targetY))) {
+            await moveToChunk(originalX, originalY);
             continue;
           }
 
@@ -836,24 +857,24 @@ class ActiveObjectManager {
               if (!visit.has(next)) {
                 visit.add(next);
                 graph.addNodeUnsafe(next);
-                dfs(next);
+                await dfs(next);
               }
               graph.addEdgeUnsafe(node, next);
             }
           }
 
-          moveToChunk(originalX, originalY);
+          await moveToChunk(originalX, originalY);
         }
-      } // function dfs ends here
+      }; // const dfs ends here
 
-      dfs(obj);
+      await dfs(obj);
     }; // function pickupSingle ends here
 
     for (const entry of startFrom) {
       const obj = this.requireObjectInstance(entry);
       const chunk = this.resolveObjectChunk(obj);
       if (!chunk) continue;
-      pickupSingle(obj.id, chunk);
+      await pickupSingle(obj.id, chunk);
     }
 
     return graph;
@@ -866,10 +887,10 @@ class ActiveObjectManager {
    * 再将新层插入到 layerOrder 中的正确位置。
    * @param {Iterable<BasicObject>} startFrom - 要选择的对象集合
    */
-  choose(startFrom) {
+  async choose(startFrom) {
     // 提取出这些对象所构成的子图
     // 随后遍历子图，按拓扑序 + 活动对象优先级分配层索引
-    let graph = this.pickup(startFrom);
+    let graph = await this.pickup(startFrom);
     const activeEntries = Array.from(startFrom, (item) =>
       this.requireObjectInstance(item),
     );
@@ -1149,7 +1170,7 @@ class ActiveObjectManager {
    * 最后触发 base 层和 live 层渲染。
    * @param {Iterable<BasicObject>} objects
    */
-  apply(objects) {
+  async apply(objects) {
     const normalizedObjects = Array.from(objects, (item) =>
       this.requireObjectInstance(item),
     );
@@ -1158,6 +1179,53 @@ class ActiveObjectManager {
     const commitObjects = [...normalizedObjects];
     const activeBasicObjects = [...normalizedObjects];
     const affectedChunkIds = new Set();
+
+    // 在操作区块前，确保所有相关区块已 FullLoad，
+    // 使 calculateStaticRelations 能正确读取已有对象实例
+    if (canCommitToBoard && activeBasicObjects.length > 0) {
+      const boardRootPath = this.board.resolvePersistenceRootPath?.();
+      const preloadChunkIds = new Set();
+      for (const obj of activeBasicObjects) {
+        const worldRange = this.getObjectWorldRange(obj);
+        if (worldRange && this.board.width > 0 && this.board.height > 0) {
+          const coveredIds =
+            ChunkObjectManager.calculateCoveredChunkIdsForRange(
+              worldRange,
+              this.board.width,
+              this.board.height,
+            );
+          for (const id of coveredIds) preloadChunkIds.add(id);
+        } else {
+          const chunkId = Chunk.worldToChunkId(
+            obj.position,
+            this.board.width,
+            this.board.height,
+          );
+          if (chunkId != null) preloadChunkIds.add(chunkId);
+        }
+      }
+      if (boardRootPath && preloadChunkIds.size > 0) {
+        const loader = this.createChunkLoader();
+        const loadPromises = [];
+        for (const chunkId of preloadChunkIds) {
+          const chunk = this.board.getChunkById(chunkId);
+          if (!chunk || (chunk.isLoad && !chunk.isTempLoad)) continue;
+          loader.trackChunk(chunk);
+          loader.emitLoadRequest(chunk, { strategy: "full" });
+          // 通过 LOAD_COMPLETE 事件等待加载完成
+          const promise = new Promise((resolve) => {
+            const unsub = this.board.chunkLoadEventBus.once(
+              CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
+              (payload) => {
+                if (payload.chunkId === chunkId) resolve();
+              },
+            );
+          });
+          loadPromises.push(promise);
+        }
+        await Promise.all(loadPromises);
+      }
+    }
 
     // 计算出所有受影响的区块 id，以便后续请求静态层渲染时使用
     if (canCommitToBoard && activeBasicObjects.length > 0) {
