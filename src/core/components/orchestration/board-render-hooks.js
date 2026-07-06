@@ -11,8 +11,8 @@ import { RectangleRange, intersectsRanges } from "../../range/index.js";
 
 /**
  * 解析 viewports 引用
- * @param {Map<string, import("./viewport-proxy.js").ViewportProxy> | (() => Map<string, import("./viewport-proxy.js").ViewportProxy>)} viewportsOrFn - viewports Map 或返回 Map 的函数
- * @returns {Map<string, import("./viewport-proxy.js").ViewportProxy> | undefined}
+ * @param {Map<string, import("./viewport.js").Viewport> | (() => Map<string, import("./viewport.js").Viewport>)} viewportsOrFn - viewports Map 或返回 Map 的函数
+ * @returns {Map<string, import("./viewport.js").Viewport> | undefined}
  */
 function _resolveViewports(viewportsOrFn) {
   if (typeof viewportsOrFn === "function") {
@@ -27,14 +27,14 @@ function _resolveViewports(viewportsOrFn) {
  * AOM 不再直接访问 board.viewports，而是通过这组钩子间接发起到各 viewport 的渲染请求。
  * `viewports` 参数支持传入直接的 Map 引用或返回 Map 的惰性函数（适合 Board 构造时 viewports 尚未就绪的场景）。
  *
- * @param {Map<string, import("./viewport-proxy.js").ViewportProxy> | (() => Map<string, import("./viewport-proxy.js").ViewportProxy>)} viewportsOrFn - 视口 Map 或惰性获取函数
+ * @param {Map<string, import("./viewport.js").Viewport> | (() => Map<string, import("./viewport.js").Viewport>)} viewportsOrFn - 视口 Map 或惰性获取函数
  * @param {() => import("../../objects/basic-obj.js").BasicObject[]} [collectAllActiveDrawables] - 收集所有活跃可绘制对象的函数（可选）
- * @returns {import("./aom-render-hooks.js").AomRenderHooks}
+ * @returns {import("./aom-render-hooks.js").AomRenderHooks
  */
 function createBoardRenderHooks(viewportsOrFn, collectAllActiveDrawables) {
   /**
    * 获取当前 viewports Map
-   * @returns {Map<string, import("./viewport-proxy.js").ViewportProxy> | undefined}
+   * @returns {Map<string, import("./viewport.js").Viewport> | undefined}
    */
   const getViewports = () => _resolveViewports(viewportsOrFn);
 

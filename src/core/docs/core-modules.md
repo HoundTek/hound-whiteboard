@@ -10,16 +10,15 @@
 
 ### `components/orchestration/`
 
-| 文件               | 运行边界 | 职责                                                                          |
-| ------------------ | -------- | ----------------------------------------------------------------------------- |
-| `board-core.js`    | Worker   | 真实白板核心，持有对象、区块、AOM、UndoTree、持久化协调                       |
-| `board.js`         | UI       | UI façade，持有 DAG、signalsEventBus、viewports，通过 Worker 与 BoardCore 通信 |
-| `viewport-core.js`  | Worker   | Worker 侧视口、ChunkLoader、base/live 渲染输出                                |
-| `viewport-proxy.js` | UI       | UI 侧 viewport 代理，接收 Worker 侧回传的 `render-frame`                       |
-
-| `active-object-manager.js` | Shared | 动态层关系、活动对象生命周期与静态图回写 |
-| `aom-render-hooks.js` | Shared | AOM 渲染钩子接口 |
-| `board-render-hooks.js` | UI | AOM 渲染请求到 viewport 渲染器的桥接层 |
+| 文件                       | 运行边界 | 职责                                                                           |
+| -------------------------- | -------- | ------------------------------------------------------------------------------ |
+| `board-core.js`            | Worker   | 真实白板核心，持有对象、区块、AOM、UndoTree、持久化协调                        |
+| `board.js`                 | UI       | UI facade，持有 DAG、signalsEventBus、viewports，通过 Worker 与 BoardCore 通信 |
+| `viewport-core.js`         | Worker   | Worker 侧视口、ChunkLoader、base/live 渲染输出                                 |
+| `viewport.js`              | UI       | UI 侧 viewport，接收 Worker 侧回传的 `render-frame`                            |
+| `active-object-manager.js` | Shared   | 动态层关系、活动对象生命周期与静态图回写                                       |
+| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                                               |
+| `board-render-hooks.js`    | UI       | AOM 渲染请求到 viewport 渲染器的桥接层                                         |
 
 ### `components/chunk/`
 
@@ -163,7 +162,7 @@ chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
 
 ## 当前状态
 
-- Core Worker 架构已落地：BoardCore / ViewportCore / BoardApiRpc / ViewportProxy 全部接通
+- Core Worker 架构已落地：BoardCore / ViewportCore / BoardApiRpc / Viewport 全部接通
 - tools 保持在 UI 线程
 - objects / range / utils / chunk / renderer / AOM 作为共享层复用
 - 主要剩余项集中在性能优化与基准测试

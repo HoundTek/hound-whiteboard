@@ -8,10 +8,10 @@
 
 UI 线程持有：
 
-- `Board` façade
+- `Board` facade
 - `DevicesDAG`
 - `signalsEventBus`
-- `Viewport` / `ViewportProxy`
+- `Viewport` / `ViewportCore`
 - tools / prefixs / devices
 - 轻量对象条目（creator `_entry` / chooser / modifier 通用）
 
@@ -41,7 +41,7 @@ Worker 与 UI 共用：
 
 ### `Board`
 
-`Board` 是 UI façade，负责：
+`Board` 是 UI facade，负责：
 
 - 持有 `DevicesDAG` 与 `signalsEventBus`
 - 管理 `viewports`
@@ -195,9 +195,9 @@ AOM 内部关键结构：
 
 ### UI 侧
 
-- `ViewportProxy` 接收位图并合成到 DOM canvas
+- `Viewport` 接收位图并合成到 DOM canvas
 - `UiRenderer` 独立维护 overlay
-- 全部 viewport 走 `ViewportProxy` 路径
+- 全部 viewport 走 `Viewport` 路径
 
 ## 持久化模型
 
@@ -211,7 +211,7 @@ AOM 内部关键结构：
 
 ## 关键术语
 
-- **运行时分层**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，viewport 通过 `ViewportProxy` ↔ `ViewportCore` 协作
+- **运行时分层**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，viewport 通过 `Viewport` ↔ `ViewportCore` 协作
 - **轻量对象条目（LightweightObjectEntry）**：UI 侧所有工具统一使用的纯数据对象协议，替代 `BasicObject` 实例在工具间传递
 - **静态图**：区块级稳定层叠图
 - **动态图 / AOM**：交互态动态层关系

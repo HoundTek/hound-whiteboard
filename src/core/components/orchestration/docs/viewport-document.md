@@ -1,6 +1,6 @@
 # 显示器组件文档
 
-本文档描述当前显示器家族：`ViewportProxy`、`ViewportCore`。
+本文档描述当前显示器家族：`Viewport`、`ViewportCore`。
 
 ## 概述
 
@@ -8,15 +8,15 @@
 
 | 类             | 线程   | 职责                                                  |
 | -------------- | ------ | ----------------------------------------------------- |
-| `ViewportProxy` | UI     | UI 侧视口代理，持有 DOM canvas，接收 Worker 侧渲染帧  |
-| `ViewportCore`  | Worker | Worker 侧视口、ChunkLoader、base 渲染与 live 合成核心 |
+| `Viewport`     | UI     | UI 侧视口，持有 DOM canvas，接收 Worker 侧渲染帧      |
+| `ViewportCore` | Worker | Worker 侧视口、ChunkLoader、base 渲染与 live 合成核心 |
 
 运行链路：
 
 ```mermaid
 flowchart LR
   UIBoard[Board]
-  Proxy[ViewportProxy]
+  UI[Viewport]
   WorkerCore[ViewportCore]
   BR[BaseRenderer]
   LR[LiveRenderer]
@@ -32,9 +32,9 @@ flowchart LR
 
 ## 职责划分
 
-### `ViewportProxy`
+### `Viewport`
 
-`ViewportProxy` 是 UI 侧 viewport 代理，职责包括：
+`Viewport` 是 UI 侧 viewport，职责包括：
 
 - 创建并持有 DOM `canvas`（接收 Worker 合成帧）与 `uiCanvas`（overlay 层）
 - 持有 `UiRenderer`
@@ -65,13 +65,13 @@ flowchart LR
 ### UI 侧
 
 - `UiRenderer`：overlay 渲染
-- `ViewportProxy`：Worker 合成帧的接收与显示
+- `Viewport`：Worker 合成帧的接收与显示
 
 这意味着：
 
 - base/live 的合成像素内容来自 Worker（`liveBitmap` 已合成两层）
 - overlay 始终留在 UI 线程
-- 视口刷新由 `ViewportProxy` 协调，Worker 只负责渲染与回帧
+- 视口刷新由 `Viewport` 协调，Worker 只负责渲染与回帧
 
 ## 视口控制接口
 
@@ -87,7 +87,7 @@ flowchart LR
 
 差异在于：
 
-- `ViewportProxy` 通过消息驱动 `ViewportCore`
+- `Viewport` 通过消息驱动 `ViewportCore`
 - `ViewportCore` 真正执行 base 渲染与 live 合成
 
 ## 设备图挂载
@@ -119,8 +119,8 @@ viewport 家族向业务层提供统一的挂载入口：
 
 ## 当前状态
 
-- `ViewportCore` / `ViewportProxy` 已落地并接通
-- demo 默认走 `ViewportProxy` 路径
+- `ViewportCore` / `Viewport` 已落地并接通
+- demo 默认走 `Viewport` 路径
 - Worker 侧 base/live 合成后在 UI 侧单 canvas 显示，overlay 边界已稳定
 
 ## 相关文档

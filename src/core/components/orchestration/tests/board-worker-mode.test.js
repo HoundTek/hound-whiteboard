@@ -4,7 +4,7 @@
 
 import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
 import { Board } from "../board.js";
-import { ViewportProxy } from "../viewport-proxy.js";
+import { Viewport } from "../viewport.js";
 
 /**
  * 测试用假 Worker 端点
@@ -164,7 +164,7 @@ function installMockDocument() {
 }
 
 describe("Board worker mode", () => {
-  test("enableWorkerMode 后 createViewport 应返回 ViewportProxy 并发送 createViewport RPC", async () => {
+  test("enableWorkerMode 后 createViewport 应返回 Viewport 并发送 createViewport RPC", async () => {
     const restoreAnimationFrame = installMockAnimationFrame();
     const restoreDocument = installMockDocument();
     const board = new Board({ width: 800, height: 600 });
@@ -185,7 +185,7 @@ describe("Board worker mode", () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(viewport).toBeInstanceOf(ViewportProxy);
+      expect(viewport).toBeInstanceOf(Viewport);
       expect(worker.postedMessages).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

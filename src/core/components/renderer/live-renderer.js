@@ -51,7 +51,7 @@ class LiveRenderer extends Renderer {
   _resolveThresholds;
 
   /**
-   * @param {import("../orchestration/viewport-proxy.js").ViewportProxy} viewport - 目标视口
+   * @param {import("../orchestration/viewport.js").Viewport} viewport - 目标视口
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */

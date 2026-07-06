@@ -9,7 +9,7 @@ import { CollectingTool } from "../../test-support/mock-tools.js";
 import { createWorkerBoardContext } from "../../test-support/worker-mode-fixtures.js";
 
 describe("Board input flow", () => {
-  test("input 事件应经由 Board、ViewportProxy 与 DevicesDAG 落到工具节点", async () => {
+  test("input 事件应经由 Board、Viewport 与 DevicesDAG 落到工具节点", async () => {
     const { board, viewport, cleanup } = await createWorkerBoardContext({
       boardWidth: 800,
       boardHeight: 600,

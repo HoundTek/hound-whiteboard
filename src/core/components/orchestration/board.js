@@ -1,7 +1,7 @@
 /**
- * @file 白板组件（UI Façade）
+ * @file UI 侧白板 facade
  * @description
- * Board 类是白板在 UI 线程的宿主 façade，负责持有 DevicesDAG、signalsEventBus、viewports 等 UI 运行时，
+ * Board 类是白板在 UI 线程的宿主 facade，负责持有 DevicesDAG、signalsEventBus、viewports 等 UI 运行时，
  * 并将 Core 数据职责（对象注册、区块加载、AOM、UndoTree、持久化）委托给 BoardCore。
  * 一个 Board 实例对应一个白板管辖。
  * @module core/components/board
@@ -17,7 +17,7 @@ import { createBoardRenderHooks } from "./board-render-hooks.js";
 import { createRendererPersistenceAdapter } from "../../bridges/persistence-adapter.js";
 import { boardFileOperateBridge } from "../../bridges/file-operate-bridge-renderer.js";
 import { BoardApiRpc } from "../../bridges/board-api.js";
-import { ViewportProxy } from "./viewport-proxy.js";
+import { Viewport } from "./viewport.js";
 
 function isValidBoardRootPath(boardRootPath) {
   return typeof boardRootPath === "string" && boardRootPath.trim() !== "";
@@ -31,7 +31,7 @@ function isValidBoardRootPath(boardRootPath) {
  */
 
 /**
- * 白板类（UI Façade）
+ * 白板类（UI Facade）
  * @description
  * Board 是白板在 UI 线程的运行时宿主，不再直接承担所有 Core 数据职责。
  * 内部持有 BoardCore 实例，Core 侧的数据与方法通过委托访问。
@@ -132,7 +132,7 @@ class Board {
 
   /**
    * 视口列表
-   * @type {Map<string, Viewport | ViewportProxy>}
+   * @type {Map<string, Viewport>}
    */
   viewports;
 
@@ -415,13 +415,13 @@ class Board {
   }
 
   /**
-   * 创建绑定到当前 Board 的 ViewportProxy
+   * 创建绑定到当前 Board 的 Viewport
    * @description 会同时创建 base/live/ui 三层 canvas，并把 viewport 注册到 `Board.viewports`。
    *   必须在 `enableWorkerMode` 之后调用。
    * @param {HTMLElement} rootElement - Viewport 的根元素
    * @param {{ width: number, height: number }} options - Viewport 尺寸选项
    * @param {string} viewportId - Viewport id
-   * @returns {ViewportProxy}
+   * @returns {Viewport}
    */
   createViewport(rootElement, { width, height }, viewportId) {
     if (!this.#worker) {
@@ -451,7 +451,7 @@ class Board {
     viewportRoot.appendChild(uiCanvas);
     rootElement.appendChild(viewportRoot);
 
-    const viewport = new ViewportProxy(
+    const viewport = new Viewport(
       {
         rootElement: viewportRoot,
         canvas,

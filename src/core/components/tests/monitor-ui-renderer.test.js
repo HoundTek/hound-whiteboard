@@ -3,7 +3,7 @@ import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
 import { createWorkerBoardContext } from "../../test-support/worker-mode-fixtures.js";
 
-describe("ViewportProxy/ui renderer", () => {
+describe("Viewport/ui renderer", () => {
   test("构造后应接上 uiRenderer 并初始化内部调度器", async () => {
     const { viewport, cleanup } = await createWorkerBoardContext({
       boardWidth: 800,

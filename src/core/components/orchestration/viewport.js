@@ -1,9 +1,9 @@
 /**
- * @file UI 侧视口代理
+ * @file UI 侧视口 facade
  * @description
- * ViewportProxy 是 UI 侧的 viewport 代理，负责本地视口状态、UiRenderer、
+ * Viewport 是 UI 线程的视口 facade，统一管理视口状态、UiRenderer、
  * workflow/overlay 挂载以及与 Worker 侧 ViewportCore 间的渲染帧与视口消息通信。
- * @module core/components/orchestration/viewport-proxy
+ * @module core/components/orchestration/viewport
  * @author Zhou Chenyu
  */
 
@@ -29,14 +29,18 @@ function resolveAnimationFrameHost() {
 }
 
 /**
- * UI 侧视口代理
+ * UI 侧视口
  * @class
  * @description
- * 持有 DOM canvas、UiRenderer 与本地视口状态副本。
- * 最终显示帧由 Worker 侧合成后通过 render-frame 消息回传，再由本类绘制到 DOM canvas。
+ * Viewport 是 UI 线程的视口 facade，统一管理以下职责：
+ * - 本地视口状态（原点、缩放）与坐标变换（screen↔world↔chunk）
+ * - 接收 Worker 侧合成的渲染帧，绘制到 DOM canvas
+ * - 持有 UiRenderer，管理 UI 覆盖层（overlay）的注册与补绘
+ * - 通过 mountSubDAG / mountWorkflow 为当前视口挂载设备图子图
+ * - 通过 viewport-change 消息驱动 Worker 侧 ViewportCore 的视口同步
  * @author Zhou Chenyu
  */
-class ViewportProxy {
+class Viewport {
   /**
    * 视口根元素
    * @type {HTMLElement | null}
@@ -44,7 +48,7 @@ class ViewportProxy {
   rootElement;
 
   /**
-   * 所属 Board façade
+   * 所属 Board facade
    * @type {import("./board.js").Board}
    */
   board;
@@ -166,7 +170,7 @@ class ViewportProxy {
    *   uiCanvas?: HTMLCanvasElement | null,
    *   worker: { postMessage: Function, addEventListener: Function, removeEventListener: Function },
    * }} htmlElements - 画布元素与 Worker 选项
-   * @param {import("./board.js").Board} board - 所属 Board façade
+   * @param {import("./board.js").Board} board - 所属 Board facade
    * @param {{ width: number, height: number }} options - Viewport 尺寸选项
    * @param {string} viewportId - 视口 id
    */
@@ -281,7 +285,7 @@ class ViewportProxy {
 
   /**
    * 启动与 Worker 的视口同步和渲染 flush 循环
-   * @returns {ViewportProxy} 当前实例
+   * @returns {Viewport} 当前实例
    */
   startWorkerSync() {
     if (this.#workerSyncStarted) {
@@ -647,7 +651,7 @@ class ViewportProxy {
   }
 
   /**
-   * 销毁当前 ViewportProxy
+   * 销毁当前 Viewport
    */
   destroy() {
     const { cancel } = resolveAnimationFrameHost();
@@ -771,4 +775,4 @@ class ViewportProxy {
   }
 }
 
-export { ViewportProxy };
+export { Viewport };

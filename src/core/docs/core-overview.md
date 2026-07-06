@@ -7,7 +7,7 @@
 当前应用可分为四层：
 
 1. **宿主层**：Tauri shell 与 `src-tauri/` 后端
-2. **UI 线程层**：模板、DOM canvas、输入设备、DevicesDAG、tools、ViewportProxy
+2. **UI 线程层**：模板、DOM canvas、输入设备、DevicesDAG、tools、Viewport
 3. **Core Worker 层**：`src/core-worker.js`、BoardCore、ViewportCore、AOM、渲染器
 4. **共享纯模块层**：objects / range / utils / chunk / renderer / hit / shared
 
@@ -26,8 +26,8 @@
 1. UI 线程创建 `Board`
 2. `Board.enableWorkerMode(worker)` 初始化 `BoardApiRpc`
 3. `BoardApiRpc.createBoard(...)` 在 Worker 中创建真正的 `BoardCore`
-4. `Board.createViewport(...)` 返回 `ViewportProxy`
-5. `ViewportProxy` 通过 `createViewport` RPC 在 Worker 中创建 `ViewportCore`
+4. `Board.createViewport(...)` 返回 `Viewport`
+5. `Viewport` 通过 `createViewport` RPC 在 Worker 中创建 `ViewportCore`
 
 ### 输入与工具
 
@@ -41,7 +41,7 @@
 
 1. Worker 侧 `BoardCore` / `AOM` / renderHooks 触发 `ViewportCore` 的 base/live 补绘
 2. `ViewportCore.flushRenderFrame()` 输出 `render-frame`
-3. UI 侧 `ViewportProxy` 接收位图并合成到 DOM canvas
+3. UI 侧 `Viewport` 接收位图并合成到 DOM canvas
 4. `UiRenderer` 在 UI 线程独立绘制 overlay
 
 ## Core 的职责范围
@@ -54,8 +54,8 @@
 
 ### UI 侧核心职责
 
-- `Board`：UI façade，持有 signalsEventBus、DevicesDAG、viewport 集合，通过 Worker 与 BoardCore 通信
-- `ViewportProxy`：UI 视口代理，承载 DOM canvas 与 overlay，接收 Worker 侧渲染帧
+- `Board`：UI facade，持有 signalsEventBus、DevicesDAG、viewport 集合，通过 Worker 与 BoardCore 通信
+- `Viewport`：UI 视口，承载 DOM canvas 与 overlay，接收 Worker 侧渲染帧
 - `devices/`、`devices-dag/`、`tools/`、`prefixs/`：输入编排与交互工具
 - `UiRenderer`：UI overlay 渲染
 
@@ -71,7 +71,7 @@
 
 ## 当前实现状态
 
-- `BoardCore` / `ViewportCore` / `ViewportProxy` / `BoardApiRpc` 已全部接通
+- `BoardCore` / `ViewportCore` / `Viewport` / `BoardApiRpc` 已全部接通
 - demo 默认启用 Worker mode
 - creator / chooser / modifier 已全部适配 Worker mode
 - creator 本地状态使用 `_entry` 纯数据对象（遵循 `LightweightObjectEntry` 协议）
@@ -80,7 +80,7 @@
 
 ## 关键术语
 
-- **RPC 通信**：UI 侧 `BoardApiRpc` 通过 postMessage 与 Worker 侧 `BoardCore` 通信，viewport 通过 `ViewportProxy` ↔ `ViewportCore` 协作
+- **RPC 通信**：UI 侧 `BoardApiRpc` 通过 postMessage 与 Worker 侧 `BoardCore` 通信，viewport 通过 `Viewport` ↔ `ViewportCore` 协作
 - **静态图**：各 `ChunkObjectManager.staticGraph` 维护的稳定层叠关系
 - **动态图 / AOM**：`ActiveObjectManager` 维护的交互态对象与临时层关系
 

@@ -215,7 +215,7 @@ async function flushMicrotasks(count = 6) {
  * }} [options={}] - 初始化选项
  * @returns {Promise<{
  *   board: Board,
- *   viewport: import("../components/orchestration/viewport-proxy.js").ViewportProxy | null,
+ *   viewport: import("../components/orchestration/viewport.js").Viewport | null,
  *   runtime: import("../../core-worker.js").CoreWorkerRuntime,
  *   uiEndpoint: LoopbackMessageEndpoint,
  *   workerHost: LoopbackMessageEndpoint,

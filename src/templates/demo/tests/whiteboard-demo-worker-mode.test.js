@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { Board, ViewportProxy } from "../../../core/components/index.js";
+import { Board, Viewport } from "../../../core/components/index.js";
 import { createCoreWorkerRuntime } from "../../../core-worker.js";
 import {
   createNoopCanvas,
@@ -242,7 +242,7 @@ describe("whiteboard demo worker mode", () => {
       );
       await flushMicrotasks();
 
-      expect(viewport).toBeInstanceOf(ViewportProxy);
+      expect(viewport).toBeInstanceOf(Viewport);
 
       const { primaryStrokeTool } = configureWhiteboardDemo(board, viewport);
 

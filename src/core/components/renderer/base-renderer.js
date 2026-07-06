@@ -31,7 +31,7 @@ class BaseRenderer extends Renderer {
   _resolveThresholds;
 
   /**
-   * @param {import("../orchestration/viewport-proxy.js").ViewportProxy} viewport - 目标视口
+   * @param {import("../orchestration/viewport.js").Viewport} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
   constructor(viewport, options = {}) {

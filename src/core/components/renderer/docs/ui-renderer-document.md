@@ -16,7 +16,7 @@
 
 ## 运行边界
 
-- **UI only**：`UiRenderer` 直接操作 `Viewport.uiCanvas` 或 `ViewportProxy.uiCanvas`
+- **UI only**：`UiRenderer` 直接操作 `Viewport.uiCanvas`
 - **不进入 Worker**：Worker 侧没有 `UiRenderer`
 - **输入来源**：工具节点 state、summary-like 条目、provider 回调
 
@@ -85,9 +85,9 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "modifier");
 - 矩形边框
 - 独立于已选对象的兼容选择框
 
-## 与 Viewport / ViewportProxy 的关系
+## 与 Viewport 的关系
 
-- `Viewport` / `ViewportProxy` 持有 `UiRenderer`
+- `Viewport` 持有 `UiRenderer`
 - `requestViewportUiRender()` 通过 `UiRenderer.invalidateViewport()` 请求刷新
 - `resizeRenderLayers()` 时会同步调整 `uiCanvas` 尺寸
 

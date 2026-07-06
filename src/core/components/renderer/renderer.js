@@ -54,7 +54,7 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
 class Renderer {
   /**
    * 绑定的视口
-   * @type {import("../orchestration/viewport-proxy.js").ViewportProxy}
+   * @type {import("../orchestration/viewport.js").Viewport}
    */
   viewport;
 
@@ -73,7 +73,7 @@ class Renderer {
   _scheduler;
 
   /**
-   * @param {import("../orchestration/viewport-proxy.js").ViewportProxy} viewport - 目标视口
+   * @param {import("../orchestration/viewport.js").Viewport} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
   constructor(viewport, options = {}) {

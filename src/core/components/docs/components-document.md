@@ -10,9 +10,9 @@
 2. **渲染执行链**：`renderer/`
 3. **白板编排层**：`orchestration/`
 
-当前组件层的一个关键特点是：**UI façade 与 Worker core 已拆分**。
+当前组件层的一个关键特点是：**UI facade 与 Worker core 已拆分**。
 
-- UI 线程持有 `Board`、`ViewportProxy`
+- UI 线程持有 `Board`、`Viewport`
 - Worker 线程持有 `BoardCore`、`ViewportCore`
 - `ActiveObjectManager`、chunk、base/live renderer 等位于共享层
 
@@ -55,14 +55,14 @@ src/core/components/
 
 编排层。
 
-| 文件                       | 运行边界 | 说明                                               |
-| -------------------------- | -------- | -------------------------------------------------- |
-| `board.js`                 | UI       | UI façade，持有 DAG、signalsEventBus、viewport 集合 |
-| `board-core.js`            | Worker   | 真实白板核心                                       |
-| `viewport-proxy.js`         | UI       | UI 侧 viewport 代理                                 |
-| `viewport-core.js`          | Worker   | Worker 侧视口与渲染核心                            |
-| `active-object-manager.js` | Shared   | 交互态动态图与层关系                               |
-| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                   |
+| 文件                       | 运行边界 | 说明                                                |
+| -------------------------- | -------- | --------------------------------------------------- |
+| `board.js`                 | UI       | UI facade，持有 DAG、signalsEventBus、viewport 集合 |
+| `board-core.js`            | Worker   | 真实白板核心                                        |
+| `viewport.js`              | UI       | UI 侧 viewport                                      |
+| `viewport-core.js`         | Worker   | Worker 侧视口与渲染核心                             |
+| `active-object-manager.js` | Shared   | 交互态动态图与层关系                                |
+| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                    |
 | `board-render-hooks.js`    | UI       | AOM → viewport 渲染桥接                             |
 
 ## 当前导出入口
@@ -70,7 +70,7 @@ src/core/components/
 `src/core/components/index.js` 当前只导出 UI 侧宿主入口：
 
 - `Board`
-- `ViewportProxy`
+- `Viewport`
 
 Worker 侧 `BoardCore` / `ViewportCore` 不经由该 barrel 导出，而是由 `src/core-worker.js` 直接引用。
 
@@ -83,7 +83,7 @@ Worker 侧 `BoardCore` / `ViewportCore` 不经由该 barrel 导出，而是由 `
 
 ### `Viewport` 家族拆分
 
-- `ViewportProxy`：UI 侧视口代理，接收 Worker 渲染帧
+- `Viewport`：UI 侧视口，接收 Worker 渲染帧
 - `ViewportCore`：Worker 侧真实渲染核心
 
 ### AOM 渲染副作用抽离
