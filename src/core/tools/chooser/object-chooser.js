@@ -22,6 +22,12 @@ import { Vector } from "../../utils/math.js";
  */
 class ObjectChooserTool extends Tool {
   /**
+   * overlay 渲染用——当前选中的对象摘要
+   * @type {import("../../shared/types.js").ObjectSummary[]}
+   * @protected
+   */
+  _overlaySelectedObjects = [];
+  /**
    * @param {{}} [options={}] - 配置选项
    */
   constructor(options = {}) {
@@ -115,37 +121,11 @@ class ObjectChooserTool extends Tool {
    * @returns {Array<Object>}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const context = overlayContext.deviceContext ?? {};
     const renderer = overlayContext.renderer;
-
-    // 只读当前 node state，不 fallthrough 到 stale context.acc.objects
-    const nodeState = this.resolveNodeState(context);
-    const objects = nodeState.objects
-      ? this.normalizeObjectCollection(nodeState.objects).filter(Boolean)
-      : [];
-
-    if (objects.length === 0) {
-      return [];
-    }
-
-    const defaultLeaf =
-      typeof context.dag?.resolveDefaultLeaf === "function" &&
-      typeof context.path === "string"
-        ? context.dag.resolveDefaultLeaf(context.path)
-        : null;
-
-    const childObjects =
-      defaultLeaf && defaultLeaf.path !== context.path
-        ? this.normalizeObjectCollection(
-            defaultLeaf.state?.objects ?? [],
-          ).filter(Boolean)
-        : [];
-
-    if (childObjects.length > 0) {
-      return [];
-    }
+    const objects = this._overlaySelectedObjects;
 
     if (
+      objects.length === 0 ||
       typeof renderer?.createCompatSelectionEntriesForSummaries !== "function"
     ) {
       return [];
@@ -218,6 +198,7 @@ class ObjectChooserTool extends Tool {
 
     if (packet.signals.some((s) => s.type === "cancel")) {
       this.clearSelectionRegion(context);
+      this._overlaySelectedObjects = [];
       this.requestUiOverlayRefresh(context);
       return;
     }
@@ -281,6 +262,7 @@ class ObjectChooserTool extends Tool {
   _applySelection(context, objects) {
     const resolvedSelection = this.replaceSelection(context, objects);
     this.clearSelectionRegion(context);
+    this._overlaySelectedObjects = resolvedSelection;
     if (resolvedSelection.length > 0) {
       this.afterChoose(resolvedSelection);
       this.confirmSelection(context, resolvedSelection);
@@ -396,6 +378,7 @@ class ObjectChooserTool extends Tool {
    */
   umount(context = {}) {
     this.clearSelectionRegion(context);
+    this._overlaySelectedObjects = [];
     const selectedObjects = this.resolveContextObjects(context);
     const boardApi = context?.acc?.boardApi;
     const objectIds = this.resolveObjectIds(context, selectedObjects);

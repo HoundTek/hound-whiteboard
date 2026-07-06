@@ -211,7 +211,7 @@ describe("ObjectChooserTool", () => {
     expect(stateAccess.getState()).toEqual({});
   });
 
-  test("collectUiOverlayEntries 在子 modifier 已有对象时不应重复声明 chooser 选择框", () => {
+  test("collectUiOverlayEntries 应读取 _overlaySelectedObjects 并委托 renderer", () => {
     const chosenObject = { id: 5 };
     const tool = new TestChooserTool();
     const renderer = {
@@ -220,45 +220,27 @@ describe("ObjectChooserTool", () => {
       ]),
     };
 
-    const stateAccess = createStateAccess({ objects: [chosenObject] });
-    const baseCtx = {
-      path: "/viewport/chooser/tool",
-      getNodeState: stateAccess.getState,
-      setNodeState: stateAccess.setState,
-    };
+    tool._overlaySelectedObjects = [chosenObject];
+    const entries = tool.collectUiOverlayEntries({ renderer });
 
-    const suppressed = tool.collectUiOverlayEntries({
-      deviceContext: {
-        ...baseCtx,
-        dag: {
-          resolveDefaultLeaf: () => ({
-            path: "/viewport/chooser/tool/tool",
-            state: { objects: [chosenObject] },
-          }),
-        },
-      },
-      renderer,
-    });
-
-    expect(suppressed).toEqual([]);
-
-    const visible = tool.collectUiOverlayEntries({
-      deviceContext: {
-        ...baseCtx,
-        dag: {
-          resolveDefaultLeaf: () => ({
-            path: "/viewport/chooser/tool",
-            state: {},
-          }),
-        },
-      },
-      renderer,
-    });
-
-    expect(visible).toEqual(["chooser-overlay"]);
+    expect(entries).toEqual(["chooser-overlay"]);
     expect(
       renderer.createCompatSelectionEntriesForSummaries,
     ).toHaveBeenCalledWith([chosenObject], "chooser");
+  });
+
+  test("collectUiOverlayEntries 无选中对象时应返回空数组", () => {
+    const tool = new TestChooserTool();
+    const renderer = {
+      createCompatSelectionEntriesForSummaries: jest.fn(() => [
+        "chooser-overlay",
+      ]),
+    };
+
+    tool._overlaySelectedObjects = [];
+    const entries = tool.collectUiOverlayEntries({ renderer });
+
+    expect(entries).toEqual([]);
   });
 
   test("collectUiOverlayEntries 在 summary-like 条目时应走 summaries 入口", () => {
@@ -274,21 +256,8 @@ describe("ObjectChooserTool", () => {
       ]),
     };
 
-    const stateAccess = createStateAccess({ objects: [chosenObject] });
-    const visible = tool.collectUiOverlayEntries({
-      deviceContext: {
-        path: "/viewport/chooser/tool",
-        getNodeState: stateAccess.getState,
-        setNodeState: stateAccess.setState,
-        dag: {
-          resolveDefaultLeaf: () => ({
-            path: "/viewport/chooser/tool",
-            state: {},
-          }),
-        },
-      },
-      renderer,
-    });
+    tool._overlaySelectedObjects = [chosenObject];
+    const visible = tool.collectUiOverlayEntries({ renderer });
 
     expect(visible).toEqual(["chooser-summary-overlay"]);
     expect(

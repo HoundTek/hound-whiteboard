@@ -39,14 +39,20 @@ const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
  */
 class ObjectModifierTool extends Tool {
   /**
+   * overlay 渲染用——当前编辑中的对象集合
+   * @type {Array<*>}
+   * @protected
+   */
+  _overlayModifiedObjects = [];
+
+  /**
    * 收集 modifier 当前声明的兼容 ui overlay
-   * @param {{ deviceContext?: Object, renderer?: Object }} [overlayContext={}]
+   * @param {{ renderer?: Object }} [overlayContext={}]
    * @returns {Array<Object>}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const context = overlayContext.deviceContext ?? {};
     const renderer = overlayContext.renderer;
-    const objects = this.resolveContextObjects(context).filter(Boolean);
+    const objects = this._overlayModifiedObjects;
 
     if (
       objects.length === 0 ||
@@ -205,7 +211,9 @@ class ObjectModifierTool extends Tool {
       return;
     }
 
-    context?.acc?.viewport?.liveRenderer?.invalidateObjects?.(normalizedObjects);
+    context?.acc?.viewport?.liveRenderer?.invalidateObjects?.(
+      normalizedObjects,
+    );
     context?.acc?.viewport?.requestViewportUiRender?.();
   }
 
@@ -434,6 +442,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
     if (objects.length === 0) return;
 
     this.setContextObjects(context, objects);
+    this._overlayModifiedObjects = objects;
     const interaction = this.buildModifyInteractionContext(
       packet,
       context,

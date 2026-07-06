@@ -72,9 +72,6 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   canBeginModifyGesture(interaction) {
     const { objects, position } = interaction;
     const result = this._isPositionInsideCombinedRect(objects, position);
-    console.log(
-      `[modifier] canBeginModifyGesture | pos: (${position?.x?.toFixed(1)}, ${position?.y?.toFixed(1)}) | result: ${result} | objects: ${objects.length}`,
-    );
     return result;
   }
 
@@ -272,15 +269,9 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
   _isPositionInsideCombinedRect(objects, position) {
     const combinedRect = this._computeCombinedWorldRect(objects);
     if (!combinedRect) {
-      console.log(
-        `[modifier] _isPositionInsideCombinedRect | no combined rect (objects: ${objects.length}) | allowing`,
-      );
       return true;
     }
     const inside = combinedRect.containsPoint(position);
-    console.log(
-      `[modifier] _isPositionInsideCombinedRect | rect: (${combinedRect.left.toFixed(1)}, ${combinedRect.top.toFixed(1)}, ${combinedRect.width.toFixed(1)}, ${combinedRect.height.toFixed(1)}) | click: (${position?.x?.toFixed(1)}, ${position?.y?.toFixed(1)}) | inside: ${inside}`,
-    );
     return inside;
   }
 }

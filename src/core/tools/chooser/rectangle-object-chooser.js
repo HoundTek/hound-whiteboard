@@ -35,6 +35,16 @@ const RECTANGLE_SELECTION_OVERLAY_LINE_DASH = Object.freeze([4, 4]);
  */
 class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
+   * overlay 渲染用——当前框选拖拽状态
+   * @type {RectangleSelectionDragState}
+   * @protected
+   */
+  _overlayDragState = {
+    isSelecting: false,
+    worldRect: undefined,
+  };
+
+  /**
    * 重置矩形框选工具的临时状态
    * @override
    */
@@ -119,18 +129,16 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    */
   collectUiOverlayEntries(overlayContext = {}) {
     const entries = [...super.collectUiOverlayEntries(overlayContext)];
-    const dragState = this.resolveSelectionDragState(
-      overlayContext.deviceContext ?? {},
-    );
+    const { worldRect } = this._overlayDragState;
 
-    if (!dragState.worldRect) {
+    if (!worldRect) {
       return entries;
     }
 
     entries.push({
       source: "rectangle-selection-drag",
       type: "rect",
-      worldRect: dragState.worldRect,
+      worldRect,
       fillStyle: RECTANGLE_SELECTION_OVERLAY_FILL_STYLE,
       strokeStyle: RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE,
       lineWidth: RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH,
@@ -150,12 +158,14 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     const dragState = this.resolveSelectionDragState(context);
     const startPosition = dragState.startPosition ?? position;
 
+    const worldRect = this.createSelectionWorldRect(startPosition, position);
     this.writeSelectionDragState(context, {
       isSelecting: true,
       startPosition,
       currentPosition: position,
-      worldRect: this.createSelectionWorldRect(startPosition, position),
+      worldRect,
     });
+    this._overlayDragState = { isSelecting: true, worldRect };
   }
 
   /**
@@ -174,6 +184,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    */
   clearSelectionRegion(context = {}) {
     this.clearSelectionDragState(context);
+    this._overlayDragState = { isSelecting: false, worldRect: undefined };
   }
 
   /**

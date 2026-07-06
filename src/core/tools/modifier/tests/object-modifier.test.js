@@ -116,7 +116,7 @@ describe("ObjectModifierTool", () => {
     expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
-  test("collectUiOverlayEntries 应把当前修改对象声明给 renderer", () => {
+  test("collectUiOverlayEntries 应读取 _overlayModifiedObjects 并委托 renderer", () => {
     class TestModifierTool extends ObjectModifierTool {
       modify() {
         return undefined;
@@ -131,12 +131,10 @@ describe("ObjectModifierTool", () => {
       ]),
     };
 
-    expect(
-      tool.collectUiOverlayEntries({
-        deviceContext: { acc: { objects: [object] } },
-        renderer,
-      }),
-    ).toEqual(["modifier-overlay"]);
+    tool._overlayModifiedObjects = [object];
+    expect(tool.collectUiOverlayEntries({ renderer })).toEqual([
+      "modifier-overlay",
+    ]);
     expect(
       renderer.createCompatSelectionEntriesForSummaries,
     ).toHaveBeenCalledWith([object], "modifier");

@@ -14,7 +14,7 @@ import {
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
 } from "./demo/whiteboard-demo.js";
-import { ViewportViewportTool } from "./demo/viewport-viewport-tool.js";
+import { ViewportTool } from "./demo/viewport-tool.js";
 
 // Demo 独立入口，需要手动注册控制台输出器
 createConsolePrinter(logBus, { timestamps: true });
@@ -74,7 +74,7 @@ async function bootstrapWhiteboard() {
     demoLog.info(label, payload);
   };
 
-  const viewportViewportTool = new ViewportViewportTool({
+  const viewportTool = new ViewportTool({
     onViewportChange(targetViewport) {
       logDemoStatus("视口状态", {
         origin: targetViewport.origin.serialize(),
@@ -95,7 +95,7 @@ async function bootstrapWhiteboard() {
   logDemoStatus("空格工具", "随机圆对象");
   logDemoStatus("视口快捷键", "方向键平移，+/- 缩放，R 全屏刷新");
   configureWhiteboardDemo(board, viewport, {
-    viewportViewportTool,
+    viewportTool,
   });
 
   const resizeViewport = () => {

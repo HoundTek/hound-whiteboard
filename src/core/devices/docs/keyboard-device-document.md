@@ -231,7 +231,7 @@ board.signalsEventBus.emit("mount", {
 board.signalsEventBus.emit("mount", {
   viewportId: "main",
   name: "viewport",
-  workflow: viewportViewportTool,
+  workflow: ViewportTool,
   edges: [
     {
       from: "/keyboard/code/ArrowUp",

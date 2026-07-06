@@ -83,18 +83,15 @@ class Tool {
       return null;
     }
 
-    let latestDeviceContext = {};
     let registeredViewport = null;
     const provider = (overlayContext = {}) =>
       this.collectUiOverlayEntries({
-        ...overlayContext,
-        deviceContext: latestDeviceContext,
+        viewport: overlayContext.viewport,
+        renderer: overlayContext.renderer,
       });
 
     return {
       sync: (context = {}) => {
-        latestDeviceContext = context;
-
         const viewport = context.acc?.viewport;
         if (!viewport?.registerUiOverlayProvider) {
           return;
@@ -116,8 +113,6 @@ class Tool {
         });
       },
       cleanup: (context = {}) => {
-        latestDeviceContext = context;
-
         const viewport = registeredViewport ?? context.acc?.viewport;
         if (viewport?.unregisterUiOverlayProvider) {
           viewport.unregisterUiOverlayProvider(provider, {
@@ -264,7 +259,7 @@ class Tool {
 
   /**
    * 收集当前工具声明的 ui overlay 条目
-   * @param {{ deviceContext?: Object, viewport?: Object, activeObjectManager?: Object, renderer?: Object }} [_overlayContext={}] - overlay 上下文
+   * @param {{ viewport?: Object, renderer?: Object }} [_overlayContext={}] - overlay 上下文
    * @returns {Array<*>}
    */
   collectUiOverlayEntries(_overlayContext = {}) {

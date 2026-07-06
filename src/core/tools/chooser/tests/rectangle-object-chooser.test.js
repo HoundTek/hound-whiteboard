@@ -150,29 +150,19 @@ describe("RectangleObjectChooserTool", () => {
 
   test("collectUiOverlayEntries 应同时返回拖拽矩形和父类选择框条目", () => {
     const tool = new RectangleObjectChooserTool();
-    const stateAccess = createStateAccess({
-      selectionStart: new Vector(0, 0),
-      selectionCurrent: new Vector(20, 30),
-      selectionWorldRect: new RectangleRange(0, 0, 20, 30),
-      objects: [{ id: 1 }],
-    });
     const renderer = {
       createCompatSelectionEntriesForSummaries: jest.fn(() => [
         "selection-frame",
       ]),
     };
 
-    expect(
-      tool.collectUiOverlayEntries({
-        deviceContext: {
-          acc: { objects: [{ id: 1 }] },
-          path: "/main/mouse/secondary/tool",
-          getNodeState: stateAccess.getState,
-          setNodeState: stateAccess.setState,
-        },
-        renderer,
-      }),
-    ).toEqual([
+    tool._overlaySelectedObjects = [{ id: 1 }];
+    tool._overlayDragState = {
+      isSelecting: true,
+      worldRect: new RectangleRange(0, 0, 20, 30),
+    };
+
+    expect(tool.collectUiOverlayEntries({ renderer })).toEqual([
       "selection-frame",
       expect.objectContaining({
         source: "rectangle-selection-drag",
