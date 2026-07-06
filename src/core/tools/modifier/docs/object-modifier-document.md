@@ -105,10 +105,51 @@ modifier 同时接受：
 - `cancel` 回退到首次手势前的初始位置
 - `success` 提交后清空 `_initialPositions`
 
-## `resolveActiveModifiedObjects()`
+## 权威数据来源
 
-modifier 通过 `boardApi` 的 `commitObjects` / `discardActiveObjects` 与 Worker 侧 AOM 交互。
-summary-like 条目本身即作为有效输入继续向下流转。
+modifier 以私有字段 `_overlayModifiedObjects` 作为当前活动对象的唯一权威数据来源。
+不依赖 node state 或 acc 中的对象引用。
+
+### `resolveActiveModifiedObjects(context, objects)`
+
+```js
+resolveActiveModifiedObjects(context, objects) {
+    if (this._overlayModifiedObjects.length > 0) {
+      return this._overlayModifiedObjects;    // 私有字段优先
+    }
+    return this.resolveModifiedObjects(context, objects); // 非 handoff 场景 fallback
+}
+```
+
+读取优先级：
+
+1. `_overlayModifiedObjects`（私有字段，handoff 桥接或自身 process 写入）
+2. `resolveContextObjects`（node state → acc fallback，非 handoff 场景兼容）
+
+`_overlayModifiedObjects` 在以下时机写入：
+
+- `process()` 中每次信号处理结束时：`this._overlayModifiedObjects = objects`
+- `receiveHandoffObjects()` 中：handoff 从 first 切换时写入
+- `clearOverlayState()` 中：清空
+
+### `receiveHandoffObjects(objects, context)`
+
+`GestureBasedObjectModifierTool` 上的方法，由 handoff 在 first 完成时立即调用。
+
+```js
+receiveHandoffObjects(objects, context = {}) {
+    if (this._overlayModifiedObjects.length > 0) return;
+    this._overlayModifiedObjects = this.normalizeObjectCollection(objects);
+    this.syncUiOverlay(context);          // 注册 overlay provider
+    this.requestUiOverlayRefresh(context); // 触发 UI 刷新
+}
+```
+
+使用约束：
+
+- 不写 node state——`process()` 执行时会通过 `setContextObjects` 写入正确的路径
+- 重复调用时如果 `_overlayModifiedObjects` 已非空则跳过
+- 同步完成后调用 `requestUiOverlayRefresh` 确保 overlay 立即显示
 
 ## overlay
 
@@ -127,12 +168,29 @@ modifier 在 handoff 中通常作为 second 阶段：
 - creator → modifier
 - chooser → modifier
 
+### 包装方式
+
 handoff 通过 `wrapToolForHandoff(second, { completeOnCancel: true })` 包装：
 
 - 订阅 `action:complete` 事件感知 `success`
 - `cancel` 信号到达时调用 `tool.discardAction()` 后通知完成
 
-完成后切回 first 阶段。
+### 对象同步协议
+
+modifier 通过 `receiveHandoffObjects(objects, context)` 接收 handoff 桥接的对象：
+
+1. first 完成时由 `createCompleteCallback` 立即调用
+2. 写入 `_overlayModifiedObjects` 私有字段
+3. 调用 `syncUiOverlay(context)` 注册 overlay provider
+4. 调用 `requestUiOverlayRefresh(context)` 刷新 UI
+
+后续信号到达 modifier 的 `process()` 时，`resolveActiveModifiedObjects` 优先从私有字段读取。
+handoff 不修改 modifier 的 node state。
+
+### 阶段切换
+
+- first → second：`receiveHandoffObjects` 同步完成后切换
+- second → first：modifier 的 `action:complete` 或 `cancel` 完成后切换。handoff 不清理 modifier 的 node state，由 modifier 自己的 `clearOverlayState` 管理
 
 ## `applyModifiedObjects()`
 

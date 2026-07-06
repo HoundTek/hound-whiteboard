@@ -148,7 +148,7 @@ describe("RectangleObjectChooserTool", () => {
     expect(stateAccess.getState()).toEqual({});
   });
 
-  test("collectUiOverlayEntries 应同时返回拖拽矩形和父类选择框条目", () => {
+  test("collectUiOverlayEntries 应返回拖拽矩形，不返回选中对象高亮", () => {
     const tool = new RectangleObjectChooserTool();
     const viewport = {
       zoom: 1,
@@ -171,6 +171,7 @@ describe("RectangleObjectChooserTool", () => {
       renderer: { drawRectEntry },
     });
 
+    // 只绘制拖拽过程中的选择矩形框，不绘制选中对象高亮（由 modifier 管理）
     expect(entries).toHaveLength(1);
     expect(entries[0]).toEqual(
       expect.objectContaining({

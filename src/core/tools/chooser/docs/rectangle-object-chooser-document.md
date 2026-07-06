@@ -56,12 +56,12 @@ flowchart LR
 
 节点 state 中的字段：
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `isSelecting` | `boolean` | 拖拽是否激活 |
-| `selectionStart` | `Vector` | 拖拽起点（世界坐标） |
-| `selectionCurrent` | `Vector` | 最近一次位置 |
-| `selectionWorldRect` | `RectangleRange` | 当前框选矩形 |
+| 字段                 | 类型             | 说明                 |
+| -------------------- | ---------------- | -------------------- |
+| `isSelecting`        | `boolean`        | 拖拽是否激活         |
+| `selectionStart`     | `Vector`         | 拖拽起点（世界坐标） |
+| `selectionCurrent`   | `Vector`         | 最近一次位置         |
+| `selectionWorldRect` | `RectangleRange` | 当前框选矩形         |
 
 这些状态由 `updateSelectionRegion` 写入，`clearSelectionRegion` 清理。
 
@@ -87,7 +87,7 @@ sequenceDiagram
 
 ## overlay
 
-`collectUiOverlayEntries()` 在基类选择框之外附加矩形拖拽框：
+`collectUiOverlayEntries()` 只返回拖拽过程中的矩形选择框，不返回选中对象的外框高亮：
 
 - `type: "rect"`
 - `worldRect: dragState.worldRect`
@@ -95,11 +95,14 @@ sequenceDiagram
 
 ```js
 // 颜色常量
-RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE = "#33a1ff"
-RECTANGLE_SELECTION_OVERLAY_FILL_STYLE   = "rgba(51, 161, 255, 0.14)"
-RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH   = 1
-RECTANGLE_SELECTION_OVERLAY_LINE_DASH    = [4, 4]
+RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE = "#33a1ff";
+RECTANGLE_SELECTION_OVERLAY_FILL_STYLE = "rgba(51, 161, 255, 0.14)";
+RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH = 1;
+RECTANGLE_SELECTION_OVERLAY_LINE_DASH = [4, 4];
 ```
+
+不调用 `super.collectUiOverlayEntries()`，因此基类 `ObjectChooserTool` 中的选中对象高亮条目不会被收集。
+选中对象的外框由 handoff 切换后的 modifier 负责绘制。
 
 ## 卸载
 

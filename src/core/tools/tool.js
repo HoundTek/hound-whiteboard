@@ -73,13 +73,30 @@ class Tool {
   }
 
   /**
+   * 在不处理信号的情况下将当前工具的 overlay provider 注册到 viewport。
+   * 供 handoff 等场景在第一个信号到达前调用。
+   * createUiOverlayBinding 内建缓存，重复调用不会重复注册。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  syncUiOverlay(context = {}) {
+    const binding = this.createUiOverlayBinding();
+    binding?.sync(context);
+  }
+
+  /**
    * 为当前工具处理器创建 ui overlay 绑定
    * @returns {{ sync: Function, cleanup: Function } | null}
    */
   createUiOverlayBinding() {
+    if (this._cachedUiOverlayBinding !== undefined) {
+      return this._cachedUiOverlayBinding;
+    }
+
     if (
       this.collectUiOverlayEntries === Tool.prototype.collectUiOverlayEntries
     ) {
+      this._cachedUiOverlayBinding = null;
       return null;
     }
 
@@ -90,7 +107,7 @@ class Tool {
         renderer: overlayContext.renderer,
       });
 
-    return {
+    const binding = {
       sync: (context = {}) => {
         const viewport = context.acc?.viewport;
         if (!viewport?.registerUiOverlayProvider) {
@@ -121,10 +138,12 @@ class Tool {
         }
 
         registeredViewport = null;
-        latestDeviceContext = {};
         context.acc?.viewport?.requestViewportUiRender?.();
       },
     };
+
+    this._cachedUiOverlayBinding = binding;
+    return binding;
   }
 
   /**

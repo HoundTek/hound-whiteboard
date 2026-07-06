@@ -213,7 +213,7 @@ function wrapToolForHandoff(tool, options = {}) {
               normalizeHandoffBridgeObjects(result, eventContext ?? context),
             );
           }
-          onToolComplete?.();
+          onToolComplete?.(context);
         }),
       );
     }
@@ -228,7 +228,7 @@ function wrapToolForHandoff(tool, options = {}) {
     if (hasCancelSignal && !completed) {
       discardSecondPhaseObjects(tool, context);
       completed = true;
-      onToolComplete?.();
+      onToolComplete?.(context);
     }
 
     // 异步 case：延迟清理 subscription，等 Promise resolve 后再移除监听
@@ -365,9 +365,6 @@ function createHandoffSubDAG(options = {}) {
     );
   }
 
-  // 保存 handoff 根节点路径用于状态桥接
-  let handoffBasePath = "";
-
   // 闭包变量：存储 first 完成时桥接的对象集合
   // 不写入 DAG state，避免污染 nodeState 的形状
   let handoffObjects = [];
@@ -388,37 +385,33 @@ function createHandoffSubDAG(options = {}) {
         defaultChild: "first",
         initialState: { phase: "first" },
         resolveTransition({ signalPacket, state, fromPhase, prefixContext }) {
-          // 捕获 handoff 根路径（首次路由时）
-          if (!handoffBasePath) {
-            handoffBasePath = prefixContext.path ?? "";
-          }
-
           // 构建 onToolComplete 回调
-          const createCompleteCallback = (completedPhase) => () => {
+          // dagContext 是 first 工具包装器中传入的 DAG 上下文（用于 handoff 同步）
+          const createCompleteCallback = (completedPhase) => (dagContext) => {
             if (completedPhase === "first") {
               // 仅当 setHandoffObjects 被显式调用且对象为空时才阻止切换
               //   （如 creator 创建失败无对象场景）
               // 未调用 setHandoffObjects（直接 onToolComplete）时始终切换
               if (handoffExplicitlySet && handoffObjects.length === 0) return;
 
+              // 将桥接对象立即同步到 second 工具的私有字段
+              // 不写 node state——process() 执行时会通过 setContextObjects 写入正确的路径
+              // 工具内部会调用 requestUiOverlayRefresh 触发 overlay 刷新
+              if (handoffObjects.length > 0) {
+                const secondTool =
+                  typeof second?.receiveHandoffObjects === "function"
+                    ? second
+                    : null;
+                if (secondTool) {
+                  secondTool.receiveHandoffObjects(handoffObjects, dagContext);
+                }
+              }
+
               prefixContext.setState({
                 phase: "second",
                 activeChild: "second",
               });
             } else if (completedPhase === "second") {
-              // 清理 first / second 节点内的旧对象引用，防止 overlay 继续渲染旧选择框
-              // 使用 delNodeState 而非设为 []，避免 resolveContextObjects 读到 truthy 空数组
-              if (handoffBasePath) {
-                prefixContext.delNodeState?.(
-                  `${handoffBasePath}/first`,
-                  "objects",
-                );
-                prefixContext.delNodeState?.(
-                  `${handoffBasePath}/second`,
-                  "objects",
-                );
-              }
-
               prefixContext.setState({
                 phase: "first",
                 activeChild: "first",
@@ -441,8 +434,7 @@ function createHandoffSubDAG(options = {}) {
               autoUmountOnApply: false,
               // 阻止 creator 在 handoff 中提前 commit
               autoCommit: false,
-              // 当前阶段持有的对象，供 modifier 直接从 acc 读取
-              objects: handoffObjects,
+              // handoff 桥接对象（仅由 createCompleteCallback 在 first 完成时立即同步）
               handoffObjects,
               // first tool 调用此回调将对象写入 handoff 闭包变量
               setHandoffObjects: (objects) => {

@@ -131,24 +131,25 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
    * @returns {import("../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const entries = [...super.collectUiOverlayEntries(overlayContext)];
+    // 只绘制拖拽过程中的选择矩形框，不绘制手势结束后的选中对象高亮
+    // （选中对象高亮由 modifier 管理）
     const { worldRect } = this._overlayDragState;
 
     if (!worldRect) {
-      return entries;
+      return [];
     }
 
-    entries.push({
-      source: "rectangle-selection-drag",
-      type: "rect",
-      worldRect,
-      fillStyle: RECTANGLE_SELECTION_OVERLAY_FILL_STYLE,
-      strokeStyle: RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE,
-      lineWidth: RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH,
-      lineDash: [...RECTANGLE_SELECTION_OVERLAY_LINE_DASH],
-    });
-
-    return entries;
+    return [
+      {
+        source: "rectangle-selection-drag",
+        type: "rect",
+        worldRect,
+        fillStyle: RECTANGLE_SELECTION_OVERLAY_FILL_STYLE,
+        strokeStyle: RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE,
+        lineWidth: RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH,
+        lineDash: [...RECTANGLE_SELECTION_OVERLAY_LINE_DASH],
+      },
+    ];
   }
 
   /**

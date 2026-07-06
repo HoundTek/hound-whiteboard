@@ -199,12 +199,41 @@ class ObjectModifierTool extends GestureTool {
   }
 
   /**
+   * 接收 handoff 传递的活跃修改对象
+   * @description
+   * 当 handoff 从第一阶段（chooser/creator）切换到第二阶段（modifier）时立即调用。
+   * 工具将对象存入私有字段 _overlayModifiedObjects，作为唯一权威数据来源。
+   * 不写 node state——process() 执行时会通过 setContextObjects 写入正确的路径。
+   * 存完后触发 UI overlay 刷新，使 overlay 系统立即收集工具的条目。
+   * 已被同步的情况下重复调用不会重复写入。
+   * @param {Array<Object>} objects - handoff 桥接的对象摘要
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文（用于触发 overlay 刷新）
+   * @returns {void}
+   */
+  receiveHandoffObjects(objects, context = {}) {
+    if (this._overlayModifiedObjects.length > 0) return;
+    this._overlayModifiedObjects = this.normalizeObjectCollection(objects);
+
+    // 确保 overlay provider 已在 viewport 注册。
+    // createUiOverlayBinding 内建缓存，后续 processor 的 sync 不会重复注册。
+    this.syncUiOverlay(context);
+
+    this.requestUiOverlayRefresh(context);
+  }
+
+  /**
    * 解析当前仍处于 AOM 动态图中的对象集合
+   * @description
+   * 优先从私有字段 _overlayModifiedObjects 读取（handoff 桥接或自身 process 写入）。
+   * 私有字段为空时回退到 resolveModifiedObjects（原生非 handoff 场景兼容）。
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    */
   resolveActiveModifiedObjects(context, objects) {
+    if (this._overlayModifiedObjects.length > 0) {
+      return this._overlayModifiedObjects;
+    }
     return this.resolveModifiedObjects(context, objects);
   }
 

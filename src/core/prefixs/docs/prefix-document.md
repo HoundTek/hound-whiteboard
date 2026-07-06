@@ -131,7 +131,8 @@ const handler = createRepeatorPrefixHandler({
 - `wrapSubDAGForHandoff(subDAGDef, options)`：子树根节点满足条件时调用 `onToolComplete`
 - handler 内部桥接：在 first / second 节点 handler 中临时订阅工具钩子，触发时调用累计 context 中的 `onToolComplete`
 
-钩子清理：handoff 保存 `beforeCommitCreatedObject` 原始引用，通过 `subDAG.resetHandoff()` 恢复。
+first 完成时通过 `receiveHandoffObjects` 将对象同步到 second 工具的私有字段，
+不依赖 node state 或 acc。通过 `autoCommit: false` 注入 acc 而非突变工具方法。
 
 ## 拖拽位移转换：`createDragAnchorPrefixHandler`
 

@@ -340,9 +340,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 42, type: "circle" }],
         });
       });
-      // 新桥接机制：modifier 从 acc.objects 读取，不再依赖 nodeState
+      // 新桥接机制：modifier 从 acc.handoffObjects 读取，不再依赖 nodeState
       const second = createMockModifier((_pkt, ctx) => {
-        const objects = ctx.acc?.objects ?? [];
+        const objects = ctx.acc?.handoffObjects ?? [];
         if (objects.length > 0) {
           ctx.setNodeState?.(ctx.path, {
             objects: [...objects],
@@ -869,8 +869,6 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         }),
       ).toThrow(/same tool instance/i);
     });
-
-
   });
 
   describe("modifier + handoff 完整工作流集成", () => {
