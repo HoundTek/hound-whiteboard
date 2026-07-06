@@ -151,14 +151,16 @@ describe("ObjectModifierTool", () => {
   });
 
   describe("生命周期钩子", () => {
-    test("applyModifiedObjects 成功后触发 afterApply 通知", () => {
+    test("applyModifiedObjects 成功后同时触发 action:complete 与 afterApply 通知", () => {
       class TestModifier extends ObjectModifierTool {
         modify() {}
       }
 
       const tool = new TestModifier();
       const afterApply = jest.fn();
+      const actionComplete = jest.fn();
       tool.on("afterApply", afterApply);
+      tool.on("action:complete", actionComplete);
 
       const object = { id: 10 };
       const boardApi = {
@@ -172,7 +174,13 @@ describe("ObjectModifierTool", () => {
       );
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([10]);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/test" }),
+        true,
+      );
       expect(afterApply).toHaveBeenCalledTimes(1);
+      expect(afterApply.mock.calls[0][1]).toEqual([object]);
       expect(afterApply.mock.calls[0][2]).toBe(true);
     });
 
@@ -183,7 +191,9 @@ describe("ObjectModifierTool", () => {
 
       const tool = new TestModifier();
       const afterApply = jest.fn();
+      const actionComplete = jest.fn();
       tool.on("afterApply", afterApply);
+      tool.on("action:complete", actionComplete);
       tool.beforeApplyModifiedObjects = () => false;
 
       const object = { id: 11 };
@@ -200,6 +210,7 @@ describe("ObjectModifierTool", () => {
 
       expect(result).toBe(false);
       expect(commitObjects).not.toHaveBeenCalled();
+      expect(actionComplete).not.toHaveBeenCalled();
       expect(afterApply).not.toHaveBeenCalled();
     });
 

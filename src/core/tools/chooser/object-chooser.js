@@ -5,8 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { Tool } from "../tool.js";
-import { SignalPacket } from "../../devices-dag/signal.js";
+import { GestureTool } from "../gesture-tool.js";
 import { RectangleRange, intersectsRanges } from "../../range/index.js";
 import { Range } from "../../range/range.js";
 import { Vector } from "../../utils/math.js";
@@ -16,23 +15,25 @@ import { createCompatSelectionEntriesForSummaries } from "../../components/rende
  * 对象选择工具基类
  * @class
  * @abstract
- * @extends Tool
+ * @extends GestureTool
  * @description
  * 对象选择工具负责根据命中规则挑选对象，并输出选择结果或选择范围。
  * @author Zhou Chenyu
  */
-class ObjectChooserTool extends Tool {
+class ObjectChooserTool extends GestureTool {
   /**
    * overlay 渲染用——当前选中的对象摘要
    * @type {import("../../shared/types.js").ObjectSummary[]}
    * @protected
    */
   _overlaySelectedObjects = [];
+
   /**
    * @param {{}} [options={}] - 配置选项
    */
   constructor(options = {}) {
     super();
+    this.autoActionOnGestureEnd = true;
   }
 
   /**
@@ -78,7 +79,6 @@ class ObjectChooserTool extends Tool {
       return localRange.withPosition(position);
     }
 
-    // 兜底：使用 boundingBox 计算世界范围
     const localBoundingBox = objectEntry?.boundingBox;
     if (localBoundingBox) {
       const worldBoundingBox = RectangleRange.fromRectLike(localBoundingBox);
@@ -192,95 +192,168 @@ class ObjectChooserTool extends Tool {
   }
 
   /**
-   * 处理选择手势信号：position → 更新选择区域，end → 提交，cancel → 清理
-   * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @returns {void|Promise<void>}
+   * 选择手势开始钩子
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
+   * @protected
    */
-  process(signalPacket, context = {}) {
-    const packet = SignalPacket.from(signalPacket);
+  beginSelectionGesture(interaction) {}
 
-    // 如果 nodeState 中的对象已被清理（handoff 完成时 delNodeState），
-    // 同步清理 overlay 状态，避免 handoff 切换回 first 阶段后显示旧的选中框
-    if (
-      this._overlaySelectedObjects.length > 0 &&
-      !this.resolveNodeState(context).objects
-    ) {
-      this._overlaySelectedObjects = [];
-    }
+  /**
+   * GestureTool 生命周期适配：开始选择手势
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
+   */
+  beginGesture(interaction) {
+    this.beginSelectionGesture(interaction);
+  }
 
-    if (packet.signals.some((s) => s.type === "cancel")) {
-      this.clearSelectionRegion(context);
-      this._overlaySelectedObjects = [];
-      this.requestUiOverlayRefresh(context);
+  /**
+   * GestureTool 生命周期适配：更新选择手势
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
+   */
+  updateGesture(interaction) {
+    if (!interaction.position) {
       return;
     }
 
-    const position = this._resolvePosition(packet, context);
-    if (position) {
-      this.updateSelectionRegion(position, context);
-      this.requestUiOverlayRefresh(context);
-    }
-
-    if (
-      packet.signals.some((s) => s.type === "end") &&
-      this.hasSelectionRegion(context)
-    ) {
-      return this._finalizeSelection(context);
-    }
+    this.updateSelectionRegion(interaction.position, interaction.context);
+    this.requestUiOverlayRefresh(interaction.context);
   }
 
   /**
-   * 从信号包中提取位置坐标
-   * @param {SignalPacket} packet - 已解析的信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @returns {Vector|null}
-   * @private
+   * GestureTool 生命周期适配：完成选择手势
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
    */
-  _resolvePosition(packet, context = {}) {
-    const positionSignal = packet.signals.find((s) => s.type === "position");
-    return Vector.parse(
-      positionSignal?.context?.value ?? positionSignal?.context?.position,
-    );
+  completeGesture(interaction) {}
+
+  /**
+   * GestureTool 生命周期适配：取消选择手势
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
+   */
+  cancelGesture(interaction) {
+    this.clearSelectionRegion(interaction.context);
   }
 
   /**
-   * 提交选择并完成选择生命周期
+   * 自定义 cancel 语义
+   * @description 选择工具的 cancel 仅清理当前拖拽区域，不撤销上一轮已确认的选择。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
+   * @protected
+   */
+  _onCancel(interaction) {
+    if (this.isGestureActive) {
+      this.cancelGesture(interaction);
+      this.isGestureActive = false;
+      this._emit("gesture:cancel", interaction);
+    }
+
+    this.clearOverlayState(interaction.context);
+  }
+
+  /**
+   * 自定义 end 语义
+   * @description end 期间需要保留当前选择区域供 submitSelection 使用，不能走基类的预清理逻辑。
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {Array<import("../../shared/types.js").ObjectSummary>|Promise<Array<import("../../shared/types.js").ObjectSummary>>|undefined}
+   * @protected
+   */
+  _onEnd(interaction) {
+    if (this.isGestureActive) {
+      this.completeGesture(interaction);
+      this.isGestureActive = false;
+      this._emit("gesture:end", interaction);
+    }
+
+    if (!this.hasSelectionRegion(interaction.context)) {
+      return undefined;
+    }
+
+    return this.completeAction(interaction.context);
+  }
+
+  /**
+   * GestureTool 生命周期适配：确认前校验
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @returns {void|Promise<void>}
-   * @private
+   * @returns {boolean}
+   * @protected
    */
-  _finalizeSelection(context) {
+  beforeAction(context) {
+    return this.beforeConfirmSelection(context);
+  }
+
+  /**
+   * GestureTool 生命周期适配：提交选择结果
+   * @description
+   * 选择动作允许异步提交，因此此处覆写 completeAction，手动处理 Promise 分支，
+   * 并仅在 confirmSelection 成功时发送 `action:complete`。
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @returns {Array<import("../../shared/types.js").ObjectSummary>|Promise<Array<import("../../shared/types.js").ObjectSummary>>}
+   */
+  completeAction(context) {
     const objectsOrPromise = this.submitSelection(context);
 
     if (objectsOrPromise instanceof Promise) {
-      return objectsOrPromise.then((objects) => {
-        this._applySelection(context, objects);
-      });
+      return objectsOrPromise.then((objects) =>
+        this._applySelection(context, objects),
+      );
     }
 
-    this._applySelection(context, objectsOrPromise);
+    return this._applySelection(context, objectsOrPromise);
   }
 
   /**
-   * 将选中对象写入上下文并触发生命周期钩子
-   * @description
-   * 总是执行 replaceSelection（丢弃旧选择），只在有新选中时才触发 afterChoose / confirmSelection。
-   * 空选择时同样会清理上一轮选择。
+   * 将选中对象写入上下文并按需触发生命周期钩子
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @param {import("../../shared/types.js").ObjectSummary[]} objects - 选中对象（可能为空）
-   * @returns {void}
+   * @param {import("../../shared/types.js").ObjectSummary[]} objects - 选中对象
+   * @returns {Array<import("../../shared/types.js").ObjectSummary>}
    * @private
    */
   _applySelection(context, objects) {
     const resolvedSelection = this.replaceSelection(context, objects);
     this.clearSelectionRegion(context);
     this._overlaySelectedObjects = resolvedSelection;
+
     if (resolvedSelection.length > 0) {
       this.afterChoose(resolvedSelection);
-      this.confirmSelection(context, resolvedSelection);
+      if (this.confirmSelection(context, resolvedSelection) !== false) {
+        super.afterAction(context, resolvedSelection);
+      }
     }
+
     this.requestUiOverlayRefresh(context);
+    return resolvedSelection;
+  }
+
+  /**
+   * GestureTool 生命周期适配：清理 overlay 临时状态
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   * @protected
+   */
+  clearOverlayState(context = {}) {
+    this._overlaySelectedObjects = [];
+    this.requestUiOverlayRefresh(context);
+  }
+
+  /**
+   * GestureTool 生命周期适配：撤销当前已激活选择
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   * @protected
+   */
+  discardAction(context = {}) {
+    const selectedObjects = this.resolveContextObjects(context);
+    const boardApi = context?.acc?.boardApi;
+    const objectIds = this.resolveObjectIds(context, selectedObjects);
+    if (boardApi && objectIds.length > 0) {
+      boardApi.discardActiveObjects(objectIds);
+    }
+    this.clearContextObjects(context);
   }
 
   /**
@@ -344,7 +417,7 @@ class ObjectChooserTool extends Tool {
   /**
    * 更新当前选择区域
    * @description
-   * 在 position 信号到达时由 process 调用。子类应在此更新选择区域的几何形状。
+   * 在 position 信号到达时由 GestureTool 调用。子类应在此更新选择区域的几何形状。
    * @param {Vector} position - 最新位置
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
@@ -382,6 +455,26 @@ class ObjectChooserTool extends Tool {
    */
   getSelectionRegion(context) {
     throw new Error("Method not implemented.");
+  }
+
+  /**
+   * 处理一个完整信号包
+   * @description
+   * 在交给 GestureTool 路由前，先同步清理已失效的 overlay 选择状态，
+   * 避免 handoff 清空 nodeState 后显示旧选中框。
+   * @param {Object} signalPacket - 输入信号包
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void|Promise<void>}
+   */
+  process(signalPacket, context = {}) {
+    if (
+      this._overlaySelectedObjects.length > 0 &&
+      !this.resolveNodeState(context).objects
+    ) {
+      this._overlaySelectedObjects = [];
+    }
+
+    return super.process(signalPacket, context);
   }
 
   /**

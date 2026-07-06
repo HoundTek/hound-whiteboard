@@ -399,6 +399,43 @@ describe("ObjectChooserTool", () => {
       );
     });
 
+    test("选择确认成功后同时触发 action:complete 与 afterConfirm", () => {
+      const chosenObject = { id: 13 };
+      const boardApi = {
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+      const stateAccess = createStateAccess();
+      const deviceContext = {
+        acc: { boardApi },
+        path: "/test",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
+      };
+      const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
+      const afterConfirm = jest.fn();
+      const actionComplete = jest.fn();
+      tool.on("afterConfirm", afterConfirm);
+      tool.on("action:complete", actionComplete);
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
+        deviceContext,
+      );
+
+      expect(afterConfirm).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/test" }),
+        [chosenObject],
+      );
+    });
+
     test("RectangleObjectChooserTool 在 end 信号时调用 confirmSelection", () => {
       // 准备一个虚拟对象用于框选命中
       const selectedSummary = {

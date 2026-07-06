@@ -243,6 +243,13 @@ class GestureTool extends Tool {
     }
 
     const result = this.performAction(context);
+    if (result instanceof Promise) {
+      return result.then((resolvedResult) => {
+        this.afterAction(context, resolvedResult);
+        return resolvedResult;
+      });
+    }
+
     this.afterAction(context, result);
     return result;
   }
@@ -261,7 +268,7 @@ class GestureTool extends Tool {
     }
 
     this.clearOverlayState(interaction.context);
-    this.discardAction(interaction.context);
+    return this.discardAction(interaction.context);
   }
 
   /**
@@ -279,8 +286,10 @@ class GestureTool extends Tool {
 
     if (this.autoActionOnGestureEnd) {
       this.clearOverlayState(interaction.context);
-      this.completeAction(interaction.context);
+      return this.completeAction(interaction.context);
     }
+
+    return undefined;
   }
 
   /**
@@ -291,7 +300,7 @@ class GestureTool extends Tool {
    * @protected
    */
   _onObjectEnd(interaction) {
-    this._onEnd(interaction);
+    return this._onEnd(interaction);
   }
 
   /**
@@ -302,7 +311,7 @@ class GestureTool extends Tool {
    * @protected
    */
   _onObjectCancel(interaction) {
-    this._onCancel(interaction);
+    return this._onCancel(interaction);
   }
 
   /**
@@ -319,7 +328,7 @@ class GestureTool extends Tool {
     }
 
     this.clearOverlayState(interaction.context);
-    this.completeAction(interaction.context);
+    return this.completeAction(interaction.context);
   }
 
   /**
@@ -361,30 +370,28 @@ class GestureTool extends Tool {
     const interaction = this.buildInteraction(packet, context);
 
     if (interaction.hasObjectCancel) {
-      this._onObjectCancel(interaction);
-      return;
+      return this._onObjectCancel(interaction);
     }
 
     if (interaction.hasCancel) {
-      this._onCancel(interaction);
-      return;
+      return this._onCancel(interaction);
     }
 
     if (interaction.hasObjectEnd) {
-      this._onObjectEnd(interaction);
-      return;
+      return this._onObjectEnd(interaction);
     }
 
     if (interaction.hasSuccess) {
-      this._onSuccess(interaction);
-      return;
+      return this._onSuccess(interaction);
     }
 
     this._handleSpatialUpdate(interaction);
 
     if (interaction.hasEnd) {
-      this._onEnd(interaction);
+      return this._onEnd(interaction);
     }
+
+    return undefined;
   }
 
   /**
@@ -452,7 +459,7 @@ class MultiGestureTool extends GestureTool {
     }
 
     this.clearOverlayState(interaction.context);
-    this.completeAction(interaction.context);
+    return this.completeAction(interaction.context);
   }
 
   /**
@@ -469,7 +476,7 @@ class MultiGestureTool extends GestureTool {
     }
 
     this.clearOverlayState(interaction.context);
-    this.discardAction(interaction.context);
+    return this.discardAction(interaction.context);
   }
 }
 
