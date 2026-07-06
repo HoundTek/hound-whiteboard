@@ -16,7 +16,7 @@ import {
 
 /**
  * 静态层渲染器
- * @description 按当前 Monitor 已加载区块中的静态图顺序，将静态对象渲染到 baseCanvas。
+ * @description 按当前 Viewport 已加载区块中的静态图顺序，将静态对象渲染到 baseCanvas。
  * 自管理 baseCanvas、渲染调度器与脏区合并策略。
  * @class
  * @extends Renderer
@@ -31,11 +31,11 @@ class BaseRenderer extends Renderer {
   _resolveThresholds;
 
   /**
-   * @param {import("../orchestration/monitor-proxy.js").MonitorProxy} monitor - 目标显示器
+   * @param {import("../orchestration/viewport.js").Viewport} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(monitor, options = {}) {
-    super(monitor, options);
+  constructor(viewport, options = {}) {
+    super(viewport, options);
     this._resolveThresholds = createBaseDirtyRectThresholdStrategy();
     this._initScheduler();
   }
@@ -60,7 +60,7 @@ class BaseRenderer extends Renderer {
    * @protected
    */
   _getThresholds() {
-    return this._resolveThresholds(this.monitor?.zoom ?? 1) ?? {};
+    return this._resolveThresholds(this.viewport?.zoom ?? 1) ?? {};
   }
 
   /**
@@ -71,13 +71,13 @@ class BaseRenderer extends Renderer {
    */
   _getCanonicalRectsForRect(dirtyRect) {
     return createBaseDirtyRectCanonicalRectsResolver({
-      getOrigin: () => this.monitor?.origin,
-      getZoom: () => this.monitor?.zoom,
+      getOrigin: () => this.viewport?.origin,
+      getZoom: () => this.viewport?.zoom,
       getLoadedChunks: () =>
-        this.monitor?.chunkLoader?.getLoadedChunks?.() ?? [],
-      getChunkById: (chunkId) => this.monitor?.board?.getChunkById?.(chunkId),
-      getChunkWidth: () => this.monitor?.chunkWidth,
-      getChunkHeight: () => this.monitor?.chunkHeight,
+        this.viewport?.chunkLoader?.getLoadedChunks?.() ?? [],
+      getChunkById: (chunkId) => this.viewport?.board?.getChunkById?.(chunkId),
+      getChunkWidth: () => this.viewport?.chunkWidth,
+      getChunkHeight: () => this.viewport?.chunkHeight,
       getChunkScreenRect: (chunk) => this.getChunkScreenRect(chunk),
     })(dirtyRect);
   }
@@ -90,7 +90,7 @@ class BaseRenderer extends Renderer {
    */
   _collectDrawables() {
     const allDrawables = this.collectStaticDrawables();
-    const aom = this.monitor?.board?.activeObjectManager;
+    const aom = this.viewport?.board?.activeObjectManager;
     return typeof aom?.has === "function"
       ? allDrawables.filter((obj) => !aom.has(obj.id))
       : allDrawables;
@@ -104,8 +104,8 @@ class BaseRenderer extends Renderer {
   getChunkWorldRect(chunk) {
     if (!chunk) return undefined;
 
-    const chunkWidth = this.monitor?.chunkWidth ?? 0;
-    const chunkHeight = this.monitor?.chunkHeight ?? 0;
+    const chunkWidth = this.viewport?.chunkWidth ?? 0;
+    const chunkHeight = this.viewport?.chunkHeight ?? 0;
     if (chunkWidth <= 0 || chunkHeight <= 0) return undefined;
 
     return new RectangleRange(
@@ -124,7 +124,7 @@ class BaseRenderer extends Renderer {
   getChunkScreenRect(chunk) {
     const worldRect = this.getChunkWorldRect(chunk);
     if (!worldRect) return undefined;
-    return this.monitor?.worldRectToScreenRect?.(worldRect);
+    return this.viewport?.worldRectToScreenRect?.(worldRect);
   }
 
   /**
@@ -137,8 +137,8 @@ class BaseRenderer extends Renderer {
     const worldRect = this.getChunkWorldRect(chunk);
     if (!worldRect) return undefined;
 
-    const origin = viewportState.origin ?? this.monitor?.origin;
-    const zoom = viewportState.zoom ?? this.monitor?.zoom ?? 1;
+    const origin = viewportState.origin ?? this.viewport?.origin;
+    const zoom = viewportState.zoom ?? this.viewport?.zoom ?? 1;
 
     return new RectangleRange(
       (worldRect.left - origin.x) * zoom,
@@ -156,10 +156,10 @@ class BaseRenderer extends Renderer {
    */
   resolveStaticObject(chunk, objectId) {
     const objectInstance =
-      this.monitor?.board?.activeObjectManager?.findBoardObjectInstance?.(
+      this.viewport?.board?.activeObjectManager?.findBoardObjectInstance?.(
         objectId,
         [chunk?.id],
-      ) ?? this.monitor?.board?.getObjectById?.(objectId);
+      ) ?? this.viewport?.board?.getObjectById?.(objectId);
 
     return objectInstance instanceof BasicObject ? objectInstance : undefined;
   }
@@ -177,10 +177,10 @@ class BaseRenderer extends Renderer {
       .filter((chunkId) => Number.isInteger(chunkId));
 
     const objectInstance =
-      this.monitor?.board?.activeObjectManager?.findBoardObjectInstance?.(
+      this.viewport?.board?.activeObjectManager?.findBoardObjectInstance?.(
         objectId,
         candidateChunkIds,
-      ) ?? this.monitor?.board?.getObjectById?.(objectId);
+      ) ?? this.viewport?.board?.getObjectById?.(objectId);
 
     return objectInstance instanceof BasicObject ? objectInstance : undefined;
   }
@@ -235,11 +235,11 @@ class BaseRenderer extends Renderer {
   }
 
   /**
-   * 收集当前 monitor 已加载区块中的静态对象
+   * 收集当前 viewport 已加载区块中的静态对象
    * @returns {BasicObject[]}
    */
   collectStaticDrawables() {
-    const chunks = this.monitor?.chunkLoader?.getLoadedChunks?.() ?? [];
+    const chunks = this.viewport?.chunkLoader?.getLoadedChunks?.() ?? [];
     return this.mergeStaticGraphs(chunks);
   }
 
@@ -260,7 +260,7 @@ class BaseRenderer extends Renderer {
       const currentRect = this.getObjectScreenRect(objectInstance);
       const previousWorldRect = previousWorldRects.get(objectInstance.id);
       const previousScreenRect = previousWorldRect
-        ? this.monitor?.worldRectToScreenRect?.(previousWorldRect)
+        ? this.viewport?.worldRectToScreenRect?.(previousWorldRect)
         : undefined;
       const previousRect = previousScreenRect
         ? previousScreenRect.inflate(padding)

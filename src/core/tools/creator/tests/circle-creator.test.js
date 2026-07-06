@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { Vector } from "../../../utils/math.js";
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -18,7 +18,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -33,7 +33,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -41,7 +41,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(10, 10) } },
           { type: "end", context: {} },
@@ -50,20 +50,20 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local).toBeDefined();
-    expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(tool._local.data.radius).toBeCloseTo(Math.sqrt(145));
+    expect(tool._entry).toBeDefined();
+    expect(tool._entry.position.serialize()).toEqual({ x: 1, y: 2 });
+    expect(tool._entry.data.radius).toBeCloseTo(Math.sqrt(145));
   });
 
-  test("结束点过近时使用固定半径，固定半径由 monitor.zoom 决定", () => {
+  test("结束点过近时使用固定半径，固定半径由 viewport.zoom 决定", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(102, {
-      monitor: { zoom: 2 },
+      viewport: { zoom: 2 },
     });
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(0, 0) } }],
       },
       deviceContext,
@@ -71,7 +71,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(0.5, 0.2) } },
           { type: "end", context: {} },
@@ -80,7 +80,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.radius).toBeCloseTo(8);
+    expect(tool._entry.data.radius).toBeCloseTo(8);
   });
 
   test("显式提供 boardApi 时应通过 RPC 创建并提交圆对象", () => {
@@ -93,7 +93,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
       },
       deviceContext,
@@ -101,7 +101,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(6, 4) } },
           { type: "end", context: {} },
@@ -119,7 +119,7 @@ describe("CircleCreatorTool", () => {
     );
     expect(modifySpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([104]);
-    expect(tool._local).toMatchObject({
+    expect(tool._entry).toMatchObject({
       id: 104,
       position: new Vector(2, 1),
     });
@@ -168,7 +168,7 @@ describe("CircleCreatorTool", () => {
     );
     expect(boardApi.modifyObject).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([702]);
-    expect(tool._local.data.radius).toBeCloseTo(5);
+    expect(tool._entry.data.radius).toBeCloseTo(5);
   });
 
   test("结束手势时应通过 boardApi.commitObjects 提交对象", () => {
@@ -179,7 +179,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
       },
       deviceContext,
@@ -187,7 +187,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
@@ -196,13 +196,13 @@ describe("CircleCreatorTool", () => {
     expect(commitSpy).toHaveBeenCalledWith([103]);
   });
 
-  test("未提供 monitor 时应以默认 zoom=1 计算固定半径", () => {
+  test("未提供 viewport 时应以默认 zoom=1 计算固定半径", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(401);
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(0, 0) } }],
       },
       deviceContext,
@@ -210,7 +210,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(0, 1) } },
           { type: "end", context: {} },
@@ -219,7 +219,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.radius).toBeCloseTo(16);
+    expect(tool._entry.data.radius).toBeCloseTo(16);
   });
 
   test("结束手势后应通过 commitObjects 提交圆对象", () => {
@@ -230,7 +230,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
       deviceContext,
@@ -238,14 +238,14 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
     );
 
     expect(commitSpy).toHaveBeenCalledWith([110]);
-    expect(tool._local.id).toBe(110);
+    expect(tool._entry.id).toBe(110);
   });
 
   test("连续两次创建应生成两个不同圆对象", () => {
@@ -257,17 +257,17 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       { acc: { board, boardApi, objectId: 201, ownerChunkId: 1 } },
     );
 
-    const firstObject = tool._local;
+    const firstObject = tool._entry;
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -278,17 +278,17 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(6, 7) } }],
       },
       { acc: { board, boardApi, objectId: 202, ownerChunkId: 1 } },
     );
 
-    const secondObject = tool._local;
+    const secondObject = tool._entry;
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(10, 10) } },
           { type: "end", context: {} },
@@ -310,7 +310,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(10, 10) } }],
       },
       deviceContext,
@@ -318,7 +318,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(10, 10) } },
           { type: "end", context: {} },
@@ -327,7 +327,7 @@ describe("CircleCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.radius).toBeCloseTo(16);
-    expect(tool._local.position.serialize()).toEqual({ x: 10, y: 10 });
+    expect(tool._entry.data.radius).toBeCloseTo(16);
+    expect(tool._entry.position.serialize()).toEqual({ x: 10, y: 10 });
   });
 });

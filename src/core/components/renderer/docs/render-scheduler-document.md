@@ -15,7 +15,7 @@
 - 不负责真正绘制对象
 - 只管理 dirty rect 的积累、调度与 flush 触发
 
-在当前渲染链路中，它位于 `Monitor` 和 `LiveRenderer` 之间。
+在当前渲染链路中，它位于 `Viewport` 和 `LiveRenderer` 之间。
 
 ## 核心职责
 
@@ -91,7 +91,7 @@
 - base 层可使用更保守的近邻合并阈值，并额外支持“覆盖足够多时退化为整 chunk”
 - 两层都可以在脏区已经接近整视口时，直接退化为整视口重绘，避免继续维护大量碎片矩形
 
-这些参数可以按调用时动态读取，例如直接绑定到 `monitor.zoom`：
+这些参数可以按调用时动态读取，例如直接绑定到 `viewport.zoom`：
 
 - 近邻距离阈值可随 `zoom` 线性放大
 - 额外扫描面积阈值可随 `zoom^2` 放大
@@ -117,7 +117,7 @@
 - 类型：flush 回调
 - 默认行为：空函数
 
-在当前 Monitor 链路中，`flushHandler` 最终会指向 `LiveRenderer.flush(dirtyRects)`。
+在当前 Viewport 链路中，`flushHandler` 最终会指向 `LiveRenderer.flush(dirtyRects)`。
 
 ## 工作流程
 
@@ -164,7 +164,7 @@
 
 - `RenderScheduler` 决定何时 flush
 - 渲染器决定 flush 时画什么
-- Monitor 负责触发时机（视口变化、区块变化等），由 Monitor 调用渲染器的 `invalidate()` / `invalidateViewport()` 推动渲染
+- Viewport 负责触发时机（视口变化、区块变化等），由 Viewport 调用渲染器的 `invalidate()` / `invalidateViewport()` 推动渲染
 
 ## 当前实现状态
 
@@ -178,5 +178,5 @@
 
 ## 相关文档
 
-- [monitor-document.md](../../orchestration/docs/monitor-document.md)
+- [viewport-document.md](../../orchestration/docs/viewport-document.md)
 - [live-renderer-document.md](./live-renderer-document.md)

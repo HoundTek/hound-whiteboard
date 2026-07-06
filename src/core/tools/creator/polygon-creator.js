@@ -53,8 +53,8 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     let tool = new PolygonCreatorTool({ property: toolData?.property });
     if (!toolData || toolData.type !== "PolygonTool")
       throw new Error("Invalid tool data for PolygonTool.");
-    if (toolData._local) {
-      tool._local = { ...toolData._local };
+    if (toolData._entry) {
+      tool._entry = { ...toolData._entry };
     }
     return tool;
   }
@@ -68,12 +68,13 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     return {
       type: "PolygonTool",
       property: { ...(this.property ?? {}) },
-      _local: this._local
+      _entry: this._entry
         ? {
-            id: this._local.id,
-            position: { x: this._local.position.x, y: this._local.position.y },
-            property: { ...this._local.property },
-            data: { ...this._local.data },
+            id: this._entry.id,
+            type: this._entry.type,
+            position: { x: this._entry.position.x, y: this._entry.position.y },
+            property: { ...this._entry.property },
+            data: { ...this._entry.data },
           }
         : null,
     };
@@ -81,9 +82,9 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
 
   /**
    * 当前正在创建多边形对象的本地状态
-   * @type {{ id: number, position: Vector, property: Record<string,any>, data: { points: Array<{x:number, y:number}> } } | null}
+   * @type {import("../../shared/types.js").LightweightObjectEntry & { data: { points: Array<{x:number, y:number}> } } | null}
    */
-  _local;
+  _entry;
 
   /**
    * 当前顶点数量
@@ -108,8 +109,9 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {number} id - 对象 id
    */
   create(position, id) {
-    this._local = {
+    this._entry = {
       id,
+      type: "PolygonObject",
       position: new Vector(position.x, position.y),
       property: { ...this.property },
       data: { points: [] },
@@ -122,7 +124,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @returns {Vector}
    */
   toLocalPoint(position) {
-    return position.sub(this._local.position);
+    return position.sub(this._entry.position);
   }
 
   /**
@@ -131,8 +133,8 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   appendPoint(localPoint, interaction) {
-    if (this._local) {
-      this._local.data.points.push({ x: localPoint.x, y: localPoint.y });
+    if (this._entry) {
+      this._entry.data.points.push({ x: localPoint.x, y: localPoint.y });
     }
 
     const boardApi = interaction?.context?.acc?.boardApi;
@@ -152,8 +154,8 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   replacePoint(localPoint, index, interaction) {
-    if (this._local) {
-      this._local.data.points[index] = { x: localPoint.x, y: localPoint.y };
+    if (this._entry) {
+      this._entry.data.points[index] = { x: localPoint.x, y: localPoint.y };
     }
 
     const boardApi = interaction?.context?.acc?.boardApi;
@@ -171,7 +173,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @description 创建手势开始时，添加一个新的顶点。
    * @param {Object} interaction - 当前交互上下文
    */
-  beginCreationGesture(interaction) {
+  beginGesture(interaction) {
     const addPt = this.toLocalPoint(interaction.position);
     this.appendPoint(addPt, interaction);
     this.lastPoint = interaction.position;
@@ -182,19 +184,20 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
    * @description 创建手势更新时，修改当前顶点位置。
    * @param {Object} interaction - 当前交互上下文
    */
-  updateCreationGesture(interaction) {
+  updateGesture(interaction) {
     if (!Vector.nearlyEq(this.lastPoint, interaction.position)) {
       this.lastPoint = interaction.position;
       const upPt = this.toLocalPoint(interaction.position);
       this.replacePoint(upPt, this.count - 1, interaction);
     }
+    this.afterGeometryMutation(interaction);
   }
 
   /**
    * @description 创建手势结束时，固定当前顶点并追加控制点。
    * @param {Object} interaction - 当前交互上下文
    */
-  completeCreationGesture(interaction) {
+  completeGesture(interaction) {
     if (
       interaction.position &&
       !Vector.nearlyEq(this.lastPoint, interaction.position)
@@ -207,12 +210,34 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
     this.lastPoint = null;
   }
 
-  cancelCreationGesture(interaction) {
+  cancelGesture(interaction) {
     return undefined;
   }
 
+  /**
+   * 根据累积的顶点计算局部外接矩形
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {{ left: number, top: number, width: number, height: number }|undefined}
+   * @protected
+   */
+  resolveCreatedObjectBoundingBox(interaction) {
+    const points = this._entry?.data?.points;
+    if (!points || points.length === 0) return undefined;
+    let minX = Infinity,
+      minY = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { left: minX, top: minY, width: maxX - minX, height: maxY - minY };
+  }
+
   reset() {
-    this._local = null;
+    this._entry = null;
     this.objectId = null;
     this.count = 0;
     this.lastPoint = null;

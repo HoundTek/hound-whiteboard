@@ -4,7 +4,7 @@
 
 import { createNoopCanvas } from "../../../test-support/noop-canvas.js";
 import { Board } from "../board.js";
-import { MonitorProxy } from "../monitor-proxy.js";
+import { Viewport } from "../viewport.js";
 
 /**
  * 测试用假 Worker 端点
@@ -164,12 +164,12 @@ function installMockDocument() {
 }
 
 describe("Board worker mode", () => {
-  test("enableWorkerMode 后 createMonitor 应返回 MonitorProxy 并发送 createMonitor RPC", async () => {
+  test("enableWorkerMode 后 createViewport 应返回 Viewport 并发送 createViewport RPC", async () => {
     const restoreAnimationFrame = installMockAnimationFrame();
     const restoreDocument = installMockDocument();
     const board = new Board({ width: 800, height: 600 });
     const worker = new FakeWorkerEndpoint();
-    let monitor = null;
+    let viewport = null;
 
     try {
       const enablePromise = board.enableWorkerMode(worker);
@@ -177,7 +177,7 @@ describe("Board worker mode", () => {
       await enablePromise;
 
       const rootElement = document.createElement("div");
-      monitor = board.createMonitor(
+      viewport = board.createViewport(
         rootElement,
         { width: 400, height: 300 },
         "main",
@@ -185,7 +185,7 @@ describe("Board worker mode", () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(monitor).toBeInstanceOf(MonitorProxy);
+      expect(viewport).toBeInstanceOf(Viewport);
       expect(worker.postedMessages).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -199,10 +199,10 @@ describe("Board worker mode", () => {
           }),
           expect.objectContaining({
             type: "rpc",
-            method: "createMonitor",
+            method: "createViewport",
             params: {
               options: {
-                monitorId: "main",
+                viewportId: "main",
                 width: 400,
                 height: 300,
               },
@@ -211,19 +211,19 @@ describe("Board worker mode", () => {
         ]),
       );
 
-      const createMonitorRequest = worker.postedMessages.find(
+      const createViewportRequest = worker.postedMessages.find(
         (message) =>
-          message?.type === "rpc" && message?.method === "createMonitor",
+          message?.type === "rpc" && message?.method === "createViewport",
       );
       worker.emit({
         type: "rpc-response",
-        msgId: createMonitorRequest?.msgId,
+        msgId: createViewportRequest?.msgId,
         result: undefined,
       });
       await Promise.resolve();
       await Promise.resolve();
     } finally {
-      monitor?.destroy?.();
+      viewport?.destroy?.();
       board.getBoardApi()?.destroy?.();
       restoreDocument();
       restoreAnimationFrame();

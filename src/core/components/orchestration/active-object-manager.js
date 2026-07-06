@@ -141,7 +141,7 @@ class ActiveObjectManager {
 
   /**
    * AOM 渲染钩子
-   * @description 注入式渲染钩子，替代直接访问 board.monitors / monitor.liveRenderer / monitor.baseRenderer。
+   * @description 注入式渲染钩子，替代直接访问 board.viewports / viewport.liveRenderer / viewport.baseRenderer。
    * @type {import("./aom-render-hooks.js").AomRenderHooks}
    */
   renderHooks;
@@ -240,7 +240,7 @@ class ActiveObjectManager {
   }
 
   /**
-   * 请求所有 monitor 刷新活动层
+   * 请求所有 viewport 刷新活动层
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
    */
@@ -252,7 +252,7 @@ class ActiveObjectManager {
   }
 
   /**
-   * 请求所有 monitor 刷新静态层
+   * 请求所有 viewport 刷新静态层
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    */
   requestBaseRender(chunks = []) {
@@ -261,7 +261,7 @@ class ActiveObjectManager {
   }
 
   /**
-   * 请求所有 monitor 按对象范围刷新静态层
+   * 请求所有 viewport 按对象范围刷新静态层
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
    * @param {Iterable<Chunk>} [fallbackChunks = []] - 无法走对象级失效时的回退区块集合
@@ -281,7 +281,7 @@ class ActiveObjectManager {
   }
 
   /**
-   * 刷新能看到指定对象集合的那些 monitor 的视口
+   * 刷新能看到指定对象集合的那些 viewport 的视口
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Array<BasicObject>} objects - 对象实例数组
    * @private

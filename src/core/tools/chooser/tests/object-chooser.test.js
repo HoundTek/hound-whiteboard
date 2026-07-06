@@ -10,9 +10,26 @@ describe("ObjectChooserTool", () => {
     constructor(options = {}) {
       super(options);
       this.chosenObjects = options.chosenObjects ?? [];
+      this._hasRegion = false;
     }
 
-    choose() {
+    updateSelectionRegion(position, context) {
+      this._hasRegion = true;
+    }
+
+    hasSelectionRegion(context) {
+      return this._hasRegion;
+    }
+
+    clearSelectionRegion(context = {}) {
+      this._hasRegion = false;
+    }
+
+    getSelectionRegion(context) {
+      return null;
+    }
+
+    submitSelection(context) {
       return this.chosenObjects;
     }
 
@@ -28,14 +45,19 @@ describe("ObjectChooserTool", () => {
     const stateAccess = createStateAccess();
     const deviceContext = {
       acc: { boardApi },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
     const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
 
     tool.process(
-      { signals: [{ type: "trigger", context: {} }] },
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(0, 0) } },
+          { type: "end" },
+        ],
+      },
       deviceContext,
     );
 
@@ -58,7 +80,7 @@ describe("ObjectChooserTool", () => {
     });
     const deviceContext = {
       acc: { boardApi, objects: [chosenObject] },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -78,7 +100,7 @@ describe("ObjectChooserTool", () => {
     const stateAccess = createStateAccess();
     const deviceContext = {
       acc: { boardApi },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -93,7 +115,12 @@ describe("ObjectChooserTool", () => {
     });
 
     tool.process(
-      { signals: [{ type: "trigger", context: {} }] },
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(0, 0) } },
+          { type: "end" },
+        ],
+      },
       deviceContext,
     );
 
@@ -134,7 +161,7 @@ describe("ObjectChooserTool", () => {
           getObjectById: jest.fn(() => staleBoardObject),
         },
       },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -143,7 +170,12 @@ describe("ObjectChooserTool", () => {
     });
 
     tool.process(
-      { signals: [{ type: "trigger", context: {} }] },
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(0, 0) } },
+          { type: "end" },
+        ],
+      },
       deviceContext,
     );
 
@@ -167,7 +199,7 @@ describe("ObjectChooserTool", () => {
         },
         objects: [chosenObject],
       },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -179,49 +211,44 @@ describe("ObjectChooserTool", () => {
     expect(stateAccess.getState()).toEqual({});
   });
 
-  test("collectUiOverlayEntries 在子 modifier 已有对象时不应重复声明 chooser 选择框", () => {
-    const chosenObject = { id: 5 };
-    const tool = new TestChooserTool();
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "chooser-overlay",
-      ]),
+  test("collectUiOverlayEntries 应调用 factory 生成选择框条目", () => {
+    const chosenObject = {
+      id: 5,
+      position: { x: 10, y: 20 },
+      range: new RectangleRange(0, 0, 30, 40),
+      property: {},
     };
-
-    const suppressed = tool.collectUiOverlayEntries({
-      deviceContext: {
-        acc: { objects: [chosenObject] },
-        path: "/monitor/chooser/tool",
-        dag: {
-          resolveDefaultLeaf: () => ({
-            path: "/monitor/chooser/tool/tool",
-            state: { objects: [chosenObject] },
-          }),
-        },
+    const tool = new TestChooserTool();
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
       },
-      renderer,
+    };
+    const drawRectEntry = jest.fn();
+
+    tool._overlaySelectedObjects = [chosenObject];
+    const entries = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
     });
 
-    expect(suppressed).toEqual([]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].objectId).toBe(5);
+    expect(entries[0].type).toBe("rect");
+    expect(entries[0].source).toBe("compat-selection-object-frame:chooser");
+  });
 
-    const visible = tool.collectUiOverlayEntries({
-      deviceContext: {
-        acc: { objects: [chosenObject] },
-        path: "/monitor/chooser/tool",
-        dag: {
-          resolveDefaultLeaf: () => ({
-            path: "/monitor/chooser/tool",
-            state: {},
-          }),
-        },
-      },
-      renderer,
+  test("collectUiOverlayEntries 无选中对象时应返回空数组", () => {
+    const tool = new TestChooserTool();
+
+    tool._overlaySelectedObjects = [];
+    const entries = tool.collectUiOverlayEntries({
+      viewport: {},
+      renderer: { drawRectEntry: jest.fn() },
     });
 
-    expect(visible).toEqual(["chooser-overlay"]);
-    expect(
-      renderer.createCompatSelectionEntriesForSummaries,
-    ).toHaveBeenCalledWith([chosenObject], "chooser");
+    expect(entries).toEqual([]);
   });
 
   test("collectUiOverlayEntries 在 summary-like 条目时应走 summaries 入口", () => {
@@ -231,41 +258,31 @@ describe("ObjectChooserTool", () => {
       range: new RectangleRange(0, 0, 5, 5),
     };
     const tool = new TestChooserTool();
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "chooser-summary-overlay",
-      ]),
-    };
-
-    const visible = tool.collectUiOverlayEntries({
-      deviceContext: {
-        acc: { objects: [chosenObject] },
-        path: "/monitor/chooser/tool",
-        dag: {
-          resolveDefaultLeaf: () => ({
-            path: "/monitor/chooser/tool",
-            state: {},
-          }),
-        },
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
       },
-      renderer,
+    };
+    const drawRectEntry = jest.fn();
+
+    tool._overlaySelectedObjects = [chosenObject];
+    const visible = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
     });
 
-    expect(visible).toEqual(["chooser-summary-overlay"]);
-    expect(
-      renderer.createCompatSelectionEntriesForSummaries,
-    ).toHaveBeenCalledWith([chosenObject], "chooser");
+    expect(visible).toHaveLength(1);
+    expect(visible[0].objectId).toBe(51);
   });
 
-  test("resolveObjectSelectionWorldRange 应使用对象主判定范围而不是 boundingBox", () => {
+  test("resolveObjectSelectionWorldRange 应优先使用 range 而非 boundingBox", () => {
     const tool = new TestChooserTool();
     const objectEntry = {
       id: 6,
       position: new Vector(100, 200),
+      range: new RectangleRange(10, 20, 5, 6),
       boundingBox: new RectangleRange(0, 0, 40, 50),
-      getRange() {
-        return new RectangleRange(10, 20, 5, 6);
-      },
     };
 
     expect(tool.resolveObjectSelectionWorldRange({}, objectEntry)).toEqual(
@@ -304,7 +321,15 @@ describe("ObjectChooserTool", () => {
       const afterChoose = jest.fn();
       tool.on("afterChoose", afterChoose);
 
-      tool.process({ signals: [{ type: "trigger" }] }, deviceContext);
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
+        deviceContext,
+      );
 
       expect(afterChoose).toHaveBeenCalledTimes(1);
       expect(afterChoose).toHaveBeenCalledWith([chosenObject]);
@@ -320,7 +345,12 @@ describe("ObjectChooserTool", () => {
       tool.on("afterChoose", afterChoose);
 
       tool.process(
-        { signals: [{ type: "trigger" }] },
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
         {
           acc: { boardApi },
           path: "/test",
@@ -332,14 +362,12 @@ describe("ObjectChooserTool", () => {
       expect(afterChoose).not.toHaveBeenCalled();
     });
 
-    test("confirmSelection → beforeConfirm 返回 false 时阻止 afterConfirm", () => {
+    test("confirmSelection → beforeConfirm 返回 false 时阻止后续完成", () => {
       const chosenObject = { id: 11 };
       const board = {
         activeObjectManager: { choose: jest.fn() },
       };
       const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
-      const afterConfirm = jest.fn();
-      tool.on("afterConfirm", afterConfirm);
       tool.beforeConfirmSelection = () => false;
 
       const result = tool.confirmSelection({ acc: { board }, path: "/test" }, [
@@ -347,14 +375,11 @@ describe("ObjectChooserTool", () => {
       ]);
 
       expect(result).toBe(false);
-      expect(afterConfirm).not.toHaveBeenCalled();
     });
 
-    test("confirmSelection 默认触发 afterConfirm", () => {
+    test("confirmSelection 默认返回 true", () => {
       const chosenObject = { id: 12 };
       const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
-      const afterConfirm = jest.fn();
-      tool.on("afterConfirm", afterConfirm);
 
       const result = tool.confirmSelection(
         { acc: { board: {} }, path: "/test" },
@@ -362,14 +387,43 @@ describe("ObjectChooserTool", () => {
       );
 
       expect(result).toBe(true);
-      expect(afterConfirm).toHaveBeenCalledTimes(1);
-      expect(afterConfirm).toHaveBeenCalledWith(
-        { acc: { board: {} }, path: "/test" },
+    });
+
+    test("选择确认成功后触发 action:complete", () => {
+      const chosenObject = { id: 13 };
+      const boardApi = {
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+      const stateAccess = createStateAccess();
+      const deviceContext = {
+        acc: { boardApi },
+        path: "/test",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
+      };
+      const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
+      const actionComplete = jest.fn();
+      tool.on("action:complete", actionComplete);
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
+        deviceContext,
+      );
+
+      expect(actionComplete).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/test" }),
         [chosenObject],
       );
     });
 
-    test("RectangleObjectChooserTool 在 end 信号时调用 confirmSelection", () => {
+    test("RectangleObjectChooserTool 在 end 信号时触发 action:complete", () => {
       // 准备一个虚拟对象用于框选命中
       const selectedSummary = {
         id: 20,
@@ -389,15 +443,15 @@ describe("ObjectChooserTool", () => {
       const stateAccess = createStateAccess();
       const deviceContext = {
         acc: { boardApi },
-        path: "/monitor/chooser",
+        path: "/viewport/chooser",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
       };
 
       const tool = new RectangleObjectChooserTool();
-      const afterConfirm = jest.fn();
+      const actionComplete = jest.fn();
       const afterChoose = jest.fn();
-      tool.on("afterConfirm", afterConfirm);
+      tool.on("action:complete", actionComplete);
       tool.on("afterChoose", afterChoose);
 
       // 先发送 position 信号，建立拖拽状态
@@ -428,15 +482,51 @@ describe("ObjectChooserTool", () => {
           deviceContext,
         )
         .then(() => {
-          // afterChoose 触发（setContextObjects 后）
           expect(afterChoose).toHaveBeenCalledTimes(1);
-          // afterConfirm 触发（confirmSelection 后）
-          expect(afterConfirm).toHaveBeenCalledTimes(1);
+          expect(actionComplete).toHaveBeenCalledTimes(1);
 
-          const confirmCall = afterConfirm.mock.calls[0];
-          expect(confirmCall[0]).toMatchObject({ path: "/monitor/chooser" });
-          expect(confirmCall[1]).toEqual([selectedSummary]);
+          const completeCall = actionComplete.mock.calls[0];
+          expect(completeCall[0]).toMatchObject({ path: "/viewport/chooser" });
+          expect(completeCall[1]).toEqual([selectedSummary]);
         });
+    });
+
+    test("cancel 信号应撤销上一轮已确认的选择", () => {
+      const chosenObject = { id: 15 };
+      const boardApi = {
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+      const stateAccess = createStateAccess();
+      const deviceContext = {
+        acc: { boardApi },
+        path: "/test",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
+      };
+      const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
+
+      // 先选择对象
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+            { type: "end" },
+          ],
+        },
+        deviceContext,
+      );
+
+      expect(boardApi.addActiveObjects).toHaveBeenCalledWith([15]);
+      expect(deviceContext.acc.objects).toEqual([chosenObject]);
+
+      // cancel 应撤销已选中的对象
+      tool.process({ signals: [{ type: "cancel" }] }, deviceContext);
+
+      expect(boardApi.discardActiveObjects).toHaveBeenCalledWith([15]);
+      expect(deviceContext.acc.objects).toBeUndefined();
+      // nodeState 中 objects 应被清理
+      expect(stateAccess.getState()).toEqual({});
     });
   });
 });

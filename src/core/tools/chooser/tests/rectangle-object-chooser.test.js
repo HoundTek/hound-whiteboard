@@ -17,14 +17,16 @@ describe("RectangleObjectChooserTool", () => {
       property: {},
       data: { radius: 10 },
     };
+
     const boardApi = {
       hitTest: jest.fn(async () => [1]),
       queryObjects: jest.fn(async () => [selectedSummary]),
       addActiveObjects: jest.fn(),
       discardActiveObjects: jest.fn(),
     };
+
     const deviceContext = {
-      acc: { boardApi, monitor: { requestViewportUiRender: jest.fn() } },
+      acc: { boardApi, viewport: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -41,6 +43,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
+
     tool.process(
       {
         signals: [
@@ -52,6 +55,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
+
     await tool.process(
       {
         signals: [
@@ -103,7 +107,7 @@ describe("RectangleObjectChooserTool", () => {
     const deviceContext = {
       acc: {
         boardApi,
-        monitor: { requestViewportUiRender: jest.fn() },
+        viewport: { requestViewportUiRender: jest.fn() },
         objects: [previousSummary],
       },
       path: "/main/mouse/secondary/tool",
@@ -144,37 +148,37 @@ describe("RectangleObjectChooserTool", () => {
     expect(stateAccess.getState()).toEqual({});
   });
 
-  test("collectUiOverlayEntries 应同时返回拖拽矩形和父类选择框条目", () => {
+  test("collectUiOverlayEntries 应返回拖拽矩形，不返回选中对象高亮", () => {
     const tool = new RectangleObjectChooserTool();
-    const stateAccess = createStateAccess({
-      selectionStart: new Vector(0, 0),
-      selectionCurrent: new Vector(20, 30),
-      selectionWorldRect: new RectangleRange(0, 0, 20, 30),
-      objects: [{ id: 1 }],
-    });
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "selection-frame",
-      ]),
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
+      },
+    };
+    const drawRectEntry = jest.fn();
+
+    tool._overlaySelectedObjects = [
+      { id: 1, position: { x: 0, y: 0 }, property: {} },
+    ];
+    tool._overlayDragState = {
+      isSelecting: true,
+      worldRect: new RectangleRange(0, 0, 20, 30),
     };
 
-    expect(
-      tool.collectUiOverlayEntries({
-        deviceContext: {
-          acc: { objects: [{ id: 1 }] },
-          path: "/main/mouse/secondary/tool",
-          getNodeState: stateAccess.getState,
-          setNodeState: stateAccess.setState,
-        },
-        renderer,
-      }),
-    ).toEqual([
-      "selection-frame",
+    const entries = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
+    });
+
+    // 只绘制拖拽过程中的选择矩形框，不绘制选中对象高亮（由 modifier 管理）
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual(
       expect.objectContaining({
         source: "rectangle-selection-drag",
         worldRect: new RectangleRange(0, 0, 20, 30),
       }),
-    ]);
+    );
   });
 
   test("异步框选应通过 hitTest/queryObjects 读取 summary-like 条目而不读取 stale board 对象", async () => {
@@ -209,7 +213,7 @@ describe("RectangleObjectChooserTool", () => {
           getObjectById: jest.fn(() => staleBoardObject),
         },
         boardApi,
-        monitor: { requestViewportUiRender: jest.fn() },
+        viewport: { requestViewportUiRender: jest.fn() },
       },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,

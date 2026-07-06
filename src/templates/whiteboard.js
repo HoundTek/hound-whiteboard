@@ -1,6 +1,6 @@
 /**
  * @file whiteboard demo 浏览器入口
- * @description 初始化 whiteboard demo 页面并默认启用 Core Worker 模式。
+ * @description 初始化 whiteboard demo 页面，通过 Worker 与 BoardCore 通信。
  * @module templates/whiteboard
  * @author Zhou Chenyu
  */
@@ -14,7 +14,7 @@ import {
   configureWhiteboardDemo,
   DEMO_KEYBOARD_INPUT_CODES,
 } from "./demo/whiteboard-demo.js";
-import { MonitorViewportTool } from "./demo/monitor-viewport-tool.js";
+import { ViewportTool } from "./demo/viewport-tool.js";
 
 // Demo 独立入口，需要手动注册控制台输出器
 createConsolePrinter(logBus, { timestamps: true });
@@ -45,17 +45,17 @@ async function bootstrapWhiteboard() {
     throw error;
   }
 
-  const monitor = board.createMonitor(
+  const viewport = board.createViewport(
     foregroundLayer,
     {
       width: appLeft.clientWidth,
       height: window.innerHeight,
     },
-    "monitor",
+    "viewport",
   );
-  monitor.zoom = 1.0;
-  monitor.origin = new Vector(0, 0);
-  monitor.canvas.tabIndex = 0;
+  viewport.zoom = 1.0;
+  viewport.origin = new Vector(0, 0);
+  viewport.canvas.tabIndex = 0;
 
   const demoLog = new Logger("Demo", "INFO", logBus);
 
@@ -74,17 +74,17 @@ async function bootstrapWhiteboard() {
     demoLog.info(label, payload);
   };
 
-  const monitorViewportTool = new MonitorViewportTool({
-    onViewportChange(targetMonitor) {
+  const viewportTool = new ViewportTool({
+    onViewportChange(targetViewport) {
       logDemoStatus("视口状态", {
-        origin: targetMonitor.origin.serialize(),
-        zoom: targetMonitor.zoom,
+        origin: targetViewport.origin.serialize(),
+        zoom: targetViewport.zoom,
       });
     },
-    onFlush(targetMonitor) {
+    onFlush(targetViewport) {
       logDemoStatus("视口全屏刷新", {
-        origin: targetMonitor.origin.serialize(),
-        zoom: targetMonitor.zoom,
+        origin: targetViewport.origin.serialize(),
+        zoom: targetViewport.zoom,
       });
     },
   });
@@ -94,19 +94,19 @@ async function bootstrapWhiteboard() {
   logDemoStatus("右键工具", "矩形框选 -> 修改对象");
   logDemoStatus("空格工具", "随机圆对象");
   logDemoStatus("视口快捷键", "方向键平移，+/- 缩放，R 全屏刷新");
-  configureWhiteboardDemo(board, monitor, {
-    monitorViewportTool,
+  configureWhiteboardDemo(board, viewport, {
+    viewportTool,
   });
 
-  const resizeMonitor = () => {
+  const resizeViewport = () => {
     const width = appLeft.clientWidth;
     const height = window.innerHeight;
-    monitor.rootElement.style.width = `${width}px`;
-    monitor.rootElement.style.height = `${height}px`;
-    monitor.resizeRenderLayers(width, height);
+    viewport.rootElement.style.width = `${width}px`;
+    viewport.rootElement.style.height = `${height}px`;
+    viewport.resizeRenderLayers(width, height);
   };
 
-  resizeMonitor();
+  resizeViewport();
 
   const emitMousePacket = (event) => {
     const signals = [];
@@ -127,7 +127,7 @@ async function bootstrapWhiteboard() {
       event.type === "mousemove" ||
       event.type === "mouseup"
     ) {
-      const worldPosition = monitor.screenToWorld(
+      const worldPosition = viewport.screenToWorld(
         new Vector(event.clientX, event.clientY),
       );
       if (!worldPosition) return;
@@ -170,14 +170,14 @@ async function bootstrapWhiteboard() {
     if (signals.length === 0) return;
 
     board.signalsEventBus.emit("input", {
-      to: `/${monitor.monitorId}/mouse`,
+      to: `/${viewport.viewportId}/mouse`,
       signals,
     });
   };
 
   const emitWindowMouseUpPacket = (event) => {
     board.signalsEventBus.emit("input", {
-      to: `/${monitor.monitorId}/mouse`,
+      to: `/${viewport.viewportId}/mouse`,
       signals: [
         {
           type: "end",
@@ -191,18 +191,18 @@ async function bootstrapWhiteboard() {
     });
   };
 
-  monitor.canvas.addEventListener("mousedown", emitMousePacket);
-  monitor.canvas.addEventListener("mousemove", emitMousePacket);
-  monitor.canvas.addEventListener("mouseup", emitMousePacket);
+  viewport.canvas.addEventListener("mousedown", emitMousePacket);
+  viewport.canvas.addEventListener("mousemove", emitMousePacket);
+  viewport.canvas.addEventListener("mouseup", emitMousePacket);
   window.addEventListener("mouseup", emitWindowMouseUpPacket);
-  monitor.canvas.addEventListener("mouseleave", emitMousePacket);
-  monitor.canvas.addEventListener("contextmenu", (event) => {
+  viewport.canvas.addEventListener("mouseleave", emitMousePacket);
+  viewport.canvas.addEventListener("contextmenu", (event) => {
     event.preventDefault();
   });
-  monitor.canvas.addEventListener("dragstart", (event) => {
+  viewport.canvas.addEventListener("dragstart", (event) => {
     event.preventDefault();
   });
-  monitor.canvas.addEventListener("selectstart", (event) => {
+  viewport.canvas.addEventListener("selectstart", (event) => {
     event.preventDefault();
   });
 
@@ -253,7 +253,7 @@ async function bootstrapWhiteboard() {
     }
 
     board.signalsEventBus.emit("input", {
-      to: `/${monitor.monitorId}/keyboard`,
+      to: `/${viewport.viewportId}/keyboard`,
       signals: [
         {
           type: event.type,
@@ -274,20 +274,20 @@ async function bootstrapWhiteboard() {
 
   const emitKeyboardCancelPacket = () => {
     board.signalsEventBus.emit("input", {
-      to: `/${monitor.monitorId}/keyboard`,
+      to: `/${viewport.viewportId}/keyboard`,
       signals: [{ type: "end", context: { domEvent: "blur" } }],
     });
   };
 
-  monitor.canvas.addEventListener("mousedown", () => {
-    monitor.canvas.focus();
+  viewport.canvas.addEventListener("mousedown", () => {
+    viewport.canvas.focus();
   });
-  monitor.canvas.addEventListener("keydown", emitKeyboardPacket);
-  monitor.canvas.addEventListener("keyup", emitKeyboardPacket);
-  monitor.canvas.addEventListener("blur", emitKeyboardCancelPacket);
-  window.addEventListener("resize", resizeMonitor);
+  viewport.canvas.addEventListener("keydown", emitKeyboardPacket);
+  viewport.canvas.addEventListener("keyup", emitKeyboardPacket);
+  viewport.canvas.addEventListener("blur", emitKeyboardCancelPacket);
+  window.addEventListener("resize", resizeViewport);
 
-  monitor.canvas.focus();
+  viewport.canvas.focus();
 }
 
 void bootstrapWhiteboard().catch((error) => {

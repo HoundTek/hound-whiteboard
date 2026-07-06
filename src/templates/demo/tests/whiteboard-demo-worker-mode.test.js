@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { Board, MonitorProxy } from "../../../core/components/index.js";
+import { Board, Viewport } from "../../../core/components/index.js";
 import { createCoreWorkerRuntime } from "../../../core-worker.js";
 import {
   createNoopCanvas,
@@ -227,7 +227,7 @@ describe("whiteboard demo worker mode", () => {
     const { uiEndpoint, workerHost } = createLoopbackWorkerPair();
     const board = new Board({ width: 800, height: 600 });
     let runtime = null;
-    let monitor = null;
+    let viewport = null;
 
     try {
       const enablePromise = board.enableWorkerMode(uiEndpoint);
@@ -235,16 +235,16 @@ describe("whiteboard demo worker mode", () => {
       await enablePromise;
 
       const rootElement = document.createElement("div");
-      monitor = board.createMonitor(
+      viewport = board.createViewport(
         rootElement,
         { width: 800, height: 600 },
         "main",
       );
       await flushMicrotasks();
 
-      expect(monitor).toBeInstanceOf(MonitorProxy);
+      expect(viewport).toBeInstanceOf(Viewport);
 
-      const { primaryStrokeTool } = configureWhiteboardDemo(board, monitor);
+      const { primaryStrokeTool } = configureWhiteboardDemo(board, viewport);
 
       board.signalsEventBus.emit("input", {
         to: "/main/mouse",
@@ -286,8 +286,8 @@ describe("whiteboard demo worker mode", () => {
       });
       await flushMicrotasks();
 
-      expect(primaryStrokeTool._local).toBeDefined();
-      expect(primaryStrokeTool._local.id).toBe(1);
+      expect(primaryStrokeTool._entry).toBeDefined();
+      expect(primaryStrokeTool._entry.id).toBe(1);
       expect(board.getObjectById(1)).toBeUndefined();
 
       const summaries = await board.getBoardApi().queryObjects([1]);
@@ -308,7 +308,7 @@ describe("whiteboard demo worker mode", () => {
         },
       });
     } finally {
-      monitor?.destroy?.();
+      viewport?.destroy?.();
       board.getBoardApi()?.destroy?.();
       runtime?.stop?.();
       restoreDocument();
@@ -322,7 +322,7 @@ describe("whiteboard demo worker mode", () => {
     const { uiEndpoint, workerHost } = createLoopbackWorkerPair();
     const board = new Board({ width: 800, height: 600 });
     let runtime = null;
-    let monitor = null;
+    let viewport = null;
 
     try {
       const enablePromise = board.enableWorkerMode(uiEndpoint);
@@ -330,14 +330,14 @@ describe("whiteboard demo worker mode", () => {
       await enablePromise;
 
       const rootElement = document.createElement("div");
-      monitor = board.createMonitor(
+      viewport = board.createViewport(
         rootElement,
         { width: 800, height: 600 },
         "main",
       );
       await flushMicrotasks();
 
-      configureWhiteboardDemo(board, monitor);
+      configureWhiteboardDemo(board, viewport);
 
       board.signalsEventBus.emit("input", {
         to: "/main/mouse",
@@ -420,7 +420,7 @@ describe("whiteboard demo worker mode", () => {
       await flushMicrotasks();
 
       expect(
-        monitor.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
+        viewport.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
       ).toEqual({
         phase: "second",
         activeChild: "second",
@@ -474,7 +474,7 @@ describe("whiteboard demo worker mode", () => {
         }),
       ]);
     } finally {
-      monitor?.destroy?.();
+      viewport?.destroy?.();
       board.getBoardApi()?.destroy?.();
       runtime?.stop?.();
       restoreDocument();

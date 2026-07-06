@@ -20,7 +20,7 @@ import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-o
 import { CommonObjectModifierTool } from "../../core/tools/modifier/common-object-modifier.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
-import { MonitorViewportTool } from "./monitor-viewport-tool.js";
+import { ViewportTool } from "./viewport-tool.js";
 
 const DEMO_PRIMARY_STROKE_COLOR = "#ff0000";
 
@@ -91,8 +91,8 @@ function buildKeyboardTriggerForwardNodeConfig() {
 /**
  * 构建视口位置移动 prefix handler
  * @description
- * 将 trigger 信号转为 position 信号，目标位置 = monitor.origin + (baseStep / zoom) * direction。
- * monitor 从 handlerContext.context 获取；路由依赖 defaultRoute。
+ * 将 trigger 信号转为 position 信号，目标位置 = viewport.origin + (baseStep / zoom) * direction。
+ * viewport 从 handlerContext.context 获取；路由依赖 defaultRoute。
  * @param {{ x: number, y: number }} direction - 位移方向（单位向量）
  * @param {number} [baseStep=200] - 缩放为 1 时的位移步长
  * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
@@ -100,8 +100,8 @@ function buildKeyboardTriggerForwardNodeConfig() {
 function buildViewportPositionNodeConfig(direction, baseStep = 200) {
   return {
     handler(packet, ctx = {}) {
-      const monitor = ctx?.acc?.monitor;
-      const zoom = monitor?.zoom ?? 1;
+      const viewport = ctx?.acc?.viewport;
+      const zoom = viewport?.zoom ?? 1;
       const step = baseStep / zoom;
       const delta = {
         x: (direction?.x ?? 0) * step,
@@ -117,8 +117,8 @@ function buildViewportPositionNodeConfig(direction, baseStep = 200) {
           ctx.signal(
             "position",
             {
-              x: (monitor?.origin?.x ?? 0) + (delta?.x ?? 0),
-              y: (monitor?.origin?.y ?? 0) + (delta?.y ?? 0),
+              x: (viewport?.origin?.x ?? 0) + (delta?.x ?? 0),
+              y: (viewport?.origin?.y ?? 0) + (delta?.y ?? 0),
             },
             {
               code: signal?.context?.code,
@@ -136,14 +136,14 @@ function buildViewportPositionNodeConfig(direction, baseStep = 200) {
  * 构建视口缩放 prefix handler
  * @description
  * 将 trigger 信号转为 scale 信号，缩放值由 scaleTransformer 函数计算。
- * monitor 从 handlerContext.context 获取；路由依赖 defaultRoute。
+ * viewport 从 handlerContext.context 获取；路由依赖 defaultRoute。
  * @param {(currentZoom: number) => number} scaleTransformer - 缩放变换函数
  * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildViewportScaleNodeConfig(scaleTransformer) {
   return {
     handler(packet, ctx = {}) {
-      const monitor = ctx?.acc?.monitor;
+      const viewport = ctx?.acc?.viewport;
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
@@ -151,7 +151,7 @@ function buildViewportScaleNodeConfig(scaleTransformer) {
 
       return ctx.routeToChild(ctx.defaultRoute || "", [
         ...triggerSignals.map((signal) =>
-          ctx.signal("scale", scaleTransformer(monitor?.zoom ?? 1), {
+          ctx.signal("scale", scaleTransformer(viewport?.zoom ?? 1), {
             code: signal?.context?.code,
             key: signal?.context?.key,
             sourceType: signal.type,
@@ -248,7 +248,7 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
 /**
  * 配置白板 Demo 的完整设备图与 workflow 绑定
  * @description
- * 为指定 board 和 monitor 挂载鼠标/键盘设备子图，注册 stroke、selector、
+ * 为指定 board 和 viewport 挂载鼠标/键盘设备子图，注册 stroke、selector、
  * WASD、viewport、debug、random-circle 等 workflow。
  *
  * 所有设备叶节点的 defaultRoute 统一为 "default"；
@@ -256,12 +256,12 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * prefix handler 不再指定 to:，依赖 defaultRoute 自动走边。
  *
  * @param {import("../../core/components/index.js").Board} board - 白板实例
- * @param {import("../../core/components/index.js").Monitor|import("../../core/components/index.js").MonitorProxy} monitor - 显示器实例
+ * @param {import("../../core/components/index.js").Viewport} viewport - 视口实例
  * @param {Object} [options={}] - 可选覆盖配置
  * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
  * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
  * @param {Object} [options.randomCircleSubDAG]
- * @param {MonitorViewportTool} [options.monitorViewportTool]
+ * @param {ViewportTool} [options.viewportTool]
  * @param {DebuggerTool} [options.debugTool]
  * @param {import("../../core/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
  * @param {Record<string, { x: number, y: number }>} [options.wasdRoutePresets]
@@ -269,18 +269,18 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * @returns {{
  *   keyboardDevice: import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition,
  *   mouseDevice: import("../../core/devices/mouse-device.js").MouseSubDAGDefinition,
- *   monitorViewportTool: MonitorViewportTool,
+ *   viewportTool: ViewportTool,
  *   primaryStrokeTool: import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool,
  *   secondarySelectionTool: import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
  *   debugTool: DebuggerTool,
  * }}
  */
-function configureWhiteboardDemo(board, monitor, options = {}) {
+function configureWhiteboardDemo(board, viewport, options = {}) {
   const demoLog = new Logger("DemoConfig", "INFO", logBus);
 
-  const effectiveBoard = board ?? monitor?.board;
-  if (!effectiveBoard || !monitor) {
-    throw new TypeError("configureWhiteboardDemo requires board and monitor");
+  const effectiveBoard = board ?? viewport?.board;
+  if (!effectiveBoard || !viewport) {
+    throw new TypeError("configureWhiteboardDemo requires board and viewport");
   }
 
   const primaryStrokeTool =
@@ -296,22 +296,22 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     createRandomCircleSubDAG({
       rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
     });
-  const monitorViewportTool =
-    options.monitorViewportTool ?? new MonitorViewportTool();
+  const viewportTool =
+    options.viewportTool ?? new ViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
   const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
 
-  monitor.mountSubDAG("/mouse", mouseDevice);
-  monitor.mountSubDAG("/keyboard", keyboardDevice);
+  viewport.mountSubDAG("/mouse", mouseDevice);
+  viewport.mountSubDAG("/keyboard", keyboardDevice);
 
   // 所有设备叶节点 defaultRoute = "default"，
   // 所有 mount edge 统一 "default"，handler 不再写 to:
 
   // 鼠标（无需 prefix，信号直接可被工具消费）
   effectiveBoard.signalsEventBus.emit("mount", {
-    monitorId: monitor.monitorId,
+    viewportId: viewport.viewportId,
     name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
     workflow: primaryStrokeTool,
     edges: [{ from: "/mouse/primary", edge: "default" }],
@@ -337,7 +337,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   });
 
   effectiveBoard.signalsEventBus.emit("mount", {
-    monitorId: monitor.monitorId,
+    viewportId: viewport.viewportId,
     name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
     workflow: secondaryHandoffSubDAG,
     edges: [
@@ -364,7 +364,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   // Space → prefix → random-circle
   if (randomCircleSubDAG) {
     effectiveBoard.signalsEventBus.emit("mount", {
-      monitorId: monitor.monitorId,
+      viewportId: viewport.viewportId,
       name: DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE,
       workflow: randomCircleSubDAG,
       edges: [
@@ -413,9 +413,9 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     };
 
     effectiveBoard.signalsEventBus.emit("mount", {
-      monitorId: monitor.monitorId,
+      viewportId: viewport.viewportId,
       name: DEMO_WORKFLOW_NAMES.VIEWPORT,
-      workflow: monitorViewportTool,
+      workflow: viewportTool,
       edges: [...positionEdges, ...scaleEdges, flushEdge],
     });
   }
@@ -445,7 +445,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
     }));
 
     effectiveBoard.signalsEventBus.emit("mount", {
-      monitorId: monitor.monitorId,
+      viewportId: viewport.viewportId,
       name: DEMO_WORKFLOW_NAMES.DEBUG,
       workflow: debugTool,
       edges: simpleDebugEdges,
@@ -473,7 +473,7 @@ function configureWhiteboardDemo(board, monitor, options = {}) {
   return {
     keyboardDevice,
     mouseDevice,
-    monitorViewportTool,
+    viewportTool,
     primaryStrokeTool,
     secondarySelectionTool,
     debugTool,

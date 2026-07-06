@@ -7,8 +7,8 @@
 当前应用可分为四层：
 
 1. **宿主层**：Tauri shell 与 `src-tauri/` 后端
-2. **UI 线程层**：模板、DOM canvas、输入设备、DevicesDAG、tools、MonitorProxy
-3. **Core Worker 层**：`src/core-worker.js`、BoardCore、MonitorCore、AOM、渲染器
+2. **UI 线程层**：模板、DOM canvas、输入设备、DevicesDAG、tools、Viewport
+3. **Core Worker 层**：`src/core-worker.js`、BoardCore、ViewportCore、AOM、渲染器
 4. **共享纯模块层**：objects / range / utils / chunk / renderer / hit / shared
 
 `src/core/` 主要覆盖后 3 层，其中：
@@ -26,12 +26,12 @@
 1. UI 线程创建 `Board`
 2. `Board.enableWorkerMode(worker)` 初始化 `BoardApiRpc`
 3. `BoardApiRpc.createBoard(...)` 在 Worker 中创建真正的 `BoardCore`
-4. `Board.createMonitor(...)` 返回 `MonitorProxy`
-6. `MonitorProxy` 通过 `createMonitor` RPC 在 Worker 中创建 `MonitorCore`
+4. `Board.createViewport(...)` 返回 `Viewport`
+5. `Viewport` 通过 `createViewport` RPC 在 Worker 中创建 `ViewportCore`
 
 ### 输入与工具
 
-1. 宿主输入先归属到某个 monitor
+1. 宿主输入先归属到某个 viewport
 2. `Board.signalsEventBus.emit("input", ...)` 把信号送到 `Board.devicesDAG`
 3. `devices/` 节点做输入规整与分流
 4. `prefixs/` 负责 handoff、信号转换和局部状态机
@@ -39,9 +39,9 @@
 
 ### 渲染
 
-1. Worker 侧 `BoardCore` / `AOM` / renderHooks 触发 `MonitorCore` 的 base/live 补绘
-2. `MonitorCore.flushRenderFrame()` 输出 `render-frame`
-3. UI 侧 `MonitorProxy` 接收位图并合成到 DOM canvas
+1. Worker 侧 `BoardCore` / `AOM` / renderHooks 触发 `ViewportCore` 的 base/live 补绘
+2. `ViewportCore.flushRenderFrame()` 输出 `render-frame`
+3. UI 侧 `Viewport` 接收位图并合成到 DOM canvas
 4. `UiRenderer` 在 UI 线程独立绘制 overlay
 
 ## Core 的职责范围
@@ -49,13 +49,13 @@
 ### Worker 侧核心职责
 
 - `BoardCore`：对象注册表、区块加载状态、AOM、UndoTree、持久化协调
-- `MonitorCore`：Worker 视口状态、ChunkLoader、OffscreenCanvas 渲染
+- `ViewportCore`：Worker 视口状态、ChunkLoader、OffscreenCanvas 渲染
 - `BoardCore`（通过 RPC 暴露）：create / modify / commit / query / hitTest 等核心操作实现
 
 ### UI 侧核心职责
 
-- `Board`：UI façade，持有 signalsEventBus、DevicesDAG、monitor 集合与 Worker 模式切换逻辑
-- `MonitorProxy`：Worker 视口代理，承载 DOM canvas 与 overlay
+- `Board`：UI facade，持有 signalsEventBus、DevicesDAG、viewport 集合，通过 Worker 与 BoardCore 通信
+- `Viewport`：UI 视口，承载 DOM canvas 与 overlay，接收 Worker 侧渲染帧
 - `devices/`、`devices-dag/`、`tools/`、`prefixs/`：输入编排与交互工具
 - `UiRenderer`：UI overlay 渲染
 
@@ -71,17 +71,16 @@
 
 ## 当前实现状态
 
-- `BoardCore` / `MonitorCore` / `MonitorProxy` / `BoardApiRpc` 已全部接通
+- `BoardCore` / `ViewportCore` / `Viewport` / `BoardApiRpc` 已全部接通
 - demo 默认启用 Worker mode
 - creator / chooser / modifier 已全部适配 Worker mode
-- creator 本地状态使用 `_local` 纯数据对象，不再持有本地 `BasicObject` 实例
+- creator 本地状态使用 `_entry` 纯数据对象（遵循 `LightweightObjectEntry` 协议）
 - objectId 在 UI 侧由 `Board` 自持 `CounterPool` 同步分配，Worker 侧要求显式传入 id
 - Worker 若收到重复 objectId，会通过 RPC 抛错返回
 
 ## 关键术语
 
-- **RPC 通信**：UI 侧 `BoardApiRpc` 通过 postMessage 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
-- **summary-like 条目**：UI 侧在 chooser / modifier / overlay 中流转的纯数据对象，例如 `{ id, position, boundingBox, property, data }`
+- **RPC 通信**：UI 侧 `BoardApiRpc` 通过 postMessage 与 Worker 侧 `BoardCore` 通信，viewport 通过 `Viewport` ↔ `ViewportCore` 协作
 - **静态图**：各 `ChunkObjectManager.staticGraph` 维护的稳定层叠关系
 - **动态图 / AOM**：`ActiveObjectManager` 维护的交互态对象与临时层关系
 

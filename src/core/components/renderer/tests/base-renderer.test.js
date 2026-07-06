@@ -181,7 +181,7 @@ describe("BaseRenderer", () => {
     ]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       board: createBoardWithObjects([lower, upper]),
@@ -192,7 +192,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
     const drawables = renderer.render();
 
     expect(drawables).toEqual([lower, upper]);
@@ -211,7 +211,7 @@ describe("BaseRenderer", () => {
     const canvas = createCanvas(320, 240, () =>
       createReceiverSensitiveContext(calls),
     );
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       board: createBoardWithObjects([object]),
@@ -222,7 +222,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     expect(() => renderer.render()).not.toThrow();
     expect(calls).toContainEqual(["strokeStyle", "#000000"]);
@@ -247,7 +247,7 @@ describe("BaseRenderer", () => {
     rightChunk.objectManager.staticGraph = DirectedGraph.parse([[42, []]]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       board: createBoardWithObjects([lower, upper]),
@@ -258,7 +258,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     expect(renderer.render()).toEqual([lower, upper]);
   });
@@ -277,7 +277,7 @@ describe("BaseRenderer", () => {
     coveredChunk.objectManager.staticGraph = DirectedGraph.parse([[21, []]]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       board: createBoardWithObjects([object]),
@@ -288,7 +288,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     expect(renderer.render()).toEqual([object]);
   });
@@ -307,7 +307,7 @@ describe("BaseRenderer", () => {
     coveredChunk.objectManager.staticGraph = DirectedGraph.parse([[51, []]]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       board: createBoardWithObjects([object]),
@@ -318,7 +318,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     expect(renderer.render()).toEqual([object]);
     expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
@@ -341,7 +341,7 @@ describe("BaseRenderer", () => {
     ]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       chunkWidth: 800,
@@ -357,7 +357,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     renderer.render([new RectangleRange(-1, -1, 20, 20)]);
 
@@ -372,11 +372,11 @@ describe("BaseRenderer", () => {
   test("clearDirtyRects 应把浮点脏区向外扩张到整像素清理矩形", () => {
     const calls = [];
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
     };
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     renderer.clearDirtyRects([new RectangleRange(10.2, 20.4, 5.1, 6.2)]);
 
@@ -394,7 +394,7 @@ describe("BaseRenderer", () => {
     chunk.objectManager.staticGraph = DirectedGraph.parse([[33, []]]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 2,
       chunkWidth: 800,
@@ -410,7 +410,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     renderer.render([new RectangleRange(-4, -4, 1, 1)]);
 
@@ -439,7 +439,7 @@ describe("BaseRenderer", () => {
     rightChunk.objectManager.staticGraph = DirectedGraph.parse([[62, []]]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       chunkWidth: 800,
@@ -455,7 +455,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     renderer.render([new RectangleRange(-2, -2, 20, 10)]);
 
@@ -494,7 +494,7 @@ describe("BaseRenderer", () => {
     chunk3.objectManager.staticGraph = DirectedGraph.parse([[73, []]]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       board: createBoardWithObjects([first, second, third]),
@@ -505,7 +505,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     expect(renderer.render()).toEqual([first, second, third]);
     expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
@@ -546,7 +546,7 @@ describe("BaseRenderer", () => {
     ]);
 
     const canvas = createCanvas(320, 240, () => createContext(calls));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       board: createBoardWithObjects([first, second, third]),
@@ -557,7 +557,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
 
     expect(renderer.render()).toEqual([first, second, third]);
     expect(calls.filter((entry) => entry[0] === "moveTo")).toEqual([
@@ -580,7 +580,7 @@ describe("BaseRenderer", () => {
       rect() {},
       clip() {},
     }));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       chunkWidth: 10,
@@ -591,7 +591,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
     const invalidateSpy = jest
       .spyOn(renderer, "invalidate")
       .mockImplementation(() => false);
@@ -615,7 +615,7 @@ describe("BaseRenderer", () => {
       setTransform() {},
       clearRect() {},
     }));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       worldRectToScreenRect(rect) {
@@ -623,7 +623,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
     const invalidateSpy = jest
       .spyOn(renderer, "invalidate")
       .mockImplementation(() => false);
@@ -658,7 +658,7 @@ describe("BaseRenderer", () => {
       setTransform() {},
       clearRect() {},
     }));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       worldRectToScreenRect(rect) {
@@ -666,7 +666,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
     const invalidateSpy = jest
       .spyOn(renderer, "invalidate")
       .mockImplementation(() => false);
@@ -702,7 +702,7 @@ describe("BaseRenderer", () => {
       setTransform() {},
       clearRect() {},
     }));
-    const monitor = {
+    const viewport = {
       origin: new Vector(0, 0),
       zoom: 1,
       worldRectToScreenRect(rect) {
@@ -710,7 +710,7 @@ describe("BaseRenderer", () => {
       },
     };
 
-    const renderer = new BaseRenderer(monitor, { canvas });
+    const renderer = new BaseRenderer(viewport, { canvas });
     const invalidateSpy = jest
       .spyOn(renderer, "invalidate")
       .mockImplementation(() => false);

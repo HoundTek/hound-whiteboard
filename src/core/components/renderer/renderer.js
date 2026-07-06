@@ -8,10 +8,8 @@
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange } from "../../range/index.js";
 import { PathRange } from "../../range/path.js";
-import {
-  createRectangleDirtyRectMerger,
-  RenderScheduler,
-} from "./render-scheduler.js";
+import { createRectangleDirtyRectMerger } from "./render-scheduler.js";
+import { CanvasHost } from "./canvas-lifecycle.js";
 
 const PATH_RASTERIZATION_SCREEN_PADDING = 1;
 
@@ -51,52 +49,13 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
  * @class
  * @author Zhou Chenyu
  */
-class Renderer {
+class Renderer extends CanvasHost {
   /**
-   * 绑定的显示器
-   * @type {import("../orchestration/monitor-proxy.js").MonitorProxy}
-   */
-  monitor;
-
-  /**
-   * 目标渲染层画布
-   * @type {HTMLCanvasElement | null}
-   * @protected
-   */
-  _canvas;
-
-  /**
-   * 渲染调度器
-   * @type {RenderScheduler | null}
-   * @protected
-   */
-  _scheduler;
-
-  /**
-   * @param {import("../orchestration/monitor-proxy.js").MonitorProxy} monitor - 目标显示器
+   * @param {import("../orchestration/viewport.js").Viewport} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(monitor, options = {}) {
-    this.monitor = monitor;
-    this._canvas = options.canvas ?? null;
-    this._scheduler = null;
-  }
-
-  /**
-   * 目标渲染层画布
-   * @type {HTMLCanvasElement | null}
-   */
-  get canvas() {
-    return this._canvas;
-  }
-
-  /**
-   * 获取目标渲染层的 2D 上下文
-   * @returns {CanvasRenderingContext2D | null}
-   * @protected
-   */
-  _getContext() {
-    return this._canvas?.getContext?.("2d") ?? null;
+  constructor(viewport, options = {}) {
+    super(viewport, options);
   }
 
   /**
@@ -105,10 +64,9 @@ class Renderer {
    * @protected
    */
   _initScheduler() {
-    this._scheduler = new RenderScheduler({
-      mergeDirtyRects: this._createDirtyRectMerger(),
-      flushHandler: (dirtyRects) => this.flush(dirtyRects),
-    });
+    super._initScheduler(this._createDirtyRectMerger(), (dirtyRects) =>
+      this.flush(dirtyRects),
+    );
   }
 
   /**
@@ -140,7 +98,7 @@ class Renderer {
    * @protected
    */
   _getViewportRect() {
-    return this.monitor?.getViewportScreenRect?.();
+    return this.viewport?.getViewportScreenRect?.();
   }
 
   /**
@@ -151,44 +109,6 @@ class Renderer {
    */
   _getCanonicalRectsForRect(dirtyRect) {
     return [];
-  }
-
-  /**
-   * 提交一次失效请求
-   * @param {any} [rect] - 失效脏区
-   * @returns {boolean}
-   */
-  invalidate(rect) {
-    if (!this._scheduler) return false;
-    return this._scheduler.invalidate(rect);
-  }
-
-  /**
-   * 失效整个视口
-   */
-  invalidateViewport() {
-    const viewportRect = this._getViewportRect();
-    if (viewportRect?.width > 0 && viewportRect?.height > 0) {
-      this.invalidate(viewportRect);
-    }
-  }
-
-  /**
-   * 调整画布尺寸
-   * @param {number} width - 画布宽度
-   * @param {number} height - 画布高度
-   * @returns {boolean} 是否发生了尺寸变化
-   */
-  resize(width, height) {
-    const canvas = this._canvas;
-    if (!canvas) return false;
-    const nextWidth = Number.isFinite(width) ? width : 0;
-    const nextHeight = Number.isFinite(height) ? height : 0;
-    if (canvas.width === nextWidth && canvas.height === nextHeight)
-      return false;
-    canvas.width = nextWidth;
-    canvas.height = nextHeight;
-    return true;
   }
 
   /**
@@ -264,7 +184,7 @@ class Renderer {
     const objectPadding = objectInstance?.getRenderPadding?.();
     const basePadding =
       Number.isFinite(objectPadding) && objectPadding > 0
-        ? objectPadding * (this.monitor?.zoom ?? 1)
+        ? objectPadding * (this.viewport?.zoom ?? 1)
         : 0;
     const objectRange = objectInstance?.getRange?.();
 
@@ -284,7 +204,7 @@ class Renderer {
     const worldRect = this.getObjectWorldRect(objectInstance);
     if (!worldRect) return undefined;
 
-    const screenRect = this.monitor?.worldRectToScreenRect?.(worldRect);
+    const screenRect = this.viewport?.worldRectToScreenRect?.(worldRect);
     if (!screenRect) return undefined;
 
     return screenRect.inflate(this.getObjectScreenPadding(objectInstance));
@@ -413,10 +333,10 @@ class Renderer {
    * @returns {CanvasRenderingContext2D}
    */
   createViewportContext(ctx) {
-    const monitor = this.monitor;
-    const zoom = monitor?.zoom ?? 1;
-    const originX = monitor?.origin?.x ?? 0;
-    const originY = monitor?.origin?.y ?? 0;
+    const viewport = this.viewport;
+    const zoom = viewport?.zoom ?? 1;
+    const originX = viewport?.origin?.x ?? 0;
+    const originY = viewport?.origin?.y ?? 0;
 
     return new Proxy(ctx, {
       get(target, prop, receiver) {

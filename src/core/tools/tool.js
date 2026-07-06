@@ -28,6 +28,7 @@ class Tool {
   _hooks;
 
   /**
+   * 初始化工具实例
    * @constructor
    */
   constructor() {
@@ -46,7 +47,7 @@ class Tool {
 
   /**
    * 序列化工具实例以保存工具数据
-   * @return {Object} 序列化后的工具数据
+   * @returns {Object} 序列化后的工具数据
    * @abstract
    */
   serialize() {
@@ -72,69 +73,83 @@ class Tool {
   }
 
   /**
+   * 在不处理信号的情况下将当前工具的 overlay provider 注册到 viewport。
+   * 供 handoff 等场景在第一个信号到达前调用。
+   * createUiOverlayBinding 内建缓存，重复调用不会重复注册。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  syncUiOverlay(context = {}) {
+    const binding = this.createUiOverlayBinding();
+    binding?.sync(context);
+  }
+
+  /**
    * 为当前工具处理器创建 ui overlay 绑定
    * @returns {{ sync: Function, cleanup: Function } | null}
    */
   createUiOverlayBinding() {
+    if (this._cachedUiOverlayBinding !== undefined) {
+      return this._cachedUiOverlayBinding;
+    }
+
     if (
       this.collectUiOverlayEntries === Tool.prototype.collectUiOverlayEntries
     ) {
+      this._cachedUiOverlayBinding = null;
       return null;
     }
 
-    let latestDeviceContext = {};
-    let registeredMonitor = null;
+    let registeredViewport = null;
     const provider = (overlayContext = {}) =>
       this.collectUiOverlayEntries({
-        ...overlayContext,
-        deviceContext: latestDeviceContext,
+        viewport: overlayContext.viewport,
+        renderer: overlayContext.renderer,
       });
 
-    return {
+    const binding = {
       sync: (context = {}) => {
-        latestDeviceContext = context;
-
-        const monitor = context.acc?.monitor;
-        if (!monitor?.registerUiOverlayProvider) {
+        const viewport = context.acc?.viewport;
+        if (!viewport?.registerUiOverlayProvider) {
           return;
         }
 
-        if (registeredMonitor === monitor) {
+        if (registeredViewport === viewport) {
           return;
         }
 
-        if (registeredMonitor?.unregisterUiOverlayProvider) {
-          registeredMonitor.unregisterUiOverlayProvider(provider, {
+        if (registeredViewport?.unregisterUiOverlayProvider) {
+          registeredViewport.unregisterUiOverlayProvider(provider, {
             invalidate: false,
           });
         }
 
-        registeredMonitor = monitor;
-        monitor.registerUiOverlayProvider(provider, {
+        registeredViewport = viewport;
+        viewport.registerUiOverlayProvider(provider, {
           invalidate: false,
         });
       },
       cleanup: (context = {}) => {
-        latestDeviceContext = context;
-
-        const monitor = registeredMonitor ?? context.acc?.monitor;
-        if (monitor?.unregisterUiOverlayProvider) {
-          monitor.unregisterUiOverlayProvider(provider, {
+        const viewport = registeredViewport ?? context.acc?.viewport;
+        if (viewport?.unregisterUiOverlayProvider) {
+          viewport.unregisterUiOverlayProvider(provider, {
             invalidate: false,
           });
         }
 
-        registeredMonitor = null;
-        latestDeviceContext = {};
-        context.acc?.monitor?.requestViewportUiRender?.();
+        registeredViewport = null;
+        context.acc?.viewport?.requestViewportUiRender?.();
       },
     };
+
+    this._cachedUiOverlayBinding = binding;
+    return binding;
   }
 
   /**
-   * 读取当前路径关联的节点状态。
+   * 读取当前路径关联的节点状态
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @param {string} [statePath=deviceContext.path] - 节点路径
+   * @param {string} [statePath=context.path] - 节点路径
    * @returns {Object}
    */
   resolveNodeState(context = {}, statePath = context.path) {
@@ -146,10 +161,10 @@ class Tool {
   }
 
   /**
-   * 写入当前路径关联的节点状态。
+   * 写入当前路径关联的节点状态
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Object} nextState - 新状态
-   * @param {string} [statePath=deviceContext.path] - 节点路径
+   * @param {string} [statePath=context.path] - 节点路径
    * @returns {Object}
    */
   writeNodeState(context = {}, nextState, statePath = context.path) {
@@ -161,7 +176,7 @@ class Tool {
   }
 
   /**
-   * 将单对象或对象集合规整为数组。
+   * 将单对象或对象集合规整为数组
    * @param {Iterable<*>|*} objects - 原始对象或对象集合
    * @returns {Array<*>}
    */
@@ -179,7 +194,7 @@ class Tool {
   }
 
   /**
-   * 从设备上下文中解析当前对象集合。
+   * 从设备上下文中解析当前对象集合
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Array<*>}
    */
@@ -220,7 +235,7 @@ class Tool {
   }
 
   /**
-   * 将对象集合写回设备上下文与节点上下文。
+   * 将对象集合写回设备上下文与节点上下文
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合
    * @returns {Array<*>}
@@ -246,7 +261,7 @@ class Tool {
   }
 
   /**
-   * 清理设备上下文中的对象引用。
+   * 清理设备上下文中的对象引用
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
@@ -263,20 +278,23 @@ class Tool {
 
   /**
    * 收集当前工具声明的 ui overlay 条目
-   * @param {{ deviceContext?: Object, monitor?: Object, activeObjectManager?: Object, renderer?: Object }} [_overlayContext={}] - overlay 上下文
-   * @returns {Array<*>}
+   * @param {{
+   *   viewport?: import("../components/orchestration/viewport.js").Viewport,
+   *   renderer?: import("../components/renderer/ui-renderer.js").UiRenderer,
+   * }} [_overlayContext={}] - overlay 上下文
+   * @returns {import("../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(_overlayContext = {}) {
     return [];
   }
 
   /**
-   * 主动请求 ui overlay 重绘。
+   * 主动请求 ui overlay 重绘
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   requestUiOverlayRefresh(context = {}) {
-    context.acc?.monitor?.requestViewportUiRender?.();
+    context.acc?.viewport?.requestViewportUiRender?.();
   }
 
   /**
@@ -306,8 +324,8 @@ class Tool {
 
   /**
    * 触发钩子（仅用于通知型钩子，不涉及控制流）
-   * @param {string} hookName
-   * @param  {...any} args
+   * @param {string} hookName - 钩子名称
+   * @param {...any} args - 传递给监听器的参数
    * @protected
    */
   _emit(hookName, ...args) {
@@ -328,7 +346,7 @@ class Tool {
   }
 
   /**
-   * 工具节点被卸载时执行清理。
+   * 工具节点被卸载时执行清理
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */

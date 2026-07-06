@@ -31,7 +31,7 @@ describe("prefix-node", () => {
               type: "handled",
               context: {
                 count:
-                  context.getNodeState("/monitor/workflow")?.lastSignalCount ??
+                  context.getNodeState("/viewport/workflow")?.lastSignalCount ??
                   -1,
               },
             },
@@ -42,14 +42,14 @@ describe("prefix-node", () => {
     _wfb.edge("tool", _wfr, _wft);
     const prefixSubDAG = _wfb.build();
 
-    dag.mountSubDAG("/monitor", prefixSubDAG);
+    dag.mountSubDAG("/viewport", prefixSubDAG);
 
-    expect(dag.getNode("/monitor/workflow")?.getSemantics()).toEqual({
+    expect(dag.getNode("/viewport/workflow")?.getSemantics()).toEqual({
       prefix: true,
     });
 
     const result = dag.dispatch({
-      to: "/monitor/workflow",
+      to: "/viewport/workflow",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
 
@@ -112,25 +112,25 @@ describe("prefix-node", () => {
     _hfb.edge("edit", _hfr, _hfe);
     const handoffSubDAG = _hfb.build();
 
-    dag.mountSubDAG("/monitor", handoffSubDAG);
+    dag.mountSubDAG("/viewport", handoffSubDAG);
 
     // 第一次 dispatch：状态为 create，路由到 create 子节点
     dag.dispatch({
-      to: "/monitor/handoff",
+      to: "/viewport/handoff",
       signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
     });
     expect(trace).toEqual(["create"]);
 
     // 第二次 dispatch：状态已切换为 edit，路由到 edit 子节点
     dag.dispatch({
-      to: "/monitor/handoff",
+      to: "/viewport/handoff",
       signals: [{ type: "position", context: { value: { x: 3, y: 4 } } }],
     });
     expect(trace).toEqual(["create", "edit"]);
 
     // 第三次 dispatch：edit 又调用了 onSwitch → 切回 create
     dag.dispatch({
-      to: "/monitor/handoff",
+      to: "/viewport/handoff",
       signals: [{ type: "position", context: { value: { x: 5, y: 6 } } }],
     });
     expect(trace).toEqual(["create", "edit", "create"]);
@@ -159,10 +159,10 @@ describe("prefix-node", () => {
     _rpb.edge("tool-b", _rpr, _rpb2);
     const repeatorSubDAG = _rpb.build();
 
-    dag.mountSubDAG("/monitor", repeatorSubDAG);
+    dag.mountSubDAG("/viewport", repeatorSubDAG);
 
     dag.dispatch({
-      to: "/monitor/repeater",
+      to: "/viewport/repeater",
       signals: [{ type: "click", acc: { button: 0 } }],
     });
 

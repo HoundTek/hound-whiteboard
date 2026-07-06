@@ -2,88 +2,142 @@
 
 ## 概述
 
-`RectangleObjectChooserTool` 是当前 demo 默认使用的 chooser 实现。
+`RectangleObjectChooserTool` 通过四个 hook 接入父类的选择手势骨架，提供矩形框选功能。
 
-它提供一条完整链路：
+子类职责限定在"区域是什么"和"区域怎么画"，信号调度与选择生命周期由父类 `ObjectChooserTool` 统一管理。
 
-1. 按下后记录拖拽起点
-2. 拖拽过程中持续维护当前框选矩形
-3. 抬起时按矩形范围命中对象
-4. 用新结果替换上一轮选择
+## hook 实现
+
+```mermaid
+flowchart LR
+    subgraph 父类调度
+        P[process]
+        F[_finalizeSelection]
+        A[_applySelection]
+    end
+
+    subgraph 子类 hook
+        U[updateSelectionRegion]
+        H[hasSelectionRegion]
+        C[clearSelectionRegion]
+        G[getSelectionRegion]
+        O[collectUiOverlayEntries]
+    end
+
+    P -->|position| U
+    P -->|end + H| F
+    F -->|submitSelection →| G
+    F --> A
+    A --> C
+```
+
+### `updateSelectionRegion(position, context)`
+
+每次 position 信号到达时：
+
+1. 从节点 state 读取当前拖拽状态
+2. 若无起点则以当前 position 为起点
+3. 通过 `createSelectionWorldRect` 计算 `startPosition → position` 矩形
+4. 写回节点 state
+
+### `hasSelectionRegion(context)`
+
+检查节点 state 中 `worldRect` 是否存在。
+
+### `clearSelectionRegion(context)`
+
+清空节点 state 中的全部拖拽字段，代理到 `clearSelectionDragState`。
+
+### `getSelectionRegion(context)`
+
+返回节点 state 中的 `worldRect`，供父类默认 `submitSelection` 做命中检测。
 
 ## 拖拽状态
 
-工具通过节点 state 维护：
+节点 state 中的字段：
 
-- `isSelecting`
-- `selectionStart`
-- `selectionCurrent`
-- `selectionWorldRect`
+| 字段                 | 类型             | 说明                 |
+| -------------------- | ---------------- | -------------------- |
+| `isSelecting`        | `boolean`        | 拖拽是否激活         |
+| `selectionStart`     | `Vector`         | 拖拽起点（世界坐标） |
+| `selectionCurrent`   | `Vector`         | 最近一次位置         |
+| `selectionWorldRect` | `RectangleRange` | 当前框选矩形         |
 
-这些状态用于：
-
-- 驱动 end/cancel 时的行为
-- 声明拖拽中的矩形 overlay
+这些状态由 `updateSelectionRegion` 写入，`clearSelectionRegion` 清理。
 
 ## 命中读取
 
-### 拖拽中
+父类 `submitSelection` 的默认实现使用 `getSelectionRegion()` 获取矩形区域：
 
-拖拽中只有本地 state 更新，不发 RPC。
+```mermaid
+sequenceDiagram
+    participant F as _finalizeSelection
+    participant S as submitSelection<br/>（父类默认）
+    participant B as boardApi
 
-### 抬起时
-
-读路径：
-
-```js
-boardApi.hitTest(selectionWorldRect, "intersect")
-  -> objectIds[]
-  -> boardApi.queryObjects(objectIds)
-  -> summaries[]
+    F->>S: getSelectionRegion(ctx)
+    S->>B: hitTest(worldRect, "intersect")
+    B-->>S: objectIds[]
+    S->>B: queryObjects(objectIds)
+    B-->>S: ObjectSummary[]
+    S-->>F: summaries
 ```
 
-因此 `process()` 可能返回 Promise，`finalizeSelection()` 会在 Promise resolve 后执行。
-
-## `replaceSelection()` 语义
-
-`replaceSelection()` 用于替换当前选择：
-
-1. 丢弃上一轮选择
-2. 清空当前 context objects
-3. 解析新选择条目
-4. 将新选择加入 AOM
-5. 把新条目写回 context
-
-Worker mode 下：
-
-- 丢弃：`boardApi.discardActiveObjects(previousIds)`
-- 选择：`boardApi.addActiveObjects(nextIds)`
+异步路径由父类 `_finalizeSelection` 自动处理。
 
 ## overlay
 
-`RectangleObjectChooserTool.collectUiOverlayEntries()` 会在基类默认选择框之外，再附加一条矩形 overlay：
+`collectUiOverlayEntries()` 只返回拖拽过程中的矩形选择框，不返回选中对象的外框高亮：
 
 - `type: "rect"`
 - `worldRect: dragState.worldRect`
-- 半透明蓝色填充 + 边框
+- 半透明蓝色填充 + 1px 虚线边框
 
-## handoff 协作
+```js
+// 颜色常量
+RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE = "#33a1ff";
+RECTANGLE_SELECTION_OVERLAY_FILL_STYLE = "rgba(51, 161, 255, 0.14)";
+RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH = 1;
+RECTANGLE_SELECTION_OVERLAY_LINE_DASH = [4, 4];
+```
 
-`finalizeSelection()` 内部会：
+不调用 `super.collectUiOverlayEntries()`，因此基类 `ObjectChooserTool` 中的选中对象高亮条目不会被收集。
+选中对象的外框由 handoff 切换后的 modifier 负责绘制。
 
-1. `replaceSelection()`
-2. `clearSelectionDragState()`
-3. `afterChoose()`
-4. `confirmSelection()`
-5. `requestUiOverlayRefresh()`
+## 卸载
 
-handoff 通常通过 `afterConfirm` 事件切到 modifier。
+父类 `umount()` 自动调用本工具的 `clearSelectionRegion()`，子类无需重写 `umount`。
 
-## 当前状态
+## 子类职责
 
-- Worker mode 下已接通 `hitTest + queryObjects` 异步读路径
-- 选择替换仍是 fire-and-forget 写路径
-- 拖拽框与选中框都已接通 `UiRenderer`
+```mermaid
+classDiagram
+    class ObjectChooserTool {
+      #process(signalPacket, context)
+      #_finalizeSelection(context)
+      #_applySelection(context, objects)
+      #replaceSelection(context, objects)
+      #submitSelection(context)
+      #updateSelectionRegion(position, context)*
+      #hasSelectionRegion(context)*
+      #clearSelectionRegion(context)*
+      #getSelectionRegion(context)*
+    }
+    class RectangleObjectChooserTool {
+      +createSelectionWorldRect(start, end)
+      -resolveSelectionDragState(context)
+      -writeSelectionDragState(context, state)
+      -clearSelectionDragState(context)
+      #updateSelectionRegion(position, context)
+      #hasSelectionRegion(context)
+      #clearSelectionRegion(context)
+      #getSelectionRegion(context)
+      +collectUiOverlayEntries(overlayContext)
+    }
+    ObjectChooserTool <|-- RectangleObjectChooserTool
+```
+
+子类提供区域 hook 和 overlay 渲染，其余全部由父类完成。
 
 ## 相关文档
 

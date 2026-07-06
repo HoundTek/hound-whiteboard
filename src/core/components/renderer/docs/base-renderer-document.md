@@ -2,8 +2,8 @@
 
 本文档提供 `BaseRenderer` 的概述。
 
-静态层渲染器用于把 `Monitor.chunkLoader` 当前已加载区块中的静态对象，按“已加载区块合并后的全局静态图拓扑序”绘制到 `Monitor.baseCanvas`。
-静态层渲染器用于把 `Monitor.chunkLoader` 当前已加载区块中的静态对象，按“已加载区块合并后的全局静态图拓扑序”绘制到 `Monitor.baseCanvas`。
+静态层渲染器用于把 `ViewportCore.chunkLoader` 当前已加载区块中的静态对象，按"已加载区块合并后的全局静态图拓扑序"绘制到 Worker 侧 base OffscreenCanvas。
+BaseRenderer 仅运行在 Worker 线程（通过 `ViewportCore`），UI 侧不持有对应的 base DOM canvas。
 
 它和 `LiveRenderer` 的边界不同：`LiveRenderer` 负责绘制当前仍在 AOM 中的对象，`BaseRenderer` 负责绘制已经脱离 AOM、稳定存在于白板静态结构中的对象。
 
@@ -13,8 +13,7 @@
 
 - `ActiveObjectManager.apply(objects)` 负责把活动对象写回区块静态结构
 - `ChunkObjectManager` 负责维护静态图与对象覆盖区块索引，`Board` 负责持有对象实例
-- `Monitor.chunkLoader` 负责回答“当前视口缓冲区里有哪些区块”
-- `Monitor.chunkLoader` 负责回答“当前视口缓冲区里有哪些区块”
+- `ViewportCore.chunkLoader` 负责回答“当前视口缓冲区里有哪些区块”
 - `BaseRenderer` 负责回答“这些已加载区块里的静态对象，如何画到 `baseCanvas` 上”
 
 ## 当前职责
@@ -24,7 +23,7 @@
 当前行为是：
 
 1. 从 `chunkLoader.getLoadedChunks()` 读取当前已加载区块
-2. 把这些区块里的 `staticGraph` 合并成一个 monitor 级全局静态图
+2. 把这些区块里的 `staticGraph` 合并成一个 viewport 级全局静态图
 3. 对合并后的全局静态图执行一次拓扑排序
 4. 通过 `ActiveObjectManager.findBoardObjectInstance(...)` 回查对象实例，并按对象 id 去重
 5. 为对象计算屏幕包围盒，并叠加对象自身按 `property` 动态推导的 `getRenderPadding()` 留白
@@ -54,7 +53,7 @@
 ### 构造参数
 
 ```javascript
-const renderer = new BaseRenderer(monitor, { canvas: baseCanvas });
+const renderer = new BaseRenderer(viewport, { canvas: baseCanvas });
 ```
 
 - 第二参数传入 `canvas` 实例
@@ -82,18 +81,18 @@ const renderer = new BaseRenderer(monitor, { canvas: baseCanvas });
 当前已接入三类触发时机：
 
 - `ActiveObjectManager.apply(objects)` 完成静态结构写回后，优先请求对象级失效（`baseRenderer.invalidateObjects(...)`）；若无法做对象级失效，再回退到"旧覆盖区块 + 新覆盖区块"并集
-- `ChunkLoader` 缓冲区更新后，`Monitor.requestViewportBaseRender()` 调用 `baseRenderer.invalidateChunks()`，将新旧区块的屏幕矩形送入 base 调度器
-- `Monitor.origin / zoom` 变化后，同样通过 `requestViewportBaseRender` 触发区块级失效
+- `ChunkLoader` 缓冲区更新后，`Viewport.requestViewportBaseRender()` 调用 `baseRenderer.invalidateChunks()`，将新旧区块的屏幕矩形送入 base 调度器
+- `Viewport.origin / zoom` 变化后，同样通过 `requestViewportBaseRender` 触发区块级失效
 
 ## 当前实现状态
 
 - 已实现：按已加载区块收集静态对象、按已加载区块合并后的全局静态图拓扑序绘制、跨区块重复对象去重、显式 dirty rect 局部清理与局部重绘、局部补绘 clip、对象级 `getRenderPadding()` 动态留白、对象级静态失效。
-- 已接入：自管理 baseCanvas、`RenderScheduler`、脏区合并策略；`Monitor` 持有 `baseRenderer` 实例，通过 `requestViewportBaseRender()` / `flushViewportRender()` 触发 base 层刷新；`ActiveObjectManager.apply(objects)` 已会优先按对象旧/新范围触发 base 层刷新；区块缓冲区变化与视口变化也会自动触发 base 层刷新。
+- 已接入：自管理 baseCanvas、`RenderScheduler`、脏区合并策略；`Viewport` 持有 `baseRenderer` 实例，通过 `requestViewportBaseRender()` / `flushViewportRender()` 触发 base 层刷新；`ActiveObjectManager.apply(objects)` 已会优先按对象旧/新范围触发 base 层刷新；区块缓冲区变化与视口变化也会自动触发 base 层刷新。
 - 对象级失效的屏幕脏区不在 `invalidateObjects` 中预合并，而是原样提交给调度器，由 `RenderScheduler.flush()` 统一合并与 canonical rect 塌缩，避免预合并时的区域丢失。
 - 待完善：按对象真实像素进一步细化静态层脏区、按区块裁剪重绘、区块增量补绘、缩放平移下更细粒度的静态层缓存策略。
 
 ## 相关文档
 
-- [monitor-document.md](../../orchestration/docs/monitor-document.md)
+- [viewport-document.md](../../orchestration/docs/viewport-document.md)
 - [live-renderer-document.md](./live-renderer-document.md)
 - [active-object-manager-document.md](../../orchestration/docs/active-object-manager-document.md)

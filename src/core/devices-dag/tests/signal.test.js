@@ -8,9 +8,9 @@ describe("SignalPacket", () => {
       signals: [],
     });
 
-    expect(SignalPacket.from({ to: "/monitor" })).toBeInstanceOf(SignalPacket);
-    expect(SignalPacket.from({ to: "/monitor" })).toEqual({
-      to: "/monitor",
+    expect(SignalPacket.from({ to: "/viewport" })).toBeInstanceOf(SignalPacket);
+    expect(SignalPacket.from({ to: "/viewport" })).toEqual({
+      to: "/viewport",
       signals: [],
     });
   });
@@ -20,11 +20,11 @@ describe("SignalPacket", () => {
     expect(SignalPacket.normalizeResult(null)).toEqual([]);
     expect(SignalPacket.normalizeResult(undefined)).toEqual([]);
 
-    const packet = new SignalPacket("/monitor", [{ type: "position" }]);
+    const packet = new SignalPacket("/viewport", [{ type: "position" }]);
     expect(SignalPacket.normalizeResult(packet)).toEqual([packet]);
     expect(SignalPacket.normalizeResult([packet])).toEqual([packet]);
     expect(
-      SignalPacket.normalizeResult({ to: "/monitor", signals: [] }),
-    ).toEqual([{ to: "/monitor", signals: [] }]);
+      SignalPacket.normalizeResult({ to: "/viewport", signals: [] }),
+    ).toEqual([{ to: "/viewport", signals: [] }]);
   });
 });

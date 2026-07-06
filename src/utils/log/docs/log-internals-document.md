@@ -214,7 +214,7 @@ child(subName, extraMeta) {
 }
 ```
 
-- 命名空间用 `:` 拼接形成路径，如 `"Monitor:BaseRenderer"`。
+- 命名空间用 `:` 拼接形成路径，如 `"Viewport:BaseRenderer"`。
 - `_meta` 使用 `_` 前缀（非 `#` 私有字段），因为 child 需要读取父级的 meta。
 - 额外的 meta（如 `{ chunkId: 5 }`）会被合并到父 meta 之上。
 

@@ -138,26 +138,26 @@ import { dagToString } from "./dag-debug.js";
  *
  * @author Zhou Chenyu
  * @example
- * // 基础用法：通过 configureNode 配置 Monitor 下的设备路由，再分发信号
+ * // 基础用法：通过 configureNode 配置 Viewport 下的设备路由，再分发信号
  * const dag = new DevicesDAG();
  *
- * // 标记 Monitor 根节点（通常由 Board.createMonitor 自动完成）
- * dag.configureNode("/monitor", { semantics: { monitor: true } });
+ * // 标记 Viewport 根节点（通常由 Board.createViewport 自动完成）
+ * dag.configureNode("/viewport", { semantics: { viewport: true } });
  *
- * // 配置 Monitor 下的设备路由节点
- * dag.configureNode("/monitor/mouse", { defaultRoute: "primary" });
- * dag.configureNode("/monitor/mouse/primary", {
+ * // 配置 Viewport 下的设备路由节点
+ * dag.configureNode("/viewport/mouse", { defaultRoute: "primary" });
+ * dag.configureNode("/viewport/mouse/primary", {
  *   handler(pkt, ctx) {
  *     return { stop: true, packets: [pkt] };
  *   },
  * });
  *
  * // 挂载 workflow 工具实例
- * dag.mountWorkflow("/monitor/workflows/pen", myPenTool, { board });
+ * dag.mountWorkflow("/viewport/workflows/pen", myPenTool);
  *
  * // 分发信号
  * dag.dispatch({
- *   to: "/monitor/mouse",
+ *   to: "/viewport/mouse",
  *   signals: [{ type: "pointerdown", x: 100, y: 200 }],
  * });
  *
@@ -602,9 +602,8 @@ class DevicesDAG {
    * 挂载结构化子图
    * @param {string} basePath - 挂载基准路径
    * @param {SubDAGDefinition} subDAGDef - 子图定义
-   * @param {Object} [context={}] - 挂载时累积上下文
    */
-  mountSubDAG(basePath, subDAGDef, context = {}) {
+  mountSubDAG(basePath, subDAGDef) {
     if (!subDAGDef || typeof subDAGDef !== "object") return [];
 
     const { rootPath = "/", rootNodeId = 0, nodes, edges = [] } = subDAGDef;
@@ -743,6 +742,13 @@ class DevicesDAG {
       },
       getNodeState: (pathOrId = path) => this.getNodeState(pathOrId),
       setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
+      delNodeState(pathOrId = path, ...keys) {
+        const current = this.getNodeState(pathOrId);
+        for (const key of keys) {
+          delete current[key];
+        }
+        this.setNodeState(pathOrId, current);
+      },
       routeToChild(to, signals = signalPacket?.signals) {
         return { packets: [new SignalPacket(to, signals)] };
       },

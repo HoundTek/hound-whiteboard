@@ -1,7 +1,7 @@
 /**
- * @file 白板组件（UI Façade）
+ * @file UI 侧白板 facade
  * @description
- * Board 类是白板在 UI 线程的宿主 façade，负责持有 DevicesDAG、signalsEventBus、monitors 等 UI 运行时，
+ * Board 类是白板在 UI 线程的宿主 facade，负责持有 DevicesDAG、signalsEventBus、viewports 等 UI 运行时，
  * 并将 Core 数据职责（对象注册、区块加载、AOM、UndoTree、持久化）委托给 BoardCore。
  * 一个 Board 实例对应一个白板管辖。
  * @module core/components/board
@@ -17,7 +17,7 @@ import { createBoardRenderHooks } from "./board-render-hooks.js";
 import { createRendererPersistenceAdapter } from "../../bridges/persistence-adapter.js";
 import { boardFileOperateBridge } from "../../bridges/file-operate-bridge-renderer.js";
 import { BoardApiRpc } from "../../bridges/board-api.js";
-import { MonitorProxy } from "./monitor-proxy.js";
+import { Viewport } from "./viewport.js";
 
 function isValidBoardRootPath(boardRootPath) {
   return typeof boardRootPath === "string" && boardRootPath.trim() !== "";
@@ -26,16 +26,16 @@ function isValidBoardRootPath(boardRootPath) {
 /**
  * Board 运行时节点配置事件载荷。
  * @typedef {Object} BoardConfigureEventPayload
- * @property {string} to - 目标设备图节点绝对路径，必须包含 monitorId
+ * @property {string} to - 目标设备图节点绝对路径，必须包含 viewportId
  * @property {import("../../devices-dag/dag.js").DevicesDAGNodeConfig} options - 要更新到节点上的配置片段；`defaultRoute` 传 `null` 或空串表示清空，`handler` 传 `null` 表示清空
  */
 
 /**
- * 白板类（UI Façade）
+ * 白板类（UI Facade）
  * @description
  * Board 是白板在 UI 线程的运行时宿主，不再直接承担所有 Core 数据职责。
  * 内部持有 BoardCore 实例，Core 侧的数据与方法通过委托访问。
- * 保留 DevicesDAG、signalsEventBus、monitors、createMonitor() 等 UI 专用能力。
+ * 保留 DevicesDAG、signalsEventBus、viewports、createViewport() 等 UI 专用能力。
  * @class
  * @author Zhou Chenyu
  */
@@ -65,12 +65,6 @@ class Board {
   undoTree;
 
   /**
-   * 活动对象管理器（委托至 BoardCore）
-   * @type {import("./active-object-manager.js").ActiveObjectManager}
-   */
-  activeObjectManager;
-
-  /**
    * 当前已知区块的统一加载状态（委托至 BoardCore）
    * @type {Map<number, BoardChunkLoadedState>}
    */
@@ -81,6 +75,15 @@ class Board {
    * @type {Map<number, BoardObjectLoadedState>}
    */
   objectLoaded;
+
+  /**
+   * AOM 在 Worker 侧运行，UI 侧可通过本 getter 访问 BoardCore 持有的 AOM 引用。
+   * Worker 模式下此引用为本地镜像，真实活跃对象状态在 Worker 侧。
+   * @type {import("./active-object-manager.js").ActiveObjectManager | undefined}
+   */
+  get activeObjectManager() {
+    return this.#boardCore?.activeObjectManager;
+  }
 
   /**
    * 区块加载事件总线（委托至 BoardCore）
@@ -131,10 +134,10 @@ class Board {
   }
 
   /**
-   * 显示器列表
-   * @type {Map<string, Monitor | MonitorProxy>}
+   * 视口列表
+   * @type {Map<string, Viewport>}
    */
-  monitors;
+  viewports;
 
   /**
    * 信道事件总线
@@ -156,11 +159,8 @@ class Board {
    * }} [options={}] - 白板初始化选项
    */
   constructor(options = {}) {
-    // 1. 创建 UI 侧渲染钩子（在 monitors Map 准备好之前先创建，实际连接在 createMonitor 后生效）
-    const renderHooks = createBoardRenderHooks(
-      () => this.monitors,
-      () => this.activeObjectManager?.activeObjects,
-    );
+    // 1. 创建 UI 侧渲染钩子（在 viewports Map 准备好之前先创建，实际连接在 createViewport 后生效）
+    const renderHooks = createBoardRenderHooks(() => this.viewports);
 
     // 2. 创建持久化适配器
     const effectiveRootPath = isValidBoardRootPath(options.rootPath)
@@ -188,14 +188,12 @@ class Board {
     this.objectLoaded = this.#boardCore.objectLoaded;
     this.chunkLoadEventBus = this.#boardCore.chunkLoadEventBus;
     this.rootChunkLoader = this.#boardCore.rootChunkLoader;
-    this.activeObjectManager = this.#boardCore.activeObjectManager;
-
     // 5. BoardApiRpc 实例初始为 null，通过 enableWorkerMode 初始化
     this.#boardApi = null;
 
     // 6. UI 专用初始化
     this.#worker = null;
-    this.monitors = new Map();
+    this.viewports = new Map();
     this.signalsEventBus = new EventBus();
     this.devicesDAG = new DevicesDAG({
       maxDispatchDepth: 32,
@@ -376,10 +374,10 @@ class Board {
   }
 
   /**
-   * 启用 Worker 模式
+   * 通过 Worker 初始化 BoardApiRpc 与 BoardCore
    * @description
-   * 该方法会创建 BoardApiRpc 并在 Worker 中初始化 BoardCore。
-   * 当前实现要求在创建任何 monitor 之前调用，避免运行中切换 monitor 实现。
+   * 创建 BoardApiRpc 并在 Worker 中初始化 BoardCore。
+   * 必须在创建任何 viewport 之前调用。
    * @param {{ postMessage: Function, addEventListener: Function, removeEventListener: Function }} worker - Worker 或兼容端点
    * @param {{ timeoutMs?: number, readyTimeoutMs?: number }} [options={}] - RPC 选项
    * @returns {Promise<BoardApiRpc>} 已就绪的 BoardApiRpc
@@ -389,8 +387,8 @@ class Board {
       return this.#boardApi;
     }
 
-    if (this.monitors.size > 0) {
-      throw new Error("enableWorkerMode must be called before createMonitor.");
+    if (this.viewports.size > 0) {
+      throw new Error("enableWorkerMode must be called before createViewport.");
     }
 
     const boardApi = new BoardApiRpc(worker, options);
@@ -415,82 +413,77 @@ class Board {
   }
 
   /**
-   * 创建绑定到当前 Board 的 MonitorProxy
-   * @description 会同时创建 base/live/ui 三层 canvas，并把 monitor 注册到 `Board.monitors`。
-   *   必须启用 Worker 模式后方可调用。
-   * @param {HTMLElement} rootElement - Monitor 的根元素
-   * @param {{ width: number, height: number }} options - Monitor 尺寸选项
-   * @param {string} monitorId - Monitor id
-   * @returns {MonitorProxy}
+   * 创建绑定到当前 Board 的 Viewport
+   * @description 会同时创建 base/live/ui 三层 canvas，并把 viewport 注册到 `Board.viewports`。
+   *   必须在 `enableWorkerMode` 之后调用。
+   * @param {HTMLElement} rootElement - Viewport 的根元素
+   * @param {{ width: number, height: number }} options - Viewport 尺寸选项
+   * @param {string} viewportId - Viewport id
+   * @returns {Viewport}
    */
-  createMonitor(rootElement, { width, height }, monitorId) {
+  createViewport(rootElement, { width, height }, viewportId) {
     if (!this.#worker) {
       throw new Error(
-        "createMonitor requires Worker mode to be enabled. Call enableWorkerMode first.",
+        "createViewport requires Worker mode to be enabled. Call enableWorkerMode first.",
       );
     }
 
-    const monitorWidth = width ?? this.chunkWidth;
-    const monitorHeight = height ?? this.chunkHeight;
-    const monitorRoot = document.createElement("div");
-    const baseCanvas = document.createElement("canvas");
-    const liveCanvas = document.createElement("canvas");
+    const viewportWidth = width ?? this.chunkWidth;
+    const viewportHeight = height ?? this.chunkHeight;
+    const viewportRoot = document.createElement("div");
+    const canvas = document.createElement("canvas");
     const uiCanvas = document.createElement("canvas");
 
-    monitorRoot.id = `monitor-root-${monitorId}`;
-    monitorRoot.className = "monitor-root";
-    monitorRoot.style.width = `${monitorWidth}px`;
-    monitorRoot.style.height = `${monitorHeight}px`;
+    viewportRoot.id = `viewport-root-${viewportId}`;
+    viewportRoot.className = "viewport-root";
+    viewportRoot.style.width = `${viewportWidth}px`;
+    viewportRoot.style.height = `${viewportHeight}px`;
 
-    baseCanvas.id = `monitor-base-canvas-${monitorId}`;
-    baseCanvas.className = "monitor-layer monitor-layer-base";
-    liveCanvas.id = `monitor-canvas-${monitorId}`;
-    liveCanvas.className = "monitor-layer monitor-layer-live";
+    canvas.id = `viewport-canvas-${viewportId}`;
+    canvas.className = "viewport-layer viewport-layer-live";
 
-    uiCanvas.id = `monitor-ui-canvas-${monitorId}`;
-    uiCanvas.className = "monitor-layer monitor-layer-ui";
+    uiCanvas.id = `viewport-ui-canvas-${viewportId}`;
+    uiCanvas.className = "viewport-layer viewport-layer-ui";
 
-    monitorRoot.appendChild(baseCanvas);
-    monitorRoot.appendChild(liveCanvas);
-    monitorRoot.appendChild(uiCanvas);
-    rootElement.appendChild(monitorRoot);
+    viewportRoot.appendChild(canvas);
+    viewportRoot.appendChild(uiCanvas);
+    rootElement.appendChild(viewportRoot);
 
-    const monitor = new MonitorProxy(
+    const viewport = new Viewport(
       {
-        rootElement: monitorRoot,
-        baseCanvas,
-        liveCanvas,
+        rootElement: viewportRoot,
+        canvas,
         uiCanvas,
         worker: this.#worker,
       },
       this,
       {
-        width: monitorWidth,
-        height: monitorHeight,
+        width: viewportWidth,
+        height: viewportHeight,
       },
-      monitorId,
+      viewportId,
     );
 
-    this.monitors.set(monitorId, monitor);
-    this.devicesDAG.configureNode(monitorId, {
-      handler: () => ({ acc: { monitor } }),
-      semantics: { monitor: true },
+    this.viewports.set(viewportId, viewport);
+    this.devicesDAG.configureNode(viewportId, {
+      handler: () => ({ acc: { viewport } }),
+      semantics: { viewport: true },
     });
 
     this.#boardApi
-      .createMonitor({
-        monitorId,
-        width: monitorWidth,
-        height: monitorHeight,
+      .createViewport({
+        viewportId,
+        width: viewportWidth,
+        height: viewportHeight,
       })
       .then(() => {
-        monitor.startWorkerSync?.();
+        viewport.startWorkerSync?.();
       })
       .catch((error) => {
-        console.error("[Board] Failed to create worker monitor:", error);
+        console.error("[Board] Failed to create worker viewport:", error);
       });
 
-    return monitor;
+    return viewport;
   }
 
   /**
@@ -500,9 +493,9 @@ class Board {
   #bindSignalsEventBus() {
     // input 事件负责将信号送往对应节点
     this.signalsEventBus.on("input", ({ to, signals }) => {
-      const monitorId = to.split("/")[1];
-      const monitor = this.monitors.get(monitorId);
-      if (monitor) {
+      const viewportId = to.split("/")[1];
+      const viewport = this.viewports.get(viewportId);
+      if (viewport) {
         this.devicesDAG.dispatch(
           { to, signals },
           { board: this, boardApi: this.#boardApi },
@@ -510,24 +503,20 @@ class Board {
       }
     });
 
-    const resolveWorkflowPath = (monitorId, name) =>
-      `/${monitorId}/workflows/${name}`;
+    const resolveWorkflowPath = (viewportId, name) =>
+      `/${viewportId}/workflows/${name}`;
 
     // mount 事件负责挂载 workflow 到设备图。
     this.signalsEventBus.on(
       "mount",
-      ({ monitorId, name, workflow, edges = [] } = {}) => {
-        const monitor = this.monitors.get(monitorId);
-        if (!monitor || !name || !workflow) return false;
+      ({ viewportId, name, workflow, edges = [] } = {}) => {
+        const viewport = this.viewports.get(viewportId);
+        if (!viewport || !name || !workflow) return false;
 
-        const workflowPath = resolveWorkflowPath(monitorId, name);
+        const workflowPath = resolveWorkflowPath(viewportId, name);
         const mountedNode = this.devicesDAG.mountWorkflow(
           workflowPath,
           workflow,
-          {
-            board: this,
-            monitor,
-          },
         );
 
         /**
@@ -546,7 +535,7 @@ class Board {
         };
 
         for (const { from, edge, prefix } of edges) {
-          const sourcePath = `/${monitorId}${from}`;
+          const sourcePath = `/${viewportId}${from}`;
 
           if (prefix) {
             const prefixSubDAG = { ...prefix, rootPath: `/${edge}` };
@@ -570,17 +559,17 @@ class Board {
     // umount 事件负责从设备图卸载 workflow。
     this.signalsEventBus.on(
       "umount",
-      ({ monitorId, name, edges = [] } = {}) => {
-        const monitor = this.monitors.get(monitorId);
-        if (!monitor || !name) return false;
+      ({ viewportId, name, edges = [] } = {}) => {
+        const viewport = this.viewports.get(viewportId);
+        if (!viewport || !name) return false;
 
-        const workflowPath = resolveWorkflowPath(monitorId, name);
+        const workflowPath = resolveWorkflowPath(viewportId, name);
         for (const { from, edge } of edges) {
-          this.devicesDAG.removeEdge(`/${monitorId}${from}`, edge);
+          this.devicesDAG.removeEdge(`/${viewportId}${from}`, edge);
         }
 
         return this.devicesDAG.unmountWorkflow(workflowPath, {
-          acc: { board: this, boardApi: this.#boardApi, monitor },
+          acc: { board: this, boardApi: this.#boardApi, viewport },
         });
       },
     );

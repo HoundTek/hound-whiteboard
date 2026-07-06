@@ -6,7 +6,7 @@
 
 当前 creator 族运行在 UI 线程，但真实对象创建发生在 Worker 侧：
 
-- UI 线程维护手势期本地状态 `_local`
+- UI 线程维护手势期本地状态 `_entry`（遵循 `LightweightObjectEntry` 协议）
 - Worker 侧通过 `BoardApiRpc` 创建真实对象并进入 AOM
 - 完成后由 creator 自己决定提交到静态图，或交给 handoff 中的 modifier 继续处理
 
@@ -14,14 +14,16 @@
 
 creator 不再持有本地 `BasicObject` 实例。
 
-当前统一使用 `_local` 纯数据对象：
+当前统一使用 `_entry` 纯数据对象，遵循 `LightweightObjectEntry` 协议：
 
 ```js
 {
-  id,
-  position: Vector,
+  id: number,
+  type: string,                      // 对象类型名（如 "StrokeObject"）
+  position: Vector | { x, y },
+  boundingBox?: { left, top, width, height },  // 完成创建后回填
   property: Record<string, any>,
-  data: Record<string, any>,
+  data: Record<string, any>,         // 类型专属几何数据
 }
 ```
 
@@ -31,7 +33,21 @@ creator 不再持有本地 `BasicObject` 实例。
 - 供 handoff / node state / 测试读取
 - 在 UI 线程上同步更新本地草稿
 
-Worker 侧真实对象与 `_local` 通过 `objectId` 关联，但引用互不共享。
+Worker 侧真实对象与 `_entry` 通过 `objectId` 关联，但引用互不共享。
+
+## 完成时回填 `boundingBox`
+
+`finalizeCreatedObject` 中调用 `resolveCreatedObjectBoundingBox()` 钩子，将计算出的局部外接矩形写入 `_entry.boundingBox`。
+
+各子类的实现：
+
+| 子类                 | 计算方式                                                       |
+| -------------------- | -------------------------------------------------------------- |
+| `StrokeCreatorTool`  | `data.points` 的 min/max                                       |
+| `CircleCreatorTool`  | `data.radius` → `{ left: -r, top: -r, width: 2r, height: 2r }` |
+| `PolygonCreatorTool` | `data.points` 的 min/max                                       |
+
+回填 `boundingBox` 后，当 handoff 把 `_entry` 桥接给 modifier 时，modifier 可以直接做准入检测（`resolveModifiedObjectWorldRect`）和 overlay 渲染。
 
 ## objectId 分配
 
@@ -88,10 +104,12 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 
 流程：
 
-1. 首个 `position` → `ensureObject()` → `beginCreationGesture()`
-2. 后续 `position` → `updateCreationGesture()`
-3. `end` → `completeCreationGesture()` → `completeCreatedObject()`
-4. `cancel` → `cancelCreatedObject()`
+1. 首个 `position` → `ensureObject()` → `beginGesture()`
+2. 后续 `position` → `updateGesture()`
+3. `end` → `completeGesture()` → `completeAction()`
+4. `cancel` → `cancelGesture()` → `discardAction()`
+
+`GestureTool.process()` 自动编排：首个 position 触发 begin，后续 position 触发 update，end 触发 completeGesture + `autoActionOnGestureEnd ? completeAction : nop`。
 
 ### `MultiGestureObjectCreatorTool`
 
@@ -99,7 +117,7 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 
 - `PolygonCreatorTool`
 
-流程：
+多手势语义通过覆写 `GestureTool._onEnd/_onCancel/_onObjectEnd/_onObjectCancel` 实现：
 
 - `end` / `cancel` 只结束当前手势
 - `object-end` / `object-cancel` 才结束整个对象
@@ -111,38 +129,40 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 决定 `finalize` 后是否把对象提交到静态图。
 
 - 默认返回 `true`
-- handoff 模式下覆盖为 `false`，对象继续留在 AOM 动态图中
+- handoff 模式下通过注入 `context.acc.autoCommit = false` 阻止提交，对象继续留在 AOM 动态图中
 
 ### `afterCompleteCreatedObject(interaction, completedObject)`
 
-创建流程完成后触发 `afterCreate` 事件。handoff 通过它从 creator 切换到 modifier。
+创建流程完成后的扩展钩子。
+
+`action:complete` 事件在 `completeAction` 中统一触发。
 
 ## 与 handoff 的关系
 
 creator 不直接持有 modifier 引用。
 
-handoff 的接入点只有两处：
+handoff 的接入点：
 
-1. `beforeCommitCreatedObject()`
-2. `afterCreate` 生命周期事件
+1. `beforeCommitCreatedObject()` — 被 `context.acc.autoCommit` 取代拦截职责
+2. `action:complete` 事件 — handoff `wrapToolForHandoff` 订阅该事件
 
-当前 `autoBridgeObjects` 会把 creator 节点 state 中的 `_local` 条目桥接给 modifier 节点，供后续修改继续使用。
+创建完成后，handoff wrapper 从 `action:complete` 事件结果中取得 `_entry`，通过 `context.acc.setHandoffObjects()` 写入 handoff 闭包变量。下次 dispatch 时 `resolveTransition` 从闭包读取，通过 `acc.objects` 注入给 modifier。
 
 ## 子类差异
 
 ### `StrokeCreatorTool`
 
-- `_local.data.points` 维护局部路径点列
+- `_entry.data.points` 维护局部路径点列
 - 每次 position 追加一个点
 
 ### `CircleCreatorTool`
 
-- `_local.data.radius` 维护半径
+- `_entry.data.radius` 维护半径
 - 小拖拽距离会回退到固定半径策略
 
 ### `PolygonCreatorTool`
 
-- `_local.data.points` 维护顶点列表
+- `_entry.data.points` 维护顶点列表
 - 通过 `appendPoint()` / `replacePoint()` 更新当前顶点
 
 ## 当前状态

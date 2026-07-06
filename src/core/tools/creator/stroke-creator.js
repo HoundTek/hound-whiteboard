@@ -23,9 +23,9 @@ import { Vector } from "../../utils/math.js";
 class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   /**
    * 当前正在创建笔画对象的本地状态
-   * @type {{ id: number, position: Vector, property: Record<string,any>, data: { points: Array<{x:number, y:number}> } } | null}
+   * @type {import("../../shared/types.js").LightweightObjectEntry & { data: { points: Array<{x:number, y:number}> } } | null}
    */
-  _local;
+  _entry;
 
   /**
    * 笔画对象的属性
@@ -59,8 +59,9 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   create(p, id) {
-    this._local = {
+    this._entry = {
       id,
+      type: "StrokeObject",
       position: new Vector(p.x, p.y),
       property: { ...this.property },
       data: { points: [] },
@@ -73,7 +74,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
    * @returns {Vector}
    */
   toLocalPoint(position) {
-    return position.sub(this._local.position);
+    return position.sub(this._entry.position);
   }
 
   /**
@@ -82,7 +83,7 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
    * @param {Object} interaction - 当前交互上下文
    */
   appendPathPoint(point, interaction) {
-    const points = this._local?.data?.points;
+    const points = this._entry?.data?.points;
     const currentLastPoint =
       points?.length > 0 ? points[points.length - 1] : undefined;
     if (
@@ -92,8 +93,8 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
       return;
     }
 
-    if (this._local) {
-      this._local.data.points.push({ x: point.x, y: point.y });
+    if (this._entry) {
+      this._entry.data.points.push({ x: point.x, y: point.y });
     }
 
     const boardApi = interaction?.context?.acc?.boardApi;
@@ -106,16 +107,17 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     this._lastLocalPoint = new Vector(point.x, point.y);
   }
 
-  beginCreationGesture(interaction) {
+  beginGesture(interaction) {
     this._lastLocalPoint = null;
     this.appendPathPoint(this.toLocalPoint(interaction.position), interaction);
   }
 
-  updateCreationGesture(interaction) {
+  updateGesture(interaction) {
     this.appendPathPoint(this.toLocalPoint(interaction.position), interaction);
+    this.afterGeometryMutation(interaction);
   }
 
-  completeCreationGesture(interaction) {
+  completeGesture(interaction) {
     if (interaction.position) {
       this.appendPathPoint(
         this.toLocalPoint(interaction.position),
@@ -124,8 +126,30 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
     }
   }
 
+  /**
+   * 根据累积的路径点计算局部外接矩形
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {{ left: number, top: number, width: number, height: number }|undefined}
+   * @protected
+   */
+  resolveCreatedObjectBoundingBox(interaction) {
+    const points = this._entry?.data?.points;
+    if (!points || points.length === 0) return undefined;
+    let minX = Infinity,
+      minY = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { left: minX, top: minY, width: maxX - minX, height: maxY - minY };
+  }
+
   reset() {
-    this._local = null;
+    this._entry = null;
     this.objectId = null;
     this._lastLocalPoint = null;
   }

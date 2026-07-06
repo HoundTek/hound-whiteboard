@@ -5,11 +5,9 @@
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../../devices-dag/signal.js";
 import { RectangleRange } from "../../range/index.js";
 import { Vector } from "../../utils/math.js";
 import { ObjectChooserTool } from "./object-chooser.js";
-import { BasicObject } from "../../objects/basic-obj.js";
 
 const RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE = "#33a1ff";
 const RECTANGLE_SELECTION_OVERLAY_FILL_STYLE = "rgba(51, 161, 255, 0.14)";
@@ -37,7 +35,18 @@ const RECTANGLE_SELECTION_OVERLAY_LINE_DASH = Object.freeze([4, 4]);
  */
 class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
-   * @returns {void}
+   * overlay 渲染用——当前框选拖拽状态
+   * @type {RectangleSelectionDragState}
+   * @protected
+   */
+  _overlayDragState = {
+    isSelecting: false,
+    worldRect: undefined,
+  };
+
+  /**
+   * 重置矩形框选工具的临时状态
+   * @override
    */
   reset() {}
 
@@ -114,188 +123,81 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   }
 
   /**
-   * 汇总当前可参与框选的对象集合
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @returns {Array<BasicObject>}
-   */
-
-
-  /**
-   * 从候选对象里筛出与当前框选矩形相交的对象
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @param {RectangleRange} worldRect - 当前框选矩形
-   * @returns {Array<BasicObject>|Promise<Array<BasicObject|Object>>} 命中的对象或其 summary-like 条目
-   */
-  selectObjectsInWorldRect(context = {}, worldRect) {
-    const normalizedSelectionRect = RectangleRange.fromRectLike(worldRect);
-    if (!normalizedSelectionRect) {
-      return [];
-    }
-
-    const boardApi = context.acc?.boardApi;
-    if (!boardApi) {
-      return [];
-    }
-    return boardApi
-      .hitTest(normalizedSelectionRect, "intersect")
-      .then((objectIds) => {
-        if (!Array.isArray(objectIds) || objectIds.length === 0) {
-          return [];
-        }
-        return boardApi.queryObjects(objectIds);
-      });
-  }
-
-  /**
-   * 用新的框选结果替换当前选择
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @param {Array<BasicObject|Object>} [nextObjects=[]] - 新选择结果
-   * @returns {Array<BasicObject|Object>}
-   */
-  replaceSelection(context = {}, nextObjects = []) {
-    const previousObjects = this.resolveContextObjects(context).filter(Boolean);
-    const boardApi = context.acc?.boardApi;
-    const previousIds = this.resolveObjectIds(context, previousObjects);
-    if (boardApi && previousIds.length > 0) {
-      boardApi.discardActiveObjects(previousIds);
-    }
-
-    this.clearContextObjects(context);
-
-    const resolvedNextObjects = this.resolveSelectedObjectReferences(
-      context,
-      nextObjects,
-    );
-    if (resolvedNextObjects.length === 0) {
-      return [];
-    }
-
-    const nextIds = this.resolveObjectIds(context, resolvedNextObjects);
-    if (boardApi && nextIds.length > 0) {
-      boardApi.addActiveObjects(nextIds);
-    }
-    return this.setContextObjects(context, resolvedNextObjects);
-  }
-
-  /**
    * 收集矩形框选工具当前声明的 overlay
-   * @param {{ deviceContext?: Object }} [overlayContext={}]
-   * @returns {Array<Object>}
+   * @param {{
+   *   viewport?: import("../../components/orchestration/viewport.js").Viewport,
+   *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer,
+   * }} [overlayContext={}] - overlay 上下文
+   * @returns {import("../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(overlayContext = {}) {
-    const entries = [...super.collectUiOverlayEntries(overlayContext)];
-    const dragState = this.resolveSelectionDragState(
-      overlayContext.deviceContext ?? {},
-    );
+    // 只绘制拖拽过程中的选择矩形框，不绘制手势结束后的选中对象高亮
+    // （选中对象高亮由 modifier 管理）
+    const { worldRect } = this._overlayDragState;
 
-    if (!dragState.worldRect) {
-      return entries;
+    if (!worldRect) {
+      return [];
     }
 
-    entries.push({
-      source: "rectangle-selection-drag",
-      type: "rect",
-      worldRect: dragState.worldRect,
-      fillStyle: RECTANGLE_SELECTION_OVERLAY_FILL_STYLE,
-      strokeStyle: RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE,
-      lineWidth: RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH,
-      lineDash: [...RECTANGLE_SELECTION_OVERLAY_LINE_DASH],
-    });
-
-    return entries;
+    return [
+      {
+        source: "rectangle-selection-drag",
+        type: "rect",
+        worldRect,
+        fillStyle: RECTANGLE_SELECTION_OVERLAY_FILL_STYLE,
+        strokeStyle: RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE,
+        lineWidth: RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH,
+        lineDash: [...RECTANGLE_SELECTION_OVERLAY_LINE_DASH],
+      },
+    ];
   }
 
   /**
-   * 完成一次框选提交
+   * 用新位置更新框选矩形
+   * @param {Vector} position - 最新拖拽位置
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
-   * @param {Array<BasicObject|Object>} selectedObjects - 命中的对象或其 summary-like 条目
    * @returns {void}
-   * @protected
    */
-  finalizeSelection(context, selectedObjects) {
-    const resolvedSelection = this.replaceSelection(context, selectedObjects);
-    this.clearSelectionDragState(context);
-    this.afterChoose(resolvedSelection);
-    this.confirmSelection(context, resolvedSelection);
-    this.requestUiOverlayRefresh(context);
-  }
-
-  /**
-   * 处理矩形框选手势
-   * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
-   * @returns {void|Promise<void>}
-   */
-  process(signalPacket, context = {}) {
-    const packet = SignalPacket.from(signalPacket);
-    const positionSignal = packet.signals.find(
-      (signal) => signal.type === "position",
-    );
-    const position = Vector.parse(
-      positionSignal?.context?.value ?? positionSignal?.context?.position,
-    );
-    const isGestureEnded = packet.signals.some(
-      (signal) => signal.type === "end",
-    );
-    const isGestureCancelled = packet.signals.some(
-      (signal) => signal.type === "cancel",
-    );
+  updateSelectionRegion(position, context) {
     const dragState = this.resolveSelectionDragState(context);
-    let nextDragState = dragState;
+    const startPosition = dragState.startPosition ?? position;
 
-    if (isGestureCancelled) {
-      if (dragState.isSelecting || dragState.worldRect) {
-        this.clearSelectionDragState(context);
-        this.requestUiOverlayRefresh(context);
-      }
-      return;
-    }
-
-    if (position) {
-      const startPosition = dragState.startPosition ?? position;
-      nextDragState = {
-        isSelecting: true,
-        startPosition,
-        currentPosition: position,
-        worldRect: this.createSelectionWorldRect(startPosition, position),
-      };
-
-      // `button/buttons` 这类设备语义已在 mouse 设备路由阶段被消费
-      // 工具节点只根据“自己已收到的位置/结束信号”维护工作流
-      this.writeSelectionDragState(context, nextDragState);
-      this.requestUiOverlayRefresh(context);
-    }
-
-    if (!isGestureEnded || !nextDragState.startPosition) {
-      return;
-    }
-
-    // 手势结束时，使用最后一次已知拖拽矩形提交新的选择结果
-    const selectionWorldRect = this.createSelectionWorldRect(
-      nextDragState.startPosition,
-      position ?? nextDragState.currentPosition ?? nextDragState.startPosition,
-    );
-    const selectedObjects = this.selectObjectsInWorldRect(
-      context,
-      selectionWorldRect,
-    );
-    if (selectedObjects instanceof Promise) {
-      return selectedObjects.then((resolvedObjects) => {
-        this.finalizeSelection(context, resolvedObjects);
-      });
-    }
-
-    this.finalizeSelection(context, selectedObjects);
+    const worldRect = this.createSelectionWorldRect(startPosition, position);
+    this.writeSelectionDragState(context, {
+      isSelecting: true,
+      startPosition,
+      currentPosition: position,
+      worldRect,
+    });
+    this._overlayDragState = { isSelecting: true, worldRect };
   }
 
   /**
-   * 卸载工具时清理拖拽状态和当前选择
+   * 当前是否有框选矩形
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @returns {boolean}
+   */
+  hasSelectionRegion(context) {
+    return Boolean(this.resolveSelectionDragState(context).worldRect);
+  }
+
+  /**
+   * 清理当前框选状态
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
-  umount(context = {}) {
+  clearSelectionRegion(context = {}) {
     this.clearSelectionDragState(context);
-    super.umount(context);
+    this._overlayDragState = { isSelecting: false, worldRect: undefined };
+  }
+
+  /**
+   * 获取当前框选矩形
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @returns {RectangleRange|null}
+   */
+  getSelectionRegion(context) {
+    return this.resolveSelectionDragState(context).worldRect ?? null;
   }
 }
 

@@ -40,11 +40,7 @@ import { createSubDAG } from "../devices-dag/index.js";
  * });
  *
  * // 挂载时作为 edge.prefix 插入设备节点与 workflow 之间
- * dag.mountSubDAG("/monitor", keyboardDevice, {
- *   workflows: {
- *     "/space-tool": { edge: { prefix } },
- *   },
- * });
+ * //（实际通过 signalsEventBus "mount" 事件完成 edge 连接，见 Board.#bindSignalsEventBus）
  *
  * // 在 workflow 定义中使用边级 prefix 转换信号
  * const prefix = createEdgePrefix({
@@ -66,9 +62,7 @@ import { createSubDAG } from "../devices-dag/index.js";
  * });
  *
  * // 挂载时作为 edge.prefix 插入 workflow 之间
- * dag.mountWorkflow("/monitor/workflows/space-tool", tool, {
- *   edge: { prefix },
- * });
+ * //（实际通过 signalsEventBus "mount" 事件的 edges[].prefix 字段完成）
  */
 function createEdgePrefix(handlerOrConfig, options = {}) {
   const handlerFn =

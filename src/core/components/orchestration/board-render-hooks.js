@@ -1,8 +1,8 @@
 /**
  * @file 白板 UI 渲染钩子工厂
  * @description
- * 创建与 UI 侧 monitor/renderer 连通的 AOM render hooks 实现。
- * 替代 AOM 直接访问 board.monitors，使 AOM 在 P3 可无修改迁入 Worker。
+ * 创建与 UI 侧 viewport/renderer 连通的 AOM render hooks 实现。
+ * AOM 通过这组钩子间接发起到各 viewport 的渲染请求，不再直接访问 board.viewports。
  * @module core/components/orchestration/board-render-hooks
  * @author Zhou Chenyu
  */
@@ -10,45 +10,44 @@
 import { RectangleRange, intersectsRanges } from "../../range/index.js";
 
 /**
- * 解析 monitors 引用
- * @param {Map<string, import("./monitor-proxy.js").MonitorProxy> | (() => Map<string, import("./monitor-proxy.js").MonitorProxy>)} monitorsOrFn - monitors Map 或返回 Map 的函数
- * @returns {Map<string, import("./monitor-proxy.js").MonitorProxy> | undefined}
+ * 解析 viewports 引用
+ * @param {Map<string, import("./viewport.js").Viewport> | (() => Map<string, import("./viewport.js").Viewport>)} viewportsOrFn - viewports Map 或返回 Map 的函数
+ * @returns {Map<string, import("./viewport.js").Viewport> | undefined}
  */
-function _resolveMonitors(monitorsOrFn) {
-  if (typeof monitorsOrFn === "function") {
-    return monitorsOrFn();
+function _resolveViewports(viewportsOrFn) {
+  if (typeof viewportsOrFn === "function") {
+    return viewportsOrFn();
   }
-  return monitorsOrFn;
+  return viewportsOrFn;
 }
 
 /**
- * 创建与 monitors Map 绑定的 UI 侧渲染钩子
+ * 创建与 viewports Map 绑定的 UI 侧渲染钩子
  * @description
- * AOM 不再直接访问 board.monitors，而是通过这组钩子间接发起到各 monitor 的渲染请求。
- * `monitors` 参数支持传入直接的 Map 引用或返回 Map 的惰性函数（适合 Board 构造时 monitors 尚未就绪的场景）。
+ * AOM 不再直接访问 board.viewports，而是通过这组钩子间接发起到各 viewport 的渲染请求。
+ * `viewports` 参数支持传入直接的 Map 引用或返回 Map 的惰性函数（适合 Board 构造时 viewports 尚未就绪的场景）。
  *
- * @param {Map<string, import("./monitor-proxy.js").MonitorProxy> | (() => Map<string, import("./monitor-proxy.js").MonitorProxy>)} monitorsOrFn - 显示器 Map 或惰性获取函数
- * @param {() => import("../../objects/basic-obj.js").BasicObject[]} [collectAllActiveDrawables] - 收集所有活跃可绘制对象的函数（可选）
- * @returns {import("./aom-render-hooks.js").AomRenderHooks}
+ * @param {Map<string, import("./viewport.js").Viewport> | (() => Map<string, import("./viewport.js").Viewport>)} viewportsOrFn - 视口 Map 或惰性获取函数
+ * @returns {import("./aom-render-hooks.js").AomRenderHooks
  */
-function createBoardRenderHooks(monitorsOrFn, collectAllActiveDrawables) {
+function createBoardRenderHooks(viewportsOrFn) {
   /**
-   * 获取当前 monitors Map
-   * @returns {Map<string, import("./monitor-proxy.js").MonitorProxy> | undefined}
+   * 获取当前 viewports Map
+   * @returns {Map<string, import("./viewport.js").Viewport> | undefined}
    */
-  const getMonitors = () => _resolveMonitors(monitorsOrFn);
+  const getViewports = () => _resolveViewports(viewportsOrFn);
 
   return {
     /**
-     * 刷新所有 monitor 的活动层
+     * 刷新所有 viewport 的活动层
      * @param {import("../../objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
      */
     requestLiveRender(objectInstances = []) {
-      const monitors = getMonitors();
-      if (!monitors?.size) return;
+      const viewports = getViewports();
+      if (!viewports?.size) return;
 
-      for (const monitor of monitors.values()) {
-        const liveRenderer = monitor?.liveRenderer;
+      for (const viewport of viewports.values()) {
+        const liveRenderer = viewport?.liveRenderer;
         if (!liveRenderer) continue;
 
         const targetObjects =
@@ -59,33 +58,33 @@ function createBoardRenderHooks(monitorsOrFn, collectAllActiveDrawables) {
         if (typeof liveRenderer.invalidateObjects === "function") {
           liveRenderer.invalidateObjects(targetObjects);
         }
-        monitor?.requestViewportUiRender?.();
+        viewport?.requestViewportUiRender?.();
       }
     },
 
     /**
-     * 刷新所有 monitor 的静态层
+     * 刷新所有 viewport 的静态层
      * @param {import("../chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
      */
     requestBaseRender(chunks = []) {
-      const monitors = getMonitors();
-      if (!monitors?.size) return;
+      const viewports = getViewports();
+      if (!viewports?.size) return;
 
-      for (const monitor of monitors.values()) {
+      for (const viewport of viewports.values()) {
         if (chunks.length > 0) {
-          monitor?.baseRenderer?.invalidateChunks?.(chunks);
+          viewport?.baseRenderer?.invalidateChunks?.(chunks);
           continue;
         }
-        if (typeof monitor?.requestViewportBaseRender === "function") {
-          monitor.requestViewportBaseRender();
+        if (typeof viewport?.requestViewportBaseRender === "function") {
+          viewport.requestViewportBaseRender();
           continue;
         }
-        monitor?.baseRenderer?.flush?.();
+        viewport?.baseRenderer?.flush?.();
       }
     },
 
     /**
-     * 按对象范围刷新 monitor 的静态层
+     * 按对象范围刷新 viewport 的静态层
      * @param {import("../../objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
      * @param {import("../chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
      * @param {Map<number, RectangleRange>} previousWorldRects - 旧世界范围快照
@@ -95,41 +94,41 @@ function createBoardRenderHooks(monitorsOrFn, collectAllActiveDrawables) {
       fallbackChunks = [],
       previousWorldRects = new Map(),
     ) {
-      const monitors = getMonitors();
-      if (!monitors?.size) return;
+      const viewports = getViewports();
+      if (!viewports?.size) return;
 
-      for (const monitor of monitors.values()) {
-        const dirtyRects = monitor?.baseRenderer?.invalidateObjects?.(
+      for (const viewport of viewports.values()) {
+        const dirtyRects = viewport?.baseRenderer?.invalidateObjects?.(
           objectInstances,
           { previousWorldRects },
         );
 
         if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
-          monitor?.syncChunkBufferWithViewport?.();
+          viewport?.syncChunkBufferWithViewport?.();
           continue;
         }
 
         if (fallbackChunks.length > 0) {
-          monitor?.baseRenderer?.invalidateChunks?.(fallbackChunks);
+          viewport?.baseRenderer?.invalidateChunks?.(fallbackChunks);
           continue;
         }
 
-        if (typeof monitor?.requestViewportBaseRender === "function") {
-          monitor.requestViewportBaseRender();
+        if (typeof viewport?.requestViewportBaseRender === "function") {
+          viewport.requestViewportBaseRender();
           continue;
         }
 
-        monitor?.baseRenderer?.flush?.();
+        viewport?.baseRenderer?.flush?.();
       }
     },
 
     /**
-     * 刷新能看到指定对象集合的那些 monitor 的视口
+     * 刷新能看到指定对象集合的那些 viewport 的视口
      * @param {import("../../objects/basic-obj.js").BasicObject[]} objectInstances - 对象实例
      */
     flushViewportForObjects(objectInstances = []) {
-      const monitors = getMonitors();
-      if (!monitors?.size) return;
+      const viewports = getViewports();
+      if (!viewports?.size) return;
 
       const worldRanges = objectInstances
         .map((obj) => {
@@ -143,15 +142,15 @@ function createBoardRenderHooks(monitorsOrFn, collectAllActiveDrawables) {
 
       if (worldRanges.length === 0) return;
 
-      for (const monitor of monitors.values()) {
-        const viewportWorldRect = monitor.getViewportWorldRect?.();
+      for (const viewport of viewports.values()) {
+        const viewportWorldRect = viewport.getViewportWorldRect?.();
         if (!viewportWorldRect) continue;
 
         const intersects = worldRanges.some((worldRange) =>
           intersectsRanges(viewportWorldRect, worldRange),
         );
         if (intersects) {
-          monitor.flushViewportRender?.();
+          viewport.flushViewportRender?.();
         }
       }
     },

@@ -21,7 +21,7 @@ description: Write module documentation, technical overviews, and API docs follo
 
 - 文档放在每个模块的 `docs/` 目录下
 - 命名格式：`{module-name}-document.md`
-- 例如 `board-document.md`、`monitor-document.md`、`device-document.md`
+- 例如 `board-document.md`、`viewport-document.md`、`device-document.md`
 
 ## `@module` 路径
 
@@ -42,7 +42,7 @@ JSDoc 中的 `@module` 路径与源码路径对应，前缀为 `core/`：
 - 句子偏短，语气偏工程化，少修辞，少宣传式表达
 - 优先写职责、关系、流程、约束、状态，不写空泛背景
 - 术语需要稳定，命名尽量与代码中的类名、字段名、方法名保持一致
-- 避免使用“不再”“现在”等前后对比措辞。直接描述当前情况即可。例如用“各渲染器自管理调度器”而非“渲染器现在自管理调度器，不再依赖 Monitor”
+- 避免使用“不再”“现在”等前后对比措辞。直接描述当前情况即可。例如用“各渲染器自管理调度器”而非“渲染器现在自管理调度器，不再依赖 Viewport”
 
 ### 文档结构（参考）
 

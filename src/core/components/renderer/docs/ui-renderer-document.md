@@ -16,65 +16,85 @@
 
 ## 运行边界
 
-- **UI only**：`UiRenderer` 直接操作 `Monitor.uiCanvas` 或 `MonitorProxy.uiCanvas`
+- **UI only**：`UiRenderer` 直接操作 `Viewport.uiCanvas`
 - **不进入 Worker**：Worker 侧没有 `UiRenderer`
+- **不持有 AOM**：`ActiveObjectManager` 是 Worker 侧模块，`UiRenderer` 不引用 AOM。overlay 所需的对象信息通过工具节点 state 或 provider 回调传入
 - **输入来源**：工具节点 state、summary-like 条目、provider 回调
+
+## 类层次
+
+```
+CanvasHost          — 画布生命周期 + 调度器（canvas-lifecycle.js）
+  └─ UiRenderer     — overlay flush + provider 管理
+```
+
+`UiRenderer` 继承自 `CanvasHost`，获得 `_canvas` / `_scheduler` 字段、`invalidate()` / `invalidateViewport()` / `resize()` 方法。
 
 ## 当前职责
 
-### 兼容选择框
+### Provider 注册
 
-`UiRenderer` 当前提供两类兼容入口：
+provider 签名：`(context: { viewport: Viewport, renderer: UiRenderer }) => any`。
 
-- `createCompatSelectionEntriesForObjects(objects, role)`
-- `createCompatSelectionEntriesForSummaries(summaries, role)`
+- `registerOverlayProvider(provider)`：注册 provider
+- `unregisterOverlayProvider(provider)`：注销 provider
 
-其中 Worker mode 下的主入口是 `createCompatSelectionEntriesForSummaries()`。
+### Overlay 条目收集
 
-### rect-like 规整
+- `collectOverlayEntries()`：遍历所有 provider，收集并归一化 overlay 条目
+- provider 返回的条目经过 `normalizeOverlayEntry`（委托给 `ui-overlay-factory.js`）归一化，确保 `draw` 函数可用
 
-`UiRenderer` 当前可接受：
+### 绘制
+
+- `drawRectEntry(context, entry)`：绘制矩形 overlay 条目
+- `flush(dirtyRects)`：清理脏区，裁剪后逐条目执行 `draw`
+
+### 条目规整
+
+条目归一化由 `ui-overlay-factory.js` 中的纯函数 `normalizeOverlayEntry` 处理。可接受：
 
 - `BasicObject` 实例
-- summary-like 条目
+- summary-like 条目（含 `position + range`、`position + boundingBox`、`worldRect`）
 - 纯 rect-like 对象（`{ left, top, width, height }` 或 `{ left, top, right, bottom }`）
 
-所有 `worldRect` / `boundingBox` / `screenRect` 都通过 `RectangleRange.fromRectLike()` 统一规整。
+所有 `worldRect` / `boundingBox` / `screenRect` 通过 `RectangleRange.fromRectLike()` 统一规整。
 
 这保证了：
 
 - Worker RPC 返回的 plain `boundingBox` 可直接参与 overlay
 - chooser / modifier 不需要真实 `BasicObject` 实例也能生成选框
 
-### provider 扩展口
+### 选择框条目生成
 
-- `registerOverlayProvider(provider)`
-- `unregisterOverlayProvider(provider)`
-
-provider 可返回：
-
-- `screenRect`
-- `worldRect`
-- `position + range`
-- `position + boundingBox`
-- 或自定义 `draw(context, runtime)`
+选择框条目的生成由 `ui-overlay-factory.js` 中的 `createCompatSelectionEntriesForSummaries` 纯函数负责，不再挂在 `UiRenderer` 实例上。
 
 ## 当前默认 overlay 来源
 
 ### chooser
 
-`ObjectChooserTool.collectUiOverlayEntries()` 会把当前上下文对象交给：
+`ObjectChooserTool.collectUiOverlayEntries()` 调用 factory：
 
 ```js
-renderer.createCompatSelectionEntriesForSummaries(objects, "chooser");
+import { createCompatSelectionEntriesForSummaries } from ".../ui-overlay-factory.js";
+createCompatSelectionEntriesForSummaries(
+  objects,
+  "chooser",
+  viewport,
+  drawRectEntry,
+);
 ```
 
 ### modifier
 
-`ObjectModifierTool.collectUiOverlayEntries()` 也走同一入口：
+`ObjectModifierTool.collectUiOverlayEntries()` 同样调用 factory：
 
 ```js
-renderer.createCompatSelectionEntriesForSummaries(objects, "modifier");
+createCompatSelectionEntriesForSummaries(
+  objects,
+  "modifier",
+  viewport,
+  drawRectEntry,
+);
 ```
 
 ### rectangle chooser drag rect
@@ -85,32 +105,39 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "modifier");
 - 矩形边框
 - 独立于已选对象的兼容选择框
 
-## 与 Monitor / MonitorProxy 的关系
+## 与 Viewport 的关系
 
-- `Monitor` / `MonitorProxy` 持有 `UiRenderer`
+- `Viewport` 持有 `UiRenderer`
 - `requestViewportUiRender()` 通过 `UiRenderer.invalidateViewport()` 请求刷新
 - `resizeRenderLayers()` 时会同步调整 `uiCanvas` 尺寸
 
-## 与 AOM / tools 的关系
+## 与 tools 的关系
 
-`UiRenderer` 自身不管理 AOM 状态，它只消费调用方提供的条目。
+`UiRenderer` 不持有 AOM（AOM 为纯 Worker 侧模块）。overlay 所需的对象信息通过以下渠道传入：
 
-AOM、creator、chooser、modifier 当前都可能推动 ui 层刷新，但真正决定“画什么”的是：
-
-- tool 当前写入的 node state
+- tool 当前写入的 node state（通过 `deviceContext` 读取）
 - tool 注册的 overlay provider
-- `UiRenderer` 对 summary-like / rect-like 数据的规整逻辑
+- `ui-overlay-factory.js` 对 summary-like / rect-like 数据的规整逻辑
 
-## 当前状态
+creator、chooser、modifier 都可能推动 ui 层刷新，但 `UiRenderer` 仅消费 provider 产出的条目，不关心数据来源。
 
-- `UiRenderer` 已稳定作为 UI overlay 层运行
-- Worker mode 下 chooser / modifier 选框已全面依赖 summary-like 路径
-- plain `boundingBox` / `worldRect` 已可直接参与 overlay
-- 更复杂的控制杆、激光笔等 overlay 仍属于后续扩展空间
+## 实例方法一览
+
+| 方法                                  | 职责                                 |
+| ------------------------------------- | ------------------------------------ |
+| `constructor(viewport, options)`      | 初始化 CanvasHost，创建调度器        |
+| `registerOverlayProvider(provider)`   | 注册自定义 overlay provider          |
+| `unregisterOverlayProvider(provider)` | 注销 provider                        |
+| `collectProviderOverlayEntries()`     | 收集并归一化所有 provider 条目       |
+| `collectOverlayEntries()`             | 收集当前应绘制的 overlay（调用上者） |
+| `drawRectEntry(context, entry)`       | 绘制矩形条目                         |
+| `flush(dirtyRects)`                   | 执行 UI 覆盖层刷新                   |
 
 ## 相关文档
 
-- [monitor-document.md](../../orchestration/docs/monitor-document.md)
+- [canvas-lifecycle-document.md](./canvas-lifecycle-document.md)
+- [ui-overlay-factory-document.md](./ui-overlay-factory-document.md)
+- [viewport-document.md](../../orchestration/docs/viewport-document.md)
 - [object-chooser-document.md](../../../tools/chooser/docs/object-chooser-document.md)
 - [object-modifier-document.md](../../../tools/modifier/docs/object-modifier-document.md)
 - [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)

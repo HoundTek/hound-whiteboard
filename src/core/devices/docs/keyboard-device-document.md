@@ -2,7 +2,7 @@
 
 ## 概述
 
-键盘设备负责把宿主层已经确认归属到某个 Monitor 的键盘输入，翻译成 Core 内稳定的设备信号。
+键盘设备负责把宿主层已经确认归属到某个 Viewport 的键盘输入，翻译成 Core 内稳定的设备信号。
 
 根路径固定为 `/keyboard`，整体结构由 `createSubDAG("/keyboard")` 构建。
 
@@ -174,7 +174,7 @@ const wasdPrefix = (code, vector) =>
   });
 
 board.signalsEventBus.emit("mount", {
-  monitorId: "main",
+  viewportId: "main",
   name: "wasd-move",
   workflow: wasdTool,
   edges: [
@@ -204,10 +204,10 @@ board.signalsEventBus.emit("mount", {
 
 ## 推荐挂载方式
 
-键盘设备本身挂在 Monitor 边界下：
+键盘设备本身挂在 Viewport 边界下：
 
 ```js
-monitor.mountSubDAG("", createKeyboardDevice());
+viewport.mountSubDAG("", createKeyboardDevice());
 ```
 
 所有 workflow 统一通过 `signalsEventBus.emit("mount", ...)` 挂载，使用 `edge.prefix` 注入信号转换逻辑：
@@ -215,7 +215,7 @@ monitor.mountSubDAG("", createKeyboardDevice());
 ```js
 // 简单的信号转发（如 Space 触发随机圆）
 board.signalsEventBus.emit("mount", {
-  monitorId: "main",
+  viewportId: "main",
   name: "create-circle",
   workflow: randomCircleSubDAG,
   edges: [
@@ -227,11 +227,11 @@ board.signalsEventBus.emit("mount", {
   ],
 });
 
-// 需要 monitor 引用的信号转换（如视口平移）
+// 需要 viewport 引用的信号转换（如视口平移）
 board.signalsEventBus.emit("mount", {
-  monitorId: "main",
+  viewportId: "main",
   name: "viewport",
-  workflow: monitorViewportTool,
+  workflow: ViewportTool,
   edges: [
     {
       from: "/keyboard/code/ArrowUp",
@@ -245,7 +245,7 @@ board.signalsEventBus.emit("mount", {
 
 // 鼠标设备不需要 prefix（信号直接可被工具消费）
 board.signalsEventBus.emit("mount", {
-  monitorId: "main",
+  viewportId: "main",
   name: "primary-stroke",
   workflow: strokeTool,
   edges: [{ from: "/mouse/primary", edge: "default" }],

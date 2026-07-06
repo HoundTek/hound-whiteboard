@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
 import { ObjectModifierTool } from "../object-modifier.js";
+import { RectangleRange } from "../../../range/index.js";
 
 describe("ObjectModifierTool", () => {
   test("withGeometryMutation 应按快照再失效的顺序包装一次几何修改", () => {
@@ -17,7 +18,7 @@ describe("ObjectModifierTool", () => {
     const calls = [];
     const modificationContext = {
       acc: {
-        monitor: {
+        viewport: {
           liveRenderer: {
             captureObjectSnapshot(objects) {
               calls.push(["capture", objects]);
@@ -56,7 +57,7 @@ describe("ObjectModifierTool", () => {
 
     const tool = new TestModifierTool();
     const objects = [{ id: 1 }, { id: 2 }];
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -64,19 +65,19 @@ describe("ObjectModifierTool", () => {
       requestViewportUiRender: jest.fn(),
     };
     const modificationContext = {
-      acc: { monitor, objects: new Set(objects) },
+      acc: { viewport, objects: new Set(objects) },
     };
 
     tool.beforeGeometryMutation(modificationContext);
     tool.afterGeometryMutation(modificationContext);
 
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith(
+    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith(
       objects,
     );
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
+    expect(viewport.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
       objects,
     );
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("显式提供 boardApi 时 withGeometryMutation 应跳过 liveRenderer 并仅刷新 overlay", () => {
@@ -91,7 +92,7 @@ describe("ObjectModifierTool", () => {
 
     const tool = new TestModifierTool();
     const object = { id: 21, changed: false };
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -101,7 +102,7 @@ describe("ObjectModifierTool", () => {
     const modificationContext = {
       acc: {
         boardApi: {},
-        monitor,
+        viewport,
         objects: [object],
       },
       object,
@@ -111,12 +112,12 @@ describe("ObjectModifierTool", () => {
 
     expect(result).toBe("done");
     expect(object.changed).toBe(true);
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
-  test("collectUiOverlayEntries 应把当前修改对象声明给 renderer", () => {
+  test("collectUiOverlayEntries 应读取 _overlayModifiedObjects 并委托 renderer", () => {
     class TestModifierTool extends ObjectModifierTool {
       modify() {
         return undefined;
@@ -124,33 +125,40 @@ describe("ObjectModifierTool", () => {
     }
 
     const tool = new TestModifierTool();
-    const object = { id: 3 };
-    const renderer = {
-      createCompatSelectionEntriesForSummaries: jest.fn(() => [
-        "modifier-overlay",
-      ]),
+    const object = {
+      id: 3,
+      position: { x: 10, y: 20 },
+      range: new RectangleRange(0, 0, 30, 40),
+      property: {},
     };
+    const viewport = {
+      zoom: 1,
+      worldRectToScreenRect(rect, padding = 0) {
+        return RectangleRange.from(rect)?.inflate?.(padding);
+      },
+    };
+    const drawRectEntry = jest.fn();
 
-    expect(
-      tool.collectUiOverlayEntries({
-        deviceContext: { acc: { objects: [object] } },
-        renderer,
-      }),
-    ).toEqual(["modifier-overlay"]);
-    expect(
-      renderer.createCompatSelectionEntriesForSummaries,
-    ).toHaveBeenCalledWith([object], "modifier");
+    tool._overlayModifiedObjects = [object];
+    const entries = tool.collectUiOverlayEntries({
+      viewport,
+      renderer: { drawRectEntry },
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].objectId).toBe(3);
+    expect(entries[0].type).toBe("rect");
   });
 
   describe("生命周期钩子", () => {
-    test("applyModifiedObjects 成功后触发 afterApply 通知", () => {
+    test("applyModifiedObjects 成功后触发 action:complete 通知", () => {
       class TestModifier extends ObjectModifierTool {
         modify() {}
       }
 
       const tool = new TestModifier();
-      const afterApply = jest.fn();
-      tool.on("afterApply", afterApply);
+      const actionComplete = jest.fn();
+      tool.on("action:complete", actionComplete);
 
       const object = { id: 10 };
       const boardApi = {
@@ -164,8 +172,11 @@ describe("ObjectModifierTool", () => {
       );
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([10]);
-      expect(afterApply).toHaveBeenCalledTimes(1);
-      expect(afterApply.mock.calls[0][2]).toBe(true);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/test" }),
+        true,
+      );
     });
 
     test("beforeApplyModifiedObjects 返回 false 时阻止 apply", () => {
@@ -174,8 +185,8 @@ describe("ObjectModifierTool", () => {
       }
 
       const tool = new TestModifier();
-      const afterApply = jest.fn();
-      tool.on("afterApply", afterApply);
+      const actionComplete = jest.fn();
+      tool.on("action:complete", actionComplete);
       tool.beforeApplyModifiedObjects = () => false;
 
       const object = { id: 11 };
@@ -192,7 +203,7 @@ describe("ObjectModifierTool", () => {
 
       expect(result).toBe(false);
       expect(commitObjects).not.toHaveBeenCalled();
-      expect(afterApply).not.toHaveBeenCalled();
+      expect(actionComplete).not.toHaveBeenCalled();
     });
 
     test("autoUmountOnApply 通过 context 注入 false 时阻止自卸载", () => {

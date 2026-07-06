@@ -173,7 +173,7 @@ describe("core-worker", () => {
     runtime.stop();
   });
 
-  test("应能创建 MonitorCore 并通过 render flush 输出 render-frame", async () => {
+  test("应能创建 ViewportCore 并通过 render flush 输出 render-frame", async () => {
     const host = new FakeWorkerHost();
     const runtime = createCoreWorkerRuntime(host).start();
 
@@ -187,11 +187,11 @@ describe("core-worker", () => {
 
     host.emit({
       type: "rpc",
-      msgId: "create-monitor",
-      method: "createMonitor",
+      msgId: "create-viewport",
+      method: "createViewport",
       params: {
         options: {
-          monitorId: "main",
+          viewportId: "main",
           width: 400,
           height: 300,
         },
@@ -201,20 +201,20 @@ describe("core-worker", () => {
 
     expect(host.postedMessages).toContainEqual({
       type: "rpc-response",
-      msgId: "create-monitor",
+      msgId: "create-viewport",
       result: undefined,
     });
 
     host.emit({
       type: "viewport-change",
-      monitorId: "main",
+      viewportId: "main",
       origin: { x: 10, y: 20 },
       zoom: 1.5,
       viewportSize: { width: 400, height: 300 },
     });
     host.emit({
       type: "request-render-flush",
-      monitorId: "main",
+      viewportId: "main",
     });
     await Promise.resolve();
 
@@ -226,13 +226,12 @@ describe("core-worker", () => {
     expect(host.postedMessages[renderFrameIndex]).toEqual(
       expect.objectContaining({
         type: "render-frame",
-        monitorId: "main",
+        viewportId: "main",
         frameId: 1,
-        baseBitmap: expect.any(Object),
         liveBitmap: expect.any(Object),
       }),
     );
-    expect(host.postedTransfers[renderFrameIndex]).toHaveLength(2);
+    expect(host.postedTransfers[renderFrameIndex]).toHaveLength(1);
 
     runtime.stop();
   });
@@ -251,11 +250,11 @@ describe("core-worker", () => {
 
     host.emit({
       type: "rpc",
-      msgId: "create-monitor",
-      method: "createMonitor",
+      msgId: "create-viewport",
+      method: "createViewport",
       params: {
         options: {
-          monitorId: "main",
+          viewportId: "main",
           width: 400,
           height: 300,
         },
@@ -265,22 +264,22 @@ describe("core-worker", () => {
 
     host.emit({
       type: "viewport-change",
-      monitorId: "main",
+      viewportId: "main",
       origin: { x: 10, y: 20 },
       zoom: 1.5,
       viewportSize: { width: 400, height: 300 },
     });
-    host.emit({ type: "request-render-flush", monitorId: "main" });
+    host.emit({ type: "request-render-flush", viewportId: "main" });
     await Promise.resolve();
 
     host.emit({
       type: "viewport-change",
-      monitorId: "main",
+      viewportId: "main",
       origin: { x: 10, y: 20 },
       zoom: 1.5,
       force: true,
     });
-    host.emit({ type: "request-render-flush", monitorId: "main" });
+    host.emit({ type: "request-render-flush", viewportId: "main" });
     await Promise.resolve();
 
     const renderFrames = host.postedMessages.filter(
@@ -291,7 +290,7 @@ describe("core-worker", () => {
     expect(renderFrames[1]).toEqual(
       expect.objectContaining({
         type: "render-frame",
-        monitorId: "main",
+        viewportId: "main",
         frameId: 2,
       }),
     );
@@ -313,10 +312,10 @@ describe("core-worker", () => {
 
     host.emit({
       type: "rpc",
-      msgId: "create-monitor",
-      method: "createMonitor",
+      msgId: "create-viewport",
+      method: "createViewport",
       params: {
-        options: { monitorId: "main", width: 400, height: 300 },
+        options: { viewportId: "main", width: 400, height: 300 },
       },
     });
     await Promise.resolve();
@@ -335,13 +334,13 @@ describe("core-worker", () => {
 
     host.emit({
       type: "viewport-change",
-      monitorId: "main",
+      viewportId: "main",
       origin: { x: 0, y: 0 },
       zoom: 1,
       viewportSize: { width: 400, height: 300 },
       force: true,
     });
-    host.emit({ type: "request-render-flush", monitorId: "main" });
+    host.emit({ type: "request-render-flush", viewportId: "main" });
     await Promise.resolve();
 
     expect(
@@ -360,7 +359,7 @@ describe("core-worker", () => {
     });
     await Promise.resolve();
 
-    host.emit({ type: "request-render-flush", monitorId: "main" });
+    host.emit({ type: "request-render-flush", viewportId: "main" });
     await Promise.resolve();
 
     const renderFrames = host.postedMessages.filter(
@@ -380,7 +379,7 @@ describe("core-worker", () => {
     });
     await Promise.resolve();
 
-    host.emit({ type: "request-render-flush", monitorId: "main" });
+    host.emit({ type: "request-render-flush", viewportId: "main" });
     await Promise.resolve();
 
     expect(
@@ -396,7 +395,7 @@ describe("core-worker", () => {
     });
     await Promise.resolve();
 
-    host.emit({ type: "request-render-flush", monitorId: "main" });
+    host.emit({ type: "request-render-flush", viewportId: "main" });
     await Promise.resolve();
 
     expect(

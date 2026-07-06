@@ -14,7 +14,7 @@ import { intersectsRanges, RectangleRange } from "./core/range/index.js";
 import { createDefaultPersistenceAdapter } from "./core/bridges/persistence-adapter.js";
 import { createDefaultAomRenderHooks } from "./core/components/orchestration/aom-render-hooks.js";
 import { BoardCore } from "./core/components/orchestration/board-core.js";
-import { MonitorCore } from "./core/components/orchestration/monitor-core.js";
+import { ViewportCore } from "./core/components/orchestration/viewport-core.js";
 import { Logger } from "./utils/log/logger.js";
 import { logBus } from "./utils/log/log-bus.js";
 
@@ -45,12 +45,12 @@ function isWorkerGlobalScopeInstance(value) {
 }
 
 /**
- * 规整 monitorId 以便作为 Map key 使用
- * @param {string | number} monitorId - monitor 标识
+ * 规整 viewportId 以便作为 Map key 使用
+ * @param {string | number} viewportId - viewport 标识
  * @returns {string} 规整后的 key
  */
-function normalizeMonitorKey(monitorId) {
-  return String(monitorId ?? "");
+function normalizeViewportKey(viewportId) {
+  return String(viewportId ?? "");
 }
 
 /**
@@ -58,7 +58,7 @@ function normalizeMonitorKey(monitorId) {
  * @class
  * @description
  * 封装 Worker 线程的消息分发、BoardCore 生命周期与 RPC 路由。
- * 在 P3.3 阶段进一步接通 MonitorCore、viewport-change / request-render-flush 与 render-frame 回传。
+ * 接通 ViewportCore、viewport-change / request-render-flush 与 render-frame 回传。
  * @author Zhou Chenyu
  */
 class CoreWorkerRuntime {
@@ -75,10 +75,10 @@ class CoreWorkerRuntime {
   #boardCore;
 
   /**
-   * 当前 MonitorCore 注册表
-   * @type {Map<string, MonitorCore>}
+   * 当前 ViewportCore 注册表
+   * @type {Map<string, ViewportCore>}
    */
-  #monitorCores;
+  #viewportCores;
 
   /**
    * 绑定后的消息监听器
@@ -122,7 +122,7 @@ class CoreWorkerRuntime {
 
     this.#host = host;
     this.#boardCore = null;
-    this.#monitorCores = new Map();
+    this.#viewportCores = new Map();
     this.#messageListener = this.#handleMessageEvent.bind(this);
     this.#log = new Logger("CoreWorker", "INFO", logBus);
     this.#offWorkerLogs = null;
@@ -167,7 +167,7 @@ class CoreWorkerRuntime {
     this.#host.removeEventListener("message", this.#messageListener);
     this.#offWorkerLogs?.();
     this.#offWorkerLogs = null;
-    this.#destroyAllMonitorCores();
+    this.#destroyAllViewportCores();
     this.#boardCore = null;
     this.#started = false;
   }
@@ -309,10 +309,10 @@ class CoreWorkerRuntime {
         return this.createBoard(params);
       case "destroyBoard":
         return this.destroyBoard();
-      case "createMonitor":
-        return this.createMonitor(params.options);
-      case "destroyMonitor":
-        return this.destroyMonitor(params.monitorId);
+      case "createViewport":
+        return this.createViewport(params.options);
+      case "destroyViewport":
+        return this.destroyViewport(params.viewportId);
       default:
         return this.#dispatchCoreMethod(method, params);
     }
@@ -336,7 +336,7 @@ class CoreWorkerRuntime {
       aomRenderHooks: createDefaultAomRenderHooks(),
     });
 
-    const renderHooks = this.#createMonitorRenderHooks();
+    const renderHooks = this.#createViewportRenderHooks();
     this.#boardCore.aomRenderHooks = renderHooks;
     this.#boardCore.activeObjectManager.renderHooks = renderHooks;
 
@@ -348,42 +348,42 @@ class CoreWorkerRuntime {
    * @returns {{ ok: boolean }} 销毁结果
    */
   destroyBoard() {
-    this.#destroyAllMonitorCores();
+    this.#destroyAllViewportCores();
     this.#boardCore = null;
     return { ok: true };
   }
 
   /**
-   * 创建 Worker 侧 MonitorCore
-   * @param {{ monitorId?: string | number, width?: number, height?: number }} [options={}] - Monitor 初始化选项
+   * 创建 Worker 侧 ViewportCore
+   * @param {{ viewportId?: string | number, width?: number, height?: number }} [options={}] - Viewport 初始化选项
    * @returns {void}
    */
-  createMonitor(options = {}) {
+  createViewport(options = {}) {
     const boardCore = this.#requireBoardCore();
-    const monitorId = options?.monitorId;
+    const viewportId = options?.viewportId;
     if (
-      monitorId === undefined ||
-      monitorId === null ||
-      String(monitorId).trim() === ""
+      viewportId === undefined ||
+      viewportId === null ||
+      String(viewportId).trim() === ""
     ) {
-      throw new TypeError("createMonitor requires a valid monitorId.");
+      throw new TypeError("createViewport requires a valid viewportId.");
     }
 
-    const monitorKey = normalizeMonitorKey(monitorId);
+    const viewportKey = normalizeViewportKey(viewportId);
     const width = Number.isFinite(options?.width) ? options.width : 0;
     const height = Number.isFinite(options?.height) ? options.height : 0;
-    const existingMonitorCore = this.#monitorCores.get(monitorKey);
+    const existingViewportCore = this.#viewportCores.get(viewportKey);
 
-    if (existingMonitorCore) {
-      if (existingMonitorCore.resize(width, height)) {
-        existingMonitorCore.requestRenderLayersRefresh();
+    if (existingViewportCore) {
+      if (existingViewportCore.resize(width, height)) {
+        existingViewportCore.requestRenderLayersRefresh();
       }
       return;
     }
 
-    const monitorCore = new MonitorCore({
+    const viewportCore = new ViewportCore({
       boardCore,
-      monitorId,
+      viewportId,
       width,
       height,
       postRenderFrame: (message, transferList = []) => {
@@ -391,21 +391,21 @@ class CoreWorkerRuntime {
       },
     });
 
-    this.#monitorCores.set(monitorKey, monitorCore);
-    monitorCore.requestRenderLayersRefresh();
+    this.#viewportCores.set(viewportKey, viewportCore);
+    viewportCore.requestRenderLayersRefresh();
   }
 
   /**
-   * 销毁 Worker 侧 MonitorCore
-   * @param {string | number} monitorId - Monitor 标识
+   * 销毁 Worker 侧 ViewportCore
+   * @param {string | number} viewportId - Viewport 标识
    * @returns {void}
    */
-  destroyMonitor(monitorId) {
-    const monitorCore = this.#resolveMonitorCore(monitorId);
-    if (!monitorCore) return;
+  destroyViewport(viewportId) {
+    const viewportCore = this.#resolveViewportCore(viewportId);
+    if (!viewportCore) return;
 
-    monitorCore.destroy();
-    this.#monitorCores.delete(normalizeMonitorKey(monitorId));
+    viewportCore.destroy();
+    this.#viewportCores.delete(normalizeViewportKey(viewportId));
   }
 
   /**
@@ -422,22 +422,22 @@ class CoreWorkerRuntime {
   }
 
   /**
-   * 创建绑定到 MonitorCore 集合的 AOM 渲染钩子
+   * 创建绑定到 ViewportCore 集合的 AOM 渲染钩子
    * @returns {import("./core/components/orchestration/aom-render-hooks.js").AomRenderHooks}
    */
-  #createMonitorRenderHooks() {
+  #createViewportRenderHooks() {
     return {
       /**
-       * 刷新所有 MonitorCore 的活动层
+       * 刷新所有 ViewportCore 的活动层
        * @description
        * 仅失效显式传入的对象。未传对象时刷新全部活动 drawable。
        * @param {import("./core/objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
        */
       requestLiveRender: (objectInstances = []) => {
-        if (this.#monitorCores.size === 0) return;
+        if (this.#viewportCores.size === 0) return;
 
-        for (const monitorCore of this.#monitorCores.values()) {
-          const liveRenderer = monitorCore.liveRenderer;
+        for (const viewportCore of this.#viewportCores.values()) {
+          const liveRenderer = viewportCore.liveRenderer;
           if (!liveRenderer) continue;
 
           const targetObjects =
@@ -448,30 +448,30 @@ class CoreWorkerRuntime {
           if (typeof liveRenderer.invalidateObjects === "function") {
             liveRenderer.invalidateObjects(targetObjects);
           }
-          monitorCore.markFrameDirty();
+          viewportCore.markFrameDirty();
         }
       },
 
       /**
-       * 刷新所有 MonitorCore 的静态层
+       * 刷新所有 ViewportCore 的静态层
        * @param {import("./core/components/chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
        */
       requestBaseRender: (chunks = []) => {
-        if (this.#monitorCores.size === 0) return;
+        if (this.#viewportCores.size === 0) return;
 
-        for (const monitorCore of this.#monitorCores.values()) {
+        for (const viewportCore of this.#viewportCores.values()) {
           if (chunks.length > 0) {
-            monitorCore.baseRenderer?.invalidateChunks?.(chunks);
-            monitorCore.markFrameDirty();
+            viewportCore.baseRenderer?.invalidateChunks?.(chunks);
+            viewportCore.markFrameDirty();
             continue;
           }
 
-          monitorCore.requestViewportBaseRender?.();
+          viewportCore.requestViewportBaseRender?.();
         }
       },
 
       /**
-       * 按对象范围刷新 MonitorCore 的静态层
+       * 按对象范围刷新 ViewportCore 的静态层
        * @param {import("./core/objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
        * @param {import("./core/components/chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
        * @param {Map<number, import("./core/range/index.js").RectangleRange>} previousWorldRects - 旧世界范围快照
@@ -481,67 +481,67 @@ class CoreWorkerRuntime {
         fallbackChunks = [],
         previousWorldRects = new Map(),
       ) => {
-        if (this.#monitorCores.size === 0) return;
+        if (this.#viewportCores.size === 0) return;
 
-        for (const monitorCore of this.#monitorCores.values()) {
-          const dirtyRects = monitorCore.baseRenderer?.invalidateObjects?.(
+        for (const viewportCore of this.#viewportCores.values()) {
+          const dirtyRects = viewportCore.baseRenderer?.invalidateObjects?.(
             objectInstances,
             { previousWorldRects },
           );
 
           if (Array.isArray(dirtyRects) && dirtyRects.length > 0) {
-            monitorCore.syncChunkBufferWithViewport?.();
-            monitorCore.markFrameDirty();
+            viewportCore.syncChunkBufferWithViewport?.();
+            viewportCore.markFrameDirty();
             continue;
           }
 
           if (fallbackChunks.length > 0) {
-            monitorCore.baseRenderer?.invalidateChunks?.(fallbackChunks);
-            monitorCore.markFrameDirty();
+            viewportCore.baseRenderer?.invalidateChunks?.(fallbackChunks);
+            viewportCore.markFrameDirty();
             continue;
           }
 
-          monitorCore.requestViewportBaseRender?.();
+          viewportCore.requestViewportBaseRender?.();
         }
       },
 
       /**
-       * 刷新所有 MonitorCore 当前视口
+       * 刷新所有 ViewportCore 当前视口
        * @param {import("./core/objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象
        */
       flushViewportForObjects: (_objectInstances = []) => {
-        if (this.#monitorCores.size === 0) return;
+        if (this.#viewportCores.size === 0) return;
 
-        for (const monitorCore of this.#monitorCores.values()) {
-          monitorCore.flushViewportRender?.();
+        for (const viewportCore of this.#viewportCores.values()) {
+          viewportCore.flushViewportRender?.();
         }
       },
     };
   }
 
   /**
-   * 销毁全部 MonitorCore
+   * 销毁全部 ViewportCore
    * @returns {void}
    */
-  #destroyAllMonitorCores() {
-    for (const monitorCore of this.#monitorCores.values()) {
-      monitorCore.destroy();
+  #destroyAllViewportCores() {
+    for (const viewportCore of this.#viewportCores.values()) {
+      viewportCore.destroy();
     }
-    this.#monitorCores.clear();
+    this.#viewportCores.clear();
   }
 
   /**
-   * 解析目标 MonitorCore
-   * @param {string | number | undefined} monitorId - monitor 标识
-   * @returns {MonitorCore | undefined}
+   * 解析目标 ViewportCore
+   * @param {string | number | undefined} viewportId - viewport 标识
+   * @returns {ViewportCore | undefined}
    */
-  #resolveMonitorCore(monitorId) {
-    if (monitorId !== undefined && monitorId !== null) {
-      return this.#monitorCores.get(normalizeMonitorKey(monitorId));
+  #resolveViewportCore(viewportId) {
+    if (viewportId !== undefined && viewportId !== null) {
+      return this.#viewportCores.get(normalizeViewportKey(viewportId));
     }
 
-    if (this.#monitorCores.size === 1) {
-      return this.#monitorCores.values().next().value;
+    if (this.#viewportCores.size === 1) {
+      return this.#viewportCores.values().next().value;
     }
 
     return undefined;
@@ -559,19 +559,19 @@ class CoreWorkerRuntime {
     this.#flushScheduled = true;
     queueMicrotask(() => {
       this.#flushScheduled = false;
-      for (const monitorCore of this.#monitorCores.values()) {
-        monitorCore.flushRenderFrame();
+      for (const viewportCore of this.#viewportCores.values()) {
+        viewportCore.flushRenderFrame();
       }
     });
   }
 
   /**
-   * 立即刷新所有 MonitorCore 的渲染帧（无去重，直接执行）
+   * 立即刷新所有 ViewportCore 的渲染帧（无去重，直接执行）
    * @returns {void}
    */
   #flushRenderFrames() {
-    for (const monitorCore of this.#monitorCores.values()) {
-      monitorCore.flushRenderFrame();
+    for (const viewportCore of this.#viewportCores.values()) {
+      viewportCore.flushRenderFrame();
     }
   }
 
@@ -848,22 +848,22 @@ class CoreWorkerRuntime {
 
   /**
    * 处理视口变更消息
-   * @param {{ monitorId?: string | number, origin?: { x?: number, y?: number }, zoom?: number, viewportSize?: { width?: number, height?: number } }} message - 视口变更消息
+   * @param {{ viewportId?: string | number, origin?: { x?: number, y?: number }, zoom?: number, viewportSize?: { width?: number, height?: number } }} message - 视口变更消息
    * @returns {void}
    */
   #handleViewportChange(message) {
-    const monitorCore = this.#resolveMonitorCore(message?.monitorId);
-    if (!monitorCore) {
+    const viewportCore = this.#resolveViewportCore(message?.viewportId);
+    if (!viewportCore) {
       this.#log.throttledWarn(
-        "viewport-change-unknown-monitor",
-        `viewport-change ignored for unknown monitor: ${String(
-          message?.monitorId,
+        "viewport-change-unknown-viewport",
+        `viewport-change ignored for unknown viewport: ${String(
+          message?.viewportId,
         )}`,
       );
       return;
     }
 
-    monitorCore.onViewportChange({
+    viewportCore.onViewportChange({
       origin: message?.origin,
       zoom: message?.zoom,
       viewportSize: message?.viewportSize,
@@ -873,29 +873,29 @@ class CoreWorkerRuntime {
 
   /**
    * 处理渲染 flush 请求
-   * @param {{ monitorId?: string | number }} message - 渲染 flush 请求消息
+   * @param {{ viewportId?: string | number }} message - 渲染 flush 请求消息
    * @returns {void}
    */
   #handleRenderFlush(message) {
-    const monitorId = message?.monitorId;
-    if (monitorId !== undefined && monitorId !== null) {
-      const monitorCore = this.#resolveMonitorCore(monitorId);
-      if (!monitorCore) {
+    const viewportId = message?.viewportId;
+    if (viewportId !== undefined && viewportId !== null) {
+      const viewportCore = this.#resolveViewportCore(viewportId);
+      if (!viewportCore) {
         this.#log.throttledWarn(
-          "render-flush-unknown-monitor",
-          `request-render-flush ignored for unknown monitor: ${String(
-            monitorId,
+          "render-flush-unknown-viewport",
+          `request-render-flush ignored for unknown viewport: ${String(
+            viewportId,
           )}`,
         );
         return;
       }
 
-      monitorCore.flushRenderFrame();
+      viewportCore.flushRenderFrame();
       return;
     }
 
-    for (const monitorCore of this.#monitorCores.values()) {
-      monitorCore.flushRenderFrame();
+    for (const viewportCore of this.#viewportCores.values()) {
+      viewportCore.flushRenderFrame();
     }
   }
 }

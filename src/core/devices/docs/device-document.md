@@ -116,7 +116,7 @@ const workflow = builder.build();
 然后通过 `addEdge` 将键位节点连接到工具子树：
 
 ```js
-monitor.addEdge(
+viewport.addEdge(
   "/keyboard/code/Space",
   "create-circle",
   "/workflows/create-circle",
@@ -170,7 +170,7 @@ flowchart LR
 - 保存设备级状态，例如 `activeTouches`、`activeKeys`、按钮状态
 - 把原始设备输入改写为稳定信号
 - 决定输入应进入哪些设备子节点
-- 在需要时给下游追加只读 context，例如 `board`、`monitor` 或局部回调
+- 在需要时给下游追加只读 context，例如 `board`、`viewport` 或局部回调
 
 workflow 负责：
 
@@ -186,16 +186,16 @@ workflow 负责：
 
 ## 设备挂载
 
-业务侧应优先通过 Monitor 挂载设备：
+业务侧应优先通过 Viewport 挂载设备：
 
 ```js
-monitor.mountSubDAG("", createKeyboardDevice());
+viewport.mountSubDAG("", createKeyboardDevice());
 ```
 
 也可以指定额外挂载前缀：
 
 ```js
-monitor.mountSubDAG("/presentation", createKeyboardDevice());
+viewport.mountSubDAG("/presentation", createKeyboardDevice());
 ```
 
 最终仍会由 Board 持有的 `DevicesDAG` 执行 `mountSubDAG(basePath, subDAGDefinition, mountContext)`。
@@ -227,7 +227,7 @@ monitor.mountSubDAG("/presentation", createKeyboardDevice());
 它们的共同特点是：
 
 - 根节点只做设备态更新与初始分流
-- 设备通过 `defaultRoute` + 出边连接到 `/<monitorId>/workflows/` 下的 workflow 节点
+- 设备通过 `defaultRoute` + 出边连接到 `/<viewportId>/workflows/` 下的 workflow 节点
 - 设备状态通过 `expose()` 对外暴露
 - debugger 的根节点是修饰节点语义，用于记录经过该节点的信号并继续下传
 

@@ -21,7 +21,7 @@ describe("Tool", () => {
     const result = processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
-        path: "/monitor/s-pen/pen",
+        path: "/viewport/s-pen/pen",
         context: {},
         acc: { customFlag: true },
       },
@@ -35,7 +35,7 @@ describe("Tool", () => {
           signals: [{ type: "pressure", context: { value: 0.5 } }],
         },
         context: expect.objectContaining({
-          path: "/monitor/s-pen/pen",
+          path: "/viewport/s-pen/pen",
           acc: expect.objectContaining({
             customFlag: true,
           }),
@@ -69,7 +69,7 @@ describe("Tool", () => {
     processor(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
-        path: "/monitor/s-pen/pen",
+        path: "/viewport/s-pen/pen",
         context: {},
         acc: { board },
       },
@@ -102,7 +102,7 @@ describe("Tool", () => {
     tool.createProcessor()(
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
-        path: "/monitor/s-pen/pen",
+        path: "/viewport/s-pen/pen",
         acc: {
           board,
           allocateObjectId: explicitAllocateObjectId,
@@ -114,7 +114,7 @@ describe("Tool", () => {
     expect(explicitAllocateObjectId).toHaveBeenCalledTimes(1);
   });
 
-  test("createProcessor 应保留传入的 board/monitor 与平面上下文", () => {
+  test("createProcessor 应保留传入的 board/viewport 与平面上下文", () => {
     class TestTool extends Tool {
       calls = [];
 
@@ -133,7 +133,7 @@ describe("Tool", () => {
         return 13;
       },
     };
-    const monitor = {
+    const viewport = {
       worldToChunk() {
         return { chunkId: 9 };
       },
@@ -144,11 +144,11 @@ describe("Tool", () => {
     tool.createProcessor()(
       { signals: [{ type: "trigger", context: {} }] },
       {
-        path: "/monitor/s-pen/pen",
+        path: "/viewport/s-pen/pen",
         acc: {
           board,
           boardApi,
-          monitor,
+          viewport,
           customFlag: true,
         },
       },
@@ -159,13 +159,13 @@ describe("Tool", () => {
         acc: expect.objectContaining({
           board,
           boardApi,
-          monitor,
+          viewport,
           customFlag: true,
         }),
       }),
     );
     expect(tool.calls[0].context.acc.board.allocateObjectId()).toBe(13);
-    expect(tool.calls[0].context.path).toBe("/monitor/s-pen/pen");
+    expect(tool.calls[0].context.path).toBe("/viewport/s-pen/pen");
     expect(tool.calls[0].context.semantics).toBeUndefined();
     expect(tool.calls[0].context.eventContext).toBeUndefined();
     expect(tool.calls[0].context.runtimeContext).toBeUndefined();
@@ -190,7 +190,7 @@ describe("Tool", () => {
     processor(
       { signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }] },
       {
-        path: "/monitor/s-pen/pen",
+        path: "/viewport/s-pen/pen",
         context: {},
       },
     );
@@ -207,7 +207,7 @@ describe("Tool", () => {
 
     const tool = new TestTool();
     const handlerContext = {
-      path: "/monitor/s-pen/pen",
+      path: "/viewport/s-pen/pen",
       context: {},
       getNodeState() {
         return {};
@@ -223,7 +223,7 @@ describe("Tool", () => {
     );
 
     expect(handlerContext).toEqual({
-      path: "/monitor/s-pen/pen",
+      path: "/viewport/s-pen/pen",
       context: {},
       getNodeState: handlerContext.getNodeState,
       setNodeState: handlerContext.setNodeState,

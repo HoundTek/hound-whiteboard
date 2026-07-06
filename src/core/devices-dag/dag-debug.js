@@ -50,14 +50,14 @@ function dagToString(dag) {
     const handler = node.getHandler?.() ?? node.handler;
     const defaultRoute = node.getDefaultRoute?.() ?? node.defaultRoute ?? "";
     const semantics = node.getSemantics?.() ?? node.semantics ?? {};
-    // monitor / prefix / tool 作为独立标签展示，其余语义归入 [...]
-    const isMonitor = !!semantics.monitor;
+    // viewport / prefix / tool 作为独立标签展示，其余语义归入 [...]
+    const isViewport = !!semantics.viewport;
     const isPrefix = !!semantics.prefix;
     const isTool = !!semantics.tool;
     const restKeys = Object.keys(semantics).filter(
       (k) =>
         semantics[k] &&
-        k !== "monitor" &&
+        k !== "viewport" &&
         k !== "prefix" &&
         k !== "tool" &&
         k !== "root",
@@ -67,7 +67,7 @@ function dagToString(dag) {
       `${prefix}${branch}${label}`,
       Number.isInteger(node.id) ? `#${node.id}` : "",
       handler ? "[handler]" : "",
-      isMonitor ? "[monitor]" : "",
+      isViewport ? "[viewport]" : "",
       isPrefix ? "[prefix]" : "",
       isTool ? "[tool]" : "",
       defaultRoute ? `[default=${defaultRoute}]` : "",
@@ -97,7 +97,7 @@ function dagToString(dag) {
  * 生成一个以节点 id 为 key 的 flowchart，可直接渲染为 SVG。
  *
  * - 根节点（`semantics.root`）→ 方角矩形 `["..."]`
- * - Monitor 节点（`semantics.monitor`）→ 体育场形 `(["..."])`
+ * - Viewport 节点（`semantics.viewport`）→ 体育场形 `(["..."])`
  * - Prefix 节点（`semantics.prefix`）→ 子程序形 `[["..."]]`
  * - Tool 节点（`semantics.tool`）→ 数据库形 `[("...")]`
  * - 普通节点 → 圆角矩形 `("...")`
@@ -146,10 +146,10 @@ function dagToMermaid(dag, options = {}) {
     const safeLabel = label.replace(/"/g, "'");
     const semantics = node.getSemantics?.() ?? node.semantics ?? {};
 
-    // 根据语义选择节点形状（优先级：root > monitor > prefix > tool > 默认）
+    // 根据语义选择节点形状（优先级：root > viewport > prefix > tool > 默认）
     if (semantics.root) {
       lines.push(`  ${node.id}["${safeLabel}"]`);
-    } else if (semantics.monitor) {
+    } else if (semantics.viewport) {
       lines.push(`  ${node.id}(["${safeLabel}"])`);
     } else if (semantics.prefix) {
       lines.push(`  ${node.id}[["${safeLabel}"]]`);
@@ -188,15 +188,15 @@ function mermaidNodeLabel(node) {
   // 节点 id
   parts.push(`#${node.id}`);
 
-  // 语义标签（monitor/prefix/tool 独立展示，其余归入 [...]）
+  // 语义标签（viewport/prefix/tool 独立展示，其余归入 [...]）
   const semantics = node.getSemantics?.() ?? node.semantics ?? {};
-  if (semantics.monitor) parts.push("[monitor]");
+  if (semantics.viewport) parts.push("[viewport]");
   if (semantics.prefix) parts.push("[prefix]");
   if (semantics.tool) parts.push("[tool]");
   const restKeys = Object.keys(semantics).filter(
     (k) =>
       semantics[k] &&
-      k !== "monitor" &&
+      k !== "viewport" &&
       k !== "prefix" &&
       k !== "tool" &&
       k !== "root",

@@ -50,7 +50,7 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 - `depth`
 - `context`
 - `board`
-- `monitor`
+- `viewport`
 - `allocateObjectId`
 - `resolveOwnerChunkId`
 - `getNodeState`
@@ -59,7 +59,7 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 这里的 `context` 就是来自 DevicesDAG 的累积上下文。它通常会携带：
 
 - `board`
-- `monitor`
+- `viewport`
 - 工作流回调，例如 `onToolComplete`
 - 其他由上游 prefix 注入的只读数据
 
@@ -119,27 +119,27 @@ Tool 与 prefix 可以在同一条链路上协作，但边界不同：
 
 ## 挂载方式
 
-当前推荐把工具作为 workflow 入口挂在 `/<monitorId>/workflows/` 下，再通过设备节点的出边连接过去，例如：
+当前推荐把工具作为 workflow 入口挂在 `/<viewportId>/workflows/` 下，再通过设备节点的出边连接过去，例如：
 
 ```js
-monitor.mountWorkflow("/workflows/pointer", pointerTool);
-monitor.mountWorkflow("/workflows/move", moveTool);
+viewport.mountWorkflow("/workflows/pointer", pointerTool);
+viewport.mountWorkflow("/workflows/move", moveTool);
 
-monitor.addEdge("/mouse/pointer", "tool", "/workflows/pointer");
-monitor.addEdge("/keyboard/code/KeyW", "tool", "/workflows/move");
+viewport.addEdge("/mouse/pointer", "tool", "/workflows/pointer");
+viewport.addEdge("/keyboard/code/KeyW", "tool", "/workflows/move");
 ```
 
 或直接对 DevicesDAG 调用：
 
 ```js
-dag.mountWorkflow("/monitor/main/workflows/pointer", pointerTool, {
+dag.mountWorkflow("/viewport/main/workflows/pointer", pointerTool, {
   board,
-  monitor,
+  viewport,
 });
 dag.addEdge(
-  "/monitor/main/mouse/pointer",
+  "/viewport/main/mouse/pointer",
   "tool",
-  "/monitor/main/workflows/pointer",
+  "/viewport/main/workflows/pointer",
 );
 ```
 
@@ -175,11 +175,15 @@ unsub();
 
 ### 当前预定义钩子
 
-| 工具类型 | 控制型钩子（可覆盖）           | 通知型钩子（可订阅）               |
-| -------- | ------------------------------ | ---------------------------------- |
-| Creator  | `beforeCommitCreatedObject()`  | `"afterCreate"`                    |
-| Modifier | `beforeApplyModifiedObjects()` | `"afterApply"`                     |
-| Chooser  | `beforeConfirmSelection()`     | `"afterChoose"` / `"afterConfirm"` |
+工具族的通知型钩子已统一为 namespace 格式，通过 `GestureTool` 的事件机制发布：
+
+| 工具类型 | 控制型钩子（可覆盖）           | 通知型事件          |
+| -------- | ------------------------------ | ------------------- |
+| Creator  | `beforeCommitCreatedObject()`  | `"action:complete"` |
+| Modifier | `beforeApplyModifiedObjects()` | `"action:complete"` |
+| Chooser  | `beforeConfirmSelection()`     | `"action:complete"` |
+
+此外，`GestureTool` 还提供手势层事件：`"gesture:begin"`、`"gesture:update"`、`"gesture:end"`、`"gesture:cancel"`。
 
 控制型钩子返回 `false` 即阻止该生命周期步骤继续执行。
 
@@ -196,9 +200,9 @@ unsub();
 
 如果工具需要在 `uiCanvas` 上声明兼容 overlay，可额外覆写：
 
-- `collectUiOverlayEntries({ deviceContext, monitor, renderer, activeObjectManager })`
+- `collectUiOverlayEntries({ deviceContext, viewport, renderer })`
 
-该方法返回的条目会通过 monitor 上注册的 provider 交给 `UiRenderer`。
+该方法返回的条目会通过 viewport 上注册的 provider 交给 `UiRenderer`。
 
 ## 设计约束
 
@@ -210,17 +214,13 @@ unsub();
 
 ## 当前状态
 
-creator、chooser、modifier 相关基类已经切到新的 `deviceContext` 与节点 `state` 模型。
+工具族已全面迁移到 `GestureTool` 与 `MultiGestureTool` 骨架。
 
-这意味着：
-
-- modifier handoff 优先通过回调与状态桥接完成
-- 默认链路继续统一走 `continueToDefaultPath()`
-- Board 输入链路测试已经覆盖 creator 到 modifier 的交接流程
-- Tool 上下文已经完全收敛为新版平面 `deviceContext`
+详见 [gesture-tool-document.md](./gesture-tool-document.md)。
 
 ## 相关文档
 
+- [手势工具基类](./gesture-tool-document.md)
 - [设备图](../devices-dag/docs/devices-dag-document.md)
 - [Core 输入流](../docs/core-input-flow.md)
 - [阶段性稳定接口](../docs/core-stable-interfaces.md)

@@ -10,10 +10,10 @@
 2. **渲染执行链**：`renderer/`
 3. **白板编排层**：`orchestration/`
 
-当前组件层的一个关键特点是：**UI façade 与 Worker core 已拆分**。
+当前组件层的一个关键特点是：**UI facade 与 Worker core 已拆分**。
 
-- UI 线程持有 `Board`、`MonitorProxy`
-- Worker 线程持有 `BoardCore`、`MonitorCore`
+- UI 线程持有 `Board`、`Viewport`
+- Worker 线程持有 `BoardCore`、`ViewportCore`
 - `ActiveObjectManager`、chunk、base/live renderer 等位于共享层
 
 ## 目录结构
@@ -55,25 +55,24 @@ src/core/components/
 
 编排层。
 
-| 文件                       | 运行边界 | 说明                                               |
-| -------------------------- | -------- | -------------------------------------------------- |
-| `board.js`                 | UI       | UI façade，持有 DAG、signalsEventBus、monitor 集合 |
-| `board-core.js`            | Worker   | 真实白板核心                                       |
-
-| `monitor-proxy.js`         | UI       | Worker 模式下的 monitor 代理                       |
-| `monitor-core.js`          | Worker   | Worker 侧视口与渲染核心                            |
-| `active-object-manager.js` | Shared   | 交互态动态图与层关系                               |
-| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                   |
-| `board-render-hooks.js`    | UI       | AOM → monitor 渲染桥接                             |
+| 文件                       | 运行边界 | 说明                                                |
+| -------------------------- | -------- | --------------------------------------------------- |
+| `board.js`                 | UI       | UI facade，持有 DAG、signalsEventBus、viewport 集合 |
+| `board-core.js`            | Worker   | 真实白板核心                                        |
+| `viewport.js`              | UI       | UI 侧 viewport                                      |
+| `viewport-core.js`         | Worker   | Worker 侧视口与渲染核心                             |
+| `active-object-manager.js` | Shared   | 交互态动态图与层关系                                |
+| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                    |
+| `board-render-hooks.js`    | UI       | AOM → viewport 渲染桥接                             |
 
 ## 当前导出入口
 
 `src/core/components/index.js` 当前只导出 UI 侧宿主入口：
 
 - `Board`
-- `MonitorProxy`
+- `Viewport`
 
-Worker 侧 `BoardCore` / `MonitorCore` 不经由该 barrel 导出，而是由 `src/core-worker.js` 直接引用。
+Worker 侧 `BoardCore` / `ViewportCore` 不经由该 barrel 导出，而是由 `src/core-worker.js` 直接引用。
 
 ## 关键设计点
 
@@ -82,10 +81,10 @@ Worker 侧 `BoardCore` / `MonitorCore` 不经由该 barrel 导出，而是由 `s
 - `Board` 负责 UI 运行时
 - `BoardCore` 负责对象、区块、AOM、UndoTree、持久化协调
 
-### `Monitor` 家族拆分
+### `Viewport` 家族拆分
 
-- `MonitorProxy`：Worker 模式下的 UI 视口代理
-- `MonitorCore`：Worker 侧真实渲染核心
+- `Viewport`：UI 侧视口，接收 Worker 渲染帧
+- `ViewportCore`：Worker 侧真实渲染核心
 
 ### AOM 渲染副作用抽离
 
@@ -95,7 +94,7 @@ Worker 侧 `BoardCore` / `MonitorCore` 不经由该 barrel 导出，而是由 `s
 - base 层对象级 / 区块级刷新
 - 视口范围刷新
 
-AOM 自身不直接依赖 DOM canvas 或 monitor 列表。
+AOM 自身不直接依赖 DOM canvas 或 viewport 列表。
 
 ## 当前状态
 
@@ -107,5 +106,5 @@ AOM 自身不直接依赖 DOM canvas 或 monitor 列表。
 
 - [core-runtime-boundaries.md](../../docs/core-runtime-boundaries.md)
 - [board-document.md](../orchestration/docs/board-document.md)
-- [monitor-document.md](../orchestration/docs/monitor-document.md)
+- [viewport-document.md](../orchestration/docs/viewport-document.md)
 - [active-object-manager-document.md](../orchestration/docs/active-object-manager-document.md)

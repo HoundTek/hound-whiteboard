@@ -8,7 +8,7 @@ import {
   flushMicrotasks,
 } from "../../../test-support/worker-mode-fixtures.js";
 
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -26,7 +26,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -41,7 +41,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
       },
       deviceContext,
@@ -49,7 +49,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "position", context: { value: new Vector(8, 9) } }],
       },
       deviceContext,
@@ -57,7 +57,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(10, 12) } },
           { type: "end", context: {} },
@@ -66,8 +66,8 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([{ x: 5, y: 7 }]);
-    expect(tool._local.position.serialize()).toEqual({ x: 5, y: 5 });
+    expect(tool._entry.data.points).toEqual([{ x: 5, y: 7 }]);
+    expect(tool._entry.position.serialize()).toEqual({ x: 5, y: 5 });
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -84,13 +84,13 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
       },
       deviceContext,
     );
 
-    expect(tool._local.property).toMatchObject({
+    expect(tool._entry.property).toMatchObject({
       fillColor: "#ff0000",
       strokeColor: "#0000ff",
       strokeWidth: 3,
@@ -103,7 +103,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -116,13 +116,13 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "cancel", context: {} }],
       },
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -136,7 +136,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -147,14 +147,14 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "object-cancel", context: {} }],
       },
       { acc: { board, boardApi, objectId: 10, ownerChunkId: 1 } },
     );
 
     expect(discardSpy).toHaveBeenCalledWith([10]);
-    expect(tool._local).toBeNull();
+    expect(tool._entry).toBeNull();
     expect(tool.count).toBe(0);
     expect(tool.lastPoint).toBeNull();
     expect(board.getObjectById).not.toHaveBeenCalled();
@@ -166,7 +166,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -177,13 +177,13 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "object-end", context: {} }],
       },
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
     expect(tool.count).toBe(1);
     expect(tool.lastPoint).toBeNull();
   });
@@ -196,7 +196,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -210,7 +210,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
@@ -223,18 +223,18 @@ describe("PolygonCreatorTool", () => {
 
   test("顶点更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
     const tool = new PolygonCreatorTool();
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
-    const { deviceContext } = createBoardDeviceContext(31, { monitor });
+    const { deviceContext } = createBoardDeviceContext(31, { viewport });
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -245,13 +245,13 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    monitor.liveRenderer.captureObjectSnapshot.mockClear();
-    monitor.liveRenderer.invalidateObjects.mockClear();
-    monitor.requestViewportUiRender.mockClear();
+    viewport.liveRenderer.captureObjectSnapshot.mockClear();
+    viewport.liveRenderer.invalidateObjects.mockClear();
+    viewport.requestViewportUiRender.mockClear();
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -262,9 +262,9 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("显式提供 boardApi 时应通过 RPC 创建并提交多边形对象", () => {
@@ -277,7 +277,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -291,7 +291,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
@@ -308,7 +308,7 @@ describe("PolygonCreatorTool", () => {
     );
     expect(appendSpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([24]);
-    expect(tool._local).toMatchObject({
+    expect(tool._entry).toMatchObject({
       id: 24,
       position: new Vector(5, 5),
     });
@@ -363,7 +363,7 @@ describe("PolygonCreatorTool", () => {
     );
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([703]);
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("object-end 后应通过 commitObjects 提交对象", () => {
@@ -373,7 +373,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -387,7 +387,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
@@ -400,22 +400,22 @@ describe("PolygonCreatorTool", () => {
 
   describe("端到端集成（通过 Board 输入链路）", () => {
     test("挂载后的 PolygonCreatorTool 应可经由输入链路完成 object-end 提交", async () => {
-      const { board, monitor, cleanup } = await createWorkerBoardContext({
+      const { board, viewport, cleanup } = await createWorkerBoardContext({
         boardWidth: 800,
         boardHeight: 600,
-        monitorId: "main",
-        monitorWidth: 800,
-        monitorHeight: 600,
+        viewportId: "main",
+        viewportWidth: 800,
+        viewportHeight: 600,
       });
 
       try {
         const tool = new PolygonCreatorTool();
-        monitor.origin = new Vector(100, 50);
-        monitor.zoom = 2;
+        viewport.origin = new Vector(100, 50);
+        viewport.zoom = 2;
 
-        monitor.mountSubDAG("", createMouseDevice());
+        viewport.mountSubDAG("", createMouseDevice());
         board.signalsEventBus.emit("mount", {
-          monitorId: "main",
+          viewportId: "main",
           name: "primary-polygon",
           workflow: tool,
           edges: [{ from: "/mouse/primary", edge: "default" }],
@@ -449,10 +449,10 @@ describe("PolygonCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._local.id]),
+          board.getBoardApi().queryObjects([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
-            id: tool._local.id,
+            id: tool._entry.id,
             isActive: false,
             position: { x: 125, y: 80 },
             data: expect.objectContaining({
@@ -460,9 +460,9 @@ describe("PolygonCreatorTool", () => {
             }),
           }),
         ]);
-        expect(tool._local.id).toBe(1);
-        expect(tool._local.position.serialize()).toEqual({ x: 125, y: 80 });
-        expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+        expect(tool._entry.id).toBe(1);
+        expect(tool._entry.position.serialize()).toEqual({ x: 125, y: 80 });
+        expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
       } finally {
         cleanup();
       }

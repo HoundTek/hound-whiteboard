@@ -32,7 +32,7 @@
 
 - 节点处理统一使用 `handler`
 - `defaultRoute` 是当前节点的默认出边名
-- **workflow 统一挂载到 `/<monitorId>/workflows/` 下**，通过 `addEdge` 与设备节点连接
+- **workflow 统一挂载到 `/<viewportId>/workflows/` 下**，通过 `addEdge` 与设备节点连接
 - `mountWorkflow` 的第一个参数是 workflow 在 `/workflows/` 下的路径，不再是设备子路径
 - `workflow` 可以是单个 Tool，也可以是单源 `SubDAGDefinition`
 - 结构化设备定义使用 `rootPath + nodes + edges`
@@ -110,13 +110,13 @@
 
 稳定语义：
 
-- `deviceContext` 顶层字段 `path`、`context`、`board`、`monitor`、`getNodeState`、`setNodeState` 已稳定
+- `deviceContext` 顶层字段 `path`、`context`、`board`、`viewport`、`getNodeState`、`setNodeState` 已稳定
 - `deviceContext` 不再构造 `eventContext` / `runtimeContext` 兼容视图
 - 工具代码应直接读取顶层字段与 `context`
 
-## Monitor
+## Viewport
 
-当前建议依赖的 Monitor 输入接口有：
+当前建议依赖的 Viewport 输入接口有：
 
 - `mountSubDAG(subDAGDefinition)`
 - `mountSubDAG(pathPrefix, subDAGDefinition)`
@@ -126,7 +126,7 @@
 
 稳定语义：
 
-- Monitor 不拥有独立 `DevicesDAG`
+- Viewport 不拥有独立 `DevicesDAG`
 - 所有挂载最终都代理到 `Board.devicesDAG`
 
 ## 配置事件

@@ -2,7 +2,7 @@ import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { SingleGestureObjectCreatorTool } from "../object-creator.js";
 import { Vector } from "../../../utils/math.js";
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -21,7 +21,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -38,7 +38,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           {
             type: "position",
@@ -55,10 +55,10 @@ describe("ObjectCreatorTool — property 信号", () => {
       deviceContext,
     );
 
-    expect(tool._local).toBeDefined();
-    expect(tool._local.property.strokeColor).toBe("hsl(120, 70%, 42%)");
-    expect(tool._local.property.width).toBe(3);
-    expect(tool._local.property.fillColor).toBe("#fff");
+    expect(tool._entry).toBeDefined();
+    expect(tool._entry.property.strokeColor).toBe("hsl(120, 70%, 42%)");
+    expect(tool._entry.property.width).toBe(3);
+    expect(tool._entry.property.fillColor).toBe("#fff");
   });
 
   test("property 信号为 null / 非对象 → injectedProperty 为 null，对象使用默认属性", () => {
@@ -69,7 +69,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(0, 0) } },
           { type: "property", context: { value: null } },
@@ -78,8 +78,8 @@ describe("ObjectCreatorTool — property 信号", () => {
       deviceContext,
     );
 
-    expect(tool._local).toBeDefined();
-    expect(tool._local.property.strokeColor).toBe("#000");
+    expect(tool._entry).toBeDefined();
+    expect(tool._entry.property.strokeColor).toBe("#000");
   });
 
   test("无 property 信号 → 对象使用默认属性", () => {
@@ -90,14 +90,14 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(3, 4) } }],
       },
       deviceContext,
     );
 
-    expect(tool._local).toBeDefined();
-    expect(tool._local.property.strokeColor).toBe("#abc");
+    expect(tool._entry).toBeDefined();
+    expect(tool._entry.property.strokeColor).toBe("#abc");
   });
 
   test("buildInteractionContext 在基类中提取 injectedProperty", () => {
@@ -143,13 +143,13 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
       deviceContext,
     );
 
-    expect(deviceContext.acc.objects).toEqual([tool._local]);
+    expect(deviceContext.acc.objects).toEqual([tool._entry]);
     expect(deviceContext.acc.boardApi.createObject).toHaveBeenCalledWith(
       "CircleObject",
       expect.objectContaining({
@@ -180,7 +180,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
@@ -195,37 +195,41 @@ describe("ObjectCreatorTool — property 信号", () => {
         position: new Vector(2, 3),
       }),
     );
-    expect(tool._local.position.serialize()).toEqual({ x: 2, y: 3 });
-    expect(tool._local.data.radius).toBe(0);
-    expect(deviceContext.acc.objects).toEqual([tool._local]);
+    expect(tool._entry.position.serialize()).toEqual({ x: 2, y: 3 });
+    expect(tool._entry.data.radius).toBe(0);
+    expect(deviceContext.acc.objects).toEqual([tool._entry]);
   });
 
   describe("生命周期钩子", () => {
-    test("completeCreatedObject 后触发 afterCreate 通知", () => {
+    test("completeCreatedObject 后触发 action:complete 通知", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();
-      const afterCreate = jest.fn();
-      tool.on("afterCreate", afterCreate);
+      const actionComplete = jest.fn();
+      tool.on("action:complete", actionComplete);
 
       tool.objectId = 1;
-      tool._local = { id: 1, type: "test" };
+      tool._entry = { id: 1, type: "test" };
       tool.completeCreatedObject({ context: { acc: {} } });
 
-      expect(afterCreate).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledWith(
+        expect.objectContaining({ acc: {} }),
+        { id: 1, type: "test" },
+      );
     });
 
     test("beforeCommitCreatedObject 返回 false 时阻止 commitObjects", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();
@@ -233,7 +237,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
       tool.beforeCommitCreatedObject = () => false;
       tool.objectId = 2;
-      tool._local = { id: 2 };
+      tool._entry = { id: 2 };
       tool.completeCreatedObject({ context: { acc: { boardApi } } });
 
       expect(boardApi.commitObjects).not.toHaveBeenCalled();
@@ -243,47 +247,47 @@ describe("ObjectCreatorTool — property 信号", () => {
     test("beforeCommitCreatedObject 默认返回 true → 对象通过 boardApi 提交", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();
       const boardApi = { commitObjects: jest.fn() };
 
       tool.objectId = 3;
-      tool._local = { id: 3 };
+      tool._entry = { id: 3 };
       tool.completeCreatedObject({ context: { acc: { boardApi } } });
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([3]);
       expect(tool.isObjectCreationCompleted).toBe(true);
     });
 
-    test("beforeCommit 返回 false 时 afterCreate 仍然触发", () => {
+    test("beforeCommit 返回 false 时 action:complete 仍然触发", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
-        beginCreationGesture() {}
-        updateCreationGesture() {}
-        completeCreationGesture() {}
+        beginGesture() {}
+        updateGesture() {}
+        completeGesture() {}
       }
 
       const tool = new TestCreator();
-      const afterCreate = jest.fn();
-      tool.on("afterCreate", afterCreate);
+      const actionComplete = jest.fn();
+      tool.on("action:complete", actionComplete);
       tool.beforeCommitCreatedObject = () => false;
       tool.objectId = 4;
-      tool._local = { id: 4 };
+      tool._entry = { id: 4 };
 
       tool.completeCreatedObject({ context: { acc: {} } });
 
-      expect(afterCreate).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
 
-    test("process 完整周期（position → end）触发 afterCreate", () => {
+    test("process 完整周期（position → end）触发 action:complete", () => {
       const tool = new CircleCreatorTool();
-      const afterCreate = jest.fn();
+      const actionComplete = jest.fn();
       const { deviceContext } = createBoardDeviceContext(301);
-      tool.on("afterCreate", afterCreate);
+      tool.on("action:complete", actionComplete);
 
       tool.process(
         {
@@ -294,11 +298,11 @@ describe("ObjectCreatorTool — property 信号", () => {
         deviceContext,
       );
 
-      expect(afterCreate).not.toHaveBeenCalled();
+      expect(actionComplete).not.toHaveBeenCalled();
 
       tool.process({ signals: [{ type: "end" }] }, deviceContext);
 
-      expect(afterCreate).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
   });
 });

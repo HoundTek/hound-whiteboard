@@ -8,7 +8,7 @@
 flowchart TD
   0["/ #0 [root]"]
   0 -->|"main"| 1
-  1(["main #1 [monitor]"])
+  1(["main #1 [viewport]"])
 
   1 -->|"mouse"| 2
   2("mouse #2 [handler]")
@@ -91,15 +91,15 @@ const penSubDAG = builder.build();
 const dag = new DevicesDAG();
 const tool = new PenTool();
 
-dag.mountSubDAG("/monitor/main", penSubDAG);
-dag.mountWorkflow("/monitor/main/workflows/pen", tool, {
+dag.mountSubDAG("/viewport/main", penSubDAG);
+dag.mountWorkflow("/viewport/main/workflows/pen", tool, {
   board,
-  monitor,
+  viewport,
 });
-dag.addEdge("/monitor/main/pen/pointer", "tool", "/monitor/main/workflows/pen");
+dag.addEdge("/viewport/main/pen/pointer", "tool", "/viewport/main/workflows/pen");
 
 const result = dag.dispatch({
-  to: "/monitor/main/pen",
+  to: "/viewport/main/pen",
   signals: [
     {
       type: "position",
@@ -111,10 +111,10 @@ const result = dag.dispatch({
 
 ## 处理过程
 
-1. 输入先到 `/monitor/main/pen`
+1. 输入先到 `/viewport/main/pen`
 2. 根节点 handler 把包转发到相对路径 `pointer`
-3. `/monitor/main/pen/pointer` 没有 handler，但声明了 `defaultRoute: "tool"`
-4. 设备图沿 `tool` 出边把输入继续送到 workflow 入口，逻辑路由路径仍表现为 `/monitor/main/pen/pointer/tool`
+3. `/viewport/main/pen/pointer` 没有 handler，但声明了 `defaultRoute: "tool"`
+4. 设备图沿 `tool` 出边把输入继续送到 workflow 入口，逻辑路由路径仍表现为 `/viewport/main/pen/pointer/tool`
 5. `PenTool.process()` 消费最终信号包
 
 ## 带状态的写法
@@ -122,8 +122,8 @@ const result = dag.dispatch({
 如果需要在设备节点和工具之间共享状态，建议显式写入节点 `state`：
 
 ```js
-dag.mount("/monitor/main/pen", (packet, context) => {
-  context.setNodeState("/monitor/main/pen", { activeStrokeId: 1 });
+dag.mount("/viewport/main/pen", (packet, context) => {
+  context.setNodeState("/viewport/main/pen", { activeStrokeId: 1 });
   return { signals: packet.signals };
 });
 ```

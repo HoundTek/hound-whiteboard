@@ -40,7 +40,7 @@
  * 视口变更消息
  * @typedef {Object} ViewportChangeMessage
  * @property {"viewport-change"} type - 消息类型
- * @property {string | number} monitorId - 目标 monitor 标识
+ * @property {string | number} viewportId - 目标 viewport 标识
  * @property {import("./types.js").Point2D} origin - 视口原点
  * @property {number} zoom - 当前缩放因子
  * @property {import("./types.js").ViewportSize} [viewportSize] - 当前视口尺寸
@@ -51,17 +51,15 @@
  * 请求渲染 flush 消息
  * @typedef {Object} RequestRenderFlushMessage
  * @property {"request-render-flush"} type - 消息类型
- * @property {string | number} [monitorId] - 目标 monitor 标识；省略时由 Worker 自行决定作用范围
+ * @property {string | number} [viewportId] - 目标 viewport 标识；省略时由 Worker 自行决定作用范围
  */
 
 /**
  * 渲染帧消息
  * @typedef {Object} RenderFrameMessage
  * @property {"render-frame"} type - 消息类型
- * @property {string | number} monitorId - 目标 monitor 标识
- * @property {ImageBitmap} [baseBitmap] - base 层位图
- * @property {ImageBitmap} [liveBitmap] - live 层位图
- * @property {import("./types.js").Rect[]} [baseDirtyRects] - base 层脏区集合
+ * @property {string | number} viewportId - 目标 viewport 标识
+ * @property {ImageBitmap} [liveBitmap] - 合成后显示层位图
  * @property {import("./types.js").Rect[]} [liveDirtyRects] - live 层脏区集合
  * @property {number} [frameId] - 帧序号
  */

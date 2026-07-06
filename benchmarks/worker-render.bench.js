@@ -1,11 +1,11 @@
 /**
  * @file Worker 渲染帧性能测试
- * @description 测量 MonitorCore flushRenderFrame() 在不同对象规模下的耗时。
+ * @description 测量 ViewportCore flushRenderFrame() 在不同对象规模下的耗时。
  * @module benchmarks/worker-render
  */
 
 import { BoardCore } from "../src/core/components/orchestration/board-core.js";
-import { MonitorCore } from "../src/core/components/orchestration/monitor-core.js";
+import { ViewportCore } from "../src/core/components/orchestration/viewport-core.js";
 import { deserialize } from "../src/core/objects/object-deserializer.js";
 import { installNoopOffscreenCanvas } from "../src/core/test-support/noop-canvas.js";
 import { printHeader, printFooter, benchmarkSync } from "./helpers.js";
@@ -16,9 +16,9 @@ function main() {
   try {
     const boardCore = new BoardCore({ width: 800, height: 600 });
     const renderFrames = [];
-    const monitor = new MonitorCore({
+    const viewport = new ViewportCore({
       boardCore,
-      monitorId: "bench",
+      viewportId: "bench",
       width: 800,
       height: 600,
       postRenderFrame(message, transferList) {
@@ -26,7 +26,7 @@ function main() {
       },
     });
 
-    monitor.onViewportChange({
+    viewport.onViewportChange({
       origin: { x: 0, y: 0 },
       zoom: 1,
       viewportSize: { width: 800, height: 600 },
@@ -58,8 +58,8 @@ function main() {
      * @returns {void}
      */
     function runFlush() {
-      monitor.markFrameDirty?.();
-      const flushed = monitor.flushRenderFrame();
+      viewport.markFrameDirty?.();
+      const flushed = viewport.flushRenderFrame();
       if (flushed) {
         renderFrames.length = 0;
       }
@@ -84,7 +84,7 @@ function main() {
       message?.baseBitmap?.close?.();
       message?.liveBitmap?.close?.();
     }
-    monitor.destroy();
+    viewport.destroy();
     restoreOffscreenCanvas?.();
   } catch (error) {
     console.error("\n❌ Worker Render 测试失败:", error.message);

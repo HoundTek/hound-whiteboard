@@ -1386,12 +1386,12 @@ describe("DevicesDAG", () => {
       expect(str).toContain("#0");
     });
 
-    test("toString 应显示 monitor 标注", () => {
+    test("toString 应显示 viewport 标注", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/mon");
-      dag.configureNode("/mon", { semantics: { monitor: true } });
+      dag.configureNode("/mon", { semantics: { viewport: true } });
       const str = dag.toString();
-      expect(str).toContain("[monitor]");
+      expect(str).toContain("[viewport]");
     });
   });
 });

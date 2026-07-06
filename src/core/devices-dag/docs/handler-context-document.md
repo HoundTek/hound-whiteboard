@@ -6,6 +6,35 @@
 
 `createPrefixNodeHandler` 仅在此基础上为 `ctx.state` / `ctx.getState()` 叠加 `initialState` 默认值，不引入额外字段。
 
+## 统一上下文原则
+
+所有 handler 和工具 processor 拿到的 `ctx` 都是同一份 `DevicesDAGHandlerContext`。
+它是沿 DAG 传递上下文的**唯一来源**，handler 不应将 `ctx` 包进自定义的中间对象后再传给下游方法。
+
+### 规则
+
+- handler / processor 的方法签名应直接接收 `ctx`（或 `context`），不创建包装层
+- 若需从 `ctx` 或 `signalPacket` 中提取派生数据，将派生值作为额外参数独立传递，而非把 `ctx` 装入一个新对象
+- 违背原则的典型模式：`buildXxxContext(signalPacket, ctx)` 返回 `{ context: ctx, ... }`，迫使下游方法从包装中拆回 `ctx`
+
+### 示例
+
+```js
+// ✅ 正确：直接传递 ctx，派生值作为独立参数
+process(signalPacket, ctx) {
+  const position = resolvePosition(signalPacket);
+  this.doSomething(ctx, position);
+}
+
+// ❌ 错误：把 ctx 包进自定义上下文对象
+process(signalPacket, ctx) {
+  const customCtx = { signalPacket, ctx, signals: packet.signals };
+  this.doSomething(customCtx);  // 里面还要 customCtx.ctx 才能取回 ctx
+}
+```
+
+---
+
 ## ctx 成员速览
 
 ### 节点信息
@@ -24,20 +53,21 @@
 
 | 成员      | 类型     | 说明                                                  |
 | --------- | -------- | ----------------------------------------------------- |
-| `ctx.acc` | `Object` | 沿 DAG 逐层累积的只读上下文（board、monitor、回调等） |
+| `ctx.acc` | `Object` | 沿 DAG 逐层累积的只读上下文（board、viewport、回调等） |
 
 **规则**：handler 不能往 `ctx` 平级新增键。向下游传递额外数据时，通过返回值 `{ acc: { key: value } }` 写入累积上下文。
 
 ### 状态管理
 
-| 成员                                | 类型                                 | 说明                                                                   |
-| ----------------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
-| `ctx.state`                         | `Object`                             | 当前节点状态快照。若走 `createPrefixNodeHandler` 已合并 `initialState` |
-| `ctx.getState()`                    | `() => Object`                       | 重读节点最新状态                                                       |
-| `ctx.setState(nextState)`           | `(Object) => Object`                 | 全量覆盖节点状态                                                       |
-| `ctx.patchState(partial)`           | `(Object) => Object`                 | 浅合并 `{ ...current, ...partial }`                                    |
-| `ctx.getNodeState(pathOrId?)`       | `(string\|number?) => Object`        | 读取任意节点（默认为当前节点）状态                                     |
-| `ctx.setNodeState(pathOrId, state)` | `(string\|number, Object) => Object` | 写入任意节点状态                                                       |
+| 成员                                  | 类型                                  | 说明                                                                   |
+| ------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| `ctx.state`                           | `Object`                              | 当前节点状态快照。若走 `createPrefixNodeHandler` 已合并 `initialState` |
+| `ctx.getState()`                      | `() => Object`                        | 重读节点最新状态                                                       |
+| `ctx.setState(nextState)`             | `(Object) => Object`                  | 全量覆盖节点状态                                                       |
+| `ctx.patchState(partial)`             | `(Object) => Object`                  | 浅合并 `{ ...current, ...partial }`                                    |
+| `ctx.getNodeState(pathOrId?)`         | `(string\|number?) => Object`         | 读取任意节点（默认为当前节点）状态                                     |
+| `ctx.setNodeState(pathOrId, state)`   | `(string\|number, Object) => Object`  | 写入任意节点状态                                                       |
+| `ctx.delNodeState(pathOrId, ...keys)` | `(string\|number, ...string) => void` | 删除指定节点的状态键                                                   |
 
 ### 路由
 
@@ -198,7 +228,7 @@ createPrefixNodeHandler({
 - 工具 processor（`Tool.createProcessor`）
 - 裸 handler（直接挂在 DAG 节点上的任意函数）
 
-工具 processor 拿到的同样是标准 handler context 全集，`ctx.acc` 中的 `board`、`boardApi`、`monitor` 等由 DAG 上游节点在 dispatch 或 mount 时注入。
+工具 processor 拿到的同样是标准 handler context 全集，`ctx.acc` 中的 `board`、`boardApi`、`viewport` 等由 DAG 上游节点在 dispatch 或 mount 时注入。
 
 ---
 

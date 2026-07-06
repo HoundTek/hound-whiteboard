@@ -5,6 +5,7 @@
  * @author Zhou Chenyu
  */
 
+import { GestureTool } from "../tools/gesture-tool.js";
 import { Tool } from "../tools/tool.js";
 
 /**
@@ -33,49 +34,62 @@ class CollectingTool extends Tool {
 /**
  * 创建模拟 creator 工具
  * @description
- * 实现完整的创建生命周期钩子，默认过程：
- *   finalize → beforeCommit → commit（可选）→ afterCreate
- * 默认 beforeCommit 返回 true（进入静态图）。
- * handoff 测试可通过 mockCreator.beforeCommitCreatedObject = () => false 阻止。
+ * 基于 GestureTool 提供最小化的 creator 生命周期模拟。
+ * `completeCreatedObject` 通过 `action:complete` 通知完成，
+ * handoff 测试可通过 `beforeCommitCreatedObject = () => false` 阻止静态图提交。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
- * @returns {Tool}
+ * @returns {GestureTool}
  */
 function createMockCreator(onProcess) {
-  return new (class extends Tool {
+  return new (class extends GestureTool {
     constructor() {
       super();
       this.isObjectCreationCompleted = false;
+      this.autoActionOnGestureEnd = true;
     }
 
     process(packet, ctx) {
       if (onProcess) onProcess(packet, ctx);
-      this.completeCreatedObject({ context: ctx });
+      this.completeCreatedObject({ context: ctx, signalPacket: packet });
+    }
+
+    beginGesture() {}
+
+    updateGesture() {}
+
+    performAction() {
+      return this._entry ?? this.obj;
     }
 
     /**
      * 完整的创建生命周期入口。
-     * 被 handoff 通过钩子（beforeCommit / afterCreate）拦截。
+     * 被 handoff 通过钩子（beforeCommit / action:complete）拦截。
+     * @param {{ context?: Object }} interaction - 交互上下文
+     * @returns {undefined}
      */
     completeCreatedObject(interaction) {
+      const draft = this._entry ?? this.obj;
       if (this.beforeCommitCreatedObject?.(interaction) === false) {
-        // handoff 模式：只 finalize，不 commit
         this.isObjectCreationCompleted = true;
       } else {
-        // 独立模式：commit 到静态图
         this.isObjectCreationCompleted = true;
         interaction?.context?.acc?.board?.activeObjectManager?.apply?.(
-          new Set([this.obj].filter(Boolean)),
+          new Set([draft].filter(Boolean)),
         );
       }
-      this.afterCompleteCreatedObject?.(interaction, this.obj);
+      this.afterCompleteCreatedObject?.(interaction, draft);
+      this._emit?.("action:complete", interaction?.context ?? {}, draft);
+      return undefined;
     }
 
     beforeCommitCreatedObject(_interaction) {
       return true;
     }
 
-    afterCompleteCreatedObject(interaction, obj) {
-      this._emit?.("afterCreate", interaction, obj);
+    afterCompleteCreatedObject(interaction, obj) {}
+
+    reset() {
+      this.isObjectCreationCompleted = false;
     }
 
     obj;
@@ -85,19 +99,21 @@ function createMockCreator(onProcess) {
 /**
  * 创建模拟 chooser 工具
  * @description
- * 支持选择生命周期钩子。
- * process 中调用 onProcess 后，会调用 confirmSelection 触发 afterConfirm。
- * 延迟 0ms 的 end 信号让 chooser 先写入 state，
- * 再通过 confirmSelection 通知完成。
+ * 基于 GestureTool 提供最小化的 chooser 生命周期模拟。
+ * `confirmSelection` 通过 `action:complete` 通知完成。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
- * @returns {Tool}
+ * @returns {GestureTool}
  */
 function createMockChooser(onProcess) {
-  return new (class extends Tool {
+  return new (class extends GestureTool {
+    constructor() {
+      super();
+      this.autoActionOnGestureEnd = false;
+    }
+
     process(packet, ctx) {
       if (onProcess) onProcess(packet, ctx);
 
-      // 检查是否携带 end 信号：是则确认选择
       const sigs = packet?.signals ?? [];
       const hasEnd = Array.isArray(sigs) && sigs.some((s) => s?.type === "end");
       if (hasEnd) {
@@ -109,33 +125,62 @@ function createMockChooser(onProcess) {
       }
     }
 
+    beginGesture() {}
+
+    updateGesture() {}
+
+    performAction() {
+      return undefined;
+    }
+
     beforeConfirmSelection() {
       return true;
     }
 
-    afterConfirmSelection(deviceContext, objects) {
-      this._emit?.("afterConfirm", deviceContext, objects);
-    }
+    afterConfirmSelection(deviceContext, objects) {}
 
     confirmSelection(deviceContext, objects) {
       if (this.beforeConfirmSelection(deviceContext) === false) return false;
       this.afterConfirmSelection(deviceContext, objects);
+      this._emit?.("action:complete", deviceContext, objects);
       return true;
     }
+
+    reset() {}
   })();
 }
 
 /**
  * 创建模拟 modifier 工具
  * @description
- * 支持修改生命周期钩子，默认 applyModifiedObjects 会触发 afterApply。
+ * 基于 GestureTool 提供最小化的 modifier 生命周期模拟。
+ * `applyModifiedObjects` 通过 `action:complete` 通知完成。
  * @param {Function} [onProcess] - 在 process() 中执行的自定义逻辑
- * @returns {Tool}
+ * @returns {GestureTool}
  */
 function createMockModifier(onProcess) {
-  return new (class extends Tool {
+  return new (class extends GestureTool {
+    constructor() {
+      super();
+      this.autoActionOnGestureEnd = false;
+    }
+
     process(packet, ctx) {
       if (onProcess) onProcess(packet, ctx);
+      const sigs = packet?.signals ?? [];
+      const hasCancel =
+        Array.isArray(sigs) && sigs.some((signal) => signal?.type === "cancel");
+      if (hasCancel) {
+        this._emit?.("gesture:cancel", { context: ctx, signals: sigs });
+      }
+    }
+
+    beginGesture() {}
+
+    updateGesture() {}
+
+    performAction() {
+      return true;
     }
 
     applyModifiedObjects(modificationContext, objects) {
@@ -151,6 +196,7 @@ function createMockModifier(onProcess) {
       ) {
         return false;
       }
+      this._emit?.("action:complete", modificationContext, true);
       this.afterApplyModifiedObjects?.(modificationContext, normalized, true);
       return true;
     }
@@ -159,9 +205,25 @@ function createMockModifier(onProcess) {
       return true;
     }
 
-    afterApplyModifiedObjects(ctx, objects) {
-      this._emit?.("afterApply", ctx, objects, true);
+    afterApplyModifiedObjects(ctx, objects) {}
+
+    discardAction(context = {}) {
+      const objects = Array.isArray(context.acc?.objects)
+        ? context.acc.objects
+        : context.acc?.objects
+          ? [context.acc.objects]
+          : [];
+      const objectIds = objects
+        .map((objectEntry) =>
+          typeof objectEntry?.id === "number" ? objectEntry.id : null,
+        )
+        .filter((objectId) => objectId != null);
+      if (objectIds.length > 0) {
+        context.acc?.boardApi?.discardActiveObjects?.(objectIds);
+      }
     }
+
+    reset() {}
   })();
 }
 

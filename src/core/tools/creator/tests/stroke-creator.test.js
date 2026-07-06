@@ -7,7 +7,7 @@ import {
   flushMicrotasks,
 } from "../../../test-support/worker-mode-fixtures.js";
 
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -24,7 +24,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -40,7 +40,7 @@ describe("StrokeCreatorTool", () => {
     expect(
       tool.process(
         {
-          to: "/monitor/stroke",
+          to: "/viewport/stroke",
           signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
         },
         deviceContext,
@@ -50,7 +50,7 @@ describe("StrokeCreatorTool", () => {
     expect(
       tool.process(
         {
-          to: "/monitor/stroke",
+          to: "/viewport/stroke",
           signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
         },
         deviceContext,
@@ -60,7 +60,7 @@ describe("StrokeCreatorTool", () => {
     expect(
       tool.process(
         {
-          to: "/monitor/stroke",
+          to: "/viewport/stroke",
           signals: [
             { type: "position", context: { value: new Vector(3, 4) } },
             { type: "end", context: {} },
@@ -70,9 +70,9 @@ describe("StrokeCreatorTool", () => {
       ),
     ).toBeUndefined();
 
-    expect(tool._local.id).toBe(100);
-    expect(tool._local.position.serialize()).toEqual({ x: 1, y: 2 });
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.id).toBe(100);
+    expect(tool._entry.position.serialize()).toEqual({ x: 1, y: 2 });
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -85,7 +85,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -93,7 +93,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
@@ -101,7 +101,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [
           { type: "position", context: { value: new Vector(2, 3) } },
           { type: "end", context: {} },
@@ -110,7 +110,7 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
     ]);
@@ -122,7 +122,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
       },
       deviceContext,
@@ -130,15 +130,15 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
     );
 
-    expect(tool._local.id).toBe(101);
-    expect(tool._local.position.serialize()).toEqual({ x: 5, y: 6 });
-    expect(tool._local.data.points).toEqual([{ x: 0, y: 0 }]);
+    expect(tool._entry.id).toBe(101);
+    expect(tool._entry.position.serialize()).toEqual({ x: 5, y: 6 });
+    expect(tool._entry.data.points).toEqual([{ x: 0, y: 0 }]);
   });
 
   test("构造参数应允许通过 property 指定新建笔画属性", () => {
@@ -149,13 +149,13 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
       },
       deviceContext,
     );
 
-    expect(tool._local.property).toMatchObject({ color: "#ff0000", width: 4 });
+    expect(tool._entry.property).toMatchObject({ color: "#ff0000", width: 4 });
   });
 
   test("cancel 信号应重置正在创建的对象并撤销 transient 对象", () => {
@@ -167,7 +167,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -175,14 +175,14 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
       { acc: { board, boardApi, objectId: 1, ownerChunkId: 1 } },
     );
 
     expect(discardSpy).toHaveBeenCalledWith([1]);
-    expect(tool._local).toBeNull();
+    expect(tool._entry).toBeNull();
     expect(board.getObjectById).not.toHaveBeenCalled();
   });
 
@@ -193,7 +193,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -206,7 +206,7 @@ describe("StrokeCreatorTool", () => {
         position: new Vector(1, 2),
       }),
     );
-    expect(deviceContext.acc.objects).toEqual([tool._local]);
+    expect(deviceContext.acc.objects).toEqual([tool._entry]);
   });
 
   test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {
@@ -219,7 +219,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -227,7 +227,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
@@ -235,7 +235,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [
           { type: "position", context: { value: new Vector(3, 4) } },
           { type: "end", context: {} },
@@ -253,7 +253,7 @@ describe("StrokeCreatorTool", () => {
     );
     expect(appendSpy).toHaveBeenCalled();
     expect(commitSpy).toHaveBeenCalledWith([20]);
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -309,7 +309,7 @@ describe("StrokeCreatorTool", () => {
     );
     expect(boardApi.appendListItem).toHaveBeenCalled();
     expect(boardApi.commitObjects).toHaveBeenCalledWith([701]);
-    expect(tool._local.data.points).toEqual([
+    expect(tool._entry.data.points).toEqual([
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
@@ -318,38 +318,38 @@ describe("StrokeCreatorTool", () => {
 
   test("创建手势更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
     const tool = new StrokeCreatorTool();
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
-    const { deviceContext } = createBoardDeviceContext(30, { monitor });
+    const { deviceContext } = createBoardDeviceContext(30, { viewport });
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
     );
 
-    monitor.liveRenderer.captureObjectSnapshot.mockClear();
-    monitor.liveRenderer.invalidateObjects.mockClear();
-    monitor.requestViewportUiRender.mockClear();
+    viewport.liveRenderer.captureObjectSnapshot.mockClear();
+    viewport.liveRenderer.invalidateObjects.mockClear();
+    viewport.requestViewportUiRender.mockClear();
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
     );
 
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("创建完成后应通过 commitObjects 提交笔画对象", () => {
@@ -359,7 +359,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -367,7 +367,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
@@ -383,7 +383,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -391,7 +391,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
       deviceContext,
@@ -410,17 +410,17 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
     );
 
-    const firstObject = tool._local;
+    const firstObject = tool._entry;
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
@@ -428,17 +428,17 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(4, 5) } }],
       },
       { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
     );
 
-    const secondObject = tool._local;
+    const secondObject = tool._entry;
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
@@ -453,22 +453,22 @@ describe("StrokeCreatorTool", () => {
 
   describe("端到端集成（通过 Board 输入链路）", () => {
     test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", async () => {
-      const { board, monitor, cleanup } = await createWorkerBoardContext({
+      const { board, viewport, cleanup } = await createWorkerBoardContext({
         boardWidth: 800,
         boardHeight: 600,
-        monitorId: "main",
-        monitorWidth: 800,
-        monitorHeight: 600,
+        viewportId: "main",
+        viewportWidth: 800,
+        viewportHeight: 600,
       });
 
       try {
         const tool = new StrokeCreatorTool();
-        monitor.origin = new Vector(100, 50);
-        monitor.zoom = 2;
+        viewport.origin = new Vector(100, 50);
+        viewport.zoom = 2;
 
-        monitor.mountSubDAG("", createMouseDevice());
+        viewport.mountSubDAG("", createMouseDevice());
         board.signalsEventBus.emit("mount", {
-          monitorId: "main",
+          viewportId: "main",
           name: "primary-stroke",
           workflow: tool,
           edges: [{ from: "/mouse/primary", edge: "default" }],
@@ -517,10 +517,10 @@ describe("StrokeCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._local.id]),
+          board.getBoardApi().queryObjects([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
-            id: tool._local.id,
+            id: tool._entry.id,
             isActive: false,
             position: { x: 105, y: 60 },
             data: expect.objectContaining({
@@ -531,9 +531,9 @@ describe("StrokeCreatorTool", () => {
             }),
           }),
         ]);
-        expect(tool._local.id).toBe(1);
-        expect(tool._local.position.serialize()).toEqual({ x: 105, y: 60 });
-        expect(tool._local.data.points).toEqual([
+        expect(tool._entry.id).toBe(1);
+        expect(tool._entry.position.serialize()).toEqual({ x: 105, y: 60 });
+        expect(tool._entry.data.points).toEqual([
           { x: 0, y: 0 },
           { x: 5, y: 5 },
         ]);
@@ -543,23 +543,23 @@ describe("StrokeCreatorTool", () => {
     });
 
     test("挂载后的 StrokeCreatorTool 在绘制中应将对象保持在 Worker 的活动态", async () => {
-      const { board, monitor, cleanup } = await createWorkerBoardContext({
+      const { board, viewport, cleanup } = await createWorkerBoardContext({
         boardWidth: 800,
         boardHeight: 600,
-        monitorId: "main",
-        monitorWidth: 800,
-        monitorHeight: 600,
+        viewportId: "main",
+        viewportWidth: 800,
+        viewportHeight: 600,
       });
 
       try {
         const tool = new StrokeCreatorTool();
-        monitor.origin = new Vector(100, 50);
-        monitor.zoom = 2;
+        viewport.origin = new Vector(100, 50);
+        viewport.zoom = 2;
 
-        monitor.mountSubDAG("", createMouseDevice());
+        viewport.mountSubDAG("", createMouseDevice());
 
         board.signalsEventBus.emit("mount", {
-          monitorId: "main",
+          viewportId: "main",
           name: "primary-stroke",
           workflow: tool,
           edges: [{ from: "/mouse/primary", edge: "default" }],
@@ -581,10 +581,10 @@ describe("StrokeCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._local.id]),
+          board.getBoardApi().queryObjects([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
-            id: tool._local.id,
+            id: tool._entry.id,
             isActive: true,
           }),
         ]);

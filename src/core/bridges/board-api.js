@@ -448,21 +448,21 @@ class BoardApiRpc {
   }
 
   /**
-   * 在 Core 侧创建 MonitorCore 实例
-   * @param {import("../shared/board-api-types.js").CreateMonitorOptions} options - 创建参数
+   * 在 Core 侧创建 ViewportCore 实例
+   * @param {import("../shared/board-api-types.js").CreateViewportOptions} options - 创建参数
    * @returns {Promise<void>}
    */
-  async createMonitor(options) {
-    return this.#call("createMonitor", { options });
+  async createViewport(options) {
+    return this.#call("createViewport", { options });
   }
 
   /**
-   * 销毁 Core 侧的 MonitorCore 实例
-   * @param {string | number} monitorId - monitor 标识
+   * 销毁 Core 侧的 ViewportCore 实例
+   * @param {string | number} viewportId - viewport 标识
    * @returns {Promise<void>}
    */
-  async destroyMonitor(monitorId) {
-    return this.#call("destroyMonitor", { monitorId });
+  async destroyViewport(viewportId) {
+    return this.#call("destroyViewport", { viewportId });
   }
 
   /**

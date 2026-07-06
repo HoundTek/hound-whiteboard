@@ -66,11 +66,11 @@ describe("mouse-device", () => {
     const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    const mountedNodes = dag.mountSubDAG("/monitor", mouseDevice);
-    mountChannelReporters(dag, "/monitor/mouse");
+    const mountedNodes = dag.mountSubDAG("/viewport", mouseDevice);
+    mountChannelReporters(dag, "/viewport/mouse");
 
     const result = dag.dispatch({
-      to: "/monitor/mouse",
+      to: "/viewport/mouse",
       signals: [
         {
           type: "position",
@@ -80,12 +80,12 @@ describe("mouse-device", () => {
     });
 
     expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
-      "/monitor/mouse",
-      "/monitor/mouse/pointer",
-      "/monitor/mouse/primary",
-      "/monitor/mouse/secondary",
-      "/monitor/mouse/auxiliary",
-      "/monitor/mouse/wheel",
+      "/viewport/mouse",
+      "/viewport/mouse/pointer",
+      "/viewport/mouse/primary",
+      "/viewport/mouse/secondary",
+      "/viewport/mouse/auxiliary",
+      "/viewport/mouse/wheel",
     ]);
     expect(mouseDevice.getState()).toEqual({
       activeButtons: {
@@ -121,11 +121,11 @@ describe("mouse-device", () => {
     const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    dag.mountSubDAG("/monitor", mouseDevice);
-    mountChannelReporters(dag, "/monitor/mouse");
+    dag.mountSubDAG("/viewport", mouseDevice);
+    mountChannelReporters(dag, "/viewport/mouse");
 
     const result = dag.dispatch({
-      to: "/monitor/mouse",
+      to: "/viewport/mouse",
       signals: [
         {
           type: "position",
@@ -155,11 +155,11 @@ describe("mouse-device", () => {
     const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    dag.mountSubDAG("/monitor", mouseDevice);
-    mountChannelReporters(dag, "/monitor/mouse");
+    dag.mountSubDAG("/viewport", mouseDevice);
+    mountChannelReporters(dag, "/viewport/mouse");
 
     dag.dispatch({
-      to: "/monitor/mouse",
+      to: "/viewport/mouse",
       signals: [
         {
           type: "position",
@@ -169,7 +169,7 @@ describe("mouse-device", () => {
     });
 
     const result = dag.dispatch({
-      to: "/monitor/mouse",
+      to: "/viewport/mouse",
       signals: [
         {
           type: "wheel",
@@ -209,11 +209,11 @@ describe("mouse-device", () => {
     const dag = new DevicesDAG();
     const mouseDevice = createMouseDevice();
 
-    dag.mountSubDAG("/monitor", mouseDevice);
-    mountChannelReporters(dag, "/monitor/mouse");
+    dag.mountSubDAG("/viewport", mouseDevice);
+    mountChannelReporters(dag, "/viewport/mouse");
 
     dag.dispatch({
-      to: "/monitor/mouse",
+      to: "/viewport/mouse",
       signals: [
         {
           type: "position",
@@ -223,7 +223,7 @@ describe("mouse-device", () => {
     });
 
     const releaseResult = dag.dispatch({
-      to: "/monitor/mouse",
+      to: "/viewport/mouse",
       signals: [
         {
           type: "position",
@@ -280,39 +280,39 @@ describe("mouse-device", () => {
       reset() {}
     }
 
-    dag.mountSubDAG("/monitor", mouseDevice);
+    dag.mountSubDAG("/viewport", mouseDevice);
     dag.mountWorkflow(
-      "/monitor/workflows/pointer-handled",
+      "/viewport/workflows/pointer-handled",
       new MappingTool("pointer-handled"),
     );
     dag.addEdge(
-      "/monitor/mouse/pointer",
+      "/viewport/mouse/pointer",
       "default",
-      "/monitor/workflows/pointer-handled",
+      "/viewport/workflows/pointer-handled",
     );
     dag.mountWorkflow(
-      "/monitor/workflows/primary-handled",
+      "/viewport/workflows/primary-handled",
       new MappingTool("primary-handled"),
     );
     dag.addEdge(
-      "/monitor/mouse/primary",
+      "/viewport/mouse/primary",
       "default",
-      "/monitor/workflows/primary-handled",
+      "/viewport/workflows/primary-handled",
     );
     dag.mountWorkflow(
-      "/monitor/workflows/wheel-handled",
+      "/viewport/workflows/wheel-handled",
       new MappingTool("wheel-handled"),
     );
     dag.addEdge(
-      "/monitor/mouse/wheel",
+      "/viewport/mouse/wheel",
       "default",
-      "/monitor/workflows/wheel-handled",
+      "/viewport/workflows/wheel-handled",
     );
 
     expect(
       toPlainPackets(
         dag.dispatch({
-          to: "/monitor/mouse",
+          to: "/viewport/mouse",
           signals: [
             {
               type: "position",

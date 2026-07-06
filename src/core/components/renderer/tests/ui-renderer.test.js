@@ -4,6 +4,7 @@ import { BasicObject } from "../../../objects/basic-obj.js";
 import { RectangleRange } from "../../../range/index.js";
 import { createNoopCanvasContext2D } from "../../../test-support/noop-canvas.js";
 import { Vector } from "../../../utils/math.js";
+import { createCompatSelectionEntriesForSummaries } from "../ui-overlay-factory.js";
 
 class TestOverlayObject extends BasicObject {
   constructor({ id = 1, position, localRect, property } = {}) {
@@ -51,9 +52,9 @@ describe("UiRenderer", () => {
     };
   }
 
-  function createMonitor(board = {}) {
+  function createViewport(board = {}) {
     return {
-      monitorId: "main",
+      viewportId: "main",
       zoom: 1,
       board,
       worldRectToScreenRect(rect, padding = 0) {
@@ -68,7 +69,7 @@ describe("UiRenderer", () => {
   test("对象只在 AOM 中但不在 chooser/modifier 当前上下文时，不应显示选择框", () => {
     const context = createContext();
     const board = {};
-    const monitor = createMonitor(board);
+    const viewport = createViewport(board);
     const canvas2 = createCanvas(context);
     const object = new TestOverlayObject({
       id: 7,
@@ -81,7 +82,7 @@ describe("UiRenderer", () => {
         return new RectangleRange(10, 20, 30, 40);
       },
     };
-    const renderer = new UiRenderer(monitor, aom, { canvas: canvas2 });
+    const renderer = new UiRenderer(viewport, { canvas: canvas2 });
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
 
@@ -91,9 +92,9 @@ describe("UiRenderer", () => {
   test("flush 应执行已注册的自定义 overlay provider", () => {
     const context = createContext();
     const board = {};
-    const monitor = createMonitor(board);
+    const viewport = createViewport(board);
     const canvas3 = createCanvas(context);
-    const renderer = new UiRenderer(monitor, undefined, { canvas: canvas3 });
+    const renderer = new UiRenderer(viewport, { canvas: canvas3 });
     const draw = jest.fn();
     const provider = jest.fn(() => ({
       type: "draw",
@@ -110,9 +111,9 @@ describe("UiRenderer", () => {
 
   test("createCompatSelectionEntriesForSummaries 应生成对象级与组合选择框", () => {
     const context = createContext();
-    const monitor = createMonitor({});
+    const viewport = createViewport({});
     const canvas = createCanvas(context);
-    const renderer = new UiRenderer(monitor, undefined, { canvas });
+    const renderer = new UiRenderer(viewport, { canvas });
     const summary1 = {
       id: 17,
       position: { x: 10, y: 20 },
@@ -126,11 +127,14 @@ describe("UiRenderer", () => {
       property: {},
     };
 
-    renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
-      overlayRenderer.createCompatSelectionEntriesForSummaries(
-        [summary1, summary2],
-        "chooser",
-      ),
+    renderer.registerOverlayProvider(
+      ({ viewport, renderer: overlayRenderer }) =>
+        createCompatSelectionEntriesForSummaries(
+          [summary1, summary2],
+          "chooser",
+          viewport,
+          (ctx, entry) => overlayRenderer.drawRectEntry(ctx, entry),
+        ),
     );
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -145,9 +149,9 @@ describe("UiRenderer", () => {
 
   test("createCompatSelectionEntriesForSummaries 应支持 RPC 风格的 plain boundingBox", () => {
     const context = createContext();
-    const monitor = createMonitor({});
+    const viewport = createViewport({});
     const canvas = createCanvas(context);
-    const renderer = new UiRenderer(monitor, undefined, { canvas });
+    const renderer = new UiRenderer(viewport, { canvas });
     const summary = {
       id: 17,
       position: { x: 10, y: 20 },
@@ -155,11 +159,14 @@ describe("UiRenderer", () => {
       property: {},
     };
 
-    renderer.registerOverlayProvider(({ renderer: overlayRenderer }) =>
-      overlayRenderer.createCompatSelectionEntriesForSummaries(
-        [summary],
-        "chooser",
-      ),
+    renderer.registerOverlayProvider(
+      ({ viewport, renderer: overlayRenderer }) =>
+        createCompatSelectionEntriesForSummaries(
+          [summary],
+          "chooser",
+          viewport,
+          (ctx, entry) => overlayRenderer.drawRectEntry(ctx, entry),
+        ),
     );
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -169,9 +176,9 @@ describe("UiRenderer", () => {
 
   test("normalizeOverlayEntry 应支持 summary-like 条目直接生成矩形 overlay", () => {
     const context = createContext();
-    const monitor = createMonitor({});
+    const viewport = createViewport({});
     const canvas = createCanvas(context);
-    const renderer = new UiRenderer(monitor, undefined, { canvas });
+    const renderer = new UiRenderer(viewport, { canvas });
     renderer.registerOverlayProvider(() => ({
       source: "summary-like-entry",
       objectId: 77,

@@ -8,20 +8,19 @@
 
 UI 线程持有：
 
-- `Board` façade
+- `Board` facade
 - `DevicesDAG`
 - `signalsEventBus`
-- `Monitor` / `MonitorProxy`
+- `Viewport` / `ViewportCore`
 - tools / prefixs / devices
-- creator 的 `_local` 纯数据状态
-- chooser / modifier 的 summary-like 条目
+- 轻量对象条目（creator `_entry` / chooser / modifier 通用）
 
 ### Worker 线程
 
 Worker 线程持有真正的 Core 数据权威：
 
 - `BoardCore`
-- `MonitorCore`
+- `ViewportCore`
 - `ActiveObjectManager`
 - `Chunk` / `ChunkObjectManager`
 - base / live 渲染结果
@@ -42,10 +41,10 @@ Worker 与 UI 共用：
 
 ### `Board`
 
-`Board` 是 UI façade，负责：
+`Board` 是 UI facade，负责：
 
 - 持有 `DevicesDAG` 与 `signalsEventBus`
-- 管理 `monitors`
+- 管理 `viewports`
 - 通过 `BoardApiRpc` 与 Worker 侧 Core 交互
 - 持有本地 `CounterPool`，同步分配 objectId
 
@@ -131,42 +130,34 @@ Worker 侧真实对象实例是 `BasicObject` 及其子类：
 - `data`
 - `rich`
 
-### UI 侧交互态对象条目
+### UI 侧轻量对象条目（`LightweightObjectEntry`）
 
-UI 线程里有两类轻量对象条目：
-
-#### creator `_local`
-
-creator 当前使用：
+定义在 `shared/types.js`，UI 线程所有工具（creator / chooser / modifier）统一使用此协议。
 
 ```js
 {
-  id,
-  position: Vector,
-  property: Record<string, any>,
-  data: Record<string, any>,
+  id: number,                    // 对象 id
+  type: string,                  // 对象类型名（如 "StrokeObject"、"CircleObject"）
+  position: Vector | { x, y },   // 世界坐标位置
+  boundingBox?: RectangleRange,  // 外接矩形（摘要态有，创建态无）
+  range?: Range,                 // 主判定范围（摘要态有，创建态无）
+  property: Record<string, any>, // 样式属性
+  data: Record<string, any>,     // 类型专属几何数据
 }
 ```
 
-这是纯数据对象，不是 `BasicObject` 实例。
+**两种场景：**
 
-#### chooser / modifier summary-like 条目
+| 场景   | 代表者                  | `position` 形态                   | `boundingBox` / `range`   |
+| ------ | ----------------------- | --------------------------------- | ------------------------- |
+| 创建态 | creator `_entry`        | `Vector` 实例（代码直接向量运算） | 无（几何未定型）          |
+| 摘要态 | chooser / modifier 条目 | `{ x, y }` 纯对象（RPC 反序列化） | 有（命中检测 / 准入判断） |
 
-chooser 与 modifier 常见条目形态：
-
-```js
-{
-  id,
-  position: { x, y },
-  boundingBox,
-  range,
-  property,
-  data,
-}
-```
+消费端（如 modifier 的 `resolveModifiedObjectPosition`）通过 `Vector.parse()` 统一处理两种 `position` 形态。
 
 这些条目用于：
 
+- creator 创建手势期间的本地状态
 - Worker mode 下的 hitTest / queryObjects 结果
 - handoff 桥接
 - UI overlay
@@ -198,15 +189,15 @@ AOM 内部关键结构：
 
 ### Worker 侧
 
-- `MonitorCore` 持有 `origin`、`zoom`、`width`、`height`
+- `ViewportCore` 持有 `origin`、`zoom`、`width`、`height`
 - base / live 两层通过 OffscreenCanvas 输出
 - `flushRenderFrame()` 回传 `render-frame`
 
 ### UI 侧
 
-- `MonitorProxy` 接收位图并合成到 DOM canvas
+- `Viewport` 接收位图并合成到 DOM canvas
 - `UiRenderer` 独立维护 overlay
-- 全部 monitor 走 `MonitorProxy` 路径
+- 全部 viewport 走 `Viewport` 路径
 
 ## 持久化模型
 
@@ -220,8 +211,8 @@ AOM 内部关键结构：
 
 ## 关键术语
 
-- **Worker 模式**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
-- **summary-like 条目**：用于 UI 侧交互和 overlay 的纯数据对象
+- **运行时分层**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，viewport 通过 `Viewport` ↔ `ViewportCore` 协作
+- **轻量对象条目（LightweightObjectEntry）**：UI 侧所有工具统一使用的纯数据对象协议，替代 `BasicObject` 实例在工具间传递
 - **静态图**：区块级稳定层叠图
 - **动态图 / AOM**：交互态动态层关系
 - **renderHooks**：AOM 到具体渲染链的注入式桥接
