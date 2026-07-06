@@ -23,37 +23,85 @@ UI Kit 另由 [HoundTek/hound-react-ui-kit](https://github.com/HoundTek/hound-re
 
 ## 快速开始
 
-```bash
-# 安装 JS 依赖
-yarn install
-
-# 生成应用图标（⚠️ 必须先执行这一步）
-yarn icon
-
-# 启动开发模式（热更新）
-yarn dev
-```
-
-> **⚠️ 很重要：`yarn icon` 是构建的前置必要条件。**
->
-> Tauri 在编译时会将图标直接嵌入二进制文件，因此图标文件必须在编译前存在。
-> 若缺少图标，Rust 编译会在 `tauri::generate_context!()` 处 panic 并失败。
->
-> 图标源文件为项目根目录的 `icon.png`，各平台产物由 `tauri icon` 自动生成到 `src-tauri/icons/`。
-> 该目录已加入 `.gitignore`，因此新克隆仓库后必须执行 `yarn icon`。
-
-## 可用命令
+### 开发与构建
 
 | 命令               | 说明                               |
 | ------------------ | ---------------------------------- |
 | `yarn dev`         | Tauri 开发模式（带热更新）         |
 | `yarn build`       | 通用生产构建                       |
 | `yarn build:mac`   | macOS 构建（dmg + app）            |
+| `yarn build:mac-universal` | macOS 通用构建（Intel + Apple Silicon） |
 | `yarn build:win`   | Windows 构建（nsis + msi）         |
 | `yarn build:linux` | Linux 构建（deb + appimage + rpm） |
+| `yarn build:android` | Android 构建（APK）               |
+| `yarn build:ios`   | iOS 构建                           |
+
+### 图标管理
+
+各平台支持独立的图标源文件，构建时自动使用对应平台的图标：
+
+| 命令               | 源文件                                  | 说明                          |
+| ------------------ | --------------------------------------- | ----------------------------- |
+| `yarn icon`        | 所有平台                                | 生成所有平台图标              |
+| `yarn icon:desktop`| `icon-desktop.png` → `icon.png`         | 生成通用桌面图标              |
+| `yarn icon:mac`    | `icon-mac.png` → `icon-desktop.png` → `icon.png` | 生成 macOS 专属图标 |
+| `yarn icon:win`    | `icon-win.png` → `icon-desktop.png` → `icon.png` | 生成 Windows 专属图标 |
+| `yarn icon:linux`  | `icon-linux.png` → `icon-desktop.png` → `icon.png` | 生成 Linux 专属图标 |
+| `yarn icon:android`| `icon-android.png` → `icon.png`         | 生成 Android 图标             |
+| `yarn icon:ios`    | `icon-ios.png` → `icon.png`             | 生成 iOS 图标                 |
+
+### 清理命令
+
+| 命令               | 说明                               |
+| ------------------ | ---------------------------------- |
+| `yarn clean`       | 清理所有构建产物（target + gen + icons + temp） |
+| `yarn clean:target` | 清理 Rust 构建产物                 |
+| `yarn clean:gen`   | 清理移动端生成文件                 |
+| `yarn clean:icons` | 清理桌面端图标                     |
+| `yarn clean:temp`  | 清理临时目录                       |
+| `yarn clean:status` | 查看当前图标来源                   |
+| `yarn clean:help`  | 显示清理命令帮助                   |
+
+### 发布与测试
+
+| 命令               | 说明                               |
+| ------------------ | ---------------------------------- |
 | `yarn test`        | 运行全部测试                       |
+| `yarn ship`        | 运行测试 + 桌面端构建              |
+| `yarn ship:win`    | 运行测试 + Windows 构建            |
+| `yarn ship:mac`    | 运行测试 + macOS 构建              |
+| `yarn ship:linux`  | 运行测试 + Linux 构建              |
+| `yarn ship:android` | 运行测试 + Android 构建            |
+| `yarn ship:ios`    | 运行测试 + iOS 构建                |
 | `yarn bench`       | 运行全部性能基准                   |
-| `yarn icon`        | 从 `icon.png` 生成各平台图标       |
+| `yarn bench:io`    | 运行 I/O 桥接基准                 |
+
+### 移动端
+
+| 命令               | 说明                               |
+| ------------------ | ---------------------------------- |
+| `yarn init:android` | 初始化 Android 项目               |
+| `yarn dev:android` | Android 开发模式                   |
+| `yarn build:android` | Android 构建                       |
+| `yarn init:ios`    | 初始化 iOS 项目                    |
+| `yarn dev:ios`     | iOS 开发模式                       |
+| `yarn build:ios`   | iOS 构建                           |
+
+## 图标配置
+
+图标配置文件位于 `scripts/icon-config.json`，可自定义各平台的源文件和输出目录。
+
+### 图标源文件优先级
+
+每个平台按优先级查找图标源文件：
+
+| 平台 | 优先级 |
+|------|--------|
+| macOS | `icon-mac.png` > `icon-desktop.png` > `icon.png` |
+| Windows | `icon-win.png` > `icon-desktop.png` > `icon.png` |
+| Linux | `icon-linux.png` > `icon-desktop.png` > `icon.png` |
+| Android | `icon-android.png` > `icon.png` |
+| iOS | `icon-ios.png` > `icon.png` |
 
 ## 许可
 

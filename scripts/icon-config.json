@@ -1,0 +1,91 @@
+{
+  "platforms": {
+    "desktop": {
+      "source": ["icon-desktop.png", "icon.png"],
+      "output": "src-tauri/icons",
+      "filesToKeep": [
+        "32x32.png",
+        "64x64.png",
+        "128x128.png",
+        "128x128@2x.png",
+        "icon.png",
+        "icon.icns",
+        "icon.ico",
+        "StoreLogo.png",
+        "Square30x30Logo.png",
+        "Square44x44Logo.png",
+        "Square71x71Logo.png",
+        "Square89x89Logo.png",
+        "Square107x107Logo.png",
+        "Square142x142Logo.png",
+        "Square150x150Logo.png",
+        "Square284x284Logo.png",
+        "Square310x310Logo.png"
+      ],
+      "needsInit": false
+    },
+    "mac": {
+      "source": ["icon-mac.png", "icon-desktop.png", "icon.png"],
+      "output": "src-tauri/icons",
+      "filesToKeep": [
+        "32x32.png",
+        "64x64.png",
+        "128x128.png",
+        "128x128@2x.png",
+        "icon.png",
+        "icon.icns"
+      ],
+      "needsInit": false
+    },
+    "win": {
+      "source": ["icon-win.png", "icon-desktop.png", "icon.png"],
+      "output": "src-tauri/icons",
+      "filesToKeep": [
+        "32x32.png",
+        "64x64.png",
+        "128x128.png",
+        "128x128@2x.png",
+        "icon.png",
+        "icon.ico",
+        "StoreLogo.png",
+        "Square30x30Logo.png",
+        "Square44x44Logo.png",
+        "Square71x71Logo.png",
+        "Square89x89Logo.png",
+        "Square107x107Logo.png",
+        "Square142x142Logo.png",
+        "Square150x150Logo.png",
+        "Square284x284Logo.png",
+        "Square310x310Logo.png"
+      ],
+      "needsInit": false
+    },
+    "linux": {
+      "source": ["icon-linux.png", "icon-desktop.png", "icon.png"],
+      "output": "src-tauri/icons",
+      "filesToKeep": [
+        "32x32.png",
+        "64x64.png",
+        "128x128.png",
+        "128x128@2x.png",
+        "icon.png"
+      ],
+      "needsInit": false
+    },
+    "android": {
+      "source": ["icon-android.png", "icon.png"],
+      "output": "src-tauri/gen/android/app/src/main/res",
+      "needsInit": true,
+      "initCheckPath": "src-tauri/gen/android",
+      "initCommand": "yarn init:android"
+    },
+    "ios": {
+      "source": ["icon-ios.png", "icon.png"],
+      "output": "src-tauri/gen/ios",
+      "needsInit": true,
+      "initCheckPath": "src-tauri/gen/ios",
+      "initCommand": "yarn init:ios"
+    }
+  },
+  "tempDir": "temp-icon-gen"
+}
