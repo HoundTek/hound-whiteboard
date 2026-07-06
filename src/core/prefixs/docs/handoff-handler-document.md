@@ -18,13 +18,23 @@ flowchart TD
 
 根节点是一个 multi-tool prefix，通过 `resolveTransition` 回调决定下一跳路由。状态为 `{ phase: "first" | "second", activeChild: "first" | "second" }`。
 
-## 三种 first 类型
+## first 与 second 的包装方式
 
-| 类型             | 包装方式                                                     | 完成检测                      |
-| ---------------- | ------------------------------------------------------------ | ----------------------------- |
-| Creator          | 覆盖 `beforeCommitCreatedObject → false`，订阅 `afterCreate` | `afterCreate` 事件触发        |
-| Chooser          | `wrapChooserForHandoff`，订阅 `afterConfirm`                 | `afterConfirm` 事件触发       |
-| SubDAGDefinition | `wrapSubDAGForHandoff`，检测 `end` 信号或自定义条件          | `end` 信号或 `shouldComplete` |
+所有 Tool 类型的 first 和 second 统一通过 `wrapToolForHandoff` 包装，监听 `action:complete` 事件。
+
+| 类型             | 包装方式                                            | 完成检测                      |
+| ---------------- | --------------------------------------------------- | ----------------------------- |
+| Tool（first）    | `wrapToolForHandoff(tool, { bridgeObjects })`       | `action:complete` 事件触发    |
+| Tool（second）   | `wrapToolForHandoff(tool, { completeOnCancel })`    | `action:complete` 事件触发    |
+| SubDAGDefinition | `wrapSubDAGForHandoff`，检测 `end` 信号或自定义条件 | `end` 信号或 `shouldComplete` |
+
+### Creator 的提交拦截
+
+creator 的 first 不再通过 `beforeCommitCreatedObject = () => false` 突变来拦截提交，
+而是由 handoff 在 `resolveTransition` 中注入 `context.acc.autoCommit = false`。
+Creator 的 `completeAction` 在检测到 `autoCommit` 为 false 时跳过 `commitCreatedObject`。
+
+不再需要 `resetHandoff` 清理机制。
 
 ## 对象桥接协议
 
@@ -36,7 +46,7 @@ sequenceDiagram
     participant Root as handoff root
     participant Second as second tool
 
-    First->>Wrapper: 完成事件（afterCreate / afterConfirm）
+    First->>Wrapper: action:complete
     Wrapper->>Closure: setHandoffObjects(objects)
     Wrapper->>Root: onToolComplete()
     Root->>Root: createCompleteCallback 切换 activeChild = "second"
@@ -56,12 +66,12 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph First 完成
-        AfterConfirm["afterConfirm / afterCreate"] --> SH[setHandoffObjects]
+        AC["action:complete"] --> SH[setHandoffObjects]
         SH --> OTC[onToolComplete]
         OTC --> Switch2["phase: second<br/>activeChild: second"]
     end
     subgraph Second 完成
-        AfterApply["afterApply / cancel"] --> OTC2[onToolComplete]
+        SU["action:complete / cancel"] --> OTC2[onToolComplete]
         OTC2 --> Del[delNodeState 清理 first/second 节点]
         Del --> Switch1["phase: first<br/>activeChild: first"]
         Switch1 --> Clear["清空闭包变量<br/>触发 UI overlay 刷新"]
@@ -83,34 +93,39 @@ flowchart LR
 | `handoffObjects`    | `Array`    | 同上，供显式读取                                                   |
 | `setHandoffObjects` | `Function` | first wrapper 调用此回调将对象写入闭包变量                         |
 
-## 生命周期钩子对照
+## 生命周期机制
+
+所有 Tool 的完成通知统一通过 `action:complete` 事件。handoff handler 订阅该事件，收到后桥接对象并切换阶段。
 
 | 步骤          | 独立模式                          | handoff 模式                                   |
 | ------------- | --------------------------------- | ---------------------------------------------- |
-| Creator 完成  | `beforeCommit → true` → AOM.apply | `beforeCommit → false` → 对象留在 AOM          |
-| Creator 通知  | `afterCreate` 无人订阅            | handoff handler 订阅 `afterCreate`             |
-| Chooser 确认  | `confirmSelection` 无人订阅       | handoff handler 订阅 `afterConfirm`            |
+| Creator 完成  | `beforeCommit → true` → AOM.apply | `autoCommit: false` → 对象留在 AOM             |
+| Creator 通知  | `action:complete` 无人订阅        | handoff `wrapToolForHandoff` 订阅              |
+| Chooser 确认  | `action:complete` 无人订阅        | handoff `wrapToolForHandoff` 订阅              |
 | Modifier 提交 | AOM.apply → 自卸载                | AOM.apply → `autoUmountOnApply:false` 阻止卸载 |
-| Modifier 通知 | `afterApply` 无人订阅             | handoff handler 订阅 `afterApply`              |
+| Modifier 通知 | `action:complete` 无人订阅        | handoff `wrapToolForHandoff` 订阅              |
 
 ## 辅助函数
+
+### `wrapToolForHandoff(tool, options)`
+
+将 Tool 包装为 handoff-ready handler。订阅 `action:complete` 事件，收到后桥接对象并调用 `onToolComplete`。
+
+| 选项               | 类型      | 默认值  | 作用                                   |
+| ------------------ | --------- | ------- | -------------------------------------- |
+| `bridgeObjects`    | `boolean` | `false` | 完成时将事件结果写入 handoff 闭包变量  |
+| `completeOnCancel` | `boolean` | `false` | 收到 `cancel` 信号时丢弃对象后通知完成 |
 
 ### `wrapSubDAGForHandoff(subDAGDef, options)`
 
 在子树根节点满足 `shouldComplete` 条件（默认检测 `end` 信号）时，从 `context.acc.objects` 读取对象并调用 `setHandoffObjects`，然后调用 `onToolComplete`。
-
-### `wrapChooserForHandoff(tool)`
-
-订阅 tool 的 `afterConfirm` 事件，从事件参数取得选中对象，调用 `setHandoffObjects` 后通知完成。
-
-### `wrapSubDAGForHandoff` 对 SubDAG 与 flat 节点的处理
 
 - SubDAG（`subDAGDef.nodes instanceof Map`）：为根节点 handler 追加完成通知包装，保留子树结构
 - 非 SubDAG（flat `{ handler }` 对象）：直接替换 `nodes.handler`
 
 ## 生命周期清理
 
-handoff 保存 `beforeCommitCreatedObject` 的原始引用。通过 `subDAG.resetHandoff()` 暴露清理入口，卸载时恢复工具原始行为。
+handoff 不再需要清理 `beforeCommitCreatedObject`（不再进行突变拦截）。second 切回 first 时自动清理 first/second 节点的 nodeState 中的 `objects` 键，避免 overlay 渲染旧选择框。
 
 ## 轻量对象条目协议
 

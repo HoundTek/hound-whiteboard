@@ -64,9 +64,9 @@ live 层重绘由 Core 侧接管。
 
 当前 modifier 主实现是：
 
-- `ObjectModifierTool`
-- `GestureBasedObjectModifierTool`
-- `CommonObjectModifierTool`
+- `ObjectModifierTool` — 继承 `GestureTool`，提供动作生命周期适配
+- `GestureBasedObjectModifierTool` — 继承 `ObjectModifierTool`，内置手势生命周期 + displacement 双通道
+- `CommonObjectModifierTool` — 继承 `GestureBasedObjectModifierTool`，拖拽移动的默认实现
 
 ### 双通道信号
 
@@ -92,16 +92,18 @@ modifier 同时接受：
 
 它维护：
 
-- `_anchorPosition`
-- `_gestureBasePositions`
-- `_initialPositions`
+- `_anchorPosition` — 手势起始光标位置
+- `_gestureBasePositions` — 当前手势开始时各对象的基准位置
+- `_initialPositions` — 首次手势开始时各对象的初始位置（仅供 cancel 回退，永不覆盖）
 
 语义是：
 
 - 首个 `position` 记录锚点
 - 后续 `position` 以锚点为基准计算位移
-- `displacement` 直接叠加到当前位置
+- `displacement` 直接叠加到当前位置，基准位置同步平移
+- `end` 结束手势，保留 `_initialPositions` 供后续 cancel 回退
 - `cancel` 回退到首次手势前的初始位置
+- `success` 提交后清空 `_initialPositions`
 
 ## `resolveActiveModifiedObjects()`
 
@@ -125,10 +127,10 @@ modifier 在 handoff 中通常作为 second 阶段：
 - creator → modifier
 - chooser → modifier
 
-handoff 通过：
+handoff 通过 `wrapToolForHandoff(second, { completeOnCancel: true })` 包装：
 
-- `afterApply` 事件感知 `success`
-- `cancel` 时优先调用 `boardApi.discardActiveObjects(objectIds)`
+- 订阅 `action:complete` 事件感知 `success`
+- `cancel` 信号到达时调用 `tool.discardAction()` 后通知完成
 
 完成后切回 first 阶段。
 

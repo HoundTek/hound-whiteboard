@@ -104,10 +104,12 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 
 流程：
 
-1. 首个 `position` → `ensureObject()` → `beginCreationGesture()`
-2. 后续 `position` → `updateCreationGesture()`
-3. `end` → `completeCreationGesture()` → `completeCreatedObject()`
-4. `cancel` → `cancelCreatedObject()`
+1. 首个 `position` → `ensureObject()` → `beginGesture()`
+2. 后续 `position` → `updateGesture()`
+3. `end` → `completeGesture()` → `completeAction()`
+4. `cancel` → `cancelGesture()` → `discardAction()`
+
+`GestureTool.process()` 自动编排：首个 position 触发 begin，后续 position 触发 update，end 触发 completeGesture + `autoActionOnGestureEnd ? completeAction : nop`。
 
 ### `MultiGestureObjectCreatorTool`
 
@@ -115,7 +117,7 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 
 - `PolygonCreatorTool`
 
-流程：
+多手势语义通过覆写 `GestureTool._onEnd/_onCancel/_onObjectEnd/_onObjectCancel` 实现：
 
 - `end` / `cancel` 只结束当前手势
 - `object-end` / `object-cancel` 才结束整个对象
@@ -127,22 +129,24 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 决定 `finalize` 后是否把对象提交到静态图。
 
 - 默认返回 `true`
-- handoff 模式下覆盖为 `false`，对象继续留在 AOM 动态图中
+- handoff 模式下通过注入 `context.acc.autoCommit = false` 阻止提交，对象继续留在 AOM 动态图中
 
 ### `afterCompleteCreatedObject(interaction, completedObject)`
 
-创建流程完成后触发 `afterCreate` 事件。handoff 通过它从 creator 切换到 modifier。
+创建流程完成后的扩展钩子。
+
+`action:complete` 事件在 `completeAction` 中统一触发。
 
 ## 与 handoff 的关系
 
 creator 不直接持有 modifier 引用。
 
-handoff 的接入点只有两处：
+handoff 的接入点：
 
-1. `beforeCommitCreatedObject()`
-2. `afterCreate` 生命周期事件
+1. `beforeCommitCreatedObject()` — 被 `context.acc.autoCommit` 取代拦截职责
+2. `action:complete` 事件 — handoff `wrapToolForHandoff` 订阅该事件
 
-创建完成后，handoff wrapper 从 `afterCreate` 事件参数中取得 `_entry`，通过 `context.acc.setHandoffObjects()` 写入 handoff 闭包变量。下次 dispatch 时 `resolveTransition` 从闭包读取，通过 `acc.objects` 注入给 modifier。
+创建完成后，handoff wrapper 从 `action:complete` 事件结果中取得 `_entry`，通过 `context.acc.setHandoffObjects()` 写入 handoff 闭包变量。下次 dispatch 时 `resolveTransition` 从闭包读取，通过 `acc.objects` 注入给 modifier。
 
 ## 子类差异
 

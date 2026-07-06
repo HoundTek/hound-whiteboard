@@ -175,11 +175,15 @@ unsub();
 
 ### 当前预定义钩子
 
-| 工具类型 | 控制型钩子（可覆盖）           | 通知型钩子（可订阅）               |
-| -------- | ------------------------------ | ---------------------------------- |
-| Creator  | `beforeCommitCreatedObject()`  | `"afterCreate"`                    |
-| Modifier | `beforeApplyModifiedObjects()` | `"afterApply"`                     |
-| Chooser  | `beforeConfirmSelection()`     | `"afterChoose"` / `"afterConfirm"` |
+工具族的通知型钩子已统一为 namespace 格式，通过 `GestureTool` 的事件机制发布：
+
+| 工具类型 | 控制型钩子（可覆盖）           | 通知型事件          |
+| -------- | ------------------------------ | ------------------- |
+| Creator  | `beforeCommitCreatedObject()`  | `"action:complete"` |
+| Modifier | `beforeApplyModifiedObjects()` | `"action:complete"` |
+| Chooser  | `beforeConfirmSelection()`     | `"action:complete"` |
+
+此外，`GestureTool` 还提供手势层事件：`"gesture:begin"`、`"gesture:update"`、`"gesture:end"`、`"gesture:cancel"`。
 
 控制型钩子返回 `false` 即阻止该生命周期步骤继续执行。
 
@@ -210,17 +214,13 @@ unsub();
 
 ## 当前状态
 
-creator、chooser、modifier 相关基类已经切到新的 `deviceContext` 与节点 `state` 模型。
+工具族已全面迁移到 `GestureTool` 与 `MultiGestureTool` 骨架。
 
-这意味着：
-
-- modifier handoff 优先通过回调与状态桥接完成
-- 默认链路继续统一走 `continueToDefaultPath()`
-- Board 输入链路测试已经覆盖 creator 到 modifier 的交接流程
-- Tool 上下文已经完全收敛为新版平面 `deviceContext`
+详见 [gesture-tool-document.md](./gesture-tool-document.md)。
 
 ## 相关文档
 
+- [手势工具基类](./gesture-tool-document.md)
 - [设备图](../devices-dag/docs/devices-dag-document.md)
 - [Core 输入流](../docs/core-input-flow.md)
 - [阶段性稳定接口](../docs/core-stable-interfaces.md)
