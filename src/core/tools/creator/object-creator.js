@@ -52,7 +52,7 @@ function extractInjectedProperty(signals) {
  * @description
  * 对象创建工具负责在白板上创建新对象。
  * 该基类复用 GestureTool 的手势路由骨架，但保留 Creator 自身的提交语义：
- * finalize 总是执行，beforeCommit 仅决定是否进入静态图，不影响 afterCreate 通知。
+ * finalize 总是执行，beforeCommit 仅决定是否进入静态图，不影响 `action:complete` 通知。
  * @author Zhou Chenyu
  */
 class ObjectCreatorTool extends GestureTool {
@@ -544,15 +544,13 @@ class ObjectCreatorTool extends GestureTool {
   }
 
   /**
-   * 对象创建生命周期完成通知。
-   * handoff 通过 {@link Tool#on|on('afterCreate', ...)} 订阅。
+   * 对象创建完成后的扩展钩子
    * @param {Object} interaction - 当前交互上下文
    * @param {{ id: number, position: Vector, property: Record<string,any>, data: Record<string,any> }} completedObject - 已完成的对象
+   * @returns {void}
    * @protected
    */
-  afterCompleteCreatedObject(interaction, completedObject) {
-    this._emit("afterCreate", interaction, completedObject);
-  }
+  afterCompleteCreatedObject(interaction, completedObject) {}
 
   /**
    * 执行 Creator 的完整提交流程

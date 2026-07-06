@@ -201,7 +201,7 @@ describe("ObjectCreatorTool — property 信号", () => {
   });
 
   describe("生命周期钩子", () => {
-    test("completeCreatedObject 后同时触发 afterCreate 与 action:complete 通知", () => {
+    test("completeCreatedObject 后触发 action:complete 通知", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
         beginCreationGesture() {}
@@ -210,16 +210,13 @@ describe("ObjectCreatorTool — property 信号", () => {
       }
 
       const tool = new TestCreator();
-      const afterCreate = jest.fn();
       const actionComplete = jest.fn();
-      tool.on("afterCreate", afterCreate);
       tool.on("action:complete", actionComplete);
 
       tool.objectId = 1;
       tool._entry = { id: 1, type: "test" };
       tool.completeCreatedObject({ context: { acc: {} } });
 
-      expect(afterCreate).toHaveBeenCalledTimes(1);
       expect(actionComplete).toHaveBeenCalledTimes(1);
       expect(actionComplete).toHaveBeenCalledWith(
         expect.objectContaining({ acc: {} }),
@@ -266,7 +263,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       expect(tool.isObjectCreationCompleted).toBe(true);
     });
 
-    test("beforeCommit 返回 false 时 afterCreate 仍然触发", () => {
+    test("beforeCommit 返回 false 时 action:complete 仍然触发", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
         create() {}
         beginCreationGesture() {}
@@ -275,22 +272,22 @@ describe("ObjectCreatorTool — property 信号", () => {
       }
 
       const tool = new TestCreator();
-      const afterCreate = jest.fn();
-      tool.on("afterCreate", afterCreate);
+      const actionComplete = jest.fn();
+      tool.on("action:complete", actionComplete);
       tool.beforeCommitCreatedObject = () => false;
       tool.objectId = 4;
       tool._entry = { id: 4 };
 
       tool.completeCreatedObject({ context: { acc: {} } });
 
-      expect(afterCreate).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
 
-    test("process 完整周期（position → end）触发 afterCreate", () => {
+    test("process 完整周期（position → end）触发 action:complete", () => {
       const tool = new CircleCreatorTool();
-      const afterCreate = jest.fn();
+      const actionComplete = jest.fn();
       const { deviceContext } = createBoardDeviceContext(301);
-      tool.on("afterCreate", afterCreate);
+      tool.on("action:complete", actionComplete);
 
       tool.process(
         {
@@ -301,11 +298,11 @@ describe("ObjectCreatorTool — property 信号", () => {
         deviceContext,
       );
 
-      expect(afterCreate).not.toHaveBeenCalled();
+      expect(actionComplete).not.toHaveBeenCalled();
 
       tool.process({ signals: [{ type: "end" }] }, deviceContext);
 
-      expect(afterCreate).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
   });
 });

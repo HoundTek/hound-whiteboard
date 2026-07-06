@@ -5,7 +5,7 @@
  * 封装为一张结构化子图。first 可以是 creator（对象创建工具）、chooser（对象选择工具）或任意子图；
  * second 通常是 modifier（对象编辑工具）。两者均可接受 Tool 实例或 SubDAGDefinition。
  *
- * 通过生命周期钩子（beforeCommit / afterCreate / afterApply）
+ * 通过统一动作完成事件与少量 creator 提交拦截钩子，
  * 实现非侵入的完成通知与流程控制，不再直接替换工具实例方法。
  * @module core/prefixs/handoff-handler
  * @author Zhou Chenyu
@@ -233,15 +233,70 @@ function registerHandoffTool(tool) {
 }
 
 /**
- * 将 chooser 工具包装为可通知父 prefix 完成信号的 handler
- *
- * @description
- * chooser 通过 confirmSelection → afterConfirmSelection 钩子宣告完成。
- * handler 在每次分发时临时订阅 afterConfirm，触发后桥接到 onToolComplete。
- * @param {Tool} tool - chooser 工具实例
+ * 将动作完成结果规整为 handoff 可桥接的对象数组
+ * @param {*} result - `action:complete` 事件的结果载荷
+ * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+ * @returns {Array<*>}
+ */
+function normalizeHandoffBridgeObjects(result, context = {}) {
+  if (Array.isArray(result)) {
+    return result.filter(Boolean);
+  }
+
+  if (result != null) {
+    return [result].filter(Boolean);
+  }
+
+  const contextObjects = context.acc?.objects;
+  if (Array.isArray(contextObjects)) {
+    return contextObjects.filter(Boolean);
+  }
+  if (contextObjects != null) {
+    return [contextObjects].filter(Boolean);
+  }
+
+  return [];
+}
+
+/**
+ * 丢弃 second 阶段当前持有的活动对象
+ * @param {Tool} tool - second 阶段工具实例
+ * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+ * @returns {void}
+ */
+function discardSecondPhaseObjects(tool, context = {}) {
+  if (typeof tool?.discardAction === "function") {
+    tool.discardAction(context);
+    return;
+  }
+
+  const cancelState = context.getNodeState?.(context.path) ?? {};
+  const cancelObjects = Array.isArray(cancelState?.objects)
+    ? cancelState.objects
+    : [];
+  const boardApi = context.acc?.boardApi;
+  const cancelObjectIds = cancelObjects
+    .map((objectEntry) =>
+      typeof objectEntry?.id === "number" ? objectEntry.id : null,
+    )
+    .filter((objectId) => objectId != null);
+
+  if (boardApi && cancelObjectIds.length > 0) {
+    boardApi.discardActiveObjects(cancelObjectIds);
+  }
+}
+
+/**
+ * 将 tool 包装为基于统一事件的 handoff handler
+ * @param {Tool} tool - tool 实例
+ * @param {{
+ *   bridgeObjects?: boolean,
+ *   completeOnCancel?: boolean,
+ * }} [options={}] - 包装选项
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
  */
-function wrapChooserForHandoff(tool) {
+function wrapToolForHandoff(tool, options = {}) {
+  const { bridgeObjects = false, completeOnCancel = false } = options;
   let processor = null;
 
   return (packet, context = {}) => {
@@ -251,21 +306,46 @@ function wrapChooserForHandoff(tool) {
 
     const onToolComplete = context.acc?.onToolComplete;
     let completed = false;
+    const unsubs = [];
 
-    const unsub =
-      typeof tool.on === "function"
-        ? tool.on("afterConfirm", (_ctx, objects) => {
-            completed = true;
-            // 优先取事件参数 objects（mock chooser 提供），fallback acc.objects
+    if (typeof tool.on === "function") {
+      unsubs.push(
+        tool.on("action:complete", (eventContext, result) => {
+          completed = true;
+          if (bridgeObjects) {
             context.acc?.setHandoffObjects?.(
-              objects ?? context.acc?.objects ?? [],
+              normalizeHandoffBridgeObjects(result, eventContext ?? context),
             );
-            onToolComplete?.();
-          })
-        : null;
+          }
+          onToolComplete?.();
+        }),
+      );
+    }
 
     const rawResult = processor(packet, context);
-    return finalizeLifecycleWrappedResult(rawResult, () => completed, unsub);
+
+    const hasCancelSignal =
+      completeOnCancel &&
+      Array.isArray(packet.signals) &&
+      packet.signals.some((signal) => signal?.type === "cancel");
+
+    if (hasCancelSignal && !completed) {
+      discardSecondPhaseObjects(tool, context);
+      completed = true;
+      onToolComplete?.();
+    }
+
+    const unsubscribeAll = () => {
+      for (const unsub of unsubs) {
+        unsub?.();
+      }
+    };
+
+    return finalizeLifecycleWrappedResult(
+      rawResult,
+      () => completed,
+      unsubscribeAll,
+    );
   };
 }
 
@@ -335,10 +415,10 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
  * 生成一棵三层子树：根节点为 multi-tool prefix 状态机，默认将信号路由到 first 子节点；
  * 当 first 完成后切换到 second；当 second 完成后切回 first。
  *
- * 采用生命周期钩子：
- * - creator 的 first：override `beforeCommitCreatedObject → false`，订阅 `afterCreate`
- * - modifier 的 second：订阅 `afterApply`，通过 context 注入 `autoUmountOnApply: false`
- * - chooser 的 first：使用 end 信号 + 对象检测
+ * 采用统一动作完成事件：
+ * - first / second 的 Tool 优先通过 `action:complete` 通知 handoff 切换
+ * - creator 的 first 仍保留 `beforeCommitCreatedObject → false` 拦截，用于阻止提前进入静态图
+ * - second 的 modifier cancel 路径保留显式对象丢弃逻辑
  *
  * @param {{
  *   rootPath?: string,
@@ -399,7 +479,6 @@ function createHandoffSubDAG(options = {}) {
   // 判断 first 类型
   const firstIsCreator =
     isToolInstance(first) && typeof first.completeCreatedObject === "function";
-  const firstIsChooser = isToolInstance(first) && !firstIsCreator;
   const firstIsSubDAG = isSubDAGDefinition(first);
 
   // 判断 second 类型
@@ -510,38 +589,12 @@ function createHandoffSubDAG(options = {}) {
   const firstNode = builder.node();
   let firstSubDAGDef = null;
 
-  if (firstIsCreator) {
-    // Creator 路径：handler 桥接 afterCreate 钩子 → onToolComplete 回调
-    let creatorProcessor = null;
-    firstNode.handler((packet, context = {}) => {
-      const onToolComplete = context.acc?.onToolComplete;
-      let completed = false;
-
-      // 临时订阅 afterCreate：工具触发时桥接到 onToolComplete
-      const unsub =
-        typeof first.on === "function"
-          ? first.on("afterCreate", (_interaction, completedObject) => {
-              completed = true;
-              // 优先取事件参数中的 completedObject，fallback 取 acc.objects
-              const objects =
-                completedObject != null
-                  ? [completedObject]
-                  : (context.acc?.objects ?? []);
-              context.acc?.setHandoffObjects?.(objects);
-              onToolComplete?.();
-            })
-          : null;
-
-      if (!creatorProcessor) {
-        creatorProcessor = first.createProcessor();
-      }
-      const rawResult = creatorProcessor(packet, context);
-      return finalizeLifecycleWrappedResult(rawResult, () => completed, unsub);
-    });
-  } else if (firstIsChooser) {
-    // Chooser 路径：使用信号检测 handler
-    const wrappedHandler = wrapChooserForHandoff(first);
-    firstNode.handler(wrappedHandler);
+  if (isToolInstance(first)) {
+    firstNode.handler(
+      wrapToolForHandoff(first, {
+        bridgeObjects: autoBridgeObjects,
+      }),
+    );
   } else if (firstIsSubDAG) {
     firstSubDAGDef = first;
   } else {
@@ -554,65 +607,14 @@ function createHandoffSubDAG(options = {}) {
   const secondNode = builder.node();
   let secondSubDAGDef = null;
 
-  if (secondIsModifier) {
-    // Modifier 路径：handler 桥接 afterApply 钩子 → onToolComplete 回调
-    let modifierProcessor = null;
-    secondNode.handler((packet, context = {}) => {
-      const onToolComplete = context.acc?.onToolComplete;
-      let completed = false;
-
-      // 检测 cancel 信号：modifier 取消时也回切到 first
-      const hasCancelSignal =
-        Array.isArray(packet.signals) &&
-        packet.signals.some((s) => s?.type === "cancel");
-
-      // 临时订阅 afterApply：工具触发时桥接到 onToolComplete
-      const unsub =
-        typeof second.on === "function"
-          ? second.on("afterApply", () => {
-              completed = true;
-              onToolComplete?.();
-            })
-          : null;
-
-      if (!modifierProcessor) {
-        modifierProcessor = second.createProcessor();
-      }
-      const rawResult = modifierProcessor(packet, context);
-
-      // cancel 信号：丢弃 AOM 动态图中的对象，再切回 first
-      if (hasCancelSignal) {
-        const cancelState = context.getNodeState?.(context.path) ?? {};
-        const cancelObjects = Array.isArray(cancelState?.objects)
-          ? cancelState.objects
-          : [];
-        const boardApi = context.acc?.boardApi;
-        const cancelObjectIds = cancelObjects
-          .map((objectEntry) =>
-            typeof objectEntry?.id === "number" ? objectEntry.id : null,
-          )
-          .filter((objectId) => objectId != null);
-
-        if (boardApi && cancelObjectIds.length > 0) {
-          boardApi.discardActiveObjects(cancelObjectIds);
-        }
-
-        onToolComplete?.();
-      }
-
-      return finalizeLifecycleWrappedResult(rawResult, () => completed, unsub);
-    });
+  if (isToolInstance(second)) {
+    secondNode.handler(
+      wrapToolForHandoff(second, {
+        completeOnCancel: secondIsModifier,
+      }),
+    );
   } else if (secondIsSubDAG) {
     secondSubDAGDef = second;
-  } else if (isToolInstance(second)) {
-    // 通用 Tool 路径：透传，工具通过 context.onToolComplete 自行通知完成
-    let genericSecondProcessor = null;
-    secondNode.handler((packet, context = {}) => {
-      if (!genericSecondProcessor) {
-        genericSecondProcessor = second.createProcessor();
-      }
-      return genericSecondProcessor(packet, context);
-    });
   } else {
     throw new TypeError(
       "createHandoffSubDAG: second must be a Tool or SubDAGDefinition.",

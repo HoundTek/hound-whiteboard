@@ -362,14 +362,12 @@ describe("ObjectChooserTool", () => {
       expect(afterChoose).not.toHaveBeenCalled();
     });
 
-    test("confirmSelection → beforeConfirm 返回 false 时阻止 afterConfirm", () => {
+    test("confirmSelection → beforeConfirm 返回 false 时阻止后续完成", () => {
       const chosenObject = { id: 11 };
       const board = {
         activeObjectManager: { choose: jest.fn() },
       };
       const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
-      const afterConfirm = jest.fn();
-      tool.on("afterConfirm", afterConfirm);
       tool.beforeConfirmSelection = () => false;
 
       const result = tool.confirmSelection({ acc: { board }, path: "/test" }, [
@@ -377,14 +375,11 @@ describe("ObjectChooserTool", () => {
       ]);
 
       expect(result).toBe(false);
-      expect(afterConfirm).not.toHaveBeenCalled();
     });
 
-    test("confirmSelection 默认触发 afterConfirm", () => {
+    test("confirmSelection 默认返回 true", () => {
       const chosenObject = { id: 12 };
       const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
-      const afterConfirm = jest.fn();
-      tool.on("afterConfirm", afterConfirm);
 
       const result = tool.confirmSelection(
         { acc: { board: {} }, path: "/test" },
@@ -392,14 +387,9 @@ describe("ObjectChooserTool", () => {
       );
 
       expect(result).toBe(true);
-      expect(afterConfirm).toHaveBeenCalledTimes(1);
-      expect(afterConfirm).toHaveBeenCalledWith(
-        { acc: { board: {} }, path: "/test" },
-        [chosenObject],
-      );
     });
 
-    test("选择确认成功后同时触发 action:complete 与 afterConfirm", () => {
+    test("选择确认成功后触发 action:complete", () => {
       const chosenObject = { id: 13 };
       const boardApi = {
         addActiveObjects: jest.fn(),
@@ -413,9 +403,7 @@ describe("ObjectChooserTool", () => {
         setNodeState: stateAccess.setState,
       };
       const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
-      const afterConfirm = jest.fn();
       const actionComplete = jest.fn();
-      tool.on("afterConfirm", afterConfirm);
       tool.on("action:complete", actionComplete);
 
       tool.process(
@@ -428,7 +416,6 @@ describe("ObjectChooserTool", () => {
         deviceContext,
       );
 
-      expect(afterConfirm).toHaveBeenCalledTimes(1);
       expect(actionComplete).toHaveBeenCalledTimes(1);
       expect(actionComplete).toHaveBeenCalledWith(
         expect.objectContaining({ path: "/test" }),
@@ -436,7 +423,7 @@ describe("ObjectChooserTool", () => {
       );
     });
 
-    test("RectangleObjectChooserTool 在 end 信号时调用 confirmSelection", () => {
+    test("RectangleObjectChooserTool 在 end 信号时触发 action:complete", () => {
       // 准备一个虚拟对象用于框选命中
       const selectedSummary = {
         id: 20,
@@ -462,9 +449,9 @@ describe("ObjectChooserTool", () => {
       };
 
       const tool = new RectangleObjectChooserTool();
-      const afterConfirm = jest.fn();
+      const actionComplete = jest.fn();
       const afterChoose = jest.fn();
-      tool.on("afterConfirm", afterConfirm);
+      tool.on("action:complete", actionComplete);
       tool.on("afterChoose", afterChoose);
 
       // 先发送 position 信号，建立拖拽状态
@@ -495,14 +482,12 @@ describe("ObjectChooserTool", () => {
           deviceContext,
         )
         .then(() => {
-          // afterChoose 触发（setContextObjects 后）
           expect(afterChoose).toHaveBeenCalledTimes(1);
-          // afterConfirm 触发（confirmSelection 后）
-          expect(afterConfirm).toHaveBeenCalledTimes(1);
+          expect(actionComplete).toHaveBeenCalledTimes(1);
 
-          const confirmCall = afterConfirm.mock.calls[0];
-          expect(confirmCall[0]).toMatchObject({ path: "/viewport/chooser" });
-          expect(confirmCall[1]).toEqual([selectedSummary]);
+          const completeCall = actionComplete.mock.calls[0];
+          expect(completeCall[0]).toMatchObject({ path: "/viewport/chooser" });
+          expect(completeCall[1]).toEqual([selectedSummary]);
         });
     });
   });

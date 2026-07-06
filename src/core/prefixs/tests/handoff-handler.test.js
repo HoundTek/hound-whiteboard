@@ -28,8 +28,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const creator = createMockCreator();
       const listener = jest.fn();
 
-      creator.on("afterCreate", listener);
-      creator._emit("afterCreate", { id: 1 }, { type: "circle" });
+      creator.on("action:complete", listener);
+      creator._emit("action:complete", { id: 1 }, { type: "circle" });
 
       expect(listener).toHaveBeenCalledTimes(1);
       expect(listener).toHaveBeenCalledWith({ id: 1 }, { type: "circle" });
@@ -39,9 +39,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const creator = createMockCreator();
       const listener = jest.fn();
 
-      const unsub = creator.on("afterCreate", listener);
+      const unsub = creator.on("action:complete", listener);
       unsub(); // 等效于 off
-      creator._emit("afterCreate");
+      creator._emit("action:complete");
 
       expect(listener).not.toHaveBeenCalled();
     });
@@ -51,9 +51,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const a = jest.fn();
       const b = jest.fn();
 
-      creator.on("afterCreate", a);
-      creator.on("afterCreate", b);
-      creator._emit("afterCreate", "x");
+      creator.on("action:complete", a);
+      creator.on("action:complete", b);
+      creator._emit("action:complete", "x");
 
       expect(a).toHaveBeenCalledWith("x");
       expect(b).toHaveBeenCalledWith("x");
@@ -109,52 +109,52 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     });
   });
 
-  describe("afterCreate / afterApply 通知钩子", () => {
-    test("creator 完成时触发 afterCreate", () => {
+  describe("action:complete 通知钩子", () => {
+    test("creator 完成时触发 action:complete", () => {
       const creator = createMockCreator();
-      const afterCreate = jest.fn();
+      const actionComplete = jest.fn();
 
-      creator.on("afterCreate", afterCreate);
+      creator.on("action:complete", actionComplete);
       creator._entry = { id: 1 };
       creator.process({ signals: [{ type: "position" }] }, {});
 
-      expect(afterCreate).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
 
-    test("modifier apply 成功时触发 afterApply", () => {
+    test("modifier apply 成功时触发 action:complete", () => {
       const modifier = createMockModifier();
-      const afterApply = jest.fn();
+      const actionComplete = jest.fn();
 
-      modifier.on("afterApply", afterApply);
+      modifier.on("action:complete", actionComplete);
       modifier.applyModifiedObjects({}, [{ id: 1 }]);
 
-      expect(afterApply).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
 
-    test("beforeCommit 返回 false 时 afterCreate 仍触发", () => {
+    test("beforeCommit 返回 false 时 action:complete 仍触发", () => {
       const creator = createMockCreator();
-      const afterCreate = jest.fn();
+      const actionComplete = jest.fn();
 
-      creator.on("afterCreate", afterCreate);
+      creator.on("action:complete", actionComplete);
       creator.beforeCommitCreatedObject = () => false;
       creator._entry = { id: 1 };
       creator.process({ signals: [{ type: "position" }] }, {});
 
-      // afterCreate 无论是否 commit 都应触发（finalize 总是执行）
-      expect(afterCreate).toHaveBeenCalledTimes(1);
+      // action:complete 无论是否 commit 都应触发（finalize 总是执行）
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("chooser 生命周期钩子", () => {
-    test("end 信号且已选中对象时触发 afterConfirm", () => {
+    test("end 信号且已选中对象时触发 action:complete", () => {
       const chooser = createMockChooser((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, {
           objects: [{ id: 7, type: "stroke" }],
         });
       });
-      const afterConfirm = jest.fn();
+      const actionComplete = jest.fn();
 
-      chooser.on("afterConfirm", afterConfirm);
+      chooser.on("action:complete", actionComplete);
 
       chooser.process(
         { signals: [{ type: "end" }] },
@@ -165,14 +165,14 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         },
       );
 
-      expect(afterConfirm).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
     });
 
-    test("end 信号但无选中对象时不触发 afterConfirm", () => {
+    test("end 信号但无选中对象时不触发 action:complete", () => {
       const chooser = createMockChooser();
-      const afterConfirm = jest.fn();
+      const actionComplete = jest.fn();
 
-      chooser.on("afterConfirm", afterConfirm);
+      chooser.on("action:complete", actionComplete);
 
       chooser.process(
         { signals: [{ type: "end" }] },
@@ -183,10 +183,10 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         },
       );
 
-      expect(afterConfirm).not.toHaveBeenCalled();
+      expect(actionComplete).not.toHaveBeenCalled();
     });
 
-    test("handoff 中 chooser 通过 afterConfirm 钩子触发切换（不再依赖信号检测）", () => {
+    test("handoff 中 chooser 通过 action:complete 钩子触发切换（不再依赖信号检测）", () => {
       const dag = new DevicesDAG();
       const chooser = createMockChooser((_pkt, ctx) => {
         ctx.setNodeState?.(ctx.path, {
@@ -203,8 +203,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       dag.mountSubDAG("/viewport", subDAG, { board: {}, viewport: {} });
 
-      // end 信号 → chooser 选中对象 → confirmSelection → afterConfirm
-      // → handler 订阅 afterConfirm → onToolComplete → 切换到 second
+      // end 信号 → chooser 选中对象 → confirmSelection → action:complete
+      // → handler 订阅 action:complete → onToolComplete → 切换到 second
       dag.dispatch({
         to: "/viewport/chooser-hook",
         signals: [{ type: "end" }],
@@ -216,7 +216,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       });
     });
 
-    test("handoff 中 async chooser 的 afterConfirm 仍可触发切换", async () => {
+    test("handoff 中 async chooser 的 action:complete 仍可触发切换", async () => {
       const dag = new DevicesDAG();
       const chooser = new RectangleObjectChooserTool();
       const modifier = createMockModifier();
@@ -727,7 +727,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           const id = createdCount;
           createdIds.push(id);
           this.isObjectCreationCompleted = true;
-          this._emit?.("afterCreate");
+          this._emit?.("action:complete");
           ctx.acc?.onToolComplete?.();
         }
       })();
@@ -942,7 +942,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
      * 根节点(multi-tool prefix) → first(creator) / second(modifier)。
      *
      * 注：createHandoffSubDAG 目前对 SubDAGDefinition 作为 second 时
-     * 不注入 afterApply 订阅，因此这里手动复现其内部结构来验证
+     * 不注入 action:complete 订阅，因此这里手动复现其内部结构来验证
      * modifier → handoff 回切的完整信号链。
      */
     function mountModifierWorkflow(
@@ -1016,7 +1016,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         let completed = false;
         const unsub =
           typeof creator.on === "function"
-            ? creator.on("afterCreate", () => {
+            ? creator.on("action:complete", () => {
                 completed = true;
                 onToolComplete?.();
               })
@@ -1037,7 +1037,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         let completed = false;
         const unsub =
           typeof modifier.on === "function"
-            ? modifier.on("afterApply", () => {
+            ? modifier.on("action:complete", () => {
                 completed = true;
                 onToolComplete?.();
               })
@@ -1366,7 +1366,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       first._entry = object;
 
       const modifier = new CommonObjectModifierTool();
-      modifier.on("afterApply", () => calls.push(["afterApply"]));
+      modifier.on("action:complete", () => calls.push(["action:complete"]));
 
       const { accumulatedContext } = mountModifierWorkflow(
         dag,
@@ -1457,7 +1457,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       );
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([object.id]);
-      expect(calls.filter((c) => c[0] === "afterApply")).toHaveLength(1);
+      expect(calls.filter((c) => c[0] === "action:complete")).toHaveLength(1);
       expect(dag.getNodeState("/viewport/modifier-flow")).toEqual({
         phase: "first",
         activeChild: "first",

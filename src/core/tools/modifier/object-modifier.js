@@ -364,18 +364,14 @@ class ObjectModifierTool extends GestureTool {
   }
 
   /**
-   * 提交成功后的通知钩子
-   * @description
-   * handoff 通过 {@link Tool#on|on('afterApply', ...)} 订阅。
-   * 兼容迁移阶段保留旧事件名，同时新增 `action:complete`。
+   * 提交成功后的扩展钩子
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<BasicObject>} objects - 已提交的对象
    * @param {boolean} result - 提交结果
+   * @returns {void}
    * @protected
    */
-  afterApplyModifiedObjects(context, objects, result) {
-    this._emit("afterApply", context, objects, result);
-  }
+  afterApplyModifiedObjects(context, objects, result) {}
 
   /**
    * GestureTool 生命周期适配：动作完成后的通知

@@ -163,22 +163,19 @@ class ObjectChooserTool extends GestureTool {
   }
 
   /**
-   * 确认选择后的通知钩子
-   * @description
-   * 子类在手势结束时调用，handoff 通过 on('afterConfirm', ...) 订阅。
+   * 确认选择后的扩展钩子
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<import("../../shared/types.js").ObjectSummary>} objects - 已确认的对象摘要
+   * @returns {void}
    * @protected
    */
-  afterConfirmSelection(context, objects) {
-    this._emit("afterConfirm", context, objects);
-  }
+  afterConfirmSelection(context, objects) {}
 
   /**
    * 显式确认当前选择
    * @description
    * 子类（如 RectangleObjectChooserTool）在手势完成（end 信号）时调用，
-   * 触发 beforeConfirm / afterConfirm 生命周期钩子。
+   * 触发选择确认校验与确认后的扩展钩子。
    * 与 creator 的 completeCreatedObject、modifier 的 applyModifiedObjects
    * 构成统一的完成确认语义入口。
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
