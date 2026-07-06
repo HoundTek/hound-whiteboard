@@ -12,7 +12,7 @@
 - chooser 选中的对象
 - modifier 正在编辑的对象
 
-AOM 本身不依赖 DOM，也不直接持有 monitor 列表。它通过 `renderHooks` 把渲染副作用注入到调用方，因此既能在测试环境使用，也能在 Worker 中作为真实语义核心运行。
+AOM 本身不依赖 DOM，也不直接持有 viewport 列表。它通过 `renderHooks` 把渲染副作用注入到调用方，因此既能在测试环境使用，也能在 Worker 中作为真实语义核心运行。
 
 ## 运行边界
 
@@ -83,7 +83,7 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 
 在 Worker mode 下：
 
-- `BoardCore` 注入的 hooks 最终驱动 `MonitorCore` 的 base/live 渲染
+- `BoardCore` 注入的 hooks 最终驱动 `ViewportCore` 的 base/live 渲染
 - AOM 自身不关心 DOM canvas
 
 ### UI（测试/兼容）
@@ -192,6 +192,6 @@ AOM 用两类快照支持对象级静态失效：
 ## 相关文档
 
 - [board-document.md](./board-document.md)
-- [monitor-document.md](./monitor-document.md)
+- [viewport-document.md](./viewport-document.md)
 - [ui-renderer-document.md](../../renderer/docs/ui-renderer-document.md)
 - [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)

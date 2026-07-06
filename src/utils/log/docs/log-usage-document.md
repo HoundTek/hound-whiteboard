@@ -84,7 +84,7 @@ createConsolePrinter(logBus, { timestamps: true });
 new Logger(name, level?, bus?)
 ```
 
-- `name` — Logger 命名空间，如 `"Monitor"`、`"HWB"`、`"safe-io"`。
+- `name` — Logger 命名空间，如 `"Viewport"`、`"HWB"`、`"safe-io"`。
 - `level` — 可选，默认 `LEVELS.INFO`。支持字符串 `"DEBUG"` 或数值 `0`。
 - `bus` — 可选，LogBus 实例。不传时 fallback 到原生 `console`。
 
@@ -200,12 +200,12 @@ setInterval(() => {
 ### 场景一：模块初始化
 
 ```js
-const log = new Logger("Monitor", "INFO", logBus);
+const log = new Logger("Viewport", "INFO", logBus);
 
 function init() {
-  log.info("Initializing monitor...");
+  log.info("Initializing viewport...");
   // ...
-  log.info("Monitor ready", { width: 800, height: 600 });
+  log.info("Viewport ready", { width: 800, height: 600 });
 }
 ```
 
@@ -213,7 +213,7 @@ function init() {
 
 ```js
 // 父 Logger 只写一次 level 和 bus
-const monLog = new Logger("Monitor", "DEBUG", logBus);
+const monLog = new Logger("Viewport", "DEBUG", logBus);
 
 // 各子模块继承
 const renderLog = monLog.child("BaseRenderer");

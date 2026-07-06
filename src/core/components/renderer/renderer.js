@@ -53,10 +53,10 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
  */
 class Renderer {
   /**
-   * 绑定的显示器
-   * @type {import("../orchestration/monitor-proxy.js").MonitorProxy}
+   * 绑定的视口
+   * @type {import("../orchestration/viewport-proxy.js").ViewportProxy}
    */
-  monitor;
+  viewport;
 
   /**
    * 目标渲染层画布
@@ -73,11 +73,11 @@ class Renderer {
   _scheduler;
 
   /**
-   * @param {import("../orchestration/monitor-proxy.js").MonitorProxy} monitor - 目标显示器
+   * @param {import("../orchestration/viewport-proxy.js").ViewportProxy} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(monitor, options = {}) {
-    this.monitor = monitor;
+  constructor(viewport, options = {}) {
+    this.viewport = viewport;
     this._canvas = options.canvas ?? null;
     this._scheduler = null;
   }
@@ -140,7 +140,7 @@ class Renderer {
    * @protected
    */
   _getViewportRect() {
-    return this.monitor?.getViewportScreenRect?.();
+    return this.viewport?.getViewportScreenRect?.();
   }
 
   /**
@@ -264,7 +264,7 @@ class Renderer {
     const objectPadding = objectInstance?.getRenderPadding?.();
     const basePadding =
       Number.isFinite(objectPadding) && objectPadding > 0
-        ? objectPadding * (this.monitor?.zoom ?? 1)
+        ? objectPadding * (this.viewport?.zoom ?? 1)
         : 0;
     const objectRange = objectInstance?.getRange?.();
 
@@ -284,7 +284,7 @@ class Renderer {
     const worldRect = this.getObjectWorldRect(objectInstance);
     if (!worldRect) return undefined;
 
-    const screenRect = this.monitor?.worldRectToScreenRect?.(worldRect);
+    const screenRect = this.viewport?.worldRectToScreenRect?.(worldRect);
     if (!screenRect) return undefined;
 
     return screenRect.inflate(this.getObjectScreenPadding(objectInstance));
@@ -413,10 +413,10 @@ class Renderer {
    * @returns {CanvasRenderingContext2D}
    */
   createViewportContext(ctx) {
-    const monitor = this.monitor;
-    const zoom = monitor?.zoom ?? 1;
-    const originX = monitor?.origin?.x ?? 0;
-    const originY = monitor?.origin?.y ?? 0;
+    const viewport = this.viewport;
+    const zoom = viewport?.zoom ?? 1;
+    const originX = viewport?.origin?.x ?? 0;
+    const originY = viewport?.origin?.y ?? 0;
 
     return new Proxy(ctx, {
       get(target, prop, receiver) {

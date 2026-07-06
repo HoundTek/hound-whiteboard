@@ -39,7 +39,7 @@
 - 若处理对象坐标、矩阵和几何变换，优先阅读 [math-document.md](./math-document.md) 与 [math-algorithm-document.md](./math-algorithm-document.md)。
 - 若处理区块缓冲区、BFS 或双端缓存，优先阅读 [queue-document.md](./queue-document.md) 与 [deque-document.md](./deque-document.md)。
 - 若处理层叠关系、依赖传播或拓扑判断，优先阅读 [directed-graph-document.md](./directed-graph-document.md)。
-- 若处理设备图节点、输入路由或 monitor 路径，优先阅读 [path-document.md](./path-document.md)。
+- 若处理设备图节点、输入路由或 viewport 路径，优先阅读 [path-document.md](./path-document.md)。
 - 若处理运行时 id 分配，优先阅读 [counter-pool-document.md](./counter-pool-document.md) 与 [random-document.md](./random-document.md)。
 
 ## 当前状态

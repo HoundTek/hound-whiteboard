@@ -19,8 +19,8 @@ describe("keyboard-device", () => {
     const keyboardDevice = createKeyboardDevice();
     const tool = new CollectingTool();
 
-    const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
-    dag.mountWorkflow("/monitor/workflows/space-tool", tool);
+    const mountedNodes = dag.mountSubDAG("/viewport", keyboardDevice);
+    dag.mountWorkflow("/viewport/workflows/space-tool", tool);
 
     const prefix = createEdgePrefix({
       handler(packet) {
@@ -31,18 +31,18 @@ describe("keyboard-device", () => {
       },
     });
     const prefixNodes = dag.mountSubDAG(
-      "/monitor/keyboard/code/Space",
+      "/viewport/keyboard/code/Space",
       { ...prefix, rootPath: "/default" },
       {},
     );
     dag.addEdge(
       prefixNodes[0].path,
       "default",
-      "/monitor/workflows/space-tool",
+      "/viewport/workflows/space-tool",
     );
 
     const result = dag.dispatch({
-      to: "/monitor/keyboard",
+      to: "/viewport/keyboard",
       signals: [
         {
           type: "keydown",
@@ -141,7 +141,7 @@ describe("keyboard-device", () => {
         ],
       },
       context: expect.objectContaining({
-        path: "/monitor/keyboard/code/Space/default/default",
+        path: "/viewport/keyboard/code/Space/default/default",
       }),
     });
   });
@@ -150,10 +150,10 @@ describe("keyboard-device", () => {
     const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    dag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountSubDAG("/viewport", keyboardDevice);
 
     dag.dispatch({
-      to: "/monitor/keyboard",
+      to: "/viewport/keyboard",
       signals: [
         {
           type: "keydown",
@@ -163,7 +163,7 @@ describe("keyboard-device", () => {
     });
 
     const result = dag.dispatch({
-      to: "/monitor/keyboard",
+      to: "/viewport/keyboard",
       signals: [
         {
           type: "keydown",
@@ -210,10 +210,10 @@ describe("keyboard-device", () => {
     const dag = new DevicesDAG();
     const keyboardDevice = createKeyboardDevice();
 
-    dag.mountSubDAG("/monitor", keyboardDevice);
+    dag.mountSubDAG("/viewport", keyboardDevice);
 
     dag.dispatch({
-      to: "/monitor/keyboard",
+      to: "/viewport/keyboard",
       signals: [
         {
           type: "keydown",
@@ -227,7 +227,7 @@ describe("keyboard-device", () => {
     });
 
     const keyupPackets = dag.dispatch({
-      to: "/monitor/keyboard",
+      to: "/viewport/keyboard",
       signals: [
         {
           type: "keyup",
@@ -255,7 +255,7 @@ describe("keyboard-device", () => {
     ]);
 
     dag.dispatch({
-      to: "/monitor/keyboard",
+      to: "/viewport/keyboard",
       signals: [{ type: "cancel", context: {} }],
     });
 
@@ -267,8 +267,8 @@ describe("keyboard-device", () => {
     const keyboardDevice = createKeyboardDevice();
     const tool = new CollectingTool();
 
-    const mountedNodes = dag.mountSubDAG("/monitor", keyboardDevice);
-    dag.mountWorkflow("/monitor/workflows/move-tool", tool);
+    const mountedNodes = dag.mountSubDAG("/viewport", keyboardDevice);
+    dag.mountWorkflow("/viewport/workflows/move-tool", tool);
 
     // 用边级 prefix 替代旧 nodeConfigs handler
     const wasdPrefix = (code, vector) =>
@@ -296,19 +296,19 @@ describe("keyboard-device", () => {
     ]) {
       const prefix = wasdPrefix(code, vector);
       const prefixNodes = dag.mountSubDAG(
-        `/monitor/keyboard/code/${code}`,
+        `/viewport/keyboard/code/${code}`,
         { ...prefix, rootPath: "/default" },
         {},
       );
       dag.addEdge(
         prefixNodes[0].path,
         "default",
-        "/monitor/workflows/move-tool",
+        "/viewport/workflows/move-tool",
       );
     }
 
     const result = dag.dispatch({
-      to: "/monitor/keyboard",
+      to: "/viewport/keyboard",
       signals: [
         {
           type: "keydown",

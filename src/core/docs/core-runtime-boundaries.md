@@ -16,12 +16,12 @@
 | `bridges/persistence-adapter.js`                    | Shared              | 持久化接口与默认内存适配                                                |
 | `components/chunk/`                                 | Shared              | 区块、区块加载器、区块静态图管理                                        |
 | `components/orchestration/board-core.js`            | Worker              | Core 侧真实白板数据与协调中心                                           |
-| `components/orchestration/board.js`                 | UI                  | UI façade，负责 signals / DAG / monitor / 通过 Worker 与 BoardCore 通信 |
-| `components/orchestration/monitor-core.js`          | Worker              | Worker 侧视口与 OffscreenCanvas 渲染核心                                |
-| `components/orchestration/monitor-proxy.js`         | UI                  | UI 侧视口代理，持有 DOM canvas，接收 Worker 侧渲染帧                    |
+| `components/orchestration/board.js`                 | UI                  | UI façade，负责 signals / DAG / viewport / 通过 Worker 与 BoardCore 通信 |
+| `components/orchestration/viewport-core.js`          | Worker              | Worker 侧视口与 OffscreenCanvas 渲染核心                                |
+| `components/orchestration/viewport-proxy.js`         | UI                  | UI 侧视口代理，持有 DOM canvas，接收 Worker 侧渲染帧                    |
 | `components/orchestration/active-object-manager.js` | Shared              | AOM 纯语义核心，通过 renderHooks 接入具体渲染链                         |
 | `components/orchestration/aom-render-hooks.js`      | Shared              | renderHooks 接口与默认空实现                                            |
-| `components/orchestration/board-render-hooks.js`    | UI                  | AOM 请求到 UI monitor 渲染器的桥接层                                    |
+| `components/orchestration/board-render-hooks.js`    | UI                  | AOM 请求到 UI viewport 渲染器的桥接层                                    |
 | `components/renderer/ui-renderer.js`                | UI                  | UI overlay 渲染                                                         |
 | `components/renderer/base-renderer.js`              | Worker              | Base 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                |
 | `components/renderer/live-renderer.js`              | Worker              | Live 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                |
@@ -52,8 +52,8 @@
 
 #### `orchestration/`
 
-- `BoardCore` / `MonitorCore` 是 Worker 侧真实核心
-- `Board` / `MonitorProxy` 是 UI 侧宿主
+- `BoardCore` / `ViewportCore` 是 Worker 侧真实核心
+- `Board` / `ViewportProxy` 是 UI 侧宿主
 - `ActiveObjectManager` 保持纯语义实现，通过 `renderHooks` 把渲染副作用延后到调用方决定
 
 #### `chunk/`
@@ -65,7 +65,7 @@
 
 #### `renderer/`
 
-- `UiRenderer` 只在 UI 侧使用，因为它直接操作 `Monitor.uiCanvas`
+- `UiRenderer` 只在 UI 侧使用，因为它直接操作 `Viewport.uiCanvas`
 - `BaseRenderer` / `LiveRenderer` / `RenderScheduler` / dirty rect 策略本身不依赖 DOM，当前属于 Shared
 
 ### `devices/` / `devices-dag/` / `tools/` / `prefixs/`
@@ -95,8 +95,8 @@
 
 ### 视口与渲染
 
-- **Worker 侧 `MonitorCore`** 负责 base/live 两层的真实补绘与帧输出
-- **UI 侧 `MonitorProxy`** 负责接收 `render-frame` 并把合成位图绘制到 DOM canvas
+- **Worker 侧 `ViewportCore`** 负责 base/live 两层的真实补绘与帧输出
+- **UI 侧 `ViewportProxy`** 负责接收 `render-frame` 并把合成位图绘制到 DOM canvas
 - **UI 侧 `UiRenderer`** 负责 overlay
 - mutation RPC（`modifyObject` 等）在 Core 侧自动调用 `requestLiveRender` 触发
   live 层失效并安排立即 flush，Tool 层无需自行处理 live 渲染
@@ -113,8 +113,8 @@ demo / `src/templates/whiteboard.js` 的初始化流程：
 
 1. UI 线程创建 `Worker(new URL("../core-worker.js", import.meta.url))`
 2. `Board.enableWorkerMode(worker)` 初始化 `BoardApiRpc`
-3. `Board.createMonitor(...)` 返回 `MonitorProxy`
-4. `MonitorProxy` 通过 `createMonitor` RPC 驱动 Worker 创建 `MonitorCore`
+3. `Board.createViewport(...)` 返回 `ViewportProxy`
+4. `ViewportProxy` 通过 `createViewport` RPC 驱动 Worker 创建 `ViewportCore`
 5. tools 保持 UI 线程执行，通过 RPC 与 Worker 侧 `BoardCore` 协作
 
 ## 相关文档
@@ -123,4 +123,4 @@ demo / `src/templates/whiteboard.js` 的初始化流程：
 - [core-modules.md](./core-modules.md)
 - [components-document.md](../components/docs/components-document.md)
 - [board-document.md](../components/orchestration/docs/board-document.md)
-- [monitor-document.md](../components/orchestration/docs/monitor-document.md)
+- [viewport-document.md](../components/orchestration/docs/viewport-document.md)

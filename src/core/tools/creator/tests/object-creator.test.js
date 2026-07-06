@@ -2,7 +2,7 @@ import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { SingleGestureObjectCreatorTool } from "../object-creator.js";
 import { Vector } from "../../../utils/math.js";
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -21,7 +21,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -38,7 +38,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           {
             type: "position",
@@ -69,7 +69,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(0, 0) } },
           { type: "property", context: { value: null } },
@@ -90,7 +90,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(3, 4) } }],
       },
       deviceContext,
@@ -143,7 +143,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
       deviceContext,
@@ -180,7 +180,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,

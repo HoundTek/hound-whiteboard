@@ -20,7 +20,7 @@
 
 ```javascript
 {
-  to: "/monitor-id/device-path",
+  to: "/viewport-id/device-path",
   signals: [
     {
       type: "position",
@@ -34,7 +34,7 @@
 
 约束如下：
 
-- `to` 必须已经包含目标 `monitorId`
+- `to` 必须已经包含目标 `viewportId`
 - `signals` 必须是数组
 - 每个信号至少包含 `type`
 - 信号载荷统一放在 `context`
@@ -77,13 +77,13 @@
 - `keyup`
   - 字段同 `keydown`
 - `cancel`
-  - 表示当前键盘交互被宿主强制中断，如 Monitor 失焦
+  - 表示当前键盘交互被宿主强制中断，如 Viewport 失焦
 
 一个最小示例如下：
 
 ```javascript
 {
-  to: "/monitor/keyboard",
+  to: "/viewport/keyboard",
   signals: [
     {
       type: "keydown",
@@ -101,7 +101,7 @@
 }
 ```
 
-这里的重点不是“所有键盘事件都进 Core”，而是“只有已经确定属于某个 Monitor 设备语义的键盘输入，才进入 Core”。
+这里的重点不是“所有键盘事件都进 Core”，而是“只有已经确定属于某个 Viewport 设备语义的键盘输入，才进入 Core”。
 
 进入键盘设备后，设备图节点还可以继续把原始 `keydown` / `keyup` 规整成更稳定的设备语义信号。当前统一做法是使用节点 handler：例如某个按键节点可以把 `trigger` 转成一条 `position`，再在返回包里显式写入 `move/tool` 或 `create-circle/params/tool` 这类本地后代路径。
 
@@ -109,7 +109,7 @@
 
 当前建议只有两类键盘输入编码为键盘设备信号：
 
-- 该输入直接操作某个 Monitor，如缩放、平移视角、翻区块浏览
+- 该输入直接操作某个 Viewport，如缩放、平移视角、翻区块浏览
 - 该输入最终会被某个工具消费，如用户绑定的 `WASD`、按住空格绘制、按键触发临时工具
 
 是否“最终会被工具消费”，应在宿主绑定层就已经明确；Core 不负责替你判断一个按键原本是不是快捷键。
@@ -120,7 +120,7 @@
 
 - `Command+S` / `Ctrl+S` 这类宿主级保存快捷键
 - 切换工具、打开 UndoTree、打开面板这类应用级命令快捷键
-- 与 Monitor 操作和工具消费无关的全局热键
+- 与 Viewport 操作和工具消费无关的全局热键
 
 这些输入可以直接在宿主 UI 层处理，不需要先绕到 Core 的设备图里再转回来。
 
@@ -132,7 +132,7 @@
 
 ```javascript
 {
-  to: "/monitor/touchscreen",
+  to: "/viewport/touchscreen",
   signals: [
     {
       type: "position",
@@ -185,16 +185,16 @@
 
 这里的“映射建议”只描述进入 Core 前的包形状，不要求这层逻辑一定实现为 Core 内部模块。当前 `whiteboard.js` 中的鼠标 demo 就是直接在模板层临时绑定 DOM 事件后再发射 `SignalPacket`。
 
-## Monitor 归属
+## Viewport 归属
 
-宿主侧输入绑定逻辑必须在进入 Core 前决定目标 Monitor。
+宿主侧输入绑定逻辑必须在进入 Core 前决定目标 Viewport。
 
 也就是说，编码层需要先知道：
 
-- 当前事件属于哪个 Monitor
-- 当前 Monitor 下应该走哪个设备路径
+- 当前事件属于哪个 Viewport
+- 当前 Viewport 下应该走哪个设备路径
 
-因为 `Board` 当前只负责按 `to` 中的 `monitorId` 把包分发到对应 Monitor，而不会替你补全目标路径。
+因为 `Board` 当前只负责按 `to` 中的 `viewportId` 把包分发到对应 Viewport，而不会替你补全目标路径。
 
 ## 当前不冻结的部分
 

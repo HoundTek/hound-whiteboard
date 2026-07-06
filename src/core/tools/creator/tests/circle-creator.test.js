@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import { CircleCreatorTool } from "../circle-creator.js";
 import { Vector } from "../../../utils/math.js";
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -18,7 +18,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -33,7 +33,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -41,7 +41,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(10, 10) } },
           { type: "end", context: {} },
@@ -55,15 +55,15 @@ describe("CircleCreatorTool", () => {
     expect(tool._entry.data.radius).toBeCloseTo(Math.sqrt(145));
   });
 
-  test("结束点过近时使用固定半径，固定半径由 monitor.zoom 决定", () => {
+  test("结束点过近时使用固定半径，固定半径由 viewport.zoom 决定", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(102, {
-      monitor: { zoom: 2 },
+      viewport: { zoom: 2 },
     });
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(0, 0) } }],
       },
       deviceContext,
@@ -71,7 +71,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(0.5, 0.2) } },
           { type: "end", context: {} },
@@ -93,7 +93,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
       },
       deviceContext,
@@ -101,7 +101,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(6, 4) } },
           { type: "end", context: {} },
@@ -179,7 +179,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(2, 1) } }],
       },
       deviceContext,
@@ -187,7 +187,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
@@ -196,13 +196,13 @@ describe("CircleCreatorTool", () => {
     expect(commitSpy).toHaveBeenCalledWith([103]);
   });
 
-  test("未提供 monitor 时应以默认 zoom=1 计算固定半径", () => {
+  test("未提供 viewport 时应以默认 zoom=1 计算固定半径", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(401);
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(0, 0) } }],
       },
       deviceContext,
@@ -210,7 +210,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(0, 1) } },
           { type: "end", context: {} },
@@ -230,7 +230,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
       },
       deviceContext,
@@ -238,7 +238,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
@@ -257,7 +257,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       { acc: { board, boardApi, objectId: 201, ownerChunkId: 1 } },
@@ -267,7 +267,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -278,7 +278,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(6, 7) } }],
       },
       { acc: { board, boardApi, objectId: 202, ownerChunkId: 1 } },
@@ -288,7 +288,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(10, 10) } },
           { type: "end", context: {} },
@@ -310,7 +310,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(10, 10) } }],
       },
       deviceContext,
@@ -318,7 +318,7 @@ describe("CircleCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/circle",
+        to: "/viewport/circle",
         signals: [
           { type: "position", context: { value: new Vector(10, 10) } },
           { type: "end", context: {} },

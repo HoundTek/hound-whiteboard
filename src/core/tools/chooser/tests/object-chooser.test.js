@@ -45,7 +45,7 @@ describe("ObjectChooserTool", () => {
     const stateAccess = createStateAccess();
     const deviceContext = {
       acc: { boardApi },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -80,7 +80,7 @@ describe("ObjectChooserTool", () => {
     });
     const deviceContext = {
       acc: { boardApi, objects: [chosenObject] },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -100,7 +100,7 @@ describe("ObjectChooserTool", () => {
     const stateAccess = createStateAccess();
     const deviceContext = {
       acc: { boardApi },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -161,7 +161,7 @@ describe("ObjectChooserTool", () => {
           getObjectById: jest.fn(() => staleBoardObject),
         },
       },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -199,7 +199,7 @@ describe("ObjectChooserTool", () => {
         },
         objects: [chosenObject],
       },
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -222,7 +222,7 @@ describe("ObjectChooserTool", () => {
 
     const stateAccess = createStateAccess({ objects: [chosenObject] });
     const baseCtx = {
-      path: "/monitor/chooser/tool",
+      path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
     };
@@ -232,7 +232,7 @@ describe("ObjectChooserTool", () => {
         ...baseCtx,
         dag: {
           resolveDefaultLeaf: () => ({
-            path: "/monitor/chooser/tool/tool",
+            path: "/viewport/chooser/tool/tool",
             state: { objects: [chosenObject] },
           }),
         },
@@ -247,7 +247,7 @@ describe("ObjectChooserTool", () => {
         ...baseCtx,
         dag: {
           resolveDefaultLeaf: () => ({
-            path: "/monitor/chooser/tool",
+            path: "/viewport/chooser/tool",
             state: {},
           }),
         },
@@ -277,12 +277,12 @@ describe("ObjectChooserTool", () => {
     const stateAccess = createStateAccess({ objects: [chosenObject] });
     const visible = tool.collectUiOverlayEntries({
       deviceContext: {
-        path: "/monitor/chooser/tool",
+        path: "/viewport/chooser/tool",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
         dag: {
           resolveDefaultLeaf: () => ({
-            path: "/monitor/chooser/tool",
+            path: "/viewport/chooser/tool",
             state: {},
           }),
         },
@@ -439,7 +439,7 @@ describe("ObjectChooserTool", () => {
       const stateAccess = createStateAccess();
       const deviceContext = {
         acc: { boardApi },
-        path: "/monitor/chooser",
+        path: "/viewport/chooser",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
       };
@@ -484,7 +484,7 @@ describe("ObjectChooserTool", () => {
           expect(afterConfirm).toHaveBeenCalledTimes(1);
 
           const confirmCall = afterConfirm.mock.calls[0];
-          expect(confirmCall[0]).toMatchObject({ path: "/monitor/chooser" });
+          expect(confirmCall[0]).toMatchObject({ path: "/viewport/chooser" });
           expect(confirmCall[1]).toEqual([selectedSummary]);
         });
     });

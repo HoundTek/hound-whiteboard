@@ -478,7 +478,7 @@ function createHandoffSubDAG(options = {}) {
               handoffExplicitlySet = false;
 
               // 触发 UI overlay 刷新，去除残留的 modifier / chooser 渲染条目
-              prefixContext.acc?.monitor?.requestViewportUiRender?.();
+              prefixContext.acc?.viewport?.requestViewportUiRender?.();
             }
           };
 

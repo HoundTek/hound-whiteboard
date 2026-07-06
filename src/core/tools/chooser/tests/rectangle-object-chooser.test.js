@@ -26,7 +26,7 @@ describe("RectangleObjectChooserTool", () => {
     };
 
     const deviceContext = {
-      acc: { boardApi, monitor: { requestViewportUiRender: jest.fn() } },
+      acc: { boardApi, viewport: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -107,7 +107,7 @@ describe("RectangleObjectChooserTool", () => {
     const deviceContext = {
       acc: {
         boardApi,
-        monitor: { requestViewportUiRender: jest.fn() },
+        viewport: { requestViewportUiRender: jest.fn() },
         objects: [previousSummary],
       },
       path: "/main/mouse/secondary/tool",
@@ -213,7 +213,7 @@ describe("RectangleObjectChooserTool", () => {
           getObjectById: jest.fn(() => staleBoardObject),
         },
         boardApi,
-        monitor: { requestViewportUiRender: jest.fn() },
+        viewport: { requestViewportUiRender: jest.fn() },
       },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,

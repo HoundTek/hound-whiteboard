@@ -1,13 +1,13 @@
 /**
  * @file UI 覆盖层渲染器
- * @description 提供 Monitor.uiCanvas 的兼容渲染实现。
+ * @description 提供 Viewport.uiCanvas 的兼容渲染实现。
  * @module core/components/renderer/ui-renderer
  * @author Zhou Chenyu
  */
 
 import { BasicObject } from "../../objects/basic-obj.js";
 import { intersectsRanges, RectangleRange } from "../../range/index.js";
-/** @typedef {import("../orchestration/monitor-proxy.js").MonitorProxy} Monitor */
+/** @typedef {import("../orchestration/viewport-proxy.js").ViewportProxy} Viewport */
 import { ActiveObjectManager } from "../orchestration/active-object-manager.js";
 import { Logger } from "../../../utils/log/logger.js";
 import { logBus } from "../../../utils/log/log-bus.js";
@@ -62,10 +62,10 @@ function normalizeDirtyRectsForScreenUpdate(
  */
 class UiRenderer {
   /**
-   * 绑定的显示器
-   * @type {Monitor}
+   * 绑定的视口
+   * @type {Viewport}
    */
-  monitor;
+  viewport;
 
   /**
    * 活动对象管理器
@@ -75,7 +75,7 @@ class UiRenderer {
 
   /**
    * 自定义 overlay provider 集合
-   * @type {Set<(context: { monitor: Monitor, activeObjectManager?: ActiveObjectManager, renderer: UiRenderer }) => any>}
+   * @type {Set<(context: { viewport: Viewport, activeObjectManager?: ActiveObjectManager, renderer: UiRenderer }) => any>}
    */
   overlayProviders;
 
@@ -107,20 +107,20 @@ class UiRenderer {
   #log;
 
   /**
-   * @param {Monitor} monitor - 目标显示器
+   * @param {Viewport} viewport - 目标视口
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(monitor, activeObjectManager, options = {}) {
-    this.monitor = monitor;
+  constructor(viewport, activeObjectManager, options = {}) {
+    this.viewport = viewport;
     this.activeObjectManager = activeObjectManager;
     this.overlayProviders = new Set();
     this._canvas = options.canvas ?? null;
     this._resolveThresholds = createLiveDirtyRectThresholdStrategy();
     this._scheduler = new RenderScheduler({
       mergeDirtyRects: createRectangleDirtyRectMerger({
-        getThresholds: () => this._resolveThresholds(monitor?.zoom ?? 1) ?? {},
-        getViewportRect: () => monitor?.getViewportScreenRect?.(),
+        getThresholds: () => this._resolveThresholds(viewport?.zoom ?? 1) ?? {},
+        getViewportRect: () => viewport?.getViewportScreenRect?.(),
       }),
       flushHandler: (dirtyRects) => this.flush(dirtyRects),
     });
@@ -159,7 +159,7 @@ class UiRenderer {
    * 失效整个视口
    */
   invalidateViewport() {
-    const viewportRect = this.monitor?.getViewportScreenRect?.();
+    const viewportRect = this.viewport?.getViewportScreenRect?.();
     if (viewportRect?.width > 0 && viewportRect?.height > 0) {
       this.invalidate(viewportRect);
     }
@@ -185,7 +185,7 @@ class UiRenderer {
 
   /**
    * 注册自定义 overlay provider
-   * @param {(context: { monitor: Monitor, activeObjectManager?: ActiveObjectManager, renderer: UiRenderer }) => any} provider - provider
+   * @param {(context: { viewport: Viewport, activeObjectManager?: ActiveObjectManager, renderer: UiRenderer }) => any} provider - provider
    * @returns {Function | undefined}
    */
   registerOverlayProvider(provider) {
@@ -232,7 +232,7 @@ class UiRenderer {
     const renderPadding = objectInstance?.getRenderPadding?.() ?? 0;
     const screenPadding =
       Number.isFinite(renderPadding) && renderPadding > 0
-        ? renderPadding * (this.monitor?.zoom ?? 1)
+        ? renderPadding * (this.viewport?.zoom ?? 1)
         : 0;
 
     return Math.max(COMPAT_SELECTION_FRAME_MARGIN, Math.ceil(screenPadding));
@@ -256,7 +256,7 @@ class UiRenderer {
         : 0;
     const screenPadding =
       Number.isFinite(renderPadding) && renderPadding > 0
-        ? renderPadding * (this.monitor?.zoom ?? 1)
+        ? renderPadding * (this.viewport?.zoom ?? 1)
         : 0;
 
     return Math.max(COMPAT_SELECTION_FRAME_MARGIN, Math.ceil(screenPadding));
@@ -314,7 +314,7 @@ class UiRenderer {
     const worldRect = this.getSummaryWorldRect(summaryEntry);
     if (!worldRect) return undefined;
 
-    return this.monitor?.worldRectToScreenRect?.(
+    return this.viewport?.worldRectToScreenRect?.(
       worldRect,
       this.getCompatSelectionPaddingForSummary(summaryEntry),
     );
@@ -329,7 +329,7 @@ class UiRenderer {
     const worldRect = this.getObjectWorldRect(objectInstance);
     if (!worldRect) return undefined;
 
-    return this.monitor?.worldRectToScreenRect?.(
+    return this.viewport?.worldRectToScreenRect?.(
       worldRect,
       this.getCompatSelectionPadding(objectInstance),
     );
@@ -452,7 +452,7 @@ class UiRenderer {
           normalizedEntry.worldRect,
         );
         if (worldRect) {
-          normalizedEntry.screenRect = this.monitor?.worldRectToScreenRect?.(
+          normalizedEntry.screenRect = this.viewport?.worldRectToScreenRect?.(
             worldRect,
             normalizedEntry.padding ?? 0,
           );
@@ -462,7 +462,7 @@ class UiRenderer {
       } else {
         const worldRect = this.getSummaryWorldRect(normalizedEntry);
         if (worldRect) {
-          normalizedEntry.screenRect = this.monitor?.worldRectToScreenRect?.(
+          normalizedEntry.screenRect = this.viewport?.worldRectToScreenRect?.(
             worldRect,
             normalizedEntry.padding ??
               this.getCompatSelectionPaddingForSummary(normalizedEntry),
@@ -500,7 +500,7 @@ class UiRenderer {
     for (const provider of this.overlayProviders) {
       try {
         const result = provider({
-          monitor: this.monitor,
+          viewport: this.viewport,
           activeObjectManager: this.activeObjectManager,
           renderer: this,
         });
@@ -576,7 +576,7 @@ class UiRenderer {
 
     const normalizedDirtyRects = normalizeDirtyRectsForScreenUpdate(
       dirtyRects,
-      this.monitor?.getViewportScreenRect?.(),
+      this.viewport?.getViewportScreenRect?.(),
     );
     if (normalizedDirtyRects.length === 0) {
       return [];
@@ -617,7 +617,7 @@ class UiRenderer {
         entry.draw?.(context, {
           dirtyRect,
           entry,
-          monitor: this.monitor,
+          viewport: this.viewport,
           activeObjectManager: this.activeObjectManager,
           renderer: this,
         });

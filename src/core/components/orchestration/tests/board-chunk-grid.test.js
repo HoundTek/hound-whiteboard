@@ -134,7 +134,7 @@ describe("Board chunk grid", () => {
     const results = board.chunkLoadEventBus.emit(
       CHUNK_LOAD_EVENTS.REQUEST_LOAD,
       {
-        requesterId: "demo-monitor",
+        requesterId: "demo-viewport",
         chunk,
         strategy: "full",
         direction: "right",
@@ -166,7 +166,7 @@ describe("Board chunk grid", () => {
     const results = board.chunkLoadEventBus.emit(
       CHUNK_LOAD_EVENTS.REQUEST_LOAD,
       {
-        requesterId: "demo-monitor",
+        requesterId: "demo-viewport",
         chunk,
         strategy: "full",
         direction: "right",
@@ -294,7 +294,7 @@ describe("Board chunk grid", () => {
       chunk: ownerChunk,
       tempLoadedCount: 0,
       fullLoadedCount: 1,
-      loaderStrategy: new Map([["test-monitor", "full"]]),
+      loaderStrategy: new Map([["test-viewport", "full"]]),
     });
 
     const loadedEntries = await board.loadChunkObjectEntries(ownerChunk);

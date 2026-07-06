@@ -208,14 +208,14 @@ async function flushMicrotasks(count = 6) {
  * @param {{
  *   boardWidth?: number,
  *   boardHeight?: number,
- *   monitorId?: string,
- *   monitorWidth?: number,
- *   monitorHeight?: number,
- *   createMonitor?: boolean,
+ *   viewportId?: string,
+ *   viewportWidth?: number,
+ *   viewportHeight?: number,
+ *   createViewport?: boolean,
  * }} [options={}] - 初始化选项
  * @returns {Promise<{
  *   board: Board,
- *   monitor: import("../components/orchestration/monitor-proxy.js").MonitorProxy | null,
+ *   viewport: import("../components/orchestration/viewport-proxy.js").ViewportProxy | null,
  *   runtime: import("../../core-worker.js").CoreWorkerRuntime,
  *   uiEndpoint: LoopbackMessageEndpoint,
  *   workerHost: LoopbackMessageEndpoint,
@@ -237,15 +237,15 @@ async function createWorkerBoardContext(options = {}) {
   await enablePromise;
 
   const rootElement = document.createElement("div");
-  const shouldCreateMonitor = options.createMonitor !== false;
-  const monitor = shouldCreateMonitor
-    ? board.createMonitor(
+  const shouldCreateViewport = options.createViewport !== false;
+  const viewport = shouldCreateViewport
+    ? board.createViewport(
         rootElement,
         {
-          width: options.monitorWidth ?? options.boardWidth ?? 800,
-          height: options.monitorHeight ?? options.boardHeight ?? 600,
+          width: options.viewportWidth ?? options.boardWidth ?? 800,
+          height: options.viewportHeight ?? options.boardHeight ?? 600,
         },
-        options.monitorId ?? "main",
+        options.viewportId ?? "main",
       )
     : null;
   await flushMicrotasks();
@@ -255,7 +255,7 @@ async function createWorkerBoardContext(options = {}) {
    * @returns {void}
    */
   function cleanup() {
-    monitor?.destroy?.();
+    viewport?.destroy?.();
     board.getBoardApi()?.destroy?.();
     runtime?.stop?.();
     restoreDocument();
@@ -265,7 +265,7 @@ async function createWorkerBoardContext(options = {}) {
 
   return {
     board,
-    monitor,
+    viewport,
     runtime,
     uiEndpoint,
     workerHost,

@@ -17,7 +17,7 @@ describe("ObjectModifierTool", () => {
     const calls = [];
     const modificationContext = {
       acc: {
-        monitor: {
+        viewport: {
           liveRenderer: {
             captureObjectSnapshot(objects) {
               calls.push(["capture", objects]);
@@ -56,7 +56,7 @@ describe("ObjectModifierTool", () => {
 
     const tool = new TestModifierTool();
     const objects = [{ id: 1 }, { id: 2 }];
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -64,19 +64,19 @@ describe("ObjectModifierTool", () => {
       requestViewportUiRender: jest.fn(),
     };
     const modificationContext = {
-      acc: { monitor, objects: new Set(objects) },
+      acc: { viewport, objects: new Set(objects) },
     };
 
     tool.beforeGeometryMutation(modificationContext);
     tool.afterGeometryMutation(modificationContext);
 
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith(
+    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith(
       objects,
     );
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
+    expect(viewport.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
       objects,
     );
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("显式提供 boardApi 时 withGeometryMutation 应跳过 liveRenderer 并仅刷新 overlay", () => {
@@ -91,7 +91,7 @@ describe("ObjectModifierTool", () => {
 
     const tool = new TestModifierTool();
     const object = { id: 21, changed: false };
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -101,7 +101,7 @@ describe("ObjectModifierTool", () => {
     const modificationContext = {
       acc: {
         boardApi: {},
-        monitor,
+        viewport,
         objects: [object],
       },
       object,
@@ -111,9 +111,9 @@ describe("ObjectModifierTool", () => {
 
     expect(result).toBe("done");
     expect(object.changed).toBe(true);
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("collectUiOverlayEntries 应把当前修改对象声明给 renderer", () => {

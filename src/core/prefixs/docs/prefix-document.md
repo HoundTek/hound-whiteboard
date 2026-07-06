@@ -28,7 +28,7 @@ prefix 节点现在依赖三条稳定边界：
 
 - **局部向下路由**：后续包只能继续发给当前节点的后代
 - **节点 state**：保存可变共享数据，例如锚点、活动 child、桥接对象
-- **累积 context**：逐层追加只读信息，例如 `board`、`monitor`、`onToolComplete`
+- **累积 context**：逐层追加只读信息，例如 `board`、`viewport`、`onToolComplete`
 
 这里需要特别区分两件事：
 
@@ -157,7 +157,7 @@ const handler = createRepeatorPrefixHandler({
 
 ## 子树构建
 
-修饰节点工作流通常通过 `createSubDAG` DSL 构建，再通过 `monitor.mountSubDAG()` 注册到 DevicesDAG。
+修饰节点工作流通常通过 `createSubDAG` DSL 构建，再通过 `viewport.mountSubDAG()` 注册到 DevicesDAG。
 
 ```js
 const builder = createSubDAG("/mouse/primary/tool");
@@ -165,7 +165,7 @@ const toolNode = builder.node().tool(new CommonObjectModifierTool());
 
 builder.edge("tool", null, toolNode);
 
-monitor.mountSubDAG("", builder.build());
+viewport.mountSubDAG("", builder.build());
 ```
 
 ## 设计约束

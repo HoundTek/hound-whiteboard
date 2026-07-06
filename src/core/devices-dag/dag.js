@@ -138,26 +138,26 @@ import { dagToString } from "./dag-debug.js";
  *
  * @author Zhou Chenyu
  * @example
- * // 基础用法：通过 configureNode 配置 Monitor 下的设备路由，再分发信号
+ * // 基础用法：通过 configureNode 配置 Viewport 下的设备路由，再分发信号
  * const dag = new DevicesDAG();
  *
- * // 标记 Monitor 根节点（通常由 Board.createMonitor 自动完成）
- * dag.configureNode("/monitor", { semantics: { monitor: true } });
+ * // 标记 Viewport 根节点（通常由 Board.createViewport 自动完成）
+ * dag.configureNode("/viewport", { semantics: { viewport: true } });
  *
- * // 配置 Monitor 下的设备路由节点
- * dag.configureNode("/monitor/mouse", { defaultRoute: "primary" });
- * dag.configureNode("/monitor/mouse/primary", {
+ * // 配置 Viewport 下的设备路由节点
+ * dag.configureNode("/viewport/mouse", { defaultRoute: "primary" });
+ * dag.configureNode("/viewport/mouse/primary", {
  *   handler(pkt, ctx) {
  *     return { stop: true, packets: [pkt] };
  *   },
  * });
  *
  * // 挂载 workflow 工具实例
- * dag.mountWorkflow("/monitor/workflows/pen", myPenTool, { board });
+ * dag.mountWorkflow("/viewport/workflows/pen", myPenTool, { board });
  *
  * // 分发信号
  * dag.dispatch({
- *   to: "/monitor/mouse",
+ *   to: "/viewport/mouse",
  *   signals: [{ type: "pointerdown", x: 100, y: 200 }],
  * });
  *

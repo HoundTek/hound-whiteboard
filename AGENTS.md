@@ -30,7 +30,7 @@ src/
 ├── preload.js / preload-io.js  # Tauri preload
 ├── io-bridge-*.js           # 渲染↔主进程 IPC 桥接
 ├── core/
-│   ├── components/          # Board + Monitor 核心组件
+│   ├── components/          # Board + Viewport 核心组件
 │   ├── objects/             # 对象模型（BasicObj, Stroke, 几何图形）
 │   ├── tools/               # 交互工具
 │   │   ├── creator/         #   创建工具（stroke/circle/polygon/obj）
@@ -107,8 +107,8 @@ applyModifiedObjects(modificationContext, objects) { ... }
 
 ### 关键坑点
 
-1. **`board.width` / `board.height` 必须设置** — 涉及位置→区块解析时，创建 `Monitor` 后必须设 `board.width` / `board.height`，否则 `chunkWidth=0` → `worldToChunk` 返回 null → 对象创建静默失败
-2. **DAG dispatch 必须传 `{ board, monitor }` 上下文** — 直接 dispatch 时手动传入；通过 `board.signalsEventBus.emit("input", ...)` 则自动携带
+1. **`board.width` / `board.height` 必须设置** — 涉及位置→区块解析时，创建 `Viewport` 后必须设 `board.width` / `board.height`，否则 `chunkWidth=0` → `worldToChunk` 返回 null → 对象创建静默失败
+2. **DAG dispatch 必须传 `{ board, viewport }` 上下文** — 直接 dispatch 时手动传入；通过 `board.signalsEventBus.emit("input", ...)` 则自动携带
 3. **modifier 双通道** — `position`（绝对坐标，手势状态机）和 `displacement`（相对位移，无状态增量）可同帧叠加。displacement 无准入检测，锚点自动同步
 4. **断言要验证实际效果** — 验证位置/状态变化，不要只 `.not.toBeNull()`
 

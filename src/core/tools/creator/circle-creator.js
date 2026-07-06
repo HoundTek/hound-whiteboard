@@ -20,7 +20,7 @@ const DEFAULT_MIN_DRAG_DISTANCE_SCREEN = 4;
  * 单手势创建圆对象：
  * - 手势开始点为圆心
  * - 手势结束点决定半径
- * - 若手势位移过小，则按 monitor.zoom 生成固定半径圆
+ * - 若手势位移过小，则按 viewport.zoom 生成固定半径圆
  * @author Zhou Chenyu
  */
 class CircleCreatorTool extends SingleGestureObjectCreatorTool {
@@ -146,7 +146,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       const radius = localPoint.length();
       this.setRadius(radius, interaction);
     }
-    const zoom = interaction.context?.acc?.monitor?.zoom ?? 1;
+    const zoom = interaction.context?.acc?.viewport?.zoom ?? 1;
     if (
       this.count <= 2 &&
       (this._entry?.data?.radius ?? 0) < this.minDragDistanceScreen / zoom

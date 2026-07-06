@@ -92,7 +92,7 @@
 - `Board` 自己持有一个根 `ChunkLoader`
 - `Board.getChunkById(...)` 与 `Board.getChunkByCoordinate(...)` 都委托给根 `ChunkLoader`
 - `Board.getChunkLoader()` 用于暴露该根 loader
-- `Board.createChunkLoader()` 会创建绑定到 Board 事件总线的新 `ChunkLoader`，适合需要自行管理加载集合的消费者（如 Monitor、AOM）
+- `Board.createChunkLoader()` 会创建绑定到 Board 事件总线的新 `ChunkLoader`，适合需要自行管理加载集合的消费者（如 Viewport、AOM）
 
 ## API
 
@@ -111,7 +111,7 @@
 ## 实现状态
 
 - 已实现：区块实例持有、按 id/坐标获取、按 id/坐标卸载、清空持有集合、持有集合内部邻接同步，以及区块加载相关事件发射。
-- 已接线：`Board` 根区块加载器委托，Monitor/AOM 使用 `Board.createChunkLoader()` 创建独立加载器。
+- 已接线：`Board` 根区块加载器委托，Viewport/AOM 使用 `Board.createChunkLoader()` 创建独立加载器。
 - 待完善：更细粒度的生命周期统计、不同 loader 之间的区块共享策略，以及更完整的错误恢复路径。
 
 ## 相关文档

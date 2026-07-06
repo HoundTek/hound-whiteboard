@@ -19,7 +19,7 @@ import { KeyThrottle } from "./key-throttle.js";
  * DEBUG 级别默认启用自适应采样。
  *
  * @example
- * const log = new Logger('Monitor', 'INFO', logBus);
+ * const log = new Logger('Viewport', 'INFO', logBus);
  * log.info('Viewport updated', { origin, zoom });
  *
  * const sub = log.child('BaseRenderer');
@@ -66,7 +66,7 @@ class Logger {
   _meta;
 
   /**
-   * @param {string} name - Logger 命名空间（如 "Monitor", "HWB"）
+   * @param {string} name - Logger 命名空间（如 "Viewport", "HWB"）
    * @param {number|string} [level=LEVELS.INFO] - 日志级别，支持字符串名或 LEVELS 值
    * @param {import("./log-bus.js").LogBus} [bus] - LogBus 实例，不传时 fallback 到原生 console
    *

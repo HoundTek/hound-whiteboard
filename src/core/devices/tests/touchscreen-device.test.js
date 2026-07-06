@@ -9,15 +9,15 @@ describe("touchscreen-device", () => {
     const dag = new DevicesDAG();
     const touchscreenDevice = createTouchscreenDevice();
 
-    const mountedNodes = dag.mountSubDAG("/monitor", touchscreenDevice);
+    const mountedNodes = dag.mountSubDAG("/viewport", touchscreenDevice);
 
     expect(mountedNodes.map((node) => dag.getNodePath(node))).toEqual([
-      "/monitor/touchscreen",
-      "/monitor/touchscreen/contacts",
+      "/viewport/touchscreen",
+      "/viewport/touchscreen/contacts",
     ]);
 
     const result = dag.dispatch({
-      to: "/monitor/touchscreen",
+      to: "/viewport/touchscreen",
       signals: [
         {
           type: "position",
@@ -71,10 +71,10 @@ describe("touchscreen-device", () => {
     const dag = new DevicesDAG();
     const touchscreenDevice = createTouchscreenDevice();
 
-    dag.mountSubDAG("/monitor", touchscreenDevice);
+    dag.mountSubDAG("/viewport", touchscreenDevice);
 
     dag.dispatch({
-      to: "/monitor/touchscreen",
+      to: "/viewport/touchscreen",
       signals: [
         {
           type: "position",
@@ -88,7 +88,7 @@ describe("touchscreen-device", () => {
     });
 
     const result = dag.dispatch({
-      to: "/monitor/touchscreen",
+      to: "/viewport/touchscreen",
       signals: [
         { type: "end", context: { touchId: "finger-1" } },
         {
@@ -131,9 +131,9 @@ describe("touchscreen-device", () => {
     const touchscreenDevice = createTouchscreenDevice();
     const dag = new DevicesDAG();
 
-    dag.mountSubDAG("/monitor", touchscreenDevice);
+    dag.mountSubDAG("/viewport", touchscreenDevice);
     dag.dispatch({
-      to: "/monitor/touchscreen",
+      to: "/viewport/touchscreen",
       signals: [
         {
           type: "position",

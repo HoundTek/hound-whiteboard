@@ -1,9 +1,9 @@
 /**
- * @file UI 侧显示器代理
+ * @file UI 侧视口代理
  * @description
- * MonitorProxy 是 UI 侧的 monitor 代理，负责本地视口状态、UiRenderer、
- * workflow/overlay 挂载以及与 Worker 侧 MonitorCore 间的渲染帧与视口消息通信。
- * @module core/components/orchestration/monitor-proxy
+ * ViewportProxy 是 UI 侧的 viewport 代理，负责本地视口状态、UiRenderer、
+ * workflow/overlay 挂载以及与 Worker 侧 ViewportCore 间的渲染帧与视口消息通信。
+ * @module core/components/orchestration/viewport-proxy
  * @author Zhou Chenyu
  */
 
@@ -29,16 +29,16 @@ function resolveAnimationFrameHost() {
 }
 
 /**
- * UI 侧显示器代理
+ * UI 侧视口代理
  * @class
  * @description
  * 持有 DOM canvas、UiRenderer 与本地视口状态副本。
  * 最终显示帧由 Worker 侧合成后通过 render-frame 消息回传，再由本类绘制到 DOM canvas。
  * @author Zhou Chenyu
  */
-class MonitorProxy {
+class ViewportProxy {
   /**
-   * 显示器根元素
+   * 视口根元素
    * @type {HTMLElement | null}
    */
   rootElement;
@@ -50,10 +50,10 @@ class MonitorProxy {
   board;
 
   /**
-   * 显示器 id
+   * 视口 id
    * @type {string}
    */
-  monitorId;
+  viewportId;
 
   /**
    * UI 覆盖层渲染器
@@ -167,18 +167,18 @@ class MonitorProxy {
    *   worker: { postMessage: Function, addEventListener: Function, removeEventListener: Function },
    * }} htmlElements - 画布元素与 Worker 选项
    * @param {import("./board.js").Board} board - 所属 Board façade
-   * @param {{ width: number, height: number }} options - Monitor 尺寸选项
-   * @param {string} monitorId - 显示器 id
+   * @param {{ width: number, height: number }} options - Viewport 尺寸选项
+   * @param {string} viewportId - 视口 id
    */
   constructor(
     { rootElement, canvas, uiCanvas, worker },
     board,
     { width, height },
-    monitorId,
+    viewportId,
   ) {
     this.rootElement = rootElement ?? null;
     this.board = board;
-    this.monitorId = monitorId;
+    this.viewportId = viewportId;
     this.#worker = worker;
     this.#canvas = canvas ?? null;
     this.#uiCanvas = uiCanvas ?? null;
@@ -240,7 +240,7 @@ class MonitorProxy {
   }
 
   /**
-   * 当前显示器画布宽度
+   * 当前视口画布宽度
    * @type {number}
    */
   get width() {
@@ -248,7 +248,7 @@ class MonitorProxy {
   }
 
   /**
-   * 当前显示器画布高度
+   * 当前视口画布高度
    * @type {number}
    */
   get height() {
@@ -256,7 +256,7 @@ class MonitorProxy {
   }
 
   /**
-   * 当前显示器的可见画布（liveCanvas）
+   * 当前视口的可见画布（liveCanvas）
    * @type {HTMLCanvasElement | null}
    */
   get canvas() {
@@ -281,7 +281,7 @@ class MonitorProxy {
 
   /**
    * 启动与 Worker 的视口同步和渲染 flush 循环
-   * @returns {MonitorProxy} 当前实例
+   * @returns {ViewportProxy} 当前实例
    */
   startWorkerSync() {
     if (this.#workerSyncStarted) {
@@ -578,11 +578,11 @@ class MonitorProxy {
 
   /**
    * 挂载子图到白板级设备图
-   * @param {string} path - 子图根路径（相对于显示器根）
+   * @param {string} path - 子图根路径（相对于视口根）
    * @param {import("../../devices-dag/dag.js").SubDAGDefinition} subDAGDefinition - 子图定义
    */
   mountSubDAG(path, subDAGDefinition) {
-    return this.devicesDAG.mountSubDAG(this.monitorId, {
+    return this.devicesDAG.mountSubDAG(this.viewportId, {
       ...subDAGDefinition,
       rootPath: path || subDAGDefinition.rootPath,
     });
@@ -590,49 +590,49 @@ class MonitorProxy {
 
   /**
    * 在白板级设备图中运行时挂载 workflow
-   * @param {string} path - workflow 路径（相对于显示器根）
+   * @param {string} path - workflow 路径（相对于视口根）
    * @param {import("../../tools/tool.js").Tool|import("../../devices-dag/dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
    */
   mountWorkflow(path, workflow) {
     return this.devicesDAG.mountWorkflow(
-      joinPath(this.monitorId, path),
+      joinPath(this.viewportId, path),
       workflow,
     );
   }
 
   /**
    * 在白板级设备图中运行时卸载 workflow 节点
-   * @param {string} path - workflow 路径（相对于显示器根）
+   * @param {string} path - workflow 路径（相对于视口根）
    * @returns {boolean}
    */
   unmountWorkflow(path) {
-    return this.devicesDAG.unmountWorkflow(joinPath(this.monitorId, path), {
+    return this.devicesDAG.unmountWorkflow(joinPath(this.viewportId, path), {
       acc: {
         board: this.board,
         boardApi: this.board?.getBoardApi?.(),
-        monitor: this,
+        viewport: this,
       },
     });
   }
 
   /**
    * 在白板级设备图中添加有向边
-   * @param {string} fromPath - 源节点路径（相对于显示器根）
+   * @param {string} fromPath - 源节点路径（相对于视口根）
    * @param {string} edgeName - 边名
-   * @param {string} toPath - 目标节点路径（相对于显示器根）
+   * @param {string} toPath - 目标节点路径（相对于视口根）
    * @returns {import("../../devices-dag/dag.js").DevicesDAGEdge}
    */
   addEdge(fromPath, edgeName, toPath) {
     return this.devicesDAG.addEdge(
-      joinPath(this.monitorId, fromPath),
+      joinPath(this.viewportId, fromPath),
       edgeName,
-      joinPath(this.monitorId, toPath),
+      joinPath(this.viewportId, toPath),
     );
   }
 
   /**
    * 处理来自 Worker 的一帧渲染结果
-   * @param {{ monitorId?: string | number, liveBitmap?: ImageBitmap }} frameData - 渲染帧消息
+   * @param {{ viewportId?: string | number, liveBitmap?: ImageBitmap }} frameData - 渲染帧消息
    */
   onRenderFrame(frameData) {
     const { liveBitmap } = frameData ?? {};
@@ -647,7 +647,7 @@ class MonitorProxy {
   }
 
   /**
-   * 销毁当前 MonitorProxy
+   * 销毁当前 ViewportProxy
    */
   destroy() {
     const { cancel } = resolveAnimationFrameHost();
@@ -695,7 +695,7 @@ class MonitorProxy {
     const message = event?.data;
     if (!message || typeof message !== "object") return;
     if (message.type !== "render-frame") return;
-    if (String(message.monitorId) !== String(this.monitorId)) return;
+    if (String(message.viewportId) !== String(this.viewportId)) return;
 
     this.onRenderFrame(message);
   }
@@ -726,7 +726,7 @@ class MonitorProxy {
 
       const payload = {
         type: "viewport-change",
-        monitorId: this.monitorId,
+        viewportId: this.viewportId,
         origin: {
           x: this.origin.x,
           y: this.origin.y,
@@ -764,11 +764,11 @@ class MonitorProxy {
 
       this.#worker.postMessage({
         type: "request-render-flush",
-        monitorId: this.monitorId,
+        viewportId: this.viewportId,
       });
       this.#scheduleRenderFlush();
     });
   }
 }
 
-export { MonitorProxy };
+export { ViewportProxy };

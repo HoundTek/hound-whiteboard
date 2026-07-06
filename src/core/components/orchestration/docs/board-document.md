@@ -10,7 +10,7 @@
 
 - 持有 `DevicesDAG`
 - 持有 `signalsEventBus`
-- 管理 `MonitorProxy` 集合
+- 管理 `ViewportProxy` 集合
 - 通过 `enableWorkerMode()` 初始化 Worker 侧 `BoardCore`，工具通过 `BoardApiRpc` 与 Worker 交互
 - 为 tools 提供同步 `allocateObjectId()`
 
@@ -20,7 +20,7 @@
 
 | 类            | 线程   | 职责                                                       |
 | ------------- | ------ | ---------------------------------------------------------- |
-| `Board`       | UI     | façade、输入分发、monitor 管理、Worker 侧 BoardCore 初始化 |
+| `Board`       | UI     | façade、输入分发、viewport 管理、Worker 侧 BoardCore 初始化 |
 | `BoardCore`   | Worker | 对象、区块、AOM、UndoTree、持久化协调                      |
 | `BoardApiRpc` | UI     | RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信   |
 
@@ -34,13 +34,13 @@
 - `mount`：把 workflow / prefix / subDAG 挂到设备图上
 - `umount`：从设备图卸载 workflow
 
-### Monitor 管理
+### Viewport 管理
 
-`Board.createMonitor(...)` 返回 `MonitorProxy`，需要在调用前通过 `enableWorkerMode()` 初始化 Worker。
+`Board.createViewport(...)` 返回 `ViewportProxy`，需要在调用前通过 `enableWorkerMode()` 初始化 Worker。
 
 ### Core API 选择
 
-所有工具通过 `getBoardApi()` 获取的 `BoardApiRpc` 实例与 Worker 交互。`enableWorkerMode()` 必须在创建任何 monitor 之前调用。
+所有工具通过 `getBoardApi()` 获取的 `BoardApiRpc` 实例与 Worker 交互。`enableWorkerMode()` 必须在创建任何 viewport 之前调用。
 
 ### objectId 分配
 
@@ -57,7 +57,7 @@
 | --------------------------------------- | ----------------------------------------------------- |
 | `signalsEventBus`                       | 输入、挂载、卸载事件总线                              |
 | `devicesDAG`                            | 白板级唯一设备图                                      |
-| `monitors`                              | `Map<string, MonitorProxy>`                           |
+| `viewports`                              | `Map<string, ViewportProxy>`                           |
 | `activeObjectManager`                   | 指向本地 `BoardCore` 的 AOM 引用（compat / 测试使用） |
 | `chunkLoaded` / `objectLoaded`          | 指向本地 `BoardCore` 的 compat 引用                   |
 | `undoTree`                              | 指向本地 `BoardCore` 的 UndoTree 引用                 |
@@ -70,7 +70,7 @@
 
 `enableWorkerMode(worker, options)` 的流程：
 
-1. 确认当前还没有 monitor 被创建
+1. 确认当前还没有 viewport 被创建
 2. 创建 `BoardApiRpc`
 3. 等待 Worker 侧 `ready`
 4. 调用 `boardApi.createBoard({ width, height, rootPath })`
@@ -79,15 +79,15 @@
 此后：
 
 - tools 的读写都走 RPC
-- `createMonitor()` 返回 `MonitorProxy`
+- `createViewport()` 返回 `ViewportProxy`
 
-## `createMonitor()` 语义
+## `createViewport()` 语义
 
-`createMonitor(rootElement, { width, height }, monitorId)`：
+`createViewport(rootElement, { width, height }, viewportId)`：
 
-- 创建 `MonitorProxy`
-- 同时调用 `boardApi.createMonitor({ monitorId, width, height })`
-- `MonitorProxy.startWorkerSync()` 驱动视口同步与渲染帧回流
+- 创建 `ViewportProxy`
+- 同时调用 `boardApi.createViewport({ viewportId, width, height })`
+- `ViewportProxy.startWorkerSync()` 驱动视口同步与渲染帧回流
 
 ## 兼容接口
 
@@ -104,13 +104,13 @@ tools 应优先通过 `boardApi` 访问真实状态。
 
 - `Board` 已稳定作为 UI façade
 - demo 默认调用 `enableWorkerMode()`
-- `createMonitor()` 走 `MonitorProxy`
+- `createViewport()` 走 `ViewportProxy`
 - objectId 由 `Board` 自身分配，不依赖 `BoardCore`
 - Worker 侧重复 id 创建会报错
 
 ## 相关文档
 
-- [monitor-document.md](./monitor-document.md)
+- [viewport-document.md](./viewport-document.md)
 - [active-object-manager-document.md](./active-object-manager-document.md)
 - [components-document.md](../../docs/components-document.md)
 - [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)

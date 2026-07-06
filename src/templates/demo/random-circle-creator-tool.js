@@ -36,7 +36,7 @@ const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
  *   maxRadius?: number,
  *   property?: Record<string, any>,
  * }} [options={}] - 随机圆工作流配置
- * @returns {import("../../core/devices-dag/dag.js").SubDAGDefinition} 可直接传入 monitor.mountSubDAG(path, subDAG) 的结构化子树定义
+ * @returns {import("../../core/devices-dag/dag.js").SubDAGDefinition} 可直接传入 viewport.mountSubDAG(path, subDAG) 的结构化子树定义
  * @see CircleCreatorTool
  * @example
  * const subDAG = createRandomCircleSubDAG({
@@ -44,7 +44,7 @@ const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
  *   minRadius: 20,
  *   maxRadius: 80,
  * });
- * monitor.mountWorkflow("/workflows/random-circle", subDAG);
+ * viewport.mountWorkflow("/workflows/random-circle", subDAG);
  */
 function createRandomCircleSubDAG(options = {}) {
   const rootPath = options.rootPath ?? "/workflows/create-circle";
@@ -80,8 +80,8 @@ function createRandomCircleSubDAG(options = {}) {
             return ctx.stop();
           }
 
-          const monitor = ctx.acc?.monitor;
-          const viewportWorldRect = monitor?.getViewportWorldRect?.();
+          const viewport = ctx.acc?.viewport;
+          const viewportWorldRect = viewport?.getViewportWorldRect?.();
           if (!viewportWorldRect) {
             return ctx.stop();
           }

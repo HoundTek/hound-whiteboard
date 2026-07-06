@@ -9,7 +9,7 @@ import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../object-modifier.js";
  * 新代码中 resolveActiveModifiedObjects 在没有 activeObjectIndex 时返回空，
  * 因此测试必须提供模拟的 AOM 上下文。
  * @param {Array|Object} objects - 测试对象（或对象数组）
- * @param {Object} [extra={}] - 额外的 acc 属性（如 monitor）
+ * @param {Object} [extra={}] - 额外的 acc 属性（如 viewport）
  * @returns {{ acc: Object }} 可用于 tool.process 的 DAG 上下文
  */
 function aomCtx(objects, extra = {}) {
@@ -36,7 +36,7 @@ describe("CommonObjectModifierTool", () => {
       position: new Vector(10, 20),
     };
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -50,7 +50,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
 
@@ -59,12 +59,12 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 23 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(12, 20));
     // 首次 position 抓快照，后续 position 不抓
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(2);
+    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(2);
   });
 
   test("后续 position 信号应继续以锚点为基准计算位移", () => {
@@ -73,7 +73,7 @@ describe("CommonObjectModifierTool", () => {
       position: new Vector(10, 20),
     };
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -87,7 +87,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
 
@@ -96,7 +96,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 23 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(12, 20));
 
@@ -105,7 +105,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 22, y: 28 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(17, 25));
   });
@@ -185,7 +185,7 @@ describe("CommonObjectModifierTool", () => {
       {
         acc: { objects: [object], boardApi },
         dag: mockDag,
-        path: "/monitor/mouse/primary/tool/tool",
+        path: "/viewport/mouse/primary/tool/tool",
       },
     );
     expect(object.position).toEqual(new Vector(5, 5));
@@ -197,7 +197,7 @@ describe("CommonObjectModifierTool", () => {
       {
         acc: { objects: [object], boardApi },
         dag: mockDag,
-        path: "/monitor/mouse/primary/tool/tool",
+        path: "/viewport/mouse/primary/tool/tool",
       },
     );
     expect(object.position).toEqual(new Vector(8, 6));
@@ -209,7 +209,7 @@ describe("CommonObjectModifierTool", () => {
       {
         acc: { objects: [object], boardApi },
         dag: mockDag,
-        path: "/monitor/mouse/primary/tool/tool",
+        path: "/viewport/mouse/primary/tool/tool",
         getNodeState() {
           return nodeState;
         },
@@ -224,7 +224,7 @@ describe("CommonObjectModifierTool", () => {
     expect(object.position).toEqual(new Vector(8, 6));
     expect(boardApi.commitObjects).toHaveBeenCalledWith([7]);
     expect(mockDag.unmount).toHaveBeenCalledWith(
-      "/monitor/mouse/primary/tool/tool",
+      "/viewport/mouse/primary/tool/tool",
     );
     expect(nodeState.objects).toBeUndefined();
   });
@@ -244,12 +244,12 @@ describe("CommonObjectModifierTool", () => {
     const modifySpy = boardApi.modifyObject;
     const commitSpy = boardApi.commitObjects;
     const mockDag = { unmount: jest.fn() };
-    const monitor = { requestViewportUiRender: jest.fn() };
+    const viewport = { requestViewportUiRender: jest.fn() };
     let nodeState = {};
     const context = {
-      acc: { boardApi, monitor, objects: [object] },
+      acc: { boardApi, viewport, objects: [object] },
       dag: mockDag,
-      path: "/monitor/mouse/primary/tool/tool",
+      path: "/viewport/mouse/primary/tool/tool",
       getNodeState() {
         return nodeState;
       },
@@ -289,10 +289,10 @@ describe("CommonObjectModifierTool", () => {
 
     expect(commitSpy).toHaveBeenCalledWith([501]);
     expect(mockDag.unmount).toHaveBeenCalledWith(
-      "/monitor/mouse/primary/tool/tool",
+      "/viewport/mouse/primary/tool/tool",
     );
     expect(nodeState.objects).toBeUndefined();
-    expect(monitor.requestViewportUiRender).toHaveBeenCalled();
+    expect(viewport.requestViewportUiRender).toHaveBeenCalled();
   });
 
   test("显式提供 boardApi 时应支持 summary-like 上下文对象完成准入与位移", () => {
@@ -314,7 +314,7 @@ describe("CommonObjectModifierTool", () => {
     const context = {
       acc: {
         boardApi,
-        monitor: { requestViewportUiRender: jest.fn() },
+        viewport: { requestViewportUiRender: jest.fn() },
         objects: [summaryLikeObject],
       },
     };
@@ -364,7 +364,7 @@ describe("CommonObjectModifierTool", () => {
           commitObjects: jest.fn(),
           discardActiveObjects: jest.fn(),
         },
-        monitor: { requestViewportUiRender: jest.fn() },
+        viewport: { requestViewportUiRender: jest.fn() },
         objects: [summaryLikeObject],
       },
     };
@@ -395,7 +395,7 @@ describe("CommonObjectModifierTool", () => {
     };
 
     const tool = new CommonObjectModifierTool();
-    tool.process({ signals: [] }, aomCtx(object, { monitor: {} }));
+    tool.process({ signals: [] }, aomCtx(object, { viewport: {} }));
 
     expect(object.position).toEqual(new Vector(5, 5));
   });
@@ -407,7 +407,7 @@ describe("CommonObjectModifierTool", () => {
       getRange: () => new RectangleRange(0, 0, 50, 30),
     };
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -421,19 +421,19 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 35, y: 35 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     // 锚点=(35,35)，initPos=(10,20)，dx=0 → 对象不动
     expect(object.position).toEqual(new Vector(10, 20));
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
 
     // 第二个 position (40, 40) → dx=5, dy=5 → (15, 25)
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 40, y: 40 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(15, 25));
   });
@@ -445,7 +445,7 @@ describe("CommonObjectModifierTool", () => {
       getRange: () => new RectangleRange(0, 0, 50, 30),
     };
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -458,12 +458,12 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 100, y: 200 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
 
     expect(object.position).toEqual(new Vector(10, 20));
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
   });
 
   test("多对象合矩形准入检测：应在所有对象合矩形内通过后方可启动", () => {
@@ -479,7 +479,7 @@ describe("CommonObjectModifierTool", () => {
     };
     // 合矩形: left=10, top=20, right=110, bottom=100
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -493,11 +493,11 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 80, y: 50 } } }],
       },
-      aomCtx([objectA, objectB], { monitor }),
+      aomCtx([objectA, objectB], { viewport }),
     );
     expect(objectA.position).toEqual(new Vector(10, 20));
     expect(objectB.position).toEqual(new Vector(70, 80));
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
 
     // 第二个 position (90, 60) → dx=10, dy=10
     // objectA: (20, 30), objectB: (80, 90)
@@ -505,7 +505,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 90, y: 60 } } }],
       },
-      aomCtx([objectA, objectB], { monitor }),
+      aomCtx([objectA, objectB], { viewport }),
     );
     expect(objectA.position).toEqual(new Vector(20, 30));
     expect(objectB.position).toEqual(new Vector(80, 90));
@@ -523,7 +523,7 @@ describe("CommonObjectModifierTool", () => {
       getRange: () => new RectangleRange(0, 0, 40, 20),
     };
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -537,12 +537,12 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
       },
-      aomCtx([objectA, objectB], { monitor }),
+      aomCtx([objectA, objectB], { viewport }),
     );
 
     expect(objectA.position).toEqual(new Vector(10, 20));
     expect(objectB.position).toEqual(new Vector(70, 80));
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
   });
 
   test("对象无 getRange 时跳过准入检测（兼容旧版对象）", () => {
@@ -551,7 +551,7 @@ describe("CommonObjectModifierTool", () => {
       position: new Vector(10, 20),
     };
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -565,17 +565,17 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 100, y: 200 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
 
     // 第二个 position → dx=110-100=10, dy=210-200=10 → (20, 30)
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 110, y: 210 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(20, 30));
   });
@@ -636,7 +636,7 @@ describe("CommonObjectModifierTool", () => {
       getRange: () => new RectangleRange(0, 0, 50, 30),
     };
 
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
@@ -653,22 +653,22 @@ describe("CommonObjectModifierTool", () => {
           { type: "end" },
         ],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
 
     // 手势启动后立即结束，对象未移动
     expect(object.position).toEqual(new Vector(10, 20));
     // begin+update 触发一次 withGeometryMutation
     // end 不包裹 withGeometryMutation（completeModifyGesture 仅做状态清理）
-    expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
-    expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
 
     // 新一轮手势应以新锚点正常启动
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 20, y: 25 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20)); // 新锚点=(20,25)，dx=0
 
@@ -676,7 +676,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 25, y: 30 } } }],
       },
-      aomCtx(object, { monitor }),
+      aomCtx(object, { viewport }),
     );
     // dx=25-20=5, dy=30-25=5 → (15, 25)
     expect(object.position).toEqual(new Vector(15, 25));
@@ -857,7 +857,7 @@ describe("CommonObjectModifierTool", () => {
 
   describe("手势准入检测——边缘场景", () => {
     function makeAomCtx(opts = {}) {
-      const { objects, board, monitor } = opts;
+      const { objects, board, viewport } = opts;
       const normalized = objects
         ? Array.isArray(objects)
           ? objects
@@ -876,7 +876,7 @@ describe("CommonObjectModifierTool", () => {
             },
             ...(board || {}),
           },
-          ...(monitor ? { monitor } : {}),
+          ...(viewport ? { viewport } : {}),
         },
       };
     }
@@ -889,7 +889,7 @@ describe("CommonObjectModifierTool", () => {
       };
       // world rect: (10, 20, 50, 30) → left=10, top=20, right=60, bottom=50
 
-      const monitor = {
+      const viewport = {
         liveRenderer: {
           captureObjectSnapshot: jest.fn(),
           invalidateObjects: jest.fn(),
@@ -903,7 +903,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       expect(object.position).toEqual(new Vector(10, 20));
       // 第二个 position → 确认手势确实激活并能移动
@@ -911,7 +911,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 25 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -922,7 +922,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 60, y: 50 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       expect(object.position).toEqual(new Vector(15, 25));
       // containsPoint 使用 1e-8 容差，边界点应命中
@@ -930,7 +930,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 65, y: 55 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // dx=5, dy=5 → (20, 30)
       expect(object.position).toEqual(new Vector(20, 30));
@@ -943,7 +943,7 @@ describe("CommonObjectModifierTool", () => {
         getRange: () => new RectangleRange(0, 0, 50, 30),
       };
 
-      const monitor = {
+      const viewport = {
         liveRenderer: {
           captureObjectSnapshot: jest.fn(),
           invalidateObjects: jest.fn(),
@@ -959,21 +959,21 @@ describe("CommonObjectModifierTool", () => {
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       expect(object.position).toEqual(new Vector(10, 20));
-      expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+      expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
 
       // 第二次：position (30, 35) 在内部 → 新锚点，正常启动
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
-      expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
+      expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
         1,
       );
 
@@ -982,7 +982,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 35, y: 40 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -995,7 +995,7 @@ describe("CommonObjectModifierTool", () => {
         getRange: () => new RectangleRange(0, 0, 50, 30),
       };
 
-      const monitor = {
+      const viewport = {
         liveRenderer: {
           captureObjectSnapshot: jest.fn(),
           invalidateObjects: jest.fn(),
@@ -1009,7 +1009,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -1021,12 +1021,12 @@ describe("CommonObjectModifierTool", () => {
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // 锚点仍为(30,35)，dx=70, dy=165 → (80, 185)
       expect(object.position).toEqual(new Vector(80, 185));
       // 首次 position 抓快照，后续 position 不重复抓取
-      expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
+      expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
         1,
       );
     });
@@ -1061,7 +1061,7 @@ describe("CommonObjectModifierTool", () => {
         getRange: () => new RectangleRange(0, 0, 50, 30),
       };
 
-      const monitor = {
+      const viewport = {
         liveRenderer: {
           captureObjectSnapshot: jest.fn(),
           invalidateObjects: jest.fn(),
@@ -1075,7 +1075,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -1084,7 +1084,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 35, y: 40 } } }],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -1092,7 +1092,7 @@ describe("CommonObjectModifierTool", () => {
       // end 结束手势
       tool.process(
         { signals: [{ type: "end" }] },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
 
       // 新一轮：position (100, 200) 在外部 → 应拒绝
@@ -1102,12 +1102,12 @@ describe("CommonObjectModifierTool", () => {
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeAomCtx({ objects: [object], monitor }),
+        makeAomCtx({ objects: [object], viewport }),
       );
       // 准入拒绝，对象位置保持在 end 时刻
       expect(object.position).toEqual(new Vector(15, 25));
       // 仅在首次 position 抓了快照，后续 update 和拒绝的准入都不抓
-      expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
+      expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
         1,
       );
     });
@@ -1120,7 +1120,7 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const monitor = {
+      const viewport = {
         liveRenderer: {
           captureObjectSnapshot: jest.fn(),
           invalidateObjects: jest.fn(),
@@ -1136,17 +1136,17 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 3, y: 5 } } },
           ],
         },
-        aomCtx(object, { monitor }),
+        aomCtx(object, { viewport }),
       );
       expect(object.position).toEqual(new Vector(13, 25));
       // 手势不应激活
       expect(tool.isModifyingGestureActive).toBe(false);
       // withGeometryMutation 带 captureSnapshot: false → 仅触发 after
-      expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
-      expect(monitor.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
+      expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
+      expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledTimes(
         0,
       );
-      expect(monitor.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
+      expect(viewport.liveRenderer.invalidateObjects).toHaveBeenCalledTimes(1);
     });
 
     test("手势激活期间位移到达：对象位置叠加、锚点跟随同步", () => {

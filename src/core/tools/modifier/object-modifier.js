@@ -182,7 +182,7 @@ class ObjectModifierTool extends Tool {
     if (normalizedObjects.length === 0) return;
     if (context?.acc?.boardApi) return;
 
-    context?.acc?.monitor?.liveRenderer?.captureObjectSnapshot?.(
+    context?.acc?.viewport?.liveRenderer?.captureObjectSnapshot?.(
       normalizedObjects,
     );
   }
@@ -205,8 +205,8 @@ class ObjectModifierTool extends Tool {
       return;
     }
 
-    context?.acc?.monitor?.liveRenderer?.invalidateObjects?.(normalizedObjects);
-    context?.acc?.monitor?.requestViewportUiRender?.();
+    context?.acc?.viewport?.liveRenderer?.invalidateObjects?.(normalizedObjects);
+    context?.acc?.viewport?.requestViewportUiRender?.();
   }
 
   /**

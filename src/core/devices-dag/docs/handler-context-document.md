@@ -53,7 +53,7 @@ process(signalPacket, ctx) {
 
 | 成员      | 类型     | 说明                                                  |
 | --------- | -------- | ----------------------------------------------------- |
-| `ctx.acc` | `Object` | 沿 DAG 逐层累积的只读上下文（board、monitor、回调等） |
+| `ctx.acc` | `Object` | 沿 DAG 逐层累积的只读上下文（board、viewport、回调等） |
 
 **规则**：handler 不能往 `ctx` 平级新增键。向下游传递额外数据时，通过返回值 `{ acc: { key: value } }` 写入累积上下文。
 
@@ -228,7 +228,7 @@ createPrefixNodeHandler({
 - 工具 processor（`Tool.createProcessor`）
 - 裸 handler（直接挂在 DAG 节点上的任意函数）
 
-工具 processor 拿到的同样是标准 handler context 全集，`ctx.acc` 中的 `board`、`boardApi`、`monitor` 等由 DAG 上游节点在 dispatch 或 mount 时注入。
+工具 processor 拿到的同样是标准 handler context 全集，`ctx.acc` 中的 `board`、`boardApi`、`viewport` 等由 DAG 上游节点在 dispatch 或 mount 时注入。
 
 ---
 

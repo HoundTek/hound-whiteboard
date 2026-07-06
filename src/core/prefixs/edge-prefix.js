@@ -40,7 +40,7 @@ import { createSubDAG } from "../devices-dag/index.js";
  * });
  *
  * // 挂载时作为 edge.prefix 插入设备节点与 workflow 之间
- * dag.mountSubDAG("/monitor", keyboardDevice, {
+ * dag.mountSubDAG("/viewport", keyboardDevice, {
  *   workflows: {
  *     "/space-tool": { edge: { prefix } },
  *   },
@@ -66,7 +66,7 @@ import { createSubDAG } from "../devices-dag/index.js";
  * });
  *
  * // 挂载时作为 edge.prefix 插入 workflow 之间
- * dag.mountWorkflow("/monitor/workflows/space-tool", tool, {
+ * dag.mountWorkflow("/viewport/workflows/space-tool", tool, {
  *   edge: { prefix },
  * });
  */

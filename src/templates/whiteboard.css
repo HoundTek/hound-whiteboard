@@ -146,13 +146,13 @@ body {
   height: 100%;
 }
 
-.monitor-root {
+.viewport-root {
   position: absolute;
   top: 0;
   left: 0;
 }
 
-.monitor-layer {
+.viewport-layer {
   display: block;
   position: absolute;
   inset: 0;
@@ -160,7 +160,7 @@ body {
   height: 100%;
 }
 
-.monitor-layer-live {
+.viewport-layer-live {
   z-index: 1;
   pointer-events: auto;
   /* background-color: transparent; */
@@ -171,7 +171,7 @@ body {
   -ms-user-select: none;
 }
 
-.monitor-layer-ui {
+.viewport-layer-ui {
   z-index: 2;
   pointer-events: none;
 }

@@ -84,7 +84,7 @@ class Tool {
     }
 
     let latestDeviceContext = {};
-    let registeredMonitor = null;
+    let registeredViewport = null;
     const provider = (overlayContext = {}) =>
       this.collectUiOverlayEntries({
         ...overlayContext,
@@ -95,39 +95,39 @@ class Tool {
       sync: (context = {}) => {
         latestDeviceContext = context;
 
-        const monitor = context.acc?.monitor;
-        if (!monitor?.registerUiOverlayProvider) {
+        const viewport = context.acc?.viewport;
+        if (!viewport?.registerUiOverlayProvider) {
           return;
         }
 
-        if (registeredMonitor === monitor) {
+        if (registeredViewport === viewport) {
           return;
         }
 
-        if (registeredMonitor?.unregisterUiOverlayProvider) {
-          registeredMonitor.unregisterUiOverlayProvider(provider, {
+        if (registeredViewport?.unregisterUiOverlayProvider) {
+          registeredViewport.unregisterUiOverlayProvider(provider, {
             invalidate: false,
           });
         }
 
-        registeredMonitor = monitor;
-        monitor.registerUiOverlayProvider(provider, {
+        registeredViewport = viewport;
+        viewport.registerUiOverlayProvider(provider, {
           invalidate: false,
         });
       },
       cleanup: (context = {}) => {
         latestDeviceContext = context;
 
-        const monitor = registeredMonitor ?? context.acc?.monitor;
-        if (monitor?.unregisterUiOverlayProvider) {
-          monitor.unregisterUiOverlayProvider(provider, {
+        const viewport = registeredViewport ?? context.acc?.viewport;
+        if (viewport?.unregisterUiOverlayProvider) {
+          viewport.unregisterUiOverlayProvider(provider, {
             invalidate: false,
           });
         }
 
-        registeredMonitor = null;
+        registeredViewport = null;
         latestDeviceContext = {};
-        context.acc?.monitor?.requestViewportUiRender?.();
+        context.acc?.viewport?.requestViewportUiRender?.();
       },
     };
   }
@@ -264,7 +264,7 @@ class Tool {
 
   /**
    * 收集当前工具声明的 ui overlay 条目
-   * @param {{ deviceContext?: Object, monitor?: Object, activeObjectManager?: Object, renderer?: Object }} [_overlayContext={}] - overlay 上下文
+   * @param {{ deviceContext?: Object, viewport?: Object, activeObjectManager?: Object, renderer?: Object }} [_overlayContext={}] - overlay 上下文
    * @returns {Array<*>}
    */
   collectUiOverlayEntries(_overlayContext = {}) {
@@ -277,7 +277,7 @@ class Tool {
    * @returns {void}
    */
   requestUiOverlayRefresh(context = {}) {
-    context.acc?.monitor?.requestViewportUiRender?.();
+    context.acc?.viewport?.requestViewportUiRender?.();
   }
 
   /**

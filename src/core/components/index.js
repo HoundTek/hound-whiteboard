@@ -6,4 +6,4 @@
 
 export { Board } from "./orchestration/board.js";
 
-export { MonitorProxy } from "./orchestration/monitor-proxy.js";
+export { ViewportProxy } from "./orchestration/viewport-proxy.js";

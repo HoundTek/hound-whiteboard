@@ -37,24 +37,24 @@ src/core/
 
 ### 1. 必须设置 board.width / board.height
 
-当测试创建 `Monitor` 且涉及位置→区块解析时（`worldToChunk`），必须在 `board.monitors.set(...)` **之后**设置：
+当测试创建 `Viewport` 且涉及位置→区块解析时（`worldToChunk`），必须在 `board.viewports.set(...)` **之后**设置：
 
 ```js
-board.monitors.set("main", monitor);
+board.viewports.set("main", viewport);
 board.width = 800; // ← 必须！否则 chunkWidth = 0
 board.height = 600; // ← 必须！否则 chunkHeight = 0
 ```
 
-`Monitor.chunkWidth` 的 getter 是 `this.board?.width ?? 0`。不设置则 `worldToChunk` 返回 null → `resolveOwnerChunkId` 返回 undefined → `ensureObject` 返回 false → **对象创建静默失败**。如果测试不涉及位置→区块解析（如纯 DAG 路由测试、Mock 测试），可以省略。
+`Viewport.chunkWidth` 的 getter 是 `this.board?.width ?? 0`。不设置则 `worldToChunk` 返回 null → `resolveOwnerChunkId` 返回 undefined → `ensureObject` 返回 false → **对象创建静默失败**。如果测试不涉及位置→区块解析（如纯 DAG 路由测试、Mock 测试），可以省略。
 
 ### 2. dispatch 时必须传递上下文
 
-当直接通过 DAG dispatch（绕过 `board.signalsEventBus.emit("input", ...)`）时，**必须传递 `{ board, monitor }` 上下文**：
+当直接通过 DAG dispatch（绕过 `board.signalsEventBus.emit("input", ...)`）时，**必须传递 `{ board, viewport }` 上下文**：
 
 ```js
-const accumulatedContext = { board, monitor };
+const accumulatedContext = { board, viewport };
 
-monitor.devicesDAG.dispatch(
+viewport.devicesDAG.dispatch(
   {
     to: "/main/workflow",
     signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
@@ -63,7 +63,7 @@ monitor.devicesDAG.dispatch(
 ); // ← 必须！
 ```
 
-原因：通过 `builder.node().tool(tool)` 挂载的工具有 `toolContext = {}`，`board` 和 `monitor` 只能从 dispatch 的 accumulated context 获取。而 `board.signalsEventBus.emit("input", ...)` 内部已自动添加该上下文，不需要手动传递。
+原因：通过 `builder.node().tool(tool)` 挂载的工具有 `toolContext = {}`，`board` 和 `viewport` 只能从 dispatch 的 accumulated context 获取。而 `board.signalsEventBus.emit("input", ...)` 内部已自动添加该上下文，不需要手动传递。
 
 ### 3. modifier 双通道：position + displacement
 

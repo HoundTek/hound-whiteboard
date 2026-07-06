@@ -19,10 +19,10 @@ description: Hound Whiteboard 项目的 Git 提交信息规范。在准备提交
 refactor(creator): 去除 Creator 对本地 BasicObject 实例的依赖
 
 fix(worker-mode): 修复叠帧渲染与框选后修改异常
-- MonitorProxy.onRenderFrame 增加 clearRect
+- ViewportProxy.onRenderFrame 增加 clearRect
 - UiRenderer 使用 RectangleRange.fromRectLike 解析 RPC 返回的 bbox
 - core-worker 转发 viewport-change.force 标志位
-- MonitorCore.flushRenderFrame 恢复 transfer 后的 OffscreenCanvas 内容
+- ViewportCore.flushRenderFrame 恢复 transfer 后的 OffscreenCanvas 内容
 ```
 
 ```

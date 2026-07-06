@@ -9,13 +9,13 @@ import { CollectingTool } from "../../test-support/mock-tools.js";
 import { createWorkerBoardContext } from "../../test-support/worker-mode-fixtures.js";
 
 describe("Board input flow", () => {
-  test("input 事件应经由 Board、MonitorProxy 与 DevicesDAG 落到工具节点", async () => {
-    const { board, monitor, cleanup } = await createWorkerBoardContext({
+  test("input 事件应经由 Board、ViewportProxy 与 DevicesDAG 落到工具节点", async () => {
+    const { board, viewport, cleanup } = await createWorkerBoardContext({
       boardWidth: 800,
       boardHeight: 600,
-      monitorId: "main",
-      monitorWidth: 800,
-      monitorHeight: 600,
+      viewportId: "main",
+      viewportWidth: 800,
+      viewportHeight: 600,
     });
 
     try {
@@ -26,7 +26,7 @@ describe("Board input flow", () => {
       const sampleTool = sampleBuilder.node().handler(tool.createProcessor());
       sampleBuilder.edge("tool", sampleRoot, sampleTool);
 
-      monitor.mountSubDAG("", sampleBuilder.build());
+      viewport.mountSubDAG("", sampleBuilder.build());
 
       const emitResults = board.signalsEventBus.emit("input", {
         to: "/main/sample-device",
@@ -41,7 +41,7 @@ describe("Board input flow", () => {
       ]);
       expect(tool.calls[0].context).toEqual(
         expect.objectContaining({
-          acc: expect.objectContaining({ board, monitor }),
+          acc: expect.objectContaining({ board, viewport }),
           path: "/main/sample-device/tool",
         }),
       );
@@ -50,7 +50,7 @@ describe("Board input flow", () => {
     }
   });
 
-  test("input 事件指向不存在的 monitor 时应被忽略", () => {
+  test("input 事件指向不存在的 viewport 时应被忽略", () => {
     const board = new Board();
 
     expect(() =>
@@ -62,12 +62,12 @@ describe("Board input flow", () => {
   });
 
   test("mount 与 umount 事件应在运行时挂载和卸载工具节点", async () => {
-    const { board, monitor, cleanup } = await createWorkerBoardContext({
+    const { board, viewport, cleanup } = await createWorkerBoardContext({
       boardWidth: 800,
       boardHeight: 600,
-      monitorId: "main",
-      monitorWidth: 800,
-      monitorHeight: 600,
+      viewportId: "main",
+      viewportWidth: 800,
+      viewportHeight: 600,
     });
 
     try {
@@ -76,10 +76,10 @@ describe("Board input flow", () => {
       const emptyBuilder = createSubDAG("/sample-device");
       emptyBuilder.node().defaultRoute("tool");
 
-      monitor.mountSubDAG("", emptyBuilder.build());
+      viewport.mountSubDAG("", emptyBuilder.build());
 
       const mountResults = board.signalsEventBus.emit("mount", {
-        monitorId: "main",
+        viewportId: "main",
         name: "sample-device-tool",
         workflow: tool,
         edges: [{ from: "/sample-device", edge: "tool" }],
@@ -87,7 +87,7 @@ describe("Board input flow", () => {
 
       expect(mountResults).toHaveLength(1);
       expect(
-        monitor.devicesDAG.getNode("/main/sample-device/tool"),
+        viewport.devicesDAG.getNode("/main/sample-device/tool"),
       ).not.toBeNull();
 
       board.signalsEventBus.emit("input", {
@@ -98,20 +98,20 @@ describe("Board input flow", () => {
       expect(tool.calls).toHaveLength(1);
       expect(tool.calls[0].context).toEqual(
         expect.objectContaining({
-          acc: expect.objectContaining({ board, monitor }),
+          acc: expect.objectContaining({ board, viewport }),
           path: "/main/sample-device/tool",
         }),
       );
 
       const umountResults = board.signalsEventBus.emit("umount", {
-        monitorId: "main",
+        viewportId: "main",
         name: "sample-device-tool",
         edges: [{ from: "/sample-device", edge: "tool" }],
       });
 
       expect(umountResults).toEqual([true]);
       expect(
-        monitor.devicesDAG.getNode("/main/sample-device/tool"),
+        viewport.devicesDAG.getNode("/main/sample-device/tool"),
       ).toBeUndefined();
     } finally {
       cleanup();
@@ -119,18 +119,18 @@ describe("Board input flow", () => {
   });
 
   test("mount 事件应支持 edge.prefix 在设备节点与 workflow 之间注入边级 prefix 链", async () => {
-    const { board, monitor, cleanup } = await createWorkerBoardContext({
+    const { board, viewport, cleanup } = await createWorkerBoardContext({
       boardWidth: 800,
       boardHeight: 600,
-      monitorId: "main",
-      monitorWidth: 800,
-      monitorHeight: 600,
+      viewportId: "main",
+      viewportWidth: 800,
+      viewportHeight: 600,
     });
 
     try {
       const keyboardDevice = createKeyboardDevice();
 
-      monitor.mountSubDAG("", keyboardDevice);
+      viewport.mountSubDAG("", keyboardDevice);
 
       const receivedPackets = [];
       const workflow = {
@@ -141,7 +141,7 @@ describe("Board input flow", () => {
       };
 
       board.signalsEventBus.emit("mount", {
-        monitorId: "main",
+        viewportId: "main",
         name: "strafe-workflow",
         workflow,
         edges: [
@@ -166,7 +166,7 @@ describe("Board input flow", () => {
         ],
       });
 
-      monitor.devicesDAG.dispatch({
+      viewport.devicesDAG.dispatch({
         to: "/main/keyboard",
         signals: [
           {

@@ -60,7 +60,7 @@ import { createDefaultPersistenceAdapter } from "../../bridges/persistence-adapt
  * BoardCore 是白板在 Worker 中的纯数据/逻辑实现。
  * - 承载对象注册表（objectLoaded）、区块加载状态（chunkLoaded）、CounterPool、UndoTree、AOM
  * - 通过注入式 persistenceAdapter 完成文件读写，不直接依赖 file-operate-bridge-renderer
- * - 通过注入式 renderHooks 消除 AOM 对 monitor/renderer 的直接依赖
+ * - 通过注入式 renderHooks 消除 AOM 对 viewport/renderer 的直接依赖
  * - 不持有 DevicesDAG、signalsEventBus、DOM 引用
  * @class
  * @author Zhou Chenyu
@@ -130,7 +130,7 @@ class BoardCore {
 
   /**
    * AOM 渲染钩子
-   * @description 注入式渲染钩子，替代 AOM 对 monitor/liveRenderer/baseRenderer 的直接访问。
+   * @description 注入式渲染钩子，替代 AOM 对 viewport/liveRenderer/baseRenderer 的直接访问。
    * @type {AomRenderHooks}
    */
   aomRenderHooks;

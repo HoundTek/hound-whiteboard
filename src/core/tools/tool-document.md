@@ -50,7 +50,7 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 - `depth`
 - `context`
 - `board`
-- `monitor`
+- `viewport`
 - `allocateObjectId`
 - `resolveOwnerChunkId`
 - `getNodeState`
@@ -59,7 +59,7 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 这里的 `context` 就是来自 DevicesDAG 的累积上下文。它通常会携带：
 
 - `board`
-- `monitor`
+- `viewport`
 - 工作流回调，例如 `onToolComplete`
 - 其他由上游 prefix 注入的只读数据
 
@@ -119,27 +119,27 @@ Tool 与 prefix 可以在同一条链路上协作，但边界不同：
 
 ## 挂载方式
 
-当前推荐把工具作为 workflow 入口挂在 `/<monitorId>/workflows/` 下，再通过设备节点的出边连接过去，例如：
+当前推荐把工具作为 workflow 入口挂在 `/<viewportId>/workflows/` 下，再通过设备节点的出边连接过去，例如：
 
 ```js
-monitor.mountWorkflow("/workflows/pointer", pointerTool);
-monitor.mountWorkflow("/workflows/move", moveTool);
+viewport.mountWorkflow("/workflows/pointer", pointerTool);
+viewport.mountWorkflow("/workflows/move", moveTool);
 
-monitor.addEdge("/mouse/pointer", "tool", "/workflows/pointer");
-monitor.addEdge("/keyboard/code/KeyW", "tool", "/workflows/move");
+viewport.addEdge("/mouse/pointer", "tool", "/workflows/pointer");
+viewport.addEdge("/keyboard/code/KeyW", "tool", "/workflows/move");
 ```
 
 或直接对 DevicesDAG 调用：
 
 ```js
-dag.mountWorkflow("/monitor/main/workflows/pointer", pointerTool, {
+dag.mountWorkflow("/viewport/main/workflows/pointer", pointerTool, {
   board,
-  monitor,
+  viewport,
 });
 dag.addEdge(
-  "/monitor/main/mouse/pointer",
+  "/viewport/main/mouse/pointer",
   "tool",
-  "/monitor/main/workflows/pointer",
+  "/viewport/main/workflows/pointer",
 );
 ```
 
@@ -196,9 +196,9 @@ unsub();
 
 如果工具需要在 `uiCanvas` 上声明兼容 overlay，可额外覆写：
 
-- `collectUiOverlayEntries({ deviceContext, monitor, renderer, activeObjectManager })`
+- `collectUiOverlayEntries({ deviceContext, viewport, renderer, activeObjectManager })`
 
-该方法返回的条目会通过 monitor 上注册的 provider 交给 `UiRenderer`。
+该方法返回的条目会通过 viewport 上注册的 provider 交给 `UiRenderer`。
 
 ## 设计约束
 

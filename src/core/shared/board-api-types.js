@@ -31,9 +31,9 @@
  */
 
 /**
- * 创建 MonitorCore 的参数
- * @typedef {Object} CreateMonitorOptions
- * @property {string | number} monitorId - monitor 标识
+ * 创建 ViewportCore 的参数
+ * @typedef {Object} CreateViewportOptions
+ * @property {string | number} viewportId - viewport 标识
  * @property {number} width - 视口宽度
  * @property {number} height - 视口高度
  */
@@ -54,8 +54,8 @@
  * @property {(ids: number[]) => Promise<import("./types.js").ObjectSummary[]>} queryObjects - 按 id 查询对象摘要
  * @property {(chunkIds: number[]) => Promise<number[]>} queryChunkObjects - 按区块查询对象 id
  * @property {(range: import("../range/range.js").Range | import("./types.js").Rect, mode?: string) => Promise<number[]>} hitTest - 执行命中查询
- * @property {(options: CreateMonitorOptions) => Promise<void>} createMonitor - 创建 MonitorCore
- * @property {(monitorId: string | number) => Promise<void>} destroyMonitor - 销毁 MonitorCore
+ * @property {(options: CreateViewportOptions) => Promise<void>} createViewport - 创建 ViewportCore
+ * @property {(viewportId: string | number) => Promise<void>} destroyViewport - 销毁 ViewportCore
  * @property {() => Promise<void>} undo - 执行撤销
  * @property {() => Promise<void>} redo - 执行重做
  */

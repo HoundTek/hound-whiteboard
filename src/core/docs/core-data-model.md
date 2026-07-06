@@ -11,7 +11,7 @@ UI 线程持有：
 - `Board` façade
 - `DevicesDAG`
 - `signalsEventBus`
-- `Monitor` / `MonitorProxy`
+- `Viewport` / `ViewportProxy`
 - tools / prefixs / devices
 - 轻量对象条目（creator `_entry` / chooser / modifier 通用）
 
@@ -20,7 +20,7 @@ UI 线程持有：
 Worker 线程持有真正的 Core 数据权威：
 
 - `BoardCore`
-- `MonitorCore`
+- `ViewportCore`
 - `ActiveObjectManager`
 - `Chunk` / `ChunkObjectManager`
 - base / live 渲染结果
@@ -44,7 +44,7 @@ Worker 与 UI 共用：
 `Board` 是 UI façade，负责：
 
 - 持有 `DevicesDAG` 与 `signalsEventBus`
-- 管理 `monitors`
+- 管理 `viewports`
 - 通过 `BoardApiRpc` 与 Worker 侧 Core 交互
 - 持有本地 `CounterPool`，同步分配 objectId
 
@@ -189,15 +189,15 @@ AOM 内部关键结构：
 
 ### Worker 侧
 
-- `MonitorCore` 持有 `origin`、`zoom`、`width`、`height`
+- `ViewportCore` 持有 `origin`、`zoom`、`width`、`height`
 - base / live 两层通过 OffscreenCanvas 输出
 - `flushRenderFrame()` 回传 `render-frame`
 
 ### UI 侧
 
-- `MonitorProxy` 接收位图并合成到 DOM canvas
+- `ViewportProxy` 接收位图并合成到 DOM canvas
 - `UiRenderer` 独立维护 overlay
-- 全部 monitor 走 `MonitorProxy` 路径
+- 全部 viewport 走 `ViewportProxy` 路径
 
 ## 持久化模型
 
@@ -211,7 +211,7 @@ AOM 内部关键结构：
 
 ## 关键术语
 
-- **运行时分层**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，monitor 通过 `MonitorProxy` ↔ `MonitorCore` 协作
+- **运行时分层**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，viewport 通过 `ViewportProxy` ↔ `ViewportCore` 协作
 - **轻量对象条目（LightweightObjectEntry）**：UI 侧所有工具统一使用的纯数据对象协议，替代 `BasicObject` 实例在工具间传递
 - **静态图**：区块级稳定层叠图
 - **动态图 / AOM**：交互态动态层关系

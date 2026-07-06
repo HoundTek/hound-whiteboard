@@ -4,17 +4,17 @@ import { createWorkerBoardContext } from "../../test-support/worker-mode-fixture
 
 describe("edge.prefix", () => {
   test("edge.prefix 应支持多节点线性链", async () => {
-    const { board, monitor, cleanup } = await createWorkerBoardContext({
+    const { board, viewport, cleanup } = await createWorkerBoardContext({
       boardWidth: 800,
       boardHeight: 600,
-      monitorId: "main",
-      monitorWidth: 800,
-      monitorHeight: 600,
+      viewportId: "main",
+      viewportWidth: 800,
+      viewportHeight: 600,
     });
 
     try {
       const keyboardDevice = createKeyboardDevice();
-      monitor.mountSubDAG("", keyboardDevice);
+      viewport.mountSubDAG("", keyboardDevice);
 
       const receivedPackets = [];
       const workflow = {
@@ -66,7 +66,7 @@ describe("edge.prefix", () => {
       const chain = builder.build();
 
       board.signalsEventBus.emit("mount", {
-        monitorId: "main",
+        viewportId: "main",
         name: "chain-workflow",
         workflow,
         edges: [
@@ -78,7 +78,7 @@ describe("edge.prefix", () => {
         ],
       });
 
-      monitor.devicesDAG.dispatch({
+      viewport.devicesDAG.dispatch({
         to: "/main/keyboard",
         signals: [
           {
@@ -101,17 +101,17 @@ describe("edge.prefix", () => {
   });
 
   test("edge.prefix 应支持多节点分支 DAG（发散-收敛）", async () => {
-    const { board, monitor, cleanup } = await createWorkerBoardContext({
+    const { board, viewport, cleanup } = await createWorkerBoardContext({
       boardWidth: 800,
       boardHeight: 600,
-      monitorId: "main",
-      monitorWidth: 800,
-      monitorHeight: 600,
+      viewportId: "main",
+      viewportWidth: 800,
+      viewportHeight: 600,
     });
 
     try {
       const keyboardDevice = createKeyboardDevice();
-      monitor.mountSubDAG("", keyboardDevice);
+      viewport.mountSubDAG("", keyboardDevice);
 
       const receivedPackets = [];
       const workflow = {
@@ -166,7 +166,7 @@ describe("edge.prefix", () => {
       const dagPrefix = builder.build();
 
       board.signalsEventBus.emit("mount", {
-        monitorId: "main",
+        viewportId: "main",
         name: "branch-workflow",
         workflow,
         edges: [
@@ -178,7 +178,7 @@ describe("edge.prefix", () => {
         ],
       });
 
-      monitor.devicesDAG.dispatch({
+      viewport.devicesDAG.dispatch({
         to: "/main/keyboard",
         signals: [
           {

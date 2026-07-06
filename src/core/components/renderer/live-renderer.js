@@ -16,7 +16,7 @@ import { createLiveDirtyRectThresholdStrategy } from "./dirty-rect-strategy-shar
 
 /**
  * 活动层渲染器
- * @description 按 AOM 当前层顺序将动态图对象渲染到 Monitor 的 liveCanvas。
+ * @description 按 AOM 当前层顺序将动态图对象渲染到 Viewport 的 liveCanvas。
  * 自管理 liveCanvas、渲染调度器与脏区合并策略。
  * @class
  * @extends Renderer
@@ -51,12 +51,12 @@ class LiveRenderer extends Renderer {
   _resolveThresholds;
 
   /**
-   * @param {import("../orchestration/monitor-proxy.js").MonitorProxy} monitor - 目标显示器
+   * @param {import("../orchestration/viewport-proxy.js").ViewportProxy} viewport - 目标视口
    * @param {ActiveObjectManager | undefined} activeObjectManager - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
-  constructor(monitor, activeObjectManager, options = {}) {
-    super(monitor, options);
+  constructor(viewport, activeObjectManager, options = {}) {
+    super(viewport, options);
     this.activeObjectManager = activeObjectManager;
     this.previousDrawableEntries = [];
     this.objectSnapshotRects = new Map();
@@ -78,7 +78,7 @@ class LiveRenderer extends Renderer {
    * @protected
    */
   _getThresholds() {
-    return this._resolveThresholds(this.monitor?.zoom ?? 1) ?? {};
+    return this._resolveThresholds(this.viewport?.zoom ?? 1) ?? {};
   }
 
   /**
@@ -88,7 +88,7 @@ class LiveRenderer extends Renderer {
    * @protected
    */
   _beforeRender(ctx) {
-    const baseScheduler = this.monitor?.baseRenderer?._scheduler;
+    const baseScheduler = this.viewport?.baseRenderer?._scheduler;
     if (baseScheduler?.framePending) {
       baseScheduler.flush();
     }
@@ -330,7 +330,7 @@ class LiveRenderer extends Renderer {
    */
   copyBase() {
     const ctx = this._canvas?.getContext?.("2d") ?? null;
-    const baseCanvas = this.monitor?.baseRenderer?.canvas;
+    const baseCanvas = this.viewport?.baseRenderer?.canvas;
     if (!ctx || !baseCanvas) return;
 
     ctx.save();
@@ -346,7 +346,7 @@ class LiveRenderer extends Renderer {
    */
   copyBaseRects(rects) {
     const ctx = this._canvas?.getContext?.("2d") ?? null;
-    const baseCanvas = this.monitor?.baseRenderer?.canvas;
+    const baseCanvas = this.viewport?.baseRenderer?.canvas;
     if (!ctx || !baseCanvas || !Array.isArray(rects)) return;
 
     ctx.save();

@@ -10,7 +10,7 @@ import {
   createNoopCanvasContext2D,
   createNoopImageBitmap,
 } from "../../../test-support/noop-canvas.js";
-import { MonitorProxy } from "../monitor-proxy.js";
+import { ViewportProxy } from "../viewport-proxy.js";
 
 /**
  * 测试用假 Worker 端点
@@ -121,7 +121,7 @@ function installMockAnimationFrame() {
   };
 }
 
-describe("MonitorProxy", () => {
+describe("ViewportProxy", () => {
   test("startWorkerSync 应发送初始 viewport-change 消息", () => {
     const { flushNextFrame, restore } = installMockAnimationFrame();
     const worker = new FakeWorkerEndpoint();
@@ -137,7 +137,7 @@ describe("MonitorProxy", () => {
     };
 
     try {
-      const monitor = new MonitorProxy(
+      const viewport = new ViewportProxy(
         {
           rootElement: {},
           canvas,
@@ -149,19 +149,19 @@ describe("MonitorProxy", () => {
         "main",
       );
 
-      monitor.startWorkerSync();
+      viewport.startWorkerSync();
       flushNextFrame();
 
       expect(worker.postedMessages[0]).toEqual({
         type: "viewport-change",
-        monitorId: "main",
+        viewportId: "main",
         origin: { x: 0, y: 0 },
         zoom: 1,
         viewportSize: { width: 800, height: 600 },
         force: true,
       });
 
-      monitor.destroy();
+      viewport.destroy();
     } finally {
       restore();
     }
@@ -187,7 +187,7 @@ describe("MonitorProxy", () => {
     };
 
     try {
-      const monitor = new MonitorProxy(
+      const viewport = new ViewportProxy(
         {
           rootElement: {},
           canvas,
@@ -199,13 +199,13 @@ describe("MonitorProxy", () => {
         "main",
       );
       const invalidateViewportSpy = jest.spyOn(
-        monitor.uiRenderer,
+        viewport.uiRenderer,
         "invalidateViewport",
       );
       const liveBitmap = createNoopImageBitmap({ width: 800, height: 600 });
 
-      monitor.onRenderFrame({
-        monitorId: "main",
+      viewport.onRenderFrame({
+        viewportId: "main",
         liveBitmap,
       });
 
@@ -214,7 +214,7 @@ describe("MonitorProxy", () => {
       expect(liveBitmap.closed).toBe(true);
       expect(invalidateViewportSpy).toHaveBeenCalledTimes(1);
 
-      monitor.destroy();
+      viewport.destroy();
     } finally {
       restore();
     }

@@ -7,7 +7,7 @@ import {
   flushMicrotasks,
 } from "../../../test-support/worker-mode-fixtures.js";
 
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -24,7 +24,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -40,7 +40,7 @@ describe("StrokeCreatorTool", () => {
     expect(
       tool.process(
         {
-          to: "/monitor/stroke",
+          to: "/viewport/stroke",
           signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
         },
         deviceContext,
@@ -50,7 +50,7 @@ describe("StrokeCreatorTool", () => {
     expect(
       tool.process(
         {
-          to: "/monitor/stroke",
+          to: "/viewport/stroke",
           signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
         },
         deviceContext,
@@ -60,7 +60,7 @@ describe("StrokeCreatorTool", () => {
     expect(
       tool.process(
         {
-          to: "/monitor/stroke",
+          to: "/viewport/stroke",
           signals: [
             { type: "position", context: { value: new Vector(3, 4) } },
             { type: "end", context: {} },
@@ -85,7 +85,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -93,7 +93,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
@@ -101,7 +101,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [
           { type: "position", context: { value: new Vector(2, 3) } },
           { type: "end", context: {} },
@@ -122,7 +122,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
       },
       deviceContext,
@@ -130,7 +130,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
@@ -149,7 +149,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(5, 6) } }],
       },
       deviceContext,
@@ -167,7 +167,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -175,7 +175,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
       { acc: { board, boardApi, objectId: 1, ownerChunkId: 1 } },
@@ -193,7 +193,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -219,7 +219,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -227,7 +227,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
@@ -235,7 +235,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [
           { type: "position", context: { value: new Vector(3, 4) } },
           { type: "end", context: {} },
@@ -318,38 +318,38 @@ describe("StrokeCreatorTool", () => {
 
   test("创建手势更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
     const tool = new StrokeCreatorTool();
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
-    const { deviceContext } = createBoardDeviceContext(30, { monitor });
+    const { deviceContext } = createBoardDeviceContext(30, { viewport });
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
     );
 
-    monitor.liveRenderer.captureObjectSnapshot.mockClear();
-    monitor.liveRenderer.invalidateObjects.mockClear();
-    monitor.requestViewportUiRender.mockClear();
+    viewport.liveRenderer.captureObjectSnapshot.mockClear();
+    viewport.liveRenderer.invalidateObjects.mockClear();
+    viewport.requestViewportUiRender.mockClear();
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(2, 3) } }],
       },
       deviceContext,
     );
 
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("创建完成后应通过 commitObjects 提交笔画对象", () => {
@@ -359,7 +359,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -367,7 +367,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       deviceContext,
@@ -383,7 +383,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       deviceContext,
@@ -391,7 +391,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
       deviceContext,
@@ -410,7 +410,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
       { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
@@ -420,7 +420,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
@@ -428,7 +428,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(4, 5) } }],
       },
       { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
@@ -438,7 +438,7 @@ describe("StrokeCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/stroke",
+        to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
       { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
@@ -453,22 +453,22 @@ describe("StrokeCreatorTool", () => {
 
   describe("端到端集成（通过 Board 输入链路）", () => {
     test("挂载后的 StrokeCreatorTool 应可经由 Board 输入链路创建对象并提交到白板", async () => {
-      const { board, monitor, cleanup } = await createWorkerBoardContext({
+      const { board, viewport, cleanup } = await createWorkerBoardContext({
         boardWidth: 800,
         boardHeight: 600,
-        monitorId: "main",
-        monitorWidth: 800,
-        monitorHeight: 600,
+        viewportId: "main",
+        viewportWidth: 800,
+        viewportHeight: 600,
       });
 
       try {
         const tool = new StrokeCreatorTool();
-        monitor.origin = new Vector(100, 50);
-        monitor.zoom = 2;
+        viewport.origin = new Vector(100, 50);
+        viewport.zoom = 2;
 
-        monitor.mountSubDAG("", createMouseDevice());
+        viewport.mountSubDAG("", createMouseDevice());
         board.signalsEventBus.emit("mount", {
-          monitorId: "main",
+          viewportId: "main",
           name: "primary-stroke",
           workflow: tool,
           edges: [{ from: "/mouse/primary", edge: "default" }],
@@ -543,23 +543,23 @@ describe("StrokeCreatorTool", () => {
     });
 
     test("挂载后的 StrokeCreatorTool 在绘制中应将对象保持在 Worker 的活动态", async () => {
-      const { board, monitor, cleanup } = await createWorkerBoardContext({
+      const { board, viewport, cleanup } = await createWorkerBoardContext({
         boardWidth: 800,
         boardHeight: 600,
-        monitorId: "main",
-        monitorWidth: 800,
-        monitorHeight: 600,
+        viewportId: "main",
+        viewportWidth: 800,
+        viewportHeight: 600,
       });
 
       try {
         const tool = new StrokeCreatorTool();
-        monitor.origin = new Vector(100, 50);
-        monitor.zoom = 2;
+        viewport.origin = new Vector(100, 50);
+        viewport.zoom = 2;
 
-        monitor.mountSubDAG("", createMouseDevice());
+        viewport.mountSubDAG("", createMouseDevice());
 
         board.signalsEventBus.emit("mount", {
-          monitorId: "main",
+          viewportId: "main",
           name: "primary-stroke",
           workflow: tool,
           edges: [{ from: "/mouse/primary", edge: "default" }],

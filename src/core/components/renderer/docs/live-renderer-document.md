@@ -2,7 +2,7 @@
 
 本文档提供 `LiveRenderer` 的概述。
 
-`LiveRenderer` 负责把 `ActiveObjectManager` 当前持有的对象按动态层顺序绘制到 MonitorCore 的 live OffscreenCanvas 上。
+`LiveRenderer` 负责把 `ActiveObjectManager` 当前持有的对象按动态层顺序绘制到 ViewportCore 的 live OffscreenCanvas 上。
 
 这里的“当前持有”不仅包括仍处于 active layer 的活动对象，也包括仍保留在 AOM 中、但所在层已经变为 inactive 的对象。只要对象还在 AOM 里，它就应由 `LiveRenderer` 负责绘制，而不会回退给 `BaseRenderer`。
 
@@ -13,7 +13,7 @@
 `LiveRenderer` 处在一条明确的边界中：
 
 - `ActiveObjectManager` 负责回答“当前哪些对象在活动层里，以及它们的层顺序是什么”
-- `MonitorCore` 负责回答“当前视口的缩放、原点和画布实例是什么”
+- `ViewportCore` 负责回答“当前视口的缩放、原点和画布实例是什么”
 - `RenderScheduler` 负责回答“何时真正执行一次 flush”
 - `BaseRenderer` 负责把静态对象渲染到 base OffscreenCanvas（作为 live 的缓存）
 - `LiveRenderer` 负责回答“这一帧应把哪些 AOM 对象画到 `liveCanvas` 上”，并负责把 baseCanvas 缓存合成到 liveCanvas
@@ -27,7 +27,7 @@
 ### 构造参数
 
 ```javascript
-const renderer = new LiveRenderer(monitor, activeObjectManager, {
+const renderer = new LiveRenderer(viewport, activeObjectManager, {
   canvas: liveCanvas,
 });
 ```
@@ -69,15 +69,15 @@ liveCanvas (唯一可见) ─── AOM 对象直接绘制在上层
 
 `baseCanvas` 由 `BaseRenderer` 维护，视为 `liveCanvas` 的**预渲染缓存**。它的 `opacity: 0` CSS 属性使其不在屏幕上显示，但像素内容完整保留在 GPU 纹理中供 `drawImage` 读取。
 
-LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
+LiveRenderer 通过 `viewport.baseRenderer.canvas` 访问 baseCanvas。
 
 ### 缓存时序保护
 
-由于 base 和 live 的调度器是彼此独立的 rAF 调度器，`render()` 在拷贝 `baseCanvas` 前会检查 `monitor.baseRenderer._scheduler.framePending`，若有待处理帧则同步调用 `flush()`，确保读到最新的缓存状态。这替代了之前通过 `monitor.baseRenderScheduler` 的检查。
+由于 base 和 live 的调度器是彼此独立的 rAF 调度器，`render()` 在拷贝 `baseCanvas` 前会检查 `viewport.baseRenderer._scheduler.framePending`，若有待处理帧则同步调用 `flush()`，确保读到最新的缓存状态。这替代了之前通过 `viewport.baseRenderScheduler` 的检查。
 
 ### 与 BaseRenderer 的数据依赖
 
-- 构造时通过 Monitor 获取 baseCanvas：`monitor.baseRenderer.canvas`
+- 构造时通过 Viewport 获取 baseCanvas：`viewport.baseRenderer.canvas`
 - 时序同步通过 `baseRenderer._scheduler.framePending` 判断
 
 ### 三步流水线
@@ -109,12 +109,12 @@ LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
 
 `LiveRenderer` 当前有三个核心输入：
 
-- `monitor`：提供 `liveCanvas`、`baseCanvas`、2D context、`origin`、`zoom`、`baseRenderScheduler` 与世界到屏幕的矩形换算
+- `viewport`：提供 `liveCanvas`、`baseCanvas`、2D context、`origin`、`zoom`、`baseRenderScheduler` 与世界到屏幕的矩形换算
 - `activeObjectManager`：提供 AOM 对象实例、层顺序、同层非活动对象图与对象范围查询能力
 
 它的输出只有一个：
 
-- 在当前 `Monitor.liveCanvas` 上完成一次活动层重绘
+- 在当前 `Viewport.liveCanvas` 上完成一次活动层重绘
 
 ## 绘制对象来源
 
@@ -151,7 +151,7 @@ LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
 关键点有两个：
 
 - 对象世界范围通过 `getObjectWorldRect()` 统一规整为 `RectangleRange`
-- 对象屏幕范围通过 `Monitor.worldRectToScreenRect()` 转成屏幕空间的 `RectangleRange`
+- 对象屏幕范围通过 `Viewport.worldRectToScreenRect()` 转成屏幕空间的 `RectangleRange`
 
 这样做的目的是让以下几类矩形共享一套数据语义：
 
@@ -295,7 +295,7 @@ LiveRenderer 通过 `monitor.baseRenderer.canvas` 访问 baseCanvas。
 
 ## 相关文档
 
-- [monitor-document.md](../../orchestration/docs/monitor-document.md)
+- [viewport-document.md](../../orchestration/docs/viewport-document.md)
 - [ui-renderer-document.md](./ui-renderer-document.md)
 - [active-object-manager-document.md](../../orchestration/docs/active-object-manager-document.md)
 - [tier-graph-document.md](../../orchestration/docs/tier-graph-document.md)

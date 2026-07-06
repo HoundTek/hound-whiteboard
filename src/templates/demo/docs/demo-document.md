@@ -6,7 +6,7 @@
 
 当前 demo 的重点不是视觉包装，而是验证这次输入系统重构后的三条边界：
 
-- 输入先归属到 Monitor，再进入 Board.devicesDAG
+- 输入先归属到 Viewport，再进入 Board.devicesDAG
 - 键盘与鼠标链路都通过显式叶子工具消费信号
 - 参数注入、状态切换和对象桥接优先由修饰节点与节点 state 完成
 
@@ -89,7 +89,7 @@
 该 demo 主要验证：
 
 - 工具挂载与卸载流程
-- 设备信号在 Monitor / DevicesDAG 中的逐层下传
+- 设备信号在 Viewport / DevicesDAG 中的逐层下传
 - 边级 prefix 注入与信号转换
 - append-only `context` 与节点 `state` 的协作边界
 - 视口控制与渲染刷新
@@ -99,12 +99,12 @@
 
 目前 demo 侧重于信号路由和 workflow 验证，已经符合当前工具体系的设计约定：
 
-- 所有 workflow 通过 `mount` 事件统一挂载到 `/<monitorId>/workflows/` 下
+- 所有 workflow 通过 `mount` 事件统一挂载到 `/<viewportId>/workflows/` 下
 - 随机圆 workflow 挂载到 `/workflows/create-circle`；`code/Space` 通过边级 prefix 接入
 - 设备节点只负责信号产出（trigger / release / cancel）；信号转换由边级 `prefix` 完成
 - 修饰节点（`createEdgePrefix`）插在设备节点与 workflow 之间的 `"default"` 边上
 - creator / chooser 与 modifier 的上下文共享以当前节点 `state` 为边界，handoff 通过回调和对象桥接完成
 - 视口、调试各 workflow 通过 `edge.prefix` 多前驱模式汇聚；WASD 通过 `edge.prefix` 注入到 handoff 工作流
-- 屏幕坐标在 Monitor 层转换为世界坐标后进入工具链
+- 屏幕坐标在 Viewport 层转换为世界坐标后进入工具链
 
 如果需要进一步丰富 demo，可继续增加更多 workflow 观测输出，以及 creator → modifier 同一路径的协同示例。

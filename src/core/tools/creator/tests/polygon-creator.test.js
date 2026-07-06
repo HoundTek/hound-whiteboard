@@ -8,7 +8,7 @@ import {
   flushMicrotasks,
 } from "../../../test-support/worker-mode-fixtures.js";
 
-function createBoardDeviceContext(objectId, { monitor } = {}) {
+function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
     getObjectById: jest.fn(() => undefined),
@@ -26,7 +26,7 @@ function createBoardDeviceContext(objectId, { monitor } = {}) {
       acc: {
         board,
         boardApi,
-        monitor,
+        viewport,
         objectId,
         ownerChunkId: 1,
       },
@@ -41,7 +41,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
       },
       deviceContext,
@@ -49,7 +49,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "position", context: { value: new Vector(8, 9) } }],
       },
       deviceContext,
@@ -57,7 +57,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(10, 12) } },
           { type: "end", context: {} },
@@ -84,7 +84,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
       },
       deviceContext,
@@ -103,7 +103,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -116,7 +116,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "cancel", context: {} }],
       },
       deviceContext,
@@ -136,7 +136,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -147,7 +147,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "object-cancel", context: {} }],
       },
       { acc: { board, boardApi, objectId: 10, ownerChunkId: 1 } },
@@ -166,7 +166,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: "position", context: { value: new Vector(5, 5) } },
           { type: "end", context: {} },
@@ -177,7 +177,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [{ type: "object-end", context: {} }],
       },
       deviceContext,
@@ -196,7 +196,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -210,7 +210,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
@@ -223,18 +223,18 @@ describe("PolygonCreatorTool", () => {
 
   test("顶点更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
     const tool = new PolygonCreatorTool();
-    const monitor = {
+    const viewport = {
       liveRenderer: {
         captureObjectSnapshot: jest.fn(),
         invalidateObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
-    const { deviceContext } = createBoardDeviceContext(31, { monitor });
+    const { deviceContext } = createBoardDeviceContext(31, { viewport });
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -245,13 +245,13 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    monitor.liveRenderer.captureObjectSnapshot.mockClear();
-    monitor.liveRenderer.invalidateObjects.mockClear();
-    monitor.requestViewportUiRender.mockClear();
+    viewport.liveRenderer.captureObjectSnapshot.mockClear();
+    viewport.liveRenderer.invalidateObjects.mockClear();
+    viewport.requestViewportUiRender.mockClear();
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -262,9 +262,9 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(monitor.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(monitor.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
-    expect(monitor.requestViewportUiRender).toHaveBeenCalledTimes(1);
+    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
   test("显式提供 boardApi 时应通过 RPC 创建并提交多边形对象", () => {
@@ -277,7 +277,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -291,7 +291,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
@@ -373,7 +373,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           {
             type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
@@ -387,7 +387,7 @@ describe("PolygonCreatorTool", () => {
 
     tool.process(
       {
-        to: "/monitor/polygon",
+        to: "/viewport/polygon",
         signals: [
           { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
         ],
@@ -400,22 +400,22 @@ describe("PolygonCreatorTool", () => {
 
   describe("端到端集成（通过 Board 输入链路）", () => {
     test("挂载后的 PolygonCreatorTool 应可经由输入链路完成 object-end 提交", async () => {
-      const { board, monitor, cleanup } = await createWorkerBoardContext({
+      const { board, viewport, cleanup } = await createWorkerBoardContext({
         boardWidth: 800,
         boardHeight: 600,
-        monitorId: "main",
-        monitorWidth: 800,
-        monitorHeight: 600,
+        viewportId: "main",
+        viewportWidth: 800,
+        viewportHeight: 600,
       });
 
       try {
         const tool = new PolygonCreatorTool();
-        monitor.origin = new Vector(100, 50);
-        monitor.zoom = 2;
+        viewport.origin = new Vector(100, 50);
+        viewport.zoom = 2;
 
-        monitor.mountSubDAG("", createMouseDevice());
+        viewport.mountSubDAG("", createMouseDevice());
         board.signalsEventBus.emit("mount", {
-          monitorId: "main",
+          viewportId: "main",
           name: "primary-polygon",
           workflow: tool,
           edges: [{ from: "/mouse/primary", edge: "default" }],

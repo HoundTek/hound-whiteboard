@@ -1,9 +1,9 @@
 /**
- * @file Worker 侧显示器核心
+ * @file Worker 侧视口核心
  * @description
- * MonitorCore 承载 Worker 侧的视口状态、chunk buffer 与 base/live 渲染器。
+ * ViewportCore 承载 Worker 侧的视口状态、chunk buffer 与 base/live 渲染器。
  * 它不依赖 DOM，仅通过 OffscreenCanvas 渲染并产出可回传到 UI 的帧数据。
- * @module core/components/orchestration/monitor-core
+ * @module core/components/orchestration/viewport-core
  * @author Zhou Chenyu
  */
 
@@ -17,14 +17,14 @@ import { LiveRenderer } from "../renderer/live-renderer.js";
 import { BoardCore } from "./board-core.js";
 
 /**
- * Worker 侧显示器核心
+ * Worker 侧视口核心
  * @class
  * @description
  * 持有 Worker 内的视口状态副本、区块加载器和 OffscreenCanvas 渲染器。
  * UI 侧通过 viewport-change / request-render-flush 驱动它更新与产出帧。
  * @author Zhou Chenyu
  */
-class MonitorCore {
+class ViewportCore {
   /**
    * 所属 BoardCore
    * @type {BoardCore}
@@ -33,11 +33,11 @@ class MonitorCore {
   #boardCore;
 
   /**
-   * 显示器 id
+   * 视口 id
    * @type {string | number}
    * @private
    */
-  #monitorId;
+  #viewportId;
 
   /**
    * 当前视口绑定的 ChunkLoader
@@ -112,19 +112,19 @@ class MonitorCore {
   /**
    * @param {{
    *   boardCore: BoardCore,
-   *   monitorId: string | number,
+   *   viewportId: string | number,
    *   width: number,
    *   height: number,
    *   postRenderFrame?: (message: Object, transferList?: Transferable[]) => void,
-   * }} options - MonitorCore 初始化选项
+   * }} options - ViewportCore 初始化选项
    */
   constructor(options) {
     if (!(options?.boardCore instanceof BoardCore)) {
-      throw new TypeError("MonitorCore requires a BoardCore instance.");
+      throw new TypeError("ViewportCore requires a BoardCore instance.");
     }
 
     this.#boardCore = options.boardCore;
-    this.#monitorId = options.monitorId;
+    this.#viewportId = options.viewportId;
     this.#width = Number.isFinite(options.width) ? options.width : 0;
     this.#height = Number.isFinite(options.height) ? options.height : 0;
     this.#zoom = 1;
@@ -133,7 +133,7 @@ class MonitorCore {
     this.#frameDirty = false;
     this.#postRenderFrame = options.postRenderFrame ?? (() => {});
     this.#chunkLoader = this.#boardCore.createChunkLoader(
-      `monitor-${String(this.#monitorId)}`,
+      `viewport-${String(this.#viewportId)}`,
     );
 
     const baseCanvas = new OffscreenCanvas(this.#width, this.#height);
@@ -160,11 +160,11 @@ class MonitorCore {
   }
 
   /**
-   * 显示器 id
+   * 视口 id
    * @type {string | number}
    */
-  get monitorId() {
-    return this.#monitorId;
+  get viewportId() {
+    return this.#viewportId;
   }
 
   /**
@@ -595,7 +595,7 @@ class MonitorCore {
     this.#postRenderFrame(
       {
         type: "render-frame",
-        monitorId: this.#monitorId,
+        viewportId: this.#viewportId,
         frameId,
         liveBitmap,
       },
@@ -607,7 +607,7 @@ class MonitorCore {
   }
 
   /**
-   * 销毁当前 MonitorCore
+   * 销毁当前 ViewportCore
    */
   destroy() {
     const loadedChunks = this.#chunkLoader?.getLoadedChunks?.() ?? [];
@@ -621,4 +621,4 @@ class MonitorCore {
   }
 }
 
-export { MonitorCore };
+export { ViewportCore };

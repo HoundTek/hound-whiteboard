@@ -227,7 +227,7 @@ class DebuggerTool extends Tool {
     const activeObjectIds = Array.from(
       board.activeObjectManager?.activeObjectIndex?.keys?.() ?? [],
     );
-    const monitorIds = Array.from(board.monitors?.keys?.() ?? []);
+    const viewportIds = Array.from(board.viewports?.keys?.() ?? []);
 
     return {
       board: this.cloneSnapshot(board),
@@ -247,8 +247,8 @@ class DebuggerTool extends Tool {
       loadedObjectIds: objectIds,
       activeObjectCount: activeObjectIds.length,
       activeObjectIds,
-      monitorCount: monitorIds.length,
-      monitorIds,
+      viewportCount: viewportIds.length,
+      viewportIds,
       rootChunkLoader: this.cloneSnapshot(board.rootChunkLoader),
     };
   }
