@@ -236,5 +236,5 @@ createPrefixNodeHandler({
 
 - [DevicesDAG 核心文档](./devices-dag-document.md)
 - [修饰节点文档](../../prefixs/docs/prefix-document.md)
-- [Core 稳定接口](../../docs/core-stable-interfaces.md)
+- [Core 稳定接口](../../../docs/core-stable-interfaces.md)
 - [signal 文档](./signal-document.md)

@@ -141,7 +141,7 @@ chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
 
 ## `hit/`
 
-历史结构层，属于 Shared。
+历史结构层，属于 Worker。
 
 - `undo-tree-core.js` 已作为运行时骨架接入 `BoardCore`
 - 更完整的 operation 语义与历史回放仍属于后续完善项
@@ -171,5 +171,5 @@ chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
 
 - [core-overview.md](./core-overview.md)
 - [core-data-model.md](./core-data-model.md)
-- [components-document.md](../components/docs/components-document.md)
+- [components-document.md](./components/components-document.md)
 - [core-runtime-boundaries.md](./core-runtime-boundaries.md)

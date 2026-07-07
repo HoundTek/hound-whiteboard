@@ -32,7 +32,7 @@
 | `components/renderer/dirty-rect-*.js`               | Shared              | 脏区策略                                                                                    |
 | `devices/`                                          | UI                  | 鼠标 / 键盘 / 触屏输入设备定义                                                              |
 | `devices-dag/`                                      | UI                  | 设备图、handlerContext、信号路由                                                            |
-| `hit/`                                              | Shared              | Undo Tree 与历史结构                                                                        |
+| `hit/`                                              | Worker              | Undo Tree 与历史结构                                                                        |
 | `objects/`                                          | Shared              | 白板对象模型与反序列化                                                                      |
 | `prefixs/`                                          | UI                  | handoff / edge prefix / 子图编排                                                            |
 | `range/`                                            | Shared              | 几何范围抽象                                                                                |
@@ -78,7 +78,7 @@
 - tools 直接消费设备信号、维护节点 state、声明 overlay provider
 - handoff / prefix 是 UI 侧输入编排逻辑，不进入 Worker
 
-### `objects/` / `range/` / `utils/` / `hit/` / `shared/`
+### `objects/` / `range/` / `utils/` / `shared/`
 
 这几类目录是当前 Core Worker 架构的稳定共享层：
 
@@ -123,6 +123,6 @@ demo / `src/templates/whiteboard.js` 的初始化流程：
 
 - [core-overview.md](./core-overview.md)
 - [core-modules.md](./core-modules.md)
-- [components-document.md](../components/docs/components-document.md)
-- [board-document.md](../components/orchestration/docs/board-document.md)
-- [viewport-document.md](../components/orchestration/docs/viewport-document.md)
+- [components-document.md](./components/components-document.md)
+- [board-document.md](../ui/components/orchestration/docs/board-document.md)
+- [viewport-document.md](../ui/components/orchestration/docs/viewport-document.md)

@@ -235,4 +235,4 @@ viewport.mountSubDAG("/presentation", createKeyboardDevice());
 
 - [设备图](../../devices-dag/docs/devices-dag-document.md)
 - [键盘设备](./keyboard-device-document.md)
-- [输入流](../../docs/core-input-flow.md)
+- [输入流](../../../docs/core-input-flow.md)

@@ -143,4 +143,4 @@ classDiagram
 
 - [object-chooser-document.md](./object-chooser-document.md)
 - [ui-renderer-document.md](../../../components/renderer/docs/ui-renderer-document.md)
-- [core-input-flow.md](../../../docs/core-input-flow.md)
+- [core-input-flow.md](../../../../docs/core-input-flow.md)

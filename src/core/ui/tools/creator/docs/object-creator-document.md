@@ -176,5 +176,5 @@ handoff 的接入点：
 
 - [object-modifier-document.md](../../modifier/docs/object-modifier-document.md)
 - [object-chooser-document.md](../../chooser/docs/object-chooser-document.md)
-- [core-data-model.md](../../../docs/core-data-model.md)
-- [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)
+- [core-data-model.md](../../../../docs/core-data-model.md)
+- [core-runtime-boundaries.md](../../../../docs/core-runtime-boundaries.md)

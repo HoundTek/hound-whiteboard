@@ -185,4 +185,4 @@ viewport.mountSubDAG("", builder.build());
 - [对象创建工具](../../tools/creator/docs/object-creator-document.md)
 - [对象选择工具](../../tools/chooser/docs/object-chooser-document.md)
 - [对象修改工具](../../tools/modifier/docs/object-modifier-document.md)
-- [Core 输入流](../../docs/core-input-flow.md)
+- [Core 输入流](../../../docs/core-input-flow.md)

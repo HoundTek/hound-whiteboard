@@ -162,4 +162,4 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "chooser");
 - [rectangle-object-chooser-document.md](./rectangle-object-chooser-document.md)
 - [object-modifier-document.md](../../modifier/docs/object-modifier-document.md)
 - [ui-renderer-document.md](../../../components/renderer/docs/ui-renderer-document.md)
-- [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)
+- [core-runtime-boundaries.md](../../../../docs/core-runtime-boundaries.md)

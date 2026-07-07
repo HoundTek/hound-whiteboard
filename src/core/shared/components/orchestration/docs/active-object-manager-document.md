@@ -216,7 +216,7 @@ AOM 用两类快照支持对象级静态失效：
 
 ## 相关文档
 
-- [board-document.md](./board-document.md)
-- [viewport-document.md](./viewport-document.md)
-- [ui-renderer-document.md](../../renderer/docs/ui-renderer-document.md)
-- [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)
+- [board-document.md](../../../../ui/components/orchestration/docs/board-document.md)
+- [viewport-document.md](../../../../ui/components/orchestration/docs/viewport-document.md)
+- [ui-renderer-document.md](../../../../ui/components/renderer/docs/ui-renderer-document.md)
+- [core-runtime-boundaries.md](../../../../docs/core-runtime-boundaries.md)

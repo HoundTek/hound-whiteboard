@@ -154,10 +154,10 @@
 
 ## 相关文档
 
-- [handler 上下文（ctx）用法](../devices-dag/docs/handler-context-document.md)
-- [设备图](../devices-dag/docs/devices-dag-document.md)
-- [设备定义](../devices/docs/device-document.md)
-- [对象创建工具](../tools/creator/docs/object-creator-document.md)
-- [对象选择工具](../tools/chooser/docs/object-chooser-document.md)
-- [对象修改工具](../tools/modifier/docs/object-modifier-document.md)
+- [handler 上下文（ctx）用法](../ui/devices-dag/docs/handler-context-document.md)
+- [设备图](../ui/devices-dag/docs/devices-dag-document.md)
+- [设备定义](../ui/devices/docs/device-document.md)
+- [对象创建工具](../ui/tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../ui/tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../ui/tools/modifier/docs/object-modifier-document.md)
 - [Core 输入流](./core-input-flow.md)

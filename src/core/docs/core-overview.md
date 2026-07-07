@@ -66,7 +66,7 @@
 - `utils/`：数学、图结构、事件总线等基础设施
 - `chunk/`：区块、覆盖索引与加载器
 - `renderer/`：base/live 渲染器与调度器
-- `hit/`：Undo Tree 核心结构
+- `hit/`：Undo Tree 核心结构（Worker 侧）
 - `shared/`：跨线程共享类型定义
 
 ## 当前实现状态

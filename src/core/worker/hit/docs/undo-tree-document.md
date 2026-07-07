@@ -112,7 +112,7 @@
 
 ## 操作存储结构
 
-在 [`.hwb` 文件](../../docs/file-structure.md)里，其根目录下的 [`history/` 文件夹](../../docs/file-structure.md#history)用以专门存放与时间回溯树有关的文件。
+在 [`.hwb` 文件](../../../docs/file-structure.md)里，其根目录下的 [`history/` 文件夹](../../../docs/file-structure.md#history)用以专门存放与时间回溯树有关的文件。
 
 其中，[`trash/` 文件夹](#)用来存放不在当前状态上，但在仍能通过 hit 将其找回的对象，即曾经存在并未被遗忘的对象。
 
@@ -120,7 +120,7 @@
 
 [`hit/` 文件夹](#)用来存放时间回溯树的树块和尝试块。
 
-除了 history/ 文件夹外，时间回溯树还会读取 [`objects/` 文件夹](../../docs/file-structure.md#objects)。该文件夹存放了当前状态直接或间接 (如在容器里等) 在白板上的对象。
+除了 history/ 文件夹外，时间回溯树还会读取 [`objects/` 文件夹](../../../docs/file-structure.md#objects)。该文件夹存放了当前状态直接或间接 (如在容器里等) 在白板上的对象。
 
 ## 内存结构
 

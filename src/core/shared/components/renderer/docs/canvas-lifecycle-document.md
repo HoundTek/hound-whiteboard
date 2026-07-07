@@ -51,7 +51,7 @@ _initScheduler(mergeDirtyRects, flushHandler);
 
 ## 相关文档
 
-- [base-renderer-document.md](./base-renderer-document.md)
-- [live-renderer-document.md](./live-renderer-document.md)
-- [ui-renderer-document.md](./ui-renderer-document.md)
+- [base-renderer-document.md](../../../../worker/components/renderer/docs/base-renderer-document.md)
+- [live-renderer-document.md](../../../../worker/components/renderer/docs/live-renderer-document.md)
+- [ui-renderer-document.md](../../../../ui/components/renderer/docs/ui-renderer-document.md)
 - [render-scheduler-document.md](./render-scheduler-document.md)

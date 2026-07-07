@@ -102,6 +102,6 @@ UI 侧的 `Viewport.onRenderFrame()` 将收到的 `liveBitmap` 绘制到 DOM can
 
 ## 相关文档
 
-- [viewport-document.md](./viewport-document.md)
+- [viewport-document.md](../../../../ui/components/orchestration/docs/viewport-document.md)
 - [board-core-document.md](./board-core-document.md)
-- [active-object-manager-document.md](./active-object-manager-document.md)
+- [active-object-manager-document.md](../../../../shared/components/orchestration/docs/active-object-manager-document.md)

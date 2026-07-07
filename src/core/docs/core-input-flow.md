@@ -125,8 +125,8 @@ handler 不应显式指定 `to:`——路由依靠 `defaultRoute: "default"` 自
 
 ## 相关文档
 
-- [设备图](../devices-dag/docs/devices-dag-document.md)
-- [对象创建工具](../tools/creator/docs/object-creator-document.md)
-- [对象选择工具](../tools/chooser/docs/object-chooser-document.md)
-- [对象修改工具](../tools/modifier/docs/object-modifier-document.md)
+- [设备图](../ui/devices-dag/docs/devices-dag-document.md)
+- [对象创建工具](../ui/tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../ui/tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../ui/tools/modifier/docs/object-modifier-document.md)
 - [阶段性稳定接口](./core-stable-interfaces.md)

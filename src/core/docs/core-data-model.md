@@ -221,6 +221,6 @@ AOM 内部关键结构：
 
 - [core-overview.md](./core-overview.md)
 - [file-structure.md](./file-structure.md)
-- [board-document.md](../components/orchestration/docs/board-document.md)
-- [active-object-manager-document.md](../components/orchestration/docs/active-object-manager-document.md)
+- [board-document.md](../ui/components/orchestration/docs/board-document.md)
+- [active-object-manager-document.md](../shared/components/orchestration/docs/active-object-manager-document.md)
 - [core-runtime-boundaries.md](./core-runtime-boundaries.md)

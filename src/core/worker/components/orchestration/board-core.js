@@ -12,7 +12,7 @@ import { deserialize } from "../../../shared/objects/object-deserializer.js";
 import { EventBus } from "../../../utils/event-bus.js";
 import { Logger } from "../../../../utils/log/logger.js";
 import { logBus } from "../../../../utils/log/log-bus.js";
-import { UndoTree } from "../../../shared/hit/undo-tree-core.js";
+import { UndoTree } from "../../hit/undo-tree-core.js";
 import { ActiveObjectManager } from "./active-object-manager.js";
 import { createDefaultAomRenderHooks } from "./aom-render-hooks.js";
 import {

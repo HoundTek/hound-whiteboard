@@ -30,26 +30,38 @@ src/
 ├── preload.js / preload-io.js  # Tauri preload
 ├── io-bridge-*.js           # 渲染↔主进程 IPC 桥接
 ├── core/
-│   ├── components/          # Board + Viewport 核心组件
-│   ├── objects/             # 对象模型（BasicObj, Stroke, 几何图形）
-│   ├── tools/               # 交互工具
-│   │   ├── creator/         #   创建工具（stroke/circle/polygon/obj）
-│   │   ├── modifier/        #   修改工具（手势位移）
-│   │   ├── chooser/         #   选择工具
-│   │   └── eraser/          #   擦除工具
-│   ├── devices/             # 物理设备抽象（mouse/keyboard/touchscreen）
-│   ├── devices-dag/         # DAG 输入路由图
-│   ├── bridges/             # 文件操作桥接
-│   ├── hit/                 # 撤销树、操作历史
-│   ├── prefixs/             # handoff 控制权转移
-│   └── utils/               # 通用工具
+│   ├── ui/                  # UI 线程（输入编排、工具、overlay）
+│   │   ├── components/      #   Board / Viewport / UiRenderer
+│   │   ├── devices/         #   物理设备抽象（mouse/keyboard/touchscreen）
+│   │   ├── devices-dag/     #   DAG 输入路由图
+│   │   ├── tools/           #   交互工具
+│   │   │   ├── creator/     #     创建工具（stroke/circle/polygon/obj）
+│   │   │   ├── modifier/    #     修改工具（手势位移）
+│   │   │   ├── chooser/     #     选择工具
+│   │   │   └── eraser/      #     擦除工具
+│   │   ├── prefixs/         #   handoff 控制权转移
+│   │   └── frame/           #   Frame 合成层
+│   ├── worker/              # Core Worker（对象、区块、渲染）
+│   │   ├── components/
+│   │   │   ├── orchestration/ #   BoardCore / ViewportCore
+│   │   │   ├── chunk/         #   区块、加载器、静态图
+│   │   │   └── renderer/      #   BaseRenderer / LiveRenderer
+│   │   └── hit/               #   撤销树、操作历史
+│   ├── shared/              # 跨线程共享纯逻辑
+│   │   ├── components/      #   AOM、渲染器基类、脏区调度
+│   │   ├── objects/         #   对象模型（BasicObj, Stroke, 几何图形）
+│   │   └── range/           #   几何范围抽象
+│   ├── bridges/             # Worker ↔ UI RPC 桥接
+│   ├── utils/               # 通用工具（数学、图、事件总线等）
+│   ├── docs/                # 核心架构文档
+│   └── test-support/        # 测试 mock 支撑
 ├── utils/                   # 应用级工具（filesys, log, safe-io）
 └── templates/               # 白板 HTML/CSS/JS 模板
 src-tauri/                   # Rust 后端（Cargo workspace）
 benchmarks/                  # 性能基准
 ```
 
-每个模块下有 `docs/{name}-document.md` 和 `tests/` 目录。
+核心模块下有 `docs/{name}-document.md` 和 `tests/` 目录。
 
 ## 架构关键概念
 

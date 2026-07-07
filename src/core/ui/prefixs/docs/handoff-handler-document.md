@@ -217,4 +217,4 @@ creator 产生的 `_entry` 和 chooser/modifier 流转的条目统一遵循 `Obj
 - [object-creator-document.md](../../tools/creator/docs/object-creator-document.md)
 - [object-modifier-document.md](../../tools/modifier/docs/object-modifier-document.md)
 - [object-chooser-document.md](../../tools/chooser/docs/object-chooser-document.md)
-- [core-data-model.md](../../docs/core-data-model.md)
+- [core-data-model.md](../../../docs/core-data-model.md)

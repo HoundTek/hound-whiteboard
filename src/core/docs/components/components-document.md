@@ -50,6 +50,6 @@ AOM 自身不直接依赖 DOM canvas 或 viewport 列表。
 ## 相关文档
 
 - [core-runtime-boundaries.md](../../docs/core-runtime-boundaries.md)
-- [board-document.md](../orchestration/docs/board-document.md)
-- [viewport-document.md](../orchestration/docs/viewport-document.md)
-- [active-object-manager-document.md](../orchestration/docs/active-object-manager-document.md)
+- [board-document.md](../../ui/components/orchestration/docs/board-document.md)
+- [viewport-document.md](../../ui/components/orchestration/docs/viewport-document.md)
+- [active-object-manager-document.md](../../shared/components/orchestration/docs/active-object-manager-document.md)

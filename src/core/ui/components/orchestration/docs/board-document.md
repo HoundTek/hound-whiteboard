@@ -1,6 +1,6 @@
 # Board 文档
 
-本文档提供 `Board`（UI 侧白板 facade）的概述。Worker 侧 `BoardCore` 参见 [board-core-document.md](./board-core-document.md)。
+本文档提供 `Board`（UI 侧白板 facade）的概述。Worker 侧 `BoardCore` 参见 [board-core-document.md](../../../../worker/components/orchestration/docs/board-core-document.md)。
 
 ## 概述
 
@@ -89,6 +89,6 @@ tools 应优先通过 `boardApi` 访问真实状态。
 ## 相关文档
 
 - [viewport-document.md](./viewport-document.md)
-- [active-object-manager-document.md](./active-object-manager-document.md)
-- [components-document.md](../../docs/components-document.md)
-- [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)
+- [active-object-manager-document.md](../../../../shared/components/orchestration/docs/active-object-manager-document.md)
+- [components-document.md](../../../../docs/components/components-document.md)
+- [core-runtime-boundaries.md](../../../../docs/core-runtime-boundaries.md)

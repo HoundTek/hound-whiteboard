@@ -93,6 +93,6 @@ const renderer = new BaseRenderer(viewport, { canvas: baseCanvas });
 
 ## 相关文档
 
-- [viewport-document.md](../../orchestration/docs/viewport-document.md)
+- [viewport-document.md](../../../../ui/components/orchestration/docs/viewport-document.md)
 - [live-renderer-document.md](./live-renderer-document.md)
-- [active-object-manager-document.md](../../orchestration/docs/active-object-manager-document.md)
+- [active-object-manager-document.md](../../../../shared/components/orchestration/docs/active-object-manager-document.md)

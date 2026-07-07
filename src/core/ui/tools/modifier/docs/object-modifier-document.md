@@ -212,5 +212,5 @@ handoff 不修改 modifier 的 node state。
 
 - [object-creator-document.md](../../creator/docs/object-creator-document.md)
 - [object-chooser-document.md](../../chooser/docs/object-chooser-document.md)
-- [active-object-manager-document.md](../../../components/orchestration/docs/active-object-manager-document.md)
-- [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)
+- [active-object-manager-document.md](../../../../shared/components/orchestration/docs/active-object-manager-document.md)
+- [core-runtime-boundaries.md](../../../../docs/core-runtime-boundaries.md)

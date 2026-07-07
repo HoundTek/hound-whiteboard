@@ -151,5 +151,5 @@ Worker 线程：
 ## 相关文档
 
 - [core-data-model.md](./core-data-model.md)
-- [board-document.md](../components/orchestration/docs/board-document.md)
-- [chunk-object-manager-document.md](../components/chunk/docs/chunk-object-manager-document.md)
+- [board-document.md](../ui/components/orchestration/docs/board-document.md)
+- [chunk-object-manager-document.md](../worker/components/chunk/docs/chunk-object-manager-document.md)

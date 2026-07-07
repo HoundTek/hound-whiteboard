@@ -98,6 +98,6 @@
 
 ## 相关文档
 
-- [board-document.md](../orchestration/docs/board-document.md)
-- [chunk-object-manager-document.md](../chunk/docs/chunk-object-manager-document.md)
+- [board-document.md](../../ui/components/orchestration/docs/board-document.md)
+- [chunk-object-manager-document.md](../../worker/components/chunk/docs/chunk-object-manager-document.md)
 - [file-structure.md](../../docs/file-structure.md)

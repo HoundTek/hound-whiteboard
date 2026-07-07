@@ -8,7 +8,7 @@
  * - 添加区块
  * - 删除区块
  * - 修改区块版本
- * @module core/shared/hit/operation
+ * @module core/worker/hit/operation
  * @author Zhou Chenyu
  */
 
