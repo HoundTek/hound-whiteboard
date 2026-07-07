@@ -26,15 +26,8 @@ class ChunkObjectManager {
   staticGraph;
 
   /**
-   * 对象覆盖区块集合索引
-   * @description 对象 id -> 覆盖到的区块 id 集合。
-   * @type {Map<number, Set<number>>}
-   */
-  objectCoverChunks;
-
-  /**
    * 所属白板
-   * @type {import("../orchestration/board.js").Board | undefined}
+   * @type {import("../orchestration/board-core.js").BoardCore | import("../orchestration/board.js").Board | undefined}
    */
   board;
 
@@ -44,16 +37,22 @@ class ChunkObjectManager {
    */
   id;
 
+  /**
+   * 无 board 时的本地覆盖索引回退（仅测试用）
+   * @type {Map<number, Set<number>>|undefined}
+   * @private
+   */
+  #localCoverChunks;
+
   constructor(chunkId, board) {
     this.id = chunkId;
     this.board = board;
     this.staticGraph = new DirectedGraph();
-    this.objectCoverChunks = new Map();
   }
 
   /**
    * 绑定白板实例
-   * @param {import("../orchestration/board.js").Board} board - 白板实例
+   * @param {import("../orchestration/board-core.js").BoardCore | import("../orchestration/board.js").Board} board - 白板实例
    */
   setBoard(board) {
     this.board = board;
@@ -70,6 +69,7 @@ class ChunkObjectManager {
 
   /**
    * 设置对象覆盖区块集合
+   * @description 委托到 BoardCore 的唯一覆盖索引，无 board 时回退到本地 Map。
    * @param {number} objectId - 对象 id
    * @param {Iterable<number>} chunkIds - 覆盖区块 id 集合
    */
@@ -79,19 +79,41 @@ class ChunkObjectManager {
       if (!Number.isInteger(chunkId) || chunkId <= 0) {
         throw new Error("Invalid covered chunk id.");
       }
-
       normalizedChunkIds.add(chunkId);
     }
-    this.objectCoverChunks.set(objectId, normalizedChunkIds);
+    if (this.board?.setObjectCoverChunks) {
+      this.board.setObjectCoverChunks(objectId, normalizedChunkIds);
+    } else {
+      if (!this.#localCoverChunks) {
+        this.#localCoverChunks = new Map();
+      }
+      this.#localCoverChunks.set(objectId, normalizedChunkIds);
+    }
+  }
+
+  /**
+   * 删除对象的覆盖区块索引
+   * @param {number} objectId - 对象 id
+   */
+  unsetObjectCoverChunks(objectId) {
+    if (this.board && typeof this.board.unsetObjectCoverChunks === "function") {
+      this.board.unsetObjectCoverChunks(objectId);
+      return;
+    }
+    this.#localCoverChunks?.delete(objectId);
   }
 
   /**
    * 获取对象覆盖区块集合
+   * @description 委托到 BoardCore 的唯一覆盖索引，无 board 时回退到本地 Map。
    * @param {number} objectId - 对象 id
    * @returns {Set<number>}
    */
   getObjectCoverChunks(objectId) {
-    return new Set(this.objectCoverChunks.get(objectId) || []);
+    if (this.board?.getObjectCoverChunks) {
+      return new Set(this.board.getObjectCoverChunks(objectId) ?? []);
+    }
+    return new Set(this.#localCoverChunks?.get(objectId) ?? []);
   }
 
   /**
@@ -198,7 +220,7 @@ class ChunkObjectManager {
    * @returns {Map<number, Set<number>>}
    */
   syncAllObjectCoverChunks(chunkWidth, chunkHeight, options = {}) {
-    this.objectCoverChunks.clear();
+    if (this.#localCoverChunks) this.#localCoverChunks.clear();
     for (const objectId of this.staticGraph.getNodes()) {
       const obj = this.getObject(objectId);
       if (!(obj instanceof BasicObject)) continue;
@@ -209,7 +231,10 @@ class ChunkObjectManager {
         options,
       );
     }
-    return new Map(this.objectCoverChunks);
+    if (this.board && typeof this.board.getObjectCoverChunks === "function") {
+      return new Map();
+    }
+    return new Map(this.#localCoverChunks ?? []);
   }
 
   /**
@@ -217,7 +242,11 @@ class ChunkObjectManager {
    * @returns {Array<[number, number[]]>}
    */
   serializeObjectCoverChunks() {
-    return Array.from(this.objectCoverChunks.entries())
+    // 有 BoardCore 时覆盖索引由 BoardCore 统一管理，不由 COM 序列化
+    if (this.board && typeof this.board.getObjectCoverChunks === "function") {
+      return [];
+    }
+    return Array.from((this.#localCoverChunks ?? new Map()).entries())
       .map(([objectId, chunkIds]) => [
         objectId,
         Array.from(chunkIds).sort((left, right) => left - right),
@@ -230,7 +259,7 @@ class ChunkObjectManager {
    * @param {Array<[number, number[]]>} coverIndexData - 覆盖索引数据
    */
   loadObjectCoverChunksFromData(coverIndexData) {
-    this.objectCoverChunks.clear();
+    if (this.#localCoverChunks) this.#localCoverChunks.clear();
     for (const entry of coverIndexData || []) {
       if (!Array.isArray(entry) || entry.length !== 2) {
         throw new Error("Invalid object cover index entry.");
@@ -258,10 +287,7 @@ class ChunkObjectManager {
     }
 
     const { tierGraph, objectCoverIndex } =
-      await boardFileOperateBridge.loadChunkMetadata(
-        boardRootPath,
-        this.id,
-      );
+      await boardFileOperateBridge.loadChunkMetadata(boardRootPath, this.id);
 
     this.staticGraph = DirectedGraph.parse(tierGraph);
     this.loadObjectCoverChunksFromData(objectCoverIndex);
@@ -289,7 +315,6 @@ class ChunkObjectManager {
    */
   unloadTierGraph() {
     this.staticGraph = new DirectedGraph();
-    this.objectCoverChunks.clear();
   }
 
   /**

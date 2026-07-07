@@ -389,15 +389,10 @@ describe("ActiveObjectManager/apply", () => {
       board.activeObjectManager.apply(new Set([stroke]));
 
       expect(chunk00.objectManager.staticGraph.hasNode(101)).toBe(false);
-      expect(chunk00.objectManager.getObjectCoverChunks(101)).toEqual(
-        new Set(),
-      );
+      expect(board.getObjectCoverChunks(101)).toEqual(new Set([chunkId10]));
 
       const chunk10 = board.getChunkById(chunkId10);
       expect(chunk10.objectManager.staticGraph.hasNode(101)).toBe(true);
-      expect(chunk10.objectManager.getObjectCoverChunks(101)).toEqual(
-        new Set([chunkId10]),
-      );
     });
 
     test("对象覆盖范围收缩后不再覆盖的旧区块应被清理", async () => {
@@ -436,13 +431,9 @@ describe("ActiveObjectManager/apply", () => {
       board.activeObjectManager.apply(new Set([stroke]));
 
       expect(chunk10.objectManager.staticGraph.hasNode(102)).toBe(false);
-      expect(chunk10.objectManager.getObjectCoverChunks(102)).toEqual(
-        new Set(),
-      );
+      expect(board.getObjectCoverChunks(102)).toEqual(new Set([chunkId00]));
       expect(chunk20.objectManager.staticGraph.hasNode(102)).toBe(false);
-      expect(chunk20.objectManager.getObjectCoverChunks(102)).toEqual(
-        new Set(),
-      );
+      expect(board.getObjectCoverChunks(102)).toEqual(new Set([chunkId00]));
       expect(chunk00.objectManager.staticGraph.hasNode(102)).toBe(true);
       expect(chunk00.objectManager.getObjectCoverChunks(102)).toEqual(
         new Set([chunkId00]),
@@ -514,15 +505,8 @@ describe("ActiveObjectManager/apply", () => {
       expect(chunk00.objectManager.staticGraph.hasNode(105)).toBe(false);
       expect(chunk10.objectManager.staticGraph.hasNode(104)).toBe(false);
       expect(chunk10.objectManager.staticGraph.hasNode(105)).toBe(true);
-      expect(chunk00.objectManager.getObjectCoverChunks(105)).toEqual(
-        new Set(),
-      );
-      expect(chunk10.objectManager.getObjectCoverChunks(105)).toEqual(
-        new Set([chunkId10]),
-      );
-      expect(chunk00.objectManager.getObjectCoverChunks(104)).toEqual(
-        new Set([chunkId00]),
-      );
+      expect(board.getObjectCoverChunks(105)).toEqual(new Set([chunkId10]));
+      expect(board.getObjectCoverChunks(104)).toEqual(new Set([chunkId00]));
     });
 
     test("多次 apply 间跨区块移动的累积清理", async () => {

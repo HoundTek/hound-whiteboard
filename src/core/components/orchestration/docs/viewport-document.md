@@ -1,81 +1,30 @@
-# 显示器组件文档
+# Viewport 文档
 
-本文档描述当前显示器家族：`Viewport`、`ViewportCore`。
+本文档提供 `Viewport`（UI 侧视口 facade）的概述。Worker 侧 `ViewportCore` 参见 [viewport-core-document.md](./viewport-core-document.md)。
 
 ## 概述
 
-显示器层拆分为两类角色：
+`Viewport` 是 UI 线程的视口 facade，负责连接 DOM 与 Worker 侧的 `ViewportCore`。
 
-| 类             | 线程   | 职责                                                  |
-| -------------- | ------ | ----------------------------------------------------- |
-| `Viewport`     | UI     | UI 侧视口，持有 DOM canvas，接收 Worker 侧渲染帧      |
-| `ViewportCore` | Worker | Worker 侧视口、ChunkLoader、base 渲染与 live 合成核心 |
-
-运行链路：
-
-```mermaid
-flowchart LR
-  UIBoard[Board]
-  UI[Viewport]
-  WorkerCore[ViewportCore]
-  BR[BaseRenderer]
-  LR[LiveRenderer]
-  UIR[UiRenderer]
-
-  UIBoard --> Proxy
-  Proxy -->|viewport-change / request-render-flush| WorkerCore
-  WorkerCore --> BR
-  WorkerCore --> LR
-  WorkerCore -->|render-frame| Proxy
-  Proxy --> UIR
-```
-
-## 职责划分
-
-### `Viewport`
-
-`Viewport` 是 UI 侧 viewport，职责包括：
+职责包括：
 
 - 创建并持有 DOM `canvas`（接收 Worker 合成帧）与 `uiCanvas`（overlay 层）
-- 持有 `UiRenderer`
+- 持有 `UiRenderer`，管理 UI 覆盖层的注册与补绘
 - 维护本地视口状态副本（`origin` / `zoom` / `width` / `height`）
-- 发送 `viewport-change` 与 `request-render-flush` 到 Worker
-- 接收 `render-frame` 后清空 canvas 并 `drawImage` 绘制 Worker 侧合成后的位图
-- 暴露与 `Viewport` 兼容的挂载接口与坐标换算接口
-
-### `ViewportCore`
-
-`ViewportCore` 是 Worker 侧真实视口核心，职责包括：
-
-- 持有 `ChunkLoader`
-- 持有 `BaseRenderer` 与 `LiveRenderer`
-- 根据视口变化同步 chunk buffer
-- 在 OffscreenCanvas 上先渲染 base 层，再到 live 层合成 active 对象
-- 输出仅包含 `liveBitmap` 的 `render-frame`
-
-`LiveRenderer` 的渲染管线会在 `_afterClear` 阶段将 base 内容拷贝到 live 画布上，因此 `liveBitmap` 已是包含静态层与活动层的合成帧。`flushRenderFrame()` 在 `transferToImageBitmap()` 后把位图立即画回源 OffscreenCanvas，保持 Worker 侧底图完整，避免下一帧只剩脏区补绘。
+- 发送 `viewport-change` 与 `request-render-flush` 到 Worker 侧 `ViewportCore`
+- 接收 `render-frame` 后 `drawImage` 绘制 Worker 侧合成后的位图
+- 通过 `mountSubDAG` / `mountWorkflow` 为当前视口挂载设备图子图
 
 ## 渲染层分工
 
-### Worker 侧
+| 层           | 线程   | 渲染内容                | 来源                  |
+| ------------ | ------ | ----------------------- | --------------------- |
+| base/live    | Worker | 静态对象 + AOM 活动对象 | `liveBitmap` 合成分片 |
+| ui (overlay) | UI     | 选择框、编辑手柄等      | `UiRenderer` 即时绘制 |
 
-- `BaseRenderer`：静态对象渲染
-- `LiveRenderer`：AOM 中对象渲染
-
-### UI 侧
-
-- `UiRenderer`：overlay 渲染
-- `Viewport`：Worker 合成帧的接收与显示
-
-这意味着：
-
-- base/live 的合成像素内容来自 Worker（`liveBitmap` 已合成两层）
-- overlay 始终留在 UI 线程
-- 视口刷新由 `Viewport` 协调，Worker 只负责渲染与回帧
+base/live 的合成像素内容来自 Worker（`liveBitmap` 已合成两层），overlay 始终留在 UI 线程。
 
 ## 视口控制接口
-
-两种显示器都围绕同一组语义工作：
 
 - `setViewportPosition(position)`
 - `setViewportScale(scale, screenAnchor?)`
@@ -85,48 +34,32 @@ flowchart LR
 - `resizeRenderLayers(width, height)`
 - `requestViewportUiRender()`
 
-差异在于：
-
-- `Viewport` 通过消息驱动 `ViewportCore`
-- `ViewportCore` 真正执行 base 渲染与 live 合成
-
 ## 设备图挂载
 
-viewport 家族向业务层提供统一的挂载入口：
-
-- `mountSubDAG(path, subDAGDefinition)`
-- `mountWorkflow(path, workflow)`
-- `unmountWorkflow(path)`
-- `addEdge(fromPath, edgeName, toPath)`
-
-这些接口都代理到 `Board.devicesDAG`，显示器本身不持有独立 DAG。
+`Viewport` 通过 `mountSubDAG` / `mountWorkflow` / `unmountWorkflow` / `addEdge` 将工具路由到当前视口的设备图子树下。这些接口都代理到 `Board.devicesDAG`。
 
 ## Frame 协议
 
-### UI → Worker
+`Viewport` 通过 postMessage 与 Worker 侧的 `ViewportCore` 通信：
 
-- `viewport-change`
-- `request-render-flush`
+**UI → Worker**：
 
-### Worker → UI
+- `viewport-change`：视口状态变更（origin / zoom / size）
+- `request-render-flush`：请求立即产出渲染帧
 
-- `render-frame`
-  - `viewportId`
-  - `frameId`
-  - `liveBitmap`（已包含 base 层与 live 层的合成结果）
+**Worker → UI**：
 
-`viewport-change.force` 已接通到 `ViewportCore.onViewportChange()`，因此 `flushViewportRender()` 可以在视口参数未变化时仍强制产出新帧。
+- `render-frame`：含 `liveBitmap`（已合成 base + live 层）
 
 ## 当前状态
 
-- `ViewportCore` / `Viewport` 已落地并接通
+- `Viewport` 作为 UI 视口 facade 运行
 - demo 默认走 `Viewport` 路径
-- Worker 侧 base/live 合成后在 UI 侧单 canvas 显示，overlay 边界已稳定
+- base/live 合成由 Worker 完成，UI 侧通过 `liveBitmap` 接收合成帧
+- overlay 始终在 UI 线程由 `UiRenderer` 绘制
 
 ## 相关文档
 
+- [viewport-core-document.md](./viewport-core-document.md)
 - [board-document.md](./board-document.md)
 - [ui-renderer-document.md](../../renderer/docs/ui-renderer-document.md)
-- [base-renderer-document.md](../../renderer/docs/base-renderer-document.md)
-- [live-renderer-document.md](../../renderer/docs/live-renderer-document.md)
-- [core-runtime-boundaries.md](../../../docs/core-runtime-boundaries.md)

@@ -328,33 +328,39 @@ class BoardCore {
   }
 
   /**
-   * 获取对象覆盖区块集合
-   * @param {number} objectId - 对象 id
-   * @param {Iterable<number>} [candidateChunkIds=[]] - 候选区块 id
-   * @returns {Set<number>}
+   * 对象覆盖区块索引（对象 id → 覆盖的区块 id 集合）
+   * 全 BoardCore 唯一的权威副本，不再按 ChunkObjectManager 重复存储
+   * @type {Map<number, Set<number>>}
+   * @private
    */
-  getObjectCoverChunks(objectId, candidateChunkIds = []) {
-    const chunkIdsToSearch = new Set(candidateChunkIds);
+  #objectCoverChunks = new Map();
 
-    for (const chunkId of candidateChunkIds) {
-      const chunk = this.getChunkById(chunkId);
-      const coveredChunkIds =
-        chunk?.objectManager?.getObjectCoverChunks?.(objectId);
-      for (const coveredChunkId of coveredChunkIds ?? []) {
-        chunkIdsToSearch.add(coveredChunkId);
-      }
-    }
+  /**
+   * 写入对象覆盖区块索引
+   * @param {number} objectId - 对象 id
+   * @param {Iterable<number>} chunkIds - 覆盖的区块 id 集合
+   * @returns {void}
+   */
+  setObjectCoverChunks(objectId, chunkIds) {
+    this.#objectCoverChunks.set(objectId, new Set(chunkIds));
+  }
 
-    for (const chunkId of chunkIdsToSearch) {
-      const chunk = this.getChunkById(chunkId);
-      const coveredChunkIds =
-        chunk?.objectManager?.getObjectCoverChunks?.(objectId);
-      if (coveredChunkIds?.size > 0) {
-        return new Set(coveredChunkIds);
-      }
-    }
+  /**
+   * 读取对象覆盖区块集合
+   * @param {number} objectId - 对象 id
+   * @returns {Set<number>|undefined}
+   */
+  getObjectCoverChunks(objectId) {
+    return this.#objectCoverChunks.get(objectId);
+  }
 
-    return new Set();
+  /**
+   * 删除对象覆盖区块索引
+   * @param {number} objectId - 对象 id
+   * @returns {void}
+   */
+  unsetObjectCoverChunks(objectId) {
+    this.#objectCoverChunks.delete(objectId);
   }
 
   /**
@@ -417,7 +423,7 @@ class BoardCore {
 
     for (const objectData of objectDataList ?? []) {
       const obj = deserialize(objectData);
-      const coveredChunkIds = this.getObjectCoverChunks(obj.id, [chunk.id]);
+      const coveredChunkIds = this.getObjectCoverChunks(obj.id);
       this.registerObjectInstance(obj, { coveredChunkIds });
       loadedObjects.set(obj.id, obj);
     }
@@ -481,7 +487,7 @@ class BoardCore {
       const entry = this.objectLoaded.get(objectId);
       if (!entry) continue;
 
-      const coveredChunkIds = this.getObjectCoverChunks(objectId, [chunk.id]);
+      const coveredChunkIds = this.getObjectCoverChunks(objectId);
       const effectiveChunkIds =
         coveredChunkIds.size > 0 ? coveredChunkIds : new Set([chunk.id]);
       entry.loadedCount = this.#countFullLoadReferences(effectiveChunkIds);
@@ -775,7 +781,7 @@ class BoardCore {
    * @private
    */
   async #syncObjectEntryForChunk(chunk, objectId) {
-    const coveredChunkIds = this.getObjectCoverChunks(objectId, [chunk.id]);
+    const coveredChunkIds = this.getObjectCoverChunks(objectId);
     const effectiveChunkIds =
       coveredChunkIds.size > 0 ? coveredChunkIds : new Set([chunk.id]);
     const loadedCount = this.#countFullLoadReferences(effectiveChunkIds);

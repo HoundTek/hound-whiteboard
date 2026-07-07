@@ -324,8 +324,16 @@ class Board {
    * @param {Iterable<number>} [candidateChunkIds=[]] - 候选区块 id
    * @returns {Set<number>}
    */
-  getObjectCoverChunks(objectId, candidateChunkIds = []) {
-    return this.#boardCore.getObjectCoverChunks(objectId, candidateChunkIds);
+  getObjectCoverChunks(objectId) {
+    return this.#boardCore.getObjectCoverChunks(objectId);
+  }
+
+  setObjectCoverChunks(objectId, chunkIds) {
+    this.#boardCore.setObjectCoverChunks(objectId, chunkIds);
+  }
+
+  unsetObjectCoverChunks(objectId) {
+    this.#boardCore.unsetObjectCoverChunks(objectId);
   }
 
   /**

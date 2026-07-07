@@ -106,6 +106,25 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 3. 调用 `requestBaseRenderForObjects()`
 4. 调用 `requestLiveRender()`
 
+### `pickup(startFrom)`
+
+（`choose` 的内置步骤，不在 AOM 公开接口列表中）
+
+用于提取以指定对象集合为起点的子图。
+
+采用双队列 BFS 逐层遍历：
+
+- `loadedQueue`：区块已加载的待处理节点
+- `pendingQueue`：区块未加载的待处理节点
+
+先耗尽 `loadedQueue`，攒够 `pendingQueue` 后统一以 `Promise.all` **批量 TempLoad** 所有未加载区块，再移入 `loadedQueue` 继续处理。
+
+- 常见情况（视口内区块均已加载）：`pendingQueue` 始终为空，零加载开销
+- 跨区块穿越时：同一层发现的新区块并行加载，不串行等待
+- 队列元素携带各自所属的 chunk 引用，无全局可变状态
+
+返回 `Promise<DirectedGraph>`。
+
 ### `choose(startFrom)`
 
 用于把静态图中的对象拾取到 AOM。
@@ -191,8 +210,9 @@ AOM 用两类快照支持对象级静态失效：
 - AOM 作为 Worker 侧真实语义核心运行
 - `choose` / `discard` / `apply` / `remove` 全部支持对象级静态失效
 - 渲染副作用通过 hooks 抽离
-- `pickup` 采用 BFS + 批量 TempLoad，跨区块导航时同一层的未加载区块并行加载
+- `pickup` 采用双队列 BFS + 批量 TempLoad，已加载区块零开销，未加载区块并行加载
 - `apply` 提交前 FullLoad 所有相关区块，确保层叠关系计算正确
+- `objectCoverChunks` 集中在 `BoardCore` 统一管理
 
 ## 相关文档
 

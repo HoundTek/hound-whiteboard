@@ -1276,7 +1276,7 @@ class ActiveObjectManager {
           const chunk = this.board.getChunkById(chunkId);
           if (!chunk) continue;
           chunk.addObject(chunkId === ownerChunk.id ? obj : obj.id);
-          chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
+          this.board?.setObjectCoverChunks?.(obj.id, coveredChunkIds);
         }
       }
 
@@ -1314,7 +1314,7 @@ class ActiveObjectManager {
             [...below],
             [...above],
           );
-          chunk.objectManager.setObjectCoverChunks(obj.id, coveredChunkIds);
+          this.board?.setObjectCoverChunks?.(obj.id, coveredChunkIds);
         }
       }
 

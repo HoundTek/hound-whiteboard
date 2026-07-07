@@ -339,7 +339,7 @@ class Chunk {
     if (graph.hasNode(objectId)) {
       graph.deleteNodeUnsafe(objectId);
     }
-    this.objectManager.objectCoverChunks.delete(objectId);
+    this.objectManager.unsetObjectCoverChunks?.(objectId);
   }
 
   /**
