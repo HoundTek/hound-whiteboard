@@ -283,6 +283,25 @@ class ChunkLoader {
   }
 
   /**
+   * 销毁当前 ChunkLoader
+   * @description 对所有已持有区块发出卸载请求以清理 board-core 的引用计数，清空本地持有，释放外部引用。
+   */
+  destroy() {
+    for (const chunk of this.chunksLoaded.values()) {
+      this.eventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, {
+        requesterId: this.requesterId,
+        chunk,
+      });
+    }
+
+    this.chunksLoaded.clear();
+    this.eventBus = undefined;
+    this.resolveChunkById = undefined;
+    this.unloadChunk = undefined;
+    this.requesterId = undefined;
+  }
+
+  /**
    * 重新同步当前已持有区块之间的四向邻接引用
    * @description 当前 loader 只负责同步“已持有集合内部”的邻接关系，不会主动解析外部区块。
    */

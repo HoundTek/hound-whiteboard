@@ -610,13 +610,7 @@ class ViewportCore {
    * 销毁当前 ViewportCore
    */
   destroy() {
-    const loadedChunks = this.#chunkLoader?.getLoadedChunks?.() ?? [];
-    for (const chunk of loadedChunks) {
-      this.#chunkLoader?.emitUnloadRequest?.(chunk);
-      this.#chunkLoader?.untrackChunkById?.(chunk.id);
-    }
-
-    this.#chunkLoader?.reset?.();
+    this.#chunkLoader?.destroy();
     this.#frameDirty = false;
   }
 }

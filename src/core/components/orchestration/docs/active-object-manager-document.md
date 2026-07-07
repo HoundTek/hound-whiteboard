@@ -112,13 +112,13 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 
 执行效果：
 
-1. `pickup(startFrom)` 提取子图
+1. `pickup(startFrom)` 提取子图（异步，内部 BFS 遍历）
 2. 分析层顺序并插入新层
 3. 注册活动对象实例
 4. 调用 `requestLiveRender()`
-5. 调用 `requestBaseRenderForObjects()`，使 base 层按对象范围把这些对象隐藏掉
+5. 调用 `requestBaseRenderForObjects()`，使 base 层按对象范围把这些对象隐藏
 
-当前实现中，`choose()` 已改为对象级静态失效，不再做整视口 flush。
+返回 `Promise<void>`。
 
 ### `discard(objects)`
 
@@ -139,12 +139,16 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 
 执行效果：
 
-1. 根据覆盖区块快照与当前几何重写对象所在区块
-2. 重算受影响对象的静态图关系
-3. 收集邻接对象，形成对象级 base 失效集合
-4. 调用 `requestBaseRenderForObjects()`
-5. 调用 `requestLiveRender()`
-6. 清理快照并移出活动索引
+1. 遍历待提交对象，计算它们覆盖的所有区块
+2. 通过 ChunkLoader 以 `Promise.all` **批量 FullLoad** 这些区块（含 `syncChunkObjectEntries`，确保对象实例从磁盘读到内存）
+3. 根据覆盖区块快照与当前几何重写对象所在区块
+4. 重算受影响对象的静态图关系（此时已有完整的历史对象实例）
+5. 收集邻接对象，形成对象级 base 失效集合
+6. 调用 `requestBaseRenderForObjects()`
+7. 调用 `requestLiveRender()`
+8. 清理快照并移出活动索引
+
+返回 `Promise<void>`。
 
 ### `remove(objects)`
 
@@ -184,9 +188,11 @@ AOM 用两类快照支持对象级静态失效：
 
 ## 当前状态
 
-- AOM 已作为 Worker 侧真实语义核心运行
+- AOM 作为 Worker 侧真实语义核心运行
 - `choose` / `discard` / `apply` / `remove` 全部支持对象级静态失效
-- 渲染副作用已完全通过 hooks 抽离
+- 渲染副作用通过 hooks 抽离
+- `pickup` 采用 BFS + 批量 TempLoad，跨区块导航时同一层的未加载区块并行加载
+- `apply` 提交前 FullLoad 所有相关区块，确保层叠关系计算正确
 
 ## 相关文档
 

@@ -150,7 +150,7 @@ class ActiveObjectManager {
    * 区块加载器 id 池
    * @type {RandomNumberPool}
    */
-  ChunkLoaderIdPool;
+  chunkLoaderIdPool;
 
   /**
    * @param {import("./board-core.js").BoardCore} [board] - 所属白板实例
@@ -160,7 +160,7 @@ class ActiveObjectManager {
     this.board = board;
     this.renderHooks = options.renderHooks ?? createDefaultAomRenderHooks();
     this.layerPool = new RandomNumberPool(1, 10000000);
-    this.ChunkLoaderIdPool = new RandomNumberPool(1, 10000000);
+    this.chunkLoaderIdPool = new RandomNumberPool(1, 10000000);
     this.layerOrder = [];
     this.onLayer = new Map();
     this.layerIndex = new Map();
@@ -497,15 +497,28 @@ class ActiveObjectManager {
 
   /**
    * 创建与白板区块加载事件总线绑定的区块加载器
+   * @description 请在使用完区块加载器后调用 {@link destroyChunkLoader} 方法，以释放资源并回收 id。
    * @returns {ChunkLoader | undefined}
    */
   createChunkLoader() {
     if (this.board?.createChunkLoader) {
       return this.board.createChunkLoader(
-        `aom-${this.ChunkLoaderIdPool.generate()}`,
+        `aom-${this.chunkLoaderIdPool.generate()}`,
       );
     }
     return undefined;
+  }
+
+  /**
+   * 销毁区块加载器
+   * @description 请在使用完区块加载器后调用该方法，以释放资源并回收 id。
+   * @param {ChunkLoader} loader - 由 {@link createChunkLoader} 创建的区块加载器
+   */
+  destroyChunkLoader(loader) {
+    let requestId = loader?.requesterId;
+    loader?.destroy?.();
+    let id = parseInt(requestId?.replace(/^aom-/, ""));
+    this.chunkLoaderIdPool.remove(id);
   }
 
   /**
@@ -747,136 +760,104 @@ class ActiveObjectManager {
 
   /**
    * 获取以指定对象集合为起点的子图
+   * @description 遍历静态图边和覆盖区块索引，跨区块时 TempLoad 目标区块再继续遍历。
    * @param {Iterable<BasicObject>} startFrom - 作为起点的对象集合
-   * @returns {DirectedGraph}
+   * @returns {Promise<DirectedGraph>}
    */
   async pickup(startFrom) {
     const visit = new Set();
     const graph = new DirectedGraph();
 
     /**
-     * @param {number} obj - 要拾取的对象 id
-     * @param {Chunk} chunk - 该对象所在的区块
+     * @type {Array<{ nodeId: number, chunk: Chunk }>}
      */
-    const pickupSingle = async (obj, chunk) => {
-      if (visit.has(obj)) return;
-      visit.add(obj);
-      graph.addNodeUnsafe(obj);
+    const queue = [];
 
-      /** @type {Chunk} */
-      let chunkNow = chunk;
+    // 创建一个临时加载器，供本次拾取中所有跨区块加载复用
+    const loader = this.createChunkLoader();
 
-      // 预创建一个临时加载器，供本次拾取中所有跨区块导航复用
-      const tempLoader = this.createChunkLoader();
-
-      /**
-       * 按区块坐标获取区块，临时加载未持有的区块
-       * @param {number} targetX
-       * @param {number} targetY
-       * @returns {Chunk|undefined}
-       */
-      const getChunkAt = async (targetX, targetY) => {
-        const targetChunk = this.board?.getChunkByCoordinate?.(
-          targetX,
-          targetY,
-        );
-        if (targetChunk) {
-          tempLoader.trackChunk(targetChunk);
-          tempLoader.emitLoadRequest(targetChunk, { strategy: "temp" });
-          // 等待 TempLoad 完成再继续遍历
-          if (!targetChunk.isLoad) {
-            await new Promise((resolve) => {
-              const unsub = this.board.chunkLoadEventBus.once(
-                CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
-                (payload) => {
-                  if (payload.chunkId === targetChunk.id) {
-                    resolve();
-                  }
-                },
-              );
-            });
-          }
+    /**
+     * 从 chunk 的 staticGraph 中读取 node 的邻接对象，
+     * 将未访问的加入队列并在图中添加边
+     * @param {number} nodeId
+     * @param {Chunk} chunk
+     * @returns {void}
+     */
+    const enqueueNeighbors = (nodeId, chunk) => {
+      if (!chunk?.objectManager) return;
+      const neighbors = chunk.objectManager.staticGraph.neighborsUnsafe(nodeId);
+      if (!neighbors) return;
+      for (const next of neighbors) {
+        if (!visit.has(next)) {
+          visit.add(next);
+          graph.addNodeUnsafe(next);
+          queue.push({ nodeId: next, chunk });
         }
-        return targetChunk;
-      };
+        graph.addEdgeUnsafe(nodeId, next);
+      }
+    };
 
-      /**
-       * 移动到指定坐标的区块
-       * @param {number} targetX
-       * @param {number} targetY
-       * @returns {boolean}
-       */
-      const moveToChunk = async (targetX, targetY) => {
-        const target = await getChunkAt(targetX, targetY);
-        if (target) {
-          chunkNow = target;
-          return true;
-        }
-        return false;
-      };
-
-      /**
-       * DFS 遍历
-       * @description 由于我们的图是薄薄的一层水，所以此处 DFS 不必担心栈溢出的问题。
-       * @param {number} node - 对象 id
-       */
-      const dfs = async (node) => {
-        if (!chunkNow?.objectManager) return;
-        const neighbors =
-          chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
-
-        // 该区块对象
-        if (neighbors) {
-          for (const next of neighbors) {
-            if (!visit.has(next)) {
-              visit.add(next);
-              graph.addNodeUnsafe(next);
-              await dfs(next);
-            }
-            graph.addEdgeUnsafe(node, next);
-          }
-        }
-
-        const currentChunkId = chunkNow.id;
-        const coveredChunks = chunkNow.objectManager.getObjectCoverChunks(node);
-        for (const chunkId of coveredChunks) {
-          if (chunkId === currentChunkId) continue;
-
-          const originalX = chunkNow.x;
-          const originalY = chunkNow.y;
-          const { x: targetX, y: targetY } = Chunk.idToCoordinate(chunkId);
-          if (!(await moveToChunk(targetX, targetY))) {
-            await moveToChunk(originalX, originalY);
-            continue;
-          }
-
-          const neighborsOnTarget =
-            chunkNow.objectManager.staticGraph.neighborsUnsafe(node);
-          if (neighborsOnTarget) {
-            for (const next of neighborsOnTarget) {
-              if (!visit.has(next)) {
-                visit.add(next);
-                graph.addNodeUnsafe(next);
-                await dfs(next);
-              }
-              graph.addEdgeUnsafe(node, next);
-            }
-          }
-
-          await moveToChunk(originalX, originalY);
-        }
-      }; // const dfs ends here
-
-      await dfs(obj);
-    }; // function pickupSingle ends here
-
+    // 初始化队列：将起点对象加入
     for (const entry of startFrom) {
       const obj = this.requireObjectInstance(entry);
       const chunk = this.resolveObjectChunk(obj);
-      if (!chunk) continue;
-      await pickupSingle(obj.id, chunk);
+      if (!chunk || visit.has(obj.id)) continue;
+      visit.add(obj.id);
+      graph.addNodeUnsafe(obj.id);
+      queue.push({ nodeId: obj.id, chunk });
     }
 
+    // BFS 逐层遍历
+    while (queue.length > 0) {
+      // 批量加载当前层所有未加载的区块
+      const pendingChunkIds = [
+        ...new Set(
+          queue
+            .filter((item) => item.chunk && !item.chunk.isLoad)
+            .map((item) => item.chunk.id),
+        ),
+      ];
+      if (pendingChunkIds.length > 0) {
+        await Promise.all(
+          pendingChunkIds.map((chunkId) => {
+            const chunk = this.board.getChunkById(chunkId);
+            if (!chunk || chunk.isLoad) return Promise.resolve();
+            loader.trackChunk(chunk);
+            loader.emitLoadRequest(chunk, { strategy: "temp" });
+            return new Promise((resolve) => {
+              this.board.chunkLoadEventBus.once(
+                CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
+                (payload) => {
+                  if (payload.chunkId === chunkId) resolve();
+                },
+              );
+            });
+          }),
+        );
+      }
+
+      // 处理当前层
+      const levelSize = queue.length;
+      for (let i = 0; i < levelSize; i++) {
+        const { nodeId, chunk: currentChunk } = queue.shift();
+        if (!currentChunk?.objectManager) continue;
+
+        // 读取当前区块中的邻接对象
+        enqueueNeighbors(nodeId, currentChunk);
+
+        // 读取覆盖区块中的邻接对象
+        const coveredIds =
+          currentChunk.objectManager.getObjectCoverChunks(nodeId);
+        for (const coveredId of coveredIds) {
+          if (coveredId === currentChunk.id) continue;
+          const coveredChunk = this.board.getChunkById(coveredId);
+          if (!coveredChunk) continue;
+          enqueueNeighbors(nodeId, coveredChunk);
+        }
+      }
+    }
+
+    this.destroyChunkLoader(loader);
     return graph;
   }
 
@@ -886,6 +867,7 @@ class ActiveObjectManager {
    * 通过 pickup 提取子图，按层依赖关系为对象分配动态层，
    * 再将新层插入到 layerOrder 中的正确位置。
    * @param {Iterable<BasicObject>} startFrom - 要选择的对象集合
+   * @returns {Promise<void>}
    */
   async choose(startFrom) {
     // 提取出这些对象所构成的子图
@@ -1168,7 +1150,9 @@ class ActiveObjectManager {
    * 将活动对象按当前动态层关系提交回白板区块静态结构，
    * 清理旧覆盖区块中的残留边，重新计算静态图上下关系，
    * 最后触发 base 层和 live 层渲染。
+   * 操作前 FullLoad 所有相关区块，使 calculateStaticRelations 能正确读取已有对象。
    * @param {Iterable<BasicObject>} objects
+   * @returns {Promise<void>}
    */
   async apply(objects) {
     const normalizedObjects = Array.from(objects, (item) =>
@@ -1180,8 +1164,7 @@ class ActiveObjectManager {
     const activeBasicObjects = [...normalizedObjects];
     const affectedChunkIds = new Set();
 
-    // 在操作区块前，确保所有相关区块已 FullLoad，
-    // 使 calculateStaticRelations 能正确读取已有对象实例
+    // 预加载所有相关区块（FullLoad），确保 calculateStaticRelations 能读取已有对象实例
     if (canCommitToBoard && activeBasicObjects.length > 0) {
       const boardRootPath = this.board.resolvePersistenceRootPath?.();
       const preloadChunkIds = new Set();
@@ -1224,6 +1207,7 @@ class ActiveObjectManager {
           loadPromises.push(promise);
         }
         await Promise.all(loadPromises);
+        loader?.destroy();
       }
     }
 
