@@ -702,4 +702,206 @@ describe("ActiveObjectManager/apply", () => {
       expect(graph.hasEdge(1, 2)).toBe(true);
     });
   });
+
+  describe("unloaded chunk", () => {
+    /**
+     * 创建不预加载任何区块的 BoardCore
+     * @param {{ width?: number, height?: number }} [options={}] - 白板尺寸
+     * @returns {import("../../board-core.js").BoardCore}
+     */
+    function createBlankBoard(options = {}) {
+      const { boardCore } = createBoardCoreAomFixture({
+        width: options.width ?? 100,
+        height: options.height ?? 100,
+        chunkIds: [],
+      });
+      return boardCore;
+    }
+
+    /**
+     * 创建仅覆盖 (0, 0) 区块的简单笔划
+     * @param {number} id - 对象 id
+     * @returns {StrokeObject}
+     */
+    function simpleStroke(id) {
+      const stroke = new StrokeObject(id, new Vector(10, 10));
+      stroke.setData({
+        points: [new Vector(10, 10), new Vector(30, 30)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
+      return stroke;
+    }
+
+    test("add 不应将对象写入未加载区块的静态图", () => {
+      const board = createBlankBoard();
+      const stroke = simpleStroke(501);
+      const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
+
+      // add 前区块不存在于 chunkLoaded 中
+      expect(board.chunkLoaded.has(chunkId)).toBe(false);
+
+      board.activeObjectManager.add(new Set([stroke]));
+
+      // 对象只在 AOM 中，区块未被创建
+      expect(board.activeObjectManager.activeObjectIndex.has(501)).toBe(true);
+      expect(board.chunkLoaded.has(chunkId)).toBe(false);
+    });
+
+    test("add 后 discard 不应创建或写入区块", () => {
+      const board = createBlankBoard();
+      const stroke = simpleStroke(502);
+      const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
+
+      board.activeObjectManager.add(new Set([stroke]));
+      expect(board.chunkLoaded.has(chunkId)).toBe(false);
+
+      board.activeObjectManager.discard(new Set([stroke]));
+
+      // discard 也不创建区块
+      expect(board.chunkLoaded.has(chunkId)).toBe(false);
+      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+    });
+
+    test("apply 应将未加载区块上的 AOM 对象写入区块静态图并设置覆盖索引", async () => {
+      const board = createBlankBoard();
+      const stroke = simpleStroke(503);
+
+      board.activeObjectManager.add(new Set([stroke]));
+
+      await board.activeObjectManager.apply(new Set([stroke]));
+
+      // 对象已不在 AOM
+      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+
+      // 区块被创建，对象写入静态图
+      const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
+      expect(board.chunkLoaded.has(chunkId)).toBe(true);
+      const chunk = board.getChunkById(chunkId);
+      expect(chunk.objectManager.staticGraph.hasNode(503)).toBe(true);
+      expect(chunk.objectManager.getObjectCoverChunks(503)).toEqual(
+        new Set([chunkId]),
+      );
+    });
+
+    test("apply 应正确写入跨越多区块的对象到所有覆盖区块的静态图中", async () => {
+      const board = createBlankBoard();
+
+      const stroke = new StrokeObject(504, new Vector(0, 0));
+      stroke.setData({
+        points: [new Vector(1, 1), new Vector(150, 150)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
+
+      board.activeObjectManager.add(new Set([stroke]));
+
+      await board.activeObjectManager.apply(new Set([stroke]));
+
+      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+
+      // 笔划从 (1,1) 到 (150,150) 跨越 (0,0) (1,0) (1,1) (0,1) 四个区块
+      const coveredIds = [1, 2, 3, 4];
+      for (const cid of coveredIds) {
+        expect(board.chunkLoaded.has(cid)).toBe(true);
+        const chunk = board.getChunkById(cid);
+        expect(chunk.objectManager.staticGraph.hasNode(504)).toBe(true);
+      }
+    });
+
+    test("apply 多次提交对象到未加载区块后区块引用计数正确", async () => {
+      const board = createBlankBoard();
+
+      const obj1 = simpleStroke(505);
+      const obj2 = new StrokeObject(506, new Vector(10, 10));
+      obj2.setData({
+        points: [new Vector(10, 10), new Vector(20, 20)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
+
+      // 第一次提交
+      board.activeObjectManager.add(new Set([obj1]));
+      await board.activeObjectManager.apply(new Set([obj1]));
+
+      const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
+      const chunk = board.getChunkById(chunkId);
+      expect(chunk.objectManager.staticGraph.hasNode(505)).toBe(true);
+
+      // 第二次提交同一区块的新对象
+      board.activeObjectManager.add(new Set([obj2]));
+      await board.activeObjectManager.apply(new Set([obj2]));
+
+      expect(chunk.objectManager.staticGraph.hasNode(506)).toBe(true);
+      // 第一次提交的对象仍然存在
+      expect(chunk.objectManager.staticGraph.hasNode(505)).toBe(true);
+    });
+
+    test("choose 可以将未加载区块上的 AOM 对象成功选中", async () => {
+      const board = createBlankBoard();
+      const stroke = simpleStroke(601);
+
+      board.activeObjectManager.add(new Set([stroke]));
+
+      const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
+      expect(board.chunkLoaded.has(chunkId)).toBe(false);
+
+      // choose 触发 pickup，内部 temp-load 未加载区块
+      await board.activeObjectManager.choose(new Set([stroke]));
+
+      // 对象在 AOM 中
+      expect(board.activeObjectManager.activeObjectIndex.has(601)).toBe(true);
+      // 区块已被 temp-load
+      expect(board.chunkLoaded.has(chunkId)).toBe(true);
+      const chunk = board.getChunkById(chunkId);
+      expect(chunk.isLoad).toBe(true);
+    });
+
+    test("choose 在 apply 之后可以从静态图中检出邻接对象", async () => {
+      const board = createBlankBoard();
+
+      // 创建两个相交的对象，先提交到静态图
+      const lower = new StrokeObject(602, new Vector(0, 0));
+      lower.setData({
+        points: [new Vector(1, 1), new Vector(30, 30)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
+      const upper = new StrokeObject(603, new Vector(0, 0));
+      upper.setData({
+        points: [new Vector(10, 10), new Vector(40, 40)].map((p) => ({
+          x: p.x,
+          y: p.y,
+        })),
+      });
+
+      board.activeObjectManager.add(new Set([lower]));
+      board.activeObjectManager.add(new Set([upper]));
+      await board.activeObjectManager.apply(new Set([lower, upper]));
+
+      // 两个对象都在静态图中，AOM 为空
+      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+
+      const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
+      const chunk = board.getChunkById(chunkId);
+      expect(chunk.objectManager.staticGraph.hasNode(602)).toBe(true);
+      expect(chunk.objectManager.staticGraph.hasNode(603)).toBe(true);
+
+      // choose 下层对象：pickup 应检出上层对象及其静态图边
+      await board.activeObjectManager.choose(new Set([lower]));
+
+      // 下层对象进入 AOM
+      expect(board.activeObjectManager.activeObjectIndex.has(602)).toBe(true);
+      // 上层对象作为 inactive 上下文也被检出
+      const layer = board.activeObjectManager.layerOrder[0];
+      expect(layer.activeObjects.has(602)).toBe(true);
+      expect(layer.inactiveGraph.hasNode(603)).toBe(true);
+      // 边在静态图中，不在 inactiveGraph（602 是 active 对象）
+      expect(chunk.objectManager.staticGraph.hasEdge(602, 603)).toBe(true);
+    });
+  });
 });

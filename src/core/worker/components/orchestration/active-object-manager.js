@@ -1099,9 +1099,9 @@ class ActiveObjectManager {
    * @private
    */
   _writeLayersToBoard(layers) {
-    const affectedChunkIds = new Set();
-    if (!this.board || !Array.isArray(layers) || layers.length === 0)
-      return affectedChunkIds;
+    if (!this.board || !Array.isArray(layers) || layers.length === 0) {
+      return new Set();
+    }
 
     // 收集所有层的对象——仅收集 activeObjects 中已失活的对象。
     // inactiveGraph 中的对象原本已在静态图中，作为层上下文保留，
@@ -1121,10 +1121,32 @@ class ActiveObjectManager {
         }
       }
     }
-    if (allObjects.length === 0) return affectedChunkIds;
+    if (allObjects.length === 0) return new Set();
 
-    // Phase 1: 确保所有对象在覆盖区块中存在（不设边）
-    for (const obj of allObjects) {
+    return this._writeObjectsToBoard(allObjects, allObjectIds);
+  }
+
+  /**
+   * 将对象集合写入静态图的覆盖区块
+   * @description 供 {@link _writeLayersToBoard} 和 {@link apply} 的活动路径复用。
+   * @param {BasicObject[]} objects - 待写入的对象集合
+   * @param {Set<number>} allObjectIds - 本次提交涉及的全部对象 id，用于 {@link calculateStaticRelations} 去除同批对象防止形成环路
+   * @returns {Set<number>} 受影响的区块 id 集合
+   * @private
+   */
+  _writeObjectsToBoard(objects, allObjectIds) {
+    const affectedChunkIds = new Set();
+    if (
+      !this.board ||
+      !Array.isArray(objects) ||
+      objects.length === 0 ||
+      !(allObjectIds instanceof Set)
+    ) {
+      return affectedChunkIds;
+    }
+
+    // 确保所有对象在覆盖区块中存在（不设边）
+    for (const obj of objects) {
       const ownerChunk = this.resolveObjectChunk(obj);
       const coveredChunkIds = this.calculateCoveredChunkIds(obj);
       for (const chunkId of coveredChunkIds) {
@@ -1138,8 +1160,8 @@ class ActiveObjectManager {
       }
     }
 
-    // Phase 2: 清除所有对象在覆盖区块中的旧边
-    for (const obj of allObjects) {
+    // 清除所有对象在覆盖区块中的旧边
+    for (const obj of objects) {
       const coveredChunkIds = this.calculateCoveredChunkIds(obj);
       for (const chunkId of coveredChunkIds) {
         const chunk = this.board.getChunkById(chunkId);
@@ -1152,8 +1174,8 @@ class ActiveObjectManager {
       }
     }
 
-    // Phase 3: 按层间关系计算并写入静态图上下关系
-    for (const obj of allObjects) {
+    // 按层间关系计算并写入静态图上下关系
+    for (const obj of objects) {
       const coveredChunkIds = this.calculateCoveredChunkIds(obj);
       const ownerChunk = this.resolveObjectChunk(obj);
       const { below, above } = this.calculateStaticRelations(
@@ -1423,52 +1445,12 @@ class ActiveObjectManager {
         return layer.active;
       });
 
-      // 确保所有对象都被加入区块
-      for (const { obj, ownerChunk, coveredChunkIds } of activeLayerContexts) {
-        for (const chunkId of coveredChunkIds) {
-          const chunk = this.board.getChunkById(chunkId);
-          if (!chunk) continue;
-          chunk.addObject(chunkId === ownerChunk.id ? obj : obj.id);
-          this.board?.setObjectCoverChunks?.(obj.id, coveredChunkIds);
-        }
-      }
-
-      // 清除对象在覆盖区块中的旧边，避免对象移动后残留之前的关系
-      for (const { obj, coveredChunkIds } of activeLayerContexts) {
-        for (const chunkId of coveredChunkIds) {
-          const chunk = this.board.getChunkById(chunkId);
-          if (!chunk?.objectManager) continue;
-          const graph = chunk.objectManager.staticGraph;
-          if (graph.hasNode(obj.id)) {
-            graph.deleteNodeUnsafe(obj.id);
-            graph.addNodeUnsafe(obj.id);
-          }
-        }
-      }
-
-      // 再计算它们在静态图中的上下关系
-      for (const {
-        obj,
-        ownerChunk,
-        coveredChunkIds,
-        wasOnBoard,
-      } of activeLayerContexts) {
-        const { below, above } = this.calculateStaticRelations(
-          obj,
-          coveredChunkIds,
+      // 对仍在 active 层的对象，通过 _writeObjectsToBoard 写入静态图
+      if (activeLayerContexts.length > 0) {
+        this._writeObjectsToBoard(
+          activeLayerContexts.map((ctx) => ctx.obj),
           applyingObjectIds,
-          { includeUntrackedCoveredObjectsBelow: true },
         );
-        for (const chunkId of coveredChunkIds) {
-          const chunk = this.board.getChunkById(chunkId);
-          if (!chunk) continue;
-          chunk.addObject(
-            chunkId === ownerChunk.id ? obj : obj.id,
-            [...below],
-            [...above],
-          );
-          this.board?.setObjectCoverChunks?.(obj.id, coveredChunkIds);
-        }
       }
 
       // 请求静态层失效时，除了直接受影响的对象外，还应包括它们在静态图中的邻接对象
