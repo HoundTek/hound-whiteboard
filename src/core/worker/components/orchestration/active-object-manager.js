@@ -11,8 +11,8 @@ import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { Chunk } from "../chunk/chunk.js";
 import { ChunkLoader, CHUNK_LOAD_EVENTS } from "../chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
-import { BasicObject } from "../../objects/basic-obj.js";
-import { intersectsRanges, RectangleRange, Range } from "../../range/index.js";
+import { BasicObject } from "../../../shared/objects/basic-obj.js";
+import { intersectsRanges, RectangleRange, Range } from "../../../shared/range/index.js";
 import { createDefaultAomRenderHooks } from "./aom-render-hooks.js";
 
 /**
@@ -135,7 +135,7 @@ class ActiveObjectManager {
 
   /**
    * 所属白板（Core 实例）
-   * @type {import("../../worker/components/orchestration/board-core.js").BoardCore}
+   * @type {import("./board-core.js").BoardCore}
    */
   board;
 
@@ -153,7 +153,7 @@ class ActiveObjectManager {
   chunkLoaderIdPool;
 
   /**
-   * @param {import("../../worker/components/orchestration/board-core.js").BoardCore} [board] - 所属白板实例
+   * @param {import("./board-core.js").BoardCore} [board] - 所属白板实例
    * @param {{ renderHooks?: import("./aom-render-hooks.js").AomRenderHooks }} [options={}] - 附加选项
    */
   constructor(board, options = {}) {

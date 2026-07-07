@@ -7,7 +7,7 @@
  * @author Zhou Chenyu
  */
 
-import { BasicObject } from "../../objects/basic-obj.js";
+import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { ChunkObjectManager } from "./chunk-object-manager.js";
 
 /**
@@ -19,7 +19,7 @@ import { ChunkObjectManager } from "./chunk-object-manager.js";
 class Chunk {
   /**
    * 所属白板
-   * @type {import("../../ui/components/orchestration/board.js").Board | undefined}
+   * @type {import("../../../ui/components/orchestration/board.js").Board | undefined}
    */
   board;
 

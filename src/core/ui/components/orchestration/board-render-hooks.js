@@ -28,7 +28,7 @@ function _resolveViewports(viewportsOrFn) {
  * `viewports` 参数支持传入直接的 Map 引用或返回 Map 的惰性函数（适合 Board 构造时 viewports 尚未就绪的场景）。
  *
  * @param {Map<string, import("./viewport.js").Viewport> | (() => Map<string, import("./viewport.js").Viewport>)} viewportsOrFn - 视口 Map 或惰性获取函数
- * @returns {import("./aom-render-hooks.js").AomRenderHooks
+ * @returns {import("../../worker/components/orchestration/aom-render-hooks.js").AomRenderHooks
  */
 function createBoardRenderHooks(viewportsOrFn) {
   /**
@@ -64,7 +64,7 @@ function createBoardRenderHooks(viewportsOrFn) {
 
     /**
      * 刷新所有 viewport 的静态层
-     * @param {import("../chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
+     * @param {Object[]} chunks - 需要刷新的区块
      */
     requestBaseRender(chunks = []) {
       const viewports = getViewports();
@@ -86,7 +86,7 @@ function createBoardRenderHooks(viewportsOrFn) {
     /**
      * 按对象范围刷新 viewport 的静态层
      * @param {import("../../objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
-     * @param {import("../chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
+     * @param {Object[]} fallbackChunks - 回退区块
      * @param {Map<number, RectangleRange>} previousWorldRects - 旧世界范围快照
      */
     requestBaseRenderForObjects(

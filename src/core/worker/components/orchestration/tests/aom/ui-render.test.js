@@ -1,7 +1,7 @@
 import { jest } from "@jest/globals";
 import { ActiveObjectManager } from "../../active-object-manager.js";
-import { BasicObject } from "../../../../objects/basic-obj.js";
-import { RectangleRange } from "../../../../range/index.js";
+import { BasicObject } from "../../../../../shared/objects/basic-obj.js";
+import { RectangleRange } from "../../../../../shared/range/index.js";
 import { Vector } from "../../../../../utils/math.js";
 
 class TestActiveObject extends BasicObject {

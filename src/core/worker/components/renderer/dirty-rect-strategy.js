@@ -6,8 +6,8 @@
  */
 
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
-import { intersectsRanges } from "../../range/geometry.js";
-import { RectangleRange } from "../../range/rectangle.js";
+import { intersectsRanges } from "../../../shared/range/geometry.js";
+import { RectangleRange } from "../../../shared/range/rectangle.js";
 import {
   createBaseDirtyRectThresholdStrategy,
   createDirtyRectPolicyResolver,
@@ -18,7 +18,7 @@ import {
   createZoomScaledThresholdStrategy,
   normalizeDirtyRectZoomScale,
   screenRectToWorldRect,
-} from "./dirty-rect-strategy-shared.js";
+} from "../../../shared/components/renderer/dirty-rect-strategy-shared.js";
 
 /**
  * 收集世界坐标矩形覆盖到的已加载区块

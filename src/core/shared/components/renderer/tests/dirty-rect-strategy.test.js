@@ -8,8 +8,8 @@ import {
   createLiveDirtyRectThresholdStrategy,
   createZoomScaledThresholdStrategy,
   screenRectToWorldRect,
-} from "../dirty-rect-strategy.js";
-import { Chunk } from "../../chunk/chunk.js";
+} from "../../../../worker/components/renderer/dirty-rect-strategy.js";
+import { Chunk } from "../../../../worker/components/chunk/chunk.js";
 import { RectangleRange } from "../../../range/rectangle.js";
 
 describe("dirty rect strategy", () => {

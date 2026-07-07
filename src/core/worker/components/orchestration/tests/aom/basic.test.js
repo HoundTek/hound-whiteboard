@@ -2,7 +2,7 @@ import { jest } from "@jest/globals";
 import { RandomNumberPool } from "../../../../../utils/random.js";
 import { ActiveObjectManager } from "../../active-object-manager.js";
 import { Vector } from "../../../../../utils/math.js";
-import { StrokeObject } from "../../../../objects/stroke/stroke.js";
+import { StrokeObject } from "../../../../../shared/objects/stroke/stroke.js";
 
 describe("ActiveObjectManager/basic", () => {
   let aom = new ActiveObjectManager();

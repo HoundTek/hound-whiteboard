@@ -12,7 +12,7 @@ import { DirectedGraph } from "../../../utils/directed-graph.js";
 import {
   createBaseDirtyRectCanonicalRectsResolver,
   createBaseDirtyRectThresholdStrategy,
-} from "../../../shared/components/renderer/dirty-rect-strategy.js";
+} from "./dirty-rect-strategy.js";
 
 /**
  * 静态层渲染器

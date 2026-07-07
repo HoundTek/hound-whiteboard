@@ -4,9 +4,9 @@ import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Vector } from "../../../../../utils/math.js";
 import { ActiveObjectManager } from "../../active-object-manager.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
-import { StrokeObject } from "../../../../objects/stroke/stroke.js";
-import { CircleObject } from "../../../../objects/graph/circle.js";
-import { RectangleRange } from "../../../../range/index.js";
+import { StrokeObject } from "../../../../../shared/objects/stroke/stroke.js";
+import { CircleObject } from "../../../../../shared/objects/graph/circle.js";
+import { RectangleRange } from "../../../../../shared/range/index.js";
 import { oneChunkData } from "./data.js";
 
 describe("ActiveObjectManager/remove", () => {

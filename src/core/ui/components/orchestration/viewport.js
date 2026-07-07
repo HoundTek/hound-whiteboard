@@ -10,7 +10,6 @@
 import { RectangleRange } from "../../../shared/range/index.js";
 import { Vector } from "../../../utils/math.js";
 import { joinPath } from "../../../utils/path.js";
-import { Chunk } from "../../../shared/components/chunk/chunk.js";
 import { UiRenderer } from "../renderer/ui-renderer.js";
 
 /**
@@ -26,6 +25,34 @@ function resolveAnimationFrameHost() {
     ((timerId) => globalThis.clearTimeout(timerId));
 
   return { request, cancel };
+}
+
+/**
+ * 区块二维坐标转回字形 id（纯数学，不依赖 Chunk 模块）
+ * @param {number} x - 区块 x 坐标
+ * @param {number} y - 区块 y 坐标
+ * @returns {number}
+ */
+function _coordinateToId(x, y) {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) {
+    throw new Error("Invalid chunk coordinate.");
+  }
+  const radius = Math.max(Math.abs(x), Math.abs(y));
+  if (radius === 0) return 1;
+  const maxId = (2 * radius + 1) ** 2;
+  let diff = 0;
+  if (y === -radius) {
+    diff = radius - x;
+  } else if (x === -radius) {
+    diff = radius * 2 + (y + radius);
+  } else if (y === radius) {
+    diff = radius * 4 + (x + radius);
+  } else if (x === radius) {
+    diff = radius * 6 + (radius - y);
+  } else {
+    throw new Error("Coordinate is not on a valid spiral ring.");
+  }
+  return maxId - diff;
 }
 
 /**
@@ -560,7 +587,7 @@ class Viewport {
 
     const chunkX = Math.floor(worldPos.x / chunkWidth);
     const chunkY = Math.floor(worldPos.y / chunkHeight);
-    const chunkId = Chunk.coordinateToId(chunkX, chunkY);
+    const chunkId = _coordinateToId(chunkX, chunkY);
 
     const chunkLocalX = worldPos.x - chunkX * chunkWidth;
     const chunkLocalY = worldPos.y - chunkY * chunkHeight;

@@ -12,7 +12,7 @@ import { deserialize } from "../shared/objects/object-deserializer.js";
 import { Matrix, Vector } from "../utils/math.js";
 import { intersectsRanges, RectangleRange } from "../shared/range/index.js";
 import { createDefaultPersistenceAdapter } from "../bridges/persistence-adapter.js";
-import { createDefaultAomRenderHooks } from "../shared/components/orchestration/aom-render-hooks.js";
+import { createDefaultAomRenderHooks } from "./components/orchestration/aom-render-hooks.js";
 import { BoardCore } from "./components/orchestration/board-core.js";
 import { ViewportCore } from "./components/orchestration/viewport-core.js";
 import { Logger } from "../../utils/log/logger.js";
@@ -423,7 +423,7 @@ class CoreWorkerRuntime {
 
   /**
    * 创建绑定到 ViewportCore 集合的 AOM 渲染钩子
-   * @returns {import("../shared/components/orchestration/aom-render-hooks.js").AomRenderHooks}
+   * @returns {import("./components/orchestration/aom-render-hooks.js").AomRenderHooks}
    */
   #createViewportRenderHooks() {
     return {
@@ -454,7 +454,7 @@ class CoreWorkerRuntime {
 
       /**
        * 刷新所有 ViewportCore 的静态层
-       * @param {import("../shared/components/chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
+       * @param {import("./components/chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
        */
       requestBaseRender: (chunks = []) => {
         if (this.#viewportCores.size === 0) return;
@@ -473,7 +473,7 @@ class CoreWorkerRuntime {
       /**
        * 按对象范围刷新 ViewportCore 的静态层
        * @param {import("../shared/objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
-       * @param {import("../shared/components/chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
+       * @param {import("./components/chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
        * @param {Map<number, import("../shared/range/index.js").RectangleRange>} previousWorldRects - 旧世界范围快照
        */
       requestBaseRenderForObjects: (

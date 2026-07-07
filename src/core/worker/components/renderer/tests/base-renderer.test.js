@@ -3,8 +3,8 @@ import { BaseRenderer } from "../base-renderer.js";
 import { DirectedGraph } from "../../../../utils/directed-graph.js";
 import { Vector } from "../../../../utils/math.js";
 import { StrokeObject } from "../../../../shared/objects/stroke/stroke.js";
-import { Chunk } from "../../../../shared/components/chunk/chunk.js";
-import { ChunkObjectManager } from "../../../../shared/components/chunk/chunk-object-manager.js";
+import { Chunk } from "../../chunk/chunk.js";
+import { ChunkObjectManager } from "../../chunk/chunk-object-manager.js";
 import { RectangleRange } from "../../../../shared/range/index.js";
 
 describe("BaseRenderer", () => {

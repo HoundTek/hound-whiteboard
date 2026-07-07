@@ -9,9 +9,9 @@
 
 import { RectangleRange } from "../../../shared/range/index.js";
 import { Vector } from "../../../utils/math.js";
-import { Chunk } from "../../../shared/components/chunk/chunk.js";
-import { CHUNK_LOAD_STRATEGIES, ChunkLoader } from "../../../shared/components/chunk/chunk-loader.js";
-import { ChunkObjectManager } from "../../../shared/components/chunk/chunk-object-manager.js";
+import { Chunk } from "../chunk/chunk.js";
+import { CHUNK_LOAD_STRATEGIES, ChunkLoader } from "../chunk/chunk-loader.js";
+import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { BaseRenderer } from "../renderer/base-renderer.js";
 import { LiveRenderer } from "../renderer/live-renderer.js";
 import { BoardCore } from "./board-core.js";
@@ -272,7 +272,7 @@ class ViewportCore {
    * 获取当前视口可见区块集合
    * @param {Vector} [origin=this.origin] - 视口原点
    * @param {number} [zoom=this.zoom] - 缩放因子
-   * @returns {import("../../../shared/components/chunk/chunk.js").Chunk[]}
+   * @returns {import("../chunk/chunk.js").Chunk[]}
    */
   getVisibleChunksForViewport(origin = this.origin, zoom = this.zoom) {
     if (
@@ -363,7 +363,7 @@ class ViewportCore {
    * @description 加载区 = 视口世界矩形向四周各扩展 50%。
    * @param {Vector} [origin=this.origin] - 视口原点
    * @param {number} [zoom=this.zoom] - 缩放因子
-   * @returns {import("../../../shared/components/chunk/chunk.js").Chunk[]} 当前视口可见区块
+   * @returns {import("../chunk/chunk.js").Chunk[]} 当前视口可见区块
    */
   syncChunkBufferWithViewport(origin = this.origin, zoom = this.zoom) {
     const chunkWidth = this.chunkWidth;
@@ -426,7 +426,7 @@ class ViewportCore {
 
   /**
    * 请求一次视口范围内的静态层重绘
-   * @param {import("../../../shared/components/chunk/chunk.js").Chunk[]} [previousChunks=[]] - 视口变化前可见区块
+   * @param {import("../chunk/chunk.js").Chunk[]} [previousChunks=[]] - 视口变化前可见区块
    * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState={}] - 旧视口状态
    */
   requestViewportBaseRender(previousChunks = [], previousViewportState = {}) {

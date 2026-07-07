@@ -1,5 +1,5 @@
 import { Board } from "../../../../../ui/components/orchestration/board.js";
-import { CircleObject } from "../../../../objects/graph/circle.js";
+import { CircleObject } from "../../../../../shared/objects/graph/circle.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Vector } from "../../../../../utils/math.js";
 

@@ -11,7 +11,7 @@ import { RectangleRange } from "../../../shared/range/rectangle.js";
 import {
   ActiveObjectManager,
   Layer,
-} from "../../../shared/components/orchestration/active-object-manager.js";
+} from "../orchestration/active-object-manager.js";
 import { createLiveDirtyRectThresholdStrategy } from "../../../shared/components/renderer/dirty-rect-strategy-shared.js";
 
 /**

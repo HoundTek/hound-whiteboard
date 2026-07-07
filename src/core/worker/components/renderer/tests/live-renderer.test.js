@@ -1,6 +1,6 @@
 import { jest } from "@jest/globals";
 import { LiveRenderer } from "../live-renderer.js";
-import { Layer } from "../../../../shared/components/orchestration/active-object-manager.js";
+import { Layer } from "../../../components/orchestration/active-object-manager.js";
 import { BasicObject } from "../../../../shared/objects/basic-obj.js";
 import { CircleObject } from "../../../../shared/objects/graph/circle.js";
 import { StrokeObject } from "../../../../shared/objects/stroke/stroke.js";

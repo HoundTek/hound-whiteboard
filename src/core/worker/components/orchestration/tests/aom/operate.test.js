@@ -3,7 +3,7 @@ import { createChunk } from "../../../../../test-support/aom-fixtures.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
-import { StrokeObject } from "../../../../objects/stroke/stroke.js";
+import { StrokeObject } from "../../../../../shared/objects/stroke/stroke.js";
 import { Vector } from "../../../../../utils/math.js";
 import { oneChunkData } from "./data.js";
 

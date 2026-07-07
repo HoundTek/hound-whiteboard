@@ -6,9 +6,9 @@
  */
 
 import { DirectedGraph } from "../../../utils/directed-graph.js";
-import { BasicObject } from "../../objects/basic-obj.js";
+import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { boardFileOperateBridge } from "../../../bridges/file-operate-bridge-renderer.js";
-import { intersectsRanges, RectangleRange } from "../../range/index.js";
+import { intersectsRanges, RectangleRange } from "../../../shared/range/index.js";
 import { Chunk } from "./chunk.js";
 
 /**
@@ -27,7 +27,7 @@ class ChunkObjectManager {
 
   /**
    * 所属白板
-   * @type {import("../../worker/components/orchestration/board-core.js").BoardCore | import("../../ui/components/orchestration/board.js").Board | undefined}
+   * @type {import("../orchestration/board-core.js").BoardCore | import("../../../ui/components/orchestration/board.js").Board | undefined}
    */
   board;
 
@@ -52,7 +52,7 @@ class ChunkObjectManager {
 
   /**
    * 绑定白板实例
-   * @param {import("../../worker/components/orchestration/board-core.js").BoardCore | import("../../ui/components/orchestration/board.js").Board} board - 白板实例
+   * @param {import("../orchestration/board-core.js").BoardCore | import("../../../ui/components/orchestration/board.js").Board} board - 白板实例
    */
   setBoard(board) {
     this.board = board;
@@ -135,7 +135,7 @@ class ChunkObjectManager {
 
   /**
    * 计算一个世界坐标范围覆盖到的区块 id 集合
-   * @param {import("../../range/range.js").Range} worldRange - 世界坐标范围
+   * @param {import("../../../shared/range/range.js").Range} worldRange - 世界坐标范围
    * @param {number} chunkWidth - 区块宽
    * @param {number} chunkHeight - 区块高
    * @param {{approximationSegments?: number}} [options] - range 几何计算参数

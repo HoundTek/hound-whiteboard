@@ -9,7 +9,7 @@ import { handleCoreFileOperateRequest } from "../../../../bridges/file-operate-b
 import { CORE_FILE_OPERATE_ACTIONS } from "../../../../bridges/file-operate-bridge-common.js";
 import { boardFileOperateBridge } from "../../../../bridges/file-operate-bridge-renderer.js";
 import { ChunkObjectManager } from "../chunk-object-manager.js";
-import { StrokeObject } from "../../../objects/stroke/stroke.js";
+import { StrokeObject } from "../../../../shared/objects/stroke/stroke.js";
 
 describe("ChunkObjectManager", () => {
   let tempRoot;

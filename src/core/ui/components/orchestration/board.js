@@ -79,7 +79,7 @@ class Board {
   /**
    * AOM 在 Worker 侧运行，UI 侧可通过本 getter 访问 BoardCore 持有的 AOM 引用。
    * Worker 模式下此引用为本地镜像，真实活跃对象状态在 Worker 侧。
-   * @type {import("../../../shared/components/orchestration/active-object-manager.js").ActiveObjectManager | undefined}
+   * @type {import("../../worker/components/orchestration/active-object-manager.js").ActiveObjectManager | undefined}
    */
   get activeObjectManager() {
     return this.#boardCore?.activeObjectManager;
@@ -246,7 +246,7 @@ class Board {
   /**
    * 按 id 获取区块实例
    * @param {number} chunkId - 区块 id
-   * @returns {import("../../../shared/components/chunk/chunk.js").Chunk | undefined}
+   * @returns {Object | undefined}
    */
   getChunkById(chunkId) {
     return this.#boardCore.getChunkById(chunkId);
@@ -256,7 +256,7 @@ class Board {
    * 按坐标获取区块实例
    * @param {number} x - 区块二维坐标 x
    * @param {number} y - 区块二维坐标 y
-   * @returns {import("../../../shared/components/chunk/chunk.js").Chunk | undefined}
+   * @returns {Object | undefined}
    */
   getChunkByCoordinate(x, y) {
     return this.#boardCore.getChunkByCoordinate(x, y);
@@ -264,9 +264,9 @@ class Board {
 
   /**
    * 获取区块的左右邻区块
-   * @param {import("../../../shared/components/chunk/chunk.js").Chunk} chunk - 当前区块
+   * @param {Object} chunk - 当前区块
    * @param {"right" | "left" | "up" | "down"} direction - 方向
-   * @returns {import("../../../shared/components/chunk/chunk.js").Chunk | undefined}
+   * @returns {Object | undefined}
    */
   getNeighborChunk(chunk, direction) {
     return this.#boardCore.getNeighborChunk(chunk, direction);
@@ -338,7 +338,7 @@ class Board {
 
   /**
    * 按区块加载对象实例到白板级对象表
-   * @param {import("../../../shared/components/chunk/chunk.js").Chunk | number} chunkOrId - 区块实例或区块 id
+   * @param {Object | number} chunkOrId - 区块实例或区块 id
    * @param {string} [boardRootPath=this.rootPath] - 白板根路径
    * @returns {Promise<Map<number, BasicObject>>}
    */
@@ -348,7 +348,7 @@ class Board {
 
   /**
    * 保存指定区块归属的对象
-   * @param {import("../../../shared/components/chunk/chunk.js").Chunk | number} chunkOrId - 区块实例或区块 id
+   * @param {Object | number} chunkOrId - 区块实例或区块 id
    * @param {string} [boardRootPath=this.rootPath] - 白板根路径
    * @returns {Promise<void>}
    */
@@ -358,7 +358,7 @@ class Board {
 
   /**
    * 根据区块当前加载状态同步其对象 loadedCount，并清理失活对象
-   * @param {import("../../../shared/components/chunk/chunk.js").Chunk | number} chunkOrId - 区块实例或区块 id
+   * @param {Object | number} chunkOrId - 区块实例或区块 id
    * @returns {Promise<void>}
    */
   async syncChunkObjectEntries(chunkOrId) {
@@ -367,7 +367,7 @@ class Board {
 
   /**
    * 卸载指定区块相关的对象实例
-   * @param {import("../../../shared/components/chunk/chunk.js").Chunk | number} chunkOrId - 区块实例或区块 id
+   * @param {Object | number} chunkOrId - 区块实例或区块 id
    */
   unloadChunkObjectEntries(chunkOrId) {
     return this.#boardCore.unloadChunkObjectEntries(chunkOrId);

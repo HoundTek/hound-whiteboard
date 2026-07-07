@@ -13,14 +13,14 @@ import { EventBus } from "../../../utils/event-bus.js";
 import { Logger } from "../../../../utils/log/logger.js";
 import { logBus } from "../../../../utils/log/log-bus.js";
 import { UndoTree } from "../../../shared/hit/undo-tree-core.js";
-import { ActiveObjectManager } from "../../../shared/components/orchestration/active-object-manager.js";
-import { createDefaultAomRenderHooks } from "../../../shared/components/orchestration/aom-render-hooks.js";
+import { ActiveObjectManager } from "./active-object-manager.js";
+import { createDefaultAomRenderHooks } from "./aom-render-hooks.js";
 import {
   CHUNK_LOAD_EVENTS,
   CHUNK_LOAD_STRATEGIES,
   ChunkLoader,
-} from "../../../shared/components/chunk/chunk-loader.js";
-import { Chunk } from "../../../shared/components/chunk/chunk.js";
+} from "../chunk/chunk-loader.js";
+import { Chunk } from "../chunk/chunk.js";
 import { createDefaultPersistenceAdapter } from "../../../bridges/persistence-adapter.js";
 
 /**
@@ -40,8 +40,8 @@ import { createDefaultPersistenceAdapter } from "../../../bridges/persistence-ad
 /**
  * @typedef {Object} AomRenderHooks
  * @property {(objectInstances: BasicObject[]) => void} requestLiveRender
- * @property {(chunks: import("../../../shared/components/chunk/chunk.js").Chunk[]) => void} requestBaseRender
- * @property {(objectInstances: BasicObject[], fallbackChunks: import("../../../shared/components/chunk/chunk.js").Chunk[], previousWorldRects: Map<number, import("../../../shared/range/index.js").RectangleRange>) => void} requestBaseRenderForObjects
+ * @property {(chunks: import("../chunk/chunk.js").Chunk[]) => void} requestBaseRender
+ * @property {(objectInstances: BasicObject[], fallbackChunks: import("../chunk/chunk.js").Chunk[], previousWorldRects: Map<number, import("../../../shared/range/index.js").RectangleRange>) => void} requestBaseRenderForObjects
  * @property {(objectInstances: BasicObject[]) => void} flushViewportForObjects
  */
 

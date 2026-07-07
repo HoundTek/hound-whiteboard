@@ -1,10 +1,10 @@
 import { jest } from "@jest/globals";
 import { Board } from "../../../../ui/components/orchestration/board.js";
-import { Chunk } from "../../../../shared/components/chunk/chunk.js";
-import { CHUNK_LOAD_EVENTS } from "../../../../shared/components/chunk/chunk-loader.js";
+import { Chunk } from "../../chunk/chunk.js";
+import { CHUNK_LOAD_EVENTS } from "../../chunk/chunk-loader.js";
 import { StrokeObject } from "../../../../shared/objects/stroke/stroke.js";
 import { Vector } from "../../../../utils/math.js";
-import { ChunkObjectManager } from "../../../../shared/components/chunk/chunk-object-manager.js";
+import { ChunkObjectManager } from "../../chunk/chunk-object-manager.js";
 import { boardFileOperateBridge } from "../../../../bridges/file-operate-bridge-renderer.js";
 
 describe("Board chunk grid", () => {

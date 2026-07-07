@@ -6,9 +6,9 @@ import { ActiveObjectManager } from "../../active-object-manager.js";
 import { Board } from "../../../../../ui/components/orchestration/board.js";
 import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
-import { StrokeObject } from "../../../../objects/stroke/stroke.js";
-import { CircleObject } from "../../../../objects/graph/circle.js";
-import { RectangleRange } from "../../../../range/index.js";
+import { StrokeObject } from "../../../../../shared/objects/stroke/stroke.js";
+import { CircleObject } from "../../../../../shared/objects/graph/circle.js";
+import { RectangleRange } from "../../../../../shared/range/index.js";
 
 describe("ActiveObjectManager/apply", () => {
   describe("basic apply", () => {

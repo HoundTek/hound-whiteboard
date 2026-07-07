@@ -7,7 +7,7 @@ import {
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
-import { BasicObject } from "../../../../objects/basic-obj.js";
+import { BasicObject } from "../../../../../shared/objects/basic-obj.js";
 import { Vector } from "../../../../../utils/math.js";
 import { oneChunkData } from "./data.js";
 
