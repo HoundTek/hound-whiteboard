@@ -3,7 +3,7 @@
  * @description
  * 提供 createRepeatorPrefixHandler，基于 createPrefixNodeHandler 实现，
  * 将输入的信号包复制为多份并发往相同或不同子节点。适合广播、双重副作用等场景。
- * @module core/ui/prefixs/repeator-handler
+ * @module core/ui/devices-dag/prefixs/repeator-handler
  * @author Zhou Chenyu
  */
 

@@ -1,7 +1,7 @@
 /**
  * @file 对象创建工具
  * @description 提供对象创建流程与信号类型定义的工具基类。
- * @module core/ui/tools/creator/object-creator
+ * @module core/ui/devices-dag/tools/creator/object-creator
  * @author Zhou Chenyu
  */
 

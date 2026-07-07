@@ -1,7 +1,7 @@
 /**
  * @file 对象修改工具
  * @description 提供对象几何和属性修改的基础工具实现。
- * @module core/ui/tools/modifier/object-modifier
+ * @module core/ui/devices-dag/tools/modifier/object-modifier
  * @author Zhou Chenyu
  */
 

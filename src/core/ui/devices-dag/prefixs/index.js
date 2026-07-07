@@ -1,6 +1,6 @@
 /**
  * @file 修饰节点 — 统一导出入口
- * @module core/ui/prefixs/index
+ * @module core/ui/devices-dag/prefixs/index
  * @author Zhou Chenyu
  */
 

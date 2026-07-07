@@ -1,7 +1,7 @@
 /**
  * @file 矩形框选工具
  * @description 提供基于拖拽矩形范围的对象选择工具。
- * @module core/ui/tools/chooser/rectangle-object-chooser
+ * @module core/ui/devices-dag/tools/chooser/rectangle-object-chooser
  * @author Zhou Chenyu
  */
 

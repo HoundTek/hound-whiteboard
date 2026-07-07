@@ -1,7 +1,7 @@
 /**
  * @file 多 ChunkLoader 协作测试
  * @description 验证多个 ChunkLoader 通过 Board 事件总线并发加载/卸载同一区块时的引用计数与生命周期管理。
- * @module core/shared/components/chunk/tests/multi-chunk-loader
+ * @module core/worker/components/chunk/tests/multi-chunk-loader
  * @author Zhou Chenyu
  */
 

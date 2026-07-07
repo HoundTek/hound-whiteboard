@@ -20,13 +20,13 @@
 | `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                                               |
 | `board-render-hooks.js`    | UI       | AOM 渲染请求到 viewport 渲染器的桥接层                                         |
 
-### `components/chunk/`
+### `worker/components/chunk/`
 
 - `chunk.js`：区块实体
 - `chunk-loader.js`：加载器与引用计数
 - `chunk-object-manager.js`：区块静态图与对象覆盖区块索引
 
-这一层属于 Shared：Worker 侧主用。
+这一层属于 Worker。
 
 ### `components/renderer/`
 
@@ -157,12 +157,12 @@ chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
 
 - Core Worker 架构已落地：BoardCore / ViewportCore / BoardApiRpc / Viewport 全部接通
 - tools 保持在 UI 线程
-- objects / range / utils / chunk / renderer / AOM 作为共享层复用
+- objects / range / utils / renderer / AOM 作为共享层复用；chunk 在 Worker 侧运行
 - 主要剩余项集中在性能优化与基准测试
 
 ## 相关文档
 
 - [core-overview.md](./core-overview.md)
 - [core-data-model.md](./core-data-model.md)
-- [components-document.md](./components/components-document.md)
+
 - [core-runtime-boundaries.md](./core-runtime-boundaries.md)

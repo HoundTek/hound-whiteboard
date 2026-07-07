@@ -1,7 +1,7 @@
 /**
  * @file dirty rect 策略
  * @description 聚合 Core 专属的 chunk 脏区解析逻辑，并兼容导出共享 dirty rect 策略函数。
- * @module core/shared/components/renderer/dirty-rect-strategy
+ * @module core/worker/components/renderer/dirty-rect-strategy
  * @author Zhou Chenyu
  */
 

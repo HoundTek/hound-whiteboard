@@ -117,4 +117,3 @@
 ## 相关文档
 
 - [board-document.md](../../../../ui/components/orchestration/docs/board-document.md)
-- [components-document.md](../../../../docs/components/components-document.md)

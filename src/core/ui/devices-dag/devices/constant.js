@@ -1,7 +1,7 @@
 /**
  * @file 设备相关常量
  * @description 定义设备相关的常量，如默认路由名称、标准键盘码等。
- * @module core/ui/devices/constant
+ * @module core/ui/devices-dag/devices/constant
  * @author Zhou Chenyu
  */
 

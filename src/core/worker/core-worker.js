@@ -4,7 +4,7 @@
  * 提供 Core Worker 的入口与运行时封装。
  * Worker 侧持有 BoardCore 等纯 Core 模块，通过 JSON-RPC 风格的消息协议响应 UI 侧请求。
  * 当文件运行在真正的 WorkerGlobalScope 中时会自动启动；测试环境可通过导出的工厂手动创建 runtime。
- * @module core-worker
+ * @module core/worker/core-worker
  * @author Zhou Chenyu
  */
 

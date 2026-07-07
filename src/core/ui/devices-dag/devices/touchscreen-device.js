@@ -1,7 +1,7 @@
 /**
  * @file 触摸屏设备
  * @description 提供触摸输入信号的设备图节点创建与处理接口。
- * @module core/ui/devices/touchscreen-device
+ * @module core/ui/devices-dag/devices/touchscreen-device
  * @author Zhou Chenyu
  */
 

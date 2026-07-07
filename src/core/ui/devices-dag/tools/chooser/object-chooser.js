@@ -1,7 +1,7 @@
 /**
  * @file 对象选择工具
  * @description 提供对象命中选择与选择结果输出的工具基类。
- * @module core/ui/tools/chooser/object-chooser
+ * @module core/ui/devices-dag/tools/chooser/object-chooser
  * @author Zhou Chenyu
  */
 

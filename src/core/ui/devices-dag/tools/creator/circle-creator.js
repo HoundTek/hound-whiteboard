@@ -1,7 +1,7 @@
 /**
  * @file 圆形创建工具
  * @description 提供单手势圆对象创建器工具实现。
- * @module core/ui/tools/creator/circle-creator
+ * @module core/ui/devices-dag/tools/creator/circle-creator
  * @author Zhou Chenyu
  */
 

@@ -4,7 +4,7 @@
  * 创建可插入设备图边上的单节点 prefix 子图定义。
  * 传入 handler（可以是裸函数或 { handler: fn } 对象），
  * 返回一个仅含一个节点的 SubDAGDefinition，挂载后可作为源=汇的修饰节点。
- * @module core/ui/prefixs/edge-prefix
+ * @module core/ui/devices-dag/prefixs/edge-prefix
  * @author Zhou Chenyu
  */
 

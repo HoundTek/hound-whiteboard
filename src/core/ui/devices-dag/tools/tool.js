@@ -1,7 +1,7 @@
 /**
  * @file 工具基类
  * @description 定义所有白板交互工具的公共接口与行为。
- * @module core/ui/tools/tool
+ * @module core/ui/devices-dag/tools/tool
  * @author Zhou Chenyu
  */
 

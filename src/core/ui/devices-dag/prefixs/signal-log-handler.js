@@ -3,7 +3,7 @@
  * @description
  * 透传所有经过该节点的信号，同时将其打印到 console。
  * 用于调试时观察信号流转，不影响下游链路。
- * @module core/ui/prefixs/signal-log-handler
+ * @module core/ui/devices-dag/prefixs/signal-log-handler
  * @author Zhou Chenyu
  */
 

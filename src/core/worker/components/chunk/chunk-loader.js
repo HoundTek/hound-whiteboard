@@ -1,7 +1,7 @@
 /**
  * @file 区块加载器
  * @description 提供面向区块实例持有与索引的基础能力。
- * @module core/shared/components/chunk/chunk-loader
+ * @module core/worker/components/chunk/chunk-loader
  * @author Zhou Chenyu
  */
 

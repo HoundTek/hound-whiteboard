@@ -4,7 +4,7 @@
  * 基于手势位置的对象修改工具。消费 position / end / success 信号，
  * 内部以手势起始位置为锚点计算位移并更新对象位置。
  * end 结束当前手势但不提交（对象仍在动态图中），success 将修改提交到静态图。
- * @module core/ui/tools/modifier/common-object-modifier
+ * @module core/ui/devices-dag/tools/modifier/common-object-modifier
  * @author Zhou Chenyu
  */
 

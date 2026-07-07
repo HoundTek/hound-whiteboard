@@ -10,33 +10,33 @@
 
 ## 总览
 
-| 目录 / 文件                                         | 运行边界            | 说明                                                                                        |
-| --------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------- |
-| `bridges/board-api.js`                              | UI（`BoardApiRpc`） | UI 侧 RPC 客户端，高频写入使用微任务批处理合并为 `rpc-batch` 消息                           |
-| `bridges/persistence-adapter.js`                    | Shared              | 持久化接口与默认内存适配                                                                    |
-| `components/chunk/`                                 | Shared              | 区块、区块加载器、区块静态图管理                                                            |
-| `components/orchestration/board-core.js`            | Worker              | Core 侧真实白板数据与协调中心                                                               |
-| `components/orchestration/board.js`                 | UI                  | UI facade，负责 signals / DAG / viewport / 通过 Worker 与 BoardCore 通信                    |
-| `components/orchestration/viewport-core.js`         | Worker              | Worker 侧视口与 OffscreenCanvas 渲染核心                                                    |
-| `components/orchestration/viewport.js`              | UI                  | UI 侧视口，持有 DOM canvas，接收 Worker 侧渲染帧                                            |
-| `components/orchestration/active-object-manager.js` | Worker              | AOM 纯语义核心，通过 renderHooks 接入具体渲染链。UI 侧不持有 AOM                            |
-| `components/orchestration/aom-render-hooks.js`      | Shared              | renderHooks 接口与默认空实现                                                                |
-| `components/orchestration/board-render-hooks.js`    | UI                  | UI 侧渲染钩子（Worker mode 下为本地 BoardCore 的占位实现，实际 AOM 渲染走 Worker 侧 hooks） |
-| `components/renderer/canvas-lifecycle.js`           | Shared              | 画布生命周期基类（CanvasHost），所有渲染器共用                                              |
-| `components/renderer/ui-renderer.js`                | UI                  | UI overlay 渲染                                                                             |
-| `components/renderer/ui-overlay-factory.js`         | Shared              | UI overlay 条目工厂纯函数                                                                   |
-| `components/renderer/base-renderer.js`              | Worker              | Base 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                                    |
-| `components/renderer/live-renderer.js`              | Worker              | Live 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                                    |
-| `components/renderer/renderer.js`                   | Shared              | 渲染器基类（继承 CanvasHost）                                                               |
-| `components/renderer/render-scheduler.js`           | Shared              | 脏区调度                                                                                    |
-| `components/renderer/dirty-rect-*.js`               | Shared              | 脏区策略                                                                                    |
-| `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`） | UI                  | DAG 路由 + 设备定义 + 工具 + 编排，统一在 UI 线程下                                        |
-| `hit/`                                              | Worker              | Undo Tree 与历史结构                                                                        |
-| `objects/`                                          | Shared              | 白板对象模型与反序列化                                                                      |
-| `range/`                                            | Shared              | 几何范围抽象                                                                                |
-| `shared/`                                           | Shared              | 跨线程共享类型定义                                                                          |
-| `utils/`                                            | Shared              | 数学、图结构、事件总线等通用工具                                                            |
-| `test-support/`                                     | Shared（测试）      | canvas / OffscreenCanvas mock 等测试支撑                                                    |
+| 目录 / 文件                                           | 运行边界 | 说明                                                                                        |
+| ----------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `bridges/board-api.js`                                | UI       | UI 侧 RPC 客户端，高频写入使用微任务批处理合并为 `rpc-batch` 消息                           |
+| `bridges/persistence-adapter.js`                      | Shared   | 持久化接口与默认内存适配                                                                    |
+| `worker/components/chunk/`                            | Worker   | 区块、区块加载器、区块静态图管理                                                            |
+| `components/orchestration/board-core.js`              | Worker   | Core 侧真实白板数据与协调中心                                                               |
+| `components/orchestration/board.js`                   | UI       | UI facade，负责 signals / DAG / viewport / 通过 Worker 与 BoardCore 通信                    |
+| `components/orchestration/viewport-core.js`           | Worker   | Worker 侧视口与 OffscreenCanvas 渲染核心                                                    |
+| `components/orchestration/viewport.js`                | UI       | UI 侧视口，持有 DOM canvas，接收 Worker 侧渲染帧                                            |
+| `components/orchestration/active-object-manager.js`   | Worker   | AOM 纯语义核心，通过 renderHooks 接入具体渲染链。UI 侧不持有 AOM                            |
+| `components/orchestration/aom-render-hooks.js`        | Shared   | renderHooks 接口与默认空实现                                                                |
+| `components/orchestration/board-render-hooks.js`      | UI       | UI 侧渲染钩子（Worker mode 下为本地 BoardCore 的占位实现，实际 AOM 渲染走 Worker 侧 hooks） |
+| `components/renderer/canvas-lifecycle.js`             | Shared   | 画布生命周期基类（CanvasHost），所有渲染器共用                                              |
+| `components/renderer/ui-renderer.js`                  | UI       | UI overlay 渲染                                                                             |
+| `components/renderer/ui-overlay-factory.js`           | Shared   | UI overlay 条目工厂纯函数                                                                   |
+| `components/renderer/base-renderer.js`                | Worker   | Base 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                                    |
+| `components/renderer/live-renderer.js`                | Worker   | Live 层渲染器，仅使用 OffscreenCanvas（Worker 侧合成用）                                    |
+| `components/renderer/renderer.js`                     | Shared   | 渲染器基类（继承 CanvasHost）                                                               |
+| `components/renderer/render-scheduler.js`             | Shared   | 脏区调度                                                                                    |
+| `components/renderer/dirty-rect-*.js`                 | Shared   | 脏区策略                                                                                    |
+| `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`） | UI       | DAG 路由 + 设备定义 + 工具 + 编排，统一在 UI 线程下                                         |
+| `hit/`                                                | Worker   | Undo Tree 与历史结构                                                                        |
+| `objects/`                                            | Shared   | 白板对象模型与反序列化                                                                      |
+| `range/`                                              | Shared   | 几何范围抽象                                                                                |
+| `shared/`                                             | Shared   | 跨线程共享类型定义                                                                          |
+| `utils/`                                              | Shared   | 数学、图结构、事件总线等通用工具                                                            |
+| `test-support/`                                       | Shared   | canvas / OffscreenCanvas mock 等测试支撑                                                    |
 
 ## 目录级说明
 
@@ -120,6 +120,6 @@ demo / `src/templates/whiteboard.js` 的初始化流程：
 
 - [core-overview.md](./core-overview.md)
 - [core-modules.md](./core-modules.md)
-- [components-document.md](./components/components-document.md)
+
 - [board-document.md](../ui/components/orchestration/docs/board-document.md)
 - [viewport-document.md](../ui/components/orchestration/docs/viewport-document.md)

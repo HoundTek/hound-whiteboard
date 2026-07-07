@@ -1,6 +1,6 @@
 /**
  * @file 设备 - 统一导出入口
- * @module core/ui/devices/index
+ * @module core/ui/devices-dag/devices/index
  * @author Zhou Chenyu
  */
 

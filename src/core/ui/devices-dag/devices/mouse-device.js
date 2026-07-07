@@ -1,7 +1,7 @@
 /**
  * @file 鼠标设备
  * @description 提供鼠标输入信号的设备图节点创建与处理接口。
- * @module core/ui/devices/mouse-device
+ * @module core/ui/devices-dag/devices/mouse-device
  * @author Zhou Chenyu
  */
 

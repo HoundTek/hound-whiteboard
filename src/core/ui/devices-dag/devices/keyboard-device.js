@@ -1,7 +1,7 @@
 /**
  * @file 键盘设备
  * @description 提供键盘输入信号的设备图节点创建与处理接口。
- * @module core/ui/devices/keyboard-device
+ * @module core/ui/devices-dag/devices/keyboard-device
  * @author Zhou Chenyu
  */
 

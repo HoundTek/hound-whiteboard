@@ -7,7 +7,7 @@
  *
  * 通过统一动作完成事件与少量 creator 提交拦截钩子，
  * 实现非侵入的完成通知与流程控制，不再直接替换工具实例方法。
- * @module core/ui/prefixs/handoff-handler
+ * @module core/ui/devices-dag/prefixs/handoff-handler
  * @author Zhou Chenyu
  */
 

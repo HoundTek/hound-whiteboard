@@ -1,7 +1,7 @@
 /**
  * @file 手势工具基类
  * @description 定义单手势与多手势工具共享的手势/动作生命周期骨架。
- * @module core/ui/tools/gesture-tool
+ * @module core/ui/devices-dag/tools/gesture-tool
  * @author Zhou Chenyu
  */
 

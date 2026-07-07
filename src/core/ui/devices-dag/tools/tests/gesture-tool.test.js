@@ -1,7 +1,7 @@
 /**
  * @file 手势工具基类测试
  * @description 验证 GestureTool 与 MultiGestureTool 的统一手势/动作编排语义。
- * @module core/ui/tools/tests/gesture-tool.test
+ * @module core/ui/devices-dag/tools/tests/gesture-tool.test
  * @author Zhou Chenyu
  */
 
