@@ -12,7 +12,11 @@ import { Chunk } from "../chunk/chunk.js";
 import { ChunkLoader, CHUNK_LOAD_EVENTS } from "../chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
-import { intersectsRanges, RectangleRange, Range } from "../../../shared/range/index.js";
+import {
+  intersectsRanges,
+  RectangleRange,
+  Range,
+} from "../../../shared/range/index.js";
 import { createDefaultAomRenderHooks } from "./aom-render-hooks.js";
 
 /**
@@ -68,6 +72,9 @@ class Layer {
     this.activeObjects.clear();
     this.inactiveGraph.clear();
     this.active = true;
+    if (this._dormantInstances) {
+      this._dormantInstances.clear();
+    }
   }
 }
 
@@ -288,19 +295,6 @@ class ActiveObjectManager {
   }
 
   /**
-   * 刷新能看到指定对象集合的那些 viewport 的视口
-   * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
-   * @param {Array<BasicObject>} objects - 对象实例数组
-   * @private
-   */
-  _flushViewportForObjects(objects = []) {
-    const normalizedObjects = Array.from(objects, (item) =>
-      this.requireObjectInstance(item),
-    );
-    this.renderHooks.flushViewportForObjects(normalizedObjects);
-  }
-
-  /**
    * 解析静态层对象级失效集合
    * @param {Iterable<BasicObject>} [objects = []] - 起始对象集合
    * @param {Array<{ coveredChunkIds: Set<number>, relatedObjectIds?: Iterable<number> }>} [contexts = []] - 关联上下文
@@ -447,12 +441,9 @@ class ActiveObjectManager {
           !objectIds.has(objectId) && this.activeObjectIndex.has(objectId),
       );
 
-      for (const objectId of objectIds) {
-        this.unregisterTrackedActiveObject(objectId);
-      }
-
       if (hasRemainingTrackedActiveObjects) {
         for (const objectId of objectIds) {
+          this.unregisterTrackedActiveObject(objectId);
           if (this.onLayer.get(objectId) === layer) {
             this.onLayer.delete(objectId);
           }
@@ -462,6 +453,19 @@ class ActiveObjectManager {
         continue;
       }
 
+      // 整层失活：保留对象实例以便 tidyup 写入静态图
+      if (!layer._dormantInstances) {
+        layer._dormantInstances = new Map();
+      }
+      for (const entry of objects ?? []) {
+        const objectInstance = this.requireObjectInstance(entry);
+        if (objectIds.has(objectInstance.id)) {
+          layer._dormantInstances.set(objectInstance.id, objectInstance);
+        }
+      }
+      for (const objectId of objectIds) {
+        this.unregisterTrackedActiveObject(objectId);
+      }
       layer.active = false;
     }
   }
@@ -544,6 +548,14 @@ class ActiveObjectManager {
     const activeObject = this.activeObjectIndex.get(objectId);
     if (activeObject instanceof BasicObject) {
       return activeObject;
+    }
+
+    // 在失活层中查找暂存的对象实例
+    for (const layer of this.layerOrder) {
+      const dormant = layer._dormantInstances?.get(objectId);
+      if (dormant instanceof BasicObject) {
+        return dormant;
+      }
     }
 
     if (!this.board) return undefined;
@@ -704,6 +716,12 @@ class ActiveObjectManager {
       const layer = this.layerOrder[index];
 
       for (const nodeId of this.collectLayerSemanticInactiveObjectIds(layer)) {
+        if (nodeId === obj.id) continue;
+        // 同层且在 applyingObjectIds 中的对象，由下方 applyingObjectIds 循环
+        // 以同层无边的语义统一处理，避免此处按 inactive 语义添加 above 边形成环路。
+        // 跨层对象不受影响，仍按 index 比较确定 below/above。
+        if (applyingObjectIds.has(nodeId) && index === currentLayerIndex)
+          continue;
         const candidate = this.findBoardObjectInstance(nodeId, coveredChunkIds);
         if (!(candidate instanceof BasicObject)) continue;
         if (!this.intersectsObjects(obj, candidate)) continue;
@@ -1071,23 +1089,127 @@ class ActiveObjectManager {
   }
 
   /**
+   * 批量将多个层的对象全部写入静态图
+   * @description
+   * 将多个层的 activeObjects 合并在同一三阶段流水线中处理：
+   * Phase 1 添加节点、Phase 2 清边、Phase 3 计算关系并写边。
+   * 批量处理避免层间 Phase 2 清边互相覆盖。
+   * @param {Layer[]} layers - 待提交的层集合（仅处理 activeObjects）
+   * @returns {Set<number>} 受影响的区块 id 集合
+   * @private
+   */
+  _writeLayersToBoard(layers) {
+    const affectedChunkIds = new Set();
+    if (!this.board || !Array.isArray(layers) || layers.length === 0)
+      return affectedChunkIds;
+
+    // 收集所有层的对象——仅收集 activeObjects 中已失活的对象。
+    // inactiveGraph 中的对象原本已在静态图中，作为层上下文保留，
+    // 不需要通过 _writeLayersToBoard 重新写入。
+    const allObjects = [];
+    const allObjectIds = new Set();
+    for (const layer of layers) {
+      const dormantInstances = layer._dormantInstances ?? new Map();
+      for (const objectId of layer.activeObjects) {
+        if (allObjectIds.has(objectId)) continue;
+        const objectInstance =
+          dormantInstances.get(objectId) ??
+          this.findBoardObjectInstance(objectId);
+        if (objectInstance instanceof BasicObject) {
+          allObjects.push(objectInstance);
+          allObjectIds.add(objectId);
+        }
+      }
+    }
+    if (allObjects.length === 0) return affectedChunkIds;
+
+    // Phase 1: 确保所有对象在覆盖区块中存在（不设边）
+    for (const obj of allObjects) {
+      const ownerChunk = this.resolveObjectChunk(obj);
+      const coveredChunkIds = this.calculateCoveredChunkIds(obj);
+      for (const chunkId of coveredChunkIds) {
+        affectedChunkIds.add(chunkId);
+      }
+      for (const chunkId of coveredChunkIds) {
+        const chunk = this.board.getChunkById(chunkId);
+        if (!chunk) continue;
+        chunk.addObject(chunkId === ownerChunk?.id ? obj : obj.id);
+        this.board?.setObjectCoverChunks?.(obj.id, coveredChunkIds);
+      }
+    }
+
+    // Phase 2: 清除所有对象在覆盖区块中的旧边
+    for (const obj of allObjects) {
+      const coveredChunkIds = this.calculateCoveredChunkIds(obj);
+      for (const chunkId of coveredChunkIds) {
+        const chunk = this.board.getChunkById(chunkId);
+        if (!chunk?.objectManager) continue;
+        const graph = chunk.objectManager.staticGraph;
+        if (graph.hasNode(obj.id)) {
+          graph.deleteNodeUnsafe(obj.id);
+          graph.addNodeUnsafe(obj.id);
+        }
+      }
+    }
+
+    // Phase 3: 按层间关系计算并写入静态图上下关系
+    for (const obj of allObjects) {
+      const coveredChunkIds = this.calculateCoveredChunkIds(obj);
+      const ownerChunk = this.resolveObjectChunk(obj);
+      const { below, above } = this.calculateStaticRelations(
+        obj,
+        coveredChunkIds,
+        allObjectIds,
+        { includeUntrackedCoveredObjectsBelow: true },
+      );
+      for (const chunkId of coveredChunkIds) {
+        const chunk = this.board.getChunkById(chunkId);
+        if (!chunk) continue;
+        chunk.addObject(
+          chunkId === ownerChunk?.id ? obj : obj.id,
+          [...below],
+          [...above],
+        );
+        this.board?.setObjectCoverChunks?.(obj.id, coveredChunkIds);
+      }
+    }
+
+    return affectedChunkIds;
+  }
+
+  /**
    * 清理动态图
    * @description
    * 删除最下面一个 active 层之下的所有 inactive 层，并清理空层。
    * 若当前已不存在 active 层，则删除全部层。
+   * 清理 inactive 层时，会先将该层对象写入静态图。
    */
   tidyup() {
-    this.layerIndex.clear();
-
-    // 删除最下面一个 active 层之下的所有 inactive 层。
+    // 收集最下面一个 active 层之下的所有 inactive 层，
+    // 批量写入静态图后再清理层映射与空层。
     let count = 0;
+    const purgingLayers = [];
     for (const layer of this.layerOrder) {
       if (layer.active) break;
-      this.purgeLayerMappings(layer);
-      layer.clear();
+      purgingLayers.push(layer);
       count++;
     }
+    if (purgingLayers.length > 0) {
+      const commitLayers = purgingLayers.filter(
+        (layer) => layer._shouldCommitToBoard === true,
+      );
+      if (commitLayers.length > 0) {
+        this._writeLayersToBoard(commitLayers);
+      }
+      for (const layer of purgingLayers) {
+        this.purgeLayerMappings(layer);
+        layer.clear();
+      }
+    }
     this.layerOrder.splice(0, count);
+
+    // 清理 layerIndex 以便后续 rebuild 从干净的起点开始
+    this.layerIndex.clear();
 
     // 删除空层
     for (let i = 0; i < this.layerOrder.length; i++) {
@@ -1219,6 +1341,19 @@ class ActiveObjectManager {
       }
     }
 
+    // 将对象对应层失活——先于静态图写入执行，
+    // 确保层变为 inactive 后该层 active set 中的对象不再进入静态图。
+    // 在失活前为当前涉及的各层标记 _shouldCommitToBoard，
+    // 使 tidyup 清理时能区分 apply（需写入静态图）与 discard（不写入）。
+    for (const objectInstance of commitObjects) {
+      const layer = this.onLayer.get(objectInstance.id);
+      if (layer instanceof Layer) {
+        layer._shouldCommitToBoard = true;
+      }
+    }
+    this.deactivateObjects(commitObjects);
+    this.tidyup();
+
     // 计算出所有受影响的区块 id，以便后续请求静态层渲染时使用
     if (canCommitToBoard && activeBasicObjects.length > 0) {
       const applyingObjectIds = new Set(
@@ -1257,7 +1392,9 @@ class ActiveObjectManager {
         })
         .filter(Boolean);
 
-      // 从不再覆盖的旧区块中移除对象
+      // 从不再覆盖的旧区块中移除对象——对所有待提交对象执行，
+      // 无论其所在层是否即将变为 inactive。此步骤只清理静态图中的节点，
+      // 不调用 chunk.removeObject 以避免副作用清除 board 级覆盖索引。
       for (const {
         obj,
         previousCoveredChunkIds,
@@ -1266,12 +1403,28 @@ class ActiveObjectManager {
         for (const staleChunkId of previousCoveredChunkIds) {
           if (coveredChunkIds.has(staleChunkId)) continue;
           const staleChunk = this.board.getChunkById(staleChunkId);
-          staleChunk?.removeObject(obj.id);
+          if (!staleChunk?.objectManager) continue;
+          const staleGraph = staleChunk.objectManager.staticGraph;
+          if (staleGraph.hasNode(obj.id)) {
+            staleGraph.deleteNodeUnsafe(obj.id);
+          }
         }
       }
 
+      // 仅对所在层仍为 active 的对象执行静态图写入。
+      // 所在层 inactive（已被 deactivateObjects 失活且未被 tidyup 清理）的对象
+      // 将留到后续 tidyup 清理该层时再写入——这避免了对象同时在静态图与 AOM
+      // inactive 层中出现，导致 base 层与 live 层重复渲染。
+      // 若对象已不在任何层中（已被 tidyup 清理），说明已通过 _writeLayersToBoard
+      // 写入静态图，应跳过避免 Phase 2 清边覆盖已写入的关系。
+      const activeLayerContexts = applyContexts.filter((ctx) => {
+        const layer = this.onLayer.get(ctx.obj.id);
+        if (!layer) return false;
+        return layer.active;
+      });
+
       // 确保所有对象都被加入区块
-      for (const { obj, ownerChunk, coveredChunkIds } of applyContexts) {
+      for (const { obj, ownerChunk, coveredChunkIds } of activeLayerContexts) {
         for (const chunkId of coveredChunkIds) {
           const chunk = this.board.getChunkById(chunkId);
           if (!chunk) continue;
@@ -1281,7 +1434,7 @@ class ActiveObjectManager {
       }
 
       // 清除对象在覆盖区块中的旧边，避免对象移动后残留之前的关系
-      for (const { obj, coveredChunkIds } of applyContexts) {
+      for (const { obj, coveredChunkIds } of activeLayerContexts) {
         for (const chunkId of coveredChunkIds) {
           const chunk = this.board.getChunkById(chunkId);
           if (!chunk?.objectManager) continue;
@@ -1299,7 +1452,7 @@ class ActiveObjectManager {
         ownerChunk,
         coveredChunkIds,
         wasOnBoard,
-      } of applyContexts) {
+      } of activeLayerContexts) {
         const { below, above } = this.calculateStaticRelations(
           obj,
           coveredChunkIds,
@@ -1339,10 +1492,6 @@ class ActiveObjectManager {
         ),
       );
     }
-
-    // 将对象对应层失活
-    this.deactivateObjects(commitObjects);
-    this.tidyup();
 
     // 请求静态层渲染
     this.requestBaseRenderForObjects(
