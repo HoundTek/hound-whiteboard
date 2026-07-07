@@ -12,16 +12,16 @@
  * @type {string[]}
  */
 const SHARED_MODULE_PATHS = [
-  "../range/index.js",
+  "../shared/range/index.js",
   "../utils/math.js",
   "../utils/math-algorithm.js",
   "../utils/chain.js",
-  "../components/renderer/render-scheduler.js",
-  "../components/renderer/renderer.js",
-  "../components/renderer/dirty-rect-strategy-shared.js",
-  "../shared/types.js",
-  "../shared/board-api-types.js",
-  "../shared/message-types.js",
+  "../shared/components/renderer/render-scheduler.js",
+  "../shared/components/renderer/renderer.js",
+  "../shared/components/renderer/dirty-rect-strategy-shared.js",
+  "../shared/types/types.js",
+  "../shared/types/board-api-types.js",
+  "../shared/types/message-types.js",
 ];
 
 describe("Shared module smoke test", () => {

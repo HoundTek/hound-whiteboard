@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { Tool } from "../../core/tools/tool.js";
-import { dagToMermaid } from "../../core/devices-dag/index.js";
+import { Tool } from "../../core/ui/tools/tool.js";
+import { dagToMermaid } from "../../core/ui/devices-dag/index.js";
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
 
@@ -189,7 +189,7 @@ class DebuggerTool extends Tool {
 
   /**
    * AOM 在 Worker 侧，UI 侧不直接持有
-   * @param {import("../../core/components/orchestration/board.js").Board} board
+   * @param {import("../../core/ui/components/orchestration/board.js").Board} board
    * @returns {{ activeObjectIds: Set<number> }}
    * @private
    */

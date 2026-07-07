@@ -6,18 +6,18 @@
 
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
-import { createMouseDevice } from "../../core/devices/mouse-device.js";
+import { createMouseDevice } from "../../core/ui/devices/mouse-device.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
-} from "../../core/devices/keyboard-device.js";
+} from "../../core/ui/devices/keyboard-device.js";
 import {
   createEdgePrefix,
   createHandoffSubDAG,
-} from "../../core/prefixs/index.js";
-import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
-import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-object-chooser.js";
-import { CommonObjectModifierTool } from "../../core/tools/modifier/common-object-modifier.js";
+} from "../../core/ui/prefixs/index.js";
+import { StrokeCreatorTool } from "../../core/ui/tools/creator/stroke-creator.js";
+import { RectangleObjectChooserTool } from "../../core/ui/tools/chooser/rectangle-object-chooser.js";
+import { CommonObjectModifierTool } from "../../core/ui/tools/modifier/common-object-modifier.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
 import { ViewportTool } from "./viewport-tool.js";
@@ -255,8 +255,8 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * 所有键位级信号转换通过边级 prefix（createEdgePrefix）注入；
  * prefix handler 不再指定 to:，依赖 defaultRoute 自动走边。
  *
- * @param {import("../../core/components/index.js").Board} board - 白板实例
- * @param {import("../../core/components/index.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {Object} [options={}] - 可选覆盖配置
  * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
  * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]

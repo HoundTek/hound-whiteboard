@@ -6,8 +6,8 @@
  * @author Zhou Chenyu
  */
 
-import { Chunk } from "../components/chunk/chunk.js";
-import { BasicObject } from "../objects/basic-obj.js";
+import { Chunk } from "../shared/components/chunk/chunk.js";
+import { BasicObject } from "../shared/objects/basic-obj.js";
 import { Vector } from "../utils/math.js";
 
 /**

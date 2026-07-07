@@ -28,7 +28,7 @@
 
 ## 目录关系
 
-- 这一层服务于 `src/core/components/`、`src/core/devices/`、`src/core/objects/` 和 `src/core/tools/`。
+- 这一层服务于 `src/core/shared/`、`src/core/ui/` 和 `src/core/worker/` 中的各模块。
 - `math.js`、`math3d.js` 和 `math-algorithm.js` 负责几何表达与交互计算。
 - `queue.js`、`deque.js`、`chain.js`、`directed-graph.js` 负责提供基础容器。
 - `path.js` 只处理 Core 内部逻辑路径，不处理操作系统文件路径。

@@ -2,8 +2,9 @@
  * @jest-environment node
  */
 
-import { Board, Viewport } from "../../../core/components/index.js";
-import { createCoreWorkerRuntime } from "../../../core-worker.js";
+import { Board } from "../../../core/ui/components/orchestration/board.js";
+import { Viewport } from "../../../core/ui/components/orchestration/viewport.js";
+import { createCoreWorkerRuntime } from "../../../core/worker/core-worker.js";
 import {
   createNoopCanvas,
   installNoopOffscreenCanvas,

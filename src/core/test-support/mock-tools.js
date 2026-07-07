@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { GestureTool } from "../tools/gesture-tool.js";
-import { Tool } from "../tools/tool.js";
+import { GestureTool } from "../ui/tools/gesture-tool.js";
+import { Tool } from "../ui/tools/tool.js";
 
 /**
  * 信号收集工具

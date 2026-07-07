@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { Board } from "../components/orchestration/board.js";
-import { createCoreWorkerRuntime } from "../../core-worker.js";
+import { Board } from "../ui/components/orchestration/board.js";
+import { createCoreWorkerRuntime } from "../worker/core-worker.js";
 import { createNoopCanvas, installNoopOffscreenCanvas } from "./noop-canvas.js";
 
 /**

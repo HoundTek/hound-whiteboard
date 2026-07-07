@@ -43,7 +43,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 /**
  * @file 白板组件
  * @description Board 类是白板在面向对象设计中的抽象核心。
- * @module core/components/board
+ * @module core/ui/components/orchestration/board
  * @author ...
  */
 ```

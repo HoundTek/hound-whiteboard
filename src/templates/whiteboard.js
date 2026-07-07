@@ -6,7 +6,7 @@
  */
 
 import { Vector } from "../core/utils/math.js";
-import { Board } from "../core/components/index.js";
+import { Board } from "../core/ui/components/orchestration/board.js";
 import { Logger } from "../utils/log/logger.js";
 import { logBus } from "../utils/log/log-bus.js";
 import { createConsolePrinter } from "../utils/log/console-printer.js";
@@ -34,7 +34,7 @@ async function bootstrapWhiteboard() {
     throw new Error("whiteboard demo root elements not found.");
   }
 
-  const worker = new Worker(new URL("../core-worker.js", import.meta.url), {
+  const worker = new Worker(new URL("../core/worker/core-worker.js", import.meta.url), {
     type: "module",
   });
 
