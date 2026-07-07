@@ -32,14 +32,14 @@ src/
 ├── core/
 │   ├── ui/                  # UI 线程（输入编排、工具、overlay）
 │   │   ├── components/      #   Board / Viewport / UiRenderer
-│   │   ├── devices/         #   物理设备抽象（mouse/keyboard/touchscreen）
-│   │   ├── devices-dag/     #   DAG 输入路由图
-│   │   ├── tools/           #   交互工具
-│   │   │   ├── creator/     #     创建工具（stroke/circle/polygon/obj）
-│   │   │   ├── modifier/    #     修改工具（手势位移）
-│   │   │   ├── chooser/     #     选择工具
-│   │   │   └── eraser/      #     擦除工具
-│   │   ├── prefixs/         #   handoff 控制权转移
+│   │   ├── devices-dag/     #   DAG 输入路由图 + 设备 + 工具 + 编排
+│   │   │   ├── devices/     #     物理设备抽象（mouse/keyboard/touchscreen）
+│   │   │   ├── tools/       #     交互工具
+│   │   │   │   ├── creator/ #       创建工具（stroke/circle/polygon/obj）
+│   │   │   │   ├── modifier/#       修改工具（手势位移）
+│   │   │   │   ├── chooser/ #       选择工具
+│   │   │   │   └── eraser/  #       擦除工具
+│   │   │   └── prefixs/     #     handoff 控制权转移
 │   │   └── frame/           #   Frame 合成层
 │   ├── worker/              # Core Worker（对象、区块、渲染）
 │   │   ├── components/

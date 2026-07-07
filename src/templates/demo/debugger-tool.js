@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { Tool } from "../../core/ui/tools/tool.js";
+import { Tool } from "../../core/ui/devices-dag/tools/tool.js";
 import { dagToMermaid } from "../../core/ui/devices-dag/index.js";
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";

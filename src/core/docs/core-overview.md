@@ -56,7 +56,7 @@
 
 - `Board`：UI facade，持有 signalsEventBus、DevicesDAG、viewport 集合，通过 Worker 与 BoardCore 通信
 - `Viewport`：UI 视口，承载 DOM canvas 与 overlay，接收 Worker 侧渲染帧
-- `devices/`、`devices-dag/`、`tools/`、`prefixs/`：输入编排与交互工具
+- `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`）：输入编排与交互工具
 - `UiRenderer`：UI overlay 渲染
 
 ### 共享职责

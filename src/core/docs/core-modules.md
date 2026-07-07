@@ -46,53 +46,46 @@
 - `persistence-adapter.js`：持久化接口与默认内存适配
 - `file-operate-bridge-*`：宿主文件 I/O 桥接，运行在 UI / preload 相关边界
 
-## `devices/`
-
-输入设备定义，全部运行在 UI 线程。
-
-- `mouse-device.js`
-- `keyboard-device.js`
-- `touchscreen-device.js`
-
-它们把宿主输入编码成稳定的 `SignalPacket`，再交给 `DevicesDAG`。
-
 ## `devices-dag/`
 
 设备图、节点状态和信号路由系统，全部运行在 UI 线程。
 
-核心职责：
+当前 `devices-dag/` 下包含全部输入编排模块：
 
-- 保存节点与边
-- `dispatch(signalPacket, accumulatedContext)`
-- 节点 state 读写
-- workflow / subDAG 的挂载与卸载
-- 异步 handler rejection 保护
+### 核心 DAG（`devices-dag/` 根目录）
 
-## `tools/`
+- `dag.js`、`dag-builder.js`、`dag-node-edge.js`、`dag-utils.js`
+- `signal.js`：SignalPacket 定义
+- `index.js`：公开接口
+
+### `devices/`（输入设备定义）
+
+- `mouse-device.js`、`keyboard-device.js`、`touchscreen-device.js`
+- 把宿主输入编码成稳定的 `SignalPacket`，再交给 DAG 分发
+
+### `tools/`（交互工具）
 
 所有工具都在 UI 线程执行。
 
-### `tools/creator/`
+#### `tools/creator/`
 
 - 使用 `_entry` 纯数据状态（`LightweightObjectEntry` 协议）维护手势期对象几何
 - 通过 `BoardApiRpc` fire-and-forget 同步 Worker 侧真实对象（高频写入经微任务批处理合并）
 - 当前 demo 已接通 `StrokeCreatorTool`、`CircleCreatorTool`、`PolygonCreatorTool`
 
-### `tools/chooser/`
+#### `tools/chooser/`
 
 - `ObjectChooserTool`：选择工具基类
 - `RectangleObjectChooserTool`：矩形框选实现
 - Worker mode 下读路径通过 `hitTest + queryObjects` 异步完成
 
-### `tools/modifier/`
+#### `tools/modifier/`
 
 - `ObjectModifierTool`：修改工具基础设施
 - `GestureBasedObjectModifierTool`：position / displacement 双通道手势调度
 - `CommonObjectModifierTool`：通用位置修改实现
 
-## `prefixs/`
-
-UI 侧输入编排层。
+### `prefixs/`（输入编排）
 
 - `handoff-handler.js`：creator / chooser → modifier 两阶段工作流
 - `edge-prefix.js`、`prefix-node.js` 等：信号转换、注入和局部状态机

@@ -62,7 +62,7 @@ flowchart TD
 
 ```js
 import { DevicesDAG, createSubDAG } from "../index.js";
-import { Tool } from "../../tools/tool.js";
+import { Tool } from "../tools/tool.js";
 
 class PenTool extends Tool {
   process(signalPacket) {
@@ -141,7 +141,7 @@ dag.mount("/viewport/main/pen", (packet, context) => {
 ## 相关文档
 
 - [设备图](./devices-dag-document.md)
-- [对象创建工具](../../tools/creator/docs/object-creator-document.md)
-- [对象选择工具](../../tools/chooser/docs/object-chooser-document.md)
-- [对象修改工具](../../tools/modifier/docs/object-modifier-document.md)
+- [对象创建工具](../tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../tools/modifier/docs/object-modifier-document.md)
 - [Core 输入流](../../../docs/core-input-flow.md)

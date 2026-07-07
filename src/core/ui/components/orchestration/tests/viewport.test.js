@@ -223,7 +223,7 @@ describe("Viewport (constructor unit)", () => {
 
 import { createSubDAG } from "../../../devices-dag/index.js";
 import { Vector } from "../../../../utils/math.js";
-import { createPrefixNodeHandler } from "../../../prefixs/index.js";
+import { createPrefixNodeHandler } from "../../../devices-dag/prefixs/index.js";
 import { createWorkerBoardContext } from "../../../../test-support/worker-mode-fixtures.js";
 
 const REPORT_SIGNAL_TYPE = "debug-report";

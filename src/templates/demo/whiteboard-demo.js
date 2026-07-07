@@ -6,18 +6,18 @@
 
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
-import { createMouseDevice } from "../../core/ui/devices/mouse-device.js";
+import { createMouseDevice } from "../../core/ui/devices-dag/devices/mouse-device.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
-} from "../../core/ui/devices/keyboard-device.js";
+} from "../../core/ui/devices-dag/devices/keyboard-device.js";
 import {
   createEdgePrefix,
   createHandoffSubDAG,
-} from "../../core/ui/prefixs/index.js";
-import { StrokeCreatorTool } from "../../core/ui/tools/creator/stroke-creator.js";
-import { RectangleObjectChooserTool } from "../../core/ui/tools/chooser/rectangle-object-chooser.js";
-import { CommonObjectModifierTool } from "../../core/ui/tools/modifier/common-object-modifier.js";
+} from "../../core/ui/devices-dag/prefixs/index.js";
+import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
+import { RectangleObjectChooserTool } from "../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
+import { CommonObjectModifierTool } from "../../core/ui/devices-dag/tools/modifier/common-object-modifier.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
 import { ViewportTool } from "./viewport-tool.js";
@@ -258,20 +258,20 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {Object} [options={}] - 可选覆盖配置
- * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
- * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
+ * @param {import("../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
+ * @param {import("../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
  * @param {Object} [options.randomCircleSubDAG]
  * @param {ViewportTool} [options.viewportTool]
  * @param {DebuggerTool} [options.debugTool]
- * @param {import("../../core/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
+ * @param {import("../../core/ui/devices-dag/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
  * @param {Record<string, { x: number, y: number }>} [options.wasdRoutePresets]
- * @param {import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition} [options.keyboardDevice]
+ * @param {import("../../core/ui/devices-dag/devices/keyboard-device.js").KeyboardSubDAGDefinition} [options.keyboardDevice]
  * @returns {{
- *   keyboardDevice: import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition,
- *   mouseDevice: import("../../core/devices/mouse-device.js").MouseSubDAGDefinition,
+ *   keyboardDevice: import("../../core/ui/devices-dag/devices/keyboard-device.js").KeyboardSubDAGDefinition,
+ *   mouseDevice: import("../../core/ui/devices-dag/devices/mouse-device.js").MouseSubDAGDefinition,
  *   viewportTool: ViewportTool,
- *   primaryStrokeTool: import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool,
- *   secondarySelectionTool: import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
+ *   primaryStrokeTool: import("../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool,
+ *   secondarySelectionTool: import("../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
  *   debugTool: DebuggerTool,
  * }}
  */

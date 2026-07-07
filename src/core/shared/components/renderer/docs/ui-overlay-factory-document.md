@@ -42,5 +42,5 @@
 ## 相关文档
 
 - [ui-renderer-document.md](../../../../ui/components/renderer/docs/ui-renderer-document.md)
-- [object-chooser-document.md](../../../../ui/tools/chooser/docs/object-chooser-document.md)
-- [object-modifier-document.md](../../../../ui/tools/modifier/docs/object-modifier-document.md)
+- [object-chooser-document.md](../../../../ui/devices-dag/tools/chooser/docs/object-chooser-document.md)
+- [object-modifier-document.md](../../../../ui/devices-dag/tools/modifier/docs/object-modifier-document.md)

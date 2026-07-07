@@ -30,14 +30,11 @@
 | `components/renderer/renderer.js`                   | Shared              | 渲染器基类（继承 CanvasHost）                                                               |
 | `components/renderer/render-scheduler.js`           | Shared              | 脏区调度                                                                                    |
 | `components/renderer/dirty-rect-*.js`               | Shared              | 脏区策略                                                                                    |
-| `devices/`                                          | UI                  | 鼠标 / 键盘 / 触屏输入设备定义                                                              |
-| `devices-dag/`                                      | UI                  | 设备图、handlerContext、信号路由                                                            |
+| `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`） | UI                  | DAG 路由 + 设备定义 + 工具 + 编排，统一在 UI 线程下                                        |
 | `hit/`                                              | Worker              | Undo Tree 与历史结构                                                                        |
 | `objects/`                                          | Shared              | 白板对象模型与反序列化                                                                      |
-| `prefixs/`                                          | UI                  | handoff / edge prefix / 子图编排                                                            |
 | `range/`                                            | Shared              | 几何范围抽象                                                                                |
 | `shared/`                                           | Shared              | 跨线程共享类型定义                                                                          |
-| `tools/`                                            | UI                  | creator / chooser / modifier / eraser 等交互工具                                            |
 | `utils/`                                            | Shared              | 数学、图结构、事件总线等通用工具                                                            |
 | `test-support/`                                     | Shared（测试）      | canvas / OffscreenCanvas mock 等测试支撑                                                    |
 
@@ -70,9 +67,9 @@
 - `UiRenderer` 只在 UI 侧使用，因为它直接操作 `Viewport.uiCanvas`
 - `BaseRenderer` / `LiveRenderer` / `RenderScheduler` / dirty rect 策略本身不依赖 DOM，当前属于 Shared
 
-### `devices/` / `devices-dag/` / `tools/` / `prefixs/`
+### `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`）
 
-这四类模块全部停留在 UI 线程：
+这四类模块全部统一在 `devices-dag/` 下，停留在 UI 线程：
 
 - 设备树与 DAG 路由由 `Board.signalsEventBus` 驱动
 - tools 直接消费设备信号、维护节点 state、声明 overlay provider

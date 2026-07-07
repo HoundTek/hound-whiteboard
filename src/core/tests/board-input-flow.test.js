@@ -1,10 +1,10 @@
 import { Board } from "../ui/components/orchestration/board.js";
 import { createSubDAG } from "../ui/devices-dag/index.js";
-import { createEdgePrefix } from "../ui/prefixs/index.js";
+import { createEdgePrefix } from "../ui/devices-dag/prefixs/index.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
-} from "../ui/devices/keyboard-device.js";
+} from "../ui/devices-dag/devices/keyboard-device.js";
 import { CollectingTool } from "../test-support/mock-tools.js";
 import { createWorkerBoardContext } from "../test-support/worker-mode-fixtures.js";
 
