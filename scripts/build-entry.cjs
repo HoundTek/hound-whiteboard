@@ -69,6 +69,12 @@ function configureAndroidSigning() {
 
   let content = fs.readFileSync(buildGradlePath, 'utf-8')
 
+  // Detect line ending style
+  const nl = content.includes('\r\n') ? '\r\n' : '\n'
+
+  // Normalize to \n for processing
+  content = content.replace(/\r\n/g, '\n')
+
   if (!content.includes('import java.io.FileInputStream')) {
     content = content.replace('import java.util.Properties', 'import java.util.Properties\nimport java.io.FileInputStream')
   }
@@ -77,14 +83,16 @@ function configureAndroidSigning() {
     const tauriPropsEndIndex = content.indexOf('}\n\nandroid')
     if (tauriPropsEndIndex !== -1) {
       const insertPos = tauriPropsEndIndex + 1
-      content = content.slice(0, insertPos) + '\n\nval keystoreProperties = Properties().apply {\n    val propFile = rootProject.file("keystore.properties")\n    if (propFile.exists()) {\n        propFile.inputStream().use { load(it) }\n    }\n}\n' + content.slice(insertPos)
+      content = content.slice(0, insertPos) +
+        '\n\nval keystoreProperties = Properties().apply {\n    val propFile = rootProject.file("keystore.properties")\n    if (propFile.exists()) {\n        propFile.inputStream().use { load(it) }\n    }\n}\n' +
+        content.slice(insertPos)
     }
   }
 
   if (!content.includes('signingConfigs')) {
     content = content.replace(
-      'buildTypes {',
-      'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties.getProperty("keyAlias", "")\n            keyPassword = keystoreProperties.getProperty("keyPassword", "")\n            storeFile = if (keystoreProperties.getProperty("storeFile").isNullOrEmpty()) null else file(keystoreProperties.getProperty("storeFile"))\n            storePassword = keystoreProperties.getProperty("storePassword", "")\n        }\n    }\n    buildTypes {'
+      'buildTypes {\n',
+      'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties.getProperty("keyAlias", "")\n            keyPassword = keystoreProperties.getProperty("keyPassword", "")\n            storeFile = if (keystoreProperties.getProperty("storeFile").isNullOrEmpty()) null else file(keystoreProperties.getProperty("storeFile"))\n            storePassword = keystoreProperties.getProperty("storePassword", "")\n        }\n    }\n    buildTypes {\n'
     )
   }
 
@@ -93,6 +101,11 @@ function configureAndroidSigning() {
       'getByName("release") {\n            isMinifyEnabled = true',
       'getByName("release") {\n            isMinifyEnabled = true\n            signingConfig = signingConfigs.getByName("release")'
     )
+  }
+
+  // Restore original line endings
+  if (nl === '\r\n') {
+    content = content.replace(/\n/g, '\r\n')
   }
 
   fs.writeFileSync(buildGradlePath, content)
