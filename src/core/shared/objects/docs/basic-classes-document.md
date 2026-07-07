@@ -1,133 +1,154 @@
 # 基础类型文档
 
-本文档提供白板中基础类型对象的概述。
+本文档提供白板中基础对象类型的概述，重点对应当前 `src/core/shared/objects/` 下的实现。
 
-## Basic Object
+## 模块概览
 
-抽象类 BasicObject 是白板上所有高级对象的基类。
+当前这组基础对象模块主要包括：
 
-BasicObject 是“零维的”，这意味着这个对象本身的宽度和高度都无法被调整，也意味着白板上的所有高级对象都是零维的。
+- `basic-obj.js`：`BasicObject`
+- `container.js`：`Container` / `ContainerMode`
+- `one-dim/one-dim-obj.js`：`OneDimensionObject`
+- `two-dim/two-dim-obj.js`：`TwoDimensionObject`
 
-### 属性
+其中真正被当前图形与笔画对象直接复用的基础类是 `BasicObject`。
 
-| 名称           | 描述                                                                                          | 类型                  |
-| -------------- | --------------------------------------------------------------------------------------------- | --------------------- |
-| `position`     | 对象的位置 (除特殊说明外，下文中的坐标默认相对于该位置)                                       | `Vector`              |
-| `transform`    | 对象的变换矩阵 (除特殊说明外，下文中的坐标默认是在 $\begin{bmatrix}1&0\\0&1\end{bmatrix}$ 下) | `Matrix`              |
-| `property`     | 渲染与行为属性字典，存放颜色、描边宽度、字体等                                                | `Object`              |
-| `data`         | 对象类型专属的持久化数据，如圆的半径、多边形的顶点集等                                        | `Record<string, any>` |
-| `rich`         | 运行时计算派生的富数据，如边界矩形、凸包、变换后的路径等                                      | `Record<string, any>` |
-| `isErasable()` | 是否是可擦对象                                                                                | `() => boolean`       |
-| `isDirected()` | 是否是有向对象                                                                                | `() => boolean`       |
+## `BasicObject`
 
-> **可擦对象**是支持被擦除的对象。可通过选择工具选中后删除，或通过擦除交互将其擦除。
->
-> **有向对象**是拥有旋转初相的对象。它可以自定义旋转中心、记录旋转角度以及归中。
+`BasicObject` 是白板上所有基础对象的根类。
 
-### 方法
+它统一定义了：
 
-注意，以下的方法都是虚方法，具体实现请看派生类。
+- 对象 id
+- 世界坐标位置 `position`
+- 变换矩阵 `transform`
+- 持久化数据 `data`
+- 运行时富数据 `rich`
+- 判定范围、凸包、边界矩形等统一接口
 
-| 名称                                          | 描述                                 | 类型                                              |
-| --------------------------------------------- | ------------------------------------ | ------------------------------------------------- |
-| `constructor(id, position, property?, data?)` | 创建对象实例                         | `(number, Vector, Object, Object) => BasicObject` |
-| `setData(data)`                               | 批量更新持久化数据，自动触发派生重算 | `(Object) => Object`                              |
-| `appendListItem(key, ...items)`               | 向列表型字段追加一项或多项           | `(string, ...any) => void`                        |
-| `replaceListItem(key, index, item)`           | 替换列表型字段中指定索引的项         | `(string, number, any) => void`                   |
-| `removeListItem(key, index)`                  | 移除列表型字段中指定索引的项         | `(string, number) => void`                        |
-| `_onDataChange(keys)`                         | 数据变更回调，子类重写以触发派生重算 | `(string[]) => void`                              |
-| `setTransform(matrix)`                        | 设置变换矩阵                         | `(Matrix) => void`                                |
-| `applyTransform(matrix)`                      | 应用变换矩阵，即右乘一个新矩阵       | `(Matrix) => void`                                |
-| `calculateConvexHull()`                       | 计算对象的凸包                       | `void`                                            |
-| `calculateRectangle()`                        | 计算对象的矩形范围                   | `void`                                            |
-| `getRange()`                                  | 获取对象的主判定范围                 | `() => Range`                                     |
-| `setProperty(property)`                       | 合并对象属性                         | `(Object) => Object`                              |
-| `getRenderPadding()`                          | 从对象属性动态推导渲染留白           | `() => number`                                    |
-| `isErasable()`                                | 返回对象是否可擦                     | `() => boolean`                                   |
-| `isDirected()`                                | 返回对象是否有向                     | `() => boolean`                                   |
-| `render(ctx)`                                 | 在 `ctx` 上渲染该对象                | `(CanvasRenderingContext2D) => boolean`           |
-| `serialize()`                                 | 将该对象转为一个 JSON 对象           | `() => Object`                                    |
-| `static parse(obj)`                           | 将一个合法的 JSON 对象转为该类对象   | `(Object) => BasicObject`                         |
+### 核心字段
 
-> [!WARNING]
->
-> **不要直接修改 `this.data` 或 `this.rich` 的子字段。应使用 `setData()` 或列表操作方法写入数据，以确保派生富数据同步更新。**
+| 名称        | 描述                     | 类型                  |
+| ----------- | ------------------------ | --------------------- |
+| `id`        | 对象 id                  | `number`              |
+| `position`  | 对象世界坐标位置         | `Vector`              |
+| `transform` | 对象变换矩阵             | `Matrix`              |
+| `property`  | 渲染与行为属性字典       | `Record<string, any>` |
+| `data`      | 对象类型专属的持久化数据 | `Record<string, any>` |
+| `rich`      | 运行时派生富数据         | `Record<string, any>` |
+
+### 关键接口
+
+| 名称                                | 描述                                         |
+| ----------------------------------- | -------------------------------------------- |
+| `setData(data)`                     | 合并持久化数据，并触发 `_onDataChange(keys)` |
+| `appendListItem(key, ...items)`     | 向列表型字段追加一项或多项                   |
+| `replaceListItem(key, index, item)` | 替换列表型字段中指定索引的项                 |
+| `removeListItem(key, index)`        | 删除列表型字段中的某一项                     |
+| `_onDataChange(keys)`               | 数据变更回调，供子类重算派生结构             |
+| `setTransform(matrix)`              | 设置变换矩阵并重算边界                       |
+| `applyTransform(matrix)`            | 在当前变换上再乘一个新矩阵                   |
+| `calculateRectangle()`              | 计算边界矩形                                 |
+| `calculateConvexHull()`             | 计算凸包                                     |
+| `getRange()`                        | 获取主判定范围                               |
+| `setProperty(property)`             | 合并属性                                     |
+| `getRenderPadding()`                | 从属性动态推导渲染留白                       |
+| `isErasable()`                      | 是否可擦                                     |
+| `isDirected()`                      | 是否有向                                     |
+| `render(ctx)`                       | 渲染对象                                     |
+| `serialize()`                       | 序列化对象                                   |
+| `static parse(obj)`                 | 从序列化数据恢复对象                         |
+
+### `data` 与 `rich`
+
+当前对象数据分为两层：
+
+- **`data`**：参与持久化的原始数据
+- **`rich`**：运行时从 `data`、`transform` 推导出的派生结构
+
+例如：
+
+- `CircleObject.data.radius`
+- `PolygonObject.data.points`
+- `StrokeObject.data.points`
+
+以及：
+
+- `rich.boundingBox`
+- `rich.convexHullRange`
+- `rich.worldPathRange`
+
+### 数据变更约束
+
+不要直接修改 `this.data` 或 `this.rich` 的子字段。
+
+应优先使用：
+
+- `setData()`
+- `appendListItem()`
+- `replaceListItem()`
+- `removeListItem()`
+
+这样子类才能通过 `_onDataChange(keys)` 正确同步派生数据。
 
 ### 序列化约定
 
-所有可持久化对象的 `serialize()` 都应返回一个可直接转成 JSON 的普通对象，并包含以下字段：
+`BasicObject.serialize()` 当前会返回通用骨架：
 
-| 名称        | 描述                                             |
-| ----------- | ------------------------------------------------ |
-| `type`      | 对象类型标识，用于统一反序列化分发               |
-| `id`        | 对象 id                                          |
-| `position`  | 对象位置，由 `Vector.serialize()` 生成           |
-| `transform` | 对象变换矩阵，由 `Matrix.serialize()` 生成       |
-| `property`  | 渲染与行为属性字典，如颜色、描边宽度、字体等     |
-| `data`      | 对象类型专属几何/内容数据，如 `points`、`radius` |
+- `id`
+- `position`
+- `transform`
+- `property`
+- `data`
 
-第一层字段 `id`、`position`、`property`、`data` 是通用骨架，各对象类型通过 `type` 区分，并将自身的几何参数填充到 `data` 内。例如：
+具体子类会在此基础上追加 `type`，例如：
 
-- `CircleObject` → `data: { radius }`
-- `PolygonObject` → `data: { points }`
-- `StrokeObject` → `data: { points }`
+- `CircleObject` → `type: "CircleObject"`
+- `PolygonObject` → `type: "PolygonObject"`
+- `StrokeObject` → `type: "StrokeObject"`
 
-当前统一反序列化入口位于 [src/core/objects/object-deserializer.js](src/core/objects/object-deserializer.js)。
+## 统一反序列化入口
 
-推荐做法是将持久化数据交给其中的 `deserialize()`，而不是在业务代码里手动根据 `type` 分支调用某个对象类的 `parse()`。
+当前统一反序列化入口位于：
 
-当前已接入统一入口的对象类型有：
+```text
+src/core/shared/objects/object-deserializer.js
+```
+
+对应导出：
+
+- `deserialize(data)`
+- `registerDeserializer(type, parser)`
+
+推荐业务代码统一使用 `deserialize()`，而不是手写 `switch(type)`。
+
+当前已注册到默认反序列化表的类型有：
 
 - `PolygonObject`
 - `StrokeObject`
 - `CircleObject`
 
-### 数据模型：`data` 与 `rich`
+## `Container` / `OneDimensionObject` / `TwoDimensionObject`
 
-每个对象的数据分为两层：
+这三个类更多保留为对象族层级的基础骨架：
 
-- **`this.data`** — 持久化原始数据。存放对象类型专属的基础参数，如圆的半径 `{ radius }`、多边形的顶点 `{ points }`。此字段直接参与序列化，写入的值必须是可 JSON 序列化的普通类型。
-- **`this.rich`** — 运行时派生富数据。存放从 `data` 和 `transform` 计算得出的几何结构，如 `boundingBox`、`convexHullRange`、`worldPolygonRange`。此字段不参与持久化，可在必要时重算。
+- `Container`：定义容器对象与 `ContainerMode`
+- `OneDimensionObject`：在 `Container` 上增加 `ihatLength` / `ihatRotate`
+- `TwoDimensionObject`：二维对象骨架
 
-两层的关系：`setData()` / 列表操作方法修改 `data` 后自动触发 `_onDataChange()`，由子类更新 `rich`。
+需要注意：
 
-### 数据变更 API
+- `Container` 当前代码中主要实现了 `mode` 与 `ContainerMode`
+- 更丰富的“容器包裹子对象”语义目前仍偏概念层，不应在文档中写成当前完整实现能力
 
-所有数据修改都应通过以下方法，不要直接操作 `this.data` 的子字段：
+## 当前状态
 
-| 方法                                     | 用途                 | 示例                                                           |
-| ---------------------------------------- | -------------------- | -------------------------------------------------------------- |
-| `setData({ radius })`                    | 批量写入/覆盖字段    | `obj.setData({ radius: 10 })`                                  |
-| `setProperty({ color })`                 | 批量写入/覆盖属性    | `obj.setProperty({ color: '#f00' })`                           |
-| `appendListItem(key, ...items)`          | 列表追加（支持多项） | `obj.appendListItem('points', { x: 1, y: 2 }, { x: 3, y: 4 })` |
-| `appendListItem(key, item)`              | 列表追加（单项）     | `obj.appendListItem('points', pt)`                             |
-| `replaceListItem('points', i, { x, y })` | 列表替换             | `obj.replaceListItem('points', 2, pt)`                         |
-| `removeListItem('points', i)`            | 列表删除             | `obj.removeListItem('points', 1)`                              |
+- `BasicObject` 是当前对象体系最稳定的公共根类
+- `deserialize()` 已接通 Circle / Polygon / Stroke 三类对象
+- Container / 一维 / 二维对象基类仍主要承担类型层级与概念承载作用
 
-子类通过重写 `_onDataChange(keys)` 监听关注的字段名，每次变更时批量重建 `rich` 中的派生结构。
+## 相关文档
 
-### 属性模型约定
-
-- 所有可调的渲染属性都应存放在 `property` 字段，而不是散落在独立字段里
-- `property` 的具体键由对象类型自行定义，例如 `StrokeObject.property.width`、`CircleObject.property.strokeWidth`
-- `getRenderPadding()` 默认会从 `property.strokeWidth`、`property.width`、`property.outlineWidth` 这类宽度字段动态推导额外留白
-- renderer 不再依赖对象族各自硬编码的 padding 常量，而是依赖对象当前 `property` 的真实宽度配置
-
-## One Dimension Object
-
-抽象类 OneDimensionObject 是所有一维对象的基类。派生于 [BasicObject](#basic-object)。
-
-OneDimensionObject 是“一维的”，这意味着它拥有一个主轴，且可以沿着主轴来变化它在这个方向上的大小分量。
-
-### 属性
-
-| 名称         | 描述                                                     | 类型     |
-| ------------ | -------------------------------------------------------- | -------- |
-| `ihatRotate` | 它的主轴对于 $\begin{bmatrix}1\\0\end{bmatrix}$ 的旋转角 | `number` |
-| `ihatLength` | 它的主轴的长度（该对象在主轴方向上的大小分量）           | `number` |
-
-## Two Dimension Object
-
-抽象类 TwoDimensionObject 是所有二维对象的基类。派生于 [BasicObject](#basic-object)。
-
-TwoDimensionObject 是“二维的”，这意味着它拥有一组轴（类似于线性代数里的基），它的大小可以沿轴的分量变化。一般的二维对象的基是正交的。
+- [白板对象文档](./board-classes-document.md)
+- [图形对象文档](../graph/graph-classes-document.md)
+- [笔画对象文档](../stroke/stroke-classes-document.md)

@@ -1,6 +1,6 @@
 # Core 数据模型与术语统一
 
-本文档整理 `src/core/` 当前运行时中的核心数据模型。
+本文档整理 `src/core/` 当前实现中的核心数据模型，并明确 UI、Worker 与共享层之间的权威边界。
 
 ## 数据权威划分
 
@@ -8,12 +8,14 @@
 
 UI 线程持有：
 
-- `Board` facade
+- `Board`
 - `DevicesDAG`
 - `signalsEventBus`
-- `Viewport` / `ViewportCore`
+- `Viewport`
 - tools / prefixes / devices
-- 轻量对象条目（creator `_entry` / chooser / modifier 通用）
+- 工具链中的轻量对象条目（creator `_entry`、chooser / modifier 条目）
+
+这些对象主要服务于输入编排、局部交互和 UI overlay，不是最终对象与区块权威。
 
 ### Worker 线程
 
@@ -22,61 +24,64 @@ Worker 线程持有真正的 Core 数据权威：
 - `BoardCore`
 - `ViewportCore`
 - `ActiveObjectManager`
-- `Chunk` / `ChunkObjectManager`
-- base / live 渲染结果
+- `Chunk` / `ChunkLoader` / `ChunkObjectManager`
+- Worker 侧 base/live 渲染器
 - `UndoTree`
 
 ### Shared 纯模型层
 
-Worker 与 UI 共用：
+UI 与 Worker 共用：
 
-- `objects/`
-- `range/`
+- `shared/objects/`
+- `shared/range/`
+- `shared/renderer/`
+- `shared/types/`
 - `utils/`
-- `chunk/`
-- `renderer/`（除 `UiRenderer` 外）
-- `shared/`
 
 ## 白板级模型
 
 ### `Board`
 
-`Board` 是 UI facade，负责：
+`Board` 是 UI 侧白板 facade，负责：
 
-- 持有 `DevicesDAG` 与 `signalsEventBus`
+- 持有唯一 `DevicesDAG`
+- 持有 `signalsEventBus`
 - 管理 `viewports`
-- 通过 `BoardApiRpc` 与 Worker 侧 Core 交互
-- 持有本地 `CounterPool`，同步分配 objectId
+- 通过 `BoardApiRpc` 与 Worker 通信
+- 通过本地 `CounterPool` 同步分配 `objectId`
 
 ### `BoardCore`
 
-`BoardCore` 是 Core 侧真实白板状态，负责：
+`BoardCore` 是 Worker 侧真实白板状态，关键字段包括：
 
+- `width` / `height`
+- `rootPath`
+- `undoTree`
 - `chunkLoaded`
 - `objectLoaded`
+- `chunkLoadEventBus`
 - `rootChunkLoader`
-- `activeObjectManager`
-- `undoTree`
 - `persistenceAdapter`
 - `aomRenderHooks`
+- `activeObjectManager`
+- `#objectCoverChunks`
 
-在 Worker mode 下，业务语义上的对象、区块与提交关系都以 Worker 中的 `BoardCore` 为准。
+在当前实现里，真正的对象、区块与提交关系都以 Worker 中的 `BoardCore` 为准。
 
 ## objectId 模型
 
-当前 objectId 分配规则：
+当前 `objectId` 分配规则：
 
-1. creator 在 UI 线程通过 `Board.allocateObjectId()` 申请 id
+1. UI 工具通过 `Board.allocateObjectId()` 申请 id
 2. `Board` 使用本地 `CounterPool` 同步递增
-3. `boardApi.createObject(type, { id, ... })` 把显式 id 发往 Worker
-4. Worker 侧 createObject 要求必须收到显式 id
-5. 若 Worker 侧发现重复 id，会抛错并通过 `rpc-response` 返回错误
+3. `BoardApiRpc.createObject(type, { id, ... })` 把显式 id 发往 Worker
+4. Worker 校验重复 id 后创建对象并加入 AOM
 
 这意味着：
 
-- UI 线程是 id 分配者
-- Worker 线程是 id 使用者与校验者
-- `BoardCore` 不再承担 id 分配职责
+- UI 线程是 **id 分配者**
+- Worker 线程是 **id 校验者与使用者**
+- `BoardCore` 当前不负责自动分配 id
 
 ## 区块级模型
 
@@ -84,20 +89,23 @@ Worker 与 UI 共用：
 
 单个区块的运行时实体，包含：
 
-- 区块坐标 / 区块 id
+- 区块二维坐标与区块 id
 - `objectManager: ChunkObjectManager`
-- 与邻区块的连接关系
+- 加载状态与邻接关系
 
 ### `ChunkObjectManager`
 
-区块静态图管理器，包含：
+区块对象管理器，负责：
 
 - `staticGraph`：区块内静态层叠图
-- `objectCoverChunks`：对象覆盖到的区块索引
+- 覆盖区块索引的同步与序列化
+- 区块元数据的加载 / 保存
+
+当前覆盖区块索引的权威副本集中在 `BoardCore.#objectCoverChunks`。`ChunkObjectManager` 有 `board` 时会委托给 `BoardCore`，只有无 `board` 的局部测试场景才回退到本地存储。
 
 ### `chunkLoaded`
 
-`BoardCore.chunkLoaded` 结构：
+`BoardCore.chunkLoaded` 的值结构可概括为：
 
 ```js
 Map<chunkId, {
@@ -108,20 +116,15 @@ Map<chunkId, {
 }>
 ```
 
-其语义是“这个区块当前被多少加载器以什么策略持有”，不是对象几何信息本身。
+它表示区块当前被哪些加载器以何种策略持有，而不是对象几何本身。
 
 ## 对象级模型
 
 ### 真实对象实例
 
-Worker 侧真实对象实例是 `BasicObject` 及其子类：
+真实对象实例定义在 `shared/objects/`，基类是 `BasicObject`，再派生出笔画、容器、一维/二维图形等对象类型。
 
-- `StrokeObject`
-- `CircleObject`
-- `PolygonObject`
-- 其它图形 / 容器对象
-
-统一字段：
+统一字段主要包括：
 
 - `id`
 - `position`
@@ -130,53 +133,62 @@ Worker 侧真实对象实例是 `BasicObject` 及其子类：
 - `data`
 - `rich`
 
-### UI 侧轻量对象条目（`LightweightObjectEntry`）
+### 轻量对象条目（`LightweightObjectEntry`）
 
-定义在 `shared/types.js`，UI 线程所有工具（creator / chooser / modifier）统一使用此协议。
+`LightweightObjectEntry` 定义在 `src/core/shared/types/types.js`。
+
+它是 UI 工具链里传递对象信息的统一纯数据协议：
 
 ```js
 {
-  id: number,                    // 对象 id
-  type: string,                  // 对象类型名（如 "StrokeObject"、"CircleObject"）
-  position: Vector | { x, y },   // 世界坐标位置
-  boundingBox?: RectangleRange,  // 外接矩形（摘要态有，创建态无）
-  range?: Range,                 // 主判定范围（摘要态有，创建态无）
-  property: Record<string, any>, // 样式属性
-  data: Record<string, any>,     // 类型专属几何数据
+  id: number,
+  type: string,
+  position: Vector | { x, y },
+  boundingBox?: RectangleRange,
+  range?: Range,
+  property: Record<string, any>,
+  data: Record<string, any>,
 }
 ```
 
-**两种场景：**
+当前主要有两类场景：
 
-| 场景   | 代表者                  | `position` 形态                   | `boundingBox` / `range`   |
-| ------ | ----------------------- | --------------------------------- | ------------------------- |
-| 创建态 | creator `_entry`        | `Vector` 实例（代码直接向量运算） | 无（几何未定型）          |
-| 摘要态 | chooser / modifier 条目 | `{ x, y }` 纯对象（RPC 反序列化） | 有（命中检测 / 准入判断） |
+| 场景   | 来源                                     | 特征                                                           |
+| ------ | ---------------------------------------- | -------------------------------------------------------------- |
+| 创建态 | creator `_entry`                         | `position` 往往是 `Vector`，通常还没有 `range` / `boundingBox` |
+| 摘要态 | `queryObjects()` / `hitTest()` / handoff | `position` 是纯对象快照，并附带 `range` / `boundingBox`        |
 
-消费端（如 modifier 的 `resolveModifiedObjectPosition`）通过 `Vector.parse()` 统一处理两种 `position` 形态。
+消费端通常通过 `Vector.parse()` 之类的逻辑统一处理两种 `position` 形态。
 
-这些条目用于：
+### `ObjectSummary`
 
-- creator 创建手势期间的本地状态
-- Worker mode 下的 hitTest / queryObjects 结果
-- handoff 桥接
-- UI overlay
+跨线程查询返回的对象摘要同样定义在 `shared/types/types.js`，通常包含：
+
+- `id`
+- `type`
+- `isActive`
+- `position`
+- `transform`
+- `boundingBox`
+- `range`
+- `property`
+- `data`
 
 ## 动态图与静态图
 
 ### 静态图
 
 - 分布在各 `ChunkObjectManager.staticGraph`
-- 表示稳定层叠关系
-- `apply()` / `remove()` / `discard()` 会影响其显示结果
+- 描述已提交对象的稳定层叠关系
+- `commitObjects()` 最终会把活动对象写回这部分结构
 
 ### 动态图（AOM）
 
 - 由 `ActiveObjectManager` 管理
-- 用于选择、创建、修改期间的临时层关系
-- 对象一旦进入 AOM，应由 live 层负责绘制
+- 描述创建、选择、修改等交互态对象与临时层关系
+- AOM 内对象主要由 Worker 侧 `LiveRenderer` 负责绘制
 
-AOM 内部关键结构：
+AOM 内部关键结构包括：
 
 - `activeObjects`
 - `activeObjectIndex`
@@ -187,40 +199,78 @@ AOM 内部关键结构：
 
 ## 视口与渲染模型
 
-### Worker 侧
+### UI 侧 `Viewport`
 
-- `ViewportCore` 持有 `origin`、`zoom`、`width`、`height`
-- base / live 两层通过 OffscreenCanvas 输出
-- `flushRenderFrame()` 回传 `render-frame`
+`Viewport` 持有：
 
-### UI 侧
+- `origin`
+- `zoom`
+- `width` / `height`
+- DOM `canvas`
+- `uiCanvas`
+- `UiRenderer`
 
-- `Viewport` 接收位图并合成到 DOM canvas
-- `UiRenderer` 独立维护 overlay
-- 全部 viewport 走 `Viewport` 路径
+它负责屏幕坐标与世界坐标换算、workflow 挂载代理，以及把 Worker 帧绘制到页面。
+
+### Worker 侧 `ViewportCore`
+
+`ViewportCore` 持有：
+
+- `origin`
+- `zoom`
+- `width` / `height`
+- `chunkLoader`
+- `baseRenderer`
+- `liveRenderer`
+- `#frameDirty`
+- `#frameId`
+
+它负责：
+
+- 视口区块缓冲管理
+- base/live 失效与 flush
+- 输出 `render-frame`，当前帧数据核心是 `liveBitmap`
 
 ## 持久化模型
 
-持久化通过 `persistenceAdapter` 接入。
+当前持久化需要分“代码中的协议”与“默认运行时接线”理解。
 
-当前稳定语义：
+### 已有协议
 
-- 对象主存储位置由 `ownerChunkId` 描述
-- 覆盖区块由 `objectCoverChunks` 单独索引
-- Worker / UI 运行时分层不改变 `.hwb` 的对象 / 区块语义
+- `BoardCore` 通过 `persistenceAdapter` 暴露 `loadChunkMetadata` / `saveChunkMetadata` / `loadObjects` / `saveObjects` / `deleteObject`
+- 文件桥接协议位于 `bridges/file-operate-bridge-*.js`
+
+### 默认运行时现状
+
+- 默认 Worker runtime 仍主要跑内存模式
+- 若按当前文件桥协议落盘，主结构是：
+  - `chunks/{chunkId}.json`：`{ tierGraph, objectCoverIndex }`
+  - `objects/{objectId}.json`：扁平对象文件
+- `createChunkStorage()` 还会创建 `chunks/{chunkId}/` 目录，但当前主读写路径不是它
+
+### 当前不要过度假设的语义
+
+以下内容不应再写成“已经由代码保证的稳定事实”：
+
+- 每个对象 JSON 一定包含 `ownerChunkId`
+- 对象一定按 `objects/chunk{chunkId}/{objectId}.json` 组织
+- 默认 demo 已完整接通文件模式
+
+这些更接近设计目标或局部桥接语义，而不是当前所有运行时场景下的统一现实。
 
 ## 关键术语
 
-- **运行时分层**：UI 侧通过 `BoardApiRpc` 与 Worker 侧 `BoardCore` 通信，viewport 通过 `Viewport` ↔ `ViewportCore` 协作
-- **轻量对象条目（LightweightObjectEntry）**：UI 侧所有工具统一使用的纯数据对象协议，替代 `BasicObject` 实例在工具间传递
+- **SignalPacket**：输入系统中的标准信号包，形如 `{ to, signals }`
+- **LightweightObjectEntry**：UI 工具链共享的轻量对象协议
 - **静态图**：区块级稳定层叠图
-- **动态图 / AOM**：交互态动态层关系
-- **renderHooks**：AOM 到具体渲染链的注入式桥接
+- **动态图 / AOM**：交互态对象与动态层关系
+- **ObjectSummary**：跨线程查询返回的对象摘要
+- **render hook**：BoardCore / AOM 到 ViewportCore 渲染失效的桥接协议
 
 ## 相关文档
 
 - [core-overview.md](./core-overview.md)
+- [core-runtime-boundaries.md](./core-runtime-boundaries.md)
 - [file-structure.md](./file-structure.md)
 - [board-document.md](../ui/components/orchestration/docs/board-document.md)
 - [active-object-manager-document.md](../worker/components/orchestration/docs/active-object-manager-document.md)
-- [core-runtime-boundaries.md](./core-runtime-boundaries.md)

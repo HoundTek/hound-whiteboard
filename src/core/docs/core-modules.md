@@ -1,124 +1,188 @@
 # Core 模块详解
 
-本文档按 `src/core/` 当前目录划分总结各模块职责与运行边界。
+本文档按 `src/core/` 当前目录结构总结各模块职责与协作关系。
 
-更细的 Worker / UI / Shared 归属见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
+更细的线程边界见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
 
-## `components/`
+## 顶层目录
 
-`components/` 负责白板运行时的对象、区块、渲染与编排。
+| 目录            | 主要职责                         | 说明                                                                |
+| --------------- | -------------------------------- | ------------------------------------------------------------------- |
+| `bridges/`      | UI / Worker / 宿主之间的桥接协议 | 包含 RPC、持久化接口、文件 I/O bridge                               |
+| `docs/`         | Core 总览与架构文档              | 当前这组顶层说明文档                                                |
+| `shared/`       | UI 与 Worker 共用的纯逻辑        | 对象模型、range、共享 renderer、类型定义                            |
+| `test-support/` | 测试支撑                         | canvas mock、worker-mode fixture、AOM fixture                       |
+| `tests/`        | Core 级集成与 smoke tests        | Board 输入流、Worker smoke、共享模块 smoke                          |
+| `ui/`           | UI 线程运行时                    | Board、Viewport、DevicesDAG、UiRenderer                             |
+| `utils/`        | 通用基础设施                     | 数学、图结构、事件总线、路径、计数池                                |
+| `worker/`       | Core Worker 运行时               | `core-worker.js`、BoardCore、ViewportCore、chunk、renderer、history |
 
-### `components/orchestration/`
+## `ui/`
 
-| 文件                       | 运行边界 | 职责                                                                           |
-| -------------------------- | -------- | ------------------------------------------------------------------------------ |
-| `board-core.js`            | Worker   | 真实白板核心，持有对象、区块、AOM、UndoTree、持久化协调                        |
-| `board.js`                 | UI       | UI facade，持有 DAG、signalsEventBus、viewports，通过 Worker 与 BoardCore 通信 |
-| `viewport-core.js`         | Worker   | Worker 侧视口、ChunkLoader、base/live 渲染输出                                 |
-| `viewport.js`              | UI       | UI 侧 viewport，接收 Worker 侧回传的 `render-frame`                            |
-| `active-object-manager.js` | Shared   | 动态层关系、活动对象生命周期与静态图回写                                       |
-| `aom-render-hooks.js`      | Shared   | AOM 渲染钩子接口                                                               |
-| `board-render-hooks.js`    | UI       | AOM 渲染请求到 viewport 渲染器的桥接层                                         |
+`ui/` 承载主线程侧的输入、视口和 overlay。
+
+### `ui/components/orchestration/`
+
+| 文件                    | 职责                                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------- |
+| `board.js`              | UI 侧白板 facade，持有 `DevicesDAG`、`signalsEventBus`、`Viewport` 集合，并负责启用 Worker mode |
+| `viewport.js`           | UI 侧视口 facade，负责 DOM canvas、坐标换算、Worker 同步与 workflow 挂载代理                    |
+| `board-render-hooks.js` | UI 侧 render hook 工厂，适用于本地/非 Worker 场景的渲染桥接辅助                                 |
+
+### `ui/components/renderer/`
+
+- `ui-renderer.js`：UI overlay 渲染器
+- `docs/` / `tests/`：对应文档与测试
+
+### `ui/devices-dag/`
+
+这是当前输入系统的主体目录，全部运行在 UI 线程。
+
+#### 根目录
+
+- `dag.js`：`DevicesDAG` 核心实现
+- `dag-builder.js`：`createSubDAG()` DSL
+- `dag-node-edge.js`：节点与边定义
+- `dag-utils.js`：handler result 规整、类型判断
+- `signal.js`：`SignalPacket` 抽象
+- `dag-debug.js`：DAG 调试输出
+
+#### `devices/`
+
+设备被建模为 `SubDAGDefinition`：
+
+- `mouse-device.js`
+- `keyboard-device.js`
+- `touchscreen-device.js`
+
+设备负责把宿主输入转换为稳定设备信号，不直接修改白板对象。
+
+#### `prefixes/`
+
+修饰节点和 workflow 编排工具：
+
+- `handoff-handler.js`
+- `edge-prefix.js`
+- `multi-tool-handler.js`
+- 其它局部状态机 / 路由辅助
+
+#### `tools/`
+
+叶子消费型处理器：
+
+- `tool.js` / `gesture-tool.js`
+- `creator/`：创建工具
+- `chooser/`：选择工具
+- `modifier/`：修改工具
+
+### `ui/frame/`
+
+当前目录主要承载 frame 相关文档。当前这棵 `src/core/` 代码树中没有对应的运行时 JS 实现文件，应视为文档化的概念层记录。
+
+## `worker/`
+
+`worker/` 是 Core Worker 的真实运行时。
+
+### `worker/core-worker.js`
+
+- Worker 入口
+- `CoreWorkerRuntime` 消息宿主封装
+- RPC / `rpc-batch` 分发
+- `viewport-change` / `request-render-flush` 处理
+- `render-frame` 回传
+
+### `worker/components/orchestration/`
+
+| 文件                       | 职责                                                         |
+| -------------------------- | ------------------------------------------------------------ |
+| `board-core.js`            | Worker 侧白板权威状态，对象、区块、AOM、UndoTree、持久化协调 |
+| `viewport-core.js`         | Worker 侧视口状态、区块缓冲、渲染帧输出                      |
+| `active-object-manager.js` | 动态图与活动对象生命周期                                     |
+| `aom-render-hooks.js`      | Worker 侧 render hook 协议与默认空实现                       |
 
 ### `worker/components/chunk/`
 
 - `chunk.js`：区块实体
-- `chunk-loader.js`：加载器与引用计数
-- `chunk-object-manager.js`：区块静态图与对象覆盖区块索引
+- `chunk-loader.js`：区块加载器与加载事件
+- `chunk-object-manager.js`：静态图与覆盖区块索引管理
 
-这一层属于 Worker。
+### `worker/components/renderer/`
 
-### `components/renderer/`
+- `base-renderer.js`：静态层渲染
+- `live-renderer.js`：活动层渲染
+- `dirty-rect-strategy.js`：Worker 侧脏区策略
 
-| 文件                      | 运行边界 | 职责         |
-| ------------------------- | -------- | ------------ |
-| `renderer.js`             | Shared   | 渲染器基类   |
-| `base-renderer.js`        | Shared   | base 层渲染  |
-| `live-renderer.js`        | Shared   | live 层渲染  |
-| `ui-renderer.js`          | UI       | overlay 渲染 |
-| `render-scheduler.js`     | Shared   | 脏区调度     |
-| `dirty-rect-strategy*.js` | Shared   | 脏区策略     |
+这些文件建立在 `shared/renderer/` 的基类之上，但自身运行在 Worker。
+
+### `worker/hit/`
+
+- `undo-tree-core.js`：UndoTree 骨架
+- `operation.js`：操作结构定义
+
+当前撤销/重做入口仍属 `[todo]`。
+
+## `shared/`
+
+`shared/` 保存可被 UI 与 Worker 同时 import 的纯逻辑模块。
+
+### `shared/objects/`
+
+- `basic-obj.js`：基础对象模型
+- `stroke/`、`one-dim/`、`two-dim/`、`graph/`、`container.js`
+- `object-deserializer.js`：对象反序列化入口
+
+### `shared/range/`
+
+几何范围、相交判断与转换工具：
+
+- `rectangle.js`
+- `path.js`
+- `polygon.js`
+- `ellipse.js`
+- `rope.js`
+- `intersections.js` 等
+
+### `shared/renderer/`
+
+共享渲染基础设施：
+
+- `renderer.js`：渲染器基类
+- `canvas-lifecycle.js`：画布生命周期辅助
+- `render-scheduler.js`：脏区调度器
+- `dirty-rect-strategy-shared.js`：共享脏区策略
+- `ui-overlay-factory.js`：overlay 条目工厂
+
+### `shared/types/`
+
+跨线程共享类型定义：
+
+- `types.js`
+- `board-api-types.js`
+- `message-types.js`
 
 ## `bridges/`
 
-- `board-api.js`
-  - `BoardApiRpc`：UI 线程 RPC 客户端，通过 postMessage 与 Worker 侧 BoardCore 通信。高频写入（modifyObject / appendListItem / replaceListItem / removeListItem）使用微任务级批处理，同 id 自动合并为单次 `rpc-batch` 消息
-- `persistence-adapter.js`：持久化接口与默认内存适配
-- `file-operate-bridge-*`：宿主文件 I/O 桥接，运行在 UI / preload 相关边界
+### `board-api.js`
 
-## `devices-dag/`
+- `BoardApiRpc`：UI 到 Worker 的异步 API 封装
+- 高频修改使用微任务级 `rpc-batch` 合并
 
-设备图、节点状态和信号路由系统，全部运行在 UI 线程。
+### `persistence-adapter.js`
 
-当前 `devices-dag/` 下包含全部输入编排模块：
+- 定义 `BoardCore` 依赖的持久化适配器协议
+- 提供 `createDefaultPersistenceAdapter()` 与 `createRendererPersistenceAdapter()`
 
-### 核心 DAG（`devices-dag/` 根目录）
+### `file-operate-bridge-*.js`
 
-- `dag.js`、`dag-builder.js`、`dag-node-edge.js`、`dag-utils.js`
-- `signal.js`：SignalPacket 定义
-- `index.js`：公开接口
+- `file-operate-bridge-common.js`：动作枚举与通道定义
+- `file-operate-bridge-renderer.js`：渲染线程侧调用入口
+- `file-operate-bridge-main.js`：宿主/主线程侧实际文件操作
 
-### `devices/`（输入设备定义）
-
-- `mouse-device.js`、`keyboard-device.js`、`touchscreen-device.js`
-- 把宿主输入编码成稳定的 `SignalPacket`，再交给 DAG 分发
-
-### `tools/`（交互工具）
-
-所有工具都在 UI 线程执行。
-
-#### `tools/creator/`
-
-- 使用 `_entry` 纯数据状态（`LightweightObjectEntry` 协议）维护手势期对象几何
-- 通过 `BoardApiRpc` fire-and-forget 同步 Worker 侧真实对象（高频写入经微任务批处理合并）
-- 当前 demo 已接通 `StrokeCreatorTool`、`CircleCreatorTool`、`PolygonCreatorTool`
-
-#### `tools/chooser/`
-
-- `ObjectChooserTool`：选择工具基类
-- `RectangleObjectChooserTool`：矩形框选实现
-- Worker mode 下读路径通过 `hitTest + queryObjects` 异步完成
-
-#### `tools/modifier/`
-
-- `ObjectModifierTool`：修改工具基础设施
-- `GestureBasedObjectModifierTool`：position / displacement 双通道手势调度
-- `CommonObjectModifierTool`：通用位置修改实现
-
-### `prefixes/`（输入编排）
-
-- `handoff-handler.js`：creator / chooser → modifier 两阶段工作流
-- `edge-prefix.js`、`prefix-node.js` 等：信号转换、注入和局部状态机
-
-## `objects/`
-
-对象模型层，属于 Shared。
-
-- `basic-obj.js`：基础对象抽象
-- `stroke/`：笔画对象
-- `graph/`：Circle / Polygon 等几何对象
-- `object-deserializer.js`：反序列化入口
-
-对象在 Worker 与 UI 两边都可能被使用：
-
-- Worker 侧用于真实状态、渲染与命中
-- UI 侧用于测试与局部纯数据 helper
-
-## `range/`
-
-几何范围抽象层，属于 Shared。
-
-- `RectangleRange`
-- `PathRange`
-- `PolygonRange`
-- `EllipseRange`
-- `RopeRange`
-
-chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
+当前这些文件描述了文件模式协议，但默认 demo 仍主要运行在内存模式。
 
 ## `utils/`
 
-纯工具层，属于 Shared。
+`utils/` 是 Core 与应用层通用基础设施。
 
 包含：
 
@@ -127,42 +191,42 @@ chooser、modifier、renderer 与 chunk 覆盖计算都会依赖它。
 - `directed-graph.js`
 - `event-bus.js`
 - `queue.js` / `deque.js`
+- `path.js`
 - `random.js`
 - `counter-pool.js`
 
-当前 `CounterPool` 由 UI 侧 `Board` 自持，用于同步分配 objectId。
+其中 `CounterPool` 目前由 UI 侧 `Board` 用来同步分配 `objectId`。
 
-## `hit/`
+## `test-support/` 与 `tests/`
 
-历史结构层，属于 Worker。
+### `test-support/`
 
-- `undo-tree-core.js` 已作为运行时骨架接入 `BoardCore`
-- 更完整的 operation 语义与历史回放仍属于后续完善项
+提供：
 
-## `shared/`
+- Worker mode fixture
+- AOM fixture
+- canvas / OffscreenCanvas mock
+- 测试用工具与状态辅助
 
-跨线程共享类型定义，属于 Shared。
+### `tests/`
 
-- `types.js`
-- `board-api-types.js`
-- `message-types.js`
+顶层集成测试覆盖：
 
-这些文件只提供 JSDoc typedef 与协议约定，不承载业务逻辑。
-
-## `test-support/`
-
-测试支撑模块，提供 canvas / OffscreenCanvas / ImageBitmap mock 等 helper。
+- `board-input-flow.test.js`
+- `core-worker-smoke.test.js`
+- `monitor-ui-renderer.test.js`
+- `shared-module-smoke.test.js`
 
 ## 当前状态
 
-- Core Worker 架构已落地：BoardCore / ViewportCore / BoardApiRpc / Viewport 全部接通
-- tools 保持在 UI 线程
-- objects / range / utils / renderer / AOM 作为共享层复用；chunk 在 Worker 侧运行
-- 主要剩余项集中在性能优化与基准测试
+- 代码树已明确分成 `ui/`、`worker/`、`shared/` 三大块
+- 旧的 `components/*`、`objects/*`、`range/*` 顶层路径已不再代表真实目录结构
+- Worker mode 是当前主路径
+- 输入系统核心都收敛在 `ui/devices-dag/`
+- 完整持久化接线与撤销/重做仍属于后续完善项
 
 ## 相关文档
 
 - [core-overview.md](./core-overview.md)
-- [core-data-model.md](./core-data-model.md)
-
 - [core-runtime-boundaries.md](./core-runtime-boundaries.md)
+- [core-data-model.md](./core-data-model.md)

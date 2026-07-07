@@ -1,6 +1,10 @@
 # 操作文档
 
-本文档提供操作的定义。
+本文档记录 Undo/Redo 体系中操作模型的设计意图。
+
+> [!WARNING]
+>
+> 当前 `src/core/worker/hit/operation.js` 仍只有 `AtomOperation` 与 `MolecularOperation` 的骨架定义。本文列出的原子/分子操作应理解为**目标模型**，并非当前已完整实现的运行时能力。
 
 ## 原子操作
 

@@ -2,34 +2,26 @@
 
 本文档提供 `ChunkLoader` 的概述。
 
-`ChunkLoader` 是区块对象的持有者。它负责缓存区块实例，并提供按区块 id 或二维坐标访问、卸载与清空的统一入口。
+`ChunkLoader` 是区块实例的直接持有者。它负责缓存区块对象，并提供按区块 id 或二维坐标访问、卸载与清空的统一入口。
 
 ## 模块定位
 
-`ChunkLoader` 解决的是"谁持有区块对象"这个问题。
+`ChunkLoader` 解决的是“谁持有一组区块实例”这个问题。
 
-因此它的职责边界是：
+它的职责边界是：
 
 - 持有当前 loader 作用域中的区块实例
-- 负责按区块 id 与二维坐标解析区块实例
-- 负责卸载与清空当前持有集合
-- 只同步当前持有集合内部的四向邻接引用
-- 负责对外发送区块加载、区块卸载与缓冲区更新事件
+- 提供按区块 id / 坐标解析区块实例的统一入口
+- 维护当前持有集合内部的四向邻接引用
+- 发出区块加载、区块卸载与缓冲区更新事件
+- 清理当前 loader 的持有关系与事件上下文
 
 它不负责：
 
-- 表达"当前区块"
+- 表达“当前区块”
 - 维护连续矩形缓冲区边界
-- 决定完整加载还是临时加载
-
-## 核心职责
-
-- 管理区块实例映射 `chunksLoaded`
-- 提供 `getChunkById(chunkId)`
-- 提供 `getChunkByCoordinate(x, y)`
-- 提供 `unloadChunkById(chunkId)`
-- 提供 `unloadChunkByCoordinate(x, y)`
-- 提供 `clear()` 与 `reset()`
+- 决定 TEMP/FULL 的真正加载实现
+- 决定对象何时被真正装入 `BoardCore.objectLoaded`
 
 ## 核心字段
 
@@ -45,24 +37,17 @@
 
 ### `getChunkById(chunkId)`
 
-按区块 id 获取区块实例。
-
 当前流程：
 
 1. 若当前已持有该区块，直接返回缓存实例
 2. 若未持有，优先调用 `resolveChunkById(chunkId)`
-3. 若未提供解析器，则退回到 `Chunk.fromId(chunkId)`
+3. 若未提供解析器，则回退到 `Chunk.fromId(chunkId)`
 4. 将结果纳入当前 `ChunkLoader` 持有范围
-5. 同步当前持有集合内部的四向邻接引用
+5. 刷新当前持有集合内部的邻接引用
 
 ### `getChunkByCoordinate(x, y)`
 
 先将二维坐标转换为区块 id，再复用 `getChunkById(...)`。
-
-这保证了：
-
-- 同一 loader 中，同一坐标和同一 id 最终会命中同一个区块实例
-- 区块实例复用策略由 loader 自身统一管理
 
 ## 卸载模型
 
@@ -70,50 +55,66 @@
 
 卸载当前 loader 持有的某个区块。
 
-若配置了 `unloadChunk(chunk)` 钩子，则会在真正从 `chunksLoaded` 中移除前先调用它：
+若配置了 `unloadChunk(chunk)` 钩子，则会先执行它：
 
-- 返回 `false` 表示拒绝卸载
-- 返回其它值表示允许继续移除
+- 返回 `false`：拒绝卸载
+- 返回其它值：允许继续从 `chunksLoaded` 中移除
 
 ### `clear()`
 
 遍历当前持有的全部区块，逐个调用卸载流程。
 
-它适合"需要真实执行卸载"的场景。
+适合“需要真实触发卸载逻辑”的场景。
 
 ### `reset()`
 
 只清空当前持有关系，不触发 `unloadChunk` 钩子。
 
-## 与 `Board` 的关系
+### `destroy()`
 
-当前实现中：
+当前实现会：
 
-- `Board` 自己持有一个根 `ChunkLoader`
-- `Board.getChunkById(...)` 与 `Board.getChunkByCoordinate(...)` 都委托给根 `ChunkLoader`
-- `Board.getChunkLoader()` 用于暴露该根 loader
-- `Board.createChunkLoader()` 会创建绑定到 Board 事件总线的新 `ChunkLoader`，适合需要自行管理加载集合的消费者（如 Viewport、AOM）
+- 对所有已持有区块发出 `REQUEST_UNLOAD`
+- 清空本地持有关系
+- 释放 `eventBus`、`resolveChunkById`、`unloadChunk`、`requesterId`
 
-## API
+## 与 `BoardCore` 的关系
 
-| 名称                            | 描述                           | 类型                                     |
-| ------------------------------- | ------------------------------ | ---------------------------------------- |
-| `getChunkById(chunkId)`         | 按区块 id 获取区块             | `(number) => Chunk \| undefined`         |
-| `getChunkByCoordinate(x, y)`    | 按二维坐标获取区块             | `(number, number) => Chunk \| undefined` |
-| `unloadChunkById(chunkId)`      | 按区块 id 卸载区块             | `(number) => boolean`                    |
-| `unloadChunkByCoordinate(x, y)` | 按坐标卸载区块                 | `(number, number) => boolean`            |
-| `clear()`                       | 卸载并清空当前持有集合         | `() => boolean`                          |
-| `reset()`                       | 只重置持有集合，不触发卸载钩子 | `() => void`                             |
-| `emitLoadRequest(...)`          | 发出区块加载请求               | `(Chunk, Object) => boolean`             |
-| `emitUnloadRequest(...)`        | 发出区块卸载请求               | `(Chunk, Object) => boolean`             |
-| `emitBufferUpdated(...)`        | 发出缓冲区更新事件             | `(Object) => boolean`                    |
+当前运行时中：
+
+- **`BoardCore`** 持有一个根 `ChunkLoader`：`rootChunkLoader`
+- `BoardCore.getChunkById(...)` / `getChunkByCoordinate(...)` 都委托给这个根 loader
+- `BoardCore.createChunkLoader(requesterId)` 可创建新的独立 loader
+
+也就是说，这里的“Board”应理解为 **Worker 侧 `BoardCore`**，而不是 UI 侧 `Board` facade。
+
+## 与 ViewportCore / AOM 的关系
+
+- `ViewportCore` 当前通过 `boardCore.createChunkLoader(...)` 持有自己的视口区块集合
+- `ActiveObjectManager` 在跨区块操作中也会创建临时 loader
+- 这些 loader 通过事件总线向 `BoardCore` 请求 TEMP / FULL 加载与卸载
+
+`ChunkLoader` 自身只负责发事件，不负责完成真正的 FULL/TEMP 语义。
+
+## 事件接口
+
+当前相关事件名包括：
+
+- `chunk-loader:request-load`
+- `chunk-loader:request-unload`
+- `chunk-loader:buffer-updated`
+- `chunk-loader:load-complete`
+
+对应常量定义在 `CHUNK_LOAD_EVENTS`。
 
 ## 实现状态
 
-- 已实现：区块实例持有、按 id/坐标获取、按 id/坐标卸载、清空持有集合、持有集合内部邻接同步，以及区块加载相关事件发射。
-- 已接线：`Board` 根区块加载器委托，Viewport/AOM 使用 `Board.createChunkLoader()` 创建独立加载器。
-- 待完善：更细粒度的生命周期统计、不同 loader 之间的区块共享策略，以及更完整的错误恢复路径。
+- 已实现：区块实例持有、按 id/坐标获取、按 id/坐标卸载、清空持有集合、集合内部邻接同步，以及区块加载相关事件发射
+- 已接线：`BoardCore` 根 loader、`ViewportCore` loader、AOM 临时 loader
+- 待完善：更细粒度的 loader 共享策略、生命周期统计，以及更复杂的错误恢复路径
 
 ## 相关文档
 
-- [board-document.md](../../../../ui/components/orchestration/docs/board-document.md)
+- [board-core-document.md](../../orchestration/docs/board-core-document.md)
+- [viewport-core-document.md](../../orchestration/docs/viewport-core-document.md)
+- [chunk-document.md](./chunk-document.md)
