@@ -5,14 +5,14 @@
  * @author Zhou Chenyu
  */
 
-import { Renderer } from "../../../shared/components/renderer/renderer.js";
+import { Renderer } from "../../../shared/renderer/renderer.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../shared/range/rectangle.js";
 import {
   ActiveObjectManager,
   Layer,
 } from "../orchestration/active-object-manager.js";
-import { createLiveDirtyRectThresholdStrategy } from "../../../shared/components/renderer/dirty-rect-strategy-shared.js";
+import { createLiveDirtyRectThresholdStrategy } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
 
 /**
  * 活动层渲染器

@@ -30,7 +30,7 @@
 | `components/renderer/renderer.js`                     | Shared   | 渲染器基类（继承 CanvasHost）                                                               |
 | `components/renderer/render-scheduler.js`             | Shared   | 脏区调度                                                                                    |
 | `components/renderer/dirty-rect-*.js`                 | Shared   | 脏区策略                                                                                    |
-| `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`） | UI       | DAG 路由 + 设备定义 + 工具 + 编排，统一在 UI 线程下                                         |
+| `devices-dag/`（含 `devices/`、`tools/`、`prefixes/`） | UI       | DAG 路由 + 设备定义 + 工具 + 编排，统一在 UI 线程下                                         |
 | `hit/`                                                | Worker   | Undo Tree 与历史结构                                                                        |
 | `objects/`                                            | Shared   | 白板对象模型与反序列化                                                                      |
 | `range/`                                              | Shared   | 几何范围抽象                                                                                |
@@ -67,7 +67,7 @@
 - `UiRenderer` 只在 UI 侧使用，因为它直接操作 `Viewport.uiCanvas`
 - `BaseRenderer` / `LiveRenderer` / `RenderScheduler` / dirty rect 策略本身不依赖 DOM，当前属于 Shared
 
-### `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`）
+### `devices-dag/`（含 `devices/`、`tools/`、`prefixes/`）
 
 这四类模块全部统一在 `devices-dag/` 下，停留在 UI 线程：
 

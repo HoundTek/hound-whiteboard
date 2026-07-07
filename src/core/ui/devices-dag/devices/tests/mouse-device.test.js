@@ -1,6 +1,6 @@
 import { DevicesDAG, createSubDAG } from "../index.js";
 import { createMouseDevice } from "../mouse-device.js";
-import { createEdgePrefix } from "../../prefixs/index.js";
+import { createEdgePrefix } from "../../prefixes/index.js";
 import { Tool } from "../../tools/tool.js";
 
 /**

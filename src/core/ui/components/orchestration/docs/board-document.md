@@ -89,5 +89,5 @@ tools 应优先通过 `boardApi` 访问真实状态。
 ## 相关文档
 
 - [viewport-document.md](./viewport-document.md)
-- [active-object-manager-document.md](../../../../shared/components/orchestration/docs/active-object-manager-document.md)
+- [active-object-manager-document.md](../../../../worker/components/orchestration/docs/active-object-manager-document.md)
 - [core-runtime-boundaries.md](../../../../docs/core-runtime-boundaries.md)

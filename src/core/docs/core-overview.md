@@ -34,7 +34,7 @@
 1. 宿主输入先归属到某个 viewport
 2. `Board.signalsEventBus.emit("input", ...)` 把信号送到 `Board.devicesDAG`
 3. `devices/` 节点做输入规整与分流
-4. `prefixs/` 负责 handoff、信号转换和局部状态机
+4. `prefixes/` 负责 handoff、信号转换和局部状态机
 5. `tools/` 作为叶子消费信号，并通过 `boardApi` 读写 Worker 状态
 
 ### 渲染
@@ -56,7 +56,7 @@
 
 - `Board`：UI facade，持有 signalsEventBus、DevicesDAG、viewport 集合，通过 Worker 与 BoardCore 通信
 - `Viewport`：UI 视口，承载 DOM canvas 与 overlay，接收 Worker 侧渲染帧
-- `devices-dag/`（含 `devices/`、`tools/`、`prefixs/`）：输入编排与交互工具
+- `devices-dag/`（含 `devices/`、`tools/`、`prefixes/`）：输入编排与交互工具
 - `UiRenderer`：UI overlay 渲染
 
 ### 共享职责

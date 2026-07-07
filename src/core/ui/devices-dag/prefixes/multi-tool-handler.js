@@ -5,7 +5,7 @@
  * 通过 resolveTransition 回调决定当前信号应路由到哪个子节点、是否消费等。
  * 适合 creator/modifier handoff 等多工具链路切换场景。
  * 向上通信改用累积上下文中的回调函数，不再使用 bubble 冒泡。
- * @module core/ui/devices-dag/prefixs/multi-tool-handler
+ * @module core/ui/devices-dag/prefixes/multi-tool-handler
  * @author Zhou Chenyu
  */
 

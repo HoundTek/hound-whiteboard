@@ -8,9 +8,9 @@ import {
   createLiveDirtyRectThresholdStrategy,
   createZoomScaledThresholdStrategy,
   screenRectToWorldRect,
-} from "../../../../worker/components/renderer/dirty-rect-strategy.js";
-import { Chunk } from "../../../../worker/components/chunk/chunk.js";
-import { RectangleRange } from "../../../range/rectangle.js";
+} from "../../../../core/worker/components/renderer/dirty-rect-strategy.js";
+import { Chunk } from "../../../../core/worker/components/chunk/chunk.js";
+import { RectangleRange } from "../../range/rectangle.js";
 
 describe("dirty rect strategy", () => {
   test("base 预设策略应返回 zoom-aware 阈值", () => {

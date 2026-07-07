@@ -7,7 +7,7 @@
  *
  * 状态写入（setState / patchState）和路由操作（routeToChild / stop）
  * 均直接委托 DAG 提供的标准 helper，不在本模块重复实现。
- * @module core/ui/devices-dag/prefixs/handler
+ * @module core/ui/devices-dag/prefixes/handler
  * @author Zhou Chenyu
  */
 

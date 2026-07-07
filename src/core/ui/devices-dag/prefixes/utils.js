@@ -2,7 +2,7 @@
  * @file 修饰节点内部工具方法
  * @description 提供修饰节点 handler 内部通用的判断、浅克隆等辅助逻辑。
  *   `isPlainObject` 从 devices-dag 导入以避免重复定义。
- * @module core/ui/devices-dag/prefixs/utils
+ * @module core/ui/devices-dag/prefixes/utils
  * @author Zhou Chenyu
  */
 

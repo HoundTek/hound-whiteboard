@@ -1,11 +1,11 @@
 /**
  * @file shared dirty rect 策略
  * @description 提供不依赖 chunk、DOM 和线程宿主的 dirty rect 共享策略函数。
- * @module core/shared/components/renderer/dirty-rect-strategy-shared
+ * @module core/shared/renderer/dirty-rect-strategy-shared
  * @author Zhou Chenyu
  */
 
-import { RectangleRange } from "../../range/rectangle.js";
+import { RectangleRange } from "../range/rectangle.js";
 
 /**
  * 规整缩放因子

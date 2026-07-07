@@ -178,5 +178,5 @@
 
 ## 相关文档
 
-- [viewport-document.md](../../../../ui/components/orchestration/docs/viewport-document.md)
-- [live-renderer-document.md](../../../../worker/components/renderer/docs/live-renderer-document.md)
+- [viewport-document.md](../../../../../src/core/ui/components/orchestration/docs/viewport-document.md)
+- [live-renderer-document.md](../../../../../src/core/worker/components/renderer/docs/live-renderer-document.md)

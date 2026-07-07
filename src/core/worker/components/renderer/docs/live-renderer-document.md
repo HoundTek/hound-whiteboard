@@ -297,5 +297,5 @@ LiveRenderer 通过 `viewport.baseRenderer.canvas` 访问 baseCanvas。
 
 - [viewport-document.md](../../../../ui/components/orchestration/docs/viewport-document.md)
 - [ui-renderer-document.md](../../../../ui/components/renderer/docs/ui-renderer-document.md)
-- [active-object-manager-document.md](../../../../shared/components/orchestration/docs/active-object-manager-document.md)
-- [tier-graph-document.md](../../../../shared/components/orchestration/docs/tier-graph-document.md)
+- [active-object-manager-document.md](../../../../worker/components/orchestration/docs/active-object-manager-document.md)
+- [tier-graph-document.md](../../../../worker/components/orchestration/docs/tier-graph-document.md)

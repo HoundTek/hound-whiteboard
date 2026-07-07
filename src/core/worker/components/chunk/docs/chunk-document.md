@@ -113,4 +113,4 @@
 
 - [chunk-object-manager-document.md](./chunk-object-manager-document.md)
 - [board-document.md](../../../../ui/components/orchestration/docs/board-document.md)
-- [tier-graph-document.md](../../../../shared/components/orchestration/docs/tier-graph-document.md)
+- [tier-graph-document.md](../../../../worker/components/orchestration/docs/tier-graph-document.md)

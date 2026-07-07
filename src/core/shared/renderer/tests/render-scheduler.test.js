@@ -1,4 +1,4 @@
-import { RectangleRange } from "../../../range/rectangle.js";
+import { RectangleRange } from "../../range/rectangle.js";
 import {
   createRectangleDirtyRectMerger,
   RenderScheduler,

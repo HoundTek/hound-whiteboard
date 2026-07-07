@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { Renderer } from "../../../shared/components/renderer/renderer.js";
+import { Renderer } from "../../../shared/renderer/renderer.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../shared/range/rectangle.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";

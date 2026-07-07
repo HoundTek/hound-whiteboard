@@ -237,4 +237,4 @@ Creator 扩展为 `buildInteractionContext`，额外提供 `injectedProperty`、
 - [object-creator-document.md](./creator/docs/object-creator-document.md)
 - [object-chooser-document.md](./chooser/docs/object-chooser-document.md)
 - [object-modifier-document.md](./modifier/docs/object-modifier-document.md)
-- [handoff-handler-document.md](../prefixs/docs/handoff-handler-document.md)
+- [handoff-handler-document.md](../prefixes/docs/handoff-handler-document.md)

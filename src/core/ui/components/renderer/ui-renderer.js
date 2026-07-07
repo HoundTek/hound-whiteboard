@@ -9,17 +9,17 @@ import { intersectsRanges, RectangleRange } from "../../../shared/range/index.js
 import { Viewport } from "../orchestration/viewport.js";
 import { Logger } from "../../../../utils/log/logger.js";
 import { logBus } from "../../../../utils/log/log-bus.js";
-import { createRectangleDirtyRectMerger } from "../../../shared/components/renderer/render-scheduler.js";
-import { createLiveDirtyRectThresholdStrategy } from "../../../shared/components/renderer/dirty-rect-strategy-shared.js";
-import { CanvasHost } from "../../../shared/components/renderer/canvas-lifecycle.js";
-import { expandRectForClear } from "../../../shared/components/renderer/renderer.js";
-import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "../../../shared/components/renderer/ui-overlay-factory.js";
+import { createRectangleDirtyRectMerger } from "../../../shared/renderer/render-scheduler.js";
+import { createLiveDirtyRectThresholdStrategy } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
+import { CanvasHost } from "../../../shared/renderer/canvas-lifecycle.js";
+import { expandRectForClear } from "../../../shared/renderer/renderer.js";
+import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "../../../shared/renderer/ui-overlay-factory.js";
 
 /**
  * UI overlay provider
  * @callback UiOverlayProvider
  * @param {{ viewport: Viewport, renderer: UiRenderer }} context - provider 上下文
- * @returns {import("../../../shared/components/renderer/ui-overlay-factory.js").UiOverlayEntry | import("../../../shared/components/renderer/ui-overlay-factory.js").UiOverlayEntry[] | undefined}
+ * @returns {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry | import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry[] | undefined}
  */
 
 /**
@@ -99,7 +99,7 @@ class UiRenderer extends CanvasHost {
   /**
    * 收集自定义 overlay 条目
    * @description 遍历所有 provider，归一化后合并返回。单个 provider 异常不中断其他 provider 的收集。
-   * @returns {import("../../../shared/components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
+   * @returns {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectProviderOverlayEntries() {
     const overlayEntries = [];
@@ -132,7 +132,7 @@ class UiRenderer extends CanvasHost {
 
   /**
    * 收集当前应绘制的 overlay
-   * @returns {import("../../../shared/components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
+   * @returns {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectOverlayEntries() {
     return this.collectProviderOverlayEntries();
@@ -141,7 +141,7 @@ class UiRenderer extends CanvasHost {
   /**
    * 绘制矩形 overlay 条目
    * @param {CanvasRenderingContext2D} context - 画布上下文
-   * @param {import("../../../shared/components/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 矩形条目
+   * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 矩形条目
    */
   drawRectEntry(context, entry = {}) {
     const screenRect = RectangleRange.fromRectLike(entry.screenRect);

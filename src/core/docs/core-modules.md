@@ -85,7 +85,7 @@
 - `GestureBasedObjectModifierTool`：position / displacement 双通道手势调度
 - `CommonObjectModifierTool`：通用位置修改实现
 
-### `prefixs/`（输入编排）
+### `prefixes/`（输入编排）
 
 - `handoff-handler.js`：creator / chooser → modifier 两阶段工作流
 - `edge-prefix.js`、`prefix-node.js` 等：信号转换、注入和局部状态机

@@ -1,12 +1,12 @@
 /**
  * @file UI overlay 条目工厂
  * @description 提供 overlay 条目的创建、归一化与坐标辅助函数。
- * @module core/shared/components/renderer/ui-overlay-factory
+ * @module core/shared/renderer/ui-overlay-factory
  * @author Zhou Chenyu
  */
 
-import { BasicObject } from "../../objects/basic-obj.js";
-import { RectangleRange } from "../../range/index.js";
+import { BasicObject } from "../objects/basic-obj.js";
+import { RectangleRange } from "../range/index.js";
 
 /**
  * 兼容选中框的最小留白（屏幕像素）

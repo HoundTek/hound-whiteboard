@@ -4,7 +4,7 @@ import { BasicObject } from "../../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../../shared/range/index.js";
 import { createNoopCanvasContext2D } from "../../../../test-support/noop-canvas.js";
 import { Vector } from "../../../../utils/math.js";
-import { createCompatSelectionEntriesForSummaries } from "../../../../shared/components/renderer/ui-overlay-factory.js";
+import { createCompatSelectionEntriesForSummaries } from "../../../../shared/renderer/ui-overlay-factory.js";
 
 class TestOverlayObject extends BasicObject {
   constructor({ id = 1, position, localRect, property } = {}) {

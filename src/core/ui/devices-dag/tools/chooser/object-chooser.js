@@ -9,7 +9,7 @@ import { GestureTool } from "../gesture-tool.js";
 import { RectangleRange, intersectsRanges } from "../../../../shared/range/index.js";
 import { Range } from "../../../../shared/range/range.js";
 import { Vector } from "../../../../utils/math.js";
-import { createCompatSelectionEntriesForSummaries } from "../../../../shared/components/renderer/ui-overlay-factory.js";
+import { createCompatSelectionEntriesForSummaries } from "../../../../shared/renderer/ui-overlay-factory.js";
 
 /**
  * 对象选择工具基类

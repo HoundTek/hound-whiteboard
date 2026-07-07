@@ -18,7 +18,7 @@ import {
   createZoomScaledThresholdStrategy,
   normalizeDirtyRectZoomScale,
   screenRectToWorldRect,
-} from "../../../shared/components/renderer/dirty-rect-strategy-shared.js";
+} from "../../../shared/renderer/dirty-rect-strategy-shared.js";
 
 /**
  * 收集世界坐标矩形覆盖到的已加载区块

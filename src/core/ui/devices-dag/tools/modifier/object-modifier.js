@@ -10,7 +10,7 @@ import { SignalPacket } from "../../signal.js";
 import { BasicObject } from "../../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../../shared/range/index.js";
 import { Vector } from "../../../../utils/math.js";
-import { createCompatSelectionEntriesForSummaries } from "../../../../shared/components/renderer/ui-overlay-factory.js";
+import { createCompatSelectionEntriesForSummaries } from "../../../../shared/renderer/ui-overlay-factory.js";
 
 /**
  * 对象修改工具相关信号类型常量

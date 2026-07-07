@@ -88,5 +88,5 @@ unsetObjectCoverChunks(objectId); // 删除
 ## 相关文档
 
 - [board-document.md](../../../../ui/components/orchestration/docs/board-document.md)（UI 侧 Board facade）
-- [active-object-manager-document.md](../../../../shared/components/orchestration/docs/active-object-manager-document.md)
+- [active-object-manager-document.md](../../../../worker/components/orchestration/docs/active-object-manager-document.md)
 - [viewport-core-document.md](./viewport-core-document.md)

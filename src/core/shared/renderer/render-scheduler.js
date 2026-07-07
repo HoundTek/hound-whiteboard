@@ -1,12 +1,12 @@
 /**
  * @file 渲染调度器
  * @description 负责脏区域合并、清理和渲染顺序的调度策略。
- * @module core/shared/components/renderer/render-scheduler
+ * @module core/shared/renderer/render-scheduler
  * @author Zhou Chenyu
  */
 
-import { RectangleRange } from "../../range/rectangle.js";
-import { intersectsRanges } from "../../range/geometry.js";
+import { RectangleRange } from "../range/rectangle.js";
+import { intersectsRanges } from "../range/geometry.js";
 
 const DIRTY_RECT_NEAR_GAP = 8;
 const DIRTY_RECT_DIAGONAL_GAP = 4;

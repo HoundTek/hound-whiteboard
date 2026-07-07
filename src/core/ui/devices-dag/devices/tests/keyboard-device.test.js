@@ -1,5 +1,5 @@
 import { DevicesDAG, createSubDAG } from "../index.js";
-import { createEdgePrefix } from "../../prefixs/index.js";
+import { createEdgePrefix } from "../../prefixes/index.js";
 import {
   createKeyboardDevice,
   KEYBOARD_DEVICE_SIGNAL_TYPES,

@@ -14,7 +14,7 @@ import {
 import {
   createEdgePrefix,
   createHandoffSubDAG,
-} from "../../core/ui/devices-dag/prefixs/index.js";
+} from "../../core/ui/devices-dag/prefixes/index.js";
 import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../core/ui/devices-dag/tools/modifier/common-object-modifier.js";

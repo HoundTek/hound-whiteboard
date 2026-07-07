@@ -1,7 +1,7 @@
 /**
  * @file 画布生命周期管理器
  * @description 提供画布引用、尺寸管理、渲染调度器初始化的通用组合基类。
- * @module core/shared/components/renderer/canvas-lifecycle
+ * @module core/shared/renderer/canvas-lifecycle
  * @author Zhou Chenyu
  */
 

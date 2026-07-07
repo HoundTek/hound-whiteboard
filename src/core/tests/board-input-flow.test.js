@@ -1,6 +1,6 @@
 import { Board } from "../ui/components/orchestration/board.js";
 import { createSubDAG } from "../ui/devices-dag/index.js";
-import { createEdgePrefix } from "../ui/devices-dag/prefixs/index.js";
+import { createEdgePrefix } from "../ui/devices-dag/prefixes/index.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
