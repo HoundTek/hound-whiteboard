@@ -121,11 +121,7 @@ class Queue {
    */
   toArray() {
     const result = [];
-    let index = this.head;
-    while (index !== this.tail) {
-      result.push(this.elements[index]);
-      index = (index + 1) % this.capacity;
-    }
+    this.#forEach((elem) => result.push(elem));
     return result;
   }
 
@@ -136,13 +132,9 @@ class Queue {
    */
   filter(predicate) {
     const result = [];
-    let index = this.head;
-    while (index !== this.tail) {
-      if (predicate(this.elements[index])) {
-        result.push(this.elements[index]);
-      }
-      index = (index + 1) % this.capacity;
-    }
+    this.#forEach((elem) => {
+      if (predicate(elem)) result.push(elem);
+    });
     return result;
   }
 
@@ -153,11 +145,7 @@ class Queue {
    */
   map(transform) {
     const result = [];
-    let index = this.head;
-    while (index !== this.tail) {
-      result.push(transform(this.elements[index]));
-      index = (index + 1) % this.capacity;
-    }
+    this.#forEach((elem) => result.push(transform(elem)));
     return result;
   }
 
@@ -172,26 +160,41 @@ class Queue {
   }
 
   /**
+   * 遍历队列元素
+   * @param {(elem: *, index: number) => void} fn - 遍历回调
+   * @private
+   */
+  #forEach(fn) {
+    if (this.head < this.tail) {
+      for (let i = this.head, j = 0; i < this.tail; i++, j++) {
+        fn(this.elements[i], j);
+      }
+    } else {
+      let j = 0;
+      for (let i = this.head; i < this.capacity; i++, j++) {
+        fn(this.elements[i], j);
+      }
+      for (let i = 0; i < this.tail; i++, j++) {
+        fn(this.elements[i], j);
+      }
+    }
+  }
+
+  /**
    * 动态扩容
    * @private
    */
   #resize() {
-    const oldCapacity = this.capacity;
-    const newCapacity = oldCapacity * Queue.GROWTH_FACTOR;
+    const newCapacity = this.capacity * Queue.GROWTH_FACTOR;
     const newElements = new Array(newCapacity);
-
-    // 将元素复制到新数组（保持顺序）
-    let count = 0;
-    let i = this.head;
-    while (i !== this.tail) {
-      newElements[count++] = this.elements[i];
-      i = (i + 1) % oldCapacity;
-    }
-
+    const elementCount = this.count();
+    this.#forEach((elem, i) => {
+      newElements[i] = elem;
+    });
     this.elements = newElements;
     this.capacity = newCapacity;
     this.head = 0;
-    this.tail = count;
+    this.tail = elementCount;
   }
 }
 
