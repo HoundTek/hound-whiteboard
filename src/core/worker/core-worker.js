@@ -17,6 +17,8 @@ import { BoardCore } from "./components/orchestration/board-core.js";
 import { ViewportCore } from "./components/orchestration/viewport-core.js";
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
+import { createConsolePrinter } from "../../utils/log/console-printer.js";
+import { handleDebugQuery } from "./debug-helper.js";
 
 /**
  * 判断值是否可作为 Worker 消息宿主
@@ -98,6 +100,9 @@ class CoreWorkerRuntime {
    */
   #offWorkerLogs;
 
+  /** Worker 运行时 DEBUG 日志订阅取消函数 */
+  #offDebugLog;
+
   /**
    * runtime 是否已启动
    * @type {boolean}
@@ -141,6 +146,10 @@ class CoreWorkerRuntime {
 
     this.#started = true;
     this.#host.addEventListener("message", this.#messageListener);
+    this.#offDebugLog = createConsolePrinter(logBus, {
+      levels: ["DEBUG"],
+      timestamps: true,
+    });
     this.#offWorkerLogs = logBus.onLevels(["WARN", "ERROR"], (entry) => {
       this.#postMessage({
         type: "worker-log",
@@ -165,6 +174,8 @@ class CoreWorkerRuntime {
     }
 
     this.#host.removeEventListener("message", this.#messageListener);
+    this.#offDebugLog?.();
+    this.#offDebugLog = null;
     this.#offWorkerLogs?.();
     this.#offWorkerLogs = null;
     this.#destroyAllViewportCores();
@@ -210,6 +221,9 @@ class CoreWorkerRuntime {
         return;
       case "request-render-flush":
         this.#handleRenderFlush(message);
+        return;
+      case "debug-request":
+        this.#handleDebugRequest(message);
         return;
       default:
         return;
@@ -897,6 +911,18 @@ class CoreWorkerRuntime {
     for (const viewportCore of this.#viewportCores.values()) {
       viewportCore.flushRenderFrame();
     }
+  }
+
+  /**
+   * 处理调试请求，输出调试信息到 Logger
+   * @param {{ query?: string, chunkId?: number, [key: string]: any }} message - 调试请求消息
+   * @returns {void}
+   * @private
+   */
+  #handleDebugRequest(message) {
+    const { query, ...params } = message;
+    const boardCore = this.#requireBoardCore();
+    handleDebugQuery(boardCore, query, params);
   }
 }
 

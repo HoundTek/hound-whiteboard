@@ -12,19 +12,19 @@
 
 ## 已实现内容
 
-### 1. 左键笔画创建
+### 左键笔画创建
 
 - 鼠标左键进入 `/mouse/primary/default` → `/workflows/primary-stroke`
 - 末端工具为 `StrokeCreatorTool`
 - 创建结果写入白板并参与渲染
 
-### 2. 右键矩形框选
+### 右键矩形框选
 
 - 鼠标右键进入 `/mouse/secondary/default` → `/workflows/secondary-chooser`
 - 末端工具为 `RectangleObjectChooserTool`
 - 用于选择覆盖范围内的对象
 
-### 3. 随机圆对象创建
+### 随机圆对象创建
 
 - 按下 `Space` 键触发随机圆 workflow
 - 键盘 code 节点默认走边 `"default"`，通过边级 prefix 转发 `trigger` 信号
@@ -38,7 +38,7 @@
 - `/workflows/create-circle/params`
 - `/workflows/create-circle/params/tool`
 
-### 4. WASD 位移 → handoff modifier
+### WASD 位移 → handoff modifier
 
 - `W`、`A`、`S`、`D` 键通过各自边级 prefix 将 trigger / trigger-repeat 转为 displacement 信号
 - displacement 信号作为边级 prefix 注入到 handoff 工作流（`/workflows/secondary-chooser`）
@@ -46,7 +46,7 @@
 - 锚点跟随位移同步，后续鼠标拖拽不产生跳跃
 - 长按触发系统 repeat 时，键盘设备发出 `trigger-repeat` 信号，WASD prefix 同样转为 displacement 持续移动对象
 
-### 5. 视口控制
+### 视口控制
 
 - `Arrow` 键控制视口平移
 - `Equal` / `NumpadAdd` 放大
@@ -56,33 +56,38 @@
 每个视口控制键通过各自边级 prefix 将 trigger 转为 position / scale / flush 信号，
 全部汇聚到共享 workflow `/workflows/viewport`。
 
-### 6. 调试命令
+### 调试命令
 
-- `KeyC`：打印 chunk 加载状态
-- `KeyO`：打印 object 加载状态
-- `KeyM`：打印 ActiveObjectManager 状态
-- `KeyB`：打印 board 状态
-- `KeyT`：打印 devices DAG 相关状态
-- `Digit1`-`Digit4`：打印指定 chunk 详情
+- `KeyC` → `debug:chunkload`：打印 chunk 加载计数
+- `Shift+C` → `debug:chunkdetails`（`ctx.ids`）：打印指定区块静态图，不传 ids 则输出全部
+- `KeyO` → `debug:objectload`：打印 object 加载计数
+- `Shift+O` → `debug:objectdetails`（`ctx.ids` / `ctx.chunks`）：打印指定对象详情，不传则输出全部
+- `KeyM` → `debug:viewport`：打印视口摘要
+- `KeyB` → `debug:board`：打印 board 摘要（Worker 侧）
+- `Shift+B` → `debug:aom`：打印 ActiveObjectManager 分层状态
+- `KeyT` → `debug:devices`（`ctx.mode="tree"`）：打印设备 DAG 树状结构
+- `Shift+T` → `debug:devices`（`ctx.mode="mermaid"`）：打印 Mermaid 流程图
 
-### 快捷键一览
+## 快捷键一览
 
-| 按键          | 功能                           |
-| ------------- | ------------------------------ |
-| 鼠标左键      | 画红色笔迹                     |
-| 鼠标右键      | 首次框选对象 → 再次拖拽修改    |
-| W / A / S / D | 移动选中对象（右键激活后）     |
-| ↑ / ↓ / ← / → | 平移视口                       |
-| + / −         | 放大 / 缩小视口                |
-| R             | 刷新视口渲染                   |
-| Space         | 随机生成圆形                   |
-| C             | 调试：chunk 加载状态           |
-| O             | 调试：object 加载状态          |
-| M             | 调试：Active Object Manager    |
-| B             | 调试：board 状态               |
-| T             | 调试：设备 DAG (树状)          |
-| Shift + T     | 调试：设备 DAG（mermaid 格式） |
-| 1 / 2 / 3 / 4 | 调试：指定 chunk 详情          |
+| 按键          | 功能                                 |
+| ------------- | ------------------------------------ |
+| 鼠标左键      | 画红色笔迹                           |
+| 鼠标右键      | 首次框选对象 → 再次拖拽修改          |
+| W / A / S / D | 移动选中对象（右键激活后）           |
+| ↑ / ↓ / ← / → | 平移视口                             |
+| + / −         | 放大 / 缩小视口                      |
+| R             | 刷新视口渲染                         |
+| Space         | 随机生成圆形                         |
+| C             | 调试：chunk 加载计数                 |
+| Shift + C     | 调试：已加载区块静态图               |
+| O             | 调试：object 加载计数                |
+| Shift + O     | 调试：已加载对象完整摘要             |
+| M             | 调试：视口摘要                       |
+| B             | 调试：board 摘要                     |
+| Shift + B     | 调试：Active Object Manager 分层状态 |
+| T             | 调试：设备 DAG（树状）               |
+| Shift + T     | 调试：设备 DAG（Mermaid 流程图）     |
 
 ## 工具链验证点
 

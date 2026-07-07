@@ -45,10 +45,6 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "Minus",
   "NumpadAdd",
   "NumpadSubtract",
-  "Digit1",
-  "Digit2",
-  "Digit3",
-  "Digit4",
   "Enter",
   "Escape",
 ]);
@@ -223,10 +219,10 @@ function buildWasdNodeConfig(code, vector) {
 
 /**
  * 构建键盘调试 prefix handler
- * @description 将 trigger 信号转为指定调试类型的信号。type 可以是静态字符串或
- * 动态函数 (signals) => string（如根据 Shift 分流）。
- * @param {string | ((signals: object[]) => string)} type - 调试信号类型或解析函数
- * @param {Object} [debugContext={}] - 调试上下文附加数据
+ * @description 将 trigger 信号转为指定调试类型的信号。type 可以是静态字符串、
+ * 动态函数 (signals) => string，或 (signals) => ({ type, context })。
+ * @param {string | ((signals: object[]) => string | { type: string, context?: Object })} type - 调试信号类型或解析函数
+ * @param {Object} [debugContext={}] - 调试上下文附加数据（默认合并到 signal.context）
  * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
@@ -236,10 +232,17 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
-      const resolvedType =
-        typeof type === "function" ? type(triggerSignals) : type;
+
+      const resolved = typeof type === "function" ? type(triggerSignals) : type;
+      const signalType =
+        typeof resolved === "object" ? resolved.type : resolved;
+      const signalContext = {
+        ...debugContext,
+        ...(typeof resolved === "object" ? resolved.context : undefined),
+      };
+
       return ctx.routeToChild(ctx.defaultRoute || "", [
-        ctx.signal(resolvedType, undefined, debugContext),
+        ctx.signal(signalType, undefined, signalContext),
       ]);
     },
   };
@@ -296,8 +299,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     createRandomCircleSubDAG({
       rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
     });
-  const viewportTool =
-    options.viewportTool ?? new ViewportTool();
+  const viewportTool = options.viewportTool ?? new ViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
@@ -422,22 +424,36 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
 
   // Debug：C/O/M/B/T/1-4 → per-key prefix
   {
-    const simpleDebugEdges = [
-      { code: "KeyC", type: "debug:chunkload" },
-      { code: "KeyO", type: "debug:objectload" },
-      { code: "KeyM", type: "debug:aom" },
-      { code: "KeyB", type: "debug:board" },
+    const debugEdgeConfigs = [
+      {
+        code: "KeyC",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:chunkdetails"
+            : "debug:chunkload",
+      },
+      {
+        code: "KeyO",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:objectdetails"
+            : "debug:objectload",
+      },
+      { code: "KeyM", type: "debug:viewport" },
+      {
+        code: "KeyB",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:aom"
+            : "debug:board",
+      },
       {
         code: "KeyT",
         type: (signals) =>
           signals.some((s) => s?.context?.shiftKey)
-            ? "debug:mermaid"
+            ? { type: "debug:devices", context: { mode: "mermaid" } }
             : "debug:devices",
       },
-      { code: "Digit1", type: "debug:chunk", ctx: { id: 1 } },
-      { code: "Digit2", type: "debug:chunk", ctx: { id: 2 } },
-      { code: "Digit3", type: "debug:chunk", ctx: { id: 3 } },
-      { code: "Digit4", type: "debug:chunk", ctx: { id: 4 } },
     ].map(({ code, type, ctx }) => ({
       from: `/keyboard/code/${code}`,
       edge: "default",
@@ -448,7 +464,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
       viewportId: viewport.viewportId,
       name: DEMO_WORKFLOW_NAMES.DEBUG,
       workflow: debugTool,
-      edges: simpleDebugEdges,
+      edges: debugEdgeConfigs,
     });
   }
 
@@ -463,11 +479,11 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
       `方向键 : 平移视口\n` +
       `+/- : 缩放视口\n` +
       `R : 刷新视口\n` +
-      `C/O : 区块/对象加载调试\n` +
-      `M : AOM 调试\n` +
-      `B : 白板调试\n` +
-      `T : 设备图调试（Shift+T = mermaid）\n` +
-      `1-4 : 区块详情`,
+      `C : 区块加载  |  Shift+C : 区块详情\n` +
+      `O : 对象加载  |  Shift+O : 对象详情\n` +
+      `M : 视口摘要\n` +
+      `B : 白板摘要  |  Shift+B : AOM 分层\n` +
+      `T : 设备图    |  Shift+T : 设备图 Mermaid`,
   );
 
   return {
