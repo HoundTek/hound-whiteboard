@@ -1,7 +1,8 @@
-import { jest } from "@jest/globals";
-import { createChunk } from "../../../../../test-support/aom-fixtures.js";
+import {
+  createChunk,
+  createMockBoard,
+} from "../../../../../test-support/aom-fixtures.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
-import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
 import { StrokeObject } from "../../../../../shared/objects/stroke/stroke.js";
 import { Vector } from "../../../../../utils/math.js";
@@ -25,24 +26,13 @@ describe("ActiveObjectManager/operate", () => {
     return object;
   }
 
-  function createBoard(...chunks) {
-    const chunkMap = new Map(chunks.map((chunk) => [chunk.id, chunk]));
-    return {
-      width: 10,
-      height: 10,
-      createChunkLoader: () => ({
-        trackChunk: jest.fn(),
-        emitLoadRequest: jest.fn(),
-      }),
-      getChunkById: (chunkId) => chunkMap.get(chunkId),
-    };
-  }
-
   beforeEach(() => {
     chunk = createChunk(1);
     chunk.objectManager = new ChunkObjectManager(1);
     chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
-    aom = new ActiveObjectManager(createBoard(chunk));
+    aom = new ActiveObjectManager(
+      createMockBoard([chunk], { width: 10, height: 10 }),
+    );
   });
 
   describe("置顶选择对象", () => {

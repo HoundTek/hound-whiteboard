@@ -9,17 +9,30 @@ import { jest } from "@jest/globals";
 import os from "os";
 import path from "path";
 
-import { Board } from "../../../../ui/components/orchestration/board.js";
+import { BoardCore } from "../../../components/orchestration/board-core.js";
 import { Chunk } from "../chunk.js";
-import { CHUNK_LOAD_EVENTS } from "../chunk-loader.js";
+import { CHUNK_LOAD_EVENTS, CHUNK_LOAD_STRATEGIES } from "../chunk-loader.js";
+import { createDefaultAomRenderHooks } from "../../../components/orchestration/aom-render-hooks.js";
+import { createDefaultPersistenceAdapter } from "../../../../bridges/persistence-adapter.js";
 
 describe("Multiple ChunkLoader", () => {
-  function getChunkLoadState(board, chunkId) {
-    return board.chunkLoaded.get(chunkId);
+  let boardCore;
+
+  beforeEach(() => {
+    boardCore = new BoardCore({
+      width: 800,
+      height: 600,
+      aomRenderHooks: createDefaultAomRenderHooks(),
+      persistenceAdapter: createDefaultPersistenceAdapter(),
+    });
+  });
+
+  function getChunkLoadState(_board, chunkId) {
+    return boardCore.chunkLoaded.get(chunkId);
   }
 
   function createBoardHarness() {
-    const board = new Board();
+    const board = {};
     const chunk1 = Chunk.fromId(6);
     const chunk2 = Chunk.fromId(1);
     const chunk3 = Chunk.fromId(2);
@@ -53,9 +66,9 @@ describe("Multiple ChunkLoader", () => {
       });
     }
 
-    board.rootPath = path.join(os.tmpdir(), "houndwhiteboard-board-test");
+    boardCore.rootPath = path.join(os.tmpdir(), "houndwhiteboard-board-test");
     for (const chunk of [chunk1, chunk2, chunk3]) {
-      board.chunkLoaded.set(chunk.id, {
+      boardCore.chunkLoaded.set(chunk.id, {
         chunk,
         tempLoadedCount: 0,
         fullLoadedCount: 0,
@@ -70,9 +83,11 @@ describe("Multiple ChunkLoader", () => {
    * 通过 ChunkLoader 发出加载请求并等待 Board 处理
    */
   async function requestTempLoad(board, chunk) {
-    const loader = board.createChunkLoader(`test-${Date.now()}-${Math.random()}`);
+    const loader = boardCore.createChunkLoader(
+      `test-${Date.now()}-${Math.random()}`,
+    );
     loader.getChunkById(chunk.id);
-    const results = board.chunkLoadEventBus.emit(
+    const results = boardCore.chunkLoadEventBus.emit(
       CHUNK_LOAD_EVENTS.REQUEST_LOAD,
       {
         requesterId: loader.requesterId,
@@ -92,9 +107,11 @@ describe("Multiple ChunkLoader", () => {
    * 通过 ChunkLoader 发出完整加载请求并等待 Board 处理
    */
   async function requestFullLoad(board, chunk) {
-    const loader = board.createChunkLoader(`test-${Date.now()}-${Math.random()}`);
+    const loader = boardCore.createChunkLoader(
+      `test-${Date.now()}-${Math.random()}`,
+    );
     loader.getChunkById(chunk.id);
-    const results = board.chunkLoadEventBus.emit(
+    const results = boardCore.chunkLoadEventBus.emit(
       CHUNK_LOAD_EVENTS.REQUEST_LOAD,
       {
         requesterId: loader.requesterId,
@@ -114,7 +131,7 @@ describe("Multiple ChunkLoader", () => {
    * 通过 ChunkLoader 发出卸载请求并等待 Board 处理
    */
   async function requestUnload(board, chunk, requesterId) {
-    const results = board.chunkLoadEventBus.emit(
+    const results = boardCore.chunkLoadEventBus.emit(
       CHUNK_LOAD_EVENTS.REQUEST_UNLOAD,
       {
         requesterId,
@@ -196,9 +213,9 @@ describe("Multiple ChunkLoader", () => {
     expect(getChunkLoadState(board, 1).fullLoadedCount).toBe(1);
 
     // 同一 requester 再次请求 full → 引用计数不变
-    const loader1Dup = board.createChunkLoader(loader1.requesterId);
+    const loader1Dup = boardCore.createChunkLoader(loader1.requesterId);
     loader1Dup.getChunkById(chunk2.id);
-    board.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_LOAD, {
+    boardCore.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_LOAD, {
       requesterId: loader1.requesterId,
       chunk: chunk2,
       strategy: "full",
@@ -219,7 +236,7 @@ describe("Multiple ChunkLoader", () => {
     chunk2.loadFull.mockClear();
 
     // 同一 requester 从 temp 升级到 full
-    board.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_LOAD, {
+    boardCore.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_LOAD, {
       requesterId: loader.requesterId,
       chunk: chunk2,
       strategy: "full",
@@ -235,12 +252,12 @@ describe("Multiple ChunkLoader", () => {
   });
 
   test("memory board 不应卸载任何区块", async () => {
-    const board = new Board();
+    const board = {};
     const chunk = Chunk.fromId(1);
     chunk.board = board;
     chunk.isLoad = true;
     chunk.isTempLoad = false;
-    board.chunkLoaded.set(chunk.id, {
+    boardCore.chunkLoaded.set(chunk.id, {
       chunk,
       tempLoadedCount: 0,
       fullLoadedCount: 1,
@@ -248,7 +265,7 @@ describe("Multiple ChunkLoader", () => {
     });
     const unloadSpy = jest.spyOn(chunk, "unload").mockReturnValue(true);
 
-    board.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, {
+    boardCore.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, {
       requesterId: "board-root",
       chunk,
       source: "test",
@@ -256,6 +273,6 @@ describe("Multiple ChunkLoader", () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(unloadSpy).not.toHaveBeenCalled();
-    expect(board.chunkLoaded.has(chunk.id)).toBe(true);
+    expect(boardCore.chunkLoaded.has(chunk.id)).toBe(true);
   });
 });

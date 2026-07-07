@@ -1,7 +1,12 @@
 import { jest } from "@jest/globals";
 import {
+  chunkConnect,
   createChunk,
   createChunkAt,
+  createMockBoard,
+  createObjectInChunk,
+  setObjectCoverage,
+  verticalChunkConnect,
 } from "../../../../../test-support/aom-fixtures.js";
 
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
@@ -31,46 +36,7 @@ describe("ActiveObjectManager/pickup", () => {
    * @returns {BasicObject}
    */
   function createObject(id, chunkId) {
-    const coord = Chunk.idToCoordinate(chunkId);
-    const pos = new Vector(
-      coord.x * CHUNK_SIZE + CHUNK_SIZE / 2,
-      coord.y * CHUNK_SIZE + CHUNK_SIZE / 2,
-    );
-    return new BasicObject(id, pos);
-  }
-
-  function createBoard(...chunks) {
-    const chunkMap = new Map(chunks.map((chunk) => [chunk.id, chunk]));
-    return {
-      width: CHUNK_SIZE,
-      height: CHUNK_SIZE,
-      getChunkById: (chunkId) => chunkMap.get(chunkId),
-      getChunkByCoordinate: (x, y) => chunkMap.get(Chunk.coordinateToId(x, y)),
-      createChunkLoader: () => ({
-        trackChunk: jest.fn(),
-        emitLoadRequest: jest.fn(),
-      }),
-    };
-  }
-
-  function chunkConnect(chunkA, chunkB) {
-    chunkA.rightChunk = chunkB;
-    chunkB.leftChunk = chunkA;
-  }
-
-  function verticalChunkConnect(lowerChunk, upperChunk) {
-    lowerChunk.upChunk = upperChunk;
-    upperChunk.downChunk = lowerChunk;
-  }
-
-  function setObjectCoverage(chunks, objectIds) {
-    const chunkIds = chunks.map((chunk) => chunk.id);
-
-    for (const chunk of chunks) {
-      for (const objectId of objectIds) {
-        chunk.objectManager.setObjectCoverChunks(objectId, chunkIds);
-      }
-    }
+    return createObjectInChunk(id, chunkId, CHUNK_SIZE);
   }
 
   describe("选取无跨区块对象的子图", () => {
@@ -80,7 +46,9 @@ describe("ActiveObjectManager/pickup", () => {
       chunk = createChunk(1);
       chunk.objectManager = new ChunkObjectManager(1);
       chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
-      aom = new ActiveObjectManager(createBoard(chunk));
+      aom = new ActiveObjectManager(
+        createMockBoard([chunk], { width: CHUNK_SIZE, height: CHUNK_SIZE }),
+      );
     });
 
     test("应能选取单对象为起点且无跨区块对象的子图", async () => {
@@ -139,7 +107,12 @@ describe("ActiveObjectManager/pickup", () => {
     beforeEach(() => {
       chunk1 = createChunk(1);
       chunk2 = createChunk(2);
-      aom = new ActiveObjectManager(createBoard(chunk1, chunk2));
+      aom = new ActiveObjectManager(
+        createMockBoard([chunk1, chunk2], {
+          width: CHUNK_SIZE,
+          height: CHUNK_SIZE,
+        }),
+      );
 
       chunkConnect(chunk1, chunk2);
 
@@ -216,7 +189,10 @@ describe("ActiveObjectManager/pickup", () => {
       chunk4 = createChunkAt(3, 0);
       chunk5 = createChunkAt(4, 0);
       aom = new ActiveObjectManager(
-        createBoard(chunk1, chunk2, chunk3, chunk4, chunk5),
+        createMockBoard([chunk1, chunk2, chunk3, chunk4, chunk5], {
+          width: CHUNK_SIZE,
+          height: CHUNK_SIZE,
+        }),
       );
 
       chunk1.objectManager = new ChunkObjectManager(chunk1.id);
@@ -276,7 +252,10 @@ describe("ActiveObjectManager/pickup", () => {
       const upChunk = createChunkAt(0, 1);
       const rightUpChunk = createChunkAt(1, 1);
       aom = new ActiveObjectManager(
-        createBoard(centerChunk, rightChunk, upChunk, rightUpChunk),
+        createMockBoard([centerChunk, rightChunk, upChunk, rightUpChunk], {
+          width: CHUNK_SIZE,
+          height: CHUNK_SIZE,
+        }),
       );
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
@@ -322,7 +301,10 @@ describe("ActiveObjectManager/pickup", () => {
       const upperChunk = createChunkAt(0, 1);
       const startChunk = createChunkAt(1, 1);
       aom = new ActiveObjectManager(
-        createBoard(centerChunk, upperChunk, startChunk),
+        createMockBoard([centerChunk, upperChunk, startChunk], {
+          width: CHUNK_SIZE,
+          height: CHUNK_SIZE,
+        }),
       );
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
@@ -368,7 +350,12 @@ describe("ActiveObjectManager/pickup", () => {
       const centerChunk = createChunkAt(0, 0);
       const upChunk = createChunkAt(0, 1);
       // (1,1) 区块不在 board 中
-      aom = new ActiveObjectManager(createBoard(centerChunk, upChunk));
+      aom = new ActiveObjectManager(
+        createMockBoard([centerChunk, upChunk], {
+          width: CHUNK_SIZE,
+          height: CHUNK_SIZE,
+        }),
+      );
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
       upChunk.objectManager = new ChunkObjectManager(upChunk.id);
@@ -405,7 +392,10 @@ describe("ActiveObjectManager/pickup", () => {
       const rightChunk = createChunkAt(1, 0);
       const upChunk = createChunkAt(0, 1);
       aom = new ActiveObjectManager(
-        createBoard(centerChunk, rightChunk, upChunk),
+        createMockBoard([centerChunk, rightChunk, upChunk], {
+          width: CHUNK_SIZE,
+          height: CHUNK_SIZE,
+        }),
       );
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);

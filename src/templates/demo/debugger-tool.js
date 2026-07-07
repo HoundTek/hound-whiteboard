@@ -35,13 +35,18 @@ class DebuggerTool extends Tool {
           this.logMermaidDevicesDAG(board);
           break;
         case "debug:chunk":
-          this.logChunk(board, signal?.context?.id);
+          this.#log.info("chunk debug not available from UI Board");
           break;
         case "debug:aom":
-          this.logActiveObjectManager(board);
+          this.#log.info("AOM debug not available from UI Board");
           break;
         case "debug:board":
-          this.logBoard(board);
+          this.#log.info("board summary:", {
+            viewportIds: Array.from(board.viewports?.keys?.() ?? []),
+            rootPath: board.rootPath,
+            width: board.width,
+            height: board.height,
+          });
           break;
         default:
           if (

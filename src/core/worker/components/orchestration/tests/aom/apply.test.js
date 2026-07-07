@@ -1,21 +1,47 @@
 import { jest } from "@jest/globals";
-import { createChunk } from "../../../../../test-support/aom-fixtures.js";
+import {
+  createBoardCoreAomFixture,
+  createChunk,
+} from "../../../../../test-support/aom-fixtures.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Vector } from "../../../../../utils/math.js";
 import { ActiveObjectManager } from "../../active-object-manager.js";
-import { Board } from "../../../../../ui/components/orchestration/board.js";
 import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
 import { StrokeObject } from "../../../../../shared/objects/stroke/stroke.js";
 import { CircleObject } from "../../../../../shared/objects/graph/circle.js";
 import { RectangleRange } from "../../../../../shared/range/index.js";
 
+/**
+ * AOM Worker 测试默认预加载的区块 ID 集合
+ * @type {number[]}
+ */
+const DEFAULT_BOARD_CHUNK_IDS = Array.from(
+  { length: 20 },
+  (_, index) => index + 1,
+);
+
+/**
+ * 创建供 AOM 集成测试使用的 Worker BoardCore
+ * @param {{ width?: number, height?: number, chunkIds?: Iterable<number> }} [options={}] - BoardCore 初始化选项
+ * @returns {import("../../board-core.js").BoardCore}
+ */
+function createWorkerBoard(options = {}) {
+  const { boardCore } = createBoardCoreAomFixture({
+    width: options.width ?? 10,
+    height: options.height ?? 10,
+    chunkIds: options.chunkIds ?? DEFAULT_BOARD_CHUNK_IDS,
+  });
+  return boardCore;
+}
+
 describe("ActiveObjectManager/apply", () => {
   describe("basic apply", () => {
     test("apply 应将活动对象写回 ChunkObjectManager 并同步覆盖区块索引", async () => {
-      const board = new Board();
-      board.width = 10;
-      board.height = 10;
+      const board = createWorkerBoard({
+        width: 10,
+        height: 10,
+      });
 
       const stroke = new StrokeObject(15, new Vector(0, 0));
       stroke.setData({
@@ -43,9 +69,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("apply 应根据活动层顺序为相交对象写回静态图上下关系", async () => {
-      const board = new Board();
-      board.width = 10;
-      board.height = 10;
+      const board = createWorkerBoard({
+        width: 10,
+        height: 10,
+      });
 
       const lower = new StrokeObject(21, new Vector(0, 0));
       lower.setData({
@@ -74,9 +101,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("apply 单独提交上层对象后应保留一个 inactive layer", async () => {
-      const board = new Board();
-      board.width = 10;
-      board.height = 10;
+      const board = createWorkerBoard({
+        width: 10,
+        height: 10,
+      });
 
       const lower = new StrokeObject(23, new Vector(0, 0));
       lower.setData({
@@ -111,9 +139,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("apply 应为顺序创建的相交对象补上静态图连边", async () => {
-      const board = new Board();
-      board.width = 10;
-      board.height = 10;
+      const board = createWorkerBoard({
+        width: 10,
+        height: 10,
+      });
 
       const vertical = new StrokeObject(41, new Vector(0, 0));
       vertical.setData({
@@ -366,9 +395,10 @@ describe("ActiveObjectManager/apply", () => {
     }
 
     test("对象跨区块移动后旧区块 COM 中节点、边和覆盖索引应被清理", async () => {
-      const board = new Board();
-      board.width = CHUNK_WIDTH;
-      board.height = CHUNK_HEIGHT;
+      const board = createWorkerBoard({
+        width: CHUNK_WIDTH,
+        height: CHUNK_HEIGHT,
+      });
 
       const chunkId00 = cid(0, 0);
       const chunkId10 = cid(1, 0);
@@ -396,9 +426,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("对象覆盖范围收缩后不再覆盖的旧区块应被清理", async () => {
-      const board = new Board();
-      board.width = CHUNK_WIDTH;
-      board.height = CHUNK_HEIGHT;
+      const board = createWorkerBoard({
+        width: CHUNK_WIDTH,
+        height: CHUNK_HEIGHT,
+      });
 
       const chunkId00 = cid(0, 0);
       const chunkId10 = cid(1, 0);
@@ -441,9 +472,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("对象覆盖范围不变时不做清理", async () => {
-      const board = new Board();
-      board.width = CHUNK_WIDTH;
-      board.height = CHUNK_HEIGHT;
+      const board = createWorkerBoard({
+        width: CHUNK_WIDTH,
+        height: CHUNK_HEIGHT,
+      });
 
       const chunkId00 = cid(0, 0);
       const chunkId01 = cid(0, 1);
@@ -472,9 +504,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("多个对象混合移动时每个对象只清理自己的旧区块", async () => {
-      const board = new Board();
-      board.width = CHUNK_WIDTH;
-      board.height = CHUNK_HEIGHT;
+      const board = createWorkerBoard({
+        width: CHUNK_WIDTH,
+        height: CHUNK_HEIGHT,
+      });
 
       const chunkId00 = cid(0, 0);
       const chunkId10 = cid(1, 0);
@@ -510,9 +543,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("多次 apply 间跨区块移动的累积清理", async () => {
-      const board = new Board();
-      board.width = CHUNK_WIDTH;
-      board.height = CHUNK_HEIGHT;
+      const board = createWorkerBoard({
+        width: CHUNK_WIDTH,
+        height: CHUNK_HEIGHT,
+      });
 
       const chunkId00 = cid(0, 0);
       const chunkId10 = cid(1, 0);
@@ -548,9 +582,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("对象移出再移回后应重建静态图边", async () => {
-      const board = new Board();
-      board.width = 800;
-      board.height = 600;
+      const board = createWorkerBoard({
+        width: 800,
+        height: 600,
+      });
 
       const chunkId00 = cid(0, 0);
 
@@ -607,9 +642,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("选中对象后跨区块移动但 discard 时不清理旧区块", async () => {
-      const board = new Board();
-      board.width = CHUNK_WIDTH;
-      board.height = CHUNK_HEIGHT;
+      const board = createWorkerBoard({
+        width: CHUNK_WIDTH,
+        height: CHUNK_HEIGHT,
+      });
 
       const chunkId00 = cid(0, 0);
 
@@ -632,9 +668,10 @@ describe("ActiveObjectManager/apply", () => {
     });
 
     test("apply 同层活动的对象时应保留指向同层非活动对象的边缘", async () => {
-      const board = new Board();
-      board.width = 10;
-      board.height = 10;
+      const board = createWorkerBoard({
+        width: 10,
+        height: 10,
+      });
 
       const circle = new CircleObject(1, new Vector(5, 5), {}, { radius: 20 });
       const stroke = new StrokeObject(2, new Vector(0, 0));

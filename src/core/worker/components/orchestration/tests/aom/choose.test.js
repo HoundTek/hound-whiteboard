@@ -1,14 +1,16 @@
 import { jest } from "@jest/globals";
 import {
+  chunkConnect,
   createChunk,
   createChunkAt,
+  createMockBoard,
+  createObjectInChunk,
+  setObjectCoverage,
+  verticalChunkConnect,
 } from "../../../../../test-support/aom-fixtures.js";
 
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
-import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
-import { BasicObject } from "../../../../../shared/objects/basic-obj.js";
-import { Vector } from "../../../../../utils/math.js";
 import { oneChunkData } from "./data.js";
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
@@ -20,53 +22,16 @@ describe("ActiveObjectManager/choose", () => {
   const CHUNK_SIZE = 100;
 
   function createObject(id, chunkId) {
-    const coord = Chunk.idToCoordinate(chunkId);
-    const pos = new Vector(
-      coord.x * CHUNK_SIZE + CHUNK_SIZE / 2,
-      coord.y * CHUNK_SIZE + CHUNK_SIZE / 2,
-    );
-    return new BasicObject(id, pos);
-  }
-
-  function createBoard(...chunks) {
-    const chunkMap = new Map(chunks.map((chunk) => [chunk.id, chunk]));
-    return {
-      width: CHUNK_SIZE,
-      height: CHUNK_SIZE,
-      getChunkById: (chunkId) => chunkMap.get(chunkId),
-      getChunkByCoordinate: (x, y) => chunkMap.get(Chunk.coordinateToId(x, y)),
-      createChunkLoader: () => ({
-        trackChunk: jest.fn(),
-        emitLoadRequest: jest.fn(),
-      }),
-    };
-  }
-
-  function chunkConnect(chunkA, chunkB) {
-    chunkA.rightChunk = chunkB;
-    chunkB.leftChunk = chunkA;
-  }
-
-  function verticalChunkConnect(lowerChunk, upperChunk) {
-    lowerChunk.upChunk = upperChunk;
-    upperChunk.downChunk = lowerChunk;
-  }
-
-  function setObjectCoverage(chunks, objectIds) {
-    const chunkIds = chunks.map((item) => item.id);
-
-    for (const targetChunk of chunks) {
-      for (const objectId of objectIds) {
-        targetChunk.objectManager.setObjectCoverChunks(objectId, chunkIds);
-      }
-    }
+    return createObjectInChunk(id, chunkId, CHUNK_SIZE);
   }
 
   beforeEach(() => {
     chunk = createChunk(1);
     chunk.objectManager = new ChunkObjectManager(1);
     chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
-    aom = new ActiveObjectManager(createBoard(chunk));
+    aom = new ActiveObjectManager(
+      createMockBoard([chunk], { width: CHUNK_SIZE, height: CHUNK_SIZE }),
+    );
 
     // 将 RandomNumberPool Mock 一下
     let idCounter = 0;
@@ -257,7 +222,10 @@ describe("ActiveObjectManager/choose", () => {
       const upChunk = createChunkAt(0, 1);
       const rightUpChunk = createChunkAt(1, 1);
       aom = new ActiveObjectManager(
-        createBoard(centerChunk, rightChunk, upChunk, rightUpChunk),
+        createMockBoard([centerChunk, rightChunk, upChunk, rightUpChunk], {
+          width: CHUNK_SIZE,
+          height: CHUNK_SIZE,
+        }),
       );
 
       centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);

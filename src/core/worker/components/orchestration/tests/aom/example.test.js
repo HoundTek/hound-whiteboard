@@ -1,7 +1,7 @@
-import { Board } from "../../../../../ui/components/orchestration/board.js";
 import { CircleObject } from "../../../../../shared/objects/graph/circle.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Vector } from "../../../../../utils/math.js";
+import { createBoardCoreAomFixture } from "../../../../../test-support/aom-fixtures.js";
 
 const ID = Object.freeze({
   A: 1,
@@ -14,12 +14,23 @@ const ID = Object.freeze({
   H: 8,
 });
 
+/**
+ * 创建示例图对应的 BoardCore 测试夹具
+ * @returns {{
+ *   boardCore: import("../../board-core.js").BoardCore,
+ *   chunk: import("../../../chunk/chunk.js").Chunk,
+ *   objects: Record<string, CircleObject>,
+ * }}
+ */
 function createExampleBoard() {
-  const board = new Board();
-  board.width = 1000;
-  board.height = 1000;
+  const { boardCore, ensureLoadedChunk, seedBoardObject } =
+    createBoardCoreAomFixture({
+      width: 1000,
+      height: 1000,
+      chunkIds: [1],
+    });
+  const chunk = ensureLoadedChunk(1);
 
-  const chunk = board.getChunkById(1);
   const positions = {
     A: new Vector(0, 0),
     B: new Vector(0, 0),
@@ -40,8 +51,7 @@ function createExampleBoard() {
       { radius: 10 },
     );
     objects[name] = object;
-    board.addObject(object, 1);
-    chunk.objectManager.setObjectCoverChunks(objectId, [1]);
+    seedBoardObject(object, { coveredChunkIds: [1] });
   }
 
   chunk.objectManager.staticGraph = DirectedGraph.parse([
@@ -55,9 +65,18 @@ function createExampleBoard() {
     [ID.H, [ID.C]],
   ]);
 
-  return { board, chunk, objects };
+  return { boardCore, chunk, objects };
 }
 
+/**
+ * 断言 layer 的活动态与静态图结构
+ * @param {import("../../layer.js").Layer} layer - 待断言的层
+ * @param {{
+ *   active: boolean,
+ *   activeObjects: number[],
+ *   inactiveGraphData: Array<[number, number[]]>,
+ * }} options - 期望值
+ */
 function expectLayer(layer, { active, activeObjects, inactiveGraphData }) {
   expect(layer.active).toBe(active);
   expect(layer.activeObjects).toEqual(new Set(activeObjects));
@@ -68,16 +87,15 @@ function expectLayer(layer, { active, activeObjects, inactiveGraphData }) {
 
 describe("ActiveObjectManager/example", () => {
   test("示例三：discard 后保留的 inactive layer 仍会影响后续 apply", async () => {
-    const { board, chunk, objects } = createExampleBoard();
+    const { boardCore, chunk, objects } = createExampleBoard();
+    const aom = boardCore.activeObjectManager;
 
-    await board.activeObjectManager.choose(
-      new Set([objects.C, objects.E, objects.H]),
-    );
-    await board.activeObjectManager.choose(new Set([objects.G]));
-    board.activeObjectManager.discard(new Set([objects.G]));
+    await aom.choose(new Set([objects.C, objects.E, objects.H]));
+    await aom.choose(new Set([objects.G]));
+    aom.discard(new Set([objects.G]));
 
-    expect(board.activeObjectManager.layerOrder.length).toBe(3);
-    expectLayer(board.activeObjectManager.layerOrder[2], {
+    expect(aom.layerOrder.length).toBe(3);
+    expectLayer(aom.layerOrder[2], {
       active: false,
       activeObjects: [ID.G],
       inactiveGraphData: [],
@@ -87,9 +105,9 @@ describe("ActiveObjectManager/example", () => {
     objects.E.position = new Vector(300, 0);
     objects.H.position = new Vector(400, 0);
 
-    board.activeObjectManager.apply(new Set([objects.C, objects.E, objects.H]));
+    aom.apply(new Set([objects.C, objects.E, objects.H]));
 
-    expect(board.activeObjectManager.layerOrder.length).toBe(0);
+    expect(aom.layerOrder.length).toBe(0);
     expect(
       chunk.objectManager.staticGraph.equals(
         DirectedGraph.parse([
@@ -107,56 +125,56 @@ describe("ActiveObjectManager/example", () => {
   });
 
   test("示例四：先选 C 再选 B，discard C 后应清掉底部 inactive 前缀层", async () => {
-    const { board, objects } = createExampleBoard();
+    const { boardCore, objects } = createExampleBoard();
+    const aom = boardCore.activeObjectManager;
 
-    await board.activeObjectManager.choose(new Set([objects.C]));
-    await board.activeObjectManager.choose(new Set([objects.B]));
+    await aom.choose(new Set([objects.C]));
+    await aom.choose(new Set([objects.B]));
 
-    expect(board.activeObjectManager.layerOrder.length).toBe(2);
-    expectLayer(board.activeObjectManager.layerOrder[0], {
+    expect(aom.layerOrder.length).toBe(2);
+    expectLayer(aom.layerOrder[0], {
       active: true,
       activeObjects: [ID.C],
       inactiveGraphData: [],
     });
-    expectLayer(board.activeObjectManager.layerOrder[1], {
+    expectLayer(aom.layerOrder[1], {
       active: true,
       activeObjects: [ID.B],
       inactiveGraphData: [[ID.A, []]],
     });
 
-    board.activeObjectManager.discard(new Set([objects.C]));
+    aom.discard(new Set([objects.C]));
 
-    expect(board.activeObjectManager.layerOrder.length).toBe(1);
-    expectLayer(board.activeObjectManager.layerOrder[0], {
+    expect(aom.layerOrder.length).toBe(1);
+    expectLayer(aom.layerOrder[0], {
       active: true,
       activeObjects: [ID.B],
       inactiveGraphData: [[ID.A, []]],
     });
 
-    board.activeObjectManager.discard(new Set([objects.B]));
-    expect(board.activeObjectManager.layerOrder.length).toBe(0);
+    aom.discard(new Set([objects.B]));
+    expect(aom.layerOrder.length).toBe(0);
   });
 
   test("示例五：先选 C、E、H，再选 D 时应在最下方插入新的活动层", async () => {
-    const { board, objects } = createExampleBoard();
+    const { boardCore, objects } = createExampleBoard();
+    const aom = boardCore.activeObjectManager;
 
-    await board.activeObjectManager.choose(
-      new Set([objects.C, objects.E, objects.H]),
-    );
-    await board.activeObjectManager.choose(new Set([objects.D]));
+    await aom.choose(new Set([objects.C, objects.E, objects.H]));
+    await aom.choose(new Set([objects.D]));
 
-    expect(board.activeObjectManager.layerOrder.length).toBe(3);
-    expectLayer(board.activeObjectManager.layerOrder[0], {
+    expect(aom.layerOrder.length).toBe(3);
+    expectLayer(aom.layerOrder[0], {
       active: true,
       activeObjects: [ID.D],
       inactiveGraphData: [],
     });
-    expectLayer(board.activeObjectManager.layerOrder[1], {
+    expectLayer(aom.layerOrder[1], {
       active: true,
       activeObjects: [ID.E, ID.H],
       inactiveGraphData: [[ID.F, []]],
     });
-    expectLayer(board.activeObjectManager.layerOrder[2], {
+    expectLayer(aom.layerOrder[2], {
       active: true,
       activeObjects: [ID.C],
       inactiveGraphData: [
@@ -167,19 +185,18 @@ describe("ActiveObjectManager/example", () => {
   });
 
   test("示例二：选择 C、E、H 时，F 应与 E、H 同层", async () => {
-    const { board, objects } = createExampleBoard();
+    const { boardCore, objects } = createExampleBoard();
+    const aom = boardCore.activeObjectManager;
 
-    await board.activeObjectManager.choose(
-      new Set([objects.C, objects.E, objects.H]),
-    );
+    await aom.choose(new Set([objects.C, objects.E, objects.H]));
 
-    expect(board.activeObjectManager.layerOrder.length).toBe(2);
-    expectLayer(board.activeObjectManager.layerOrder[0], {
+    expect(aom.layerOrder.length).toBe(2);
+    expectLayer(aom.layerOrder[0], {
       active: true,
       activeObjects: [ID.E, ID.H],
       inactiveGraphData: [[ID.F, []]],
     });
-    expectLayer(board.activeObjectManager.layerOrder[1], {
+    expectLayer(aom.layerOrder[1], {
       active: true,
       activeObjects: [ID.C],
       inactiveGraphData: [

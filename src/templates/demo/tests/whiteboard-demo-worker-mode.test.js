@@ -287,8 +287,8 @@ describe("whiteboard demo worker mode", () => {
 
       expect(primaryStrokeTool._entry).toBeDefined();
       expect(primaryStrokeTool._entry.id).toBe(1);
-      expect(board.getObjectById(1)).toBeUndefined();
 
+      // object 在 commit 前不在 Worker 侧
       const summaries = await board.getBoardApi().queryObjects([1]);
       expect(summaries).toHaveLength(1);
       expect(summaries[0]).toMatchObject({
@@ -465,7 +465,6 @@ describe("whiteboard demo worker mode", () => {
       });
       await flushMicrotasks();
 
-      expect(board.getObjectById(1)).toBeUndefined();
       await expect(board.getBoardApi().queryObjects([1])).resolves.toEqual([
         expect.objectContaining({
           id: 1,
