@@ -1,7 +1,6 @@
 /**
  * @file AdaptiveSampler 单元测试
  * @description 测试自适应降采样器的首次放行、间隔恢复、密集降采样和重置行为。
- * @module utils/log/tests/adaptive-sampler.test
  * @author Zhou Chenyu
  */
 

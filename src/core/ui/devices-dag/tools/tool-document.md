@@ -222,5 +222,5 @@ unsub();
 
 - [手势工具基类](./gesture-tool-document.md)
 - [设备图](../docs/devices-dag-document.md)
-- [Core 输入流](../docs/core-input-flow.md)
-- [阶段性稳定接口](../docs/core-stable-interfaces.md)
+- [Core 输入流](../../../docs/core-input-flow.md)
+- [阶段性稳定接口](../../../docs/core-stable-interfaces.md)

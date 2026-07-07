@@ -1,7 +1,7 @@
 /**
  * @file Board API 类型定义
  * @description 定义 BoardApi 的共享 JSDoc typedef，约束同线程实现与 RPC 实现的统一签名。
- * @module core/shared/board-api-types
+ * @module core/shared/types/board-api-types
  * @author Zhou Chenyu
  */
 

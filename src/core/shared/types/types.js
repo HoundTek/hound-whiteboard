@@ -1,7 +1,7 @@
 /**
  * @file 共享类型定义
  * @description 定义 Core Worker 迁移阶段两线程共享的通用 JSDoc typedef。
- * @module core/shared/types
+ * @module core/shared/types/types
  * @author Zhou Chenyu
  */
 

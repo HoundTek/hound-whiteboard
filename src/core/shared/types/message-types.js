@@ -1,7 +1,7 @@
 /**
  * @file Worker 消息类型定义
  * @description 定义 Core Worker 迁移阶段的共享消息协议 JSDoc typedef。
- * @module core/shared/message-types
+ * @module core/shared/types/message-types
  * @author Zhou Chenyu
  */
 

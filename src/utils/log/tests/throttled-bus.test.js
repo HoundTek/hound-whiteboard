@@ -1,7 +1,6 @@
 /**
  * @file ThrottledBus 单元测试
  * @description 测试 ThrottledBus 的定时刷出、满额刷出、手动刷出、subscribe 连接和统计数据。
- * @module utils/log/tests/throttled-bus.test
  * @author Zhou Chenyu
  */
 

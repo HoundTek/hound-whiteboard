@@ -1,7 +1,6 @@
 /**
  * @file LogBus 单元测试
  * @description 测试 LogBus 的级别订阅、通配符订阅、多级别订阅和取消订阅行为。
- * @module utils/log/tests/log-bus.test
  * @author Zhou Chenyu
  */
 

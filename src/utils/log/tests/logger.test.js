@@ -1,7 +1,6 @@
 /**
  * @file Logger 单元测试
  * @description 测试 Logger 的基本发射、级别过滤、子 Logger 继承、兜底 fallback、源头节流和自适应采样。
- * @module utils/log/tests/logger.test
  * @author Zhou Chenyu
  */
 
