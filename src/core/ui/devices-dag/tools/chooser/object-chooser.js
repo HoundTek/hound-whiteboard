@@ -406,6 +406,7 @@ class ObjectChooserTool extends GestureTool {
     const regionRect = RectangleRange.fromRectLike(region);
     if (!regionRect) return [];
 
+    // 等到 boardApi.hitTest 完成后再 queryObjects
     return boardApi.hitTest(regionRect, "intersect").then((objectIds) => {
       if (!Array.isArray(objectIds) || objectIds.length === 0) return [];
       return boardApi.queryObjects(objectIds);

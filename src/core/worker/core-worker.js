@@ -14,6 +14,8 @@ import { intersectsRanges, RectangleRange } from "../shared/range/index.js";
 import { createDefaultPersistenceAdapter } from "../bridges/persistence-adapter.js";
 import { createDefaultAomRenderHooks } from "./components/orchestration/aom-render-hooks.js";
 import { BoardCore } from "./components/orchestration/board-core.js";
+import { ChunkObjectManager } from "./components/chunk/chunk-object-manager.js";
+import { CHUNK_LOAD_EVENTS } from "./components/chunk/chunk-loader.js";
 import { ViewportCore } from "./components/orchestration/viewport-core.js";
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
@@ -837,19 +839,7 @@ class CoreWorkerRuntime {
         }
         if (!queryRange) return [];
 
-        const hits = [];
-        for (const [objectId] of boardCore.objectLoaded) {
-          const obj = boardCore.getObjectById(objectId);
-          if (!obj) continue;
-
-          const worldRange = obj.getRange()?.withPosition?.(obj.position);
-          if (!worldRange) continue;
-
-          if (intersectsRanges(worldRange, queryRange)) {
-            hits.push(objectId);
-          }
-        }
-        return hits;
+        return this.#collectHitObjects(boardCore, queryRange);
       }
       case "undo":
         throw new Error("Not implemented yet.");
@@ -858,6 +848,90 @@ class CoreWorkerRuntime {
       default:
         throw new Error(`Unknown RPC method: ${method}`);
     }
+  }
+
+  /**
+   * 收集与查询范围相交的对象 id
+   * @description
+   * 若查询范围覆盖未加载或仅临时加载的区块，会先 FullLoad 使对象实例就绪，
+   * 执行命中检测后销毁 loader 释放引用。
+   * @param {BoardCore} boardCore - BoardCore 实例
+   * @param {RectangleRange} queryRange - 查询范围
+   * @returns {Promise<number[]>} 命中的对象 id 列表
+   * @private
+   */
+  async #collectHitObjects(boardCore, queryRange) {
+    // 确定查询范围覆盖的区块
+    if (
+      boardCore.width > 0 &&
+      boardCore.height > 0 &&
+      typeof queryRange.left === "number"
+    ) {
+      const chunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
+        queryRange,
+        boardCore.width,
+        boardCore.height,
+      );
+      const chunksToLoad = [...chunkIds]
+        .map((id) => boardCore.getChunkById(id))
+        .filter((chunk) => chunk && (chunk.isTempLoad || !chunk.isLoad));
+
+      if (chunksToLoad.length > 0) {
+        const loader = boardCore.createChunkLoader(
+          `hit-test-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        );
+        // 逐个加载，用 on+off 避免 EventBus.once 在 emit 迭代中移除所有回调的竞态
+        for (const chunk of chunksToLoad) {
+          loader.trackChunk(chunk);
+          loader.emitLoadRequest(chunk, { strategy: "full" });
+          await new Promise((resolve) => {
+            const handler = (payload) => {
+              if (payload.chunkId === chunk.id) {
+                boardCore.chunkLoadEventBus.off(
+                  CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
+                  handler,
+                );
+                resolve();
+              }
+            };
+            boardCore.chunkLoadEventBus.on(
+              CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
+              handler,
+            );
+          });
+        }
+
+        // 此时对象已通过 syncChunkObjectEntries 加载到 objectLoaded
+        const hits = this.#runHitTest(boardCore, queryRange);
+        loader.destroy();
+        return hits;
+      }
+    }
+
+    return this.#runHitTest(boardCore, queryRange);
+  }
+
+  /**
+   * 在当前已加载对象中执行命中检测
+   * @param {BoardCore} boardCore - BoardCore 实例
+   * @param {RectangleRange} queryRange - 查询范围
+   * @returns {number[]}
+   * @private
+   */
+  #runHitTest(boardCore, queryRange) {
+    const hits = [];
+    for (const [objectId] of boardCore.objectLoaded) {
+      const obj = boardCore.getObjectById(objectId);
+      if (!obj) continue;
+
+      const worldRange = obj.getRange()?.withPosition?.(obj.position);
+      if (!worldRange) continue;
+
+      if (intersectsRanges(worldRange, queryRange)) {
+        hits.push(objectId);
+      }
+    }
+    return hits;
   }
 
   /**
