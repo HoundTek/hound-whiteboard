@@ -768,10 +768,8 @@ class ActiveObjectManager {
     const visit = new Set();
     const graph = new DirectedGraph();
 
-    /**
-     * @type {Array<{ nodeId: number, chunk: Chunk }>}
-     */
-    const queue = [];
+    /** `{ nodeId: number, chunk: Chunk }` 的队列 */
+    const queue = new Queue();
 
     // 创建一个临时加载器，供本次拾取中所有跨区块加载复用
     const loader = this.createChunkLoader();
@@ -808,7 +806,7 @@ class ActiveObjectManager {
     }
 
     // BFS 逐层遍历
-    while (queue.length > 0) {
+    while (!queue.empty()) {
       // 批量加载当前层所有未加载的区块
       const pendingChunkIds = [
         ...new Set(
@@ -837,9 +835,9 @@ class ActiveObjectManager {
       }
 
       // 处理当前层
-      const levelSize = queue.length;
+      const levelSize = queue.count();
       for (let i = 0; i < levelSize; i++) {
-        const { nodeId, chunk: currentChunk } = queue.shift();
+        const { nodeId, chunk: currentChunk } = queue.pop();
         if (!currentChunk?.objectManager) continue;
 
         // 读取当前区块中的邻接对象

@@ -40,7 +40,7 @@ class Queue {
    * @type {number}
    * @private
    */
-  static INITIAL_CAPACITY = 8;
+  static INITIAL_CAPACITY = 32;
 
   /**
    * 扩容因子
@@ -116,6 +116,52 @@ class Queue {
   }
 
   /**
+   * 转换为数组
+   * @returns {Array<any>}
+   */
+  toArray() {
+    const result = [];
+    let index = this.head;
+    while (index !== this.tail) {
+      result.push(this.elements[index]);
+      index = (index + 1) % this.capacity;
+    }
+    return result;
+  }
+
+  /**
+   * 筛选队列元素
+   * @param {(elem: *) => boolean} predicate - 筛选函数
+   * @returns {Array<*>} 匹配的元素数组
+   */
+  filter(predicate) {
+    const result = [];
+    let index = this.head;
+    while (index !== this.tail) {
+      if (predicate(this.elements[index])) {
+        result.push(this.elements[index]);
+      }
+      index = (index + 1) % this.capacity;
+    }
+    return result;
+  }
+
+  /**
+   * 映射队列元素
+   * @param {(elem: *) => *} transform - 映射函数
+   * @returns {Array<*>} 变换后的元素数组
+   */
+  map(transform) {
+    const result = [];
+    let index = this.head;
+    while (index !== this.tail) {
+      result.push(transform(this.elements[index]));
+      index = (index + 1) % this.capacity;
+    }
+    return result;
+  }
+
+  /**
    * 清空队列
    */
   clear() {
@@ -149,6 +195,4 @@ class Queue {
   }
 }
 
-export {
-  Queue,
-};
+export { Queue };
