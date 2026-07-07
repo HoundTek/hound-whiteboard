@@ -768,15 +768,24 @@ class ActiveObjectManager {
     const visit = new Set();
     const graph = new DirectedGraph();
 
-    /** `{ nodeId: number, chunk: Chunk }` 的队列 */
-    const queue = new Queue();
+    /**
+     * 已加载区块的节点队列
+     * @description 元素类型为 `{ nodeId: number, chunk: Chunk }`
+     */
+    const loadedQueue = new Queue();
+
+    /**
+     * 需等待区块加载的节点队列
+     * @description 元素类型为 `{ nodeId: number, chunk: Chunk }`
+     */
+    const pendingQueue = new Queue();
 
     // 创建一个临时加载器，供本次拾取中所有跨区块加载复用
     const loader = this.createChunkLoader();
 
     /**
      * 从 chunk 的 staticGraph 中读取 node 的邻接对象，
-     * 将未访问的加入队列并在图中添加边
+     * 将未访问的按区块加载状态分入 loadedQueue 或 pendingQueue
      * @param {number} nodeId
      * @param {Chunk} chunk
      * @returns {void}
@@ -789,40 +798,43 @@ class ActiveObjectManager {
         if (!visit.has(next)) {
           visit.add(next);
           graph.addNodeUnsafe(next);
-          queue.push({ nodeId: next, chunk });
+          const targetQueue = chunk.isLoad ? loadedQueue : pendingQueue;
+          targetQueue.push({ nodeId: next, chunk });
         }
         graph.addEdgeUnsafe(nodeId, next);
       }
     };
 
-    // 初始化队列：将起点对象加入
+    // 初始化队列：将起点对象按加载状态分入
     for (const entry of startFrom) {
       const obj = this.requireObjectInstance(entry);
       const chunk = this.resolveObjectChunk(obj);
       if (!chunk || visit.has(obj.id)) continue;
       visit.add(obj.id);
       graph.addNodeUnsafe(obj.id);
-      queue.push({ nodeId: obj.id, chunk });
+      const targetQueue = chunk.isLoad ? loadedQueue : pendingQueue;
+      targetQueue.push({ nodeId: obj.id, chunk });
     }
 
-    // BFS 逐层遍历
-    while (!queue.empty()) {
-      // 批量加载当前层所有未加载的区块
-      const pendingChunkIds = [
-        ...new Set(
-          queue
-            .filter((item) => item.chunk && !item.chunk.isLoad)
-            .map((item) => item.chunk.id),
-        ),
-      ];
-      if (pendingChunkIds.length > 0) {
+    // BFS：优先处理已加载区块，攒够未加载的统一批量加载
+    while (!loadedQueue.empty() || !pendingQueue.empty()) {
+      // loadedQueue 耗尽时，批量加载 pendingQueue 中所有未加载区块
+      if (loadedQueue.empty() && !pendingQueue.empty()) {
+        const unloadedIds = [
+          ...new Set(
+            pendingQueue
+              .toArray()
+              .filter((item) => item.chunk && !item.chunk.isLoad)
+              .map((item) => item.chunk.id),
+          ),
+        ];
         await Promise.all(
-          pendingChunkIds.map((chunkId) => {
+          unloadedIds.map(async (chunkId) => {
             const chunk = this.board.getChunkById(chunkId);
-            if (!chunk || chunk.isLoad) return Promise.resolve();
+            if (!chunk || chunk.isLoad) return;
             loader.trackChunk(chunk);
             loader.emitLoadRequest(chunk, { strategy: "temp" });
-            return new Promise((resolve) => {
+            await new Promise((resolve) => {
               this.board.chunkLoadEventBus.once(
                 CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
                 (payload) => {
@@ -832,26 +844,24 @@ class ActiveObjectManager {
             });
           }),
         );
+        // 全部移入 loadedQueue
+        while (!pendingQueue.empty()) loadedQueue.push(pendingQueue.pop());
       }
 
-      // 处理当前层
-      const levelSize = queue.count();
-      for (let i = 0; i < levelSize; i++) {
-        const { nodeId, chunk: currentChunk } = queue.pop();
-        if (!currentChunk?.objectManager) continue;
+      const { nodeId, chunk: currentChunk } = loadedQueue.pop();
+      if (!currentChunk?.objectManager) continue;
 
-        // 读取当前区块中的邻接对象
-        enqueueNeighbors(nodeId, currentChunk);
+      // 读取当前区块中的邻接对象
+      enqueueNeighbors(nodeId, currentChunk);
 
-        // 读取覆盖区块中的邻接对象
-        const coveredIds =
-          currentChunk.objectManager.getObjectCoverChunks(nodeId);
-        for (const coveredId of coveredIds) {
-          if (coveredId === currentChunk.id) continue;
-          const coveredChunk = this.board.getChunkById(coveredId);
-          if (!coveredChunk) continue;
-          enqueueNeighbors(nodeId, coveredChunk);
-        }
+      // 读取覆盖区块中的邻接对象
+      const coveredIds =
+        currentChunk.objectManager.getObjectCoverChunks(nodeId);
+      for (const coveredId of coveredIds) {
+        if (coveredId === currentChunk.id) continue;
+        const coveredChunk = this.board.getChunkById(coveredId);
+        if (!coveredChunk) continue;
+        enqueueNeighbors(nodeId, coveredChunk);
       }
     }
 

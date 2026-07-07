@@ -9,6 +9,8 @@ import { Chunk } from "../../../chunk/chunk.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
 import { BasicObject } from "../../../../objects/basic-obj.js";
 import { Vector } from "../../../../utils/math.js";
+import { EventBus } from "../../../../utils/event-bus.js";
+import { CHUNK_LOAD_EVENTS } from "../../../chunk/chunk-loader.js";
 import { oneChunkData, twoChunkData, multiChunkData } from "./data.js";
 
 const { ActiveObjectManager } = await import("../../active-object-manager.js");
@@ -494,6 +496,76 @@ describe("ActiveObjectManager/pickup", () => {
       ]);
 
       expect(pickup8.equals(expected8)).toBe(true);
+    });
+  });
+
+  describe("跨区块加载", () => {
+    test("遍历到未加载区块时应 TempLoad 并等待完成后继续", async () => {
+      const chunk1 = createChunk(1);
+      chunk1.objectManager = new ChunkObjectManager(1);
+      chunk1.objectManager.staticGraph = DirectedGraph.parse(twoChunkData[0]);
+      // 标记覆盖关系：对象 10、15、17、18 跨区块
+      chunk1.objectManager.setObjectCoverChunks(15, [1, 2]);
+      chunk1.objectManager.setObjectCoverChunks(17, [1, 2]);
+      chunk1.objectManager.setObjectCoverChunks(18, [1, 2]);
+
+      // chunk2 处于未加载状态
+      const chunk2 = Chunk.fromId(2);
+      chunk2.x = 1;
+      chunk2.y = 0;
+      chunk2.objectManager = new ChunkObjectManager(2);
+      chunk2.objectManager.staticGraph = DirectedGraph.parse(twoChunkData[1]);
+      chunk2.objectManager.setObjectCoverChunks(15, [1, 2]);
+      chunk2.objectManager.setObjectCoverChunks(16, [2]);
+      chunk2.objectManager.setObjectCoverChunks(17, [1, 2]);
+      chunk2.objectManager.setObjectCoverChunks(18, [1, 2]);
+
+      const emitLoadMock = jest.fn((chunk, _options) => {
+        // 模拟 BoardCore 的异步加载：下个微任务完成 TempLoad
+        queueMicrotask(() => {
+          chunk.isLoad = true;
+          chunk.isTempLoad = true;
+          eventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, {
+            chunkId: chunk.id,
+          });
+        });
+      });
+      const eventBus = new EventBus();
+      const board = {
+        width: 100,
+        height: 100,
+        getChunkById: (chunkId) =>
+          chunkId === 1 ? chunk1 : chunkId === 2 ? chunk2 : undefined,
+        getChunkByCoordinate: (x, y) => {
+          if (x === 0 && y === 0) return chunk1;
+          if (x === 1 && y === 0) return chunk2;
+          return undefined;
+        },
+        chunkLoadEventBus: eventBus,
+        createChunkLoader: () => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: emitLoadMock,
+          destroy: jest.fn(),
+        }),
+        destroyChunkLoader: jest.fn(),
+      };
+      const aom = new ActiveObjectManager(board);
+
+      // 从 chunk1 的对象 15 出发，应能跨到 chunk2 并拿到 16、17、18
+      const result = await aom.pickup(new Set([createObject(15, 1)]));
+
+      expect(result.hasNode(15)).toBe(true);
+      expect(result.hasNode(16)).toBe(true);
+      expect(result.hasNode(17)).toBe(true);
+      expect(result.hasNode(18)).toBe(true);
+      // chunk2 已加载
+      expect(chunk2.isLoad).toBe(true);
+      expect(chunk2.isTempLoad).toBe(true);
+      // emitLoadRequest 被调用了
+      expect(emitLoadMock).toHaveBeenCalledWith(
+        chunk2,
+        expect.objectContaining({ strategy: "temp" }),
+      );
     });
   });
 });
