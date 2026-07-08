@@ -1309,18 +1309,11 @@ describe("DevicesDAG", () => {
   });
 
   describe("dispatch 其他边缘场景", () => {
-    test("dispatch 深度超限应在递归中抛错", () => {
+    test("dispatch 深度超限应在 _walkSegments 中抛错", () => {
       const dag = new DevicesDAG({ maxDispatchDepth: 2 });
-      dag.dispatch = jest.fn(function (...args) {
-        return DevicesDAG.prototype.dispatch.apply(this, args);
-      });
       dag.ensureNode("/deep/deep/deep");
       expect(() =>
-        dag.dispatch(
-          { to: "/deep/deep/deep", signals: [{ type: "d" }] },
-          {},
-          3,
-        ),
+        dag.dispatch({ to: "/deep/deep/deep", signals: [{ type: "d" }] }),
       ).toThrow(/depth exceeded/i);
     });
 

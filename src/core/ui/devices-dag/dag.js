@@ -28,10 +28,6 @@ import { DevicesDAGNode } from "./dag-node-edge.js";
 import { DevicesDAGEdge } from "./dag-node-edge.js";
 import { dagToString } from "./dag-debug.js";
 
-// ---------------------------------------------------------------------------
-// 类型定义（JSDoc）
-// ---------------------------------------------------------------------------
-
 /**
  * 设备图处理器上下文
  * @description
@@ -424,6 +420,18 @@ class DevicesDAG {
    * @throws {Error} 当源路径不存在或边名冲突时
    */
   addEdge(fromPath, edgeName, toPath) {
+    // 校验：addEdge 的路径必须是绝对路径
+    if (!fromPath.startsWith("/")) {
+      throw new Error(
+        `addEdge() requires an absolute path for fromPath, got "${fromPath}".`,
+      );
+    }
+    if (toPath && !toPath.startsWith("/")) {
+      throw new Error(
+        `addEdge() requires an absolute path for toPath, got "${toPath}".`,
+      );
+    }
+
     const source = this.getNode(fromPath);
     if (!source) {
       throw new Error(`Source node not found at path "${fromPath}".`);
@@ -778,12 +786,12 @@ class DevicesDAG {
    * @param {string} params.startPath - 起始节点路径
    * @param {string[]} params.segments - 路径段列表（可被循环内修改）
    * @param {SignalPacket} params.startPacket - 起始信号包
-   * @param {Object} params.accumulatedContext - 初始累积上下文
+   * @param {Record<string, any>} params.accumulatedContext - 初始累积上下文
    * @param {number} params.depth - 递归深度（内部计算用）
    * @param {(currentPacket: SignalPacket) => SignalPacket[]} [params.edgeNotFoundFallback]
    *   - 边不存在时的回退；传入当前信号包，返回回退结果。
    *   - 不传则返回空数组。
-   * @returns {{ packets: SignalPacket[], context?: Object }}
+   * @returns {{ packets: SignalPacket[], context?: Record<string, any> }}
    * @private
    */
   _walkSegments({
@@ -913,6 +921,13 @@ class DevicesDAG {
 
       // redirect：覆盖后续路径段
       if (result.redirect) {
+        // 校验：redirect 必须是相对路径
+        if (result.redirect.startsWith("/")) {
+          throw new Error(
+            `Handler at "${childPath}" returned an absolute redirect "${result.redirect}". ` +
+              `Redirect must be a relative path.`,
+          );
+        }
         const redirectSegments = normalizePath(result.redirect);
         segments.splice(i + 1, segments.length - i - 1, ...redirectSegments);
       }
@@ -925,6 +940,13 @@ class DevicesDAG {
         for (const extraPacket of remainingPackets) {
           const p = SignalPacket.from(extraPacket);
           if (p.to) {
+            // 校验：handler 返回的额外包路径必须是相对路径
+            if (p.to.startsWith("/")) {
+              throw new Error(
+                `Handler at "${childPath}" returned an extra packet with absolute path "${p.to}". ` +
+                  `Extra packet "to" must be a relative path.`,
+              );
+            }
             deferredRoutes.push({
               fromNode: child,
               fromPath: childPath,
@@ -935,6 +957,13 @@ class DevicesDAG {
         }
 
         if (primaryPacket.to) {
+          // 校验：handler 返回的路径必须是相对路径
+          if (primaryPacket.to.startsWith("/")) {
+            throw new Error(
+              `Handler at "${childPath}" returned an absolute path "${primaryPacket.to}". ` +
+                `Handler "to" must be a relative path.`,
+            );
+          }
           // 主包指定了下一段路由 → 替换后续路径
           const primarySegments = normalizePath(primaryPacket.to);
           segments.splice(i + 1, segments.length - i - 1, ...primarySegments);
@@ -983,17 +1012,18 @@ class DevicesDAG {
    * 从根节点开始分发信号包
    * @param {SignalPacket|Object} packet - 信号包
    * @param {Object} [context={}] - 初始累积上下文
-   * @param {number} [depth=0] - 当前分发深度（内部使用）
    * @returns {{ packets: SignalPacket[], context?: Object }} 分发结果
    */
-  dispatch(packet, context = {}, depth = 0) {
-    if (depth > this._maxDispatchDepth) {
+  dispatch(packet, context = {}) {
+    const startPacket = SignalPacket.from(packet, { defaultTo: "" });
+
+    // 校验：dispatch 必须使用从根节点出发的绝对路径
+    if (startPacket.to && !startPacket.to.startsWith("/")) {
       throw new Error(
-        `Dispatch depth exceeded (${this._maxDispatchDepth}). Possible cycle detected.`,
+        `dispatch() requires an absolute path starting with "/", got "${startPacket.to}".`,
       );
     }
 
-    const startPacket = SignalPacket.from(packet, { defaultTo: "" });
     let segments = normalizePath(startPacket.to || "");
 
     if (segments.length === 0) {
@@ -1010,7 +1040,7 @@ class DevicesDAG {
       segments,
       startPacket,
       accumulatedContext: context,
-      depth,
+      depth: 0,
       edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
     });
   }
