@@ -103,6 +103,14 @@ class Board {
     this.viewports = new Map();
     this.signalsEventBus = new EventBus();
     this.devicesDAG = new DevicesDAG({ maxDispatchDepth: 32 });
+
+    // 根节点 handler：注入全局共享上下文
+    this.devicesDAG.configureNode("/", {
+      handler: (_pkt, _ctx) => {
+        return { acc: { board: this, boardApi: this.#boardApi } };
+      },
+    });
+
     this.#bindSignalsEventBus();
   }
 
@@ -250,14 +258,7 @@ class Board {
   #bindSignalsEventBus() {
     // input 事件负责将信号送往对应节点
     this.signalsEventBus.on("input", ({ to, signals }) => {
-      const viewportId = to.split("/")[1];
-      const viewport = this.viewports.get(viewportId);
-      if (viewport) {
-        this.devicesDAG.dispatch(
-          { to, signals },
-          { board: this, boardApi: this.#boardApi },
-        );
-      }
+      this.devicesDAG.dispatch({ to, signals });
     });
 
     const resolveWorkflowPath = (viewportId, name) =>

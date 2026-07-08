@@ -1010,11 +1010,13 @@ class DevicesDAG {
 
   /**
    * 从根节点开始分发信号包
-   * @param {SignalPacket|Object} packet - 信号包
-   * @param {Object} [context={}] - 初始累积上下文
-   * @returns {{ packets: SignalPacket[], context?: Object }} 分发结果
+   * @description
+   * 累积上下文由根节点 handler 注入，调用方不应直接传递。
+   * @param {SignalPacket|Record<string, any>} packet - 信号包
+   * @returns {{ packets: SignalPacket[], context?: Record<string, any> }} 分发结果
    */
-  dispatch(packet, context = {}) {
+  dispatch(packet) {
+    let context = {};
     const startPacket = SignalPacket.from(packet, { defaultTo: "" });
 
     // 校验：dispatch 必须使用从根节点出发的绝对路径
@@ -1034,6 +1036,39 @@ class DevicesDAG {
       }
     }
 
+    // 调根节点 handler（如果存在），合并其 acc 到累积上下文
+    if (typeof this._root.handler === "function") {
+      const rootCtx = this._createHandlerContext(
+        this._root,
+        "/",
+        startPacket,
+        context,
+        0,
+      );
+      try {
+        let rawResult = this._root.handler(startPacket, rootCtx);
+        if (rawResult instanceof Promise) {
+          rawResult.catch((error) => {
+            console.error("[DevicesDAG] async root handler rejection:", error);
+          });
+          rawResult = undefined;
+        }
+        const rootResult = normalizeHandlerResult(rawResult);
+        if (rootResult.acc && isPlainObject(rootResult.acc)) {
+          for (const key of Object.keys(rootResult.acc)) {
+            if (Object.prototype.hasOwnProperty.call(context, key)) {
+              throw new Error(
+                `Context key "${key}" already exists. Root handler acc cannot override.`,
+              );
+            }
+          }
+          context = { ...context, ...rootResult.acc };
+        }
+      } catch (error) {
+        console.error("[DevicesDAG] root handler error:", error);
+      }
+    }
+
     return this._walkSegments({
       startNode: this._root,
       startPath: "/",
@@ -1050,9 +1085,9 @@ class DevicesDAG {
    * @param {DevicesDAGNode} fromNode - 起始节点
    * @param {string} fromPath - 起始节点路径
    * @param {SignalPacket} signalPacket - 信号包
-   * @param {Object} accumulatedContext - 累积上下文
+   * @param {Record<string, any>} accumulatedContext - 累积上下文
    * @param {number} depth - 当前深度
-   * @returns {{ packets: SignalPacket[], context?: Object }} 路由结果
+   * @returns {{ packets: SignalPacket[], context?: Record<string, any> }} 路由结果
    * @private
    */
   _routeFromNode(
@@ -1098,7 +1133,7 @@ class DevicesDAG {
   /**
    * 卸载指定路径的 workflow 节点（便捷方法）
    * @param {string} path - workflow 节点路径
-   * @param {Object} [context={}] - 卸载上下文
+   * @param {Record<string, any>} [context={}] - 卸载上下文
    */
   unmountWorkflow(path, context = {}) {
     return this.unmount(path, context);
@@ -1108,7 +1143,7 @@ class DevicesDAG {
    * 卸载指定路径的节点及其出边子图
    * 若目标节点有多个入边，只移除从该路径可达的入边
    * @param {string} path - 节点路径
-   * @param {Object} [context={}] - 卸载上下文
+   * @param {Record<string, any>} [context={}] - 卸载上下文
    */
   unmount(path, context = {}) {
     const node = this.getNode(path);
@@ -1144,7 +1179,7 @@ class DevicesDAG {
   /**
    * 深度优先执行卸载钩子并清理子图
    * @param {DevicesDAGNode} root - 子图根节点
-   * @param {Object} context - 卸载上下文
+   * @param {Record<string, any>} context - 卸载上下文
    * @param {Set<number>} [visited=new Set()] - 已访问节点
    * @private
    */

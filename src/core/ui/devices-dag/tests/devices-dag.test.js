@@ -758,9 +758,16 @@ describe("DevicesDAG", () => {
       expect(calls).toEqual([["auto"]]);
     });
 
-    test("dispatch 初始 context 应传递到 handlerContext", () => {
+    test("根 handler 注入的初始 context 应传递到下游 handler", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a");
+
+      // 通过根 handler 注入初始上下文
+      dag.configureNode("/", {
+        handler() {
+          return { acc: { initialKey: "initialVal" } };
+        },
+      });
 
       const ctxSnap = [];
       dag.configureNode("/a", {
@@ -769,10 +776,7 @@ describe("DevicesDAG", () => {
         },
       });
 
-      dag.dispatch(
-        { to: "/a", signals: [{ type: "t" }] },
-        { initialKey: "initialVal" },
-      );
+      dag.dispatch({ to: "/a", signals: [{ type: "t" }] });
 
       expect(ctxSnap[0].initialKey).toBe("initialVal");
     });
