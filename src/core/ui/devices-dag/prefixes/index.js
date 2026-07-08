@@ -13,3 +13,4 @@ export {
 } from "./handoff-handler.js";
 export { createSignalLogPrefixHandler } from "./signal-log-handler.js";
 export { createEdgePrefix } from "./edge-prefix.js";
+export { createScreenToWorldPrefixHandler } from "./screen-to-world-handler.js";
