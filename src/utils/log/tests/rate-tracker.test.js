@@ -1,7 +1,6 @@
 /**
  * @file LogRateTracker 单元测试
  * @description 测试速率追踪器的记录、窗口过滤、subscribe 连接和清空功能。
- * @module utils/log/tests/rate-tracker.test
  * @author Zhou Chenyu
  */
 

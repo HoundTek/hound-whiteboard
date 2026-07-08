@@ -14,6 +14,9 @@ yarn test                       # 运行全部测试
 npx jest path/to/test.test.js   # 运行单个测试文件
 npx jest -t "pattern"           # 按名称过滤
 
+# CI 检查
+yarn ci-check                   # 文档链接 + @module 路径一致性检查
+
 # 基准测试
 yarn bench                      # 全部基准
 yarn bench:io                   # I/O 桥接基准
@@ -30,32 +33,45 @@ src/
 ├── preload.js / preload-io.js  # Tauri preload
 ├── io-bridge-*.js           # 渲染↔主进程 IPC 桥接
 ├── core/
-│   ├── components/          # Board + Viewport 核心组件
-│   ├── objects/             # 对象模型（BasicObj, Stroke, 几何图形）
-│   ├── tools/               # 交互工具
-│   │   ├── creator/         #   创建工具（stroke/circle/polygon/obj）
-│   │   ├── modifier/        #   修改工具（手势位移）
-│   │   ├── chooser/         #   选择工具
-│   │   └── eraser/          #   擦除工具
-│   ├── devices/             # 物理设备抽象（mouse/keyboard/touchscreen）
-│   ├── devices-dag/         # DAG 输入路由图
-│   ├── bridges/             # 文件操作桥接
-│   ├── hit/                 # 撤销树、操作历史
-│   ├── prefixs/             # handoff 控制权转移
-│   └── utils/               # 通用工具
+│   ├── ui/                  # UI 线程（输入编排、工具、overlay）
+│   │   ├── components/      #   Board / Viewport / UiRenderer
+│   │   ├── devices-dag/     #   DAG 输入路由图 + 设备 + 工具 + 编排
+│   │   │   ├── devices/     #     物理设备抽象（mouse/keyboard/touchscreen）
+│   │   │   ├── tools/       #     交互工具
+│   │   │   │   ├── creator/ #       创建工具（stroke/circle/polygon/obj）
+│   │   │   │   ├── modifier/#       修改工具（手势位移）
+│   │   │   │   ├── chooser/ #       选择工具
+│   │   │   │   └── eraser/  #       擦除工具
+│   │   │   └── prefixes/     #     handoff 控制权转移
+│   │   └── frame/           #   Frame 合成层
+│   ├── worker/              # Core Worker（对象、区块、渲染）
+│   │   ├── components/
+│   │   │   ├── orchestration/ #   BoardCore / ViewportCore
+│   │   │   ├── chunk/         #   区块、加载器、静态图
+│   │   │   └── renderer/      #   BaseRenderer / LiveRenderer
+│   │   └── hit/               #   撤销树、操作历史
+│   ├── shared/              # 跨线程共享纯逻辑
+│   │   ├── objects/         #   对象模型（BasicObj, Stroke, 几何图形）
+│   │   ├── range/           #   几何范围抽象
+│   │   ├── renderer/        #   渲染器基类、脏区调度
+│   │   └── types/           #   跨线程共享类型定义
+│   ├── bridges/             # Worker ↔ UI RPC 桥接
+│   ├── utils/               # 通用工具（数学、图、事件总线等）
+│   ├── docs/                # 核心架构文档
+│   └── test-support/        # 测试 mock 支撑
 ├── utils/                   # 应用级工具（filesys, log, safe-io）
 └── templates/               # 白板 HTML/CSS/JS 模板
 src-tauri/                   # Rust 后端（Cargo workspace）
 benchmarks/                  # 性能基准
 ```
 
-每个模块下有 `docs/{name}-document.md` 和 `tests/` 目录。
+核心模块下有 `docs/{name}-document.md` 和 `tests/` 目录。
 
 ## 架构关键概念
 
 - **Tool** — 设备图末端消费型处理器，不转发信号。生命周期：`beginInteraction → handleSignal* → endInteraction → success`
 - **信号类型** — `position`（绝对坐标，驱动手势状态机）、`displacement`（相对位移，无状态增量）、`end`、`success`
-- **输入路由** — 设备 → DAG → 工具处理器。handoff 通过 `prefixs/` 转移控制权
+- **输入路由** — 设备 → DAG → 工具处理器。handoff 通过 `prefixes/` 转移控制权
 - **对象模型** — `BasicObject` 基类，`Stroke`/`Container`/`two-dim`/`one-dim` 子类
 
 ## 代码规范

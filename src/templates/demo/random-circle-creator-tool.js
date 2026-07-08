@@ -5,13 +5,13 @@
  * @author Zhou Chenyu
  */
 
-import { createSubDAG } from "../../core/devices-dag/index.js";
-import { createPrefixNodeHandler } from "../../core/prefixs/index.js";
-import { SignalPacket } from "../../core/devices-dag/signal.js";
-import { CircleCreatorTool } from "../../core/tools/creator/circle-creator.js";
-import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/tools/creator/object-creator.js";
+import { createSubDAG } from "../../core/ui/devices-dag/index.js";
+import { createPrefixNodeHandler } from "../../core/ui/devices-dag/prefixes/index.js";
+import { SignalPacket } from "../../core/ui/devices-dag/signal.js";
+import { CircleCreatorTool } from "../../core/ui/devices-dag/tools/creator/circle-creator.js";
+import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/ui/devices-dag/tools/creator/object-creator.js";
 import { Vector } from "../../core/utils/math.js";
-import { isPlainObject } from "../../core/prefixs/utils.js";
+import { isPlainObject } from "../../core/ui/devices-dag/prefixes/utils.js";
 
 /**
  * 随机圆 prefix 工作流信号类型

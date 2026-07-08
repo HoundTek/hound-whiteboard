@@ -1,7 +1,6 @@
 /**
  * @file createConsolePrinter 单元测试
  * @description 测试控制台输出器的级别映射、指定级别过滤和取消订阅功能。
- * @module utils/log/tests/console-printer.test
  * @author Zhou Chenyu
  */
 

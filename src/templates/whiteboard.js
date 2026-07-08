@@ -6,7 +6,7 @@
  */
 
 import { Vector } from "../core/utils/math.js";
-import { Board } from "../core/components/index.js";
+import { Board } from "../core/ui/components/orchestration/board.js";
 import { Logger } from "../utils/log/logger.js";
 import { logBus } from "../utils/log/log-bus.js";
 import { createConsolePrinter } from "../utils/log/console-printer.js";
@@ -34,9 +34,12 @@ async function bootstrapWhiteboard() {
     throw new Error("whiteboard demo root elements not found.");
   }
 
-  const worker = new Worker(new URL("../core-worker.js", import.meta.url), {
-    type: "module",
-  });
+  const worker = new Worker(
+    new URL("../core/worker/core-worker.js", import.meta.url),
+    {
+      type: "module",
+    },
+  );
 
   try {
     await board.enableWorkerMode(worker);
@@ -224,31 +227,31 @@ async function bootstrapWhiteboard() {
       if (event.code === "Space") {
         logDemoStatus("当前输入", "空格随机圆");
       } else if (
-        event.code === "ArrowUp" ||
-        event.code === "ArrowDown" ||
-        event.code === "ArrowLeft" ||
-        event.code === "ArrowRight" ||
-        event.code === "Equal" ||
-        event.code === "Minus" ||
-        event.code === "NumpadAdd" ||
-        event.code === "NumpadSubtract" ||
-        event.code === "KeyR"
+        [
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+          "Equal",
+          "Minus",
+          "NumpadAdd",
+          "NumpadSubtract",
+          "KeyR",
+        ].includes(event.code)
       ) {
         logDemoStatus("当前输入", `viewport ${event.code}`);
       } else if (
-        event.code === "KeyC" ||
-        event.code === "KeyO" ||
-        event.code === "KeyM" ||
-        event.code === "KeyB" ||
-        event.code.startsWith("Digit")
+        ["KeyC", "KeyO", "KeyM", "KeyB", "KeyT"].includes(event.code)
       ) {
         logDemoStatus("当前输入", `debug ${event.code}`);
       } else if (event.code === "Enter") {
         logDemoStatus("当前输入", "handoff Enter");
       } else if (event.code === "Escape") {
         logDemoStatus("当前输入", "handoff Escape");
-      } else {
+      } else if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
         logDemoStatus("当前输入", `WASD ${event.code}`);
+      } else {
+        logDemoStatus("当前输入", `keyboard ${event.code}`);
       }
     }
 

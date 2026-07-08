@@ -40,7 +40,7 @@ class Queue {
    * @type {number}
    * @private
    */
-  static INITIAL_CAPACITY = 8;
+  static INITIAL_CAPACITY = 32;
 
   /**
    * 扩容因子
@@ -116,6 +116,40 @@ class Queue {
   }
 
   /**
+   * 转换为数组
+   * @returns {Array<any>}
+   */
+  toArray() {
+    const result = [];
+    this.#forEach((elem) => result.push(elem));
+    return result;
+  }
+
+  /**
+   * 筛选队列元素
+   * @param {(elem: *) => boolean} predicate - 筛选函数
+   * @returns {Array<*>} 匹配的元素数组
+   */
+  filter(predicate) {
+    const result = [];
+    this.#forEach((elem) => {
+      if (predicate(elem)) result.push(elem);
+    });
+    return result;
+  }
+
+  /**
+   * 映射队列元素
+   * @param {(elem: *) => *} transform - 映射函数
+   * @returns {Array<*>} 变换后的元素数组
+   */
+  map(transform) {
+    const result = [];
+    this.#forEach((elem) => result.push(transform(elem)));
+    return result;
+  }
+
+  /**
    * 清空队列
    */
   clear() {
@@ -126,29 +160,42 @@ class Queue {
   }
 
   /**
+   * 遍历队列元素
+   * @param {(elem: *, index: number) => void} fn - 遍历回调
+   * @private
+   */
+  #forEach(fn) {
+    if (this.head < this.tail) {
+      for (let i = this.head, j = 0; i < this.tail; i++, j++) {
+        fn(this.elements[i], j);
+      }
+    } else {
+      let j = 0;
+      for (let i = this.head; i < this.capacity; i++, j++) {
+        fn(this.elements[i], j);
+      }
+      for (let i = 0; i < this.tail; i++, j++) {
+        fn(this.elements[i], j);
+      }
+    }
+  }
+
+  /**
    * 动态扩容
    * @private
    */
   #resize() {
-    const oldCapacity = this.capacity;
-    const newCapacity = oldCapacity * Queue.GROWTH_FACTOR;
+    const newCapacity = this.capacity * Queue.GROWTH_FACTOR;
     const newElements = new Array(newCapacity);
-
-    // 将元素复制到新数组（保持顺序）
-    let count = 0;
-    let i = this.head;
-    while (i !== this.tail) {
-      newElements[count++] = this.elements[i];
-      i = (i + 1) % oldCapacity;
-    }
-
+    const elementCount = this.count();
+    this.#forEach((elem, i) => {
+      newElements[i] = elem;
+    });
     this.elements = newElements;
     this.capacity = newCapacity;
     this.head = 0;
-    this.tail = count;
+    this.tail = elementCount;
   }
 }
 
-export {
-  Queue,
-};
+export { Queue };

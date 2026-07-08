@@ -1,7 +1,6 @@
 /**
  * @file LEVELS / resolveLevel 单元测试
  * @description 测试日志级别枚举和解析工具函数。
- * @module utils/log/tests/levels.test
  * @author Zhou Chenyu
  */
 

@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { Board } from "../components/orchestration/board.js";
-import { createCoreWorkerRuntime } from "../../core-worker.js";
+import { Board } from "../ui/components/orchestration/board.js";
+import { createCoreWorkerRuntime } from "../worker/core-worker.js";
 import { createNoopCanvas, installNoopOffscreenCanvas } from "./noop-canvas.js";
 
 /**
@@ -197,10 +197,8 @@ function installMockDocument() {
  * @param {number} [count=6] - 冲刷轮数
  * @returns {Promise<void>}
  */
-async function flushMicrotasks(count = 6) {
-  for (let index = 0; index < count; index += 1) {
-    await Promise.resolve();
-  }
+async function flushMicrotasks(_count = 6) {
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 /**

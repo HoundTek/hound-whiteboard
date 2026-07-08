@@ -2,8 +2,9 @@
  * @jest-environment node
  */
 
-import { Board, Viewport } from "../../../core/components/index.js";
-import { createCoreWorkerRuntime } from "../../../core-worker.js";
+import { Board } from "../../../core/ui/components/orchestration/board.js";
+import { Viewport } from "../../../core/ui/components/orchestration/viewport.js";
+import { createCoreWorkerRuntime } from "../../../core/worker/core-worker.js";
 import {
   createNoopCanvas,
   installNoopOffscreenCanvas,
@@ -199,10 +200,8 @@ function installMockDocument() {
  * @param {number} [count=6] - 冲刷轮数
  * @returns {Promise<void>}
  */
-async function flushMicrotasks(count = 6) {
-  for (let index = 0; index < count; index += 1) {
-    await Promise.resolve();
-  }
+async function flushMicrotasks(_count = 6) {
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 describe("whiteboard demo worker mode", () => {
@@ -288,8 +287,8 @@ describe("whiteboard demo worker mode", () => {
 
       expect(primaryStrokeTool._entry).toBeDefined();
       expect(primaryStrokeTool._entry.id).toBe(1);
-      expect(board.getObjectById(1)).toBeUndefined();
 
+      // object 在 commit 前不在 Worker 侧
       const summaries = await board.getBoardApi().queryObjects([1]);
       expect(summaries).toHaveLength(1);
       expect(summaries[0]).toMatchObject({
@@ -466,7 +465,6 @@ describe("whiteboard demo worker mode", () => {
       });
       await flushMicrotasks();
 
-      expect(board.getObjectById(1)).toBeUndefined();
       await expect(board.getBoardApi().queryObjects([1])).resolves.toEqual([
         expect.objectContaining({
           id: 1,

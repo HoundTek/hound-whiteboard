@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { createCoreWorkerRuntime } from "../../core-worker.js";
+import { createCoreWorkerRuntime } from "../worker/core-worker.js";
 import { installNoopOffscreenCanvas } from "../test-support/noop-canvas.js";
 
 /**
@@ -401,6 +401,111 @@ describe("core-worker", () => {
     expect(
       host.postedMessages.filter((m) => m?.type === "render-frame"),
     ).toHaveLength(4);
+
+    runtime.stop();
+  });
+
+  test("hitTest 应在未加载区块上 FullLoad 并找到已提交对象", async () => {
+    const host = new FakeWorkerHost();
+    const runtime = createCoreWorkerRuntime(host).start();
+
+    // 创建 board（无 rootPath，走内存模式，区块均未加载）
+    host.emit({
+      type: "rpc",
+      msgId: "create-board",
+      method: "createBoard",
+      params: { width: 100, height: 100 },
+    });
+    await Promise.resolve();
+
+    // createObject → commitObjects
+    host.emit({
+      type: "rpc",
+      msgId: "create-obj",
+      method: "createObject",
+      params: {
+        type: "CircleObject",
+        props: {
+          id: 50,
+          position: { x: 10, y: 10 },
+          data: { radius: 5 },
+        },
+      },
+    });
+    await Promise.resolve();
+
+    host.emit({
+      type: "rpc",
+      msgId: "commit-obj",
+      method: "commitObjects",
+      params: { objectIds: [50] },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // hitTest — 区块从未加载，hitTest 应内部 FullLoad 后找到对象
+    host.emit({
+      type: "rpc",
+      msgId: "hit-test",
+      method: "hitTest",
+      params: {
+        range: { left: 0, top: 0, width: 100, height: 100 },
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const hitResponse = host.postedMessages.find(
+      (m) => m?.msgId === "hit-test",
+    );
+    expect(hitResponse).toBeDefined();
+    expect(hitResponse.error).toBeUndefined();
+    expect(hitResponse.result).toEqual([50]);
+
+    runtime.stop();
+  });
+
+  test("hitTest 在未加载区块上应能找到 AOM 活动对象", async () => {
+    const host = new FakeWorkerHost();
+    const runtime = createCoreWorkerRuntime(host).start();
+
+    host.emit({
+      type: "rpc",
+      msgId: "create-board",
+      method: "createBoard",
+      params: { width: 100, height: 100 },
+    });
+    await Promise.resolve();
+
+    // 仅 createObject（未 commit），对象在 AOM 中
+    host.emit({
+      type: "rpc",
+      msgId: "create-obj",
+      method: "createObject",
+      params: {
+        type: "CircleObject",
+        props: {
+          id: 60,
+          position: { x: 30, y: 30 },
+          data: { radius: 10 },
+        },
+      },
+    });
+    await Promise.resolve();
+
+    // hitTest — AOM 对象在 objectLoaded 中，应被找到
+    host.emit({
+      type: "rpc",
+      msgId: "hit-test",
+      method: "hitTest",
+      params: {
+        range: { left: 20, top: 20, width: 50, height: 50 },
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const response = host.postedMessages.find((m) => m?.msgId === "hit-test");
+    expect(response).toBeDefined();
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual([60]);
 
     runtime.stop();
   });

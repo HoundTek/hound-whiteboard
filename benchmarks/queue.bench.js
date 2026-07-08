@@ -103,6 +103,79 @@ benchmarkSync("Queue#empty (非空队列)", 50000, ROUNDS, () => {
   queue.empty();
 });
 
+// toArray 操作
+benchmarkSync("Queue#toArray (100 元素队列)", 50000, ROUNDS, () => {
+  const queue = createFilledQueue(SMALL_SIZE);
+  queue.toArray();
+});
+
+benchmarkSync("Queue#toArray (10000 元素队列)", 1000, ROUNDS, () => {
+  const queue = createFilledQueue(LARGE_SIZE);
+  queue.toArray();
+});
+
+// Filter 操作
+benchmarkSync("Queue#filter (100 元素，筛选一半)", 50000, ROUNDS, () => {
+  const queue = createFilledQueue(SMALL_SIZE);
+  queue.filter((n) => n % 2 === 0);
+});
+
+benchmarkSync("Queue#filter (10000 元素，筛选一半)", 1000, ROUNDS, () => {
+  const queue = createFilledQueue(LARGE_SIZE);
+  queue.filter((n) => n % 2 === 0);
+});
+
+// Map 操作
+benchmarkSync("Queue#map (100 元素)", 50000, ROUNDS, () => {
+  const queue = createFilledQueue(SMALL_SIZE);
+  queue.map((n) => n * 2);
+});
+
+benchmarkSync("Queue#map (10000 元素)", 1000, ROUNDS, () => {
+  const queue = createFilledQueue(LARGE_SIZE);
+  queue.map((n) => n * 2);
+});
+
+// 对比：toArray + filter vs 直接 filter
+benchmarkSync(
+  "对比：Queue#toArray().filter() (100 元素)",
+  50000,
+  ROUNDS,
+  () => {
+    const queue = createFilledQueue(SMALL_SIZE);
+    queue.toArray().filter((n) => n % 2 === 0);
+  },
+);
+
+benchmarkSync("对比：Queue#filter() 直接 (100 元素)", 50000, ROUNDS, () => {
+  const queue = createFilledQueue(SMALL_SIZE);
+  queue.filter((n) => n % 2 === 0);
+});
+
+// 对比：toArray + filter + map vs filter + map
+benchmarkSync(
+  "对比：Queue#toArray().filter().map() (100 元素)",
+  50000,
+  ROUNDS,
+  () => {
+    const queue = createFilledQueue(SMALL_SIZE);
+    queue
+      .toArray()
+      .filter((n) => n % 2 === 0)
+      .map((n) => n * 3);
+  },
+);
+
+benchmarkSync(
+  "对比：Queue#filter().map() 链式 (100 元素)",
+  50000,
+  ROUNDS,
+  () => {
+    const queue = createFilledQueue(SMALL_SIZE);
+    queue.filter((n) => n % 2 === 0).map((n) => n * 3);
+  },
+);
+
 // Clear
 benchmarkSync("Queue#clear (100 元素队列)", 5000, ROUNDS, () => {
   const queue = createFilledQueue(SMALL_SIZE);

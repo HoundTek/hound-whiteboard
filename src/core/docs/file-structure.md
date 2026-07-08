@@ -1,155 +1,204 @@
 # `.hwb` 文件结构文档
 
-本文档整理 `.hwb` 白板文件当前的持久化语义。
+本文档整理当前代码中**可以被源码直接验证**的 `.hwb` 文件结构与持久化语义。
+
+需要特别说明：
+
+- 这份文档描述的是当前 file bridge 协议与 `BoardCore` 持久化接口所约定的结构
+- 默认 Worker runtime 仍主要运行在内存模式
+- 因此这里的目录结构应理解为“当前文件模式合同”，而不是“所有运行场景默认都会落盘的结果”
 
 ## 概述
 
-`.hwb` 是白板数据的归档格式。当前实现通过宿主层把白板内容展开到目录结构，再由 `persistenceAdapter` / file bridge 读写对象与区块元数据。
+当前持久化相关代码分成两层：
 
-Worker / UI 的运行时拆分不会改变 `.hwb` 的核心语义：
+1. `BoardCore.persistenceAdapter`：Core 侧的持久化接口
+2. `bridges/file-operate-bridge-*.js`：宿主侧真实文件读写实现
 
-- 区块仍按区块 id 与区块文件组织
-- 对象仍按 objectId 与 `ownerChunkId` 组织
-- 对象覆盖到的其它区块仍通过独立索引描述
-
-## 当前稳定语义
-
-### 对象归属区块
-
-每个对象都有一个主存储位置：`ownerChunkId`。
-
-- 对象本体存放在归属区块对应的数据分组中
-- 对象几何若跨越多个区块，额外覆盖到的区块不复制对象本体
-- 这些覆盖关系通过区块级 `objectCoverChunks` 索引描述
-
-### 区块静态图
-
-每个区块都可以拥有一份静态层叠图快照：
-
-- 节点是 objectId
-- 边表示上下遮挡关系
-- 文件只描述图结构，不直接内嵌对象实例内容
-
-### 覆盖区块索引
-
-对象覆盖到哪些区块，由区块级独立索引维护：
-
-```json
-[
-  [15, [1, 2]],
-  [18, [1, 2, 3]]
-]
-```
-
-其含义是：
-
-- 对象 `15` 覆盖区块 `1` 与 `2`
-- 对象 `18` 覆盖区块 `1`、`2` 与 `3`
-
-### 历史结构
-
-历史数据目录（如 `history/`）在设计上保留给：
-
-- 删除对象 / 区块的暂存
-- 历史版本
-- Undo Tree 相关数据
-
-这部分语义仍处于后续完善阶段，应视为 `[todo]`。
-
-## 目录示意
-
-以下结构描述的是语义边界，不代表当前运行时一定逐项完整落地：
+如果只执行 `createBoardRoot()`，当前确定会创建的是：
 
 ```text
 .hwb/
+  meta.json
+  config.json
+  devices/
+  history/
+  objects/
+  chunks/
+  templates/
+```
+
+在后续文件模式操作中，当前 bridge 还会继续读写这些路径：
+
+```text
+.hwb/
+  trace.json               # 可选，缺失时可按 connection 推导默认值
   chunks/
     connection.json
     {chunkId}.json
-    {chunkId}-object-cover.json
+    {chunkId}/             # 当前由 createChunkStorage 创建，但不是主读写路径
   objects/
-    chunk{chunkId}/
-      {objectId}.json
-  history/                # [todo] 历史与版本结构
-  templates/              # 模板 / 宿主扩展数据
-  config.json
-  meta.json
+    {objectId}.json
 ```
 
-## 各目录说明
+## 当前稳定语义
 
-### `chunks/`
+### 1. 区块元数据按单文件保存
 
-#### `connection.json`
+每个区块当前的主元数据文件是：
 
-区块连接与白板范围相关元数据。
+```text
+chunks/{chunkId}.json
+```
 
-当前实现中，这里的字段主要用于：
+其内容形如：
 
-- 描述区块集合的顺序或范围
-- 作为持久化层的目录级元数据快照
+```json
+{
+  "tierGraph": [],
+  "objectCoverIndex": []
+}
+```
 
-其中与运行时计数池相关的字段应视为持久化层历史遗留语义；当前 UI 线程的 objectId 分配由 `Board` 自持 `CounterPool` 负责，尚未从文件恢复计数状态。
+字段含义：
 
-#### `{chunkId}.json`
+- `tierGraph`：区块静态层叠图的数组化结果
+- `objectCoverIndex`：对象覆盖区块索引，格式通常为 `Array<[objectId, number[]]>`
 
-区块静态层叠图。
+当前代码不会再把覆盖索引单独写成 `{chunkId}-object-cover.json`。
 
-#### `{chunkId}-object-cover.json`
+### 2. 对象当前是扁平存储
 
-区块对象覆盖索引。
+对象文件当前主路径是：
 
-### `objects/`
+```text
+objects/{objectId}.json
+```
 
-对象实例内容。
+而不是旧文档中的：
 
-当前稳定语义：
+```text
+objects/chunk{chunkId}/{objectId}.json
+```
 
-- 文件名通常是 objectId
-- 对象 JSON 内部带有 `ownerChunkId`
-- 对象实际覆盖范围仍需要结合区块级 `objectCoverChunks` 索引判断
+当前 bridge 的 `loadObjects` / `saveObjects` / `deleteObject` 都按这个扁平结构工作。
 
-### `history/`
+### 3. `chunks/{chunkId}/` 目录目前不是主数据路径
 
-历史结构目录。
+`createChunkStorage()` 仍会创建：
 
-- 删除对象 / 区块暂存
-- 历史版本
-- Undo Tree 块
+```text
+chunks/{chunkId}/
+```
 
-当前应视为 `[todo]` 语义区。
+但当前主读写逻辑：
 
-### `config.json` / `meta.json`
+- 区块元数据读写走 `chunks/{chunkId}.json`
+- 对象读写走 `objects/{objectId}.json`
 
-白板配置与元数据。
+因此 `chunks/{chunkId}/` 更适合视为历史遗留或预留扩展目录，而不是当前主要持久化载体。
+
+## 各文件与目录说明
+
+### `meta.json`
+
+白板元信息文件。
+
+当前 file bridge 在创建根目录时会先写入它；读取白板快照时也会先校验它是否存在以及类型是否匹配。
+
+### `config.json`
+
+白板配置文件。
+
+它与 `meta.json` 一起在 `createBoardRoot()` 时被创建；但若要让 `loadBoardSnapshot()` 成功，当前还需要 `chunks/connection.json` 作为必需元数据的一部分。
+
+### `trace.json`
+
+记录最近一次打开/浏览位置的轨迹信息。
+
+当前结构至少涉及：
+
+- `onChunk`
+- `offset`
+
+若文件不存在，bridge 会根据 `connection.json` 推导默认值。
+
+### `chunks/connection.json`
+
+记录区块连接与顺序信息。当前读取白板快照时会把它当作必需文件。
+
+典型字段包括：
+
+- `count`
+- `order`
+- `size`
+
+### `chunks/{chunkId}.json`
+
+单区块元数据文件，包含：
+
+- `tierGraph`
+- `objectCoverIndex`
+
+### `objects/{objectId}.json`
+
+对象序列化结果。
+
+当前应该注意两点：
+
+1. 路径是按 `objectId` 扁平组织
+2. 不应在顶层文档中再把 `ownerChunkId` 写成“当前代码保证存在”的稳定字段
+
+是否带有 `ownerChunkId` 取决于具体对象类型或未来扩展，基础 `BasicObject.serialize()` 并不默认产出这个字段。
+
+### `devices/` / `templates/` / `history/`
+
+这些目录在 `createBoardRoot()` 中会被创建，但当前顶层 Core 文档里不应过度推断它们的完整业务语义：
+
+- `devices/`：可视为宿主或白板扩展数据预留区
+- `templates/`：模板相关数据预留区
+- `history/`：历史与版本空间，当前仍应视为 `[todo]` 能力
 
 ## 与运行时模型的关系
 
-### UI 线程
+### `BoardCore`
 
-UI 线程：
+`BoardCore` 通过 `persistenceAdapter` 表达对持久化的需求：
 
-- 分配 objectId
-- 维护输入图与工具状态
-- 通过 `BoardApiRpc` 请求 Worker 读写持久化相关对象语义
+- `loadChunkMetadata`
+- `saveChunkMetadata`
+- `loadObjects`
+- `saveObjects`
+- `deleteObject`
 
-### Worker 线程
+### file bridge
 
-Worker 线程：
+宿主侧 file bridge 负责把这些抽象操作映射到 `.hwb` 目录结构。
 
-- 持有真实 `BoardCore`
-- 维护对象注册表、区块静态图与覆盖索引
-- 决定对象提交 / 删除 / 命中查询的真实结果
+也就是说，当前这份目录结构更准确地说是：
 
-因此 `.hwb` 文件的对象与区块语义，最终仍以 Worker 侧 `BoardCore` 的读写结果为准。
+- **bridge 层的主存储合同**
+- 与 `BoardCore` 的持久化接口相匹配
 
-## 设计约束
+### 默认运行时现状
 
-- `.hwb` 文件结构的稳定语义是“对象本体 + 区块静态图 + 覆盖区块索引”三件事
-- Worker / UI 分层不应改变持久化格式本身
-- 历史结构与计数池恢复仍属于后续完善项
+当前默认 Worker runtime 创建 `BoardCore` 时仍使用 `createDefaultPersistenceAdapter()`。
+
+因此：
+
+- 内存模式是当前最常见路径
+- 完整文件模式属于已定义协议但未全面成为默认运行时的能力
+
+## 当前已知约束
+
+- `undo` / `redo` 与 `history/` 的真实落盘语义尚未实现
+- 顶层文档不应再把对象按 ownerChunk 分目录存储写成现状
+- 顶层文档不应再把 cover index 单独文件写成现状
+- `objectId` 计数池恢复尚未从文件层接回 UI 侧 `CounterPool`
 
 ## 相关文档
 
 - [core-data-model.md](./core-data-model.md)
-- [board-document.md](../components/orchestration/docs/board-document.md)
-- [chunk-object-manager-document.md](../components/chunk/docs/chunk-object-manager-document.md)
+- [core-overview.md](./core-overview.md)
+- [board-core-document.md](../worker/components/orchestration/docs/board-core-document.md)
+- [file-operate-document.md](../bridges/docs/file-operate-document.md)

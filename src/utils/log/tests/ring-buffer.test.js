@@ -1,7 +1,6 @@
 /**
  * @file RingBuffer 单元测试
  * @description 测试环形缓冲区的写入顺序、覆写、length 限制、按级别筛选和 subscribe 连接。
- * @module utils/log/tests/ring-buffer.test
  * @author Zhou Chenyu
  */
 

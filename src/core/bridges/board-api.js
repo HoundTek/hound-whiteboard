@@ -482,6 +482,20 @@ class BoardApiRpc {
   }
 
   /**
+   * 发送调试请求到 Worker（fire-and-forget，不等待响应）
+   * @param {string} query - 调试查询名（如 "chunkLoadState"）
+   * @param {Record<string, any>} [extra={}] - 附加参数
+   * @returns {void}
+   */
+  requestDebug(query, extra = {}) {
+    this.#endpoint.postMessage({
+      type: "debug-request",
+      query,
+      ...extra,
+    });
+  }
+
+  /**
    * 销毁 RPC 端点绑定并拒绝所有未完成请求
    * @param {string} [reason="BoardApiRpc destroyed."] - 销毁原因
    * @returns {void}

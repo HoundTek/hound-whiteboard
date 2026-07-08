@@ -1,18 +1,25 @@
 # Core 输入编码标准
 
-本文档约束 HoundWhiteboard 当前阶段在进入 Core 之前，外部输入应如何被规整成 Core 可消费的 `SignalPacket`。
+本文档约束 Hound Whiteboard 当前阶段在进入 Core 之前，宿主输入应如何被规整成 Core 可消费的 `SignalPacket`。
 
 ## 目标
 
-这层标准只解决一件事：把外部输入规整成统一的包结构，再送进 `board.signalsEventBus.emit("input", packet)`。
+这一层只解决一件事：
+
+- 把外部输入规整成统一的包结构
+- 再送进 `board.signalsEventBus.emit("input", packet)`
 
 它不负责：
 
 - 推断工具语义
 - 决定设备图内部路由
-- 直接修改 `Board` 状态
+- 直接修改 `BoardCore` 状态
 
-这些职责分别属于 Device、DevicesDAG 和 Tool。
+这些职责分别属于：
+
+- 宿主归属判断
+- Device / DevicesDAG
+- Tool / `BoardApiRpc` / `Viewport`
 
 ## 最小输出格式
 
@@ -39,12 +46,23 @@
 - 每个信号至少包含 `type`
 - 信号载荷统一放在 `context`
 
-## 单点输入约定
+## Viewport 归属
 
-对于鼠标、单笔、单触点这类单点输入，推荐约定如下：
+宿主侧输入绑定逻辑必须在进入 Core 前决定目标 viewport。
+
+也就是说，编码层需要先知道：
+
+- 当前事件属于哪个 viewport
+- 当前 viewport 下应该走哪个设备路径
+
+`Board` 当前只负责根据 `to` 中的 `viewportId` 找到目标 `Viewport`，再把包送进白板级唯一 `DevicesDAG`。它不会替宿主补全目标路径。
+
+## 鼠标 / 单点输入约定
+
+对于鼠标、单笔、单触点这类单点输入，当前推荐约定如下：
 
 - `position`
-  - `context.value`: `{ x, y }` 或 `Vector` 等坐标值
+  - `context.value`: `{ x, y }` 或 `Vector` 兼容坐标
 - `pressure`
   - `context.value`: `number`
 - `tilt`
@@ -52,34 +70,34 @@
 - `rotate`
   - `context.value`: `number`
 - `end`
-  - `context`: 结束当前交互所需的附加信息
+  - 表示本次交互结束
 - `cancel`
-  - `context`: 取消当前交互所需的附加信息
+  - 表示本次交互取消
 
-当前鼠标实现还额外约定了几项常用字段：
+鼠标输入当前还常携带这些上下文字段：
 
-- `context.button`: 当前事件对应的按钮
-- `context.buttons`: 当前按钮位掩码
-- `context.domEvent`: 原始 DOM 事件名
-- `context.ctrlKey / shiftKey / altKey / metaKey`: 当前修饰键状态
+- `context.button`
+- `context.buttons`
+- `context.domEvent`
+- `context.ctrlKey / shiftKey / altKey / metaKey`
 
-这些字段目前主要用于鼠标设备在设备层判断“当前是在悬停还是在主键拖动”。
+这些字段主要供**设备层**使用，用来决定当前输入应进入 `primary`、`secondary`、`pointer` 还是其它设备分支。Tool 层不应再把它们当作主要判定条件。
 
 ## 键盘输入约定
 
-对于会进入键盘设备子树的输入，当前建议直接按 DOM 键盘事件规整：
+进入键盘设备根节点的宿主输入，当前建议仍按 DOM 键盘事件规整：
 
 - `keydown`
-  - `context.code`: 键位编码，如 `KeyW`、`Space`
-  - `context.key`: 字符或键名，如 `w`、` `、`ArrowUp`
-  - `context.repeat`: 是否为长按重复触发
-  - `context.ctrlKey / shiftKey / altKey / metaKey`: 当前修饰键状态
+  - `context.code`
+  - `context.key`
+  - `context.repeat`
+  - `context.ctrlKey / shiftKey / altKey / metaKey`
 - `keyup`
   - 字段同 `keydown`
 - `cancel`
-  - 表示当前键盘交互被宿主强制中断，如 Viewport 失焦
+  - 表示当前键盘交互被宿主强制中断，如失焦
 
-一个最小示例如下：
+最小示例：
 
 ```javascript
 {
@@ -101,28 +119,33 @@
 }
 ```
 
-这里的重点不是“所有键盘事件都进 Core”，而是“只有已经确定属于某个 Viewport 设备语义的键盘输入，才进入 Core”。
+进入键盘设备后，设备子图会把这些原始输入进一步规整为更稳定的工具层信号，例如：
 
-进入键盘设备后，设备图节点还可以继续把原始 `keydown` / `keyup` 规整成更稳定的设备语义信号。当前统一做法是使用节点 handler：例如某个按键节点可以把 `trigger` 转成一条 `position`，再在返回包里显式写入 `move/tool` 或 `create-circle/params/tool` 这类本地后代路径。
+- `trigger`
+- `trigger-repeat`
+- `release`
+- `cancel`
+
+然后再通过 code 节点与边级 prefix 把它们送入 workflow。
 
 ## 哪些键盘输入应进入设备图
 
 当前建议只有两类键盘输入编码为键盘设备信号：
 
-- 该输入直接操作某个 Viewport，如缩放、平移视角、翻区块浏览
-- 该输入最终会被某个工具消费，如用户绑定的 `WASD`、按住空格绘制、按键触发临时工具
+1. 直接操作某个 viewport，如平移、缩放、刷新视口
+2. 最终会被某个 workflow / tool 消费，如 `W/A/S/D`、`Space`、`Enter`、`Escape`
 
-是否“最终会被工具消费”，应在宿主绑定层就已经明确；Core 不负责替你判断一个按键原本是不是快捷键。
+是否“最终会被工具消费”，应在宿主绑定层就已经明确；Core 不负责替你判断某个按键原本是不是应用级快捷键。
 
 ## 哪些键盘输入不应进入设备图
 
-下面这些输入不应编码为键盘设备信号：
+以下输入通常不应先绕进 Core 设备图：
 
 - `Command+S` / `Ctrl+S` 这类宿主级保存快捷键
-- 切换工具、打开 UndoTree、打开面板这类应用级命令快捷键
-- 与 Viewport 操作和工具消费无关的全局热键
+- 切换面板、菜单命令、窗口命令等应用级热键
+- 与 viewport 操作和 tool 消费无关的全局热键
 
-这些输入可以直接在宿主 UI 层处理，不需要先绕到 Core 的设备图里再转回来。
+这些输入可以直接在宿主 UI 层处理。
 
 ## 多点输入约定
 
@@ -152,49 +175,35 @@
 }
 ```
 
-推荐字段如下：
+推荐字段：
 
-- `touchId`: 触点 id
-- `pointerId`: 若来自 PointerEvent，可直接沿用
-- `value`: 当前坐标
+- `touchId`
+- `pointerId`
+- `value`
 
-约束重点只有一个：同一包里的多个触点必须能被稳定区分。
+重点只有一个：同一包里的多个触点必须能被稳定区分。
 
-## 宿主输入到信号的映射建议
+## 宿主事件到信号的映射建议
 
-当前建议的映射方向如下：
+当前推荐映射方向如下：
 
-- `mousedown` -> `position`
-- `mousemove` -> `position`
+- `mousedown` / `mousemove` -> `position`
 - `mouseup` -> `position + end`
 - `mouseleave` -> `cancel`
 - `pointermove` / `touchmove` -> `position`
 - `pointerdown` / `touchstart` -> 首个 `position`，必要时附加 `pressure`
 - `pointerup` / `touchend` -> `end`
 - `pointercancel` / `touchcancel` -> `cancel`
+- `keydown` -> `keydown`
+- `keyup` -> `keyup`
 
-是否要把一次 DOM 事件编码成一个信号，还是多个信号，应按“同一时刻应被一起处理的信息”来决定。
+是否把一次宿主事件编码成一个信号还是多个信号，应按“同一时刻需要被一起处理的信息”决定。
 
 例如：
 
-- 一个 MouseEvent 可以编码成一条 `position`，并通过 `buttons` 表示当前是否仍按着主键
-- 一个 `mouseup` 可以编码成同一包内的 `position + end`
-- 一个 PointerEvent 同时有位置与压力，就可以编码成同一个包内的两条信号
-- 一次 TouchEvent 含多个 changedTouches，就可以编码成同一个包内的多条 `position` / `end` / `cancel`
-- 一次键盘事件通常只需要编码成一条 `keydown`、`keyup` 或 `cancel`
-
-这里的“映射建议”只描述进入 Core 前的包形状，不要求这层逻辑一定实现为 Core 内部模块。当前 `whiteboard.js` 中的鼠标 demo 就是直接在模板层临时绑定 DOM 事件后再发射 `SignalPacket`。
-
-## Viewport 归属
-
-宿主侧输入绑定逻辑必须在进入 Core 前决定目标 Viewport。
-
-也就是说，编码层需要先知道：
-
-- 当前事件属于哪个 Viewport
-- 当前 Viewport 下应该走哪个设备路径
-
-因为 `Board` 当前只负责按 `to` 中的 `viewportId` 把包分发到对应 Viewport，而不会替你补全目标路径。
+- 一个 `mouseup` 可以编码成同包内的 `position + end`
+- 一个 PointerEvent 可以同时编码出 `position + pressure`
+- 一次 TouchEvent 可以编码成多条 `position` / `end` / `cancel`
 
 ## 当前不冻结的部分
 
@@ -203,6 +212,12 @@
 - `context` 里除 `value` / `touchId` / `pointerId` 外的扩展字段
 - 宿主事件与设备路径之间的具体映射表
 - 是否在进入 Core 前先做坐标转换
-- 是否在宿主侧附加调试字段
+- 是否附加调试字段
 
 但无论如何变化，都不应破坏上面的最小输出格式。
+
+## 相关文档
+
+- [Core 输入流](./core-input-flow.md)
+- [SignalPacket](../ui/devices-dag/docs/signal-document.md)
+- [设备定义](../ui/devices-dag/devices/docs/device-document.md)

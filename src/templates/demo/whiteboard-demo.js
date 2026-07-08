@@ -6,18 +6,18 @@
 
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
-import { createMouseDevice } from "../../core/devices/mouse-device.js";
+import { createMouseDevice } from "../../core/ui/devices-dag/devices/mouse-device.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
-} from "../../core/devices/keyboard-device.js";
+} from "../../core/ui/devices-dag/devices/keyboard-device.js";
 import {
   createEdgePrefix,
   createHandoffSubDAG,
-} from "../../core/prefixs/index.js";
-import { StrokeCreatorTool } from "../../core/tools/creator/stroke-creator.js";
-import { RectangleObjectChooserTool } from "../../core/tools/chooser/rectangle-object-chooser.js";
-import { CommonObjectModifierTool } from "../../core/tools/modifier/common-object-modifier.js";
+} from "../../core/ui/devices-dag/prefixes/index.js";
+import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
+import { RectangleObjectChooserTool } from "../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
+import { CommonObjectModifierTool } from "../../core/ui/devices-dag/tools/modifier/common-object-modifier.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { createRandomCircleSubDAG } from "./random-circle-creator-tool.js";
 import { ViewportTool } from "./viewport-tool.js";
@@ -45,10 +45,6 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
   "Minus",
   "NumpadAdd",
   "NumpadSubtract",
-  "Digit1",
-  "Digit2",
-  "Digit3",
-  "Digit4",
   "Enter",
   "Escape",
 ]);
@@ -223,10 +219,10 @@ function buildWasdNodeConfig(code, vector) {
 
 /**
  * 构建键盘调试 prefix handler
- * @description 将 trigger 信号转为指定调试类型的信号。type 可以是静态字符串或
- * 动态函数 (signals) => string（如根据 Shift 分流）。
- * @param {string | ((signals: object[]) => string)} type - 调试信号类型或解析函数
- * @param {Object} [debugContext={}] - 调试上下文附加数据
+ * @description 将 trigger 信号转为指定调试类型的信号。type 可以是静态字符串、
+ * 动态函数 (signals) => string，或 (signals) => ({ type, context })。
+ * @param {string | ((signals: object[]) => string | { type: string, context?: Object })} type - 调试信号类型或解析函数
+ * @param {Object} [debugContext={}] - 调试上下文附加数据（默认合并到 signal.context）
  * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
  */
 function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
@@ -236,10 +232,17 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
-      const resolvedType =
-        typeof type === "function" ? type(triggerSignals) : type;
+
+      const resolved = typeof type === "function" ? type(triggerSignals) : type;
+      const signalType =
+        typeof resolved === "object" ? resolved.type : resolved;
+      const signalContext = {
+        ...debugContext,
+        ...(typeof resolved === "object" ? resolved.context : undefined),
+      };
+
       return ctx.routeToChild(ctx.defaultRoute || "", [
-        ctx.signal(resolvedType, undefined, debugContext),
+        ctx.signal(signalType, undefined, signalContext),
       ]);
     },
   };
@@ -255,23 +258,23 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * 所有键位级信号转换通过边级 prefix（createEdgePrefix）注入；
  * prefix handler 不再指定 to:，依赖 defaultRoute 自动走边。
  *
- * @param {import("../../core/components/index.js").Board} board - 白板实例
- * @param {import("../../core/components/index.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {Object} [options={}] - 可选覆盖配置
- * @param {import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
- * @param {import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
+ * @param {import("../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} [options.primaryStrokeTool]
+ * @param {import("../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} [options.secondarySelectionTool]
  * @param {Object} [options.randomCircleSubDAG]
  * @param {ViewportTool} [options.viewportTool]
  * @param {DebuggerTool} [options.debugTool]
- * @param {import("../../core/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
+ * @param {import("../../core/ui/devices-dag/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
  * @param {Record<string, { x: number, y: number }>} [options.wasdRoutePresets]
- * @param {import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition} [options.keyboardDevice]
+ * @param {import("../../core/ui/devices-dag/devices/keyboard-device.js").KeyboardSubDAGDefinition} [options.keyboardDevice]
  * @returns {{
- *   keyboardDevice: import("../../core/devices/keyboard-device.js").KeyboardSubDAGDefinition,
- *   mouseDevice: import("../../core/devices/mouse-device.js").MouseSubDAGDefinition,
+ *   keyboardDevice: import("../../core/ui/devices-dag/devices/keyboard-device.js").KeyboardSubDAGDefinition,
+ *   mouseDevice: import("../../core/ui/devices-dag/devices/mouse-device.js").MouseSubDAGDefinition,
  *   viewportTool: ViewportTool,
- *   primaryStrokeTool: import("../../core/tools/creator/stroke-creator.js").StrokeCreatorTool,
- *   secondarySelectionTool: import("../../core/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
+ *   primaryStrokeTool: import("../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool,
+ *   secondarySelectionTool: import("../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
  *   debugTool: DebuggerTool,
  * }}
  */
@@ -296,8 +299,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     createRandomCircleSubDAG({
       rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
     });
-  const viewportTool =
-    options.viewportTool ?? new ViewportTool();
+  const viewportTool = options.viewportTool ?? new ViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
@@ -422,22 +424,36 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
 
   // Debug：C/O/M/B/T/1-4 → per-key prefix
   {
-    const simpleDebugEdges = [
-      { code: "KeyC", type: "debug:chunkload" },
-      { code: "KeyO", type: "debug:objectload" },
-      { code: "KeyM", type: "debug:aom" },
-      { code: "KeyB", type: "debug:board" },
+    const debugEdgeConfigs = [
+      {
+        code: "KeyC",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:chunkdetails"
+            : "debug:chunkload",
+      },
+      {
+        code: "KeyO",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:objectdetails"
+            : "debug:objectload",
+      },
+      { code: "KeyM", type: "debug:viewport" },
+      {
+        code: "KeyB",
+        type: (signals) =>
+          signals.some((s) => s?.context?.shiftKey)
+            ? "debug:aom"
+            : "debug:board",
+      },
       {
         code: "KeyT",
         type: (signals) =>
           signals.some((s) => s?.context?.shiftKey)
-            ? "debug:mermaid"
+            ? { type: "debug:devices", context: { mode: "mermaid" } }
             : "debug:devices",
       },
-      { code: "Digit1", type: "debug:chunk", ctx: { id: 1 } },
-      { code: "Digit2", type: "debug:chunk", ctx: { id: 2 } },
-      { code: "Digit3", type: "debug:chunk", ctx: { id: 3 } },
-      { code: "Digit4", type: "debug:chunk", ctx: { id: 4 } },
     ].map(({ code, type, ctx }) => ({
       from: `/keyboard/code/${code}`,
       edge: "default",
@@ -448,7 +464,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
       viewportId: viewport.viewportId,
       name: DEMO_WORKFLOW_NAMES.DEBUG,
       workflow: debugTool,
-      edges: simpleDebugEdges,
+      edges: debugEdgeConfigs,
     });
   }
 
@@ -463,11 +479,11 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
       `方向键 : 平移视口\n` +
       `+/- : 缩放视口\n` +
       `R : 刷新视口\n` +
-      `C/O : 区块/对象加载调试\n` +
-      `M : AOM 调试\n` +
-      `B : 白板调试\n` +
-      `T : 设备图调试（Shift+T = mermaid）\n` +
-      `1-4 : 区块详情`,
+      `C : 区块加载  |  Shift+C : 区块详情\n` +
+      `O : 对象加载  |  Shift+O : 对象详情\n` +
+      `M : 视口摘要\n` +
+      `B : 白板摘要  |  Shift+B : AOM 分层\n` +
+      `T : 设备图    |  Shift+T : 设备图 Mermaid`,
   );
 
   return {

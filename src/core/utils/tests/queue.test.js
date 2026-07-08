@@ -85,17 +85,17 @@ describe("Queue", () => {
 
   describe("动态扩容", () => {
     test("应该在队列满时自动扩容", () => {
-      // 初始容量为 8，可以存放 7 个元素（需要预留 1 个空位）
-      for (let i = 0; i < 7; i++) {
+      // 初始容量为 32，可以存放 31 个元素（需要预留 1 个空位）
+      for (let i = 0; i < 31; i++) {
         queue.push(i);
       }
-      expect(queue.count()).toBe(7);
-      expect(queue.capacity).toBe(8);
+      expect(queue.count()).toBe(31);
+      expect(queue.capacity).toBe(32);
 
       // 再添加一个元素应该触发扩容
-      queue.push(7);
-      expect(queue.count()).toBe(8);
-      expect(queue.capacity).toBe(16); // 扩容因子为 2
+      queue.push(31);
+      expect(queue.count()).toBe(32);
+      expect(queue.capacity).toBe(64); // 扩容因子为 2
     });
 
     test("扩容后元素顺序应保持正确", () => {
@@ -123,26 +123,26 @@ describe("Queue", () => {
     });
 
     test("应该支持多次扩容", () => {
-      // 第一次扩容：8 -> 16
-      for (let i = 0; i < 8; i++) {
-        queue.push(i);
-      }
-      expect(queue.capacity).toBe(16);
-
-      // 第二次扩容：16 -> 32
-      for (let i = 8; i < 16; i++) {
-        queue.push(i);
-      }
-      expect(queue.capacity).toBe(32);
-
-      // 第三次扩容：32 -> 64
-      for (let i = 16; i < 32; i++) {
+      // 第一次扩容：32 -> 64
+      for (let i = 0; i < 32; i++) {
         queue.push(i);
       }
       expect(queue.capacity).toBe(64);
 
+      // 第二次扩容：64 -> 128
+      for (let i = 32; i < 64; i++) {
+        queue.push(i);
+      }
+      expect(queue.capacity).toBe(128);
+
+      // 第三次扩容：128 -> 256
+      for (let i = 64; i < 128; i++) {
+        queue.push(i);
+      }
+      expect(queue.capacity).toBe(256);
+
       // 验证所有元素都在
-      expect(queue.count()).toBe(32);
+      expect(queue.count()).toBe(128);
     });
 
     test("循环数组扩容时应正确处理 head 不在 0 位置的情况", () => {
@@ -172,16 +172,92 @@ describe("Queue", () => {
 
     test("扩容后 clear 应该重置容量", () => {
       // 触发扩容
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 40; i++) {
         queue.push(i);
       }
-      expect(queue.capacity).toBeGreaterThan(8);
+      expect(queue.capacity).toBeGreaterThan(32);
 
       // 清空队列
       queue.clear();
-      expect(queue.capacity).toBe(8); // 应该重置为初始容量
+      expect(queue.capacity).toBe(32); // 应该重置为初始容量
       expect(queue.count()).toBe(0);
       expect(queue.empty()).toBe(true);
+    });
+  });
+
+  describe("filter / map", () => {
+    test("filter 应返回匹配的元素数组", () => {
+      for (let i = 0; i < 10; i++) queue.push(i);
+      const evens = queue.filter((n) => n % 2 === 0);
+      expect(evens).toEqual([0, 2, 4, 6, 8]);
+    });
+
+    test("filter 无匹配时返回空数组", () => {
+      queue.push(1);
+      queue.push(3);
+      const result = queue.filter((n) => n > 10);
+      expect(result).toEqual([]);
+    });
+
+    test("filter 全部匹配时返回所有元素", () => {
+      for (let i = 0; i < 5; i++) queue.push(i);
+      const result = queue.filter((n) => n >= 0);
+      expect(result).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    test("filter 不应修改原队列", () => {
+      for (let i = 0; i < 5; i++) queue.push(i);
+      queue.filter((n) => n % 2 === 0);
+      expect(queue.count()).toBe(5);
+      expect(queue.toArray()).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    test("空队列 filter 返回空数组", () => {
+      expect(queue.filter((n) => true)).toEqual([]);
+    });
+
+    test("map 应返回变换后的数组", () => {
+      for (let i = 0; i < 5; i++) queue.push(i);
+      const doubled = queue.map((n) => n * 2);
+      expect(doubled).toEqual([0, 2, 4, 6, 8]);
+    });
+
+    test("map 应保持元素顺序", () => {
+      queue.push("a");
+      queue.push("b");
+      queue.push("c");
+      const result = queue.map((s) => s.toUpperCase());
+      expect(result).toEqual(["A", "B", "C"]);
+    });
+
+    test("map 不应修改原队列", () => {
+      for (let i = 0; i < 5; i++) queue.push(i);
+      queue.map((n) => n * 2);
+      expect(queue.count()).toBe(5);
+      expect(queue.toArray()).toEqual([0, 1, 2, 3, 4]);
+    });
+
+    test("空队列 map 返回空数组", () => {
+      expect(queue.map((n) => n)).toEqual([]);
+    });
+
+    test("head 不在 0 位置时 filter 和 map 仍保持正确顺序", () => {
+      for (let i = 0; i < 6; i++) queue.push(i);
+      queue.pop(); // 0
+      queue.pop(); // 1
+      expect(queue.head).toBe(2);
+
+      const filtered = queue.filter((n) => n % 2 === 0);
+      expect(filtered).toEqual([2, 4]);
+
+      const mapped = queue.map((n) => n * 10);
+      expect(mapped).toEqual([20, 30, 40, 50]);
+    });
+
+    test("filter 和 map 支持链式调用（filter 后接原生数组方法）", () => {
+      for (let i = 0; i < 10; i++) queue.push(i);
+      const result = queue.filter((n) => n % 2 === 0).map((n) => n * 3);
+      expect(result).toEqual([0, 6, 12, 18, 24]);
     });
   });
 

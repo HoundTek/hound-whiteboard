@@ -1,7 +1,6 @@
 /**
  * @file KeyThrottle 单元测试
  * @description 测试按 key 节流的窗口控制、跳过计数、清空和自定义窗口行为。
- * @module utils/log/tests/key-throttle.test
  * @author Zhou Chenyu
  */
 

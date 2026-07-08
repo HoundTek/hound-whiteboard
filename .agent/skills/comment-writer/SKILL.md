@@ -35,6 +35,25 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 - `@module` — 路径格式为 `core/{path/to/module}`，与源码路径对应
 - `@author` — 作者名。不确定时执行 `git config user.name`
 
+### 测试文件
+
+测试文件（`.test.js`）**不应写 `@module`**。原因：
+
+- 测试不被其他模块导入，`@module` 对文档生成和模块图无贡献
+- 测试和被测试文件天然配对（`foo.test.js` 就在 `tests/` 里紧挨 `foo.js`），路径关系一目了然
+- `@module` 路径和 `.test.js` 后缀的命名冲突增加了维护噪音
+
+文件头只需要 `@file`、`@description`（可选）和 `@author`，例如：
+
+```javascript
+/**
+ * @file 区块加载器测试
+ * @author Zhou Chenyu
+ */
+```
+
+`check-module-paths.mjs` 会自动跳过 `.test.js` 文件。
+
 作者名可执行 `git config user.name`、`git config --global user.name` 获取。
 
 单行示例：
@@ -43,7 +62,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 /**
  * @file 白板组件
  * @description Board 类是白板在面向对象设计中的抽象核心。
- * @module core/components/board
+ * @module core/ui/components/orchestration/board
  * @author ...
  */
 ```
