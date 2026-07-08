@@ -62,6 +62,18 @@ class ChunkLoader {
   requesterId;
 
   /**
+   * 挂起的销毁定时器句柄
+   * @type {ReturnType<typeof setTimeout> | undefined}
+   */
+  #pendingDestroyTimer;
+
+  /**
+   * 是否已完成销毁
+   * @type {boolean}
+   */
+  #isDestroyed = false;
+
+  /**
    * @param {{ resolveChunkById?: (chunkId: number) => Chunk | undefined, unloadChunk?: (chunk: Chunk) => boolean | void, eventBus?: EventBus, requesterId?: number | string }} [options] - loader 选项
    * @constructor
    */
@@ -79,6 +91,7 @@ class ChunkLoader {
    * @returns {ChunkLoader}
    */
   configureRequestContext({ eventBus, requesterId } = {}) {
+    this.#cancelScheduledDestroyIfPending();
     this.eventBus = eventBus;
     this.requesterId = requesterId;
     return this;
@@ -116,6 +129,8 @@ class ChunkLoader {
    * @throws {TypeError} 当输入不是合法 `Chunk` 时抛出错误
    */
   trackChunk(chunk) {
+    this.#cancelScheduledDestroyIfPending();
+
     if (!(chunk instanceof Chunk)) {
       throw new TypeError("Invalid chunk instance.");
     }
@@ -134,6 +149,8 @@ class ChunkLoader {
    */
   getChunkById(chunkId) {
     if (!Number.isInteger(chunkId) || chunkId <= 0) return undefined;
+
+    this.#cancelScheduledDestroyIfPending();
 
     const existingChunk = this.chunksLoaded.get(chunkId);
     if (existingChunk) return existingChunk;
@@ -165,6 +182,8 @@ class ChunkLoader {
   unloadChunkById(chunkId) {
     if (!Number.isInteger(chunkId) || chunkId <= 0) return false;
 
+    this.#cancelScheduledDestroyIfPending();
+
     const chunk = this.chunksLoaded.get(chunkId);
     if (!chunk) return false;
 
@@ -192,6 +211,8 @@ class ChunkLoader {
    * @returns {boolean} 是否全部成功卸载并移除
    */
   clear() {
+    this.#cancelScheduledDestroyIfPending();
+
     let cleared = true;
     for (const chunkId of [...this.chunksLoaded.keys()]) {
       if (!this.unloadChunkById(chunkId)) {
@@ -202,10 +223,24 @@ class ChunkLoader {
   }
 
   /**
+   * 取消已挂起的销毁定时（若有）
+   * @returns {boolean} 是否成功取消（有正在挂起的定时并已清除）
+   */
+  cancelScheduledDestroy() {
+    if (this.#pendingDestroyTimer !== undefined) {
+      clearTimeout(this.#pendingDestroyTimer);
+      this.#pendingDestroyTimer = undefined;
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * 只重置当前 loader 的持有关系
    * @description 该方法不会触发 `unloadChunk` 钩子，适合由包装层在自定义卸载时序中使用。
    */
   reset() {
+    this.#cancelScheduledDestroyIfPending();
     this.chunksLoaded.clear();
   }
 
@@ -215,6 +250,7 @@ class ChunkLoader {
    * @returns {boolean}
    */
   untrackChunkById(chunkId) {
+    this.#cancelScheduledDestroyIfPending();
     if (!this.chunksLoaded.has(chunkId)) return false;
     this.chunksLoaded.delete(chunkId);
     this.#refreshLoadedNeighborRefs();
@@ -231,6 +267,8 @@ class ChunkLoader {
     chunk,
     { strategy, direction, source, alreadyBuffered = false } = {},
   ) {
+    this.#cancelScheduledDestroyIfPending();
+
     if (!(this.eventBus instanceof EventBus)) return false;
     this.eventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_LOAD, {
       requesterId: this.requesterId,
@@ -250,6 +288,8 @@ class ChunkLoader {
    * @returns {boolean}
    */
   emitUnloadRequest(chunk, { source } = {}) {
+    this.#cancelScheduledDestroyIfPending();
+
     if (!(this.eventBus instanceof EventBus)) return false;
     this.eventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, {
       requesterId: this.requesterId,
@@ -271,6 +311,8 @@ class ChunkLoader {
     chunksLoaded,
     bufferBounds,
   }) {
+    this.#cancelScheduledDestroyIfPending();
+
     if (!(this.eventBus instanceof EventBus)) return false;
     this.eventBus.emit(CHUNK_LOAD_EVENTS.BUFFER_UPDATED, {
       action,
@@ -285,10 +327,32 @@ class ChunkLoader {
   /**
    * 销毁当前 ChunkLoader
    * @description 对所有已持有区块发出卸载请求以清理 board-core 的引用计数，清空本地持有，释放外部引用。
+   * 若传入 `delayMs`，则定时到期后再执行实际销毁；定时期间可通过 `cancelScheduledDestroy()`
+   * 取消，或通过任何追踪/访问方法（trackChunk、getChunkById 等）自动取消。
+   * @param {number} [delayMs] - 延迟销毁的毫秒数。省略或 ≤0 则立即销毁。
    */
-  destroy() {
+  destroy(delayMs) {
+    this.#cancelPendingDestroyTimer();
+
+    if (typeof delayMs === "number" && delayMs > 0) {
+      this.#pendingDestroyTimer = setTimeout(() => {
+        this.#pendingDestroyTimer = undefined;
+        this.#performDestroy();
+      }, delayMs);
+      return;
+    }
+
+    this.#performDestroy();
+  }
+
+  /**
+   * 执行实际销毁
+   * @description 发出卸载请求、释放引用、标记已销毁。
+   * @private
+   */
+  #performDestroy() {
     for (const chunk of this.chunksLoaded.values()) {
-      this.eventBus.emit(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, {
+      this.eventBus?.emit(CHUNK_LOAD_EVENTS.REQUEST_UNLOAD, {
         requesterId: this.requesterId,
         chunk,
       });
@@ -299,6 +363,30 @@ class ChunkLoader {
     this.resolveChunkById = undefined;
     this.unloadChunk = undefined;
     this.requesterId = undefined;
+    this.#isDestroyed = true;
+  }
+
+  /**
+   * 清除挂起的销毁定时（若有）
+   * @private
+   */
+  #cancelPendingDestroyTimer() {
+    if (this.#pendingDestroyTimer !== undefined) {
+      clearTimeout(this.#pendingDestroyTimer);
+      this.#pendingDestroyTimer = undefined;
+    }
+  }
+
+  /**
+   * 若挂有销毁定时则自动取消
+   * @description 当 loader 仍有活跃操作时调用，避免定时器到期误销毁。
+   * @private
+   */
+  #cancelScheduledDestroyIfPending() {
+    if (this.#pendingDestroyTimer !== undefined) {
+      clearTimeout(this.#pendingDestroyTimer);
+      this.#pendingDestroyTimer = undefined;
+    }
   }
 
   /**

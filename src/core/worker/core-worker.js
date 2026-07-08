@@ -903,7 +903,8 @@ class CoreWorkerRuntime {
 
         // 此时对象已通过 syncChunkObjectEntries 加载到 objectLoaded
         const hits = this.#runHitTest(boardCore, queryRange);
-        loader.destroy();
+        // 延时销毁：保留已加载区块，短时间内次次 hitTest 可复用缓存
+        loader.destroy(300);
         return hits;
       }
     }

@@ -1359,7 +1359,8 @@ class ActiveObjectManager {
           loadPromises.push(promise);
         }
         await Promise.all(loadPromises);
-        loader?.destroy();
+        // 延时销毁：保留已预加载区块，短时间内后续 apply 可复用缓存
+        loader?.destroy(300);
       }
     }
 
