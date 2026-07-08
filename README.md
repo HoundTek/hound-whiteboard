@@ -28,7 +28,7 @@ UI Kit 另由 [HoundTek/hound-react-ui-kit](https://github.com/HoundTek/hound-re
 yarn install
 
 # 2. 启动开发模式（带热更新）
-yarn dev
+yarn dev:quick
 
 # 3. 运行测试
 yarn test

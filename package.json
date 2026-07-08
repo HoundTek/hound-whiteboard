@@ -20,8 +20,7 @@
     "clean:status": "node scripts/build/clean.cjs status",
     "clean:help": "node scripts/build/clean.cjs help",
 
-    "dev": "node scripts/build/build-entry.cjs dev",
-    "dev:quick": "tauri dev",
+    "dev": "tauri dev",
     "build": "node scripts/build/build-entry.cjs build",
     "build:quick": "tauri build",
 
@@ -59,7 +58,7 @@
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:modules": "node scripts/ci/check-module-paths.mjs",
     "ci-check": "yarn check:docs && yarn check:modules",
-    "prepare": "husky"
+    "prepare": "husky && yarn icon"
   },
   "author": "Frank Steven",
   "license": "GPL-3.0-only",
