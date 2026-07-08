@@ -2,7 +2,7 @@ const { execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 
-const ROOT_DIR = path.resolve(__dirname, '..')
+const ROOT_DIR = path.resolve(__dirname, '../..')
 
 const PLATFORMS = {
   desktop: {

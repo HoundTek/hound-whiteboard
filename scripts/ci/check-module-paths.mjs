@@ -3,7 +3,7 @@
 /**
  * @file 文件头路径检查
  * @description 扫描 src/core 下所有 .js 文件，验证 @module 路径与实际文件路径一致。
- * @module scripts/check-module-paths
+ * @module scripts/ci/check-module-paths
  */
 
 import fs from "fs";
@@ -11,7 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = path.resolve(__dirname, "../..");
 const CORE_DIR = path.join(ROOT, "src", "core");
 
 let checked = 0;

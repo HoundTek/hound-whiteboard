@@ -3,7 +3,7 @@ const path = require('path')
 const { execSync } = require('child_process')
 
 const scriptDir = __dirname
-const rootDir = path.resolve(scriptDir, '..')
+const rootDir = path.resolve(scriptDir, '../..')
 const configPath = path.join(scriptDir, 'icon-config.json')
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
 

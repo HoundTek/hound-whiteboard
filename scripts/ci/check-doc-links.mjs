@@ -3,7 +3,7 @@
 /**
  * @file 文档链接检查
  * @description 扫描 src/core 下所有 .md 文件，验证相对链接目标是否存在。
- * @module scripts/check-doc-links
+ * @module scripts/ci/check-doc-links
  */
 
 import fs from "fs";
@@ -11,7 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = path.resolve(__dirname, "../..");
 const CORE_DIR = path.join(ROOT, "src", "core");
 
 let total = 0;
