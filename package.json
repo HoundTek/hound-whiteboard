@@ -5,13 +5,13 @@
   "description": "A whiteboard app",
   "scripts": {
     "deps": "yarn",
-    "icon": "node scripts/build/gen-icons.cjs all",
-    "icon:desktop": "node scripts/build/gen-icons.cjs desktop",
-    "icon:mac": "node scripts/build/gen-icons.cjs mac",
-    "icon:win": "node scripts/build/gen-icons.cjs win",
-    "icon:linux": "node scripts/build/gen-icons.cjs linux",
-    "icon:android": "node scripts/build/gen-icons.cjs android",
-    "icon:ios": "node scripts/build/gen-icons.cjs ios",
+    "icon": "node scripts/build/build-entry.cjs icon all",
+    "icon:desktop": "node scripts/build/build-entry.cjs icon desktop",
+    "icon:mac": "node scripts/build/build-entry.cjs icon mac",
+    "icon:win": "node scripts/build/build-entry.cjs icon win",
+    "icon:linux": "node scripts/build/build-entry.cjs icon linux",
+    "icon:android": "node scripts/build/build-entry.cjs icon android",
+    "icon:ios": "node scripts/build/build-entry.cjs icon ios",
     "clean": "node scripts/build/clean.cjs",
     "clean:target": "node scripts/build/clean.cjs target",
     "clean:gen": "node scripts/build/clean.cjs gen",
@@ -19,11 +19,9 @@
     "clean:temp": "node scripts/build/clean.cjs temp",
     "clean:status": "node scripts/build/clean.cjs status",
     "clean:help": "node scripts/build/clean.cjs help",
-
-    "dev": "tauri dev",
+    "dev": "node scripts/build/build-entry.cjs dev",
     "build": "node scripts/build/build-entry.cjs build",
-    "build:quick": "tauri build",
-
+    "build:quick": "node scripts/build/build-entry.cjs build-quick",
     "dev:win": "node scripts/build/build-entry.cjs dev win",
     "build:win": "node scripts/build/build-entry.cjs build win",
     "dev:mac": "node scripts/build/build-entry.cjs dev mac",
@@ -31,15 +29,12 @@
     "build:mac-universal": "node scripts/build/build-entry.cjs build mac-universal",
     "dev:linux": "node scripts/build/build-entry.cjs dev linux",
     "build:linux": "node scripts/build/build-entry.cjs build linux",
-
     "init:android": "yarn deps && tauri android init",
     "dev:android": "node scripts/build/build-entry.cjs dev android",
     "build:android": "node scripts/build/build-entry.cjs build android",
     "dev:ios": "node scripts/build/build-entry.cjs dev ios",
     "build:ios": "node scripts/build/build-entry.cjs build ios",
-
     "test": "node --experimental-vm-modules --localstorage-file=/tmp/jest-localstorage node_modules/jest/bin/jest.js --passWithNoTests",
-
     "ship": "node scripts/build/build-entry.cjs ship",
     "ship:win": "node scripts/build/build-entry.cjs ship win",
     "ship:mac": "node scripts/build/build-entry.cjs ship mac",
@@ -47,18 +42,16 @@
     "ship:android": "node scripts/build/build-entry.cjs ship android",
     "ship:ios": "node scripts/build/build-entry.cjs ship ios",
     "ci": "yarn deps && yarn test && yarn build",
-
     "bench": "node benchmarks/all.bench.js",
     "bench:io": "node benchmarks/io-bridge.bench.js",
     "bench:io:direct": "node benchmarks/io-direct.bench.js",
     "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js",
     "bench:worker": "node benchmarks/worker-rpc.bench.js",
     "bench:render": "node benchmarks/worker-render.bench.js",
-
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:modules": "node scripts/ci/check-module-paths.mjs",
     "ci-check": "yarn check:docs && yarn check:modules",
-    "prepare": "husky && yarn icon"
+    "prepare": "husky"
   },
   "author": "Frank Steven",
   "license": "GPL-3.0-only",
@@ -71,7 +64,9 @@
     "@tauri-apps/cli": "^2.11.2",
     "benchmark": "2.1.4",
     "husky": "^9.1.7",
-    "jest": "30.4.2"
+    "ink": "5",
+    "jest": "30.4.2",
+    "react": "18"
   },
   "jest": {
     "testEnvironment": "node"
