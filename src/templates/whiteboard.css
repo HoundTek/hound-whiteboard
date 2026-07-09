@@ -136,6 +136,7 @@ body {
 #app-foreground-layer {
   position: absolute;
   inset: 0;
+  touch-action: none;
 }
 
 #svg {
@@ -150,6 +151,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
+  touch-action: none;
 }
 
 .viewport-layer {
@@ -169,6 +171,8 @@ body {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .viewport-layer-ui {

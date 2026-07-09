@@ -18,6 +18,16 @@
 - 末端工具为 `StrokeCreatorTool`
 - 创建结果写入白板并参与渲染
 
+### 触摸多指笔画
+
+- 触摸事件（`touchstart`/`touchmove`/`touchend`/`touchcancel`）从 DOM canvas 捕获，`emitTouchPacket` 将每个 `changedTouch` 转为 `position`/`end`/`cancel` 信号
+- 信号发送到 `/touchscreen`，touchscreen device 在 `rootHandler` 中完成 canvas→world 坐标转换后更新内部触点状态
+- 每帧聚合输出一条 `touch-contacts` 信号到 `touchscreen/contacts`
+- `MultiToolWrapper(StrokeCreatorTool)` 挂载在 `/workflows/touch-stroke`，edge 来自 `touchscreen/contacts`
+- wrapper 为每个 `touchId` 创建一个独立 `StrokeCreatorTool` 实例，各自维护独立的 `isGestureActive`、`objectId` 和路径点列
+- 多指同时拖动时各笔画互不干扰，同时落笔并行绘制
+- 坐标转换：在 touchscreen device 内通过 `viewport.convertCanvasSignalsToWorld()` 完成，与 mouse device 共用同一方法
+
 ### 右键矩形框选
 
 - 鼠标右键进入 `/mouse/secondary/default` → `/workflows/secondary-chooser`
@@ -72,6 +82,7 @@
 
 | 按键          | 功能                                 |
 | ------------- | ------------------------------------ |
+| 触摸拖动      | 多指同时创建红色笔画（每指独立）     |
 | 鼠标左键      | 画红色笔迹                           |
 | 鼠标右键      | 首次框选对象 → 再次拖拽修改          |
 | W / A / S / D | 移动选中对象（右键激活后）           |
@@ -98,6 +109,8 @@
 - 边级 prefix 注入与信号转换
 - append-only `context` 与节点 `state` 的协作边界
 - 视口控制与渲染刷新
+- 触摸输入信号转触点聚合状态（touchscreen device）
+- 多工具并发包装器（`MultiToolWrapper`）为每指创建独立工具实例
 - 调试信息打印是否正常
 
 ## 当前说明
@@ -111,5 +124,7 @@
 - creator / chooser 与 modifier 的上下文共享以当前节点 `state` 为边界，handoff 通过回调和对象桥接完成
 - 视口、调试各 workflow 通过 `edge.prefix` 多前驱模式汇聚；WASD 通过 `edge.prefix` 注入到 handoff 工作流
 - 屏幕坐标在 Viewport 层转换为世界坐标后进入工具链
+- 触摸设备通过 `viewport.convertCanvasSignalsToWorld()` 完成 canvas→world 坐标转换
+- 多指并发通过 `MultiToolWrapper` 在工具内部分流，设备图保持静态
 
 如果需要进一步丰富 demo，可继续增加更多 workflow 观测输出，以及 creator → modifier 同一路径的协同示例。

@@ -7,6 +7,7 @@
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
 import { createMouseDevice } from "../../core/ui/devices-dag/devices/mouse-device.js";
+import { createTouchscreenDevice } from "../../core/ui/devices-dag/devices/touchscreen-device.js";
 import {
   KEYBOARD_DEVICE_SIGNAL_TYPES,
   createKeyboardDevice,
@@ -16,6 +17,7 @@ import {
   createHandoffSubDAG,
 } from "../../core/ui/devices-dag/prefixes/index.js";
 import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
+import { MultiToolWrapper } from "../../core/ui/devices-dag/tools/multi-tool-wrapper.js";
 import { RectangleObjectChooserTool } from "../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../core/ui/devices-dag/tools/modifier/common-object-modifier.js";
 import { DebuggerTool } from "./debugger-tool.js";
@@ -55,6 +57,7 @@ const DEMO_WORKFLOW_NAMES = Object.freeze({
   RANDOM_CIRCLE: "create-circle",
   DEBUG: "debug",
   VIEWPORT: "viewport",
+  TOUCH_STROKE: "touch-stroke",
 });
 
 const DEMO_VIEWPORT_POSITION_STEP = 200;
@@ -269,8 +272,10 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
  * @param {import("../../core/ui/devices-dag/devices/mouse-device.js").MouseSubDAGDefinition} [options.mouseDevice]
  * @param {Record<string, { x: number, y: number }>} [options.wasdRoutePresets]
  * @param {import("../../core/ui/devices-dag/devices/keyboard-device.js").KeyboardSubDAGDefinition} [options.keyboardDevice]
+ * @param {import("../../core/ui/devices-dag/devices/touchscreen-device.js").TouchscreenSubDAGDefinition} [options.touchscreenDevice]
  * @returns {{
  *   keyboardDevice: import("../../core/ui/devices-dag/devices/keyboard-device.js").KeyboardSubDAGDefinition,
+ *   touchscreenDevice: import("../../core/ui/devices-dag/devices/touchscreen-device.js").TouchscreenSubDAGDefinition,
  *   mouseDevice: import("../../core/ui/devices-dag/devices/mouse-device.js").MouseSubDAGDefinition,
  *   viewportTool: ViewportTool,
  *   primaryStrokeTool: import("../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool,
@@ -304,9 +309,23 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
   const mouseDevice = options.mouseDevice ?? createMouseDevice();
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
   const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
+  const touchscreenDevice =
+    options.touchscreenDevice ?? createTouchscreenDevice();
 
   viewport.mountSubDAG("mouse", mouseDevice);
   viewport.mountSubDAG("keyboard", keyboardDevice);
+  viewport.mountSubDAG("touchscreen", touchscreenDevice);
+
+  // 触摸多指笔画
+  const touchStrokeTool = new MultiToolWrapper(StrokeCreatorTool, {
+    property: { color: DEMO_PRIMARY_STROKE_COLOR, width: 2 },
+  });
+  effectiveBoard.signalsEventBus.emit("mount", {
+    viewportId: viewport.viewportId,
+    name: DEMO_WORKFLOW_NAMES.TOUCH_STROKE,
+    workflow: touchStrokeTool,
+    edges: [{ from: "touchscreen/contacts", edge: "default" }],
+  });
 
   // 所有设备叶节点 defaultRoute = "default"，
   // 所有 mount edge 统一 "default"，handler 不再写 to:
@@ -486,8 +505,14 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     `T : 设备图    |  Shift+T : 设备图 Mermaid`,
   );
 
+  demoLog.info(
+    `── 触摸 ──\n` +
+    `触摸拖动 : 多指同时创建笔画（每指独立）`,
+  );
+
   return {
     keyboardDevice,
+    touchscreenDevice,
     mouseDevice,
     viewportTool,
     primaryStrokeTool,

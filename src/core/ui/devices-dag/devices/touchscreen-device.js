@@ -5,8 +5,16 @@
  * @author Zhou Chenyu
  */
 
+/**
+ * @typedef {import("../../devices-dag/dag.js").SubDAGDefinition & {
+ *   clearTouches: () => void,
+ *   getActiveTouches: () => Array<{touchId: string, position: any}>,
+ * }} TouchscreenSubDAGDefinition
+ */
+
 import { createSubDAG } from "../index.js";
 import { SignalPacket } from "../signal.js";
+import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
 
 /**
  * 触摸屏设备输出信号类型
@@ -109,14 +117,26 @@ function createTouchscreenDevice(options = {}) {
 
   /**
    * 根节点处理器
+   * @description
+   * 1. 将 position 信号的 canvas 相对坐标转为世界坐标
+   * 2. 更新内部触点状态
+   * 3. 路由到 contacts 子节点输出聚合的触点报告
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 acc.viewport）
    * @returns {Object}
    */
   const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
-    updateTouches(packet);
-    return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
+
+    const viewport = ctx?.acc?.viewport;
+    const convertedSignals =
+      viewport && typeof viewport.convertCanvasSignalsToWorld === "function"
+        ? viewport.convertCanvasSignalsToWorld(packet.signals)
+        : packet.signals;
+
+    const convertedPacket = new SignalPacket(packet.to, convertedSignals);
+    updateTouches(convertedPacket);
+    return ctx.routeToChild(ctx.defaultRoute || "", convertedPacket.signals);
   };
 
   /**
@@ -139,7 +159,7 @@ function createTouchscreenDevice(options = {}) {
 
   const builder = createSubDAG("/touchscreen");
   const root = builder.node().handler(rootHandler).defaultRoute("contacts");
-  const contacts = builder.node().handler(contactsHandler);
+  const contacts = builder.node().handler(contactsHandler).defaultRoute(DEVICE_DEFAULT_ROUTE);
   builder.edge("contacts", root, contacts);
 
   return builder

@@ -111,95 +111,88 @@ async function bootstrapWhiteboard() {
 
   resizeViewport();
 
-  const emitMousePacket = (event) => {
+  /**
+   * 统一指针事件处理器（替换 mouse + touch 两套）
+   * @description
+   * 使用 Pointer Events 统一处理鼠标、触摸和笔输入。
+   * `setPointerCapture` 保证指针离开 canvas 后仍能收到后续事件（替代 window mouseup 监听）。
+   * 路由：mouse pointerType → mouse device；touch/pen → touchscreen device。
+   * @param {PointerEvent} event
+   * @returns {void}
+   */
+  const emitPointerPacket = (event) => {
+    event.preventDefault();
+    const rect = viewport.canvas.getBoundingClientRect();
     const signals = [];
 
-    if (event.type === "mousedown") {
-      event.preventDefault();
-      if (event.button === 0) {
-        logDemoStatus("当前输入", "左键红笔");
-      } else if (event.button === 2) {
-        logDemoStatus("当前输入", "右键选择-修改");
+    // pointerdown 时 capture 该指针，确保 pointermove/up 持续送达 canvas
+    if (event.type === "pointerdown") {
+      viewport.canvas.setPointerCapture(event.pointerId);
+      if (event.pointerType === "mouse") {
+        if (event.button === 0) {
+          logDemoStatus("当前输入", "左键红笔");
+        } else if (event.button === 2) {
+          logDemoStatus("当前输入", "右键选择-修改");
+        } else {
+          logDemoStatus("当前输入", "鼠标输入");
+        }
       } else {
-        logDemoStatus("当前输入", "鼠标输入");
+        logDemoStatus("当前输入", `触摸指针 ${event.pointerId}`);
       }
     }
 
+    const canvasPos = new Vector(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+    );
+
+    const baseContext = {
+      value: canvasPos,
+      pointerId: String(event.pointerId),
+      button: event.button,
+      buttons: event.buttons,
+      pointerType: event.pointerType,
+      domEvent: event.type,
+      ctrlKey: Boolean(event.ctrlKey),
+      shiftKey: Boolean(event.shiftKey),
+      altKey: Boolean(event.altKey),
+      metaKey: Boolean(event.metaKey),
+    };
+
     if (
-      event.type === "mousedown" ||
-      event.type === "mousemove" ||
-      event.type === "mouseup"
+      event.type === "pointerdown" ||
+      event.type === "pointermove"
     ) {
-      const rect = viewport.canvas.getBoundingClientRect();
-      const canvasPos = new Vector(
-        event.clientX - rect.left,
-        event.clientY - rect.top,
-      );
-
-      const baseContext = {
-        value: canvasPos,
-        button: event.button,
-        buttons: event.buttons,
-        domEvent: event.type,
-        ctrlKey: Boolean(event.ctrlKey),
-        shiftKey: Boolean(event.shiftKey),
-        altKey: Boolean(event.altKey),
-        metaKey: Boolean(event.metaKey),
-      };
-
-      signals.push({ type: "position", context: baseContext });
+      signals.push({ type: "position", context: { ...baseContext } });
     }
 
-    if (event.type === "mouseup") {
-      signals.push({
-        type: "end",
-        context: {
-          button: event.button,
-          buttons: event.buttons,
-          domEvent: event.type,
-        },
-      });
+    if (event.type === "pointerup" || event.type === "pointerleave") {
+      signals.push({ type: "end", context: { ...baseContext } });
     }
 
-    if (event.type === "mouseleave") {
-      signals.push({
-        type: "end",
-        context: {
-          buttons: event.buttons,
-          domEvent: event.type,
-        },
-      });
+    if (event.type === "pointercancel") {
+      signals.push({ type: "cancel", context: { ...baseContext } });
     }
 
     if (signals.length === 0) return;
 
+    // 鼠标 → mouse device，触摸/笔 → touchscreen device
+    const devicePath =
+      event.pointerType === "mouse"
+        ? `/${viewport.viewportId}/mouse`
+        : `/${viewport.viewportId}/touchscreen`;
+
     board.signalsEventBus.emit("input", {
-      to: `/${viewport.viewportId}/mouse`,
+      to: devicePath,
       signals,
     });
   };
 
-  const emitWindowMouseUpPacket = (event) => {
-    board.signalsEventBus.emit("input", {
-      to: `/${viewport.viewportId}/mouse`,
-      signals: [
-        {
-          type: "end",
-          context: {
-            button: event.button,
-            buttons: event.buttons,
-            domEvent: event.type,
-          },
-        },
-      ],
-    });
-  };
-
-  viewport.canvas.addEventListener("mousedown", emitMousePacket);
-  viewport.canvas.addEventListener("mousemove", emitMousePacket);
-  viewport.canvas.addEventListener("mouseup", emitMousePacket);
-  window.addEventListener("mouseup", emitWindowMouseUpPacket);
-  viewport.canvas.addEventListener("mouseleave", emitMousePacket);
+  viewport.canvas.addEventListener("pointerdown", emitPointerPacket);
+  viewport.canvas.addEventListener("pointermove", emitPointerPacket);
+  viewport.canvas.addEventListener("pointerup", emitPointerPacket);
+  viewport.canvas.addEventListener("pointerleave", emitPointerPacket);
+  viewport.canvas.addEventListener("pointercancel", emitPointerPacket);
   viewport.canvas.addEventListener("contextmenu", (event) => {
     event.preventDefault();
   });
@@ -283,7 +276,7 @@ async function bootstrapWhiteboard() {
     });
   };
 
-  viewport.canvas.addEventListener("mousedown", () => {
+  viewport.canvas.addEventListener("pointerdown", () => {
     viewport.canvas.focus();
   });
   viewport.canvas.addEventListener("keydown", emitKeyboardPacket);

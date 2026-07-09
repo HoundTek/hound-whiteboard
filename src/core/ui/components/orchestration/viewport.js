@@ -363,9 +363,9 @@ class Viewport {
         : nextState.origin instanceof Vector
           ? nextState.origin
           : new Vector(
-              nextState.origin?.x ?? this.origin.x,
-              nextState.origin?.y ?? this.origin.y,
-            );
+            nextState.origin?.x ?? this.origin.x,
+            nextState.origin?.y ?? this.origin.y,
+          );
     const nextZoom =
       nextState.zoom === undefined
         ? this.zoom
@@ -480,6 +480,33 @@ class Viewport {
         includeViewportSize: true,
       });
     }
+  }
+
+  /**
+   * 批量将信号包中的 position 信号从 canvas 坐标转为世界坐标
+   * @description
+   * 遍历信号数组，对 type === "position" 且 context.value 存在的信号做坐标变换。
+   * 非 position 信号原样透传。
+   * @param {Array<{type: string, context?: Object}>} signals - 原始信号列表
+   * @returns {Array<{type: string, context?: Object}>} 转换后的信号列表
+   */
+  convertCanvasSignalsToWorld(signals) {
+    return signals.map((signal) => {
+      if (signal.type === "position" && signal.context?.value) {
+        const raw = signal.context.value;
+        return {
+          ...signal,
+          context: {
+            ...signal.context,
+            value: {
+              x: raw.x / this.zoom + this.origin.x,
+              y: raw.y / this.zoom + this.origin.y,
+            },
+          },
+        };
+      }
+      return signal;
+    });
   }
 
   /**
