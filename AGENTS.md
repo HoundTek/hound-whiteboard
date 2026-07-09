@@ -6,8 +6,14 @@ Tauri 2 桌面白板应用。前端 Vanilla JS（无框架），通过 IPC 与 R
 
 ```bash
 # 开发
-yarn dev                        # Tauri 开发模式（热更新）
+yarn dev                        # Tauri 开发模式（热更新，默认桌面端）
+yarn dev:win                    # Windows 开发
+yarn dev:mac                    # macOS 开发
+yarn dev:linux                  # Linux 开发
+yarn dev:android                # Android 开发
+yarn dev:ios                    # iOS 开发
 yarn build                      # 生产构建
+yarn build:quick                # 仅构建（跳过依赖安装和图标）
 
 # 测试
 yarn test                       # 运行全部测试
@@ -63,6 +69,9 @@ src/
 └── templates/               # 白板 HTML/CSS/JS 模板
 src-tauri/                   # Rust 后端（Cargo workspace）
 benchmarks/                  # 性能基准
+scripts/                     # 构建脚本系统
+├── build/                   #   构建入口、task-runner、任务定义、TUI
+└── ci/                      #   文档链接 / @module 路径检查
 ```
 
 核心模块下有 `docs/{name}-document.md` 和 `tests/` 目录。

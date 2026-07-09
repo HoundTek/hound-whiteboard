@@ -195,32 +195,26 @@ function safeExit(code) {
 }
 
 // ============================================================
-//  Safeguard: 最大存活时间
-// ============================================================
-
-const MAX_LIFETIME = 10 * 60 * 1000; // 10 分钟
-setTimeout(() => {
-  if (!gExiting) {
-    process.stderr.write('TUI timeout: exiting\n');
-    safeExit(1);
-  }
-}, MAX_LIFETIME);
-
-// ============================================================
 //  Components
 // ============================================================
 
-function TaskRow({ task }) {
+function TaskRow({ task, liveElapsed }) {
   const icon = STATUS_ICONS[task.status] || task.status;
   const color = STATUS_COLORS[task.status] || 'white';
+
+  /** 运行中显示实时计时，完成后显示精确耗时 */
+  const elapsedText = task.status === STATUS.RUNNING && liveElapsed != null
+    ? formatElapsed(liveElapsed)
+    : task.elapsed != null && task.status === STATUS.DONE
+      ? formatElapsed(task.elapsed)
+      : null;
 
   return React.createElement(
     Box,
     null,
     React.createElement(Text, { color }, `  ${icon}  ${task.name}`),
-    React.createElement(Text, { color: 'cyan' }, task.status === STATUS.RUNNING ? ' ...' : ''),
-    task.elapsed != null && task.status === STATUS.DONE
-      && React.createElement(Text, { color: 'grey' }, `  ${formatElapsed(task.elapsed)}`),
+    elapsedText != null
+      && React.createElement(Text, { color: task.status === STATUS.RUNNING ? 'cyan' : 'grey' }, `  ${elapsedText}`),
     task.status === STATUS.FAILED && React.createElement(Text, { color: 'red' }, '  FAILED'),
   );
 }
@@ -229,9 +223,18 @@ function App({ port }) {
   const [tasks, setTasks] = useState([]);
   const [logs, setLogs] = useState([]);
   const [exiting, setExiting] = useState(false);
+  const [tick, setTick] = useState(0);
   const tasksRef = useRef(tasks);
+  /** @type {{ current: number[] }} 每个任务 index 的运行起始时间戳 */
+  const runningSinceRef = useRef([]);
 
   tasksRef.current = tasks;
+
+  // 100ms 定时器驱动运行中计时器刷新
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 100);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let buf = '';
@@ -289,6 +292,9 @@ function App({ port }) {
               status: msg.status || STATUS.PENDING,
               elapsed: msg.elapsed,
             };
+            if (msg.status === STATUS.RUNNING) {
+              runningSinceRef.current[msg.index] = Date.now();
+            }
           }
           return next;
         });
@@ -354,7 +360,12 @@ function App({ port }) {
     React.createElement(
       Box,
       { flexDirection: 'column' },
-      ...tasks.map((t, i) => React.createElement(TaskRow, { key: i, task: t })),
+      ...tasks.map((t, i) => {
+        const liveElapsed = t.status === STATUS.RUNNING && runningSinceRef.current[i] != null
+          ? Date.now() - runningSinceRef.current[i]
+          : null;
+        return React.createElement(TaskRow, { key: i, task: t, liveElapsed });
+      }),
     ),
     React.createElement(Box, { height: 1 }),
     // 输出矩形：只显示最后 15 行，精确截断防止溢出
