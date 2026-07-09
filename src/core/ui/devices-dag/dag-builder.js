@@ -18,11 +18,7 @@
  */
 
 import { isPlainObject } from "./dag-utils.js";
-import { normalizePath, toAbsolutePath } from "../../utils/path.js";
-
-// ---------------------------------------------------------------------------
-// DAGNodeBuilder
-// ---------------------------------------------------------------------------
+import { joinPath, normalizePath } from "../../utils/path.js";
 
 /**
  * 子图节点构建器
@@ -147,10 +143,6 @@ class DAGNodeBuilder {
   }
 }
 
-// ---------------------------------------------------------------------------
-// DAGBuilder
-// ---------------------------------------------------------------------------
-
 /**
  * 子图构建器
  * @class
@@ -215,7 +207,7 @@ class DAGBuilder {
    * @param {string} rootPath - 子图根路径前缀
    */
   constructor(rootPath = "/") {
-    this._rootPath = toAbsolutePath(normalizePath(rootPath));
+    this._rootPath = joinPath(normalizePath(rootPath));
     this._nextLocalId = 0;
     this._nodeDefs = new Map();
     this._edges = [];
@@ -293,8 +285,6 @@ class DAGBuilder {
     };
   }
 
-  // ---- 内部方法 ----
-
   /**
    * @param {number} localId
    * @param {Partial<import("./devices-dag.js").SubDAGNodeDefinition>} patch
@@ -321,10 +311,6 @@ class DAGBuilder {
     });
   }
 }
-
-// ---------------------------------------------------------------------------
-// createSubDAG
-// ---------------------------------------------------------------------------
 
 /**
  * 创建一个子图构建器

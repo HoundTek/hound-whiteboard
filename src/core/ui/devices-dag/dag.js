@@ -206,8 +206,13 @@ class DevicesDAG {
     this._maxDispatchDepth = options.maxDispatchDepth ?? 32;
     this._mountedToolInstances = new Set();
 
-    // 创建根节点（id = 0，唯一的源）
+    // 幽灵节点（-1，分发起点，对外不可见）
+    this._ghost = this._createNode(-1);
+    this._ghost.semantics = { ghost: true };
+
+    // 真实根节点（id = 0，路径 "/"），通过边 "/" 从幽灵节点可达
     this._root = this._createNode(0);
+    this._connectNodes(this._ghost, "/", this._root);
     this._root.semantics = { root: true };
     this._root.path = "/";
   }
@@ -298,7 +303,7 @@ class DevicesDAG {
   _cleanupOrphanChain(node, cleaned = new Set()) {
     if (cleaned.has(node.id)) return;
     if (node.inEdges.size > 0) return; // 仍有入边，不是孤立节点
-    if (node.id === 0) return; // 根节点永不清理
+    if (node === this._ghost) return; // 幽灵节点永不清理
 
     cleaned.add(node.id);
 
@@ -323,7 +328,7 @@ class DevicesDAG {
     if (absolutePath === "/") return this._root;
 
     const segments = normalizePath(absolutePath);
-    let current = this._root;
+    let current = this._ghost;
 
     for (const segment of segments) {
       const edge = current.outEdges.get(segment);
@@ -351,7 +356,7 @@ class DevicesDAG {
     }
 
     const segments = normalizePath(absolutePath);
-    let current = this._root;
+    let current = this._ghost;
 
     for (const segment of segments) {
       let edge = current.outEdges.get(segment);
@@ -389,9 +394,10 @@ class DevicesDAG {
    */
   getNodePath(node) {
     if (!node) return undefined;
-    if (node.id === 0) return "/";
+    if (node === this._ghost) return undefined;
+    if (node === this._root) return "/";
 
-    // BFS 从根找一条到目标节点的路径
+    // BFS 从真实根找一条到目标节点的路径
     const visited = new Set();
     const queue = [{ node: this._root, path: "/" }];
     visited.add(this._root.id);
@@ -1030,48 +1036,16 @@ class DevicesDAG {
 
     if (segments.length === 0) {
       if (this._root.getDefaultRoute()) {
-        segments = normalizePath(this._root.getDefaultRoute());
+        // 走 ghost→"/"→root 后再走默认出边
+        segments = ["/", ...normalizePath(this._root.getDefaultRoute())];
       } else {
         return { packets: [startPacket] };
       }
     }
 
-    // 调根节点 handler（如果存在），合并其 acc 到累积上下文
-    if (typeof this._root.handler === "function") {
-      const rootCtx = this._createHandlerContext(
-        this._root,
-        "/",
-        startPacket,
-        context,
-        0,
-      );
-      try {
-        let rawResult = this._root.handler(startPacket, rootCtx);
-        if (rawResult instanceof Promise) {
-          rawResult.catch((error) => {
-            console.error("[DevicesDAG] async root handler rejection:", error);
-          });
-          rawResult = undefined;
-        }
-        const rootResult = normalizeHandlerResult(rawResult);
-        if (rootResult.acc && isPlainObject(rootResult.acc)) {
-          for (const key of Object.keys(rootResult.acc)) {
-            if (Object.prototype.hasOwnProperty.call(context, key)) {
-              throw new Error(
-                `Context key "${key}" already exists. Root handler acc cannot override.`,
-              );
-            }
-          }
-          context = { ...context, ...rootResult.acc };
-        }
-      } catch (error) {
-        console.error("[DevicesDAG] root handler error:", error);
-      }
-    }
-
     return this._walkSegments({
-      startNode: this._root,
-      startPath: "/",
+      startNode: this._ghost,
+      startPath: "",
       segments,
       startPacket,
       accumulatedContext: context,
@@ -1148,9 +1122,9 @@ class DevicesDAG {
   unmount(path, context = {}) {
     const node = this.getNode(path);
     if (!node) return false;
-    if (node.id === 0) return false; // 不能卸载根节点
+    if (node === this._ghost || node === this._root) return false;
 
-    // 找到从根到此节点的最后一条边
+    // 找到从幽灵节点到此节点的最后一条边
     const absolutePath = resolvePath("/", path);
     if (absolutePath === "/") return false;
 
@@ -1158,7 +1132,7 @@ class DevicesDAG {
     if (segments.length === 0) return false;
 
     // 逐段走到目标节点前，断开最后一段边
-    let current = this._root;
+    let current = this._ghost;
     for (let i = 0; i < segments.length - 1; i++) {
       const edge = current.outEdges.get(segments[i]);
       if (!edge) return false;
@@ -1239,7 +1213,7 @@ class DevicesDAG {
     root.defaultRoute = "";
 
     // 从全局表中移除
-    if (root.id !== 0) {
+    if (root !== this._ghost) {
       this._nodes.delete(root.id);
     }
   }

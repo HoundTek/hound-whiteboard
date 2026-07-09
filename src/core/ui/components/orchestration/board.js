@@ -12,6 +12,7 @@ import { EventBus } from "../../../utils/event-bus.js";
 import { DevicesDAG } from "../../devices-dag/index.js";
 import { BoardApiRpc } from "../../../bridges/board-api.js";
 import { Viewport } from "./viewport.js";
+import { joinPath } from "../../../utils/path.js";
 
 /**
  * Board 运行时节点配置事件载荷。
@@ -293,10 +294,10 @@ class Board {
         };
 
         for (const { from, edge, prefix } of edges) {
-          const sourcePath = `/${viewportId}${from}`;
+          const sourcePath = joinPath("/", viewportId, from);
 
           if (prefix) {
-            const prefixSubDAG = { ...prefix, rootPath: `/${edge}` };
+            const prefixSubDAG = { ...prefix, rootPath: edge };
             const prefixNodes = this.devicesDAG.mountSubDAG(
               sourcePath,
               prefixSubDAG,

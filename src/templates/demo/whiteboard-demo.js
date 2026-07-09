@@ -305,8 +305,8 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
   const wasdRoutePresets = options.wasdRoutePresets ?? WASD_ROUTE_PRESETS;
   const keyboardDevice = options.keyboardDevice ?? createKeyboardDevice();
 
-  viewport.mountSubDAG("/mouse", mouseDevice);
-  viewport.mountSubDAG("/keyboard", keyboardDevice);
+  viewport.mountSubDAG("mouse", mouseDevice);
+  viewport.mountSubDAG("keyboard", keyboardDevice);
 
   // 所有设备叶节点 defaultRoute = "default"，
   // 所有 mount edge 统一 "default"，handler 不再写 to:
@@ -316,7 +316,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     viewportId: viewport.viewportId,
     name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
     workflow: primaryStrokeTool,
-    edges: [{ from: "/mouse/primary", edge: "default" }],
+    edges: [{ from: "mouse/primary", edge: "default" }],
   });
   const secondaryHandoffSubDAG = createHandoffSubDAG({
     rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER}`,
@@ -343,20 +343,20 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
     workflow: secondaryHandoffSubDAG,
     edges: [
-      { from: "/mouse/secondary", edge: "default" },
+      { from: "mouse/secondary", edge: "default" },
       {
-        from: "/keyboard/code/Enter",
+        from: "keyboard/code/Enter",
         edge: "default",
         prefix: createEdgePrefix(signalForwardNodeConfig("success")),
       },
       {
-        from: "/keyboard/code/Escape",
+        from: "keyboard/code/Escape",
         edge: "default",
         prefix: createEdgePrefix(signalForwardNodeConfig("cancel")),
       },
       // WASD → displacement 到 handoff modifier
       ...Object.entries(wasdRoutePresets).map(([code, vector]) => ({
-        from: `/keyboard/code/${code}`,
+        from: `keyboard/code/${code}`,
         edge: "default",
         prefix: createEdgePrefix(buildWasdNodeConfig(code, vector)),
       })),
@@ -371,7 +371,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
       workflow: randomCircleSubDAG,
       edges: [
         {
-          from: "/keyboard/code/Space",
+          from: "keyboard/code/Space",
           edge: "default",
           prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
         },
@@ -390,7 +390,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
       { code: "ArrowLeft", direction: { x: -1, y: 0 } },
       { code: "ArrowRight", direction: { x: 1, y: 0 } },
     ].map(({ code, direction }) => ({
-      from: `/keyboard/code/${code}`,
+      from: `keyboard/code/${code}`,
       edge: "default",
       prefix: createEdgePrefix(
         buildViewportPositionNodeConfig(direction, step),
@@ -403,13 +403,13 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
       { code: "Minus", transformer: (zoom) => zoom * factor },
       { code: "NumpadSubtract", transformer: (zoom) => zoom * factor },
     ].map(({ code, transformer }) => ({
-      from: `/keyboard/code/${code}`,
+      from: `keyboard/code/${code}`,
       edge: "default",
       prefix: createEdgePrefix(buildViewportScaleNodeConfig(transformer)),
     }));
 
     const flushEdge = {
-      from: "/keyboard/code/KeyR",
+      from: "keyboard/code/KeyR",
       edge: "default",
       prefix: createEdgePrefix(buildViewportFlushNodeConfig()),
     };
@@ -455,7 +455,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
             : "debug:devices",
       },
     ].map(({ code, type, ctx }) => ({
-      from: `/keyboard/code/${code}`,
+      from: `keyboard/code/${code}`,
       edge: "default",
       prefix: createEdgePrefix(buildKeyboardDebugNodeConfig(type, ctx)),
     }));

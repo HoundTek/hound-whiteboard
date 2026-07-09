@@ -66,7 +66,13 @@ function createConsolePrinter(bus, options = {}) {
     const prefix = `%c${ts}[${logger}]`;
     const style = COLORS[level] ?? "color:inherit";
 
-    console[CONSOLE_FN[level] ?? "log"](prefix, style, ...args);
+    // 所有参数均为字符串时嵌入到 %c 消息中，避免 Chrome 对 string 类型显示 \" 转义
+    const allStrings = args.every((a) => typeof a === "string");
+    if (allStrings) {
+      console[CONSOLE_FN[level] ?? "log"](`${prefix} ${args.join(" ")}`, style);
+    } else {
+      console[CONSOLE_FN[level] ?? "log"](prefix, style, ...args);
+    }
   };
 
   if (levels && levels.length > 0) {

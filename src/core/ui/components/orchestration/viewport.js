@@ -626,7 +626,7 @@ class Viewport {
    */
   mountWorkflow(path, workflow) {
     return this.devicesDAG.mountWorkflow(
-      joinPath(this.viewportId, path),
+      joinPath("/", this.viewportId, path),
       workflow,
     );
   }
@@ -637,7 +637,7 @@ class Viewport {
    * @returns {boolean}
    */
   unmountWorkflow(path) {
-    return this.devicesDAG.unmountWorkflow(joinPath(this.viewportId, path), {
+    return this.devicesDAG.unmountWorkflow(joinPath("/", this.viewportId, path), {
       acc: {
         board: this.board,
         boardApi: this.board?.getBoardApi?.(),
@@ -655,9 +655,9 @@ class Viewport {
    */
   addEdge(fromPath, edgeName, toPath) {
     return this.devicesDAG.addEdge(
-      joinPath(this.viewportId, fromPath),
+      joinPath("/", this.viewportId, fromPath),
       edgeName,
-      joinPath(this.viewportId, toPath),
+      joinPath("/", this.viewportId, toPath),
     );
   }
 
