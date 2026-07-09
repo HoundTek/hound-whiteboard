@@ -1,62 +1,81 @@
 /**
  * @file 构建入口
- * @description 内联 + TCP 分屏 TUI 构建编排。inner TUI 时用 TCP 驱动独立 ANSI 进程，
- *              stdout 不是 TTY 时回退到内联进度输出。
+ * @description 命令映射 → 声明式任务依赖解析 → TUI/回退执行。
  * @module scripts/build
  */
 
-const { spawn, spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
-const fs = require('fs');
 const net = require('net');
+const { run, runCmdInherit, loadTaskRegistry, resolveTaskGraph, executeTasks, ROOT_DIR } = require('./task-runner.cjs');
 
-const ROOT_DIR = path.resolve(__dirname, '../..');
 const TUI_PATH = path.join(__dirname, 'tui-app', 'index.mjs');
 
-const PLATFORMS = {
-  desktop: {
-    iconCmd: 'yarn icon:desktop',
-    buildCmd: 'tauri build',
+// ============================================================
+//  命令 → 目标任务 ID 映射
+// ============================================================
+
+const ALL_PLATFORMS = ['desktop', 'mac', 'win', 'linux', 'android', 'ios'];
+const ALL_ICON_TASKS = ALL_PLATFORMS.map((p) => 'icon:' + p);
+
+/**
+ * 给定命令和平台，返回需要解析执行的目标任务 ID 列表
+ */
+const COMMAND_TASKS = {
+  icon: Object.fromEntries([
+    ...ALL_PLATFORMS.map((p) => [p, ['icon:' + p]]),
+    ['all', ALL_ICON_TASKS],
+  ]),
+  build: {
+    desktop: ['build:desktop'],
+    mac: ['build:mac'],
+    'mac-universal': ['build:mac-universal'],
+    win: ['build:win'],
+    linux: ['build:linux'],
+    android: ['build:android'],
+    ios: ['build:ios'],
   },
-  win: {
-    iconCmd: 'yarn icon:win',
-    buildCmd: 'tauri build --bundles nsis msi',
-  },
-  mac: {
-    iconCmd: 'yarn icon:mac',
-    buildCmd: 'tauri build --bundles dmg app',
-  },
-  'mac-universal': {
-    iconCmd: 'yarn icon:mac',
-    buildCmd: 'tauri build --target universal-apple-darwin',
-  },
-  linux: {
-    iconCmd: 'yarn icon:linux',
-    buildCmd: 'tauri build --bundles deb appimage rpm',
-  },
-  android: {
-    iconCmd: 'yarn icon:android && yarn icon:desktop',
-    initCmd: 'yarn init:android',
-    buildCmd: 'tauri android build',
-  },
-  ios: {
-    iconCmd: 'yarn icon:ios && yarn icon:desktop',
-    buildCmd: 'tauri ios build',
+  ship: {
+    desktop: ['test', 'build:desktop'],
+    mac: ['test', 'build:mac'],
+    'mac-universal': ['test', 'build:mac-universal'],
+    win: ['test', 'build:win'],
+    linux: ['test', 'build:linux'],
+    android: ['test', 'build:android'],
+    ios: ['test', 'build:ios'],
   },
 };
 
-// ============================================================
-//  Formatting
-// ============================================================
+/** dev 命令在依赖任务完成后还需要 spawn tauri dev */
+const DEV_SETUP_TASKS = {
+  desktop: ['deps', 'icon:desktop'],
+  mac: ['deps', 'icon:mac'],
+  win: ['deps', 'icon:win'],
+  linux: ['deps', 'icon:linux'],
+  android: ['deps', 'android:init', 'icon:android', 'icon:desktop'],
+  ios: ['deps', 'icon:ios', 'icon:desktop'],
+};
 
-function formatElapsed(ms) {
-  if (ms < 0) return '';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  const mins = Math.floor(ms / 60000);
-  const secs = ((ms % 60000) / 1000).toFixed(0);
-  return `${mins}m${secs}s`;
-}
+/** dev 命令的长运行进程 */
+const DEV_CMD = {
+  desktop: 'tauri dev',
+  mac: 'tauri dev',
+  win: 'tauri dev',
+  linux: 'tauri dev',
+  android: 'tauri android dev',
+  ios: 'tauri ios dev',
+};
+
+/** build-quick 命令的构建命令 */
+const BUILD_QUICK_CMD = {
+  desktop: 'tauri build',
+  mac: 'tauri build --bundles dmg app',
+  'mac-universal': 'tauri build --target universal-apple-darwin',
+  win: 'tauri build --bundles nsis msi',
+  linux: 'tauri build --bundles deb appimage rpm',
+  android: 'tauri android build',
+  ios: 'tauri ios build',
+};
 
 // ============================================================
 //  TUI (TCP → Ink process)
@@ -65,12 +84,13 @@ function formatElapsed(ms) {
 let tuiSock = null;
 let tuiChild = null;
 
+/** @returns {boolean} */
 function isTuiAlive() {
   return tuiSock && !tuiSock.destroyed && tuiChild && !tuiChild.killed;
 }
 
 /**
- * 启动 TUI 子进程，建立 TCP 连接
+ * 启动 TUI 子进程
  * @returns {Promise<void>}
  */
 function startTui() {
@@ -116,333 +136,86 @@ function startTui() {
   });
 }
 
-/**
- * 向 TUI 发送 JSON 消息
- * @param {object} msg
- */
+/** @param {object} msg */
 function sendTui(msg) {
   if (!tuiSock || tuiSock.destroyed) return;
-  try {
-    tuiSock.write(JSON.stringify(msg) + '\n');
-  } catch (_) { /* socket may be closed */ }
+  try { tuiSock.write(JSON.stringify(msg) + '\n'); } catch (_) {}
 }
 
-/**
- * 初始化 TUI 任务列表
- * @param {string[]} taskNames
- */
-function initTui(taskNames) {
-  sendTui({ type: 'init', tasks: taskNames });
-}
-
-/**
- * 更新任务状态
- * @param {number} index
- * @param {string} status
- * @param {number} [elapsed]
- */
-function statusTui(index, status, elapsed) {
-  sendTui({ type: 'status', index, status, elapsed });
-}
-
-/**
- * 追加日志行
- * @param {string} text
- */
-function logTui(text) {
-  sendTui({ type: 'log', text });
-}
-
-/**
- * 等待 TUI 退出
- */
+/** @returns {Promise<void>} */
 async function waitTuiExit() {
   if (tuiChild) {
-    return new Promise((resolve) => {
-      tuiChild.on('exit', resolve);
-    });
+    return new Promise((resolve) => { tuiChild.on('exit', resolve); });
   }
 }
 
 // ============================================================
-//  Task execution
+//  TUI 回调适配器
 // ============================================================
 
 /**
- * 静默执行 shell 命令，捕获输出通过 TUI 日志显示
- * @param {string} cmd
- * @returns {Promise<boolean>}
+ * 创建适配 task-runner 回调接口的 TUI 适配器
+ * @returns {{ onInit, onStatus, onLog, onExit }}
  */
-function runCmdSilent(cmd) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, [], {
-      cwd: ROOT_DIR,
-      shell: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, FORCE_COLOR: '1' },
-    });
-
-    let buf = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-
-    const onData = (text) => {
-      buf += text;
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const l of lines) {
-        if (l.trim()) logTui(l);
-      }
-    };
-
-    child.stdout.on('data', onData);
-    child.stderr.on('data', onData);
-
-    child.on('close', (code) => {
-      if (buf.trim()) logTui(buf.trimEnd());
-      resolve(code === 0);
-    });
-    child.on('error', () => resolve(false));
-  });
-}
-
-/**
- * 用 inherit stdio 执行命令（用于 TUI 退出后的长期运行进程，如 tauri dev）
- * @param {string} cmd
- * @returns {Promise<boolean>}
- */
-function runCmdInherit(cmd) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, [], {
-      cwd: ROOT_DIR,
-      shell: true,
-      stdio: 'inherit',
-      env: { ...process.env, FORCE_COLOR: '1' },
-    });
-    child.on('close', (code) => resolve(code === 0));
-    child.on('error', () => resolve(false));
-  });
-}
-
-/**
- * 通过 TUI 执行一组任务（任务间发送 update 消息）
- * @param {string[]} taskNames
- * @param {{ cmd?: string, fn?: () => boolean }[]} taskDefs
- * @returns {Promise<boolean>}
- */
-async function runTasksWithTui(taskNames, taskDefs) {
-  initTui(taskNames);
-
-  let allOk = true;
-
-  for (let i = 0; i < taskDefs.length; i++) {
-    const td = taskDefs[i];
-    const start = Date.now();
-
-    statusTui(i, 'running');
-
-    let ok;
-    if (td.fn) {
-      try { ok = td.fn() !== false; } catch (_) { ok = false; }
-      // sync fn: give TUI a tick to render
-      await new Promise(r => setImmediate(r));
-    } else {
-      ok = await runCmdSilent(td.cmd);
-    }
-
-    const elapsed = Date.now() - start;
-
-    if (ok) {
-      statusTui(i, 'done', elapsed);
-    } else {
-      statusTui(i, 'failed', elapsed);
-      allOk = false;
-      break;
-    }
-  }
-
-  return allOk;
+function createTuiAdapter() {
+  return {
+    onInit(tasks) {
+      sendTui({ type: 'init', tasks });
+    },
+    onStatus(index, status, elapsed) {
+      sendTui({ type: 'status', index, status, elapsed });
+    },
+    onLog(text) {
+      sendTui({ type: 'log', text });
+    },
+    onExit(ok) {
+      sendTui({ type: 'exit', ok });
+    },
+  };
 }
 
 // ============================================================
-//  Fallback: inline progress (no TTY)
-// ============================================================
-
-const ICON_RUN = '\x1b[36m●\x1b[0m';
-const ICON_OK = '\x1b[32m✓\x1b[0m';
-const ICON_FAIL = '\x1b[31m✗\x1b[0m';
-
-/**
- * 执行一组任务，内联打印进度（无 TUI 时回退）
- * @param {string[]} taskNames
- * @param {{ cmd?: string, fn?: () => boolean }[]} taskDefs
- * @param {string} title
- * @returns {Promise<boolean>}
- */
-async function runTasksInline(taskNames, taskDefs, title) {
-  console.log(`\n${title}`);
-  console.log('─'.repeat(60));
-  for (const n of taskNames) console.log(`  ○  ${n}`);
-  console.log('');
-
-  let allOk = true;
-
-  for (let i = 0; i < taskDefs.length; i++) {
-    const td = taskDefs[i];
-    const start = Date.now();
-
-    process.stdout.write(`\x1b[1A\x1b[2K  ${ICON_RUN} ${taskNames[i]}...\n`);
-
-    let ok;
-    if (td.fn) {
-      try { ok = td.fn() !== false; } catch (_) { ok = false; }
-    } else {
-      ok = await runCmdInherit(td.cmd);
-    }
-
-    const elapsed = Date.now() - start;
-
-    if (ok) {
-      process.stdout.write(`\x1b[1A\x1b[2K  ${ICON_OK} ${taskNames[i]}  ${formatElapsed(elapsed)}\n`);
-    } else {
-      process.stdout.write(`\x1b[1A\x1b[2K  ${ICON_FAIL} ${taskNames[i]}  FAILED  ${formatElapsed(elapsed)}\n`);
-      allOk = false;
-      break;
-    }
-  }
-
-  console.log(`\n${allOk ? '\x1b[32mSUCCESS\x1b[0m' : '\x1b[31mFAILED\x1b[0m'}`);
-  console.log('─'.repeat(60));
-  return allOk;
-}
-
-// ============================================================
-//  Task definitions
-// ============================================================
-
-function devSetupTasks(platform, config) {
-  const tasks = [];
-  tasks.push({ name: 'Install dependencies', cmd: 'yarn deps' });
-  if (platform === 'android') {
-    tasks.push({ name: 'Initialize Android', cmd: config.initCmd });
-  }
-  tasks.push({ name: 'Generate icons', cmd: config.iconCmd });
-  return tasks;
-}
-
-function buildTasks(command, platform, config) {
-  const tasks = [];
-
-  if (command === 'ship') {
-    tasks.push({ name: 'Run tests', cmd: 'yarn test' });
-  }
-
-  tasks.push({ name: 'Install dependencies', cmd: 'yarn deps' });
-
-  if (platform === 'android') {
-    tasks.push({ name: 'Initialize Android', cmd: config.initCmd });
-    tasks.push({ name: 'Configure signing', fn: configureAndroidSigning });
-  }
-
-  tasks.push({ name: 'Generate icons', cmd: config.iconCmd });
-  tasks.push({ name: `Build ${platform}`, cmd: config.buildCmd });
-
-  return tasks;
-}
-
-// ============================================================
-//  Android signing
-// ============================================================
-
-function configureAndroidSigning() {
-  const keystoreSrc = path.join(ROOT_DIR, 'keys', 'keystore.properties');
-  const keystoreDest = path.join(ROOT_DIR, 'src-tauri', 'gen', 'android', 'keystore.properties');
-  const buildGradlePath = path.join(ROOT_DIR, 'src-tauri', 'gen', 'android', 'app', 'build.gradle.kts');
-
-  if (fs.existsSync(keystoreSrc)) {
-    fs.mkdirSync(path.dirname(keystoreDest), { recursive: true });
-    fs.copyFileSync(keystoreSrc, keystoreDest);
-  } else {
-    console.warn('Warning: keystore.properties not found in keys/');
-    return false;
-  }
-
-  if (!fs.existsSync(buildGradlePath)) {
-    console.warn('Warning: build.gradle.kts not found');
-    return false;
-  }
-
-  let content = fs.readFileSync(buildGradlePath, 'utf-8');
-  const nl = content.includes('\r\n') ? '\r\n' : '\n';
-  content = content.replace(/\r\n/g, '\n');
-
-  if (!content.includes('import java.io.FileInputStream')) {
-    content = content.replace('import java.util.Properties', 'import java.util.Properties\nimport java.io.FileInputStream');
-  }
-
-  if (!content.includes('keystoreProperties')) {
-    const tauriPropsEndIndex = content.indexOf('}\n\nandroid');
-    if (tauriPropsEndIndex !== -1) {
-      const insertPos = tauriPropsEndIndex + 1;
-      content = content.slice(0, insertPos) +
-        '\n\nval keystoreProperties = Properties().apply {\n    val propFile = rootProject.file("keystore.properties")\n    if (propFile.exists()) {\n        propFile.inputStream().use { load(it) }\n    }\n}\n' +
-        content.slice(insertPos);
-    }
-  }
-
-  if (!content.includes('signingConfigs')) {
-    content = content.replace(
-      'buildTypes {\n',
-      'signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties.getProperty("keyAlias", "")\n            keyPassword = keystoreProperties.getProperty("keyPassword", "")\n            storeFile = if (keystoreProperties.getProperty("storeFile").isNullOrEmpty()) null else file(keystoreProperties.getProperty("storeFile"))\n            storePassword = keystoreProperties.getProperty("storePassword", "")\n        }\n    }\n    buildTypes {\n'
-    );
-  }
-
-  if (!content.includes('signingConfig = signingConfigs.getByName("release")')) {
-    content = content.replace(
-      'getByName("release") {\n            isMinifyEnabled = true',
-      'getByName("release") {\n            isMinifyEnabled = true\n            signingConfig = signingConfigs.getByName("release")'
-    );
-  }
-
-  if (nl === '\r\n') {
-    content = content.replace(/\n/g, '\r\n');
-  }
-
-  fs.writeFileSync(buildGradlePath, content);
-  return true;
-}
-
-// ============================================================
-//  Orchestrator: try TUI, fallback to inline
+//  编排：TUI → 回退
 // ============================================================
 
 /**
- * 尝试用 TUI 执行任务，失败则回退内联
- * @param {string[]} taskNames
- * @param {{ name: string, cmd?: string, fn?: () => boolean }[]} taskDefs
- * @param {string} title
+ * 尝试用 TUI 执行目标任务，失败则回退内联
+ * @param {string[]} targetIds
  * @returns {Promise<boolean>}
  */
-async function runTasksOrFallback(taskNames, taskDefs, title) {
+async function runWithTuiOrFallback(targetIds) {
   if (!process.stdout.isTTY) {
-    return runTasksInline(taskNames, taskDefs, title);
+    const { ok, errors } = await run(targetIds, 'inline');
+    if (errors.length > 0) {
+      console.error('Errors:', errors.join(', '));
+      return false;
+    }
+    return ok;
   }
 
   // 尝试启动 TUI
-  try {
-    await startTui();
-  } catch (_) {
-    return runTasksInline(taskNames, taskDefs, title);
+  try { await startTui(); } catch (_) {
+    const { ok, errors } = await run(targetIds, 'inline');
+    if (errors.length > 0) console.error('Errors:', errors.join(', '));
+    return ok;
   }
 
-  // 确认 TUI 仍然存活
   if (!isTuiAlive()) {
-    return runTasksInline(taskNames, taskDefs, title);
+    const { ok, errors } = await run(targetIds, 'inline');
+    if (errors.length > 0) console.error('Errors:', errors.join(', '));
+    return ok;
   }
 
-  // 通过 TUI 执行
-  const ok = await runTasksWithTui(taskNames, taskDefs);
-  sendTui({ type: 'exit', ok });
+  const tuiAdapter = createTuiAdapter();
+  const registry = loadTaskRegistry();
+  const { ordered, errors } = resolveTaskGraph(targetIds, registry);
+
+  if (errors.length > 0) {
+    console.error('Errors:', errors.join(', '));
+    return false;
+  }
+
+  const ok = await executeTasks(ordered, 'tui', tuiAdapter);
   await waitTuiExit();
   return ok;
 }
@@ -477,72 +250,57 @@ async function main() {
     return;
   }
 
-  if (!PLATFORMS[platform] && command !== 'help') {
-    console.error('Unknown platform:', platform);
-    console.error('Available:', Object.keys(PLATFORMS).join(', '));
-    process.exit(1);
-  }
-
-  const config = PLATFORMS[platform];
-
-  // icon
+  // ---- icon ----
   if (command === 'icon') {
-    if (process.stdout.isTTY) {
-      const iconScript = path.join(__dirname, 'gen-icons.cjs');
-      const ok = await runTasksOrFallback(
-        [`Generate icons: ${platform}`],
-        [{ cmd: `node "${iconScript}" ${platform}` }],
-        'Icons'
-      );
-      process.exit(ok ? 0 : 1);
-    } else {
-      const iconScript = path.join(__dirname, 'gen-icons.cjs');
-      const result = spawnSync('node', [iconScript, platform], {
-        cwd: ROOT_DIR, stdio: 'inherit',
-      });
-      process.exit(result.status || 0);
+    const mapping = COMMAND_TASKS.icon[platform];
+    if (!mapping) {
+      console.error('Unknown icon platform:', platform);
+      console.error('Available:', Object.keys(COMMAND_TASKS.icon).join(', '));
+      process.exit(1);
     }
-    return;
-  }
-
-  // dev
-  if (command === 'dev') {
-    const tasks = devSetupTasks(platform, config);
-    const ok = await runTasksOrFallback(
-      tasks.map(t => t.name),
-      tasks,
-      'Dev ' + platform
-    );
-    if (!ok) { process.exit(1); return; }
-
-    const devCmd = platform === 'android' ? 'tauri android dev'
-      : platform === 'ios' ? 'tauri ios dev'
-      : 'tauri dev';
-    await runCmdInherit(devCmd);
-    return;
-  }
-
-  // build-quick
-  if (command === 'build-quick') {
-    const tasks = [{ name: `Build ${platform}`, cmd: config.buildCmd }];
-    const ok = await runTasksOrFallback(
-      tasks.map(t => t.name),
-      tasks,
-      'Build ' + platform
-    );
+    const ok = await runWithTuiOrFallback(mapping);
     process.exit(ok ? 0 : 1);
     return;
   }
 
-  // build / ship
+  // ---- dev ----
+  if (command === 'dev') {
+    const setupTasks = DEV_SETUP_TASKS[platform];
+    if (!setupTasks) {
+      console.error('Unknown platform:', platform);
+      console.error('Available:', Object.keys(DEV_SETUP_TASKS).join(', '));
+      process.exit(1);
+    }
+    const ok = await runWithTuiOrFallback(setupTasks);
+    if (!ok) { process.exit(1); return; }
+
+    // 依赖任务完成后，spawn 长期运行的 tauri dev
+    await runCmdInherit(DEV_CMD[platform]);
+    return;
+  }
+
+  // ---- build-quick ----
+  if (command === 'build-quick') {
+    const cmd = BUILD_QUICK_CMD[platform];
+    if (!cmd) {
+      console.error('Unknown platform:', platform);
+      console.error('Available:', Object.keys(BUILD_QUICK_CMD).join(', '));
+      process.exit(1);
+    }
+    const ok = await runCmdInherit(cmd);
+    process.exit(ok ? 0 : 1);
+    return;
+  }
+
+  // ---- build / ship ----
   if (command === 'build' || command === 'ship') {
-    const tasks = buildTasks(command, platform, config);
-    const title = command === 'ship' ? 'Ship ' + platform : 'Build ' + platform;
-    const ok = await runTasksOrFallback(
-      tasks.map(t => t.name),
-      tasks,
-      title
-    );
+    const mapping = COMMAND_TASKS[command][platform];
+    if (!mapping) {
+      console.error('Unknown platform:', platform);
+      console.error('Available:', Object.keys(COMMAND_TASKS[command]).join(', '));
+      process.exit(1);
+    }
+    const ok = await runWithTuiOrFallback(mapping);
     process.exit(ok ? 0 : 1);
     return;
   }
@@ -552,7 +310,7 @@ async function main() {
   process.exit(1);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Build failed:', err);
   process.exit(1);
 });
