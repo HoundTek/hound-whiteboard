@@ -105,12 +105,12 @@ function visualWidth(str) {
 }
 
 /**
- * 将字符串截断到指定可视宽度，超出尾部加 …
+ * 将字符串截断到指定可视宽度，超出加 …
  * @param {string} str - 原始字符串（可含 ANSI）
  * @param {number} maxWidth - 最大可视列宽
  * @returns {string} 截断后的纯文本
  */
-function truncateToWidth(str, maxWidth) {
+function truncateText(str, maxWidth) {
   if (maxWidth <= 0) return '';
   const clean = stripAnsi(str);
   if (visualWidth(clean) <= maxWidth) return clean;
@@ -119,11 +119,25 @@ function truncateToWidth(str, maxWidth) {
   let cutIdx = 0;
   for (let i = 0; i < clean.length; i++) {
     const cw = isWideChar(clean.codePointAt(i)) ? 2 : 1;
-    if (w + cw > maxWidth - 1) break; // -1 留给 …
+    if (w + cw > maxWidth - 1) break;
     w += cw;
     cutIdx = i + 1;
   }
   return clean.slice(0, cutIdx) + '\u2026';
+}
+
+/**
+ * 将字符串精确填充到目标可视列宽（短则补 braille 空白，超则截断加 …）
+ * @param {string} str - 原始字符串（可含 ANSI）
+ * @param {number} maxWidth - 目标可视列宽
+ * @returns {string} 精确 maxWidth 列宽的纯文本
+ */
+function fitToWidth(str, maxWidth) {
+  const truncated = truncateText(str, maxWidth);
+  const currentWidth = visualWidth(truncated);
+  if (currentWidth >= maxWidth) return truncated;
+  // braille 空白 \u2800：可见字符、渲染为空、Ink 不剥离尾部
+  return truncated + '\u2800'.repeat(maxWidth - currentWidth);
 }
 
 // ============================================================
@@ -198,7 +212,7 @@ function safeExit(code) {
 //  Components
 // ============================================================
 
-function TaskRow({ task, liveElapsed }) {
+function TaskRow({ task, liveElapsed, maxNameWidth }) {
   const icon = STATUS_ICONS[task.status] || task.status;
   const color = STATUS_COLORS[task.status] || 'white';
 
@@ -209,10 +223,15 @@ function TaskRow({ task, liveElapsed }) {
       ? formatElapsed(task.elapsed)
       : null;
 
+  /** 截断过长的任务名，防止溢出 */
+  const displayName = maxNameWidth > 0
+    ? fitToWidth(task.name, maxNameWidth)
+    : task.name;
+
   return React.createElement(
     Box,
     null,
-    React.createElement(Text, { color }, `  ${icon}  ${task.name}`),
+    React.createElement(Text, { color }, `  ${icon}  ${displayName}`),
     elapsedText != null
       && React.createElement(Text, { color: task.status === STATUS.RUNNING ? 'cyan' : 'grey' }, `  ${elapsedText}`),
     task.status === STATUS.FAILED && React.createElement(Text, { color: 'red' }, '  FAILED'),
@@ -343,6 +362,9 @@ function App({ port }) {
   const done = tasks.filter((t) => t.status === STATUS.DONE).length;
   const failed = tasks.filter((t) => t.status === STATUS.FAILED).length;
   const total = tasks.length;
+  const columns = process.stdout.columns || 80;
+  /** 任务名可用宽度 = 终端宽度 - 前缀(5) - 后缀(8: FAILED/elapsed) */
+  const maxNameWidth = Math.max(20, columns - 13);
 
   return React.createElement(
     Box,
@@ -364,19 +386,22 @@ function App({ port }) {
         const liveElapsed = t.status === STATUS.RUNNING && runningSinceRef.current[i] != null
           ? Date.now() - runningSinceRef.current[i]
           : null;
-        return React.createElement(TaskRow, { key: i, task: t, liveElapsed });
+        return React.createElement(TaskRow, { key: i, task: t, liveElapsed, maxNameWidth });
       }),
     ),
     React.createElement(Box, { height: 1 }),
-    // 输出矩形：只显示最后 15 行，精确截断防止溢出
+    // 输出矩形：只显示最后 15 行，fitToWidth 保证每行精确占满
     logs.length > 0 && (() => {
-      const columns = process.stdout.columns || 80;
-      const maxLogWidth = Math.max(20, columns - 4); // border + padding ≈ 4 列
+      const maxLogWidth = Math.max(20, columns - 2);
       return React.createElement(
         Box,
         { flexGrow: 1, flexDirection: 'column', borderStyle: 'round', borderColor: 'cyan', overflow: 'hidden' },
         ...logs.slice(-15).map((line, i) =>
-          React.createElement(Text, { key: i }, truncateToWidth(line, maxLogWidth))
+          React.createElement(
+            Box,
+            { key: i, width: maxLogWidth },
+            React.createElement(Text, null, fitToWidth(line, maxLogWidth))
+          )
         ),
       );
     })(),
