@@ -10,5 +10,6 @@ module.exports = {
   id: 'icon:ios',
   description: 'Generate icons: ios',
   dependsOn: [],
+  conflicts: ['resource:gen-icons'],
   run: { cmd: `node "${path.join(__dirname, '..', 'gen-icons.cjs')}" ios` },
 };

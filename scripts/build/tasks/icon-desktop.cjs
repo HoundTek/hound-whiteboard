@@ -10,5 +10,6 @@ module.exports = {
   id: 'icon:desktop',
   description: 'Generate icons: desktop',
   dependsOn: [],
+  conflicts: ['resource:gen-icons'],
   run: { cmd: `node "${path.join(__dirname, '..', 'gen-icons.cjs')}" desktop` },
 };

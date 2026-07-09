@@ -70,6 +70,9 @@ module.exports = {
   /** 依赖的任务 ID 列表，无依赖时传 [] */
   dependsOn: ['other:id'],
 
+  /** 冲突资源名列表，共享同一资源的任务会被自动串行化 */
+  conflicts: ['resource:gen-icons'],
+
   /** 执行体，二选一 */
   run: { cmd: 'shell command' }   // shell 命令
     | { fn: someFunction }        // 同步函数，返回 boolean
@@ -143,7 +146,7 @@ ship:win 的解析结果（4 步）：
 | `dev` | `desktop` | `['deps', 'icon:desktop']` → spawn `tauri dev` |
 | | `android` | `['deps', 'android:init', 'icon:android', 'icon:desktop']` → spawn `tauri android dev` |
 | `build` | `win` | `['build:win']` (自动解析依赖) |
-| `build-quick` | `win` | 直接 `tauri build --bundles nsis msi`（不经依赖图） |
+| `build-quick` | `win` | 直接 `tauri build`（不经依赖图） |
 | `ship` | `mac` | `['test', 'build:mac']` (自动解析依赖) |
 
 ### dev 命令特殊性
@@ -215,10 +218,23 @@ interface RunCallbacks {
 
 拓扑排序完成后检查 `ordered.length !== needed.size`，若不等则报告 `Circular dependency detected`。
 
-## 添加新任务
+### 冲突锁
+
+当多个任务操作同一资源（临时文件、CLI 进程、目录）时，声明 `conflicts` 可防止它们在未来并行化时同时运行。
+
+- `conflicts` 数组中的值为资源标识符（推荐 `resource:` 前缀）
+- `resolveTaskGraph` 检测共享冲突资源的任务对，若无依赖路径则自动插入串行边
+- 已有依赖路径的冲突对（如一方的 `dependsOn` 已覆盖另一方）不做修改
+
+```
+示例：6 个 icon:* 任务均声明 conflicts: ['resource:gen-icons']
+→ 拓扑排序时自动串行化，确保 gen-icons.cjs 不被并发调用
+```
+
+### 添加新任务
 
 1. 在 `scripts/build/tasks/` 下创建 `{name}.cjs`
-2. 按规范导出 `{ id, description, dependsOn, run }`
+2. 按规范导出 `{ id, description, dependsOn, conflicts, run }`
 3. 如果新任务需要被某个命令触发，在 `build-entry.cjs` 的 `COMMAND_TASKS` 中添加映射
 
 无需修改 `task-runner.cjs`——它会自动扫描 `tasks/` 目录加载。

@@ -59,6 +59,7 @@ function loadTaskRegistry() {
       id: def.id,
       description: def.description || def.id,
       dependsOn: def.dependsOn || [],
+      conflicts: def.conflicts || [],
       run: def.run || {},
     });
   }
@@ -69,6 +70,29 @@ function loadTaskRegistry() {
 // ============================================================
 //  依赖解析
 // ============================================================
+
+/**
+ * DFS 检查 from 是否能到达 to
+ * @param {string} from - 起点任务 ID
+ * @param {string} to - 终点任务 ID
+ * @param {Map<string, string[]>} graph - 邻接表 (dep → [dependents])
+ * @returns {boolean}
+ */
+function hasPath(from, to, graph) {
+  if (from === to) return true;
+  const visited = new Set();
+  const stack = [from];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === to) return true;
+    if (visited.has(node)) continue;
+    visited.add(node);
+    for (const next of (graph.get(node) || [])) {
+      stack.push(next);
+    }
+  }
+  return false;
+}
 
 /**
  * 解析目标任务的完整依赖图，返回拓扑排序后的执行列表
@@ -125,6 +149,36 @@ function resolveTaskGraph(targetIds, registry) {
       }
     }
   }
+
+  // ==========================================================
+  //  冲突锁：共享 conflict 资源的任务必须串行化
+  // ==========================================================
+
+  const conflictGroups = new Map();
+  for (const id of needed) {
+    const task = registry.get(id);
+    for (const res of (task.conflicts || [])) {
+      if (!conflictGroups.has(res)) conflictGroups.set(res, []);
+      conflictGroups.get(res).push(id);
+    }
+  }
+
+  for (const ids of conflictGroups.values()) {
+    if (ids.length < 2) continue;
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i];
+        const b = ids[j];
+        // 已有路径则跳过
+        if (hasPath(a, b, graph) || hasPath(b, a, graph)) continue;
+        // 添加边 a → b（b 依赖 a，a 先执行）
+        graph.get(a).push(b);
+        inDegree.set(b, (inDegree.get(b) || 0) + 1);
+      }
+    }
+  }
+
+  // ==========================================================
 
   const ordered = [];
   const zeroQueue = [];

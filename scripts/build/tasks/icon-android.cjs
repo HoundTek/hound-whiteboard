@@ -10,5 +10,6 @@ module.exports = {
   id: 'icon:android',
   description: 'Generate icons: android',
   dependsOn: [],
+  conflicts: ['resource:gen-icons'],
   run: { cmd: `node "${path.join(__dirname, '..', 'gen-icons.cjs')}" android` },
 };
