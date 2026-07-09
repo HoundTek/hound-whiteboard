@@ -69,10 +69,10 @@ const DEV_CMD = {
 /** build-quick 命令的构建命令 */
 const BUILD_QUICK_CMD = {
   desktop: 'tauri build',
-  mac: 'tauri build --bundles dmg app',
+  mac: 'tauri build',
   'mac-universal': 'tauri build --target universal-apple-darwin',
-  win: 'tauri build --bundles nsis msi',
-  linux: 'tauri build --bundles deb appimage rpm',
+  win: 'tauri build',
+  linux: 'tauri build',
   android: 'tauri android build',
   ios: 'tauri ios build',
 };
