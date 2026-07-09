@@ -26,9 +26,9 @@ const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
 /**
  * 创建随机圆修饰节点工作流
  * @description
- *   工厂函数，接收配置选项后一次性生成包含 random-circle-generator prefix、
- *   circle-params prefix 和 CircleCreatorTool 的三层修饰节点子树。
- *   无需手动实例化工具类，挂载后任意 trigger 信号即可生成随机圆。
+ * 工厂函数，接收配置选项后一次性生成包含 random-circle-generator prefix、
+ * circle-params prefix 和 CircleCreatorTool 的三层修饰节点子树。
+ * 无需手动实例化工具类，挂载后任意 trigger 信号即可生成随机圆。
  * @param {{
  *   rootPath: string,
  *   random?: () => number,

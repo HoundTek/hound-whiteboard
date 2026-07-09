@@ -1,53 +1,26 @@
 /**
  * @file 屏幕坐标→世界坐标转换 prefix 测试
- * @description 验证 createScreenToWorldPrefixHandler 在各种场景下的坐标转换行为。
+ * @description 验证 createCanvasToWorldPrefixHandler 在各种场景下的坐标转换行为。
  * @module core/ui/devices-dag/prefixes/tests/screen-to-world-handler.test
  * @author Zhou Chenyu
  */
 
-import { jest } from "@jest/globals";
 import { DevicesDAG, createSubDAG } from "../../index.js";
-import { createScreenToWorldPrefixHandler } from "../index.js";
+import { createCanvasToWorldPrefixHandler } from "../index.js";
 import { Vector } from "../../../../utils/math.js";
 
-describe("createScreenToWorldPrefixHandler", () => {
+describe("createCanvasToWorldPrefixHandler", () => {
   /**
-   * 创建一个带 mock canvas 的模拟视口
+   * 创建一个模拟视口
    * @param {number} zoom - 缩放倍率
    * @param {number} originX - 世界原点 x
    * @param {number} originY - 世界原点 y
-   * @param {{left: number, top: number}} canvasRect - canvas 在视口中的偏移
    * @returns {Object} 模拟视口
    */
-  function createMockViewport(
-    zoom = 2,
-    originX = 100,
-    originY = 200,
-    canvasRect = { left: 0, top: 0 },
-  ) {
+  function createMockViewport(zoom = 2, originX = 100, originY = 200) {
     return {
       zoom,
       origin: { x: originX, y: originY },
-      canvas: {
-        getBoundingClientRect: () => ({
-          left: canvasRect.left,
-          top: canvasRect.top,
-          right: canvasRect.left + 800,
-          bottom: canvasRect.top + 600,
-          width: 800,
-          height: 600,
-        }),
-      },
-      screenToWorld(screenPos) {
-        if (!this.canvas || !screenPos) return null;
-        const rect = this.canvas.getBoundingClientRect();
-        const canvasX = screenPos.x - rect.left;
-        const canvasY = screenPos.y - rect.top;
-        return new Vector(
-          canvasX / this.zoom + this.origin.x,
-          canvasY / this.zoom + this.origin.y,
-        );
-      },
     };
   }
 
@@ -61,7 +34,7 @@ describe("createScreenToWorldPrefixHandler", () => {
     const prefixNode = builder
       .node()
       .defaultRoute("tool")
-      .prefix(createScreenToWorldPrefixHandler());
+      .prefix(createCanvasToWorldPrefixHandler());
 
     const toolNode = builder.node().handler((packet, context) => ({
       packets: [
@@ -125,22 +98,18 @@ describe("createScreenToWorldPrefixHandler", () => {
     expect(signal.context.buttons).toBe(1);
   });
 
-  test("canvas 有非零偏移时应正确扣除", () => {
-    const mockViewport = createMockViewport(1, 0, 0, {
-      left: 50,
-      top: 30,
-    });
+  test("canvas 相对坐标应正确转换为世界坐标", () => {
+    const mockViewport = createMockViewport(1, 0, 0);
     const { dag, viewportId } = setupDAG(mockViewport);
 
-    // clientX=200, clientY=150
-    // canvasX = 200-50=150, canvasY = 150-30=120
-    // world = (150/1 + 0, 120/1 + 0) = (150, 120)
+    // canvas 相对坐标 (150, 120)
+    // zoom=1, origin=(0,0) → world = (150, 120)
     const result = dag.dispatch({
       to: `/${viewportId}/mouse/pointer`,
       signals: [
         {
           type: "position",
-          context: { value: new Vector(200, 150) },
+          context: { value: new Vector(150, 120) },
         },
       ],
     });
@@ -223,7 +192,7 @@ describe("createScreenToWorldPrefixHandler", () => {
     const prefixNode = builder
       .node()
       .defaultRoute("tool")
-      .prefix(createScreenToWorldPrefixHandler());
+      .prefix(createCanvasToWorldPrefixHandler());
 
     const toolNode = builder.node().handler((packet, context) => ({
       packets: [{ to: "", signals: packet.signals }],
@@ -251,11 +220,9 @@ describe("createScreenToWorldPrefixHandler", () => {
     );
   });
 
-  test("screenToWorld 返回 null 时应保留原始值", () => {
-    const mockViewport = createMockViewport();
-    // 让 screenToWorld 返回 null
-    jest.spyOn(mockViewport, "screenToWorld").mockReturnValue(null);
-    const { dag, viewportId } = setupDAG(mockViewport);
+  test("zoom 或 origin 缺失时应保留原始值", () => {
+    const badViewport = { zoom: 2 }; // 缺少 origin
+    const { dag, viewportId } = setupDAG(badViewport);
 
     const result = dag.dispatch({
       to: `/${viewportId}/mouse/pointer`,

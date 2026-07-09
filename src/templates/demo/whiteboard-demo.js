@@ -14,6 +14,7 @@ import {
 import {
   createEdgePrefix,
   createHandoffSubDAG,
+  createCanvasToWorldPrefixHandler,
 } from "../../core/ui/devices-dag/prefixes/index.js";
 import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
@@ -316,7 +317,15 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     viewportId: viewport.viewportId,
     name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
     workflow: primaryStrokeTool,
-    edges: [{ from: "mouse/primary", edge: "default" }],
+    edges: [
+      {
+        from: "mouse/primary",
+        edge: "default",
+        prefix: createEdgePrefix({
+          handler: createCanvasToWorldPrefixHandler(),
+        }),
+      },
+    ],
   });
   const secondaryHandoffSubDAG = createHandoffSubDAG({
     rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER}`,
@@ -343,7 +352,13 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
     workflow: secondaryHandoffSubDAG,
     edges: [
-      { from: "mouse/secondary", edge: "default" },
+      {
+        from: "mouse/secondary",
+        edge: "default",
+        prefix: createEdgePrefix({
+          handler: createCanvasToWorldPrefixHandler(),
+        }),
+      },
       {
         from: "keyboard/code/Enter",
         edge: "default",
@@ -470,20 +485,20 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
 
   demoLog.info(
     `── 快捷键 ──\n` +
-      `左键 : 创建笔画\n` +
-      `右键 : 首次拖拽框选对象 → 再次拖拽修改位置\n` +
-      `Enter : 提交修改\n` +
-      `Escape : 取消修改\n` +
-      `Space : 随机圆\n` +
-      `W/A/S/D : 移动选中对象（二次拖拽激活后）\n` +
-      `方向键 : 平移视口\n` +
-      `+/- : 缩放视口\n` +
-      `R : 刷新视口\n` +
-      `C : 区块加载  |  Shift+C : 区块详情\n` +
-      `O : 对象加载  |  Shift+O : 对象详情\n` +
-      `M : 视口摘要\n` +
-      `B : 白板摘要  |  Shift+B : AOM 分层\n` +
-      `T : 设备图    |  Shift+T : 设备图 Mermaid`,
+    `左键 : 创建笔画\n` +
+    `右键 : 首次拖拽框选对象 → 再次拖拽修改位置\n` +
+    `Enter : 提交修改\n` +
+    `Escape : 取消修改\n` +
+    `Space : 随机圆\n` +
+    `W/A/S/D : 移动选中对象（二次拖拽激活后）\n` +
+    `方向键 : 平移视口\n` +
+    `+/- : 缩放视口\n` +
+    `R : 刷新视口\n` +
+    `C : 区块加载  |  Shift+C : 区块详情\n` +
+    `O : 对象加载  |  Shift+O : 对象详情\n` +
+    `M : 视口摘要\n` +
+    `B : 白板摘要  |  Shift+B : AOM 分层\n` +
+    `T : 设备图    |  Shift+T : 设备图 Mermaid`,
   );
 
   return {

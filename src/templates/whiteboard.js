@@ -130,13 +130,14 @@ async function bootstrapWhiteboard() {
       event.type === "mousemove" ||
       event.type === "mouseup"
     ) {
-      const worldPosition = viewport.screenToWorld(
-        new Vector(event.clientX, event.clientY),
+      const rect = viewport.canvas.getBoundingClientRect();
+      const canvasPos = new Vector(
+        event.clientX - rect.left,
+        event.clientY - rect.top,
       );
-      if (!worldPosition) return;
 
       const baseContext = {
-        value: worldPosition,
+        value: canvasPos,
         button: event.button,
         buttons: event.buttons,
         domEvent: event.type,
