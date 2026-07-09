@@ -421,13 +421,14 @@ describe("PolygonCreatorTool", () => {
           edges: [{ from: "/mouse/primary", edge: "default" }],
         });
 
+        // canvas 相对坐标：world=(125,80) → ((125-100)*2, (80-50)*2) = (50, 60)
         board.signalsEventBus.emit("input", {
           to: "/main/mouse/primary",
           signals: [
             {
               type: "position",
               context: {
-                value: new Vector(125, 80),
+                value: new Vector(50, 60),
               },
             },
             {

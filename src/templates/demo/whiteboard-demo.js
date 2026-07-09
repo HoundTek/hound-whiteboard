@@ -14,7 +14,6 @@ import {
 import {
   createEdgePrefix,
   createHandoffSubDAG,
-  createCanvasToWorldPrefixHandler,
 } from "../../core/ui/devices-dag/prefixes/index.js";
 import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
@@ -317,15 +316,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     viewportId: viewport.viewportId,
     name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
     workflow: primaryStrokeTool,
-    edges: [
-      {
-        from: "mouse/primary",
-        edge: "default",
-        prefix: createEdgePrefix({
-          handler: createCanvasToWorldPrefixHandler(),
-        }),
-      },
-    ],
+    edges: [{ from: "mouse/primary", edge: "default" }],
   });
   const secondaryHandoffSubDAG = createHandoffSubDAG({
     rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER}`,
@@ -352,13 +343,7 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
     name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
     workflow: secondaryHandoffSubDAG,
     edges: [
-      {
-        from: "mouse/secondary",
-        edge: "default",
-        prefix: createEdgePrefix({
-          handler: createCanvasToWorldPrefixHandler(),
-        }),
-      },
+      { from: "mouse/secondary", edge: "default" },
       {
         from: "keyboard/code/Enter",
         edge: "default",

@@ -474,13 +474,14 @@ describe("StrokeCreatorTool", () => {
           edges: [{ from: "/mouse/primary", edge: "default" }],
         });
 
+        // canvas 相对坐标：world=(105,60) → ((105-100)*2, (60-50)*2) = (10, 20)
         board.signalsEventBus.emit("input", {
           to: "/main/mouse",
           signals: [
             {
               type: "position",
               context: {
-                value: new Vector(105, 60),
+                value: new Vector(10, 20),
                 buttons: 1,
                 button: 0,
               },
@@ -488,13 +489,14 @@ describe("StrokeCreatorTool", () => {
           ],
         });
 
+        // canvas 相对坐标：world=(110,65) → ((110-100)*2, (65-50)*2) = (20, 30)
         board.signalsEventBus.emit("input", {
           to: "/main/mouse",
           signals: [
             {
               type: "position",
               context: {
-                value: new Vector(110, 65),
+                value: new Vector(20, 30),
                 buttons: 1,
                 button: 0,
               },

@@ -214,19 +214,56 @@ function createMouseDevice() {
   };
 
   /**
+   * 将 position 信号的 canvas 相对坐标转为世界坐标
+   * @param {Array} signals - 原始信号列表
+   * @param {Object} viewport - 视口实例（含 zoom 和 origin）
+   * @returns {Array} 转换后的信号列表（非 position 信号原样透传）
+   */
+  const convertCanvasToWorld = (signals, viewport) => {
+    return signals.map((signal) => {
+      if (signal.type === "position" && signal.context?.value) {
+        const raw = signal.context.value;
+        return {
+          ...signal,
+          context: {
+            ...signal.context,
+            value: {
+              x: raw.x / viewport.zoom + viewport.origin.x,
+              y: raw.y / viewport.zoom + viewport.origin.y,
+            },
+          },
+        };
+      }
+      return signal;
+    });
+  };
+
+  /**
    * 根节点处理器
+   * @description
+   * 1. 将 position 信号的 canvas 相对坐标转为世界坐标
+   * 2. 更新设备内部状态（按钮掩码、最近位置）
+   * 3. 按按钮状态分流到对应的通道路由节点
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [context={}] - handler context
+   * @param {Object} [context={}] - handler context（含 acc.viewport）
    * @returns {Array<SignalPacket|Object>}
    */
   const rootHandler = (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
+
+    const viewport = context?.acc?.viewport;
+    const convertedSignals =
+      viewport && typeof viewport.zoom === "number"
+        ? convertCanvasToWorld(packet.signals, viewport)
+        : packet.signals;
+
+    const convertedPacket = new SignalPacket(packet.to, convertedSignals);
     const nextPackets = resolveRouteTargets(
-      packet,
-      updateStateFromPacket(packet),
+      convertedPacket,
+      updateStateFromPacket(convertedPacket),
     );
     const explicitDescendantPath = resolveExplicitDescendantPath(
-      packet,
+      convertedPacket,
       context,
     );
     if (
@@ -235,7 +272,7 @@ function createMouseDevice() {
     ) {
       nextPackets.push({
         to: explicitDescendantPath,
-        signals: packet.signals,
+        signals: convertedPacket.signals,
       });
     }
     return nextPackets;

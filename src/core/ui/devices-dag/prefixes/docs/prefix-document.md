@@ -37,15 +37,16 @@ prefix 节点现在依赖三条稳定边界：
 
 ## 模块清单
 
-| 文件                     | 导出                                          | 用途                        |
-| ------------------------ | --------------------------------------------- | --------------------------- |
-| `index.js`               | 统一导出入口                                  | 集中导出全部公开 API        |
-| `utils.js`               | `isPlainObject`, `shallowCloneSignals`        | 内部工具方法                |
-| `handler.js`             | `createPrefixNodeHandler`                     | 基础修饰节点处理器          |
-| `multi-tool-handler.js`  | `createMultiToolPrefixHandler`                | 多工具状态机路由            |
-| `repeator-handler.js`    | `createRepeatorPrefixHandler`                 | 信号复制分发                |
-| `handoff-handler.js`     | `createHandoffSubDAG`, `wrapSubDAGForHandoff` | first → second 两阶段工作流 |
-| `drag-anchor-handler.js` | `createDragAnchorPrefixHandler`               | 拖拽位移转换                |
+| 文件                         | 导出                                          | 用途                         |
+| ---------------------------- | --------------------------------------------- | ---------------------------- |
+| `index.js`                   | 统一导出入口                                  | 集中导出全部公开 API         |
+| `utils.js`                   | `isPlainObject`, `shallowCloneSignals`        | 内部工具方法                 |
+| `handler.js`                 | `createPrefixNodeHandler`                     | 基础修饰节点处理器           |
+| `multi-tool-handler.js`      | `createMultiToolPrefixHandler`                | 多工具状态机路由             |
+| `repeator-handler.js`        | `createRepeatorPrefixHandler`                 | 信号复制分发                 |
+| `handoff-handler.js`         | `createHandoffSubDAG`, `wrapSubDAGForHandoff` | first → second 两阶段工作流  |
+| `drag-anchor-handler.js`     | `createDragAnchorPrefixHandler`               | 拖拽位移转换                 |
+| `canvas-to-world-handler.js` | `createCanvasToWorldPrefixHandler`            | canvas 相对坐标→世界坐标转换 |
 
 ## 关系图
 
