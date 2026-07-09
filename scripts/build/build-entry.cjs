@@ -175,11 +175,16 @@ function createTuiAdapter() {
 }
 
 // ============================================================
-//  编排：TUI → 回退
+//  编排：TUI（带重试） → 回退
 // ============================================================
 
+/** TUI 启动最大重试次数 */
+const MAX_TUI_RETRIES = 3;
+/** 重试间隔（毫秒） */
+const TUI_RETRY_DELAY = 500;
+
 /**
- * 尝试用 TUI 执行目标任务，失败则回退内联
+ * 尝试用 TUI 执行目标任务，启动失败自动重试，最终失败回退内联
  * @param {string[]} targetIds
  * @returns {Promise<boolean>}
  */
@@ -193,14 +198,23 @@ async function runWithTuiOrFallback(targetIds) {
     return ok;
   }
 
-  // 尝试启动 TUI
-  try { await startTui(); } catch (_) {
-    const { ok, errors } = await run(targetIds, 'inline');
-    if (errors.length > 0) console.error('Errors:', errors.join(', '));
-    return ok;
+  // 带重试启动 TUI
+  let tuiStarted = false;
+  for (let i = 0; i < MAX_TUI_RETRIES; i++) {
+    try {
+      await startTui();
+      tuiStarted = true;
+      break;
+    } catch (err) {
+      if (i < MAX_TUI_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, TUI_RETRY_DELAY));
+      } else {
+        console.error('TUI failed after ' + MAX_TUI_RETRIES + ' attempts:', err.message);
+      }
+    }
   }
 
-  if (!isTuiAlive()) {
+  if (!tuiStarted || !isTuiAlive()) {
     const { ok, errors } = await run(targetIds, 'inline');
     if (errors.length > 0) console.error('Errors:', errors.join(', '));
     return ok;
