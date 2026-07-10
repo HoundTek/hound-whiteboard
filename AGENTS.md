@@ -154,3 +154,8 @@ applyModifiedObjects(modificationContext, objects) { ... }
 | `hound-whiteboard-test-patterns`      | 添加/迁移/审查测试           |
 | `hound-whiteboard-benchmark-patterns` | 添加/迁移/审查 benchmark     |
 | `hound-whiteboard-git-convention`     | 准备提交时加载，确保格式一致 |
+
+## Git 提交
+
+- 在提交前让用户检查并征得同意
+- 较大的更改需要拆分逻辑提交

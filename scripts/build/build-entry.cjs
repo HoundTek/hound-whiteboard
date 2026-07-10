@@ -7,7 +7,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const net = require('net');
-const { run, runCmdInherit, loadTaskRegistry, resolveTaskGraph, executeTasks, ROOT_DIR } = require('./task-runner.cjs');
+const { runCmdInherit, loadTaskRegistry, resolveTaskGraph, executeTasks, ROOT_DIR } = require('./task-runner.cjs');
 
 const TUI_PATH = path.join(__dirname, 'tui-app', 'index.mjs');
 
@@ -218,6 +218,81 @@ function createTuiAdapter() {
 }
 
 // ============================================================
+//  结果收集器 — 汇总任务状态和日志，供最终文本输出
+// ============================================================
+
+/**
+ * 创建收集回调，同时转发到目标回调（如有）
+ * @param {RunCallbacks} [target] - 转发目标（TUI 适配器），为 null 即仅收集
+ * @returns {{ cb: RunCallbacks, getSummary: () => object }}
+ */
+function createCollector(target) {
+  let tasks = [];
+  let statuses = [];
+  let rows = [];
+  let errorLogs = [];
+  let exitOk = false;
+
+  return {
+    cb: {
+      onInit(payload) {
+        tasks = payload.tasks || [];
+        rows = payload.rows || [];
+        statuses = tasks.map(() => ({ status: 'pending', elapsed: null }));
+        if (target) target.onInit(payload);
+      },
+      onStatus(index, status, elapsed, extra) {
+        if (index < statuses.length) {
+          statuses[index] = { status, elapsed: elapsed || null };
+        }
+        if (target) target.onStatus(index, status, elapsed, extra);
+      },
+      onLog(text) {
+        // 收集错误行
+        if (/(?:error|fail|fatal|ENOENT|ECONNREFUSED|EACCES)/i.test(text)) {
+          errorLogs.push(text);
+        }
+        if (target) target.onLog(text);
+      },
+      onExit(ok) {
+        exitOk = ok;
+        if (target) target.onExit(ok);
+      },
+    },
+    getSummary() {
+      return { tasks, statuses, rows, errorLogs, exitOk };
+    },
+  };
+}
+
+/**
+ * 打印构建结果摘要（与 TUI 结算画面格式一致）
+ * @param {{ tasks, statuses, rows, errorLogs, exitOk }} summary
+ */
+function printSummary(summary) {
+  const { statuses, errorLogs, exitOk } = summary;
+  const done = statuses.filter((s) => s.status === 'done').length;
+  const failed = statuses.filter((s) => s.status === 'failed').length;
+  const skipped = statuses.filter((s) => s.status === 'skipped').length;
+  const total = statuses.length;
+
+  // 横幅
+  console.log('');
+  console.log(exitOk ? '  BUILD SUCCEEDED' : '  BUILD FAILED');
+  console.log(`  ${done} done  ${failed} failed  ${skipped} skipped  ${total} total`);
+  console.log('');
+
+  // 错误日志（仅失败时）
+  if (!exitOk && errorLogs.length > 0) {
+    const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+    for (const line of errorLogs) {
+      console.log('  ' + stripAnsi(line));
+    }
+    console.log('');
+  }
+}
+
+// ============================================================
 //  编排：TUI → 回退
 // ============================================================
 
@@ -228,28 +303,45 @@ function createTuiAdapter() {
  */
 async function runWithTuiOrFallback(targetIds) {
   if (!process.stdout.isTTY) {
-    const { ok, errors } = await run(targetIds, 'inline');
-    if (errors.length > 0) {
-      console.error('Errors:', errors.join(', '));
-      return false;
-    }
+    const collector = createCollector(null);
+    const ok = await executeResolved(targetIds, 'inline', collector.cb);
+    printSummary(collector.getSummary());
     return ok;
   }
 
   // 尝试启动 TUI
   try { await startTui(); } catch (_) {
-    const { ok, errors } = await run(targetIds, 'inline');
-    if (errors.length > 0) console.error('Errors:', errors.join(', '));
+    const collector = createCollector(null);
+    const ok = await executeResolved(targetIds, 'inline', collector.cb);
+    printSummary(collector.getSummary());
     return ok;
   }
 
   if (!isTuiAlive()) {
-    const { ok, errors } = await run(targetIds, 'inline');
-    if (errors.length > 0) console.error('Errors:', errors.join(', '));
+    const collector = createCollector(null);
+    const ok = await executeResolved(targetIds, 'inline', collector.cb);
+    printSummary(collector.getSummary());
     return ok;
   }
 
   const tuiAdapter = createTuiAdapter();
+  const collector = createCollector(tuiAdapter);
+  const ok = await executeResolved(targetIds, 'tui', collector.cb);
+  await waitTuiExit();
+  // 等待 TUI 的 stdout 缓冲区完全刷新，避免 printSummary 输出交叠
+  await new Promise((r) => setTimeout(r, 200));
+  printSummary(collector.getSummary());
+  return ok;
+}
+
+/**
+ * 解析 + 执行（公共流程）
+ * @param {string[]} targetIds
+ * @param {'tui'|'inline'} mode
+ * @param {RunCallbacks} cb
+ * @returns {Promise<boolean>}
+ */
+async function executeResolved(targetIds, mode, cb) {
   const registry = loadTaskRegistry();
   const { ordered, errors } = resolveTaskGraph(targetIds, registry);
 
@@ -258,9 +350,7 @@ async function runWithTuiOrFallback(targetIds) {
     return false;
   }
 
-  const ok = await executeTasks(ordered, 'tui', tuiAdapter);
-  await waitTuiExit();
-  return ok;
+  return executeTasks(ordered, mode, cb);
 }
 
 // ============================================================

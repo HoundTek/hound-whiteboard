@@ -172,37 +172,6 @@ function formatElapsed(ms) {
   return `${mins}m${secs}s`;
 }
 
-function buildSummary() {
-  let text = '\n';
-  let failed = false;
-  for (const t of gTasks) {
-    switch (t.status) {
-      case STATUS.DONE:
-        text += `\x1b[32m  ✓  ${t.name}  ${formatElapsed(t.elapsed)}\x1b[0m\n`;
-        break;
-      case STATUS.FAILED:
-        text += `\x1b[31m  ✗  ${t.name}  FAILED\x1b[0m\n`;
-        failed = true;
-        break;
-      case STATUS.RUNNING:
-        text += `\x1b[33m  ●  ${t.name}  (interrupted)\x1b[0m\n`;
-        break;
-      default:
-        text += `\x1b[90m  ○  ${t.name}\x1b[0m\n`;
-    }
-  }
-  if (!gExitOk) failed = true;
-
-  if (failed && gErrorLogs.length > 0) {
-    text += '\n\x1b[90m── error output ──\x1b[0m\n';
-    text += gErrorLogs.join('\n') + '\n';
-    text += '\x1b[90m── end ──\x1b[0m\n';
-  }
-
-  text += '\n' + (failed ? '\x1b[31mBuild FAILED\x1b[0m' : '\x1b[32mBuild SUCCESS\x1b[0m') + '\n';
-  return { text, failed };
-}
-
 /**
  * 安全退出：确保终端复位
  */
@@ -216,15 +185,10 @@ function safeExit(code) {
     try { gRenderInstance.clear(); } catch (_) {}
   }
 
-  // 强制恢复终端
-  process.stdout.write('\x1b[?1049l\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l');
-
-  // 写摘要
-  const { text } = buildSummary();
-  process.stdout.write(text);
-
-  // 同步退出
-  setImmediate(() => process.exit(code));
+  // 清空 alternate screen 残留 → 恢复终端 → 立即退出（不用 setImmediate，避免事件循环刷写 Ink 残留帧）
+  process.stdout.write('\x1b[2J\x1b[H\x1b[?1049l\x1b[?25h\x1b[?1000l\x1b[?1006l');
+  process.exitCode = code;
+  process.exit(code);
 }
 
 // ============================================================

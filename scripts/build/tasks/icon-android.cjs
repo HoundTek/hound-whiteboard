@@ -18,7 +18,7 @@ module.exports = [
   {
     id: 'icon:copy:android',
     description: 'icon android copy',
-    dependsOn: ['icon:generate:android'],
+    dependsOn: ['icon:generate:android', 'android:init'],
     run: { cmd: `${GEN_CMD} android --phase=copy` },
   },
 ];

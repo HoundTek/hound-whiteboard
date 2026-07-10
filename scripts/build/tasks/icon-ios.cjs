@@ -18,7 +18,7 @@ module.exports = [
   {
     id: 'icon:copy:ios',
     description: 'icon ios copy',
-    dependsOn: ['icon:generate:ios'],
+    dependsOn: ['icon:generate:ios', 'ios:init'],
     run: { cmd: `${GEN_CMD} ios --phase=copy` },
   },
 ];
