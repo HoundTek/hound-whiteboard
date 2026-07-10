@@ -234,6 +234,8 @@ function App({ port }) {
   /** 日志面板的屏幕 Y 坐标范围（1-based，含边框），用于判断滚轮是否在面板内 */
   const logPanelYStart = useRef(1);
   const logPanelYEnd = useRef(1);
+  /** 渲染函数计算的日志可见行数，供键盘/鼠标处理器使用，确保 maxOffset 一致 */
+  const logVisibleRef = useRef(20);
 
   tasksRef.current = tasks;
   scrollOffsetRef.current = logState.scrollOffset;
@@ -288,8 +290,7 @@ function App({ port }) {
     }
     const total = logState.logs.length;
     if (total === 0) return;
-    // 粗略估算可见行数（终端高度 - 头部 - 任务区 - 边框）
-    const visible = Math.max(5, (process.stdout.rows || 24) - 14);
+    const visible = logVisibleRef.current;
     const maxOffset = Math.max(0, total - visible);
     if (key.upArrow) {
       setLogState((prev) => ({ ...prev, scrollOffset: Math.min(maxOffset, prev.scrollOffset + 1) }));
@@ -320,7 +321,7 @@ function App({ port }) {
       if (py < logPanelYStart.current || py > logPanelYEnd.current) return;
       const total = logsRef.current.length;
       if (total === 0) return;
-      const visible = Math.max(5, (process.stdout.rows || 24) - 14);
+      const visible = logVisibleRef.current;
       const maxOffset = Math.max(0, total - visible);
       const btn = parseInt(m[1], 10);
       const step = 3; // 滚轮每次 3 行
@@ -449,6 +450,7 @@ function App({ port }) {
         const maxLogWidth = Math.max(20, columns - 4);
         const usedByTasks = allRows.length;
         const visible = Math.max(5, (process.stdout.rows || 24) - usedByTasks - 10);
+        logVisibleRef.current = visible;
         const total = logs.length;
         logPanelYStart.current = 4;
         logPanelYEnd.current = 4 + 2 + visible + (total > visible ? 1 : 0);
@@ -643,6 +645,7 @@ function App({ port }) {
       // 可用行数：终端高度 - 头部(1) - 间距(1) - 任务区(visibleRows) - 间距(1) - 边框(2) - 指示器(1)
       const usedByTasks = visibleRows.length;
       const visible = Math.max(5, (process.stdout.rows || 24) - usedByTasks - 8);
+      logVisibleRef.current = visible;
       const total = logs.length;
       // 计算日志面板在屏幕上的 Y 坐标范围（1-based），用于滚轮区域判断
       logPanelYStart.current = 4 + usedByTasks;
