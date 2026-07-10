@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'build:android',
-  description: 'Build Android',
-  dependsOn: ['deps', 'android:init', 'android:signing', 'icon:android', 'icon:desktop'],
+  description: 'build android',
+  dependsOn: ['android:init', 'android:signing', 'icon:copy:android', 'icon:copy:common'],
+  conflicts: ['resource:cargo-build'],
   run: { cmd: 'tauri android build' },
 };

@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'build:mac-universal',
-  description: 'Build macOS Universal',
-  dependsOn: ['deps', 'icon:mac'],
+  description: 'build mac uni',
+  dependsOn: ['icon:copy:mac'],
+  conflicts: ['resource:cargo-build'],
   run: { cmd: 'tauri build --target universal-apple-darwin' },
 };

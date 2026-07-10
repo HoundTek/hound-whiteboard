@@ -15,15 +15,19 @@ const TUI_PATH = path.join(__dirname, 'tui-app', 'index.mjs');
 //  命令 → 目标任务 ID 映射
 // ============================================================
 
-const ALL_PLATFORMS = ['desktop', 'mac', 'win', 'linux', 'android', 'ios'];
-const ALL_ICON_TASKS = ALL_PLATFORMS.map((p) => 'icon:' + p);
+const ALL_PLATFORMS = ['desktop', 'mac', 'win', 'linux', 'android', 'ios', 'desktop-platforms', 'mobile', 'all'];
+const ICON_PLATFORMS = ['desktop', 'mac', 'win', 'linux', 'android', 'ios', 'common'];
+/**
+ * 图标命令只需指定 copy 任务（generate 通过依赖自动触发）
+ */
+const ALL_ICON_TASKS = ICON_PLATFORMS.map((p) => 'icon:copy:' + p);
 
 /**
  * 给定命令和平台，返回需要解析执行的目标任务 ID 列表
  */
 const COMMAND_TASKS = {
   icon: Object.fromEntries([
-    ...ALL_PLATFORMS.map((p) => [p, ['icon:' + p]]),
+    ...ICON_PLATFORMS.map((p) => [p, ['icon:copy:' + p]]),
     ['all', ALL_ICON_TASKS],
   ]),
   build: {
@@ -34,6 +38,9 @@ const COMMAND_TASKS = {
     linux: ['build:linux'],
     android: ['build:android'],
     ios: ['build:ios'],
+    'desktop-platforms': ['build:desktop-platforms'],
+    mobile: ['build:mobile'],
+    all: ['build:all'],
   },
   ship: {
     desktop: ['test', 'build:desktop'],
@@ -43,17 +50,20 @@ const COMMAND_TASKS = {
     linux: ['test', 'build:linux'],
     android: ['test', 'build:android'],
     ios: ['test', 'build:ios'],
+    'desktop-platforms': ['test', 'build:desktop-platforms'],
+    mobile: ['test', 'build:mobile'],
+    all: ['test', 'build:all'],
   },
 };
 
 /** dev 命令在依赖任务完成后还需要 spawn tauri dev */
 const DEV_SETUP_TASKS = {
-  desktop: ['deps', 'icon:desktop'],
-  mac: ['deps', 'icon:mac'],
-  win: ['deps', 'icon:win'],
-  linux: ['deps', 'icon:linux'],
-  android: ['deps', 'android:init', 'icon:android', 'icon:desktop'],
-  ios: ['deps', 'icon:ios', 'icon:desktop'],
+  desktop: ['deps', 'icon:copy:desktop'],
+  mac: ['deps', 'icon:copy:mac'],
+  win: ['deps', 'icon:copy:win'],
+  linux: ['deps', 'icon:copy:linux'],
+  android: ['deps', 'android:init', 'icon:copy:android', 'icon:copy:common'],
+  ios: ['deps', 'icon:copy:ios', 'icon:copy:common'],
 };
 
 /** dev 命令的长运行进程 */
@@ -159,11 +169,11 @@ async function waitTuiExit() {
  */
 function createTuiAdapter() {
   return {
-    onInit(tasks) {
-      sendTui({ type: 'init', tasks });
+    onInit(payload) {
+      sendTui({ type: 'init', ...payload });
     },
-    onStatus(index, status, elapsed) {
-      sendTui({ type: 'status', index, status, elapsed });
+    onStatus(index, status, elapsed, extra) {
+      sendTui({ type: 'status', index, status, elapsed, ...(extra || {}) });
     },
     onLog(text) {
       sendTui({ type: 'log', text });

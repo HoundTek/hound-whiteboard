@@ -6,7 +6,7 @@
 
 module.exports = {
   id: 'test',
-  description: 'Run tests',
+  description: 'test',
   dependsOn: [],
   run: { cmd: 'yarn test' },
 };

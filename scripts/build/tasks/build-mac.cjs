@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'build:mac',
-  description: 'Build macOS',
-  dependsOn: ['deps', 'icon:mac'],
-  run: { cmd: 'tauri build --bundles dmg app' },
+  description: 'build mac',
+  dependsOn: ['icon:copy:mac'],
+  conflicts: ['resource:cargo-build'],
+  run: { cmd: 'tauri build' },
 };

@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'build:ios',
-  description: 'Build iOS',
-  dependsOn: ['deps', 'icon:ios', 'icon:desktop'],
+  description: 'build ios',
+  dependsOn: ['ios:init', 'icon:copy:ios', 'icon:copy:common'],
+  conflicts: ['resource:cargo-build'],
   run: { cmd: 'tauri ios build' },
 };

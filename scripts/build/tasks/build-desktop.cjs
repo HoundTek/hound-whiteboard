@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'build:desktop',
-  description: 'Build desktop',
-  dependsOn: ['deps', 'icon:desktop'],
+  description: 'build desktop',
+  dependsOn: ['icon:copy:desktop'],
+  conflicts: ['resource:cargo-build'],
   run: { cmd: 'tauri build' },
 };

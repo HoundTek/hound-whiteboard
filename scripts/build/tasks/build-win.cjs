@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'build:win',
-  description: 'Build Windows',
-  dependsOn: ['deps', 'icon:win'],
-  run: { cmd: 'tauri build --bundles nsis msi' },
+  description: 'build win',
+  dependsOn: ['icon:copy:win'],
+  conflicts: ['resource:cargo-build'],
+  run: { cmd: 'tauri build' },
 };

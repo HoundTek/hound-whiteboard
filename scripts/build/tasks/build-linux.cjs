@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'build:linux',
-  description: 'Build Linux',
-  dependsOn: ['deps', 'icon:linux'],
-  run: { cmd: 'tauri build --bundles deb appimage rpm' },
+  description: 'build linux',
+  dependsOn: ['icon:copy:linux'],
+  conflicts: ['resource:cargo-build'],
+  run: { cmd: 'tauri build' },
 };

@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'android:init',
-  description: 'Initialize Android',
+  description: 'android init',
   dependsOn: [],
+  conflicts: ['resource:tauri-cli'],
   run: { cmd: 'yarn init:android' },
 };

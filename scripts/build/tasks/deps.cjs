@@ -6,7 +6,7 @@
 
 module.exports = {
   id: 'deps',
-  description: 'Install dependencies',
+  description: 'install deps',
   dependsOn: [],
   run: { cmd: 'yarn deps' },
 };

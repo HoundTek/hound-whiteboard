@@ -73,7 +73,7 @@ function configureAndroidSigning() {
 
 module.exports = {
   id: 'android:signing',
-  description: 'Configure Android signing',
+  description: 'android sign',
   dependsOn: ['android:init'],
   run: { fn: configureAndroidSigning },
 };

@@ -1,5 +1,17 @@
 {
   "platforms": {
+    "common": {
+      "source": ["icon.png"],
+      "output": "src-tauri/icons",
+      "filesToKeep": [
+        "32x32.png",
+        "64x64.png",
+        "128x128.png",
+        "128x128@2x.png",
+        "icon.png"
+      ],
+      "needsInit": false
+    },
     "desktop": {
       "source": ["icon-desktop.png", "icon.png"],
       "output": "src-tauri/icons",

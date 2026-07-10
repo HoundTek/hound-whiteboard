@@ -6,7 +6,8 @@
 
 module.exports = {
   id: 'ios:init',
-  description: 'Initialize iOS',
+  description: 'ios init',
   dependsOn: [],
+  conflicts: ['resource:tauri-cli'],
   run: { cmd: 'yarn tauri ios init' },
 };
