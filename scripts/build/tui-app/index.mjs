@@ -222,11 +222,10 @@ function App({ port }) {
   const [tasks, setTasks] = useState([]);
   /** @type {[import('react').Dispatch<Array<{ name: string, color: string, indices: number[], prefix: string }>>]} */
   const [rows, setRows] = useState([]);
-  const [logs, setLogs] = useState([]);
+  /** @type {[{ logs: string[], scrollOffset: number }, Function]} 合并状态确保原子更新，避免日志行与偏移分帧导致抖动 */
+  const [logState, setLogState] = useState({ logs: [], scrollOffset: 0 });
   const [exiting, setExiting] = useState(false);
   const [tick, setTick] = useState(0);
-  /** 日志滚动偏移：0 = 底部，正数 = 向上滚动的行数 */
-  const [scrollOffset, setScrollOffset] = useState(0);
   const scrollOffsetRef = useRef(0);
   const tasksRef = useRef(tasks);
   /** @type {{ current: number[] }} 每个任务 index 的运行起始时间戳 */
@@ -237,8 +236,8 @@ function App({ port }) {
   const logPanelYEnd = useRef(1);
 
   tasksRef.current = tasks;
-  scrollOffsetRef.current = scrollOffset;
-  logsRef.current = logs;
+  scrollOffsetRef.current = logState.scrollOffset;
+  logsRef.current = logState.logs;
 
   // 100ms 定时器驱动运行中计时器刷新
   useEffect(() => {
@@ -287,23 +286,23 @@ function App({ port }) {
       safeExit(gExitOk ? 0 : 1);
       return;
     }
-    const total = logs.length;
+    const total = logState.logs.length;
     if (total === 0) return;
     // 粗略估算可见行数（终端高度 - 头部 - 任务区 - 边框）
     const visible = Math.max(5, (process.stdout.rows || 24) - 14);
     const maxOffset = Math.max(0, total - visible);
     if (key.upArrow) {
-      setScrollOffset((prev) => Math.min(maxOffset, prev + 1));
+      setLogState((prev) => ({ ...prev, scrollOffset: Math.min(maxOffset, prev.scrollOffset + 1) }));
     } else if (key.downArrow) {
-      setScrollOffset((prev) => Math.max(0, prev - 1));
+      setLogState((prev) => ({ ...prev, scrollOffset: Math.max(0, prev.scrollOffset - 1) }));
     } else if (key.pageUp) {
-      setScrollOffset((prev) => Math.min(maxOffset, prev + visible));
+      setLogState((prev) => ({ ...prev, scrollOffset: Math.min(maxOffset, prev.scrollOffset + visible) }));
     } else if (key.pageDown) {
-      setScrollOffset((prev) => Math.max(0, prev - visible));
+      setLogState((prev) => ({ ...prev, scrollOffset: Math.max(0, prev.scrollOffset - visible) }));
     } else if (key.home) {
-      setScrollOffset(maxOffset);
+      setLogState((prev) => ({ ...prev, scrollOffset: maxOffset }));
     } else if (key.end) {
-      setScrollOffset(0);
+      setLogState((prev) => ({ ...prev, scrollOffset: 0 }));
     }
   });
 
@@ -326,9 +325,9 @@ function App({ port }) {
       const btn = parseInt(m[1], 10);
       const step = 3; // 滚轮每次 3 行
       if (btn === 64) {
-        setScrollOffset((prev) => Math.min(maxOffset, prev + step));
+        setLogState((prev) => ({ ...prev, scrollOffset: Math.min(maxOffset, prev.scrollOffset + step) }));
       } else if (btn === 65) {
-        setScrollOffset((prev) => Math.max(0, prev - step));
+        setLogState((prev) => ({ ...prev, scrollOffset: Math.max(0, prev.scrollOffset - step) }));
       }
     };
 
@@ -351,7 +350,7 @@ function App({ port }) {
           ),
         );
         setRows(msg.rows || []);
-        setLogs([]);
+        setLogState({ logs: [], scrollOffset: 0 });
         break;
 
       case 'status':
@@ -381,16 +380,16 @@ function App({ port }) {
           const plain = bulletMatch
             ? bulletMatch[1] + ' ' + stripAnsi(msg.text.slice(bulletMatch[0].length))
             : stripAnsi(msg.text);
-          setLogs((prev) => {
-            const next = [...prev.slice(-500), plain];
+          // 合并更新：logs 和 scrollOffset 原子变更，避免分帧渲染导致内容跳动
+          setLogState((prev) => {
+            const next = [...prev.logs.slice(-500), plain];
             // 跟踪首次报错行
             if (gFirstErrorLine < 0 && isErrorLine(plain)) {
               gFirstErrorLine = next.length - 1;
             }
-            return next;
+            const newOffset = prev.scrollOffset > 0 ? prev.scrollOffset + 1 : 0;
+            return { logs: next, scrollOffset: newOffset };
           });
-          // 自动跟随：在底部则保持底部，已上滚则维持相对位置
-          setScrollOffset((prev) => prev > 0 ? prev + 1 : 0);
         }
         break;
 
@@ -401,10 +400,9 @@ function App({ port }) {
         if (!gExitOk) {
           const sliced = gFirstErrorLine >= 0 ? logsRef.current.slice(gFirstErrorLine) : logsRef.current.slice(-30);
           gErrorLogs = sliced;
-          setLogs(sliced);
-          setScrollOffset(0);
+          setLogState({ logs: sliced, scrollOffset: 0 });
         } else {
-          setLogs([]);
+          setLogState(prev => ({ ...prev, logs: [] }));
         }
         setExiting(true);
         break;
@@ -518,6 +516,8 @@ function App({ port }) {
   const failed = tasks.filter((t) => t.status === STATUS.FAILED).length;
   const skipped = tasks.filter((t) => t.status === STATUS.SKIPPED).length;
   const total = tasks.length;
+
+  const { logs, scrollOffset } = logState;
 
   // 为每行构造 getLiveElapsed
   const getLiveElapsed = (ri) => {

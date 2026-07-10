@@ -157,5 +157,5 @@ applyModifiedObjects(modificationContext, objects) { ... }
 
 ## Git 提交
 
-- 在提交前让用户检查并征得同意
+- 在提交前让用户检查并征得同意，如果用户明确要求提交，默认同意提交
 - 较大的更改需要拆分逻辑提交
