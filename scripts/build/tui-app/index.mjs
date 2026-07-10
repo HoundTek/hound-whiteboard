@@ -481,7 +481,41 @@ function App({ port }) {
         ),
       ),
       React.createElement(Box, { height: 1 }),
-      // 任务终态列表
+      // 错误日志（仅失败时）
+      !ok && logs.length > 0 && (() => {
+        const columns = process.stdout.columns || 80;
+        const maxLogWidth = Math.max(20, columns - 4);
+        const usedByTasks = allRows.length;
+        const visible = Math.max(5, (process.stdout.rows || 24) - usedByTasks - 10);
+        const total = logs.length;
+        logPanelYStart.current = 4;
+        logPanelYEnd.current = 4 + 2 + visible + (total > visible ? 1 : 0);
+        const clampedOffset = Math.min(scrollOffset, Math.max(0, total - visible));
+        const start = total - visible - clampedOffset;
+        const end = total - clampedOffset;
+        const windowLines = logs.slice(Math.max(0, start), end);
+        return React.createElement(
+          Box,
+          { flexGrow: 1, flexDirection: 'column', borderStyle: 'round', borderColor: 'red', overflow: 'hidden' },
+          ...windowLines.map((line, i) =>
+            React.createElement(Text, { key: start + i }, truncateToWidth(line, maxLogWidth))
+          ),
+          total > visible && React.createElement(
+            Text,
+            { color: 'grey' },
+            `  \u2014 ${start + 1}-${end} / ${total} \u2014`,
+          ),
+        );
+      })(),
+      React.createElement(Box, { height: 1 }),
+      // 退出提示
+      React.createElement(
+        Box,
+        null,
+        React.createElement(Text, { color: 'grey' }, '  Press any key to exit'),
+      ),
+      React.createElement(Box, { flexGrow: 1 }),
+      // 任务终态列表（底部）
       React.createElement(
         Box,
         { flexDirection: 'column' },
@@ -512,40 +546,6 @@ function App({ port }) {
              ...stepNodes,
            );
         }),
-      ),
-      // 错误日志（仅失败时）
-      !ok && logs.length > 0 && React.createElement(Box, { height: 1 }),
-      !ok && logs.length > 0 && (() => {
-        const columns = process.stdout.columns || 80;
-        const maxLogWidth = Math.max(20, columns - 4);
-        const usedByTasks = allRows.length;
-        const visible = Math.max(5, (process.stdout.rows || 24) - usedByTasks - 10);
-        const total = logs.length;
-        logPanelYStart.current = 7 + usedByTasks;
-        logPanelYEnd.current = logPanelYStart.current + 2 + visible + (total > visible ? 1 : 0);
-        const clampedOffset = Math.min(scrollOffset, Math.max(0, total - visible));
-        const start = total - visible - clampedOffset;
-        const end = total - clampedOffset;
-        const windowLines = logs.slice(Math.max(0, start), end);
-        return React.createElement(
-          Box,
-          { flexGrow: 1, flexDirection: 'column', borderStyle: 'round', borderColor: 'red', overflow: 'hidden' },
-          ...windowLines.map((line, i) =>
-            React.createElement(Text, { key: start + i }, truncateToWidth(line, maxLogWidth))
-          ),
-          total > visible && React.createElement(
-            Text,
-            { color: 'grey' },
-            `  \u2014 ${start + 1}-${end} / ${total} \u2014`,
-          ),
-        );
-      })(),
-      React.createElement(Box, { height: 1 }),
-      // 退出提示
-      React.createElement(
-        Box,
-        null,
-        React.createElement(Text, { color: 'grey' }, '  Press any key to exit'),
       ),
     );
   }
@@ -655,7 +655,12 @@ function App({ port }) {
            stepNodes.push(React.createElement(Text, { key: `ic${ri}_${s}`, color: sc }, ic));
            stepNodes.push(React.createElement(Text, { key: `nm${ri}_${s}`, color: sc }, ` ${m.name}`));
          }
-         const chainElapsed = allTerminal ? Math.max(...members.map((m) => m.elapsed || 0)) : null;
+         let chainElapsed = null;
+         if (allTerminal) {
+           chainElapsed = Math.max(...members.map((m) => m.elapsed || 0));
+         } else if (chainLive != null) {
+           chainElapsed = chainLive;
+         }
          return React.createElement(
            Box,
            { key: `r${ri}` },
