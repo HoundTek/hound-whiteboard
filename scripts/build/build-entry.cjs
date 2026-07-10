@@ -100,48 +100,81 @@ function isTuiAlive() {
 }
 
 /**
- * 启动 TUI 子进程
+ * 启动 TUI 子进程，失败时重试最多 3 次
  * @returns {Promise<void>}
  */
 function startTui() {
   return new Promise((resolve, reject) => {
     let resolved = false;
+    let retries = 0;
+    const MAX_RETRIES = 3;
 
-    const server = net.createServer((sock) => {
+    function tryStart() {
       if (resolved) return;
-      resolved = true;
-      tuiSock = sock;
-      sock.setNoDelay(true);
-      sock.on('error', () => {});
-      resolve();
-    });
 
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port;
-      tuiChild = spawn('node', [TUI_PATH, String(port)], {
-        cwd: ROOT_DIR,
-        stdio: ['inherit', 'inherit', 'inherit'],
+      const server = net.createServer((sock) => {
+        if (resolved) return;
+        resolved = true;
+        tuiSock = sock;
+        sock.setNoDelay(true);
+        sock.on('error', () => {});
+        resolve();
       });
 
-      tuiChild.on('error', (err) => {
-        if (!resolved) { resolved = true; reject(err); }
+      server.on('error', (err) => {
+        server.close();
+        if (resolved) return;
+        if (++retries < MAX_RETRIES) {
+          setTimeout(tryStart, 500);
+          return;
+        }
+        resolved = true;
+        reject(err);
       });
 
-      tuiChild.on('exit', (code) => {
-        tuiSock = null;
-        if (!resolved) {
+      server.listen(0, '127.0.0.1', () => {
+        if (resolved) return;
+        const port = server.address().port;
+        tuiChild = spawn(process.execPath, [TUI_PATH, String(port)], {
+          cwd: ROOT_DIR,
+          stdio: ['inherit', 'inherit', 'inherit'],
+        });
+
+        tuiChild.on('error', (err) => {
+          if (resolved) return;
+          server.close();
+          if (++retries < MAX_RETRIES) {
+            setTimeout(tryStart, 500);
+            return;
+          }
+          resolved = true;
+          reject(err);
+        });
+
+        tuiChild.on('exit', (code) => {
+          tuiSock = null;
+          if (resolved) return;
+          server.close();
+          if (++retries < MAX_RETRIES) {
+            setTimeout(tryStart, 500);
+            return;
+          }
           resolved = true;
           reject(new Error('TUI exited with code ' + code));
-        }
+        });
       });
-    });
+    }
 
-    server.on('error', (err) => {
-      if (!resolved) { resolved = true; reject(err); }
-    });
+    tryStart();
 
     setTimeout(() => {
-      if (!resolved) { resolved = true; reject(new Error('TUI connection timeout')); }
+      if (resolved) return;
+      if (++retries < MAX_RETRIES) {
+        tryStart();
+        return;
+      }
+      resolved = true;
+      reject(new Error('TUI connection timeout'));
     }, 10000);
   });
 }
