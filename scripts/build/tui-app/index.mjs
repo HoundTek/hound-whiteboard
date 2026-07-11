@@ -26,19 +26,29 @@ let gExiting = false;
 let gFirstErrorLine = -1;
 let gFirstErrorSourceIdx = -1;
 let gErrorLogs = [];
+let gExitReceived = false;
 /** @type {{lineIdx: number, col: number}|null} 选择锚点（按下位置） */
 let gSelAnchor = null;
 /** @type {{lineIdx: number, col: number}|null} 选择焦点（拖拽当前位置） */
 let gSelFocus = null;
+/** 鼠标左键是否处于按下状态（用于区分 "正在选择" 与 "选择完成但高亮保留"） */
+let gIsMouseDown = false;
 
 // ============================================================
 //  Error detection
 // ============================================================
 
 const ERROR_RE = /(?:error|fail|fatal|ENOENT|ECONNREFUSED|EACCES)/i;
+const DEPRECATION_RE = /DeprecationWarning|\[DEP\d+\]/i;
+const RETRY_RE = /\[retry\]/i;
 
 function isErrorLine(line) {
-  return ERROR_RE.test(line);
+  // 先去除 ANSI/OSC 控制序列，避免干扰匹配
+  const stripped = stripAnsi(line);
+  if (DEPRECATION_RE.test(stripped)) return false;
+  if (stripped.includes('Skipped')) return false;
+  if (RETRY_RE.test(stripped)) return false;
+  return ERROR_RE.test(stripped);
 }
 
 // ============================================================
@@ -522,12 +532,20 @@ function App({ port }) {
 
   // 键盘滚动 / 结算页退出 / 选择清除
   useInput((_input, key) => {
+    // Escape / q / Enter 退出结算页
     if (exiting) {
-      safeExit(gExitOk ? 0 : 1);
-      return;
+      if (key.escape) {
+        // 先清除选择，再退出
+        setSelAnchor(null);
+        setSelFocus(null);
+        safeExit(gExitOk ? 0 : 1);
+      }
+      if (key.return) {
+        safeExit(gExitOk ? 0 : 1);
+      }
+      // 允许在结算页继续滚动和选择
     }
-    // Escape 清除文本选择
-    if (key.escape) {
+    if (key.escape && !exiting) {
       if (selAnchor || selFocus) {
         setSelAnchor(null);
         setSelFocus(null);
@@ -604,25 +622,40 @@ function App({ port }) {
         setSelFocus(anchor);
         gSelAnchor = anchor;
         gSelFocus = anchor;
+        gIsMouseDown = true;
       } else if (btn === 32) {
-        // 拖拽移动：扩展选择（需要已有锚点；允许越界，自动钳制到首/末行）
+        // 拖拽移动：扩展选择。鼠标触达日志面板上/下边缘时自动滚动
         if (!gSelAnchor) return;
         const visible = logVisibleRef.current;
         const total = logsRef.current.length;
-        const clampedOffset = Math.min(scrollOffsetRef.current, Math.max(0, total - visible));
-        const start = total - visible - clampedOffset;
-        const rawLineIdx = start + (py - logPanelYStart.current - 1);
+        let offset = Math.min(scrollOffsetRef.current, Math.max(0, total - visible));
+        const topY = logPanelYStart.current + 1;
+        const bottomY = logPanelYStart.current + visible;
+        // 上边缘：向上滚动（增大 offset，展示更早的行）
+        if (py <= topY && offset < total - visible) {
+          offset = Math.min(total - visible, offset + 1);
+          setLogState(prev => ({ ...prev, scrollOffset: offset }));
+        }
+        // 下边缘：向下滚动（减小 offset，回到更近底部的行）
+        else if (py >= bottomY && offset > 0) {
+          offset = Math.max(0, offset - 1);
+          setLogState(prev => ({ ...prev, scrollOffset: offset }));
+        }
+        const start = total - visible - offset;
+        const rawLineIdx = start + Math.max(0, Math.min(visible - 1, py - topY));
         const lineIdx = Math.max(0, Math.min(total - 1, rawLineIdx));
         const col = Math.max(0, px - 1);
         const focus = { lineIdx, col };
         setSelFocus(focus);
         gSelFocus = focus;
       } else if (btn === 0 && !isPress) {
+        gIsMouseDown = false;
         // 左键释放：完成选择并复制到剪贴板
-        if (!gSelAnchor) return;
-        const text = getSelectedText(logsRef.current, gSelAnchor, gSelFocus);
-        if (text.length > 0) {
-          copyOsc52(text);
+        if (gSelAnchor) {
+          const text = getSelectedText(logsRef.current, gSelAnchor, gSelFocus);
+          if (text.length > 0) {
+            copyOsc52(text);
+          }
         }
       }
     };
@@ -634,9 +667,10 @@ function App({ port }) {
     };
   }, []);
 
-  // 终端 resize：重新折行并保持滚动位置
+  // 终端 resize：重新折行并保持滚动位置（exit 后不再响应，避免覆盖过滤后的错误日志）
   useEffect(() => {
     const onResize = () => {
+      if (gExitReceived) return;
       const srcLines = sourceLogsRef.current;
       if (srcLines.length === 0) return;
       const newMaxWidth = Math.max(20, (process.stdout.columns || 80) - 4);
@@ -680,6 +714,7 @@ function App({ port }) {
   function handleMsg(msg) {
     switch (msg.type) {
       case 'init':
+        gExitReceived = false;
         gFirstErrorLine = -1;
         gFirstErrorSourceIdx = -1;
         sourceLogsRef.current = [];
@@ -717,7 +752,7 @@ function App({ port }) {
         break;
 
       case 'log':
-        if (msg.text != null) {
+        if (gExitReceived || msg.text == null) break;
           // 保留前导 ● 颜色标记，剥离其余 ANSI（如 cargo warning 着色）
           const bulletMatch = msg.text.match(/^(\x1b\[\d+m\u25cf\x1b\[0m) /);
           const plain = bulletMatch
@@ -742,24 +777,36 @@ function App({ port }) {
             if (gFirstErrorLine < 0 && isErrorLine(plain)) {
               gFirstErrorLine = next.length - 1;
             }
-            const newOffset = gSelAnchor
-              ? prev.scrollOffset + wrapped.length  // 选择中：维持视觉位置，禁止自动跟底
+            const newOffset = (gIsMouseDown && gSelAnchor)
+              ? prev.scrollOffset + wrapped.length  // 正在拖选：维持视觉位置，禁止自动跟底
               : (prev.scrollOffset > 0 ? prev.scrollOffset + wrapped.length : 0);
             return { logs: next, scrollOffset: newOffset };
           });
-        }
         break;
 
       case 'exit':
+        gExitReceived = true;
         gTasks = [...tasksRef.current];
         gExitOk = msg.ok !== false;
         setSelAnchor(null);
         setSelFocus(null);
-        // 失败时截取报错相关日志
         if (!gExitOk) {
-          const sliced = gFirstErrorLine >= 0 ? logsRef.current.slice(gFirstErrorLine) : logsRef.current.slice(-30);
-          gErrorLogs = sliced;
-          setLogState({ logs: sliced, scrollOffset: 0 });
+          // 仅保留错误行，从源日志行过滤后重新折行
+          let errorSources;
+          if (gFirstErrorSourceIdx >= 0) {
+            errorSources = sourceLogsRef.current.slice(gFirstErrorSourceIdx).filter(isErrorLine);
+          } else {
+            const last30 = sourceLogsRef.current.slice(-30);
+            const filtered = last30.filter(isErrorLine);
+            errorSources = filtered;
+          }
+          const maxLogWidth = Math.max(20, (process.stdout.columns || 80) - 4);
+          const errorLogs = [];
+          for (const src of errorSources) {
+            errorLogs.push(...wrapLine(src, maxLogWidth, 2));
+          }
+          gErrorLogs = errorLogs;
+          setLogState({ logs: errorLogs, scrollOffset: 0 });
         } else {
           setLogState(prev => ({ ...prev, logs: [] }));
         }
@@ -767,6 +814,8 @@ function App({ port }) {
         break;
     }
   }
+
+  const { logs, scrollOffset } = logState;
 
   if (exiting) {
     // 结算页面：全量任务终态 + 结果横幅 + 错误日志
@@ -813,7 +862,8 @@ function App({ port }) {
         const clampedOffset = Math.min(scrollOffset, Math.max(0, total - visible));
         const start = total - visible - clampedOffset;
         const end = total - clampedOffset;
-        const windowLines = logs.slice(Math.max(0, start), end);
+        const windowLines = logs.slice(Math.max(0, start), end)
+          .filter(line => !stripAnsi(line).includes('Skipped'));
         return React.createElement(
           Box,
           { flexGrow: 1, flexDirection: 'column', borderStyle: 'round', borderColor: 'red', overflow: 'hidden' },
@@ -834,7 +884,7 @@ function App({ port }) {
       React.createElement(
         Box,
         null,
-        React.createElement(Text, { color: 'grey' }, '  Press any key to exit'),
+        React.createElement(Text, { color: 'grey' }, '  Press Esc or Enter to exit'),
       ),
       React.createElement(Box, { flexGrow: 1 }),
       // 任务终态列表（底部）
@@ -876,8 +926,6 @@ function App({ port }) {
   const failed = tasks.filter((t) => t.status === STATUS.FAILED).length;
   const skipped = tasks.filter((t) => t.status === STATUS.SKIPPED).length;
   const total = tasks.length;
-
-  const { logs, scrollOffset } = logState;
 
   // 为每行构造 getLiveElapsed
   const getLiveElapsed = (ri) => {

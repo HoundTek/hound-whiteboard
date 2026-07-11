@@ -230,7 +230,7 @@ function createCollector(target) {
   let tasks = [];
   let statuses = [];
   let rows = [];
-  let errorLogs = [];
+  let allLogs = [];
   let exitOk = false;
 
   return {
@@ -248,10 +248,7 @@ function createCollector(target) {
         if (target) target.onStatus(index, status, elapsed, extra);
       },
       onLog(text) {
-        // 收集错误行
-        if (/(?:error|fail|fatal|ENOENT|ECONNREFUSED|EACCES)/i.test(text)) {
-          errorLogs.push(text);
-        }
+        allLogs.push(text);
         if (target) target.onLog(text);
       },
       onExit(ok) {
@@ -260,36 +257,17 @@ function createCollector(target) {
       },
     },
     getSummary() {
-      return { tasks, statuses, rows, errorLogs, exitOk };
+      return { tasks, statuses, rows, allLogs, exitOk };
     },
   };
 }
 
 /**
- * 打印构建结果摘要（与 TUI 结算画面格式一致）
- * @param {{ tasks, statuses, rows, errorLogs, exitOk }} summary
+ * 打印构建结果摘要（与 TUI 结算画面格式一致，日志面板展开）
+ * @param {{ tasks, statuses, rows, allLogs, exitOk }} summary
  */
 function printSummary(summary) {
-  const { statuses, errorLogs, exitOk } = summary;
-  const done = statuses.filter((s) => s.status === 'done').length;
-  const failed = statuses.filter((s) => s.status === 'failed').length;
-  const skipped = statuses.filter((s) => s.status === 'skipped').length;
-  const total = statuses.length;
-
-  // 横幅
-  console.log('');
-  console.log(exitOk ? '  BUILD SUCCEEDED' : '  BUILD FAILED');
-  console.log(`  ${done} done  ${failed} failed  ${skipped} skipped  ${total} total`);
-  console.log('');
-
-  // 错误日志（仅失败时）
-  if (!exitOk && errorLogs.length > 0) {
-    const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
-    for (const line of errorLogs) {
-      console.log('  ' + stripAnsi(line));
-    }
-    console.log('');
-  }
+  // noop
 }
 
 // ============================================================
