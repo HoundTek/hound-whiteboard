@@ -21,7 +21,7 @@ class ChunkObjectManager {
    * 该区块的静态图
    * @description 见 [tier-graph-document.md](./docs/tier-graph-document.md)。
    * 内部存储所有对象的层叠关系，包含在该区块的对象（可以不属于该区块）。存储对象 id，不拥有对象实例的所有权。
-   * @type {DirectedGraph}
+   * @type {DirectedGraph<number>}
    */
   staticGraph;
 

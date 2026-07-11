@@ -7,13 +7,14 @@
 
 /**
  * 双端队列
+ * @template T
  * @class
  * @author Zhou Chenyu
  */
 class Deque {
   /**
    * 循环数组存储元素
-   * @type {Array<any>}
+   * @type {Array<T>}
    */
   elements;
 
@@ -61,7 +62,7 @@ class Deque {
 
   /**
    * 从队尾入队
-   * @param {any} elem - 要入队的元素
+   * @param {T} elem - 要入队的元素
    */
   pushBack(elem) {
     // 检查是否需要扩容（预留一个空位用于区分满和空）
@@ -74,7 +75,7 @@ class Deque {
 
   /**
    * 从队头入队
-   * @param {any} elem - 要入队的元素
+   * @param {T} elem - 要入队的元素
    */
   pushFront(elem) {
     // 检查是否需要扩容（预留一个空位用于区分满和空）
@@ -89,7 +90,7 @@ class Deque {
   /**
    * 从队头出队
    * @throws {RangeError} 当队列为空时
-   * @returns {any}
+   * @returns {T}
    */
   popFront() {
     if (this.empty()) {
@@ -104,7 +105,7 @@ class Deque {
   /**
    * 从队尾出队
    * @throws {RangeError} 当队列为空时
-   * @returns {any}
+   * @returns {T}
    */
   popBack() {
     if (this.empty()) {
@@ -136,7 +137,7 @@ class Deque {
   /**
    * 获取队头元素
    * @throws {RangeError} 当队列为空时
-   * @returns {any}
+   * @returns {T}
    */
   peekFront() {
     if (this.empty()) {
@@ -148,7 +149,7 @@ class Deque {
   /**
    * 获取队尾元素
    * @throws {RangeError} 当队列为空时
-   * @returns {any}
+   * @returns {T}
    */
   peekBack() {
     if (this.empty()) {
@@ -171,7 +172,7 @@ class Deque {
 
   /**
    * 转换为数组
-   * @returns {Array<any>}
+   * @returns {Array<T>}
    */
   toArray() {
     const result = [];
@@ -185,7 +186,7 @@ class Deque {
 
   /**
    * 判断是否包含某个元素
-   * @param {any} elem - 要查询的元素
+   * @param {T} elem - 要查询的元素
    * @returns {boolean}
    */
   includes(elem) {

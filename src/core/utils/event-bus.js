@@ -7,6 +7,7 @@
 
 /**
  * 事件总线
+ * @template T
  * @class
  * @description 提供同步事件订阅、取消订阅和单次订阅能力。
  */
@@ -23,8 +24,9 @@ class EventBus {
 
   /**
    * 订阅事件
+   * @template H
    * @param {string} eventName - 事件名
-   * @param {Function} handler - 监听器
+   * @param {(payload: T) => H} handler - 监听器
    * @returns {Function} 取消订阅函数
    */
   on(eventName, handler) {
@@ -52,8 +54,9 @@ class EventBus {
 
   /**
    * 订阅一次事件
+   * @template H
    * @param {string} eventName - 事件名
-   * @param {Function} handler - 监听器
+   * @param {(payload: T) => H} handler - 监听器
    * @returns {Function} 取消订阅函数
    */
   once(eventName, handler) {
@@ -66,9 +69,10 @@ class EventBus {
 
   /**
    * 发射事件
+   * @template H
    * @param {string} eventName - 事件名
-   * @param {*} payload - 事件数据
-   * @returns {Array<*>} 所有监听器返回值
+   * @param {T} payload - 事件数据
+   * @returns {Array<H>} 所有监听器返回值
    */
   emit(eventName, payload) {
     if (!this.listeners.has(eventName)) return [];

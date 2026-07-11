@@ -7,25 +7,26 @@
 
 /**
  * 链表节点
+ * @template T
  * @class
  * @author Zhou Chenyu
  */
 class Node {
   /**
    * 节点值
-   * @type {any}
+   * @type {T}
    */
   value;
 
   /**
    * 下一个节点
-   * @type {Node|null}
+   * @type {Node<T>|null}
    */
   next;
 
   /**
    * @constructor
-   * @param {any} value - 节点值
+   * @param {T} value - 节点值
    */
   constructor(value) {
     this.value = value;
@@ -35,18 +36,19 @@ class Node {
 
 /**
  * 链表
+ * @template T
  * @author Zhou Chenyu
  */
 class Chain {
   /**
    * 链表头节点
-   * @type {Node | null}
+   * @type {Node<T> | null}
    */
   head;
 
   /**
    * 链表尾节点
-   * @type {Node | null}
+   * @type {Node<T> | null}
    */
   tail;
 
@@ -67,7 +69,7 @@ class Chain {
 
   /**
    * 在链表末尾添加一个节点
-   * @param {any} value - 要添加的节点值
+   * @param {T} value - 要添加的节点值
    */
   append(value) {
     const newNode = new Node(value);
@@ -83,7 +85,7 @@ class Chain {
 
   /**
    * 在链表开头添加一个节点
-   * @param {any} value - 要添加的节点值
+   * @param {T} value - 要添加的节点值
    */
   prepend(value) {
     const newNode = new Node(value);
@@ -99,7 +101,7 @@ class Chain {
 
   /**
    * 在指定位置插入一个节点
-   * @param {any} value - 要插入的节点值
+   * @param {T} value - 要插入的节点值
    * @param {number} index - 插入位置的索引
    * @throws {RangeError} 当索引超出范围时
    */
@@ -128,7 +130,7 @@ class Chain {
   /**
    * 移除指定位置的节点
    * @param {number} index - 移除位置的索引
-   * @returns {any} 被移除节点的值
+   * @returns {T} 被移除节点的值
    * @throws {RangeError} 当索引超出范围或链表为空时
    */
   removeAt(index) {
@@ -162,7 +164,7 @@ class Chain {
   /**
    * 获取指定位置的节点值
    * @param {number} index - 节点位置的索引
-   * @returns {any} 节点值
+   * @returns {T} 节点值
    * @throws {RangeError} 当索引超出范围或链表为空时
    */
   getAt(index) {
@@ -178,7 +180,7 @@ class Chain {
 
   /**
    * 获取指定值的节点索引
-   * @param {any} value - 要查找的值
+   * @param {T} value - 要查找的值
    * @returns {number} 节点索引，如果未找到则返回 -1
    */
   indexOf(value) {
