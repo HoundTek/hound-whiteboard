@@ -137,11 +137,9 @@ describe("ActiveObjectManager/remove", () => {
       await aom.choose(new Set([stroke12, stroke13]));
       aom.remove(new Set([stroke12]));
 
-      expect(aom.activeObjects.has(stroke12)).toBe(false);
       expect(aom.activeObjectIndex.has(12)).toBe(false);
       expect(aom.onLayer.has(12)).toBe(false);
       // stroke13 不应对 stroke12 的删除有任何影响
-      expect(aom.activeObjects.has(stroke13)).toBe(true);
       expect(aom.activeObjectIndex.has(13)).toBe(true);
       expect(aom.onLayer.has(13)).toBe(true);
     });
@@ -176,7 +174,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(ownerChunk.objectManager.getObjectCoverChunks(201)).toEqual(
         new Set(),
       );
-      expect(aom.activeObjects.size).toBe(0);
+      expect(aom.activeObjectIndex.size).toBe(0);
     });
 
     test("remove 应清理所有被移除对象后的空层", async () => {
@@ -223,7 +221,6 @@ describe("ActiveObjectManager/remove", () => {
 
       // 空层应被 tidyup 清理
       expect(aom.layerOrder.length).toBe(0);
-      expect(aom.activeObjects.size).toBe(0);
       expect(aom.activeObjectIndex.size).toBe(0);
       expect(aom.onLayer.size).toBe(0);
     });
@@ -603,7 +600,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(ownerChunk.objectManager.staticGraph.hasNode(703)).toBe(false);
       // 活动的 701 也应从活动集合中移除
       expect(aom.activeObjectIndex.has(701)).toBe(false);
-      expect(aom.activeObjects.size).toBe(0);
+      expect(aom.activeObjectIndex.size).toBe(0);
     });
 
     test("remove 应能处理由 add 加入但未 apply 的对象", async () => {
@@ -635,7 +632,7 @@ describe("ActiveObjectManager/remove", () => {
 
       // 活动状态应被清理
       expect(aom.activeObjectIndex.has(801)).toBe(false);
-      expect(aom.activeObjects.size).toBe(0);
+      expect(aom.activeObjectIndex.size).toBe(0);
       // 区块静态图中也不应在（本来就不在）
       expect(ownerChunk.objectManager.staticGraph.hasNode(801)).toBe(false);
     });
@@ -673,7 +670,7 @@ describe("ActiveObjectManager/remove", () => {
       expect(() => aom.remove(new Set([stroke]))).not.toThrow();
 
       expect(aom.activeObjectIndex.has(901)).toBe(false);
-      expect(aom.activeObjects.size).toBe(0);
+      expect(aom.activeObjectIndex.size).toBe(0);
     });
   });
 

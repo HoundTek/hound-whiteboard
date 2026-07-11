@@ -56,7 +56,7 @@ describe("ActiveObjectManager/apply", () => {
       const ownerChunk = board.getChunkById(1);
       const coveredChunk = board.getChunkById(2);
 
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+      expect(board.activeObjectManager.activeObjectIndex.size).toBe(0);
       expect(ownerChunk.objectManager.getObject(15)).toBe(stroke);
       expect(ownerChunk.objectManager.getObjectCoverChunks(15)).toEqual(
         new Set([1, 2, 3]),
@@ -761,7 +761,7 @@ describe("ActiveObjectManager/apply", () => {
 
       // discard 也不创建区块
       expect(board.chunkLoaded.has(chunkId)).toBe(false);
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+      expect(board.activeObjectManager.activeObjectIndex.size).toBe(0);
     });
 
     test("apply 应将未加载区块上的 AOM 对象写入区块静态图并设置覆盖索引", async () => {
@@ -773,7 +773,7 @@ describe("ActiveObjectManager/apply", () => {
       await board.activeObjectManager.apply(new Set([stroke]));
 
       // 对象已不在 AOM
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+      expect(board.activeObjectManager.activeObjectIndex.size).toBe(0);
 
       // 区块被创建，对象写入静态图
       const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
@@ -800,7 +800,7 @@ describe("ActiveObjectManager/apply", () => {
 
       await board.activeObjectManager.apply(new Set([stroke]));
 
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+      expect(board.activeObjectManager.activeObjectIndex.size).toBe(0);
 
       // 笔划从 (1,1) 到 (150,150) 跨越 (0,0) (1,0) (1,1) (0,1) 四个区块
       const coveredIds = [1, 2, 3, 4];
@@ -884,7 +884,7 @@ describe("ActiveObjectManager/apply", () => {
       await board.activeObjectManager.apply(new Set([lower, upper]));
 
       // 两个对象都在静态图中，AOM 为空
-      expect(board.activeObjectManager.activeObjects.size).toBe(0);
+      expect(board.activeObjectManager.activeObjectIndex.size).toBe(0);
 
       const chunkId = Chunk.worldToChunkId(new Vector(10, 10), 100, 100);
       const chunk = board.getChunkById(chunkId);
