@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { render, Box, Text, useInput } from 'ink';
+import { render, Box, Text, useInput, useStdin } from 'ink';
 import net from 'net';
 
 const IPC_PORT = parseInt(process.argv[2], 10);
@@ -24,7 +24,12 @@ let gExitOk = false;
 let gRenderInstance = null;
 let gExiting = false;
 let gFirstErrorLine = -1;
+let gFirstErrorSourceIdx = -1;
 let gErrorLogs = [];
+/** @type {{lineIdx: number, col: number}|null} 选择锚点（按下位置） */
+let gSelAnchor = null;
+/** @type {{lineIdx: number, col: number}|null} 选择焦点（拖拽当前位置） */
+let gSelFocus = null;
 
 // ============================================================
 //  Error detection
@@ -159,6 +164,212 @@ function truncateToWidth(str, maxWidth) {
   return result + '\u2026';
 }
 
+/**
+ * 从字符串开头取指定可视宽度的字符
+ * @param {string} str - 输入字符串
+ * @param {number} maxW - 最大可视宽度
+ * @returns {{ line: string, rest: string }} 截取的行和剩余部分
+ */
+function takeVisualChars(str, maxW) {
+  const chars = [...str];
+  let w = 0;
+  let i = 0;
+  for (; i < chars.length; i++) {
+    const cw = isWideChar(chars[i].codePointAt(0)) ? 2 : 1;
+    if (w + cw > maxW) break;
+    w += cw;
+  }
+  return { line: chars.slice(0, i).join(''), rest: chars.slice(i).join('') };
+}
+
+/**
+ * 将单行日志折行到指定宽度，续行使用悬挂缩进
+ * @param {string} str - 单行日志（可含前导 "\x1b[NNm●\x1b[0m " 颜色标记）
+ * @param {number} maxWidth - 最大列宽
+ * @param {number} indentWidth - 续行缩进宽度（默认 2，匹配 "● " 宽度）
+ * @returns {string[]} 折行后的显示行数组
+ */
+function wrapLine(str, maxWidth, indentWidth = 2) {
+  // 检测前导 ● 标记（颜色 ANSI + ● + 复位 + 空格）
+  const bulletMatch = str.match(/^(\x1b\[\d+m\u25cf\x1b\[0m) /);
+  let content;
+  let bulletPrefix = '';
+  if (bulletMatch) {
+    bulletPrefix = bulletMatch[1] + ' ';
+    content = str.slice(bulletMatch[0].length);
+  } else {
+    content = str;
+  }
+
+  const firstWidth = bulletMatch ? maxWidth - 2 : maxWidth; // "● " 占用 2 可视列
+  const contWidth = maxWidth - indentWidth;
+  const indent = ' '.repeat(indentWidth);
+  const lines = [];
+
+  // 首行
+  const { line: firstLine, rest: afterFirst } = takeVisualChars(content, firstWidth);
+  lines.push(bulletPrefix + firstLine);
+
+  // 续行
+  let remaining = afterFirst;
+  while (remaining.length > 0) {
+    const trimmed = remaining.replace(/^\s+/, ''); // 折行处去除前导空白
+    if (trimmed.length === 0) break;
+    const { line, rest } = takeVisualChars(trimmed, contWidth);
+    lines.push(indent + line);
+    remaining = rest;
+  }
+
+  return lines;
+}
+
+// ============================================================
+//  Text selection
+// ============================================================
+
+/**
+ * 在行内对指定可视列范围施加反色高亮
+ * @param {string} line - 显示行（可含 ANSI 前缀）
+ * @param {number} startCol - 起始可视列（0-based）
+ * @param {number} endCol - 结束可视列（0-based，Infinity 表示行尾）
+ * @returns {string} 带反色高亮的行
+ */
+function highlightRange(line, startCol, endCol) {
+  if (startCol >= endCol) return line;
+
+  const plain = stripAnsi(line);
+  const totalWidth = visualWidth(plain);
+  if (startCol >= totalWidth) return line;
+
+  const effEnd = endCol === Infinity || !isFinite(endCol) ? totalWidth : Math.min(endCol, totalWidth);
+  if (startCol >= effEnd) return line;
+
+  // 解析为 ANSI 段落
+  const segments = [];
+  let lastEnd = 0;
+  let match;
+  ANSI_RE.lastIndex = 0;
+  while ((match = ANSI_RE.exec(line)) !== null) {
+    if (match.index > lastEnd) {
+      segments.push({ ansi: false, text: line.slice(lastEnd, match.index) });
+    }
+    segments.push({ ansi: true, text: match[0] });
+    lastEnd = match.index + match[0].length;
+  }
+  if (lastEnd < line.length) {
+    segments.push({ ansi: false, text: line.slice(lastEnd) });
+  }
+
+  let result = '';
+  let visualCol = 0;
+
+  for (const seg of segments) {
+    if (seg.ansi) {
+      result += seg.text;
+      continue;
+    }
+    for (const ch of seg.text) {
+      if (visualCol === startCol) {
+        result += '\x1b[7m';
+      }
+      const cw = isWideChar(ch.codePointAt(0)) ? 2 : 1;
+      visualCol += cw;
+      result += ch;
+      if (visualCol === effEnd) {
+        result += '\x1b[0m';
+      }
+    }
+  }
+
+  // 若高亮延伸到行尾则关闭
+  if (visualCol > startCol && visualCol <= effEnd) {
+    result += '\x1b[0m';
+  }
+
+  return result;
+}
+
+/**
+ * 获取某显示行在选择中的高亮范围
+ * @param {number} lineIdx - 显示行索引
+ * @param {{lineIdx: number, col: number}|null} anchor - 锚点
+ * @param {{lineIdx: number, col: number}|null} focus - 焦点
+ * @returns {{startCol: number, endCol: number}|null} 高亮列范围或 null
+ */
+function getLineHighlight(lineIdx, anchor, focus) {
+  if (!anchor || !focus) return null;
+
+  const l1 = anchor.lineIdx, c1 = anchor.col;
+  const l2 = focus.lineIdx, c2 = focus.col;
+
+  if (l1 === l2) {
+    if (lineIdx !== l1) return null;
+    return { startCol: Math.min(c1, c2), endCol: Math.max(c1, c2) };
+  }
+
+  const startLine = Math.min(l1, l2);
+  const endLine = Math.max(l1, l2);
+
+  if (lineIdx < startLine || lineIdx > endLine) return null;
+
+  if (lineIdx === startLine) {
+    return { startCol: l1 < l2 ? c1 : c2, endCol: Infinity };
+  }
+  if (lineIdx === endLine) {
+    return { startCol: 0, endCol: l1 > l2 ? c1 : c2 };
+  }
+  return { startCol: 0, endCol: Infinity };
+}
+
+/**
+ * 提取选中文本（纯文本，不含 ANSI）
+ * @param {string[]} logs - 日志显示行数组
+ * @param {{lineIdx: number, col: number}} anchor - 锚点
+ * @param {{lineIdx: number, col: number}} focus - 焦点
+ * @returns {string} 选中文本
+ */
+function getSelectedText(logs, anchor, focus) {
+  if (!anchor || !focus) return '';
+
+  const l1 = anchor.lineIdx, c1 = anchor.col;
+  const l2 = focus.lineIdx, c2 = focus.col;
+
+  const startLine = Math.min(l1, l2);
+  const endLine = Math.max(l1, l2);
+
+  let startCol, endCol;
+  if (l1 < l2) { startCol = c1; endCol = c2; }
+  else if (l1 > l2) { startCol = c2; endCol = c1; }
+  else { startCol = Math.min(c1, c2); endCol = Math.max(c1, c2); }
+
+  const result = [];
+  for (let i = startLine; i <= endLine; i++) {
+    if (i < 0 || i >= logs.length) continue;
+    const plain = stripAnsi(logs[i]);
+    const totalW = visualWidth(plain);
+
+    const s = i === startLine ? Math.min(startCol, totalW) : 0;
+    const e = i === endLine ? Math.min(endCol, totalW) : totalW;
+
+    if (s >= e) { result.push(''); continue; }
+
+    const { rest: fromStart } = takeVisualChars(plain, s);
+    const { line: selected } = takeVisualChars(fromStart, e - s);
+    result.push(selected);
+  }
+
+  return result.join('\n');
+}
+
+/**
+ * 通过 OSC 52 将文本写入系统剪贴板
+ * @param {string} text - 要复制的文本
+ */
+function copyOsc52(text) {
+  const b64 = Buffer.from(text, 'utf-8').toString('base64');
+  process.stdout.write(`\x1b]52;c;${b64}\x07`);
+}
+
 // ============================================================
 //  Formatting
 // ============================================================
@@ -186,7 +397,7 @@ function safeExit(code) {
   }
 
   // 清空 alternate screen 残留 → 恢复终端 → 立即退出（不用 setImmediate，避免事件循环刷写 Ink 残留帧）
-  process.stdout.write('\x1b[2J\x1b[H\x1b[?1049l\x1b[?25h\x1b[?1000l\x1b[?1006l');
+  process.stdout.write('\x1b[2J\x1b[H\x1b[?1049l\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1006l');
   process.exitCode = code;
   process.exit(code);
 }
@@ -226,11 +437,18 @@ function App({ port }) {
   const [logState, setLogState] = useState({ logs: [], scrollOffset: 0 });
   const [exiting, setExiting] = useState(false);
   const [tick, setTick] = useState(0);
+  /** 文本选择状态（React 状态驱动重渲染，同时同步到 gSelAnchor/gSelFocus 供非 React 上下文读取） */
+  const [selAnchor, setSelAnchor] = useState(null);
+  const [selFocus, setSelFocus] = useState(null);
+  /** Ink 内部事件发射器，用于统一接收 stdin 输入（避免 data/readable 流模式冲突） */
+  const { internal_eventEmitter } = useStdin();
   const scrollOffsetRef = useRef(0);
   const tasksRef = useRef(tasks);
   /** @type {{ current: number[] }} 每个任务 index 的运行起始时间戳 */
   const runningSinceRef = useRef([]);
   const logsRef = useRef([]);
+  /** 源日志行引用（折行前），用于终端 resize 时重新折行 */
+  const sourceLogsRef = useRef([]);
   /** 日志面板的屏幕 Y 坐标范围（1-based，含边框），用于判断滚轮是否在面板内 */
   const logPanelYStart = useRef(1);
   const logPanelYEnd = useRef(1);
@@ -240,6 +458,8 @@ function App({ port }) {
   tasksRef.current = tasks;
   scrollOffsetRef.current = logState.scrollOffset;
   logsRef.current = logState.logs;
+  gSelAnchor = selAnchor;
+  gSelFocus = selFocus;
 
   // 100ms 定时器驱动运行中计时器刷新
   useEffect(() => {
@@ -282,10 +502,18 @@ function App({ port }) {
     };
   }, []);
 
-  // 键盘滚动 / 结算页退出
+  // 键盘滚动 / 结算页退出 / 选择清除
   useInput((_input, key) => {
     if (exiting) {
       safeExit(gExitOk ? 0 : 1);
+      return;
+    }
+    // Escape 清除文本选择
+    if (key.escape) {
+      if (selAnchor || selFocus) {
+        setSelAnchor(null);
+        setSelFocus(null);
+      }
       return;
     }
     const total = logState.logs.length;
@@ -307,42 +535,138 @@ function App({ port }) {
     }
   });
 
-  // 鼠标滚轮滚动
+  // 鼠标滚轮 + 文本选择（通过 Ink internal_eventEmitter 统一接收，避免 data/readable 流模式冲突）
   useEffect(() => {
-    process.stdout.write('\x1b[?1000h\x1b[?1006h');
+    // 启用鼠标追踪：1000(按钮事件) + 1002(拖拽移动) + 1006(SGR 扩展格式)
+    process.stdout.write('\x1b[?1000h\x1b[?1002h\x1b[?1006h');
 
-    const onData = (chunk) => {
+    const onMouse = (chunk) => {
       const str = chunk.toString();
-      // SGR 鼠标事件: \x1b[<Pb;Px;PyM
-      const m = str.match(/\x1b\[<(64|65);(\d+);(\d+)M/);
+      // SGR 鼠标事件: \x1b[<Pb;Px;PyM (按下) 或 \x1b[<Pb;Px;Pym (释放)
+      const m = str.match(/\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
       if (!m) return;
-      const py = parseInt(m[3], 10);
-      // 仅当日志面板存在且鼠标在其范围内时处理滚轮
-      if (py < logPanelYStart.current || py > logPanelYEnd.current) return;
-      const total = logsRef.current.length;
-      if (total === 0) return;
-      const visible = logVisibleRef.current;
-      const maxOffset = Math.max(0, total - visible);
       const btn = parseInt(m[1], 10);
-      const step = 3; // 滚轮每次 3 行
-      if (btn === 64) {
-        setLogState((prev) => ({ ...prev, scrollOffset: Math.min(maxOffset, prev.scrollOffset + step) }));
-      } else if (btn === 65) {
-        setLogState((prev) => ({ ...prev, scrollOffset: Math.max(0, prev.scrollOffset - step) }));
+      const px = parseInt(m[2], 10);
+      const py = parseInt(m[3], 10);
+      const isPress = m[4] === 'M';
+
+      // 滚轮事件
+      if (btn === 64 || btn === 65) {
+        if (py < logPanelYStart.current || py > logPanelYEnd.current) return;
+        const total = logsRef.current.length;
+        if (total === 0) return;
+        const visible = logVisibleRef.current;
+        const maxOffset = Math.max(0, total - visible);
+        const step = 3;
+        if (btn === 64) {
+          setLogState((prev) => ({ ...prev, scrollOffset: Math.min(maxOffset, prev.scrollOffset + step) }));
+        } else if (btn === 65) {
+          setLogState((prev) => ({ ...prev, scrollOffset: Math.max(0, prev.scrollOffset - step) }));
+        }
+        return;
+      }
+
+      // 文本选择：左键按下 (0) / 拖拽移动 (32) / 左键释放 (0m)
+      if (btn === 0 && isPress) {
+        const visible = logVisibleRef.current;
+        const total = logsRef.current.length;
+        // 点击在日志面板外 → 清除选择
+        if (py < logPanelYStart.current + 1 || py > logPanelYStart.current + visible || total === 0) {
+          setSelAnchor(null);
+          setSelFocus(null);
+          return;
+        }
+        const clampedOffset = Math.min(scrollOffsetRef.current, Math.max(0, total - visible));
+        const start = total - visible - clampedOffset;
+        const lineIdx = start + (py - logPanelYStart.current - 1);
+        if (lineIdx < 0 || lineIdx >= total) return;
+        const col = Math.max(0, px - 1); // 1-based → 0-based，减去左边框
+        const anchor = { lineIdx, col };
+        setSelAnchor(anchor);
+        setSelFocus(anchor);
+        gSelAnchor = anchor;
+        gSelFocus = anchor;
+      } else if (btn === 32) {
+        // 拖拽移动：扩展选择（需要已有锚点；允许越界，自动钳制到首/末行）
+        if (!gSelAnchor) return;
+        const visible = logVisibleRef.current;
+        const total = logsRef.current.length;
+        const clampedOffset = Math.min(scrollOffsetRef.current, Math.max(0, total - visible));
+        const start = total - visible - clampedOffset;
+        const rawLineIdx = start + (py - logPanelYStart.current - 1);
+        const lineIdx = Math.max(0, Math.min(total - 1, rawLineIdx));
+        const col = Math.max(0, px - 1);
+        const focus = { lineIdx, col };
+        setSelFocus(focus);
+        gSelFocus = focus;
+      } else if (btn === 0 && !isPress) {
+        // 左键释放：完成选择并复制到剪贴板
+        if (!gSelAnchor) return;
+        const text = getSelectedText(logsRef.current, gSelAnchor, gSelFocus);
+        if (text.length > 0) {
+          copyOsc52(text);
+        }
       }
     };
 
-    process.stdin.on('data', onData);
+    internal_eventEmitter.on('input', onMouse);
     return () => {
-      process.stdout.write('\x1b[?1000l\x1b[?1006l');
-      process.stdin.off('data', onData);
+      process.stdout.write('\x1b[?1000l\x1b[?1002l\x1b[?1006l');
+      internal_eventEmitter.removeListener('input', onMouse);
     };
+  }, []);
+
+  // 终端 resize：重新折行并保持滚动位置
+  useEffect(() => {
+    const onResize = () => {
+      const srcLines = sourceLogsRef.current;
+      if (srcLines.length === 0) return;
+      const newMaxWidth = Math.max(20, (process.stdout.columns || 80) - 4);
+      const newLogs = [];
+      for (const src of srcLines) {
+        newLogs.push(...wrapLine(src, newMaxWidth, 2));
+      }
+      const prevLogs = logsRef.current;
+      const prevOffset = scrollOffsetRef.current;
+      const prevVisible = logVisibleRef.current;
+      const newTotal = newLogs.length;
+      const newVisible = Math.max(5, Math.min(prevVisible, (process.stdout.rows || 24) - 8));
+      // 按比例保持滚动位置：以第一条可见显示行为基准
+      let newOffset;
+      if (prevLogs.length > 0 && prevOffset === 0) {
+        // 已在底部（跟底），保持跟底
+        newOffset = 0;
+      } else if (prevLogs.length > 0 && prevVisible > 0) {
+        const prevTopIdx = prevLogs.length - prevVisible - prevOffset;
+        // 按比例映射：prevTopIdx / prevLogs.length ≈ newTopIdx / newTotal
+        const ratio = Math.max(0, Math.min(1, prevTopIdx / Math.max(1, prevLogs.length)));
+        const newTopIdx = Math.round(ratio * newTotal);
+        newOffset = Math.max(0, newTotal - newVisible - newTopIdx);
+      } else {
+        newOffset = 0;
+      }
+      // 跟踪首次报错行（显示行索引）
+      gFirstErrorLine = -1;
+      for (let i = 0; i < newLogs.length; i++) {
+        if (isErrorLine(newLogs[i])) {
+          gFirstErrorLine = i;
+          break;
+        }
+      }
+      setLogState({ logs: newLogs, scrollOffset: newOffset });
+    };
+    process.stdout.on('resize', onResize);
+    return () => { process.stdout.removeListener('resize', onResize); };
   }, []);
 
   function handleMsg(msg) {
     switch (msg.type) {
       case 'init':
         gFirstErrorLine = -1;
+        gFirstErrorSourceIdx = -1;
+        sourceLogsRef.current = [];
+        setSelAnchor(null);
+        setSelFocus(null);
         setTasks(
           (msg.tasks || []).map((item) =>
             typeof item === 'string'
@@ -381,14 +705,28 @@ function App({ port }) {
           const plain = bulletMatch
             ? bulletMatch[1] + ' ' + stripAnsi(msg.text.slice(bulletMatch[0].length))
             : stripAnsi(msg.text);
+          // 折行后存储：每条显示行独立，scrollOffset 与显示行一一对应
+          const maxLogWidth = Math.max(20, (process.stdout.columns || 80) - 4);
+          const wrapped = wrapLine(plain, maxLogWidth, 2);
+          // 存储源行（折行前），用于 resize 时重新折行
+          sourceLogsRef.current.push(plain);
+          if (sourceLogsRef.current.length > 2000) {
+            sourceLogsRef.current.shift();
+            if (gFirstErrorSourceIdx >= 0) gFirstErrorSourceIdx--;
+          }
+          if (gFirstErrorSourceIdx < 0 && isErrorLine(plain)) {
+            gFirstErrorSourceIdx = sourceLogsRef.current.length - 1;
+          }
           // 合并更新：logs 和 scrollOffset 原子变更，避免分帧渲染导致内容跳动
           setLogState((prev) => {
-            const next = [...prev.logs.slice(-500), plain];
-            // 跟踪首次报错行
+            const next = [...prev.logs.slice(-2000), ...wrapped];
+            // 跟踪首次报错行（显示行索引）
             if (gFirstErrorLine < 0 && isErrorLine(plain)) {
               gFirstErrorLine = next.length - 1;
             }
-            const newOffset = prev.scrollOffset > 0 ? prev.scrollOffset + 1 : 0;
+            const newOffset = gSelAnchor
+              ? prev.scrollOffset + wrapped.length  // 选择中：维持视觉位置，禁止自动跟底
+              : (prev.scrollOffset > 0 ? prev.scrollOffset + wrapped.length : 0);
             return { logs: next, scrollOffset: newOffset };
           });
         }
@@ -397,6 +735,8 @@ function App({ port }) {
       case 'exit':
         gTasks = [...tasksRef.current];
         gExitOk = msg.ok !== false;
+        setSelAnchor(null);
+        setSelFocus(null);
         // 失败时截取报错相关日志
         if (!gExitOk) {
           const sliced = gFirstErrorLine >= 0 ? logsRef.current.slice(gFirstErrorLine) : logsRef.current.slice(-30);
@@ -446,8 +786,6 @@ function App({ port }) {
       React.createElement(Box, { height: 1 }),
       // 错误日志（仅失败时）
       !ok && logs.length > 0 && (() => {
-        const columns = process.stdout.columns || 80;
-        const maxLogWidth = Math.max(20, columns - 4);
         const usedByTasks = allRows.length;
         const visible = Math.max(5, (process.stdout.rows || 24) - usedByTasks - 10);
         logVisibleRef.current = visible;
@@ -461,9 +799,11 @@ function App({ port }) {
         return React.createElement(
           Box,
           { flexGrow: 1, flexDirection: 'column', borderStyle: 'round', borderColor: 'red', overflow: 'hidden' },
-          ...windowLines.map((line, i) =>
-            React.createElement(Text, { key: start + i }, truncateToWidth(line, maxLogWidth))
-          ),
+          ...windowLines.map((line, i) => {
+            const lineIdx = start + i;
+            const hl = getLineHighlight(lineIdx, selAnchor, selFocus);
+            return React.createElement(Text, { key: lineIdx }, hl ? highlightRange(line, hl.startCol, hl.endCol) : line);
+          }),
           total > visible && React.createElement(
             Text,
             { color: 'grey' },
@@ -640,8 +980,6 @@ function App({ port }) {
     React.createElement(Box, { height: 1 }),
     // 可滚动日志面板
     logs.length > 0 && (() => {
-      const columns = process.stdout.columns || 80;
-      const maxLogWidth = Math.max(20, columns - 4);
       // 可用行数：终端高度 - 头部(1) - 间距(1) - 任务区(visibleRows) - 间距(1) - 边框(2) - 指示器(1)
       const usedByTasks = visibleRows.length;
       const visible = Math.max(5, (process.stdout.rows || 24) - usedByTasks - 8);
@@ -657,9 +995,11 @@ function App({ port }) {
       return React.createElement(
         Box,
         { flexGrow: 1, flexDirection: 'column', borderStyle: 'round', borderColor: 'cyan', overflow: 'hidden' },
-        ...windowLines.map((line, i) =>
-          React.createElement(Text, { key: start + i }, truncateToWidth(line, maxLogWidth))
-        ),
+        ...windowLines.map((line, i) => {
+          const lineIdx = start + i;
+          const hl = getLineHighlight(lineIdx, selAnchor, selFocus);
+          return React.createElement(Text, { key: lineIdx }, hl ? highlightRange(line, hl.startCol, hl.endCol) : line);
+        }),
         total > visible && React.createElement(
           Text,
           { color: 'grey' },
