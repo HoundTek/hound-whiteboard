@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { GestureTool } from "../gesture-tool.js";
+import { GestureTool, unifyActionResult } from "../gesture-tool.js";
 import { RectangleRange, intersectsRanges } from "../../../../shared/range/index.js";
 import { Range } from "../../../../shared/range/range.js";
 import { Vector } from "../../../../utils/math.js";
@@ -287,21 +287,15 @@ class ObjectChooserTool extends GestureTool {
   /**
    * GestureTool 生命周期适配：提交选择结果
    * @description
-   * 选择动作允许异步提交，因此此处覆写 completeAction，手动处理 Promise 分支，
-   * 并仅在 confirmSelection 成功时发送 `action:complete`。
+   * 选择动作允许异步提交，因此此处覆写 completeAction，用 unifyActionResult 统一同步/异步路径。
+   * 仅在 confirmSelection 成功时发送 `action:complete`。
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {Array<import("../../shared/types.js").ObjectSummary>|Promise<Array<import("../../shared/types.js").ObjectSummary>>}
    */
   completeAction(context) {
-    const objectsOrPromise = this.submitSelection(context);
-
-    if (objectsOrPromise instanceof Promise) {
-      return objectsOrPromise.then((objects) =>
-        this._applySelection(context, objects),
-      );
-    }
-
-    return this._applySelection(context, objectsOrPromise);
+    return unifyActionResult(this.submitSelection(context), (objects) =>
+      this._applySelection(context, objects),
+    );
   }
 
   /**

@@ -8,6 +8,48 @@
 import { SignalPacket } from "../signal.js";
 
 /**
+ * 将单对象或对象集合规整为数组（纯函数）
+ * @param {Iterable<*>|*} objects - 原始对象或对象集合
+ * @returns {Array<*>}
+ */
+function normalizeObjectCollection(objects) {
+  if (objects == null) return [];
+
+  if (
+    typeof objects !== "string" &&
+    typeof objects[Symbol.iterator] === "function"
+  ) {
+    return Array.from(objects);
+  }
+
+  return [objects];
+}
+
+/**
+ * 解析对象条目的数字 id（纯函数）
+ * @param {*} objectEntry - 对象实例或兼容条目
+ * @returns {number|null}
+ */
+function resolveObjectId(objectEntry) {
+  return typeof objectEntry?.id === "number" ? objectEntry.id : null;
+}
+
+/**
+ * 批量解析对象条目的数字 id，去重（纯函数）
+ * @param {Iterable<*>|*} objects - 对象或对象集合
+ * @returns {number[]}
+ */
+function resolveObjectIds(objects) {
+  return [
+    ...new Set(
+      normalizeObjectCollection(objects)
+        .map((entry) => resolveObjectId(entry))
+        .filter((id) => id != null),
+    ),
+  ];
+}
+
+/**
  * 工具基类
  *
  * @class
@@ -181,16 +223,7 @@ class Tool {
    * @returns {Array<*>}
    */
   normalizeObjectCollection(objects) {
-    if (objects == null) return [];
-
-    if (
-      typeof objects !== "string" &&
-      typeof objects[Symbol.iterator] === "function"
-    ) {
-      return Array.from(objects);
-    }
-
-    return [objects];
+    return normalizeObjectCollection(objects);
   }
 
   /**
@@ -215,7 +248,7 @@ class Tool {
    * @returns {number|null} objectId
    */
   resolveObjectId(objectEntry) {
-    return typeof objectEntry?.id === "number" ? objectEntry.id : null;
+    return resolveObjectId(objectEntry);
   }
 
   /**
@@ -225,13 +258,7 @@ class Tool {
    * @returns {number[]} 去重后的 objectId 列表
    */
   resolveObjectIds(context, objects) {
-    return [
-      ...new Set(
-        this.normalizeObjectCollection(objects)
-          .map((objectEntry) => this.resolveObjectId(objectEntry))
-          .filter((objectId) => objectId != null),
-      ),
-    ];
+    return resolveObjectIds(objects);
   }
 
   /**
@@ -335,6 +362,21 @@ class Tool {
   }
 
   /**
+   * 折叠钩子——将监听器返回值逐层折叠为最终结果（适用于控制流钩子）
+   * @template T
+   * @param {string} hookName - 钩子名称
+   * @param {T} initialValue - 初始值
+   * @param {...any} args - 传递给每个监听器的额外参数
+   * @returns {T} 折叠后的最终值
+   * @protected
+   */
+  _foldHooks(hookName, initialValue, ...args) {
+    const list = this._hooks?.get(hookName);
+    if (!list || list.length === 0) return initialValue;
+    return list.reduce((acc, fn) => fn(acc, ...args), initialValue);
+  }
+
+  /**
    * 处理一个完整信号包
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
@@ -365,4 +407,4 @@ class Tool {
   }
 }
 
-export { Tool };
+export { normalizeObjectCollection, resolveObjectId, resolveObjectIds, Tool };

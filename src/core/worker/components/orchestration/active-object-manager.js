@@ -20,6 +20,64 @@ import {
 import { createDefaultAomRenderHooks } from "./aom-render-hooks.js";
 
 /**
+ * 断言输入是有效对象实例（纯函数）
+ * @param {*} obj - 候选对象
+ * @returns {BasicObject}
+ * @throws {TypeError}
+ */
+function requireObjectInstance(obj) {
+  if (!(obj instanceof BasicObject)) {
+    throw new TypeError(
+      "ActiveObjectManager only accepts BasicObject instances.",
+    );
+  }
+  return obj;
+}
+
+/**
+ * 计算对象在世界空间中的范围（纯函数）
+ * @param {BasicObject} obj - 对象实例
+ * @returns {RectangleRange | undefined}
+ */
+function getObjectWorldRange(obj) {
+  if (!(obj instanceof BasicObject)) return undefined;
+  if (!obj.position || typeof obj.getRange !== "function") return undefined;
+  const range = obj.getRange();
+  if (!range || typeof range.withPosition !== "function") return undefined;
+  return range.withPosition(obj.position);
+}
+
+/**
+ * 判断两个对象是否相交（纯函数）
+ * @param {BasicObject} left
+ * @param {BasicObject} right
+ * @returns {boolean}
+ */
+function intersectsObjects(left, right) {
+  const leftRange = getObjectWorldRange(left);
+  const rightRange = getObjectWorldRange(right);
+  if (!leftRange || !rightRange) return false;
+  return intersectsRanges(leftRange, rightRange);
+}
+
+/**
+ * 收集某层按 inactive 语义参与计算的对象 id（纯函数）
+ * @param {Layer} layer
+ * @returns {Set<number>}
+ */
+function collectLayerSemanticInactiveObjectIds(layer) {
+  const objectIds = new Set(layer?.inactiveGraph?.getNodes?.() ?? []);
+
+  if (layer?.active === false) {
+    for (const objectId of layer.activeObjects ?? []) {
+      objectIds.add(objectId);
+    }
+  }
+
+  return objectIds;
+}
+
+/**
  * 层类
  * @description
  * 每一层包含一个 `activeObjects` 集合、一个 `inactiveGraph` 子图，
@@ -44,7 +102,7 @@ class Layer {
 
   /**
    * 该层上的非活动对象子图
-   * @type {DirectedGraph}
+   * @type {DirectedGraph<number>}
    */
   inactiveGraph;
 
@@ -233,12 +291,7 @@ class ActiveObjectManager {
    * @private
    */
   requireObjectInstance(obj) {
-    if (!(obj instanceof BasicObject)) {
-      throw new TypeError(
-        "ActiveObjectManager only accepts BasicObject instances.",
-      );
-    }
-    return obj;
+    return requireObjectInstance(obj);
   }
 
   /**
@@ -532,11 +585,7 @@ class ActiveObjectManager {
    * @private
    */
   getObjectWorldRange(obj) {
-    if (!(obj instanceof BasicObject)) return undefined;
-    if (!obj.position || typeof obj.getRange !== "function") return undefined;
-    const range = obj.getRange();
-    if (!range || typeof range.withPosition !== "function") return undefined;
-    return range.withPosition(obj.position);
+    return getObjectWorldRange(obj);
   }
 
   /**
@@ -596,10 +645,7 @@ class ActiveObjectManager {
    * @private
    */
   intersectsObjects(left, right) {
-    const leftRange = this.getObjectWorldRange(left);
-    const rightRange = this.getObjectWorldRange(right);
-    if (!leftRange || !rightRange) return false;
-    return intersectsRanges(leftRange, rightRange);
+    return intersectsObjects(left, right);
   }
 
   /**
@@ -670,15 +716,7 @@ class ActiveObjectManager {
    * @private
    */
   collectLayerSemanticInactiveObjectIds(layer) {
-    const objectIds = new Set(layer?.inactiveGraph?.getNodes?.() ?? []);
-
-    if (layer?.active === false) {
-      for (const objectId of layer.activeObjects ?? []) {
-        objectIds.add(objectId);
-      }
-    }
-
-    return objectIds;
+    return collectLayerSemanticInactiveObjectIds(layer);
   }
 
   /**
@@ -787,7 +825,7 @@ class ActiveObjectManager {
    * 获取以指定对象集合为起点的子图
    * @description 遍历静态图边和覆盖区块索引，跨区块时 TempLoad 目标区块再继续遍历。
    * @param {Iterable<BasicObject>} startFrom - 作为起点的对象集合
-   * @returns {Promise<DirectedGraph>}
+   * @returns {Promise<DirectedGraph<number>>}
    * @private
    */
   async pickup(startFrom) {
