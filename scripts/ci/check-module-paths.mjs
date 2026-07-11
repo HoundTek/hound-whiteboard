@@ -48,7 +48,7 @@ for (const file of jsFiles) {
 
   // 计算实际路径（相对于 src/core，去掉 .js 后缀）
   const relPath = path.relative(CORE_DIR, file);
-  const actualPath = relPath.replace(/\.js$/, "");
+  const actualPath = relPath.replace(/\\/g, "/").replace(/\.js$/, "");
 
   // 规范化：module 路径可能以 core/ 开头
   const normalizedModule = modulePath.startsWith("core/")

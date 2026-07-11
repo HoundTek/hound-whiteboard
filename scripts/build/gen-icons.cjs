@@ -9,7 +9,7 @@ const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
 
 function findSource(candidates) {
   for (const name of candidates) {
-    const p = path.join(rootDir, name)
+    const p = path.join(rootDir, 'icons', name)
     if (fs.existsSync(p)) return p
   }
   return null
