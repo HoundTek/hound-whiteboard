@@ -7,7 +7,7 @@
  * @author Zhou Chenyu
  */
 
-import { Renderer } from "../../../shared/renderer/renderer.js";
+import { Renderer, normalizeDirtyRectsForScreenUpdate } from "../../../shared/renderer/renderer.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../shared/range/rectangle.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
@@ -828,33 +828,37 @@ class ViewportRenderer extends Renderer {
     const viewportContext = this.createViewportContext(outputCtx);
     const hasExplicitDirtyRects =
       Array.isArray(dirtyRects) && dirtyRects.length > 0;
-    const effectiveDirtyRects = hasExplicitDirtyRects
-      ? this.collectDirtyRects(dirtyRects).filter(Boolean)
+
+    // 脏区归一化并扩边到整数边界，确保 clearRect / drawImage / clip 使用一致的 rect
+    const normalizedDirtyRects = hasExplicitDirtyRects
+      ? normalizeDirtyRectsForScreenUpdate(
+        this.collectDirtyRects(dirtyRects),
+      )
       : [];
 
     // 清空输出 canvas 脏区
-    if (hasExplicitDirtyRects) {
-      this.clearDirtyRects(effectiveDirtyRects);
+    if (normalizedDirtyRects.length > 0) {
+      this.clearDirtyRects(normalizedDirtyRects);
     } else {
       this.clear();
     }
 
     // 从缓存拷贝静态内容到输出
-    if (hasExplicitDirtyRects) {
-      this.#copyCacheRects(outputCtx, effectiveDirtyRects);
+    if (normalizedDirtyRects.length > 0) {
+      this.#copyCacheRects(outputCtx, normalizedDirtyRects);
     } else {
       this.#copyCache(outputCtx);
     }
 
     // 绘制 AOM 对象
     for (const entry of drawableEntries) {
-      if (hasExplicitDirtyRects) {
-        if (!this.intersectsDirtyRects(entry, effectiveDirtyRects)) continue;
+      if (normalizedDirtyRects.length > 0) {
+        if (!this.intersectsDirtyRects(entry, normalizedDirtyRects)) continue;
       }
       if (typeof entry.object.render !== "function") continue;
 
-      const entryDirtyRects = hasExplicitDirtyRects
-        ? this.getEntryDirtyRects(entry, effectiveDirtyRects)
+      const entryDirtyRects = normalizedDirtyRects.length > 0
+        ? this.getEntryDirtyRects(entry, normalizedDirtyRects)
         : [];
 
       this.renderObjectWithinDirtyRects(
