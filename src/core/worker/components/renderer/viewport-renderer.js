@@ -149,8 +149,6 @@ class ViewportRenderer extends Renderer {
     this._scheduler = this.#outputScheduler;
   }
 
-  // ─── 公开属性 ────────────────────────────────────────
-
   /**
    * 输出 canvas（最终上屏的位图来源）
    * @type {HTMLCanvasElement | OffscreenCanvas | null}
@@ -175,8 +173,6 @@ class ViewportRenderer extends Renderer {
   setActiveObjectManager(aom) {
     this.#aom = aom;
   }
-
-  // ─── 尺寸管理 ────────────────────────────────────────
 
   /**
    * 调整渲染层尺寸
@@ -203,8 +199,6 @@ class ViewportRenderer extends Renderer {
 
     return resized;
   }
-
-  // ─── 阈值策略 ────────────────────────────────────────
 
   /**
    * 获取当前脏区合并阈值
@@ -265,8 +259,6 @@ class ViewportRenderer extends Renderer {
     return scheduled;
   }
 
-  // ─── 对象集合收集 ────────────────────────────────────
-
   /**
    * 收集应在输出层绘制的对象（AOM 中的对象）
    * @returns {BasicObject[]}
@@ -305,8 +297,6 @@ class ViewportRenderer extends Renderer {
     ctx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
     ctx.restore();
   }
-
-  // ─── 区块矩形 ────────────────────────────────────────
 
   /**
    * 获取区块的世界矩形范围
@@ -359,8 +349,6 @@ class ViewportRenderer extends Renderer {
       worldRect.height * zoom,
     );
   }
-
-  // ─── 静态图对象收集 ──────────────────────────────────
 
   /**
    * 解析静态对象实例
@@ -470,8 +458,6 @@ class ViewportRenderer extends Renderer {
       : allDrawables;
   }
 
-  // ─── AOM 对象收集 ────────────────────────────────────
-
   /**
    * 收集应绘制的 AOM 对象
    * @returns {BasicObject[]}
@@ -479,8 +465,6 @@ class ViewportRenderer extends Renderer {
   collectActiveDrawables() {
     return _collectActiveDrawables(this.#aom);
   }
-
-  // ─── 对象范围查询 ────────────────────────────────────
 
   /**
    * 获取对象的世界矩形范围
@@ -499,8 +483,6 @@ class ViewportRenderer extends Renderer {
       return undefined;
     }
   }
-
-  // ─── 快照管理 ────────────────────────────────────────
 
   /**
    * 记录对象当前几何快照
@@ -530,8 +512,6 @@ class ViewportRenderer extends Renderer {
     return new Map(entries.map((entry) => [entry.objectId, entry]));
   }
 
-  // ─── 失效 API ────────────────────────────────────────
-
   /**
    * 失效 AOM 对象对应的屏幕脏区（输出层）
    * @description
@@ -543,6 +523,13 @@ class ViewportRenderer extends Renderer {
     const previousEntryIndex = this.indexDrawableEntries(
       this.#previousAomEntries,
     );
+
+    const objectSet = new Set(
+      Array.from(objects).map((obj) =>
+        obj instanceof BasicObject ? obj.id : obj,
+      ),
+    );
+
     const dirtyRects = Array.from(objects).flatMap((objectInstance) => {
       const rects = [];
       const currentRect = this.getObjectScreenRect(objectInstance);
@@ -557,6 +544,18 @@ class ViewportRenderer extends Renderer {
 
       return rects;
     });
+
+    // 除传入对象外，将其他 AOM 静止对象的屏幕矩形也加入脏区，
+    // 确保输出层渲染时脏区覆盖所有 AOM 对象，
+    // 避免静止对象仅被裁剪到运动对象脏区的子集，产生拼接细线。
+    if (dirtyRects.length > 0 && objectSet.size > 0) {
+      const allAomDrawables = this.collectActiveDrawables();
+      for (const aomObject of allAomDrawables) {
+        if (objectSet.has(aomObject.id)) continue;
+        const rect = this.getObjectScreenRect(aomObject);
+        if (rect) dirtyRects.push(rect);
+      }
+    }
 
     const targetDirtyRects =
       dirtyRects.length > 0
@@ -650,8 +649,6 @@ class ViewportRenderer extends Renderer {
     }
   }
 
-  // ─── 缓存合成 ────────────────────────────────────────
-
   /**
    * 全量拷贝静态缓存到输出 canvas
    * @description 在 clear → copyCache → render 三步流水线中用作第二步。
@@ -696,8 +693,6 @@ class ViewportRenderer extends Renderer {
     }
     ctx.restore();
   }
-
-  // ─── 缓存渲染 ────────────────────────────────────────
 
   /**
    * 更新静态缓存
@@ -767,8 +762,6 @@ class ViewportRenderer extends Renderer {
       ctx.restore();
     }
   }
-
-  // ─── 主刷新入口 ──────────────────────────────────────
 
   /**
    * 缓存调度器 flush 处理器
@@ -897,8 +890,6 @@ class ViewportRenderer extends Renderer {
     this.#flushCacheScheduler();
     return this.#renderOutput(dirtyRects);
   }
-
-  // ─── 调试 API ────────────────────────────────────────
 
   /**
    * 将静态缓存内容渲染到外部 canvas（调试用）
