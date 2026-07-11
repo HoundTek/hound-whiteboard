@@ -1,7 +1,7 @@
 /**
  * @file Worker 侧视口核心
  * @description
- * ViewportCore 承载 Worker 侧的视口状态、chunk buffer 与 base/live 渲染器。
+ * ViewportCore 承载 Worker 侧的视口状态、chunk buffer 与 ViewportRenderer。
  * 它不依赖 DOM，仅通过 OffscreenCanvas 渲染并产出可回传到 UI 的帧数据。
  * @module core/worker/components/orchestration/viewport-core
  * @author Zhou Chenyu
@@ -12,8 +12,7 @@ import { Vector } from "../../../utils/math.js";
 import { Chunk } from "../chunk/chunk.js";
 import { CHUNK_LOAD_STRATEGIES, ChunkLoader } from "../chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
-import { BaseRenderer } from "../renderer/base-renderer.js";
-import { LiveRenderer } from "../renderer/live-renderer.js";
+import { ViewportRenderer } from "../renderer/viewport-renderer.js";
 import { BoardCore } from "./board-core.js";
 
 /**
@@ -47,18 +46,11 @@ class ViewportCore {
   #chunkLoader;
 
   /**
-   * 静态层渲染器
-   * @type {BaseRenderer}
+   * 视口渲染器
+   * @type {ViewportRenderer}
    * @private
    */
-  #baseRenderer;
-
-  /**
-   * 动态层渲染器
-   * @type {LiveRenderer}
-   * @private
-   */
-  #liveRenderer;
+  #renderer;
 
   /**
    * 当前视口原点
@@ -136,17 +128,11 @@ class ViewportCore {
       `viewport-${String(this.#viewportId)}`,
     );
 
-    const baseCanvas = new OffscreenCanvas(this.#width, this.#height);
-    const liveCanvas = new OffscreenCanvas(this.#width, this.#height);
-
-    this.#baseRenderer = new BaseRenderer(this, {
-      canvas: baseCanvas,
-    });
-    this.#liveRenderer = new LiveRenderer(
+    this.#renderer = new ViewportRenderer(
       this,
       this.#boardCore.activeObjectManager,
       {
-        canvas: liveCanvas,
+        canvas: new OffscreenCanvas(this.#width, this.#height),
       },
     );
   }
@@ -176,19 +162,11 @@ class ViewportCore {
   }
 
   /**
-   * 静态层渲染器
-   * @type {BaseRenderer}
+   * 视口渲染器
+   * @type {ViewportRenderer}
    */
-  get baseRenderer() {
-    return this.#baseRenderer;
-  }
-
-  /**
-   * 动态层渲染器
-   * @type {LiveRenderer}
-   */
-  get liveRenderer() {
-    return this.#liveRenderer;
+  get renderer() {
+    return this.#renderer;
   }
 
   /**
@@ -419,36 +397,36 @@ class ViewportCore {
   /**
    * 请求一次视口范围内的活动层补绘
    */
-  requestViewportLiveRender() {
+  requestViewportActiveRefresh() {
     this.markFrameDirty();
-    this.#liveRenderer?.invalidateViewport();
+    this.#renderer?.invalidateViewport();
   }
 
   /**
-   * 请求一次视口范围内的静态层重绘
+   * 请求一次视口范围内的静态缓存刷新
    * @param {import("../chunk/chunk.js").Chunk[]} [previousChunks=[]] - 视口变化前可见区块
    * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState={}] - 旧视口状态
    */
-  requestViewportBaseRender(previousChunks = [], previousViewportState = {}) {
+  requestViewportStaticRefresh(previousChunks = [], previousViewportState = {}) {
     const currentChunks = this.syncChunkBufferWithViewport();
     this.markFrameDirty();
 
     if (currentChunks.length > 0 || previousChunks.length > 0) {
-      this.#baseRenderer?.invalidateChunks?.(currentChunks, previousChunks, {
+      this.#renderer?.invalidateChunks?.(currentChunks, previousChunks, {
         previousViewportState,
       });
       return;
     }
 
-    this.#baseRenderer?.invalidateViewport();
+    this.#renderer?.invalidateViewport();
   }
 
   /**
    * 在渲染层尺寸变化后请求补绘
    */
   requestRenderLayersRefresh() {
-    this.requestViewportBaseRender();
-    this.requestViewportLiveRender();
+    this.requestViewportStaticRefresh();
+    this.requestViewportActiveRefresh();
   }
 
   /**
@@ -460,8 +438,7 @@ class ViewportCore {
 
     this.syncChunkBufferWithViewport();
     this.markFrameDirty();
-    this.#baseRenderer?.invalidate(viewportRect);
-    this.#liveRenderer?.invalidate(viewportRect);
+    this.#renderer?.invalidate(viewportRect);
   }
 
   /**
@@ -477,8 +454,7 @@ class ViewportCore {
     this.#height = nextHeight;
 
     let resized = false;
-    if (this.#baseRenderer?.resize(nextWidth, nextHeight)) resized = true;
-    if (this.#liveRenderer?.resize(nextWidth, nextHeight)) resized = true;
+    if (this.#renderer?.resize(nextWidth, nextHeight)) resized = true;
     return resized;
   }
 
@@ -532,8 +508,8 @@ class ViewportCore {
       return false;
     }
 
-    this.requestViewportBaseRender(previousChunks, previousViewportState);
-    this.requestViewportLiveRender();
+    this.requestViewportStaticRefresh(previousChunks, previousViewportState);
+    this.requestViewportActiveRefresh();
     return true;
   }
 
@@ -543,7 +519,7 @@ class ViewportCore {
    * `transferToImageBitmap()` 会把当前像素内容转移给 `ImageBitmap`，
    * 之后源 canvas 可能变为新的空底图。
    * 若不立刻恢复，下一帧仅按脏区补绘时就会丢失未命中的旧像素。
-   * @param {OffscreenCanvas | null | undefined} canvas - 源 OffscreenCanvas
+   * @param {OffscreenCanvas | HTMLCanvasElement | null | undefined} canvas - 源 canvas
    * @param {ImageBitmap | null | undefined} bitmap - 刚转出的位图
    * @returns {void}
    * @private
@@ -577,17 +553,14 @@ class ViewportCore {
       return false;
     }
 
-    if (this.#baseRenderer?._scheduler?.framePending) {
-      this.#baseRenderer._scheduler.flush();
-    }
-    if (this.#liveRenderer?._scheduler?.framePending) {
-      this.#liveRenderer._scheduler.flush();
+    if (this.#renderer?._scheduler?.framePending) {
+      this.#renderer._scheduler.flush();
     }
 
-    const liveCanvas = this.#liveRenderer?.canvas;
-    const liveBitmap = liveCanvas?.transferToImageBitmap?.();
+    const outputCanvas = this.#renderer?.outputCanvas;
+    const liveBitmap = outputCanvas?.transferToImageBitmap?.();
 
-    this.#restoreTransferredBitmapToCanvas(liveCanvas, liveBitmap);
+    this.#restoreTransferredBitmapToCanvas(outputCanvas, liveBitmap);
 
     const transferList = liveBitmap ? [liveBitmap] : [];
     const frameId = ++this.#frameId;

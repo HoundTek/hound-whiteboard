@@ -60,14 +60,12 @@ describe("ViewportCore", () => {
     return { boardCore, viewportCore, postedFrames };
   }
 
-  test("构造后应初始化 chunkLoader、baseRenderer 和 liveRenderer", () => {
+  test("构造后应初始化 chunkLoader 和 renderer", () => {
     const { viewportCore } = createViewportCoreContext();
 
     expect(viewportCore.chunkLoader).toBeDefined();
-    expect(viewportCore.baseRenderer).toBeDefined();
-    expect(viewportCore.liveRenderer).toBeDefined();
-    expect(viewportCore.baseRenderer._scheduler).toBeDefined();
-    expect(viewportCore.liveRenderer._scheduler).toBeDefined();
+    expect(viewportCore.renderer).toBeDefined();
+    expect(viewportCore.renderer._scheduler).toBeDefined();
     expect(viewportCore.origin).toEqual(new Vector(0, 0));
     expect(viewportCore.zoom).toBe(1);
     expect(viewportCore.getViewportScreenRect()).toEqual(
@@ -75,15 +73,15 @@ describe("ViewportCore", () => {
     );
   });
 
-  test("onViewportChange 应触发 base/live 重绘请求", () => {
+  test("onViewportChange 应触发缓存 / 输出刷新请求", () => {
     const { viewportCore } = createViewportCoreContext();
-    const requestBaseRenderSpy = jest.spyOn(
+    const requestStaticSpy = jest.spyOn(
       viewportCore,
-      "requestViewportBaseRender",
+      "requestViewportStaticRefresh",
     );
-    const requestLiveRenderSpy = jest.spyOn(
+    const requestActiveSpy = jest.spyOn(
       viewportCore,
-      "requestViewportLiveRender",
+      "requestViewportActiveRefresh",
     );
 
     const changed = viewportCore.onViewportChange({
@@ -92,15 +90,15 @@ describe("ViewportCore", () => {
     });
 
     expect(changed).toBe(true);
-    expect(requestBaseRenderSpy).toHaveBeenCalledTimes(1);
-    expect(requestLiveRenderSpy).toHaveBeenCalledTimes(1);
+    expect(requestStaticSpy).toHaveBeenCalledTimes(1);
+    expect(requestActiveSpy).toHaveBeenCalledTimes(1);
     expect(viewportCore.origin).toEqual(new Vector(120, 80));
     expect(viewportCore.zoom).toBe(2);
   });
 
   test("flushRenderFrame 应输出 render-frame 消息并将位图画回源 OffscreenCanvas", () => {
     const { viewportCore, postedFrames } = createViewportCoreContext();
-    const liveCanvas = viewportCore.liveRenderer.canvas;
+    const liveCanvas = viewportCore.renderer.canvas;
     const liveBitmap = createNoopImageBitmap({ width: 800, height: 600 });
     const liveContext = {
       ...createNoopCanvasContext2D(),

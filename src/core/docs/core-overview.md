@@ -31,10 +31,10 @@ Worker 层负责真正的数据与渲染权威：
 
 - `CoreWorkerRuntime`：`src/core/worker/core-worker.js` 中的消息入口与 RPC 调度器
 - `BoardCore`：对象、区块、AOM、UndoTree、持久化协调
-- `ViewportCore`：Worker 视口状态、区块缓冲、base/live 渲染输出
+- `ViewportCore`：Worker 视口状态、区块缓冲、`ViewportRenderer` 渲染输出
 - `ActiveObjectManager`：交互态对象与动态层关系
 - `worker/components/chunk/`：区块、加载器、区块对象管理
-- `worker/components/renderer/`：`BaseRenderer`、`LiveRenderer` 与 Worker 侧脏区绘制
+- `worker/components/renderer/`：`ViewportRenderer` 与 Worker 侧脏区绘制
 
 ### 共享纯逻辑层
 
@@ -70,9 +70,11 @@ Worker 层负责真正的数据与渲染权威：
 
 ### 渲染
 
-1. tool 通过 `BoardApiRpc` 调用 `createObject` / `modifyObject` / `commitObjects` 等 RPC
-2. Worker 侧 `BoardCore` / `ActiveObjectManager` 触发 render hooks
-3. `ViewportCore` 失效 base/live 渲染器，并在 flush 时输出 `render-frame`
+1. tool 通过 `BoardApiRpc` 调用 RPC（`createObject` / `modifyObject` / `commitObjects` 等）
+2. Worker 侧 `BoardCore` / `ActiveObjectManager` 按操作类型选择性地触发 render hooks：
+   - `createObject` / `modifyObject` 不涉及静态图变化，只触发 `requestActiveRender`
+   - `commitObjects`（apply 到静态图）才同时触发 `requestStaticRenderForObjects` + `requestActiveRender`
+3. `ViewportCore` 失效 `ViewportRenderer`，并在 flush 时输出 `render-frame`
 4. UI 侧 `Viewport` 接收 `liveBitmap` 并绘制到显示 canvas
 5. `UiRenderer` 在 UI 线程补绘 overlay
 

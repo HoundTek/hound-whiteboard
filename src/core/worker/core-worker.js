@@ -449,20 +449,20 @@ class CoreWorkerRuntime {
        * 仅失效显式传入的对象。未传对象时刷新全部活动 drawable。
        * @param {import("../shared/objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
        */
-      requestLiveRender: (objectInstances = []) => {
+      requestActiveRender: (objectInstances = []) => {
         if (this.#viewportCores.size === 0) return;
 
         for (const viewportCore of this.#viewportCores.values()) {
-          const liveRenderer = viewportCore.liveRenderer;
-          if (!liveRenderer) continue;
+          const renderer = viewportCore.renderer;
+          if (!renderer) continue;
 
           const targetObjects =
             objectInstances.length > 0
               ? objectInstances
-              : (liveRenderer.collectActiveDrawables?.() ?? []);
+              : (renderer.collectActiveDrawables?.() ?? []);
 
-          if (typeof liveRenderer.invalidateObjects === "function") {
-            liveRenderer.invalidateObjects(targetObjects);
+          if (typeof renderer.invalidateActiveObjects === "function") {
+            renderer.invalidateActiveObjects(targetObjects);
           }
           viewportCore.markFrameDirty();
         }
@@ -472,17 +472,17 @@ class CoreWorkerRuntime {
        * 刷新所有 ViewportCore 的静态层
        * @param {import("./components/chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
        */
-      requestBaseRender: (chunks = []) => {
+      requestStaticRender: (chunks = []) => {
         if (this.#viewportCores.size === 0) return;
 
         for (const viewportCore of this.#viewportCores.values()) {
           if (chunks.length > 0) {
-            viewportCore.baseRenderer?.invalidateChunks?.(chunks);
+            viewportCore.renderer?.invalidateChunks?.(chunks);
             viewportCore.markFrameDirty();
             continue;
           }
 
-          viewportCore.requestViewportBaseRender?.();
+          viewportCore.requestViewportStaticRefresh?.();
         }
       },
 
@@ -492,7 +492,7 @@ class CoreWorkerRuntime {
        * @param {import("./components/chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
        * @param {Map<number, import("../shared/range/index.js").RectangleRange>} previousWorldRects - 旧世界范围快照
        */
-      requestBaseRenderForObjects: (
+      requestStaticRenderForObjects: (
         objectInstances = [],
         fallbackChunks = [],
         previousWorldRects = new Map(),
@@ -500,7 +500,7 @@ class CoreWorkerRuntime {
         if (this.#viewportCores.size === 0) return;
 
         for (const viewportCore of this.#viewportCores.values()) {
-          const dirtyRects = viewportCore.baseRenderer?.invalidateObjects?.(
+          const dirtyRects = viewportCore.renderer?.invalidateCachedObjects?.(
             objectInstances,
             { previousWorldRects },
           );
@@ -512,12 +512,12 @@ class CoreWorkerRuntime {
           }
 
           if (fallbackChunks.length > 0) {
-            viewportCore.baseRenderer?.invalidateChunks?.(fallbackChunks);
+            viewportCore.renderer?.invalidateChunks?.(fallbackChunks);
             viewportCore.markFrameDirty();
             continue;
           }
 
-          viewportCore.requestViewportBaseRender?.();
+          viewportCore.requestViewportStaticRefresh?.();
         }
       },
 
@@ -646,7 +646,7 @@ class CoreWorkerRuntime {
         if (patch.data != null) {
           obj.setData(patch.data);
         }
-        boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+        boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
         this.#scheduleFlushRenderFrames();
         return;
       }
@@ -673,7 +673,7 @@ class CoreWorkerRuntime {
           modifiedObjects.push(obj);
         }
         if (modifiedObjects.length > 0) {
-          boardCore.aomRenderHooks?.requestLiveRender?.(modifiedObjects);
+          boardCore.aomRenderHooks?.requestActiveRender?.(modifiedObjects);
           this.#scheduleFlushRenderFrames();
         }
         return;
@@ -682,7 +682,7 @@ class CoreWorkerRuntime {
         const obj = boardCore.getObjectById(params.objectId);
         if (obj) {
           obj.appendListItem(params.key, ...(params.items ?? []));
-          boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+          boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
           this.#scheduleFlushRenderFrames();
         }
         return;
@@ -691,7 +691,7 @@ class CoreWorkerRuntime {
         const obj = boardCore.getObjectById(params.objectId);
         if (obj) {
           obj.replaceListItem(params.key, params.index, params.item);
-          boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+          boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
           this.#scheduleFlushRenderFrames();
         }
         return;
@@ -700,7 +700,7 @@ class CoreWorkerRuntime {
         const obj = boardCore.getObjectById(params.objectId);
         if (obj) {
           obj.removeListItem(params.key, params.index);
-          boardCore.aomRenderHooks?.requestLiveRender?.([obj]);
+          boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
           this.#scheduleFlushRenderFrames();
         }
         return;
@@ -737,9 +737,9 @@ class CoreWorkerRuntime {
 
         if (
           affectedChunks.size > 0 &&
-          boardCore.aomRenderHooks?.requestBaseRender
+          boardCore.aomRenderHooks?.requestStaticRender
         ) {
-          boardCore.aomRenderHooks.requestBaseRender([...affectedChunks]);
+          boardCore.aomRenderHooks.requestStaticRender([...affectedChunks]);
         }
         return;
       }

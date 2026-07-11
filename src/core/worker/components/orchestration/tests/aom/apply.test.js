@@ -180,13 +180,13 @@ describe("ActiveObjectManager/apply", () => {
       const coveredChunk = createChunk(2);
       coveredChunk.objectManager = new ChunkObjectManager(2);
 
-      const requestBaseRenderForObjects = jest.fn();
-      const requestLiveRender = jest.fn();
-      const requestBaseRender = jest.fn();
+      const requestStaticRenderForObjects = jest.fn();
+      const requestActiveRender = jest.fn();
+      const requestStaticRender = jest.fn();
       const renderHooks = {
-        requestLiveRender,
-        requestBaseRender,
-        requestBaseRenderForObjects,
+        requestActiveRender,
+        requestStaticRender,
+        requestStaticRenderForObjects,
         flushViewportForObjects: jest.fn(),
       };
 
@@ -216,13 +216,13 @@ describe("ActiveObjectManager/apply", () => {
       });
 
       aom.add(new Set([stroke]));
-      requestLiveRender.mockClear();
-      requestBaseRenderForObjects.mockClear();
+      requestActiveRender.mockClear();
+      requestStaticRenderForObjects.mockClear();
 
       aom.apply(new Set([stroke]));
 
-      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
-      expect(requestLiveRender).toHaveBeenCalledWith([stroke]);
+      expect(requestStaticRenderForObjects).toHaveBeenCalledTimes(1);
+      expect(requestActiveRender).toHaveBeenCalledWith([stroke]);
     });
 
     test("apply 应优先按对象旧范围与新范围触发静态层局部失效", async () => {
@@ -239,11 +239,11 @@ describe("ActiveObjectManager/apply", () => {
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[301, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(301, [1]);
 
-      const requestBaseRenderForObjects = jest.fn();
+      const requestStaticRenderForObjects = jest.fn();
       const renderHooks = {
-        requestLiveRender: jest.fn(),
-        requestBaseRender: jest.fn(),
-        requestBaseRenderForObjects,
+        requestActiveRender: jest.fn(),
+        requestStaticRender: jest.fn(),
+        requestStaticRenderForObjects,
         flushViewportForObjects: jest.fn(),
       };
 
@@ -265,14 +265,14 @@ describe("ActiveObjectManager/apply", () => {
 
       await aom.choose(new Set([stroke]));
       // choose() 也会触发 base render invalidation，清计数以便仅验证 apply 的调用
-      requestBaseRenderForObjects.mockClear();
+      requestStaticRenderForObjects.mockClear();
       stroke.position = new Vector(100, 0);
 
       aom.apply(new Set([stroke]));
 
-      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      expect(requestStaticRenderForObjects).toHaveBeenCalledTimes(1);
       const [objects, fallbackChunks, previousWorldRects] =
-        requestBaseRenderForObjects.mock.calls[0];
+        requestStaticRenderForObjects.mock.calls[0];
       expect(previousWorldRects.get(301)).toEqual(
         RectangleRange.from(stroke.getRange().withPosition(new Vector(0, 0))),
       );
@@ -303,11 +303,11 @@ describe("ActiveObjectManager/apply", () => {
       ownerChunk.objectManager.setObjectCoverChunks(401, [1]);
       ownerChunk.objectManager.setObjectCoverChunks(402, [1]);
 
-      const requestBaseRenderForObjects = jest.fn();
+      const requestStaticRenderForObjects = jest.fn();
       const renderHooks = {
-        requestLiveRender: jest.fn(),
-        requestBaseRender: jest.fn(),
-        requestBaseRenderForObjects,
+        requestActiveRender: jest.fn(),
+        requestStaticRender: jest.fn(),
+        requestStaticRenderForObjects,
         flushViewportForObjects: jest.fn(),
       };
       const objectMap = new Map([
@@ -330,11 +330,11 @@ describe("ActiveObjectManager/apply", () => {
 
       await aom.choose(new Set([lower]));
       aom.liftup(new Set([lower]));
-      requestBaseRenderForObjects.mockClear();
+      requestStaticRenderForObjects.mockClear();
       aom.apply(new Set([lower]));
 
-      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
-      const [invalidatedObjects] = requestBaseRenderForObjects.mock.calls[0];
+      expect(requestStaticRenderForObjects).toHaveBeenCalledTimes(1);
+      const [invalidatedObjects] = requestStaticRenderForObjects.mock.calls[0];
       expect(
         invalidatedObjects
           .map((objectInstance) => objectInstance.id)

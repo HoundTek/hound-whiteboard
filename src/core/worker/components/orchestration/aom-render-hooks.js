@@ -21,24 +21,24 @@
 function createDefaultAomRenderHooks() {
   return {
     /**
-     * 刷新活动层（live renderer）
+     * 刷新活动层（AOM 对象输出层）
      * @param {import("../../objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象实例
      */
-    requestLiveRender(_objectInstances = []) {},
+    requestActiveRender(_objectInstances = []) {},
 
     /**
-     * 刷新静态层（base renderer）
+     * 刷新静态缓存层
      * @param {import("../chunk/chunk.js").Chunk[]} _chunks - 需要刷新的区块集合
      */
-    requestBaseRender(_chunks = []) {},
+    requestStaticRender(_chunks = []) {},
 
     /**
-     * 按对象范围刷新静态层
+     * 按对象范围刷新静态缓存层
      * @param {import("../../objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象
      * @param {import("../chunk/chunk.js").Chunk[]} _fallbackChunks - 无法走对象级失效时的回退区块
      * @param {Map<number, import("../../range/index.js").RectangleRange>} [_previousWorldRects] - 对象进入 AOM 前的世界范围快照
      */
-    requestBaseRenderForObjects(
+    requestStaticRenderForObjects(
       _objectInstances = [],
       _fallbackChunks = [],
       _previousWorldRects = new Map(),

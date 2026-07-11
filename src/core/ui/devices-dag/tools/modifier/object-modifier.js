@@ -248,7 +248,7 @@ class ObjectModifierTool extends GestureTool {
     if (normalizedObjects.length === 0) return;
     if (context?.acc?.boardApi) return;
 
-    context?.acc?.viewport?.liveRenderer?.captureObjectSnapshot?.(
+    context?.acc?.viewport?.renderer?.captureObjectSnapshot?.(
       normalizedObjects,
     );
   }
@@ -256,7 +256,7 @@ class ObjectModifierTool extends GestureTool {
   /**
    * 在对象几何修改后请求活动层刷新
    * @description
-   * boardApi 存在时 Core 侧 RPC handler 已自动触发 liveRenderer 重绘，
+   * boardApi 存在时 Core 侧 RPC handler 已自动触发 ViewportRenderer 输出刷新，
    * 此处仅刷新 UI overlay。非 boardApi 路径自行失效 live 脏区。
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
@@ -271,7 +271,7 @@ class ObjectModifierTool extends GestureTool {
       return;
     }
 
-    context?.acc?.viewport?.liveRenderer?.invalidateObjects?.(
+    context?.acc?.viewport?.renderer?.invalidateActiveObjects?.(
       normalizedObjects,
     );
     context?.acc?.viewport?.requestViewportUiRender?.();

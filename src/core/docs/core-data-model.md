@@ -186,7 +186,7 @@ Map<chunkId, {
 
 - 由 `ActiveObjectManager` 管理
 - 描述创建、选择、修改等交互态对象与临时层关系
-- AOM 内对象主要由 Worker 侧 `LiveRenderer` 负责绘制
+- AOM 内对象由 Worker 侧 `ViewportRenderer` 的输出层负责绘制（AOM 中存在的对象不会回退到静态缓存）
 
 AOM 内部关键结构包括：
 
@@ -220,15 +220,14 @@ AOM 内部关键结构包括：
 - `zoom`
 - `width` / `height`
 - `chunkLoader`
-- `baseRenderer`
-- `liveRenderer`
+- `renderer`
 - `#frameDirty`
 - `#frameId`
 
 它负责：
 
 - 视口区块缓冲管理
-- base/live 失效与 flush
+- `ViewportRenderer` 的缓存 / 输出失效与 flush
 - 输出 `render-frame`，当前帧数据核心是 `liveBitmap`
 
 ## 持久化模型

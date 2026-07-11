@@ -22,20 +22,20 @@ class TestActiveObject extends BasicObject {
 }
 
 describe("ActiveObjectManager/ui render", () => {
-  test("requestLiveRender 应通过 renderHooks 触发刷新", () => {
-    const requestLiveRender = jest.fn();
+  test("requestActiveRender 应通过 renderHooks 触发刷新", () => {
+    const requestActiveRender = jest.fn();
     const renderHooks = {
-      requestLiveRender,
-      requestBaseRender: jest.fn(),
-      requestBaseRenderForObjects: jest.fn(),
+      requestActiveRender,
+      requestStaticRender: jest.fn(),
+      requestStaticRenderForObjects: jest.fn(),
       flushViewportForObjects: jest.fn(),
     };
     const aom = new ActiveObjectManager(undefined, { renderHooks });
     const object = new TestActiveObject(7);
 
-    aom.requestLiveRender([object]);
+    aom.requestActiveRender([object]);
 
-    expect(requestLiveRender).toHaveBeenCalledWith([object]);
-    expect(requestLiveRender).toHaveBeenCalledTimes(1);
+    expect(requestActiveRender).toHaveBeenCalledWith([object]);
+    expect(requestActiveRender).toHaveBeenCalledTimes(1);
   });
 });

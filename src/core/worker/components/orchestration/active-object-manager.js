@@ -148,7 +148,7 @@ class ActiveObjectManager {
 
   /**
    * AOM 渲染钩子
-   * @description 注入式渲染钩子，替代直接访问 board.viewports / viewport.liveRenderer / viewport.baseRenderer。
+   * @description 注入式渲染钩子，替代直接访问 board.viewports / viewport.renderer。
    * @type {import("./aom-render-hooks.js").AomRenderHooks}
    */
   renderHooks;
@@ -258,20 +258,20 @@ class ActiveObjectManager {
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
    */
-  requestLiveRender(objects = []) {
+  requestActiveRender(objects = []) {
     const changedObjects = Array.from(objects, (item) =>
       this.requireObjectInstance(item),
     );
-    this.renderHooks.requestLiveRender(changedObjects);
+    this.renderHooks.requestActiveRender(changedObjects);
   }
 
   /**
    * 请求所有 viewport 刷新静态层
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    */
-  requestBaseRender(chunks = []) {
+  requestStaticRender(chunks = []) {
     const normalizedChunks = Array.from(chunks).filter(Boolean);
-    this.renderHooks.requestBaseRender(normalizedChunks);
+    this.renderHooks.requestStaticRender(normalizedChunks);
   }
 
   /**
@@ -280,14 +280,14 @@ class ActiveObjectManager {
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
    * @param {Iterable<Chunk>} [fallbackChunks = []] - 无法走对象级失效时的回退区块集合
    */
-  requestBaseRenderForObjects(objects = [], fallbackChunks = []) {
+  requestStaticRenderForObjects(objects = [], fallbackChunks = []) {
     const normalizedObjects = Array.from(objects, (item) =>
       this.requireObjectInstance(item),
     );
     const normalizedChunks = Array.from(fallbackChunks).filter(Boolean);
     const previousWorldRects = new Map(this.baseObjectSnapshotWorldRanges);
 
-    this.renderHooks.requestBaseRenderForObjects(
+    this.renderHooks.requestStaticRenderForObjects(
       normalizedObjects,
       normalizedChunks,
       previousWorldRects,
@@ -1052,10 +1052,10 @@ class ActiveObjectManager {
       this.insertLayerUnderById(layers[i], underWhich[i]);
     }
 
-    this.requestLiveRender(activeEntries);
+    this.requestActiveRender(activeEntries);
     // 对象已从静态图被拾取到 AOM，需要按对象范围重绘静态层，
-    // 让 BaseRenderer 通过 AOM 过滤将它们从 base 层中隐藏，避免整视口重绘。
-    this.requestBaseRenderForObjects(activeEntries);
+    // 让 ViewportRenderer 的静态缓存通过 AOM 过滤将它们从缓存层中隐藏，避免整视口重绘。
+    this.requestStaticRenderForObjects(activeEntries);
   }
 
   /**
@@ -1083,8 +1083,8 @@ class ActiveObjectManager {
     }
 
     this.insertLayerToTop(newLayer);
-    this.requestBaseRenderForObjects(newObjectEntries);
-    this.requestLiveRender(newObjectEntries);
+    this.requestStaticRenderForObjects(newObjectEntries);
+    this.requestActiveRender(newObjectEntries);
     return newLayer;
   }
 
@@ -1476,14 +1476,14 @@ class ActiveObjectManager {
       );
     }
 
-    // 请求静态层渲染
-    this.requestBaseRenderForObjects(
+    // 请求静态缓存层刷新
+    this.requestStaticRenderForObjects(
       activeBasicObjects,
       [...affectedChunkIds]
         .map((chunkId) => this.board?.getChunkById?.(chunkId))
         .filter(Boolean),
     );
-    this.requestLiveRender(normalizedObjects);
+    this.requestActiveRender(normalizedObjects);
     this.clearBaseObjectSnapshots(normalizedObjects);
   }
 
@@ -1567,14 +1567,14 @@ class ActiveObjectManager {
     }
     this.tidyup();
 
-    // 请求静态层和活动层渲染
-    this.requestBaseRenderForObjects(
+    // 请求静态缓存层和活动层刷新
+    this.requestStaticRenderForObjects(
       normalizedObjects,
       [...affectedChunkIds]
         .map((chunkId) => this.board?.getChunkById?.(chunkId))
         .filter(Boolean),
     );
-    this.requestLiveRender(normalizedObjects);
+    this.requestActiveRender(normalizedObjects);
     this.clearBaseObjectSnapshots(normalizedObjects);
   }
 
@@ -1593,8 +1593,8 @@ class ActiveObjectManager {
 
     this.deactivateObjects(normalizedObjects);
     this.tidyup();
-    this.requestBaseRenderForObjects(normalizedObjects);
-    this.requestLiveRender(normalizedObjects);
+    this.requestStaticRenderForObjects(normalizedObjects);
+    this.requestActiveRender(normalizedObjects);
     this.clearBaseObjectSnapshots(normalizedObjects);
   }
 

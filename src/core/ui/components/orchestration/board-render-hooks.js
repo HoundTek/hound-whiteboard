@@ -42,44 +42,44 @@ function createBoardRenderHooks(viewportsOrFn) {
      * 刷新所有 viewport 的活动层
      * @param {import("../../objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
      */
-    requestLiveRender(objectInstances = []) {
+    requestActiveRender(objectInstances = []) {
       const viewports = getViewports();
       if (!viewports?.size) return;
 
       for (const viewport of viewports.values()) {
-        const liveRenderer = viewport?.liveRenderer;
-        if (!liveRenderer) continue;
+        const renderer = viewport?.renderer;
+        if (!renderer) continue;
 
         const targetObjects =
           objectInstances.length > 0
             ? objectInstances
-            : (liveRenderer.collectActiveDrawables?.() ?? []);
+            : (renderer.collectActiveDrawables?.() ?? []);
 
-        if (typeof liveRenderer.invalidateObjects === "function") {
-          liveRenderer.invalidateObjects(targetObjects);
+        if (typeof renderer.invalidateActiveObjects === "function") {
+          renderer.invalidateActiveObjects(targetObjects);
         }
         viewport?.requestViewportUiRender?.();
       }
     },
 
     /**
-     * 刷新所有 viewport 的静态层
+     * 刷新所有 viewport 的静态缓存层
      * @param {Object[]} chunks - 需要刷新的区块
      */
-    requestBaseRender(chunks = []) {
+    requestStaticRender(chunks = []) {
       const viewports = getViewports();
       if (!viewports?.size) return;
 
       for (const viewport of viewports.values()) {
         if (chunks.length > 0) {
-          viewport?.baseRenderer?.invalidateChunks?.(chunks);
+          viewport?.renderer?.invalidateChunks?.(chunks);
           continue;
         }
-        if (typeof viewport?.requestViewportBaseRender === "function") {
-          viewport.requestViewportBaseRender();
+        if (typeof viewport?.requestViewportStaticRefresh === "function") {
+          viewport.requestViewportStaticRefresh();
           continue;
         }
-        viewport?.baseRenderer?.flush?.();
+        viewport?.renderer?.invalidateViewport?.();
       }
     },
 
@@ -89,7 +89,7 @@ function createBoardRenderHooks(viewportsOrFn) {
      * @param {Object[]} fallbackChunks - 回退区块
      * @param {Map<number, RectangleRange>} previousWorldRects - 旧世界范围快照
      */
-    requestBaseRenderForObjects(
+    requestStaticRenderForObjects(
       objectInstances = [],
       fallbackChunks = [],
       previousWorldRects = new Map(),
@@ -98,7 +98,7 @@ function createBoardRenderHooks(viewportsOrFn) {
       if (!viewports?.size) return;
 
       for (const viewport of viewports.values()) {
-        const dirtyRects = viewport?.baseRenderer?.invalidateObjects?.(
+        const dirtyRects = viewport?.renderer?.invalidateCachedObjects?.(
           objectInstances,
           { previousWorldRects },
         );
@@ -109,16 +109,16 @@ function createBoardRenderHooks(viewportsOrFn) {
         }
 
         if (fallbackChunks.length > 0) {
-          viewport?.baseRenderer?.invalidateChunks?.(fallbackChunks);
+          viewport?.renderer?.invalidateChunks?.(fallbackChunks);
           continue;
         }
 
-        if (typeof viewport?.requestViewportBaseRender === "function") {
-          viewport.requestViewportBaseRender();
+        if (typeof viewport?.requestViewportStaticRefresh === "function") {
+          viewport.requestViewportStaticRefresh();
           continue;
         }
 
-        viewport?.baseRenderer?.flush?.();
+        viewport?.renderer?.invalidateViewport?.();
       }
     },
 

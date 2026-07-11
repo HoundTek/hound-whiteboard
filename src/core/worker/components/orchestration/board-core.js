@@ -39,9 +39,9 @@ import { createDefaultPersistenceAdapter } from "../../../bridges/persistence-ad
 
 /**
  * @typedef {Object} AomRenderHooks
- * @property {(objectInstances: BasicObject[]) => void} requestLiveRender
- * @property {(chunks: import("../chunk/chunk.js").Chunk[]) => void} requestBaseRender
- * @property {(objectInstances: BasicObject[], fallbackChunks: import("../chunk/chunk.js").Chunk[], previousWorldRects: Map<number, import("../../../shared/range/index.js").RectangleRange>) => void} requestBaseRenderForObjects
+ * @property {(objectInstances: BasicObject[]) => void} requestActiveRender
+ * @property {(chunks: import("../chunk/chunk.js").Chunk[]) => void} requestStaticRender
+ * @property {(objectInstances: BasicObject[], fallbackChunks: import("../chunk/chunk.js").Chunk[], previousWorldRects: Map<number, import("../../../shared/range/index.js").RectangleRange>) => void} requestStaticRenderForObjects
  * @property {(objectInstances: BasicObject[]) => void} flushViewportForObjects
  */
 
@@ -130,7 +130,7 @@ class BoardCore {
 
   /**
    * AOM 渲染钩子
-   * @description 注入式渲染钩子，替代 AOM 对 viewport/liveRenderer/baseRenderer 的直接访问。
+   * @description 注入式渲染钩子，替代 AOM 对 viewport.renderer 的直接访问。
    * @type {AomRenderHooks}
    */
   aomRenderHooks;

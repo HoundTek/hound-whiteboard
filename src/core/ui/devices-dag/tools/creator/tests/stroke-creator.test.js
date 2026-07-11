@@ -316,12 +316,12 @@ describe("StrokeCreatorTool", () => {
     ]);
   });
 
-  test("创建手势更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
+  test("创建手势更新后仅请求 UI overlay 刷新，不再直调 renderer", () => {
     const tool = new StrokeCreatorTool();
     const viewport = {
-      liveRenderer: {
+      renderer: {
         captureObjectSnapshot: jest.fn(),
-        invalidateObjects: jest.fn(),
+        invalidateActiveObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
@@ -335,8 +335,8 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    viewport.liveRenderer.captureObjectSnapshot.mockClear();
-    viewport.liveRenderer.invalidateObjects.mockClear();
+    viewport.renderer.captureObjectSnapshot.mockClear();
+    viewport.renderer.invalidateActiveObjects.mockClear();
     viewport.requestViewportUiRender.mockClear();
 
     tool.process(
@@ -347,8 +347,8 @@ describe("StrokeCreatorTool", () => {
       deviceContext,
     );
 
-    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.renderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.renderer.invalidateActiveObjects).not.toHaveBeenCalled();
     expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 

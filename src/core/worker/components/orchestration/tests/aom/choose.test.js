@@ -44,12 +44,12 @@ describe("ActiveObjectManager/choose", () => {
   describe("单次选择对象", () => {
     test("choose 应通过 renderHooks 触发刷新", async () => {
       const selected = createObject(12, chunk.id);
-      const requestLiveRender = jest.fn();
-      const requestBaseRenderForObjects = jest.fn();
+      const requestActiveRender = jest.fn();
+      const requestStaticRenderForObjects = jest.fn();
       const renderHooks = {
-        requestLiveRender,
-        requestBaseRender: jest.fn(),
-        requestBaseRenderForObjects,
+        requestActiveRender,
+        requestStaticRender: jest.fn(),
+        requestStaticRenderForObjects,
         flushViewportForObjects: jest.fn(),
       };
       aom = new ActiveObjectManager(undefined, { renderHooks });
@@ -59,8 +59,8 @@ describe("ActiveObjectManager/choose", () => {
 
       await aom.choose(new Set([selected]));
 
-      expect(requestLiveRender).toHaveBeenCalledWith([selected]);
-      expect(requestBaseRenderForObjects).toHaveBeenCalledWith(
+      expect(requestActiveRender).toHaveBeenCalledWith([selected]);
+      expect(requestStaticRenderForObjects).toHaveBeenCalledWith(
         [selected],
         [],
         expect.any(Map),

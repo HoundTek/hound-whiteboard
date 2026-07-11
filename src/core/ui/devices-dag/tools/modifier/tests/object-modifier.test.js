@@ -19,11 +19,11 @@ describe("ObjectModifierTool", () => {
     const modificationContext = {
       acc: {
         viewport: {
-          liveRenderer: {
+          renderer: {
             captureObjectSnapshot(objects) {
               calls.push(["capture", objects]);
             },
-            invalidateObjects(objects) {
+            invalidateActiveObjects(objects) {
               calls.push(["invalidate", objects]);
             },
           },
@@ -58,9 +58,9 @@ describe("ObjectModifierTool", () => {
     const tool = new TestModifierTool();
     const objects = [{ id: 1 }, { id: 2 }];
     const viewport = {
-      liveRenderer: {
+      renderer: {
         captureObjectSnapshot: jest.fn(),
-        invalidateObjects: jest.fn(),
+        invalidateActiveObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
@@ -71,16 +71,16 @@ describe("ObjectModifierTool", () => {
     tool.beforeGeometryMutation(modificationContext);
     tool.afterGeometryMutation(modificationContext);
 
-    expect(viewport.liveRenderer.captureObjectSnapshot).toHaveBeenCalledWith(
+    expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledWith(
       objects,
     );
-    expect(viewport.liveRenderer.invalidateObjects).toHaveBeenCalledWith(
+    expect(viewport.renderer.invalidateActiveObjects).toHaveBeenCalledWith(
       objects,
     );
     expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 
-  test("显式提供 boardApi 时 withGeometryMutation 应跳过 liveRenderer 并仅刷新 overlay", () => {
+  test("显式提供 boardApi 时 withGeometryMutation 应跳过 renderer 直刷并仅刷新 overlay", () => {
     class TestModifierTool extends ObjectModifierTool {
       modify(modificationContext) {
         return this.withGeometryMutation(modificationContext, () => {
@@ -93,9 +93,9 @@ describe("ObjectModifierTool", () => {
     const tool = new TestModifierTool();
     const object = { id: 21, changed: false };
     const viewport = {
-      liveRenderer: {
+      renderer: {
         captureObjectSnapshot: jest.fn(),
-        invalidateObjects: jest.fn(),
+        invalidateActiveObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
@@ -112,8 +112,8 @@ describe("ObjectModifierTool", () => {
 
     expect(result).toBe("done");
     expect(object.changed).toBe(true);
-    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.renderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.renderer.invalidateActiveObjects).not.toHaveBeenCalled();
     expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 

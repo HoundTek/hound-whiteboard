@@ -221,12 +221,12 @@ describe("PolygonCreatorTool", () => {
     expect(commitSpy).toHaveBeenCalledWith([10]);
   });
 
-  test("顶点更新后仅请求 UI overlay 刷新，不再直调 liveRenderer", () => {
+  test("顶点更新后仅请求 UI overlay 刷新，不再直调 renderer", () => {
     const tool = new PolygonCreatorTool();
     const viewport = {
-      liveRenderer: {
+      renderer: {
         captureObjectSnapshot: jest.fn(),
-        invalidateObjects: jest.fn(),
+        invalidateActiveObjects: jest.fn(),
       },
       requestViewportUiRender: jest.fn(),
     };
@@ -245,8 +245,8 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    viewport.liveRenderer.captureObjectSnapshot.mockClear();
-    viewport.liveRenderer.invalidateObjects.mockClear();
+    viewport.renderer.captureObjectSnapshot.mockClear();
+    viewport.renderer.invalidateActiveObjects.mockClear();
     viewport.requestViewportUiRender.mockClear();
 
     tool.process(
@@ -262,8 +262,8 @@ describe("PolygonCreatorTool", () => {
       deviceContext,
     );
 
-    expect(viewport.liveRenderer.captureObjectSnapshot).not.toHaveBeenCalled();
-    expect(viewport.liveRenderer.invalidateObjects).not.toHaveBeenCalled();
+    expect(viewport.renderer.captureObjectSnapshot).not.toHaveBeenCalled();
+    expect(viewport.renderer.invalidateActiveObjects).not.toHaveBeenCalled();
     expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
   });
 

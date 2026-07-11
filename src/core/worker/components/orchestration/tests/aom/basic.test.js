@@ -24,12 +24,12 @@ describe("ActiveObjectManager/basic", () => {
 
   describe("活动层刷新", () => {
     test("add 与 discard 应通过 renderHooks 触发刷新", () => {
-      const requestLiveRender = jest.fn();
-      const requestBaseRenderForObjects = jest.fn();
+      const requestActiveRender = jest.fn();
+      const requestStaticRenderForObjects = jest.fn();
       const renderHooks = {
-        requestLiveRender,
-        requestBaseRender: jest.fn(),
-        requestBaseRenderForObjects,
+        requestActiveRender,
+        requestStaticRender: jest.fn(),
+        requestStaticRenderForObjects,
         flushViewportForObjects: jest.fn(),
       };
       aom = new ActiveObjectManager(undefined, { renderHooks });
@@ -38,17 +38,17 @@ describe("ActiveObjectManager/basic", () => {
       stroke.setData({ points: [new Vector(1, 1), new Vector(4, 4)].map(p => ({ x: p.x, y: p.y })) });
 
       aom.add(new Set([stroke]));
-      expect(requestLiveRender).toHaveBeenCalledTimes(1);
-      expect(requestLiveRender).toHaveBeenNthCalledWith(1, [stroke]);
-      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      expect(requestActiveRender).toHaveBeenCalledTimes(1);
+      expect(requestActiveRender).toHaveBeenNthCalledWith(1, [stroke]);
+      expect(requestStaticRenderForObjects).toHaveBeenCalledTimes(1);
 
       // discard again: 第二次 flush 和 live render
-      requestLiveRender.mockClear();
-      requestBaseRenderForObjects.mockClear();
+      requestActiveRender.mockClear();
+      requestStaticRenderForObjects.mockClear();
 
       aom.discard(new Set([stroke]));
-      expect(requestLiveRender).toHaveBeenCalledTimes(1);
-      expect(requestBaseRenderForObjects).toHaveBeenCalledTimes(1);
+      expect(requestActiveRender).toHaveBeenCalledTimes(1);
+      expect(requestStaticRenderForObjects).toHaveBeenCalledTimes(1);
     });
 
     test("add 应将白板外新对象注册到动态图顶层", () => {

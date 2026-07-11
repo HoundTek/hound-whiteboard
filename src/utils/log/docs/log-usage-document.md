@@ -216,7 +216,7 @@ function init() {
 const monLog = new Logger("Viewport", "DEBUG", logBus);
 
 // 各子模块继承
-const renderLog = monLog.child("BaseRenderer");
+const renderLog = monLog.child("ViewportRenderer");
 const inputLog = monLog.child("Input");
 
 renderLog.debug("Dirty rects:", rects);

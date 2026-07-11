@@ -372,12 +372,12 @@ class Renderer extends CanvasHost {
    * 渲染管线模板方法
    * @description
    * 方法骨架：
-   * 1. _beforeRender     — 渲染前准备工作（LiveRenderer 同步 base 缓存）
+   * 1. _beforeRender     — 渲染前准备工作
    * 2. _collectDrawables — 子类决定从何处收集对象
    * 3. clear / clearDirtyRects — 清空画布
-   * 4. _afterClear       — 清空后绘制前的工作（LiveRenderer 拷贝 baseCanvas）
+   * 4. _afterClear       — 清空后绘制前的工作（例如合成缓存层）
    * 5. 遍历 drawable     — 脏区裁剪 + 渲染
-   * 6. _afterRender      — 渲染后收尾（LiveRenderer 保存上一帧缓存）
+   * 6. _afterRender      — 渲染后收尾（例如保存上一帧缓存）
    * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
    * @returns {BasicObject[]} 当前渲染的对象集合
    */

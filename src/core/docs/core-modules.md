@@ -108,11 +108,10 @@
 
 ### `worker/components/renderer/`
 
-- `base-renderer.js`：静态层渲染
-- `live-renderer.js`：活动层渲染
+- `viewport-renderer.js`：视口渲染器
 - `dirty-rect-strategy.js`：Worker 侧脏区策略
 
-这些文件建立在 `shared/renderer/` 的基类之上，但自身运行在 Worker。
+`ViewportRenderer` 建立在 `shared/renderer/` 的 `Renderer` 基类之上，在单类内管理静态缓存与输出合成。
 
 ### `worker/hit/`
 

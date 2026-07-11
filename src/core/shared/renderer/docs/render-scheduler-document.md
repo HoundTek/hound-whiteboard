@@ -6,7 +6,7 @@
 
 ## 模块定位
 
-`RenderScheduler` 当前是各渲染器内部的通用调度层。每个 `BaseRenderer`、`LiveRenderer`、`UiRenderer` 在构造时各自创建自己的 `_scheduler` 实例。
+`RenderScheduler` 当前是各渲染器内部的通用调度层。`ViewportRenderer` 与 `UiRenderer` 在构造时各自创建自己的 `_scheduler` 实例。
 
 它的边界是：
 
@@ -15,7 +15,7 @@
 - 不负责真正绘制对象
 - 只管理 dirty rect 的积累、调度与 flush 触发
 
-在当前渲染链路中，它位于 `Viewport` 和 `LiveRenderer` 之间。
+在当前渲染链路中，它位于 `ViewportCore` / `Viewport` 与具体渲染器之间。
 
 ## 核心职责
 
@@ -117,7 +117,7 @@
 - 类型：flush 回调
 - 默认行为：空函数
 
-在当前 Viewport 链路中，`flushHandler` 最终会指向 `LiveRenderer.flush(dirtyRects)`。
+在当前 Viewport 链路中，`flushHandler` 最终会指向 `ViewportRenderer.flush(dirtyRects)`。
 
 ## 工作流程
 
@@ -154,8 +154,7 @@
 
 当前接入方式是每个渲染器在构造时创建自己的 `_scheduler`：
 
-- `BaseRenderer._initScheduler()` 创建 `_scheduler`，flush handler 绑定到 `this.flush`
-- `LiveRenderer._initScheduler()` 创建 `_scheduler`，flush handler 绑定到 `this.flush`
+- `ViewportRenderer` 构造时创建 `_scheduler`，flush handler 绑定到 `this.flush`
 - `UiRenderer` 构造时直接创建 `_scheduler`，flush handler 绑定到 `this.flush`
 
 各渲染器通过 `this.invalidate(rect)` 提交脏区到自己的调度器。
@@ -170,7 +169,7 @@
 
 - 已实现：多次 `invalidate(...)` 合并到单次调度、可替换的 `scheduleFrame`、可替换的 `mergeDirtyRects`、可替换的 `flushHandler`、手动 `flush()` 与 `clear()`。
 - 已验证：同一帧周期内的多次失效请求只会触发一次调度；`flush()` 会先走 `mergeDirtyRects(...)` 再调用处理器。
-- 已接入：`BaseRenderer`、`LiveRenderer`、`UiRenderer` 均在内部持有 `_scheduler` 实例，各渲染器的 `invalidate()` 直接委托给 `_scheduler.invalidate()`。
+- 已接入：`ViewportRenderer`、`UiRenderer` 均在内部持有 `_scheduler` 实例，各渲染器的 `invalidate()` 直接委托给 `_scheduler.invalidate()`。
 - 已实现的默认聚合：重叠/相接矩形合并、近邻矩形的受控合并、非矩形输入透传。
 - 已实现的宿主参数化：base/live 可分别注入不同阈值；并支持“整视口 / 整 chunk”退化。
 - `collapseLargeRect`：当脏区覆盖某个 canonical rect（如 chunk 屏幕矩形）超过 `canonicalRectCoverageRatio` 时，该脏区退化为整 canonical rect；覆盖率不足时保留脏区与该 canonical rect 的交集，避免跨区块对象在低覆盖率 chunk 上丢失渲染。
@@ -179,4 +178,4 @@
 ## 相关文档
 
 - [viewport-document.md](../../../../../src/core/ui/components/orchestration/docs/viewport-document.md)
-- [live-renderer-document.md](../../../../../src/core/worker/components/renderer/docs/live-renderer-document.md)
+- [viewport-renderer-document.md](../../../../../src/core/worker/components/renderer/docs/viewport-renderer-document.md)

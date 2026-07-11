@@ -73,9 +73,9 @@ AOM 本身不依赖 DOM，也不直接持有 viewport 列表。它通过 `render
 
 AOM 当前通过 `renderHooks` 发起渲染请求：
 
-- `requestLiveRender(objectInstances)`
-- `requestBaseRender(chunks)`
-- `requestBaseRenderForObjects(objectInstances, fallbackChunks, previousWorldRects)`
+- `requestActiveRender(objectInstances)`
+- `requestStaticRender(chunks)`
+- `requestStaticRenderForObjects(objectInstances, fallbackChunks, previousWorldRects)`
 - `flushViewportForObjects(objectInstances)`
 
 ### Worker mode
@@ -103,8 +103,9 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 
 1. 注册到 `activeObjects` / `activeObjectIndex`
 2. 创建新的顶层活动层
-3. 调用 `requestBaseRenderForObjects()`
-4. 调用 `requestLiveRender()`
+3. 调用 `requestActiveRender()`
+
+> ⚠️ 当前实现在此步骤也调用了 `requestStaticRenderForObjects()`，但由于对象此前从未进入静态图，base 层无对应像素需要隐藏，该调用是多余的。[todo] 移除。
 
 ### `pickup(startFrom)`
 
@@ -134,8 +135,8 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 1. `pickup(startFrom)` 提取子图（异步，内部 BFS 遍历）
 2. 分析层顺序并插入新层
 3. 注册活动对象实例
-4. 调用 `requestLiveRender()`
-5. 调用 `requestBaseRenderForObjects()`，使 base 层按对象范围把这些对象隐藏
+4. 调用 `requestActiveRender()`
+5. 调用 `requestStaticRenderForObjects()`，使 base 层按对象范围把这些对象隐藏
 
 返回 `Promise<void>`。
 
@@ -148,8 +149,8 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 1. 从活动对象索引中移除对象
 2. 必要时把层标记为 inactive
 3. `tidyup()` 清理底部 inactive 前缀层与空层
-4. 调用 `requestBaseRenderForObjects()`，使静态层重新显示这些对象
-5. 调用 `requestLiveRender()`
+4. 调用 `requestStaticRenderForObjects()`，使静态层重新显示这些对象
+5. 调用 `requestActiveRender()`
 6. 清理快照
 
 ### `apply(objects)`
@@ -163,8 +164,8 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 3. 根据覆盖区块快照与当前几何重写对象所在区块
 4. 重算受影响对象的静态图关系（此时已有完整的历史对象实例）
 5. 收集邻接对象，形成对象级 base 失效集合
-6. 调用 `requestBaseRenderForObjects()`
-7. 调用 `requestLiveRender()`
+6. 调用 `requestStaticRenderForObjects()`
+7. 调用 `requestActiveRender()`
 8. 清理快照并移出活动索引
 
 返回 `Promise<void>`。

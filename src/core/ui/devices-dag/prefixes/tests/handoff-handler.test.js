@@ -1227,7 +1227,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         discardActiveObjects: jest.fn(),
       };
       const viewport = {
-        liveRenderer: {
+        renderer: {
           captureObjectSnapshot: jest.fn((objs) =>
             calls.push(["capture", objs.length]),
           ),

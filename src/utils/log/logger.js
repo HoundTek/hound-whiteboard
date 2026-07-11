@@ -22,7 +22,7 @@ import { KeyThrottle } from "./key-throttle.js";
  * const log = new Logger('Viewport', 'INFO', logBus);
  * log.info('Viewport updated', { origin, zoom });
  *
- * const sub = log.child('BaseRenderer');
+ * const sub = log.child('ViewportRenderer');
  * sub.warn('Chunk not found', chunkId);
  *
  * // 源头节流（相同 key 200ms 内不重复）

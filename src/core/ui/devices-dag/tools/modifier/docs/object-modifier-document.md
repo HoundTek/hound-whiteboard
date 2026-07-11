@@ -54,7 +54,7 @@ boardApi.discardActiveObjects(objectIds);
 ### 渲染失效
 
 Core 侧的 mutation RPC handler（`modifyObject` / `appendListItem` / `replaceListItem` /
-`removeListItem`）在修改 AOM 对象后自动调用 `requestLiveRender` 触发 live 层脏区失效，
+`removeListItem`）在修改 AOM 对象后自动调用 `requestActiveRender` 触发输出层脏区失效，
 并安排立即 flush 使帧回传与 UI overlay 保持同步。
 
 modifier 的 `afterGeometryMutation` 在 boardApi 存在时仅负责 UI overlay 刷新，

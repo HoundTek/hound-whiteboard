@@ -52,7 +52,7 @@ const CONSOLE_FN = {
  *
  * // 控制台输出示例：
  * //   %c12:34:56.789[HWB]                    (蓝色粗体)
- * //   %c12:34:56.790[Viewport:BaseRenderer]    (灰色，DEBUG)
+ * //   %c12:34:56.790[Viewport:ViewportRenderer]    (灰色，DEBUG)
  * //   %c12:34:56.791[safe-io]                 (红色粗体，ERROR)
  */
 function createConsolePrinter(bus, options = {}) {

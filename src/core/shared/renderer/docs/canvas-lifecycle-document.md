@@ -11,8 +11,7 @@
 ```
 CanvasHost          — 画布生命周期 + 调度器（canvas-lifecycle.js）
   ├─ Renderer       — 对象渲染管线 + viewportContext
-  │   ├─ BaseRenderer
-  │   └─ LiveRenderer
+  │   └─ ViewportRenderer
   └─ UiRenderer     — overlay flush + provider 管理
 ```
 
@@ -51,7 +50,6 @@ _initScheduler(mergeDirtyRects, flushHandler);
 
 ## 相关文档
 
-- [base-renderer-document.md](../../../../../src/core/worker/components/renderer/docs/base-renderer-document.md)
-- [live-renderer-document.md](../../../../../src/core/worker/components/renderer/docs/live-renderer-document.md)
+- [viewport-renderer-document.md](../../../../../src/core/worker/components/renderer/docs/viewport-renderer-document.md)
 - [ui-renderer-document.md](../../../../../src/core/ui/components/renderer/docs/ui-renderer-document.md)
 - [render-scheduler-document.md](./render-scheduler-document.md)
