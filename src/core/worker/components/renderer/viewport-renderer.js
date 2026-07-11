@@ -10,6 +10,7 @@
 import {
   Renderer,
   expandRectForClear,
+  normalizeDirtyRectsForScreenUpdate,
 } from "../../../shared/renderer/renderer.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../shared/range/rectangle.js";
@@ -785,14 +786,15 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 渲染输出帧（全量重绘）
+   * 渲染输出帧
    * @description
-   * 临时跳过脏区优化，全量输出管线：
-   * 1. 全量清空输出 canvas
-   * 2. 全量从缓存拷贝静态内容到输出
-   * 3. 全量绘制所有 AOM 对象
+   * 输出层渲染管线（临时简化版）：脏区清空 + 脏区缓存拷贝 + 全量 AOM 绘制。
+   * 保留脏区清空/拷贝逻辑，避免全量 clear 在缓存不完整时把旧像素也抹掉。
+   * 1. 按脏区清空输出 canvas
+   * 2. 按脏区从缓存拷贝静态内容到输出
+   * 3. 全量绘制所有 AOM 对象（无裁剪）
    * 4. 保存状态供下一帧使用
-   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合（当前忽略）
+   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
    * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
    * @private
    */
@@ -803,14 +805,31 @@ class ViewportRenderer extends Renderer {
     const aomDrawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(aomDrawables);
     const viewportContext = this.createViewportContext(outputCtx);
+    const hasExplicitDirtyRects =
+      Array.isArray(dirtyRects) && dirtyRects.length > 0;
 
-    // 全量清空输出 canvas
-    this.clear();
+    // 脏区归一化并扩边到整数边界，确保 clearRect / drawImage 使用一致的 rect
+    const normalizedDirtyRects = hasExplicitDirtyRects
+      ? normalizeDirtyRectsForScreenUpdate(
+          this.collectDirtyRects(dirtyRects),
+        )
+      : [];
 
-    // 全量从缓存拷贝静态内容到输出
-    this.#copyCache(outputCtx);
+    // 按脏区清空输出 canvas（无脏区时全量清空）
+    if (normalizedDirtyRects.length > 0) {
+      this.clearDirtyRects(normalizedDirtyRects);
+    } else {
+      this.clear();
+    }
 
-    // 全量绘制所有 AOM 对象
+    // 按脏区从缓存拷贝静态内容到输出（无脏区时全量拷贝）
+    if (normalizedDirtyRects.length > 0) {
+      this.#copyCacheRects(outputCtx, normalizedDirtyRects);
+    } else {
+      this.#copyCache(outputCtx);
+    }
+
+    // 全量绘制所有 AOM 对象（无裁剪、无相交判断）
     for (const entry of drawableEntries) {
       if (typeof entry.object.render !== "function") continue;
       entry.object.render(viewportContext);

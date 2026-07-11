@@ -480,7 +480,7 @@ describe("ViewportRenderer", () => {
     expect(renderer._scheduler.dirtyRects).toHaveLength(3);
   });
 
-  test("AOM 对象位移后应全量重绘输出帧", () => {
+  test("AOM 对象位移后应脏区清空 + 全量 AOM 绘制", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const lowerObject = new FakeRectObject(1, new Vector(0, 0), renderCalls);
@@ -506,16 +506,20 @@ describe("ViewportRenderer", () => {
     renderer.invalidateActiveObjects([upperObject]);
     renderer._scheduler.flush();
 
-    // 脏区优化已临时移除，全量清空 + 全量 drawImage + 全量绘制 AOM 对象
+    // 脏区清空/拷贝 + 全量 AOM 对象绘制
     expect(renderCalls).toEqual([
       [1, "output"],
       [2, "output"],
     ]);
-    expect(ctxCalls).toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
-    expect(ctxCalls).toContainEqual(["output", "drawImage", expect.any(Object), 0, 0]);
+    // 脏区清空：不应是全视口清空
+    expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    // 脏区拷贝或全量拷贝均应进行
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
+    // 无 clip（AOM 对象无裁剪渲染）
+    expect(ctxCalls.every((call) => call[1] !== "clip")).toBe(true);
   });
 
-  test("active 圆 + 提交上层笔画时，圆应在全量重绘中单次渲染", () => {
+  test("active 圆 + 提交上层笔画时，圆应在脏区清空 + 全量 AOM 中单次渲染", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const circleObj = new FakeRectObject(1, new Vector(0, 0), renderCalls);
@@ -543,7 +547,7 @@ describe("ViewportRenderer", () => {
     renderer.invalidateCachedObjects([strokeObj]);
     renderer._scheduler.flush();
 
-    // 脏区优化已临时移除，全量重绘
+    // 脏区清空/拷贝 + 全量 AOM 绘制
     // 圆只渲染一次（输出层）
     expect(
       renderCalls.filter((call) => call[0] === 1 && call[1] === "output"),
@@ -552,8 +556,12 @@ describe("ViewportRenderer", () => {
     expect(
       renderCalls.filter((call) => call[0] === 1 && call[1] === "cache"),
     ).toHaveLength(0);
-    // 全量清空输出 canvas
-    expect(ctxCalls).toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    // 脏区清空：不应是全视口清空
+    expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    // 脏区拷贝或全量拷贝均应进行
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
+    // 无 clip（AOM 对象无裁剪渲染）
+    expect(ctxCalls.every((call) => call[1] !== "clip")).toBe(true);
   });
 
   test("getObjectScreenRect 应为 PathRange 额外补足栅格化 padding", () => {
