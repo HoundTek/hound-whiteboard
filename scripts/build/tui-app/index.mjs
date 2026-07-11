@@ -68,14 +68,15 @@ const STATUS_COLORS = {
 // ============================================================
 
 const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]/g;
+const OSC_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
 
 /**
- * 去除 ANSI 转义序列
+ * 去除 ANSI 转义序列和 OSC 超链接等控制序列
  * @param {string} str - 原始字符串
  * @returns {string} 纯文本
  */
 function stripAnsi(str) {
-  return str.replace(ANSI_RE, '');
+  return str.replace(OSC_RE, '').replace(ANSI_RE, '');
 }
 
 /**
@@ -228,16 +229,31 @@ function wrapLine(str, maxWidth, indentWidth = 2) {
 // ============================================================
 
 /**
- * 在行内对指定可视列范围施加反色高亮
+ * 检测显示行的前缀偏移（圆点提示 ● 或悬挂缩进），选择/高亮时应跳过
+ * @param {string} plain - 去除 ANSI 后的纯文本行
+ * @returns {number} 应跳过的可视列数
+ */
+function getPrefixSkip(plain) {
+  // 首行：● 前缀（颜色标记已在 stripAnsi 后变为 "\u25cf "）
+  if (plain.startsWith('\u25cf ')) return 2;
+  // 续行：两个空格悬挂缩进（排除分页指示行 "  — N-M / Total —"）
+  if (/^  [^ \u2014]/.test(plain)) return 2;
+  return 0;
+}
+
+/**
+ * 在行内对指定可视列范围施加反色高亮，自动跳过装饰性前缀
  * @param {string} line - 显示行（可含 ANSI 前缀）
  * @param {number} startCol - 起始可视列（0-based）
  * @param {number} endCol - 结束可视列（0-based，Infinity 表示行尾）
  * @returns {string} 带反色高亮的行
  */
 function highlightRange(line, startCol, endCol) {
+  const plain = stripAnsi(line);
+  const prefixSkip = getPrefixSkip(plain);
+  startCol = Math.max(startCol, prefixSkip);
   if (startCol >= endCol) return line;
 
-  const plain = stripAnsi(line);
   const totalWidth = visualWidth(plain);
   if (startCol >= totalWidth) return line;
 
@@ -347,8 +363,10 @@ function getSelectedText(logs, anchor, focus) {
     if (i < 0 || i >= logs.length) continue;
     const plain = stripAnsi(logs[i]);
     const totalW = visualWidth(plain);
+    // 跳过装饰性前缀（圆点提示/悬挂缩进）
+    const prefixSkip = getPrefixSkip(plain);
 
-    const s = i === startLine ? Math.min(startCol, totalW) : 0;
+    const s = i === startLine ? Math.max(prefixSkip, Math.min(startCol, totalW)) : prefixSkip;
     const e = i === endLine ? Math.min(endCol, totalW) : totalW;
 
     if (s >= e) { result.push(''); continue; }
