@@ -480,7 +480,7 @@ describe("ViewportRenderer", () => {
     expect(renderer._scheduler.dirtyRects).toHaveLength(3);
   });
 
-  test("AOM 对象位移后应脏区清空 + 全量 AOM 绘制", () => {
+  test("AOM 对象位移后应脏区清空 + 裁剪 AOM 绘制", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const lowerObject = new FakeRectObject(1, new Vector(0, 0), renderCalls);
@@ -506,7 +506,7 @@ describe("ViewportRenderer", () => {
     renderer.invalidateActiveObjects([upperObject]);
     renderer._scheduler.flush();
 
-    // 脏区清空/拷贝 + 全量 AOM 对象绘制
+    // 脏区清空/拷贝 + 裁剪 AOM 对象绘制（两对象均与脏区相交，均渲染）
     expect(renderCalls).toEqual([
       [1, "output"],
       [2, "output"],
@@ -515,11 +515,41 @@ describe("ViewportRenderer", () => {
     expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
     // 脏区拷贝或全量拷贝均应进行
     expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
-    // 无 clip（AOM 对象无裁剪渲染）
-    expect(ctxCalls.every((call) => call[1] !== "clip")).toBe(true);
+    // AOM 对象按脏区裁剪渲染
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "clip")).toBe(true);
   });
 
-  test("active 圆 + 提交上层笔画时，圆应在脏区清空 + 全量 AOM 中单次渲染", () => {
+  test("远离脏区的 AOM 对象应被跳过不渲染", () => {
+    const renderCalls = [];
+    const ctxCalls = [];
+    const leftObject = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+    const farObject = new FakeRectObject(2, new Vector(500, 0), renderCalls);
+    const outputCtx = createContext("output", ctxCalls);
+    const outputCanvas = createCanvas(800, 600, outputCtx);
+    const { viewport, aom } = createViewportContext({
+      activeObjects: [leftObject, farObject],
+      outputCanvas,
+    });
+
+    const renderer = new ViewportRenderer(viewport, aom, {
+      canvas: outputCanvas,
+    });
+    renderer._scheduler.scheduleFrame = () => 0;
+
+    renderer.flush();
+    renderCalls.length = 0;
+    ctxCalls.length = 0;
+
+    renderer.captureObjectSnapshot([leftObject]);
+    leftObject.position = new Vector(1, 0);
+    renderer.invalidateActiveObjects([leftObject]);
+    renderer._scheduler.flush();
+
+    // 仅 leftObject 与脏区相交并渲染，farObject 被跳过
+    expect(renderCalls).toEqual([[1, "output"]]);
+  });
+
+  test("active 圆 + 提交上层笔画时，圆应在脏区清空 + 裁剪 AOM 中单次渲染", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const circleObj = new FakeRectObject(1, new Vector(0, 0), renderCalls);
@@ -547,7 +577,7 @@ describe("ViewportRenderer", () => {
     renderer.invalidateCachedObjects([strokeObj]);
     renderer._scheduler.flush();
 
-    // 脏区清空/拷贝 + 全量 AOM 绘制
+    // 脏区清空/拷贝 + 裁剪 AOM 绘制
     // 圆只渲染一次（输出层）
     expect(
       renderCalls.filter((call) => call[0] === 1 && call[1] === "output"),
@@ -560,8 +590,8 @@ describe("ViewportRenderer", () => {
     expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
     // 脏区拷贝或全量拷贝均应进行
     expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
-    // 无 clip（AOM 对象无裁剪渲染）
-    expect(ctxCalls.every((call) => call[1] !== "clip")).toBe(true);
+    // AOM 对象按脏区裁剪渲染
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "clip")).toBe(true);
   });
 
   test("getObjectScreenRect 应为 PathRange 额外补足栅格化 padding", () => {

@@ -501,12 +501,6 @@ class ViewportRenderer extends Renderer {
       this.#previousAomEntries,
     );
 
-    const objectSet = new Set(
-      Array.from(objects).map((obj) =>
-        obj instanceof BasicObject ? obj.id : obj,
-      ),
-    );
-
     const dirtyRects = Array.from(objects).flatMap((objectInstance) => {
       const rects = [];
       const currentRect = this.getObjectScreenRect(objectInstance);
@@ -521,18 +515,6 @@ class ViewportRenderer extends Renderer {
 
       return rects;
     });
-
-    // 除传入对象外，将其他 AOM 静止对象的屏幕矩形也加入脏区，
-    // 确保输出层渲染时脏区覆盖所有 AOM 对象，
-    // 避免静止对象仅被裁剪到运动对象脏区的子集，产生拼接细线。
-    if (dirtyRects.length > 0 && objectSet.size > 0) {
-      const allAomDrawables = this.collectActiveDrawables();
-      for (const aomObject of allAomDrawables) {
-        if (objectSet.has(aomObject.id)) continue;
-        const rect = this.getObjectScreenRect(aomObject);
-        if (rect) dirtyRects.push(rect);
-      }
-    }
 
     const targetDirtyRects =
       dirtyRects.length > 0
@@ -765,11 +747,11 @@ class ViewportRenderer extends Renderer {
   /**
    * 渲染输出帧
    * @description
-   * 输出层渲染管线（临时简化版）：脏区清空 + 脏区缓存拷贝 + 全量 AOM 绘制。
+   * 输出层渲染管线：脏区清空 + 脏区缓存拷贝 + 脏区裁剪 AOM 绘制。
    * 保留脏区清空/拷贝逻辑，避免全量 clear 在缓存不完整时把旧像素也抹掉。
    * 1. 按脏区清空输出 canvas
    * 2. 按脏区从缓存拷贝静态内容到输出
-   * 3. 全量绘制所有 AOM 对象（无裁剪）
+   * 3. 按脏区裁剪绘制 AOM 对象（不相交则跳过）
    * 4. 保存状态供下一帧使用
    * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
    * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
@@ -788,8 +770,8 @@ class ViewportRenderer extends Renderer {
     // 脏区归一化并扩边到整数边界，确保 clearRect / drawImage 使用一致的 rect
     const normalizedDirtyRects = hasExplicitDirtyRects
       ? normalizeDirtyRectsForScreenUpdate(
-          this.collectDirtyRects(dirtyRects),
-        )
+        this.collectDirtyRects(dirtyRects),
+      )
       : [];
 
     // 按脏区清空输出 canvas（无脏区时全量清空）
@@ -806,10 +788,25 @@ class ViewportRenderer extends Renderer {
       this.#copyCache(outputCtx);
     }
 
-    // 全量绘制所有 AOM 对象（无裁剪、无相交判断）
+    // 按脏区裁剪绘制 AOM 对象：不相交则跳过，相交则裁剪到对应脏区
     for (const entry of drawableEntries) {
       if (typeof entry.object.render !== "function") continue;
-      entry.object.render(viewportContext);
+      if (
+        hasExplicitDirtyRects &&
+        !this.intersectsDirtyRects(entry, normalizedDirtyRects)
+      )
+        continue;
+
+      const entryDirtyRects = hasExplicitDirtyRects
+        ? this.getEntryDirtyRects(entry, normalizedDirtyRects)
+        : [];
+
+      this.renderObjectWithinDirtyRects(
+        outputCtx,
+        viewportContext,
+        entry.object,
+        entryDirtyRects,
+      );
     }
 
     // 保存状态供下一帧使用

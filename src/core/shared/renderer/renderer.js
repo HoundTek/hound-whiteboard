@@ -311,14 +311,9 @@ class Renderer extends CanvasHost {
       return;
     }
 
-    const clipPadding = Math.max(
-      1,
-      this.getObjectScreenPadding(objectInstance),
-    );
     const clipRects = dirtyRects
       .map((dirtyRect) => RectangleRange.fromRectLike(dirtyRect))
-      .filter(Boolean)
-      .map((dirtyRect) => dirtyRect.inflate(clipPadding));
+      .filter(Boolean);
 
     if (clipRects.length === 0) {
       objectInstance.render(viewportContext);
