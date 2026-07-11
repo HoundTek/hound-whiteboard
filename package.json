@@ -54,8 +54,8 @@
     "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js",
     "bench:worker": "node benchmarks/worker-rpc.bench.js",
     "bench:render": "node benchmarks/worker-render.bench.js",
-    "check:docs": "hound-tauri-check-docs",
-    "check:modules": "hound-tauri-check-modules",
+    "check:docs": "node scripts/ci/check-doc-links.mjs",
+    "check:modules": "node scripts/ci/check-module-paths.mjs",
     "ci-check": "yarn check:docs && yarn check:modules",
     "prepare": "husky"
   },
