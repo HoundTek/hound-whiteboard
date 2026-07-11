@@ -7,7 +7,11 @@
  * @author Zhou Chenyu
  */
 
-import { Renderer, normalizeDirtyRectsForScreenUpdate } from "../../../shared/renderer/renderer.js";
+import {
+  Renderer,
+  expandRectForClear,
+  normalizeDirtyRectsForScreenUpdate,
+} from "../../../shared/renderer/renderer.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../shared/range/rectangle.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
@@ -558,11 +562,11 @@ class ViewportRenderer extends Renderer {
       dirtyRects.length > 0
         ? dirtyRects
         : [
-            ...this.createDrawableEntries(this.collectActiveDrawables()),
-            ...this.#previousAomEntries,
-          ]
-            .map((entry) => this.normalizeScreenRect(entry?.screenRect))
-            .filter(Boolean);
+          ...this.createDrawableEntries(this.collectActiveDrawables()),
+          ...this.#previousAomEntries,
+        ]
+          .map((entry) => this.normalizeScreenRect(entry?.screenRect))
+          .filter(Boolean);
 
     for (const dirtyRect of targetDirtyRects) {
       this.#outputScheduler.invalidate(dirtyRect);
@@ -749,16 +753,16 @@ class ViewportRenderer extends Renderer {
     if (!ctx) return;
 
     for (const dirtyRect of dirtyRects) {
-      const normalizedRect = RectangleRange.fromRectLike(dirtyRect);
-      if (!normalizedRect) continue;
+      const clearRect = expandRectForClear(dirtyRect);
+      if (!clearRect) continue;
 
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(
-        Math.floor(normalizedRect.left),
-        Math.floor(normalizedRect.top),
-        Math.ceil(normalizedRect.width),
-        Math.ceil(normalizedRect.height),
+        clearRect.left,
+        clearRect.top,
+        clearRect.width,
+        clearRect.height,
       );
       ctx.restore();
     }

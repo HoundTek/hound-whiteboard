@@ -311,17 +311,32 @@ class Renderer extends CanvasHost {
       return;
     }
 
+    const clipPadding = Math.max(
+      1,
+      this.getObjectScreenPadding(objectInstance),
+    );
+    const clipRects = dirtyRects
+      .map((dirtyRect) => RectangleRange.fromRectLike(dirtyRect))
+      .filter(Boolean)
+      .map((dirtyRect) => dirtyRect.inflate(clipPadding));
+
+    if (clipRects.length === 0) {
+      objectInstance.render(viewportContext);
+      return;
+    }
+
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.beginPath();
-    for (const dirtyRect of dirtyRects) {
+    for (const clipRect of clipRects) {
       ctx.rect(
-        dirtyRect.left,
-        dirtyRect.top,
-        dirtyRect.width,
-        dirtyRect.height,
+        clipRect.left,
+        clipRect.top,
+        clipRect.width,
+        clipRect.height,
       );
     }
+
     ctx.clip();
     objectInstance.render(viewportContext);
     ctx.restore();

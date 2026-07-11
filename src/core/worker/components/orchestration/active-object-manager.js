@@ -1060,10 +1060,24 @@ class ActiveObjectManager {
       this.insertLayerUnderById(layers[i], underWhich[i]);
     }
 
+    const cacheInvalidationObjectMap = new Map(
+      activeEntries.map((objectInstance) => [objectInstance.id, objectInstance]),
+    );
+    for (const objectId of graph.getNodes()) {
+      if (cacheInvalidationObjectMap.has(objectId)) continue;
+
+      const objectInstance = this.findBoardObjectInstance(objectId);
+      if (!(objectInstance instanceof BasicObject)) continue;
+
+      cacheInvalidationObjectMap.set(objectId, objectInstance);
+    }
+
     this.requestActiveRender(activeEntries);
     // 对象已从静态图被拾取到 AOM，需要按对象范围重绘静态层，
     // 让 ViewportRenderer 的静态缓存通过 AOM 过滤将它们从缓存层中隐藏，避免整视口重绘。
-    this.requestStaticRenderForObjects(activeEntries);
+    // 这里不仅要隐藏显式选中的对象，也要隐藏被 pickup 纳入 AOM 的同层 inactive 对象，
+    // 否则这些对象会同时出现在 cache 和 AOM 输出层中，造成重复渲染。
+    this.requestStaticRenderForObjects(cacheInvalidationObjectMap.values());
   }
 
   /**
