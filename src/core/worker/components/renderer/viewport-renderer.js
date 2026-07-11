@@ -13,7 +13,11 @@ import { RectangleRange } from "../../../shared/range/rectangle.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { ActiveObjectManager } from "../orchestration/active-object-manager.js";
 import { collectActiveDrawables as _collectActiveDrawables } from "./aom-collect-utils.js";
-import { createBaseDirtyRectThresholdStrategy } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
+import { RenderScheduler, createRectangleDirtyRectMerger } from "../../../shared/renderer/render-scheduler.js";
+import {
+  createBaseDirtyRectThresholdStrategy,
+  createLiveDirtyRectThresholdStrategy,
+} from "../../../shared/renderer/dirty-rect-strategy-shared.js";
 import {
   createBaseDirtyRectCanonicalRectsResolver,
 } from "./dirty-rect-strategy.js";
@@ -86,6 +90,27 @@ class ViewportRenderer extends Renderer {
   #resolveCacheThresholds;
 
   /**
+   * 输出层缩放感知的脏区合并阈值策略
+   * @type {(zoom: number) => Record<string, number | undefined>}
+   * @private
+   */
+  #resolveOutputThresholds;
+
+  /**
+   * 缓存层渲染调度器
+   * @type {RenderScheduler}
+   * @private
+   */
+  #cacheScheduler;
+
+  /**
+   * 输出层渲染调度器
+   * @type {RenderScheduler}
+   * @private
+   */
+  #outputScheduler;
+
+  /**
    * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 目标视口
    * @param {ActiveObjectManager | undefined} aom - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | OffscreenCanvas | null }} [options = {}] - 初始化选项
@@ -105,10 +130,19 @@ class ViewportRenderer extends Renderer {
 
     this.#cache = new OffscreenCanvas(width, height);
 
-    this._initScheduler(
-      this._createDirtyRectMerger(),
-      (dirtyRects) => this.flush(dirtyRects),
-    );
+    this.#resolveOutputThresholds = createLiveDirtyRectThresholdStrategy();
+
+    this.#cacheScheduler = new RenderScheduler({
+      mergeDirtyRects: this._createDirtyRectMerger(),
+      flushHandler: (dirtyRects) => this.#cacheFlush(dirtyRects),
+    });
+
+    this.#outputScheduler = new RenderScheduler({
+      mergeDirtyRects: this.#createOutputDirtyRectMerger(),
+      flushHandler: (dirtyRects) => this.#outputFlush(dirtyRects),
+    });
+
+    this._scheduler = this.#outputScheduler;
   }
 
   // ─── 公开属性 ────────────────────────────────────────
@@ -194,6 +228,37 @@ class ViewportRenderer extends Renderer {
       getChunkHeight: () => this.viewport?.chunkHeight,
       getChunkScreenRect: (chunk) => this.getChunkScreenRect(chunk),
     })(dirtyRect);
+  }
+
+  /**
+   * 创建输出层脏区合并器
+   * @description 使用 live 层策略（更激进的合并阈值），适用于逐帧变化的 AOM 输出层。
+   * @returns {(dirtyRects: any[]) => any[]}
+   * @private
+   */
+  #createOutputDirtyRectMerger() {
+    return createRectangleDirtyRectMerger({
+      getThresholds: () => this.#resolveOutputThresholds(this.viewport?.zoom ?? 1) ?? {},
+      getViewportRect: () => this._getViewportRect(),
+      getCanonicalRectsForRect: (dirtyRect) =>
+        this._getCanonicalRectsForRect(dirtyRect),
+    });
+  }
+
+  /**
+   * 提交一次失效请求到缓存层和输出层调度器
+   * @param {any} [rect] - 失效脏区
+   * @returns {boolean}
+   */
+  invalidate(rect) {
+    let scheduled = false;
+    if (this.#cacheScheduler) {
+      scheduled = this.#cacheScheduler.invalidate(rect) || scheduled;
+    }
+    if (this.#outputScheduler) {
+      scheduled = this.#outputScheduler.invalidate(rect) || scheduled;
+    }
+    return scheduled;
   }
 
   // ─── 对象集合收集 ────────────────────────────────────
@@ -500,7 +565,7 @@ class ViewportRenderer extends Renderer {
             .filter(Boolean);
 
     for (const dirtyRect of targetDirtyRects) {
-      this.invalidate(dirtyRect);
+      this.#outputScheduler.invalidate(dirtyRect);
     }
   }
 
@@ -702,27 +767,62 @@ class ViewportRenderer extends Renderer {
   // ─── 主刷新入口 ──────────────────────────────────────
 
   /**
-   * 刷新输出帧
+   * 缓存调度器 flush 处理器
+   * @description 由缓存层调度器在 rAF 中触发。仅在 #cacheDirty 为真时更新缓存。
+   * @param {RectangleRange[]} cacheDirtyRects - 缓存层脏区集合
+   * @private
+   */
+  #cacheFlush(cacheDirtyRects) {
+    if (this.#cacheDirty) {
+      this.#updateCache(cacheDirtyRects);
+      this.#cacheDirty = false;
+    }
+  }
+
+  /**
+   * 刷新缓存层
+   * @description 若缓存脏且有积压脏区，同步刷新缓存。在输出层 flush 前调用，确保缓存不落后于输出。
+   * @private
+   */
+  #flushCacheScheduler() {
+    if (!this.#cacheDirty) return;
+    if (this.#cacheScheduler?.dirtyRects?.length > 0) {
+      this.#cacheScheduler.flush();
+      return;
+    }
+    // 无积压脏区但缓存脏 → 全量重建
+    this.#updateCache([]);
+    this.#cacheDirty = false;
+  }
+
+  /**
+   * 输出调度器 flush 处理器
+   * @description 由输出层调度器在 rAF 中触发。先刷新缓存层（如需要），再渲染输出帧。
+   * @param {RectangleRange[]} outputDirtyRects - 输出层脏区集合
+   * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
+   * @private
+   */
+  #outputFlush(outputDirtyRects) {
+    this.#flushCacheScheduler();
+    return this.#renderOutput(outputDirtyRects);
+  }
+
+  /**
+   * 渲染输出帧
    * @description
-   * 主渲染入口：
-   * 1. 若缓存脏 → 更新缓存
-   * 2. 清空输出 canvas 脏区
-   * 3. 从缓存拷贝静态内容到输出
-   * 4. 绘制 AOM 对象
-   * 5. 保存状态供下一帧使用
+   * 输出层渲染管线：
+   * 1. 清空输出 canvas 脏区
+   * 2. 从缓存拷贝静态内容到输出
+   * 3. 绘制 AOM 对象
+   * 4. 保存状态供下一帧使用
    * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
    * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
+   * @private
    */
-  flush(dirtyRects) {
+  #renderOutput(dirtyRects) {
     const outputCtx = this._getContext();
     if (!outputCtx) return [];
 
-    // Step 1: 更新缓存（如需要）
-    if (this.#cacheDirty) {
-      this.#updateCache(dirtyRects);
-    }
-
-    // Step 2-3: 渲染输出
     const aomDrawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(aomDrawables);
     const viewportContext = this.createViewportContext(outputCtx);
@@ -765,11 +865,29 @@ class ViewportRenderer extends Renderer {
       );
     }
 
-    // Step 4: 保存状态
+    // 保存状态
     this.#previousAomEntries = drawableEntries;
     this.#objectSnapshotRects.clear();
 
     return aomDrawables;
+  }
+
+  /**
+   * 刷新输出帧
+   * @description
+   * 主渲染入口：
+   * 1. 刷新缓存层（如需要）
+   * 2. 清空输出 canvas 脏区
+   * 3. 从缓存拷贝静态内容到输出
+   * 4. 绘制 AOM 对象
+   * 5. 保存状态供下一帧使用
+   * 可直接调用（如测试），也作为输出调度器 flushHandler 的代理。
+   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
+   * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
+   */
+  flush(dirtyRects) {
+    this.#flushCacheScheduler();
+    return this.#renderOutput(dirtyRects);
   }
 
   // ─── 调试 API ────────────────────────────────────────

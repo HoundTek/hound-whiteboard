@@ -65,7 +65,7 @@ class FakePathObject extends BasicObject {
   /**
    * 渲染对象
    */
-  render() {}
+  render() { }
 }
 
 /**
@@ -441,10 +441,11 @@ describe("ViewportRenderer", () => {
     renderer.captureObjectSnapshot([objectInstance]);
     objectInstance.position = new Vector(20, 0);
 
-    const invalidateSpy = jest.spyOn(renderer, "invalidate");
     renderer.invalidateActiveObjects([objectInstance]);
 
-    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    // invalidateActiveObjects 直接调用 #outputScheduler.invalidate，
+    // 验证输出调度器收集了 3 个脏区（当前范围 + 快照 + 上一帧）
+    expect(renderer._scheduler.dirtyRects).toHaveLength(3);
   });
 
   test("getObjectScreenRect 应为 PathRange 额外补足栅格化 padding", () => {
