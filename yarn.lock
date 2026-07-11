@@ -1433,8 +1433,10 @@ hidefile@3:
   dependencies:
     winattr "^3.0.0"
 
-"hound-tauri-build@file:../hound-tauri-build":
+hound-tauri-build@0.1.0:
   version "0.1.0"
+  resolved "https://registry.yarnpkg.com/hound-tauri-build/-/hound-tauri-build-0.1.0.tgz#bbd7f95d6a93f3e6da54571475ed625c1e6323f9"
+  integrity sha512-KNwqIyra8U4+LVBkoU4hyCYmYi/r0jkKZnl/4y9TykYu6z86hBI9SEgL1PsBDA6V7adQfdGXH5DJFH99pkiJoQ==
   dependencies:
     adm-zip "0.5.17"
     hidefile "3"
