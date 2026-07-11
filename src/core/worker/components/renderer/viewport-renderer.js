@@ -10,7 +10,6 @@
 import {
   Renderer,
   expandRectForClear,
-  normalizeDirtyRectsForScreenUpdate,
 } from "../../../shared/renderer/renderer.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../shared/range/rectangle.js";
@@ -695,10 +694,10 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 更新静态缓存
+   * 更新静态缓存（全量重绘）
    * @description
-   * 清空缓存 canvas 的脏区，收集非 AOM 的静态对象，按拓扑序绘制。
-   * @param {RectangleRange[]} dirtyRects - 脏区集合
+   * 临时跳过脏区优化，全量清空缓存 canvas 并重绘所有非 AOM 的静态对象。
+   * @param {RectangleRange[]} dirtyRects - 脏区集合（当前忽略，用于全量重绘触发）
    * @private
    */
   #updateCache(dirtyRects) {
@@ -708,31 +707,12 @@ class ViewportRenderer extends Renderer {
     const drawables = this.#collectCacheDrawables();
     const drawableEntries = this.createDrawableEntries(drawables);
     const viewportContext = this.createViewportContext(ctx);
-    const hasExplicitDirtyRects =
-      Array.isArray(dirtyRects) && dirtyRects.length > 0;
 
-    if (hasExplicitDirtyRects) {
-      this.clearDirtyRectsOnContext(ctx, dirtyRects);
-    } else {
-      this.#clearCache();
-    }
+    this.#clearCache();
 
     for (const entry of drawableEntries) {
-      if (hasExplicitDirtyRects) {
-        if (!this.intersectsDirtyRects(entry, dirtyRects)) continue;
-      }
       if (typeof entry.object.render !== "function") continue;
-
-      const entryDirtyRects = hasExplicitDirtyRects
-        ? this.getEntryDirtyRects(entry, dirtyRects)
-        : [];
-
-      this.renderObjectWithinDirtyRects(
-        ctx,
-        viewportContext,
-        entry.object,
-        entryDirtyRects,
-      );
+      entry.object.render(viewportContext);
     }
 
     this.#cacheDirty = false;
@@ -805,14 +785,14 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 渲染输出帧
+   * 渲染输出帧（全量重绘）
    * @description
-   * 输出层渲染管线：
-   * 1. 清空输出 canvas 脏区
-   * 2. 从缓存拷贝静态内容到输出
-   * 3. 绘制 AOM 对象
+   * 临时跳过脏区优化，全量输出管线：
+   * 1. 全量清空输出 canvas
+   * 2. 全量从缓存拷贝静态内容到输出
+   * 3. 全量绘制所有 AOM 对象
    * 4. 保存状态供下一帧使用
-   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
+   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合（当前忽略）
    * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
    * @private
    */
@@ -823,50 +803,20 @@ class ViewportRenderer extends Renderer {
     const aomDrawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(aomDrawables);
     const viewportContext = this.createViewportContext(outputCtx);
-    const hasExplicitDirtyRects =
-      Array.isArray(dirtyRects) && dirtyRects.length > 0;
 
-    // 脏区归一化并扩边到整数边界，确保 clearRect / drawImage / clip 使用一致的 rect
-    const normalizedDirtyRects = hasExplicitDirtyRects
-      ? normalizeDirtyRectsForScreenUpdate(
-        this.collectDirtyRects(dirtyRects),
-      )
-      : [];
+    // 全量清空输出 canvas
+    this.clear();
 
-    // 清空输出 canvas 脏区
-    if (normalizedDirtyRects.length > 0) {
-      this.clearDirtyRects(normalizedDirtyRects);
-    } else {
-      this.clear();
-    }
+    // 全量从缓存拷贝静态内容到输出
+    this.#copyCache(outputCtx);
 
-    // 从缓存拷贝静态内容到输出
-    if (normalizedDirtyRects.length > 0) {
-      this.#copyCacheRects(outputCtx, normalizedDirtyRects);
-    } else {
-      this.#copyCache(outputCtx);
-    }
-
-    // 绘制 AOM 对象
+    // 全量绘制所有 AOM 对象
     for (const entry of drawableEntries) {
-      if (normalizedDirtyRects.length > 0) {
-        if (!this.intersectsDirtyRects(entry, normalizedDirtyRects)) continue;
-      }
       if (typeof entry.object.render !== "function") continue;
-
-      const entryDirtyRects = normalizedDirtyRects.length > 0
-        ? this.getEntryDirtyRects(entry, normalizedDirtyRects)
-        : [];
-
-      this.renderObjectWithinDirtyRects(
-        outputCtx,
-        viewportContext,
-        entry.object,
-        entryDirtyRects,
-      );
+      entry.object.render(viewportContext);
     }
 
-    // 保存状态
+    // 保存状态供下一帧使用
     this.#previousAomEntries = drawableEntries;
     this.#objectSnapshotRects.clear();
 

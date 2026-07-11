@@ -423,7 +423,7 @@ describe("ViewportRenderer", () => {
     expect(dirtyRects[1]).toEqual(new RectangleRange(0, 0, 10, 10));
   });
 
-  test("invalidateCachedObjects 应按 right/bottom 向上取整清理子像素缓存脏区", () => {
+  test("invalidateCachedObjects 应触发全量缓存重绘", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const objectInstance = new FakeRectObject(
@@ -451,7 +451,8 @@ describe("ViewportRenderer", () => {
     renderer.invalidateCachedObjects([objectInstance]);
     renderer.flush();
 
-    expect(ctxCalls).toContainEqual(["cache", "clearRect", 20, 30, 11, 11]);
+    // 脏区优化已临时移除，改为全量缓存清空 + 全量对象重绘
+    expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
   });
 
   test("invalidateActiveObjects 应同时提交当前/快照/上一帧范围", () => {
@@ -479,7 +480,7 @@ describe("ViewportRenderer", () => {
     expect(renderer._scheduler.dirtyRects).toHaveLength(3);
   });
 
-  test("局部脏区刷新时不应把相交 AOM 对象的整块范围加入裁剪区", () => {
+  test("AOM 对象位移后应全量重绘输出帧", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const lowerObject = new FakeRectObject(1, new Vector(0, 0), renderCalls);
@@ -505,24 +506,16 @@ describe("ViewportRenderer", () => {
     renderer.invalidateActiveObjects([upperObject]);
     renderer._scheduler.flush();
 
+    // 脏区优化已临时移除，全量清空 + 全量 drawImage + 全量绘制 AOM 对象
     expect(renderCalls).toEqual([
       [1, "output"],
       [2, "output"],
     ]);
-    expect(ctxCalls).toContainEqual(["output", "clip"]);
-    expect(
-      ctxCalls.some(
-        (call) =>
-          call[0] === "output" &&
-          call[1] === "rect" &&
-          call[2] < 5 &&
-          call[4] > 10,
-      ),
-    ).toBe(true);
-    expect(ctxCalls).not.toContainEqual(["output", "rect", 0, 0, 10, 10]);
+    expect(ctxCalls).toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    expect(ctxCalls).toContainEqual(["output", "drawImage", expect.any(Object), 0, 0]);
   });
 
-  test("active 圆 + 提交上层笔画时，圆应在扩边脏区内单次补绘且不重复", () => {
+  test("active 圆 + 提交上层笔画时，圆应在全量重绘中单次渲染", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const circleObj = new FakeRectObject(1, new Vector(0, 0), renderCalls);
@@ -546,10 +539,11 @@ describe("ViewportRenderer", () => {
     renderCalls.length = 0;
     ctxCalls.length = 0;
 
-    // 模拟笔画提交：失效笔画的缓存区域
+    // 模拟笔画提交：触发缓存和输出层刷新
     renderer.invalidateCachedObjects([strokeObj]);
     renderer._scheduler.flush();
 
+    // 脏区优化已临时移除，全量重绘
     // 圆只渲染一次（输出层）
     expect(
       renderCalls.filter((call) => call[0] === 1 && call[1] === "output"),
@@ -558,17 +552,8 @@ describe("ViewportRenderer", () => {
     expect(
       renderCalls.filter((call) => call[0] === 1 && call[1] === "cache"),
     ).toHaveLength(0);
-    // 裁剪区有扩边（left < 笔画原始 left=10），但不能退回整对象范围
-    expect(
-      ctxCalls.some(
-        (call) =>
-          call[0] === "output" &&
-          call[1] === "rect" &&
-          call[2] < 10 &&
-          call[4] > 80,
-      ),
-    ).toBe(true);
-    expect(ctxCalls).not.toContainEqual(["output", "rect", 0, 0, 100, 100]);
+    // 全量清空输出 canvas
+    expect(ctxCalls).toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
   });
 
   test("getObjectScreenRect 应为 PathRange 额外补足栅格化 padding", () => {
