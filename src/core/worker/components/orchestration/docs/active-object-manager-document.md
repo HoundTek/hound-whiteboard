@@ -39,11 +39,61 @@ AOM 本身不依赖 DOM，也不直接持有 viewport 列表。它通过 `render
 - `layerOrder`
 - `layerIndex`
 - `onLayer`
-- `activeObjects`
 - `activeObjectIndex`
 - `baseObjectSnapshotWorldRanges`
 - `baseObjectSnapshotCoverChunks`
 - `renderHooks`
+
+## API 一览
+
+### 公开方法
+
+| 方法      | 签名                                                     | 说明                                                |
+| --------- | -------------------------------------------------------- | --------------------------------------------------- |
+| `has`     | `(objectId: number) => boolean`                          | 判断对象 id 是否在 AOM 的任意层中（含 inactive 层） |
+| `add`     | `(objects: Iterable<BasicObject>) => Layer \| undefined` | 将白板外新对象加入 AOM 顶层，返回新创建的层         |
+| `choose`  | `(startFrom: Iterable<BasicObject>) => Promise<void>`    | 从静态图中拾取对象到 AOM（异步，内部 BFS 遍历）     |
+| `discard` | `(objects: Iterable<BasicObject>) => void`               | 取消活动态，不提交几何变化回静态图                  |
+| `apply`   | `(objects: Iterable<BasicObject>) => Promise<void>`      | 提交活动态变化回静态图（异步，含 FullLoad 预加载）  |
+| `remove`  | `(objects: Iterable<BasicObject>) => void`               | 从白板彻底删除对象并移出 AOM                        |
+
+### 私有方法
+
+所有私有方法均标记 `@private`，不构成公开契约。关键私有方法速览：
+
+| 方法                                                                          | 说明                                                                 |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `pickup(startFrom)`                                                           | 提取以指定对象集合为起点的子图（BFS 双队列），供给 `choose` 内部使用 |
+| `deactivateObjects(objects)`                                                  | 将一组活动对象失活，必要时整层标记 inactive                          |
+| `tidyup()`                                                                    | 清理最底层 inactive 层及空层，失活层对象写入静态图                   |
+| `captureBaseObjectSnapshot(objects)`                                          | 记录对象进入 AOM 前的世界范围快照                                    |
+| `captureBaseObjectCoverChunks(objects)`                                       | 记录对象进入 AOM 前的覆盖区块快照                                    |
+| `clearBaseObjectSnapshots(objects)`                                           | 清理快照                                                             |
+| `registerActiveObject(obj)`                                                   | 将对象实例注册到活动索引                                             |
+| `unregisterTrackedActiveObject(objectId)`                                     | 从活动索引移除对象                                                   |
+| `findBoardObjectInstance(objectId, candidateChunkIds?)`                       | 在 AOM 和 BoardCore 中查找对象实例                                   |
+| `getObjectWorldRange(obj)`                                                    | 获取对象世界坐标范围                                                 |
+| `calculateCoveredChunkIds(obj)`                                               | 计算对象覆盖区块集合                                                 |
+| `resolveObjectChunk(obj)`                                                     | 解析对象所在的起始区块                                               |
+| `calculateStaticRelations(obj, coveredChunkIds, applyingObjectIds, options?)` | 计算对象在静态图中的上下关系                                         |
+| `collectStaticGraphNeighborIds(objectId, coveredChunkIds?)`                   | 收集静态图中某对象的邻接对象 id                                      |
+| `collectBaseInvalidationObjects(objects, contexts?)`                          | 解析静态层对象级失效集合                                             |
+| `intersectsObjects(left, right)`                                              | 判断两个对象世界范围是否相交                                         |
+| `collectCoveredStaticObjectIds(coveredChunkIds)`                              | 收集覆盖区块中的静态对象 id                                          |
+| `collectLayerSemanticInactiveObjectIds(layer)`                                | 收集某层按 inactive 语义参与计算的对象 id                            |
+| `updateLayerActiveState(layer)`                                               | 按当前活动索引刷新层的 active 状态                                   |
+| `removeObjectFromLayerStorage(layer, objectId)`                               | 从给定层的结构中移除对象 id                                          |
+| `removeObjectFromLayer(objectId)`                                             | 从对象所在层移除对象 id                                              |
+| `purgeLayerMappings(layer)`                                                   | 清理层的 onLayer 映射与 layerPool                                    |
+| `insertLayerUnderById(layerNow, layerAboveId?)`                               | 将层插入到指定层之下                                                 |
+| `insertLayerToTop(layerNow)`                                                  | 将层插入到顶层                                                       |
+| `compareLayerOrderById(layer1, layer2)`                                       | 比较两层的层次顺序                                                   |
+| `requestActiveRender(objects)`                                                | 通过 renderHooks 请求活动层刷新                                      |
+| `requestStaticRender(chunks)`                                                 | 通过 renderHooks 请求静态层刷新                                      |
+| `requestStaticRenderForObjects(objects, fallbackChunks?)`                     | 按对象范围请求静态层刷新                                             |
+| `createChunkLoader()`                                                         | 创建绑定到 BoardCore 的 ChunkLoader                                  |
+| `destroyChunkLoader(loader)`                                                  | 销毁 ChunkLoader                                                     |
+| `requireObjectInstance(obj)`                                                  | 断言输入是 BasicObject 实例                                          |
 
 ## AOM 与静态图的边界
 
@@ -57,7 +107,7 @@ AOM 本身不依赖 DOM，也不直接持有 viewport 列表。它通过 `render
 
 - AOM 内部的 `layerOrder + activeObjects + inactiveGraph`
 - 只在交互期间存在
-- 对象位于 AOM 中时，应由 live 层负责绘制
+- 对象位于 AOM 中时，应由 active 层负责绘制
 
 这两者的切换由：
 
@@ -82,7 +132,7 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 
 在 Worker mode 下：
 
-- `BoardCore` 注入的 hooks 最终驱动 `ViewportCore` 的 base/live 渲染
+- `BoardCore` 注入的 hooks 最终驱动 `ViewportCore` 的 static/active 渲染
 - AOM 自身不关心 DOM canvas
 
 ### UI（测试/兼容）

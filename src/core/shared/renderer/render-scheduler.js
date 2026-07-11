@@ -53,12 +53,12 @@ function getRectangleGap(firstRect, secondRect) {
   const gapX = Math.max(
     0,
     Math.max(firstRect.left, secondRect.left) -
-      Math.min(firstRect.right, secondRect.right),
+    Math.min(firstRect.right, secondRect.right),
   );
   const gapY = Math.max(
     0,
     Math.max(firstRect.top, secondRect.top) -
-      Math.min(firstRect.bottom, secondRect.bottom),
+    Math.min(firstRect.bottom, secondRect.bottom),
   );
 
   return { gapX, gapY };
@@ -339,7 +339,7 @@ function createRectangleDirtyRectMerger(options = {}) {
       if (
         viewportArea > 0 &&
         getRectangleIntersectionArea(rect, viewportRect) / viewportArea >=
-          viewportCoverageRatio
+        viewportCoverageRatio
       ) {
         return [viewportRect];
       }
@@ -435,6 +435,15 @@ class RenderScheduler {
   dirtyRects;
 
   /**
+   * 调度代次计数器
+   * @description 每次 invalidate 递增，供 scheduleFrame 回调校验是否过期。
+   * 外部直接调用 flush() 后也会递增，使已在途中的延迟回调自动跳过。
+   * @type {number}
+   * @private
+   */
+  #scheduleGeneration;
+
+  /**
    * 帧调度函数
    * @type {(callback: FrameRequestCallback) => number | unknown}
    */
@@ -462,6 +471,7 @@ class RenderScheduler {
   constructor(options = {}) {
     this.framePending = false;
     this.dirtyRects = [];
+    this.#scheduleGeneration = 0;
     this.scheduleFrame =
       options.scheduleFrame ??
       ((callback) => {
@@ -471,7 +481,7 @@ class RenderScheduler {
         return globalThis.setTimeout(() => callback(Date.now()), 16);
       });
     this.mergeDirtyRects = options.mergeDirtyRects ?? mergeRectangleDirtyRects;
-    this.flushHandler = options.flushHandler ?? (() => {});
+    this.flushHandler = options.flushHandler ?? (() => { });
   }
 
   /**
@@ -479,7 +489,7 @@ class RenderScheduler {
    * @param {(dirtyRects: any[]) => unknown} flushHandler - flush 回调
    */
   setFlushHandler(flushHandler) {
-    this.flushHandler = flushHandler ?? (() => {});
+    this.flushHandler = flushHandler ?? (() => { });
   }
 
   /**
@@ -497,7 +507,13 @@ class RenderScheduler {
     }
 
     this.framePending = true;
-    this.scheduleFrame(() => this.flush());
+    const gen = ++this.#scheduleGeneration;
+    this.scheduleFrame(() => {
+      if (this.#scheduleGeneration !== gen) {
+        return;
+      }
+      this.flush();
+    });
     return true;
   }
 
@@ -516,6 +532,8 @@ class RenderScheduler {
     const mergedRects = this.mergeDirtyRects([...this.dirtyRects]);
     this.framePending = false;
     this.dirtyRects.length = 0;
+    // 递增代次以使已在途中的延迟 scheduleFrame 回调自动跳过
+    this.#scheduleGeneration++;
     return this.flushHandler(mergedRects);
   }
 }

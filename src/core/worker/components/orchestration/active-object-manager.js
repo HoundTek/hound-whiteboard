@@ -20,6 +20,64 @@ import {
 import { createDefaultAomRenderHooks } from "./aom-render-hooks.js";
 
 /**
+ * 断言输入是有效对象实例（纯函数）
+ * @param {*} obj - 候选对象
+ * @returns {BasicObject}
+ * @throws {TypeError}
+ */
+function requireObjectInstance(obj) {
+  if (!(obj instanceof BasicObject)) {
+    throw new TypeError(
+      "ActiveObjectManager only accepts BasicObject instances.",
+    );
+  }
+  return obj;
+}
+
+/**
+ * 计算对象在世界空间中的范围（纯函数）
+ * @param {BasicObject} obj - 对象实例
+ * @returns {RectangleRange | undefined}
+ */
+function getObjectWorldRange(obj) {
+  if (!(obj instanceof BasicObject)) return undefined;
+  if (!obj.position || typeof obj.getRange !== "function") return undefined;
+  const range = obj.getRange();
+  if (!range || typeof range.withPosition !== "function") return undefined;
+  return range.withPosition(obj.position);
+}
+
+/**
+ * 判断两个对象是否相交（纯函数）
+ * @param {BasicObject} left
+ * @param {BasicObject} right
+ * @returns {boolean}
+ */
+function intersectsObjects(left, right) {
+  const leftRange = getObjectWorldRange(left);
+  const rightRange = getObjectWorldRange(right);
+  if (!leftRange || !rightRange) return false;
+  return intersectsRanges(leftRange, rightRange);
+}
+
+/**
+ * 收集某层按 inactive 语义参与计算的对象 id（纯函数）
+ * @param {Layer} layer
+ * @returns {Set<number>}
+ */
+function collectLayerSemanticInactiveObjectIds(layer) {
+  const objectIds = new Set(layer?.inactiveGraph?.getNodes?.() ?? []);
+
+  if (layer?.active === false) {
+    for (const objectId of layer.activeObjects ?? []) {
+      objectIds.add(objectId);
+    }
+  }
+
+  return objectIds;
+}
+
+/**
  * 层类
  * @description
  * 每一层包含一个 `activeObjects` 集合、一个 `inactiveGraph` 子图，
@@ -44,7 +102,7 @@ class Layer {
 
   /**
    * 该层上的非活动对象子图
-   * @type {DirectedGraph}
+   * @type {DirectedGraph<number>}
    */
   inactiveGraph;
 
@@ -112,13 +170,12 @@ class ActiveObjectManager {
   layerIndex;
 
   /**
-   * 当前所有活动对象实例集合
-   * @type {Set<BasicObject>}
-   */
-  activeObjects;
-
-  /**
-   * 活动对象 id 到实例的索引
+   * 活动对象 id 到实例的本地缓存
+   * @description
+   * BoardCore.objectLoaded 是对象实例的唯一权威持有者。
+   * activeObjectIndex 是 AOM 的本地快速查找缓存，与 BoardCore 指向同一个实例，
+   * 两者之间不会产生分歧。该缓存使渲染和交互过程中频繁的实例查找
+   * 可以直接在 AOM 内部完成，无需绕经 BoardCore。
    * @type {Map<number, BasicObject>}
    */
   activeObjectIndex;
@@ -171,7 +228,6 @@ class ActiveObjectManager {
     this.layerOrder = [];
     this.onLayer = new Map();
     this.layerIndex = new Map();
-    this.activeObjects = new Set();
     this.activeObjectIndex = new Map();
     this.baseObjectSnapshotWorldRanges = new Map();
     this.baseObjectSnapshotCoverChunks = new Map();
@@ -180,6 +236,7 @@ class ActiveObjectManager {
   /**
    * 记录对象进入活动层前的世界范围快照
    * @param {Iterable<BasicObject>} [objects = []] - 待记录对象集合
+   * @private
    */
   captureBaseObjectSnapshot(objects = []) {
     for (const entry of objects ?? []) {
@@ -199,6 +256,7 @@ class ActiveObjectManager {
   /**
    * 记录对象进入活动层前的覆盖区块快照
    * @param {Iterable<BasicObject>} [objects = []] - 待记录对象集合
+   * @private
    */
   captureBaseObjectCoverChunks(objects = []) {
     for (const entry of objects ?? []) {
@@ -216,6 +274,7 @@ class ActiveObjectManager {
   /**
    * 清理对象的静态层旧范围快照
    * @param {Iterable<BasicObject>} [objects = []] - 待清理对象集合
+   * @private
    */
   clearBaseObjectSnapshots(objects = []) {
     for (const entry of objects ?? []) {
@@ -229,34 +288,27 @@ class ActiveObjectManager {
    * 断言输入是有效对象实例
    * @param {*} obj - 候选对象
    * @returns {BasicObject}
+   * @private
    */
   requireObjectInstance(obj) {
-    if (!(obj instanceof BasicObject)) {
-      throw new TypeError(
-        "ActiveObjectManager only accepts BasicObject instances.",
-      );
-    }
-    return obj;
+    return requireObjectInstance(obj);
   }
 
   /**
    * 注册活动对象实例
    * @param {BasicObject} obj - 要注册的对象实例
+   * @private
    */
   registerActiveObject(obj) {
     this.requireObjectInstance(obj);
-    const previous = this.activeObjectIndex.get(obj.id);
-    if (previous) {
-      this.activeObjects.delete(previous);
-    }
     this.activeObjectIndex.set(obj.id, obj);
-    this.activeObjects.add(obj);
   }
 
   /**
    * 请求所有 viewport 刷新活动层
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
+   * @private
    */
   requestActiveRender(objects = []) {
     const changedObjects = Array.from(objects, (item) =>
@@ -268,6 +320,7 @@ class ActiveObjectManager {
   /**
    * 请求所有 viewport 刷新静态层
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
+   * @private
    */
   requestStaticRender(chunks = []) {
     const normalizedChunks = Array.from(chunks).filter(Boolean);
@@ -279,6 +332,7 @@ class ActiveObjectManager {
    * @description 通过 `renderHooks` 委托给 UI 侧实际渲染管线。
    * @param {Iterable<BasicObject>} [objects = []] - 受影响对象集合
    * @param {Iterable<Chunk>} [fallbackChunks = []] - 无法走对象级失效时的回退区块集合
+   * @private
    */
   requestStaticRenderForObjects(objects = [], fallbackChunks = []) {
     const normalizedObjects = Array.from(objects, (item) =>
@@ -299,6 +353,7 @@ class ActiveObjectManager {
    * @param {Iterable<BasicObject>} [objects = []] - 起始对象集合
    * @param {Array<{ coveredChunkIds: Set<number>, relatedObjectIds?: Iterable<number> }>} [contexts = []] - 关联上下文
    * @returns {BasicObject[]}
+   * @private
    */
   collectBaseInvalidationObjects(objects = [], contexts = []) {
     const invalidationObjectMap = new Map();
@@ -331,6 +386,7 @@ class ActiveObjectManager {
    * @param {number} objectId - 对象 id
    * @param {Iterable<number>} [coveredChunkIds = []] - 相关覆盖区块
    * @returns {Set<number>}
+   * @private
    */
   collectStaticGraphNeighborIds(objectId, coveredChunkIds = []) {
     const relatedObjectIds = new Set();
@@ -355,11 +411,10 @@ class ActiveObjectManager {
   /**
    * 从全局活动对象索引中移除对象实例
    * @param {number} objectId - 要移除的对象 id
+   * @private
    */
   unregisterTrackedActiveObject(objectId) {
-    const activeObject = this.activeObjectIndex.get(objectId);
-    if (activeObject) {
-      this.activeObjects.delete(activeObject);
+    if (this.activeObjectIndex.has(objectId)) {
       this.activeObjectIndex.delete(objectId);
     }
   }
@@ -368,6 +423,7 @@ class ActiveObjectManager {
    * 按当前全局活动对象索引刷新层的活动状态
    * @param {Layer | undefined} layer - 目标层
    * @returns {boolean}
+   * @private
    */
   updateLayerActiveState(layer) {
     if (!(layer instanceof Layer)) return false;
@@ -382,6 +438,7 @@ class ActiveObjectManager {
    * 从给定层的结构中移除对象
    * @param {Layer | undefined} layer - 目标层
    * @param {number} objectId - 对象 id
+   * @private
    */
   removeObjectFromLayerStorage(layer, objectId) {
     if (!(layer instanceof Layer)) return;
@@ -400,6 +457,7 @@ class ActiveObjectManager {
   /**
    * 从对象所在层的结构中移除对象
    * @param {number} objectId - 对象 id
+   * @private
    */
   removeObjectFromLayer(objectId) {
     this.removeObjectFromLayerStorage(this.onLayer.get(objectId), objectId);
@@ -412,6 +470,7 @@ class ActiveObjectManager {
    * 若该层所有活动对象都被本次操作失活，则保留其 `activeObjects` 结构，
    * 仅将层标记为 inactive，以便后续按 inactive 语义参与 duplicate 判断与层级恢复。
    * @param {Iterable<BasicObject>} [objects = []] - 待失活对象集合
+   * @private
    */
   deactivateObjects(objects = []) {
     /** @type {Map<Layer, Set<number>>} */
@@ -471,18 +530,10 @@ class ActiveObjectManager {
   }
 
   /**
-   * 取消注册活动对象实例并从所在层移除
-   * @param {number} objectId - 要取消注册的对象 id
-   */
-  unregisterActiveObject(objectId) {
-    this.unregisterTrackedActiveObject(objectId);
-    this.removeObjectFromLayer(objectId);
-  }
-
-  /**
    * 解析对象起始区块
    * @param {BasicObject} obj
    * @returns {Chunk | undefined}
+   * @private
    */
   resolveObjectChunk(obj) {
     this.requireObjectInstance(obj);
@@ -503,6 +554,7 @@ class ActiveObjectManager {
    * 创建与白板区块加载事件总线绑定的区块加载器
    * @description 请在使用完区块加载器后调用 {@link destroyChunkLoader} 方法，以释放资源并回收 id。
    * @returns {ChunkLoader | undefined}
+   * @private
    */
   createChunkLoader() {
     if (this.board?.createChunkLoader) {
@@ -517,6 +569,7 @@ class ActiveObjectManager {
    * 销毁区块加载器
    * @description 请在使用完区块加载器后调用该方法，以释放资源并回收 id。
    * @param {ChunkLoader} loader - 由 {@link createChunkLoader} 创建的区块加载器
+   * @private
    */
   destroyChunkLoader(loader) {
     let requestId = loader?.requesterId;
@@ -529,13 +582,10 @@ class ActiveObjectManager {
    * 获取对象世界坐标范围
    * @param {BasicObject} obj - 要获取世界坐标范围的对象实例
    * @returns {Range | undefined} 对象的世界坐标范围，若无法获取则返回 undefined
+   * @private
    */
   getObjectWorldRange(obj) {
-    if (!(obj instanceof BasicObject)) return undefined;
-    if (!obj.position || typeof obj.getRange !== "function") return undefined;
-    const range = obj.getRange();
-    if (!range || typeof range.withPosition !== "function") return undefined;
-    return range.withPosition(obj.position);
+    return getObjectWorldRange(obj);
   }
 
   /**
@@ -543,6 +593,7 @@ class ActiveObjectManager {
    * @param {number} objectId - 要查找的对象 id
    * @param {Iterable<number>} [candidateChunkIds = []] - 可能包含该对象的区块 id 集合，若提供则优先在这些区块中查找以提升性能
    * @returns {BasicObject | undefined} 查找到的对象实例，若未找到则返回 undefined
+   * @private
    */
   findBoardObjectInstance(objectId, candidateChunkIds = []) {
     const activeObject = this.activeObjectIndex.get(objectId);
@@ -591,18 +642,17 @@ class ActiveObjectManager {
    * @param {BasicObject} left
    * @param {BasicObject} right
    * @returns {boolean}
+   * @private
    */
   intersectsObjects(left, right) {
-    const leftRange = this.getObjectWorldRange(left);
-    const rightRange = this.getObjectWorldRange(right);
-    if (!leftRange || !rightRange) return false;
-    return intersectsRanges(leftRange, rightRange);
+    return intersectsObjects(left, right);
   }
 
   /**
    * 计算对象覆盖区块集合
    * @param {BasicObject} obj
    * @returns {Set<number>}
+   * @private
    */
   calculateCoveredChunkIds(obj) {
     if (!(obj instanceof BasicObject) || !this.board) {
@@ -640,6 +690,7 @@ class ActiveObjectManager {
    * 收集覆盖区块中的静态对象 id
    * @param {Iterable<number>} coveredChunkIds
    * @returns {Set<number>}
+   * @private
    */
   collectCoveredStaticObjectIds(coveredChunkIds = []) {
     const objectIds = new Set();
@@ -662,17 +713,10 @@ class ActiveObjectManager {
    * 收集某层按 inactive 语义参与计算的对象 id
    * @param {Layer} layer
    * @returns {Set<number>}
+   * @private
    */
   collectLayerSemanticInactiveObjectIds(layer) {
-    const objectIds = new Set(layer?.inactiveGraph?.getNodes?.() ?? []);
-
-    if (layer?.active === false) {
-      for (const objectId of layer.activeObjects ?? []) {
-        objectIds.add(objectId);
-      }
-    }
-
-    return objectIds;
+    return collectLayerSemanticInactiveObjectIds(layer);
   }
 
   /**
@@ -691,6 +735,7 @@ class ActiveObjectManager {
    * @param {Set<number>} applyingObjectIds - 正在被提交的对象 id 集合
    * @param {{includeUntrackedCoveredObjectsBelow?: boolean}} [options]
    * @returns {{below: Set<number>, above: Set<number>}}
+   * @private
    */
   calculateStaticRelations(
     obj,
@@ -780,7 +825,8 @@ class ActiveObjectManager {
    * 获取以指定对象集合为起点的子图
    * @description 遍历静态图边和覆盖区块索引，跨区块时 TempLoad 目标区块再继续遍历。
    * @param {Iterable<BasicObject>} startFrom - 作为起点的对象集合
-   * @returns {Promise<DirectedGraph>}
+   * @returns {Promise<DirectedGraph<number>>}
+   * @private
    */
   async pickup(startFrom) {
     const visit = new Set();
@@ -1052,10 +1098,24 @@ class ActiveObjectManager {
       this.insertLayerUnderById(layers[i], underWhich[i]);
     }
 
+    const cacheInvalidationObjectMap = new Map(
+      activeEntries.map((objectInstance) => [objectInstance.id, objectInstance]),
+    );
+    for (const objectId of graph.getNodes()) {
+      if (cacheInvalidationObjectMap.has(objectId)) continue;
+
+      const objectInstance = this.findBoardObjectInstance(objectId);
+      if (!(objectInstance instanceof BasicObject)) continue;
+
+      cacheInvalidationObjectMap.set(objectId, objectInstance);
+    }
+
     this.requestActiveRender(activeEntries);
     // 对象已从静态图被拾取到 AOM，需要按对象范围重绘静态层，
     // 让 ViewportRenderer 的静态缓存通过 AOM 过滤将它们从缓存层中隐藏，避免整视口重绘。
-    this.requestStaticRenderForObjects(activeEntries);
+    // 这里不仅要隐藏显式选中的对象，也要隐藏被 pickup 纳入 AOM 的同层 inactive 对象，
+    // 否则这些对象会同时出现在 cache 和 AOM 输出层中，造成重复渲染。
+    this.requestStaticRenderForObjects(cacheInvalidationObjectMap.values());
   }
 
   /**
@@ -1205,6 +1265,7 @@ class ActiveObjectManager {
    * 删除最下面一个 active 层之下的所有 inactive 层，并清理空层。
    * 若当前已不存在 active 层，则删除全部层。
    * 清理 inactive 层时，会先将该层对象写入静态图。
+   * @private
    */
   tidyup() {
     // 收集最下面一个 active 层之下的所有 inactive 层，
@@ -1599,8 +1660,8 @@ class ActiveObjectManager {
   }
 
   /**
-   * 判断指定对象 id 是否当前在 AOM 中（不论活跃与否）
-   * @param {number} objectId - 对象 id
+   * 判断指定的对象是否当前在 AOM 中（不论活跃与否）
+   * @param {number} objectId - 指定的对象 id
    * @returns {boolean}
    */
   has(objectId) {
@@ -1608,18 +1669,9 @@ class ActiveObjectManager {
   }
 
   /**
-   * 将某层插入到另一层之下
-   * @description 欲插入的那一层的实例应该不存在于 `layerOrder` 中。
-   * @param {Layer} layerNow - 要插入的层
-   * @param {Layer | undefined} [layerAbove = undefined] - 要插入到何层之下，若未指定则移至顶层
-   */
-  insertLayerUnder(layerNow, layerAbove) {
-    this.insertLayerUnderById(layerNow, layerAbove ? layerAbove.id : undefined);
-  }
-
-  /**
    * 清理给定层的 `onLayer` 映射和 `layerPool`
    * @param {Layer} layer - 要清理的层
+   * @private
    */
   purgeLayerMappings(layer) {
     for (const objectId of layer.activeObjects) {
@@ -1636,6 +1688,7 @@ class ActiveObjectManager {
    * @description 欲插入的那一层的实例应该不存在于 `layerOrder` 中。
    * @param {Layer} layerNow - 要插入的层
    * @param {number | undefined} [layerAboveId = undefined] - 要插入到何层之下，若未指定则移至顶层，是层 id
+   * @private
    */
   insertLayerUnderById(layerNow, layerAboveId) {
     let indexAbove = layerAboveId
@@ -1652,6 +1705,7 @@ class ActiveObjectManager {
    * 将某层插入至顶层
    * @param {Layer} layerNow - 要插入的层
    * @description 欲插入的那一层的实例应该不存在于 `layerOrder` 中。
+   * @private
    */
   insertLayerToTop(layerNow) {
     this.insertLayerUnderById(layerNow, undefined);
@@ -1662,6 +1716,7 @@ class ActiveObjectManager {
    * @param {number | undefined} layer1 - 层 1 的 id
    * @param {number | undefined} layer2 - 层 2 的 id
    * @returns {number} 若层 1 在层 2 之上则返回正数，若层 1 在层 2 之下则返回负数，若二者相等则返回 0
+   * @private
    */
   compareLayerOrderById(layer1, layer2) {
     if (layer1 === layer2) return 0;
@@ -1670,15 +1725,6 @@ class ActiveObjectManager {
     return this.layerIndex.get(layer1) - this.layerIndex.get(layer2);
   }
 
-  /**
-   * 比较两层的层次顺序
-   * @param {Layer} layer1 - 层 1 的实例
-   * @param {Layer} layer2 - 层 2 的实例
-   * @returns {number} 若层 1 在层 2 之上则返回正数，若层 1 在层 2 之下则返回负数，若二者相等则返回 0
-   */
-  compareLayerOrder(layer1, layer2) {
-    return this.compareLayerOrderById(layer1.id, layer2.id);
-  }
 }
 
 export { ActiveObjectManager, Layer };

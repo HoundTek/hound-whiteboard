@@ -65,7 +65,7 @@ class FakePathObject extends BasicObject {
   /**
    * 渲染对象
    */
-  render() {}
+  render() { }
 }
 
 /**
@@ -423,6 +423,38 @@ describe("ViewportRenderer", () => {
     expect(dirtyRects[1]).toEqual(new RectangleRange(0, 0, 10, 10));
   });
 
+  test("invalidateCachedObjects 应触发全量缓存重绘", () => {
+    const renderCalls = [];
+    const ctxCalls = [];
+    const objectInstance = new FakeRectObject(
+      1,
+      new Vector(20.5, 30.5),
+      renderCalls,
+    );
+    const outputCanvas = createCanvas(800, 600, createContext("output", []));
+    const { viewport, aom } = createViewportContext({
+      staticObjects: [objectInstance],
+      outputCanvas,
+    });
+
+    const renderer = new ViewportRenderer(viewport, aom, {
+      canvas: outputCanvas,
+    });
+    renderer._scheduler.scheduleFrame = () => 0;
+
+    const cacheCtx = createContext("cache", ctxCalls);
+    renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
+
+    renderer.flush();
+    ctxCalls.length = 0;
+
+    renderer.invalidateCachedObjects([objectInstance]);
+    renderer.flush();
+
+    // 脏区优化已临时移除，改为全量缓存清空 + 全量对象重绘
+    expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+  });
+
   test("invalidateActiveObjects 应同时提交当前/快照/上一帧范围", () => {
     const renderCalls = [];
     const objectInstance = new FakeRectObject(1, new Vector(0, 0), renderCalls);
@@ -441,10 +473,125 @@ describe("ViewportRenderer", () => {
     renderer.captureObjectSnapshot([objectInstance]);
     objectInstance.position = new Vector(20, 0);
 
-    const invalidateSpy = jest.spyOn(renderer, "invalidate");
     renderer.invalidateActiveObjects([objectInstance]);
 
-    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    // invalidateActiveObjects 直接调用 #outputScheduler.invalidate，
+    // 验证输出调度器收集了 3 个脏区（当前范围 + 快照 + 上一帧）
+    expect(renderer._scheduler.dirtyRects).toHaveLength(3);
+  });
+
+  test("AOM 对象位移后应脏区清空 + 裁剪 AOM 绘制", () => {
+    const renderCalls = [];
+    const ctxCalls = [];
+    const lowerObject = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+    const upperObject = new FakeRectObject(2, new Vector(5, 0), renderCalls);
+    const outputCtx = createContext("output", ctxCalls);
+    const outputCanvas = createCanvas(800, 600, outputCtx);
+    const { viewport, aom } = createViewportContext({
+      activeObjects: [lowerObject, upperObject],
+      outputCanvas,
+    });
+
+    const renderer = new ViewportRenderer(viewport, aom, {
+      canvas: outputCanvas,
+    });
+    renderer._scheduler.scheduleFrame = () => 0;
+
+    renderer.flush();
+    renderCalls.length = 0;
+    ctxCalls.length = 0;
+
+    renderer.captureObjectSnapshot([upperObject]);
+    upperObject.position = new Vector(20, 0);
+    renderer.invalidateActiveObjects([upperObject]);
+    renderer._scheduler.flush();
+
+    // 脏区清空/拷贝 + 裁剪 AOM 对象绘制（两对象均与脏区相交，均渲染）
+    expect(renderCalls).toEqual([
+      [1, "output"],
+      [2, "output"],
+    ]);
+    // 脏区清空：不应是全视口清空
+    expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    // 脏区拷贝或全量拷贝均应进行
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
+    // AOM 对象按脏区裁剪渲染
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "clip")).toBe(true);
+  });
+
+  test("远离脏区的 AOM 对象应被跳过不渲染", () => {
+    const renderCalls = [];
+    const ctxCalls = [];
+    const leftObject = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+    const farObject = new FakeRectObject(2, new Vector(500, 0), renderCalls);
+    const outputCtx = createContext("output", ctxCalls);
+    const outputCanvas = createCanvas(800, 600, outputCtx);
+    const { viewport, aom } = createViewportContext({
+      activeObjects: [leftObject, farObject],
+      outputCanvas,
+    });
+
+    const renderer = new ViewportRenderer(viewport, aom, {
+      canvas: outputCanvas,
+    });
+    renderer._scheduler.scheduleFrame = () => 0;
+
+    renderer.flush();
+    renderCalls.length = 0;
+    ctxCalls.length = 0;
+
+    renderer.captureObjectSnapshot([leftObject]);
+    leftObject.position = new Vector(1, 0);
+    renderer.invalidateActiveObjects([leftObject]);
+    renderer._scheduler.flush();
+
+    // 仅 leftObject 与脏区相交并渲染，farObject 被跳过
+    expect(renderCalls).toEqual([[1, "output"]]);
+  });
+
+  test("active 圆 + 提交上层笔画时，圆应在脏区清空 + 裁剪 AOM 中单次渲染", () => {
+    const renderCalls = [];
+    const ctxCalls = [];
+    const circleObj = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+    circleObj.rich.boundingBox = new RectangleRange(0, 0, 100, 100);
+    const strokeObj = new FakeRectObject(2, new Vector(10, 10), renderCalls);
+    strokeObj.rich.boundingBox = new RectangleRange(0, 0, 80, 80);
+    const outputCtx = createContext("output", ctxCalls);
+    const outputCanvas = createCanvas(800, 600, outputCtx);
+    const { viewport, aom } = createViewportContext({
+      staticObjects: [strokeObj],
+      activeObjects: [circleObj],
+      outputCanvas,
+    });
+
+    const renderer = new ViewportRenderer(viewport, aom, {
+      canvas: outputCanvas,
+    });
+    renderer._scheduler.scheduleFrame = () => 0;
+
+    renderer.flush();
+    renderCalls.length = 0;
+    ctxCalls.length = 0;
+
+    // 模拟笔画提交：触发缓存和输出层刷新
+    renderer.invalidateCachedObjects([strokeObj]);
+    renderer._scheduler.flush();
+
+    // 脏区清空/拷贝 + 裁剪 AOM 绘制
+    // 圆只渲染一次（输出层）
+    expect(
+      renderCalls.filter((call) => call[0] === 1 && call[1] === "output"),
+    ).toHaveLength(1);
+    // 圆未进入静态缓存（仍被 AOM 过滤，不会重复渲染）
+    expect(
+      renderCalls.filter((call) => call[0] === 1 && call[1] === "cache"),
+    ).toHaveLength(0);
+    // 脏区清空：不应是全视口清空
+    expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    // 脏区拷贝或全量拷贝均应进行
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
+    // AOM 对象按脏区裁剪渲染
+    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "clip")).toBe(true);
   });
 
   test("getObjectScreenRect 应为 PathRange 额外补足栅格化 padding", () => {

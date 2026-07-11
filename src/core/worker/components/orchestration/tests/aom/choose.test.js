@@ -10,6 +10,8 @@ import {
 } from "../../../../../test-support/aom-fixtures.js";
 
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
+import { Vector } from "../../../../../utils/math.js";
+import { CircleObject } from "../../../../../shared/objects/graph/circle.js";
 import { ChunkObjectManager } from "../../../chunk/chunk-object-manager.js";
 import { oneChunkData } from "./data.js";
 
@@ -86,6 +88,59 @@ describe("ActiveObjectManager/choose", () => {
       expect(
         aom.layerOrder[0].inactiveGraph.equals(expectedInactiveGraph),
       ).toBe(true);
+    });
+
+    test("choose 应将 pickup 纳入 AOM 的 inactive 邻接对象一并加入静态层失效集合", async () => {
+      const lower = new CircleObject(101, new Vector(50, 50), {}, {
+        radius: 60,
+      });
+      const upper = new CircleObject(102, new Vector(70, 50), {}, {
+        radius: 60,
+      });
+
+      const ownerChunk = createChunk(1);
+      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
+        [101, [102]],
+        [102, []],
+      ]);
+      ownerChunk.objectManager.setObjectCoverChunks(101, [1]);
+      ownerChunk.objectManager.setObjectCoverChunks(102, [1]);
+
+      const requestStaticRenderForObjects = jest.fn();
+      const renderHooks = {
+        requestActiveRender: jest.fn(),
+        requestStaticRender: jest.fn(),
+        requestStaticRenderForObjects,
+        flushViewportForObjects: jest.fn(),
+      };
+      const objectMap = new Map([
+        [101, lower],
+        [102, upper],
+      ]);
+      const board = {
+        width: CHUNK_SIZE,
+        height: CHUNK_SIZE,
+        getObjectById: jest.fn((objectId) => objectMap.get(objectId)),
+        getChunkById: jest.fn((chunkId) =>
+          chunkId === 1 ? ownerChunk : undefined,
+        ),
+        createChunkLoader: jest.fn(() => ({
+          trackChunk: jest.fn(),
+          emitLoadRequest: jest.fn(),
+        })),
+      };
+      aom = new ActiveObjectManager(board, { renderHooks });
+
+      await aom.choose(new Set([lower]));
+
+      expect(requestStaticRenderForObjects).toHaveBeenCalledTimes(1);
+      const [invalidatedObjects] = requestStaticRenderForObjects.mock.calls[0];
+      expect(
+        invalidatedObjects
+          .map((objectInstance) => objectInstance.id)
+          .sort((left, right) => left - right),
+      ).toEqual([101, 102]);
     });
 
     test("应正确选择多个对象", async () => {

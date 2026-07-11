@@ -10,6 +10,23 @@ import { Vector } from "../../../utils/math.js";
 import { Tool } from "./tool.js";
 
 /**
+ * 统一处理可能同步或异步的动作结果（纯函数）
+ * @description
+ * 同步结果立即调用回调并同步返回；Promise 则链式 then 回调并返回新 Promise。
+ * 执行时序完全由结果类型决定，不引入额外 microtask。
+ * @template T, U
+ * @param {T|Promise<T>} result - 可能同步可能异步的返回值
+ * @param {(value: T) => U} onResolved - 结果就绪后的回调
+ * @returns {U|Promise<U>} 保持原返回值类型（sync→sync, async→async）
+ */
+function unifyActionResult(result, onResolved) {
+  if (result instanceof Promise) {
+    return result.then(onResolved);
+  }
+  return onResolved(result);
+}
+
+/**
  * 手势工具相关信号类型常量
  * @readonly
  * @enum {string}
@@ -242,16 +259,10 @@ class GestureTool extends Tool {
       return false;
     }
 
-    const result = this.performAction(context);
-    if (result instanceof Promise) {
-      return result.then((resolvedResult) => {
-        this.afterAction(context, resolvedResult);
-        return resolvedResult;
-      });
-    }
-
-    this.afterAction(context, result);
-    return result;
+    return unifyActionResult(this.performAction(context), (resolvedResult) => {
+      this.afterAction(context, resolvedResult);
+      return resolvedResult;
+    });
   }
 
   /**
@@ -480,4 +491,4 @@ class MultiGestureTool extends GestureTool {
   }
 }
 
-export { GESTURE_TOOL_SIGNAL_TYPES, GestureTool, MultiGestureTool };
+export { GESTURE_TOOL_SIGNAL_TYPES, GestureTool, MultiGestureTool, unifyActionResult };

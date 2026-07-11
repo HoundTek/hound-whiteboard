@@ -8,7 +8,7 @@
 
 - **Core Worker** — 对象管理、区块系统、层叠图、渲染调度，运行在 Web Worker 中
 - **Devices DAG** — 输入设备路由图，将鼠标/键盘/触摸等输入信号路由到对应的工具处理器
-- **UI Renderer** — 脏区渲染、位图合成、Overlay UI 渲染
+- **Viewport Renderer** — 脏区渲染、位图合成、Overlay UI 渲染
 - **Tool System** — 创建、选择、修改、擦除等交互工具
 
 UI Kit 另由 [HoundTek/hound-react-ui-kit](https://github.com/HoundTek/hound-react-ui-kit) 独立开发，使用 Cell DSL 构建 UI，为后续 React UI 迁移做准备。

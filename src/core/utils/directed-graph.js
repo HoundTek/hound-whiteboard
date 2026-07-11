@@ -137,18 +137,19 @@ class EdgeAlreadyExistError extends GraphError {
 
 /**
  * 有向图
+ * @template T
  * @author Zhou Chenyu
  */
 class DirectedGraph {
   /**
    * 该图的邻接表
-   * @type {Map<*, Set<*>>}
+   * @type {Map<T, Set<T>>}
    */
   adjList;
 
   /**
    * 该图的反向邻接表
-   * @type {Map<*, Set<*>>}
+   * @type {Map<T, Set<T>>}
    */
   adjListR;
 
@@ -163,7 +164,7 @@ class DirectedGraph {
 
   /**
    * 查询图中是否包含某个节点
-   * @param {*} node - 要查询的节点
+   * @param {T} node - 要查询的节点
    * @returns {boolean} 如果图中包含该节点，则返回 true，否则返回 false
    */
   hasNode(node) {
@@ -172,8 +173,9 @@ class DirectedGraph {
 
   /**
    * 查询图中是否存在某边
-   * @param {*} from - 起点
-   * @param {*} to - 终点
+   * @param {T} from - 起点
+   * @param {T} to - 终点
+   * @returns {boolean}
    */
   hasEdge(from, to) {
     return this.adjList.has(from) && this.adjList.get(from).has(to);
@@ -181,8 +183,8 @@ class DirectedGraph {
 
   /**
    * 添加一个节点
-   * @param {*} node - 要添加的节点
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @param {T} node - 要添加的节点
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   addNodeUnsafe(node) {
     this.adjList.set(node, new Set());
@@ -192,9 +194,9 @@ class DirectedGraph {
 
   /**
    * 添加一个节点，如果节点已存在，则抛出错误
-   * @param {*} node - 要添加的节点
+   * @param {T} node - 要添加的节点
    * @throws {NodeAlreadyExistError} 如果节点已存在
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   addNode(node) {
     if (this.hasNode(node)) {
@@ -205,9 +207,9 @@ class DirectedGraph {
 
   /**
    * 添加一条边
-   * @param {*} from - 起点
-   * @param {*} to - 终点
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @param {T} from - 起点
+   * @param {T} to - 终点
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   addEdgeUnsafe(from, to) {
     this.adjList.get(from).add(to);
@@ -217,10 +219,10 @@ class DirectedGraph {
 
   /**
    * 添加一条边，如果起点或终点不存在，或边已存在，则抛出错误
-   * @param {*} from - 起点
-   * @param {*} to - 终点
+   * @param {T} from - 起点
+   * @param {T} to - 终点
    * @throws {NodeNotExistError | EdgeAlreadyExistError} 如果起点或终点不存在，或边已存在
-   * @return {DirectedGraph} 返回自身以方便链式调用
+   * @return {DirectedGraph<T>} 返回自身以方便链式调用
    */
   addEdge(from, to) {
     if (!this.hasNode(from)) {
@@ -237,9 +239,9 @@ class DirectedGraph {
 
   /**
    * 删除一条边
-   * @param {*} from - 起点
-   * @param {*} to - 终点
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @param {T} from - 起点
+   * @param {T} to - 终点
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   deleteEdgeUnsafe(from, to) {
     this.adjList.get(from).delete(to);
@@ -249,10 +251,10 @@ class DirectedGraph {
 
   /**
    * 删除一条边，如果起点或终点不存在，或边不存在，则抛出错误
-   * @param {*} from - 起点
-   * @param {*} to - 终点
+   * @param {T} from - 起点
+   * @param {T} to - 终点
    * @throws {NodeNotExistError | EdgeNotExistError} 如果起点或终点不存在，或边不存在
-   * @return {DirectedGraph} 返回自身以方便链式调用
+   * @return {DirectedGraph<T>} 返回自身以方便链式调用
    */
   deleteEdge(from, to) {
     if (!this.hasNode(from)) {
@@ -269,9 +271,9 @@ class DirectedGraph {
 
   /**
    * 更改节点名称
-   * @param {*} oldNode - 旧节点名称
-   * @param {*} newNode - 新节点名称
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @param {T} oldNode - 旧节点名称
+   * @param {T} newNode - 新节点名称
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   changeNodeNameUnsafe(oldNode, newNode) {
     const outgoing = this.adjList.get(oldNode);
@@ -298,10 +300,10 @@ class DirectedGraph {
 
   /**
    * 更改节点名称，若节点不存在，则抛出错误
-   * @param {*} oldNode - 旧节点名称
-   * @param {*} newNode - 新节点名称
+   * @param {T} oldNode - 旧节点名称
+   * @param {T} newNode - 新节点名称
    * @throws {NodeNotExistError | NodeAlreadyExistError} 如果旧节点不存在或新节点已存在
-   * @return {DirectedGraph} 返回自身以方便链式调用
+   * @return {DirectedGraph<T>} 返回自身以方便链式调用
    */
   changeNodeName(oldNode, newNode) {
     if (!this.hasNode(oldNode)) {
@@ -315,8 +317,8 @@ class DirectedGraph {
 
   /**
    * 删除某个节点的所有边 (包括出边和入边)
-   * @param {*} node - 要删除边的节点
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @param {T} node - 要删除边的节点
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   deleteAllEdgesOfNodeUnsafe(node) {
     for (const neighbor of this.adjList.get(node)) {
@@ -332,9 +334,9 @@ class DirectedGraph {
 
   /**
    * 删除某个节点的所有边 (包括出边和入边)，如果节点不存在，则抛出错误
-   * @param {*} node - 要删除边的节点
+   * @param {T} node - 要删除边的节点
    * @throws {NodeNotExistError} 如果节点不存在
-   * @return {DirectedGraph} 返回自身以方便链式调用
+   * @return {DirectedGraph<T>} 返回自身以方便链式调用
    */
   deleteAllEdgesOfNode(node) {
     if (!this.hasNode(node)) {
@@ -345,8 +347,8 @@ class DirectedGraph {
 
   /**
    * 删除某个节点及其所有关联的边
-   * @param {*} node - 要删除的节点
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @param {T} node - 要删除的节点
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   deleteNodeUnsafe(node) {
     this.deleteAllEdgesOfNodeUnsafe(node); // 先删除所有关联的边
@@ -357,9 +359,9 @@ class DirectedGraph {
 
   /**
    * 删除某个节点及其所有关联的边，如果节点不存在，则抛出错误
-   * @param {*} node - 要删除的节点
+   * @param {T} node - 要删除的节点
    * @throws {NodeNotExistError} 如果节点不存在
-   * @return {DirectedGraph} 返回自身以方便链式调用
+   * @return {DirectedGraph<T>} 返回自身以方便链式调用
    */
   deleteNode(node) {
     if (!this.hasNode(node)) {
@@ -371,9 +373,9 @@ class DirectedGraph {
 
   /**
    * 查询节点的后继点，如果节点不存在，则抛出错误
-   * @param {*} node - 要查询的节点
+   * @param {T} node - 要查询的节点
    * @throws {NodeNotExistError} 如果节点不存在
-   * @returns {Set<*> | undefined} 该节点的后继
+   * @returns {Set<T> | undefined} 该节点的后继
    */
   neighbors(node) {
     if (!this.hasNode(node)) {
@@ -384,8 +386,8 @@ class DirectedGraph {
 
   /**
    * 查询节点的后继点
-   * @param {*} node - 要查询的节点
-   * @returns {Set<*> | undefined} 该节点的后继
+   * @param {T} node - 要查询的节点
+   * @returns {Set<T> | undefined} 该节点的后继
    */
   neighborsUnsafe(node) {
     return this.adjList.get(node);
@@ -393,9 +395,9 @@ class DirectedGraph {
 
   /**
    * 查询节点的前驱点，如果节点不存在，则抛出错误
-   * @param {*} node - 要查询的节点
+   * @param {T} node - 要查询的节点
    * @throws {NodeNotExistError} 如果节点不存在
-   * @returns {Set<*> | undefined} 该节点的前驱
+   * @returns {Set<T> | undefined} 该节点的前驱
    */
   predecessors(node) {
     if (!this.hasNode(node)) {
@@ -406,8 +408,8 @@ class DirectedGraph {
 
   /**
    * 查询节点的前驱点
-   * @param {*} node - 要查询的节点
-   * @returns {Set<*> | undefined} 该节点的前驱
+   * @param {T} node - 要查询的节点
+   * @returns {Set<T> | undefined} 该节点的前驱
    */
   predecessorsUnsafe(node) {
     return this.adjListR.get(node);
@@ -423,7 +425,7 @@ class DirectedGraph {
 
   /**
    * 查询节点的入度
-   * @param {*} node - 要查询的节点
+   * @param {T} node - 要查询的节点
    * @returns {number} 节点的入度
    */
   getInDegreeUnsafe(node) {
@@ -432,7 +434,7 @@ class DirectedGraph {
 
   /**
    * 查询节点的入度，若节点不存在，则抛出错误
-   * @param {*} node - 要查询的节点
+   * @param {T} node - 要查询的节点
    * @throws {NodeNotExistError} 如果节点不存在
    * @returns {number} 节点的入度
    */
@@ -445,7 +447,7 @@ class DirectedGraph {
 
   /**
    * 查询节点的出度
-   * @param {*} node - 要查询的节点
+   * @param {T} node - 要查询的节点
    * @returns {number} 节点的出度
    */
   getOutDegreeUnsafe(node) {
@@ -454,7 +456,7 @@ class DirectedGraph {
 
   /**
    * 查询节点的出度，若节点不存在，则抛出错误
-   * @param {*} node - 要查询的节点
+   * @param {T} node - 要查询的节点
    * @throws {NodeNotExistError} 如果节点不存在
    * @returns {number} 节点的出度
    */
@@ -467,7 +469,7 @@ class DirectedGraph {
 
   /**
    * 获取图中所有节点的入度映射
-   * @returns {Map<*, number>} 节点到入度的映射
+   * @returns {Map<T, number>} 节点到入度的映射
    */
   getInDegreeMap() {
     let inDegreeMap = new Map();
@@ -479,7 +481,7 @@ class DirectedGraph {
 
   /**
    * 获取所有入度为 0 的节点
-   * @returns {Array<*>} 所有入度为 0 的节点
+   * @returns {Array<T>} 所有入度为 0 的节点
    */
   getNoIncomingNodes() {
     let noIncoming = [];
@@ -493,7 +495,7 @@ class DirectedGraph {
 
   /**
    * 获取图中所有节点的出度映射
-   * @returns {Map<*, number>} 节点到出度的映射
+   * @returns {Map<T, number>} 节点到出度的映射
    */
   getOutDegreeMap() {
     let outDegreeMap = new Map();
@@ -505,7 +507,7 @@ class DirectedGraph {
 
   /**
    * 获取所有出度为 0 的节点
-   * @returns {Array<*>} 所有出度为 0 的节点
+   * @returns {Array<T>} 所有出度为 0 的节点
    */
   getNoOutgoingNodes() {
     let noOutgoing = [];
@@ -519,7 +521,7 @@ class DirectedGraph {
 
   /**
    * 获取图中所有节点
-   * @returns {Array<*>} 图中所有节点
+   * @returns {Array<T>} 图中所有节点
    */
   getNodes() {
     return Array.from(this.adjList.keys());
@@ -527,7 +529,7 @@ class DirectedGraph {
 
   /**
    * 清空图
-   * @returns {DirectedGraph} 返回自身以方便链式调用
+   * @returns {DirectedGraph<T>} 返回自身以方便链式调用
    */
   clear() {
     this.adjList.clear();
@@ -537,7 +539,7 @@ class DirectedGraph {
 
   /**
    * 获取图的一个拓扑序
-   * @returns {Array<*>} 图的拓扑序；若图含环，则仅返回 Kahn 算法可释放的前缀
+   * @returns {Array<T>} 图的拓扑序；若图含环，则仅返回 Kahn 算法可释放的前缀
    */
   getTopologicalOrder() {
     const inDegreeMap = this.getInDegreeMap();
@@ -583,12 +585,13 @@ class DirectedGraph {
 
   /**
    * 从邻接表构建一个有向图实例
-   * @param {Array<Array<any>>} arr - 邻接表表示的有向图
+   * @template T
+   * @param {Array<[T, Array<T>]>} arr - 邻接表表示的有向图
    * @example
    * let graph = DirectedGraph.parse([[1, [2, 3]], [2, [3]], [3, []]]);
    * // graph 表示的有向图为：1 -> 2, 1 -> 3, 2 -> 3
    * @static
-   * @returns {DirectedGraph} 创建的实例
+   * @returns {DirectedGraph<T>} 创建的实例
    */
   static parse(arr) {
     let graph = new DirectedGraph();
@@ -614,7 +617,7 @@ class DirectedGraph {
 
   /**
    * 将图转换为邻接表表示的数组
-   * @returns {Array<Array<any>>} 邻接表表示的数组
+   * @returns {Array<[T, Array<T>]>} 邻接表表示的数组
    */
   toArray() {
     let arr = [];
@@ -639,7 +642,7 @@ class DirectedGraph {
 
   /**
    * 比较该图与另一个图是否相等
-   * @param {DirectedGraph} otherGraph - 另一个有向图
+   * @param {DirectedGraph<T>} otherGraph - 另一个有向图
    * @returns {boolean} 是否与另一个图相等，即节点和边均相同，相等则返回 true，否则返回 false
    */
   equals(otherGraph) {

@@ -5,14 +5,13 @@
  * @author Zhou Chenyu
  */
 
-import { intersectsRanges, RectangleRange } from "../../../shared/range/index.js";
+import { RectangleRange } from "../../../shared/range/index.js";
 import { Viewport } from "../orchestration/viewport.js";
 import { Logger } from "../../../../utils/log/logger.js";
 import { logBus } from "../../../../utils/log/log-bus.js";
 import { createRectangleDirtyRectMerger } from "../../../shared/renderer/render-scheduler.js";
 import { createLiveDirtyRectThresholdStrategy } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
 import { CanvasHost } from "../../../shared/renderer/canvas-lifecycle.js";
-import { expandRectForClear } from "../../../shared/renderer/renderer.js";
 import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "../../../shared/renderer/ui-overlay-factory.js";
 
 /**
@@ -176,87 +175,43 @@ class UiRenderer extends CanvasHost {
   }
 
   /**
-   * 执行 UI 覆盖层刷新
-   * @param {Array<RectangleRange | Object>} [dirtyRects=[]] - 脏区集合
+   * 执行 UI 覆盖层刷新（全量重绘）
+   * @description
+   * 临时跳过脏区优化，全量清空 uiCanvas 并重绘所有 overlay 条目。
+   * @param {Array<RectangleRange | Object>} [dirtyRects=[]] - 脏区集合（当前忽略）
    * @returns {RectangleRange[]} 本次实际处理的脏区
    */
   flush(dirtyRects = []) {
     const context = this._getContext();
     if (!context) return [];
 
-    const normalizedDirtyRects = UiRenderer._normalizeDirtyRects(
-      dirtyRects,
-      this.viewport?.getViewportScreenRect?.(),
-    );
-    if (normalizedDirtyRects.length === 0) {
+    const viewportRect = this.viewport?.getViewportScreenRect?.();
+    if (!viewportRect || viewportRect.width <= 0 || viewportRect.height <= 0) {
       return [];
     }
 
-    for (const dirtyRect of normalizedDirtyRects) {
-      context.clearRect?.(
-        dirtyRect.left,
-        dirtyRect.top,
-        dirtyRect.width,
-        dirtyRect.height,
-      );
-    }
+    // 全量清空 uiCanvas
+    context.clearRect?.(0, 0, viewportRect.width, viewportRect.height);
 
     const overlayEntries = this.collectOverlayEntries();
     if (overlayEntries.length === 0) {
-      return normalizedDirtyRects;
+      return [viewportRect];
     }
 
-    for (const dirtyRect of normalizedDirtyRects) {
-      const visibleEntries = overlayEntries.filter((entry) => {
-        if (!entry?.screenRect) return true;
-        return intersectsRanges(entry.screenRect, dirtyRect);
+    // 全量绘制所有 overlay 条目
+    for (const entry of overlayEntries) {
+      entry.draw?.(context, {
+        dirtyRect: viewportRect,
+        entry,
+        viewport: this.viewport,
+        renderer: this,
       });
-      if (visibleEntries.length === 0) continue;
-
-      context.save?.();
-      context.beginPath?.();
-      context.rect?.(
-        dirtyRect.left,
-        dirtyRect.top,
-        dirtyRect.width,
-        dirtyRect.height,
-      );
-      context.clip?.();
-
-      for (const entry of visibleEntries) {
-        entry.draw?.(context, {
-          dirtyRect,
-          entry,
-          viewport: this.viewport,
-          renderer: this,
-        });
-      }
-
-      context.restore?.();
     }
 
-    return normalizedDirtyRects;
+    return [viewportRect];
   }
 
-  /**
-   * 规整脏区数组用于屏幕清理（含回退到全视口）
-   * @param {any[]} dirtyRects - 原始脏区集合
-   * @param {RectangleRange | undefined} fallbackRect - 空脏区时的回退矩形
-   * @returns {RectangleRange[]}
-   * @private
-   */
-  static _normalizeDirtyRects(dirtyRects = [], fallbackRect) {
-    const normalizedDirtyRects = dirtyRects
-      .map((dirtyRect) => expandRectForClear(dirtyRect))
-      .filter(Boolean);
 
-    if (normalizedDirtyRects.length > 0) {
-      return normalizedDirtyRects;
-    }
-
-    const normalizedFallbackRect = expandRectForClear(fallbackRect);
-    return normalizedFallbackRect ? [normalizedFallbackRect] : [];
-  }
 }
 
 export { UiRenderer };

@@ -7,13 +7,14 @@
 
 /**
  * 队列
+ * @template T
  * @class
  * @author Zhou Chenyu
  */
 class Queue {
   /**
    * 循环数组存储元素
-   * @type {Array<any>}
+   * @type {Array<T>}
    */
   elements;
 
@@ -61,7 +62,7 @@ class Queue {
 
   /**
    * 入队
-   * @param {any} elem - 要入队的元素
+   * @param {T} elem - 要入队的元素
    */
   push(elem) {
     // 检查是否需要扩容（预留一个空位用于区分满和空）
@@ -75,7 +76,7 @@ class Queue {
   /**
    * 出队
    * @throws {RangeError} 当队列为空时
-   * @returns {any}
+   * @returns {T}
    */
   pop() {
     if (this.empty()) {
@@ -106,7 +107,7 @@ class Queue {
   /**
    * 获取队头元素
    * @throws {RangeError} 当队列为空时
-   * @returns {any}
+   * @returns {T}
    */
   peek() {
     if (this.empty()) {
@@ -117,7 +118,7 @@ class Queue {
 
   /**
    * 转换为数组
-   * @returns {Array<any>}
+   * @returns {Array<T>}
    */
   toArray() {
     const result = [];
@@ -127,8 +128,8 @@ class Queue {
 
   /**
    * 筛选队列元素
-   * @param {(elem: *) => boolean} predicate - 筛选函数
-   * @returns {Array<*>} 匹配的元素数组
+   * @param {(elem: T) => boolean} predicate - 筛选函数
+   * @returns {Array<T>} 匹配的元素数组
    */
   filter(predicate) {
     const result = [];
@@ -140,8 +141,9 @@ class Queue {
 
   /**
    * 映射队列元素
-   * @param {(elem: *) => *} transform - 映射函数
-   * @returns {Array<*>} 变换后的元素数组
+   * @template R
+   * @param {(elem: T) => R} transform - 映射函数
+   * @returns {Array<R>} 变换后的元素数组
    */
   map(transform) {
     const result = [];
@@ -161,7 +163,7 @@ class Queue {
 
   /**
    * 遍历队列元素
-   * @param {(elem: *, index: number) => void} fn - 遍历回调
+   * @param {(elem: T, index: number) => void} fn - 遍历回调
    * @private
    */
   #forEach(fn) {

@@ -109,7 +109,7 @@ function collectFallbackActiveDrawables(aom, seenObjectIds) {
   if (!aom) return [];
 
   const drawables = [];
-  for (const objectInstance of aom.activeObjects ?? []) {
+  for (const objectInstance of aom.activeObjectIndex?.values() ?? []) {
     if (!(objectInstance instanceof BasicObject)) continue;
     if (seenObjectIds.has(objectInstance.id)) continue;
     drawables.push(objectInstance);

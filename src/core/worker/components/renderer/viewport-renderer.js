@@ -7,16 +7,22 @@
  * @author Zhou Chenyu
  */
 
-import { Renderer } from "../../../shared/renderer/renderer.js";
+import {
+  Renderer,
+  expandRectForClear,
+  normalizeDirtyRectsForScreenUpdate,
+} from "../../../shared/renderer/renderer.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../shared/range/rectangle.js";
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { ActiveObjectManager } from "../orchestration/active-object-manager.js";
 import { collectActiveDrawables as _collectActiveDrawables } from "./aom-collect-utils.js";
-import { createBaseDirtyRectThresholdStrategy } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
+import { RenderScheduler, createRectangleDirtyRectMerger } from "../../../shared/renderer/render-scheduler.js";
 import {
-  createBaseDirtyRectCanonicalRectsResolver,
-} from "./dirty-rect-strategy.js";
+  createBaseDirtyRectThresholdStrategy,
+  createLiveDirtyRectThresholdStrategy,
+} from "../../../shared/renderer/dirty-rect-strategy-shared.js";
+
 
 /**
  * @typedef {Object} ViewportRendererInvalidateActiveOptions
@@ -86,6 +92,27 @@ class ViewportRenderer extends Renderer {
   #resolveCacheThresholds;
 
   /**
+   * 输出层缩放感知的脏区合并阈值策略
+   * @type {(zoom: number) => Record<string, number | undefined>}
+   * @private
+   */
+  #resolveOutputThresholds;
+
+  /**
+   * 缓存层渲染调度器
+   * @type {RenderScheduler}
+   * @private
+   */
+  #cacheScheduler;
+
+  /**
+   * 输出层渲染调度器
+   * @type {RenderScheduler}
+   * @private
+   */
+  #outputScheduler;
+
+  /**
    * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 目标视口
    * @param {ActiveObjectManager | undefined} aom - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | OffscreenCanvas | null }} [options = {}] - 初始化选项
@@ -105,13 +132,20 @@ class ViewportRenderer extends Renderer {
 
     this.#cache = new OffscreenCanvas(width, height);
 
-    this._initScheduler(
-      this._createDirtyRectMerger(),
-      (dirtyRects) => this.flush(dirtyRects),
-    );
-  }
+    this.#resolveOutputThresholds = createLiveDirtyRectThresholdStrategy();
 
-  // ─── 公开属性 ────────────────────────────────────────
+    this.#cacheScheduler = new RenderScheduler({
+      mergeDirtyRects: this._createDirtyRectMerger(),
+      flushHandler: (dirtyRects) => this.#cacheFlush(dirtyRects),
+    });
+
+    this.#outputScheduler = new RenderScheduler({
+      mergeDirtyRects: this.#createOutputDirtyRectMerger(),
+      flushHandler: (dirtyRects) => this.#outputFlush(dirtyRects),
+    });
+
+    this._scheduler = this.#outputScheduler;
+  }
 
   /**
    * 输出 canvas（最终上屏的位图来源）
@@ -137,8 +171,6 @@ class ViewportRenderer extends Renderer {
   setActiveObjectManager(aom) {
     this.#aom = aom;
   }
-
-  // ─── 尺寸管理 ────────────────────────────────────────
 
   /**
    * 调整渲染层尺寸
@@ -166,8 +198,6 @@ class ViewportRenderer extends Renderer {
     return resized;
   }
 
-  // ─── 阈值策略 ────────────────────────────────────────
-
   /**
    * 获取当前脏区合并阈值
    * @returns {Record<string, number | undefined>}
@@ -178,25 +208,33 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 获取脏区对应的已加载区块的屏幕矩形集合
-   * @param {any} dirtyRect - 脏区
-   * @returns {any[]}
-   * @protected
+   * 创建输出层脏区合并器
+   * @description 使用 live 层策略（更激进的合并阈值），适用于逐帧变化的 AOM 输出层。
+   * @returns {(dirtyRects: any[]) => any[]}
+   * @private
    */
-  _getCanonicalRectsForRect(dirtyRect) {
-    return createBaseDirtyRectCanonicalRectsResolver({
-      getOrigin: () => this.viewport?.origin,
-      getZoom: () => this.viewport?.zoom,
-      getLoadedChunks: () =>
-        this.viewport?.chunkLoader?.getLoadedChunks?.() ?? [],
-      getChunkById: (chunkId) => this.viewport?.board?.getChunkById?.(chunkId),
-      getChunkWidth: () => this.viewport?.chunkWidth,
-      getChunkHeight: () => this.viewport?.chunkHeight,
-      getChunkScreenRect: (chunk) => this.getChunkScreenRect(chunk),
-    })(dirtyRect);
+  #createOutputDirtyRectMerger() {
+    return createRectangleDirtyRectMerger({
+      getThresholds: () => this.#resolveOutputThresholds(this.viewport?.zoom ?? 1) ?? {},
+      getViewportRect: () => this._getViewportRect(),
+    });
   }
 
-  // ─── 对象集合收集 ────────────────────────────────────
+  /**
+   * 提交一次失效请求到缓存层和输出层调度器
+   * @param {any} [rect] - 失效脏区
+   * @returns {boolean}
+   */
+  invalidate(rect) {
+    let scheduled = false;
+    if (this.#cacheScheduler) {
+      scheduled = this.#cacheScheduler.invalidate(rect) || scheduled;
+    }
+    if (this.#outputScheduler) {
+      scheduled = this.#outputScheduler.invalidate(rect) || scheduled;
+    }
+    return scheduled;
+  }
 
   /**
    * 收集应在输出层绘制的对象（AOM 中的对象）
@@ -236,8 +274,6 @@ class ViewportRenderer extends Renderer {
     ctx.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
     ctx.restore();
   }
-
-  // ─── 区块矩形 ────────────────────────────────────────
 
   /**
    * 获取区块的世界矩形范围
@@ -290,8 +326,6 @@ class ViewportRenderer extends Renderer {
       worldRect.height * zoom,
     );
   }
-
-  // ─── 静态图对象收集 ──────────────────────────────────
 
   /**
    * 解析静态对象实例
@@ -401,8 +435,6 @@ class ViewportRenderer extends Renderer {
       : allDrawables;
   }
 
-  // ─── AOM 对象收集 ────────────────────────────────────
-
   /**
    * 收集应绘制的 AOM 对象
    * @returns {BasicObject[]}
@@ -410,8 +442,6 @@ class ViewportRenderer extends Renderer {
   collectActiveDrawables() {
     return _collectActiveDrawables(this.#aom);
   }
-
-  // ─── 对象范围查询 ────────────────────────────────────
 
   /**
    * 获取对象的世界矩形范围
@@ -430,8 +460,6 @@ class ViewportRenderer extends Renderer {
       return undefined;
     }
   }
-
-  // ─── 快照管理 ────────────────────────────────────────
 
   /**
    * 记录对象当前几何快照
@@ -461,8 +489,6 @@ class ViewportRenderer extends Renderer {
     return new Map(entries.map((entry) => [entry.objectId, entry]));
   }
 
-  // ─── 失效 API ────────────────────────────────────────
-
   /**
    * 失效 AOM 对象对应的屏幕脏区（输出层）
    * @description
@@ -474,6 +500,7 @@ class ViewportRenderer extends Renderer {
     const previousEntryIndex = this.indexDrawableEntries(
       this.#previousAomEntries,
     );
+
     const dirtyRects = Array.from(objects).flatMap((objectInstance) => {
       const rects = [];
       const currentRect = this.getObjectScreenRect(objectInstance);
@@ -493,14 +520,14 @@ class ViewportRenderer extends Renderer {
       dirtyRects.length > 0
         ? dirtyRects
         : [
-            ...this.createDrawableEntries(this.collectActiveDrawables()),
-            ...this.#previousAomEntries,
-          ]
-            .map((entry) => this.normalizeScreenRect(entry?.screenRect))
-            .filter(Boolean);
+          ...this.createDrawableEntries(this.collectActiveDrawables()),
+          ...this.#previousAomEntries,
+        ]
+          .map((entry) => this.normalizeScreenRect(entry?.screenRect))
+          .filter(Boolean);
 
     for (const dirtyRect of targetDirtyRects) {
-      this.invalidate(dirtyRect);
+      this.#outputScheduler.invalidate(dirtyRect);
     }
   }
 
@@ -581,8 +608,6 @@ class ViewportRenderer extends Renderer {
     }
   }
 
-  // ─── 缓存合成 ────────────────────────────────────────
-
   /**
    * 全量拷贝静态缓存到输出 canvas
    * @description 在 clear → copyCache → render 三步流水线中用作第二步。
@@ -628,13 +653,11 @@ class ViewportRenderer extends Renderer {
     ctx.restore();
   }
 
-  // ─── 缓存渲染 ────────────────────────────────────────
-
   /**
-   * 更新静态缓存
+   * 更新静态缓存（全量重绘）
    * @description
-   * 清空缓存 canvas 的脏区，收集非 AOM 的静态对象，按拓扑序绘制。
-   * @param {RectangleRange[]} dirtyRects - 脏区集合
+   * 临时跳过脏区优化，全量清空缓存 canvas 并重绘所有非 AOM 的静态对象。
+   * @param {RectangleRange[]} dirtyRects - 脏区集合（当前忽略，用于全量重绘触发）
    * @private
    */
   #updateCache(dirtyRects) {
@@ -644,31 +667,12 @@ class ViewportRenderer extends Renderer {
     const drawables = this.#collectCacheDrawables();
     const drawableEntries = this.createDrawableEntries(drawables);
     const viewportContext = this.createViewportContext(ctx);
-    const hasExplicitDirtyRects =
-      Array.isArray(dirtyRects) && dirtyRects.length > 0;
 
-    if (hasExplicitDirtyRects) {
-      this.clearDirtyRectsOnContext(ctx, dirtyRects);
-    } else {
-      this.#clearCache();
-    }
+    this.#clearCache();
 
     for (const entry of drawableEntries) {
-      if (hasExplicitDirtyRects) {
-        if (!this.intersectsDirtyRects(entry, dirtyRects)) continue;
-      }
       if (typeof entry.object.render !== "function") continue;
-
-      const entryDirtyRects = hasExplicitDirtyRects
-        ? this.getEntryDirtyRects(entry, dirtyRects)
-        : [];
-
-      this.renderObjectWithinDirtyRects(
-        ctx,
-        viewportContext,
-        entry.object,
-        entryDirtyRects,
-      );
+      entry.object.render(viewportContext);
     }
 
     this.#cacheDirty = false;
@@ -684,77 +688,117 @@ class ViewportRenderer extends Renderer {
     if (!ctx) return;
 
     for (const dirtyRect of dirtyRects) {
-      const normalizedRect = RectangleRange.fromRectLike(dirtyRect);
-      if (!normalizedRect) continue;
+      const clearRect = expandRectForClear(dirtyRect);
+      if (!clearRect) continue;
 
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(
-        Math.floor(normalizedRect.left),
-        Math.floor(normalizedRect.top),
-        Math.ceil(normalizedRect.width),
-        Math.ceil(normalizedRect.height),
+        clearRect.left,
+        clearRect.top,
+        clearRect.width,
+        clearRect.height,
       );
       ctx.restore();
     }
   }
 
-  // ─── 主刷新入口 ──────────────────────────────────────
+  /**
+   * 缓存调度器 flush 处理器
+   * @description 由缓存层调度器在 rAF 中触发。仅在 #cacheDirty 为真时更新缓存。
+   * @param {RectangleRange[]} cacheDirtyRects - 缓存层脏区集合
+   * @private
+   */
+  #cacheFlush(cacheDirtyRects) {
+    if (this.#cacheDirty) {
+      this.#updateCache(cacheDirtyRects);
+      this.#cacheDirty = false;
+    }
+  }
 
   /**
-   * 刷新输出帧
+   * 刷新缓存层
+   * @description 若缓存脏且有积压脏区，同步刷新缓存。在输出层 flush 前调用，确保缓存不落后于输出。
+   * @private
+   */
+  #flushCacheScheduler() {
+    if (!this.#cacheDirty) return;
+    if (this.#cacheScheduler?.dirtyRects?.length > 0) {
+      this.#cacheScheduler.flush();
+      return;
+    }
+    // 无积压脏区但缓存脏 → 全量重建
+    this.#updateCache([]);
+    this.#cacheDirty = false;
+  }
+
+  /**
+   * 输出调度器 flush 处理器
+   * @description 由输出层调度器在 rAF 中触发。先刷新缓存层（如需要），再渲染输出帧。
+   * @param {RectangleRange[]} outputDirtyRects - 输出层脏区集合
+   * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
+   * @private
+   */
+  #outputFlush(outputDirtyRects) {
+    this.#flushCacheScheduler();
+    return this.#renderOutput(outputDirtyRects);
+  }
+
+  /**
+   * 渲染输出帧
    * @description
-   * 主渲染入口：
-   * 1. 若缓存脏 → 更新缓存
-   * 2. 清空输出 canvas 脏区
-   * 3. 从缓存拷贝静态内容到输出
-   * 4. 绘制 AOM 对象
-   * 5. 保存状态供下一帧使用
+   * 输出层渲染管线：脏区清空 + 脏区缓存拷贝 + 脏区裁剪 AOM 绘制。
+   * 保留脏区清空/拷贝逻辑，避免全量 clear 在缓存不完整时把旧像素也抹掉。
+   * 1. 按脏区清空输出 canvas
+   * 2. 按脏区从缓存拷贝静态内容到输出
+   * 3. 按脏区裁剪绘制 AOM 对象（不相交则跳过）
+   * 4. 保存状态供下一帧使用
    * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
    * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
+   * @private
    */
-  flush(dirtyRects) {
+  #renderOutput(dirtyRects) {
     const outputCtx = this._getContext();
     if (!outputCtx) return [];
 
-    // Step 1: 更新缓存（如需要）
-    if (this.#cacheDirty) {
-      this.#updateCache(dirtyRects);
-    }
-
-    // Step 2-3: 渲染输出
     const aomDrawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(aomDrawables);
     const viewportContext = this.createViewportContext(outputCtx);
     const hasExplicitDirtyRects =
       Array.isArray(dirtyRects) && dirtyRects.length > 0;
-    const effectiveDirtyRects = hasExplicitDirtyRects
-      ? this.collectDirtyRects(dirtyRects).filter(Boolean)
+
+    // 脏区归一化并扩边到整数边界，确保 clearRect / drawImage 使用一致的 rect
+    const normalizedDirtyRects = hasExplicitDirtyRects
+      ? normalizeDirtyRectsForScreenUpdate(
+        this.collectDirtyRects(dirtyRects),
+      )
       : [];
 
-    // 清空输出 canvas 脏区
-    if (hasExplicitDirtyRects) {
-      this.clearDirtyRects(effectiveDirtyRects);
+    // 按脏区清空输出 canvas（无脏区时全量清空）
+    if (normalizedDirtyRects.length > 0) {
+      this.clearDirtyRects(normalizedDirtyRects);
     } else {
       this.clear();
     }
 
-    // 从缓存拷贝静态内容到输出
-    if (hasExplicitDirtyRects) {
-      this.#copyCacheRects(outputCtx, effectiveDirtyRects);
+    // 按脏区从缓存拷贝静态内容到输出（无脏区时全量拷贝）
+    if (normalizedDirtyRects.length > 0) {
+      this.#copyCacheRects(outputCtx, normalizedDirtyRects);
     } else {
       this.#copyCache(outputCtx);
     }
 
-    // 绘制 AOM 对象
+    // 按脏区裁剪绘制 AOM 对象：不相交则跳过，相交则裁剪到对应脏区
     for (const entry of drawableEntries) {
-      if (hasExplicitDirtyRects) {
-        if (!this.intersectsDirtyRects(entry, effectiveDirtyRects)) continue;
-      }
       if (typeof entry.object.render !== "function") continue;
+      if (
+        hasExplicitDirtyRects &&
+        !this.intersectsDirtyRects(entry, normalizedDirtyRects)
+      )
+        continue;
 
       const entryDirtyRects = hasExplicitDirtyRects
-        ? this.getEntryDirtyRects(entry, effectiveDirtyRects)
+        ? this.getEntryDirtyRects(entry, normalizedDirtyRects)
         : [];
 
       this.renderObjectWithinDirtyRects(
@@ -765,14 +809,30 @@ class ViewportRenderer extends Renderer {
       );
     }
 
-    // Step 4: 保存状态
+    // 保存状态供下一帧使用
     this.#previousAomEntries = drawableEntries;
     this.#objectSnapshotRects.clear();
 
     return aomDrawables;
   }
 
-  // ─── 调试 API ────────────────────────────────────────
+  /**
+   * 刷新输出帧
+   * @description
+   * 主渲染入口：
+   * 1. 刷新缓存层（如需要）
+   * 2. 清空输出 canvas 脏区
+   * 3. 从缓存拷贝静态内容到输出
+   * 4. 绘制 AOM 对象
+   * 5. 保存状态供下一帧使用
+   * 可直接调用（如测试），也作为输出调度器 flushHandler 的代理。
+   * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
+   * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
+   */
+  flush(dirtyRects) {
+    this.#flushCacheScheduler();
+    return this.#renderOutput(dirtyRects);
+  }
 
   /**
    * 将静态缓存内容渲染到外部 canvas（调试用）

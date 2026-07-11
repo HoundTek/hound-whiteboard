@@ -16,7 +16,7 @@ describe("ActiveObjectManager/basic", () => {
       expect(aom).toBeInstanceOf(ActiveObjectManager);
       expect(aom.layerOrder).toEqual([]);
       expect(aom.layerIndex).toBeInstanceOf(Map);
-      expect(aom.activeObjects).toBeInstanceOf(Set);
+      expect(aom.activeObjectIndex).toBeInstanceOf(Map);
       expect(aom.layerPool).toBeInstanceOf(RandomNumberPool);
       expect(aom.onLayer).toBeInstanceOf(Map);
     });
@@ -63,7 +63,7 @@ describe("ActiveObjectManager/basic", () => {
 
       expect(firstLayer.activeObjects).toEqual(new Set([30]));
       expect(secondLayer.activeObjects).toEqual(new Set([31]));
-      expect(aom.activeObjects).toEqual(new Set([lower, upper]));
+      expect(new Set(aom.activeObjectIndex.values())).toEqual(new Set([lower, upper]));
       expect(aom.layerOrder).toEqual([firstLayer, secondLayer]);
       expect(aom.onLayer.get(30)).toBe(firstLayer);
       expect(aom.onLayer.get(31)).toBe(secondLayer);
