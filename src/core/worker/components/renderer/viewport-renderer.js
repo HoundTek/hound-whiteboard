@@ -22,9 +22,7 @@ import {
   createBaseDirtyRectThresholdStrategy,
   createLiveDirtyRectThresholdStrategy,
 } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
-import {
-  createBaseDirtyRectCanonicalRectsResolver,
-} from "./dirty-rect-strategy.js";
+
 
 /**
  * @typedef {Object} ViewportRendererInvalidateActiveOptions
@@ -210,25 +208,6 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 获取脏区对应的已加载区块的屏幕矩形集合
-   * @param {any} dirtyRect - 脏区
-   * @returns {any[]}
-   * @protected
-   */
-  _getCanonicalRectsForRect(dirtyRect) {
-    return createBaseDirtyRectCanonicalRectsResolver({
-      getOrigin: () => this.viewport?.origin,
-      getZoom: () => this.viewport?.zoom,
-      getLoadedChunks: () =>
-        this.viewport?.chunkLoader?.getLoadedChunks?.() ?? [],
-      getChunkById: (chunkId) => this.viewport?.board?.getChunkById?.(chunkId),
-      getChunkWidth: () => this.viewport?.chunkWidth,
-      getChunkHeight: () => this.viewport?.chunkHeight,
-      getChunkScreenRect: (chunk) => this.getChunkScreenRect(chunk),
-    })(dirtyRect);
-  }
-
-  /**
    * 创建输出层脏区合并器
    * @description 使用 live 层策略（更激进的合并阈值），适用于逐帧变化的 AOM 输出层。
    * @returns {(dirtyRects: any[]) => any[]}
@@ -238,8 +217,6 @@ class ViewportRenderer extends Renderer {
     return createRectangleDirtyRectMerger({
       getThresholds: () => this.#resolveOutputThresholds(this.viewport?.zoom ?? 1) ?? {},
       getViewportRect: () => this._getViewportRect(),
-      getCanonicalRectsForRect: (dirtyRect) =>
-        this._getCanonicalRectsForRect(dirtyRect),
     });
   }
 
