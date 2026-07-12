@@ -74,7 +74,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",
     "benchmark": "2.1.4",
-    "hound-tauri-build": "^0.2.3",
+    "hound-tauri-build": "0.2.2",
     "husky": "^9.1.7",
     "ink": "5",
     "jest": "30.4.2",

@@ -1433,10 +1433,13 @@ hidefile@3:
   dependencies:
     winattr "^3.0.0"
 
-hound-tauri-build@^0.2.3:
-  version "0.2.3"
-  resolved "https://registry.npmmirror.com/hound-tauri-build/-/hound-tauri-build-0.2.3.tgz#eafef5141578165179a32666fb5953d7ae8895e6"
-  integrity sha512-OvgCm1ec2ZVReiZ1JYF0+sJS/rG8p8cykufPgHDphVcCNS6cc1tbfhseuDF6F+fzJJNAM8gEnUugs8G8Sh0Qcw==
+hound-tauri-build@0.2.2:
+  version "0.2.2"
+  resolved "https://registry.npmmirror.com/hound-tauri-build/-/hound-tauri-build-0.2.2.tgz#d4363a67b192a756ae1a6a308cde91d1a4427069"
+  integrity sha512-cTvdxFA8HSSaE82IuAeccuz5cS0SAhSI78b7Ajl7/E7EUaqTFt1HUcoN8CweZENgCCUEMIEhXFfvXqhpcGiD0A==
+  dependencies:
+    adm-zip "0.5.17"
+    hidefile "3"
 
 html-escaper@^2.0.0:
   version "2.0.2"
