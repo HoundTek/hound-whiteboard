@@ -253,7 +253,9 @@ function intersectsPathWithArea(path, area, options = {}) {
 
 /**
  * 判断两条路径是否相交
- * @description 只检查路径点落在线上或两侧线段相交的情况。
+ * @description
+ * Path 是开放折线，不围成面积。路径点落在另一条开放折线线段上的概率近乎为零，
+ * 且即使有点共线，anySegmentIntersection 也会在第三步捕获，因此跳过点包含检测。
  * @param {PathRange} left - 左侧路径
  * @param {PathRange} right - 右侧路径
  * @param {{approximationSegments?: number}} [options] - 点列近似参数
@@ -262,12 +264,6 @@ function intersectsPathWithArea(path, area, options = {}) {
 function intersectsPathWithPath(left, right, options = {}) {
   if (!rangesMayOverlap(left, right, options)) {
     return false;
-  }
-  if (anyPointContained(left.toPoints(options), right, options)) {
-    return true;
-  }
-  if (anyPointContained(right.toPoints(options), left, options)) {
-    return true;
   }
   return anySegmentIntersection(left, right, options);
 }
