@@ -13,6 +13,7 @@ import { Vector } from "../../../core/utils/math.js";
 import {
   configureWhiteboardDemo,
   DEMO_PRIMARY_STROKE_COLOR,
+  mountPrimaryStrokeTool,
 } from "../whiteboard-demo.js";
 
 /**
@@ -244,6 +245,7 @@ describe("whiteboard demo worker mode", () => {
       expect(viewport).toBeInstanceOf(Viewport);
 
       const { primaryStrokeTool } = configureWhiteboardDemo(board, viewport);
+      mountPrimaryStrokeTool(board, viewport, primaryStrokeTool);
 
       board.signalsEventBus.emit("input", {
         to: "/main/mouse",
@@ -336,7 +338,8 @@ describe("whiteboard demo worker mode", () => {
       );
       await flushMicrotasks();
 
-      configureWhiteboardDemo(board, viewport);
+      const { primaryStrokeTool } = configureWhiteboardDemo(board, viewport);
+      mountPrimaryStrokeTool(board, viewport, primaryStrokeTool);
 
       board.signalsEventBus.emit("input", {
         to: "/main/mouse",
