@@ -25,23 +25,19 @@ import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../devices/touchscreen-device.j
  *
  * @example
  * ```js
- * const multiStroke = new MultiToolWrapper(StrokeCreatorTool, {
- *   property: { color: "#ff0000", width: 2 },
+ * const multiStroke = new MultiToolWrapper((touchId) => {
+ *   return new StrokeCreatorTool({
+ *     property: { color: "#ff0000", width: 2 },
+ *   });
  * });
  * ```
  */
 class MultiToolWrapper extends Tool {
   /**
-   * 工具构造函数
-   * @type {Function}
+   * 触点到工具实例的工厂函数
+   * @type {(touchId: string) => Tool}
    */
-  #toolConstructor;
-
-  /**
-   * 透传给每个工具实例的构造参数
-   * @type {Record<string, any>}
-   */
-  #toolOptions;
+  #toolFactory;
 
   /**
    * touchId 到工具实例的映射
@@ -50,13 +46,11 @@ class MultiToolWrapper extends Tool {
   #instances = new Map();
 
   /**
-   * @param {Function} toolConstructor - 工具构造函数，每次新触点时 `new toolConstructor(options)`
-   * @param {Object} [toolOptions={}] - 透传给每个工具实例的构造参数
+   * @param {(touchId: string) => Tool} toolFactory - 工具工厂函数，每次新触点时调用返回工具实例
    */
-  constructor(toolConstructor, toolOptions = {}) {
+  constructor(toolFactory) {
     super();
-    this.#toolConstructor = toolConstructor;
-    this.#toolOptions = toolOptions;
+    this.#toolFactory = toolFactory;
   }
 
   /**
@@ -105,7 +99,7 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   #beginTouch(touchId, contact, deviceContext) {
-    const instance = new this.#toolConstructor(this.#toolOptions);
+    const instance = this.#toolFactory(touchId);
     this.#instances.set(touchId, instance);
 
     const packet = new SignalPacket("/", [

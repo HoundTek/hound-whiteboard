@@ -67,16 +67,15 @@ describe("MultiToolWrapper", () => {
   const defaultCtx = { acc: { board: {}, viewport: {} } };
 
   /**
-   * 创建一个可追踪实例的 spy 工具类
+   * 创建一个可追踪实例的 spy 工厂函数
    * @param {Array<MockTool>} spyOut - 实例写入此数组
-   * @returns {typeof MockTool}
+   * @returns {(touchId: string) => MockTool}
    */
   function createTrackedTool(spyOut) {
-    return class extends MockTool {
-      constructor(...args) {
-        super(...args);
-        spyOut.push(this);
-      }
+    return (_touchId) => {
+      const instance = new MockTool();
+      spyOut.push(instance);
+      return instance;
     };
   }
 

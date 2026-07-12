@@ -11,7 +11,6 @@ import { createKeyboardDevice } from "../../core/ui/devices-dag/devices/keyboard
 import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
 import { MultiToolWrapper } from "../../core/ui/devices-dag/tools/multi-tool-wrapper.js";
 import {
-  DEMO_PRIMARY_STROKE_COLOR,
   DEMO_STROKE_WIDTH,
   DEMO_WORKFLOW_NAMES,
 } from "./constants.js";
@@ -29,12 +28,34 @@ function mountDemoDevices(viewport) {
   viewport.mountSubDAG("keyboard", createKeyboardDevice());
   viewport.mountSubDAG("touchscreen", createTouchscreenDevice());
 
-  const touchStrokeTool = new MultiToolWrapper(StrokeCreatorTool, {
-    property: { color: DEMO_PRIMARY_STROKE_COLOR, width: DEMO_STROKE_WIDTH },
+  const touchStrokeTool = new MultiToolWrapper((touchId) => {
+    return new StrokeCreatorTool({
+      property: {
+        color: TOUCH_COLORS[parseInt(touchId, 10) % TOUCH_COLORS.length],
+        width: DEMO_STROKE_WIDTH,
+      },
+    });
   });
   viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.TOUCH_STROKE, touchStrokeTool, [
     { from: "touchscreen/contacts", edge: "default" },
   ]);
 }
+
+/**
+ * 触控点位对应的颜色调色板（HSL 均匀分布，10 色循环）
+ * @type {string[]}
+ */
+const TOUCH_COLORS = [
+  "#FF6B6B", // 红
+  "#4ECDC4", // 青
+  "#45B7D1", // 蓝
+  "#96CEB4", // 绿
+  "#FFEAA7", // 黄
+  "#DDA0DD", // 梅
+  "#FF9FF3", // 粉
+  "#54A0FF", // 天蓝
+  "#5F27CD", // 紫
+  "#01A3A4", // 深青
+];
 
 export { mountDemoDevices };
