@@ -47,7 +47,6 @@
     "ship:desktop-platforms": "hound-tauri-build ship desktop-platforms",
     "ship:mobile": "hound-tauri-build ship mobile",
     "ship:all": "hound-tauri-build ship all",
-    "ci": "yarn deps && yarn test && yarn build",
     "bench": "node benchmarks/all.bench.js",
     "bench:io": "node benchmarks/io-bridge.bench.js",
     "bench:io:direct": "node benchmarks/io-direct.bench.js",
@@ -60,6 +59,12 @@
     "prepare": "husky"
   },
   "author": "Frank Steven",
+  "contributors": [
+    {
+      "name": "Zhou Chenyu",
+      "email": "zhouc_yu@foxmail.com"
+    }
+  ],
   "license": "GPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
@@ -69,7 +74,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.2",
     "benchmark": "2.1.4",
-    "hound-tauri-build": "0.1.0",
+    "hound-tauri-build": "^0.2.3",
     "husky": "^9.1.7",
     "ink": "5",
     "jest": "30.4.2",
