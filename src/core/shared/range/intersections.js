@@ -224,12 +224,17 @@ function intersectsClosedRanges(left, right, options = {}) {
   if (!rangesMayOverlap(left, right, options)) {
     return false;
   }
-  if (anyPointContained(left.toPoints(options), right, options)) {
+
+  // 闭合形状仅需测一个顶点：要么全在内，要么有边界穿越（由 anySegmentIntersection 覆盖）
+  const leftPoints = left.toPoints(options);
+  if (leftPoints.length > 0 && right.containsPoint(leftPoints[0], options)) {
     return true;
   }
-  if (anyPointContained(right.toPoints(options), left, options)) {
+  const rightPoints = right.toPoints(options);
+  if (rightPoints.length > 0 && left.containsPoint(rightPoints[0], options)) {
     return true;
   }
+
   return anySegmentIntersection(left, right, options);
 }
 
@@ -245,9 +250,13 @@ function intersectsPathWithArea(path, area, options = {}) {
   if (!rangesMayOverlap(path, area, options)) {
     return false;
   }
-  if (anyPointContained(path.toPoints(options), area, options)) {
+
+  // 路径全在面积内 → 所有顶点在内；局部在内 → 边界穿越由 anySegmentIntersection 覆盖
+  const pathPoints = path.toPoints(options);
+  if (pathPoints.length > 0 && area.containsPoint(pathPoints[0], options)) {
     return true;
   }
+
   return anySegmentIntersection(path, area, options);
 }
 

@@ -1,6 +1,7 @@
 import { Vector } from "../../../utils/math.js";
 import { intersectsRanges } from "../geometry.js";
 import { PathRange } from "../path.js";
+import { PolygonRange } from "../polygon.js";
 import { RectangleRange } from "../rectangle.js";
 
 describe("PathRange", () => {
@@ -56,5 +57,53 @@ describe("PathRange", () => {
 
     expect(intersectsRanges(horizontal, vertical)).toBe(true);
     expect(intersectsRanges(horizontal, away)).toBe(false);
+  });
+
+  test("路径完全在多边形内时应判定相交", () => {
+    const polygon = new PolygonRange([
+      new Vector(0, 0),
+      new Vector(8, 0),
+      new Vector(8, 8),
+      new Vector(0, 8),
+    ]);
+    const inside = new PathRange([
+      new Vector(2, 2),
+      new Vector(4, 2),
+      new Vector(4, 4),
+    ]);
+
+    expect(intersectsRanges(polygon, inside)).toBe(true);
+  });
+
+  test("路径从多边形外穿入内部时应判定相交（边界穿越）", () => {
+    const polygon = new PolygonRange([
+      new Vector(0, 0),
+      new Vector(4, 0),
+      new Vector(4, 4),
+      new Vector(0, 4),
+    ]);
+    // 第一个顶点在 Polygon 外，第二个在内，线段穿越边界
+    const crossing = new PathRange([
+      new Vector(-2, 2),
+      new Vector(2, 2),
+    ]);
+
+    expect(intersectsRanges(polygon, crossing)).toBe(true);
+  });
+
+  test("路径完全在多边形外且包围盒重叠时应判定不相交", () => {
+    const polygon = new PolygonRange([
+      new Vector(0, 0),
+      new Vector(4, 0),
+      new Vector(4, 4),
+      new Vector(0, 4),
+    ]);
+    // 路径的 AABB 与多边形 AABB 重叠但路径在外部
+    const outside = new PathRange([
+      new Vector(2, 5),
+      new Vector(3, 6),
+    ]);
+
+    expect(intersectsRanges(polygon, outside)).toBe(false);
   });
 });

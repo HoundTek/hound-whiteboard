@@ -61,19 +61,13 @@
 
 ### 复杂度矩阵
 
-| left \ right | `Rectangle` | `Polygon`               | `Rope`                  | `Ellipse` | `Path`                        |
-| ------------ | ----------- | ----------------------- | ----------------------- | --------- | ----------------------------- |
-| `Rectangle`  | O(1)        | O(P)                    | O(R)                    | O(1)      | O(S)                          |
-| `Polygon`    | O(P)        | O(P₁·P₂) <sup>[1]</sup> | O(P·R) <sup>[1]</sup>   | O(P)      | O(S·P) <sup>[1]</sup>         |
-| `Rope`       | O(R)        | O(R·P) <sup>[1]</sup>   | O(R₁·R₂) <sup>[1]</sup> | O(R)      | O(S·R) <sup>[1]</sup>         |
-| `Ellipse`    | O(1)        | O(P) <sup>[2]</sup>     | O(R) <sup>[2]</sup>     | O(1)      | O(S)                          |
-| `Path`       | O(S)        | O(S·P) <sup>[1]</sup>   | O(S·R) <sup>[1]</sup>   | O(S)      | O(N log N + k) <sup>[★]</sup> |
-
-<sup>[1]</sup> 瓶颈在 `anyPointContained` 中的 `containsPoint` 双循环，尚未优化。
-
-<sup>[2]</sup> `Polygon × Ellipse` 走 `anySegmentEllipseIntersection`，椭圆的 `containsPoint` 是 O(1) 解析解，无平方问题。
-
-<sup>[★]</sup> Path × Path 跳过了 `anyPointContained`，仅走 `anySegmentIntersection`（Sweep and Prune），从 O(S₁·S₂) 降为 **O(N log N + k)**。
+| left \ right | `Rectangle` | `Polygon` | `Rope`   | `Ellipse` | `Path`         |
+| ------------ | ----------- | --------- | -------- | --------- | -------------- |
+| `Rectangle`  | O(1)        | O(P)      | O(R)     | O(1)      | O(S)           |
+| `Polygon`    | O(P)        | O(P₁+P₂)  | O(P+R)   | O(P)      | O(P+S)         |
+| `Rope`       | O(R)        | O(R+P)    | O(R₁+R₂) | O(R)      | O(R+S)         |
+| `Ellipse`    | O(1)        | O(P)      | O(R)     | O(1)      | O(S)           |
+| `Path`       | O(S)        | O(S+P)    | O(S+R)   | O(S)      | O(N log N + k) |
 
 符号：P = 多边形顶点数，R = 绳圈控制点数，S = 路径采样点数，N = S₁ + S₂，k << S₁·S₂
 
@@ -105,3 +99,5 @@
 **`PolygonRange` 与 `RopeRange` 的区域语义不同。** `PolygonRange` 使用奇偶规则（绳钉值绝对值为奇数时为内部），`RopeRange` 使用非零缠绕规则（绳钉值不为 0 时为内部）。自交轮廓下两者的包含结果可能不同。
 
 **`intersectsRangesByType` 集中管理特化。** 15 组无序组合的显式分派集中在 `intersections.js`，不通过 `index.js` 暴露。包围盒快速排除的共享实现放在 `bounds.js`。
+
+**单顶点探针。** `intersectsClosedRanges` 和 `intersectsPathWithArea` 中的点包含检测仅需测一个顶点：对于闭合形状，若完全在另一个形状内部，则所有顶点均在内部；对于路径，若全在面积内则所有顶点均在内部，若部分在内则必有边界穿越（由 `anySegmentIntersection` 覆盖）。因此将 O(L·R) 的 `anyPointContained` 替换为 O(R) 的单顶点 `containsPoint` 调用。
