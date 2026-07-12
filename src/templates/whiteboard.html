@@ -16,6 +16,15 @@
         <div class="demo-panel">
           <h1>Demo UI</h1>
           <p>这个面板仅用于演示，右侧宽度固定为 300px。</p>
+          <section id="tool-switcher-toolbar">
+            <h2>工具切换</h2>
+            <p class="toolbar-hint">点击切换左键绑定的工具</p>
+            <div class="toolbar-btn-group">
+              <button class="toolbar-btn active" data-tool="stroke">笔画</button>
+              <button class="toolbar-btn" data-tool="circle">圆</button>
+              <button class="toolbar-btn" data-tool="select">选择+修改</button>
+            </div>
+          </section>
           <section>
             <h2>说明</h2>
             <ul>
@@ -53,13 +62,13 @@
             <b>工具</b>
             <div class="shortcut-grid">
               <span class="key"><kbd class="kbd">左键</kbd></span>
-              <span class="desc">红色笔画</span>
+              <span class="desc">当前激活工具（笔画 / 圆 / 选择+修改）</span>
               <span class="key"><kbd class="kbd">右键</kbd></span>
               <span class="desc">首次拖拽框选→再次拖拽修改位置</span>
               <span class="key"><kbd class="kbd">Enter</kbd></span>
-              <span class="desc">提交修改</span>
+              <span class="desc">提交修改（右键 handoff + 左键选择工具）</span>
               <span class="key"><kbd class="kbd">Esc</kbd></span>
-              <span class="desc">取消修改</span>
+              <span class="desc">取消修改（右键 handoff + 左键选择工具）</span>
               <span class="key"><kbd class="kbd">Space</kbd></span>
               <span class="desc">随机圆</span>
               <span class="key">

@@ -12,11 +12,18 @@
 
 ## 已实现内容
 
-### 左键笔画创建
+### 左键工具切换
 
-- 鼠标左键进入 `/mouse/primary/default` → `/workflows/primary-stroke`
-- 末端工具为 `StrokeCreatorTool`
-- 创建结果写入白板并参与渲染
+- 鼠标左键进入 `/mouse/primary/default` → `/workflows/tool-switcher`
+- tool-switcher 根据当前激活工具名称路由信号到对应子节点
+- 三个可选工具：
+  - **笔画**（`StrokeCreatorTool`）
+  - **圆**（`CircleCreatorTool`）
+  - **选择+修改**（`RectangleObjectChooserTool` → `CommonObjectModifierTool` handoff）
+- 通过工具栏按钮（`.toolbar-btn`）切换激活工具
+- 按钮 `pointerdown` 事件发出 `button-press` 信号 → `/viewport/toolbar/button` → 双输入汇聚到 tool-switcher 根节点
+- tool-switcher 的 `onToolChange` 回调更新 DOM 按钮 `.active` 类
+- 默认激活工具为笔画
 
 ### 触摸多指笔画
 
@@ -33,6 +40,7 @@
 - 鼠标右键进入 `/mouse/secondary/default` → `/workflows/secondary-chooser`
 - 末端工具为 `RectangleObjectChooserTool`
 - 用于选择覆盖范围内的对象
+- 框选完成后进入 handoff modifier 阶段，再次拖拽修改对象位置
 
 ### 随机圆对象创建
 
@@ -47,6 +55,14 @@
 - `/workflows/create-circle/`（prefix 入口）
 - `/workflows/create-circle/params`
 - `/workflows/create-circle/params/tool`
+
+### Enter / Escape — 全局 modifier 确认/取消
+
+- Enter 发 `success` 信号、Escape 发 `cancel` 信号
+- 信号同时到达两条路径：
+  - 键盘设备 → `code/Enter` / `code/Escape` → secondary-chooser（右键 handoff）
+  - 直接 emit → `/workflows/tool-switcher` → 经 router 转发到当前激活工具（左键 handoff 也响应）
+- 各 handoff 按当前 phase 路由：phase=first（chooser）忽略，phase=second（modifier）提交/丢弃修改
 
 ### WASD 位移 → handoff modifier
 
@@ -80,25 +96,27 @@
 
 ## 快捷键一览
 
-| 按键          | 功能                                 |
-| ------------- | ------------------------------------ |
-| 触摸拖动      | 多指同时创建红色笔画（每指独立）     |
-| 鼠标左键      | 画红色笔迹                           |
-| 鼠标右键      | 首次框选对象 → 再次拖拽修改          |
-| W / A / S / D | 移动选中对象（右键激活后）           |
-| ↑ / ↓ / ← / → | 平移视口                             |
-| + / −         | 放大 / 缩小视口                      |
-| R             | 刷新视口渲染                         |
-| Space         | 随机生成圆形                         |
-| C             | 调试：chunk 加载计数                 |
-| Shift + C     | 调试：已加载区块静态图               |
-| O             | 调试：object 加载计数                |
-| Shift + O     | 调试：已加载对象完整摘要             |
-| M             | 调试：视口摘要                       |
-| B             | 调试：board 摘要                     |
-| Shift + B     | 调试：Active Object Manager 分层状态 |
-| T             | 调试：设备 DAG（树状）               |
-| Shift + T     | 调试：设备 DAG（Mermaid 流程图）     |
+| 按键          | 功能                                    |
+| ------------- | --------------------------------------- |
+| 触摸拖动      | 多指同时创建红色笔画（每指独立）        |
+| 鼠标左键      | 当前激活工具（笔画 / 圆 / 选择+修改）   |
+| 鼠标右键      | 首次框选对象 → 再次拖拽修改             |
+| Enter         | 提交修改（右键 handoff + 左键选择工具） |
+| Esc           | 取消修改（右键 handoff + 左键选择工具） |
+| W / A / S / D | 移动选中对象（右键激活后）              |
+| ↑ / ↓ / ← / → | 平移视口                                |
+| + / −         | 放大 / 缩小视口                         |
+| R             | 刷新视口渲染                            |
+| Space         | 随机生成圆形                            |
+| C             | 调试：chunk 加载计数                    |
+| Shift + C     | 调试：已加载区块静态图                  |
+| O             | 调试：object 加载计数                   |
+| Shift + O     | 调试：已加载对象完整摘要                |
+| M             | 调试：视口摘要                          |
+| B             | 调试：board 摘要                        |
+| Shift + B     | 调试：Active Object Manager 分层状态    |
+| T             | 调试：设备 DAG（树状）                  |
+| Shift + T     | 调试：设备 DAG（Mermaid 流程图）        |
 
 ## 工具链验证点
 
@@ -126,5 +144,8 @@
 - 屏幕坐标在 Viewport 层转换为世界坐标后进入工具链
 - 触摸设备通过 `viewport.convertCanvasSignalsToWorld()` 完成 canvas→world 坐标转换
 - 多指并发通过 `MultiToolWrapper` 在工具内部分流，设备图保持静态
-
-如果需要进一步丰富 demo，可继续增加更多 workflow 观测输出，以及 creator → modifier 同一路径的协同示例。
+- tool-switcher 通过 `createToolSwitcherSubDAG` 创建具有双输入汇聚的路由子图，
+  挂载在 `mouse/primary` 下游接收鼠标信号，同时接受 `toolbar/button` 路径的切换信号
+- 各工具（笔画、圆、选择-handoff）单独挂载为独立 workflow，通过 `addEdge` 连接到 tool-switcher 子节点
+- Enter/Escape 同时发往 keyboard device（供右键 handoff）和 tool-switcher（供左键选择工具），
+  实现全局 modifier 确认/取消

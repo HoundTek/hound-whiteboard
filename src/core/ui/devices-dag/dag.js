@@ -52,9 +52,9 @@ import { dagToString } from "./dag-debug.js";
  * @property {() => any} getState - 重读节点最新状态
  * @property {(nextState: Object) => Object} setState - 全量写入节点状态
  * @property {(partial: Object) => Object} patchState - 浅合并写入节点状态
- * @property {(to: string, signals?: Array) => DevicesDAGHandlerResult} routeToChild - 路由到子节点
+ * @property {(to: string, signals?: Array<SignalPacket>) => DevicesDAGHandlerResult} routeToChild - 路由到子节点
  * @property {() => DevicesDAGHandlerResult} stop - 终止当前链路
- * @property {(type: string, value: any, extra?: Object) => Object} signal - 构造标准信号 { type, context: { value, ...extra } }
+ * @property {(type: string, value: any, extra?: Object) => SignalPacket} signal - 构造标准信号 { type, context: { value, ...extra } }
  * @property {(pathOrId?: string|number) => any} getNodeState - 读取任意节点状态
  * @property {(pathOrId: string|number, state: any) => any} setNodeState - 写入任意节点状态
  */

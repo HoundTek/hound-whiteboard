@@ -21,4 +21,8 @@ export {
   createTouchscreenDevice,
   TOUCHSCREEN_DEVICE_SIGNAL_TYPES,
 } from "./touchscreen-device.js";
+export {
+  createButtonGroupDevice,
+  BUTTON_GROUP_DEVICE_SIGNAL_TYPES,
+} from "./button-group-device.js";
 export { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";

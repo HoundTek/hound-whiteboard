@@ -58,6 +58,7 @@ const DEMO_WORKFLOW_NAMES = Object.freeze({
   DEBUG: "debug",
   VIEWPORT: "viewport",
   TOUCH_STROKE: "touch-stroke",
+  TOOL_SWITCHER: "tool-switcher",
 });
 
 const DEMO_VIEWPORT_POSITION_STEP = 200;
@@ -330,13 +331,14 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
   // 所有设备叶节点 defaultRoute = "default"，
   // 所有 mount edge 统一 "default"，handler 不再写 to:
 
-  // 鼠标（无需 prefix，信号直接可被工具消费）
+  // 鼠标左键：直接挂载笔画工具到 mouse/primary
   effectiveBoard.signalsEventBus.emit("mount", {
     viewportId: viewport.viewportId,
     name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
     workflow: primaryStrokeTool,
     edges: [{ from: "mouse/primary", edge: "default" }],
   });
+
   const secondaryHandoffSubDAG = createHandoffSubDAG({
     rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER}`,
     first: secondarySelectionTool,

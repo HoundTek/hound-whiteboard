@@ -13,6 +13,18 @@
  */
 class SignalPacket {
   /**
+   * 目标节点路径
+   * @type {string}
+   */
+  to;
+
+  /**
+   * 信号列表
+   * @type {Array<{type: string, context?: {value?: *, [key: string]: *}}>}
+   */
+  signals;
+
+  /**
    * @param {string} [to=""] - 目标节点路径
    * @param {Array<Object>} [signals=[]] - 信号列表
    */
