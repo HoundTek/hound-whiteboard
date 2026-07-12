@@ -39,8 +39,7 @@ import { createSubDAG } from "../index.js";
  *   },
  * });
  *
- * // 挂载时作为 edge.prefix 插入设备节点与 workflow 之间
- * //（实际通过 signalsEventBus "mount" 事件完成 edge 连接，见 Board.#bindSignalsEventBus）
+ * // 挂载时作为 edge.prefix 传入 viewport.mountWorkflow 的 edges 参数
  *
  * // 在 workflow 定义中使用边级 prefix 转换信号
  * const prefix = createEdgePrefix({
@@ -61,8 +60,7 @@ import { createSubDAG } from "../index.js";
  *   },
  * });
  *
- * // 挂载时作为 edge.prefix 插入 workflow 之间
- * //（实际通过 signalsEventBus "mount" 事件的 edges[].prefix 字段完成）
+ * // 挂载时作为 edge.prefix 传入 viewport.mountWorkflow 的 edges 参数
  */
 function createEdgePrefix(handlerOrConfig, options = {}) {
   const handlerFn =

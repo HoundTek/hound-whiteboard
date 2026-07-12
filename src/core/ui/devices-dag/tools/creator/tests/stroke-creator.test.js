@@ -467,12 +467,9 @@ describe("StrokeCreatorTool", () => {
         viewport.zoom = 2;
 
         viewport.mountSubDAG("", createMouseDevice());
-        board.signalsEventBus.emit("mount", {
-          viewportId: "main",
-          name: "primary-stroke",
-          workflow: tool,
-          edges: [{ from: "/mouse/primary", edge: "default" }],
-        });
+        viewport.mountWorkflow("primary-stroke", tool, [
+          { from: "/mouse/primary", edge: "default" },
+        ]);
 
         // canvas 相对坐标：world=(105,60) → ((105-100)*2, (60-50)*2) = (10, 20)
         board.signalsEventBus.emit("input", {
@@ -560,12 +557,9 @@ describe("StrokeCreatorTool", () => {
 
         viewport.mountSubDAG("", createMouseDevice());
 
-        board.signalsEventBus.emit("mount", {
-          viewportId: "main",
-          name: "primary-stroke",
-          workflow: tool,
-          edges: [{ from: "/mouse/primary", edge: "default" }],
-        });
+        viewport.mountWorkflow("primary-stroke", tool, [
+          { from: "/mouse/primary", edge: "default" },
+        ]);
 
         board.signalsEventBus.emit("input", {
           to: "/main/mouse",

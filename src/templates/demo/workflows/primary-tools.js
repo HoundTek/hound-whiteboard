@@ -23,18 +23,14 @@ import {
 /**
  * 将笔画工具直接挂载到鼠标左键
  * @description 不经过 tool-switcher，mouse/primary → primary-stroke 直连，用于测试等无需工具切换的场景。
- * @param {import("../../../core/ui/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {import("../../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} primaryStrokeTool - 笔画工具实例
  * @returns {void}
  */
-function mountPrimaryStrokeTool(board, viewport, primaryStrokeTool) {
-  board.signalsEventBus.emit("mount", {
-    viewportId: viewport.viewportId,
-    name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
-    workflow: primaryStrokeTool,
-    edges: [{ from: "mouse/primary", edge: "default" }],
-  });
+function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
+  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.PRIMARY_STROKE, primaryStrokeTool, [
+    { from: "mouse/primary", edge: "default" },
+  ]);
 }
 
 /**
@@ -68,67 +64,53 @@ function mountToolSwitcher(board, viewport, options) {
 
   // 2. tool-switcher prefix：按激活工具名路由 mouse/primary 信号
   const switcherSubDAG = createToolSwitcherSubDAG({ tools, defaultTool });
-  board.signalsEventBus.emit("mount", {
-    viewportId: vpId,
-    name: DEMO_WORKFLOW_NAMES.TOOL_SWITCHER,
-    workflow: switcherSubDAG,
-    edges: [{ from: "mouse/primary", edge: "default" }],
-  });
+  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.TOOL_SWITCHER, switcherSubDAG, [
+    { from: "mouse/primary", edge: "default" },
+  ]);
 
   const switcherPath = `/${vpId}/workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}`;
 
-  // 3. 笔画分支（复用传入的 primaryStrokeTool）
-  board.signalsEventBus.emit("mount", {
-    viewportId: vpId,
-    name: DEMO_WORKFLOW_NAMES.PRIMARY_STROKE,
-    workflow: primaryStrokeTool,
-    edges: [],
-  });
-  board.devicesDAG.addEdge(
+  // 3. 笔画分支 — 仅从 tool-switcher/stroke → default 可达
+  const strokeEdge = board.devicesDAG.addEdge(
     `${switcherPath}/${DEMO_TOOL_NAMES.STROKE}`,
     "default",
-    `/${vpId}/workflows/${DEMO_WORKFLOW_NAMES.PRIMARY_STROKE}`,
   );
+  const strokeNode = strokeEdge.target;
+  const strokeProcessor = primaryStrokeTool.createProcessor();
+  strokeNode.handler = strokeProcessor;
+  strokeNode.semantics = { ...strokeNode.semantics, tool: true };
 
-  // 4. 圆分支
+  // 4. 圆分支 — 仅从 tool-switcher/circle → default 可达
   const circleCreatorTool = new CircleCreatorTool({
     property: {
       strokeColor: DEMO_CIRCLE_STROKE_COLOR,
       strokeWidth: DEMO_STROKE_WIDTH,
     },
   });
-  const circleWorkflowName = `${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/circle-tool`;
-  board.signalsEventBus.emit("mount", {
-    viewportId: vpId,
-    name: circleWorkflowName,
-    workflow: circleCreatorTool,
-    edges: [],
-  });
-  board.devicesDAG.addEdge(
+  const circleEdge = board.devicesDAG.addEdge(
     `${switcherPath}/${DEMO_TOOL_NAMES.CIRCLE}`,
     "default",
-    `/${vpId}/workflows/${circleWorkflowName}`,
   );
+  const circleNode = circleEdge.target;
+  const circleProcessor = circleCreatorTool.createProcessor();
+  circleNode.handler = circleProcessor;
+  circleNode.semantics = { ...circleNode.semantics, tool: true };
 
-  // 5. 选择+修改分支（handoff）
+  // 5. 选择+修改分支（handoff）— 仅从 tool-switcher/select → default 可达
   const selectHandoffSubDAG = createHandoffSubDAG({
-    rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/select-handoff`,
+    rootPath: `/`,
     first: new RectangleObjectChooserTool(),
     second: new CommonObjectModifierTool(),
     autoBridgeObjects: true,
   });
-  const selectWorkflowName = `${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/select-handoff`;
-  board.signalsEventBus.emit("mount", {
-    viewportId: vpId,
-    name: selectWorkflowName,
-    workflow: selectHandoffSubDAG,
-    edges: [],
-  });
-  board.devicesDAG.addEdge(
+  const selectEdge = board.devicesDAG.addEdge(
     `${switcherPath}/${DEMO_TOOL_NAMES.SELECT}`,
     "default",
-    `/${vpId}/workflows/${selectWorkflowName}`,
   );
+  board.devicesDAG.mountSubDAG("", {
+    ...selectHandoffSubDAG,
+    rootPath: selectEdge.target.path,
+  });
 
   // 6. 双输入汇聚：toolbar/button-group → tool-switcher
   board.devicesDAG.addEdge(

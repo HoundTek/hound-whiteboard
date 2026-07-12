@@ -84,11 +84,11 @@ function configureWhiteboardDemo(board, viewport, options = {}) {
   const viewportTool = options.viewportTool ?? new ViewportTool();
   const debugTool = options.debugTool ?? new DebuggerTool();
 
-  mountDemoDevices(board, viewport);
-  mountSecondaryHandoff(board, viewport, secondarySelectionTool);
-  mountRandomCircle(board, viewport);
-  mountViewportControl(board, viewport, viewportTool);
-  mountDebugControl(board, viewport, debugTool);
+  mountDemoDevices(viewport);
+  mountSecondaryHandoff(viewport, secondarySelectionTool);
+  mountRandomCircle(viewport);
+  mountViewportControl(viewport, viewportTool);
+  mountDebugControl(viewport, debugTool);
 
   const demoLog = new DemoLog("DemoConfig");
   demoLog.status(formatShortcutLegend());

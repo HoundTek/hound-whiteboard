@@ -23,12 +23,11 @@ import {
 /**
  * 挂载视口控制 workflow
  * @description 平移键转 position 信号、缩放键转 scale 信号、刷新键转 flush 信号，全部汇聚到视口工具。
- * @param {import("../../../core/ui/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {import("../viewport-tool.js").ViewportTool} viewportTool - 视口工具实例
  * @returns {void}
  */
-function mountViewportControl(board, viewport, viewportTool) {
+function mountViewportControl(viewport, viewportTool) {
   const factor = DEMO_VIEWPORT_SCALE_FACTOR;
   const step = DEMO_VIEWPORT_POSITION_STEP;
 
@@ -56,12 +55,11 @@ function mountViewportControl(board, viewport, viewportTool) {
     prefix: createEdgePrefix(buildViewportFlushNodeConfig()),
   }));
 
-  board.signalsEventBus.emit("mount", {
-    viewportId: viewport.viewportId,
-    name: DEMO_WORKFLOW_NAMES.VIEWPORT,
-    workflow: viewportTool,
-    edges: [...positionEdges, ...scaleEdges, ...flushEdges],
-  });
+  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.VIEWPORT, viewportTool, [
+    ...positionEdges,
+    ...scaleEdges,
+    ...flushEdges,
+  ]);
 }
 
 export { mountViewportControl };

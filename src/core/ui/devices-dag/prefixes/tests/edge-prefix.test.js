@@ -65,18 +65,13 @@ describe("edge.prefix", () => {
       builder.edge("next", b, c);
       const chain = builder.build();
 
-      board.signalsEventBus.emit("mount", {
-        viewportId: "main",
-        name: "chain-workflow",
-        workflow,
-        edges: [
-          {
-            from: "/keyboard/code/KeyW",
-            edge: "default",
-            prefix: chain,
-          },
-        ],
-      });
+      viewport.mountWorkflow("chain-workflow", workflow, [
+        {
+          from: "/keyboard/code/KeyW",
+          edge: "default",
+          prefix: chain,
+        },
+      ]);
 
       viewport.devicesDAG.dispatch({
         to: "/main/keyboard",
@@ -165,18 +160,13 @@ describe("edge.prefix", () => {
       builder.edge("sink", b, sink);
       const dagPrefix = builder.build();
 
-      board.signalsEventBus.emit("mount", {
-        viewportId: "main",
-        name: "branch-workflow",
-        workflow,
-        edges: [
-          {
-            from: "/keyboard/code/KeyW",
-            edge: "default",
-            prefix: dagPrefix,
-          },
-        ],
-      });
+      viewport.mountWorkflow("branch-workflow", workflow, [
+        {
+          from: "/keyboard/code/KeyW",
+          edge: "default",
+          prefix: dagPrefix,
+        },
+      ]);
 
       viewport.devicesDAG.dispatch({
         to: "/main/keyboard",

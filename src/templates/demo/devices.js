@@ -21,11 +21,10 @@ import {
  * @description
  * 为视口挂载 mouse/keyboard/touchscreen 三个设备子图，并为 touchscreen/contacts 挂载
  * 多指并发笔画包装器，使每指独立创建一条笔画。
- * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @returns {void}
  */
-function mountDemoDevices(board, viewport) {
+function mountDemoDevices(viewport) {
   viewport.mountSubDAG("mouse", createMouseDevice());
   viewport.mountSubDAG("keyboard", createKeyboardDevice());
   viewport.mountSubDAG("touchscreen", createTouchscreenDevice());
@@ -33,12 +32,9 @@ function mountDemoDevices(board, viewport) {
   const touchStrokeTool = new MultiToolWrapper(StrokeCreatorTool, {
     property: { color: DEMO_PRIMARY_STROKE_COLOR, width: DEMO_STROKE_WIDTH },
   });
-  board.signalsEventBus.emit("mount", {
-    viewportId: viewport.viewportId,
-    name: DEMO_WORKFLOW_NAMES.TOUCH_STROKE,
-    workflow: touchStrokeTool,
-    edges: [{ from: "touchscreen/contacts", edge: "default" }],
-  });
+  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.TOUCH_STROKE, touchStrokeTool, [
+    { from: "touchscreen/contacts", edge: "default" },
+  ]);
 }
 
 export { mountDemoDevices };

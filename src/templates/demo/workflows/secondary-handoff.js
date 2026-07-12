@@ -39,12 +39,11 @@ function buildSignalForwardNodeConfig(targetType) {
 /**
  * 挂载右键选择→修改 handoff workflow
  * @description 鼠标右键驱动 chooser 框选；Enter 提交、Escape 取消；WASD 在 modifier 阶段产生 displacement。
- * @param {import("../../../core/ui/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {import("../../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} secondarySelectionTool - 右键框选工具
  * @returns {void}
  */
-function mountSecondaryHandoff(board, viewport, secondarySelectionTool) {
+function mountSecondaryHandoff(viewport, secondarySelectionTool) {
   const secondaryHandoffSubDAG = createHandoffSubDAG({
     rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER}`,
     first: secondarySelectionTool,
@@ -58,25 +57,20 @@ function mountSecondaryHandoff(board, viewport, secondarySelectionTool) {
     prefix: createEdgePrefix(buildWasdNodeConfig(code, vector)),
   }));
 
-  board.signalsEventBus.emit("mount", {
-    viewportId: viewport.viewportId,
-    name: DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER,
-    workflow: secondaryHandoffSubDAG,
-    edges: [
-      { from: "mouse/secondary", edge: "default" },
-      {
-        from: `keyboard/code/${SUBMIT_KEY}`,
-        edge: "default",
-        prefix: createEdgePrefix(buildSignalForwardNodeConfig("success")),
-      },
-      {
-        from: `keyboard/code/${CANCEL_KEY}`,
-        edge: "default",
-        prefix: createEdgePrefix(buildSignalForwardNodeConfig("cancel")),
-      },
-      ...wasdEdges,
-    ],
-  });
+  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER, secondaryHandoffSubDAG, [
+    { from: "mouse/secondary", edge: "default" },
+    {
+      from: `keyboard/code/${SUBMIT_KEY}`,
+      edge: "default",
+      prefix: createEdgePrefix(buildSignalForwardNodeConfig("success")),
+    },
+    {
+      from: `keyboard/code/${CANCEL_KEY}`,
+      edge: "default",
+      prefix: createEdgePrefix(buildSignalForwardNodeConfig("cancel")),
+    },
+    ...wasdEdges,
+  ]);
 }
 
 export { mountSecondaryHandoff };

@@ -647,24 +647,69 @@ class Viewport {
   }
 
   /**
-   * 在白板级设备图中运行时挂载 workflow
-   * @param {string} path - workflow 路径（相对于视口根）
-   * @param {import("../../tools/tool.js").Tool|import("../../devices-dag/dag.js").SubDAGDefinition} workflow - 要挂载的 workflow 入口
+   * 挂载 workflow 并建立边连接
+   * @description
+   * workflow 挂载在 `workflows/{name}` 路径下。edges 数组定义从其他节点到该 workflow 的有向边，
+   * 支持 prefix 子图（边级信号转换）。
+   * @param {string} name - workflow 名（挂载路径为 workflows/{name}）
+   * @param {import("../../tools/tool.js").Tool|import("../../devices-dag/dag.js").SubDAGDefinition} workflow - workflow 或子图定义
+   * @param {Array<{from: string, edge: string, prefix?: Object}>} [edges=[]] - 边列表
+   * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode|import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]}
    */
-  mountWorkflow(path, workflow) {
-    return this.devicesDAG.mountWorkflow(
-      joinPath("/", this.viewportId, path),
-      workflow,
-    );
+  mountWorkflow(name, workflow, edges = []) {
+    const path = `workflows/${name}`;
+    const workflowPath = joinPath("/", this.viewportId, path);
+
+    const mountedNode = this.devicesDAG.mountWorkflow(workflowPath, workflow);
+    const mountedNodes = Array.isArray(mountedNode) ? mountedNode : [mountedNode];
+
+    /**
+     * 在已挂载的单源单汇子图中找到汇节点
+     * @param {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]} nodes
+     * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode|undefined}
+     */
+    const findPrefixSink = (nodes) => {
+      if (nodes.length === 1) return nodes[0];
+      return nodes.find((n) => {
+        for (const outEdge of n.outEdges.values()) {
+          if (nodes.includes(outEdge.target)) return false;
+        }
+        return true;
+      });
+    };
+
+    for (const { from, edge, prefix } of edges) {
+      const sourcePath = joinPath("/", this.viewportId, from);
+
+      if (prefix) {
+        const prefixSubDAG = { ...prefix, rootPath: edge };
+        const prefixNodes = this.devicesDAG.mountSubDAG(sourcePath, prefixSubDAG);
+        const sinkNode = findPrefixSink(prefixNodes);
+        if (sinkNode?.path) {
+          this.devicesDAG.addEdge(sinkNode.path, edge, workflowPath);
+        }
+      } else {
+        this.devicesDAG.addEdge(sourcePath, edge, workflowPath);
+      }
+    }
+
+    return mountedNode;
   }
 
   /**
-   * 在白板级设备图中运行时卸载 workflow 节点
-   * @param {string} path - workflow 路径（相对于视口根）
+   * 卸载 workflow 并移除边连接
+   * @param {string} name - workflow 名
+   * @param {Array<{from: string, edge: string}>} [edges=[]] - 要移除的边列表
    * @returns {boolean}
    */
-  unmountWorkflow(path) {
-    return this.devicesDAG.unmountWorkflow(joinPath("/", this.viewportId, path), {
+  unmountWorkflow(name, edges = []) {
+    const workflowPath = joinPath("/", this.viewportId, `workflows/${name}`);
+
+    for (const { from, edge } of edges) {
+      this.devicesDAG.removeEdge(joinPath("/", this.viewportId, from), edge);
+    }
+
+    return this.devicesDAG.unmountWorkflow(workflowPath, {
       acc: {
         board: this.board,
         boardApi: this.board?.getBoardApi?.(),

@@ -414,12 +414,9 @@ describe("PolygonCreatorTool", () => {
         viewport.zoom = 2;
 
         viewport.mountSubDAG("", createMouseDevice());
-        board.signalsEventBus.emit("mount", {
-          viewportId: "main",
-          name: "primary-polygon",
-          workflow: tool,
-          edges: [{ from: "/mouse/primary", edge: "default" }],
-        });
+        viewport.mountWorkflow("primary-polygon", tool, [
+          { from: "/mouse/primary", edge: "default" },
+        ]);
 
         // canvas 相对坐标：world=(125,80) → ((125-100)*2, (80-50)*2) = (50, 60)
         board.signalsEventBus.emit("input", {

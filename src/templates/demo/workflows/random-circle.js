@@ -16,27 +16,21 @@ import {
 /**
  * 挂载随机圆 workflow
  * @description Space 键的 trigger 信号经转发 prefix 进入随机圆子图，由子图内部生成随机参数并创建圆对象。
- * @param {import("../../../core/ui/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @returns {void}
  */
-function mountRandomCircle(board, viewport) {
+function mountRandomCircle(viewport) {
   const randomCircleSubDAG = createRandomCircleSubDAG({
     rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
   });
 
-  board.signalsEventBus.emit("mount", {
-    viewportId: viewport.viewportId,
-    name: DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE,
-    workflow: randomCircleSubDAG,
-    edges: [
-      {
-        from: `keyboard/code/${RANDOM_CIRCLE_KEY}`,
-        edge: "default",
-        prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
-      },
-    ],
-  });
+  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE, randomCircleSubDAG, [
+    {
+      from: `keyboard/code/${RANDOM_CIRCLE_KEY}`,
+      edge: "default",
+      prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
+    },
+  ]);
 }
 
 export { mountRandomCircle };

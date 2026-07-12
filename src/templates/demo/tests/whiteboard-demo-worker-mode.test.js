@@ -245,7 +245,7 @@ describe("whiteboard demo worker mode", () => {
       expect(viewport).toBeInstanceOf(Viewport);
 
       const { primaryStrokeTool } = configureWhiteboardDemo(board, viewport);
-      mountPrimaryStrokeTool(board, viewport, primaryStrokeTool);
+      mountPrimaryStrokeTool(viewport, primaryStrokeTool);
 
       board.signalsEventBus.emit("input", {
         to: "/main/mouse",
@@ -339,7 +339,7 @@ describe("whiteboard demo worker mode", () => {
       await flushMicrotasks();
 
       const { primaryStrokeTool } = configureWhiteboardDemo(board, viewport);
-      mountPrimaryStrokeTool(board, viewport, primaryStrokeTool);
+      mountPrimaryStrokeTool(viewport, primaryStrokeTool);
 
       board.signalsEventBus.emit("input", {
         to: "/main/mouse",
