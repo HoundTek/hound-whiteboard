@@ -902,11 +902,14 @@ class CoreWorkerRuntime {
         }
 
         // 此时对象已通过 syncChunkObjectEntries 加载到 objectLoaded
-        const hits = this.#runHitTest(boardCore, queryRange);
+        const hits = this.#runHitTest(boardCore, queryRange, chunkIds);
         // 延时销毁：保留已加载区块，短时间内次次 hitTest 可复用缓存
         loader.destroy(300);
         return hits;
       }
+
+      // chunk 全已加载，仍可借 chunkIds 做粗筛
+      return this.#runHitTest(boardCore, queryRange, chunkIds);
     }
 
     return this.#runHitTest(boardCore, queryRange);
@@ -914,16 +917,28 @@ class CoreWorkerRuntime {
 
   /**
    * 在当前已加载对象中执行命中检测
+   * @description
+   * 当传入 chunkIds 时，会利用对象的覆盖区块索引做粗筛：对象覆盖的区块与查询
+   * 区块不重叠时直接跳过，无需走精确几何相交检测。无索引回退的对象按精确检测处理。
    * @param {BoardCore} boardCore - BoardCore 实例
    * @param {RectangleRange} queryRange - 查询范围
+   * @param {Set<number>} [chunkIds] - 查询范围覆盖的区块 id 集合，用于粗筛
    * @returns {number[]}
    * @private
    */
-  #runHitTest(boardCore, queryRange) {
+  #runHitTest(boardCore, queryRange, chunkIds) {
     const hits = [];
     for (const [objectId] of boardCore.objectLoaded) {
       const obj = boardCore.getObjectById(objectId);
       if (!obj) continue;
+
+      // 区块级粗筛：若对象覆盖区块与查询区块无交集则跳过
+      if (chunkIds) {
+        const coverChunks = boardCore.getObjectCoverChunks(objectId);
+        if (coverChunks && !this.#chunkSetsOverlap(coverChunks, chunkIds)) {
+          continue;
+        }
+      }
 
       const worldRange = obj.getRange()?.withPosition?.(obj.position);
       if (!worldRange) continue;
@@ -933,6 +948,22 @@ class CoreWorkerRuntime {
       }
     }
     return hits;
+  }
+
+  /**
+   * 判断两个区块 id 集合是否有交集
+   * @param {Set<number>} a - 集合 a
+   * @param {Set<number>} b - 集合 b
+   * @returns {boolean}
+   * @private
+   */
+  #chunkSetsOverlap(a, b) {
+    // 遍历较小的集合
+    const [smaller, larger] = a.size <= b.size ? [a, b] : [b, a];
+    for (const id of smaller) {
+      if (larger.has(id)) return true;
+    }
+    return false;
   }
 
   /**

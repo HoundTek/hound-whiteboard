@@ -15,7 +15,7 @@ import { RopeRange } from "./rope.js";
 const RANGE_EPSILON = 1e-8;
 
 /**
- * 计算有向叉积。
+ * 计算有向叉积
  * @description 返回从 origin 指向 first 与 second 两个向量的二维叉积结果。
  * @param {{x: number, y: number}} origin - 叉积原点
  * @param {{x: number, y: number}} first - 第一个点
@@ -30,7 +30,7 @@ function crossProduct(origin, first, second) {
 }
 
 /**
- * 判断点是否在线段上。
+ * 判断点是否在线段上
  * @description 先检查共线，再检查点是否落在线段端点之间。
  * @param {{x: number, y: number}} point - 待判断点
  * @param {{x: number, y: number}} start - 线段起点
@@ -50,7 +50,7 @@ function pointOnSegment(point, start, end, eps = RANGE_EPSILON) {
 }
 
 /**
- * 将范围展开为线段列表。
+ * 将范围展开为线段列表
  * @description 对闭合范围会自动补上末点到首点的闭合边。
  * @param {import('./range.js').Range} range - 待展开的范围
  * @param {{approximationSegments?: number}} [options] - 点列近似参数
@@ -69,7 +69,7 @@ function getRangeSegments(range, options = {}) {
 }
 
 /**
- * 判断两线段是否相交。
+ * 判断两线段是否相交
  * @description 相交定义包含正常穿越、端点接触与共线重叠。
  * @param {{x: number, y: number}} firstStart - 第一条线段起点
  * @param {{x: number, y: number}} firstEnd - 第一条线段终点
@@ -123,8 +123,10 @@ function anyPointContained(sourcePoints, targetRange, options = {}) {
 }
 
 /**
- * 判断两范围的边界线段是否存在交点。
- * @description 会遍历两侧线段集合并逐段做相交判定。
+ * 判断两范围的边界线段是否存在交点
+ * @description
+ * 使用 Sweep and Prune，时间复杂度 O(N log N + k)，
+ * 当任一侧线段数不超过 8 时回退朴素双循环（O(N^2)，但常数开销更低）。
  * @param {import('./range.js').Range} left - 左侧范围
  * @param {import('./range.js').Range} right - 右侧范围
  * @param {{approximationSegments?: number}} [options] - 点列近似参数
@@ -133,18 +135,85 @@ function anyPointContained(sourcePoints, targetRange, options = {}) {
 function anySegmentIntersection(left, right, options = {}) {
   const leftSegments = getRangeSegments(left, options);
   const rightSegments = getRangeSegments(right, options);
-  for (const [leftStart, leftEnd] of leftSegments) {
-    for (const [rightStart, rightEnd] of rightSegments) {
-      if (segmentsIntersect(leftStart, leftEnd, rightStart, rightEnd)) {
+
+  const leftCount = leftSegments.length;
+  const rightCount = rightSegments.length;
+
+  // 任一侧线段数 ≤ 8 时，朴素双循环更快（避免排序和分配开销）
+  if (leftCount <= 8 || rightCount <= 8) {
+    for (const [leftStart, leftEnd] of leftSegments) {
+      for (const [rightStart, rightEnd] of rightSegments) {
+        if (segmentsIntersect(leftStart, leftEnd, rightStart, rightEnd)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // 合并线段并标记来源，同时计算 x 范围
+  const tagged = new Array(leftCount + rightCount);
+  let idx = 0;
+  for (const [s, e] of leftSegments) {
+    tagged[idx++] = {
+      s, e,
+      minX: s.x <= e.x ? s.x : e.x,
+      maxX: s.x >= e.x ? s.x : e.x,
+      src: 0,
+    };
+  }
+  for (const [s, e] of rightSegments) {
+    tagged[idx++] = {
+      s, e,
+      minX: s.x <= e.x ? s.x : e.x,
+      maxX: s.x >= e.x ? s.x : e.x,
+      src: 1,
+    };
+  }
+
+  // 按 minX 升序排列
+  tagged.sort((a, b) => a.minX - b.minX);
+
+  const active = [];
+
+  for (let ti = 0; ti < tagged.length; ti++) {
+    const seg = tagged[ti];
+
+    // 淘汰 maxX < seg.minX 的过期线段
+    let writeIdx = 0;
+    for (let ai = 0; ai < active.length; ai++) {
+      if (active[ai].maxX >= seg.minX) {
+        active[writeIdx++] = active[ai];
+      }
+    }
+    active.length = writeIdx;
+
+    // 仅检测异源线段
+    for (let ai = 0; ai < active.length; ai++) {
+      const other = active[ai];
+      if (other.src === seg.src) continue;
+
+      // Y 轴 AABB 快速排除
+      if (
+        (seg.s.y <= seg.e.y ? seg.s.y : seg.e.y) > (other.s.y >= other.e.y ? other.s.y : other.e.y) ||
+        (seg.s.y >= seg.e.y ? seg.s.y : seg.e.y) < (other.s.y <= other.e.y ? other.s.y : other.e.y)
+      ) {
+        continue;
+      }
+
+      if (segmentsIntersect(seg.s, seg.e, other.s, other.e)) {
         return true;
       }
     }
+
+    active.push(seg);
   }
+
   return false;
 }
 
 /**
- * 判断两个闭合范围是否相交。
+ * 判断两个闭合范围是否相交
  * @description 先做包围盒快速排除，再检查点包含与边界线段相交。
  * @param {import('./range.js').Range} left - 左侧闭合范围
  * @param {import('./range.js').Range} right - 右侧闭合范围
@@ -165,7 +234,7 @@ function intersectsClosedRanges(left, right, options = {}) {
 }
 
 /**
- * 判断路径与面积范围是否相交。
+ * 判断路径与面积范围是否相交
  * @description 路径只检查自身点列与线段，不把其内部视为面积。
  * @param {PathRange} path - 路径范围
  * @param {import('./range.js').Range} area - 面积范围
@@ -183,7 +252,7 @@ function intersectsPathWithArea(path, area, options = {}) {
 }
 
 /**
- * 判断两条路径是否相交。
+ * 判断两条路径是否相交
  * @description 只检查路径点落在线上或两侧线段相交的情况。
  * @param {PathRange} left - 左侧路径
  * @param {PathRange} right - 右侧路径
@@ -204,7 +273,7 @@ function intersectsPathWithPath(left, right, options = {}) {
 }
 
 /**
- * 将点在椭圆局部基底中表示为参数因子。
+ * 将点在椭圆局部基底中表示为参数因子
  * @description 返回点在 axisX 与 axisY 张成坐标系下的系数，退化椭圆时返回 null。
  * @param {EllipseRange} ellipse - 目标椭圆
  * @param {number} x - 相对椭圆中心的 x 分量
@@ -224,7 +293,7 @@ function solveEllipseFactors(ellipse, x, y) {
 }
 
 /**
- * 计算点代入椭圆隐式方程后的值。
+ * 计算点代入椭圆隐式方程后的值
  * @description 返回值小于零表示在内部，等于零表示在边界上，大于零表示在外部。
  * @param {EllipseRange} ellipse - 目标椭圆
  * @param {{x: number, y: number}} point - 待评估点
@@ -244,7 +313,7 @@ function evaluateEllipseImplicit(ellipse, point, options = {}) {
 }
 
 /**
- * 判断线段与椭圆是否相交。
+ * 判断线段与椭圆是否相交
  * @description 非退化椭圆走解析二次方程，退化椭圆回退到边界线段判定。
  * @param {{x: number, y: number}} start - 线段起点
  * @param {{x: number, y: number}} end - 线段终点
@@ -317,7 +386,7 @@ function segmentIntersectsEllipse(start, end, ellipse, options = {}) {
 }
 
 /**
- * 判断某范围的任一边界线段是否与椭圆相交。
+ * 判断某范围的任一边界线段是否与椭圆相交
  * @description 会将 range 展开成线段并逐段调用线段-椭圆判定。
  * @param {import('./range.js').Range} range - 待检查范围
  * @param {EllipseRange} ellipse - 目标椭圆
@@ -331,7 +400,7 @@ function anySegmentEllipseIntersection(range, ellipse, options = {}) {
 }
 
 /**
- * 获取椭圆边界在指定参数角度上的点。
+ * 获取椭圆边界在指定参数角度上的点
  * @description 该函数使用椭圆的仿射表达直接生成边界采样点。
  * @param {EllipseRange} ellipse - 目标椭圆
  * @param {number} angle - 参数角度
@@ -344,7 +413,7 @@ function sampleEllipsePoint(ellipse, angle) {
 }
 
 /**
- * 去掉多项式首部的零系数。
+ * 去掉多项式首部的零系数
  * @description 该函数用于在求根前恢复正确的多项式次数。
  * @param {number[]} coefficients - 按降幂排列的系数数组
  * @returns {number[]} 去掉首部零系数后的数组
@@ -361,7 +430,7 @@ function trimPolynomialLeadingZeros(coefficients) {
 }
 
 /**
- * 创建复数对象。
+ * 创建复数对象
  * @description 复数在椭圆四次方程求根时作为内部数值表示使用。
  * @param {number} [re=0] - 实部
  * @param {number} [im=0] - 虚部
@@ -372,7 +441,7 @@ function createComplex(re = 0, im = 0) {
 }
 
 /**
- * 计算复数加法。
+ * 计算复数加法
  * @description 返回 left 与 right 的和。
  * @param {{re: number, im: number}} left - 左侧复数
  * @param {{re: number, im: number}} right - 右侧复数
@@ -383,7 +452,7 @@ function complexAdd(left, right) {
 }
 
 /**
- * 计算复数减法。
+ * 计算复数减法
  * @description 返回 left 减去 right 的结果。
  * @param {{re: number, im: number}} left - 左侧复数
  * @param {{re: number, im: number}} right - 右侧复数
@@ -394,7 +463,7 @@ function complexSub(left, right) {
 }
 
 /**
- * 计算复数乘法。
+ * 计算复数乘法
  * @description 返回两个复数的乘积。
  * @param {{re: number, im: number}} left - 左侧复数
  * @param {{re: number, im: number}} right - 右侧复数
@@ -408,7 +477,7 @@ function complexMul(left, right) {
 }
 
 /**
- * 计算复数除法。
+ * 计算复数除法
  * @description 当分母过小无法稳定相除时，返回 Infinity 占位值。
  * @param {{re: number, im: number}} left - 被除数
  * @param {{re: number, im: number}} right - 除数
@@ -426,7 +495,7 @@ function complexDiv(left, right) {
 }
 
 /**
- * 计算复数模长。
+ * 计算复数模长
  * @description 返回复数到原点的欧氏距离。
  * @param {{re: number, im: number}} value - 复数
  * @returns {number} 模长
@@ -436,7 +505,7 @@ function complexAbs(value) {
 }
 
 /**
- * 在复数点上评估多项式值。
+ * 在复数点上评估多项式值
  * @description 系数数组要求按降幂顺序排列。
  * @param {number[]} coefficients - 多项式系数
  * @param {{re: number, im: number}} value - 代入点
@@ -454,7 +523,7 @@ function evaluatePolynomialComplex(coefficients, value) {
 }
 
 /**
- * 求多项式的实根近似。
+ * 求多项式的实根近似
  * @description 当前使用 Durand-Kerner 迭代，再筛出虚部足够小的根作为实根。
  * @param {number[]} coefficients - 按降幂排列的多项式系数
  * @returns {number[]} 实根数组
@@ -524,7 +593,7 @@ function solvePolynomialRealRoots(coefficients) {
 }
 
 /**
- * 在实数点上评估多项式值。
+ * 在实数点上评估多项式值
  * @description 系数数组要求按降幂顺序排列。
  * @param {number[]} coefficients - 多项式系数
  * @param {number} value - 代入点
@@ -539,7 +608,7 @@ function evaluatePolynomialReal(coefficients, value) {
 }
 
 /**
- * 计算多项式的一阶导数系数。
+ * 计算多项式的一阶导数系数
  * @description 系数数组要求按降幂顺序排列。
  * @param {number[]} coefficients - 原多项式系数
  * @returns {number[]} 导函数系数
@@ -555,7 +624,7 @@ function derivePolynomial(coefficients) {
 }
 
 /**
- * 构造两椭圆边界相交对应的四次方程。
+ * 构造两椭圆边界相交对应的四次方程
  * @description 方程变量是左椭圆参数化后代入右椭圆隐式方程得到的半角代换结果。
  * @param {EllipseRange} left - 左侧椭圆
  * @param {EllipseRange} right - 右侧椭圆
@@ -597,7 +666,7 @@ function buildEllipseIntersectionPolynomial(left, right) {
 }
 
 /**
- * 判断两个椭圆边界是否相交或外切。
+ * 判断两个椭圆边界是否相交或外切
  * @description 先检查四次方程实根，再用导函数临界点补偿重根切触。
  * @param {EllipseRange} left - 左侧椭圆
  * @param {EllipseRange} right - 右侧椭圆
@@ -639,7 +708,7 @@ function ellipseBoundaryTouchesEllipse(left, right, options = {}) {
 }
 
 /**
- * 判断两个矩形范围是否相交。
+ * 判断两个矩形范围是否相交
  * @description 该组合直接退化为包围盒重叠判定。
  * @param {RectangleRange} left - 左侧矩形
  * @param {RectangleRange} right - 右侧矩形
@@ -650,7 +719,7 @@ function intersectsRectangleWithRectangle(left, right) {
 }
 
 /**
- * 判断矩形与多边形是否相交。
+ * 判断矩形与多边形是否相交
  * @description 该组合走闭合面积范围的通用判定。
  * @param {RectangleRange} left - 左侧矩形
  * @param {PolygonRange} right - 右侧多边形
@@ -662,7 +731,7 @@ function intersectsRectangleWithPolygon(left, right, options = {}) {
 }
 
 /**
- * 判断矩形与绳子范围是否相交。
+ * 判断矩形与绳子范围是否相交
  * @description 该组合走闭合面积范围的通用判定。
  * @param {RectangleRange} left - 左侧矩形
  * @param {RopeRange} right - 右侧绳子范围
@@ -674,7 +743,7 @@ function intersectsRectangleWithRope(left, right, options = {}) {
 }
 
 /**
- * 判断矩形与椭圆是否相交。
+ * 判断矩形与椭圆是否相交
  * @description 该组合会结合点包含、椭圆中心包含与边界线段-椭圆相交判定。
  * @param {RectangleRange} left - 左侧矩形
  * @param {EllipseRange} right - 右侧椭圆
@@ -695,7 +764,7 @@ function intersectsRectangleWithEllipse(left, right, options = {}) {
 }
 
 /**
- * 判断矩形与路径是否相交。
+ * 判断矩形与路径是否相交
  * @description 该组合复用路径与面积范围的通用判定。
  * @param {RectangleRange} left - 左侧矩形
  * @param {PathRange} right - 右侧路径
@@ -707,7 +776,7 @@ function intersectsRectangleWithPath(left, right, options = {}) {
 }
 
 /**
- * 判断两个多边形是否相交。
+ * 判断两个多边形是否相交
  * @description 该组合走闭合面积范围的通用判定。
  * @param {PolygonRange} left - 左侧多边形
  * @param {PolygonRange} right - 右侧多边形
@@ -719,7 +788,7 @@ function intersectsPolygonWithPolygon(left, right, options = {}) {
 }
 
 /**
- * 判断多边形与绳子范围是否相交。
+ * 判断多边形与绳子范围是否相交
  * @description 该组合走闭合面积范围的通用判定。
  * @param {PolygonRange} left - 左侧多边形
  * @param {RopeRange} right - 右侧绳子范围
@@ -731,7 +800,7 @@ function intersectsPolygonWithRope(left, right, options = {}) {
 }
 
 /**
- * 判断多边形与椭圆是否相交。
+ * 判断多边形与椭圆是否相交
  * @description 该组合会结合点包含、多边形对椭圆中心的包含与边界线段-椭圆相交判定。
  * @param {PolygonRange} left - 左侧多边形
  * @param {EllipseRange} right - 右侧椭圆
@@ -752,7 +821,7 @@ function intersectsPolygonWithEllipse(left, right, options = {}) {
 }
 
 /**
- * 判断多边形与路径是否相交。
+ * 判断多边形与路径是否相交
  * @description 该组合复用路径与面积范围的通用判定。
  * @param {PolygonRange} left - 左侧多边形
  * @param {PathRange} right - 右侧路径
@@ -764,7 +833,7 @@ function intersectsPolygonWithPath(left, right, options = {}) {
 }
 
 /**
- * 判断两个绳子范围是否相交。
+ * 判断两个绳子范围是否相交
  * @description 该组合走闭合面积范围的通用判定。
  * @param {RopeRange} left - 左侧绳子范围
  * @param {RopeRange} right - 右侧绳子范围
@@ -776,7 +845,7 @@ function intersectsRopeWithRope(left, right, options = {}) {
 }
 
 /**
- * 判断绳子范围与椭圆是否相交。
+ * 判断绳子范围与椭圆是否相交
  * @description 该组合会结合点包含、绳子对椭圆中心的包含与边界线段-椭圆相交判定。
  * @param {RopeRange} left - 左侧绳子范围
  * @param {EllipseRange} right - 右侧椭圆
@@ -797,7 +866,7 @@ function intersectsRopeWithEllipse(left, right, options = {}) {
 }
 
 /**
- * 判断绳子范围与路径是否相交。
+ * 判断绳子范围与路径是否相交
  * @description 该组合复用路径与面积范围的通用判定。
  * @param {RopeRange} left - 左侧绳子范围
  * @param {PathRange} right - 右侧路径
@@ -809,7 +878,7 @@ function intersectsRopeWithPath(left, right, options = {}) {
 }
 
 /**
- * 判断两个椭圆是否相交。
+ * 判断两个椭圆是否相交
  * @description 该组合会先检查中心包含，再检查两侧边界是否存在交点或外切点。
  * @param {EllipseRange} left - 左侧椭圆
  * @param {EllipseRange} right - 右侧椭圆
@@ -833,7 +902,7 @@ function intersectsEllipseWithEllipse(left, right, options = {}) {
 }
 
 /**
- * 判断椭圆与路径是否相交。
+ * 判断椭圆与路径是否相交
  * @description 该组合会结合路径点包含与边界线段-椭圆相交判定。
  * @param {EllipseRange} left - 左侧椭圆
  * @param {PathRange} right - 右侧路径
@@ -851,7 +920,7 @@ function intersectsEllipseWithPath(left, right, options = {}) {
 }
 
 /**
- * 按具体范围类型分派到特化的相交算法。
+ * 按具体范围类型分派到特化的相交算法
  * @description 当前覆盖矩形、多边形、绳子、椭圆、路径五类范围的 15 组无序组合。
  * @param {import('./range.js').Range} left - 左侧范围
  * @param {import('./range.js').Range} right - 右侧范围
