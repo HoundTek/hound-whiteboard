@@ -37,6 +37,17 @@ import { dagToString } from "./dag-debug.js";
  * 在 DAG 中，分发沿单一路径进行，上下文只沿该路径累积，
  * 节点的多入边不影响单次分发的上下文。
  *
+ * @typedef {Object} DevicesDAGAccumulatedContext
+ * @property {Object} [board] - Board 实例（含 allocateObjectId 等方法）
+ * @property {Object} [viewport] - Viewport 实例（含 registerUiOverlayProvider / requestViewportUiRender 等）
+ * @property {Object} [boardApi] - Board API RPC 代理（含 createObject / commitObjects / discardActiveObjects / modifyObject / queryObjects 等）
+ * @property {Array<Object>} [objects] - 当前工具持有的对象集合
+ * @property {Function} [allocateObjectId] - 分配对象 id 的便捷函数（优先于 board.allocateObjectId）
+ * @property {boolean} [autoCommit] - handoff prefix 注入的标志，false 时阻止 Creator 自动提交到静态图
+ * @property {boolean} [autoUmountOnApply] - 修改提交后是否自动卸载工具节点（默认 true）
+ * @property {Function} [resolvePosition] - 由 prefix 注入的坐标解析函数
+ * @property {Object} [customFlag] - 上游节点可添加的自定义键值对
+ *
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
  * @property {DevicesDAG} dag - 所属设备图
@@ -46,7 +57,7 @@ import { dagToString } from "./dag-debug.js";
  * @property {string} resolvedDefaultRoutePath - 当前默认出边对应的绝对路径
  * @property {number} depth - 当前分发深度
  * @property {SignalPacket|undefined} signalPacket - 当前已规整的输入信号包
- * @property {Object} acc - 累积上下文（沿分发路径逐层追加，handler 不能在此平级新增键）
+ * @property {DevicesDAGAccumulatedContext} acc - 累积上下文（沿分发路径逐层追加，handler 只能在 acc 中新增键）
  * @property {Object} state - 当前节点状态的只读快照
  * @property {() => any} getState - 重读节点最新状态
  * @property {(nextState: Object) => Object} setState - 全量写入节点状态

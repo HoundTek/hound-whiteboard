@@ -56,7 +56,7 @@ describe("RectangleObjectChooserTool", () => {
       deviceContext,
     );
 
-    await tool.process(
+    tool.process(
       {
         signals: [
           {
@@ -71,6 +71,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(boardApi.hitTest).toHaveBeenCalledWith(
       new RectangleRange(5, 5, 35, 35),
@@ -126,7 +127,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
-    await tool.process(
+    tool.process(
       {
         signals: [
           {
@@ -141,6 +142,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(boardApi.discardActiveObjects).toHaveBeenCalledWith([1]);
     expect(boardApi.addActiveObjects).not.toHaveBeenCalled();
@@ -232,7 +234,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
-    await tool.process(
+    tool.process(
       {
         signals: [
           { type: "position", context: { value: new Vector(30, 30) } },
@@ -241,6 +243,7 @@ describe("RectangleObjectChooserTool", () => {
       },
       deviceContext,
     );
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(boardApi.hitTest).toHaveBeenCalledWith(
       new RectangleRange(0, 0, 30, 30),

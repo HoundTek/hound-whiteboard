@@ -231,19 +231,19 @@ function wrapToolForHandoff(tool, options = {}) {
       onToolComplete?.(context);
     }
 
-    // 异步 case：延迟清理 subscription，等 Promise resolve 后再移除监听
-    if (rawResult instanceof Promise) {
-      return rawResult.then((resolvedResult) => {
+    // 根据工具是否可能有异步 action:complete 来决定清理时机
+    // 异步工具（如 Chooser）：延迟到 macrotask，确保 action:complete 在其被移除前触发
+    // 同步工具：立刻清理，避免不必要的异步调度
+    if (tool?.hasAsyncCompleteAction) {
+      setTimeout(() => {
         for (const unsub of unsubs) {
           unsub?.();
         }
-        return resolvedResult;
-      });
-    }
-
-    // 同步 case：直接清理
-    for (const unsub of unsubs) {
-      unsub?.();
+      }, 0);
+    } else {
+      for (const unsub of unsubs) {
+        unsub?.();
+      }
     }
 
     return rawResult;

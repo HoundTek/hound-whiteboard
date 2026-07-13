@@ -33,7 +33,7 @@ describe("ObjectChooserTool", () => {
       return this.chosenObjects;
     }
 
-    reset() {}
+    reset() { }
   }
 
   test("process 应通过 boardApi.addActiveObjects 写回选择结果", () => {
@@ -355,7 +355,7 @@ describe("ObjectChooserTool", () => {
           acc: { boardApi },
           path: "/test",
           getNodeState: () => ({}),
-          setNodeState: () => {},
+          setNodeState: () => { },
         },
       );
 
@@ -423,7 +423,7 @@ describe("ObjectChooserTool", () => {
       );
     });
 
-    test("RectangleObjectChooserTool 在 end 信号时触发 action:complete", () => {
+    test("RectangleObjectChooserTool 在 end 信号时触发 action:complete", async () => {
       // 准备一个虚拟对象用于框选命中
       const selectedSummary = {
         id: 20,
@@ -468,27 +468,29 @@ describe("ObjectChooserTool", () => {
       );
 
       // 发送 end 信号，携带最终位置 → 框选命中 → confirmSelection
-      return tool
-        .process(
-          {
-            signals: [
-              { type: "end" },
-              {
-                type: "position",
-                context: { value: new Vector(200, 200) },
-              },
-            ],
-          },
-          deviceContext,
-        )
-        .then(() => {
-          expect(afterChoose).toHaveBeenCalledTimes(1);
-          expect(actionComplete).toHaveBeenCalledTimes(1);
+      const completePromise = new Promise((resolve) =>
+        tool.on("action:complete", () => resolve()),
+      );
+      tool.process(
+        {
+          signals: [
+            { type: "end" },
+            {
+              type: "position",
+              context: { value: new Vector(200, 200) },
+            },
+          ],
+        },
+        deviceContext,
+      );
+      await completePromise;
 
-          const completeCall = actionComplete.mock.calls[0];
-          expect(completeCall[0]).toMatchObject({ path: "/viewport/chooser" });
-          expect(completeCall[1]).toEqual([selectedSummary]);
-        });
+      expect(afterChoose).toHaveBeenCalledTimes(1);
+      expect(actionComplete).toHaveBeenCalledTimes(1);
+
+      const completeCall = actionComplete.mock.calls[0];
+      expect(completeCall[0]).toMatchObject({ path: "/viewport/chooser" });
+      expect(completeCall[1]).toEqual([selectedSummary]);
     });
 
     test("cancel 信号应撤销上一轮已确认的选择", () => {

@@ -322,7 +322,8 @@ class GestureTool extends Tool {
       this._emit("gesture:cancel", interaction);
     }
 
-    return this.cancelAction(interaction.context);
+    this.cancelAction(interaction.context);
+    return undefined;
   }
 
   /**
@@ -339,7 +340,7 @@ class GestureTool extends Tool {
     }
 
     if (this.autoActionOnGestureEnd) {
-      return this.completeAction(interaction.context);
+      this.completeAction(interaction.context);
     }
 
     return undefined;
@@ -380,7 +381,8 @@ class GestureTool extends Tool {
       this._emit("gesture:end", interaction);
     }
 
-    return this.completeAction(interaction.context);
+    this.completeAction(interaction.context);
+    return undefined;
   }
 
   /**
@@ -422,7 +424,8 @@ class GestureTool extends Tool {
    * @protected
    */
   _onEndAction(interaction) {
-    return this.endAction(interaction.context);
+    this.endAction(interaction.context);
+    return undefined;
   }
 
   /**
@@ -552,7 +555,8 @@ class MultiGestureTool extends GestureTool {
       this._emit("gesture:end", interaction);
     }
 
-    return this.completeAction(interaction.context);
+    this.completeAction(interaction.context);
+    return undefined;
   }
 
   /**
@@ -568,7 +572,8 @@ class MultiGestureTool extends GestureTool {
       this._emit("gesture:cancel", interaction);
     }
 
-    return this.cancelAction(interaction.context);
+    this.cancelAction(interaction.context);
+    return undefined;
   }
 }
 

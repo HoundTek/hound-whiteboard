@@ -37,6 +37,14 @@ class ObjectChooserTool extends GestureTool {
   }
 
   /**
+   * Chooser 的 completeAction 可能返回 Promise（异步框选）
+   * @returns {boolean}
+   */
+  get hasAsyncCompleteAction() {
+    return true;
+  }
+
+  /**
    * 将选择条目回填为真实对象实例（若可解析）
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {import("../../shared/types.js").ObjectSummary} objectEntry - 对象摘要
@@ -249,7 +257,8 @@ class ObjectChooserTool extends GestureTool {
       this._emit("gesture:cancel", interaction);
     }
 
-    return this.cancelAction(interaction.context);
+    this.cancelAction(interaction.context);
+    return undefined;
   }
 
   /**
@@ -270,7 +279,8 @@ class ObjectChooserTool extends GestureTool {
       return undefined;
     }
 
-    return this.completeAction(interaction.context);
+    this.completeAction(interaction.context);
+    return undefined;
   }
 
   /**

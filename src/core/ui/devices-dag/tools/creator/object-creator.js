@@ -601,7 +601,8 @@ class ObjectCreatorTool extends GestureTool {
 
     this._pendingActionInteraction = interaction;
     try {
-      return this.completeCreatedObject(interaction);
+      this.completeCreatedObject(interaction);
+      return undefined;
     } finally {
       this._pendingActionInteraction = null;
     }
@@ -706,7 +707,8 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
 
     this._pendingActionInteraction = interaction;
     try {
-      return this.completeCreatedObject(interaction);
+      this.completeCreatedObject(interaction);
+      return undefined;
     } finally {
       this._pendingActionInteraction = null;
     }
