@@ -94,7 +94,10 @@ function createToolSwitcherSubDAG(options = {}) {
     );
     if (switchSignal) {
       const target = switchSignal?.context?.activeTool;
-      if (typeof target === "string" && target) {
+      if (typeof target === "string" && target && target !== routeTarget) {
+        ctx.routeToChild(routeTarget, [
+          { type: "end-action", context: {} },
+        ]);
         routeTarget = target;
       }
       return ctx.stop();

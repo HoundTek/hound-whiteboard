@@ -178,8 +178,8 @@ class ObjectCreatorTool extends GestureTool {
   resolveCreatedObjectProperty(interaction) {
     const baseProperty =
       this.property &&
-      typeof this.property === "object" &&
-      !Array.isArray(this.property)
+        typeof this.property === "object" &&
+        !Array.isArray(this.property)
         ? this.property
         : {};
 
@@ -362,6 +362,10 @@ class ObjectCreatorTool extends GestureTool {
         return;
       }
 
+      if (!this.isActionActive) {
+        this.beginAction(interaction.context);
+      }
+
       this.beginGesture(interaction);
       this.isGestureActive = true;
       this._emit("gesture:begin", interaction);
@@ -500,7 +504,7 @@ class ObjectCreatorTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  afterCompleteCreatedObject(interaction, completedObject) {}
+  afterCompleteCreatedObject(interaction, completedObject) { }
 
   /**
    * 完成整个对象创建（编排钩子流程）
@@ -523,7 +527,10 @@ class ObjectCreatorTool extends GestureTool {
    * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {undefined}
    */
-  completeAction(context) {
+  completeAction(context = {}) {
+    this.clearOverlayState(context);
+    this.isActionActive = false;
+
     if (!this._entry) {
       return undefined;
     }
@@ -556,7 +563,7 @@ class ObjectCreatorTool extends GestureTool {
    * @returns {void}
    */
   cancelCreatedObject(interaction) {
-    this.discardAction(interaction?.context ?? {});
+    this.cancelAction(interaction?.context ?? {});
     return undefined;
   }
 
@@ -621,6 +628,7 @@ class ObjectCreatorTool extends GestureTool {
    * @returns {void}
    */
   umount(context = {}) {
+    this.isActionActive = false;
     this.discardCreatedObjects(context);
     this.clearContextObjects(context);
     this.objectId = null;
@@ -639,7 +647,7 @@ class ObjectCreatorTool extends GestureTool {
  * @description
  * 一次对象创建只对应一个手势。手势结束即对象结束，手势取消即对象取消。
  */
-class SingleGestureObjectCreatorTool extends ObjectCreatorTool {}
+class SingleGestureObjectCreatorTool extends ObjectCreatorTool { }
 
 /**
  * 多手势对象创建工具

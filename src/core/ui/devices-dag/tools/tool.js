@@ -75,6 +75,12 @@ class Tool {
    */
   constructor() {
     this._hooks = null;
+
+    /**
+     * 当前动作是否活跃
+     * @type {boolean}
+     */
+    this.isActionActive = false;
   }
 
   /**
@@ -377,6 +383,60 @@ class Tool {
   }
 
   /**
+   * 动作开始
+   * @description
+   * 标记当前工具进入活跃动作状态。手势工具在首个 position 信号触发
+   * 此方法，多指 wrapper 在首个触点到达时触发。工具切换前可调此方法确保状态机同步。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  beginAction(context = {}) {
+    this.isActionActive = true;
+    this._emit("action:begin", context);
+  }
+
+  /**
+   * 动作完成（提交结果）
+   * @description
+   * 子类 override 实现具体的提交逻辑。默认仅将 isActionActive 置 false。
+   * 外部模块（如 tool-switcher）可通过此方法统一结束当前工具动作，
+   * 无需理解具体工具的信号语义。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {*}
+   */
+  completeAction(context = {}) {
+    this.isActionActive = false;
+  }
+
+  /**
+   * 动作取消（丢弃结果）
+   * @description
+   * 子类 override 实现具体的丢弃逻辑。默认调用 reset() 清理状态，
+   * 并触发 action:cancel 钩子。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  cancelAction(context = {}) {
+    this.isActionActive = false;
+    this.reset();
+    this._emit("action:cancel", context);
+  }
+
+  /**
+   * 优雅结束当前动作（外部调用入口）
+   * @description
+   * 供 tool-switcher 等外部模块调用，在切换工具前让当前工具优雅结束当前工作。
+   * 默认调用 completeAction。手势工具会先完成手势再提交动作。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {*}
+   */
+  endAction(context = {}) {
+    if (this.isActionActive) {
+      return this.completeAction(context);
+    }
+  }
+
+  /**
    * 处理一个完整信号包
    * @param {SignalPacket} signalPacket - 输入信号包
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
@@ -393,6 +453,9 @@ class Tool {
    * @returns {void}
    */
   umount(context = {}) {
+    if (this.isActionActive) {
+      this.cancelAction(context);
+    }
     if (this.reset !== Tool.prototype.reset) {
       this.reset(context);
     }

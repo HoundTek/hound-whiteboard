@@ -169,7 +169,7 @@ class ObjectChooserTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  afterConfirmSelection(context, objects) {}
+  afterConfirmSelection(context, objects) { }
 
   /**
    * 显式确认当前选择
@@ -194,7 +194,7 @@ class ObjectChooserTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  beginSelectionGesture(interaction) {}
+  beginSelectionGesture(interaction) { }
 
   /**
    * GestureTool 生命周期适配：开始选择手势
@@ -224,7 +224,7 @@ class ObjectChooserTool extends GestureTool {
    * @param {Object} interaction - 当前交互上下文
    * @returns {void}
    */
-  completeGesture(interaction) {}
+  completeGesture(interaction) { }
 
   /**
    * GestureTool 生命周期适配：取消选择手势
@@ -249,8 +249,7 @@ class ObjectChooserTool extends GestureTool {
       this._emit("gesture:cancel", interaction);
     }
 
-    this.clearOverlayState(interaction.context);
-    this.discardAction(interaction.context);
+    return this.cancelAction(interaction.context);
   }
 
   /**
@@ -476,6 +475,7 @@ class ObjectChooserTool extends GestureTool {
    * @returns {void}
    */
   umount(context = {}) {
+    this.isActionActive = false;
     this.clearSelectionRegion(context);
     this._overlaySelectedObjects = [];
     const selectedObjects = this.resolveContextObjects(context);

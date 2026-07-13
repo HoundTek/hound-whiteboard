@@ -74,15 +74,21 @@ class MultiToolWrapper extends Tool {
   process(signalPacket, deviceContext = {}) {
     const packet = SignalPacket.from(signalPacket);
 
-    const touchSignal = packet.signals?.[0];
+    const firstSignal = packet.signals?.[0];
+
+    // 处理 end-action 信号（外部强制结束，如 tool-switcher 切换）
+    if (firstSignal?.type === "end-action") {
+      return this.endAction(deviceContext);
+    }
+
     if (
-      !touchSignal ||
-      touchSignal.type !== TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS
+      !firstSignal ||
+      firstSignal.type !== TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS
     ) {
       return;
     }
 
-    const { contacts, changedTouchIds } = touchSignal.context ?? {};
+    const { contacts, changedTouchIds } = firstSignal.context ?? {};
     if (!changedTouchIds || changedTouchIds.length === 0) {
       return;
     }
@@ -111,8 +117,14 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   #beginTouch(touchId, contact, deviceContext) {
+    const isFirstTouch = this.#instances.size === 0;
+
     const entry = this.#entryFactory(touchId);
     this.#instances.set(touchId, entry);
+
+    if (isFirstTouch) {
+      this.beginAction(deviceContext);
+    }
 
     const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
@@ -155,6 +167,10 @@ class MultiToolWrapper extends Tool {
     // 清理入口节点 handler 的外部资源（如 overlay）
     this.#disposeNode(entry, deviceContext);
     this.#instances.delete(touchId);
+
+    if (this.#instances.size === 0 && this.isActionActive) {
+      this.completeAction(deviceContext);
+    }
   }
 
   /**
@@ -182,11 +198,71 @@ class MultiToolWrapper extends Tool {
   }
 
   /**
+   * 动作开始
+   * @description 首个触点到达时触发。外部 tool-switcher 也可通过此方法同步状态。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  beginAction(context = {}) {
+    super.beginAction(context);
+  }
+
+  /**
+   * 动作完成（提交所有子工具结果）
+   * @description 最后一个触点抬起时自动触发；外部 tool-switcher 也可通过此方法强制结束。
+   * 向所有活跃子图发送 end 信号，然后递归清理。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  completeAction(context = {}) {
+    for (const [touchId, entry] of this.#instances) {
+      const packet = new SignalPacket("", [
+        { type: "end", context: {} },
+      ]);
+      entry.dispatch(packet, { acc: context.acc ?? {} });
+      this.#disposeNode(entry, context);
+    }
+    this.#instances.clear();
+    this.isActionActive = false;
+  }
+
+  /**
+   * 动作取消（丢弃所有子工具结果）
+   * @description 向所有活跃子图发送 cancel 信号，然后递归清理并重置。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  cancelAction(context = {}) {
+    for (const [touchId, entry] of this.#instances) {
+      const packet = new SignalPacket("", [
+        { type: "cancel", context: {} },
+      ]);
+      entry.dispatch(packet, { acc: context.acc ?? {} });
+      this.#disposeNode(entry, context);
+    }
+    this.#instances.clear();
+    this.isActionActive = false;
+  }
+
+  /**
+   * 优雅结束当前动作
+   * @description 向所有活跃子图发送 end 信号并清理。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {void}
+   */
+  endAction(context = {}) {
+    if (this.#instances.size > 0 || this.isActionActive) {
+      this.completeAction(context);
+    }
+  }
+
+  /**
    * 重置所有子图实例
    * @returns {void}
    */
   reset() {
     this.#instances.clear();
+    this.isActionActive = false;
   }
 }
 

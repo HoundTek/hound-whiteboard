@@ -44,6 +44,8 @@ const GESTURE_TOOL_SIGNAL_TYPES = Object.freeze({
   OBJECT_CANCEL: "object-cancel",
   /** 显式提交动作 */
   SUCCESS: "success",
+  /** 外部强制结束动作（如 tool-switcher 切换） */
+  END_ACTION: "end-action",
 });
 
 /**
@@ -58,6 +60,7 @@ const GESTURE_TOOL_SIGNAL_TYPES = Object.freeze({
  * @property {boolean} hasObjectCancel - 是否包含 object-cancel 信号
  * @property {boolean} hasObjectEnd - 是否包含 object-end 信号
  * @property {boolean} hasSuccess - 是否包含 success 信号
+ * @property {boolean} hasEndAction - 是否包含 end-action 信号
  */
 
 /**
@@ -148,6 +151,9 @@ class GestureTool extends Tool {
       hasSuccess: signals.some(
         (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.SUCCESS,
       ),
+      hasEndAction: signals.some(
+        (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.END_ACTION,
+      ),
     };
   }
 
@@ -194,13 +200,13 @@ class GestureTool extends Tool {
    * 手势完成钩子
    * @param {GestureInteraction} interaction - 当前手势交互上下文
    */
-  completeGesture(interaction) {}
+  completeGesture(interaction) { }
 
   /**
    * 手势取消钩子
    * @param {GestureInteraction} interaction - 当前手势交互上下文
    */
-  cancelGesture(interaction) {}
+  cancelGesture(interaction) { }
 
   /**
    * 动作执行前的控制流钩子
@@ -239,7 +245,7 @@ class GestureTool extends Tool {
    * @returns {void}
    * @protected
    */
-  discardAction(context) {}
+  discardAction(context) { }
 
   /**
    * 清理当前工具维护的 overlay 临时状态
@@ -247,14 +253,41 @@ class GestureTool extends Tool {
    * @returns {void}
    * @protected
    */
-  clearOverlayState(context = {}) {}
+  clearOverlayState(context = {}) { }
+
+  /**
+   * 优雅结束当前动作
+   * @description
+   * 供 tool-switcher 或 end-action 信号调用。
+   * 先完成当前手势（写最后的路径点等），再提交动作。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {*}
+   */
+  endAction(context = {}) {
+    if (this.isGestureActive) {
+      const interaction = this.buildInteraction(
+        SignalPacket.from({ signals: [] }),
+        context,
+      );
+      this.completeGesture(interaction);
+      this.isGestureActive = false;
+      this._emit("gesture:end", interaction);
+    }
+
+    if (this.isActionActive) {
+      return this.completeAction(context);
+    }
+  }
 
   /**
    * 编排完整的动作提交流程
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {*} 动作结果
    */
-  completeAction(context) {
+  completeAction(context = {}) {
+    this.clearOverlayState(context);
+    this.isActionActive = false;
+
     if (this.beforeAction(context) === false) {
       return false;
     }
@@ -263,6 +296,17 @@ class GestureTool extends Tool {
       this.afterAction(context, resolvedResult);
       return resolvedResult;
     });
+  }
+
+  /**
+   * 取消当前动作并丢弃状态
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   */
+  cancelAction(context = {}) {
+    this.clearOverlayState(context);
+    this.isActionActive = false;
+    return this.discardAction(context);
   }
 
   /**
@@ -278,8 +322,7 @@ class GestureTool extends Tool {
       this._emit("gesture:cancel", interaction);
     }
 
-    this.clearOverlayState(interaction.context);
-    return this.discardAction(interaction.context);
+    return this.cancelAction(interaction.context);
   }
 
   /**
@@ -296,7 +339,6 @@ class GestureTool extends Tool {
     }
 
     if (this.autoActionOnGestureEnd) {
-      this.clearOverlayState(interaction.context);
       return this.completeAction(interaction.context);
     }
 
@@ -338,7 +380,6 @@ class GestureTool extends Tool {
       this._emit("gesture:end", interaction);
     }
 
-    this.clearOverlayState(interaction.context);
     return this.completeAction(interaction.context);
   }
 
@@ -361,6 +402,10 @@ class GestureTool extends Tool {
         return;
       }
 
+      if (!this.isActionActive) {
+        this.beginAction(interaction.context);
+      }
+
       this.beginGesture(interaction);
       this.isGestureActive = true;
       this._emit("gesture:begin", interaction);
@@ -368,6 +413,16 @@ class GestureTool extends Tool {
 
     this.updateGesture(interaction);
     this._emit("gesture:update", interaction);
+  }
+
+  /**
+   * 处理 end-action 信号
+   * @param {GestureInteraction} interaction - 当前手势交互上下文
+   * @returns {*}
+   * @protected
+   */
+  _onEndAction(interaction) {
+    return this.endAction(interaction.context);
   }
 
   /**
@@ -379,6 +434,10 @@ class GestureTool extends Tool {
   process(signalPacket, context = {}) {
     const packet = SignalPacket.from(signalPacket);
     const interaction = this.buildInteraction(packet, context);
+
+    if (interaction.hasEndAction) {
+      return this._onEndAction(interaction);
+    }
 
     if (interaction.hasObjectCancel) {
       return this._onObjectCancel(interaction);
@@ -411,6 +470,7 @@ class GestureTool extends Tool {
    */
   reset() {
     this.isGestureActive = false;
+    this.isActionActive = false;
   }
 }
 
@@ -424,6 +484,29 @@ class GestureTool extends Tool {
  * 仅在 `object-end/object-cancel` 到达时才提交或丢弃整个对象动作。
  */
 class MultiGestureTool extends GestureTool {
+  /**
+   * 优雅结束当前动作（多手势语义）
+   * @description
+   * 多手势模式下，结束动作等同于提交整个对象（等同 object-end 语义）。
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @returns {*}
+   */
+  endAction(context = {}) {
+    if (this.isGestureActive) {
+      const interaction = this.buildInteraction(
+        SignalPacket.from({ signals: [] }),
+        context,
+      );
+      this.completeGesture(interaction);
+      this.isGestureActive = false;
+      this._emit("gesture:end", interaction);
+    }
+
+    if (this.isActionActive) {
+      return this.completeAction(context);
+    }
+  }
+
   /**
    * 处理 end 信号（多手势语义）
    * @param {GestureInteraction} interaction - 当前手势交互上下文
@@ -469,7 +552,6 @@ class MultiGestureTool extends GestureTool {
       this._emit("gesture:end", interaction);
     }
 
-    this.clearOverlayState(interaction.context);
     return this.completeAction(interaction.context);
   }
 
@@ -486,8 +568,7 @@ class MultiGestureTool extends GestureTool {
       this._emit("gesture:cancel", interaction);
     }
 
-    this.clearOverlayState(interaction.context);
-    return this.discardAction(interaction.context);
+    return this.cancelAction(interaction.context);
   }
 }
 
