@@ -2,13 +2,13 @@
 
 ## 概述
 
-`MultiToolWrapper` 是一个泛型包装器，位于 `Tool` 之上。它将一条多指输入流按 `touchId` 分流为多个独立工具实例，使设备图保持静态的同时支持多指并发。
+`MultiToolWrapper` 是一个泛型包装器，位于 `Tool` 之上。它将一条多指输入流按 `touchId` 分流为多个独立节点图，使设备图保持静态的同时支持多指并发。
 
 ### 解决的问题
 
 touchscreen device 输出的 `touch-contacts` 信号包含所有活动触点的全量快照。如果直接将这个信号连到一个 `StrokeCreatorTool`，单指绘制正常，但多指同时绘制时所有触点共用一个 `isGestureActive`、一个 `objectId`，无法独立跟踪每根手指。
 
-`MultiToolWrapper` 在工具内部维护 `Map<touchId, Tool>`，为每个触点分配独立的工具实例。从设备图的角度看，它只是一个普通的叶子节点——图的结构在设计期就已确定。
+`MultiToolWrapper` 在工具内部维护 `Map<touchId, DevicesDAGNode>`，为每个触点分配独立的子图入口节点。从设备图的角度看，它只是一个普通的叶子节点——图的结构在设计期就已确定。
 
 ## 继承关系
 
@@ -20,9 +20,8 @@ classDiagram
     }
 
     class MultiToolWrapper {
-        -#toolConstructor: Function
-        -#toolOptions: Object
-        -#instances: Map~string, Tool~
+        -#entryFactory: Function
+        -#instances: Map~string, DevicesDAGNode~
         +process(signalPacket, context)
         +reset()
         -#beginTouch(touchId, contact, context)
@@ -38,39 +37,45 @@ classDiagram
 ## 实例生命周期
 
 ```
-触点按下（changedTouchId 在 contacts 中，且尚无实例）
+触点按下（changedTouchId 在 contacts 中，且尚无入口节点）
     │
     ▼
 #beginTouch
-    │  new StrokeCreatorTool(options)
-    │  instance.process({position, value: contact.position})
-    │  instances.set(touchId, instance)
+    │  entry = this.#entryFactory(touchId)
+    │  entry.dispatch(packet, { acc })    // position 信号
+    │  instances.set(touchId, entry)
     │
-触点移动（changedTouchId 在 contacts 中，且已有实例）
+触点移动（changedTouchId 在 contacts 中，且已有入口节点）
     │
     ▼
 #updateTouch
-    │  instance.process({position, value: contact.position})
+    │  entry.dispatch(packet, { acc })    // position 信号
     │
 触点抬起（changedTouchId 不在 contacts 中）
     │
     ▼
 #endTouch
-    │  instance.process({end})
+    │  entry.dispatch(packet, { acc })    // end 信号
+    │  #disposeNode(entry)                // 递归清理 handler.dispose
     │  instances.delete(touchId)
 ```
 
 ### 信号转发方式
 
-wrapper 从 `touch-contacts` 信号中提取 `contacts` 和 `changedTouchIds`，为每个变化的触点构造一条独立的 `SignalPacket`：
+wrapper 从 `touch-contacts` 信号中提取 `contacts` 和 `changedTouchIds`，为每个变化的触点构造一条独立的 `SignalPacket` 并通过 `entry.dispatch()` 路由：
 
-| 触点状态     | 构造的信号包                                               | 目标                   |
-| ------------ | ---------------------------------------------------------- | ---------------------- |
-| 新触点       | `[{type: "position", context: {value: contact.position}}]` | 新实例的 `process()`   |
-| 已有触点移动 | 同上                                                       | 已有实例的 `process()` |
-| 触点抬起     | `[{type: "end", context: {}}]`                             | 已有实例的 `process()` |
+| 触点状态     | 构造的信号包                                               | 目标                        |
+| ------------ | ---------------------------------------------------------- | --------------------------- |
+| 新触点       | `[{type: "position", context: {value: contact.position}}]` | 新入口节点的 `dispatch()`   |
+| 已有触点移动 | 同上                                                       | 已有入口节点的 `dispatch()` |
+| 触点抬起     | `[{type: "end", context: {}}]`                             | 已有入口节点的 `dispatch()` |
 
-`deviceContext`（包含 `acc.board`、`acc.viewport`、`acc.boardApi` 等）原样透传，每个工具实例看到的上下文与单指场景完全一致。
+`deviceContext`（包含 `acc.board`、`acc.viewport`、`acc.boardApi` 等）作为 `dispatch` 的 `acc` 选项原样透传，每个子图入口看到的是同一套上下文。
+
+每触点可配置单工具或多节点子图：
+
+- **单工具**：入口节点 handler 设为工具 processor
+- **多节点链**：通过 `builder.edge()` 声明节点间信号路由，handler 返回 `{ to: "next", signals }` 沿边走
 
 ## 与设备图哲学的关系
 
@@ -82,12 +87,38 @@ touch 的触点数在设计期未知。如果用"动态挂载工具"的方案，
 
 ## 使用方式
 
+使用 `createSubDAG` + `DevicesDAGNode.createGraph` 构建每触点的子图模板：
+
 ```js
 import { MultiToolWrapper } from "./tools/multi-tool-wrapper.js";
-import { StrokeCreatorTool } from "./tools/creator/stroke-creator.js";
+import { DevicesDAGNode } from "../dag-node-edge.js";
+import { createSubDAG } from "../index.js";
 
-const multiStroke = new MultiToolWrapper(StrokeCreatorTool, {
-  property: { color: "#ff0000", width: 2 },
+const multiStroke = new MultiToolWrapper((touchId) => {
+  const builder = createSubDAG("/touch");
+  builder.node().tool(
+    new StrokeCreatorTool({
+      property: { color: "#ff0000", width: 2 },
+    }),
+  );
+  return DevicesDAGNode.createGraph(builder.build());
+});
+```
+
+也可为多节点子图（如 handoff：chooser → modifier）声明边连接：
+
+```js
+new MultiToolWrapper((touchId) => {
+  const builder = createSubDAG("/touch");
+  const entry = builder.node().handler((pkt) => ({
+    to: "first",
+    signals: pkt.signals,
+  }));
+  const first = builder.node().handler(firstProcessor);
+  const second = builder.node().handler(secondProcessor);
+  builder.edge("first", entry, first);
+  builder.edge("second", first, second);
+  return DevicesDAGNode.createGraph(builder.build());
 });
 ```
 
@@ -105,9 +136,10 @@ effectiveBoard.signalsEventBus.emit("mount", {
 ## 设计约束
 
 - 只消费 `touch-contacts` 信号（`TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS`），其他信号静默跳过
-- 内部工具实例通过构造函数的 `new` 创建，构造函数签名需与 `options` 参数匹配
-- `reset()` 清空所有实例，不会触发 `end` 信号
+- 入口节点工厂函数每次触点按下时调用，返回 `DevicesDAGNode` 实例
+- `reset()` 清空所有入口节点，不会触发 `end` 信号
 - 不处理 `cancel` 信号——触点 `touchcancel` 到设备层时已转为 `changedTouchId` 不在 `contacts` 中的情况，走 `#endTouch` 路径
+- `#endTouch` 在发送 `end` 信号后递归遍历子图节点调用 `handler.dispose()` 清理外部资源（如 overlay）
 
 ## 相关文档
 

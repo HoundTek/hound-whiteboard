@@ -1,5 +1,4 @@
-import { jest } from "@jest/globals";
-import { DevicesDAG, DevicesDAGNode, DevicesDAGEdge } from "../index.js";
+import { DevicesDAGNode, DevicesDAGEdge } from "../index.js";
 
 describe("DevicesDAGNode", () => {
   describe("构造与初始状态", () => {
@@ -28,7 +27,7 @@ describe("DevicesDAGNode", () => {
 
     test("setHandler(null) 应将 handler 设为 null", () => {
       const node = new DevicesDAGNode(1);
-      node.setHandler(() => {});
+      node.setHandler(() => { });
       node.setHandler(null);
       expect(node.handler).toBeNull();
       expect(node.getHandler()).toBeNull();
@@ -129,7 +128,7 @@ describe("DevicesDAGNode", () => {
 
     test("setUmountHandler(null) 应将 umount 设为 null", () => {
       const node = new DevicesDAGNode(1);
-      node.setUmountHandler(() => {});
+      node.setUmountHandler(() => { });
       node.setUmountHandler(null);
       expect(node.umount).toBeNull();
       expect(node.getUmountHandler()).toBeNull();

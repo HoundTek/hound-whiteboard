@@ -2,7 +2,7 @@
 
 ## 概述
 
-所有 DevicesDAG 节点 handler 的 `handler(packet, ctx)` 签名的第二个参数 `ctx`，即 `DevicesDAGHandlerContext`，由 DAG 引擎在分发时通过 `_createHandlerContext` 统一构建。所有 handler（设备根节点、prefix handler、工具 processor）拿到的都是同一套接口。
+所有 DevicesDAG 节点 handler 的 `handler(packet, ctx)` 签名的第二个参数 `ctx`，即 `DevicesDAGHandlerContext`，由 `DevicesDAGNode._buildHandlerContext` 在分发时统一构建。所有 handler（设备根节点、prefix handler、工具 processor）拿到的都是同一套接口。
 
 `createPrefixNodeHandler` 仅在此基础上为 `ctx.state` / `ctx.getState()` 叠加 `initialState` 默认值，不引入额外字段。
 
@@ -51,8 +51,8 @@ process(signalPacket, ctx) {
 
 ### 累积上下文
 
-| 成员      | 类型     | 说明                                                  |
-| --------- | -------- | ----------------------------------------------------- |
+| 成员      | 类型     | 说明                                                   |
+| --------- | -------- | ------------------------------------------------------ |
 | `ctx.acc` | `Object` | 沿 DAG 逐层累积的只读上下文（board、viewport、回调等） |
 
 **规则**：handler 不能往 `ctx` 平级新增键。向下游传递额外数据时，通过返回值 `{ acc: { key: value } }` 写入累积上下文。

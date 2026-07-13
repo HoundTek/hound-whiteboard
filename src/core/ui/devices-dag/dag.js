@@ -22,7 +22,6 @@ import { CounterPool } from "../../utils/counter-pool.js";
 import {
   isPlainObject,
   isSubDAGDefinition,
-  normalizeHandlerResult,
 } from "./dag-utils.js";
 import { DevicesDAGNode } from "./dag-node-edge.js";
 import { DevicesDAGEdge } from "./dag-node-edge.js";
@@ -711,318 +710,14 @@ class DevicesDAG {
   }
 
   /**
-   * 创建节点处理器上下文
-   * `path` 是本次实际分发所走的活动路径；同一节点可有多条路径
-   * @param {DevicesDAGNode} node
-   * @param {string} path
-   * @param {SignalPacket|undefined} signalPacket
-   * @param {Object} accumulatedContext
-   * @param {number} depth
-   * @returns {DevicesDAGHandlerContext}
-   */
-  _createHandlerContext(
-    node,
-    path,
-    signalPacket,
-    accumulatedContext = {},
-    depth = 0,
-  ) {
-    const defaultRoute = node.getDefaultRoute?.() ?? node.defaultRoute ?? "";
-    const resolvedDefaultRoutePath = defaultRoute
-      ? joinPath(path, defaultRoute)
-      : path;
-
-    const readNodeState = () => this.getNodeState(path);
-
-    return {
-      node,
-      dag: this,
-      path,
-      semantics: node.getSemantics?.() ?? { ...node.semantics },
-      defaultRoute,
-      resolvedDefaultRoutePath,
-      depth,
-      signalPacket,
-      acc: { ...accumulatedContext },
-      state: readNodeState(),
-      getState: readNodeState,
-      setState: (nextState) => this.setNodeState(path, nextState),
-      patchState(partial = {}) {
-        const current = readNodeState();
-        return this.setNodeState(
-          path,
-          isPlainObject(partial) ? { ...current, ...partial } : current,
-        );
-      },
-      getNodeState: (pathOrId = path) => this.getNodeState(pathOrId),
-      setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
-      delNodeState(pathOrId = path, ...keys) {
-        const current = this.getNodeState(pathOrId);
-        for (const key of keys) {
-          delete current[key];
-        }
-        this.setNodeState(pathOrId, current);
-      },
-      routeToChild(to, signals = signalPacket?.signals) {
-        return { packets: [new SignalPacket(to, signals)] };
-      },
-      stop() {
-        return { packets: [] };
-      },
-      signal(type, value, extra) {
-        const base = isPlainObject(extra) ? { ...extra } : {};
-        if (value !== undefined) {
-          base.value = value;
-        }
-        return { type, context: base };
-      },
-    };
-  }
-
-  /**
-   * 统一的图走法引擎
-   * @description
-   * 从指定节点出发，沿 segments 逐段下钻，每经过一个节点调用其 handler，
-   * 根据返回结果动态调整后续路由（redirect、stop、多路分发、默认出边等）。
-   *
-   * dispatch 和 _routeFromNode 都是此方法的薄包装。
-   *
-   * @param {Object} params
-   * @param {DevicesDAGNode} params.startNode - 起始节点
-   * @param {string} params.startPath - 起始节点路径
-   * @param {string[]} params.segments - 路径段列表（可被循环内修改）
-   * @param {SignalPacket} params.startPacket - 起始信号包
-   * @param {Record<string, any>} params.accumulatedContext - 初始累积上下文
-   * @param {number} params.depth - 递归深度（内部计算用）
-   * @param {(currentPacket: SignalPacket) => SignalPacket[]} [params.edgeNotFoundFallback]
-   *   - 边不存在时的回退；传入当前信号包，返回回退结果。
-   *   - 不传则返回空数组。
-   * @returns {{ packets: SignalPacket[], context?: Record<string, any> }}
-   * @private
-   */
-  _walkSegments({
-    startNode,
-    startPath,
-    segments,
-    startPacket,
-    accumulatedContext,
-    depth,
-    edgeNotFoundFallback,
-  }) {
-    let currentNode = startNode;
-    let currentPath = startPath;
-    let currentPacket = startPacket;
-    let mergedContext = { ...accumulatedContext };
-    let contextChanged = false;
-    const finalPackets = [];
-    const deferredRoutes = [];
-
-    /**
-     * 刷新延迟路由队列
-     * @description 将 deferredRoutes 中累积的额外信号包逐一通过 _routeFromNode 分发，
-     * 结果追加到 finalPackets，最后清空队列。
-     */
-    const flushDeferredRoutes = () => {
-      for (const deferredRoute of deferredRoutes) {
-        const subResult = this._routeFromNode(
-          deferredRoute.fromNode,
-          deferredRoute.fromPath,
-          deferredRoute.packet,
-          deferredRoute.acc,
-          depth + 1,
-        );
-        if (subResult.packets.length > 0) {
-          finalPackets.push(...subResult.packets);
-        }
-      }
-      deferredRoutes.length = 0;
-    };
-
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const edge = currentNode.outEdges.get(segment);
-      const child = edge?.target;
-
-      if (!child) {
-        flushDeferredRoutes();
-        const fallback =
-          finalPackets.length > 0
-            ? finalPackets
-            : edgeNotFoundFallback
-              ? edgeNotFoundFallback(currentPacket)
-              : [];
-        return {
-          packets: fallback,
-          acc: contextChanged ? mergedContext : undefined,
-        };
-      }
-
-      const childPath = joinPath(currentPath, segment);
-
-      depth++;
-      if (depth > this._maxDispatchDepth) {
-        throw new Error(
-          `Dispatch depth exceeded (${this._maxDispatchDepth}). Possible cycle detected.`,
-        );
-      }
-
-      const handler = child.getHandler?.() ?? child.handler;
-      const handlerContext = this._createHandlerContext(
-        child,
-        childPath,
-        currentPacket,
-        mergedContext,
-        depth,
-      );
-
-      let rawResult;
-      if (typeof handler === "function") {
-        try {
-          rawResult = handler(currentPacket, handlerContext);
-        } catch (error) {
-          console.error(`[DevicesDAG] handler error at "${childPath}":`, error);
-          rawResult = undefined;
-        }
-
-        if (rawResult instanceof Promise) {
-          rawResult.catch((error) => {
-            console.error(
-              `[DevicesDAG] async handler rejection at "${childPath}":`,
-              error,
-            );
-          });
-          rawResult = undefined;
-        }
-      }
-
-      const result =
-        typeof handler === "function"
-          ? normalizeHandlerResult(rawResult)
-          : { packets: [new SignalPacket("", currentPacket.signals)] };
-
-      // 累积上下文合并（禁止覆盖已有键）
-      if (result.acc && isPlainObject(result.acc)) {
-        for (const key of Object.keys(result.acc)) {
-          if (Object.prototype.hasOwnProperty.call(mergedContext, key)) {
-            throw new Error(
-              `Context key "${key}" already exists in accumulated context. Cannot override.`,
-            );
-          }
-        }
-        mergedContext = { ...mergedContext, ...result.acc };
-        contextChanged = true;
-      }
-
-      // stop：终止当前链路
-      if (result.stop) {
-        if (result.packets.length > 0) {
-          finalPackets.push(...result.packets);
-        }
-        flushDeferredRoutes();
-        return {
-          packets: finalPackets.length > 0 ? finalPackets : result.packets,
-          acc: contextChanged ? mergedContext : undefined,
-        };
-      }
-
-      // redirect：覆盖后续路径段
-      if (result.redirect) {
-        // 校验：redirect 必须是相对路径
-        if (result.redirect.startsWith("/")) {
-          throw new Error(
-            `Handler at "${childPath}" returned an absolute redirect "${result.redirect}". ` +
-              `Redirect must be a relative path.`,
-          );
-        }
-        const redirectSegments = normalizePath(result.redirect);
-        segments.splice(i + 1, segments.length - i - 1, ...redirectSegments);
-      }
-
-      if (result.packets.length > 0) {
-        const primaryPacket = SignalPacket.from(result.packets[0]);
-        const remainingPackets = result.packets.slice(1);
-
-        // 额外信号包 → 延迟路由队列
-        for (const extraPacket of remainingPackets) {
-          const p = SignalPacket.from(extraPacket);
-          if (p.to) {
-            // 校验：handler 返回的额外包路径必须是相对路径
-            if (p.to.startsWith("/")) {
-              throw new Error(
-                `Handler at "${childPath}" returned an extra packet with absolute path "${p.to}". ` +
-                  `Extra packet "to" must be a relative path.`,
-              );
-            }
-            deferredRoutes.push({
-              fromNode: child,
-              fromPath: childPath,
-              packet: p,
-              acc: mergedContext,
-            });
-          }
-        }
-
-        if (primaryPacket.to) {
-          // 校验：handler 返回的路径必须是相对路径
-          if (primaryPacket.to.startsWith("/")) {
-            throw new Error(
-              `Handler at "${childPath}" returned an absolute path "${primaryPacket.to}". ` +
-                `Handler "to" must be a relative path.`,
-            );
-          }
-          // 主包指定了下一段路由 → 替换后续路径
-          const primarySegments = normalizePath(primaryPacket.to);
-          segments.splice(i + 1, segments.length - i - 1, ...primarySegments);
-          currentPacket = primaryPacket;
-        } else if (child.getDefaultRoute()) {
-          // 主包无 to → 走节点的默认出边
-          segments.splice(
-            i + 1,
-            segments.length - i - 1,
-            child.getDefaultRoute(),
-          );
-          currentPacket = primaryPacket;
-        } else if (i === segments.length - 1) {
-          // 路径终点 → 收入最终结果
-          finalPackets.push(primaryPacket);
-          break;
-        }
-      } else if (result.explicitPackets) {
-        // handler 显式返回了空 packets → 终止
-        flushDeferredRoutes();
-        return {
-          packets: finalPackets,
-          acc: contextChanged ? mergedContext : undefined,
-        };
-      } else if (i === segments.length - 1 && child.getDefaultRoute()) {
-        // handler 无输出但节点有默认出边 → 继续走
-        segments.splice(
-          i + 1,
-          segments.length - i - 1,
-          child.getDefaultRoute(),
-        );
-      }
-
-      currentNode = child;
-      currentPath = childPath;
-    }
-
-    flushDeferredRoutes();
-    return {
-      packets: finalPackets,
-      acc: contextChanged ? mergedContext : undefined,
-    };
-  }
-
-  /**
    * 从根节点开始分发信号包
    * @description
    * 累积上下文由根节点 handler 注入，调用方不应直接传递。
+   * 核心路由逻辑委托给 {@link DevicesDAGNode#dispatch}。
    * @param {SignalPacket|Record<string, any>} packet - 信号包
    * @returns {{ packets: SignalPacket[], context?: Record<string, any> }} 分发结果
    */
   dispatch(packet) {
-    let context = {};
     const startPacket = SignalPacket.from(packet, { defaultTo: "" });
 
     // 校验：dispatch 必须使用从根节点出发的绝对路径
@@ -1032,67 +727,28 @@ class DevicesDAG {
       );
     }
 
-    let segments = normalizePath(startPacket.to || "");
+    let to = startPacket.to || "";
 
-    if (segments.length === 0) {
+    if (!to) {
       if (this._root.getDefaultRoute()) {
         // 走 ghost→"/"→root 后再走默认出边
-        segments = ["/", ...normalizePath(this._root.getDefaultRoute())];
+        to = "/" + this._root.getDefaultRoute();
       } else {
         return { packets: [startPacket] };
       }
     }
 
-    return this._walkSegments({
-      startNode: this._ghost,
-      startPath: "",
-      segments,
-      startPacket,
-      accumulatedContext: context,
-      depth: 0,
-      edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
-    });
-  }
-
-  /**
-   * 从指定节点开始路由信号包
-   * @param {DevicesDAGNode} fromNode - 起始节点
-   * @param {string} fromPath - 起始节点路径
-   * @param {SignalPacket} signalPacket - 信号包
-   * @param {Record<string, any>} accumulatedContext - 累积上下文
-   * @param {number} depth - 当前深度
-   * @returns {{ packets: SignalPacket[], context?: Record<string, any> }} 路由结果
-   * @private
-   */
-  _routeFromNode(
-    fromNode,
-    fromPath,
-    signalPacket,
-    accumulatedContext = {},
-    depth = 0,
-  ) {
-    const segments = normalizePath(signalPacket.to || "");
-    if (segments.length === 0) {
-      if (fromNode.getDefaultRoute()) {
-        return this._routeFromNode(
-          fromNode,
-          fromPath,
-          new SignalPacket(fromNode.getDefaultRoute(), signalPacket.signals),
-          accumulatedContext,
-          depth,
-        );
-      }
-      return { packets: [] };
-    }
-
-    return this._walkSegments({
-      startNode: fromNode,
-      startPath: fromPath,
-      segments,
-      startPacket: signalPacket,
-      accumulatedContext,
-      depth,
-    });
+    return this._ghost.dispatch(
+      new SignalPacket(to, startPacket.signals),
+      {
+        path: "",
+        acc: {},
+        depth: 0,
+        maxDepth: this._maxDispatchDepth,
+        dag: this,
+        edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
+      },
+    );
   }
 
   /**

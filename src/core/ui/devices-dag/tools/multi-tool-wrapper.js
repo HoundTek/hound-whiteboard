@@ -1,12 +1,13 @@
 /**
  * @file 多工具并发的 wrapper
- * @description 将一条多指输入流按 touchId 分流为多个独立工具实例的泛型包装器。
+ * @description 将一条多指输入流按 touchId 分流为多个独立子图的泛型包装器。
  * @module core/ui/devices-dag/tools/multi-tool-wrapper
  * @author Zhou Chenyu
  */
 
 import { SignalPacket } from "../signal.js";
 import { Tool } from "./tool.js";
+import { DevicesDAGNode } from "../dag-node-edge.js";
 import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../devices/touchscreen-device.js";
 
 /**
@@ -15,46 +16,57 @@ import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../devices/touchscreen-device.j
  * @extends Tool
  * @description
  * 接收 touchscreen device 输出的 `touch-contacts` 信号，为每个 touchId
- * 创建一个独立的工具实例并转发信号。工具实例的生命周期与触点同步：
+ * 创建一个独立的子图入口节点并通过 {@link DevicesDAGNode#dispatch} 沿边路由信号。
+ * 子图的生命周期与触点同步：
  *
- * - 新触点 → 新建工具实例，送第一个 position 信号
+ * - 新触点 → 新建入口节点，送第一个 position 信号
  * - 触点移动 → 送 position 信号
- * - 触点抬起 → 送 end 信号，销毁实例
+ * - 触点抬起 → 送 end 信号，销毁节点
  *
  * 目的是在设备图保持静态（不动态挂载/卸载节点）的前提下实现多指并发。
  *
  * @example
- * ```js
+ * // 单工具 per touch：工厂函数包装 Tool 成节点
  * const multiStroke = new MultiToolWrapper((touchId) => {
- *   return new StrokeCreatorTool({
+ *   const entry = new DevicesDAGNode(0);
+ *   entry.handler = new StrokeCreatorTool({
  *     property: { color: "#ff0000", width: 2 },
- *   });
+ *   }).createProcessor();
+ *   return entry;
  * });
- * ```
+ *
+ * @example
+ * // 多节点 per touch：工厂函数构建多节点子图
+ * const multiHandoff = new MultiToolWrapper((touchId) => {
+ *   const entry = new DevicesDAGNode(0);
+ *   const chooser = new DevicesDAGNode(1);
+ *   // ... setup edges ...
+ *   return entry;
+ * });
  */
 class MultiToolWrapper extends Tool {
   /**
-   * 触点到工具实例的工厂函数
-   * @type {(touchId: string) => Tool}
+   * 触点到入口节点的工厂函数
+   * @type {(touchId: string) => DevicesDAGNode}
    */
-  #toolFactory;
+  #entryFactory;
 
   /**
-   * touchId 到工具实例的映射
-   * @type {Map<string, Tool>}
+   * touchId 到入口节点的映射
+   * @type {Map<string, DevicesDAGNode>}
    */
   #instances = new Map();
 
   /**
-   * @param {(touchId: string) => Tool} toolFactory - 工具工厂函数，每次新触点时调用返回工具实例
+   * @param {(touchId: string) => DevicesDAGNode} entryFactory - 入口节点工厂函数，每次新触点时调用返回入口节点
    */
-  constructor(toolFactory) {
+  constructor(entryFactory) {
     super();
-    this.#toolFactory = toolFactory;
+    this.#entryFactory = entryFactory;
   }
 
   /**
-   * 处理 touch-contacts 信号，将每个触点分发给对应的工具实例
+   * 处理 touch-contacts 信号，将每个触点分发给对应的子图
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [deviceContext={}] - 设备图处理器上下文
    * @returns {void}
@@ -92,64 +104,88 @@ class MultiToolWrapper extends Tool {
   }
 
   /**
-   * 新建触点——创建工具实例并发起手势
+   * 新建触点——创建入口节点并走边路由信号
    * @param {string} touchId - 触点 id
    * @param {{touchId: string, position: any}} contact - 触点信息
    * @param {Object} deviceContext - 设备上下文
    * @returns {void}
    */
   #beginTouch(touchId, contact, deviceContext) {
-    const instance = this.#toolFactory(touchId);
-    this.#instances.set(touchId, instance);
+    const entry = this.#entryFactory(touchId);
+    this.#instances.set(touchId, entry);
 
-    const packet = new SignalPacket("/", [
+    const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
     ]);
-    instance.process(packet, deviceContext);
+    entry.dispatch(packet, { acc: deviceContext.acc ?? {} });
   }
 
   /**
-   * 更新触点——向已有工具实例发送新位置
+   * 更新触点——向已有子图入口发送新位置
    * @param {string} touchId - 触点 id
    * @param {{touchId: string, position: any}} contact - 触点信息
    * @param {Object} deviceContext - 设备上下文
    * @returns {void}
    */
   #updateTouch(touchId, contact, deviceContext) {
-    const instance = this.#instances.get(touchId);
-    if (!instance) return;
+    const entry = this.#instances.get(touchId);
+    if (!entry) return;
 
-    const packet = new SignalPacket("/", [
+    const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
     ]);
-    instance.process(packet, deviceContext);
+    entry.dispatch(packet, { acc: deviceContext.acc ?? {} });
   }
 
   /**
-   * 触点抬起——结束手势并销毁工具实例
+   * 触点抬起——结束手势并清理子图
    * @param {string} touchId - 触点 id
    * @param {Object} deviceContext - 设备上下文
    * @returns {void}
    */
   #endTouch(touchId, deviceContext) {
-    const instance = this.#instances.get(touchId);
-    if (!instance) return;
+    const entry = this.#instances.get(touchId);
+    if (!entry) return;
 
-    const packet = new SignalPacket("/", [
+    const packet = new SignalPacket("", [
       { type: "end", context: {} },
     ]);
-    instance.process(packet, deviceContext);
+    entry.dispatch(packet, { acc: deviceContext.acc ?? {} });
+
+    // 清理入口节点 handler 的外部资源（如 overlay）
+    this.#disposeNode(entry, deviceContext);
     this.#instances.delete(touchId);
   }
 
   /**
-   * 重置所有工具实例
+   * 递归清理节点 handler 的 dispose 钩子
+   * @param {DevicesDAGNode} node - 当前节点
+   * @param {Object} deviceContext - 设备上下文
+   * @param {Set<number>} [visited=new Set()] - 已访问节点 id
+   */
+  #disposeNode(node, deviceContext, visited = new Set()) {
+    if (!node || visited.has(node.id)) return;
+    visited.add(node.id);
+
+    const handler = node.handler;
+    if (typeof handler?.dispose === "function") {
+      try {
+        handler.dispose(deviceContext);
+      } catch {
+        // 静默吞掉 dispose 错误
+      }
+    }
+
+    for (const edge of node.outEdges.values()) {
+      this.#disposeNode(edge.target, deviceContext, visited);
+    }
+  }
+
+  /**
+   * 重置所有子图实例
    * @returns {void}
    */
   reset() {
-    for (const instance of this.#instances.values()) {
-      instance.reset();
-    }
     this.#instances.clear();
   }
 }

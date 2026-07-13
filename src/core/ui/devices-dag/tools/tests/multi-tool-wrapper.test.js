@@ -6,6 +6,8 @@
 import { jest } from "@jest/globals";
 import { MultiToolWrapper } from "../multi-tool-wrapper.js";
 import { Tool } from "../tool.js";
+import { DevicesDAGNode } from "../../dag-node-edge.js";
+import { createSubDAG } from "../../index.js";
 import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../devices/touchscreen-device.js";
 
 /**
@@ -67,15 +69,19 @@ describe("MultiToolWrapper", () => {
   const defaultCtx = { acc: { board: {}, viewport: {} } };
 
   /**
-   * 创建一个可追踪实例的 spy 工厂函数
+   * 创建一个可追踪实例的 spy 工厂函数，使用 builder + createGraph 构建入口节点
    * @param {Array<MockTool>} spyOut - 实例写入此数组
-   * @returns {(touchId: string) => MockTool}
+   * @returns {(touchId: string) => DevicesDAGNode}
    */
   function createTrackedTool(spyOut) {
     return (_touchId) => {
       const instance = new MockTool();
       spyOut.push(instance);
-      return instance;
+      const builder = createSubDAG("/touch");
+      builder.node().handler((pkt, ctx) => {
+        instance.process(pkt, ctx);
+      });
+      return DevicesDAGNode.createGraph(builder.build());
     };
   }
 
@@ -322,5 +328,70 @@ describe("MultiToolWrapper", () => {
     expect(instances[0].calls[0].contextKeys).toEqual(
       expect.arrayContaining(["board", "viewport", "boardApi"]),
     );
+  });
+
+  test("per-touch handoff 子图：entry → first → second，end 信号触发移交", () => {
+    const instances = [];
+
+    const factory = (_touchId) => {
+      const firstTool = new MockTool();
+      const secondTool = new MockTool();
+      instances.push(firstTool, secondTool);
+
+      const builder = createSubDAG("/touch");
+
+      // entry：信号原样路由到 first
+      const entry = builder.node().handler((pkt, _ctx) => ({
+        to: "first",
+        signals: pkt.signals,
+      }));
+
+      // first：处理信号，收到 end 时移交到 second
+      const first = builder.node().handler((pkt, ctx) => {
+        firstTool.process(pkt, ctx);
+        const hasEnd = pkt.signals.some((s) => s.type === "end");
+        return hasEnd ? { to: "second", signals: pkt.signals } : undefined;
+      });
+
+      // second：仅处理信号
+      const second = builder.node().handler((pkt, ctx) => {
+        secondTool.process(pkt, ctx);
+      });
+
+      builder.edge("first", entry, first);
+      builder.edge("second", first, second);
+
+      return DevicesDAGNode.createGraph(builder.build());
+    };
+
+    const wrapper = new MultiToolWrapper(factory);
+
+    // 手指按下
+    wrapper.process(
+      buildContactsPacket([{ touchId: "0", position: { x: 10, y: 20 } }]),
+      defaultCtx,
+    );
+
+    // position 只到达 first，未移交到 second
+    expect(instances[0].calls).toHaveLength(1);
+    expect(instances[0].calls[0].signals).toEqual([
+      { type: "position", value: { x: 10, y: 20 } },
+    ]);
+    expect(instances[1].calls).toHaveLength(0);
+
+    // 手指抬起 → end 信号先到 first（记录），再移交到 second（记录）
+    wrapper.process(
+      buildContactsPacket([{ touchId: "0" }]),
+      defaultCtx,
+    );
+
+    expect(instances[0].calls).toHaveLength(2);
+    expect(instances[0].calls[1].signals).toEqual([
+      { type: "end", value: null },
+    ]);
+    expect(instances[1].calls).toHaveLength(1);
+    expect(instances[1].calls[0].signals).toEqual([
+      { type: "end", value: null },
+    ]);
   });
 });

@@ -9,6 +9,8 @@ import { createMouseDevice } from "../../core/ui/devices-dag/devices/mouse-devic
 import { createTouchscreenDevice } from "../../core/ui/devices-dag/devices/touchscreen-device.js";
 import { createKeyboardDevice } from "../../core/ui/devices-dag/devices/keyboard-device.js";
 import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
+import { DevicesDAGNode } from "../../core/ui/devices-dag/dag-node-edge.js";
+import { createSubDAG } from "../../core/ui/devices-dag/index.js";
 import { MultiToolWrapper } from "../../core/ui/devices-dag/tools/multi-tool-wrapper.js";
 import {
   DEMO_STROKE_WIDTH,
@@ -29,12 +31,16 @@ function mountDemoDevices(viewport) {
   viewport.mountSubDAG("touchscreen", createTouchscreenDevice());
 
   const touchStrokeTool = new MultiToolWrapper((touchId) => {
-    return new StrokeCreatorTool({
-      property: {
-        color: TOUCH_COLORS[parseInt(touchId, 10) % TOUCH_COLORS.length],
-        width: DEMO_STROKE_WIDTH,
-      },
-    });
+    const builder = createSubDAG("/touch");
+    builder.node().tool(
+      new StrokeCreatorTool({
+        property: {
+          color: TOUCH_COLORS[parseInt(touchId, 10) % TOUCH_COLORS.length],
+          width: DEMO_STROKE_WIDTH,
+        },
+      }),
+    );
+    return DevicesDAGNode.createGraph(builder.build());
   });
   viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.TOUCH_STROKE, touchStrokeTool, [
     { from: "touchscreen/contacts", edge: "default" },
