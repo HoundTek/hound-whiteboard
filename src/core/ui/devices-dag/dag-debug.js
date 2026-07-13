@@ -74,6 +74,28 @@ function dagToString(dag) {
       restKeys.length ? `[${restKeys.join(",")}]` : "",
       node.inEdges?.size > 1 ? `[in=${node.inEdges.size}]` : "",
     ];
+
+    // 关键编排状态摘要
+    const state = node.state ?? {};
+    const stateKeys = [
+      "phase",
+      "routeTarget",
+      "activeChild",
+      "bridgeObjectCount",
+    ];
+    const stateSummary = stateKeys
+      .filter(
+        (k) =>
+          state[k] !== undefined &&
+          state[k] !== null &&
+          state[k] !== "",
+      )
+      .map((k) => `${k}=${state[k]}`)
+      .join(", ");
+    if (stateSummary) {
+      parts.push(`{${stateSummary}}`);
+    }
+
     lines.push(parts.filter(Boolean).join(" "));
 
     const edges = Array.from(node.outEdges?.entries?.() ?? []).sort(

@@ -269,6 +269,9 @@ class Tool {
 
   /**
    * 将对象集合写回设备上下文与节点上下文
+   * @description
+   * 向 `context.acc.objects` 写入对象集合（acc 是链路级共享作用域，允许有限可写），
+   * 同时同步到节点 `state.objects` 供跨 handler 观察。
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合
    * @returns {Array<*>}
@@ -295,6 +298,9 @@ class Tool {
 
   /**
    * 清理设备上下文中的对象引用
+   * @description
+   * 从 `context.acc.objects` 和节点 `state.objects` 中移除对象引用。
+   * acc 是链路级共享作用域，允许有限可写。
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */

@@ -340,6 +340,7 @@ viewport.addEdge(
 ## 相关文档
 
 - [handler 上下文（ctx）用法](./handler-context-document.md)
+- [状态模型](./state-model-document.md)
 - [设备定义](../devices/docs/device-document.md)
 - [设备图示例](./devices-dag-example.md)
 - [对象创建工具](../tools/creator/docs/object-creator-document.md)

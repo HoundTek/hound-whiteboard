@@ -281,4 +281,35 @@ describe("createToolSwitcherSubDAG", () => {
     // 无路由目标时 stop，返回空 packets
     expect(result.packets).toHaveLength(0);
   });
+
+  test("routeTarget 应同步到节点状态供外部观察", () => {
+    const { dag } = setupSwitcher(
+      [{ name: "stroke" }, { name: "circle" }],
+      "stroke",
+    );
+
+    // 初始状态为空（handler 尚未被调用）
+    expect(dag.getNodeState("/switcher")).toEqual({});
+
+    // 发送常规信号后，routeTarget 同步到节点状态
+    dag.dispatch({
+      to: "/switcher",
+      signals: [
+        { type: "position", context: { value: { x: 1, y: 1 } } },
+      ],
+    });
+    expect(dag.getNodeState("/switcher").routeTarget).toBe("stroke");
+
+    // 切换后 routeTarget 更新
+    dag.dispatch({
+      to: "/switcher",
+      signals: [
+        {
+          type: BUTTON_GROUP_DEVICE_SIGNAL_TYPES.TOOL_SWITCH,
+          context: { activeTool: "circle" },
+        },
+      ],
+    });
+    expect(dag.getNodeState("/switcher").routeTarget).toBe("circle");
+  });
 });

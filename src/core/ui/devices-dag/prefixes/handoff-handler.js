@@ -410,11 +410,13 @@ function createHandoffSubDAG(options = {}) {
               prefixContext.setState({
                 phase: "second",
                 activeChild: "second",
+                bridgeObjectCount: handoffObjects.length,
               });
             } else if (completedPhase === "second") {
               prefixContext.setState({
                 phase: "first",
                 activeChild: "first",
+                bridgeObjectCount: 0,
               });
 
               // 清空闭包中的桥接对象

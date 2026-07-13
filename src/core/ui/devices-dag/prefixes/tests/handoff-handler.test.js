@@ -210,7 +210,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         signals: [{ type: "end" }],
       });
 
-      expect(dag.getNodeState("/viewport/chooser-hook")).toEqual({
+      expect(dag.getNodeState("/viewport/chooser-hook")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -280,7 +280,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(dag.getNodeState("/viewport/chooser-async-hook")).toEqual({
+      expect(dag.getNodeState("/viewport/chooser-async-hook")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -322,7 +322,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/workflow",
         signals: [{ type: "position" }],
       });
-      expect(dag.getNodeState("/viewport/workflow")).toEqual({
+      expect(dag.getNodeState("/viewport/workflow")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -361,11 +361,11 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         signals: [{ type: "position" }],
       });
 
-      expect(dag.getNodeState("/viewport/ce/first")).toEqual({
+      expect(dag.getNodeState("/viewport/ce/first")).toMatchObject({
         objects: [{ id: 42, type: "circle" }],
       });
       // 新机制：对象在 acc 中，不在 second 的 nodeState
-      expect(dag.getNodeState("/viewport/ce")).toEqual({
+      expect(dag.getNodeState("/viewport/ce")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -374,7 +374,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/ce",
         signals: [{ type: "transform" }],
       });
-      expect(dag.getNodeState("/viewport/ce/second")).toEqual({
+      expect(dag.getNodeState("/viewport/ce/second")).toMatchObject({
         objects: [{ id: 42, type: "circle" }],
         touched: true,
       });
@@ -405,7 +405,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       dag.mountSubDAG("/viewport", subDAG, { board: {}, viewport: {} });
 
       dag.dispatch({ to: "/viewport/toggle", signals: [{ type: "position" }] });
-      expect(dag.getNodeState("/viewport/toggle")).toEqual({
+      expect(dag.getNodeState("/viewport/toggle")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -414,7 +414,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/toggle",
         signals: [{ type: "transform" }],
       });
-      expect(dag.getNodeState("/viewport/toggle")).toEqual({
+      expect(dag.getNodeState("/viewport/toggle")).toMatchObject({
         phase: "first",
         activeChild: "first",
       });
@@ -459,7 +459,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/modifier-cycle",
         signals: [{ type: "position" }],
       });
-      expect(dag.getNodeState("/viewport/modifier-cycle")).toEqual({
+      expect(dag.getNodeState("/viewport/modifier-cycle")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -482,12 +482,12 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(boardApi.commitObjects).toHaveBeenCalledWith([object.id]);
       // dx=8-5=3, dy=6-5=1 → (8, 6)
       expect(object.position).toEqual(new Vector(8, 6));
-      expect(dag.getNodeState("/viewport/modifier-cycle")).toEqual({
+      expect(dag.getNodeState("/viewport/modifier-cycle")).toMatchObject({
         phase: "first",
         activeChild: "first",
       });
       expect(dag.getNode("/viewport/modifier-cycle/second")).not.toBeNull();
-      expect(dag.getNodeState("/viewport/modifier-cycle/second")).toEqual({});
+      expect(dag.getNodeState("/viewport/modifier-cycle/second")).toMatchObject({});
     });
 
     test("应支持 chooser 作为 first", () => {
@@ -512,14 +512,14 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/chooser-flow",
         signals: [{ type: "position" }],
       });
-      expect(dag.getNodeState("/viewport/chooser-flow")).toEqual({});
+      expect(dag.getNodeState("/viewport/chooser-flow")).toMatchObject({});
 
       // End 信号触发 chooser 的完成回调 → handoff
       dag.dispatch({
         to: "/viewport/chooser-flow",
         signals: [{ type: "end" }],
       });
-      expect(dag.getNodeState("/viewport/chooser-flow")).toEqual({
+      expect(dag.getNodeState("/viewport/chooser-flow")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -566,7 +566,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(dag.getNode("/viewport/nested/first/tool")).not.toBeNull();
 
       dag.dispatch({ to: "/viewport/nested", signals: [{ type: "trigger" }] });
-      expect(dag.getNodeState("/viewport/nested")).toEqual({
+      expect(dag.getNodeState("/viewport/nested")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -597,7 +597,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         signals: [{ type: "position" }],
       });
       // 对象不应被桥接到 second
-      expect(dag.getNodeState("/viewport/no-bridge/second")).toEqual({});
+      expect(dag.getNodeState("/viewport/no-bridge/second")).toMatchObject({});
     });
 
     test("first 无对象时不应崩溃且应停留在 first 阶段", () => {
@@ -627,7 +627,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // 状态未持久化写入（prefix 初始状态仅内存合并），
       // 但验证 second 没有获得对象，且后续信号仍由 first 处理
-      expect(dag.getNodeState("/viewport/empty/second")).toEqual({});
+      expect(dag.getNodeState("/viewport/empty/second")).toMatchObject({});
 
       // 第二轮信号仍应被 first 接收
       dag.dispatch({
@@ -679,7 +679,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       // 第一次完成回调：first → second
       dag.dispatch({ to: "/viewport/rapid", signals: [{ type: "trigger" }] });
-      expect(dag.getNodeState("/viewport/rapid")).toEqual({
+      expect(dag.getNodeState("/viewport/rapid")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -687,7 +687,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       // 第二次 dispatch 信号路由到 second（modifier），first 的 process 不会被调用
       dag.dispatch({ to: "/viewport/rapid", signals: [{ type: "trigger" }] });
       // 状态保持 second（second 未发出完成回调，不会触发切换）
-      expect(dag.getNodeState("/viewport/rapid")).toEqual({
+      expect(dag.getNodeState("/viewport/rapid")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -737,7 +737,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/full-cycle",
         signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
       });
-      expect(dag.getNodeState("/viewport/full-cycle")).toEqual({
+      expect(dag.getNodeState("/viewport/full-cycle")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -753,7 +753,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/full-cycle",
         signals: [{ type: "success" }],
       });
-      expect(dag.getNodeState("/viewport/full-cycle")).toEqual({
+      expect(dag.getNodeState("/viewport/full-cycle")).toMatchObject({
         phase: "first",
         activeChild: "first",
       });
@@ -763,7 +763,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/full-cycle",
         signals: [{ type: "position", context: { value: { x: 10, y: 10 } } }],
       });
-      expect(dag.getNodeState("/viewport/full-cycle")).toEqual({
+      expect(dag.getNodeState("/viewport/full-cycle")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -833,7 +833,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           p.signals.some((s) => s.type === "inner-done"),
         ),
       ).toBe(true);
-      expect(dag.getNodeState("/viewport/outer")).toEqual({ completed: true });
+      expect(dag.getNodeState("/viewport/outer")).toMatchObject({ completed: true });
       expect(
         secondResult.packets.some((p) =>
           p.signals.some((s) => s.type === "handled"),
@@ -1028,7 +1028,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         to: "/viewport/modifier-flow",
         signals: [{ type: "position" }],
       });
-      expect(dag.getNodeState("/viewport/modifier-flow")).toEqual({
+      expect(dag.getNodeState("/viewport/modifier-flow")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -1085,7 +1085,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([object.id]);
       expect(object.position).toEqual(new Vector(35, 30));
-      expect(dag.getNodeState("/viewport/modifier-flow")).toEqual({
+      expect(dag.getNodeState("/viewport/modifier-flow")).toMatchObject({
         phase: "first",
         activeChild: "first",
       });
@@ -1111,7 +1111,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       dag.setNodeState("/viewport/modifier-flow/second", {
         objects: [object2],
       });
-      expect(dag.getNodeState("/viewport/modifier-flow")).toEqual({
+      expect(dag.getNodeState("/viewport/modifier-flow")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -1135,7 +1135,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         signals: [{ type: "success", context: {} }],
       });
       expect(boardApi.commitObjects).toHaveBeenCalledWith([object2.id]);
-      expect(dag.getNodeState("/viewport/modifier-flow")).toEqual({
+      expect(dag.getNodeState("/viewport/modifier-flow")).toMatchObject({
         phase: "first",
         activeChild: "first",
       });
@@ -1197,7 +1197,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       });
 
       // 切回 first 后 second 节点应仍然存在
-      expect(dag.getNodeState("/viewport/no-unmount-flow")).toEqual({
+      expect(dag.getNodeState("/viewport/no-unmount-flow")).toMatchObject({
         phase: "first",
         activeChild: "first",
       });
@@ -1304,7 +1304,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([object.id]);
       expect(calls.filter((c) => c[0] === "action:complete")).toHaveLength(1);
-      expect(dag.getNodeState("/viewport/modifier-flow")).toEqual({
+      expect(dag.getNodeState("/viewport/modifier-flow")).toMatchObject({
         phase: "first",
         activeChild: "first",
       });
@@ -1356,7 +1356,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         signals: [{ type: "position" }],
       });
 
-      expect(dag.getNodeState("/viewport/test-umount")).toEqual({
+      expect(dag.getNodeState("/viewport/test-umount")).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
@@ -1469,7 +1469,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         await expect(boardApi.queryChunkObjects([1])).resolves.toEqual(
           expect.arrayContaining([firstObjectId]),
         );
-        expect(viewport.devicesDAG.getNodeState("/main/workflow")).toEqual({
+        expect(viewport.devicesDAG.getNodeState("/main/workflow")).toMatchObject({
           phase: "first",
           activeChild: "first",
         });
@@ -1500,7 +1500,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
             isActive: true,
           }),
         ]);
-        expect(viewport.devicesDAG.getNodeState("/main/workflow")).toEqual({
+        expect(viewport.devicesDAG.getNodeState("/main/workflow")).toMatchObject({
           phase: "second",
           activeChild: "second",
         });
@@ -1567,7 +1567,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         ]);
         expect(
           viewport.devicesDAG.getNodeState("/main/choose-and-modify"),
-        ).toEqual({
+        ).toMatchObject({
           phase: "second",
           activeChild: "second",
         });
@@ -1606,7 +1606,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         ]);
         expect(
           viewport.devicesDAG.getNodeState("/main/choose-and-modify"),
-        ).toEqual({
+        ).toMatchObject({
           phase: "first",
           activeChild: "first",
         });
@@ -1616,6 +1616,51 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       } finally {
         cleanup();
       }
+    });
+  });
+
+  describe("状态可观察性", () => {
+    test("handoff phase 和 bridgeObjectCount 应可通过 getNodeState 观察", () => {
+      const dag = new DevicesDAG();
+      dag.configureNode("/viewport", {
+        handler: () => ({ acc: { board: {}, viewport: {} } }),
+      });
+
+      const firstTool = new (class extends Tool {
+        process(packet, ctx) {
+          const hasEnd = packet.signals?.some((s) => s?.type === "end");
+          if (hasEnd) {
+            ctx.acc?.setHandoffObjects?.([{ id: 42 }]);
+            ctx.acc?.onToolComplete?.(ctx);
+          }
+        }
+        reset() {}
+      })();
+
+      const secondTool = new (class extends Tool {
+        process() {}
+        reset() {}
+      })();
+
+      const subDAG = createHandoffSubDAG({
+        rootPath: "/workflow",
+        first: firstTool,
+        second: secondTool,
+      });
+      dag.mountSubDAG("/viewport", subDAG);
+
+      // 发送 end 信号完成 first 阶段
+      dag.dispatch({
+        to: "/viewport/workflow/first",
+        signals: [{ type: "end", context: {} }],
+      });
+
+      // 切换到 second 后，phase 和 bridgeObjectCount 可观察
+      expect(dag.getNodeState("/viewport/workflow")).toMatchObject({
+        phase: "second",
+        activeChild: "second",
+        bridgeObjectCount: 1,
+      });
     });
   });
 });

@@ -98,6 +98,7 @@ function createToolSwitcherSubDAG(options = {}) {
         const oldTarget = routeTarget;
         routeTarget = target;
         // 先向旧工具发送 end-action 让其优雅收尾，再切换路由目标
+        ctx.patchState?.({ routeTarget });
         if (oldTarget) {
           return ctx.routeToChild(oldTarget, [
             { type: "end-action", context: {} },
@@ -106,6 +107,9 @@ function createToolSwitcherSubDAG(options = {}) {
       }
       return ctx.stop();
     }
+
+    // 同步 routeTarget 到节点状态，供调试与外部观察
+    ctx.patchState?.({ routeTarget });
 
     // 鼠标等常规信号 → 转发到当前路由目标
     if (routeTarget) {

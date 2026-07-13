@@ -423,7 +423,7 @@ describe("whiteboard demo worker mode", () => {
 
       expect(
         viewport.devicesDAG.getNode("/main/workflows/secondary-chooser")?.state,
-      ).toEqual({
+      ).toMatchObject({
         phase: "second",
         activeChild: "second",
       });
