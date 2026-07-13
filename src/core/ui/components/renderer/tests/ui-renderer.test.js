@@ -101,8 +101,11 @@ describe("UiRenderer", () => {
     const renderer = new UiRenderer(viewport, { canvas: canvas3 });
     const draw = jest.fn();
     const provider = jest.fn(() => ({
-      type: "draw",
-      worldRect: new RectangleRange(100, 120, 20, 30),
+      source: "custom",
+      type: "rect",
+      geometry: {
+        screenRect: new RectangleRange(0, 0, 10, 10),
+      },
       draw,
     }));
 
@@ -132,12 +135,11 @@ describe("UiRenderer", () => {
     };
 
     renderer.registerOverlayProvider(
-      ({ viewport, renderer: overlayRenderer }) =>
+      ({ viewport }) =>
         createCompatSelectionEntriesForSummaries(
           [summary1, summary2],
           "chooser",
           viewport,
-          (ctx, entry) => overlayRenderer.drawRectEntry(ctx, entry),
         ),
     );
 
@@ -164,12 +166,11 @@ describe("UiRenderer", () => {
     };
 
     renderer.registerOverlayProvider(
-      ({ viewport, renderer: overlayRenderer }) =>
+      ({ viewport }) =>
         createCompatSelectionEntriesForSummaries(
           [summary],
           "chooser",
           viewport,
-          (ctx, entry) => overlayRenderer.drawRectEntry(ctx, entry),
         ),
     );
 
@@ -200,9 +201,8 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "test-point",
       type: "point",
-      screenPoint: { x: 100, y: 200 },
-      radius: 6,
-      fillStyle: "#ff6600",
+      geometry: { screenPoint: { x: 100, y: 200 }, radius: 6 },
+      style: { fillStyle: "#ff6600" },
     }));
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -235,9 +235,8 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "test-point-world",
       type: "point",
-      worldPoint: { x: 50, y: 100 },
-      radius: 3,
-      fillStyle: "#33a1ff",
+      geometry: { worldPoint: { x: 50, y: 100 }, radius: 3 },
+      style: { fillStyle: "#33a1ff" },
     }));
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -276,14 +275,14 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "test-path",
       type: "path",
-      screenPoints: [
-        { x: 10, y: 20 },
-        { x: 100, y: 200 },
-        { x: 50, y: 300 },
-      ],
-      strokeStyle: "#00ff00",
-      lineWidth: 2,
-      lineDash: [4, 4],
+      geometry: {
+        screenPoints: [
+          { x: 10, y: 20 },
+          { x: 100, y: 200 },
+          { x: 50, y: 300 },
+        ],
+      },
+      style: { strokeStyle: "#00ff00", lineWidth: 2, lineDash: [4, 4] },
     }));
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -322,13 +321,15 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "test-path-close",
       type: "path",
-      screenPoints: [
-        { x: 0, y: 0 },
-        { x: 100, y: 0 },
-        { x: 50, y: 80 },
-      ],
-      fillStyle: "rgba(0,0,255,0.3)",
-      closePath: true,
+      geometry: {
+        screenPoints: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 50, y: 80 },
+        ],
+        closePath: true,
+      },
+      style: { fillStyle: "rgba(0,0,255,0.3)" },
     }));
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -361,11 +362,13 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "test-path-world",
       type: "path",
-      worldPoints: [
-        { x: 10, y: 20 },
-        { x: 20, y: 30 },
-      ],
-      strokeStyle: "#333",
+      geometry: {
+        worldPoints: [
+          { x: 10, y: 20 },
+          { x: 20, y: 30 },
+        ],
+      },
+      style: { strokeStyle: "#333" },
     }));
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -373,6 +376,27 @@ describe("UiRenderer", () => {
     // zoom=3, origin=(10,20) → (0,0), (30,30)
     expect(context.moveTo).toHaveBeenCalledWith(0, 0);
     expect(context.lineTo).toHaveBeenCalledWith(30, 30);
+  });
+
+  test("normalizeOverlayEntry 应支持 geometry 格式的 rect 条目", () => {
+    const context = createContext();
+    const viewport = createViewport({});
+    const canvas = createCanvas(context);
+    const renderer = new UiRenderer(viewport, { canvas });
+    renderer.registerOverlayProvider(() => ({
+      source: "rect-from-geometry",
+      objectId: 77,
+      type: "rect",
+      geometry: {
+        worldRect: new RectangleRange(10, 20, 30, 40),
+      },
+      style: { strokeStyle: "#ff0000", lineWidth: 1 },
+    }));
+
+    renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+
+    // worldRect(10, 20, 30, 40) → screenRect 经 inflate 后即为原大小
+    expect(context.strokeRect).toHaveBeenCalledWith(10, 20, 30, 40);
   });
 
   test("flush 无脏区时回退全量清空", () => {
@@ -383,7 +407,6 @@ describe("UiRenderer", () => {
 
     renderer.flush([]);
 
-    // 无脏区时不调用 _clearDirtyRects，直接 full clearRect
     expect(context.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
   });
 
@@ -395,7 +418,6 @@ describe("UiRenderer", () => {
 
     renderer.flush([new RectangleRange(100, 200, 50, 60)]);
 
-    // clearRect 只应在脏区上调用，不应全量
     expect(context.clearRect).toHaveBeenCalledTimes(1);
     expect(context.clearRect).toHaveBeenCalledWith(100, 200, 50, 60);
   });
@@ -408,8 +430,6 @@ describe("UiRenderer", () => {
 
     renderer.flush([new RectangleRange(100.3, 200.7, 50.2, 60.9)]);
 
-    // Math.floor(100.3) = 100, Math.floor(200.7) = 200
-    // Math.ceil(150.5) = 151, Math.ceil(261.6) = 262
     expect(context.clearRect).toHaveBeenCalledWith(100, 200, 51, 62);
   });
 
@@ -423,13 +443,11 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "intersecting-rect",
       type: "rect",
-      screenRect: new RectangleRange(50, 50, 30, 30),
-      strokeStyle: "#f00",
-      lineWidth: 1,
+      geometry: { screenRect: new RectangleRange(50, 50, 30, 30) },
+      style: { strokeStyle: "#f00", lineWidth: 1 },
       draw,
     }));
 
-    // 脏区与条目相交
     renderer.flush([new RectangleRange(40, 40, 60, 60)]);
 
     expect(draw).toHaveBeenCalledTimes(1);
@@ -445,13 +463,11 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "non-intersecting-rect",
       type: "rect",
-      screenRect: new RectangleRange(200, 200, 30, 30),
-      strokeStyle: "#f00",
-      lineWidth: 1,
+      geometry: { screenRect: new RectangleRange(200, 200, 30, 30) },
+      style: { strokeStyle: "#f00", lineWidth: 1 },
       draw,
     }));
 
-    // 脏区完全远离条目
     renderer.flush([new RectangleRange(0, 0, 50, 50)]);
 
     expect(draw).not.toHaveBeenCalled();
@@ -472,18 +488,16 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => {});
-    context.arc = jest.fn(() => {});
+    context.beginPath = jest.fn(() => { });
+    context.arc = jest.fn(() => { });
 
     renderer.registerOverlayProvider(() => ({
       source: "non-intersecting-point",
       type: "point",
-      screenPoint: { x: 500, y: 500 },
-      radius: 4,
-      fillStyle: "#f00",
+      geometry: { screenPoint: { x: 500, y: 500 }, radius: 4 },
+      style: { fillStyle: "#f00" },
     }));
 
-    // point 在脏区（0,0,50,50）之外
     renderer.flush([new RectangleRange(0, 0, 50, 50)]);
 
     expect(context.arc).not.toHaveBeenCalled();
@@ -495,21 +509,22 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => {});
-    context.moveTo = jest.fn(() => {});
-    context.stroke = jest.fn(() => {});
+    context.beginPath = jest.fn(() => { });
+    context.moveTo = jest.fn(() => { });
+    context.stroke = jest.fn(() => { });
 
     renderer.registerOverlayProvider(() => ({
       source: "non-intersecting-path",
       type: "path",
-      screenPoints: [
-        { x: 300, y: 300 },
-        { x: 400, y: 400 },
-      ],
-      strokeStyle: "#f00",
+      geometry: {
+        screenPoints: [
+          { x: 300, y: 300 },
+          { x: 400, y: 400 },
+        ],
+      },
+      style: { strokeStyle: "#f00" },
     }));
 
-    // path 在脏区（0,0,50,50）之外
     renderer.flush([new RectangleRange(0, 0, 50, 50)]);
 
     expect(context.stroke).not.toHaveBeenCalled();
@@ -525,15 +540,13 @@ describe("UiRenderer", () => {
     renderer.registerOverlayProvider(() => ({
       source: "clipped-rect",
       type: "rect",
-      screenRect: new RectangleRange(100, 100, 50, 50),
-      strokeStyle: "#f00",
-      lineWidth: 1,
+      geometry: { screenRect: new RectangleRange(100, 100, 50, 50) },
+      style: { strokeStyle: "#f00", lineWidth: 1 },
       draw,
     }));
 
     renderer.flush([new RectangleRange(80, 80, 100, 100)]);
 
-    // clip 管线：save → setTransform → beginPath → rect → clip → draw → restore
     expect(context.save).toHaveBeenCalled();
     expect(context.setTransform).toHaveBeenCalledWith(1, 0, 0, 1, 0, 0);
     expect(context.beginPath).toHaveBeenCalled();
@@ -554,25 +567,26 @@ describe("UiRenderer", () => {
       {
         source: "entry-a",
         type: "rect",
-        screenRect: new RectangleRange(10, 10, 20, 20),
+        geometry: { screenRect: new RectangleRange(10, 10, 20, 20) },
         draw: draw1,
       },
       {
         source: "entry-b",
         type: "rect",
-        screenRect: new RectangleRange(200, 200, 20, 20),
+        geometry: { screenRect: new RectangleRange(200, 200, 20, 20) },
         draw: draw2,
       },
     ]);
 
     renderer.flush([new RectangleRange(0, 0, 50, 50)]);
 
-    // entry-a 在脏区内，应绘制；entry-b 远离脏区，应跳过
     expect(draw1).toHaveBeenCalledTimes(1);
     expect(draw2).not.toHaveBeenCalled();
   });
 
-  test("无 screenRect/screenPoint/screenPoints 的自定义 draw 条目不被跳过", () => {
+
+
+  test("无 geometry 的条目被 normalize 丢弃", () => {
     const context = createContext();
     const viewport = createViewport({});
     const canvas = createCanvas(context);
@@ -580,34 +594,13 @@ describe("UiRenderer", () => {
     const draw = jest.fn();
 
     renderer.registerOverlayProvider(() => ({
-      source: "custom-draw",
-      type: "draw",
+      source: "no-geometry-entry",
       draw,
-    }));
-
-    // 自定义 draw 条目无已知边界，即使不在脏区内也应绘制
-    renderer.flush([new RectangleRange(0, 0, 10, 10)]);
-
-    expect(draw).toHaveBeenCalledTimes(1);
-  });
-
-  test("normalizeOverlayEntry 应支持 summary-like 条目直接生成矩形 overlay", () => {
-    const context = createContext();
-    const viewport = createViewport({});
-    const canvas = createCanvas(context);
-    const renderer = new UiRenderer(viewport, { canvas });
-    renderer.registerOverlayProvider(() => ({
-      source: "summary-like-entry",
-      objectId: 77,
-      type: "rect",
-      position: { x: 10, y: 20 },
-      boundingBox: { left: 0, top: 0, width: 30, height: 40 },
-      strokeStyle: "#ff0000",
-      lineWidth: 1,
     }));
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
 
-    expect(context.strokeRect).toHaveBeenCalledWith(6, 16, 38, 48);
+    // 无 geometry → normalize 返回 undefined → 丢弃
+    expect(draw).not.toHaveBeenCalled();
   });
 });

@@ -47,22 +47,24 @@ provider 签名：`(context: { viewport: Viewport, renderer: UiRenderer }) => an
 ### 绘制
 
 - `drawRectEntry(context, entry)`：绘制矩形 overlay 条目
-- `flush(dirtyRects)`：清理脏区，裁剪后逐条目执行 `draw`
+- `drawPointEntry(context, entry)`：绘制填充圆点
+- `drawPathEntry(context, entry)`：绘制折线/闭合路径
+
+### 脏区刷新
+
+`flush(dirtyRects)` 接收调度器合并后的脏区集合：仅清空脏区范围，跳过不与脏区相交的条目，对剩余条目通过 clip 限制绘制区域。无脏区时回退全量清空+全量绘制。
 
 ### 条目规整
 
-条目归一化由 `ui-overlay-factory.js` 中的纯函数 `normalizeOverlayEntry` 处理。可接受：
+条目归一化由 `ui-overlay-factory.js` 中的纯函数 `normalizeOverlayEntry` 处理。输入的条目必须含 `geometry` 字段，无 geometry 的条目被 normalize 丢弃。
 
-- `BasicObject` 实例
-- summary-like 条目（含 `position + range`、`position + boundingBox`、`worldRect`）
-- 纯 rect-like 对象（`{ left, top, width, height }` 或 `{ left, top, right, bottom }`）
+归一化处理：
 
-所有 `worldRect` / `boundingBox` / `screenRect` 通过 `RectangleRange.fromRectLike()` 统一规整。
+1. 将 `geometry` 中的 world 坐标（`worldRect`/`worldPoint`/`worldPoints`）转为 screen 坐标
+2. 清理已转换的 world 字段
+3. 为未提供 `draw` 的条目注入对应类型的默认绘制函数
 
-这保证了：
-
-- Worker RPC 返回的 plain `boundingBox` 可直接参与 overlay
-- chooser / modifier 不需要真实 `BasicObject` 实例也能生成选框
+`createCompatSelectionEntriesForSummaries` 负责从 Worker RPC 返回的 summary 构建 entry，外部无需手动转换。
 
 ### 选择框条目生成
 
@@ -76,12 +78,7 @@ provider 签名：`(context: { viewport: Viewport, renderer: UiRenderer }) => an
 
 ```js
 import { createCompatSelectionEntriesForSummaries } from ".../ui-overlay-factory.js";
-createCompatSelectionEntriesForSummaries(
-  objects,
-  "chooser",
-  viewport,
-  drawRectEntry,
-);
+createCompatSelectionEntriesForSummaries(objects, "chooser", viewport);
 ```
 
 ### modifier
@@ -89,12 +86,7 @@ createCompatSelectionEntriesForSummaries(
 `ObjectModifierTool.collectUiOverlayEntries()` 同样调用 factory：
 
 ```js
-createCompatSelectionEntriesForSummaries(
-  objects,
-  "modifier",
-  viewport,
-  drawRectEntry,
-);
+createCompatSelectionEntriesForSummaries(objects, "modifier", viewport);
 ```
 
 ### rectangle chooser drag rect
@@ -116,17 +108,37 @@ createCompatSelectionEntriesForSummaries(
 
 这演示了如何用 `type: "point"` 和 `type: "path"` 为创建工具添加可视辅助。
 
-## overlay 类型
+## overlay 条目格式
 
-当前 `UiRenderer` 原生支持三种 overlay 类型：
+条目分三层结构：
 
-| type    | 绘制方法         | 关键字段                                                         |
-| ------- | ---------------- | ---------------------------------------------------------------- |
-| `rect`  | `drawRectEntry`  | `screenRect` / `worldRect` + `fillStyle` / `strokeStyle`         |
-| `point` | `drawPointEntry` | `screenPoint` / `worldPoint` + `radius` + `fillStyle`            |
-| `path`  | `drawPathEntry`  | `screenPoints[]` / `worldPoints[]` + `strokeStyle` + `closePath` |
+```javascript
+{
+  source: "circle-center",  // 来源标识
+  type: "point",            // 判别器
+  geometry: { worldPoint: center, radius: 4 },  // 坐标数据
+  style: { fillStyle: "#33a1ff" },              // 画法属性
+}
+```
 
-归一化流程（`normalizeOverlayEntry`）自动处理 world→screen 坐标转换，并为每种类型注入默认 draw 函数。
+### type + geometry
+
+| type    | geometry 字段                                    |
+| ------- | ------------------------------------------------ |
+| `rect`  | `screenRect` / `worldRect`                       |
+| `point` | `screenPoint` / `worldPoint` + `radius`          |
+| `path`  | `screenPoints[]` / `worldPoints[]` + `closePath` |
+
+world 字段在归一化阶段由 `normalizeOverlayEntry` 转为 screen 字段后清空。
+
+### style
+
+| 字段          | 说明   |
+| ------------- | ------ |
+| `fillStyle`   | 填充色 |
+| `strokeStyle` | 描边色 |
+| `lineWidth`   | 线宽   |
+| `lineDash`    | 虚线   |
 
 ## 与 Viewport 的关系
 
@@ -140,7 +152,6 @@ createCompatSelectionEntriesForSummaries(
 
 - tool 当前写入的 node state（通过 `deviceContext` 读取）
 - tool 注册的 overlay provider
-- `ui-overlay-factory.js` 对 summary-like / rect-like 数据的规整逻辑
 
 creator、chooser、modifier 都可能推动 ui 层刷新，但 `UiRenderer` 仅消费 provider 产出的条目，不关心数据来源。
 

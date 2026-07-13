@@ -201,9 +201,13 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       {
         source: "circle-center",
         type: "point",
-        worldPoint: center,
-        radius: 4,
-        fillStyle: "#33a1ff",
+        geometry: {
+          worldPoint: center,
+          radius: 4,
+        },
+        style: {
+          fillStyle: "#33a1ff",
+        },
       },
     ];
 
@@ -212,11 +216,15 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       result.push({
         source: "circle-radius",
         type: "path",
-        worldPoints: [center, currentPosition],
-        strokeStyle: "#33a1ff",
-        lineWidth: 1,
-        lineDash: [4, 4],
-        closePath: false,
+        geometry: {
+          worldPoints: [center, currentPosition],
+          closePath: false,
+        },
+        style: {
+          strokeStyle: "#33a1ff",
+          lineWidth: 1,
+          lineDash: [4, 4],
+        },
       });
     }
 

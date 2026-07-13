@@ -63,41 +63,22 @@ describe("Viewport/ui renderer", () => {
     });
 
     try {
-      const provider = () => undefined;
       const invalidateSpy = jest
-        .spyOn(viewport.uiRenderer, "invalidateViewport")
-        .mockImplementation(() => undefined);
+        .spyOn(viewport.uiRenderer, "invalidate")
+        .mockImplementation(() => false);
 
-      expect(viewport.registerUiOverlayProvider(provider)).toBe(provider);
-      expect(viewport.uiRenderer.overlayProviders.has(provider)).toBe(true);
+      viewport.registerUiOverlayProvider(() => ({
+        source: "test-provider",
+        type: "rect",
+        geometry: {
+          screenRect: new RectangleRange(10, 20, 30, 40),
+        },
+        draw: jest.fn(),
+      }));
+
       expect(invalidateSpy).toHaveBeenCalledTimes(1);
 
-      expect(viewport.unregisterUiOverlayProvider(provider)).toBe(true);
-      expect(viewport.uiRenderer.overlayProviders.has(provider)).toBe(false);
-      expect(invalidateSpy).toHaveBeenCalledTimes(2);
-
       invalidateSpy.mockRestore();
-    } finally {
-      cleanup();
-    }
-  });
-
-  test("flush 在传入空 dirtyRects 时应回退到全视口刷新", async () => {
-    const { viewport, cleanup } = await createWorkerBoardContext({
-      boardWidth: 800,
-      boardHeight: 600,
-      viewportId: "ui-viewport",
-      viewportWidth: 800,
-      viewportHeight: 600,
-    });
-
-    try {
-      const uiContext = viewport.uiRenderer.canvas.getContext("2d");
-      uiContext.clearRect = jest.fn();
-
-      viewport.uiRenderer.flush([]);
-
-      expect(uiContext.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
     } finally {
       cleanup();
     }
@@ -120,8 +101,11 @@ describe("Viewport/ui renderer", () => {
         undefined,
         123,
         {
+          source: "good-entry",
           type: "rect",
-          screenRect: new RectangleRange(10, 20, 30, 40),
+          geometry: {
+            screenRect: new RectangleRange(10, 20, 30, 40),
+          },
           draw: goodDraw,
         },
       ]);
@@ -152,8 +136,11 @@ describe("Viewport/ui renderer", () => {
       });
       viewport.uiRenderer.registerOverlayProvider(() => [
         {
+          source: "good-entry",
           type: "rect",
-          screenRect: new RectangleRange(50, 60, 20, 10),
+          geometry: {
+            screenRect: new RectangleRange(50, 60, 20, 10),
+          },
           draw: goodDraw,
         },
       ]);
@@ -178,19 +165,38 @@ describe("Viewport/ui renderer", () => {
     });
 
     try {
-      viewport.uiRenderer._canvas = {
-        width: 100,
-        height: 100,
-        getContext() {
-          return null;
-        },
-      };
+      const getContextSpy = jest
+        .spyOn(viewport.uiRenderer, "_getContext")
+        .mockReturnValue(null);
 
       const result = viewport.uiRenderer.flush([
-        new RectangleRange(0, 0, 100, 100),
+        new RectangleRange(0, 0, 800, 600),
       ]);
-
       expect(result).toEqual([]);
+
+      getContextSpy.mockRestore();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("resize 应触发 uiRenderer.resize", async () => {
+    const { viewport, cleanup } = await createWorkerBoardContext({
+      boardWidth: 800,
+      boardHeight: 600,
+      viewportId: "ui-viewport",
+      viewportWidth: 800,
+      viewportHeight: 600,
+    });
+
+    try {
+      const resizeSpy = jest.spyOn(viewport.uiRenderer, "resize");
+
+      viewport.resizeRenderLayers(400, 300);
+
+      expect(resizeSpy).toHaveBeenCalledTimes(1);
+
+      resizeSpy.mockRestore();
     } finally {
       cleanup();
     }

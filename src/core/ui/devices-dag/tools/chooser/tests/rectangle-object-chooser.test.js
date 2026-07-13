@@ -178,7 +178,10 @@ describe("RectangleObjectChooserTool", () => {
     expect(entries[0]).toEqual(
       expect.objectContaining({
         source: "rectangle-selection-drag",
-        worldRect: new RectangleRange(0, 0, 20, 30),
+        type: "rect",
+        geometry: expect.objectContaining({
+          worldRect: new RectangleRange(0, 0, 20, 30),
+        }),
       }),
     );
   });

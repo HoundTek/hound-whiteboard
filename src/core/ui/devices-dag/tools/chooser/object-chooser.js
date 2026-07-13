@@ -137,7 +137,7 @@ class ObjectChooserTool extends GestureTool {
     const { viewport, renderer } = overlayContext;
     const objects = this._overlaySelectedObjects;
 
-    if (objects.length === 0 || !renderer?.drawRectEntry) {
+    if (objects.length === 0 || !renderer) {
       return [];
     }
 
@@ -145,7 +145,6 @@ class ObjectChooserTool extends GestureTool {
       objects,
       "chooser",
       viewport,
-      (ctx, entry) => renderer.drawRectEntry(ctx, entry),
     );
   }
 

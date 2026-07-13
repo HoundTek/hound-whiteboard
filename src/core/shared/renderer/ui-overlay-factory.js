@@ -5,7 +5,6 @@
  * @author Zhou Chenyu
  */
 
-import { BasicObject } from "../objects/basic-obj.js";
 import { RectangleRange } from "../range/index.js";
 
 /**
@@ -15,30 +14,23 @@ import { RectangleRange } from "../range/index.js";
 const COMPAT_SELECTION_FRAME_MARGIN = 4;
 
 /**
- * UI overlay 条目
- * @typedef {Object} UiOverlayEntry
- * @property {string} source - 条目来源标识（如 "compat-selection-object-frame:chooser"）
- * @property {number} [objectId] - 关联的白板对象 id
- * @property {string} type - 条目类型："rect" | "point" | "path"
- * @property {RectangleRange} [screenRect] - 屏幕空间的矩形范围（rect 类型）
- * @property {RectangleRange} [worldRect] - 世界空间的矩形范围（rect 类型，归一化前使用）
- * @property {{ x: number, y: number }} [screenPoint] - 屏幕坐标点（point 类型）
- * @property {{ x: number, y: number }} [worldPoint] - 世界坐标点（point 类型，归一化时转 screenPoint）
- * @property {number} [radius] - 圆点半径，屏幕像素（point 类型，默认 4）
- * @property {Array<{x: number, y: number}>} [screenPoints] - 屏幕坐标点数组（path 类型）
- * @property {Array<{x: number, y: number}>} [worldPoints] - 世界坐标点数组（path 类型，归一化时逐个转 screenPoints）
- * @property {boolean} [closePath] - 是否闭合路径（path 类型）
+ * UI overlay 画法属性
+ * @typedef {Object} UiOverlayStyle
  * @property {string} [fillStyle] - 填充色
  * @property {string} [strokeStyle] - 描边色
  * @property {number} [lineWidth] - 描边线宽
  * @property {number[]} [lineDash] - 描边虚线模式
- * @property {number} [padding] - world→screen 转换时的额外留白
- * @property {BasicObject} [object] - BasicObject 实例（provider 直接传入时使用）
- * @property {{ x: number, y: number }} [position] - 条目所属对象的世界坐标
- * @property {Object} [range] - 条目所属对象的局部范围
- * @property {Object} [boundingBox] - 条目所属对象的包围盒
- * @property {Object} [property] - 条目所属对象的属性
- * @property {(context: CanvasRenderingContext2D, runtime: UiOverlayDrawRuntime) => void} draw - 绘制函数
+ */
+
+/**
+ * UI overlay 条目
+ * @typedef {Object} UiOverlayEntry
+ * @property {string} source - 条目来源标识（如 "compat-selection-object-frame:chooser"）
+ * @property {number} [objectId] - 关联的白板对象 id
+ * @property {"rect"|"point"|"path"} type - 条目类型
+ * @property {Record<string, any>} geometry - 类型专属几何，字段按 type 约定
+ * @property {UiOverlayStyle} [style] - 画法属性
+ * @property {(context: CanvasRenderingContext2D, runtime: UiOverlayDrawRuntime) => void} [draw] - 绘制函数，归一化阶段注入
  */
 
 /**
@@ -197,15 +189,9 @@ function getObjectScreenRect(objectInstance, viewport) {
  * @param {SummaryLikeEntry} summaryEntry - 摘要或兼容条目
  * @param {string} source - 条目来源
  * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
- * @param {(context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void} drawRectEntry - 矩形绘制函数
  * @returns {UiOverlayEntry | undefined}
  */
-function createCompatSummarySelectionEntry(
-  summaryEntry,
-  source,
-  viewport,
-  drawRectEntry,
-) {
+function createCompatSummarySelectionEntry(summaryEntry, source, viewport) {
   const screenRect = getSummaryScreenRect(summaryEntry, viewport);
   if (!screenRect) return undefined;
 
@@ -213,17 +199,13 @@ function createCompatSummarySelectionEntry(
     source,
     objectId: summaryEntry?.id,
     type: "rect",
-    screenRect,
-    strokeStyle: "#33a1ff",
-    lineWidth: 1,
-    lineDash: [],
-    draw: (context) => {
-      drawRectEntry(context, {
-        screenRect,
-        strokeStyle: "#33a1ff",
-        lineWidth: 1,
-        lineDash: [],
-      });
+    geometry: {
+      screenRect,
+    },
+    style: {
+      strokeStyle: "#33a1ff",
+      lineWidth: 1,
+      lineDash: [],
     },
   };
 }
@@ -232,24 +214,19 @@ function createCompatSummarySelectionEntry(
  * 生成组合大矩形 overlay 条目
  * @param {RectangleRange} screenRect - 组合屏幕矩形
  * @param {string} source - 条目来源
- * @param {(context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void} drawRectEntry - 矩形绘制函数
  * @returns {UiOverlayEntry}
  */
-function createCompatGroupSelectionEntry(screenRect, source, drawRectEntry) {
+function createCompatGroupSelectionEntry(screenRect, source) {
   return {
     source,
     type: "rect",
-    screenRect,
-    strokeStyle: "#33a1ff",
-    lineWidth: 1,
-    lineDash: [10, 4],
-    draw: (context) => {
-      drawRectEntry(context, {
-        screenRect,
-        strokeStyle: "#33a1ff",
-        lineWidth: 1,
-        lineDash: [10, 4],
-      });
+    geometry: {
+      screenRect,
+    },
+    style: {
+      strokeStyle: "#33a1ff",
+      lineWidth: 1,
+      lineDash: [10, 4],
     },
   };
 }
@@ -259,22 +236,15 @@ function createCompatGroupSelectionEntry(screenRect, source, drawRectEntry) {
  * @param {SummaryLikeEntry[]} summaries - 摘要或兼容条目集合
  * @param {string} role - 当前角色（如 "chooser"、"modifier"）
  * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
- * @param {(context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void} drawRectEntry - 矩形绘制函数
  * @returns {UiOverlayEntry[]}
  */
-function createCompatSelectionEntriesForSummaries(
-  summaries,
-  role,
-  viewport,
-  drawRectEntry,
-) {
+function createCompatSelectionEntriesForSummaries(summaries, role, viewport) {
   const objectEntries = summaries
     .map((summaryEntry) =>
       createCompatSummarySelectionEntry(
         summaryEntry,
         `compat-selection-object-frame:${role}`,
         viewport,
-        drawRectEntry,
       ),
     )
     .filter(Boolean);
@@ -284,7 +254,7 @@ function createCompatSelectionEntriesForSummaries(
   }
 
   const groupScreenRect = objectEntries.reduce((combinedRect, entry) => {
-    const screenRect = RectangleRange.fromRectLike(entry.screenRect);
+    const screenRect = RectangleRange.fromRectLike(entry.geometry.screenRect);
     if (!screenRect) {
       return combinedRect;
     }
@@ -300,7 +270,6 @@ function createCompatSelectionEntriesForSummaries(
     createCompatGroupSelectionEntry(
       groupScreenRect,
       `compat-selection-group-frame:${role}`,
-      drawRectEntry,
     ),
   ];
 }
@@ -359,52 +328,62 @@ function worldPointsToScreenPoints(worldPoints, viewport) {
 /**
  * 创建点类型 overlay 条目
  * @param {{ x: number, y: number }} worldPoint - 世界坐标
- * @param {{ fillStyle?: string, strokeStyle?: string, radius?: number, lineWidth?: number, source?: string }} [style] - 样式选项
+ * @param {{ fillStyle?: string, strokeStyle?: string, radius?: number, source?: string }} [options] - 选项
  * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {UiOverlayEntry | undefined}
  */
-function createPointOverlayEntry(worldPoint, style = {}, viewport) {
+function createPointOverlayEntry(worldPoint, options = {}, viewport) {
   if (!worldPoint || !viewport) return undefined;
 
   return {
-    source: style.source ?? "point",
+    source: options.source ?? "point",
     type: "point",
-    worldPoint,
-    fillStyle: style.fillStyle ?? "#33a1ff",
-    strokeStyle: style.strokeStyle,
-    radius: style.radius ?? 4,
-    lineWidth: style.lineWidth ?? 1,
+    geometry: {
+      worldPoint,
+      radius: options.radius ?? 4,
+    },
+    style: {
+      fillStyle: options.fillStyle ?? "#33a1ff",
+      strokeStyle: options.strokeStyle,
+    },
   };
 }
 
 /**
  * 创建路径类型 overlay 条目
  * @param {Array<{x: number, y: number}>} worldPoints - 世界坐标点数组
- * @param {{ strokeStyle?: string, fillStyle?: string, lineWidth?: number, lineDash?: number[], closePath?: boolean, source?: string }} [style] - 样式选项
+ * @param {{ strokeStyle?: string, fillStyle?: string, lineWidth?: number, lineDash?: number[], closePath?: boolean, source?: string }} [options] - 选项
  * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {UiOverlayEntry | undefined}
  */
-function createPathOverlayEntry(worldPoints, style = {}, viewport) {
+function createPathOverlayEntry(worldPoints, options = {}, viewport) {
   if (!Array.isArray(worldPoints) || worldPoints.length < 2 || !viewport) {
     return undefined;
   }
 
   return {
-    source: style.source ?? "path",
+    source: options.source ?? "path",
     type: "path",
-    worldPoints,
-    strokeStyle: style.strokeStyle ?? "#33a1ff",
-    fillStyle: style.fillStyle,
-    lineWidth: style.lineWidth ?? 1,
-    lineDash: style.lineDash ?? [],
-    closePath: style.closePath ?? false,
+    geometry: {
+      worldPoints,
+      closePath: options.closePath ?? false,
+    },
+    style: {
+      strokeStyle: options.strokeStyle ?? "#33a1ff",
+      fillStyle: options.fillStyle,
+      lineWidth: options.lineWidth ?? 1,
+      lineDash: options.lineDash ?? [],
+    },
   };
 }
 
 /**
  * 规范化单个 overlay 条目
- * @description 补全 screenRect/screenPoint/screenPoints、为 rect/point/path 类型注入默认 draw 函数。
- * @param {Object} entry - 原始条目（provider 返回的未归一化条目）
+ * @description
+ * 将 entry.geometry 中的 world 坐标转为 screen 坐标并清理 world 字段。
+ * 为 rect/point/path 类型注入默认 draw 函数（provider 未提供时）。
+ * 无 geometry 的条目直接丢弃。
+ * @param {Object} entry - 原始条目（必须含 geometry）
  * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
  * @param {{
  *   drawRectEntry: (context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void,
@@ -418,100 +397,56 @@ function normalizeOverlayEntry(entry, viewport, drawFns) {
     return undefined;
   }
 
-  const normalizedEntry = { ...entry };
-  const objectInstance =
-    normalizedEntry.object instanceof BasicObject
-      ? normalizedEntry.object
-      : undefined;
+  const g = entry.geometry;
+  if (typeof g !== "object") {
+    return undefined;
+  }
 
-  // --- rect: 补全 screenRect ---
-  if (!normalizedEntry.screenRect) {
-    if (normalizedEntry.worldRect) {
-      const worldRect = RectangleRange.fromRectLike(normalizedEntry.worldRect);
-      if (worldRect) {
-        normalizedEntry.screenRect = viewport?.worldRectToScreenRect?.(
-          worldRect,
-          normalizedEntry.padding ?? 0,
-        );
-      }
-    } else if (objectInstance) {
-      normalizedEntry.screenRect = getObjectScreenRect(
-        objectInstance,
-        viewport,
-      );
-    } else {
-      const worldRect = getSummaryWorldRect(normalizedEntry);
-      if (worldRect) {
-        normalizedEntry.screenRect = viewport?.worldRectToScreenRect?.(
-          worldRect,
-          normalizedEntry.padding ??
-          getCompatSelectionPaddingForSummary(
-            normalizedEntry,
-            viewport?.zoom ?? 1,
-          ),
-        );
+  const norm = { ...entry, geometry: { ...g } };
+  const ng = norm.geometry;
+
+  // rect: worldRect → screenRect
+  if (norm.type === "rect") {
+    if (ng.worldRect && !ng.screenRect) {
+      const wr = RectangleRange.fromRectLike(ng.worldRect);
+      if (wr) {
+        ng.screenRect = viewport?.worldRectToScreenRect?.(wr, 0);
       }
     }
+    if (ng.screenRect) {
+      ng.screenRect = RectangleRange.fromRectLike(ng.screenRect);
+    }
+    delete ng.worldRect;
   }
 
-  if (normalizedEntry.screenRect) {
-    normalizedEntry.screenRect = RectangleRange.fromRectLike(
-      normalizedEntry.screenRect,
-    );
+  // point: worldPoint → screenPoint
+  if (norm.type === "point") {
+    if (ng.worldPoint && !ng.screenPoint) {
+      ng.screenPoint = worldToScreenPoint(ng.worldPoint, viewport);
+    }
+    delete ng.worldPoint;
   }
 
-  // --- point: 补全 screenPoint ---
-  if (normalizedEntry.type === "point" && !normalizedEntry.screenPoint) {
-    if (normalizedEntry.worldPoint) {
-      normalizedEntry.screenPoint = worldToScreenPoint(
-        normalizedEntry.worldPoint,
-        viewport,
-      );
+  // path: worldPoints → screenPoints
+  if (norm.type === "path") {
+    if (ng.worldPoints && !ng.screenPoints) {
+      ng.screenPoints = worldPointsToScreenPoints(ng.worldPoints, viewport);
+    }
+    delete ng.worldPoints;
+  }
+
+  // 注入默认 draw
+  if (typeof norm.draw !== "function") {
+    if (norm.type === "rect" && ng.screenRect && drawFns?.drawRectEntry) {
+      norm.draw = (ctx) => drawFns.drawRectEntry(ctx, norm);
+    } else if (norm.type === "point" && ng.screenPoint && drawFns?.drawPointEntry) {
+      norm.draw = (ctx) => drawFns.drawPointEntry(ctx, norm);
+    } else if (norm.type === "path" && ng.screenPoints?.length >= 2 && drawFns?.drawPathEntry) {
+      norm.draw = (ctx) => drawFns.drawPathEntry(ctx, norm);
     }
   }
 
-  // --- path: 补全 screenPoints ---
-  if (normalizedEntry.type === "path" && !normalizedEntry.screenPoints) {
-    if (normalizedEntry.worldPoints) {
-      normalizedEntry.screenPoints = worldPointsToScreenPoints(
-        normalizedEntry.worldPoints,
-        viewport,
-      );
-    }
-  }
-
-  // --- 注入默认 draw ---
-  if (typeof normalizedEntry.draw !== "function") {
-    if (
-      normalizedEntry.type === "rect" &&
-      normalizedEntry.screenRect &&
-      drawFns?.drawRectEntry
-    ) {
-      normalizedEntry.draw = (context) => {
-        drawFns.drawRectEntry(context, normalizedEntry);
-      };
-    } else if (
-      normalizedEntry.type === "point" &&
-      normalizedEntry.screenPoint &&
-      drawFns?.drawPointEntry
-    ) {
-      normalizedEntry.draw = (context) => {
-        drawFns.drawPointEntry(context, normalizedEntry);
-      };
-    } else if (
-      normalizedEntry.type === "path" &&
-      normalizedEntry.screenPoints?.length >= 2 &&
-      drawFns?.drawPathEntry
-    ) {
-      normalizedEntry.draw = (context) => {
-        drawFns.drawPathEntry(context, normalizedEntry);
-      };
-    }
-  }
-
-  return typeof normalizedEntry.draw === "function"
-    ? normalizedEntry
-    : undefined;
+  return typeof norm.draw === "function" ? norm : undefined;
 }
 
 export {

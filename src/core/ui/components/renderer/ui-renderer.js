@@ -21,28 +21,30 @@ import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "../../../
  * @returns {RectangleRange | undefined} 边界矩形；无法推导时返回 undefined
  */
 function _getOverlayEntryBounds(entry) {
-  if (!entry) return undefined;
+  const g = entry?.geometry;
+  if (!g) return undefined;
 
-  if (entry.screenRect) {
-    return RectangleRange.fromRectLike(entry.screenRect);
+  if (entry.type === "rect" && g.screenRect) {
+    return RectangleRange.fromRectLike(g.screenRect);
   }
 
-  if (entry.screenPoint) {
-    const r = entry.radius ?? 4;
+  if (entry.type === "point" && g.screenPoint) {
+    const r = g.radius ?? 4;
     return new RectangleRange(
-      entry.screenPoint.x - r,
-      entry.screenPoint.y - r,
+      g.screenPoint.x - r,
+      g.screenPoint.y - r,
       r * 2,
       r * 2,
     );
   }
 
-  if (Array.isArray(entry.screenPoints) && entry.screenPoints.length > 0) {
+  if (entry.type === "path" && Array.isArray(g.screenPoints) && g.screenPoints.length > 0) {
+    const pts = g.screenPoints;
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const pt of entry.screenPoints) {
+    for (const pt of pts) {
       if (typeof pt.x !== "number" || typeof pt.y !== "number") continue;
       if (pt.x < minX) minX = pt.x;
       if (pt.x > maxX) maxX = pt.x;
@@ -50,8 +52,7 @@ function _getOverlayEntryBounds(entry) {
       if (pt.y > maxY) maxY = pt.y;
     }
     if (!Number.isFinite(minX)) return undefined;
-    // 为描边线宽留出余地
-    const lw = (entry.lineWidth ?? 1) + 2;
+    const lw = (entry.style?.lineWidth ?? 1) + 2;
     return new RectangleRange(minX - lw, minY - lw, maxX - minX + lw * 2, maxY - minY + lw * 2);
   }
 
@@ -230,15 +231,20 @@ class UiRenderer extends CanvasHost {
    * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 矩形条目
    */
   drawRectEntry(context, entry = {}) {
-    const screenRect = RectangleRange.fromRectLike(entry.screenRect);
+    const g = entry.geometry;
+    if (!g?.screenRect) return;
+
+    const screenRect = RectangleRange.fromRectLike(g.screenRect);
     if (!screenRect) return;
+
+    const style = entry.style ?? {};
 
     context.save?.();
     if (typeof context.setLineDash === "function") {
-      context.setLineDash(entry.lineDash ?? []);
+      context.setLineDash(style.lineDash ?? []);
     }
-    if (entry.fillStyle !== undefined) {
-      context.fillStyle = entry.fillStyle;
+    if (style.fillStyle !== undefined) {
+      context.fillStyle = style.fillStyle;
       context.fillRect?.(
         screenRect.left,
         screenRect.top,
@@ -246,11 +252,11 @@ class UiRenderer extends CanvasHost {
         screenRect.height,
       );
     }
-    if (entry.strokeStyle !== undefined) {
-      context.strokeStyle = entry.strokeStyle;
+    if (style.strokeStyle !== undefined) {
+      context.strokeStyle = style.strokeStyle;
     }
-    if (Number.isFinite(entry.lineWidth)) {
-      context.lineWidth = entry.lineWidth;
+    if (Number.isFinite(style.lineWidth)) {
+      context.lineWidth = style.lineWidth;
     }
     context.strokeRect?.(
       screenRect.left,
@@ -268,21 +274,25 @@ class UiRenderer extends CanvasHost {
    * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 点条目
    */
   drawPointEntry(context, entry = {}) {
-    const sp = entry.screenPoint;
-    if (!sp || typeof sp.x !== "number" || typeof sp.y !== "number") return;
+    const g = entry.geometry;
+    if (!g?.screenPoint) return;
 
-    const radius = entry.radius ?? 4;
+    const sp = g.screenPoint;
+    if (typeof sp.x !== "number" || typeof sp.y !== "number") return;
+
+    const radius = g.radius ?? 4;
+    const style = entry.style ?? {};
 
     context.save?.();
     context.beginPath?.();
     context.arc?.(sp.x, sp.y, radius, 0, Math.PI * 2);
-    if (entry.fillStyle !== undefined) {
-      context.fillStyle = entry.fillStyle;
+    if (style.fillStyle !== undefined) {
+      context.fillStyle = style.fillStyle;
       context.fill?.();
     }
-    if (entry.strokeStyle !== undefined) {
-      context.strokeStyle = entry.strokeStyle;
-      context.lineWidth = entry.lineWidth ?? 1;
+    if (style.strokeStyle !== undefined) {
+      context.strokeStyle = style.strokeStyle;
+      context.lineWidth = style.lineWidth ?? 1;
       context.stroke?.();
     }
     context.restore?.();
@@ -295,8 +305,13 @@ class UiRenderer extends CanvasHost {
    * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 路径条目
    */
   drawPathEntry(context, entry = {}) {
-    const points = entry.screenPoints;
+    const g = entry.geometry;
+    if (!g?.screenPoints) return;
+
+    const points = g.screenPoints;
     if (!Array.isArray(points) || points.length < 2) return;
+
+    const style = entry.style ?? {};
 
     context.save?.();
     context.beginPath?.();
@@ -304,19 +319,19 @@ class UiRenderer extends CanvasHost {
     for (let i = 1; i < points.length; i++) {
       context.lineTo(points[i].x, points[i].y);
     }
-    if (entry.closePath) {
+    if (g.closePath) {
       context.closePath?.();
     }
     if (typeof context.setLineDash === "function") {
-      context.setLineDash(entry.lineDash ?? []);
+      context.setLineDash(style.lineDash ?? []);
     }
-    if (entry.strokeStyle !== undefined) {
-      context.strokeStyle = entry.strokeStyle;
-      context.lineWidth = entry.lineWidth ?? 1;
+    if (style.strokeStyle !== undefined) {
+      context.strokeStyle = style.strokeStyle;
+      context.lineWidth = style.lineWidth ?? 1;
       context.stroke?.();
     }
-    if (entry.fillStyle !== undefined) {
-      context.fillStyle = entry.fillStyle;
+    if (style.fillStyle !== undefined) {
+      context.fillStyle = style.fillStyle;
       context.fill?.();
     }
     context.restore?.();

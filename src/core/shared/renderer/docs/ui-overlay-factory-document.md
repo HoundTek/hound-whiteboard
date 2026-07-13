@@ -8,13 +8,24 @@
 
 ## overlay 条目类型
 
-当前支持三种条目类型：
+条目分三层：`type` 在条目顶层做判别，`geometry` 承载坐标，`style` 承载画法属性。
 
-| type      | 语义            | 坐标字段                                | 默认绘制         |
-| --------- | --------------- | --------------------------------------- | ---------------- |
-| `"rect"`  | 矩形            | `worldRect` / `screenRect`              | `drawRectEntry`  |
-| `"point"` | 填充圆点        | `worldPoint` / `screenPoint` + `radius` | `drawPointEntry` |
-| `"path"`  | 折线 / 闭合路径 | `worldPoints[]` / `screenPoints[]`      | `drawPathEntry`  |
+| type      | 语义            | geometry 字段                                    | 默认绘制         |
+| --------- | --------------- | ------------------------------------------------ | ---------------- |
+| `"rect"`  | 矩形            | `worldRect` / `screenRect`                       | `drawRectEntry`  |
+| `"point"` | 填充圆点        | `worldPoint` / `screenPoint` + `radius`          | `drawPointEntry` |
+| `"path"`  | 折线 / 闭合路径 | `worldPoints[]` / `screenPoints[]` + `closePath` | `drawPathEntry`  |
+
+条目示例：
+
+```javascript
+{
+  source: "circle-center",
+  type: "point",
+  geometry: { worldPoint: center, radius: 4 },
+  style: { fillStyle: "#33a1ff" },
+}
+```
 
 归一化时自动转换 world→screen 坐标并注入默认 draw 函数。
 
@@ -35,29 +46,21 @@
 
 ### 条目工厂
 
-| 函数                                                                                 | 说明                                                     |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| `createCompatSelectionEntriesForSummaries(summaries, role, viewport, drawRectEntry)` | 基于 summary-like 条目生成兼容选择框条目（含组合大矩形） |
-| `createPointOverlayEntry(worldPoint, style, viewport)`                               | 创建点类型 overlay 条目（circle 圆心等）                 |
-| `createPathOverlayEntry(worldPoints, style, viewport)`                               | 创建路径类型 overlay 条目（线段、参考线等）              |
+| 函数                                                                  | 说明                                                     |
+| --------------------------------------------------------------------- | -------------------------------------------------------- |
+| `createCompatSelectionEntriesForSummaries(summaries, role, viewport)` | 基于 summary-like 条目生成兼容选择框条目（含组合大矩形） |
+| `createPointOverlayEntry(worldPoint, style, viewport)`                | 创建点类型 overlay 条目（circle 圆心等）                 |
+| `createPathOverlayEntry(worldPoints, style, viewport)`                | 创建路径类型 overlay 条目（线段、参考线等）              |
 
 ### 条目归一化
 
-| 函数                                              | 说明                                                     |
-| ------------------------------------------------- | -------------------------------------------------------- |
-| `normalizeOverlayEntry(entry, viewport, drawFns)` | 规整混合格式的 overlay 条目，补全 screen 坐标并注入 draw |
+| 函数                                              | 说明                                                   |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `normalizeOverlayEntry(entry, viewport, drawFns)` | 将 geometry 中的 world 坐标转为 screen 坐标，注入 draw |
 
-## normalizeOverlayEntry 签名变更
-
-`normalizeOverlayEntry` 的第三个参数从 `drawRectEntry` 回调改为 `drawFns` 对象：
+`normalizeOverlayEntry` 的第三个参数传入各类型绘制函数：
 
 ```javascript
-// 旧（仅 rect）
-normalizeOverlayEntry(entry, viewport, (ctx, rectEntry) =>
-  renderer.drawRectEntry(ctx, rectEntry),
-);
-
-// 新（rect + point + path）
 normalizeOverlayEntry(entry, viewport, {
   drawRectEntry: (ctx, entry) => renderer.drawRectEntry(ctx, entry),
   drawPointEntry: (ctx, entry) => renderer.drawPointEntry(ctx, entry),
@@ -65,11 +68,7 @@ normalizeOverlayEntry(entry, viewport, {
 });
 ```
 
-## 覆盖率
-
-- 所有已有 `type: "rect"` 的 overlay 条目 zero breakage
-- 新工具在 `collectUiOverlayEntries` 中返回 `type: "point"` / `type: "path"` 即可自动获得绘制功能
-- 应用示例见 `CircleCreatorTool.collectUiOverlayEntries`
+provider 返回的条目必须含 `geometry`，无 geometry 的条目被 normalize 丢弃。`draw` 由 normalize 按 type 注入，provider 也可自备 draw 覆盖。
 
 ## 与 UiRenderer 的关系
 

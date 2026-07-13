@@ -86,7 +86,7 @@ class ObjectModifierTool extends GestureTool {
     const { viewport, renderer } = overlayContext;
     const objects = this._overlayModifiedObjects;
 
-    if (objects.length === 0 || !renderer?.drawRectEntry) {
+    if (objects.length === 0 || !renderer) {
       return [];
     }
 
@@ -94,7 +94,6 @@ class ObjectModifierTool extends GestureTool {
       objects,
       "modifier",
       viewport,
-      (ctx, entry) => renderer.drawRectEntry(ctx, entry),
     );
   }
 

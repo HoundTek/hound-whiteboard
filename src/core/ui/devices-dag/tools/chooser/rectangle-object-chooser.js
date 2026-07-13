@@ -143,11 +143,15 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       {
         source: "rectangle-selection-drag",
         type: "rect",
-        worldRect,
-        fillStyle: RECTANGLE_SELECTION_OVERLAY_FILL_STYLE,
-        strokeStyle: RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE,
-        lineWidth: RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH,
-        lineDash: [...RECTANGLE_SELECTION_OVERLAY_LINE_DASH],
+        geometry: {
+          worldRect,
+        },
+        style: {
+          fillStyle: RECTANGLE_SELECTION_OVERLAY_FILL_STYLE,
+          strokeStyle: RECTANGLE_SELECTION_OVERLAY_STROKE_STYLE,
+          lineWidth: RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH,
+          lineDash: [...RECTANGLE_SELECTION_OVERLAY_LINE_DASH],
+        },
       },
     ];
   }
