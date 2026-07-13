@@ -276,6 +276,83 @@ function attachToolbarAdapter(board, viewport) {
 }
 
 /**
+ * 绑定滚轮事件适配器
+ * @description
+ * 监听 #app-left 上的滚轮事件，将滚动偏移转换为视口平移信号（scroll-to-pan）。
+ * 支持 Magic Mouse、触控板与鼠标滚轮。使用 passive: false 确保能 preventDefault。
+ * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
+ * @param {HTMLElement} appLeft - 左侧容器元素
+ * @param {Object} [options={}] - 可选参数
+ * @param {number} [options.sensitivity=1] - 滚动敏感度系数（越大平移越快）
+ * @returns {() => void} 解绑函数
+ */
+function attachWheelAdapter(viewport, board, appLeft, options = {}) {
+  const sensitivity = options.sensitivity ?? 1;
+
+  // 不同 deltaMode 到像素的转换因子
+  const LINE_HEIGHT = 16;
+  const PAGE_FACTOR = 0.8;
+
+  /**
+   * 将 wheel delta 统一转换为像素值
+   * @param {WheelEvent} event
+   * @returns {{ x: number, y: number }}
+   */
+  const deltaToPixels = (event) => {
+    let dx = event.deltaX;
+    let dy = event.deltaY;
+    const mode = event.deltaMode;
+
+    if (mode === 1) {
+      // DOM_DELTA_LINE
+      dx *= LINE_HEIGHT;
+      dy *= LINE_HEIGHT;
+    } else if (mode === 2) {
+      // DOM_DELTA_PAGE
+      dx *= appLeft.clientWidth * PAGE_FACTOR;
+      dy *= appLeft.clientHeight * PAGE_FACTOR;
+    }
+
+    return { x: dx, y: dy };
+  };
+
+  /**
+   * 滚轮事件处理器
+   * @param {WheelEvent} event
+   * @returns {void}
+   */
+  const onWheel = (event) => {
+    event.preventDefault();
+
+    const zoom = viewport.zoom ?? 1;
+    const origin = viewport.origin;
+    const pixelDelta = deltaToPixels(event);
+
+    const newOrigin = new Vector(
+      origin.x + pixelDelta.x * sensitivity / zoom,
+      origin.y + pixelDelta.y * sensitivity / zoom,
+    );
+
+    board.signalsEventBus.emit("input", {
+      to: `/${viewport.viewportId}/workflows/${DEMO_WORKFLOW_NAMES.VIEWPORT}`,
+      signals: [
+        {
+          type: "position",
+          context: {
+            value: newOrigin,
+            sourceType: "wheel",
+          },
+        },
+      ],
+    });
+  };
+
+  appLeft.addEventListener("wheel", onWheel, { passive: false });
+  return () => appLeft.removeEventListener("wheel", onWheel);
+}
+
+/**
  * 绑定窗口尺寸适配器
  * @description 窗口 resize 时同步视口根元素与各渲染层尺寸。
  * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
@@ -301,4 +378,5 @@ export {
   attachPointerAdapter,
   attachResizeAdapter,
   attachToolbarAdapter,
+  attachWheelAdapter,
 };

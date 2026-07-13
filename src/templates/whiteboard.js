@@ -19,6 +19,7 @@ import {
   attachPointerAdapter,
   attachResizeAdapter,
   attachToolbarAdapter,
+  attachWheelAdapter,
 } from "./demo/dom-adapters.js";
 
 // Demo 独立入口，需要手动注册控制台输出器
@@ -104,6 +105,7 @@ async function bootstrapWhiteboard() {
   attachPointerAdapter(viewport, board, demoLog);
   attachKeyboardAdapter(viewport, board, demoLog);
   attachResizeAdapter(viewport, appLeft);
+  attachWheelAdapter(viewport, board, appLeft);
 
   viewport.canvas.focus();
 }
