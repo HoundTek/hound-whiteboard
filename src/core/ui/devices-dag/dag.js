@@ -28,15 +28,10 @@ import { DevicesDAGEdge } from "./dag-node-edge.js";
 import { dagToString } from "./dag-debug.js";
 
 /**
- * 设备图处理器上下文
+ * 设备图处理器累积上下文
  * @description
- * 处理器上下文包含当前节点元数据、累积上下文以及节点状态访问接口，
- * 供节点处理器在处理信号包时使用。
- *
- * 累积上下文（\`acc\`）是沿分发路径逐步追加的只读对象。
- * 在 DAG 中，分发沿单一路径进行，上下文只沿该路径累积，
- * 节点的多入边不影响单次分发的上下文。
- *
+ * 沿分发路径逐层追加的共享上下文，handler 只读，只能通过前缀节点新增键。
+ * 包含 Board、Viewport、BoardApi RPC、当前工具对象集合等运行时依赖。
  * @typedef {Object} DevicesDAGAccumulatedContext
  * @property {Object} [board] - Board 实例（含 allocateObjectId 等方法）
  * @property {Object} [viewport] - Viewport 实例（含 registerUiOverlayProvider / requestViewportUiRender 等）
@@ -46,8 +41,18 @@ import { dagToString } from "./dag-debug.js";
  * @property {boolean} [autoCommit] - handoff prefix 注入的标志，false 时阻止 Creator 自动提交到静态图
  * @property {boolean} [autoUmountOnApply] - 修改提交后是否自动卸载工具节点（默认 true）
  * @property {Function} [resolvePosition] - 由 prefix 注入的坐标解析函数
- * @property {Object} [customFlag] - 上游节点可添加的自定义键值对
+ */
+
+/**
+ * 设备图处理器上下文
+ * @description
+ * 处理器上下文包含当前节点元数据、累积上下文以及节点状态访问接口，
+ * 供节点处理器在处理信号包时使用。
  *
+ * 累积上下文（\`acc\`）是沿分发路径逐步追加的只读对象。
+ * 在 DAG 中，分发沿单一路径进行，上下文只沿该路径累积，
+ * 节点的多入边不影响单次分发的上下文。
+ * 
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
  * @property {DevicesDAG} dag - 所属设备图
