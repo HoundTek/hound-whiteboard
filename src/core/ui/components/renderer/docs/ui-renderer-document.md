@@ -105,6 +105,29 @@ createCompatSelectionEntriesForSummaries(
 - 矩形边框
 - 独立于已选对象的兼容选择框
 
+### circle creator point + path
+
+`CircleCreatorTool.collectUiOverlayEntries()` 返回两个 overlay：
+
+| source          | type    | 说明                 |
+| --------------- | ------- | -------------------- |
+| `circle-center` | `point` | 圆心蓝色圆点         |
+| `circle-radius` | `path`  | 圆心到手指的虚线线段 |
+
+这演示了如何用 `type: "point"` 和 `type: "path"` 为创建工具添加可视辅助。
+
+## overlay 类型
+
+当前 `UiRenderer` 原生支持三种 overlay 类型：
+
+| type    | 绘制方法         | 关键字段                                                         |
+| ------- | ---------------- | ---------------------------------------------------------------- |
+| `rect`  | `drawRectEntry`  | `screenRect` / `worldRect` + `fillStyle` / `strokeStyle`         |
+| `point` | `drawPointEntry` | `screenPoint` / `worldPoint` + `radius` + `fillStyle`            |
+| `path`  | `drawPathEntry`  | `screenPoints[]` / `worldPoints[]` + `strokeStyle` + `closePath` |
+
+归一化流程（`normalizeOverlayEntry`）自动处理 world→screen 坐标转换，并为每种类型注入默认 draw 函数。
+
 ## 与 Viewport 的关系
 
 - `Viewport` 持有 `UiRenderer`
@@ -131,6 +154,8 @@ creator、chooser、modifier 都可能推动 ui 层刷新，但 `UiRenderer` 仅
 | `collectProviderOverlayEntries()`     | 收集并归一化所有 provider 条目       |
 | `collectOverlayEntries()`             | 收集当前应绘制的 overlay（调用上者） |
 | `drawRectEntry(context, entry)`       | 绘制矩形条目                         |
+| `drawPointEntry(context, entry)`      | 绘制点（填充圆点）条目               |
+| `drawPathEntry(context, entry)`       | 绘制路径（折线/闭合路径）条目        |
 | `flush(dirtyRects)`                   | 执行 UI 覆盖层刷新                   |
 
 ## 相关文档

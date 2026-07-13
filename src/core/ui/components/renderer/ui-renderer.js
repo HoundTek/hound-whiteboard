@@ -1,11 +1,12 @@
 /**
  * @file UI 覆盖层渲染器
- * @description 提供 Viewport.uiCanvas 的兼容渲染实现。
+ * @description 提供 Viewport.uiCanvas 的 overlay 渲染实现，支持脏区增量更新。
  * @module core/ui/components/renderer/ui-renderer
  * @author Zhou Chenyu
  */
 
-import { RectangleRange } from "../../../shared/range/index.js";
+import { RectangleRange, intersectsRanges } from "../../../shared/range/index.js";
+import { expandRectForClear } from "../../../shared/renderer/renderer.js";
 import { Viewport } from "../orchestration/viewport.js";
 import { Logger } from "../../../../utils/log/logger.js";
 import { logBus } from "../../../../utils/log/log-bus.js";
@@ -13,6 +14,85 @@ import { createRectangleDirtyRectMerger } from "../../../shared/renderer/render-
 import { createLiveDirtyRectThresholdStrategy } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
 import { CanvasHost } from "../../../shared/renderer/canvas-lifecycle.js";
 import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "../../../shared/renderer/ui-overlay-factory.js";
+
+/**
+ * 提取 overlay 条目的屏幕边界矩形，用于脏区相交检测
+ * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - overlay 条目
+ * @returns {RectangleRange | undefined} 边界矩形；无法推导时返回 undefined
+ */
+function _getOverlayEntryBounds(entry) {
+  if (!entry) return undefined;
+
+  if (entry.screenRect) {
+    return RectangleRange.fromRectLike(entry.screenRect);
+  }
+
+  if (entry.screenPoint) {
+    const r = entry.radius ?? 4;
+    return new RectangleRange(
+      entry.screenPoint.x - r,
+      entry.screenPoint.y - r,
+      r * 2,
+      r * 2,
+    );
+  }
+
+  if (Array.isArray(entry.screenPoints) && entry.screenPoints.length > 0) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const pt of entry.screenPoints) {
+      if (typeof pt.x !== "number" || typeof pt.y !== "number") continue;
+      if (pt.x < minX) minX = pt.x;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.y > maxY) maxY = pt.y;
+    }
+    if (!Number.isFinite(minX)) return undefined;
+    // 为描边线宽留出余地
+    const lw = (entry.lineWidth ?? 1) + 2;
+    return new RectangleRange(minX - lw, minY - lw, maxX - minX + lw * 2, maxY - minY + lw * 2);
+  }
+
+  return undefined;
+}
+
+/**
+ * 判断边界矩形是否与任一脏区相交
+ * @param {RectangleRange} bounds - 条目边界矩形
+ * @param {RectangleRange[]} dirtyRects - 脏区集合
+ * @returns {boolean}
+ */
+function _intersectsAnyDirtyRect(bounds, dirtyRects) {
+  if (!bounds || !Array.isArray(dirtyRects)) return true;
+
+  return dirtyRects.some(
+    (dirtyRect) => dirtyRect instanceof RectangleRange && intersectsRanges(bounds, dirtyRect),
+  );
+}
+
+/**
+ * 按脏区清空 context
+ * @param {CanvasRenderingContext2D} context - 画布上下文
+ * @param {RectangleRange[]} dirtyRects - 脏区集合
+ */
+function _clearDirtyRects(context, dirtyRects) {
+  if (!context || !Array.isArray(dirtyRects)) return;
+
+  for (const dirtyRect of dirtyRects) {
+    if (!(dirtyRect instanceof RectangleRange)) continue;
+    context.save?.();
+    context.setTransform?.(1, 0, 0, 1, 0, 0);
+    context.clearRect?.(
+      dirtyRect.left,
+      dirtyRect.top,
+      dirtyRect.width,
+      dirtyRect.height,
+    );
+    context.restore?.();
+  }
+}
 
 /**
  * UI overlay provider
@@ -25,7 +105,9 @@ import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "../../../
  * UI 覆盖层渲染器
  * @description
  * 负责绘制 chooser/modifier 的选择框等 UI 覆盖元素。
- * 自管理 uiCanvas、渲染调度器与脏区合并策略。不参与 Worker 侧渲染。
+ * 自管理 uiCanvas、渲染调度器与脏区合并策略。
+ * flush 接收调度器合并后的脏区，仅清空脏区范围并裁剪绘制条目。
+ * 不参与 Worker 侧渲染。
  * @class
  * @extends CanvasHost
  * @author Zhou Chenyu
@@ -102,6 +184,11 @@ class UiRenderer extends CanvasHost {
    */
   collectProviderOverlayEntries() {
     const overlayEntries = [];
+    const drawFns = {
+      drawRectEntry: (context, rectEntry) => this.drawRectEntry(context, rectEntry),
+      drawPointEntry: (context, pointEntry) => this.drawPointEntry(context, pointEntry),
+      drawPathEntry: (context, pathEntry) => this.drawPathEntry(context, pathEntry),
+    };
 
     for (const provider of this.overlayProviders) {
       try {
@@ -115,7 +202,7 @@ class UiRenderer extends CanvasHost {
           const normalizedEntry = normalizeOverlayEntryFactory(
             entry,
             this.viewport,
-            (context, rectEntry) => this.drawRectEntry(context, rectEntry),
+            drawFns,
           );
           if (normalizedEntry) {
             overlayEntries.push(normalizedEntry);
@@ -175,10 +262,72 @@ class UiRenderer extends CanvasHost {
   }
 
   /**
-   * 执行 UI 覆盖层刷新（全量重绘）
+   * 绘制点 overlay 条目
+   * @description 在 screenPoint 处画一个填充/描边的圆点。
+   * @param {CanvasRenderingContext2D} context - 画布上下文
+   * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 点条目
+   */
+  drawPointEntry(context, entry = {}) {
+    const sp = entry.screenPoint;
+    if (!sp || typeof sp.x !== "number" || typeof sp.y !== "number") return;
+
+    const radius = entry.radius ?? 4;
+
+    context.save?.();
+    context.beginPath?.();
+    context.arc?.(sp.x, sp.y, radius, 0, Math.PI * 2);
+    if (entry.fillStyle !== undefined) {
+      context.fillStyle = entry.fillStyle;
+      context.fill?.();
+    }
+    if (entry.strokeStyle !== undefined) {
+      context.strokeStyle = entry.strokeStyle;
+      context.lineWidth = entry.lineWidth ?? 1;
+      context.stroke?.();
+    }
+    context.restore?.();
+  }
+
+  /**
+   * 绘制路径 overlay 条目
+   * @description 连接 screenPoints 中的点画一条折线/闭合路径。
+   * @param {CanvasRenderingContext2D} context - 画布上下文
+   * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 路径条目
+   */
+  drawPathEntry(context, entry = {}) {
+    const points = entry.screenPoints;
+    if (!Array.isArray(points) || points.length < 2) return;
+
+    context.save?.();
+    context.beginPath?.();
+    context.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      context.lineTo(points[i].x, points[i].y);
+    }
+    if (entry.closePath) {
+      context.closePath?.();
+    }
+    if (typeof context.setLineDash === "function") {
+      context.setLineDash(entry.lineDash ?? []);
+    }
+    if (entry.strokeStyle !== undefined) {
+      context.strokeStyle = entry.strokeStyle;
+      context.lineWidth = entry.lineWidth ?? 1;
+      context.stroke?.();
+    }
+    if (entry.fillStyle !== undefined) {
+      context.fillStyle = entry.fillStyle;
+      context.fill?.();
+    }
+    context.restore?.();
+  }
+
+  /**
+   * 执行 UI 覆盖层刷新（脏区增量）
    * @description
-   * 临时跳过脏区优化，全量清空 uiCanvas 并重绘所有 overlay 条目。
-   * @param {Array<RectangleRange | Object>} [dirtyRects=[]] - 脏区集合（当前忽略）
+   * 仅清空脏区范围，跳过不与脏区相交的条目，通过 clip 限制绘制区域。
+   * 无显式脏区时回退全量清空+全量绘制。
+   * @param {Array<RectangleRange | Object>} [dirtyRects=[]] - 脏区集合
    * @returns {RectangleRange[]} 本次实际处理的脏区
    */
   flush(dirtyRects = []) {
@@ -190,25 +339,73 @@ class UiRenderer extends CanvasHost {
       return [];
     }
 
-    // 全量清空 uiCanvas
-    context.clearRect?.(0, 0, viewportRect.width, viewportRect.height);
-
     const overlayEntries = this.collectOverlayEntries();
-    if (overlayEntries.length === 0) {
-      return [viewportRect];
+
+    const normalizedDirtyRects =
+      Array.isArray(dirtyRects) && dirtyRects.length > 0
+        ? dirtyRects
+          .map((rect) => expandRectForClear(rect))
+          .filter(Boolean)
+        : [];
+
+    // 只清空脏区（无脏区时全量清空）
+    if (normalizedDirtyRects.length > 0) {
+      _clearDirtyRects(context, normalizedDirtyRects);
+    } else {
+      context.clearRect?.(0, 0, viewportRect.width, viewportRect.height);
     }
 
-    // 全量绘制所有 overlay 条目
+    if (overlayEntries.length === 0) {
+      return normalizedDirtyRects.length > 0
+        ? normalizedDirtyRects
+        : [viewportRect];
+    }
+
+    // 绘制条目：脏区裁剪 + 相交检测
     for (const entry of overlayEntries) {
+      const hasDirtyRects = normalizedDirtyRects.length > 0;
+
+      // 有脏区且条目有边界 → 跳过不与任何脏区相交的条目
+      const entryBounds = _getOverlayEntryBounds(entry);
+      if (
+        hasDirtyRects &&
+        entryBounds &&
+        !_intersectsAnyDirtyRect(entryBounds, normalizedDirtyRects)
+      ) {
+        continue;
+      }
+
+      // 有脏区时 clip 到脏区，避免绘制越界
+      if (hasDirtyRects) {
+        context.save?.();
+        context.setTransform?.(1, 0, 0, 1, 0, 0);
+        context.beginPath?.();
+        for (const dirtyRect of normalizedDirtyRects) {
+          context.rect?.(
+            dirtyRect.left,
+            dirtyRect.top,
+            dirtyRect.width,
+            dirtyRect.height,
+          );
+        }
+        context.clip?.();
+      }
+
       entry.draw?.(context, {
         dirtyRect: viewportRect,
         entry,
         viewport: this.viewport,
         renderer: this,
       });
+
+      if (hasDirtyRects) {
+        context.restore?.();
+      }
     }
 
-    return [viewportRect];
+    return normalizedDirtyRects.length > 0
+      ? normalizedDirtyRects
+      : [viewportRect];
   }
 
 

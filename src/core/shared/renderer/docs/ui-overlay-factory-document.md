@@ -4,11 +4,19 @@
 
 ## 概述
 
-`ui-overlay-factory.js` 提供一组纯函数，负责创建兼容选择框 overlay 条目、归一化混合格式的条目、以及处理 summary-like 条目到屏幕矩形的坐标转换。不依赖任何类实例。
+`ui-overlay-factory.js` 提供一组纯函数，负责创建 overlay 条目、归一化混合格式的条目、以及处理世界坐标到屏幕坐标的转换。不依赖任何类实例。
 
-## 模块定位
+## overlay 条目类型
 
-`UiRenderer` 原有的坐标辅助方法和条目工厂方法（`getObjectWorldRect`、`getCompatSelectionPadding`、`getSummaryWorldRect`、`createCompatSelectionEntriesForSummaries`、`normalizeOverlayEntry` 等）已迁至此处，改为纯函数。调用方（object-chooser、object-modifier）直接 import 使用。
+当前支持三种条目类型：
+
+| type      | 语义            | 坐标字段                                | 默认绘制         |
+| --------- | --------------- | --------------------------------------- | ---------------- |
+| `"rect"`  | 矩形            | `worldRect` / `screenRect`              | `drawRectEntry`  |
+| `"point"` | 填充圆点        | `worldPoint` / `screenPoint` + `radius` | `drawPointEntry` |
+| `"path"`  | 折线 / 闭合路径 | `worldPoints[]` / `screenPoints[]`      | `drawPathEntry`  |
+
+归一化时自动转换 world→screen 坐标并注入默认 draw 函数。
 
 ## 导出函数
 
@@ -22,22 +30,50 @@
 | `getSummaryWorldRect(summaryEntry)`                       | 解析 summary-like 条目的世界矩形       |
 | `getSummaryScreenRect(summaryEntry, viewport)`            | 获取 summary-like 条目的屏幕矩形       |
 | `getObjectScreenRect(objectInstance, viewport)`           | 获取对象实例的屏幕矩形                 |
+| `worldToScreenPoint(worldPoint, viewport)`                | 将世界坐标点转为屏幕坐标点             |
+| `worldPointsToScreenPoints(worldPoints, viewport)`        | 批量将世界坐标点数组转为屏幕坐标点数组 |
 
 ### 条目工厂
 
 | 函数                                                                                 | 说明                                                     |
 | ------------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | `createCompatSelectionEntriesForSummaries(summaries, role, viewport, drawRectEntry)` | 基于 summary-like 条目生成兼容选择框条目（含组合大矩形） |
+| `createPointOverlayEntry(worldPoint, style, viewport)`                               | 创建点类型 overlay 条目（circle 圆心等）                 |
+| `createPathOverlayEntry(worldPoints, style, viewport)`                               | 创建路径类型 overlay 条目（线段、参考线等）              |
 
 ### 条目归一化
 
-| 函数                                                    | 说明                                              |
-| ------------------------------------------------------- | ------------------------------------------------- |
-| `normalizeOverlayEntry(entry, viewport, drawRectEntry)` | 规整混合格式的 overlay 条目，确保 `draw` 函数可用 |
+| 函数                                              | 说明                                                     |
+| ------------------------------------------------- | -------------------------------------------------------- |
+| `normalizeOverlayEntry(entry, viewport, drawFns)` | 规整混合格式的 overlay 条目，补全 screen 坐标并注入 draw |
+
+## normalizeOverlayEntry 签名变更
+
+`normalizeOverlayEntry` 的第三个参数从 `drawRectEntry` 回调改为 `drawFns` 对象：
+
+```javascript
+// 旧（仅 rect）
+normalizeOverlayEntry(entry, viewport, (ctx, rectEntry) =>
+  renderer.drawRectEntry(ctx, rectEntry),
+);
+
+// 新（rect + point + path）
+normalizeOverlayEntry(entry, viewport, {
+  drawRectEntry: (ctx, entry) => renderer.drawRectEntry(ctx, entry),
+  drawPointEntry: (ctx, entry) => renderer.drawPointEntry(ctx, entry),
+  drawPathEntry: (ctx, entry) => renderer.drawPathEntry(ctx, entry),
+});
+```
+
+## 覆盖率
+
+- 所有已有 `type: "rect"` 的 overlay 条目 zero breakage
+- 新工具在 `collectUiOverlayEntries` 中返回 `type: "point"` / `type: "path"` 即可自动获得绘制功能
+- 应用示例见 `CircleCreatorTool.collectUiOverlayEntries`
 
 ## 与 UiRenderer 的关系
 
-`UiRenderer` 不再直接提供这些方法。`UiRenderer.collectProviderOverlayEntries()` 内部调用 `normalizeOverlayEntry` 对所有 provider 返回的条目做归一化。`createCompatSelectionEntriesForSummaries` 由调用方直接 import 使用。
+`UiRenderer` 不再直接提供坐标辅助方法。`UiRenderer.collectProviderOverlayEntries()` 内部调用 `normalizeOverlayEntry` 对所有 provider 返回的条目做归一化。`createCompatSelectionEntriesForSummaries` 等工厂函数由调用方直接 import 使用。
 
 ## 相关文档
 

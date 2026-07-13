@@ -31,6 +31,13 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   _entry;
 
   /**
+   * overlay 渲染用——手势中的当前世界坐标位置
+   * @type {{ x: number, y: number } | null}
+   * @private
+   */
+  _overlayCurrentPosition;
+
+  /**
    * 圆对象的属性
    * @type {Record<string, any>}
    */
@@ -66,6 +73,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       options.fixedRadiusScreen ?? DEFAULT_FIXED_RADIUS_SCREEN;
     this.minDragDistanceScreen =
       options.minDragDistanceScreen ?? DEFAULT_MIN_DRAG_DISTANCE_SCREEN;
+    this._overlayCurrentPosition = null;
   }
 
   getCreatedObjectType() {
@@ -129,11 +137,13 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
 
   beginGesture(interaction) {
     this.count = 0;
+    this._overlayCurrentPosition = interaction.position ?? null;
     this.setRadius(0, interaction);
   }
 
   updateGesture(interaction) {
     this.count++;
+    this._overlayCurrentPosition = interaction.position ?? null;
     const localPoint = this.toLocalPoint(interaction.position);
     const radius = localPoint.length();
     this.setRadius(radius, interaction);
@@ -142,6 +152,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   completeGesture(interaction) {
     if (interaction.position) {
       this.count++;
+      this._overlayCurrentPosition = interaction.position;
       const localPoint = this.toLocalPoint(interaction.position);
       const radius = localPoint.length();
       this.setRadius(radius, interaction);
@@ -168,12 +179,67 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
   }
 
   /**
+   * 收集当前创建圆工具声明的 overlay 条目
+   * @param {{
+   *   viewport?: import("../../components/orchestration/viewport.js").Viewport,
+   *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer,
+   * }} [overlayContext={}] - overlay 上下文
+   * @returns {import("../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
+   */
+  collectUiOverlayEntries(overlayContext = {}) {
+    if (!this.isActionActive) return [];
+
+    const { viewport, renderer } = overlayContext;
+    const entry = this._entry;
+    const currentPosition = this._overlayCurrentPosition;
+    if (!entry || !currentPosition || !viewport || !renderer) return [];
+
+    const center = entry.position;
+    if (!center || typeof center.x !== "number") return [];
+
+    const result = [
+      {
+        source: "circle-center",
+        type: "point",
+        worldPoint: center,
+        radius: 4,
+        fillStyle: "#33a1ff",
+      },
+    ];
+
+    const radius = entry.data?.radius ?? 0;
+    if (radius > 0) {
+      result.push({
+        source: "circle-radius",
+        type: "path",
+        worldPoints: [center, currentPosition],
+        strokeStyle: "#33a1ff",
+        lineWidth: 1,
+        lineDash: [4, 4],
+        closePath: false,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * 清理 overlay 临时状态
+   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @protected
+   */
+  clearOverlayState(context = {}) {
+    this._overlayCurrentPosition = null;
+  }
+
+  /**
    * 重置创建器运行时状态
    */
   reset() {
     this._entry = null;
     this.objectId = null;
     this.count = 0;
+    this._overlayCurrentPosition = null;
   }
 }
 
