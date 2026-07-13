@@ -406,24 +406,29 @@ class DevicesDAGNode {
       }
     }
 
-    // 7. 延迟路由（额外信号包）
-    // 注意：延迟路由不传 edgeNotFoundFallback，与原 _routeFromNode 行为一致
+    // 7. 路由主包到子节点（优先于延迟路由，与原 _walkSegments 行为一致）
     const deferredResults = [];
-    for (const deferredPkt of deferredPackets) {
-      const subResult = this._routeFrom(deferredPkt, {
-        path,
-        acc: mergedAcc,
-        depth: depth + 1,
-        maxDepth,
-        dag,
-      });
-      if (subResult.packets.length > 0) {
-        deferredResults.push(...subResult.packets);
-      }
-    }
 
-    // 8. 路由主包到子节点
+    /**
+     * 处理延迟路由队列
+     */
+    const flushDeferredRoutes = () => {
+      for (const deferredPkt of deferredPackets) {
+        const subResult = this._routeFrom(deferredPkt, {
+          path,
+          acc: mergedAcc,
+          depth: depth + 1,
+          maxDepth,
+          dag,
+        });
+        if (subResult.packets.length > 0) {
+          deferredResults.push(...subResult.packets);
+        }
+      }
+    };
+
     if (routeSegments.length === 0) {
+      flushDeferredRoutes();
       return { packets: [...finalPackets, ...deferredResults], acc: contextAcc };
     }
 
@@ -431,7 +436,7 @@ class DevicesDAGNode {
     const edge = this.outEdges.get(firstSegment);
 
     if (!edge) {
-      // 边不存在
+      flushDeferredRoutes();
       const allCollected = [...finalPackets, ...deferredResults];
       if (allCollected.length > 0) {
         return { packets: allCollected, acc: contextAcc };
@@ -454,6 +459,7 @@ class DevicesDAGNode {
       );
     }
 
+    // 先走主路
     const childResult = child.dispatch(currentPacket, {
       path: childPath,
       acc: mergedAcc,
@@ -464,8 +470,11 @@ class DevicesDAGNode {
       remainingSegments: childRemaining,
     });
 
+    // 8. 延迟路由（额外信号包），在主路完成后处理
+    flushDeferredRoutes();
+
     return {
-      packets: [...finalPackets, ...deferredResults, ...childResult.packets],
+      packets: [...finalPackets, ...childResult.packets, ...deferredResults],
       acc: childResult.acc || contextAcc,
     };
   }
