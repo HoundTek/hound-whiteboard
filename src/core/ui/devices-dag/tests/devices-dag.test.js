@@ -4,6 +4,8 @@ import {
   DevicesDAGNode,
   DevicesDAGEdge,
   createSubDAG,
+  traceToString,
+  profileFromTrace,
 } from "../index.js";
 import { SignalPacket } from "../signal.js";
 
@@ -1547,6 +1549,88 @@ describe("DevicesDAG", () => {
       });
       // async handler 被忽略，无输出
       expect(result.packets).toHaveLength(0);
+    });
+  });
+
+  describe("route trace 与 profiling", () => {
+    test("dispatchWithTrace 应返回 trace 数组", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a", {
+        handler: () => ({ acc: { layer: "a" } }),
+      });
+
+      const result = dag.dispatchWithTrace({
+        to: "/a/b",
+        signals: [{ type: "t" }],
+      });
+
+      expect(result.packets).toHaveLength(1);
+      expect(Array.isArray(result.trace)).toBe(true);
+      expect(result.trace.length).toBeGreaterThan(0);
+    });
+
+    test("trace 应记录每个节点的路径和动作", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a", {
+        handler: () => ({ stop: true }),
+      });
+
+      const result = dag.dispatchWithTrace({
+        to: "/a/b",
+        signals: [{ type: "t" }],
+      });
+
+      const paths = result.trace.map((e) => e.path);
+      expect(paths).toContain("/a");
+      const stopEntry = result.trace.find((e) => e.action === "stop");
+      expect(stopEntry).toBeDefined();
+    });
+
+    test("traceToString 应生成可读文本", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+
+      const result = dag.dispatchWithTrace({
+        to: "/a/b",
+        signals: [{ type: "t" }],
+      });
+
+      const str = traceToString(result.trace);
+      expect(typeof str).toBe("string");
+      expect(str).toContain("/a");
+    });
+
+    test("profileFromTrace 应计算性能摘要", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a", {
+        handler: () => ({ acc: { mark: true } }),
+      });
+
+      const result = dag.dispatchWithTrace({
+        to: "/a/b",
+        signals: [{ type: "t" }],
+      });
+
+      const profile = profileFromTrace(result.trace);
+      expect(profile.nodeCount).toBeGreaterThan(0);
+      expect(profile.handlerCallCount).toBeGreaterThanOrEqual(1);
+      expect(profile.maxDepth).toBeGreaterThan(0);
+      expect(profile.fanOutCount).toBe(0);
+    });
+
+    test("dispatch（无 trace）不应返回 trace 字段", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a");
+
+      const result = dag.dispatch({
+        to: "/a",
+        signals: [{ type: "t" }],
+      });
+
+      expect(result.trace).toBeUndefined();
     });
   });
 });

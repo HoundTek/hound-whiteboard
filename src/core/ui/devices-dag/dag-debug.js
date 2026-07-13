@@ -1,7 +1,8 @@
 /**
  * @file DAG 调试与可视化
  * @description
- * 提供 DevicesDAG 的文本树形表示（dagToString）和 Mermaid 流程图生成（dagToMermaid）。
+ * 提供 DevicesDAG 的文本树形表示（dagToString）、Mermaid 流程图生成（dagToMermaid）、
+ * 路由追踪格式化（traceToString）与性能摘要（profileFromTrace）。
  * @module core/ui/devices-dag/dag-debug
  * @author Zhou Chenyu
  */
@@ -236,4 +237,62 @@ function mermaidNodeLabel(node) {
   return parts.join(" ");
 }
 
-export { dagToString, dagToMermaid };
+/**
+ * 将路由追踪数组格式化为可读文本
+ * @description
+ * 每行一个节点，显示路径、深度、动作和包数量。
+ * @param {Array<{path: string, depth: number, hadHandler: boolean, action: string, nextSegment?: string, packetsCount: number, deferredCount: number, accKeys?: string[]}>} trace - 路由追踪数组
+ * @returns {string} 格式化后的追踪文本
+ */
+function traceToString(trace) {
+  if (!trace || trace.length === 0) return "(empty trace)";
+
+  const lines = trace.map((entry) => {
+    const indent = "  ".repeat(entry.depth);
+ const parts = [
+      `${indent}${entry.path}`,
+      `d=${entry.depth}`,
+      entry.hadHandler ? "[handler]" : "[no-handler]",
+      entry.action,
+    ];
+    if (entry.nextSegment) parts.push(`→${entry.nextSegment}`);
+    if (entry.packetsCount > 0) parts.push(`pkts=${entry.packetsCount}`);
+    if (entry.deferredCount > 0) parts.push(`deferred=${entry.deferredCount}`);
+    if (entry.accKeys?.length > 0) parts.push(`acc=[${entry.accKeys.join(",")}]`);
+    return parts.join(" ");
+  });
+
+  return lines.join("\n");
+}
+
+/**
+ * 从路由追踪数组计算性能摘要
+ * @description
+ * 从 trace 中提取最大深度、节点数、fan-out 数和 handler 调用数。
+ * @param {Array} trace - 路由追踪数组
+ * @returns {{ maxDepth: number, nodeCount: number, fanOutCount: number, handlerCallCount: number }}
+ */
+function profileFromTrace(trace) {
+  if (!trace || trace.length === 0) {
+    return { maxDepth: 0, nodeCount: 0, fanOutCount: 0, handlerCallCount: 0 };
+  }
+
+  let maxDepth = 0;
+  let fanOutCount = 0;
+  let handlerCallCount = 0;
+
+  for (const entry of trace) {
+    if (entry.depth > maxDepth) maxDepth = entry.depth;
+    if (entry.deferredCount > 0) fanOutCount += entry.deferredCount;
+    if (entry.hadHandler) handlerCallCount++;
+  }
+
+  return {
+    maxDepth,
+    nodeCount: trace.length,
+    fanOutCount,
+    handlerCallCount,
+  };
+}
+
+export { dagToString, dagToMermaid, traceToString, profileFromTrace };

@@ -812,6 +812,51 @@ class DevicesDAG {
   }
 
   /**
+   * 从根节点开始分发信号包并返回路由追踪信息
+   * @description
+   * 与 {@link DevicesDAG#dispatch} 行为一致，额外收集路由追踪信息。
+   * 返回结果中包含 `trace` 数组，可通过 `traceToString()` 格式化。
+   * @param {SignalPacket|Record<string, any>} packet - 信号包
+   * @returns {{ packets: SignalPacket[], acc?: Object, trace: Array }} 分发结果与追踪信息
+   */
+  dispatchWithTrace(packet) {
+    const trace = [];
+    const startPacket = SignalPacket.from(packet, { defaultTo: "" });
+
+    if (startPacket.to && !startPacket.to.startsWith("/")) {
+      throw new Error(
+        `dispatchWithTrace() requires an absolute path starting with "/", got "${startPacket.to}".`,
+      );
+    }
+
+    let to = startPacket.to || "";
+
+    if (!to) {
+      if (this._root.getDefaultRoute()) {
+        to = "/" + this._root.getDefaultRoute();
+      } else {
+        return { packets: [startPacket], trace };
+      }
+    }
+
+    const result = this._ghost.dispatch(
+      new SignalPacket(to, startPacket.signals),
+      {
+        path: "",
+        acc: {},
+        depth: 0,
+        maxDepth: this._maxDispatchDepth,
+        strict: this._strict,
+        dag: this,
+        trace,
+        edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
+      },
+    );
+
+    return { ...result, trace };
+  }
+
+  /**
    * 生成设备图的树状字符串表示（委托 dag-debug.js）
    * @see {@link module:core/devices-dag/dag-debug.dagToString}
    * @returns {string}

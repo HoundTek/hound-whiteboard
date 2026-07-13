@@ -268,6 +268,7 @@ class DevicesDAGNode {
    * @param {number} [options.maxDepth=32] - 最大递归深度
    * @param {Object|null} [options.dag=null] - 所属 DAG 实例（用于跨节点状态管理）
    * @param {boolean} [options.strict=false] - strict 模式下 handler 报错直接抛出
+   * @param {Array|null} [options.trace=null] - 路由追踪收集器，传入数组时自动记录遍历路径
    * @param {(packet: SignalPacket) => SignalPacket[]} [options.edgeNotFoundFallback] - 边不存在时的回退
    * @param {string[]|null} [options.remainingSegments=null] - 剩余路径段（用于边查找，独立于 packet.to）
    * @returns {{ packets: SignalPacket[], acc?: Object }} 分发结果
@@ -280,9 +281,18 @@ class DevicesDAGNode {
       maxDepth = 32,
       dag = null,
       strict = false,
+      trace = null,
       edgeNotFoundFallback = null,
       remainingSegments = null,
     } = options;
+
+    /**
+     * 向 trace 数组推送一条记录（仅在 trace 启用时生效）
+     * @param {Object} entry - trace 条目
+     */
+    const pushTrace = (entry) => {
+      if (trace) trace.push({ path, depth, ...entry });
+    };
 
     const pkt = SignalPacket.from(packet);
 
@@ -350,11 +360,23 @@ class DevicesDAGNode {
 
     // 4. stop：终止当前链路
     if (result.stop) {
+      pushTrace({
+        hadHandler: typeof handler === "function",
+        action: "stop",
+        packetsCount: result.packets.length,
+        deferredCount: 0,
+      });
       return { packets: result.packets, acc: contextAcc };
     }
 
     // 5. explicitPackets 且空 → 终止
     if (result.explicitPackets && result.packets.length === 0) {
+      pushTrace({
+        hadHandler: typeof handler === "function",
+        action: "stop-empty",
+        packetsCount: 0,
+        deferredCount: 0,
+      });
       return { packets: [], acc: contextAcc };
     }
 
@@ -426,6 +448,7 @@ class DevicesDAGNode {
           maxDepth,
           dag,
           strict,
+          trace,
         });
         if (subResult.packets.length > 0) {
           deferredResults.push(...subResult.packets);
@@ -434,6 +457,12 @@ class DevicesDAGNode {
     };
 
     if (routeSegments.length === 0) {
+      pushTrace({
+        hadHandler: typeof handler === "function",
+        action: "leaf",
+        packetsCount: finalPackets.length,
+        deferredCount: deferredPackets.length,
+      });
       flushDeferredRoutes();
       return { packets: [...finalPackets, ...deferredResults], acc: contextAcc };
     }
@@ -442,6 +471,13 @@ class DevicesDAGNode {
     const edge = this.outEdges.get(firstSegment);
 
     if (!edge) {
+      pushTrace({
+        hadHandler: typeof handler === "function",
+        action: "edge-not-found",
+        nextSegment: firstSegment,
+        packetsCount: finalPackets.length,
+        deferredCount: deferredPackets.length,
+      });
       flushDeferredRoutes();
       const allCollected = [...finalPackets, ...deferredResults];
       if (allCollected.length > 0) {
@@ -452,6 +488,15 @@ class DevicesDAGNode {
         : [];
       return { packets: fallback, acc: contextAcc };
     }
+
+    pushTrace({
+      hadHandler: typeof handler === "function",
+      action: result.redirect ? "redirect" : "route",
+      nextSegment: firstSegment,
+      packetsCount: result.packets.length,
+      deferredCount: deferredPackets.length,
+      accKeys: result.acc ? Object.keys(result.acc) : [],
+    });
 
     const child = edge.target;
     const childPath = joinPath(path, firstSegment);
@@ -473,6 +518,7 @@ class DevicesDAGNode {
       maxDepth,
       dag,
       strict,
+      trace,
       edgeNotFoundFallback,
       remainingSegments: childRemaining,
     });
@@ -504,6 +550,7 @@ class DevicesDAGNode {
       maxDepth = 32,
       dag = null,
       strict = false,
+      trace = null,
     } = options;
 
     const segments = normalizePath(packet.to || "");
@@ -542,6 +589,7 @@ class DevicesDAGNode {
       maxDepth,
       dag,
       strict,
+      trace,
       remainingSegments: childRemaining,
     });
   }

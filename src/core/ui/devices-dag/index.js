@@ -12,5 +12,10 @@ export {
 } from "./dag-utils.js";
 export { DevicesDAGNode, DevicesDAGEdge } from "./dag-node-edge.js";
 export { DAGBuilder, DAGNodeBuilder, createSubDAG } from "./dag-builder.js";
-export { dagToString, dagToMermaid } from "./dag-debug.js";
+export {
+  dagToString,
+  dagToMermaid,
+  traceToString,
+  profileFromTrace,
+} from "./dag-debug.js";
 export { SignalPacket } from "./signal.js";
