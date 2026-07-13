@@ -11,6 +11,8 @@ import { jest } from "@jest/globals";
 
 let consoleErrorAllowed = false;
 
+globalThis.__JEST__ = true;
+
 beforeEach(() => {
   consoleErrorAllowed = false;
   jest.spyOn(console, "error").mockImplementation(() => {

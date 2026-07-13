@@ -224,19 +224,28 @@ function wrapToolForHandoff(tool, options = {}) {
       onToolComplete?.(context);
     }
 
-    // 根据工具是否可能有异步 action:complete 来决定清理时机
-    // 异步工具（如 Chooser）：延迟到 macrotask，确保 action:complete 在其被移除前触发
-    // 同步工具：立刻清理，避免不必要的异步调度
-    if (tool?.hasAsyncCompleteAction) {
-      setTimeout(() => {
-        for (const unsub of unsubs) {
-          unsub?.();
-        }
-      }, 0);
-    } else {
-      for (const unsub of unsubs) {
-        unsub?.();
-      }
+    // 异步 case：延迟清理 subscription，等 Promise resolve 后再移除监听
+    // 确保 action:complete 事件在 listener 被移除前触发
+    if (rawResult instanceof Promise) {
+      rawResult.then(
+        () => {
+          for (const unsub of unsubs) {
+            unsub?.();
+          }
+        },
+        () => {
+          for (const unsub of unsubs) {
+            unsub?.();
+          }
+        },
+      );
+      // 不向上传播 Promise，避免触发 DAG 的 async handler ban
+      return undefined;
+    }
+
+    // 同步 case：直接清理
+    for (const unsub of unsubs) {
+      unsub?.();
     }
 
     return rawResult;

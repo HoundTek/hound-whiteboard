@@ -103,11 +103,9 @@ class Board {
     this.#counterPool = new CounterPool();
     this.viewports = new Map();
     this.signalsEventBus = new EventBus();
-    const isTestEnv =
-      typeof process !== "undefined" && process.env?.NODE_ENV === "test";
     this.devicesDAG = new DevicesDAG({
       maxDispatchDepth: 32,
-      strict: isTestEnv,
+      strict: globalThis.__JEST__ === true,
     });
 
     // 根节点 handler：注入全局共享上下文

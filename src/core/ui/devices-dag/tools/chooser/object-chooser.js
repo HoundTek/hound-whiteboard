@@ -279,8 +279,7 @@ class ObjectChooserTool extends GestureTool {
       return undefined;
     }
 
-    this.completeAction(interaction.context);
-    return undefined;
+    return this.completeAction(interaction.context);
   }
 
   /**

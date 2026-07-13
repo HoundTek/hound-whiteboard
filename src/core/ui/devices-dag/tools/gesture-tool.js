@@ -294,7 +294,7 @@ class GestureTool extends Tool {
   /**
    * 处理 end 信号（单手势默认语义）
    * @param {GestureInteraction} interaction - 当前手势交互上下文
-   * @returns {void}
+   * @returns {*|undefined} `completeAction` 的返回值（异步工具为 Promise），无动作时 undefined
    * @protected
    */
   _onEnd(interaction) {
@@ -305,7 +305,7 @@ class GestureTool extends Tool {
     }
 
     if (this.autoActionOnGestureEnd) {
-      this.completeAction(interaction.context);
+      return this.completeAction(interaction.context);
     }
 
     return undefined;
@@ -315,7 +315,7 @@ class GestureTool extends Tool {
    * 处理 object-end 信号
    * @description 单手势模式下等同于 `_onEnd`。
    * @param {GestureInteraction} interaction - 当前手势交互上下文
-   * @returns {void}
+   * @returns {*|undefined} `completeAction` 的返回值（异步工具为 Promise），无动作时 undefined
    * @protected
    */
   _onObjectEnd(interaction) {
@@ -336,7 +336,7 @@ class GestureTool extends Tool {
   /**
    * 处理 success 信号
    * @param {GestureInteraction} interaction - 当前手势交互上下文
-   * @returns {void}
+   * @returns {*|undefined} `completeAction` 的返回值（异步工具为 Promise）
    * @protected
    */
   _onSuccess(interaction) {
@@ -346,8 +346,7 @@ class GestureTool extends Tool {
       this._emit("gesture:end", interaction);
     }
 
-    this.completeAction(interaction.context);
-    return undefined;
+    return this.completeAction(interaction.context);
   }
 
   /**
@@ -389,8 +388,7 @@ class GestureTool extends Tool {
    * @protected
    */
   _onEndAction(interaction) {
-    this.endAction(interaction.context);
-    return undefined;
+    return this.endAction(interaction.context);
   }
 
   /**
@@ -510,7 +508,7 @@ class MultiGestureTool extends GestureTool {
   /**
    * 处理 object-end 信号（多手势语义）
    * @param {GestureInteraction} interaction - 当前手势交互上下文
-   * @returns {void}
+   * @returns {*|undefined} `completeAction` 的返回值（异步工具为 Promise）
    * @protected
    */
   _onObjectEnd(interaction) {
@@ -520,8 +518,7 @@ class MultiGestureTool extends GestureTool {
       this._emit("gesture:end", interaction);
     }
 
-    this.completeAction(interaction.context);
-    return undefined;
+    return this.completeAction(interaction.context);
   }
 
   /**
