@@ -53,7 +53,7 @@ process(signalPacket, ctx) {
 
 | 成员      | 类型     | 说明                                                   |
 | --------- | -------- | ------------------------------------------------------ |
-| `ctx.acc` | `Object` | 沿 DAG 逐层累积的只读上下文（board、viewport、回调等） |
+| `ctx.acc` | `Object` | 沿 DAG 逐层累积的上下文（board、viewport、回调等）；上游注入，下游可有限可写 |
 
 **规则**：handler 不能往 `ctx` 平级新增键。向下游传递额外数据时，通过返回值 `{ acc: { key: value } }` 写入累积上下文。
 

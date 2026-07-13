@@ -195,6 +195,12 @@ class DevicesDAG {
   _maxDispatchDepth;
 
   /**
+   * 是否启用 strict 模式（handler 报错直接抛出，禁止 async handler）
+   * @type {boolean}
+   */
+  _strict;
+
+  /**
    * 已挂载 tool 实例集合（禁止重复挂载）
    * @type {Set<import("../tools/tool.js").Tool>}
    */
@@ -209,11 +215,13 @@ class DevicesDAG {
   /**
    * @param {Object} [options={}] - 构造选项
    * @param {number} [options.maxDispatchDepth=32] - 最大分发深度（防止环路）
+   * @param {boolean} [options.strict=false] - 是否启用 strict 模式
    */
   constructor(options = {}) {
     this._nodes = new Map();
     this._nodeIdPool = new CounterPool(0);
     this._maxDispatchDepth = options.maxDispatchDepth ?? 32;
+    this._strict = options.strict ?? false;
     this._mountedToolInstances = new Set();
 
     // 幽灵节点（-1，分发起点，对外不可见）
@@ -457,7 +465,49 @@ class DevicesDAG {
       ? this.ensureNode(toPath)
       : this._createNode(this._allocateNodeId());
 
+    this._checkNoCycle(source, edgeName, target);
     return this._connectNodes(source, edgeName, target);
+  }
+
+  /**
+   * 检查新增边是否会形成环
+   * @description
+   * 如果 target 已能经由现有边到达 source，则新增 source→target 会产生环。
+   * @param {DevicesDAGNode} source - 源节点
+   * @param {string} edgeName - 边名
+   * @param {DevicesDAGNode} target - 目标节点
+   * @throws {Error} 当新增边会形成环时
+   * @private
+   */
+  _checkNoCycle(source, edgeName, target) {
+    if (this._wouldCreateCycle(source, target)) {
+ throw new Error(
+        `Edge "${edgeName}" would create a cycle.`,
+      );
+    }
+  }
+
+  /**
+   * 判断 target 是否已能到达 source（DFS）
+   * @param {DevicesDAGNode} source - 源节点
+   * @param {DevicesDAGNode} target - 目标节点
+   * @returns {boolean} target 可达 source 则为 true
+   * @private
+   */
+  _wouldCreateCycle(source, target) {
+    if (source === target) return true;
+    const visited = new Set();
+    const stack = [target];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (node === source) return true;
+      if (visited.has(node.id)) continue;
+      visited.add(node.id);
+      for (const edge of node.outEdges.values()) {
+        stack.push(edge.target);
+      }
+    }
+    return false;
   }
 
   /**
@@ -658,11 +708,9 @@ class DevicesDAG {
       const fromNode = idMap.get(edgeDef.fromNodeId);
       const toNode = idMap.get(edgeDef.toNodeId);
       if (!fromNode || !toNode) continue;
-      try {
-        this._connectNodes(fromNode, edgeDef.name, toNode);
-      } catch {
-        // 边已存在时跳过（幂等挂载）
-      }
+      if (fromNode.outEdges.has(edgeDef.name)) continue;
+      this._checkNoCycle(fromNode, edgeDef.name, toNode);
+      this._connectNodes(fromNode, edgeDef.name, toNode);
     }
 
     for (const node of mountedNodes) {
@@ -756,6 +804,7 @@ class DevicesDAG {
         acc: {},
         depth: 0,
         maxDepth: this._maxDispatchDepth,
+        strict: this._strict,
         dag: this,
         edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
       },

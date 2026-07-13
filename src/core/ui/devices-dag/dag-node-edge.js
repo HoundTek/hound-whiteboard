@@ -267,6 +267,7 @@ class DevicesDAGNode {
    * @param {number} [options.depth=0] - 当前递归深度
    * @param {number} [options.maxDepth=32] - 最大递归深度
    * @param {Object|null} [options.dag=null] - 所属 DAG 实例（用于跨节点状态管理）
+   * @param {boolean} [options.strict=false] - strict 模式下 handler 报错直接抛出
    * @param {(packet: SignalPacket) => SignalPacket[]} [options.edgeNotFoundFallback] - 边不存在时的回退
    * @param {string[]|null} [options.remainingSegments=null] - 剩余路径段（用于边查找，独立于 packet.to）
    * @returns {{ packets: SignalPacket[], acc?: Object }} 分发结果
@@ -278,6 +279,7 @@ class DevicesDAGNode {
       depth = 0,
       maxDepth = 32,
       dag = null,
+      strict = false,
       edgeNotFoundFallback = null,
       remainingSegments = null,
     } = options;
@@ -303,6 +305,7 @@ class DevicesDAGNode {
       try {
         rawResult = handler(pkt, handlerContext);
       } catch (error) {
+        if (strict) throw error;
         console.error(
           `[DevicesDAGNode] handler error at "${path}":`,
           error,
@@ -310,12 +313,14 @@ class DevicesDAGNode {
         rawResult = undefined;
       }
       if (rawResult instanceof Promise) {
-        rawResult.catch((error) => {
-          console.error(
-            `[DevicesDAGNode] async handler rejection at "${path}":`,
-            error,
+        if (strict) {
+          throw new Error(
+            `[DevicesDAGNode] async handler is not supported at "${path}". DAG handlers must be synchronous.`,
           );
-        });
+        }
+        console.warn(
+          `[DevicesDAGNode] async handler at "${path}" was ignored. DAG handlers must be synchronous.`,
+        );
         rawResult = undefined;
       }
     }
@@ -420,6 +425,7 @@ class DevicesDAGNode {
           depth: depth + 1,
           maxDepth,
           dag,
+          strict,
         });
         if (subResult.packets.length > 0) {
           deferredResults.push(...subResult.packets);
@@ -466,6 +472,7 @@ class DevicesDAGNode {
       depth: nextDepth,
       maxDepth,
       dag,
+      strict,
       edgeNotFoundFallback,
       remainingSegments: childRemaining,
     });
@@ -496,6 +503,7 @@ class DevicesDAGNode {
       depth = 0,
       maxDepth = 32,
       dag = null,
+      strict = false,
     } = options;
 
     const segments = normalizePath(packet.to || "");
@@ -533,6 +541,7 @@ class DevicesDAGNode {
       depth: nextDepth,
       maxDepth,
       dag,
+      strict,
       remainingSegments: childRemaining,
     });
   }

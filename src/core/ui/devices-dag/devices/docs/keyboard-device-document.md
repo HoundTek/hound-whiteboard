@@ -173,33 +173,28 @@ const wasdPrefix = (code, vector) =>
     },
   });
 
-board.signalsEventBus.emit("mount", {
-  viewportId: "main",
-  name: "wasd-move",
-  workflow: wasdTool,
-  edges: [
-    {
-      from: "/keyboard/code/KeyW",
-      edge: "default",
-      prefix: wasdPrefix("KeyW", { x: 0, y: -1 }),
-    },
-    {
-      from: "/keyboard/code/KeyA",
-      edge: "default",
-      prefix: wasdPrefix("KeyA", { x: -1, y: 0 }),
-    },
-    {
-      from: "/keyboard/code/KeyS",
-      edge: "default",
-      prefix: wasdPrefix("KeyS", { x: 0, y: 1 }),
-    },
-    {
-      from: "/keyboard/code/KeyD",
-      edge: "default",
-      prefix: wasdPrefix("KeyD", { x: 1, y: 0 }),
-    },
-  ],
-});
+viewport.mountWorkflow("wasd-move", wasdTool, [
+  {
+    from: "/keyboard/code/KeyW",
+    edge: "default",
+    prefix: wasdPrefix("KeyW", { x: 0, y: -1 }),
+  },
+  {
+    from: "/keyboard/code/KeyA",
+    edge: "default",
+    prefix: wasdPrefix("KeyA", { x: -1, y: 0 }),
+  },
+  {
+    from: "/keyboard/code/KeyS",
+    edge: "default",
+    prefix: wasdPrefix("KeyS", { x: 0, y: 1 }),
+  },
+  {
+    from: "/keyboard/code/KeyD",
+    edge: "default",
+    prefix: wasdPrefix("KeyD", { x: 1, y: 0 }),
+  },
+]);
 ```
 
 ## 推荐挂载方式
@@ -210,46 +205,33 @@ board.signalsEventBus.emit("mount", {
 viewport.mountSubDAG("", createKeyboardDevice());
 ```
 
-所有 workflow 统一通过 `signalsEventBus.emit("mount", ...)` 挂载，使用 `edge.prefix` 注入信号转换逻辑：
+所有 workflow 统一通过 `viewport.mountWorkflow(name, workflow, edges)` 挂载，使用 `edge.prefix` 注入信号转换逻辑：
 
 ```js
 // 简单的信号转发（如 Space 触发随机圆）
-board.signalsEventBus.emit("mount", {
-  viewportId: "main",
-  name: "create-circle",
-  workflow: randomCircleSubDAG,
-  edges: [
-    {
-      from: "/keyboard/code/Space",
-      edge: "default",
-      prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
-    },
-  ],
-});
+viewport.mountWorkflow("create-circle", randomCircleSubDAG, [
+  {
+    from: "/keyboard/code/Space",
+    edge: "default",
+    prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
+  },
+]);
 
 // 需要 viewport 引用的信号转换（如视口平移）
-board.signalsEventBus.emit("mount", {
-  viewportId: "main",
-  name: "viewport",
-  workflow: ViewportTool,
-  edges: [
-    {
-      from: "/keyboard/code/ArrowUp",
-      edge: "default",
-      prefix: createEdgePrefix(
-        buildViewportPositionNodeConfig({ x: 0, y: -200 }),
-      ),
-    },
-  ],
-});
+viewport.mountWorkflow("viewport", ViewportTool, [
+  {
+    from: "/keyboard/code/ArrowUp",
+    edge: "default",
+    prefix: createEdgePrefix(
+      buildViewportPositionNodeConfig({ x: 0, y: -200 }),
+    ),
+  },
+]);
 
 // 鼠标设备不需要 prefix（信号直接可被工具消费）
-board.signalsEventBus.emit("mount", {
-  viewportId: "main",
-  name: "primary-stroke",
-  workflow: strokeTool,
-  edges: [{ from: "/mouse/primary", edge: "default" }],
-});
+viewport.mountWorkflow("primary-stroke", strokeTool, [
+  { from: "/mouse/primary", edge: "default" },
+]);
 ```
 
 prefix handler 不应指定 `to:`。路由由 `defaultRoute: "default"` 自动完成。

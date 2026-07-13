@@ -882,15 +882,30 @@ describe("DevicesDAG", () => {
       expect(result.packets[0].signals.map((s) => s.type)).toEqual(["stopped"]);
     });
 
-    test("defaultRoute 导致的无限循环应被深度限制捕获", () => {
-      const dag = new DevicesDAG({ maxDispatchDepth: 5 });
-      // 构造自环：/loop 的 defaultRoute 指向自身
-      dag.ensureNode("/loop");
-      dag.addEdge("/loop", "self", "/loop");
-      dag.configureNode("/loop", { defaultRoute: "self" });
+    test("addEdge 应在形成环时抛错", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a");
+      dag.ensureNode("/b");
+      dag.addEdge("/a", "to-b", "/b");
+      // b → a 会形成环
+      expect(() => dag.addEdge("/b", "to-a", "/a")).toThrow(/cycle/);
+    });
 
+    test("addEdge 自环应抛错", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/loop");
+      expect(() => dag.addEdge("/loop", "self", "/loop")).toThrow(/cycle/);
+    });
+
+    test("defaultRoute 导致的深度超限应被捕获", () => {
+      const dag = new DevicesDAG({ maxDispatchDepth: 5 });
+      // 构造线性深链而非环
+      dag.ensureNode("/deep/deep/deep/deep/deep/deep/deep");
       expect(() =>
-        dag.dispatch({ to: "/loop", signals: [{ type: "oops" }] }),
+        dag.dispatch({
+          to: "/deep/deep/deep/deep/deep/deep/deep",
+          signals: [{ type: "oops" }],
+        }),
       ).toThrow(/depth exceeded/i);
     });
 
@@ -1471,6 +1486,67 @@ describe("DevicesDAG", () => {
       dag.configureNode("/mon", { semantics: { viewport: true } });
       const str = dag.toString();
       expect(str).toContain("[viewport]");
+    });
+  });
+
+  describe("strict 模式", () => {
+    test("strict 模式下 handler 报错应直接抛出", () => {
+      const dag = new DevicesDAG({ strict: true });
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a/b", {
+        handler() {
+          throw new Error("boom");
+        },
+      });
+      expect(() =>
+        dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] }),
+      ).toThrow("boom");
+    });
+
+    test("非 strict 模式下 handler 报错应静默吞掉", () => {
+      const dag = new DevicesDAG({ strict: false });
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a/b", {
+        handler() {
+          throw new Error("boom");
+        },
+      });
+      allowConsoleError();
+      const result = dag.dispatch({
+        to: "/a/b",
+        signals: [{ type: "t" }],
+      });
+      // handler 报错被吞掉，无输出
+      expect(result.packets).toHaveLength(0);
+    });
+
+    test("strict 模式下 async handler 应抛错", () => {
+      const dag = new DevicesDAG({ strict: true });
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a/b", {
+        handler() {
+          return Promise.resolve();
+        },
+      });
+      expect(() =>
+        dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] }),
+      ).toThrow(/async handler is not supported/);
+    });
+
+    test("非 strict 模式下 async handler 应被静默忽略", () => {
+      const dag = new DevicesDAG({ strict: false });
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a/b", {
+        handler() {
+          return Promise.resolve();
+        },
+      });
+      const result = dag.dispatch({
+        to: "/a/b",
+        signals: [{ type: "t" }],
+      });
+      // async handler 被忽略，无输出
+      expect(result.packets).toHaveLength(0);
     });
   });
 });

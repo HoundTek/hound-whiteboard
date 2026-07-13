@@ -21,11 +21,9 @@ Worker 侧真实白板核心参见 [board-core-document.md](../../../../worker/c
 
 ### 输入总线
 
-`Board.signalsEventBus` 当前处理三类事件：
+`Board.signalsEventBus` 当前处理一类事件：
 
 - `input`：把输入包送到 `devicesDAG.dispatch()`
-- `mount`：把 workflow / prefix / subDAG 挂到当前 viewport 的设备图子树
-- `umount`：从设备图中卸载 workflow
 
 ### Viewport 管理
 
@@ -62,7 +60,7 @@ Worker 侧真实白板核心参见 [board-core-document.md](../../../../worker/c
 | `width` / `height` | 白板宽高，同时也是当前 chunk 尺寸来源 |
 | `rootPath`         | 白板根路径；为空时通常意味着内存模式  |
 | `viewports`        | `Map<string, Viewport>`               |
-| `signalsEventBus`  | 输入、挂载、卸载事件总线              |
+| `signalsEventBus`  | 输入事件总线                          |
 | `devicesDAG`       | 白板级唯一设备图                      |
 | `#boardApi`        | `BoardApiRpc` 实例                    |
 | `#worker`          | 当前绑定的 Worker 端点                |
@@ -82,7 +80,7 @@ Worker 侧真实白板核心参见 [board-core-document.md](../../../../worker/c
 
 ## workflow 挂载约定
 
-`Board.signalsEventBus.emit("mount", ...)` 当前会把 workflow 挂到：
+workflow 通过 `viewport.mountWorkflow(name, workflow, edges)` 挂到：
 
 ```text
 /<viewportId>/workflows/${name}

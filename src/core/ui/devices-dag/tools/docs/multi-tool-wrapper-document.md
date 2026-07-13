@@ -125,12 +125,9 @@ new MultiToolWrapper((touchId) => {
 挂载到设备图：
 
 ```js
-effectiveBoard.signalsEventBus.emit("mount", {
-  viewportId: viewport.viewportId,
-  name: "touch-stroke",
-  workflow: multiStroke,
-  edges: [{ from: "touchscreen/contacts", edge: "default" }],
-});
+viewport.mountWorkflow("touch-stroke", multiStroke, [
+  { from: "touchscreen/contacts", edge: "default" },
+]);
 ```
 
 ## 设计约束

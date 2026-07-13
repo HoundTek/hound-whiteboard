@@ -30,20 +30,15 @@ import {
   createCanvasToWorldPrefixHandler,
 } from "../prefixes/index.js";
 
-board.signalsEventBus.emit("mount", {
-  viewportId: "main",
-  name: "primary-stroke",
-  workflow: strokeTool,
-  edges: [
-    {
-      from: "mouse/primary",
-      edge: "default",
-      prefix: createEdgePrefix({
-        handler: createCanvasToWorldPrefixHandler(),
-      }),
-    },
-  ],
-});
+viewport.mountWorkflow("primary-stroke", strokeTool, [
+  {
+    from: "mouse/primary",
+    edge: "default",
+    prefix: createEdgePrefix({
+      handler: createCanvasToWorldPrefixHandler(),
+    }),
+  },
+]);
 ```
 
 ## 输入坐标系约定

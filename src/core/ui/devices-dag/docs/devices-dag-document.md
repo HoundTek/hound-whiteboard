@@ -105,7 +105,7 @@ handler 的原生返回值可以是多种形式——单个 `SignalPacket`、数
 return { packets: [new SignalPacket("", packet.signals)] };
 
 // 注入上下文给下游节点
-return { context: { onToolComplete: () => console.log("done") } };
+return { acc: { onToolComplete: () => console.log("done") } };
 
 // 改写后续路由
 return { redirect: "alternate-child" };
@@ -237,8 +237,8 @@ return { stop: true };
 当前推荐的挂载方式有三类：
 
 - `mount(path, handler, options)`：挂载普通运行时节点
-- `mountWorkflow(path, workflow, workflowContext)`：挂载 workflow 节点
-- `mountSubDAG(basePath, subDAGDefinition, mountContext)`：挂载结构化输入子图
+- `mountWorkflow(path, workflow)`：挂载 workflow 节点
+- `mountSubDAG(basePath, subDAGDefinition)`：挂载结构化输入子图
 
 ### Workflow 挂载约定
 
@@ -333,6 +333,9 @@ viewport.addEdge(
 - 累积上下文只能追加，不能覆盖
 - `handler` 与 `tool` 不能在同一结构化节点上同时声明
 - 节点身份由 id 决定，路径只是一条可达路由表示
+- `addEdge()` 和 `mountSubDAG()` 在形成环时直接抛错，不允许构造 cyclic 图
+- DAG handler 必须是同步函数；返回 Promise 会在 strict 模式下抛错，非 strict 模式下静默忽略
+- `DevicesDAG` 构造选项 `strict: true` 时，handler 报错直接抛出而非 `console.error` 吞掉
 
 ## 相关文档
 
