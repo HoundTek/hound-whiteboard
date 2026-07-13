@@ -37,24 +37,32 @@ function createCanvasToWorldPrefixHandler() {
         return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
       }
 
-      const transformedSignals = packet.signals.map((signal) => {
-        if (signal.type === "position" && signal.context?.value) {
-          const raw = signal.context.value;
-          const canvasPos =
-            raw instanceof Vector ? raw : new Vector(raw.x, raw.y);
+      // 优先委托 viewport.convertCanvasSignalsToWorld，保证与 device 内转换逻辑一致
+      let transformedSignals;
+      if (typeof viewport.convertCanvasSignalsToWorld === "function") {
+        transformedSignals = viewport.convertCanvasSignalsToWorld(
+          packet.signals,
+        );
+      } else {
+        transformedSignals = packet.signals.map((signal) => {
+          if (signal.type === "position" && signal.context?.value) {
+            const raw = signal.context.value;
+            const canvasPos =
+              raw instanceof Vector ? raw : new Vector(raw.x, raw.y);
 
-          const worldPos = new Vector(
-            canvasPos.x / viewport.zoom + viewport.origin.x,
-            canvasPos.y / viewport.zoom + viewport.origin.y,
-          );
+            const worldPos = new Vector(
+              canvasPos.x / viewport.zoom + viewport.origin.x,
+              canvasPos.y / viewport.zoom + viewport.origin.y,
+            );
 
-          return {
-            ...signal,
-            context: { ...signal.context, value: worldPos },
-          };
-        }
-        return signal;
-      });
+            return {
+              ...signal,
+              context: { ...signal.context, value: worldPos },
+            };
+          }
+          return signal;
+        });
+      }
 
       return ctx.routeToChild(ctx.defaultRoute || "", transformedSignals);
     },

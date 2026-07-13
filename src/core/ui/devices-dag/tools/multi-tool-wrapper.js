@@ -52,10 +52,16 @@ class MultiToolWrapper extends Tool {
   #entryFactory;
 
   /**
-   * touchId 到入口节点的映射
-   * @type {Map<string, DevicesDAGNode>}
+   * touchId 到会话信息的映射
+   * @type {Map<string, { sessionId: number, entry: DevicesDAGNode, createdAt: number }>}
    */
   #instances = new Map();
+
+  /**
+   * 会话 id 分配计数器
+   * @type {number}
+   */
+  #nextSessionId = 0;
 
   /**
    * @param {(touchId: string) => DevicesDAGNode} entryFactory - 入口节点工厂函数，每次新触点时调用返回入口节点
@@ -63,6 +69,30 @@ class MultiToolWrapper extends Tool {
   constructor(entryFactory) {
     super();
     this.#entryFactory = entryFactory;
+  }
+
+  /**
+   * 获取当前活跃触点数量
+   * @description 供外部调试与 tool-switcher 等编排模块观察当前并发会话数。
+   * @returns {number}
+   */
+  getActiveTouchCount() {
+    return this.#instances.size;
+  }
+
+  /**
+   * 获取会话调试信息
+   * @description 返回当前活跃会话的摘要列表，供调试观察。
+   * @returns {Array<{ touchId: string, sessionId: number, createdAt: number }>}
+   */
+  getSessionDebugInfo() {
+    return Array.from(this.#instances.entries()).map(
+      ([touchId, session]) => ({
+        touchId,
+        sessionId: session.sessionId,
+        createdAt: session.createdAt,
+      }),
+    );
   }
 
   /**
@@ -120,7 +150,12 @@ class MultiToolWrapper extends Tool {
     const isFirstTouch = this.#instances.size === 0;
 
     const entry = this.#entryFactory(touchId);
-    this.#instances.set(touchId, entry);
+    const sessionId = this.#nextSessionId++;
+    this.#instances.set(touchId, {
+      sessionId,
+      entry,
+      createdAt: Date.now(),
+    });
 
     if (isFirstTouch) {
       this.beginAction(deviceContext);
@@ -140,8 +175,9 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   #updateTouch(touchId, contact, deviceContext) {
-    const entry = this.#instances.get(touchId);
-    if (!entry) return;
+    const session = this.#instances.get(touchId);
+    if (!session) return;
+    const entry = session.entry;
 
     const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
@@ -156,8 +192,9 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   #endTouch(touchId, deviceContext) {
-    const entry = this.#instances.get(touchId);
-    if (!entry) return;
+    const session = this.#instances.get(touchId);
+    if (!session) return;
+    const entry = session.entry;
 
     const packet = new SignalPacket("", [
       { type: "end", context: {} },
@@ -215,7 +252,8 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   completeAction(context = {}) {
-    for (const [touchId, entry] of this.#instances) {
+    for (const [, session] of this.#instances) {
+      const entry = session.entry;
       const packet = new SignalPacket("", [
         { type: "end", context: {} },
       ]);
@@ -233,7 +271,8 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   cancelAction(context = {}) {
-    for (const [touchId, entry] of this.#instances) {
+    for (const [, session] of this.#instances) {
+      const entry = session.entry;
       const packet = new SignalPacket("", [
         { type: "cancel", context: {} },
       ]);
@@ -262,6 +301,7 @@ class MultiToolWrapper extends Tool {
    */
   reset() {
     this.#instances.clear();
+    this.#nextSessionId = 0;
     this.isActionActive = false;
   }
 }

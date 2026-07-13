@@ -394,4 +394,75 @@ describe("MultiToolWrapper", () => {
       { type: "end", value: null },
     ]);
   });
+
+  describe("会话可观察性", () => {
+    test("getActiveTouchCount 应反映当前活跃触点数", () => {
+      const instances = [];
+      const wrapper = new MultiToolWrapper(createTrackedTool(instances));
+      expect(wrapper.getActiveTouchCount()).toBe(0);
+
+      wrapper.process(
+        buildContactsPacket([{ touchId: "t1", position: { x: 1, y: 1 } }]),
+        defaultCtx,
+      );
+      expect(wrapper.getActiveTouchCount()).toBe(1);
+
+      wrapper.process(
+        buildContactsPacket(
+          [{ touchId: "t2", position: { x: 5, y: 5 } }],
+          [{ touchId: "t1", position: { x: 2, y: 2 } }],
+        ),
+        defaultCtx,
+      );
+      expect(wrapper.getActiveTouchCount()).toBe(2);
+
+      // t1 抬起
+      wrapper.process(
+        buildContactsPacket([{ touchId: "t1" }], [
+          { touchId: "t2", position: { x: 5, y: 5 } },
+        ]),
+        defaultCtx,
+      );
+      expect(wrapper.getActiveTouchCount()).toBe(1);
+    });
+
+    test("getSessionDebugInfo 应返回会话摘要", () => {
+      const instances = [];
+      const wrapper = new MultiToolWrapper(createTrackedTool(instances));
+
+      wrapper.process(
+        buildContactsPacket([{ touchId: "t1", position: { x: 1, y: 1 } }]),
+        defaultCtx,
+      );
+
+      const sessions = wrapper.getSessionDebugInfo();
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].touchId).toBe("t1");
+      expect(sessions[0].sessionId).toBe(0);
+      expect(typeof sessions[0].createdAt).toBe("number");
+    });
+
+    test("reset 应清空会话并重置 sessionId 计数器", () => {
+      const instances = [];
+      const wrapper = new MultiToolWrapper(createTrackedTool(instances));
+
+      wrapper.process(
+        buildContactsPacket([{ touchId: "t1", position: { x: 1, y: 1 } }]),
+        defaultCtx,
+      );
+      expect(wrapper.getActiveTouchCount()).toBe(1);
+
+      wrapper.reset();
+      expect(wrapper.getActiveTouchCount()).toBe(0);
+      expect(wrapper.getSessionDebugInfo()).toHaveLength(0);
+
+      // reset 后新触点应从 sessionId=0 重新开始
+      wrapper.process(
+        buildContactsPacket([{ touchId: "t2", position: { x: 2, y: 2 } }]),
+        defaultCtx,
+      );
+      const sessions = wrapper.getSessionDebugInfo();
+      expect(sessions[0].sessionId).toBe(0);
+    });
+  });
 });

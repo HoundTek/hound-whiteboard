@@ -135,9 +135,7 @@ import { createMouseDevice, DEVICE_DEFAULT_ROUTE } from "../devices/index.js";
 
 进入鼠标设备的 `position` 信号 `context.value` 应为 **canvas 相对坐标**（即 DOM 坐标减去 `canvas.getBoundingClientRect().left/top`）。
 
-坐标转换在鼠标设备根节点中自动完成，下游通道节点输出的 `context.value` 已是世界坐标。
-
-如果需要在非标准场景下手动进行坐标转换，可使用 `createCanvasToWorldPrefixHandler`。详见 [canvas-to-world-handler 文档](../../prefixes/docs/canvas-to-world-handler-document.md)。
+坐标转换在鼠标设备根节点中自动完成，下游通道节点输出的 `context.value` 已是世界坐标。`createCanvasToWorldPrefixHandler` 使用同一套转换逻辑（委托 `viewport.convertCanvasSignalsToWorld`），用于非标准场景下在设备与 workflow 之间插入边级 prefix。详见 [canvas-to-world-handler 文档](../../prefixes/docs/canvas-to-world-handler-document.md)。
 
 ## 设计要点
 

@@ -138,6 +138,33 @@ viewport.mountWorkflow("touch-stroke", multiStroke, [
 - 不处理 `cancel` 信号——触点 `touchcancel` 到设备层时已转为 `changedTouchId` 不在 `contacts` 中的情况，走 `#endTouch` 路径
 - `#endTouch` 在发送 `end` 信号后递归遍历子图节点调用 `handler.dispose()` 清理外部资源（如 overlay）
 
+## 会话模型
+
+每个触点对应一个独立会话，会话信息包括：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `sessionId` | `number` | 递增分配的唯一会话 id |
+| `entry` | `DevicesDAGNode` | 会话的入口节点 |
+| `createdAt` | `number` | 会话创建时间戳 |
+
+### 可观察方法
+
+| 方法 | 返回值 | 说明 |
+| --- | --- | --- |
+| `getActiveTouchCount()` | `number` | 当前活跃触点数 |
+| `getSessionDebugInfo()` | `Array<{ touchId, sessionId, createdAt }>` | 活跃会话摘要列表 |
+
+### 独立子图与主 DAG 的关系
+
+per-touch 子图通过 `DevicesDAGNode.createGraph()` 创建，脱离主 DAG 运行。这意味着：
+
+- `dag === null`：子图内 `getNodeState` / `setNodeState` 退化为仅读写本节点 `state`
+- 子图节点不注册到主 DAG 的全局节点表
+- 子图节点不可通过 `dag.getNode(path)` 访问
+
+这是当前的设计选择：per-touch 子图是短暂的（随触点创建和销毁），不需要跨节点状态访问和主 DAG 可观察性。如果未来需要更强的可观察性，可考虑引入正式的 `SubgraphSession` 抽象，将会话注册到主 DAG 的调试层。
+
 ## 相关文档
 
 - [touchscreen-device 文档](../../devices/docs/device-document.md)

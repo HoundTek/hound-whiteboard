@@ -239,4 +239,45 @@ describe("createCanvasToWorldPrefixHandler", () => {
       new Vector(100, 200),
     );
   });
+
+  test("prefix 应优先委托 viewport.convertCanvasSignalsToWorld 保持逻辑一致", () => {
+    let delegatedCallCount = 0;
+    const mockViewport = {
+      zoom: 2,
+      origin: { x: 100, y: 200 },
+      convertCanvasSignalsToWorld(signals) {
+        delegatedCallCount++;
+        return signals.map((signal) => {
+          if (signal.type === "position" && signal.context?.value) {
+            const raw = signal.context.value;
+            return {
+              ...signal,
+              context: {
+                ...signal.context,
+                value: {
+                  x: raw.x / this.zoom + this.origin.x,
+                  y: raw.y / this.zoom + this.origin.y,
+                },
+              },
+            };
+          }
+          return signal;
+        });
+      },
+    };
+    const { dag, viewportId } = setupDAG(mockViewport);
+
+    dag.dispatch({
+      to: `/${viewportId}/mouse/pointer`,
+      signals: [
+        {
+          type: "position",
+          context: { value: new Vector(100, 200) },
+        },
+      ],
+    });
+
+    // prefix 应委托 viewport.convertCanvasSignalsToWorld
+    expect(delegatedCallCount).toBe(1);
+  });
 });
