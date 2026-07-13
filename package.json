@@ -81,6 +81,7 @@
     "react": "18"
   },
   "jest": {
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": ["<rootDir>/src/core/test-support/jest-setup.js"]
   }
 }

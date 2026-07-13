@@ -1283,7 +1283,58 @@ describe("DevicesDAG", () => {
       dag.unmount("/route-a");
       expect(dag.getNode("/route-a")).toBeUndefined();
       // route-b 仍然可达
+      expect(dag.getNode("/route-b")).toBeDefined();
       expect(dag.getNode("/route-b")).toBe(dag.getNode("/shared"));
+    });
+
+    test("unmount 多入边共享节点后另一路径 dispatch 仍有效", () => {
+      const dag = new DevicesDAG();
+      const calls = [];
+      dag.ensureNode("/shared");
+      dag.configureNode("/shared", {
+        handler: (pkt) => {
+          calls.push(pkt.signals[0].type);
+          return { stop: true };
+        },
+      });
+      dag.addEdge("/", "route-a", "/shared");
+      dag.addEdge("/", "route-b", "/shared");
+
+      dag.unmount("/route-a");
+
+      // route-b 路径 dispatch 仍能到达 /shared
+      dag.dispatch({
+        to: "/route-b",
+        signals: [{ type: "ping" }],
+      });
+      expect(calls).toEqual(["ping"]);
+    });
+
+    test("unmount 多入边共享子图只清理孤立部分", () => {
+      const dag = new DevicesDAG();
+      const umountCalls = [];
+      // /parent-a → /shared-child → /shared-grandchild
+      // /parent-b → /shared-child → /shared-grandchild
+      dag.ensureNode("/shared-child");
+      dag.ensureNode("/shared-grandchild");
+      dag.addEdge("/", "parent-a", "/shared-child");
+      dag.addEdge("/", "parent-b", "/shared-child");
+      dag.addEdge("/shared-child", "child", "/shared-grandchild");
+      dag.configureNode("/shared-grandchild", {
+        umount(ctx) {
+          umountCalls.push(ctx.path);
+        },
+      });
+
+      // 卸载 parent-a 路径
+      dag.unmount("/parent-a");
+
+      // shared-child 仍有 parent-b 入边，不应被卸载
+      expect(dag.getNode("/parent-b")).toBeDefined();
+      expect(dag.getNode("/shared-child")).toBeDefined();
+      // shared-grandchild 仍可达，umount 钩子不应被调用
+      expect(dag.getNode("/shared-child/child")).toBeDefined();
+      expect(umountCalls).toEqual([]);
     });
 
     test("unmountWorkflow 应委托 unmount", () => {

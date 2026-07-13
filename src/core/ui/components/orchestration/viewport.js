@@ -710,11 +710,9 @@ class Viewport {
     }
 
     return this.devicesDAG.unmountWorkflow(workflowPath, {
-      acc: {
-        board: this.board,
-        boardApi: this.board?.getBoardApi?.(),
-        viewport: this,
-      },
+      board: this.board,
+      boardApi: this.board?.getBoardApi?.(),
+      viewport: this,
     });
   }
 

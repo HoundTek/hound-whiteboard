@@ -29,7 +29,11 @@ function createCanvasToWorldPrefixHandler() {
     handle(packet, ctx) {
       const viewport = ctx.acc?.viewport;
 
-      if (!viewport || typeof viewport.zoom !== "number") {
+      if (
+        !viewport ||
+        typeof viewport.zoom !== "number" ||
+        !viewport.origin
+      ) {
         return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
       }
 

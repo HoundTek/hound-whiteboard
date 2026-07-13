@@ -95,10 +95,14 @@ function createToolSwitcherSubDAG(options = {}) {
     if (switchSignal) {
       const target = switchSignal?.context?.activeTool;
       if (typeof target === "string" && target && target !== routeTarget) {
-        ctx.routeToChild(routeTarget, [
-          { type: "end-action", context: {} },
-        ]);
+        const oldTarget = routeTarget;
         routeTarget = target;
+        // 先向旧工具发送 end-action 让其优雅收尾，再切换路由目标
+        if (oldTarget) {
+          return ctx.routeToChild(oldTarget, [
+            { type: "end-action", context: {} },
+          ]);
+        }
       }
       return ctx.stop();
     }

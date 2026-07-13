@@ -812,36 +812,39 @@ class DevicesDAG {
 
     const target = lastEdge.target;
 
-    // 执行卸载钩子（深度优先：先子后父）
-    this._umountSubgraph(target, context);
+    // 先断开指定路径的最后一条入边，再递归清理因此变成孤立的节点
+    this._disconnectEdge(lastEdge);
+    this._umountSubgraph(target, context, new Set(), absolutePath);
     return true;
   }
 
   /**
    * 深度优先执行卸载钩子并清理子图
+   * @description
+   * 仅清理因入边断开而变成孤立的节点（inEdges.size === 0）。
+   * 仍有其他入边的节点（多入边共享节点）保持不动。
    * @param {DevicesDAGNode} root - 子图根节点
    * @param {Record<string, any>} context - 卸载上下文
    * @param {Set<number>} [visited=new Set()] - 已访问节点
+   * @param {string} [nodePath=""] - 当前节点的路径（由调用方传入，因断边后 getNodePath 不可用）
    * @private
    */
-  _umountSubgraph(root, context = {}, visited = new Set()) {
+  _umountSubgraph(root, context = {}, visited = new Set(), nodePath = "") {
     if (!root || visited.has(root.id)) return;
+    if (root === this._ghost || root === this._root) return;
+    // 仅清理因入边断开而变成孤立的节点；仍有其他入边的节点保持不动
+    if (root.inEdges.size > 0) return;
+
     visited.add(root.id);
 
-    // 在断开边之前解析路径（断开后节点将不可达）
-    const nodePath = this.getNodePath(root) ?? "";
-
-    // 先递归卸载所有后继
+    // 先断开出边再递归，使子节点的孤立检测能正确反映边变化
     const outgoingEdges = [...root.outEdges.values()];
     for (const edge of outgoingEdges) {
-      this._umountSubgraph(edge.target, context, visited);
+      const childPath = nodePath
+        ? `${nodePath}/${edge.name}`
+        : `/${edge.name}`;
       this._disconnectEdge(edge);
-    }
-
-    // 清理入边
-    const incomingEdges = [...root.inEdges];
-    for (const edge of incomingEdges) {
-      this._disconnectEdge(edge);
+      this._umountSubgraph(edge.target, context, visited, childPath);
     }
 
     // 执行卸载钩子
