@@ -182,5 +182,5 @@ objects/chunk{ownerChunkId}/{objectId}.json
 ## 相关文档
 
 - [file-structure.md](../../docs/file-structure.md)
-- [board-core-document.md](../../worker/components/orchestration/docs/board-core-document.md)
-- [chunk-object-manager-document.md](../../worker/components/chunk/docs/chunk-object-manager-document.md)
+- [board-core-document.md](../../engine/orchestration/docs/board-core-document.md)
+- [chunk-object-manager-document.md](../../engine/chunk/docs/chunk-object-manager-document.md)

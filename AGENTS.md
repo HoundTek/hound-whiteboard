@@ -35,40 +35,20 @@ yarn bench:io:direct            # I/O 直连基准
 
 ```
 src/
-├── core/
-│   ├── ui/                  # UI 线程（输入编排、工具、overlay）
-│   │   ├── components/      #   Board / Viewport / UiRenderer
-│   │   ├── devices-dag/     #   DAG 输入路由图 + 设备 + 工具 + 编排
-│   │   │   ├── devices/     #     物理设备抽象（mouse/keyboard/touchscreen）
-│   │   │   ├── tools/       #     交互工具
-│   │   │   │   ├── creator/ #       创建工具（stroke/circle/polygon/obj）
-│   │   │   │   ├── modifier/#       修改工具（手势位移）
-│   │   │   │   ├── chooser/ #       选择工具
-│   │   │   │   └── eraser/  #       擦除工具
-│   │   │   └── prefixes/     #     handoff 控制权转移
-│   │   └── frame/           #   Frame 合成层
-│   ├── worker/              # Core Worker（对象、区块、渲染）
-│   │   ├── components/
-│   │   │   ├── orchestration/ #   BoardCore / ViewportCore
-│   │   │   ├── chunk/         #   区块、加载器、静态图
-│   │   │   └── renderer/      #   BaseRenderer / LiveRenderer
-│   │   └── hit/               #   撤销树、操作历史
-│   ├── shared/              # 跨线程共享纯逻辑
-│   │   ├── objects/         #   对象模型（BasicObj, Stroke, 几何图形）
-│   │   ├── range/           #   几何范围抽象
-│   │   ├── renderer/        #   渲染器基类、脏区调度
-│   │   └── types/           #   跨线程共享类型定义
-│   ├── bridges/             # Worker ↔ UI RPC 桥接
-│   ├── utils/               # 通用工具（数学、图、事件总线等）
-│   ├── docs/                # 核心架构文档
-│   └── test-support/        # 测试 mock 支撑
+├── core/                    # 核心层
+│   ├── engine/              # 核心领域层（对象、几何、区块、编排、渲染基类）
+│   ├── ui-thread/           # UI 线程（Board / Viewport / DevicesDAG / Tools）
+│   ├── bridges/             # IPC 通信（多线程模式）
+│   ├── test-support/        # 测试 mock 支撑
+│   ├── tests/               # 冒烟测试
+│   └── docs/                # 架构文档
 ├── utils/                   # 应用级工具（filesys, log, safe-io）
-└── templates/               # 白板 HTML/CSS/JS 模板
-src-tauri/                   # Rust 后端（Cargo workspace）
-benchmarks/                  # 性能基准
-scripts/                     # 构建脚本系统
-├── build/                   #   构建入口、task-runner、任务定义、TUI
-└── ci/                      #   文档链接 / @module 路径检查
+├── templates/               # 白板 HTML/CSS/JS 模板
+├── src-tauri/               # Rust 后端（Cargo workspace）
+├── benchmarks/              # 性能基准
+└── scripts/                 # 构建脚本系统
+    ├── build/               # 构建入口、task-runner、任务定义、TUI
+    └── ci/                  # 文档链接 / @module 路径检查
 ```
 
 核心模块下有 `docs/{name}-document.md` 和 `tests/` 目录。
@@ -88,7 +68,7 @@ scripts/                     # 构建脚本系统
 /**
  * @file 简短描述，不加句号
  * @description 一句话职责说明，以句号结尾。
- * @module core/{path/to/module}
+ * @module engine/{path/to/module}
  * @author {git config user.name}
  */
 ```

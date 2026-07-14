@@ -7,12 +7,12 @@
  */
 
 import { createDefaultPersistenceAdapter } from "../bridges/persistence-adapter.js";
-import { BoardCore } from "../worker/components/orchestration/board-core.js";
-import { createDefaultAomRenderHooks } from "../worker/components/orchestration/aom-render-hooks.js";
-import { Chunk } from "../worker/components/chunk/chunk.js";
-import { CHUNK_LOAD_STRATEGIES } from "../worker/components/chunk/chunk-loader.js";
-import { BasicObject } from "../shared/objects/basic-obj.js";
-import { Vector } from "../utils/math.js";
+import { BoardCore } from "../engine/orchestration/board-core.js";
+import { createDefaultAomRenderHooks } from "../engine/orchestration/aom-render-hooks.js";
+import { Chunk } from "../engine/chunk/chunk.js";
+import { CHUNK_LOAD_STRATEGIES } from "../engine/chunk/chunk-loader.js";
+import { BasicObject } from "../engine/objects/basic-obj.js";
+import { Vector } from "../engine/utils/math.js";
 
 /**
  * 按 ID 创建已加载的区块

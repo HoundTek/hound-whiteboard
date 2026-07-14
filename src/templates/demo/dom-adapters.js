@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { Vector } from "../../core/utils/math.js";
+import { Vector } from "../../core/engine/utils/math.js";
 import {
   DEMO_KEYBOARD_INPUT_CODES,
   DEMO_TOOL_NAMES,

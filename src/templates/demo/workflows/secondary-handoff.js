@@ -5,9 +5,9 @@
  * @author Zhou Chenyu
  */
 
-import { createEdgePrefix, createHandoffSubDAG } from "../../../core/ui/devices-dag/prefixes/index.js";
-import { CommonObjectModifierTool } from "../../../core/ui/devices-dag/tools/modifier/common-object-modifier.js";
-import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../../core/ui/devices-dag/devices/keyboard-device.js";
+import { createEdgePrefix, createHandoffSubDAG } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
+import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
+import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../../core/ui-thread/devices-dag/devices/keyboard-device.js";
 import { buildWasdNodeConfig } from "../prefix-builders.js";
 import {
   CANCEL_KEY,

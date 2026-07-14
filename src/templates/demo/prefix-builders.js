@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../core/ui/devices-dag/devices/keyboard-device.js";
+import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/devices/keyboard-device.js";
 
 /**
  * 构建键盘触发信号转发 prefix handler

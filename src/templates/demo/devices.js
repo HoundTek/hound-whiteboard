@@ -5,13 +5,13 @@
  * @author Zhou Chenyu
  */
 
-import { createMouseDevice } from "../../core/ui/devices-dag/devices/mouse-device.js";
-import { createTouchscreenDevice } from "../../core/ui/devices-dag/devices/touchscreen-device.js";
-import { createKeyboardDevice } from "../../core/ui/devices-dag/devices/keyboard-device.js";
-import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
-import { DevicesDAGNode } from "../../core/ui/devices-dag/dag-node-edge.js";
-import { createSubDAG } from "../../core/ui/devices-dag/index.js";
-import { MultiToolWrapper } from "../../core/ui/devices-dag/tools/multi-tool-wrapper.js";
+import { createMouseDevice } from "../../core/ui-thread/devices-dag/devices/mouse-device.js";
+import { createTouchscreenDevice } from "../../core/ui-thread/devices-dag/devices/touchscreen-device.js";
+import { createKeyboardDevice } from "../../core/ui-thread/devices-dag/devices/keyboard-device.js";
+import { StrokeCreatorTool } from "../../core/ui-thread/devices-dag/tools/creator/stroke-creator.js";
+import { DevicesDAGNode } from "../../core/ui-thread/devices-dag/dag-node-edge.js";
+import { createSubDAG } from "../../core/ui-thread/devices-dag/index.js";
+import { MultiToolWrapper } from "../../core/ui-thread/devices-dag/tools/multi-tool-wrapper.js";
 import {
   DEMO_STROKE_WIDTH,
   DEMO_WORKFLOW_NAMES,

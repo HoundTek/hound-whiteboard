@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createEdgePrefix } from "../../../core/ui/devices-dag/prefixes/index.js";
+import { createEdgePrefix } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
 import { createRandomCircleSubDAG } from "../random-circle-creator-tool.js";
 import { buildKeyboardTriggerForwardNodeConfig } from "../prefix-builders.js";
 import {

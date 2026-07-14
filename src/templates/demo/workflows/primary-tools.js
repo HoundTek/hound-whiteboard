@@ -5,14 +5,14 @@
  * @author Zhou Chenyu
  */
 
-import { createButtonGroupDevice } from "../../../core/ui/devices-dag/devices/button-group-device.js";
+import { createButtonGroupDevice } from "../../../core/ui-thread/devices-dag/devices/button-group-device.js";
 import {
   createHandoffSubDAG,
   createToolSwitcherSubDAG,
-} from "../../../core/ui/devices-dag/prefixes/index.js";
-import { CircleCreatorTool } from "../../../core/ui/devices-dag/tools/creator/circle-creator.js";
-import { RectangleObjectChooserTool } from "../../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
-import { CommonObjectModifierTool } from "../../../core/ui/devices-dag/tools/modifier/common-object-modifier.js";
+} from "../../../core/ui-thread/devices-dag/prefixes/index.js";
+import { CircleCreatorTool } from "../../../core/ui-thread/devices-dag/tools/creator/circle-creator.js";
+import { RectangleObjectChooserTool } from "../../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js";
+import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
 import {
   DEMO_CIRCLE_STROKE_COLOR,
   DEMO_STROKE_WIDTH,

@@ -200,5 +200,5 @@ chunks/{chunkId}/
 
 - [core-data-model.md](./core-data-model.md)
 - [core-overview.md](./core-overview.md)
-- [board-core-document.md](../worker/components/orchestration/docs/board-core-document.md)
+- [board-core-document.md](../engine/orchestration/docs/board-core-document.md)
 - [file-operate-document.md](../bridges/docs/file-operate-document.md)

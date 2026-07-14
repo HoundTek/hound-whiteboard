@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { StrokeCreatorTool } from "../../core/ui/devices-dag/tools/creator/stroke-creator.js";
-import { RectangleObjectChooserTool } from "../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js";
+import { StrokeCreatorTool } from "../../core/ui-thread/devices-dag/tools/creator/stroke-creator.js";
+import { RectangleObjectChooserTool } from "../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js";
 import { DebuggerTool } from "./debugger-tool.js";
 import { ViewportTool } from "./viewport-tool.js";
 import { mountDemoDevices } from "./devices.js";

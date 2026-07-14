@@ -154,7 +154,7 @@ sequenceDiagram
 
 ## 相关文档
 
-- [board-core-document.md](../../worker/components/orchestration/docs/board-core-document.md)
-- [active-object-manager-document.md](../../worker/components/orchestration/docs/active-object-manager-document.md)
+- [board-core-document.md](../../engine/orchestration/docs/board-core-document.md)
+- [active-object-manager-document.md](../../engine/orchestration/docs/active-object-manager-document.md)
 - [core-modules.md](../../docs/core-modules.md)
-- [board-api-types.js](../../shared/types/board-api-types.js)
+- [board-api-types.js](../../engine/types/board-api-types.js)

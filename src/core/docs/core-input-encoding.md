@@ -229,7 +229,7 @@ canvasY = clientY - canvas.getBoundingClientRect().top
 ## 相关文档
 
 - [Core 输入流](./core-input-flow.md)
-- [SignalPacket](../ui/devices-dag/docs/signal-document.md)
-- [设备定义](../ui/devices-dag/devices/docs/device-document.md)
-- [鼠标设备](../ui/devices-dag/devices/docs/mouse-device-document.md)
-- [canvas-to-world-handler](../ui/devices-dag/prefixes/docs/canvas-to-world-handler-document.md)
+- [SignalPacket](../ui-thread/devices-dag/docs/signal-document.md)
+- [设备定义](../ui-thread/devices-dag/devices/docs/device-document.md)
+- [鼠标设备](../ui-thread/devices-dag/devices/docs/mouse-device-document.md)
+- [canvas-to-world-handler](../ui-thread/devices-dag/prefixes/docs/canvas-to-world-handler-document.md)

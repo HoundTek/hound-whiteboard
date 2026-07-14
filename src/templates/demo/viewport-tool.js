@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { Tool } from "../../core/ui/devices-dag/tools/tool.js";
+import { Tool } from "../../core/ui-thread/devices-dag/tools/tool.js";
 
 /**
  * Demo 专用 Viewport 视口工具

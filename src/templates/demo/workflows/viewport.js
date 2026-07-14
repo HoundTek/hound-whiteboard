@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { createEdgePrefix } from "../../../core/ui/devices-dag/prefixes/index.js";
+import { createEdgePrefix } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
 import {
   buildViewportFlushNodeConfig,
   buildViewportPositionNodeConfig,

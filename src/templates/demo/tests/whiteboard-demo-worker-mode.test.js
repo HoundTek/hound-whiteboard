@@ -2,14 +2,14 @@
  * @jest-environment node
  */
 
-import { Board } from "../../../core/ui/components/orchestration/board.js";
-import { Viewport } from "../../../core/ui/components/orchestration/viewport.js";
-import { createCoreWorkerRuntime } from "../../../core/worker/core-worker.js";
+import { Board } from "../../../core/ui-thread/components/orchestration/board.js";
+import { Viewport } from "../../../core/ui-thread/components/orchestration/viewport.js";
+import { createCoreWorkerRuntime } from "../../../core/engine/core-worker.js";
 import {
   createNoopCanvas,
   installNoopOffscreenCanvas,
 } from "../../../core/test-support/noop-canvas.js";
-import { Vector } from "../../../core/utils/math.js";
+import { Vector } from "../../../core/engine/utils/math.js";
 import {
   configureWhiteboardDemo,
   DEMO_PRIMARY_STROKE_COLOR,
