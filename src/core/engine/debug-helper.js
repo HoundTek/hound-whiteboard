@@ -13,7 +13,7 @@ const debugLog = new Logger("DebugHelper", "DEBUG", logBus);
 
 /**
  * 处理调试查询，输出到 Worker 控制台
- * @param {import("./components/orchestration/board-core.js").BoardCore} boardCore - BoardCore 实例
+ * @param {import("./orchestration/board-core.js").BoardCore} boardCore - BoardCore 实例
  * @param {string} query - 调试查询名
  * @param {{ chunkIds?: number[], [key: string]: any }} [params={}] - 查询参数
  * @returns {void}
@@ -39,7 +39,7 @@ function handleDebugQuery(boardCore, query, params = {}) {
 
 /**
  * 输出所有区块加载状态
- * @param {import("./components/orchestration/board-core.js").BoardCore} boardCore
+ * @param {import("./orchestration/board-core.js").BoardCore} boardCore
  * @returns {void}
  */
 function logChunkLoadState(boardCore) {
@@ -55,7 +55,7 @@ function logChunkLoadState(boardCore) {
 
 /**
  * 输出所有对象加载状态
- * @param {import("./components/orchestration/board-core.js").BoardCore} boardCore
+ * @param {import("./orchestration/board-core.js").BoardCore} boardCore
  * @returns {void}
  */
 function logObjectLoadState(boardCore) {
@@ -75,7 +75,7 @@ function logObjectLoadState(boardCore) {
 
 /**
  * 输出 AOM 各层详情
- * @param {import("./components/orchestration/board-core.js").BoardCore} boardCore
+ * @param {import("./orchestration/board-core.js").BoardCore} boardCore
  * @returns {void}
  */
 function logAomState(boardCore) {
@@ -105,7 +105,7 @@ function logAomState(boardCore) {
 /**
  * 输出区块静态图详情
  * @description 若 chunkIds 为空或未提供，则输出所有已加载区块的详情。
- * @param {import("./components/orchestration/board-core.js").BoardCore} boardCore
+ * @param {import("./orchestration/board-core.js").BoardCore} boardCore
  * @param {number[]} [chunkIds] - 区块 id 列表
  * @returns {void}
  */
@@ -142,7 +142,7 @@ function logChunksDetail(boardCore, chunkIds) {
 /**
  * 输出对象详情
  * @description 按 objectIds 或 chunkIds 查询；都不传则输出所有已加载对象。
- * @param {import("./components/orchestration/board-core.js").BoardCore} boardCore
+ * @param {import("./orchestration/board-core.js").BoardCore} boardCore
  * @param {{ objectIds?: number[], chunkIds?: number[] }} params - 查询参数
  * @returns {void}
  */
@@ -200,7 +200,7 @@ function logObjectsDetail(boardCore, params = {}) {
 
 /**
  * 输出 Worker 侧 BoardCore 摘要
- * @param {import("./components/orchestration/board-core.js").BoardCore} boardCore
+ * @param {import("./orchestration/board-core.js").BoardCore} boardCore
  * @returns {void}
  */
 function logBoardState(boardCore) {

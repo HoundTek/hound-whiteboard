@@ -23,7 +23,7 @@ import {
 /**
  * 将笔画工具直接挂载到鼠标左键
  * @description 不经过 tool-switcher，mouse/primary → primary-stroke 直连，用于测试等无需工具切换的场景。
- * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {import("../../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} primaryStrokeTool - 笔画工具实例
  * @returns {void}
  */
@@ -39,8 +39,8 @@ function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
  * 在 mouse/primary 下游挂载 tool-switcher，按当前激活工具名路由到笔画/圆/选择+修改三个子分支；
  * 同时挂载按钮组设备并建立 toolbar/button-group → tool-switcher 的双输入汇聚。
  * 本函数只做 DAG 装配，不读取 DOM；工具列表与激活回调由调用方传入。
- * @param {import("../../../core/ui/components/orchestration/board.js").Board} board - 白板实例
- * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {Object} options - 配置项
  * @param {Array<{ name: string }>} options.tools - 工具列表
  * @param {string} options.defaultTool - 默认激活工具名

@@ -439,7 +439,7 @@ class CoreWorkerRuntime {
 
   /**
    * 创建绑定到 ViewportCore 集合的 AOM 渲染钩子
-   * @returns {import("./components/orchestration/aom-render-hooks.js").AomRenderHooks}
+   * @returns {import("./orchestration/aom-render-hooks.js").AomRenderHooks}
    */
   #createViewportRenderHooks() {
     return {
@@ -447,7 +447,7 @@ class CoreWorkerRuntime {
        * 刷新所有 ViewportCore 的活动层
        * @description
        * 仅失效显式传入的对象。未传对象时刷新全部活动 drawable。
-       * @param {import("../shared/objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
+       * @param {import("./objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
        */
       requestActiveRender: (objectInstances = []) => {
         if (this.#viewportCores.size === 0) return;
@@ -470,7 +470,7 @@ class CoreWorkerRuntime {
 
       /**
        * 刷新所有 ViewportCore 的静态层
-       * @param {import("./components/chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
+       * @param {import("./chunk/chunk.js").Chunk[]} chunks - 需要刷新的区块
        */
       requestStaticRender: (chunks = []) => {
         if (this.#viewportCores.size === 0) return;
@@ -488,8 +488,8 @@ class CoreWorkerRuntime {
 
       /**
        * 按对象范围刷新 ViewportCore 的静态层
-       * @param {import("../shared/objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
-       * @param {import("./components/chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
+       * @param {import("./objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
+       * @param {import("./chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
        * @param {Map<number, import("../shared/range/index.js").RectangleRange>} previousWorldRects - 旧世界范围快照
        */
       requestStaticRenderForObjects: (
@@ -523,7 +523,7 @@ class CoreWorkerRuntime {
 
       /**
        * 刷新所有 ViewportCore 当前视口
-       * @param {import("../shared/objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象
+       * @param {import("./objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象
        */
       flushViewportForObjects: (_objectInstances = []) => {
         if (this.#viewportCores.size === 0) return;
@@ -1043,7 +1043,7 @@ function createCoreWorkerRuntime(host) {
 
 /**
  * 判断对象是否已进入 Worker 侧的区块静态图
- * @param {import("../worker/components/orchestration/board-core.js").BoardCore} boardCore - BoardCore 实例
+ * @param {import("../engine/orchestration/board-core.js").BoardCore} boardCore - BoardCore 实例
  * @param {number} objectId - 对象 id
  * @returns {boolean}
  */

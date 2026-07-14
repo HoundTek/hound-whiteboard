@@ -16,7 +16,7 @@ import {
 /**
  * 挂载随机圆 workflow
  * @description Space 键的 trigger 信号经转发 prefix 进入随机圆子图，由子图内部生成随机参数并创建圆对象。
- * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @returns {void}
  */
 function mountRandomCircle(viewport) {

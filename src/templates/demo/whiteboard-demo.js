@@ -60,8 +60,8 @@ export {
  * 视口控制、调试等 workflow。本函数不挂载 mouse/primary 上的左键工具——由调用方通过
  * {@link mountPrimaryStrokeTool} 或 {@link mountToolSwitcher} 显式选择左键路由。
  *
- * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
- * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {Object} [options={}] - 可选覆盖配置
  * @param {ViewportTool} [options.viewportTool] - 自定义视口工具实例
  * @param {DebuggerTool} [options.debugTool] - 自定义调试工具实例

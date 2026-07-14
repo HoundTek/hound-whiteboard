@@ -77,8 +77,8 @@ function ensureBoardCoreChunkLoaded(boardCore, chunkId, options = {}) {
  *   rootPath?: string,
  *   chunkIds?: Iterable<number>,
  *   chunkStrategy?: "temp" | "full",
- *   aomRenderHooks?: import("../worker/components/orchestration/board-core.js").AomRenderHooks,
- *   persistenceAdapter?: import("../worker/components/orchestration/board-core.js").PersistenceAdapter,
+ *   aomRenderHooks?: import("../engine/orchestration/board-core.js").AomRenderHooks,
+ *   persistenceAdapter?: import("../engine/orchestration/board-core.js").PersistenceAdapter,
  * }} [options={}] - BoardCore 初始化选项
  * @returns {{
  *   boardCore: BoardCore,

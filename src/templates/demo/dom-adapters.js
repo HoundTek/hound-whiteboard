@@ -19,8 +19,8 @@ import {
  * @description
  * 使用 Pointer Events 统一处理鼠标、触摸和笔输入；pointerdown 时 setPointerCapture
  * 保证指针离开 canvas 后仍能收到后续事件。鼠标走 mouse 设备，触摸/笔走 touchscreen 设备。
- * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
- * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("./log.js").DemoLog} demoLog - demo 日志器
  * @returns {() => void} 解绑函数
  */
@@ -135,8 +135,8 @@ function logPointerDown(event, demoLog) {
  * @description
  * 仅处理 demo 关心的键位（见 DEMO_KEYBOARD_INPUT_CODES），跳过含 meta/ctrl 的组合键。
  * Enter/Escape 额外向 tool-switcher 发送 success/cancel，使左键选择工具也能响应确认/取消。
- * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
- * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("./log.js").DemoLog} demoLog - demo 日志器
  * @returns {() => void} 解绑函数
  */
@@ -222,8 +222,8 @@ function attachKeyboardAdapter(viewport, board, demoLog) {
  * @description
  * 读取 .toolbar-btn 按钮列表，将 pointerdown 翻译为 button-press 信号发往按钮组设备；
  * 返回工具列表、默认工具名与激活切换回调，供 mountToolSwitcher 使用。
- * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
- * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @returns {{ tools: Array<{ name: string }>, defaultTool: string, onToolChange: (activeTool: string) => void, cleanup: () => void } | null}
  */
 function attachToolbarAdapter(board, viewport) {
@@ -280,8 +280,8 @@ function attachToolbarAdapter(board, viewport) {
  * @description
  * 监听 #app-left 上的滚轮事件，将滚动偏移转换为视口平移信号（scroll-to-pan）。
  * 支持 Magic Mouse、触控板与鼠标滚轮。使用 passive: false 确保能 preventDefault。
- * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
- * @param {import("../../core/ui/components/orchestration/board.js").Board} board - 白板实例
+ * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
  * @param {HTMLElement} appLeft - 左侧容器元素
  * @param {Object} [options={}] - 可选参数
  * @param {number} [options.sensitivity=1] - 滚动敏感度系数（越大平移越快）
@@ -355,7 +355,7 @@ function attachWheelAdapter(viewport, board, appLeft, options = {}) {
 /**
  * 绑定窗口尺寸适配器
  * @description 窗口 resize 时同步视口根元素与各渲染层尺寸。
- * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {HTMLElement} appLeft - 左侧容器元素
  * @returns {() => void} 解绑函数
  */

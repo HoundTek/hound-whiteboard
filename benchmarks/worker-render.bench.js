@@ -4,9 +4,9 @@
  * @module benchmarks/worker-render
  */
 
-import { BoardCore } from "../src/core/worker/components/orchestration/board-core.js";
-import { ViewportCore } from "../src/core/worker/components/orchestration/viewport-core.js";
-import { deserialize } from "../src/core/shared/objects/object-deserializer.js";
+import { BoardCore } from "../src/core/engine/orchestration/board-core.js";
+import { ViewportCore } from "../src/core/engine/orchestration/viewport-core.js";
+import { deserialize } from "../src/core/engine/objects/object-deserializer.js";
 import { installNoopOffscreenCanvas } from "../src/core/test-support/noop-canvas.js";
 import { printHeader, printFooter, benchmarkSync } from "./helpers.js";
 

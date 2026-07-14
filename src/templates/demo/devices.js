@@ -22,7 +22,7 @@ import {
  * @description
  * 为视口挂载 mouse/keyboard/touchscreen 三个设备子图，并为 touchscreen/contacts 挂载
  * 多指并发笔画包装器，使每指独立创建一条笔画。
- * @param {import("../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @returns {void}
  */
 function mountDemoDevices(viewport) {

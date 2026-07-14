@@ -23,7 +23,7 @@ import {
 /**
  * 挂载视口控制 workflow
  * @description 平移键转 position 信号、缩放键转 scale 信号、刷新键转 flush 信号，全部汇聚到视口工具。
- * @param {import("../../../core/ui/components/orchestration/viewport.js").Viewport} viewport - 视口实例
+ * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {import("../viewport-tool.js").ViewportTool} viewportTool - 视口工具实例
  * @returns {void}
  */
