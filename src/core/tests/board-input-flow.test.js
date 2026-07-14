@@ -26,7 +26,7 @@ describe("Board input flow", () => {
       const sampleTool = sampleBuilder.node().handler(tool.createProcessor());
       sampleBuilder.edge("tool", sampleRoot, sampleTool);
 
-      viewport.mountSubDAG("", sampleBuilder.build());
+      viewport.inputScope.mountDevice("", sampleBuilder.build());
 
       const emitResults = board.signalsEventBus.emit("input", {
         to: "/main/sample-device",
@@ -76,13 +76,15 @@ describe("Board input flow", () => {
       const emptyBuilder = createSubDAG("/sample-device");
       emptyBuilder.node().defaultRoute("tool");
 
-      viewport.mountSubDAG("", emptyBuilder.build());
+      const scope = viewport.inputScope;
+      scope.mountDevice("", emptyBuilder.build());
 
-      const mountedNode = viewport.mountWorkflow(
-        "sample-device-tool",
-        tool,
-        [{ from: "/sample-device", edge: "tool" }],
-      );
+      const mountedNode = scope.mountWorkflow("sample-device-tool", tool);
+      scope.addEdge({
+        from: "sample-device",
+        to: "workflows/sample-device-tool",
+        name: "tool",
+      });
 
       expect(mountedNode).not.toBeNull();
       expect(
@@ -102,7 +104,7 @@ describe("Board input flow", () => {
         }),
       );
 
-      const unmounted = viewport.unmountWorkflow("sample-device-tool", [
+      const unmounted = scope.unmountWorkflow("sample-device-tool", [
         { from: "/sample-device", edge: "tool" },
       ]);
 
@@ -127,7 +129,8 @@ describe("Board input flow", () => {
     try {
       const keyboardDevice = createKeyboardDevice();
 
-      viewport.mountSubDAG("", keyboardDevice);
+      const scope = viewport.inputScope;
+      scope.mountDevice("", keyboardDevice);
 
       const receivedPackets = [];
       const workflow = {
@@ -137,26 +140,25 @@ describe("Board input flow", () => {
         },
       };
 
-      viewport.mountWorkflow("strafe-workflow", workflow, [
-        {
-          from: "/keyboard/code/KeyW",
-          edge: "default",
-          prefix: createEdgePrefix({
-            handler(packet) {
-              const signals = packet.signals
-                .filter(
-                  (signal) =>
-                    signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
-                )
-                .map(() => ({
-                  type: "position",
-                  context: { value: { x: 1, y: 0 }, code: "KeyW" },
-                }));
-              return signals.length === 0 ? [] : { signals };
-            },
-          }),
-        },
-      ]);
+      scope.mountWorkflow("strafe-workflow", workflow);
+      scope.addEdge({
+        from: "keyboard/code/KeyW",
+        to: "workflows/strafe-workflow",
+        prefix: createEdgePrefix({
+          handler(packet) {
+            const signals = packet.signals
+              .filter(
+                (signal) =>
+                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+              )
+              .map(() => ({
+                type: "position",
+                context: { value: { x: 1, y: 0 }, code: "KeyW" },
+              }));
+            return signals.length === 0 ? [] : { signals };
+          },
+        }),
+      });
 
       viewport.devicesDAG.dispatch({
         to: "/main/keyboard",

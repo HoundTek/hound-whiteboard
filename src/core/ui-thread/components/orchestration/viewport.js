@@ -9,8 +9,8 @@
 
 import { RectangleRange } from "../../../engine/range/index.js";
 import { Vector } from "../../../engine/utils/math.js";
-import { joinPath } from "../../../engine/utils/path.js";
 import { UiRenderer } from "../renderer/ui-renderer.js";
+import { InputScope } from "./input-scope.js";
 
 /**
  * 规整 requestAnimationFrame 宿主
@@ -63,7 +63,7 @@ function _coordinateToId(x, y) {
  * - 本地视口状态（原点、缩放）与坐标变换（screen↔world↔chunk）
  * - 接收 Worker 侧合成的渲染帧，绘制到 DOM canvas
  * - 持有 UiRenderer，管理 UI 覆盖层（overlay）的注册与补绘
- * - 通过 mountSubDAG / mountWorkflow 为当前视口挂载设备图子图
+ * - 提供 inputScope 供外部挂载设备子图与 workflow
  * - 通过 viewport-change 消息驱动 Worker 侧 ViewportCore 的视口同步
  * @author Zhou Chenyu
  */
@@ -91,6 +91,12 @@ class Viewport {
    * @type {UiRenderer}
    */
   uiRenderer;
+
+  /**
+   * 输入接线作用域
+   * @type {InputScope}
+   */
+  inputScope;
 
   /**
    * 当前视口原点
@@ -227,6 +233,7 @@ class Viewport {
     this.uiRenderer = new UiRenderer(this, {
       canvas: this.#uiCanvas,
     });
+    this.inputScope = new InputScope(board, this);
 
     const liveCanvasRect = this.#canvas?.getBoundingClientRect?.();
     const canvasWidth = liveCanvasRect?.width ?? this.#width;
@@ -363,9 +370,9 @@ class Viewport {
         : nextState.origin instanceof Vector
           ? nextState.origin
           : new Vector(
-            nextState.origin?.x ?? this.origin.x,
-            nextState.origin?.y ?? this.origin.y,
-          );
+              nextState.origin?.x ?? this.origin.x,
+              nextState.origin?.y ?? this.origin.y,
+            );
     const nextZoom =
       nextState.zoom === undefined
         ? this.zoom
@@ -632,103 +639,6 @@ class Viewport {
     const worldPos = this.screenToWorld(screenPos);
     if (!worldPos) return null;
     return this.worldToChunk(worldPos);
-  }
-
-  /**
-   * 挂载子图到白板级设备图
-   * @param {string} path - 子图根路径（相对于视口根）
-   * @param {import("../../devices-dag/dag.js").SubDAGDefinition} subDAGDefinition - 子图定义
-   */
-  mountSubDAG(path, subDAGDefinition) {
-    return this.devicesDAG.mountSubDAG(this.viewportId, {
-      ...subDAGDefinition,
-      rootPath: path || subDAGDefinition.rootPath,
-    });
-  }
-
-  /**
-   * 挂载 workflow 并建立边连接
-   * @description
-   * workflow 挂载在 `workflows/{name}` 路径下。edges 数组定义从其他节点到该 workflow 的有向边，
-   * 支持 prefix 子图（边级信号转换）。
-   * @param {string} name - workflow 名（挂载路径为 workflows/{name}）
-   * @param {import("../../tools/tool.js").Tool|import("../../devices-dag/dag.js").SubDAGDefinition} workflow - workflow 或子图定义
-   * @param {Array<{from: string, edge: string, prefix?: Object}>} [edges=[]] - 边列表
-   * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode|import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]}
-   */
-  mountWorkflow(name, workflow, edges = []) {
-    const path = `workflows/${name}`;
-    const workflowPath = joinPath("/", this.viewportId, path);
-
-    const mountedNode = this.devicesDAG.mountWorkflow(workflowPath, workflow);
-    const mountedNodes = Array.isArray(mountedNode) ? mountedNode : [mountedNode];
-
-    /**
-     * 在已挂载的单源单汇子图中找到汇节点
-     * @param {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]} nodes
-     * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode|undefined}
-     */
-    const findPrefixSink = (nodes) => {
-      if (nodes.length === 1) return nodes[0];
-      return nodes.find((n) => {
-        for (const outEdge of n.outEdges.values()) {
-          if (nodes.includes(outEdge.target)) return false;
-        }
-        return true;
-      });
-    };
-
-    for (const { from, edge, prefix } of edges) {
-      const sourcePath = joinPath("/", this.viewportId, from);
-
-      if (prefix) {
-        const prefixSubDAG = { ...prefix, rootPath: edge };
-        const prefixNodes = this.devicesDAG.mountSubDAG(sourcePath, prefixSubDAG);
-        const sinkNode = findPrefixSink(prefixNodes);
-        if (sinkNode?.path) {
-          this.devicesDAG.addEdge(sinkNode.path, edge, workflowPath);
-        }
-      } else {
-        this.devicesDAG.addEdge(sourcePath, edge, workflowPath);
-      }
-    }
-
-    return mountedNode;
-  }
-
-  /**
-   * 卸载 workflow 并移除边连接
-   * @param {string} name - workflow 名
-   * @param {Array<{from: string, edge: string}>} [edges=[]] - 要移除的边列表
-   * @returns {boolean}
-   */
-  unmountWorkflow(name, edges = []) {
-    const workflowPath = joinPath("/", this.viewportId, `workflows/${name}`);
-
-    for (const { from, edge } of edges) {
-      this.devicesDAG.removeEdge(joinPath("/", this.viewportId, from), edge);
-    }
-
-    return this.devicesDAG.unmountWorkflow(workflowPath, {
-      board: this.board,
-      boardApi: this.board?.getBoardApi?.(),
-      viewport: this,
-    });
-  }
-
-  /**
-   * 在白板级设备图中添加有向边
-   * @param {string} fromPath - 源节点路径（相对于视口根）
-   * @param {string} edgeName - 边名
-   * @param {string} toPath - 目标节点路径（相对于视口根）
-   * @returns {import("../../devices-dag/dag.js").DevicesDAGEdge}
-   */
-  addEdge(fromPath, edgeName, toPath) {
-    return this.devicesDAG.addEdge(
-      joinPath("/", this.viewportId, fromPath),
-      edgeName,
-      joinPath("/", this.viewportId, toPath),
-    );
   }
 
   /**

@@ -39,7 +39,7 @@ import { createSubDAG } from "../index.js";
  *   },
  * });
  *
- * // 挂载时作为 edge.prefix 传入 viewport.mountWorkflow 的 edges 参数
+ * // 挂载时作为 edge.prefix 传入 inputScope.addEdge 的 prefix 参数
  *
  * // 在 workflow 定义中使用边级 prefix 转换信号
  * const prefix = createEdgePrefix({
@@ -60,7 +60,7 @@ import { createSubDAG } from "../index.js";
  *   },
  * });
  *
- * // 挂载时作为 edge.prefix 传入 viewport.mountWorkflow 的 edges 参数
+ * // 挂载时作为 edge.prefix 传入 inputScope.addEdge 的 prefix 参数
  */
 function createEdgePrefix(handlerOrConfig, options = {}) {
   const handlerFn =

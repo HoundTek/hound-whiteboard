@@ -8,10 +8,7 @@
 import { createEdgePrefix } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
 import { createRandomCircleSubDAG } from "../random-circle-creator-tool.js";
 import { buildKeyboardTriggerForwardNodeConfig } from "../prefix-builders.js";
-import {
-  DEMO_WORKFLOW_NAMES,
-  RANDOM_CIRCLE_KEY,
-} from "../constants.js";
+import { DEMO_WORKFLOW_NAMES, RANDOM_CIRCLE_KEY } from "../constants.js";
 
 /**
  * 挂载随机圆 workflow
@@ -20,17 +17,19 @@ import {
  * @returns {void}
  */
 function mountRandomCircle(viewport) {
+  const scope = viewport.inputScope;
+  const wfName = DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE;
+
   const randomCircleSubDAG = createRandomCircleSubDAG({
-    rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE}`,
+    rootPath: `/workflows/${wfName}`,
   });
 
-  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.RANDOM_CIRCLE, randomCircleSubDAG, [
-    {
-      from: `keyboard/code/${RANDOM_CIRCLE_KEY}`,
-      edge: "default",
-      prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
-    },
-  ]);
+  scope.mountWorkflow(wfName, randomCircleSubDAG);
+  scope.addEdge({
+    from: `keyboard/code/${RANDOM_CIRCLE_KEY}`,
+    to: `workflows/${wfName}`,
+    prefix: createEdgePrefix(buildKeyboardTriggerForwardNodeConfig()),
+  });
 }
 
 export { mountRandomCircle };

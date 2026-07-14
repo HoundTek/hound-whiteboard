@@ -5,7 +5,10 @@
  * @author Zhou Chenyu
  */
 
-import { createEdgePrefix, createHandoffSubDAG } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
+import {
+  createEdgePrefix,
+  createHandoffSubDAG,
+} from "../../../core/ui-thread/devices-dag/prefixes/index.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
 import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../../core/ui-thread/devices-dag/devices/keyboard-device.js";
 import { buildWasdNodeConfig } from "../prefix-builders.js";
@@ -44,33 +47,36 @@ function buildSignalForwardNodeConfig(targetType) {
  * @returns {void}
  */
 function mountSecondaryHandoff(viewport, secondarySelectionTool) {
+  const scope = viewport.inputScope;
+  const wfName = DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER;
+
   const secondaryHandoffSubDAG = createHandoffSubDAG({
-    rootPath: `/workflows/${DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER}`,
+    rootPath: `/workflows/${wfName}`,
     first: secondarySelectionTool,
     second: new CommonObjectModifierTool(),
     autoBridgeObjects: true,
   });
 
-  const wasdEdges = WASD_KEYS.map(({ code, vector }) => ({
-    from: `keyboard/code/${code}`,
-    edge: "default",
-    prefix: createEdgePrefix(buildWasdNodeConfig(code, vector)),
-  }));
+  scope.mountWorkflow(wfName, secondaryHandoffSubDAG);
 
-  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER, secondaryHandoffSubDAG, [
-    { from: "mouse/secondary", edge: "default" },
-    {
-      from: `keyboard/code/${SUBMIT_KEY}`,
-      edge: "default",
-      prefix: createEdgePrefix(buildSignalForwardNodeConfig("success")),
-    },
-    {
-      from: `keyboard/code/${CANCEL_KEY}`,
-      edge: "default",
-      prefix: createEdgePrefix(buildSignalForwardNodeConfig("cancel")),
-    },
-    ...wasdEdges,
-  ]);
+  scope.addEdge({ from: "mouse/secondary", to: `workflows/${wfName}` });
+  scope.addEdge({
+    from: `keyboard/code/${SUBMIT_KEY}`,
+    to: `workflows/${wfName}`,
+    prefix: createEdgePrefix(buildSignalForwardNodeConfig("success")),
+  });
+  scope.addEdge({
+    from: `keyboard/code/${CANCEL_KEY}`,
+    to: `workflows/${wfName}`,
+    prefix: createEdgePrefix(buildSignalForwardNodeConfig("cancel")),
+  });
+  for (const { code, vector } of WASD_KEYS) {
+    scope.addEdge({
+      from: `keyboard/code/${code}`,
+      to: `workflows/${wfName}`,
+      prefix: createEdgePrefix(buildWasdNodeConfig(code, vector)),
+    });
+  }
 }
 
 export { mountSecondaryHandoff };

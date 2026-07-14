@@ -14,7 +14,8 @@ describe("edge.prefix", () => {
 
     try {
       const keyboardDevice = createKeyboardDevice();
-      viewport.mountSubDAG("", keyboardDevice);
+      const scope = viewport.inputScope;
+      scope.mountDevice("", keyboardDevice);
 
       const receivedPackets = [];
       const workflow = {
@@ -65,13 +66,12 @@ describe("edge.prefix", () => {
       builder.edge("next", b, c);
       const chain = builder.build();
 
-      viewport.mountWorkflow("chain-workflow", workflow, [
-        {
-          from: "/keyboard/code/KeyW",
-          edge: "default",
-          prefix: chain,
-        },
-      ]);
+      scope.mountWorkflow("chain-workflow", workflow);
+      scope.addEdge({
+        from: "keyboard/code/KeyW",
+        to: "workflows/chain-workflow",
+        prefix: chain,
+      });
 
       viewport.devicesDAG.dispatch({
         to: "/main/keyboard",
@@ -106,7 +106,8 @@ describe("edge.prefix", () => {
 
     try {
       const keyboardDevice = createKeyboardDevice();
-      viewport.mountSubDAG("", keyboardDevice);
+      const scope = viewport.inputScope;
+      scope.mountDevice("", keyboardDevice);
 
       const receivedPackets = [];
       const workflow = {
@@ -160,13 +161,12 @@ describe("edge.prefix", () => {
       builder.edge("sink", b, sink);
       const dagPrefix = builder.build();
 
-      viewport.mountWorkflow("branch-workflow", workflow, [
-        {
-          from: "/keyboard/code/KeyW",
-          edge: "default",
-          prefix: dagPrefix,
-        },
-      ]);
+      scope.mountWorkflow("branch-workflow", workflow);
+      scope.addEdge({
+        from: "keyboard/code/KeyW",
+        to: "workflows/branch-workflow",
+        prefix: dagPrefix,
+      });
 
       viewport.devicesDAG.dispatch({
         to: "/main/keyboard",

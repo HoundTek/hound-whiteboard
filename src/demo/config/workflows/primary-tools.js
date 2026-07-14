@@ -28,9 +28,12 @@ import {
  * @returns {void}
  */
 function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
-  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.PRIMARY_STROKE, primaryStrokeTool, [
-    { from: "mouse/primary", edge: "default" },
-  ]);
+  const scope = viewport.inputScope;
+  scope.mountWorkflow(DEMO_WORKFLOW_NAMES.PRIMARY_STROKE, primaryStrokeTool);
+  scope.addEdge({
+    from: "mouse/primary",
+    to: `workflows/${DEMO_WORKFLOW_NAMES.PRIMARY_STROKE}`,
+  });
 }
 
 /**
@@ -52,6 +55,8 @@ function mountToolSwitcher(board, viewport, options) {
   const vpId = viewport.viewportId;
   const { tools, defaultTool, primaryStrokeTool, onToolChange } = options;
 
+  const scope = viewport.inputScope;
+
   // 1. 按钮组设备：接收 button-press 信号，维护当前激活工具名
   const buttonGroupDef = createButtonGroupDevice({
     tools,
@@ -60,21 +65,20 @@ function mountToolSwitcher(board, viewport, options) {
       onToolChange?.(activeTool);
     },
   });
-  viewport.mountSubDAG("toolbar/button-group", buttonGroupDef);
+  scope.mountDevice("toolbar/button-group", buttonGroupDef);
 
   // 2. tool-switcher prefix：按激活工具名路由 mouse/primary 信号
   const switcherSubDAG = createToolSwitcherSubDAG({ tools, defaultTool });
-  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.TOOL_SWITCHER, switcherSubDAG, [
-    { from: "mouse/primary", edge: "default" },
-  ]);
-
-  const switcherPath = `/${vpId}/workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}`;
+  scope.mountWorkflow(DEMO_WORKFLOW_NAMES.TOOL_SWITCHER, switcherSubDAG);
+  scope.addEdge({
+    from: "mouse/primary",
+    to: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}`,
+  });
 
   // 3. 笔画分支 — 仅从 tool-switcher/stroke → default 可达
-  const strokeEdge = board.devicesDAG.addEdge(
-    `${switcherPath}/${DEMO_TOOL_NAMES.STROKE}`,
-    "default",
-  );
+  const strokeEdge = scope.addEdge({
+    from: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.STROKE}`,
+  });
   const strokeNode = strokeEdge.target;
   const strokeProcessor = primaryStrokeTool.createProcessor();
   strokeNode.handler = strokeProcessor;
@@ -87,10 +91,9 @@ function mountToolSwitcher(board, viewport, options) {
       strokeWidth: DEMO_STROKE_WIDTH,
     },
   });
-  const circleEdge = board.devicesDAG.addEdge(
-    `${switcherPath}/${DEMO_TOOL_NAMES.CIRCLE}`,
-    "default",
-  );
+  const circleEdge = scope.addEdge({
+    from: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.CIRCLE}`,
+  });
   const circleNode = circleEdge.target;
   const circleProcessor = circleCreatorTool.createProcessor();
   circleNode.handler = circleProcessor;
@@ -103,21 +106,19 @@ function mountToolSwitcher(board, viewport, options) {
     second: new CommonObjectModifierTool(),
     autoBridgeObjects: true,
   });
-  const selectEdge = board.devicesDAG.addEdge(
-    `${switcherPath}/${DEMO_TOOL_NAMES.SELECT}`,
-    "default",
-  );
+  const selectEdge = scope.addEdge({
+    from: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.SELECT}`,
+  });
   board.devicesDAG.mountSubDAG("", {
     ...selectHandoffSubDAG,
     rootPath: selectEdge.target.path,
   });
 
   // 6. 双输入汇聚：toolbar/button-group → tool-switcher
-  board.devicesDAG.addEdge(
-    `/${vpId}/toolbar/button-group`,
-    "default",
-    switcherPath,
-  );
+  scope.addEdge({
+    from: "toolbar/button-group",
+    to: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}`,
+  });
 }
 
 export { mountPrimaryStrokeTool, mountToolSwitcher };

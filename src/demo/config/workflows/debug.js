@@ -17,13 +17,18 @@ import { DEBUG_KEYS, DEMO_WORKFLOW_NAMES } from "../constants.js";
  * @returns {void}
  */
 function mountDebugControl(viewport, debugTool) {
-  const debugEdges = DEBUG_KEYS.map(({ code, type, context }) => ({
-    from: `keyboard/code/${code}`,
-    edge: "default",
-    prefix: createEdgePrefix(buildKeyboardDebugNodeConfig(type, context)),
-  }));
+  const scope = viewport.inputScope;
+  const wfName = DEMO_WORKFLOW_NAMES.DEBUG;
 
-  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.DEBUG, debugTool, debugEdges);
+  scope.mountWorkflow(wfName, debugTool);
+
+  for (const { code, type, context } of DEBUG_KEYS) {
+    scope.addEdge({
+      from: `keyboard/code/${code}`,
+      to: `workflows/${wfName}`,
+      prefix: createEdgePrefix(buildKeyboardDebugNodeConfig(type, context)),
+    });
+  }
 }
 
 export { mountDebugControl };

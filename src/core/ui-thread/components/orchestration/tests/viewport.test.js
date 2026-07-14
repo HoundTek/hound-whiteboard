@@ -289,7 +289,7 @@ describe("Viewport (integration)", () => {
     try {
       const reportSubDAG = createReportSubDAG();
 
-      const mountedNodes = viewport.mountSubDAG("", reportSubDAG);
+      const mountedNodes = viewport.inputScope.mountDevice("", reportSubDAG);
       const packets = viewport.devicesDAG.dispatch({
         to: "/alpha/debugger",
         signals: [{ type: "position", context: { value: { x: 1, y: 2 } } }],
@@ -331,7 +331,10 @@ describe("Viewport (integration)", () => {
 
     try {
       const reportSubDAG = createReportSubDAG();
-      const mountedNodes = viewport.mountSubDAG("debugger", reportSubDAG);
+      const mountedNodes = viewport.inputScope.mountDevice(
+        "debugger",
+        reportSubDAG,
+      );
 
       expect(mountedNodes.map((node) => node.path)).toEqual([
         "/beta/debugger",

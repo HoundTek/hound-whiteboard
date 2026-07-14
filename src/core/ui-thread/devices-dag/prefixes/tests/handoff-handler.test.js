@@ -487,7 +487,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         activeChild: "first",
       });
       expect(dag.getNode("/viewport/modifier-cycle/second")).not.toBeNull();
-      expect(dag.getNodeState("/viewport/modifier-cycle/second")).toMatchObject({});
+      expect(dag.getNodeState("/viewport/modifier-cycle/second")).toMatchObject(
+        {},
+      );
     });
 
     test("应支持 chooser 作为 first", () => {
@@ -833,7 +835,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           p.signals.some((s) => s.type === "inner-done"),
         ),
       ).toBe(true);
-      expect(dag.getNodeState("/viewport/outer")).toMatchObject({ completed: true });
+      expect(dag.getNodeState("/viewport/outer")).toMatchObject({
+        completed: true,
+      });
       expect(
         secondResult.packets.some((p) =>
           p.signals.some((s) => s.type === "handled"),
@@ -1382,7 +1386,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         const creatorTool = new StrokeCreatorTool();
         let firstObjectId = null;
 
-        viewport.mountSubDAG(
+        viewport.inputScope.mountDevice(
           "",
           createHandoffSubDAG({
             rootPath: "workflow",
@@ -1469,7 +1473,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         await expect(boardApi.queryChunkObjects([1])).resolves.toEqual(
           expect.arrayContaining([firstObjectId]),
         );
-        expect(viewport.devicesDAG.getNodeState("/main/workflow")).toMatchObject({
+        expect(
+          viewport.devicesDAG.getNodeState("/main/workflow"),
+        ).toMatchObject({
           phase: "first",
           activeChild: "first",
         });
@@ -1500,7 +1506,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
             isActive: true,
           }),
         ]);
-        expect(viewport.devicesDAG.getNodeState("/main/workflow")).toMatchObject({
+        expect(
+          viewport.devicesDAG.getNodeState("/main/workflow"),
+        ).toMatchObject({
           phase: "second",
           activeChild: "second",
         });
@@ -1537,7 +1545,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         await boardApi.commitObjects([41]);
         await flushMicrotasks();
 
-        viewport.mountSubDAG(
+        viewport.inputScope.mountDevice(
           "",
           createHandoffSubDAG({
             rootPath: "choose-and-modify",

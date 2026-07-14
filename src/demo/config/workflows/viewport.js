@@ -28,38 +28,42 @@ import {
  * @returns {void}
  */
 function mountViewportControl(viewport, viewportTool) {
+  const scope = viewport.inputScope;
+  const wfName = DEMO_WORKFLOW_NAMES.VIEWPORT;
   const factor = DEMO_VIEWPORT_SCALE_FACTOR;
   const step = DEMO_VIEWPORT_POSITION_STEP;
 
-  const positionEdges = VIEWPORT_POSITION_KEYS.map(({ code, direction }) => ({
-    from: `keyboard/code/${code}`,
-    edge: "default",
-    prefix: createEdgePrefix(buildViewportPositionNodeConfig(direction, step)),
-  }));
+  scope.mountWorkflow(wfName, viewportTool);
 
-  const scaleEdges = VIEWPORT_SCALE_KEYS.map(({ code, scale }) => ({
-    from: `keyboard/code/${code}`,
-    edge: "default",
-    prefix: createEdgePrefix(
-      buildViewportScaleNodeConfig(
-        scale === "in"
-          ? (zoom) => zoom / factor
-          : (zoom) => zoom * factor,
+  for (const { code, direction } of VIEWPORT_POSITION_KEYS) {
+    scope.addEdge({
+      from: `keyboard/code/${code}`,
+      to: `workflows/${wfName}`,
+      prefix: createEdgePrefix(
+        buildViewportPositionNodeConfig(direction, step),
       ),
-    ),
-  }));
+    });
+  }
 
-  const flushEdges = VIEWPORT_FLUSH_KEYS.map((code) => ({
-    from: `keyboard/code/${code}`,
-    edge: "default",
-    prefix: createEdgePrefix(buildViewportFlushNodeConfig()),
-  }));
+  for (const { code, scale } of VIEWPORT_SCALE_KEYS) {
+    scope.addEdge({
+      from: `keyboard/code/${code}`,
+      to: `workflows/${wfName}`,
+      prefix: createEdgePrefix(
+        buildViewportScaleNodeConfig(
+          scale === "in" ? (zoom) => zoom / factor : (zoom) => zoom * factor,
+        ),
+      ),
+    });
+  }
 
-  viewport.mountWorkflow(DEMO_WORKFLOW_NAMES.VIEWPORT, viewportTool, [
-    ...positionEdges,
-    ...scaleEdges,
-    ...flushEdges,
-  ]);
+  for (const code of VIEWPORT_FLUSH_KEYS) {
+    scope.addEdge({
+      from: `keyboard/code/${code}`,
+      to: `workflows/${wfName}`,
+      prefix: createEdgePrefix(buildViewportFlushNodeConfig()),
+    });
+  }
 }
 
 export { mountViewportControl };
