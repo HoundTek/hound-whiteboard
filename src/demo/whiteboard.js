@@ -1,7 +1,7 @@
 /**
  * @file whiteboard demo 浏览器入口
  * @description 初始化 whiteboard demo 页面，装配 board/viewport/worker、demo 配置与 DOM 适配器。
- * @module templates/whiteboard
+ * @module demo/whiteboard
  * @author Zhou Chenyu
  */
 

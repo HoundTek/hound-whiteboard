@@ -132,7 +132,7 @@ objects/chunk{ownerChunkId}/{objectId}.json
   history/
   objects/
   chunks/
-  templates/
+  demo/
 ```
 
 后续文件模式运行中，还会继续读写：

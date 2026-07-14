@@ -1,6 +1,6 @@
 /**
  * @file demo Viewport 视口工具
- * @module templates/demo/viewport-tool
+ * @module demo/config/viewport-tool
  * @author Zhou Chenyu
  */
 

@@ -1,7 +1,7 @@
 /**
  * @file 调试 workflow 挂载
  * @description 将 C/O/M/B/T 各键通过边级 prefix 接入调试工具。
- * @module templates/demo/workflows/debug
+ * @module demo/config/workflows/debug
  * @author Zhou Chenyu
  */
 

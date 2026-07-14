@@ -1,7 +1,7 @@
 /**
  * @file demo 设备子图挂载
  * @description 挂载鼠标、键盘、触摸三个设备子图以及触摸多指笔画 workflow。
- * @module templates/demo/devices
+ * @module demo/config/devices
  * @author Zhou Chenyu
  */
 

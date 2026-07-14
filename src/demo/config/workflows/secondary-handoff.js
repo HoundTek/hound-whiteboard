@@ -1,7 +1,7 @@
 /**
  * @file 右键选择→修改 handoff workflow 挂载
  * @description 将鼠标右键、Enter/Escape、WASD 汇聚到 handoff 子图。
- * @module templates/demo/workflows/secondary-handoff
+ * @module demo/config/workflows/secondary-handoff
  * @author Zhou Chenyu
  */
 

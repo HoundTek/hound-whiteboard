@@ -1,7 +1,7 @@
 /**
  * @file 左键工具 workflow 挂载
  * @description 提供两种左键路由：直接挂笔画工具（测试用）与挂载 tool-switcher 多工具切换子图（浏览器用）。
- * @module templates/demo/workflows/primary-tools
+ * @module demo/config/workflows/primary-tools
  * @author Zhou Chenyu
  */
 

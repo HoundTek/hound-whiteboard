@@ -1,7 +1,7 @@
 /**
  * @file whiteboard demo 配置入口
  * @description 编排 demo 设备子图与各 workflow 的挂载，并提供公共符号的统一导出。
- * @module templates/demo/whiteboard-demo
+ * @module demo/config/whiteboard-demo
  * @author Zhou Chenyu
  */
 

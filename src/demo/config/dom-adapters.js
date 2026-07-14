@@ -1,7 +1,7 @@
 /**
  * @file demo DOM 事件适配器
  * @description 将指针、键盘、工具栏按钮、窗口尺寸等 DOM 事件翻译为白板输入信号。
- * @module templates/demo/dom-adapters
+ * @module demo/config/dom-adapters
  * @author Zhou Chenyu
  */
 

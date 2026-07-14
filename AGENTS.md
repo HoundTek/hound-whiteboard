@@ -43,7 +43,7 @@ src/
 │   ├── tests/               # 冒烟测试
 │   └── docs/                # 架构文档
 ├── utils/                   # 应用级工具（filesys, log, safe-io）
-├── templates/               # 白板 HTML/CSS/JS 模板
+├── demo/                    # 白板 HTML/CSS/JS 入口
 ├── src-tauri/               # Rust 后端（Cargo workspace）
 ├── benchmarks/              # 性能基准
 └── scripts/                 # 构建脚本系统

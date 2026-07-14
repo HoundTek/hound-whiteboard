@@ -1,7 +1,7 @@
 /**
  * @file demo 日志与输入分类
  * @description 封装 demo 状态日志输出，并基于 constants 的按键配置派生键盘输入分类与快捷键说明。
- * @module templates/demo/log
+ * @module demo/config/log
  * @author Zhou Chenyu
  */
 

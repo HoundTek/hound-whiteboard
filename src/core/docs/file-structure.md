@@ -25,7 +25,7 @@
   history/
   objects/
   chunks/
-  templates/
+  demo/
 ```
 
 在后续文件模式操作中，当前 bridge 还会继续读写这些路径：
@@ -151,12 +151,12 @@ chunks/{chunkId}/
 
 是否带有 `ownerChunkId` 取决于具体对象类型或未来扩展，基础 `BasicObject.serialize()` 并不默认产出这个字段。
 
-### `devices/` / `templates/` / `history/`
+### `devices/` / `demo/` / `history/`
 
 这些目录在 `createBoardRoot()` 中会被创建，但当前顶层 Core 文档里不应过度推断它们的完整业务语义：
 
 - `devices/`：可视为宿主或白板扩展数据预留区
-- `templates/`：模板相关数据预留区
+- `demo/`：模板相关数据预留区
 - `history/`：历史与版本空间，当前仍应视为 `[todo]` 能力
 
 ## 与运行时模型的关系

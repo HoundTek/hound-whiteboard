@@ -1,7 +1,7 @@
 /**
  * @file demo 配置常量
  * @description 集中管理 demo 的工具属性、工具名、workflow 名与键盘按键映射，作为挂载与日志分类的单一事实源。
- * @module templates/demo/constants
+ * @module demo/config/constants
  * @author Zhou Chenyu
  */
 

@@ -1,7 +1,7 @@
 /**
  * @file demo 随机圆修饰节点工作流
  * @description 提供 createRandomCircleSubDAG 工厂函数，生成完整的随机圆 prefix 工作流。
- * @module templates/demo/random-circle-creator-tool
+ * @module demo/config/random-circle-creator-tool
  * @author Zhou Chenyu
  */
 

@@ -1,7 +1,7 @@
 /**
  * @file 视口控制 workflow 挂载
  * @description 将方向键、+/-、R 通过边级 prefix 汇聚到共享视口工具。
- * @module templates/demo/workflows/viewport
+ * @module demo/config/workflows/viewport
  * @author Zhou Chenyu
  */
 

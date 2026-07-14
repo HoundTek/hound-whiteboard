@@ -1,7 +1,7 @@
 /**
  * @file demo 边级 prefix handler 构造器
  * @description 提供键盘 trigger 信号到 position/scale/flush/displacement/debug 等信号的转换构造器。
- * @module templates/demo/prefix-builders
+ * @module demo/config/prefix-builders
  * @author Zhou Chenyu
  */
 

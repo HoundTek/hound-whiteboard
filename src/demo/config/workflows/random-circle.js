@@ -1,7 +1,7 @@
 /**
  * @file 随机圆 workflow 挂载
  * @description 将 Space 键通过边级 prefix 接入随机圆子图。
- * @module templates/demo/workflows/random-circle
+ * @module demo/config/workflows/random-circle
  * @author Zhou Chenyu
  */
 
