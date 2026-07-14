@@ -1,25 +1,13 @@
 /**
  * @file Core 文件操作渲染器桥接
- * @description 提供渲染进程向预加载层调用 Core 文件操作的桥接接口。
+ * @description 提供渲染进程调用 Core 文件操作的接口（待 Tauri IO 桥实现后接入）。
  * @module core/bridges/file-operate-bridge-renderer
  * @author Zhou Chenyu
  */
 
 import { CORE_FILE_OPERATE_ACTIONS } from "./file-operate-bridge-common.js";
 
-/**
- * 获取预加载层注入的 Core 文件操作桥。
- * @returns {{call: function({action: string, payload: any}): Promise<any>}}
- */
-function getCoreFileOperateBridge() {
-  const bridge = globalThis.__houndCoreFileOps;
-  if (!bridge || typeof bridge.call !== "function") {
-    throw new Error(
-      "Core file operate bridge is unavailable. Did preload-io.js load?",
-    );
-  }
-  return bridge;
-}
+const NOT_IMPLEMENTED_ERROR = "IO bridge not yet implemented for Tauri";
 
 /**
  * 调用 Core 文件操作 IPC。
@@ -28,7 +16,7 @@ function getCoreFileOperateBridge() {
  * @returns {Promise<any>}
  */
 async function callCoreFileOperate(action, payload) {
-  return getCoreFileOperateBridge().call({ action, payload });
+  throw new Error(`${NOT_IMPLEMENTED_ERROR}: ${action}`);
 }
 
 /**

@@ -17,7 +17,6 @@ const __dirname = path.dirname(__filename);
 const benchmarks = [
   { name: "Queue", file: "queue.bench.js" },
   { name: "Chain", file: "chain.bench.js" },
-  { name: "IO Bridge", file: "io-bridge.bench.js" },
   { name: "IO Direct", file: "io-direct.bench.js" },
   { name: "IO File Granularity", file: "io-file-granularity.bench.js" },
   { name: "IO Roundtrip", file: "io-roundtrip.bench.js", runner: "electron" },

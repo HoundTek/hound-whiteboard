@@ -35,9 +35,6 @@ yarn bench:io:direct            # I/O 直连基准
 
 ```
 src/
-├── main.js                  # 渲染进程入口，日志初始化
-├── preload.js / preload-io.js  # Tauri preload
-├── io-bridge-*.js           # 渲染↔主进程 IPC 桥接
 ├── core/
 │   ├── ui/                  # UI 线程（输入编排、工具、overlay）
 │   │   ├── components/      #   Board / Viewport / UiRenderer
