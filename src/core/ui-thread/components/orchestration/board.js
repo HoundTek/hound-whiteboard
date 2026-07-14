@@ -10,7 +10,7 @@
 import { CounterPool } from "../../../engine/utils/counter-pool.js";
 import { EventBus } from "../../../engine/utils/event-bus.js";
 import { DevicesDAG } from "../../devices-dag/index.js";
-import { BoardApiRpc } from "../../../bridges/board-api.js";
+import { BoardApiRpc } from "../../../bridges/board-api-rpc.js";
 import { Viewport } from "./viewport.js";
 import { joinPath } from "../../../engine/utils/path.js";
 

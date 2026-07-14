@@ -1,14 +1,16 @@
-# BoardApi 文档
+# BoardApiRpc 文档
 
 ## 概述
 
-BoardApi 是 UI 线程与 Core Worker 之间的统一通信接口。UI 侧通过 `BoardApiRpc` 暴露异步方法，经过 JSON-RPC 风格的消息协议与 Worker 侧的 `BoardCore` 交互。
+`BoardApiRpc` 是 [BoardApi 契约](../../engine/types/board-api-types.js) 的 RPC 运输实现。UI 侧通过它暴露异步方法，经过 JSON-RPC 风格的消息协议与 Worker 侧的 `BoardCore` 交互。
 
-BoardApi 不承载业务逻辑，只负责：
+`BoardApiRpc` 不承载业务逻辑，只负责：
 
 - 将 UI 侧操作翻译为 RPC 请求
 - 高频写入方法的微任务级批处理合并
 - RPC 响应路由与超时管理
+
+契约（`@typedef BoardApi`）定义在 [board-api-types.js](../../engine/types/board-api-types.js)，约束所有实现的统一签名。
 
 ## 架构
 
@@ -44,7 +46,7 @@ sequenceDiagram
 
 ## API 面
 
-所有方法返回 `Promise`。参数格式见 `board-api-types.js`。
+所有方法返回 `Promise`。参数格式见 [board-api-types.js](../../engine/types/board-api-types.js)。
 
 ### 板面生命周期
 
@@ -147,9 +149,9 @@ sequenceDiagram
 
 ## 设计约束
 
-- BoardApi 不依赖 DOM 或特定 Worker 实现，只要求端点满足 `postMessage` / `addEventListener` / `removeEventListener` 接口
+- `BoardApiRpc` 不依赖 DOM 或特定 Worker 实现，只要求端点满足 `postMessage` / `addEventListener` / `removeEventListener` 接口
 - `createObject` 需要显式传入 `id` 字段（当前由 UI 侧 `Board.allocateObjectId()` 分配）
-- 同线程实现（`BoardApiLocal`）在 P2 阶段存在但未接入当前运行时
+- 同线程实现（`BoardApiLocal`）已移除，当前仅保留 RPC 实现
 - undo / redo 的实现尚未落地
 
 ## 相关文档

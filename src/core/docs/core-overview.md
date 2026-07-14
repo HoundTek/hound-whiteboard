@@ -9,7 +9,7 @@
 当前 Core 可以按职责分为四层：
 
 1. **宿主层**：Tauri / 模板页面 / DOM 事件绑定 / 文件桥接宿主
-2. **UI 线程层**：`src/core/ui-thread/**` 与 `src/core/bridges/board-api.js`
+2. **UI 线程层**：`src/core/ui-thread/**` 与 `src/core/bridges/board-api-rpc.js`
 3. **Engine 核心层**：`src/core/engine/**`
 4. **Engine 核心层**：`src/core/engine/**`
 

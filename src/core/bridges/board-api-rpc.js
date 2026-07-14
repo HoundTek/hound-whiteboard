@@ -1,8 +1,8 @@
 /**
- * @file Uniform Board API
+ * @file RPC Board API
  * @description
  * 通过 postMessage 与 Core Worker 通信，以真正异步的方式暴露 BoardApi 接口。
- * @module core/bridges/board-api
+ * @module core/bridges/board-api-rpc
  * @author Zhou Chenyu
  */
 

@@ -2,25 +2,22 @@
  * @file Core Worker 入口
  * @description
  * 提供 Core Worker 的入口与运行时封装。
- * Worker 侧持有 BoardCore 等纯 Core 模块，通过 JSON-RPC 风格的消息协议响应 UI 侧请求。
+ * Worker 侧持有 BoardCore + BoardApi + ViewportCore，通过 JSON-RPC 风格的消息协议响应 UI 侧请求。
+ * 领域分发委托给 BoardApi（api/board-api.js），本文件只负责消息路由、生命周期和渲染编排。
  * 当文件运行在真正的 WorkerGlobalScope 中时会自动启动；测试环境可通过导出的工厂手动创建 runtime。
  * @module core/engine/core-worker
  * @author Zhou Chenyu
  */
 
-import { deserialize } from "./objects/object-deserializer.js";
-import { Matrix, Vector } from "./utils/math.js";
-import { intersectsRanges, RectangleRange } from "./range/index.js";
 import { createDefaultPersistenceAdapter } from "../bridges/persistence-adapter.js";
 import { createDefaultAomRenderHooks } from "./orchestration/aom-render-hooks.js";
 import { BoardCore } from "./orchestration/board-core.js";
-import { ChunkObjectManager } from "./chunk/chunk-object-manager.js";
-import { CHUNK_LOAD_EVENTS } from "./chunk/chunk-loader.js";
 import { ViewportCore } from "./orchestration/viewport-core.js";
 import { Logger } from "../../utils/log/logger.js";
 import { logBus } from "../../utils/log/log-bus.js";
 import { createConsolePrinter } from "../../utils/log/console-printer.js";
 import { handleDebugQuery } from "./debug-helper.js";
+import { BoardApi } from "./api/board-api.js";
 
 /**
  * 判断值是否可作为 Worker 消息宿主
@@ -79,6 +76,12 @@ class CoreWorkerRuntime {
   #boardCore;
 
   /**
+   * Engine 侧 BoardApi 分发器
+   * @type {BoardApi | null}
+   */
+  #boardApi;
+
+  /**
    * 当前 ViewportCore 注册表
    * @type {Map<string, ViewportCore>}
    */
@@ -129,6 +132,7 @@ class CoreWorkerRuntime {
 
     this.#host = host;
     this.#boardCore = null;
+    this.#boardApi = null;
     this.#viewportCores = new Map();
     this.#messageListener = this.#handleMessageEvent.bind(this);
     this.#log = new Logger("CoreWorker", "INFO", logBus);
@@ -303,7 +307,7 @@ class CoreWorkerRuntime {
     for (const item of items) {
       try {
         const { method, ...params } = item;
-        this.#dispatchCoreMethod(method, params);
+        this.#invokeBoardApi(method, params);
       } catch (error) {
         this.#log.error(
           `Batch item failed: ${item?.method ?? "unknown"}`,
@@ -330,7 +334,7 @@ class CoreWorkerRuntime {
       case "destroyViewport":
         return this.destroyViewport(params.viewportId);
       default:
-        return this.#dispatchCoreMethod(method, params);
+        return this.#invokeBoardApi(method, params);
     }
   }
 
@@ -356,6 +360,8 @@ class CoreWorkerRuntime {
     this.#boardCore.aomRenderHooks = renderHooks;
     this.#boardCore.activeObjectManager.renderHooks = renderHooks;
 
+    this.#boardApi = new BoardApi(this.#boardCore);
+
     return { ok: true };
   }
 
@@ -365,6 +371,7 @@ class CoreWorkerRuntime {
    */
   destroyBoard() {
     this.#destroyAllViewportCores();
+    this.#boardApi = null;
     this.#boardCore = null;
     return { ok: true };
   }
@@ -592,378 +599,94 @@ class CoreWorkerRuntime {
   }
 
   /**
-   * 将 RPC 方法转发到 Worker 内的 BoardCore
+   * 将 RPC 方法转发到 Engine 侧 BoardApi
    * @param {string} method - RPC 方法名
    * @param {Record<string, any>} params - RPC 参数
    * @returns {*}
    */
-  #dispatchCoreMethod(method, params = {}) {
-    const boardCore = this.#requireBoardCore();
+  #invokeBoardApi(method, params = {}) {
+    const api = this.#boardApi;
+    if (!api) {
+      throw new Error("BoardApi is not initialized. Call createBoard first.");
+    }
 
+    let result;
     switch (method) {
-      case "createObject": {
-        const objectId = params.props?.id;
-        if (objectId == null) {
-          throw new Error("createObject requires an explicit object id.");
-        }
-        const existingObject = boardCore.getObjectById(objectId);
-        if (existingObject) {
-          throw new Error(
-            `Duplicate object id ${objectId}: an object with this id already exists.`,
-          );
-        }
-
-        const obj = deserialize({
-          type: params.type,
-          id: objectId,
-          position: params.props?.position ?? { x: 0, y: 0 },
-          transform: { a: 1, b: 0, c: 0, d: 1 },
-          property: { ...(params.props?.property ?? {}) },
-          data: { ...(params.props?.data ?? {}) },
-        });
-
-        boardCore.registerObjectInstance(obj);
-        boardCore.activeObjectManager.add(new Set([obj]));
-
-        return objectId;
-      }
-      case "modifyObject": {
-        const obj = boardCore.getObjectById(params.objectId);
-        if (!obj) {
-          throw new Error(`Object ${params.objectId} not found.`);
-        }
-        const patch = params.patch;
-        if (patch.position != null) {
-          obj.position = new Vector(patch.position.x, patch.position.y);
-        }
-        if (patch.transform != null) {
-          const { a, b, c, d } = patch.transform;
-          obj.setTransform(new Matrix(a, b, c, d));
-        }
-        if (patch.property != null) {
-          obj.setProperty(patch.property);
-        }
-        if (patch.data != null) {
-          obj.setData(patch.data);
-        }
-        boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
-        this.#scheduleFlushRenderFrames();
-        return;
-      }
-      case "modifyObjects": {
-        const patches = Array.isArray(params.patches) ? params.patches : [];
-        const modifiedObjects = [];
-        for (const { objectId, patch } of patches) {
-          if (objectId == null || !patch) continue;
-          const obj = boardCore.getObjectById(objectId);
-          if (!obj) continue;
-          if (patch.position != null) {
-            obj.position = new Vector(patch.position.x, patch.position.y);
-          }
-          if (patch.transform != null) {
-            const { a, b, c, d } = patch.transform;
-            obj.setTransform(new Matrix(a, b, c, d));
-          }
-          if (patch.property != null) {
-            obj.setProperty(patch.property);
-          }
-          if (patch.data != null) {
-            obj.setData(patch.data);
-          }
-          modifiedObjects.push(obj);
-        }
-        if (modifiedObjects.length > 0) {
-          boardCore.aomRenderHooks?.requestActiveRender?.(modifiedObjects);
-          this.#scheduleFlushRenderFrames();
-        }
-        return;
-      }
-      case "appendListItem": {
-        const obj = boardCore.getObjectById(params.objectId);
-        if (obj) {
-          obj.appendListItem(params.key, ...(params.items ?? []));
-          boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
-          this.#scheduleFlushRenderFrames();
-        }
-        return;
-      }
-      case "replaceListItem": {
-        const obj = boardCore.getObjectById(params.objectId);
-        if (obj) {
-          obj.replaceListItem(params.key, params.index, params.item);
-          boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
-          this.#scheduleFlushRenderFrames();
-        }
-        return;
-      }
-      case "removeListItem": {
-        const obj = boardCore.getObjectById(params.objectId);
-        if (obj) {
-          obj.removeListItem(params.key, params.index);
-          boardCore.aomRenderHooks?.requestActiveRender?.([obj]);
-          this.#scheduleFlushRenderFrames();
-        }
-        return;
-      }
-      case "deleteObjects": {
-        const objectIds = Array.isArray(params.objectIds)
-          ? params.objectIds
-          : [];
-        const aom = boardCore.activeObjectManager;
-        const activeToDiscard = [];
-        const affectedChunks = new Set();
-
-        for (const objectId of objectIds) {
-          const obj = boardCore.getObjectById(objectId);
-          if (!obj) continue;
-
-          if (aom?.activeObjectIndex?.has?.(objectId)) {
-            activeToDiscard.push(obj);
-          }
-
-          for (const { chunk } of boardCore.chunkLoaded.values()) {
-            if (chunk?.objectManager?.staticGraph?.hasNode?.(objectId)) {
-              chunk.removeObject(objectId);
-              affectedChunks.add(chunk);
-            }
-          }
-
-          boardCore.objectLoaded.delete(objectId);
-        }
-
-        if (activeToDiscard.length > 0) {
-          aom.discard(new Set(activeToDiscard));
-        }
-
-        if (
-          affectedChunks.size > 0 &&
-          boardCore.aomRenderHooks?.requestStaticRender
-        ) {
-          boardCore.aomRenderHooks.requestStaticRender([...affectedChunks]);
-        }
-        return;
-      }
-      case "commitObjects": {
-        const objectIds = Array.isArray(params.objectIds)
-          ? params.objectIds
-          : [];
-        const objects = objectIds
-          .map((id) => boardCore.getObjectById(id))
-          .filter(Boolean);
-        if (objects.length > 0) {
-          return boardCore.activeObjectManager.apply(new Set(objects));
-        }
-        return;
-      }
-      case "addActiveObjects": {
-        const objectIds = Array.isArray(params.objectIds)
-          ? params.objectIds
-          : [];
-        const objects = objectIds
-          .map((id) => boardCore.getObjectById(id))
-          .filter(Boolean);
-        if (objects.length > 0) {
-          return boardCore.activeObjectManager.choose(new Set(objects));
-        }
-        return;
-      }
-      case "discardActiveObjects": {
-        const objectIds = Array.isArray(params.objectIds)
-          ? params.objectIds
-          : [];
-        const objects = objectIds
-          .map((id) => boardCore.getObjectById(id))
-          .filter(Boolean);
-
-        const transientObjectIds = objects.filter(
-          (obj) => !hasStaticBoardObject(boardCore, obj.id),
+      case "createObject":
+        result = api.createObject(params.type, params.props);
+        break;
+      case "modifyObject":
+        result = api.modifyObject(params.objectId, params.patch);
+        break;
+      case "modifyObjects":
+        result = api.modifyObjects(params.patches);
+        break;
+      case "appendListItem":
+        result = api.appendListItem(params.objectId, params.key, params.items);
+        break;
+      case "replaceListItem":
+        result = api.replaceListItem(
+          params.objectId,
+          params.key,
+          params.index,
+          params.item,
         );
-
-        boardCore.activeObjectManager.discard(new Set(objects));
-
-        for (const objectId of transientObjectIds) {
-          boardCore.objectLoaded.delete(objectId);
-        }
-        return;
-      }
-      case "queryObjects": {
-        const ids = Array.isArray(params.ids) ? params.ids : [];
-        const aom = boardCore.activeObjectManager;
-        return ids
-          .map((objectId) => {
-            const obj = boardCore.getObjectById(objectId);
-            if (!obj) return null;
-            const isActive = aom?.activeObjectIndex?.has?.(objectId) ?? false;
-            return {
-              id: obj.id,
-              type: obj.constructor.name,
-              isActive,
-              position: { x: obj.position.x, y: obj.position.y },
-              transform: obj.transform
-                ? {
-                    a: obj.transform.a,
-                    b: obj.transform.b,
-                    c: obj.transform.c,
-                    d: obj.transform.d,
-                  }
-                : undefined,
-              boundingBox: obj.rich?.boundingBox,
-              range: obj.getRange(),
-              property: { ...(obj.property ?? {}) },
-              data: { ...(obj.data ?? {}) },
-            };
-          })
-          .filter(Boolean);
-      }
-      case "queryChunkObjects": {
-        const chunkIds = Array.isArray(params.chunkIds) ? params.chunkIds : [];
-        const seen = new Set();
-        for (const chunkId of chunkIds) {
-          const chunk = boardCore.getChunkById(chunkId);
-          if (!chunk?.objectManager?.staticGraph) continue;
-          for (const objectId of chunk.objectManager.staticGraph.getNodes()) {
-            seen.add(objectId);
-          }
-        }
-        return [...seen];
-      }
-      case "hitTest": {
-        let queryRange;
-        const range = params.range;
-        if (range instanceof RectangleRange) {
-          queryRange = range;
-        } else if (typeof range?.left === "number") {
-          queryRange = RectangleRange.fromRectLike(range);
-        } else {
-          queryRange = range;
-        }
-        if (!queryRange) return [];
-
-        return this.#collectHitObjects(boardCore, queryRange);
-      }
+        break;
+      case "removeListItem":
+        result = api.removeListItem(params.objectId, params.key, params.index);
+        break;
+      case "deleteObjects":
+        result = api.deleteObjects(params.objectIds);
+        break;
+      case "commitObjects":
+        result = api.commitObjects(params.objectIds);
+        break;
+      case "addActiveObjects":
+        result = api.addActiveObjects(params.objectIds);
+        break;
+      case "discardActiveObjects":
+        result = api.discardActiveObjects(params.objectIds);
+        break;
+      case "queryObjects":
+        result = api.queryObjects(params.ids);
+        break;
+      case "queryChunkObjects":
+        result = api.queryChunkObjects(params.chunkIds);
+        break;
+      case "hitTest":
+        return api.hitTest(params.range, params.mode);
       case "undo":
-        throw new Error("Not implemented yet.");
+        result = api.undo();
+        break;
       case "redo":
-        throw new Error("Not implemented yet.");
+        result = api.redo();
+        break;
       default:
         throw new Error(`Unknown RPC method: ${method}`);
     }
-  }
 
-  /**
-   * 收集与查询范围相交的对象 id
-   * @description
-   * 若查询范围覆盖未加载或仅临时加载的区块，会先 FullLoad 使对象实例就绪，
-   * 执行命中检测后销毁 loader 释放引用。
-   * @param {BoardCore} boardCore - BoardCore 实例
-   * @param {RectangleRange} queryRange - 查询范围
-   * @returns {Promise<number[]>} 命中的对象 id 列表
-   * @private
-   */
-  async #collectHitObjects(boardCore, queryRange) {
-    // 确定查询范围覆盖的区块
-    if (
-      boardCore.width > 0 &&
-      boardCore.height > 0 &&
-      typeof queryRange.left === "number"
-    ) {
-      const chunkIds = ChunkObjectManager.calculateCoveredChunkIdsForRange(
-        queryRange,
-        boardCore.width,
-        boardCore.height,
-      );
-      const chunksToLoad = [...chunkIds]
-        .map((id) => boardCore.getChunkById(id))
-        .filter((chunk) => chunk && (chunk.isTempLoad || !chunk.isLoad));
-
-      if (chunksToLoad.length > 0) {
-        const loader = boardCore.createChunkLoader(
-          `hit-test-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        );
-        // 逐个加载，用 on+off 避免 EventBus.once 在 emit 迭代中移除所有回调的竞态
-        for (const chunk of chunksToLoad) {
-          loader.trackChunk(chunk);
-          loader.emitLoadRequest(chunk, { strategy: "full" });
-          await new Promise((resolve) => {
-            const handler = (payload) => {
-              if (payload.chunkId === chunk.id) {
-                boardCore.chunkLoadEventBus.off(
-                  CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
-                  handler,
-                );
-                resolve();
-              }
-            };
-            boardCore.chunkLoadEventBus.on(
-              CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
-              handler,
-            );
-          });
-        }
-
-        // 此时对象已通过 syncChunkObjectEntries 加载到 objectLoaded
-        const hits = this.#runHitTest(boardCore, queryRange, chunkIds);
-        // 延时销毁：保留已加载区块，短时间内次次 hitTest 可复用缓存
-        loader.destroy(300);
-        return hits;
-      }
-
-      // chunk 全已加载，仍可借 chunkIds 做粗筛
-      return this.#runHitTest(boardCore, queryRange, chunkIds);
+    // 对象修改后调度渲染帧 flush
+    if (this.#isMutationMethod(method)) {
+      this.#scheduleFlushRenderFrames();
     }
 
-    return this.#runHitTest(boardCore, queryRange);
+    return result;
   }
 
   /**
-   * 在当前已加载对象中执行命中检测
-   * @description
-   * 当传入 chunkIds 时，会利用对象的覆盖区块索引做粗筛：对象覆盖的区块与查询
-   * 区块不重叠时直接跳过，无需走精确几何相交检测。无索引回退的对象按精确检测处理。
-   * @param {BoardCore} boardCore - BoardCore 实例
-   * @param {RectangleRange} queryRange - 查询范围
-   * @param {Set<number>} [chunkIds] - 查询范围覆盖的区块 id 集合，用于粗筛
-   * @returns {number[]}
-   * @private
-   */
-  #runHitTest(boardCore, queryRange, chunkIds) {
-    const hits = [];
-    for (const [objectId] of boardCore.objectLoaded) {
-      const obj = boardCore.getObjectById(objectId);
-      if (!obj) continue;
-
-      // 区块级粗筛：若对象覆盖区块与查询区块无交集则跳过
-      if (chunkIds) {
-        const coverChunks = boardCore.getObjectCoverChunks(objectId);
-        if (coverChunks && !this.#chunkSetsOverlap(coverChunks, chunkIds)) {
-          continue;
-        }
-      }
-
-      const worldRange = obj.getRange()?.withPosition?.(obj.position);
-      if (!worldRange) continue;
-
-      if (intersectsRanges(worldRange, queryRange)) {
-        hits.push(objectId);
-      }
-    }
-    return hits;
-  }
-
-  /**
-   * 判断两个区块 id 集合是否有交集
-   * @param {Set<number>} a - 集合 a
-   * @param {Set<number>} b - 集合 b
+   * 判断 RPC 方法是否为对象修改类方法
+   * @param {string} method - RPC 方法名
    * @returns {boolean}
-   * @private
    */
-  #chunkSetsOverlap(a, b) {
-    // 遍历较小的集合
-    const [smaller, larger] = a.size <= b.size ? [a, b] : [b, a];
-    for (const id of smaller) {
-      if (larger.has(id)) return true;
-    }
-    return false;
+  #isMutationMethod(method) {
+    return [
+      "modifyObject",
+      "modifyObjects",
+      "appendListItem",
+      "replaceListItem",
+      "removeListItem",
+      "deleteObjects",
+    ].includes(method);
   }
 
   /**
@@ -1039,21 +762,6 @@ class CoreWorkerRuntime {
  */
 function createCoreWorkerRuntime(host) {
   return new CoreWorkerRuntime(host);
-}
-
-/**
- * 判断对象是否已进入 Worker 侧的区块静态图
- * @param {import("../engine/orchestration/board-core.js").BoardCore} boardCore - BoardCore 实例
- * @param {number} objectId - 对象 id
- * @returns {boolean}
- */
-function hasStaticBoardObject(boardCore, objectId) {
-  for (const { chunk } of boardCore.chunkLoaded.values()) {
-    if (chunk?.objectManager?.staticGraph?.hasNode?.(objectId)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 const defaultWorkerHost = globalThis?.self;

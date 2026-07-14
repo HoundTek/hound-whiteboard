@@ -106,5 +106,5 @@ workflow 通过 `viewport.mountWorkflow(name, workflow, edges)` 挂到：
 ## 相关文档
 
 - [viewport-document.md](./viewport-document.md)
-- [board-api-document.md](../../../../bridges/docs/board-api-document.md)
+- [board-api-rpc-document.md](../../../../bridges/docs/board-api-rpc-document.md)
 - [core-runtime-boundaries.md](../../../../docs/core-runtime-boundaries.md)

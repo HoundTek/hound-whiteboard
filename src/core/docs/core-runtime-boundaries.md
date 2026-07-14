@@ -13,8 +13,8 @@
 
 | 目录 / 文件                                                | 运行边界 | 说明                                                            |
 | ---------------------------------------------------------- | -------- | --------------------------------------------------------------- |
-| `bridges/board-api.js`                                     | UI       | UI 侧 RPC 客户端，封装 `rpc` / `rpc-batch` / `rpc-response`     |
-| `bridges/persistence-adapter.js`                           | Engine    | 持久化适配器协议与工厂，本身不依赖线程宿主                      |
+| `bridges/board-api-rpc.js`                                 | UI       | UI 侧 RPC 客户端，封装 `rpc` / `rpc-batch` / `rpc-response`     |
+| `bridges/persistence-adapter.js`                           | Engine   | 持久化适配器协议与工厂，本身不依赖线程宿主                      |
 | `bridges/file-operate-bridge-renderer.js`                  | UI       | 渲染线程侧文件桥调用入口                                        |
 | `bridges/file-operate-bridge-main.js`                      | Host     | 宿主/主线程的真实文件系统实现                                   |
 | `ui-thread/components/orchestration/board.js`              | UI       | UI 白板 facade、唯一 `DevicesDAG`、viewport 管理、Worker 初始化 |
