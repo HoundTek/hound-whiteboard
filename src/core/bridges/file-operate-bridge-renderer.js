@@ -10,13 +10,27 @@ import { CORE_FILE_OPERATE_ACTIONS } from "./file-operate-bridge-common.js";
 const NOT_IMPLEMENTED_ERROR = "IO bridge not yet implemented for Tauri";
 
 /**
+ * 获取宿主/测试注入的 Core 文件操作桥。
+ * 优先使用 globalThis.__houndCoreFileOps（测试通过它注入 mock 后端），
+ * 不存在则抛"未实现"错误。
+ * @returns {{call: function({action: string, payload: any}): Promise<any>}}
+ */
+function getCoreFileOperateBridge() {
+  const bridge = globalThis.__houndCoreFileOps;
+  if (bridge && typeof bridge.call === "function") {
+    return bridge;
+  }
+  throw new Error(`${NOT_IMPLEMENTED_ERROR} — 未设置 __houndCoreFileOps`);
+}
+
+/**
  * 调用 Core 文件操作 IPC。
  * @param {string} action - 动作名
  * @param {any} payload - 动作参数
  * @returns {Promise<any>}
  */
 async function callCoreFileOperate(action, payload) {
-  throw new Error(`${NOT_IMPLEMENTED_ERROR}: ${action}`);
+  return getCoreFileOperateBridge().call({ action, payload });
 }
 
 /**
