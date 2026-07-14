@@ -11,16 +11,16 @@ import { createConsolePrinter, logBus } from "../utils/log/index.js";
 import {
   configureWhiteboardDemo,
   mountToolSwitcher,
-} from "./demo/whiteboard-demo.js";
-import { DemoLog } from "./demo/log.js";
-import { ViewportTool } from "./demo/viewport-tool.js";
+} from "./config/whiteboard-demo.js";
+import { DemoLog } from "./config/log.js";
+import { ViewportTool } from "./config/viewport-tool.js";
 import {
   attachKeyboardAdapter,
   attachPointerAdapter,
   attachResizeAdapter,
   attachToolbarAdapter,
   attachWheelAdapter,
-} from "./demo/dom-adapters.js";
+} from "./config/dom-adapters.js";
 
 // Demo 独立入口，需要手动注册控制台输出器
 createConsolePrinter(logBus, { timestamps: true });
