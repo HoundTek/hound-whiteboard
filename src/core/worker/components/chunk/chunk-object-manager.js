@@ -8,7 +8,10 @@
 import { DirectedGraph } from "../../../utils/directed-graph.js";
 import { BasicObject } from "../../../shared/objects/basic-obj.js";
 import { boardFileOperateBridge } from "../../../bridges/file-operate-bridge-renderer.js";
-import { intersectsRanges, RectangleRange } from "../../../shared/range/index.js";
+import {
+  intersectsRanges,
+  RectangleRange,
+} from "../../../shared/range/index.js";
 import { Chunk } from "./chunk.js";
 
 /**
@@ -26,8 +29,8 @@ class ChunkObjectManager {
   staticGraph;
 
   /**
-   * 所属白板
-   * @type {import("../orchestration/board-core.js").BoardCore | import("../../../ui/components/orchestration/board.js").Board | undefined}
+   * 所属白板核心
+   * @type {import("../orchestration/board-core.js").BoardCore | undefined}
    */
   board;
 
@@ -38,12 +41,9 @@ class ChunkObjectManager {
   id;
 
   /**
-   * 无 board 时的本地覆盖索引回退（仅测试用）
-   * @type {Map<number, Set<number>>|undefined}
-   * @private
+   * @param {number} chunkId - 区块 id
+   * @param {import("../orchestration/board-core.js").BoardCore} [board] - Worker 端白板实例
    */
-  #localCoverChunks;
-
   constructor(chunkId, board) {
     this.id = chunkId;
     this.board = board;
@@ -52,7 +52,7 @@ class ChunkObjectManager {
 
   /**
    * 绑定白板实例
-   * @param {import("../orchestration/board-core.js").BoardCore | import("../../../ui/components/orchestration/board.js").Board} board - 白板实例
+   * @param {import("../orchestration/board-core.js").BoardCore} board - Worker 端白板实例
    */
   setBoard(board) {
     this.board = board;
@@ -69,7 +69,7 @@ class ChunkObjectManager {
 
   /**
    * 设置对象覆盖区块集合
-   * @description 委托到 BoardCore 的唯一覆盖索引，无 board 时回退到本地 Map。
+   * @description 委托到 BoardCore 的唯一覆盖索引。
    * @param {number} objectId - 对象 id
    * @param {Iterable<number>} chunkIds - 覆盖区块 id 集合
    */
@@ -81,14 +81,7 @@ class ChunkObjectManager {
       }
       normalizedChunkIds.add(chunkId);
     }
-    if (this.board?.setObjectCoverChunks) {
-      this.board.setObjectCoverChunks(objectId, normalizedChunkIds);
-    } else {
-      if (!this.#localCoverChunks) {
-        this.#localCoverChunks = new Map();
-      }
-      this.#localCoverChunks.set(objectId, normalizedChunkIds);
-    }
+    this.board?.setObjectCoverChunks?.(objectId, normalizedChunkIds);
   }
 
   /**
@@ -96,24 +89,17 @@ class ChunkObjectManager {
    * @param {number} objectId - 对象 id
    */
   unsetObjectCoverChunks(objectId) {
-    if (this.board && typeof this.board.unsetObjectCoverChunks === "function") {
-      this.board.unsetObjectCoverChunks(objectId);
-      return;
-    }
-    this.#localCoverChunks?.delete(objectId);
+    this.board?.unsetObjectCoverChunks?.(objectId);
   }
 
   /**
    * 获取对象覆盖区块集合
-   * @description 委托到 BoardCore 的唯一覆盖索引，无 board 时回退到本地 Map。
+   * @description 委托到 BoardCore 的唯一覆盖索引。
    * @param {number} objectId - 对象 id
    * @returns {Set<number>}
    */
   getObjectCoverChunks(objectId) {
-    if (this.board?.getObjectCoverChunks) {
-      return new Set(this.board.getObjectCoverChunks(objectId) ?? []);
-    }
-    return new Set(this.#localCoverChunks?.get(objectId) ?? []);
+    return new Set(this.board?.getObjectCoverChunks?.(objectId) ?? []);
   }
 
   /**
@@ -213,45 +199,12 @@ class ChunkObjectManager {
   }
 
   /**
-   * 根据当前区块对象映射重建所有对象覆盖区块索引
-   * @param {number} chunkWidth - 区块宽
-   * @param {number} chunkHeight - 区块高
-   * @param {{approximationSegments?: number}} [options] - range 几何计算参数
-   * @returns {Map<number, Set<number>>}
-   */
-  syncAllObjectCoverChunks(chunkWidth, chunkHeight, options = {}) {
-    if (this.#localCoverChunks) this.#localCoverChunks.clear();
-    for (const objectId of this.staticGraph.getNodes()) {
-      const obj = this.getObject(objectId);
-      if (!(obj instanceof BasicObject)) continue;
-      this.syncObjectCoverChunksForObject(
-        obj,
-        chunkWidth,
-        chunkHeight,
-        options,
-      );
-    }
-    if (this.board && typeof this.board.getObjectCoverChunks === "function") {
-      return new Map();
-    }
-    return new Map(this.#localCoverChunks ?? []);
-  }
-
-  /**
    * 将对象覆盖区块索引序列化为可持久化结构
+   * @description 有 BoardCore 时覆盖索引由 BoardCore 统一管理，不由 COM 序列化。
    * @returns {Array<[number, number[]]>}
    */
   serializeObjectCoverChunks() {
-    // 有 BoardCore 时覆盖索引由 BoardCore 统一管理，不由 COM 序列化
-    if (this.board && typeof this.board.getObjectCoverChunks === "function") {
-      return [];
-    }
-    return Array.from((this.#localCoverChunks ?? new Map()).entries())
-      .map(([objectId, chunkIds]) => [
-        objectId,
-        Array.from(chunkIds).sort((left, right) => left - right),
-      ])
-      .sort((left, right) => left[0] - right[0]);
+    return [];
   }
 
   /**
@@ -259,7 +212,6 @@ class ChunkObjectManager {
    * @param {Array<[number, number[]]>} coverIndexData - 覆盖索引数据
    */
   loadObjectCoverChunksFromData(coverIndexData) {
-    if (this.#localCoverChunks) this.#localCoverChunks.clear();
     for (const entry of coverIndexData || []) {
       if (!Array.isArray(entry) || entry.length !== 2) {
         throw new Error("Invalid object cover index entry.");
@@ -350,28 +302,6 @@ class ChunkObjectManager {
   unload() {
     this.unloadObjects();
     this.unloadTierGraph();
-  }
-
-  /**
-   * 解析区块对象目录
-   * @param {Directory} root - 白板根目录
-   * @returns {Directory} 对象目录，如果根目录不存在或无法访问，则返回 undefined
-   * @description 对象目录位于白板根目录下的 `objects/chunk{chunkId}/`。
-   */
-  resolveObjectsDirectory(root) {
-    if (!root) return undefined;
-    return root.cd("objects").cd("chunk" + this.id.toString());
-  }
-
-  /**
-   * 解析区块层叠图文件位置
-   * @param {Directory} root - 白板根目录
-   * @returns {File} 层叠图文件，如果根目录不存在或无法访问，则返回 undefined
-   * @description 层叠图文件位于白板根目录下的 `chunks/{chunkId}.json`。
-   */
-  resolveTierGraphFile(root) {
-    if (!root) return undefined;
-    return root.cd("chunks").peek(this.id.toString(), "json");
   }
 }
 

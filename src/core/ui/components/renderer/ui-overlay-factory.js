@@ -1,11 +1,11 @@
 /**
  * @file UI overlay 条目工厂
  * @description 提供 overlay 条目的创建、归一化与坐标辅助函数。
- * @module core/shared/renderer/ui-overlay-factory
+ * @module core/ui/components/renderer/ui-overlay-factory
  * @author Zhou Chenyu
  */
 
-import { RectangleRange } from "../range/index.js";
+import { RectangleRange } from "../../../shared/range/index.js";
 
 /**
  * 兼容选中框的最小留白（屏幕像素）
@@ -38,7 +38,7 @@ const COMPAT_SELECTION_FRAME_MARGIN = 4;
  * @typedef {Object} UiOverlayDrawRuntime
  * @property {RectangleRange} dirtyRect - 当前裁剪脏区
  * @property {UiOverlayEntry} entry - 当前绘制的条目
- * @property {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 当前视口
+ * @property {import("../orchestration/viewport.js").Viewport} viewport - 当前视口
  * @property {import("./ui-renderer.js").UiRenderer} renderer - 当前渲染器
  */
 
@@ -155,7 +155,7 @@ function getSummaryWorldRect(summaryEntry) {
 /**
  * 获取 summary-like 条目的兼容选中框屏幕矩形
  * @param {SummaryLikeEntry} summaryEntry - 摘要或兼容条目
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {RectangleRange | undefined}
  */
 function getSummaryScreenRect(summaryEntry, viewport) {
@@ -171,7 +171,7 @@ function getSummaryScreenRect(summaryEntry, viewport) {
 /**
  * 获取对象兼容选中框的屏幕矩形
  * @param {BasicObject} objectInstance - 对象实例
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {RectangleRange | undefined}
  */
 function getObjectScreenRect(objectInstance, viewport) {
@@ -188,7 +188,7 @@ function getObjectScreenRect(objectInstance, viewport) {
  * 生成 summary-like 条目级兼容选中框 overlay 条目
  * @param {SummaryLikeEntry} summaryEntry - 摘要或兼容条目
  * @param {string} source - 条目来源
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {UiOverlayEntry | undefined}
  */
 function createCompatSummarySelectionEntry(summaryEntry, source, viewport) {
@@ -235,7 +235,7 @@ function createCompatGroupSelectionEntry(screenRect, source) {
  * 基于 summary-like 条目生成兼容选择框条目
  * @param {SummaryLikeEntry[]} summaries - 摘要或兼容条目集合
  * @param {string} role - 当前角色（如 "chooser"、"modifier"）
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {UiOverlayEntry[]}
  */
 function createCompatSelectionEntriesForSummaries(summaries, role, viewport) {
@@ -277,7 +277,7 @@ function createCompatSelectionEntriesForSummaries(summaries, role, viewport) {
 /**
  * 将世界坐标点转为屏幕坐标点
  * @param {{ x: number, y: number }} worldPoint - 世界坐标
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {{ x: number, y: number } | undefined}
  */
 function worldToScreenPoint(worldPoint, viewport) {
@@ -306,7 +306,7 @@ function worldToScreenPoint(worldPoint, viewport) {
 /**
  * 批量将世界坐标点数组转为屏幕坐标点数组
  * @param {Array<{x: number, y: number}>} worldPoints - 世界坐标点数组
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {Array<{x: number, y: number}> | undefined}
  */
 function worldPointsToScreenPoints(worldPoints, viewport) {
@@ -329,7 +329,7 @@ function worldPointsToScreenPoints(worldPoints, viewport) {
  * 创建点类型 overlay 条目
  * @param {{ x: number, y: number }} worldPoint - 世界坐标
  * @param {{ fillStyle?: string, strokeStyle?: string, radius?: number, source?: string }} [options] - 选项
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {UiOverlayEntry | undefined}
  */
 function createPointOverlayEntry(worldPoint, options = {}, viewport) {
@@ -353,7 +353,7 @@ function createPointOverlayEntry(worldPoint, options = {}, viewport) {
  * 创建路径类型 overlay 条目
  * @param {Array<{x: number, y: number}>} worldPoints - 世界坐标点数组
  * @param {{ strokeStyle?: string, fillStyle?: string, lineWidth?: number, lineDash?: number[], closePath?: boolean, source?: string }} [options] - 选项
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @returns {UiOverlayEntry | undefined}
  */
 function createPathOverlayEntry(worldPoints, options = {}, viewport) {
@@ -384,7 +384,7 @@ function createPathOverlayEntry(worldPoints, options = {}, viewport) {
  * 为 rect/point/path 类型注入默认 draw 函数（provider 未提供时）。
  * 无 geometry 的条目直接丢弃。
  * @param {Object} entry - 原始条目（必须含 geometry）
- * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 视口
+ * @param {import("../orchestration/viewport.js").Viewport} viewport - 视口
  * @param {{
  *   drawRectEntry: (context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void,
  *   drawPointEntry: (context: CanvasRenderingContext2D, entry: UiOverlayEntry) => void,
@@ -439,9 +439,17 @@ function normalizeOverlayEntry(entry, viewport, drawFns) {
   if (typeof norm.draw !== "function") {
     if (norm.type === "rect" && ng.screenRect && drawFns?.drawRectEntry) {
       norm.draw = (ctx) => drawFns.drawRectEntry(ctx, norm);
-    } else if (norm.type === "point" && ng.screenPoint && drawFns?.drawPointEntry) {
+    } else if (
+      norm.type === "point" &&
+      ng.screenPoint &&
+      drawFns?.drawPointEntry
+    ) {
       norm.draw = (ctx) => drawFns.drawPointEntry(ctx, norm);
-    } else if (norm.type === "path" && ng.screenPoints?.length >= 2 && drawFns?.drawPathEntry) {
+    } else if (
+      norm.type === "path" &&
+      ng.screenPoints?.length >= 2 &&
+      drawFns?.drawPathEntry
+    ) {
       norm.draw = (ctx) => drawFns.drawPathEntry(ctx, norm);
     }
   }

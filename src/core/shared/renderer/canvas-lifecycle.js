@@ -18,7 +18,7 @@ import { RenderScheduler } from "./render-scheduler.js";
 class CanvasHost {
   /**
    * 绑定的视口
-   * @type {import("../../ui/components/orchestration/viewport.js").Viewport}
+   * @type {import("../types/types.js").ViewportLike}
    */
   viewport;
 
@@ -37,7 +37,7 @@ class CanvasHost {
   _scheduler;
 
   /**
-   * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 目标视口
+   * @param {import("../types/types.js").ViewportLike} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options={}] - 初始化选项
    */
   constructor(viewport, options = {}) {

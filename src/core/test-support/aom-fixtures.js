@@ -262,11 +262,36 @@ function setObjectCoverage(chunks, objectIds) {
   }
 }
 
+/**
+ * 创建覆盖区块索引存储
+ * @returns {{
+ *   setObjectCoverChunks: (objectId: number, chunkIds: Iterable<number>) => void,
+ *   getObjectCoverChunks: (objectId: number) => Set<number> | undefined,
+ *   unsetObjectCoverChunks: (objectId: number) => void,
+ * }}
+ */
+function createCoverChunkStorage() {
+  /** @type {Map<number, Set<number>>} */
+  const coverChunks = new Map();
+  return {
+    setObjectCoverChunks(objectId, chunkIds) {
+      coverChunks.set(objectId, new Set(chunkIds));
+    },
+    getObjectCoverChunks(objectId) {
+      return coverChunks.get(objectId);
+    },
+    unsetObjectCoverChunks(objectId) {
+      coverChunks.delete(objectId);
+    },
+  };
+}
+
 export {
   chunkConnect,
   createBoardCoreAomFixture,
   createChunk,
   createChunkAt,
+  createCoverChunkStorage,
   createMockBoard,
   createObjectInChunk,
   ensureBoardCoreChunkLoaded,

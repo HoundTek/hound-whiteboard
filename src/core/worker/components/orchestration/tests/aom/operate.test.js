@@ -1,5 +1,6 @@
 import {
   createChunk,
+  createCoverChunkStorage,
   createMockBoard,
 } from "../../../../../test-support/aom-fixtures.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
@@ -28,7 +29,7 @@ describe("ActiveObjectManager/operate", () => {
 
   beforeEach(() => {
     chunk = createChunk(1);
-    chunk.objectManager = new ChunkObjectManager(1);
+    chunk.objectManager = new ChunkObjectManager(1, createCoverChunkStorage());
     chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
     aom = new ActiveObjectManager(
       createMockBoard([chunk], { width: 10, height: 10 }),

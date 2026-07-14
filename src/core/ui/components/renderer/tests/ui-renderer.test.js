@@ -4,7 +4,7 @@ import { BasicObject } from "../../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../../shared/range/index.js";
 import { createNoopCanvasContext2D } from "../../../../test-support/noop-canvas.js";
 import { Vector } from "../../../../utils/math.js";
-import { createCompatSelectionEntriesForSummaries } from "../../../../shared/renderer/ui-overlay-factory.js";
+import { createCompatSelectionEntriesForSummaries } from "../ui-overlay-factory.js";
 
 class TestOverlayObject extends BasicObject {
   constructor({ id = 1, position, localRect, property } = {}) {
@@ -23,7 +23,7 @@ class TestOverlayObject extends BasicObject {
     return true;
   }
 
-  render() { }
+  render() {}
 }
 
 describe("UiRenderer", () => {
@@ -134,13 +134,12 @@ describe("UiRenderer", () => {
       property: {},
     };
 
-    renderer.registerOverlayProvider(
-      ({ viewport }) =>
-        createCompatSelectionEntriesForSummaries(
-          [summary1, summary2],
-          "chooser",
-          viewport,
-        ),
+    renderer.registerOverlayProvider(({ viewport }) =>
+      createCompatSelectionEntriesForSummaries(
+        [summary1, summary2],
+        "chooser",
+        viewport,
+      ),
     );
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -165,13 +164,8 @@ describe("UiRenderer", () => {
       property: {},
     };
 
-    renderer.registerOverlayProvider(
-      ({ viewport }) =>
-        createCompatSelectionEntriesForSummaries(
-          [summary],
-          "chooser",
-          viewport,
-        ),
+    renderer.registerOverlayProvider(({ viewport }) =>
+      createCompatSelectionEntriesForSummaries([summary], "chooser", viewport),
     );
 
     renderer.flush([new RectangleRange(0, 0, 800, 600)]);
@@ -194,9 +188,9 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => { });
-    context.arc = jest.fn(() => { });
-    context.fill = jest.fn(() => { });
+    context.beginPath = jest.fn(() => {});
+    context.arc = jest.fn(() => {});
+    context.fill = jest.fn(() => {});
 
     renderer.registerOverlayProvider(() => ({
       source: "test-point",
@@ -228,9 +222,9 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => { });
-    context.arc = jest.fn(() => { });
-    context.fill = jest.fn(() => { });
+    context.beginPath = jest.fn(() => {});
+    context.arc = jest.fn(() => {});
+    context.fill = jest.fn(() => {});
 
     renderer.registerOverlayProvider(() => ({
       source: "test-point-world",
@@ -267,10 +261,10 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => { });
-    context.moveTo = jest.fn(() => { });
-    context.lineTo = jest.fn(() => { });
-    context.stroke = jest.fn(() => { });
+    context.beginPath = jest.fn(() => {});
+    context.moveTo = jest.fn(() => {});
+    context.lineTo = jest.fn(() => {});
+    context.stroke = jest.fn(() => {});
 
     renderer.registerOverlayProvider(() => ({
       source: "test-path",
@@ -312,11 +306,11 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => { });
-    context.moveTo = jest.fn(() => { });
-    context.lineTo = jest.fn(() => { });
-    context.closePath = jest.fn(() => { });
-    context.fill = jest.fn(() => { });
+    context.beginPath = jest.fn(() => {});
+    context.moveTo = jest.fn(() => {});
+    context.lineTo = jest.fn(() => {});
+    context.closePath = jest.fn(() => {});
+    context.fill = jest.fn(() => {});
 
     renderer.registerOverlayProvider(() => ({
       source: "test-path-close",
@@ -350,14 +344,18 @@ describe("UiRenderer", () => {
         this._strokeStyle = v;
       },
     };
-    const viewport = { ...createViewport({}), origin: { x: 10, y: 20 }, zoom: 3 };
+    const viewport = {
+      ...createViewport({}),
+      origin: { x: 10, y: 20 },
+      zoom: 3,
+    };
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => { });
-    context.moveTo = jest.fn(() => { });
-    context.lineTo = jest.fn(() => { });
-    context.stroke = jest.fn(() => { });
+    context.beginPath = jest.fn(() => {});
+    context.moveTo = jest.fn(() => {});
+    context.lineTo = jest.fn(() => {});
+    context.stroke = jest.fn(() => {});
 
     renderer.registerOverlayProvider(() => ({
       source: "test-path-world",
@@ -488,8 +486,8 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => { });
-    context.arc = jest.fn(() => { });
+    context.beginPath = jest.fn(() => {});
+    context.arc = jest.fn(() => {});
 
     renderer.registerOverlayProvider(() => ({
       source: "non-intersecting-point",
@@ -509,9 +507,9 @@ describe("UiRenderer", () => {
     const canvas = createCanvas(context);
     const renderer = new UiRenderer(viewport, { canvas });
 
-    context.beginPath = jest.fn(() => { });
-    context.moveTo = jest.fn(() => { });
-    context.stroke = jest.fn(() => { });
+    context.beginPath = jest.fn(() => {});
+    context.moveTo = jest.fn(() => {});
+    context.stroke = jest.fn(() => {});
 
     renderer.registerOverlayProvider(() => ({
       source: "non-intersecting-path",
@@ -583,8 +581,6 @@ describe("UiRenderer", () => {
     expect(draw1).toHaveBeenCalledTimes(1);
     expect(draw2).not.toHaveBeenCalled();
   });
-
-
 
   test("无 geometry 的条目被 normalize 丢弃", () => {
     const context = createContext();

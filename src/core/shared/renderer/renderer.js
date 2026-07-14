@@ -51,7 +51,7 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
  */
 class Renderer extends CanvasHost {
   /**
-   * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 目标视口
+   * @param {import("../types/types.js").ViewportLike} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options = {}] - 初始化选项
    */
   constructor(viewport, options = {}) {
@@ -324,12 +324,7 @@ class Renderer extends CanvasHost {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.beginPath();
     for (const clipRect of clipRects) {
-      ctx.rect(
-        clipRect.left,
-        clipRect.top,
-        clipRect.width,
-        clipRect.height,
-      );
+      ctx.rect(clipRect.left, clipRect.top, clipRect.width, clipRect.height);
     }
 
     ctx.clip();

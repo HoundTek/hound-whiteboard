@@ -6,10 +6,13 @@
  */
 
 import { GestureTool, unifyActionResult } from "../gesture-tool.js";
-import { RectangleRange, intersectsRanges } from "../../../../shared/range/index.js";
+import {
+  RectangleRange,
+  intersectsRanges,
+} from "../../../../shared/range/index.js";
 import { Range } from "../../../../shared/range/range.js";
 import { Vector } from "../../../../utils/math.js";
-import { createCompatSelectionEntriesForSummaries } from "../../../../shared/renderer/ui-overlay-factory.js";
+import { createCompatSelectionEntriesForSummaries } from "../../../components/renderer/ui-overlay-factory.js";
 
 /**
  * 对象选择工具基类
@@ -176,7 +179,7 @@ class ObjectChooserTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  afterConfirmSelection(context, objects) { }
+  afterConfirmSelection(context, objects) {}
 
   /**
    * 显式确认当前选择
@@ -201,7 +204,7 @@ class ObjectChooserTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  beginSelectionGesture(interaction) { }
+  beginSelectionGesture(interaction) {}
 
   /**
    * GestureTool 生命周期适配：开始选择手势
@@ -231,7 +234,7 @@ class ObjectChooserTool extends GestureTool {
    * @param {Object} interaction - 当前交互上下文
    * @returns {void}
    */
-  completeGesture(interaction) { }
+  completeGesture(interaction) {}
 
   /**
    * GestureTool 生命周期适配：取消选择手势

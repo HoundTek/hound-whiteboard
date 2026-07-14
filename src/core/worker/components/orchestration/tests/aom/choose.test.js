@@ -3,6 +3,7 @@ import {
   chunkConnect,
   createChunk,
   createChunkAt,
+  createCoverChunkStorage,
   createMockBoard,
   createObjectInChunk,
   setObjectCoverage,
@@ -29,7 +30,7 @@ describe("ActiveObjectManager/choose", () => {
 
   beforeEach(() => {
     chunk = createChunk(1);
-    chunk.objectManager = new ChunkObjectManager(1);
+    chunk.objectManager = new ChunkObjectManager(1, createCoverChunkStorage());
     chunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
     aom = new ActiveObjectManager(
       createMockBoard([chunk], { width: CHUNK_SIZE, height: CHUNK_SIZE }),
@@ -91,15 +92,28 @@ describe("ActiveObjectManager/choose", () => {
     });
 
     test("choose 应将 pickup 纳入 AOM 的 inactive 邻接对象一并加入静态层失效集合", async () => {
-      const lower = new CircleObject(101, new Vector(50, 50), {}, {
-        radius: 60,
-      });
-      const upper = new CircleObject(102, new Vector(70, 50), {}, {
-        radius: 60,
-      });
+      const lower = new CircleObject(
+        101,
+        new Vector(50, 50),
+        {},
+        {
+          radius: 60,
+        },
+      );
+      const upper = new CircleObject(
+        102,
+        new Vector(70, 50),
+        {},
+        {
+          radius: 60,
+        },
+      );
 
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
         [101, [102]],
         [102, []],
@@ -283,10 +297,22 @@ describe("ActiveObjectManager/choose", () => {
         }),
       );
 
-      centerChunk.objectManager = new ChunkObjectManager(centerChunk.id);
-      rightChunk.objectManager = new ChunkObjectManager(rightChunk.id);
-      upChunk.objectManager = new ChunkObjectManager(upChunk.id);
-      rightUpChunk.objectManager = new ChunkObjectManager(rightUpChunk.id);
+      centerChunk.objectManager = new ChunkObjectManager(
+        centerChunk.id,
+        createCoverChunkStorage(),
+      );
+      rightChunk.objectManager = new ChunkObjectManager(
+        rightChunk.id,
+        createCoverChunkStorage(),
+      );
+      upChunk.objectManager = new ChunkObjectManager(
+        upChunk.id,
+        createCoverChunkStorage(),
+      );
+      rightUpChunk.objectManager = new ChunkObjectManager(
+        rightUpChunk.id,
+        createCoverChunkStorage(),
+      );
 
       centerChunk.objectManager.staticGraph = DirectedGraph.parse([
         [100, [101]],

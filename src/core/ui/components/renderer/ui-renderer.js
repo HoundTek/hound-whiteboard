@@ -5,7 +5,10 @@
  * @author Zhou Chenyu
  */
 
-import { RectangleRange, intersectsRanges } from "../../../shared/range/index.js";
+import {
+  RectangleRange,
+  intersectsRanges,
+} from "../../../shared/range/index.js";
 import { expandRectForClear } from "../../../shared/renderer/renderer.js";
 import { Viewport } from "../orchestration/viewport.js";
 import { Logger } from "../../../../utils/log/logger.js";
@@ -13,11 +16,11 @@ import { logBus } from "../../../../utils/log/log-bus.js";
 import { createRectangleDirtyRectMerger } from "../../../shared/renderer/render-scheduler.js";
 import { createLiveDirtyRectThresholdStrategy } from "../../../shared/renderer/dirty-rect-strategy-shared.js";
 import { CanvasHost } from "../../../shared/renderer/canvas-lifecycle.js";
-import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "../../../shared/renderer/ui-overlay-factory.js";
+import { normalizeOverlayEntry as normalizeOverlayEntryFactory } from "./ui-overlay-factory.js";
 
 /**
  * 提取 overlay 条目的屏幕边界矩形，用于脏区相交检测
- * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - overlay 条目
+ * @param {import("./ui-overlay-factory.js").UiOverlayEntry} entry - overlay 条目
  * @returns {RectangleRange | undefined} 边界矩形；无法推导时返回 undefined
  */
 function _getOverlayEntryBounds(entry) {
@@ -38,7 +41,11 @@ function _getOverlayEntryBounds(entry) {
     );
   }
 
-  if (entry.type === "path" && Array.isArray(g.screenPoints) && g.screenPoints.length > 0) {
+  if (
+    entry.type === "path" &&
+    Array.isArray(g.screenPoints) &&
+    g.screenPoints.length > 0
+  ) {
     const pts = g.screenPoints;
     let minX = Infinity;
     let minY = Infinity;
@@ -53,7 +60,12 @@ function _getOverlayEntryBounds(entry) {
     }
     if (!Number.isFinite(minX)) return undefined;
     const lw = (entry.style?.lineWidth ?? 1) + 2;
-    return new RectangleRange(minX - lw, minY - lw, maxX - minX + lw * 2, maxY - minY + lw * 2);
+    return new RectangleRange(
+      minX - lw,
+      minY - lw,
+      maxX - minX + lw * 2,
+      maxY - minY + lw * 2,
+    );
   }
 
   return undefined;
@@ -69,7 +81,9 @@ function _intersectsAnyDirtyRect(bounds, dirtyRects) {
   if (!bounds || !Array.isArray(dirtyRects)) return true;
 
   return dirtyRects.some(
-    (dirtyRect) => dirtyRect instanceof RectangleRange && intersectsRanges(bounds, dirtyRect),
+    (dirtyRect) =>
+      dirtyRect instanceof RectangleRange &&
+      intersectsRanges(bounds, dirtyRect),
   );
 }
 
@@ -99,7 +113,7 @@ function _clearDirtyRects(context, dirtyRects) {
  * UI overlay provider
  * @callback UiOverlayProvider
  * @param {{ viewport: Viewport, renderer: UiRenderer }} context - provider 上下文
- * @returns {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry | import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry[] | undefined}
+ * @returns {import("./ui-overlay-factory.js").UiOverlayEntry | import("./ui-overlay-factory.js").UiOverlayEntry[] | undefined}
  */
 
 /**
@@ -181,14 +195,17 @@ class UiRenderer extends CanvasHost {
   /**
    * 收集自定义 overlay 条目
    * @description 遍历所有 provider，归一化后合并返回。单个 provider 异常不中断其他 provider 的收集。
-   * @returns {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
+   * @returns {import("./ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectProviderOverlayEntries() {
     const overlayEntries = [];
     const drawFns = {
-      drawRectEntry: (context, rectEntry) => this.drawRectEntry(context, rectEntry),
-      drawPointEntry: (context, pointEntry) => this.drawPointEntry(context, pointEntry),
-      drawPathEntry: (context, pathEntry) => this.drawPathEntry(context, pathEntry),
+      drawRectEntry: (context, rectEntry) =>
+        this.drawRectEntry(context, rectEntry),
+      drawPointEntry: (context, pointEntry) =>
+        this.drawPointEntry(context, pointEntry),
+      drawPathEntry: (context, pathEntry) =>
+        this.drawPathEntry(context, pathEntry),
     };
 
     for (const provider of this.overlayProviders) {
@@ -219,7 +236,7 @@ class UiRenderer extends CanvasHost {
 
   /**
    * 收集当前应绘制的 overlay
-   * @returns {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
+   * @returns {import("./ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectOverlayEntries() {
     return this.collectProviderOverlayEntries();
@@ -228,7 +245,7 @@ class UiRenderer extends CanvasHost {
   /**
    * 绘制矩形 overlay 条目
    * @param {CanvasRenderingContext2D} context - 画布上下文
-   * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 矩形条目
+   * @param {import("./ui-overlay-factory.js").UiOverlayEntry} entry - 矩形条目
    */
   drawRectEntry(context, entry = {}) {
     const g = entry.geometry;
@@ -271,7 +288,7 @@ class UiRenderer extends CanvasHost {
    * 绘制点 overlay 条目
    * @description 在 screenPoint 处画一个填充/描边的圆点。
    * @param {CanvasRenderingContext2D} context - 画布上下文
-   * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 点条目
+   * @param {import("./ui-overlay-factory.js").UiOverlayEntry} entry - 点条目
    */
   drawPointEntry(context, entry = {}) {
     const g = entry.geometry;
@@ -302,7 +319,7 @@ class UiRenderer extends CanvasHost {
    * 绘制路径 overlay 条目
    * @description 连接 screenPoints 中的点画一条折线/闭合路径。
    * @param {CanvasRenderingContext2D} context - 画布上下文
-   * @param {import("../../../shared/renderer/ui-overlay-factory.js").UiOverlayEntry} entry - 路径条目
+   * @param {import("./ui-overlay-factory.js").UiOverlayEntry} entry - 路径条目
    */
   drawPathEntry(context, entry = {}) {
     const g = entry.geometry;
@@ -358,9 +375,7 @@ class UiRenderer extends CanvasHost {
 
     const normalizedDirtyRects =
       Array.isArray(dirtyRects) && dirtyRects.length > 0
-        ? dirtyRects
-          .map((rect) => expandRectForClear(rect))
-          .filter(Boolean)
+        ? dirtyRects.map((rect) => expandRectForClear(rect)).filter(Boolean)
         : [];
 
     // 只清空脏区（无脏区时全量清空）
@@ -422,8 +437,6 @@ class UiRenderer extends CanvasHost {
       ? normalizedDirtyRects
       : [viewportRect];
   }
-
-
 }
 
 export { UiRenderer };

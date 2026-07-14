@@ -38,6 +38,18 @@
  */
 
 /**
+ * 视口通用接口
+ * @description UI Viewport 与 Worker ViewportCore 的公共子集，供 shared/renderer 使用。
+ * @typedef {Object} ViewportLike
+ * @property {number} zoom - 缩放因子
+ * @property {{ x: number, y: number }} origin - 视口原点（世界坐标）
+ * @property {number} width - 视口宽度
+ * @property {number} height - 视口高度
+ * @property {() => import("../range/rectangle.js").RectangleRange} getViewportScreenRect - 获取视口屏幕矩形
+ * @property {(rect: import("../range/rectangle.js").RectangleRange, padding?: number) => (import("../range/rectangle.js").RectangleRange | undefined)} worldRectToScreenRect - 世界坐标转屏幕坐标
+ */
+
+/**
  * 轻量对象条目
  * @description
  * UI 侧（creator / chooser / modifier）统一使用的纯数据对象协议，代替 BasicObject 实例在工具间传递。

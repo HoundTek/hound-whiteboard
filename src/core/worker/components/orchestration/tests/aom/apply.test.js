@@ -2,6 +2,7 @@ import { jest } from "@jest/globals";
 import {
   createBoardCoreAomFixture,
   createChunk,
+  createCoverChunkStorage,
 } from "../../../../../test-support/aom-fixtures.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Vector } from "../../../../../utils/math.js";
@@ -175,10 +176,16 @@ describe("ActiveObjectManager/apply", () => {
 
     test("apply 应通过 renderHooks 触发刷新", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.setObjectCoverChunks(201, [1, 2]);
       const coveredChunk = createChunk(2);
-      coveredChunk.objectManager = new ChunkObjectManager(2);
+      coveredChunk.objectManager = new ChunkObjectManager(
+        2,
+        createCoverChunkStorage(),
+      );
 
       const requestStaticRenderForObjects = jest.fn();
       const requestActiveRender = jest.fn();
@@ -235,7 +242,10 @@ describe("ActiveObjectManager/apply", () => {
       });
 
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[301, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(301, [1]);
 
@@ -295,7 +305,10 @@ describe("ActiveObjectManager/apply", () => {
       });
 
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
         [401, [402]],
         [402, []],

@@ -10,7 +10,7 @@ import { SignalPacket } from "../../signal.js";
 import { BasicObject } from "../../../../shared/objects/basic-obj.js";
 import { RectangleRange } from "../../../../shared/range/index.js";
 import { Vector } from "../../../../utils/math.js";
-import { createCompatSelectionEntriesForSummaries } from "../../../../shared/renderer/ui-overlay-factory.js";
+import { createCompatSelectionEntriesForSummaries } from "../../../components/renderer/ui-overlay-factory.js";
 
 /**
  * 对象修改工具相关信号类型常量
@@ -399,7 +399,7 @@ class ObjectModifierTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  afterApplyModifiedObjects(context, objects, result) { }
+  afterApplyModifiedObjects(context, objects, result) {}
 
   /**
    * GestureTool 生命周期适配：动作完成后的通知
@@ -760,7 +760,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 修改手势完成
    * @param {Object} interaction - 当前交互上下文
    */
-  completeGesture(interaction) { }
+  completeGesture(interaction) {}
 
   /**
    * 修改手势取消
@@ -770,7 +770,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 覆写时只需恢复几何，无需关心引用失效与渲染刷新。
    * @param {Object} interaction - 当前交互上下文
    */
-  cancelGesture(interaction) { }
+  cancelGesture(interaction) {}
 
   /**
    * 位移应用前的 hook
@@ -779,7 +779,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @protected
    */
-  onBeforeDisplacement(interaction) { }
+  onBeforeDisplacement(interaction) {}
 
   /**
    * 位移应用后的 hook
@@ -789,7 +789,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @protected
    */
-  onAfterDisplacement(interaction) { }
+  onAfterDisplacement(interaction) {}
 
   /**
    * 将 displacement 增量直接累加到各对象位置

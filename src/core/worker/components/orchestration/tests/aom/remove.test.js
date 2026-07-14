@@ -1,5 +1,8 @@
 import { jest } from "@jest/globals";
-import { createChunk } from "../../../../../test-support/aom-fixtures.js";
+import {
+  createChunk,
+  createCoverChunkStorage,
+} from "../../../../../test-support/aom-fixtures.js";
 import { DirectedGraph } from "../../../../../utils/directed-graph.js";
 import { Vector } from "../../../../../utils/math.js";
 import { ActiveObjectManager } from "../../active-object-manager.js";
@@ -13,7 +16,10 @@ describe("ActiveObjectManager/remove", () => {
   describe("基础删除", () => {
     test("remove 应将对象从区块静态图中移除", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[101, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(101, new Set([1]));
 
@@ -45,19 +51,28 @@ describe("ActiveObjectManager/remove", () => {
     test("remove 应从所有覆盖区块中移除对象", async () => {
       // 使用螺旋 id：(0,0)=1, (1,0)=2, (1,1)=3
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[102, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(102, new Set([1, 2, 3]));
 
       const coveredChunkA = createChunk(2);
-      coveredChunkA.objectManager = new ChunkObjectManager(2);
+      coveredChunkA.objectManager = new ChunkObjectManager(
+        2,
+        createCoverChunkStorage(),
+      );
       coveredChunkA.objectManager.staticGraph = DirectedGraph.parse([
         [102, []],
       ]);
       coveredChunkA.objectManager.setObjectCoverChunks(102, new Set([1, 2, 3]));
 
       const coveredChunkB = createChunk(3);
-      coveredChunkB.objectManager = new ChunkObjectManager(3);
+      coveredChunkB.objectManager = new ChunkObjectManager(
+        3,
+        createCoverChunkStorage(),
+      );
       coveredChunkB.objectManager.staticGraph = DirectedGraph.parse([
         [102, []],
       ]);
@@ -102,7 +117,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 应将对象从活动集合中移除", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
       ownerChunk.objectManager.setObjectCoverChunks(12, new Set([1]));
 
@@ -146,7 +164,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 应能处理不在活动集合中的对象", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[201, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(201, new Set([1]));
 
@@ -179,7 +200,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 应清理所有被移除对象后的空层", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse(oneChunkData);
       for (const nodeId of [12, 13, 5, 7, 8, 9, 4, 6]) {
         ownerChunk.objectManager.setObjectCoverChunks(nodeId, new Set([1]));
@@ -237,7 +261,10 @@ describe("ActiveObjectManager/remove", () => {
         flushViewportForObjects: jest.fn(),
       };
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[301, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(301, new Set([1]));
 
@@ -280,12 +307,18 @@ describe("ActiveObjectManager/remove", () => {
         flushViewportForObjects: jest.fn(),
       };
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[302, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(302, new Set([1, 2]));
 
       const coveredChunk = createChunk(2);
-      coveredChunk.objectManager = new ChunkObjectManager(2);
+      coveredChunk.objectManager = new ChunkObjectManager(
+        2,
+        createCoverChunkStorage(),
+      );
       coveredChunk.objectManager.staticGraph = DirectedGraph.parse([[302, []]]);
       coveredChunk.objectManager.setObjectCoverChunks(302, new Set([1, 2]));
 
@@ -319,7 +352,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 应优先触发对象级静态层局部失效", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[303, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(303, new Set([1]));
 
@@ -360,7 +396,10 @@ describe("ActiveObjectManager/remove", () => {
   describe("快照清理", () => {
     test("remove 应清理 baseObjectSnapshotWorldRanges", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[401, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(401, new Set([1]));
 
@@ -398,7 +437,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 应清理 add 产生的快照", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[402, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(402, new Set([1]));
 
@@ -440,7 +482,10 @@ describe("ActiveObjectManager/remove", () => {
   describe("静态图邻接清理", () => {
     test("remove 应将邻接对象纳入 base 层失效", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
         [501, [502]],
         [502, []],
@@ -499,7 +544,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 删除无邻接的孤立对象时只纳入自身", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([[601, []]]);
       ownerChunk.objectManager.setObjectCoverChunks(601, new Set([1]));
 
@@ -543,7 +591,10 @@ describe("ActiveObjectManager/remove", () => {
   describe("混合场景", () => {
     test("remove 应支持同时移除活动和静态对象", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       ownerChunk.objectManager.staticGraph = DirectedGraph.parse([
         [701, []],
         [702, []],
@@ -605,7 +656,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 应能处理由 add 加入但未 apply 的对象", async () => {
       const ownerChunk = createChunk(1);
-      ownerChunk.objectManager = new ChunkObjectManager(1);
+      ownerChunk.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
 
       const board = {
         width: 10,
@@ -678,17 +732,26 @@ describe("ActiveObjectManager/remove", () => {
     test("remove 应能从多个区块中正确移除跨区块对象", async () => {
       // 螺旋 id：(0,0)=1, (1,0)=2, (2,0)=11
       const chunk00 = createChunk(1);
-      chunk00.objectManager = new ChunkObjectManager(1);
+      chunk00.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       chunk00.objectManager.staticGraph = DirectedGraph.parse([[1001, []]]);
       chunk00.objectManager.setObjectCoverChunks(1001, new Set([1, 2, 11]));
 
       const chunk10 = createChunk(2);
-      chunk10.objectManager = new ChunkObjectManager(2);
+      chunk10.objectManager = new ChunkObjectManager(
+        2,
+        createCoverChunkStorage(),
+      );
       chunk10.objectManager.staticGraph = DirectedGraph.parse([[1001, []]]);
       chunk10.objectManager.setObjectCoverChunks(1001, new Set([1, 2, 11]));
 
       const chunk20 = createChunk(11);
-      chunk20.objectManager = new ChunkObjectManager(11);
+      chunk20.objectManager = new ChunkObjectManager(
+        11,
+        createCoverChunkStorage(),
+      );
       chunk20.objectManager.staticGraph = DirectedGraph.parse([[1001, []]]);
       chunk20.objectManager.setObjectCoverChunks(1001, new Set([1, 2, 11]));
 
@@ -730,7 +793,10 @@ describe("ActiveObjectManager/remove", () => {
 
     test("remove 应正确处理部分区块不存在的场景", async () => {
       const chunk00 = createChunk(1);
-      chunk00.objectManager = new ChunkObjectManager(1);
+      chunk00.objectManager = new ChunkObjectManager(
+        1,
+        createCoverChunkStorage(),
+      );
       chunk00.objectManager.staticGraph = DirectedGraph.parse([[1101, []]]);
       chunk00.objectManager.setObjectCoverChunks(1101, new Set([1, 2]));
 

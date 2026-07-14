@@ -113,7 +113,7 @@ class ViewportRenderer extends Renderer {
   #outputScheduler;
 
   /**
-   * @param {import("../../ui/components/orchestration/viewport.js").Viewport} viewport - 目标视口
+   * @param {import("../orchestration/viewport-core.js").ViewportCore} viewport - 目标视口
    * @param {ActiveObjectManager | undefined} aom - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | OffscreenCanvas | null }} [options = {}] - 初始化选项
    */

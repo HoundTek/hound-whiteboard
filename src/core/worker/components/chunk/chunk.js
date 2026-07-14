@@ -18,8 +18,8 @@ import { ChunkObjectManager } from "./chunk-object-manager.js";
  */
 class Chunk {
   /**
-   * 所属白板
-   * @type {import("../../../ui/components/orchestration/board.js").Board | undefined}
+   * 所属白板核心
+   * @type {import("../orchestration/board-core.js").BoardCore | undefined}
    */
   board;
 

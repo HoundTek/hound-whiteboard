@@ -11,6 +11,29 @@ import { boardFileOperateBridge } from "../../../../bridges/file-operate-bridge-
 import { ChunkObjectManager } from "../chunk-object-manager.js";
 import { StrokeObject } from "../../../../shared/objects/stroke/stroke.js";
 
+/**
+ * 创建覆盖区块索引存储
+ * @returns {{
+ *   setObjectCoverChunks: (objectId: number, chunkIds: Iterable<number>) => void,
+ *   getObjectCoverChunks: (objectId: number) => Set<number> | undefined,
+ *   unsetObjectCoverChunks: (objectId: number) => void,
+ * }}
+ */
+function createCoverChunkStorage() {
+  const coverChunks = new Map();
+  return {
+    setObjectCoverChunks(objectId, chunkIds) {
+      coverChunks.set(objectId, new Set(chunkIds));
+    },
+    getObjectCoverChunks(objectId) {
+      return coverChunks.get(objectId);
+    },
+    unsetObjectCoverChunks(objectId) {
+      coverChunks.delete(objectId);
+    },
+  };
+}
+
 describe("ChunkObjectManager", () => {
   let tempRoot;
   let originalBridge;
@@ -46,7 +69,8 @@ describe("ChunkObjectManager", () => {
       },
     });
 
-    const chunkObjectManager = new ChunkObjectManager(1);
+    const coverChunkBoard = createCoverChunkStorage();
+    const chunkObjectManager = new ChunkObjectManager(1, coverChunkBoard);
     chunkObjectManager.staticGraph = DirectedGraph.parse([
       [15, [18]],
       [18, []],
@@ -56,20 +80,23 @@ describe("ChunkObjectManager", () => {
 
     await chunkObjectManager.saveChunkMetadata(boardRoot);
 
-    const restoredManager = new ChunkObjectManager(1);
+    const restoredManager = new ChunkObjectManager(1, coverChunkBoard);
     await restoredManager.loadChunkMetadata(boardRoot);
 
+    // 层叠图由 COM 持久化，新实例从磁盘恢复后应一致
     expect(
       restoredManager.staticGraph.equals(chunkObjectManager.staticGraph),
     ).toBe(true);
-    expect(restoredManager.serializeObjectCoverChunks()).toEqual([
-      [15, [1, 2]],
-      [18, [1, 2, 3]],
-    ]);
+    // 覆盖索引通过 board 存储，COM 序列化时不包含（有 board 时返回 []）
+    expect(coverChunkBoard.getObjectCoverChunks(15)).toEqual(new Set([1, 2]));
+    expect(coverChunkBoard.getObjectCoverChunks(18)).toEqual(
+      new Set([1, 2, 3]),
+    );
   });
 
   test("无 rootPath 时层叠图读写应直接保持内存 no-op", async () => {
-    const chunkObjectManager = new ChunkObjectManager(1);
+    const coverChunkBoard = createCoverChunkStorage();
+    const chunkObjectManager = new ChunkObjectManager(1, coverChunkBoard);
     chunkObjectManager.staticGraph = DirectedGraph.parse([
       [15, [18]],
       [18, []],
@@ -98,22 +125,22 @@ describe("ChunkObjectManager", () => {
         ]),
       ),
     ).toBe(true);
-    expect(chunkObjectManager.serializeObjectCoverChunks()).toEqual([
-      [15, [1, 2]],
-    ]);
+    // 覆盖索引通过 board 存储
+    expect(coverChunkBoard.getObjectCoverChunks(15)).toEqual(new Set([1, 2]));
 
     loadMetadataSpy.mockRestore();
     saveMetadataSpy.mockRestore();
   });
 
   test("应基于对象 range 精确计算覆盖区块，而不是仅按 bounding box 粗算", () => {
-    const chunkObjectManager = new ChunkObjectManager(1);
+    const coverChunkBoard = createCoverChunkStorage();
+    const chunkObjectManager = new ChunkObjectManager(1, coverChunkBoard);
     const stroke = new StrokeObject(15, new Vector(0, 0));
-    stroke.setData({ points: [
-      new Vector(1, 1),
-      new Vector(19, 1),
-      new Vector(19, 19),
-    ].map(p => ({ x: p.x, y: p.y })) });
+    stroke.setData({
+      points: [new Vector(1, 1), new Vector(19, 1), new Vector(19, 19)].map(
+        (p) => ({ x: p.x, y: p.y }),
+      ),
+    });
 
     const coveredChunks = chunkObjectManager.syncObjectCoverChunksForObject(
       stroke,
