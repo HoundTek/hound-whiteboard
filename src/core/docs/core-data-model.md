@@ -1,6 +1,6 @@
 # Core 数据模型与术语统一
 
-本文档整理 `src/core/` 当前实现中的核心数据模型，并明确 UI、Worker 与共享层之间的权威边界。
+本文档整理 `src/core/engine/` + `src/core/ui-thread/` + `src/core/bridges/` 当前实现中的核心数据模型，并明确 UI 线程、Worker 与 Engine 核心层之间的权威边界。
 
 ## 数据权威划分
 
@@ -32,11 +32,11 @@ Worker 线程持有真正的 Core 数据权威：
 
 UI 与 Worker 共用：
 
-- `shared/objects/`
-- `shared/range/`
-- `shared/renderer/`
-- `shared/types/`
-- `utils/`
+- `engine/objects/`
+- `engine/range/`
+- `engine/renderer/`
+- `engine/types/`
+- `engine/utils/`
 
 ## 白板级模型
 
@@ -122,7 +122,7 @@ Map<chunkId, {
 
 ### 真实对象实例
 
-真实对象实例定义在 `shared/objects/`，基类是 `BasicObject`，再派生出笔画、容器、一维/二维图形等对象类型。
+真实对象实例定义在 `engine/objects/`，基类是 `BasicObject`，再派生出笔画、容器、一维/二维图形等对象类型。
 
 统一字段主要包括：
 
@@ -135,7 +135,7 @@ Map<chunkId, {
 
 ### 轻量对象条目（`LightweightObjectEntry`）
 
-`LightweightObjectEntry` 定义在 `src/core/shared/types/types.js`。
+`LightweightObjectEntry` 定义在 `src/core/engine/types/types.js`。
 
 它是 UI 工具链里传递对象信息的统一纯数据协议：
 
@@ -162,7 +162,7 @@ Map<chunkId, {
 
 ### `ObjectSummary`
 
-跨线程查询返回的对象摘要同样定义在 `shared/types/types.js`，通常包含：
+跨线程查询返回的对象摘要同样定义在 `engine/types/types.js`，通常包含：
 
 - `id`
 - `type`
@@ -186,7 +186,7 @@ Map<chunkId, {
 
 - 由 `ActiveObjectManager` 管理
 - 描述创建、选择、修改等交互态对象与临时层关系
-- AOM 内对象主要由 Worker 侧 `LiveRenderer` 负责绘制
+- AOM 内对象由 Worker 侧 `ViewportRenderer` 的输出层负责绘制（AOM 中存在的对象不会回退到静态缓存）
 
 AOM 内部关键结构包括：
 
@@ -220,15 +220,14 @@ AOM 内部关键结构包括：
 - `zoom`
 - `width` / `height`
 - `chunkLoader`
-- `baseRenderer`
-- `liveRenderer`
+- `renderer`
 - `#frameDirty`
 - `#frameId`
 
 它负责：
 
 - 视口区块缓冲管理
-- base/live 失效与 flush
+- `ViewportRenderer` 的缓存 / 输出失效与 flush
 - 输出 `render-frame`，当前帧数据核心是 `liveBitmap`
 
 ## 持久化模型
@@ -272,5 +271,5 @@ AOM 内部关键结构包括：
 - [core-overview.md](./core-overview.md)
 - [core-runtime-boundaries.md](./core-runtime-boundaries.md)
 - [file-structure.md](./file-structure.md)
-- [board-document.md](../ui/components/orchestration/docs/board-document.md)
-- [active-object-manager-document.md](../worker/components/orchestration/docs/active-object-manager-document.md)
+- [board-document.md](../ui-thread/components/orchestration/docs/board-document.md)
+- [active-object-manager-document.md](../engine/orchestration/docs/active-object-manager-document.md)

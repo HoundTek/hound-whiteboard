@@ -7,7 +7,7 @@
     {
       "name": "Launch via yarn",
       "request": "launch",
-      "runtimeArgs": ["dev", "debug"],
+      "runtimeArgs": ["dev"],
       "runtimeExecutable": "yarn",
       "skipFiles": ["<node_internals>/**"],
       "type": "node"

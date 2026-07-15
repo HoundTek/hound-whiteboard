@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { GestureTool } from "../ui/devices-dag/tools/gesture-tool.js";
-import { Tool } from "../ui/devices-dag/tools/tool.js";
+import { GestureTool } from "../ui-thread/devices-dag/tools/gesture-tool.js";
+import { Tool } from "../ui-thread/devices-dag/tools/tool.js";
 
 /**
  * 信号收集工具

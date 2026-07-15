@@ -11,7 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, "../..");
+const ROOT = process.env.HOUND_BUILD_ROOT || path.resolve(__dirname, "../..");
 const CORE_DIR = path.join(ROOT, "src", "core");
 
 let total = 0;

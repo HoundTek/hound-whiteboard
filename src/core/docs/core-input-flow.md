@@ -58,11 +58,9 @@ flowchart LR
 
 ### 2. `Board` 作为唯一 DAG 入口
 
-`Board.signalsEventBus` 当前处理三类输入相关事件：
+`Board.signalsEventBus` 当前处理一类输入相关事件：
 
 - `input`
-- `mount`
-- `umount`
 
 其中 `input` 的稳定语义是：
 
@@ -132,7 +130,7 @@ Tool 是设备图末端的消费型处理器，只负责：
 ### `Board` 负责
 
 - 拥有唯一 `DevicesDAG`
-- 监听 `input` / `mount` / `umount`
+- 监听 `input`
 - 将 `{ board, boardApi }` 作为 dispatch 初始上下文
 - 为 `/${viewportId}` 节点补上 `viewport`
 
@@ -214,9 +212,9 @@ Tool 是设备图末端的消费型处理器，只负责：
 
 ## 相关文档
 
-- [设备图](../ui/devices-dag/docs/devices-dag-document.md)
-- [设备定义](../ui/devices-dag/devices/docs/device-document.md)
-- [对象创建工具](../ui/devices-dag/tools/creator/docs/object-creator-document.md)
-- [对象选择工具](../ui/devices-dag/tools/chooser/docs/object-chooser-document.md)
-- [对象修改工具](../ui/devices-dag/tools/modifier/docs/object-modifier-document.md)
+- [设备图](../ui-thread/devices-dag/docs/devices-dag-document.md)
+- [设备定义](../ui-thread/devices-dag/devices/docs/device-document.md)
+- [对象创建工具](../ui-thread/devices-dag/tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../ui-thread/devices-dag/tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../ui-thread/devices-dag/tools/modifier/docs/object-modifier-document.md)
 - [阶段性稳定接口](./core-stable-interfaces.md)

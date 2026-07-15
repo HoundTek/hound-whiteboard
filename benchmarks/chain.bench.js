@@ -20,7 +20,6 @@ function createFilledChain(size) {
 
 printHeader("Chain 性能测试");
 
-// ========== Append ==========
 benchmarkSync("Chain#append (单个元素)", 50000, ROUNDS, () => {
   const chain = new Chain();
   chain.append(1);
@@ -36,7 +35,6 @@ benchmarkSync("Chain#append (1000 个元素)", 1000, ROUNDS, () => {
   for (let i = 0; i < MEDIUM_SIZE; i++) chain.append(i);
 });
 
-// ========== Prepend ==========
 benchmarkSync("Chain#prepend (单个元素)", 50000, ROUNDS, () => {
   const chain = new Chain();
   chain.prepend(1);
@@ -52,7 +50,6 @@ benchmarkSync("Chain#prepend (1000 个元素)", 1000, ROUNDS, () => {
   for (let i = 0; i < MEDIUM_SIZE; i++) chain.prepend(i);
 });
 
-// ========== InsertAt ==========
 benchmarkSync("Chain#insertAt (开头位置，100 次)", 5000, ROUNDS, () => {
   const chain = new Chain();
   for (let i = 0; i < SMALL_SIZE; i++) chain.insertAt(i, 0);
@@ -68,7 +65,6 @@ benchmarkSync("Chain#insertAt (末尾位置，100 次)", 5000, ROUNDS, () => {
   for (let i = 0; i < SMALL_SIZE; i++) chain.insertAt(i, chain.size());
 });
 
-// ========== RemoveAt ==========
 benchmarkSync("Chain#removeAt (开头位置，100 次)", 5000, ROUNDS, () => {
   const chain = createFilledChain(200);
   for (let i = 0; i < SMALL_SIZE; i++) chain.removeAt(0);
@@ -86,7 +82,6 @@ benchmarkSync("Chain#removeAt (末尾位置，100 次)", 5000, ROUNDS, () => {
   for (let i = 0; i < SMALL_SIZE; i++) chain.removeAt(chain.size() - 1);
 });
 
-// ========== GetAt ==========
 benchmarkSync("Chain#getAt (100 元素链表，首元素)", 50000, ROUNDS, () => {
   createFilledChain(SMALL_SIZE).getAt(0);
 });
@@ -103,7 +98,6 @@ benchmarkSync("Chain#getAt (1000 元素链表，中间元素)", 5000, ROUNDS, ()
   createFilledChain(MEDIUM_SIZE).getAt(500);
 });
 
-// ========== IndexOf ==========
 benchmarkSync("Chain#indexOf (100 元素，查找首元素)", 50000, ROUNDS, () => {
   createFilledChain(SMALL_SIZE).indexOf(0);
 });
@@ -124,7 +118,6 @@ benchmarkSync("Chain#indexOf (1000 元素，查找中间元素)", 5000, ROUNDS, 
   createFilledChain(MEDIUM_SIZE).indexOf(500);
 });
 
-// ========== Size & IsEmpty ==========
 benchmarkSync("Chain#size (100 元素链表)", 50000, ROUNDS, () => {
   createFilledChain(SMALL_SIZE).size();
 });
@@ -141,7 +134,6 @@ benchmarkSync("Chain#isEmpty (非空链表)", 50000, ROUNDS, () => {
   createFilledChain(SMALL_SIZE).isEmpty();
 });
 
-// ========== Clear ==========
 benchmarkSync("Chain#clear (100 元素链表)", 5000, ROUNDS, () => {
   createFilledChain(SMALL_SIZE).clear();
 });
@@ -150,7 +142,6 @@ benchmarkSync("Chain#clear (10000 元素链表)", 1000, ROUNDS, () => {
   createFilledChain(LARGE_SIZE).clear();
 });
 
-// ========== 场景 ==========
 benchmarkSync("场景：构建链表并遍历 (500 节点)", 1000, ROUNDS, () => {
   const chain = new Chain();
   for (let i = 0; i < 500; i++) chain.append(i);
@@ -191,7 +182,6 @@ benchmarkSync("场景：有序插入 (100 个随机数)", 1000, ROUNDS, () => {
   }
 });
 
-// ========== 与原生数组对比 ==========
 benchmarkSync("对比：Array.push (100 次)", 5000, ROUNDS, () => {
   const arr = [];
   for (let i = 0; i < SMALL_SIZE; i++) arr.push(i);

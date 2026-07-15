@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect } from "@jest/globals";
-import { EventBus } from "../../../core/utils/event-bus.js";
+import { EventBus } from "../../../core/engine/utils/event-bus.js";
 import { LogBus, logBus } from "../log-bus.js";
 
 describe("LogBus", () => {

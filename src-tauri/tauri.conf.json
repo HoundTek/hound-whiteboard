@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "url": "templates/whiteboard.html",
+        "url": "demo/whiteboard.html",
         "title": "Hound Whiteboard",
         "width": 800,
         "height": 600,

@@ -5,62 +5,65 @@
   "description": "A whiteboard app",
   "scripts": {
     "deps": "yarn",
-    "icon": "node scripts/build/gen-icons.cjs all",
-    "icon:desktop": "node scripts/build/gen-icons.cjs desktop",
-    "icon:mac": "node scripts/build/gen-icons.cjs mac",
-    "icon:win": "node scripts/build/gen-icons.cjs win",
-    "icon:linux": "node scripts/build/gen-icons.cjs linux",
-    "icon:android": "node scripts/build/gen-icons.cjs android",
-    "icon:ios": "node scripts/build/gen-icons.cjs ios",
-    "clean": "node scripts/build/clean.cjs",
-    "clean:target": "node scripts/build/clean.cjs target",
-    "clean:gen": "node scripts/build/clean.cjs gen",
-    "clean:icons": "node scripts/build/clean.cjs icons",
-    "clean:temp": "node scripts/build/clean.cjs temp",
-    "clean:status": "node scripts/build/clean.cjs status",
-    "clean:help": "node scripts/build/clean.cjs help",
-
-    "dev": "tauri dev",
-    "build": "node scripts/build/build-entry.cjs build",
-    "build:quick": "tauri build",
-
-    "dev:win": "node scripts/build/build-entry.cjs dev win",
-    "build:win": "node scripts/build/build-entry.cjs build win",
-    "dev:mac": "node scripts/build/build-entry.cjs dev mac",
-    "build:mac": "node scripts/build/build-entry.cjs build mac",
-    "build:mac-universal": "node scripts/build/build-entry.cjs build mac-universal",
-    "dev:linux": "node scripts/build/build-entry.cjs dev linux",
-    "build:linux": "node scripts/build/build-entry.cjs build linux",
-
+    "icon": "htb icon all",
+    "icon:desktop": "htb icon desktop",
+    "icon:mac": "htb icon mac",
+    "icon:win": "htb icon win",
+    "icon:linux": "htb icon linux",
+    "icon:android": "htb icon android",
+    "icon:ios": "htb icon ios",
+    "clean": "htb-clean",
+    "clean:target": "htb-clean target",
+    "clean:gen": "htb-clean gen",
+    "clean:icons": "htb-clean icons",
+    "clean:temp": "htb-clean temp",
+    "clean:status": "htb-clean status",
+    "clean:help": "htb-clean help",
+    "dev": "htb dev",
+    "build": "htb build",
+    "build:quick": "htb build-quick",
+    "dev:win": "htb dev win",
+    "build:win": "htb build win",
+    "dev:mac": "htb dev mac",
+    "build:mac": "htb build mac",
+    "build:mac-universal": "htb build mac-universal",
+    "dev:linux": "htb dev linux",
+    "build:linux": "htb build linux",
     "init:android": "yarn deps && tauri android init",
-    "dev:android": "node scripts/build/build-entry.cjs dev android",
-    "build:android": "node scripts/build/build-entry.cjs build android",
-    "dev:ios": "node scripts/build/build-entry.cjs dev ios",
-    "build:ios": "node scripts/build/build-entry.cjs build ios",
-
+    "dev:android": "htb dev android",
+    "build:android": "htb build android",
+    "dev:ios": "htb dev ios",
+    "build:ios": "htb build ios",
+    "build:desktop-platforms": "htb build desktop-platforms",
+    "build:mobile": "htb build mobile",
+    "build:all": "htb build all",
     "test": "node --experimental-vm-modules --localstorage-file=/tmp/jest-localstorage node_modules/jest/bin/jest.js --passWithNoTests",
-
-    "ship": "node scripts/build/build-entry.cjs ship",
-    "ship:win": "node scripts/build/build-entry.cjs ship win",
-    "ship:mac": "node scripts/build/build-entry.cjs ship mac",
-    "ship:linux": "node scripts/build/build-entry.cjs ship linux",
-    "ship:android": "node scripts/build/build-entry.cjs ship android",
-    "ship:ios": "node scripts/build/build-entry.cjs ship ios",
-    "ci": "yarn deps && yarn test && yarn build",
-
+    "ship": "htb ship",
+    "ship:win": "htb ship win",
+    "ship:mac": "htb ship mac",
+    "ship:linux": "htb ship linux",
+    "ship:android": "htb ship android",
+    "ship:ios": "htb ship ios",
+    "ship:desktop-platforms": "htb ship desktop-platforms",
+    "ship:mobile": "htb ship mobile",
+    "ship:all": "htb ship all",
     "bench": "node benchmarks/all.bench.js",
-    "bench:io": "node benchmarks/io-bridge.bench.js",
     "bench:io:direct": "node benchmarks/io-direct.bench.js",
     "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js",
     "bench:worker": "node benchmarks/worker-rpc.bench.js",
     "bench:render": "node benchmarks/worker-render.bench.js",
-
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:modules": "node scripts/ci/check-module-paths.mjs",
     "ci-check": "yarn check:docs && yarn check:modules",
-    "prepare": "husky && yarn icon"
+    "prepare": "husky"
   },
   "author": "Frank Steven",
+  "contributors": [
+    {
+      "name": "Zhou Chenyu",
+      "email": "zhouc_yu@foxmail.com"
+    }
+  ],
   "license": "GPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
@@ -68,12 +71,15 @@
     "hidefile": "3"
   },
   "devDependencies": {
+    "hound-tauri-build": "0.3.1",
     "@tauri-apps/cli": "^2.11.2",
     "benchmark": "2.1.4",
     "husky": "^9.1.7",
-    "jest": "30.4.2"
+    "jest": "30.4.2",
+    "react": "18"
   },
   "jest": {
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": ["<rootDir>/src/core/test-support/jest-setup.js"]
   }
 }

@@ -1,6 +1,6 @@
 import { jest } from "@jest/globals";
 
-import { BoardApiRpc } from "../board-api.js";
+import { BoardApiRpc } from "../board-api-rpc.js";
 
 /**
  * 测试用假 RPC 端点

@@ -52,7 +52,7 @@ const CONSOLE_FN = {
  *
  * // 控制台输出示例：
  * //   %c12:34:56.789[HWB]                    (蓝色粗体)
- * //   %c12:34:56.790[Viewport:BaseRenderer]    (灰色，DEBUG)
+ * //   %c12:34:56.790[Viewport:ViewportRenderer]    (灰色，DEBUG)
  * //   %c12:34:56.791[safe-io]                 (红色粗体，ERROR)
  */
 function createConsolePrinter(bus, options = {}) {
@@ -66,7 +66,13 @@ function createConsolePrinter(bus, options = {}) {
     const prefix = `%c${ts}[${logger}]`;
     const style = COLORS[level] ?? "color:inherit";
 
-    console[CONSOLE_FN[level] ?? "log"](prefix, style, ...args);
+    // 所有参数均为字符串时嵌入到 %c 消息中，避免 Chrome 对 string 类型显示 \" 转义
+    const allStrings = args.every((a) => typeof a === "string");
+    if (allStrings) {
+      console[CONSOLE_FN[level] ?? "log"](`${prefix} ${args.join(" ")}`, style);
+    } else {
+      console[CONSOLE_FN[level] ?? "log"](prefix, style, ...args);
+    }
   };
 
   if (levels && levels.length > 0) {

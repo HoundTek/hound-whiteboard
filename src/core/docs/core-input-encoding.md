@@ -83,6 +83,17 @@
 
 这些字段主要供**设备层**使用，用来决定当前输入应进入 `primary`、`secondary`、`pointer` 还是其它设备分支。Tool 层不应再把它们当作主要判定条件。
 
+### 坐标参考系
+
+进入鼠标设备根节点的 `position` 信号 `context.value` 应为 **canvas 相对坐标**：
+
+```
+canvasX = clientX - canvas.getBoundingClientRect().left
+canvasY = clientY - canvas.getBoundingClientRect().top
+```
+
+宿主层在编码鼠标信号时应完成 canvas 偏移扣除。世界坐标转换由鼠标设备根节点自动完成，不在编码层处理。
+
 ## 键盘输入约定
 
 进入键盘设备根节点的宿主输入，当前建议仍按 DOM 键盘事件规整：
@@ -211,7 +222,6 @@
 
 - `context` 里除 `value` / `touchId` / `pointerId` 外的扩展字段
 - 宿主事件与设备路径之间的具体映射表
-- 是否在进入 Core 前先做坐标转换
 - 是否附加调试字段
 
 但无论如何变化，都不应破坏上面的最小输出格式。
@@ -219,5 +229,7 @@
 ## 相关文档
 
 - [Core 输入流](./core-input-flow.md)
-- [SignalPacket](../ui/devices-dag/docs/signal-document.md)
-- [设备定义](../ui/devices-dag/devices/docs/device-document.md)
+- [SignalPacket](../ui-thread/devices-dag/docs/signal-document.md)
+- [设备定义](../ui-thread/devices-dag/devices/docs/device-document.md)
+- [鼠标设备](../ui-thread/devices-dag/devices/docs/mouse-device-document.md)
+- [canvas-to-world-handler](../ui-thread/devices-dag/prefixes/docs/canvas-to-world-handler-document.md)

@@ -7,12 +7,12 @@
  */
 
 import { createDefaultPersistenceAdapter } from "../bridges/persistence-adapter.js";
-import { BoardCore } from "../worker/components/orchestration/board-core.js";
-import { createDefaultAomRenderHooks } from "../worker/components/orchestration/aom-render-hooks.js";
-import { Chunk } from "../worker/components/chunk/chunk.js";
-import { CHUNK_LOAD_STRATEGIES } from "../worker/components/chunk/chunk-loader.js";
-import { BasicObject } from "../shared/objects/basic-obj.js";
-import { Vector } from "../utils/math.js";
+import { BoardCore } from "../engine/orchestration/board-core.js";
+import { createDefaultAomRenderHooks } from "../engine/orchestration/aom-render-hooks.js";
+import { Chunk } from "../engine/chunk/chunk.js";
+import { CHUNK_LOAD_STRATEGIES } from "../engine/chunk/chunk-loader.js";
+import { BasicObject } from "../engine/objects/basic-obj.js";
+import { Vector } from "../engine/utils/math.js";
 
 /**
  * 按 ID 创建已加载的区块
@@ -77,8 +77,8 @@ function ensureBoardCoreChunkLoaded(boardCore, chunkId, options = {}) {
  *   rootPath?: string,
  *   chunkIds?: Iterable<number>,
  *   chunkStrategy?: "temp" | "full",
- *   aomRenderHooks?: import("../worker/components/orchestration/board-core.js").AomRenderHooks,
- *   persistenceAdapter?: import("../worker/components/orchestration/board-core.js").PersistenceAdapter,
+ *   aomRenderHooks?: import("../engine/orchestration/board-core.js").AomRenderHooks,
+ *   persistenceAdapter?: import("../engine/orchestration/board-core.js").PersistenceAdapter,
  * }} [options={}] - BoardCore 初始化选项
  * @returns {{
  *   boardCore: BoardCore,
@@ -262,11 +262,36 @@ function setObjectCoverage(chunks, objectIds) {
   }
 }
 
+/**
+ * 创建覆盖区块索引存储
+ * @returns {{
+ *   setObjectCoverChunks: (objectId: number, chunkIds: Iterable<number>) => void,
+ *   getObjectCoverChunks: (objectId: number) => Set<number> | undefined,
+ *   unsetObjectCoverChunks: (objectId: number) => void,
+ * }}
+ */
+function createCoverChunkStorage() {
+  /** @type {Map<number, Set<number>>} */
+  const coverChunks = new Map();
+  return {
+    setObjectCoverChunks(objectId, chunkIds) {
+      coverChunks.set(objectId, new Set(chunkIds));
+    },
+    getObjectCoverChunks(objectId) {
+      return coverChunks.get(objectId);
+    },
+    unsetObjectCoverChunks(objectId) {
+      coverChunks.delete(objectId);
+    },
+  };
+}
+
 export {
   chunkConnect,
   createBoardCoreAomFixture,
   createChunk,
   createChunkAt,
+  createCoverChunkStorage,
   createMockBoard,
   createObjectInChunk,
   ensureBoardCoreChunkLoaded,

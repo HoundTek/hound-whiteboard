@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { EventBus } from "../../core/utils/event-bus.js";
+import { EventBus } from "../../core/engine/utils/event-bus.js";
 
 /**
  * 日志级别名称数组

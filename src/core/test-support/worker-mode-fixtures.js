@@ -5,8 +5,8 @@
  * @author Zhou Chenyu
  */
 
-import { Board } from "../ui/components/orchestration/board.js";
-import { createCoreWorkerRuntime } from "../worker/core-worker.js";
+import { Board } from "../ui-thread/components/orchestration/board.js";
+import { createCoreWorkerRuntime } from "../engine/core-worker.js";
 import { createNoopCanvas, installNoopOffscreenCanvas } from "./noop-canvas.js";
 
 /**
@@ -213,7 +213,7 @@ async function flushMicrotasks(_count = 6) {
  * }} [options={}] - 初始化选项
  * @returns {Promise<{
  *   board: Board,
- *   viewport: import("../components/orchestration/viewport.js").Viewport | null,
+ *   viewport: import("../ui-thread/components/orchestration/viewport.js").Viewport | null,
  *   runtime: import("../../core-worker.js").CoreWorkerRuntime,
  *   uiEndpoint: LoopbackMessageEndpoint,
  *   workerHost: LoopbackMessageEndpoint,

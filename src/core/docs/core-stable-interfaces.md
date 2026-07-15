@@ -41,39 +41,6 @@ board.signalsEventBus.emit("input", {
 - `Board` 会把它分发到唯一的 `Board.devicesDAG`
 - 初始 dispatch context 会附带 `{ board, boardApi }`
 
-### `mount`
-
-```js
-board.signalsEventBus.emit("mount", {
-  viewportId,
-  name,
-  workflow,
-  edges,
-});
-```
-
-语义：
-
-- 这是 **Board 层 workflow 约定**
-- 当前实现会把 workflow 挂到 `/<viewportId>/workflows/${name}`
-- `edges` 用来把设备节点接到该 workflow
-- `edge.prefix` 可注入单源单汇的前置 prefix 子图
-
-### `umount`
-
-```js
-board.signalsEventBus.emit("umount", {
-  viewportId,
-  name,
-  edges,
-});
-```
-
-语义：
-
-- 移除设备到 workflow 的边
-- 卸载 `/<viewportId>/workflows/${name}` 对应子图
-
 ## BoardApiRpc
 
 当前可以稳定依赖的 `BoardApiRpc` 方法包括：
@@ -126,7 +93,7 @@ board.signalsEventBus.emit("umount", {
 - `mount(path, handler?, options?)`
 - `mountWorkflow(path, workflow)`
 - `mountSubDAG(basePath, subDAGDefinition)`
-- `dispatch(packet, context?)`
+- `dispatch(packet)`
 - `unmountWorkflow(path, context?)`
 - `unmount(path, context?)`
 
@@ -248,8 +215,8 @@ board.signalsEventBus.emit("umount", {
 ### 设备图挂载
 
 - `mountSubDAG(path, subDAGDefinition)`
-- `mountWorkflow(path, workflow)`
-- `unmountWorkflow(path)`
+- `mountWorkflow(name, workflow, edges)`
+- `unmountWorkflow(name, edges)`
 - `addEdge(fromPath, edgeName, toPath)`
 - 通过 `viewport.devicesDAG` 读取白板级唯一 DAG
 
@@ -294,10 +261,10 @@ board.signalsEventBus.emit("umount", {
 
 ## 相关文档
 
-- [handler 上下文（ctx）用法](../ui/devices-dag/docs/handler-context-document.md)
-- [设备图](../ui/devices-dag/docs/devices-dag-document.md)
-- [设备定义](../ui/devices-dag/devices/docs/device-document.md)
-- [对象创建工具](../ui/devices-dag/tools/creator/docs/object-creator-document.md)
-- [对象选择工具](../ui/devices-dag/tools/chooser/docs/object-chooser-document.md)
-- [对象修改工具](../ui/devices-dag/tools/modifier/docs/object-modifier-document.md)
+- [handler 上下文（ctx）用法](../ui-thread/devices-dag/docs/handler-context-document.md)
+- [设备图](../ui-thread/devices-dag/docs/devices-dag-document.md)
+- [设备定义](../ui-thread/devices-dag/devices/docs/device-document.md)
+- [对象创建工具](../ui-thread/devices-dag/tools/creator/docs/object-creator-document.md)
+- [对象选择工具](../ui-thread/devices-dag/tools/chooser/docs/object-chooser-document.md)
+- [对象修改工具](../ui-thread/devices-dag/tools/modifier/docs/object-modifier-document.md)
 - [Core 输入流](./core-input-flow.md)
