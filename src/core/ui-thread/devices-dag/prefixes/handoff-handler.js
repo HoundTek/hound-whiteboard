@@ -21,6 +21,78 @@ import {
 } from "./handoff-wrappers.js";
 
 /**
+ * 解析 handoff 子节点对应的根路径
+ * @param {import("../dag.js").DevicesDAGHandlerContext} [context={}] - 当前子节点上下文
+ * @returns {string}
+ */
+function resolveHandoffRootPath(context = {}) {
+  if (typeof context.path !== "string" || context.path === "") {
+    return "";
+  }
+
+  const lastSlashIndex = context.path.lastIndexOf("/");
+  if (lastSlashIndex <= 0) {
+    return "/";
+  }
+
+  return context.path.slice(0, lastSlashIndex);
+}
+
+/**
+ * 切换 handoff 根节点的阶段状态
+ * @param {import("../dag.js").DevicesDAGHandlerContext} [context={}] - 当前子节点上下文
+ * @param {"first"|"second"} phase - 目标阶段
+ * @returns {void}
+ */
+function switchHandoffPhase(context = {}, phase) {
+  const handoffRootPath = resolveHandoffRootPath(context);
+  if (
+    !handoffRootPath ||
+    typeof context.getNodeState !== "function" ||
+    typeof context.setNodeState !== "function"
+  ) {
+    return;
+  }
+
+  const currentState = context.getNodeState(handoffRootPath) ?? {};
+  context.setNodeState(handoffRootPath, {
+    ...currentState,
+    phase,
+    activeChild: phase,
+  });
+}
+
+/**
+ * 创建 handoff 完成回调
+ * @param {Tool|import("../devices-dag/dag.js").SubDAGDefinition} second - 第二阶段工具或子图
+ * @returns {(phase: "first"|"second", context: import("../dag.js").DevicesDAGHandlerContext, objects?: Array<*>) => void}
+ */
+function createHandoffCompletionHandler(second) {
+  return (phase, context = {}, objects) => {
+    if (phase === "first") {
+      // 空数组 = first tool 完成了但没产出对象 → 不切换
+      if (Array.isArray(objects) && objects.length === 0) return;
+
+      if (objects && objects.length > 0) {
+        const secondTool =
+          typeof second?.receiveHandoffObjects === "function" ? second : null;
+        secondTool?.receiveHandoffObjects(objects, context);
+      }
+
+      switchHandoffPhase(context, "second");
+      return;
+    }
+
+    switchHandoffPhase(context, "first");
+
+    // 触发 UI overlay 刷新，去除残留的 modifier / chooser 渲染条目
+    (
+      context.services?.viewport ?? context.acc?.viewport
+    )?.requestViewportUiRender?.();
+  };
+}
+
+/**
  * 创建 handoff 修饰节点子树
  *
  * @description
@@ -81,6 +153,8 @@ function createHandoffSubDAG(options = {}) {
     isToolInstance(second) && typeof second.applyModifiedObjects === "function";
   const secondIsSubDAG = isSubDAGDefinition(second);
 
+  const handleHandoffComplete = createHandoffCompletionHandler(second);
+
   // 构建子树
   const builder = createSubDAG(rootPath);
   const root = builder
@@ -90,48 +164,26 @@ function createHandoffSubDAG(options = {}) {
       createMultiToolPrefixHandler({
         defaultChild: "first",
         initialState: { phase: "first" },
-        resolveTransition({ signalPacket, state, fromPhase, prefixContext }) {
-          // 构建 onToolComplete 回调
-          // dagContext 是 first 工具包装器中传入的 DAG 上下文（用于 handoff 同步）
-          const createCompleteCallback = (completedPhase) => (objects) => {
-            if (completedPhase === "first") {
-              // 空数组 = first tool 完成了但没产出对象 → 不切换
-              if (Array.isArray(objects) && objects.length === 0) return;
+        resolveTransition({ state, fromPhase }) {
+          const activeChild =
+            typeof state.activeChild === "string" && state.activeChild
+              ? state.activeChild
+              : fromPhase || "first";
+          const nextRouteContext = {};
 
-              if (objects && objects.length > 0) {
-                const secondTool =
-                  typeof second?.receiveHandoffObjects === "function"
-                    ? second
-                    : null;
-                if (secondTool) {
-                  secondTool.receiveHandoffObjects(objects, prefixContext);
-                }
-              }
+          // creator/chooser 所在阶段阻止 creator 提前 commit
+          if (activeChild === "first") {
+            nextRouteContext.autoCommit = false;
+          }
 
-              prefixContext.setState({
-                phase: "second",
-                activeChild: "second",
-              });
-            } else if (completedPhase === "second") {
-              prefixContext.setState({
-                phase: "first",
-                activeChild: "first",
-              });
-
-              // 触发 UI overlay 刷新，去除残留的 modifier / chooser 渲染条目
-              prefixContext.acc?.viewport?.requestViewportUiRender?.();
-            }
-          };
+          // modifier 所在阶段阻止其提交后自卸载
+          if (activeChild === "second" && secondIsModifier) {
+            nextRouteContext.autoUmountOnApply = false;
+          }
 
           return {
-            child: state.activeChild,
-            acc: {
-              onToolComplete: createCompleteCallback(fromPhase || "first"),
-              // 阻止 modifier 在 handoff 中自卸载
-              autoUmountOnApply: false,
-              // 阻止 creator 在 handoff 中提前 commit
-              autoCommit: false,
-            },
+            child: activeChild,
+            routeContext: nextRouteContext,
           };
         },
       }),
@@ -150,11 +202,16 @@ function createHandoffSubDAG(options = {}) {
   if (isToolInstance(first)) {
     firstNode.handler(
       wrapToolForHandoff(first, {
+        phase: "first",
         bridgeObjects: autoBridgeObjects,
+        onComplete: handleHandoffComplete,
       }),
     );
   } else if (firstIsSubDAG) {
-    firstSubDAGDef = first;
+    firstSubDAGDef = wrapSubDAGForHandoff(first, {
+      phase: "first",
+      onComplete: handleHandoffComplete,
+    });
   } else {
     throw new TypeError(
       "createHandoffSubDAG: first must be a Tool or SubDAGDefinition.",
@@ -168,11 +225,16 @@ function createHandoffSubDAG(options = {}) {
   if (isToolInstance(second)) {
     secondNode.handler(
       wrapToolForHandoff(second, {
+        phase: "second",
         completeOnCancel: secondIsModifier,
+        onComplete: handleHandoffComplete,
       }),
     );
   } else if (secondIsSubDAG) {
-    secondSubDAGDef = second;
+    secondSubDAGDef = wrapSubDAGForHandoff(second, {
+      phase: "second",
+      onComplete: handleHandoffComplete,
+    });
   } else {
     throw new TypeError(
       "createHandoffSubDAG: second must be a Tool or SubDAGDefinition.",

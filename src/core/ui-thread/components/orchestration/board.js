@@ -108,10 +108,14 @@ class Board {
       strict: globalThis.__JEST__ === true,
     });
 
-    // 根节点 handler：注入全局共享上下文
+    // 根节点 services：声明全局共享基础设施依赖
+    const board = this;
     this.devicesDAG.configureNode("/", {
-      handler: (_pkt, _ctx) => {
-        return { acc: { board: this, boardApi: this.#boardApi } };
+      services: {
+        board,
+        get boardApi() {
+          return board.getBoardApi();
+        },
       },
     });
 
@@ -235,7 +239,7 @@ class Board {
 
     this.viewports.set(viewportId, viewport);
     this.devicesDAG.configureNode(viewportId, {
-      handler: () => ({ acc: { viewport } }),
+      services: { viewport },
       semantics: { viewport: true },
     });
 

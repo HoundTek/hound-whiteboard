@@ -13,11 +13,11 @@
 - 输出：`context.value` 替换为世界坐标 `Vector`
 - 非 `position` 信号：原样透传
 
-如果 `ctx.acc.viewport` 不可达或缺少 `zoom` 字段，所有信号原样透传，不发生转换报错。
+如果 `ctx.services.viewport` 不可达或缺少 `zoom` 字段，所有信号原样透传，不发生转换报错。
 
 ## 依赖
 
-- 视口实例来自 `ctx.acc.viewport`（由 `Board.createViewport` 在 `/<viewportId>` 节点注入）
+- 视口实例来自 `ctx.services.viewport`（由 `Board.createViewport` 在 `/<viewportId>` 节点声明）
 - 不依赖 `Viewport.screenToWorld` 方法，直接使用 `viewport.origin` 和 `viewport.zoom`
 
 ## 用法

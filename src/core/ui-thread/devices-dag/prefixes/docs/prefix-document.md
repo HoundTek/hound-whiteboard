@@ -28,12 +28,14 @@ prefix 节点现在依赖三条稳定边界：
 
 - **局部向下路由**：后续包只能继续发给当前节点的后代
 - **节点 state**：保存可变共享数据，例如锚点、活动 child、桥接对象
-- **累积 context**：逐层追加只读信息，例如 `board`、`viewport`、`onToolComplete`
+- **静态 services**：声明式注入的基础设施依赖，例如 `board`、`boardApi`、`viewport`
+- **路由参数 routeContext**：由 handler 返回值逐层追加的运行时控制参数，例如 `autoCommit`
 
-这里需要特别区分两件事：
+这里需要特别区分三件事：
 
 - 节点 state 适合保存跨多次输入仍然需要保留的局部状态
-- 累积 context 适合保存当前链路内的只读注入数据或回调函数
+- services 适合保存声明式注入的只读基础设施
+- routeContext 适合保存单次 dispatch 内的路由控制参数
 
 ## 模块清单
 
@@ -87,15 +89,15 @@ const handler = createPrefixNodeHandler({
 
 当前路由决策对象的稳定字段有：
 
-| 字段         | 类型      | 语义                                |
-| ------------ | --------- | ----------------------------------- |
-| `child`      | `string`  | 路由到特定子节点                    |
-| `consume`    | `boolean` | 消费信号，不继续转发                |
-| `to`         | `string`  | 覆盖默认 child 路径，仍然只指向后代 |
-| `patchState` | `Object`  | 合并到当前状态                      |
-| `state`      | `Object`  | 直接替换当前状态                    |
-| `signals`    | `Array`   | 改写下发信号                        |
-| `context`    | `Object`  | 追加到下游累积 context              |
+| 字段           | 类型      | 语义                                         |
+| -------------- | --------- | -------------------------------------------- |
+| `child`        | `string`  | 路由到特定子节点                             |
+| `consume`      | `boolean` | 消费信号，不继续转发                         |
+| `to`           | `string`  | 覆盖默认 child 路径，仍然只指向后代          |
+| `patchState`   | `Object`  | 合并到当前状态                               |
+| `state`        | `Object`  | 直接替换当前状态                             |
+| `signals`      | `Array`   | 改写下发信号                                 |
+| `routeContext` | `Object`  | 追加到下游路由参数上下文（旧接口可用 `acc`） |
 
 ```js
 const handler = createMultiToolPrefixHandler({
@@ -107,7 +109,8 @@ const handler = createMultiToolPrefixHandler({
 });
 ```
 
-`transition.acc` 是 prefix 把回调或只读数据传给当前活动子链的关键途径。
+`transition.routeContext` 是 prefix 把控制参数传给当前活动子链的关键途径。
+旧接口可用 `transition.acc` 作为兼容别名。
 
 ## 信号复制分发：`createRepeatorPrefixHandler`
 
@@ -133,7 +136,7 @@ const handler = createRepeatorPrefixHandler({
 - handler 内部桥接：在 first / second 节点 handler 中临时订阅工具钩子，触发时调用累计 context 中的 `onToolComplete`
 
 first 完成时通过 `receiveHandoffObjects` 将对象同步到 second 工具的私有字段，
-不依赖 node state 或 acc。通过 `autoCommit: false` 注入 acc 而非突变工具方法。
+不依赖 node state 或 routeContext。通过 `routeContext.autoCommit = false` 控制下游行为。
 
 ## 拖拽位移转换：`createDragAnchorPrefixHandler`
 

@@ -18,6 +18,7 @@ function cloneDAGNodeDefinition(nodeDef = {}) {
   return {
     handler: typeof nodeDef.handler === "function" ? nodeDef.handler : null,
     semantics: isPlainObject(nodeDef.semantics) ? { ...nodeDef.semantics } : {},
+    services: isPlainObject(nodeDef.services) ? nodeDef.services : {},
     defaultRoute:
       typeof nodeDef.defaultRoute === "string" ? nodeDef.defaultRoute : "",
     tool: nodeDef.tool,
@@ -42,6 +43,9 @@ function mergeDAGNodeDefinition(targetNodeDef = {}, sourceNodeDef = {}) {
   }
   if (isPlainObject(sourceNodeDef.semantics)) {
     merged.semantics = { ...merged.semantics, ...sourceNodeDef.semantics };
+  }
+  if (isPlainObject(sourceNodeDef.services)) {
+    merged.services = { ...merged.services, ...sourceNodeDef.services };
   }
   if (typeof sourceNodeDef.defaultRoute === "string") {
     merged.defaultRoute = sourceNodeDef.defaultRoute;
@@ -154,7 +158,7 @@ function discardSecondPhaseObjects(tool, context = {}) {
   const cancelObjects = Array.isArray(cancelState?.objects)
     ? cancelState.objects
     : [];
-  const boardApi = context.acc?.boardApi;
+  const boardApi = context.services?.boardApi ?? context.acc?.boardApi;
   const cancelObjectIds = cancelObjects
     .map((objectEntry) =>
       typeof objectEntry?.id === "number" ? objectEntry.id : null,
@@ -170,13 +174,20 @@ function discardSecondPhaseObjects(tool, context = {}) {
  * 将 tool 包装为基于统一事件的 handoff handler
  * @param {Tool} tool - tool 实例
  * @param {{
+ *   phase: "first"|"second",
  *   bridgeObjects?: boolean,
  *   completeOnCancel?: boolean,
+ *   onComplete?: (phase: "first"|"second", context: import("../dag.js").DevicesDAGHandlerContext, objects?: Array<*>) => void,
  * }} [options={}] - 包装选项
  * @returns {import("../dag.js").DevicesDAGHandler}
  */
 function wrapToolForHandoff(tool, options = {}) {
-  const { bridgeObjects = false, completeOnCancel = false } = options;
+  const {
+    phase = "first",
+    bridgeObjects = false,
+    completeOnCancel = false,
+    onComplete = null,
+  } = options;
   let processor = null;
 
   return (packet, context = {}) => {
@@ -184,7 +195,6 @@ function wrapToolForHandoff(tool, options = {}) {
       processor = tool.createProcessor();
     }
 
-    const onToolComplete = context.acc?.onToolComplete;
     let completed = false;
     const unsubs = [];
 
@@ -195,7 +205,7 @@ function wrapToolForHandoff(tool, options = {}) {
           const objects = bridgeObjects
             ? normalizeHandoffBridgeObjects(result)
             : undefined;
-          onToolComplete?.(objects);
+          onComplete?.(phase, context, objects);
         }),
       );
     }
@@ -210,7 +220,7 @@ function wrapToolForHandoff(tool, options = {}) {
     if (hasCancelSignal && !completed) {
       discardSecondPhaseObjects(tool, context);
       completed = true;
-      onToolComplete?.([]);
+      onComplete?.(phase, context, []);
     }
 
     // 异步 case：延迟清理 subscription，等 Promise resolve 后再移除监听
@@ -245,11 +255,13 @@ function wrapToolForHandoff(tool, options = {}) {
  * 为 subDAG 的根节点追加完成通知包装
  * @param {import("../dag.js").SubDAGDefinition} subDAGDef - 原始子图定义
  * @param {Object} [options={}] - 包装选项
+ * @param {"first"|"second"} [options.phase="first"] - 当前子图所处的 handoff 阶段
  * @param {Function} [options.shouldComplete] - 决定是否发出完成通知，接收 (packet, context)，省略时在收到 "end" 信号后发出
+ * @param {(phase: "first"|"second", context: import("../dag.js").DevicesDAGHandlerContext, objects?: Array<*>) => void} [options.onComplete] - 完成后的阶段切换回调
  * @returns {import("../dag.js").SubDAGDefinition} 包装后的子图定义
  */
 function wrapSubDAGForHandoff(subDAGDef, options = {}) {
-  const { shouldComplete } = options;
+  const { phase = "first", shouldComplete, onComplete = null } = options;
   const createWrappedHandler = (originalHandler) => (packet, context) => {
     const rawResult =
       typeof originalHandler === "function"
@@ -262,10 +274,10 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
     if (!should) return rawResult;
 
     // 子图内部工具通过 setContextObjects 写入 node.state.objects，
-    // 经由回调参数桥接到 handoff
+    // 经由闭包回调桥接到 handoff
     const nodeState = context.getNodeState?.() ?? {};
     const objects = nodeState.objects ?? [];
-    context.acc?.onToolComplete?.(objects);
+    onComplete?.(phase, context, objects);
     return rawResult;
   };
 

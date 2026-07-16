@@ -108,7 +108,7 @@ modifier 同时接受：
 ## 权威数据来源
 
 modifier 以私有字段 `_overlayModifiedObjects` 作为当前活动对象的唯一权威数据来源。
-不依赖 node state 或 acc 中的对象引用。
+不依赖 node state 或 routeContext 中的对象引用。
 
 ### `resolveActiveModifiedObjects(context, objects)`
 
@@ -124,7 +124,7 @@ resolveActiveModifiedObjects(context, objects) {
 读取优先级：
 
 1. `_overlayModifiedObjects`（私有字段，handoff 桥接或自身 process 写入）
-2. `resolveContextObjects`（node state → acc fallback，非 handoff 场景兼容）
+2. `resolveContextObjects`（node state → services/routeContext fallback，非 handoff 场景兼容）
 
 `_overlayModifiedObjects` 在以下时机写入：
 

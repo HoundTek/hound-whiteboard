@@ -64,7 +64,7 @@ flowchart LR
 
 坐标转换规则：`worldX = canvasX / viewport.zoom + viewport.origin.x`，`worldY = canvasY / viewport.zoom + viewport.origin.y`。
 
-视口实例来自 `ctx.acc.viewport`（由上游 `/<viewportId>` 节点注入）。如果视口不可达，信号原样透传，不发生转换报错。
+视口实例来自 `ctx.services.viewport`（由上游 `/<viewportId>` 节点声明）。如果视口不可达，信号原样透传，不发生转换报错。
 
 ### 路由规则
 

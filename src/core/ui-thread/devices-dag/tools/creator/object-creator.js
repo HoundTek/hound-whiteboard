@@ -145,7 +145,10 @@ class ObjectCreatorTool extends GestureTool {
       isGestureCancelled: baseInteraction.hasCancel,
       isObjectEnded: baseInteraction.hasObjectEnd,
       isObjectCancelled: baseInteraction.hasObjectCancel,
-      objectId: positionSignal?.context?.objectId ?? context.acc?.objectId,
+      objectId:
+        positionSignal?.context?.objectId ??
+        context.routeContext?.objectId ??
+        context.acc?.objectId,
       injectedProperty: extractInjectedProperty(signals),
     };
   }
@@ -178,8 +181,8 @@ class ObjectCreatorTool extends GestureTool {
   resolveCreatedObjectProperty(interaction) {
     const baseProperty =
       this.property &&
-        typeof this.property === "object" &&
-        !Array.isArray(this.property)
+      typeof this.property === "object" &&
+      !Array.isArray(this.property)
         ? this.property
         : {};
 
@@ -234,7 +237,9 @@ class ObjectCreatorTool extends GestureTool {
    * @protected
    */
   createObjectViaRpc(interaction) {
-    const boardApi = interaction?.context?.acc?.boardApi;
+    const boardApi =
+      interaction?.context?.services?.boardApi ??
+      interaction?.context?.acc?.boardApi;
     const objectType = this.getCreatedObjectType();
 
     if (
@@ -284,6 +289,7 @@ class ObjectCreatorTool extends GestureTool {
 
       if (interaction.objectId == null) {
         const allocatedId =
+          interaction?.context?.services?.board?.allocateObjectId?.() ??
           interaction?.context?.acc?.board?.allocateObjectId?.();
         if (allocatedId != null) {
           interaction.objectId = allocatedId;
@@ -334,7 +340,7 @@ class ObjectCreatorTool extends GestureTool {
    * @returns {void}
    */
   discardCreatedObjects(context = {}) {
-    const boardApi = context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
     if (boardApi && this.objectId != null) {
       boardApi.discardActiveObjects([this.objectId]);
     }
@@ -488,7 +494,7 @@ class ObjectCreatorTool extends GestureTool {
    */
   commitCreatedObject(interaction) {
     const context = interaction?.context ?? {};
-    const boardApi = context.acc?.boardApi;
+    const boardApi = context.services?.boardApi ?? context.acc?.boardApi;
 
     if (boardApi && this.objectId != null) {
       boardApi.commitObjects([this.objectId]);
@@ -504,7 +510,7 @@ class ObjectCreatorTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  afterCompleteCreatedObject(interaction, completedObject) { }
+  afterCompleteCreatedObject(interaction, completedObject) {}
 
   /**
    * 完成整个对象创建（编排钩子流程）
@@ -545,9 +551,10 @@ class ObjectCreatorTool extends GestureTool {
     // finalize 总是执行
     this.finalizeCreatedObject(interaction);
 
-    // handoff 通过注入 autoCommit: false 阻止提前 commit
+    // handoff 通过 routeContext.autoCommit = false 阻止提前 commit
     // 除此之外通过 beforeCommitCreatedObject 判断
-    const autoCommit = context?.acc?.autoCommit !== false;
+    const autoCommit =
+      (context?.routeContext?.autoCommit ?? context?.acc?.autoCommit) !== false;
     if (autoCommit && this.beforeCommitCreatedObject(interaction) !== false) {
       this.commitCreatedObject(interaction);
     }
@@ -648,7 +655,7 @@ class ObjectCreatorTool extends GestureTool {
  * @description
  * 一次对象创建只对应一个手势。手势结束即对象结束，手势取消即对象取消。
  */
-class SingleGestureObjectCreatorTool extends ObjectCreatorTool { }
+class SingleGestureObjectCreatorTool extends ObjectCreatorTool {}
 
 /**
  * 多手势对象创建工具

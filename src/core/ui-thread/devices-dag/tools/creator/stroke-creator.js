@@ -97,7 +97,9 @@ class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
       this._entry.data.points.push({ x: point.x, y: point.y });
     }
 
-    const boardApi = interaction?.context?.acc?.boardApi;
+    const boardApi =
+      interaction?.context?.services?.boardApi ??
+      interaction?.context?.acc?.boardApi;
     if (boardApi && this.objectId != null) {
       boardApi.appendListItem(this.objectId, "points", [
         { x: point.x, y: point.y },

@@ -129,7 +129,7 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 决定 `finalize` 后是否把对象提交到静态图。
 
 - 默认返回 `true`
-- handoff 模式下通过注入 `context.acc.autoCommit = false` 阻止提交，对象继续留在 AOM 动态图中
+- handoff 模式下通过注入 `routeContext.autoCommit = false` 阻止提交，对象继续留在 AOM 动态图中
 
 ### `afterCompleteCreatedObject(interaction, completedObject)`
 
@@ -143,10 +143,10 @@ creator 不直接持有 modifier 引用。
 
 handoff 的接入点：
 
-1. `beforeCommitCreatedObject()` — 被 `context.acc.autoCommit` 取代拦截职责
+1. `beforeCommitCreatedObject()` — 被 `routeContext.autoCommit` 取代拦截职责
 2. `action:complete` 事件 — handoff `wrapToolForHandoff` 订阅该事件
 
-创建完成后，handoff wrapper 从 `action:complete` 事件结果中取得 `_entry`，通过 `context.acc.setHandoffObjects()` 写入 handoff 闭包变量。下次 dispatch 时 `resolveTransition` 从闭包读取，通过 `acc.objects` 注入给 modifier。
+创建完成后，handoff wrapper 从 `action:complete` 事件结果中取得 `_entry`，通过 `onComplete(phase, context, objects)` 回调桥接给 modifier。
 
 ## 子类差异
 

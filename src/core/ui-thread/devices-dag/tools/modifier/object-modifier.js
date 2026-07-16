@@ -184,7 +184,7 @@ class ObjectModifierTool extends GestureTool {
 
     const nextPosition = new Vector(normalizedPosition.x, normalizedPosition.y);
     const objectId = this.resolveObjectId(objectEntry);
-    const boardApi = context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
     if (boardApi && objectId != null) {
       boardApi.modifyObject(objectId, {
         position: {
@@ -245,11 +245,11 @@ class ObjectModifierTool extends GestureTool {
     const normalizedObjects = this.resolveModifiedObjects(context, objects);
 
     if (normalizedObjects.length === 0) return;
-    if (context?.acc?.boardApi) return;
+    if (context?.services?.boardApi ?? context?.acc?.boardApi) return;
 
-    context?.acc?.viewport?.renderer?.captureObjectSnapshot?.(
-      normalizedObjects,
-    );
+    (
+      context?.services?.viewport ?? context?.acc?.viewport
+    )?.renderer?.captureObjectSnapshot?.(normalizedObjects);
   }
 
   /**
@@ -265,15 +265,17 @@ class ObjectModifierTool extends GestureTool {
 
     if (normalizedObjects.length === 0) return;
 
-    if (context?.acc?.boardApi) {
+    if (context?.services?.boardApi ?? context?.acc?.boardApi) {
       this.requestUiOverlayRefresh(context);
       return;
     }
 
-    context?.acc?.viewport?.renderer?.invalidateActiveObjects?.(
-      normalizedObjects,
-    );
-    context?.acc?.viewport?.requestViewportUiRender?.();
+    (
+      context?.services?.viewport ?? context?.acc?.viewport
+    )?.renderer?.invalidateActiveObjects?.(normalizedObjects);
+    (
+      context?.services?.viewport ?? context?.acc?.viewport
+    )?.requestViewportUiRender?.();
   }
 
   /**
@@ -346,7 +348,7 @@ class ObjectModifierTool extends GestureTool {
       return false;
     }
 
-    const boardApi = context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
     const objectIds = this.resolveObjectIds(context, normalizedObjects);
     if (!boardApi || objectIds.length === 0) {
       this.clearContextObjects(context);
@@ -369,7 +371,7 @@ class ObjectModifierTool extends GestureTool {
     const objectIds =
       this._pendingActionObjectIds ??
       this.resolveObjectIds(context, normalizedObjects);
-    const boardApi = context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
 
     if (!boardApi || objectIds.length === 0) {
       this.clearContextObjects(context);
@@ -379,7 +381,9 @@ class ObjectModifierTool extends GestureTool {
     boardApi.commitObjects(objectIds);
     this.clearContextObjects(context);
 
-    const autoUmount = context.acc?.autoUmountOnApply !== false;
+    const autoUmount =
+      (context.routeContext?.autoUmountOnApply ??
+        context.acc?.autoUmountOnApply) !== false;
     if (
       autoUmount &&
       typeof context.dag?.unmount === "function" &&
@@ -424,7 +428,7 @@ class ObjectModifierTool extends GestureTool {
    */
   discardAction(context) {
     const normalizedObjects = this.resolveActionObjects(context);
-    const boardApi = context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
     const objectIds = this.resolveObjectIds(context, normalizedObjects);
 
     if (boardApi && objectIds.length > 0) {
@@ -473,7 +477,7 @@ class ObjectModifierTool extends GestureTool {
   umount(context = {}) {
     this.isActionActive = false;
     const normalizedObjects = this.resolveActiveModifiedObjects(context);
-    const boardApi = context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
     const objectIds = this.resolveObjectIds(context, normalizedObjects);
 
     if (boardApi && objectIds.length > 0) {

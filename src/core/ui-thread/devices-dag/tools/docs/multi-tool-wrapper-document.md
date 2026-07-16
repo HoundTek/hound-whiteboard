@@ -70,7 +70,9 @@ wrapper 从 `touch-contacts` 信号中提取 `contacts` 和 `changedTouchIds`，
 | 已有触点移动 | 同上                                                       | 已有入口节点的 `dispatch()` |
 | 触点抬起     | `[{type: "end", context: {}}]`                             | 已有入口节点的 `dispatch()` |
 
-`deviceContext`（包含 `acc.board`、`acc.viewport`、`acc.boardApi` 等）作为 `dispatch` 的 `acc` 选项原样透传，每个子图入口看到的是同一套上下文。
+`deviceContext`（包含 `services.board`、`services.viewport`、`services.boardApi` 等）作为 `dispatch` 的选项原样透传。
+优先使用 `services` 和 `routeContext`；仅兼容旧接口时使用 `acc`。
+每个子图入口看到的是同一套上下文。
 
 每触点可配置单工具或多节点子图：
 
@@ -142,17 +144,17 @@ viewport.mountWorkflow("touch-stroke", multiStroke, [
 
 每个触点对应一个独立会话，会话信息包括：
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `sessionId` | `number` | 递增分配的唯一会话 id |
-| `entry` | `DevicesDAGNode` | 会话的入口节点 |
-| `createdAt` | `number` | 会话创建时间戳 |
+| 字段        | 类型             | 说明                  |
+| ----------- | ---------------- | --------------------- |
+| `sessionId` | `number`         | 递增分配的唯一会话 id |
+| `entry`     | `DevicesDAGNode` | 会话的入口节点        |
+| `createdAt` | `number`         | 会话创建时间戳        |
 
 ### 可观察方法
 
-| 方法 | 返回值 | 说明 |
-| --- | --- | --- |
-| `getActiveTouchCount()` | `number` | 当前活跃触点数 |
+| 方法                    | 返回值                                     | 说明             |
+| ----------------------- | ------------------------------------------ | ---------------- |
+| `getActiveTouchCount()` | `number`                                   | 当前活跃触点数   |
 | `getSessionDebugInfo()` | `Array<{ touchId, sessionId, createdAt }>` | 活跃会话摘要列表 |
 
 ### 独立子图与主 DAG 的关系

@@ -80,7 +80,7 @@ function createRandomCircleSubDAG(options = {}) {
             return ctx.stop();
           }
 
-          const viewport = ctx.acc?.viewport;
+          const viewport = ctx.services?.viewport ?? ctx.acc?.viewport;
           const viewportWorldRect = viewport?.getViewportWorldRect?.();
           if (!viewportWorldRect) {
             return ctx.stop();

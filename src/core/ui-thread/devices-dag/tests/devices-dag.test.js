@@ -206,8 +206,8 @@ describe("DevicesDAG", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a");
 
-      const handler = () => { };
-      const umount = () => { };
+      const handler = () => {};
+      const umount = () => {};
 
       dag.configureNode("/a", {
         handler,
@@ -226,7 +226,7 @@ describe("DevicesDAG", () => {
     test("configureNode 传 null 可清空 handler 和 umount", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a");
-      dag.configureNode("/a", { handler: () => { }, umount: () => { } });
+      dag.configureNode("/a", { handler: () => {}, umount: () => {} });
       dag.configureNode("/a", { handler: null, umount: null });
 
       const node = dag.getNode("/a");
@@ -350,6 +350,74 @@ describe("DevicesDAG", () => {
       dag.dispatch({ to: "/a/b", signals: [{ type: "test" }] });
 
       expect(bContext[0].injected).toBe(42);
+    });
+
+    test("节点声明的 services 应通过 context.services 下发，并保留 acc 兼容视图", () => {
+      const dag = new DevicesDAG();
+      const viewport = { id: "vp-1" };
+      const snapshots = [];
+
+      dag.ensureNode("/a/b");
+      dag.configureNode("/", {
+        services: { board: { id: "board-1" } },
+      });
+      dag.configureNode("/a", {
+        services: { viewport },
+      });
+      dag.configureNode("/a/b", {
+        handler(_pkt, ctx) {
+          snapshots.push({
+            services: { ...ctx.services },
+            routeContext: { ...ctx.routeContext },
+            acc: { ...ctx.acc },
+          });
+        },
+      });
+
+      dag.dispatch({ to: "/a/b", signals: [{ type: "test" }] });
+
+      expect(snapshots[0].services).toEqual({
+        board: { id: "board-1" },
+        viewport,
+      });
+      expect(snapshots[0].routeContext).toEqual({});
+      expect(snapshots[0].acc).toEqual({
+        board: { id: "board-1" },
+        viewport,
+      });
+    });
+
+    test("getServiceContext 应只聚合静态 services，不混入 routeContext", () => {
+      const dag = new DevicesDAG();
+      dag.ensureNode("/a/b");
+      dag.configureNode("/", {
+        services: { board: { id: "board-1" } },
+      });
+      dag.configureNode("/a", {
+        services: { viewport: { id: "vp-1" } },
+      });
+      dag.configureNode("/a/b", {
+        handler() {
+          return { routeContext: { autoCommit: false } };
+        },
+      });
+
+      const serviceContext = dag.getServiceContext("/a/b");
+      const dispatchResult = dag.dispatch({
+        to: "/a/b",
+        signals: [{ type: "test" }],
+      });
+
+      expect(serviceContext).toEqual({
+        board: { id: "board-1" },
+        viewport: { id: "vp-1" },
+      });
+      expect(dispatchResult.routeContext).toEqual({ autoCommit: false });
+      expect(dispatchResult.acc).toEqual({
+        board: { id: "board-1" },
+        viewport: { id: "vp-1" },
+        autoCommit: false,
+      });
     });
   });
 
@@ -503,7 +571,7 @@ describe("DevicesDAG", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b");
       dag.configureNode("/a", { defaultRoute: "b" });
-      dag.configureNode("/a/b", { handler: () => { } });
+      dag.configureNode("/a/b", { handler: () => {} });
 
       const str = dag.toString();
       expect(str).toContain("[default=b]");
@@ -738,7 +806,7 @@ describe("DevicesDAG", () => {
       dag.ensureNode("/leaf");
 
       // handler 什么都不返回
-      dag.configureNode("/leaf", { handler() { } });
+      dag.configureNode("/leaf", { handler() {} });
 
       const result = dag.dispatch({ to: "/leaf", signals: [{ type: "t" }] });
       expect(result.packets).toEqual([]);
@@ -1058,7 +1126,7 @@ describe("DevicesDAG", () => {
   describe("tool 实例重复挂载检查", () => {
     const makeTool = () => ({
       createProcessor() {
-        return () => { };
+        return () => {};
       },
     });
 
@@ -1172,7 +1240,7 @@ describe("DevicesDAG", () => {
   describe("mount() 方法", () => {
     test("mount 应设置 handler、semantics 和 defaultRoute", () => {
       const dag = new DevicesDAG();
-      const handler = () => { };
+      const handler = () => {};
       const node = dag.mount("/mounted", handler, {
         semantics: { prefix: true },
         defaultRoute: "next",
@@ -1184,7 +1252,7 @@ describe("DevicesDAG", () => {
 
     test("mount 应通过 defaultRoute 设置默认路由", () => {
       const dag = new DevicesDAG();
-      const node = dag.mount("/mounted", () => { }, {
+      const node = dag.mount("/mounted", () => {}, {
         defaultRoute: "leaf",
       });
       expect(node.defaultRoute).toBe("leaf");
@@ -1193,7 +1261,7 @@ describe("DevicesDAG", () => {
     test("mount 不传 defaultRoute 时应为空串", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/mounted");
-      const node = dag.mount("/mounted", () => { }, {});
+      const node = dag.mount("/mounted", () => {}, {});
       expect(node.defaultRoute).toBe("");
     });
 
@@ -1207,8 +1275,8 @@ describe("DevicesDAG", () => {
 
     test("mount 应设置 umount 钩子", () => {
       const dag = new DevicesDAG();
-      const cleanup = () => { };
-      dag.mount("/mounted", () => { }, { umount: cleanup });
+      const cleanup = () => {};
+      dag.mount("/mounted", () => {}, { umount: cleanup });
       expect(dag.getNode("/mounted").umount).toBe(cleanup);
     });
   });
@@ -1217,10 +1285,10 @@ describe("DevicesDAG", () => {
     test("mountWorkflow 在节点已有 handler 时应抛错", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/occupied");
-      dag.configureNode("/occupied", { handler: () => { } });
+      dag.configureNode("/occupied", { handler: () => {} });
       const tool = {
         createProcessor() {
-          return () => { };
+          return () => {};
         },
       };
       expect(() => dag.mountWorkflow("/occupied", tool)).toThrow(
@@ -1231,7 +1299,7 @@ describe("DevicesDAG", () => {
     test("mountWorkflow 传入 SubDAGDefinition 应委托 mountSubDAG", () => {
       const dag = new DevicesDAG();
       const builder = createSubDAG("/wf-sub");
-      const handler = () => { };
+      const handler = () => {};
       builder.node().handler(handler);
       const subDAG = builder.build();
 
@@ -1281,7 +1349,7 @@ describe("DevicesDAG", () => {
       const dag = new DevicesDAG();
       const tool = {
         createProcessor() {
-          return () => { };
+          return () => {};
         },
       };
       dag.mountWorkflow("/wf/tool", tool);

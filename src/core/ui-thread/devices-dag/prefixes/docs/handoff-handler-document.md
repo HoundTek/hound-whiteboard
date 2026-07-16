@@ -71,7 +71,7 @@ sequenceDiagram
 | **first tool `node.state`**  | first 阶段的数据真相源                                      |
 | **second tool 实例字段**     | `_overlayModifiedObjects` 是 handoff 后 second 的缓存真相源 |
 | **second tool `node.state`** | second 阶段的数据真相源（下次 process 时同步）              |
-| **`acc`**                    | 承载回调（`onToolComplete`），不承载对象数据                |
+| **`ctx`**                    | 回调参数传递，不承载对象数据                                |
 
 ### 同步时机
 
@@ -80,14 +80,15 @@ first 完成后立即桥接到 second 的私有字段，不等到下一个信号
 ```
 first 完成
   │
-  ├── onToolComplete(objects)                  ← 数据作为参数传入
+  ├── action:complete (ctx, objects)                ← 数据作为事件参数传入
   │
-  ├── second.receiveHandoffObjects(objects, context)
-  │     ├── _overlayModifiedObjects = [...]    ← 私有字段写入
-  │     ├── syncUiOverlay(context)             ← 注册 overlay provider
-  │     └── requestUiOverlayRefresh(context)   ← 刷新 → 立即显示
-  │
-  └── setState({ phase: "second", activeChild: "second" })
+  ├── createHandoffCompletionHandler
+  │     ├── second.receiveHandoffObjects(objects, context)
+  │     │     ├── _overlayModifiedObjects = [...]    ← 私有字段写入
+  │     │     ├── syncUiOverlay(context)             ← 注册 overlay provider
+  │     │     └── requestUiOverlayRefresh(context)   ← 刷新 → 立即显示
+  │     └── switchHandoffPhase(context, "second")
+  │           └── setNodeState({ phase: "second", activeChild: "second" })
 ```
 
 ### `receiveHandoffObjects(objects, context)`
@@ -123,13 +124,13 @@ resolveActiveModifiedObjects(context, objects) {
 ```mermaid
 flowchart LR
     subgraph First 完成
-        AC["action:complete"] --> OTC["onToolComplete(objects)"]
-        OTC --> Sync["second.receiveHandoffObjects<br/>私有字段 ← syncUiOverlay ← 刷新"]
-        Sync --> Switch2["phase: second<br/>activeChild: second"]
+        AC["action:complete"] --> Handler["createHandoffCompletionHandler"]
+        Handler --> Sync["second.receiveHandoffObjects<br/>私有字段 ← syncUiOverlay ← 刷新"]
+        Sync --> Switch2["switchHandoffPhase('second')"]
     end
     subgraph Second 完成
-        SU["action:complete / cancel"] --> OTC2["onToolComplete([])"]
-        OTC2 --> Switch1["phase: first<br/>activeChild: first"]
+        SU["action:complete / cancel"] --> Handler2["createHandoffCompletionHandler"]
+        Handler2 --> Switch1["switchHandoffPhase('first')"]
         Switch1 --> UI["requestViewportUiRender()"]
     end
 ```
@@ -139,13 +140,12 @@ flowchart LR
 - first 完成时：`objects` 为空数组时（无产出对象）**不切换**；非空或未显式传入对象时**始终切换**
 - second 完成时：总是切回 first
 
-### `acc` 注入字段
+### `routeContext` 注入字段
 
-| 字段                | 类型                | 语义                                     |
-| ------------------- | ------------------- | ---------------------------------------- |
-| `onToolComplete`    | `(objects) => void` | first/second 完成通知，接受对象参数      |
-| `autoUmountOnApply` | `boolean`           | 固定为 `false`，阻止 modifier 自卸载     |
-| `autoCommit`        | `boolean`           | 固定为 `false`，阻止 creator 提前 commit |
+| 字段                | 类型      | 语义                                     |
+| ------------------- | --------- | ---------------------------------------- |
+| `autoUmountOnApply` | `boolean` | 固定为 `false`，阻止 modifier 自卸载     |
+| `autoCommit`        | `boolean` | 固定为 `false`，阻止 creator 提前 commit |
 
 ## 数据所有权迁移
 
@@ -161,9 +161,10 @@ flowchart LR
 
 Handoff prefix 全程不持有 `objects`。它的职责局限于：
 
-1. 注入 `onToolComplete` 回调到 `acc`
+1. 通过 `wrapToolForHandoff` 订阅 `action:complete` 事件
 2. 在回调中调用 `second.receiveHandoffObjects(objects)`
 3. 更新自己的 `node.state.phase` + `activeChild` 控制下一跳路由
+4. 通过 `routeContext` 注入 `autoCommit` 和 `autoUmountOnApply` 控制下游行为
 
 ## 生命周期机制
 

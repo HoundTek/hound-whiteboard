@@ -49,6 +49,8 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 - `resolvedDefaultRoutePath`
 - `depth`
 - `context`
+- `services`
+- `routeContext`
 - `board`
 - `viewport`
 - `allocateObjectId`
@@ -56,15 +58,21 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 - `getNodeState`
 - `setNodeState`
 
-这里的 `context` 就是来自 DevicesDAG 的累积上下文。它通常会携带：
+这里的 `services` 和 `routeContext` 来自 DevicesDAG 的分层上下文。
+`acc`（兼容旧接口）是两者的合并视图。
+`services` 通常会携带：
 
 - `board`
+- `boardApi`
 - `viewport`
-- 工作流回调，例如 `onToolComplete`
-- 其他由上游 prefix 注入的只读数据
+
+`routeContext` 通常会携带：
+
+- `autoCommit`（handoff 注入，控制是否提交）
+- `autoUmountOnApply`（handoff 注入，控制是否自卸载）
 
 `deviceContext` 现在不再构造 `eventContext` / `runtimeContext` 两层兼容视图。
-工具应直接读取顶层字段与 `context`。
+工具应直接读取顶层字段与 `services` / `routeContext`。
 
 ## 对象上下文辅助方法
 

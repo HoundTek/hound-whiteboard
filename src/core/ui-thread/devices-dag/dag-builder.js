@@ -25,7 +25,7 @@ import { joinPath, normalizePath } from "../../engine/utils/path.js";
  * @class
  * @description
  * 声明式子图节点的流畅构建器。通过 {@link DAGBuilder#node} 创建，
- * 提供链式 API 设置处理器、语义、默认出边、工具绑定和卸载钩子。
+ * 提供链式 API 设置处理器、语义、静态服务、默认出边、工具绑定和卸载钩子。
  * @author Zhou Chenyu
  * @example
  * // 在 builder 上下文中创建节点并链式配置
@@ -91,6 +91,18 @@ class DAGNodeBuilder {
       prefix: true,
       ...(isPlainObject(semantics) ? semantics : {}),
     });
+  }
+
+  /**
+   * 设置节点声明的静态服务集合
+   * @param {Object} services
+   * @returns {DAGNodeBuilder}
+   */
+  services(services = {}) {
+    this._dagBuilder._setNodeDef(this._localId, {
+      services: isPlainObject(services) ? services : {},
+    });
+    return this;
   }
 
   /**
@@ -228,6 +240,7 @@ class DAGBuilder {
     this._nodeDefs.set(localId, {
       handler: null,
       semantics: {},
+      services: {},
       defaultRoute: "",
       tool: undefined,
       toolContext: {},

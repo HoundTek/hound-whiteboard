@@ -381,11 +381,12 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       });
       first._entry = { id: 1 };
 
-      // second：手动触发 onToolComplete 来模拟 modifier 完成
+      // second：通过 action:complete 模拟 modifier 完成
       const second = new (class extends Tool {
         process(_packet, ctx) {
-          ctx.acc?.onToolComplete?.();
+          this._emit?.("action:complete", ctx, true);
         }
+        reset() {}
       })();
 
       const subDAG = createHandoffSubDAG({
@@ -531,7 +532,6 @@ describe("handoff-handler（生命周期钩子模式）", () => {
             handle(_pkt, ctx) {
               const objects = [{ id: 99 }];
               ctx.setNodeState?.(ctx.path, { objects });
-              ctx.acc?.onToolComplete?.(objects);
               return ctx.routeToChild("tool");
             },
           }),
@@ -556,7 +556,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(dag.getNode("/viewport/nested/first")).not.toBeNull();
       expect(dag.getNode("/viewport/nested/first/tool")).not.toBeNull();
 
-      dag.dispatch({ to: "/viewport/nested", signals: [{ type: "trigger" }] });
+      dag.dispatch({ to: "/viewport/nested", signals: [{ type: "end" }] });
       expect(dag.getNodeState("/viewport/nested")).toMatchObject({
         phase: "second",
         activeChild: "second",
@@ -631,13 +631,6 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     test("连续两次完成回调不应导致状态紊乱", () => {
       const dag = new DevicesDAG();
       let toggleCount = 0;
-      // first 每次 process 都通过回调触发完成
-      const first = new (class extends Tool {
-        process(_pkt, ctx) {
-          toggleCount++;
-          ctx.acc?.onToolComplete?.();
-        }
-      })();
       const second = createMockModifier();
 
       // 对于非 creator 非 chooser 的 Tool，createHandoffSubDAG 会走到 chooser 分支
@@ -650,7 +643,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           createPrefixNodeHandler({
             handle(pkt, ctx) {
               toggleCount++;
-              ctx.acc?.onToolComplete?.();
+              ctx.setNodeState?.(ctx.path, {
+                objects: [{ id: toggleCount }],
+              });
               return ctx.routeToChild("child");
             },
           }),
@@ -669,7 +664,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       dag.mountSubDAG("/viewport", handoffSubDAG, { board: {}, viewport: {} });
 
       // 第一次完成回调：first → second
-      dag.dispatch({ to: "/viewport/rapid", signals: [{ type: "trigger" }] });
+      dag.dispatch({ to: "/viewport/rapid", signals: [{ type: "end" }] });
       expect(dag.getNodeState("/viewport/rapid")).toMatchObject({
         phase: "second",
         activeChild: "second",
@@ -702,15 +697,16 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           const id = createdCount;
           createdIds.push(id);
           this.isObjectCreationCompleted = true;
-          this._emit?.("action:complete");
-          ctx.acc?.onToolComplete?.();
+          this._emit?.("action:complete", ctx, { id });
         }
+        reset() {}
       })();
 
-      const second = createMockModifier((_pkt, ctx) => {
+      let second = null;
+      second = createMockModifier((_pkt, ctx) => {
         const hasSuccess = _pkt.signals?.some((s) => s.type === "success");
         if (hasSuccess) {
-          ctx.acc?.onToolComplete?.();
+          second?._emit?.("action:complete", ctx, true);
         }
       });
 
@@ -773,7 +769,16 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       }));
       const inner = innerDAG.build();
 
-      const wrapped = wrapSubDAGForHandoff(inner);
+      const wrapped = wrapSubDAGForHandoff(inner, {
+        onComplete(_phase, ctx) {
+          const parentPath = ctx.path.replace(/\/child$/, "");
+          const currentState = ctx.getNodeState?.(parentPath) ?? {};
+          ctx.setNodeState?.(parentPath, {
+            ...currentState,
+            completed: true,
+          });
+        },
+      });
       const outerDAG = createSubDAG("/outer");
       const outerRoot = outerDAG
         .node()
@@ -795,11 +800,6 @@ describe("handoff-handler（生命周期钩子模式）", () => {
 
               return {
                 packets: [{ to: "child", signals: packet.signals }],
-                acc: {
-                  onToolComplete() {
-                    ctx.patchState({ completed: true });
-                  },
-                },
               };
             },
           }),
@@ -1620,15 +1620,14 @@ describe("handoff-handler（生命周期钩子模式）", () => {
     test("handoff phase 和 bridgeObjectCount 应可通过 getNodeState 观察", () => {
       const dag = new DevicesDAG();
       dag.configureNode("/viewport", {
-        handler: () => ({ acc: { board: {}, viewport: {} } }),
+        services: { board: {}, viewport: {} },
       });
 
       const firstTool = new (class extends Tool {
         process(packet, ctx) {
           const hasEnd = packet.signals?.some((s) => s?.type === "end");
           if (hasEnd) {
-            ctx.acc?.setHandoffObjects?.([{ id: 42 }]);
-            ctx.acc?.onToolComplete?.(ctx);
+            this._emit?.("action:complete", ctx, [{ id: 42 }]);
           }
         }
         reset() {}

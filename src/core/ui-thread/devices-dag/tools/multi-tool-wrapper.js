@@ -86,13 +86,11 @@ class MultiToolWrapper extends Tool {
    * @returns {Array<{ touchId: string, sessionId: number, createdAt: number }>}
    */
   getSessionDebugInfo() {
-    return Array.from(this.#instances.entries()).map(
-      ([touchId, session]) => ({
-        touchId,
-        sessionId: session.sessionId,
-        createdAt: session.createdAt,
-      }),
-    );
+    return Array.from(this.#instances.entries()).map(([touchId, session]) => ({
+      touchId,
+      sessionId: session.sessionId,
+      createdAt: session.createdAt,
+    }));
   }
 
   /**
@@ -140,6 +138,27 @@ class MultiToolWrapper extends Tool {
   }
 
   /**
+   * 构造子图 dispatch 所需的上下文选项
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext|Object} [context={}] - 外层设备上下文
+   * @returns {Object}
+   */
+  #buildDispatchContext(context = {}) {
+    const dispatchContext = {};
+
+    if (context.services) {
+      dispatchContext.services = context.services;
+    }
+    if (context.routeContext) {
+      dispatchContext.routeContext = context.routeContext;
+    }
+    if (!context.services && !context.routeContext && context.acc) {
+      dispatchContext.acc = context.acc;
+    }
+
+    return dispatchContext;
+  }
+
+  /**
    * 新建触点——创建入口节点并走边路由信号
    * @param {string} touchId - 触点 id
    * @param {{touchId: string, position: any}} contact - 触点信息
@@ -164,7 +183,7 @@ class MultiToolWrapper extends Tool {
     const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
     ]);
-    entry.dispatch(packet, { acc: deviceContext.acc ?? {} });
+    entry.dispatch(packet, this.#buildDispatchContext(deviceContext));
   }
 
   /**
@@ -182,7 +201,7 @@ class MultiToolWrapper extends Tool {
     const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
     ]);
-    entry.dispatch(packet, { acc: deviceContext.acc ?? {} });
+    entry.dispatch(packet, this.#buildDispatchContext(deviceContext));
   }
 
   /**
@@ -196,10 +215,8 @@ class MultiToolWrapper extends Tool {
     if (!session) return;
     const entry = session.entry;
 
-    const packet = new SignalPacket("", [
-      { type: "end", context: {} },
-    ]);
-    entry.dispatch(packet, { acc: deviceContext.acc ?? {} });
+    const packet = new SignalPacket("", [{ type: "end", context: {} }]);
+    entry.dispatch(packet, this.#buildDispatchContext(deviceContext));
 
     // 清理入口节点 handler 的外部资源（如 overlay）
     this.#disposeNode(entry, deviceContext);
@@ -254,10 +271,8 @@ class MultiToolWrapper extends Tool {
   completeAction(context = {}) {
     for (const [, session] of this.#instances) {
       const entry = session.entry;
-      const packet = new SignalPacket("", [
-        { type: "end", context: {} },
-      ]);
-      entry.dispatch(packet, { acc: context.acc ?? {} });
+      const packet = new SignalPacket("", [{ type: "end", context: {} }]);
+      entry.dispatch(packet, this.#buildDispatchContext(context));
       this.#disposeNode(entry, context);
     }
     this.#instances.clear();
@@ -273,10 +288,8 @@ class MultiToolWrapper extends Tool {
   cancelAction(context = {}) {
     for (const [, session] of this.#instances) {
       const entry = session.entry;
-      const packet = new SignalPacket("", [
-        { type: "cancel", context: {} },
-      ]);
-      entry.dispatch(packet, { acc: context.acc ?? {} });
+      const packet = new SignalPacket("", [{ type: "cancel", context: {} }]);
+      entry.dispatch(packet, this.#buildDispatchContext(context));
       this.#disposeNode(entry, context);
     }
     this.#instances.clear();

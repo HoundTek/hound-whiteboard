@@ -122,13 +122,13 @@ function createTouchscreenDevice(options = {}) {
    * 2. 更新内部触点状态
    * 3. 路由到 contacts 子节点输出聚合的触点报告
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 acc.viewport）
+   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 services.viewport）
    * @returns {Object}
    */
   const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
 
-    const viewport = ctx?.acc?.viewport;
+    const viewport = ctx?.services?.viewport ?? ctx?.acc?.viewport;
     const convertedSignals =
       viewport && typeof viewport.convertCanvasSignalsToWorld === "function"
         ? viewport.convertCanvasSignalsToWorld(packet.signals)
@@ -159,7 +159,10 @@ function createTouchscreenDevice(options = {}) {
 
   const builder = createSubDAG("/touchscreen");
   const root = builder.node().handler(rootHandler).defaultRoute("contacts");
-  const contacts = builder.node().handler(contactsHandler).defaultRoute(DEVICE_DEFAULT_ROUTE);
+  const contacts = builder
+    .node()
+    .handler(contactsHandler)
+    .defaultRoute(DEVICE_DEFAULT_ROUTE);
   builder.edge("contacts", root, contacts);
 
   return builder

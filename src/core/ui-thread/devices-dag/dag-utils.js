@@ -57,10 +57,18 @@ function normalizeHandlerResult(rawResult, options = {}) {
     (Array.isArray(rawResult.packets) ||
       "stop" in rawResult ||
       "redirect" in rawResult ||
-      "acc" in rawResult)
+      "acc" in rawResult ||
+      "routeContext" in rawResult)
   ) {
+    const routeContext = isPlainObject(rawResult.routeContext)
+      ? { ...rawResult.routeContext }
+      : isPlainObject(rawResult.acc)
+        ? { ...rawResult.acc }
+        : undefined;
+
     return {
       ...rawResult,
+      routeContext,
       packets: SignalPacket.normalizeResult(rawResult.packets ?? [], options),
       explicitPackets: Object.prototype.hasOwnProperty.call(
         rawResult,
@@ -81,7 +89,8 @@ function normalizeHandlerResult(rawResult, options = {}) {
         (Array.isArray(item.packets) ||
           "stop" in item ||
           "redirect" in item ||
-          "acc" in item)
+          "acc" in item ||
+          "routeContext" in item)
       ) {
         packets.push(
           ...SignalPacket.normalizeResult(item.packets ?? [], options),

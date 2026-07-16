@@ -220,13 +220,13 @@ function createMouseDevice() {
    * 2. 更新设备内部状态（按钮掩码、最近位置）
    * 3. 按按钮状态分流到对应的通道路由节点
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {Object} [context={}] - handler context（含 acc.viewport）
+   * @param {Object} [context={}] - handler context（含 services.viewport）
    * @returns {Array<SignalPacket|Object>}
    */
   const rootHandler = (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
 
-    const viewport = context?.acc?.viewport;
+    const viewport = context?.services?.viewport ?? context?.acc?.viewport;
     const convertedSignals =
       viewport && typeof viewport.convertCanvasSignalsToWorld === "function"
         ? viewport.convertCanvasSignalsToWorld(packet.signals)

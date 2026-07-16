@@ -29,30 +29,46 @@ import { DevicesDAGEdge } from "./dag-node-edge.js";
 import { dagToString } from "./dag-debug.js";
 
 /**
- * 设备图处理器累积上下文
+ * 设备图静态服务上下文
  * @description
- * 沿分发路径逐层追加的共享上下文，用于注入基础设施和回调函数，不承载领域数据。
- * 包含 Board、Viewport、BoardApi RPC 等运行时依赖和 handoff 工作流回调。
- * @typedef {Object} DevicesDAGAccumulatedContext
+ * 沿 DAG 路径由节点声明的 `services` 静态累积而成，用于暴露 Board、Viewport、BoardApi RPC 等基础设施依赖。
+ * 这部分上下文由节点配置显式声明，不通过 handler 返回值注入。
+ * @typedef {Object} DevicesDAGServiceContext
  * @property {Object} [board] - Board 实例（含 allocateObjectId 等方法）
  * @property {Object} [viewport] - Viewport 实例（含 registerUiOverlayProvider / requestViewportUiRender 等）
  * @property {Object} [boardApi] - Board API RPC 代理（含 createObject / commitObjects / discardActiveObjects / modifyObject / queryObjects 等）
  * @property {Function} [allocateObjectId] - 分配对象 id 的便捷函数（优先于 board.allocateObjectId）
- * @property {boolean} [autoCommit] - handoff prefix 注入的标志，false 时阻止 Creator 自动提交到静态图
- * @property {boolean} [autoUmountOnApply] - 修改提交后是否自动卸载工具节点（默认 true）
+ */
+
+/**
+ * 设备图路由参数上下文
+ * @description
+ * 沿单次 dispatch 链路由 handler 返回值逐层追加的运行时参数，通常用于控制下游工具行为，
+ * 例如 handoff 场景中的 `autoCommit` 与 `autoUmountOnApply`。
+ * @typedef {Object} DevicesDAGRouteContext
+ * @property {boolean} [autoCommit] - false 时阻止 Creator 自动提交到静态图
+ * @property {boolean} [autoUmountOnApply] - false 时阻止 Modifier 提交后自卸载
  * @property {Function} [resolvePosition] - 由 prefix 注入的坐标解析函数
- * @property {Function} [onToolComplete] - handoff prefix 注入的回调，接受 objects 参数，用于通知完成并桥接对象
+ * @property {number} [objectId] - 由上游注入的预分配对象 id
+ */
+
+/**
+ * 设备图处理器累积上下文
+ * @description
+ * 兼容旧接口的累积上下文视图，等价于 `services + routeContext` 的浅合并快照。
+ * 建议新代码优先读取 `context.services` 与 `context.routeContext`。
+ * @typedef {DevicesDAGServiceContext & DevicesDAGRouteContext} DevicesDAGAccumulatedContext
  */
 
 /**
  * 设备图处理器上下文
  * @description
- * 处理器上下文包含当前节点元数据、累积上下文以及节点状态访问接口，
+ * 处理器上下文包含当前节点元数据、静态服务、路由参数以及节点状态访问接口，
  * 供节点处理器在处理信号包时使用。
  *
- * 累积上下文（\`acc\`）是沿分发路径逐步追加的只读对象。
- * 在 DAG 中，分发沿单一路径进行，上下文只沿该路径累积，
- * 节点的多入边不影响单次分发的上下文。
+ * `services` 是沿 DAG 路径静态声明并累积的基础设施依赖；
+ * `routeContext` 是单次 dispatch 中由上游 handler 返回值逐层追加的运行时参数；
+ * `acc` 仅作为兼容旧接口的合并视图保留。
  *
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
@@ -63,7 +79,9 @@ import { dagToString } from "./dag-debug.js";
  * @property {string} resolvedDefaultRoutePath - 当前默认出边对应的绝对路径
  * @property {number} depth - 当前分发深度
  * @property {SignalPacket|undefined} signalPacket - 当前已规整的输入信号包
- * @property {DevicesDAGAccumulatedContext} acc - 累积上下文（沿分发路径逐层追加，handler 只能在 acc 中新增键）
+ * @property {DevicesDAGServiceContext} services - 静态服务上下文
+ * @property {DevicesDAGRouteContext} routeContext - 路由参数上下文
+ * @property {DevicesDAGAccumulatedContext} acc - 兼容旧接口的累积上下文视图
  * @property {Object} state - 当前节点状态的只读快照
  * @property {() => any} getState - 重读节点最新状态
  * @property {(nextState: Object) => Object} setState - 全量写入节点状态
@@ -79,7 +97,8 @@ import { dagToString } from "./dag-debug.js";
  * 设备图处理器输出
  * @typedef {Object} DevicesDAGHandlerResult
  * @property {SignalPacket[]} packets - 继续路由到后继节点的信号包列表
- * @property {Object} [acc] - 要合并到累积上下文的键值对
+ * @property {DevicesDAGRouteContext} [routeContext] - 要合并到路由参数上下文的键值对
+ * @property {Object} [acc] - 兼容旧接口的别名，等价于 routeContext
  * @property {string} [redirect] - 覆盖 dispatcher 原本要走的下一段出边名
  * @property {boolean} [stop] - 强制终止当前链路路由
  */
@@ -106,6 +125,7 @@ import { dagToString } from "./dag-debug.js";
  * @typedef {Object} SubDAGNodeDefinition
  * @property {DevicesDAGHandler|null} [handler] - 节点处理器
  * @property {Object} [semantics] - 节点语义元数据
+ * @property {DevicesDAGServiceContext} [services] - 节点声明的静态服务集合
  * @property {string} [defaultRoute] - 默认出边名
  * @property {import("../tools/tool.js").Tool} [tool] - 工具实例
  * @property {DevicesDAGNodeUmountHandler|null} [umount] - 卸载钩子
@@ -442,6 +462,39 @@ class DevicesDAG {
   }
 
   /**
+   * 解析某一路径可见的静态服务上下文
+   * @description
+   * 沿绝对路径从根节点逐段收集节点声明的 `services`，返回浅合并快照。
+   * 不会执行 handler，因此可用于调试和装配时检查。
+   * @param {string} [path="/"] - 目标节点路径
+   * @returns {DevicesDAGServiceContext} 服务上下文快照
+   */
+  getServiceContext(path = "/") {
+    const absolutePath = resolvePath("/", path);
+    const segments = normalizePath(absolutePath);
+    let current = this._ghost;
+    let mergedServices = {};
+
+    for (const segment of segments) {
+      const edge = current.outEdges.get(segment);
+      if (!edge) return {};
+      current = edge.target;
+
+      if (!isPlainObject(current.services)) continue;
+      for (const key of Object.keys(current.services)) {
+        if (Object.prototype.hasOwnProperty.call(mergedServices, key)) {
+          throw new Error(
+            `Service context key "${key}" already exists along path "${absolutePath}".`,
+          );
+        }
+      }
+      mergedServices = { ...mergedServices, ...current.services };
+    }
+
+    return { ...mergedServices };
+  }
+
+  /**
    * 添加一条有向边
    * @param {string} fromPath - 源节点路径
    * @param {string} edgeName - 边名
@@ -568,6 +621,7 @@ class DevicesDAG {
    * @param {Object} options - 配置选项
    * @param {DevicesDAGHandler|null} [options.handler] - 新处理器
    * @param {Object|null} [options.semantics] - 新语义
+   * @param {DevicesDAGServiceContext|null} [options.services] - 节点声明的静态服务集合
    * @param {string|null} [options.defaultRoute] - 新默认出边
    * @param {DevicesDAGNodeUmountHandler|null} [options.umount] - 新卸载钩子
    * @returns {DevicesDAGNode} 更新后的节点
@@ -583,6 +637,9 @@ class DevicesDAG {
       node.semantics = isPlainObject(options.semantics)
         ? { ...options.semantics }
         : {};
+    }
+    if ("services" in options) {
+      node.services = isPlainObject(options.services) ? options.services : {};
     }
     if ("defaultRoute" in options) {
       node.defaultRoute =
@@ -600,7 +657,7 @@ class DevicesDAG {
    * 直接挂载一个运行时节点
    * @param {string} path - 节点路径
    * @param {DevicesDAGHandler|null} [handler=null] - 节点处理器
-   * @param {{semantics?: Object, defaultRoute?: string, umount?: DevicesDAGNodeUmountHandler|null}} [options={}] - 配置选项
+   * @param {{semantics?: Object, services?: DevicesDAGServiceContext, defaultRoute?: string, umount?: DevicesDAGNodeUmountHandler|null}} [options={}] - 配置选项
    * @returns {DevicesDAGNode} 挂载后的节点
    */
   mount(path, handler = null, options = {}) {
@@ -611,6 +668,12 @@ class DevicesDAG {
     }
     if (isPlainObject(options.semantics)) {
       node.semantics = { ...node.semantics, ...options.semantics };
+    }
+    if (isPlainObject(options.services)) {
+      node.services = {
+        ...node.services,
+        ...options.services,
+      };
     }
 
     const defaultRoute =
@@ -740,6 +803,9 @@ class DevicesDAG {
     if (isPlainObject(def.semantics)) {
       node.semantics = { ...node.semantics, ...def.semantics };
     }
+    if (isPlainObject(def.services)) {
+      node.services = { ...node.services, ...def.services };
+    }
     if (typeof def.defaultRoute === "string") {
       node.defaultRoute = def.defaultRoute;
     }
@@ -775,10 +841,10 @@ class DevicesDAG {
   /**
    * 从根节点开始分发信号包
    * @description
-   * 累积上下文由根节点 handler 注入，调用方不应直接传递。
+   * 静态服务上下文由路径上的节点 `services` 声明提供，路由参数上下文从空对象开始逐层累积。
    * 核心路由逻辑委托给 {@link DevicesDAGNode#dispatch}。
    * @param {SignalPacket|Record<string, any>} packet - 信号包
-   * @returns {{ packets: SignalPacket[], context?: Record<string, any> }} 分发结果
+   * @returns {{ packets: SignalPacket[], services?: Object, routeContext?: Object, acc?: Object }} 分发结果
    */
   dispatch(packet) {
     const startPacket = SignalPacket.from(packet, { defaultTo: "" });
@@ -803,7 +869,8 @@ class DevicesDAG {
 
     return this._ghost.dispatch(new SignalPacket(to, startPacket.signals), {
       path: "",
-      acc: {},
+      services: {},
+      routeContext: {},
       depth: 0,
       maxDepth: this._maxDispatchDepth,
       strict: this._strict,
@@ -818,7 +885,7 @@ class DevicesDAG {
    * 与 {@link DevicesDAG#dispatch} 行为一致，额外收集路由追踪信息。
    * 返回结果中包含 `trace` 数组，可通过 `traceToString()` 格式化。
    * @param {SignalPacket|Record<string, any>} packet - 信号包
-   * @returns {{ packets: SignalPacket[], acc?: Object, trace: Array }} 分发结果与追踪信息
+   * @returns {{ packets: SignalPacket[], services?: Object, routeContext?: Object, acc?: Object, trace: Array }} 分发结果与追踪信息
    */
   dispatchWithTrace(packet) {
     const trace = [];
@@ -844,7 +911,8 @@ class DevicesDAG {
       new SignalPacket(to, startPacket.signals),
       {
         path: "",
-        acc: {},
+        services: {},
+        routeContext: {},
         depth: 0,
         maxDepth: this._maxDispatchDepth,
         strict: this._strict,
@@ -951,6 +1019,8 @@ class DevicesDAG {
         resolvedDefaultRoutePath: "",
         depth: 0,
         signalPacket: undefined,
+        services: { ...context },
+        routeContext: {},
         acc: { ...context },
         getNodeState: (pathOrId) => this.getNodeState(pathOrId),
         setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
@@ -971,6 +1041,7 @@ class DevicesDAG {
     root.handler = null;
     root.semantics = {};
     root.state = {};
+    root.services = {};
     root.umount = null;
     root._toolInstance = null;
     root.defaultRoute = "";

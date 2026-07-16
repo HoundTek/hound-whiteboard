@@ -1,7 +1,7 @@
 /**
  * @file canvas 相对坐标→世界坐标转换 prefix
  * @description 将 position 信号的 context.value 从 canvas 相对坐标转为世界坐标。
- * 视口实例来自 ctx.acc.viewport（由上游 `/<viewportId>` 节点注入）。
+ * 视口实例来自 ctx.services.viewport（由上游 `/<viewportId>` 节点声明）。
  * @module core/ui-thread/devices-dag/prefixes/canvas-to-world-handler
  * @author Zhou Chenyu
  */
@@ -27,13 +27,9 @@ import { createPrefixNodeHandler } from "./handler.js";
 function createCanvasToWorldPrefixHandler() {
   return createPrefixNodeHandler({
     handle(packet, ctx) {
-      const viewport = ctx.acc?.viewport;
+      const viewport = ctx.services?.viewport ?? ctx.acc?.viewport;
 
-      if (
-        !viewport ||
-        typeof viewport.zoom !== "number" ||
-        !viewport.origin
-      ) {
+      if (!viewport || typeof viewport.zoom !== "number" || !viewport.origin) {
         return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
       }
 

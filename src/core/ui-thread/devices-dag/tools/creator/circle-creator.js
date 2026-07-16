@@ -125,7 +125,9 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       this._entry.data.radius = radius;
     }
 
-    const boardApi = interaction?.context?.acc?.boardApi;
+    const boardApi =
+      interaction?.context?.services?.boardApi ??
+      interaction?.context?.acc?.boardApi;
     if (!boardApi || this.objectId == null) {
       return;
     }
@@ -157,7 +159,10 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
       const radius = localPoint.length();
       this.setRadius(radius, interaction);
     }
-    const zoom = interaction.context?.acc?.viewport?.zoom ?? 1;
+    const zoom =
+      interaction.context?.services?.viewport?.zoom ??
+      interaction.context?.acc?.viewport?.zoom ??
+      1;
     if (
       this.count <= 2 &&
       (this._entry?.data?.radius ?? 0) < this.minDragDistanceScreen / zoom
