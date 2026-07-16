@@ -16,13 +16,14 @@
  * @author Zhou Chenyu
  */
 
-import { joinPath, normalizePath, resolvePath } from "../../engine/utils/path.js";
+import {
+  joinPath,
+  normalizePath,
+  resolvePath,
+} from "../../engine/utils/path.js";
 import { SignalPacket } from "./signal.js";
 import { CounterPool } from "../../engine/utils/counter-pool.js";
-import {
-  isPlainObject,
-  isSubDAGDefinition,
-} from "./dag-utils.js";
+import { isPlainObject, isSubDAGDefinition } from "./dag-utils.js";
 import { DevicesDAGNode } from "./dag-node-edge.js";
 import { DevicesDAGEdge } from "./dag-node-edge.js";
 import { dagToString } from "./dag-debug.js";
@@ -30,17 +31,17 @@ import { dagToString } from "./dag-debug.js";
 /**
  * 设备图处理器累积上下文
  * @description
- * 沿分发路径逐层追加的共享上下文，handler 只读，只能通过前缀节点新增键。
- * 包含 Board、Viewport、BoardApi RPC、当前工具对象集合等运行时依赖。
+ * 沿分发路径逐层追加的共享上下文，用于注入基础设施和回调函数，不承载领域数据。
+ * 包含 Board、Viewport、BoardApi RPC 等运行时依赖和 handoff 工作流回调。
  * @typedef {Object} DevicesDAGAccumulatedContext
  * @property {Object} [board] - Board 实例（含 allocateObjectId 等方法）
  * @property {Object} [viewport] - Viewport 实例（含 registerUiOverlayProvider / requestViewportUiRender 等）
  * @property {Object} [boardApi] - Board API RPC 代理（含 createObject / commitObjects / discardActiveObjects / modifyObject / queryObjects 等）
- * @property {Array<Object>} [objects] - 当前工具持有的对象集合
  * @property {Function} [allocateObjectId] - 分配对象 id 的便捷函数（优先于 board.allocateObjectId）
  * @property {boolean} [autoCommit] - handoff prefix 注入的标志，false 时阻止 Creator 自动提交到静态图
  * @property {boolean} [autoUmountOnApply] - 修改提交后是否自动卸载工具节点（默认 true）
  * @property {Function} [resolvePosition] - 由 prefix 注入的坐标解析函数
+ * @property {Function} [onToolComplete] - handoff prefix 注入的回调，接受 objects 参数，用于通知完成并桥接对象
  */
 
 /**
@@ -52,7 +53,7 @@ import { dagToString } from "./dag-debug.js";
  * 累积上下文（\`acc\`）是沿分发路径逐步追加的只读对象。
  * 在 DAG 中，分发沿单一路径进行，上下文只沿该路径累积，
  * 节点的多入边不影响单次分发的上下文。
- * 
+ *
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
  * @property {DevicesDAG} dag - 所属设备图
@@ -486,9 +487,7 @@ class DevicesDAG {
    */
   _checkNoCycle(source, edgeName, target) {
     if (this._wouldCreateCycle(source, target)) {
- throw new Error(
-        `Edge "${edgeName}" would create a cycle.`,
-      );
+      throw new Error(`Edge "${edgeName}" would create a cycle.`);
     }
   }
 
@@ -802,18 +801,15 @@ class DevicesDAG {
       }
     }
 
-    return this._ghost.dispatch(
-      new SignalPacket(to, startPacket.signals),
-      {
-        path: "",
-        acc: {},
-        depth: 0,
-        maxDepth: this._maxDispatchDepth,
-        strict: this._strict,
-        dag: this,
-        edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
-      },
-    );
+    return this._ghost.dispatch(new SignalPacket(to, startPacket.signals), {
+      path: "",
+      acc: {},
+      depth: 0,
+      maxDepth: this._maxDispatchDepth,
+      strict: this._strict,
+      dag: this,
+      edgeNotFoundFallback: (pkt) => [new SignalPacket("", pkt.signals)],
+    });
   }
 
   /**
@@ -939,9 +935,7 @@ class DevicesDAG {
     // 先断开出边再递归，使子节点的孤立检测能正确反映边变化
     const outgoingEdges = [...root.outEdges.values()];
     for (const edge of outgoingEdges) {
-      const childPath = nodePath
-        ? `${nodePath}/${edge.name}`
-        : `/${edge.name}`;
+      const childPath = nodePath ? `${nodePath}/${edge.name}` : `/${edge.name}`;
       this._disconnectEdge(edge);
       this._umountSubgraph(edge.target, context, visited, childPath);
     }

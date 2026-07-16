@@ -19,17 +19,25 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
     discardActiveObjects: jest.fn(),
   };
 
-  return {
-    deviceContext: {
-      acc: {
-        board,
-        boardApi,
-        viewport,
-        objectId,
-        ownerChunkId: 1,
-      },
+  const _nodeState = {};
+  const deviceContext = {
+    path: "/test",
+    getNodeState: () => ({ ..._nodeState }),
+    setNodeState: (_pathOrId, state) => {
+      Object.assign(_nodeState, state);
+      return { ..._nodeState };
+    },
+    _nodeState,
+    acc: {
+      board,
+      boardApi,
+      viewport,
+      objectId,
+      ownerChunkId: 1,
     },
   };
+
+  return { deviceContext };
 }
 
 describe("StrokeCreatorTool", () => {
@@ -206,7 +214,7 @@ describe("StrokeCreatorTool", () => {
         position: new Vector(1, 2),
       }),
     );
-    expect(deviceContext.acc.objects).toEqual([tool._entry]);
+    expect(deviceContext._nodeState.objects).toEqual([tool._entry]);
   });
 
   test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {

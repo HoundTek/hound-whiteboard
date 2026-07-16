@@ -242,9 +242,6 @@ class Tool {
     if (nodeState.objects) {
       return this.normalizeObjectCollection(nodeState.objects);
     }
-    if (context.acc?.objects) {
-      return this.normalizeObjectCollection(context.acc.objects);
-    }
     return [];
   }
 
@@ -268,10 +265,9 @@ class Tool {
   }
 
   /**
-   * 将对象集合写回设备上下文与节点上下文
+   * 将对象集合写入当前节点状态
    * @description
-   * 向 `context.acc.objects` 写入对象集合（acc 是链路级共享作用域，允许有限可写），
-   * 同时同步到节点 `state.objects` 供跨 handler 观察。
+   * 写入节点 `state.objects` 作为领域数据的唯一真相源，供跨 handler 观察。
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合
    * @returns {Array<*>}
@@ -285,8 +281,6 @@ class Tool {
       return [];
     }
 
-    context.acc.objects = normalizedObjects;
-
     const nodeState = this.resolveNodeState(context);
     this.writeNodeState(context, {
       ...nodeState,
@@ -297,16 +291,13 @@ class Tool {
   }
 
   /**
-   * 清理设备上下文中的对象引用
+   * 清理当前节点状态中的对象引用
    * @description
-   * 从 `context.acc.objects` 和节点 `state.objects` 中移除对象引用。
-   * acc 是链路级共享作用域，允许有限可写。
+   * 从节点 `state.objects` 中移除对象引用。
    * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   clearContextObjects(context = {}) {
-    delete context.acc?.objects;
-
     const nodeState = { ...this.resolveNodeState(context) };
     if (Object.prototype.hasOwnProperty.call(nodeState, "objects")) {
       delete nodeState.objects;

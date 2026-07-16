@@ -78,18 +78,10 @@ function dagToString(dag) {
 
     // 关键编排状态摘要
     const state = node.state ?? {};
-    const stateKeys = [
-      "phase",
-      "routeTarget",
-      "activeChild",
-      "bridgeObjectCount",
-    ];
+    const stateKeys = ["phase", "routeTarget", "activeChild"];
     const stateSummary = stateKeys
       .filter(
-        (k) =>
-          state[k] !== undefined &&
-          state[k] !== null &&
-          state[k] !== "",
+        (k) => state[k] !== undefined && state[k] !== null && state[k] !== "",
       )
       .map((k) => `${k}=${state[k]}`)
       .join(", ");
@@ -249,7 +241,7 @@ function traceToString(trace) {
 
   const lines = trace.map((entry) => {
     const indent = "  ".repeat(entry.depth);
- const parts = [
+    const parts = [
       `${indent}${entry.path}`,
       `d=${entry.depth}`,
       entry.hadHandler ? "[handler]" : "[no-handler]",
@@ -258,7 +250,8 @@ function traceToString(trace) {
     if (entry.nextSegment) parts.push(`→${entry.nextSegment}`);
     if (entry.packetsCount > 0) parts.push(`pkts=${entry.packetsCount}`);
     if (entry.deferredCount > 0) parts.push(`deferred=${entry.deferredCount}`);
-    if (entry.accKeys?.length > 0) parts.push(`acc=[${entry.accKeys.join(",")}]`);
+    if (entry.accKeys?.length > 0)
+      parts.push(`acc=[${entry.accKeys.join(",")}]`);
     return parts.join(" ");
   });
 

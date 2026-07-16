@@ -14,9 +14,16 @@ import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../object-modifier.js";
  */
 function aomCtx(objects, extra = {}) {
   const normalized = Array.isArray(objects) ? objects : [objects];
+  const _nodeState = { objects: normalized.filter(Boolean) };
   return {
+    path: "/test",
+    getNodeState: () => ({ ..._nodeState }),
+    setNodeState: (_pathOrId, state) => {
+      Object.assign(_nodeState, state);
+      return { ..._nodeState };
+    },
+    state: _nodeState,
     acc: {
-      objects: normalized.filter(Boolean),
       board: {
         activeObjectManager: {
           activeObjectIndex: new Map(
@@ -175,18 +182,27 @@ describe("CommonObjectModifierTool", () => {
     const mockDag = {
       unmount: jest.fn(),
     };
-    let nodeState = { object };
+    let nodeState = { objects: [object] };
     const tool = new CommonObjectModifierTool();
+
+    function makeCtx() {
+      return {
+        path: "/viewport/mouse/primary/tool/tool",
+        getNodeState: () => ({ ...nodeState }),
+        setNodeState: (_path, nextState) => {
+          nodeState = nextState ?? {};
+          return nodeState;
+        },
+        acc: { boardApi },
+        dag: mockDag,
+      };
+    }
 
     tool.process(
       {
         signals: [{ type: "position", context: { value: { x: 7, y: 5 } } }],
       },
-      {
-        acc: { objects: [object], boardApi },
-        dag: mockDag,
-        path: "/viewport/mouse/primary/tool/tool",
-      },
+      makeCtx(),
     );
     expect(object.position).toEqual(new Vector(5, 5));
 
@@ -194,11 +210,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 10, y: 6 } } }],
       },
-      {
-        acc: { objects: [object], boardApi },
-        dag: mockDag,
-        path: "/viewport/mouse/primary/tool/tool",
-      },
+      makeCtx(),
     );
     expect(object.position).toEqual(new Vector(8, 6));
 
@@ -206,18 +218,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
       },
-      {
-        acc: { objects: [object], boardApi },
-        dag: mockDag,
-        path: "/viewport/mouse/primary/tool/tool",
-        getNodeState() {
-          return nodeState;
-        },
-        setNodeState(path, nextState) {
-          nodeState = nextState ?? {};
-          return nodeState;
-        },
-      },
+      makeCtx(),
     );
 
     expect(result).toBeUndefined();
@@ -245,9 +246,9 @@ describe("CommonObjectModifierTool", () => {
     const commitSpy = boardApi.commitObjects;
     const mockDag = { unmount: jest.fn() };
     const viewport = { requestViewportUiRender: jest.fn() };
-    let nodeState = {};
+    let nodeState = { objects: [object] };
     const context = {
-      acc: { boardApi, viewport, objects: [object] },
+      acc: { boardApi, viewport },
       dag: mockDag,
       path: "/viewport/mouse/primary/tool/tool",
       getNodeState() {
@@ -311,11 +312,17 @@ describe("CommonObjectModifierTool", () => {
       property: {},
       data: { radius: 5 },
     };
+    const _nodeState = { objects: [summaryLikeObject] };
     const context = {
+      path: "/test",
+      getNodeState: () => ({ ..._nodeState }),
+      setNodeState: (_pathOrId, state) => {
+        Object.assign(_nodeState, state);
+        return { ..._nodeState };
+      },
       acc: {
         boardApi,
         viewport: { requestViewportUiRender: jest.fn() },
-        objects: [summaryLikeObject],
       },
     };
 
@@ -351,8 +358,15 @@ describe("CommonObjectModifierTool", () => {
       property: {},
       data: { radius: 5 },
     };
+    const _nodeState_inline = { objects: [summaryLikeObject] };
     const modifyObject = jest.fn();
     const context = {
+      path: "/test",
+      getNodeState: () => ({ ..._nodeState_inline }),
+      setNodeState: (_pathOrId, state) => {
+        Object.assign(_nodeState_inline, state);
+        return { ..._nodeState_inline };
+      },
       acc: {
         board: {
           activeObjectManager: {
@@ -365,7 +379,6 @@ describe("CommonObjectModifierTool", () => {
           discardActiveObjects: jest.fn(),
         },
         viewport: { requestViewportUiRender: jest.fn() },
-        objects: [summaryLikeObject],
       },
     };
 
@@ -863,9 +876,15 @@ describe("CommonObjectModifierTool", () => {
           ? objects
           : [objects]
         : [];
+      const _nodeState = { objects: normalized.filter(Boolean) };
       return {
+        path: "/test",
+        getNodeState: () => ({ ..._nodeState }),
+        setNodeState: (_pathOrId, state) => {
+          Object.assign(_nodeState, state);
+          return { ..._nodeState };
+        },
         acc: {
-          objects: normalized.filter(Boolean),
           board: {
             activeObjectManager: {
               activeObjectIndex: new Map(
@@ -973,9 +992,7 @@ describe("CommonObjectModifierTool", () => {
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
-      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(
-        1,
-      );
+      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
 
       // 第三个 position → 确认位移生效
       tool.process(
@@ -1026,9 +1043,7 @@ describe("CommonObjectModifierTool", () => {
       // 锚点仍为(30,35)，dx=70, dy=165 → (80, 185)
       expect(object.position).toEqual(new Vector(80, 185));
       // 首次 position 抓快照，后续 position 不重复抓取
-      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(
-        1,
-      );
+      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
     });
 
     test("经过 AOM 过滤后对象集合为空时不应触发手势", () => {
@@ -1107,9 +1122,7 @@ describe("CommonObjectModifierTool", () => {
       // 准入拒绝，对象位置保持在 end 时刻
       expect(object.position).toEqual(new Vector(15, 25));
       // 仅在首次 position 抓了快照，后续 update 和拒绝的准入都不抓
-      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(
-        1,
-      );
+      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1143,10 +1156,10 @@ describe("CommonObjectModifierTool", () => {
       expect(tool.isGestureActive).toBe(false);
       // withGeometryMutation 带 captureSnapshot: false → 仅触发 after
       expect(viewport.requestViewportUiRender).toHaveBeenCalledTimes(1);
-      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(
-        0,
+      expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(0);
+      expect(viewport.renderer.invalidateActiveObjects).toHaveBeenCalledTimes(
+        1,
       );
-      expect(viewport.renderer.invalidateActiveObjects).toHaveBeenCalledTimes(1);
     });
 
     test("手势激活期间位移到达：对象位置叠加、锚点跟随同步", () => {
@@ -1435,9 +1448,15 @@ describe("CommonObjectModifierTool", () => {
         modifyObject: jest.fn(),
       };
       const tool = new CommonObjectModifierTool();
+      const _nodeState_inline2 = { objects: [object] };
       const context = {
+        path: "/test",
+        getNodeState: () => ({ ..._nodeState_inline2 }),
+        setNodeState: (_pathOrId, state) => {
+          Object.assign(_nodeState_inline2, state);
+          return { ..._nodeState_inline2 };
+        },
         acc: {
-          objects: [object],
           boardApi,
         },
       };

@@ -76,11 +76,6 @@ function createHandoffSubDAG(options = {}) {
     );
   }
 
-  // 闭包变量：存储 first 完成时桥接的对象集合
-  // 不写入 DAG state，避免污染 nodeState 的形状
-  let handoffObjects = [];
-  let handoffExplicitlySet = false;
-
   // 判断 second 类型
   const secondIsModifier =
     isToolInstance(second) && typeof second.applyModifiedObjects === "function";
@@ -98,41 +93,30 @@ function createHandoffSubDAG(options = {}) {
         resolveTransition({ signalPacket, state, fromPhase, prefixContext }) {
           // 构建 onToolComplete 回调
           // dagContext 是 first 工具包装器中传入的 DAG 上下文（用于 handoff 同步）
-          const createCompleteCallback = (completedPhase) => (dagContext) => {
+          const createCompleteCallback = (completedPhase) => (objects) => {
             if (completedPhase === "first") {
-              // 仅当 setHandoffObjects 被显式调用且对象为空时才阻止切换
-              //   （如 creator 创建失败无对象场景）
-              // 未调用 setHandoffObjects（直接 onToolComplete）时始终切换
-              if (handoffExplicitlySet && handoffObjects.length === 0) return;
+              // 空数组 = first tool 完成了但没产出对象 → 不切换
+              if (Array.isArray(objects) && objects.length === 0) return;
 
-              // 将桥接对象立即同步到 second 工具的私有字段
-              // 不写 node state——process() 执行时会通过 setContextObjects 写入正确的路径
-              // 工具内部会调用 requestUiOverlayRefresh 触发 overlay 刷新
-              if (handoffObjects.length > 0) {
+              if (objects && objects.length > 0) {
                 const secondTool =
                   typeof second?.receiveHandoffObjects === "function"
                     ? second
                     : null;
                 if (secondTool) {
-                  secondTool.receiveHandoffObjects(handoffObjects, dagContext);
+                  secondTool.receiveHandoffObjects(objects, prefixContext);
                 }
               }
 
               prefixContext.setState({
                 phase: "second",
                 activeChild: "second",
-                bridgeObjectCount: handoffObjects.length,
               });
             } else if (completedPhase === "second") {
               prefixContext.setState({
                 phase: "first",
                 activeChild: "first",
-                bridgeObjectCount: 0,
               });
-
-              // 清空闭包中的桥接对象
-              handoffObjects = [];
-              handoffExplicitlySet = false;
 
               // 触发 UI overlay 刷新，去除残留的 modifier / chooser 渲染条目
               prefixContext.acc?.viewport?.requestViewportUiRender?.();
@@ -147,13 +131,6 @@ function createHandoffSubDAG(options = {}) {
               autoUmountOnApply: false,
               // 阻止 creator 在 handoff 中提前 commit
               autoCommit: false,
-              // handoff 桥接对象（仅由 createCompleteCallback 在 first 完成时立即同步）
-              handoffObjects,
-              // first tool 调用此回调将对象写入 handoff 闭包变量
-              setHandoffObjects: (objects) => {
-                handoffObjects = Array.isArray(objects) ? [...objects] : [];
-                handoffExplicitlySet = true;
-              },
             },
           };
         },

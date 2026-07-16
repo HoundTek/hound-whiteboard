@@ -15,8 +15,15 @@ describe("ObjectModifierTool", () => {
 
     const tool = new TestModifierTool();
     const object = { id: 1, changed: false };
+    const _nodeState = { objects: [object] };
     const calls = [];
     const modificationContext = {
+      path: "/test",
+      getNodeState: () => ({ ..._nodeState }),
+      setNodeState: (_pathOrId, state) => {
+        Object.assign(_nodeState, state);
+        return { ..._nodeState };
+      },
       acc: {
         viewport: {
           renderer: {
@@ -32,7 +39,6 @@ describe("ObjectModifierTool", () => {
           },
         },
         object,
-        objects: [object],
       },
       object,
     };
@@ -64,8 +70,15 @@ describe("ObjectModifierTool", () => {
       },
       requestViewportUiRender: jest.fn(),
     };
+    const _nodeState2 = { objects: [...objects] };
     const modificationContext = {
-      acc: { viewport, objects: new Set(objects) },
+      path: "/test",
+      getNodeState: () => ({ ..._nodeState2 }),
+      setNodeState: (_pathOrId, state) => {
+        Object.assign(_nodeState2, state);
+        return { ..._nodeState2 };
+      },
+      acc: { viewport },
     };
 
     tool.beforeGeometryMutation(modificationContext);
@@ -274,10 +287,16 @@ describe("ObjectModifierTool", () => {
         discardActiveObjects,
       };
       const unmount = jest.fn();
+      const _nodeState3 = { objects: [object] };
       const context = {
-        acc: { boardApi, objects: [object] },
-        dag: { unmount },
         path: "/test",
+        getNodeState: () => ({ ..._nodeState3 }),
+        setNodeState: (_pathOrId, state) => {
+          Object.assign(_nodeState3, state);
+          return { ..._nodeState3 };
+        },
+        acc: { boardApi },
+        dag: { unmount },
       };
 
       expect(tool.applyModifiedObjects(context, [object])).toBe(true);

@@ -14,19 +14,25 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
     discardActiveObjects: jest.fn(),
   };
 
-  return {
-    board,
-    boardApi,
-    deviceContext: {
-      acc: {
-        board,
-        boardApi,
-        viewport,
-        objectId,
-        ownerChunkId: 1,
-      },
+  const _nodeState = {};
+  const deviceContext = {
+    path: "/test",
+    getNodeState: () => ({ ..._nodeState }),
+    setNodeState: (_pathOrId, state) => {
+      Object.assign(_nodeState, state);
+      return { ..._nodeState };
+    },
+    _nodeState,
+    acc: {
+      board,
+      boardApi,
+      viewport,
+      objectId,
+      ownerChunkId: 1,
     },
   };
+
+  return { board, boardApi, deviceContext };
 }
 
 describe("ObjectCreatorTool — property 信号", () => {
@@ -149,7 +155,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       deviceContext,
     );
 
-    expect(deviceContext.acc.objects).toEqual([tool._entry]);
+    expect(deviceContext._nodeState.objects).toEqual([tool._entry]);
     expect(deviceContext.acc.boardApi.createObject).toHaveBeenCalledWith(
       "CircleObject",
       expect.objectContaining({
@@ -171,7 +177,15 @@ describe("ObjectCreatorTool — property 信号", () => {
       commitObjects: jest.fn(),
       discardActiveObjects: jest.fn(),
     };
+    const _nodeState = {};
     const deviceContext = {
+      path: "/test",
+      getNodeState: () => ({ ..._nodeState }),
+      setNodeState: (_pathOrId, state) => {
+        Object.assign(_nodeState, state);
+        return { ..._nodeState };
+      },
+      _nodeState,
       acc: {
         board,
         boardApi,
@@ -197,7 +211,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     );
     expect(tool._entry.position.serialize()).toEqual({ x: 2, y: 3 });
     expect(tool._entry.data.radius).toBe(0);
-    expect(deviceContext.acc.objects).toEqual([tool._entry]);
+    expect(deviceContext._nodeState.objects).toEqual([tool._entry]);
   });
 
   describe("生命周期钩子", () => {

@@ -6,7 +6,9 @@
 
 - **creator → modifier**：用户画一个笔画，创建完成后直接拖拽修改位置
 - **chooser → modifier**：用户选中已有对象，然后拖拽修改位置
-- **SubDAGDefinition → modifier**：任意子图作为 first，完成后交给 modifier
+- **SubDAGDefinition → SubDAGDefinition**：任意子图作为 first，完成后交给作为 second 的另一子图处理
+
+Handoff prefix 只做两件事：**路由** + **传递**。它不持有领域数据，所有工具对象归各工具节点所有。
 
 ## 子树结构
 
@@ -30,11 +32,13 @@ flowchart TD
 
 ### Creator 的提交拦截
 
-creator 的 first 不再通过 `beforeCommitCreatedObject = () => false` 突变来拦截提交，
-而是由 handoff 在 `resolveTransition` 中注入 `context.acc.autoCommit = false`。
+creator 的 first 通过 `context.acc.autoCommit = false` 阻止提前 commit（由 handoff 在 `resolveTransition` 中注入）。
 Creator 的 `completeAction` 在检测到 `autoCommit` 为 false 时跳过 `commitCreatedObject`。
 
-不再需要 `resetHandoff` 清理机制。
+### SubDAG 作为 first / second
+
+当 first 或 second 是 SubDAGDefinition 时，通过 `attachDAGSubDAG` 将其结构融合到手写子树中。
+SubDAG 内的工具不经过 `wrapToolForHandoff` 包装，其完成检测由 `wrapSubDAGForHandoff` 包装器完成。
 
 ## 对象桥接协议
 
@@ -43,47 +47,47 @@ Creator 的 `completeAction` 在检测到 `autoCommit` 为 false 时跳过 `comm
 ```mermaid
 sequenceDiagram
     participant First as first tool
-    participant Wrapper as handoff wrapper
-    participant Closure as 闭包变量
-    participant Cb as createCompleteCallback
+    participant Wrap as wrapToolForHandoff
+    participant Cb as createCompleteCallback<br/>(onToolComplete)
     participant Second as second tool
+    participant Prefix as prefix node.state
 
-    First->>Wrapper: action:complete
-    Wrapper->>Closure: setHandoffObjects(objects)
-    Wrapper->>Cb: onToolComplete(context)
-    Cb->>Second: receiveHandoffObjects(handoffObjects, context)
+    First->>First: completeAction()
+    First->>Wrap: action:complete(result)
+    Wrap->>Cb: onToolComplete(objects)
+    Cb->>Second: receiveHandoffObjects(objects)
     Note over Second: _overlayModifiedObjects = objects
     Note over Second: syncUiOverlay(context)
     Note over Second: requestUiOverlayRefresh(context)
-    Cb->>Root: setState({ activeChild: "second" })
+    Cb->>Prefix: setState({ phase: "second",<br/>activeChild: "second" })
 ```
 
-对象存储在 handoff 的闭包变量而非 DAG nodeState。所有阶段切换和数据传递均通过闭包完成，不依赖子节点状态。
+对象以回调参数的形式传递，不在 handoff 中停留。
 
 ### 权威数据源
 
-| 存储位置                | 角色                                                              |
-| ----------------------- | ----------------------------------------------------------------- |
-| **工具私有字段**        | `_overlayModifiedObjects` 是唯一权威数据来源                      |
-| **闭包 handoffObjects** | 跨 dispatch 周期的桥接载体                                        |
-| **acc**                 | 承载回调（`onToolComplete`、`setHandoffObjects`），不承载对象数据 |
-| **Node state**          | 工具可选写入（供外部 overlay 读取），工具不从 node state 读对象   |
+| 存储位置                     | 角色                                                        |
+| ---------------------------- | ----------------------------------------------------------- |
+| **first tool `node.state`**  | first 阶段的数据真相源                                      |
+| **second tool 实例字段**     | `_overlayModifiedObjects` 是 handoff 后 second 的缓存真相源 |
+| **second tool `node.state`** | second 阶段的数据真相源（下次 process 时同步）              |
+| **`acc`**                    | 承载回调（`onToolComplete`），不承载对象数据                |
 
 ### 同步时机
 
-first 完成后**立即同步**到 second 的私有字段，不等到下一个信号到达。
+first 完成后立即桥接到 second 的私有字段，不等到下一个信号到达。
 
 ```
 first 完成
   │
-  ├── setHandoffObjects(result)           → 闭包 handoffObjects = [...]
+  ├── onToolComplete(objects)                  ← 数据作为参数传入
   │
-  ├── second.receiveHandoffObjects(objects, dagContext)
+  ├── second.receiveHandoffObjects(objects, context)
   │     ├── _overlayModifiedObjects = [...]    ← 私有字段写入
-  │     ├── syncUiOverlay(dagContext)          ← 注册 overlay provider
-  │     └── requestUiOverlayRefresh(dagContext) ← 刷新 → 立即显示
+  │     ├── syncUiOverlay(context)             ← 注册 overlay provider
+  │     └── requestUiOverlayRefresh(context)   ← 刷新 → 立即显示
   │
-  └── setState({ activeChild: "second" })
+  └── setState({ phase: "second", activeChild: "second" })
 ```
 
 ### `receiveHandoffObjects(objects, context)`
@@ -107,10 +111,10 @@ first 完成
 
 ```js
 resolveActiveModifiedObjects(context, objects) {
-    if (this._overlayModifiedObjects.length > 0) {
-      return this._overlayModifiedObjects;    // 私有字段优先
-    }
-    return this.resolveModifiedObjects(context, objects); // 非 handoff 场景 fallback
+  if (this._overlayModifiedObjects.length > 0) {
+    return this._overlayModifiedObjects;        // 私有字段优先
+  }
+  return this.resolveModifiedObjects(context, objects); // 非 handoff 场景 fallback
 }
 ```
 
@@ -119,32 +123,47 @@ resolveActiveModifiedObjects(context, objects) {
 ```mermaid
 flowchart LR
     subgraph First 完成
-        AC["action:complete"] --> SH[setHandoffObjects]
-        SH --> OTC[onToolComplete(context)]
+        AC["action:complete"] --> OTC["onToolComplete(objects)"]
         OTC --> Sync["second.receiveHandoffObjects<br/>私有字段 ← syncUiOverlay ← 刷新"]
         Sync --> Switch2["phase: second<br/>activeChild: second"]
     end
     subgraph Second 完成
-        SU["action:complete / cancel"] --> OTC2[onToolComplete(context)]
+        SU["action:complete / cancel"] --> OTC2["onToolComplete([])"]
         OTC2 --> Switch1["phase: first<br/>activeChild: first"]
-        Switch1 --> Clear["清空闭包变量<br/>触发 UI overlay 刷新"]
+        Switch1 --> UI["requestViewportUiRender()"]
     end
 ```
 
 ### 切换判断
 
-- first 完成时：`setHandoffObjects` 被显式调用且对象为空时**不切换**；未被调用（直接调 `onToolComplete`）时**始终切换**
-- second 完成时：总是切回 first，清空闭包变量。handoff 不清理子节点 node state
+- first 完成时：`objects` 为空数组时（无产出对象）**不切换**；非空或未显式传入对象时**始终切换**
+- second 完成时：总是切回 first
 
 ### `acc` 注入字段
 
-| 字段                | 类型       | 语义                                                                 |
-| ------------------- | ---------- | -------------------------------------------------------------------- |
-| `onToolComplete`    | `Function` | first/second 完成通知，接受 `context` 参数                           |
-| `autoUmountOnApply` | `boolean`  | 固定为 `false`，阻止 modifier 自卸载                                 |
-| `autoCommit`        | `boolean`  | 固定为 `false`，阻止 creator 提前 commit                             |
-| `handoffObjects`    | `Array`    | handoff 闭包中的桥接对象（仅由 createCompleteCallback 在同步时消费） |
-| `setHandoffObjects` | `Function` | first wrapper 调用此回调将对象写入闭包变量                           |
+| 字段                | 类型                | 语义                                     |
+| ------------------- | ------------------- | ---------------------------------------- |
+| `onToolComplete`    | `(objects) => void` | first/second 完成通知，接受对象参数      |
+| `autoUmountOnApply` | `boolean`           | 固定为 `false`，阻止 modifier 自卸载     |
+| `autoCommit`        | `boolean`           | 固定为 `false`，阻止 creator 提前 commit |
+
+## 数据所有权迁移
+
+```
+第一阶段：first tool 持有对象
+  node.state.objects = [{ id: 1, ... }]       ← first tool 的 node.state 是真相源
+
+第二阶段：second tool 持有对象
+  receiveHandoffObjects(objects)              ← 写入实例字段
+  process() → setContextObjects(context, objects) → 写入 node.state
+  node.state.objects = [{ id: 1, ... }]       ← second tool 的 node.state 是真相源
+```
+
+Handoff prefix 全程不持有 `objects`。它的职责局限于：
+
+1. 注入 `onToolComplete` 回调到 `acc`
+2. 在回调中调用 `second.receiveHandoffObjects(objects)`
+3. 更新自己的 `node.state.phase` + `activeChild` 控制下一跳路由
 
 ## 生命周期机制
 
@@ -170,23 +189,28 @@ flowchart LR
 
 ### `wrapToolForHandoff(tool, options)`
 
-将 Tool 包装为 handoff-ready handler。订阅 `action:complete` 事件，收到后桥接对象并调用 `onToolComplete(context)`。
+将 Tool 包装为 handoff-ready handler。订阅 `action:complete` 事件，收到后桥接对象并调用 `onToolComplete(objects)`。
 
-| 选项               | 类型      | 默认值  | 作用                                   |
-| ------------------ | --------- | ------- | -------------------------------------- |
-| `bridgeObjects`    | `boolean` | `false` | 完成时将事件结果写入 handoff 闭包变量  |
-| `completeOnCancel` | `boolean` | `false` | 收到 `cancel` 信号时丢弃对象后通知完成 |
+| 选项               | 类型      | 默认值  | 作用                                               |
+| ------------------ | --------- | ------- | -------------------------------------------------- |
+| `bridgeObjects`    | `boolean` | `false` | 完成时将事件结果规整后传入 `onToolComplete`        |
+| `completeOnCancel` | `boolean` | `false` | 收到 `cancel` 信号时丢弃对象后通知完成，传入空数组 |
 
 ### `wrapSubDAGForHandoff(subDAGDef, options)`
 
-在子树根节点满足 `shouldComplete` 条件（默认检测 `end` 信号）时，从 `context.acc?.objects` 读取对象并调用 `setHandoffObjects`，然后调用 `onToolComplete`。
+在子树根节点满足 `shouldComplete` 条件（默认检测 `end` 信号）时，从 `context.acc?.objects` 读取对象并调用 `onToolComplete(objects)`。
 
 - SubDAG（`subDAGDef.nodes instanceof Map`）：为根节点 handler 追加完成通知包装，保留子树结构
 - 非 SubDAG（flat `{ handler }` 对象）：直接替换 `nodes.handler`
 
-## 生命周期清理
+### `normalizeHandoffBridgeObjects(result, context)`
 
-handoff 不再需要清理 `beforeCommitCreatedObject`（不再进行突变拦截）。second 切回 first 时不清理子节点的 node state（工具自己管理自己的状态）。
+将 `action:complete` 的事件载荷规整为对象数组。支持以下几种输入：
+
+- 数组：直接过滤 null/undefined
+- 非 null 值：包装为单元素数组
+- null/undefined：回退到 `context.acc?.objects`（SubDAG 场景的瞬态通道）
+- 全空时返回 `[]`
 
 ## 轻量对象条目协议
 
@@ -213,6 +237,7 @@ creator 产生的 `_entry` 和 chooser/modifier 流转的条目统一遵循 `Obj
 
 ## 相关文档
 
+- [状态模型](../../docs/state-model-document.md)
 - [prefix-document.md](./prefix-document.md)
 - [object-creator-document.md](../../tools/creator/docs/object-creator-document.md)
 - [object-modifier-document.md](../../tools/modifier/docs/object-modifier-document.md)

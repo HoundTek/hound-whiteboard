@@ -124,24 +124,15 @@ function isToolInstance(value) {
 /**
  * 将动作完成结果规整为 handoff 可桥接的对象数组
  * @param {*} result - `action:complete` 事件的结果载荷
- * @param {import("../dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
  * @returns {Array<*>}
  */
-function normalizeHandoffBridgeObjects(result, context = {}) {
+function normalizeHandoffBridgeObjects(result) {
   if (Array.isArray(result)) {
     return result.filter(Boolean);
   }
 
   if (result != null) {
     return [result].filter(Boolean);
-  }
-
-  const contextObjects = context.acc?.objects;
-  if (Array.isArray(contextObjects)) {
-    return contextObjects.filter(Boolean);
-  }
-  if (contextObjects != null) {
-    return [contextObjects].filter(Boolean);
   }
 
   return [];
@@ -201,12 +192,10 @@ function wrapToolForHandoff(tool, options = {}) {
       unsubs.push(
         tool.on("action:complete", (eventContext, result) => {
           completed = true;
-          if (bridgeObjects) {
-            context.acc?.setHandoffObjects?.(
-              normalizeHandoffBridgeObjects(result, eventContext ?? context),
-            );
-          }
-          onToolComplete?.(context);
+          const objects = bridgeObjects
+            ? normalizeHandoffBridgeObjects(result)
+            : undefined;
+          onToolComplete?.(objects);
         }),
       );
     }
@@ -221,7 +210,7 @@ function wrapToolForHandoff(tool, options = {}) {
     if (hasCancelSignal && !completed) {
       discardSecondPhaseObjects(tool, context);
       completed = true;
-      onToolComplete?.(context);
+      onToolComplete?.([]);
     }
 
     // 异步 case：延迟清理 subscription，等 Promise resolve 后再移除监听
@@ -272,10 +261,11 @@ function wrapSubDAGForHandoff(subDAGDef, options = {}) {
 
     if (!should) return rawResult;
 
-    // 将子图写入 acc.objects 的对象桥接到 handoff root 状态
-    const objects = context.acc?.objects ?? [];
-    context.acc?.setHandoffObjects?.(objects);
-    context.acc?.onToolComplete?.();
+    // 子图内部工具通过 setContextObjects 写入 node.state.objects，
+    // 经由回调参数桥接到 handoff
+    const nodeState = context.getNodeState?.() ?? {};
+    const objects = nodeState.objects ?? [];
+    context.acc?.onToolComplete?.(objects);
     return rawResult;
   };
 

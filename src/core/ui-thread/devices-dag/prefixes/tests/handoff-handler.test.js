@@ -335,16 +335,8 @@ describe("handoff-handler（生命周期钩子模式）", () => {
           objects: [{ id: 42, type: "circle" }],
         });
       });
-      // 新桥接机制：modifier 从 acc.handoffObjects 读取，不再依赖 nodeState
-      const second = createMockModifier((_pkt, ctx) => {
-        const objects = ctx.acc?.handoffObjects ?? [];
-        if (objects.length > 0) {
-          ctx.setNodeState?.(ctx.path, {
-            objects: [...objects],
-            touched: true,
-          });
-        }
-      });
+      // 新桥接机制：modifier 通过 receiveHandoffObjects 接收对象，process 时自动同步到节点状态
+      const second = createMockModifier();
 
       first._entry = { id: 42, type: "circle" };
 
@@ -525,7 +517,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         phase: "second",
         activeChild: "second",
       });
-      // 新桥接机制：对象走 acc.objects，不再写入 second 的 nodeState
+      // autoBridgeObjects=false 时不桥接对象，仅切换阶段
     });
 
     test("应支持 SubDAGDefinition 作为 first", () => {
@@ -537,12 +529,9 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         .prefix(
           createPrefixNodeHandler({
             handle(_pkt, ctx) {
-              ctx.setNodeState?.(ctx.path, {
-                objects: [{ id: 99 }],
-              });
-              // 新桥接机制：需要写 acc.objects 供 handoff wrapper 读取
-              ctx.acc.objects = [{ id: 99 }];
-              ctx.acc?.onToolComplete?.();
+              const objects = [{ id: 99 }];
+              ctx.setNodeState?.(ctx.path, { objects });
+              ctx.acc?.onToolComplete?.(objects);
               return ctx.routeToChild("tool");
             },
           }),
@@ -1663,11 +1652,10 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         signals: [{ type: "end", context: {} }],
       });
 
-      // 切换到 second 后，phase 和 bridgeObjectCount 可观察
+      // 切换到 second 后，phase 可观察
       expect(dag.getNodeState("/viewport/workflow")).toMatchObject({
         phase: "second",
         activeChild: "second",
-        bridgeObjectCount: 1,
       });
     });
   });

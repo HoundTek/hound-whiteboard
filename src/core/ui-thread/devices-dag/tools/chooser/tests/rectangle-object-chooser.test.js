@@ -79,7 +79,7 @@ describe("RectangleObjectChooserTool", () => {
     );
     expect(boardApi.queryObjects).toHaveBeenCalledWith([1]);
     expect(boardApi.addActiveObjects).toHaveBeenCalledWith([1]);
-    expect(deviceContext.acc.objects).toEqual([selectedSummary]);
+    expect(stateAccess.getState().objects).toEqual([selectedSummary]);
     expect(stateAccess.getState()).toEqual({
       objects: [selectedSummary],
     });
@@ -146,7 +146,7 @@ describe("RectangleObjectChooserTool", () => {
 
     expect(boardApi.discardActiveObjects).toHaveBeenCalledWith([1]);
     expect(boardApi.addActiveObjects).not.toHaveBeenCalled();
-    expect(deviceContext.acc.objects).toBeUndefined();
+    expect(stateAccess.getState().objects).toBeUndefined();
     expect(stateAccess.getState()).toEqual({});
   });
 
@@ -254,7 +254,7 @@ describe("RectangleObjectChooserTool", () => {
     );
     expect(boardApi.queryObjects).toHaveBeenCalledWith([121]);
     expect(boardApi.addActiveObjects).toHaveBeenCalledWith([121]);
-    expect(deviceContext.acc.objects).toEqual([selectedSummary]);
+    expect(stateAccess.getState().objects).toEqual([selectedSummary]);
     expect(deviceContext.acc.board.getObjectById).not.toHaveBeenCalled();
     expect(stateAccess.getState()).toEqual({ objects: [selectedSummary] });
   });
