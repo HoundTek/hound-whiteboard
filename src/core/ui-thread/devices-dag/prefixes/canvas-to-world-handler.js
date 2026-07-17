@@ -27,7 +27,7 @@ import { createPrefixNodeHandler } from "./handler.js";
 function createCanvasToWorldPrefixHandler() {
   return createPrefixNodeHandler({
     handle(packet, ctx) {
-      const viewport = ctx.services?.viewport ?? ctx.acc?.viewport;
+      const viewport = ctx.services?.viewport;
 
       if (!viewport || typeof viewport.zoom !== "number" || !viewport.origin) {
         return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);

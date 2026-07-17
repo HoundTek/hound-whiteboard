@@ -116,7 +116,7 @@ Creator 的 `completeAction` 具有独特的非对称语义：
 4. `afterCompleteCreatedObject(interaction, completedObject)` — **总是**执行
 5. `super.afterAction(context, completedObject)` — 触发 `action:complete`
 
-即：finalize 和通知始终执行，commit 受控于 beforeCommit。handoff 通过注入 `routeContext.autoCommit = false` 拦截 commit。
+即：finalize 和通知始终执行，commit 受控于 beforeCommit。handoff 通过注入 `acc.autoCommit = false` 拦截 commit。
 
 ## 信号分派
 

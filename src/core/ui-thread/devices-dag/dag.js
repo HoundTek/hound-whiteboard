@@ -41,11 +41,12 @@ import { dagToString } from "./dag-debug.js";
  */
 
 /**
- * 设备图路由参数上下文
+ * 设备图处理器累积上下文
  * @description
  * 沿单次 dispatch 链路由 handler 返回值逐层追加的运行时参数，通常用于控制下游工具行为，
  * 例如 handoff 场景中的 `autoCommit` 与 `autoUmountOnApply`。
- * @typedef {Object} DevicesDAGRouteContext
+ * 这部分上下文不包含 `services` 中的静态基础设施依赖。
+ * @typedef {Object} DevicesDAGAccumulatedContext
  * @property {boolean} [autoCommit] - false 时阻止 Creator 自动提交到静态图
  * @property {boolean} [autoUmountOnApply] - false 时阻止 Modifier 提交后自卸载
  * @property {Function} [resolvePosition] - 由 prefix 注入的坐标解析函数
@@ -53,22 +54,13 @@ import { dagToString } from "./dag-debug.js";
  */
 
 /**
- * 设备图处理器累积上下文
- * @description
- * 兼容旧接口的累积上下文视图，等价于 `services + routeContext` 的浅合并快照。
- * 建议新代码优先读取 `context.services` 与 `context.routeContext`。
- * @typedef {DevicesDAGServiceContext & DevicesDAGRouteContext} DevicesDAGAccumulatedContext
- */
-
-/**
  * 设备图处理器上下文
  * @description
- * 处理器上下文包含当前节点元数据、静态服务、路由参数以及节点状态访问接口，
+ * 处理器上下文包含当前节点元数据、静态服务、累积上下文以及节点状态访问接口，
  * 供节点处理器在处理信号包时使用。
  *
  * `services` 是沿 DAG 路径静态声明并累积的基础设施依赖；
- * `routeContext` 是单次 dispatch 中由上游 handler 返回值逐层追加的运行时参数；
- * `acc` 仅作为兼容旧接口的合并视图保留。
+ * `acc` 是单次 dispatch 中由上游 handler 返回值逐层追加的运行时参数。
  *
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
@@ -80,8 +72,7 @@ import { dagToString } from "./dag-debug.js";
  * @property {number} depth - 当前分发深度
  * @property {SignalPacket|undefined} signalPacket - 当前已规整的输入信号包
  * @property {DevicesDAGServiceContext} services - 静态服务上下文
- * @property {DevicesDAGRouteContext} routeContext - 路由参数上下文
- * @property {DevicesDAGAccumulatedContext} acc - 兼容旧接口的累积上下文视图
+ * @property {DevicesDAGAccumulatedContext} acc - 累积上下文（仅包含动态路由参数）
  * @property {Object} state - 当前节点状态的只读快照
  * @property {() => any} getState - 重读节点最新状态
  * @property {(nextState: Object) => Object} setState - 全量写入节点状态
@@ -97,8 +88,7 @@ import { dagToString } from "./dag-debug.js";
  * 设备图处理器输出
  * @typedef {Object} DevicesDAGHandlerResult
  * @property {SignalPacket[]} packets - 继续路由到后继节点的信号包列表
- * @property {DevicesDAGRouteContext} [routeContext] - 要合并到路由参数上下文的键值对
- * @property {Object} [acc] - 兼容旧接口的别名，等价于 routeContext
+ * @property {DevicesDAGAccumulatedContext} [acc] - 要合并到累积上下文的键值对
  * @property {string} [redirect] - 覆盖 dispatcher 原本要走的下一段出边名
  * @property {boolean} [stop] - 强制终止当前链路路由
  */
@@ -841,10 +831,10 @@ class DevicesDAG {
   /**
    * 从根节点开始分发信号包
    * @description
-   * 静态服务上下文由路径上的节点 `services` 声明提供，路由参数上下文从空对象开始逐层累积。
+   * 静态服务上下文由路径上的节点 `services` 声明提供，累积上下文从空对象开始逐层累积。
    * 核心路由逻辑委托给 {@link DevicesDAGNode#dispatch}。
    * @param {SignalPacket|Record<string, any>} packet - 信号包
-   * @returns {{ packets: SignalPacket[], services?: Object, routeContext?: Object, acc?: Object }} 分发结果
+   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }} 分发结果
    */
   dispatch(packet) {
     const startPacket = SignalPacket.from(packet, { defaultTo: "" });
@@ -870,7 +860,7 @@ class DevicesDAG {
     return this._ghost.dispatch(new SignalPacket(to, startPacket.signals), {
       path: "",
       services: {},
-      routeContext: {},
+      acc: {},
       depth: 0,
       maxDepth: this._maxDispatchDepth,
       strict: this._strict,
@@ -885,7 +875,7 @@ class DevicesDAG {
    * 与 {@link DevicesDAG#dispatch} 行为一致，额外收集路由追踪信息。
    * 返回结果中包含 `trace` 数组，可通过 `traceToString()` 格式化。
    * @param {SignalPacket|Record<string, any>} packet - 信号包
-   * @returns {{ packets: SignalPacket[], services?: Object, routeContext?: Object, acc?: Object, trace: Array }} 分发结果与追踪信息
+   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object, trace: Array }} 分发结果与追踪信息
    */
   dispatchWithTrace(packet) {
     const trace = [];
@@ -912,7 +902,7 @@ class DevicesDAG {
       {
         path: "",
         services: {},
-        routeContext: {},
+        acc: {},
         depth: 0,
         maxDepth: this._maxDispatchDepth,
         strict: this._strict,
@@ -1020,8 +1010,7 @@ class DevicesDAG {
         depth: 0,
         signalPacket: undefined,
         services: { ...context },
-        routeContext: {},
-        acc: { ...context },
+        acc: {},
         getNodeState: (pathOrId) => this.getNodeState(pathOrId),
         setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
       };

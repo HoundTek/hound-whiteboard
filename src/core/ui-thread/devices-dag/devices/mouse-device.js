@@ -226,7 +226,7 @@ function createMouseDevice() {
   const rootHandler = (signalPacket, context = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
 
-    const viewport = context?.services?.viewport ?? context?.acc?.viewport;
+    const viewport = context?.services?.viewport;
     const convertedSignals =
       viewport && typeof viewport.convertCanvasSignalsToWorld === "function"
         ? viewport.convertCanvasSignalsToWorld(packet.signals)

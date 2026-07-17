@@ -2,12 +2,12 @@
 
 ## 概述
 
-设备图中有三种不同作用域的可变状态，各自遵循不同的读写规则和生命周期。
+设备图中有四种不同作用域的可变状态，各自遵循不同的读写规则和生命周期。
 
-明确区分这三种状态是编写可维护 prefix / tool 的前提：
+明确区分这四种状态是编写可维护 prefix / tool 的前提：
 
 - **静态服务上下文（`services`）**：基础设施依赖，由节点声明注入，沿 DAG 路径累积
-- **路由参数上下文（`routeContext`）**：单次 dispatch 中由上游 handler 逐层追加的运行时控制参数
+- **累积上下文（`acc`）**：单次 dispatch 中由上游 handler 逐层追加的运行时控制参数
 - **节点状态（`node.state`）**：节点持久可观察状态，领域数据的唯一真相源
 - **闭包状态**：handler 实例私有状态，只捕获实现细节，不存领域数据
 
@@ -38,26 +38,25 @@
 | `boardApi` | Board 根节点 `/` | BoardApiRpc 代理  |
 | `viewport` | Viewport 根节点  | Viewport 实例引用 |
 
-### 路由参数上下文（`routeContext`）
+### 累积上下文（`acc`）
 
-`routeContext` 是单次 dispatch 中由上游 handler 返回结果时逐层追加的运行时参数。
-用于控制下游工具行为的开关或标志，例如 handoff 中的 `autoCommit` 与 `autoUmountOnApply`。
+`acc` 是单次 dispatch 中由上游 handler 返回结果时逐层追加的运行时参数。
+它只包含动态路由参数，不包含 `services` 中的静态基础设施依赖。
 
 | 属性     | 说明                               |
 | -------- | ---------------------------------- |
-| 存储位置 | `handlerContext.routeContext`      |
+| 存储位置 | `handlerContext.acc`               |
 | 作用域   | 当前分发链路（单次 `dispatch`）    |
 | 生命周期 | 单次 `dispatch` 结束后丢弃         |
 | 读写规则 | 上游注入，下游只读；不可覆盖已有键 |
 
-`routeContext` 适合放：
+`acc` 适合放：
 
 - 链路级一次性控制标志（`autoCommit`、`autoUmountOnApply`）
 - 链路级临时参数（`resolvePosition`、`objectId`）
+- 仅对当前链路生效的轻量元数据
 
-**历史兼容**：`ctx.acc` 是 `services` + `routeContext` 的合并视图，仅在旧接口兼容期内保留。新代码请优先读取 `ctx.services` 与 `ctx.routeContext`。
-
-#### 已知 routeContext 键
+#### 已知 acc 键
 
 | 键                  | 注入方         | 用途                          |
 | ------------------- | -------------- | ----------------------------- |
@@ -105,7 +104,7 @@
 - 懒初始化的处理器（tool `processor`）
 - 临时缓存，不需要暴露给外部
 
-闭包**不适合**放领域数据。如果数据需要跨上下传递（如 handoff 桥接对象），应通过回调参数传入，而非存入闭包变量。
+闭包**不适合**放领域数据。如果数据需要跨上下游传递，应通过事件参数、函数参数或节点状态传递，而非存入闭包变量。
 
 #### 已知闭包状态
 
@@ -129,7 +128,7 @@ first tool 创建对象
 ```
 
 - 每个工具节点在任意时刻都是自己 `objects` 的唯一真相源
-- handoff prefix **不持有** `objects` — 它只提供回调传递机制
+- handoff prefix **不持有** `objects` — 它只负责路由与状态切换
 
 ## 写入约定
 
@@ -137,7 +136,7 @@ first tool 创建对象
 - **写入自身**：handler 通过 `ctx.setState()` / `ctx.patchState()` 写入当前节点状态
 - **跨节点写入**：仅允许父节点协调子节点状态的场景
 - **外部写入**：非 handler 代码不应直接调用 `dag.setNodeState()`
-- **routeContext 写入**：通过 handler 返回值 `{ routeContext: { key: value } }` 注入
+- **acc 写入**：通过 handler 返回值 `{ acc: { key: value } }` 注入
 
 ## 相关文档
 

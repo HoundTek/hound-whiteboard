@@ -158,7 +158,7 @@ function discardSecondPhaseObjects(tool, context = {}) {
   const cancelObjects = Array.isArray(cancelState?.objects)
     ? cancelState.objects
     : [];
-  const boardApi = context.services?.boardApi ?? context.acc?.boardApi;
+  const boardApi = context.services?.boardApi;
   const cancelObjectIds = cancelObjects
     .map((objectEntry) =>
       typeof objectEntry?.id === "number" ? objectEntry.id : null,

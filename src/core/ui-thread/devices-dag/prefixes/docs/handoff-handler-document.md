@@ -140,7 +140,7 @@ flowchart LR
 - first 完成时：`objects` 为空数组时（无产出对象）**不切换**；非空或未显式传入对象时**始终切换**
 - second 完成时：总是切回 first
 
-### `routeContext` 注入字段
+### `acc` 注入字段
 
 | 字段                | 类型      | 语义                                     |
 | ------------------- | --------- | ---------------------------------------- |
@@ -164,7 +164,7 @@ Handoff prefix 全程不持有 `objects`。它的职责局限于：
 1. 通过 `wrapToolForHandoff` 订阅 `action:complete` 事件
 2. 在回调中调用 `second.receiveHandoffObjects(objects)`
 3. 更新自己的 `node.state.phase` + `activeChild` 控制下一跳路由
-4. 通过 `routeContext` 注入 `autoCommit` 和 `autoUmountOnApply` 控制下游行为
+4. 通过 `acc` 注入 `autoCommit` 和 `autoUmountOnApply` 控制下游行为
 
 ## 生命周期机制
 

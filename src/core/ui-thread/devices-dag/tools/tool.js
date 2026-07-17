@@ -157,7 +157,7 @@ class Tool {
 
     const binding = {
       sync: (context = {}) => {
-        const viewport = context.services?.viewport ?? context.acc?.viewport;
+        const viewport = context.services?.viewport;
         if (!viewport?.registerUiOverlayProvider) {
           return;
         }
@@ -178,10 +178,7 @@ class Tool {
         });
       },
       cleanup: (context = {}) => {
-        const viewport =
-          registeredViewport ??
-          context.services?.viewport ??
-          context.acc?.viewport;
+        const viewport = registeredViewport ?? context.services?.viewport;
         if (viewport?.unregisterUiOverlayProvider) {
           viewport.unregisterUiOverlayProvider(provider, {
             invalidate: false,
@@ -189,9 +186,7 @@ class Tool {
         }
 
         registeredViewport = null;
-        (
-          context.services?.viewport ?? context.acc?.viewport
-        )?.requestViewportUiRender?.();
+        context.services?.viewport?.requestViewportUiRender?.();
       },
     };
 
@@ -329,9 +324,7 @@ class Tool {
    * @returns {void}
    */
   requestUiOverlayRefresh(context = {}) {
-    (
-      context.services?.viewport ?? context.acc?.viewport
-    )?.requestViewportUiRender?.();
+    context.services?.viewport?.requestViewportUiRender?.();
   }
 
   /**

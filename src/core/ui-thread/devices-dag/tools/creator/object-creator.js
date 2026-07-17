@@ -145,10 +145,7 @@ class ObjectCreatorTool extends GestureTool {
       isGestureCancelled: baseInteraction.hasCancel,
       isObjectEnded: baseInteraction.hasObjectEnd,
       isObjectCancelled: baseInteraction.hasObjectCancel,
-      objectId:
-        positionSignal?.context?.objectId ??
-        context.routeContext?.objectId ??
-        context.acc?.objectId,
+      objectId: positionSignal?.context?.objectId ?? context.acc?.objectId,
       injectedProperty: extractInjectedProperty(signals),
     };
   }
@@ -551,10 +548,9 @@ class ObjectCreatorTool extends GestureTool {
     // finalize 总是执行
     this.finalizeCreatedObject(interaction);
 
-    // handoff 通过 routeContext.autoCommit = false 阻止提前 commit
+    // handoff 通过 acc.autoCommit = false 阻止提前 commit
     // 除此之外通过 beforeCommitCreatedObject 判断
-    const autoCommit =
-      (context?.routeContext?.autoCommit ?? context?.acc?.autoCommit) !== false;
+    const autoCommit = context?.acc?.autoCommit !== false;
     if (autoCommit && this.beforeCommitCreatedObject(interaction) !== false) {
       this.commitCreatedObject(interaction);
     }

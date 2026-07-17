@@ -368,7 +368,6 @@ describe("DevicesDAG", () => {
         handler(_pkt, ctx) {
           snapshots.push({
             services: { ...ctx.services },
-            routeContext: { ...ctx.routeContext },
             acc: { ...ctx.acc },
           });
         },
@@ -380,14 +379,10 @@ describe("DevicesDAG", () => {
         board: { id: "board-1" },
         viewport,
       });
-      expect(snapshots[0].routeContext).toEqual({});
-      expect(snapshots[0].acc).toEqual({
-        board: { id: "board-1" },
-        viewport,
-      });
+      expect(snapshots[0].acc).toEqual({});
     });
 
-    test("getServiceContext 应只聚合静态 services，不混入 routeContext", () => {
+    test("getServiceContext 应只聚合静态 services，不混入 acc", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b");
       dag.configureNode("/", {
@@ -398,7 +393,7 @@ describe("DevicesDAG", () => {
       });
       dag.configureNode("/a/b", {
         handler() {
-          return { routeContext: { autoCommit: false } };
+          return { acc: { autoCommit: false } };
         },
       });
 
@@ -412,12 +407,7 @@ describe("DevicesDAG", () => {
         board: { id: "board-1" },
         viewport: { id: "vp-1" },
       });
-      expect(dispatchResult.routeContext).toEqual({ autoCommit: false });
-      expect(dispatchResult.acc).toEqual({
-        board: { id: "board-1" },
-        viewport: { id: "vp-1" },
-        autoCommit: false,
-      });
+      expect(dispatchResult.acc).toEqual({ autoCommit: false });
     });
   });
 

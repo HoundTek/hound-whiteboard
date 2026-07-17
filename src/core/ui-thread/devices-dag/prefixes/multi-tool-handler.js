@@ -4,7 +4,7 @@
  * 提供 createMultiToolPrefixHandler，基于 createPrefixNodeHandler 实现，
  * 通过 resolveTransition 回调决定当前信号应路由到哪个子节点、是否消费等。
  * 适合 creator/modifier handoff 等多工具链路切换场景。
- * 下游控制参数通过 `routeContext` 传递，不再依赖 bubble 冒泡。
+ * 下游控制参数通过 `acc` 传递，不再依赖 bubble 冒泡。
  * @module core/ui-thread/devices-dag/prefixes/multi-tool-handler
  * @author Zhou Chenyu
  */
@@ -22,8 +22,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @property {Object} [patchState] - 浅合并到当前节点状态
  * @property {Object} [state] - 直接替换当前节点状态（优先级高于 patchState）
  * @property {Array<Object>} [signals] - 改写下发的信号列表
- * @property {Object} [routeContext] - 追加到路由参数上下文的键值对
- * @property {Object} [acc] - 兼容旧接口的别名，等价于 routeContext
+ * @property {Object} [acc] - 追加到下游累积上下文的键值对
  */
 
 /**
@@ -33,7 +32,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @property {import("../devices-dag/signal.js").SignalPacket} signalPacket - 当前已规整的输入信号包
  * @property {Object} state - 当前节点状态快照（含 activeChild、phase 等）
  * @property {string|undefined} fromPhase - 当前阶段，即 state.phase
- * @property {import("../devices-dag/dag.js").DevicesDAGHandlerContext} prefixContext - DAG 处理器上下文，含 setState、routeToChild、stop、delNodeState、services、routeContext 及 acc
+ * @property {import("../devices-dag/dag.js").DevicesDAGHandlerContext} prefixContext - DAG 处理器上下文，含 setState、routeToChild、stop、delNodeState、services 及 acc
  */
 
 /**
@@ -42,7 +41,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * 工厂函数，基于 createPrefixNodeHandler 构建状态机路由。
  * 通过 resolveTransition 回调接收当前信号包与状态，返回路由决策对象。
  * 支持 consume（消费不转发）、child（路由到特定子节点）、patchState（状态迁移）。
- * 需要控制下游时，可通过 routeContext 传递运行时参数（不再使用 bubble）。
+ * 需要控制下游时，可通过 acc 传递运行时参数（不再使用 bubble）。
  * @param {Object} options - 多工具修饰节点路由选项
  * @param {string} [options.defaultChild=""] - 默认活动子节点名，用作 fallback
  * @param {Object} [options.initialState={}] - 额外初始状态，与 { activeChild: defaultChild } 合并
@@ -129,14 +128,10 @@ function createMultiToolPrefixHandler(options = {}) {
         transition.signals ?? packet.signals,
       );
 
-      // 将 transition.routeContext 传递到下游子节点；acc 仅作旧接口兼容
-      const nextRouteContext = isPlainObject(transition.routeContext)
-        ? transition.routeContext
-        : isPlainObject(transition.acc)
-          ? transition.acc
-          : null;
-      if (nextRouteContext) {
-        return { ...result, routeContext: nextRouteContext };
+      // 将 transition.acc 传递到下游子节点
+      const nextAcc = isPlainObject(transition.acc) ? transition.acc : null;
+      if (nextAcc) {
+        return { ...result, acc: nextAcc };
       }
 
       return result;

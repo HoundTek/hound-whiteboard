@@ -71,7 +71,7 @@ wrapper 从 `touch-contacts` 信号中提取 `contacts` 和 `changedTouchIds`，
 | 触点抬起     | `[{type: "end", context: {}}]`                             | 已有入口节点的 `dispatch()` |
 
 `deviceContext`（包含 `services.board`、`services.viewport`、`services.boardApi` 等）作为 `dispatch` 的选项原样透传。
-优先使用 `services` 和 `routeContext`；仅兼容旧接口时使用 `acc`。
+优先使用 `services` 和 `acc`。
 每个子图入口看到的是同一套上下文。
 
 每触点可配置单工具或多节点子图：

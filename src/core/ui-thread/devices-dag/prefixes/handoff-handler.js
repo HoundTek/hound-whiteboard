@@ -86,9 +86,7 @@ function createHandoffCompletionHandler(second) {
     switchHandoffPhase(context, "first");
 
     // 触发 UI overlay 刷新，去除残留的 modifier / chooser 渲染条目
-    (
-      context.services?.viewport ?? context.acc?.viewport
-    )?.requestViewportUiRender?.();
+    context.services?.viewport?.requestViewportUiRender?.();
   };
 }
 
@@ -169,21 +167,21 @@ function createHandoffSubDAG(options = {}) {
             typeof state.activeChild === "string" && state.activeChild
               ? state.activeChild
               : fromPhase || "first";
-          const nextRouteContext = {};
+          const nextAcc = {};
 
           // creator/chooser 所在阶段阻止 creator 提前 commit
           if (activeChild === "first") {
-            nextRouteContext.autoCommit = false;
+            nextAcc.autoCommit = false;
           }
 
           // modifier 所在阶段阻止其提交后自卸载
           if (activeChild === "second" && secondIsModifier) {
-            nextRouteContext.autoUmountOnApply = false;
+            nextAcc.autoUmountOnApply = false;
           }
 
           return {
             child: activeChild,
-            routeContext: nextRouteContext,
+            acc: nextAcc,
           };
         },
       }),

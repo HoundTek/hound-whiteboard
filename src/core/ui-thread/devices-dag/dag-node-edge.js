@@ -61,19 +61,6 @@ function mergeContextLayer(baseLayer = {}, patchLayer = {}, options = {}) {
 }
 
 /**
- * 构造兼容旧接口的累积上下文快照
- * @param {Object} services - 静态服务上下文
- * @param {Object} routeContext - 路由参数上下文
- * @returns {Object}
- */
-function buildAccumulatedContext(services = {}, routeContext = {}) {
-  return {
-    ...snapshotServices(services),
-    ...(isPlainObject(routeContext) ? routeContext : {}),
-  };
-}
-
-/**
  * 设备图节点
  * @class
  * @description
@@ -279,7 +266,6 @@ class DevicesDAGNode {
     /** @type {Map<number, DevicesDAGNode>} */
     const idMap = new Map();
 
-    // 1. 创建节点
     if (nodes) {
       for (const [localId, nodeDef] of nodes) {
         const node = new DevicesDAGNode(localId);
@@ -317,7 +303,6 @@ class DevicesDAGNode {
       }
     }
 
-    // 2. 连接边
     for (const edgeDef of edges) {
       const fromNode = idMap.get(edgeDef.fromNodeId);
       const toNode = idMap.get(edgeDef.toNodeId);
@@ -337,7 +322,7 @@ class DevicesDAGNode {
    *
    * 流程：
    * 1. 构造 handlerContext 并调用 `this.handler`
-   * 2. 归一化结果，合并静态服务与路由参数上下文（禁止覆盖已有键）
+   * 2. 归一化结果，合并静态服务与累积上下文（禁止覆盖已有键）
    * 3. 处理 `stop` / `explicitPackets` / `redirect`
    * 4. 根据 `result.to` / `defaultRoute` / 剩余路径确定下一跳
    * 5. 沿 `outEdges` 递归调用 `child.dispatch()`
@@ -349,8 +334,7 @@ class DevicesDAGNode {
    * @param {Object} [options={}] - 路由选项
    * @param {string} [options.path=""] - 当前节点的路径
    * @param {Object} [options.services={}] - 静态服务上下文
-   * @param {Object} [options.routeContext={}] - 路由参数上下文
-   * @param {Object} [options.acc] - 兼容旧接口的累积上下文别名，等价于 routeContext
+   * @param {Object} [options.acc={}] - 累积上下文（仅包含动态路由参数）
    * @param {number} [options.depth=0] - 当前递归深度
    * @param {number} [options.maxDepth=32] - 最大递归深度
    * @param {Object|null} [options.dag=null] - 所属 DAG 实例（用于跨节点状态管理）
@@ -358,13 +342,12 @@ class DevicesDAGNode {
    * @param {Array|null} [options.trace=null] - 路由追踪收集器，传入数组时自动记录遍历路径
    * @param {(packet: SignalPacket) => SignalPacket[]} [options.edgeNotFoundFallback] - 边不存在时的回退
    * @param {string[]|null} [options.remainingSegments=null] - 剩余路径段（用于边查找，独立于 packet.to）
-   * @returns {{ packets: SignalPacket[], services?: Object, routeContext?: Object, acc?: Object }} 分发结果
+   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }} 分发结果
    */
   dispatch(packet, options = {}) {
     const {
       path = this.path ?? "",
-      services = {},
-      routeContext,
+      services,
       acc,
       depth = 0,
       maxDepth = 32,
@@ -376,20 +359,11 @@ class DevicesDAGNode {
     } = options;
 
     const inheritedServices = snapshotServices(services);
-    const inheritedRouteContext = isPlainObject(routeContext)
-      ? { ...routeContext }
-      : isPlainObject(acc)
-        ? Object.fromEntries(
-            Object.entries(acc).filter(
-              ([key]) =>
-                !Object.prototype.hasOwnProperty.call(inheritedServices, key),
-            ),
-          )
-        : {};
+    const inheritedAcc = isPlainObject(acc) ? { ...acc } : {};
 
     const { layer: mergedServices, changed: servicesChanged } =
       mergeContextLayer(inheritedServices, this.getServices(), {
-        forbidden: inheritedRouteContext,
+        forbidden: inheritedAcc,
         label: "Service context",
       });
 
@@ -402,20 +376,16 @@ class DevicesDAGNode {
     };
 
     const pkt = SignalPacket.from(packet);
-
-    // 剩余路径段用于边查找，与 handler 接收的 packet.to 解耦
     let routeSegments = remainingSegments ?? normalizePath(pkt.to || "");
-    // currentPacket 是 handler 接收的包，仅在 handler 返回路由结果时更新
     let currentPacket = pkt;
 
-    // 1. 构造 handlerContext 并调用 handler
     const handler = this.getHandler?.() ?? this.handler;
     let rawResult;
     if (typeof handler === "function") {
       const handlerContext = this._buildHandlerContext(pkt, {
         path,
         services: mergedServices,
-        routeContext: inheritedRouteContext,
+        acc: inheritedAcc,
         depth,
         dag,
       });
@@ -439,7 +409,6 @@ class DevicesDAGNode {
       }
     }
 
-    // 2. 归一化结果
     const result =
       typeof handler === "function"
         ? normalizeHandlerResult(rawResult)
@@ -448,21 +417,15 @@ class DevicesDAGNode {
             explicitPackets: false,
           };
 
-    // 3. 路由参数上下文（禁止覆盖已有键，也不可与服务层冲突）
-    const { layer: mergedRouteContext, changed: routeContextChanged } =
-      mergeContextLayer(inheritedRouteContext, result.routeContext, {
+    const { layer: mergedAcc, changed: accChanged } = mergeContextLayer(
+      inheritedAcc,
+      result.acc,
+      {
         forbidden: mergedServices,
-        label: "Route context",
-      });
-
-    const mergedAcc = buildAccumulatedContext(
-      mergedServices,
-      mergedRouteContext,
+        label: "Accumulated context",
+      },
     );
-    const contextChanged = servicesChanged || routeContextChanged;
-    const contextAcc = contextChanged ? mergedAcc : undefined;
 
-    // 4. stop：终止当前链路
     if (result.stop) {
       pushTrace({
         hadHandler: typeof handler === "function",
@@ -472,13 +435,11 @@ class DevicesDAGNode {
       });
       return {
         packets: result.packets,
-        services: mergedServices,
-        routeContext: mergedRouteContext,
-        acc: contextAcc,
+        services: servicesChanged ? mergedServices : undefined,
+        acc: accChanged ? mergedAcc : undefined,
       };
     }
 
-    // 5. explicitPackets 且空 → 终止
     if (result.explicitPackets && result.packets.length === 0) {
       pushTrace({
         hadHandler: typeof handler === "function",
@@ -488,17 +449,14 @@ class DevicesDAGNode {
       });
       return {
         packets: [],
-        services: mergedServices,
-        routeContext: mergedRouteContext,
-        acc: contextAcc,
+        services: servicesChanged ? mergedServices : undefined,
+        acc: accChanged ? mergedAcc : undefined,
       };
     }
 
-    // 6. 确定路由段
     const finalPackets = [];
     const deferredPackets = [];
 
-    // redirect：覆盖后续路径段
     if (result.redirect) {
       if (result.redirect.startsWith("/")) {
         throw new Error(
@@ -511,7 +469,6 @@ class DevicesDAGNode {
     if (result.packets.length > 0) {
       const primaryPacket = SignalPacket.from(result.packets[0]);
 
-      // 额外信号包 → 延迟路由队列
       for (const extraPkt of result.packets.slice(1)) {
         const p = SignalPacket.from(extraPkt);
         if (p.to) {
@@ -536,29 +493,22 @@ class DevicesDAGNode {
         routeSegments = normalizePath(this.defaultRoute);
         currentPacket = primaryPacket;
       } else if (routeSegments.length === 0) {
-        // 路径终点 → 收入最终结果
         finalPackets.push(primaryPacket);
       }
-      // else: 无路由指定且仍有剩余路径段 → 保留原信号继续走
     } else if (!result.explicitPackets) {
-      // 无 packets，非 explicit → 继续沿路径或默认出边
       if (routeSegments.length === 0 && this.defaultRoute) {
         routeSegments = normalizePath(this.defaultRoute);
       }
     }
 
-    // 7. 路由主包到子节点（优先于延迟路由，与原 _walkSegments 行为一致）
     const deferredResults = [];
 
-    /**
-     * 处理延迟路由队列
-     */
     const flushDeferredRoutes = () => {
       for (const deferredPkt of deferredPackets) {
         const subResult = this._routeFrom(deferredPkt, {
           path,
           services: mergedServices,
-          routeContext: mergedRouteContext,
+          acc: mergedAcc,
           depth: depth + 1,
           maxDepth,
           dag,
@@ -581,9 +531,8 @@ class DevicesDAGNode {
       flushDeferredRoutes();
       return {
         packets: [...finalPackets, ...deferredResults],
-        services: mergedServices,
-        routeContext: mergedRouteContext,
-        acc: contextAcc,
+        services: servicesChanged ? mergedServices : undefined,
+        acc: accChanged ? mergedAcc : undefined,
       };
     }
 
@@ -603,9 +552,8 @@ class DevicesDAGNode {
       if (allCollected.length > 0) {
         return {
           packets: allCollected,
-          services: mergedServices,
-          routeContext: mergedRouteContext,
-          acc: contextAcc,
+          services: servicesChanged ? mergedServices : undefined,
+          acc: accChanged ? mergedAcc : undefined,
         };
       }
       const fallback = edgeNotFoundFallback
@@ -613,9 +561,8 @@ class DevicesDAGNode {
         : [];
       return {
         packets: fallback,
-        services: mergedServices,
-        routeContext: mergedRouteContext,
-        acc: contextAcc,
+        services: servicesChanged ? mergedServices : undefined,
+        acc: accChanged ? mergedAcc : undefined,
       };
     }
 
@@ -625,14 +572,12 @@ class DevicesDAGNode {
       nextSegment: firstSegment,
       packetsCount: result.packets.length,
       deferredCount: deferredPackets.length,
-      accKeys: result.routeContext ? Object.keys(result.routeContext) : [],
+      accKeys: result.acc ? Object.keys(result.acc) : [],
     });
 
     const child = edge.target;
     const childPath = joinPath(path, firstSegment);
     const childRemaining = routeSegments.slice(1);
-
-    // 深度检测
     const nextDepth = depth + 1;
     if (nextDepth > maxDepth) {
       throw new Error(
@@ -640,11 +585,10 @@ class DevicesDAGNode {
       );
     }
 
-    // 先走主路
     const childResult = child.dispatch(currentPacket, {
       path: childPath,
       services: mergedServices,
-      routeContext: mergedRouteContext,
+      acc: mergedAcc,
       depth: nextDepth,
       maxDepth,
       dag,
@@ -654,14 +598,13 @@ class DevicesDAGNode {
       remainingSegments: childRemaining,
     });
 
-    // 8. 延迟路由（额外信号包），在主路完成后处理
     flushDeferredRoutes();
 
     return {
       packets: [...finalPackets, ...childResult.packets, ...deferredResults],
-      services: childResult.services || mergedServices,
-      routeContext: childResult.routeContext || mergedRouteContext,
-      acc: childResult.acc || contextAcc,
+      services:
+        childResult.services || (servicesChanged ? mergedServices : undefined),
+      acc: childResult.acc || (accChanged ? mergedAcc : undefined),
     };
   }
 
@@ -672,14 +615,13 @@ class DevicesDAGNode {
    * 不调用本节点的 handler，仅做边查找与子节点递归。
    * @param {SignalPacket} packet - 信号包
    * @param {Object} options - 路由选项（同 {@link DevicesDAGNode#dispatch}）
-   * @returns {{ packets: SignalPacket[], services?: Object, routeContext?: Object, acc?: Object }}
+   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }}
    * @private
    */
   _routeFrom(packet, options = {}) {
     const {
       path = this.path ?? "",
-      services = {},
-      routeContext,
+      services,
       acc,
       depth = 0,
       maxDepth = 32,
@@ -689,16 +631,7 @@ class DevicesDAGNode {
     } = options;
 
     const inheritedServices = snapshotServices(services);
-    const inheritedRouteContext = isPlainObject(routeContext)
-      ? { ...routeContext }
-      : isPlainObject(acc)
-        ? Object.fromEntries(
-            Object.entries(acc).filter(
-              ([key]) =>
-                !Object.prototype.hasOwnProperty.call(inheritedServices, key),
-            ),
-          )
-        : {};
+    const inheritedAcc = isPlainObject(acc) ? { ...acc } : {};
     const segments = normalizePath(packet.to || "");
 
     if (segments.length === 0) {
@@ -708,29 +641,18 @@ class DevicesDAGNode {
           { ...options, depth },
         );
       }
-      return {
-        packets: [],
-        services: inheritedServices,
-        routeContext: inheritedRouteContext,
-        acc: buildAccumulatedContext(inheritedServices, inheritedRouteContext),
-      };
+      return { packets: [], services: undefined, acc: undefined };
     }
 
     const firstSegment = segments[0];
     const edge = this.outEdges.get(firstSegment);
     if (!edge) {
-      return {
-        packets: [],
-        services: inheritedServices,
-        routeContext: inheritedRouteContext,
-        acc: buildAccumulatedContext(inheritedServices, inheritedRouteContext),
-      };
+      return { packets: [], services: undefined, acc: undefined };
     }
 
     const child = edge.target;
     const childPath = joinPath(path, firstSegment);
     const childRemaining = segments.slice(1);
-
     const nextDepth = depth + 1;
     if (nextDepth > maxDepth) {
       throw new Error(
@@ -741,7 +663,7 @@ class DevicesDAGNode {
     return child.dispatch(packet, {
       path: childPath,
       services: inheritedServices,
-      routeContext: inheritedRouteContext,
+      acc: inheritedAcc,
       depth: nextDepth,
       maxDepth,
       dag,
@@ -759,13 +681,13 @@ class DevicesDAGNode {
    * @param {Object} opts - 上下文构建选项
    * @param {string} opts.path - 节点路径
    * @param {Object} opts.services - 静态服务上下文
-   * @param {Object} opts.routeContext - 路由参数上下文
+   * @param {Object} opts.acc - 累积上下文（动态路由参数）
    * @param {number} opts.depth - 递归深度
    * @param {Object|null} opts.dag - DAG 实例
    * @returns {Object}
    * @private
    */
-  _buildHandlerContext(packet, { path, services, routeContext, depth, dag }) {
+  _buildHandlerContext(packet, { path, services, acc, depth, dag }) {
     const defaultRoute = this.defaultRoute ?? "";
     const resolvedDefaultRoutePath = defaultRoute
       ? joinPath(path, defaultRoute)
@@ -788,8 +710,7 @@ class DevicesDAGNode {
       depth,
       signalPacket: packet,
       services: snapshotServices(services),
-      routeContext: isPlainObject(routeContext) ? { ...routeContext } : {},
-      acc: buildAccumulatedContext(services, routeContext),
+      acc: isPlainObject(acc) ? { ...acc } : {},
       state: readNodeState(),
       getState: readNodeState,
       setState: (nextState) => {

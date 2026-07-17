@@ -26,7 +26,8 @@ class MockTool extends Tool {
         type: s.type,
         value: s.context?.value ?? null,
       })),
-      contextKeys: Object.keys(context?.acc ?? {}),
+      serviceKeys: Object.keys(context?.services ?? {}),
+      accKeys: Object.keys(context?.acc ?? {}),
     });
   }
 
@@ -117,7 +118,9 @@ describe("MultiToolWrapper", () => {
     );
 
     expect(instances[0].calls).toHaveLength(3);
-    expect(instances[0].calls[2].signals).toEqual([{ type: "end", value: null }]);
+    expect(instances[0].calls[2].signals).toEqual([
+      { type: "end", value: null },
+    ]);
   });
 
   test("双触点应创建两个独立工具实例，各自接收独立信号", () => {
@@ -177,9 +180,10 @@ describe("MultiToolWrapper", () => {
 
     // 手指 0 抬起，手指 1 保持
     wrapper.process(
-      buildContactsPacket([{ touchId: "0" }], [
-        { touchId: "1", position: { x: 110, y: 210 } },
-      ]),
+      buildContactsPacket(
+        [{ touchId: "0" }],
+        [{ touchId: "1", position: { x: 110, y: 210 } }],
+      ),
       defaultCtx,
     );
 
@@ -325,9 +329,10 @@ describe("MultiToolWrapper", () => {
       customCtx,
     );
 
-    expect(instances[0].calls[0].contextKeys).toEqual(
+    expect(instances[0].calls[0].serviceKeys).toEqual(
       expect.arrayContaining(["board", "viewport", "boardApi"]),
     );
+    expect(instances[0].calls[0].accKeys).toEqual([]);
   });
 
   test("per-touch handoff 子图：entry → first → second，end 信号触发移交", () => {
@@ -380,10 +385,7 @@ describe("MultiToolWrapper", () => {
     expect(instances[1].calls).toHaveLength(0);
 
     // 手指抬起 → end 信号先到 first（记录），再移交到 second（记录）
-    wrapper.process(
-      buildContactsPacket([{ touchId: "0" }]),
-      defaultCtx,
-    );
+    wrapper.process(buildContactsPacket([{ touchId: "0" }]), defaultCtx);
 
     expect(instances[0].calls).toHaveLength(2);
     expect(instances[0].calls[1].signals).toEqual([
@@ -418,9 +420,10 @@ describe("MultiToolWrapper", () => {
 
       // t1 抬起
       wrapper.process(
-        buildContactsPacket([{ touchId: "t1" }], [
-          { touchId: "t2", position: { x: 5, y: 5 } },
-        ]),
+        buildContactsPacket(
+          [{ touchId: "t1" }],
+          [{ touchId: "t2", position: { x: 5, y: 5 } }],
+        ),
         defaultCtx,
       );
       expect(wrapper.getActiveTouchCount()).toBe(1);

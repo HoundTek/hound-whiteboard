@@ -128,7 +128,7 @@ function createTouchscreenDevice(options = {}) {
   const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
 
-    const viewport = ctx?.services?.viewport ?? ctx?.acc?.viewport;
+    const viewport = ctx?.services?.viewport;
     const convertedSignals =
       viewport && typeof viewport.convertCanvasSignalsToWorld === "function"
         ? viewport.convertCanvasSignalsToWorld(packet.signals)
