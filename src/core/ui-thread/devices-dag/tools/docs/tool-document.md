@@ -42,27 +42,17 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 
 当前推荐直接依赖的顶层字段有：
 
-- `tree`
-- `node`
 - `path`
-- `defaultRoute`
-- `resolvedDefaultRoutePath`
-- `depth`
-- `context`
 - `services`
 - `acc`
-- `board`
-- `viewport`
-- `allocateObjectId`
-- `resolveOwnerChunkId`
 - `getNodeState`
 - `setNodeState`
 
 这里的 `services` 和 `acc` 来自 DevicesDAG 的分层上下文。
 `services` 通常会携带：
 
-- `board`
-- `boardApi`
+- `board`（含 `allocateObjectId` 等方法）
+- `boardApi`（RPC 代理）
 - `viewport`
 
 `acc` 通常会携带：
@@ -70,8 +60,8 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 - `autoCommit`（handoff 注入，控制是否提交）
 - `autoUmountOnApply`（handoff 注入，控制是否自卸载）
 
-`deviceContext` 现在不再构造 `eventContext` / `runtimeContext` 两层兼容视图。
-工具应直接读取顶层字段与 `services` / `acc`。
+基础设施依赖（`board`、`boardApi`、`viewport`）统一通过 `context.services` 读取，
+动态路由参数（`autoCommit`、`autoUmountOnApply` 等）通过 `context.acc` 读取。
 
 ## 对象上下文辅助方法
 

@@ -23,12 +23,13 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
       return { ..._nodeState };
     },
     _nodeState,
-    acc: {
+    services: {
       board,
       boardApi,
       viewport,
+    },
+    acc: {
       objectId,
-      ownerChunkId: 1,
     },
   };
 
@@ -156,7 +157,7 @@ describe("ObjectCreatorTool — property 信号", () => {
     );
 
     expect(deviceContext._nodeState.objects).toEqual([tool._entry]);
-    expect(deviceContext.acc.boardApi.createObject).toHaveBeenCalledWith(
+    expect(deviceContext.services.boardApi.createObject).toHaveBeenCalledWith(
       "CircleObject",
       expect.objectContaining({
         id: 206,
@@ -186,7 +187,7 @@ describe("ObjectCreatorTool — property 信号", () => {
         return { ..._nodeState };
       },
       _nodeState,
-      acc: {
+      services: {
         board,
         boardApi,
       },
@@ -252,7 +253,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.beforeCommitCreatedObject = () => false;
       tool.objectId = 2;
       tool._entry = { id: 2 };
-      tool.completeCreatedObject({ context: { acc: { boardApi } } });
+      tool.completeCreatedObject({ context: { services: { boardApi } } });
 
       expect(boardApi.commitObjects).not.toHaveBeenCalled();
       expect(tool.isObjectCreationCompleted).toBe(true);
@@ -271,7 +272,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
       tool.objectId = 3;
       tool._entry = { id: 3 };
-      tool.completeCreatedObject({ context: { acc: { boardApi } } });
+      tool.completeCreatedObject({ context: { services: { boardApi } } });
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([3]);
       expect(tool.isObjectCreationCompleted).toBe(true);

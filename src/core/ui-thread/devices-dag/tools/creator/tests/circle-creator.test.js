@@ -15,12 +15,13 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
 
   return {
     deviceContext: {
-      acc: {
+      services: {
         board,
         boardApi,
         viewport,
+      },
+      acc: {
         objectId,
-        ownerChunkId: 1,
       },
     },
   };
@@ -86,7 +87,7 @@ describe("CircleCreatorTool", () => {
   test("显式提供 boardApi 时应通过 RPC 创建并提交圆对象", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(104);
-    const boardApi = deviceContext.acc.boardApi;
+    const boardApi = deviceContext.services.boardApi;
     const createSpy = jest.spyOn(boardApi, "createObject");
     const modifySpy = jest.spyOn(boardApi, "modifyObject");
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -137,7 +138,7 @@ describe("CircleCreatorTool", () => {
       discardActiveObjects: jest.fn(),
     };
     const deviceContext = {
-      acc: {
+      services: {
         board,
         boardApi,
       },
@@ -174,7 +175,7 @@ describe("CircleCreatorTool", () => {
   test("结束手势时应通过 boardApi.commitObjects 提交对象", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(103);
-    const boardApi = deviceContext.acc.boardApi;
+    const boardApi = deviceContext.services.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -225,7 +226,7 @@ describe("CircleCreatorTool", () => {
   test("结束手势后应通过 commitObjects 提交圆对象", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(110);
-    const boardApi = deviceContext.acc.boardApi;
+    const boardApi = deviceContext.services.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -251,8 +252,8 @@ describe("CircleCreatorTool", () => {
   test("连续两次创建应生成两个不同圆对象", () => {
     const tool = new CircleCreatorTool();
     const { deviceContext } = createBoardDeviceContext(201);
-    const board = deviceContext.acc.board;
-    const boardApi = deviceContext.acc.boardApi;
+    const board = deviceContext.services.board;
+    const boardApi = deviceContext.services.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -260,7 +261,7 @@ describe("CircleCreatorTool", () => {
         to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, boardApi, objectId: 201, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 201 } },
     );
 
     const firstObject = tool._entry;
@@ -273,7 +274,7 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { acc: { board, boardApi, objectId: 201, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 201 } },
     );
 
     tool.process(
@@ -281,7 +282,7 @@ describe("CircleCreatorTool", () => {
         to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(6, 7) } }],
       },
-      { acc: { board, boardApi, objectId: 202, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 202 } },
     );
 
     const secondObject = tool._entry;
@@ -294,7 +295,7 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { acc: { board, boardApi, objectId: 202, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 202 } },
     );
 
     expect(firstObject).not.toBe(secondObject);

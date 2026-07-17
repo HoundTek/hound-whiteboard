@@ -26,7 +26,7 @@ describe("RectangleObjectChooserTool", () => {
     };
 
     const deviceContext = {
-      acc: { boardApi, viewport: { requestViewportUiRender: jest.fn() } },
+      services: { boardApi, viewport: { requestViewportUiRender: jest.fn() } },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -106,9 +106,11 @@ describe("RectangleObjectChooserTool", () => {
       discardActiveObjects: jest.fn(),
     };
     const deviceContext = {
-      acc: {
+      services: {
         boardApi,
         viewport: { requestViewportUiRender: jest.fn() },
+      },
+      acc: {
         objects: [previousSummary],
       },
       path: "/main/mouse/secondary/tool",
@@ -213,7 +215,7 @@ describe("RectangleObjectChooserTool", () => {
       },
     };
     const deviceContext = {
-      acc: {
+      services: {
         board: {
           getObjectById: jest.fn(() => staleBoardObject),
         },
@@ -255,7 +257,7 @@ describe("RectangleObjectChooserTool", () => {
     expect(boardApi.queryObjects).toHaveBeenCalledWith([121]);
     expect(boardApi.addActiveObjects).toHaveBeenCalledWith([121]);
     expect(stateAccess.getState().objects).toEqual([selectedSummary]);
-    expect(deviceContext.acc.board.getObjectById).not.toHaveBeenCalled();
+    expect(deviceContext.services.board.getObjectById).not.toHaveBeenCalled();
     expect(stateAccess.getState()).toEqual({ objects: [selectedSummary] });
   });
 });

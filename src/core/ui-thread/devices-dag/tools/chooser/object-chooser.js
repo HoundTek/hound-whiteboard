@@ -350,7 +350,7 @@ class ObjectChooserTool extends GestureTool {
    */
   discardAction(context = {}) {
     const selectedObjects = this.resolveContextObjects(context);
-    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi;
     const objectIds = this.resolveObjectIds(context, selectedObjects);
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);
@@ -368,7 +368,7 @@ class ObjectChooserTool extends GestureTool {
    */
   replaceSelection(context = {}, nextObjects = []) {
     const previousObjects = this.resolveContextObjects(context).filter(Boolean);
-    const boardApi = context.services?.boardApi ?? context.acc?.boardApi;
+    const boardApi = context.services?.boardApi;
     const previousIds = this.resolveObjectIds(context, previousObjects);
     if (boardApi && previousIds.length > 0) {
       boardApi.discardActiveObjects(previousIds);
@@ -404,7 +404,7 @@ class ObjectChooserTool extends GestureTool {
     const region = this.getSelectionRegion(context);
     if (!region) return [];
 
-    const boardApi = context.services?.boardApi ?? context.acc?.boardApi;
+    const boardApi = context.services?.boardApi;
     if (!boardApi) return [];
 
     const regionRect = RectangleRange.fromRectLike(region);
@@ -490,7 +490,7 @@ class ObjectChooserTool extends GestureTool {
     this.clearSelectionRegion(context);
     this._overlaySelectedObjects = [];
     const selectedObjects = this.resolveContextObjects(context);
-    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi;
     const objectIds = this.resolveObjectIds(context, selectedObjects);
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);

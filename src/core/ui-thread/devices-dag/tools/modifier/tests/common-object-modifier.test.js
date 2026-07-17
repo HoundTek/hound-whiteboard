@@ -9,8 +9,8 @@ import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../object-modifier.js";
  * 新代码中 resolveActiveModifiedObjects 在没有 activeObjectIndex 时返回空，
  * 因此测试必须提供模拟的 AOM 上下文。
  * @param {Array|Object} objects - 测试对象（或对象数组）
- * @param {Object} [extra={}] - 额外的 acc 属性（如 viewport）
- * @returns {{ acc: Object }} 可用于 tool.process 的 DAG 上下文
+ * @param {Object} [extra={}] - 额外的 services 属性（如 viewport、boardApi）
+ * @returns {{ services: Object }} 可用于 tool.process 的 DAG 上下文
  */
 function aomCtx(objects, extra = {}) {
   const normalized = Array.isArray(objects) ? objects : [objects];
@@ -23,7 +23,7 @@ function aomCtx(objects, extra = {}) {
       return { ..._nodeState };
     },
     state: _nodeState,
-    acc: {
+    services: {
       board: {
         activeObjectManager: {
           activeObjectIndex: new Map(
@@ -193,7 +193,7 @@ describe("CommonObjectModifierTool", () => {
           nodeState = nextState ?? {};
           return nodeState;
         },
-        acc: { boardApi },
+        services: { boardApi },
         dag: mockDag,
       };
     }
@@ -248,7 +248,7 @@ describe("CommonObjectModifierTool", () => {
     const viewport = { requestViewportUiRender: jest.fn() };
     let nodeState = { objects: [object] };
     const context = {
-      acc: { boardApi, viewport },
+      services: { boardApi, viewport },
       dag: mockDag,
       path: "/viewport/mouse/primary/tool/tool",
       getNodeState() {
@@ -320,7 +320,7 @@ describe("CommonObjectModifierTool", () => {
         Object.assign(_nodeState, state);
         return { ..._nodeState };
       },
-      acc: {
+      services: {
         boardApi,
         viewport: { requestViewportUiRender: jest.fn() },
       },
@@ -367,7 +367,7 @@ describe("CommonObjectModifierTool", () => {
         Object.assign(_nodeState_inline, state);
         return { ..._nodeState_inline };
       },
-      acc: {
+      services: {
         board: {
           activeObjectManager: {
             activeObjectIndex: new Map(),
@@ -884,7 +884,7 @@ describe("CommonObjectModifierTool", () => {
           Object.assign(_nodeState, state);
           return { ..._nodeState };
         },
-        acc: {
+        services: {
           board: {
             activeObjectManager: {
               activeObjectIndex: new Map(
@@ -1456,7 +1456,7 @@ describe("CommonObjectModifierTool", () => {
           Object.assign(_nodeState_inline2, state);
           return { ..._nodeState_inline2 };
         },
-        acc: {
+        services: {
           boardApi,
         },
       };

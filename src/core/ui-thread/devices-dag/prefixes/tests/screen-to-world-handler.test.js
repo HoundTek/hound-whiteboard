@@ -52,7 +52,7 @@ describe("createCanvasToWorldPrefixHandler", () => {
 
     // 模拟 Board.createViewport 的行为——在视口根节点注入视口实例
     dag.configureNode(viewportId, {
-      handler: () => ({ acc: { viewport: mockViewport } }),
+      services: { viewport: mockViewport },
       semantics: { viewport: true },
     });
 
@@ -213,7 +213,7 @@ describe("createCanvasToWorldPrefixHandler", () => {
       ],
     });
 
-    // acc 中没有 board，视口不可达，应原样透传
+    // services 中没有 viewport，视口不可达，应原样透传
     expect(result.packets).toHaveLength(1);
     expect(result.packets[0].signals[0].context.value).toEqual(
       new Vector(100, 200),

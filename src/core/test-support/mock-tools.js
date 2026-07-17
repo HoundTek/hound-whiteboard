@@ -73,7 +73,7 @@ function createMockCreator(onProcess) {
         this.isObjectCreationCompleted = true;
       } else {
         this.isObjectCreationCompleted = true;
-        interaction?.context?.acc?.board?.activeObjectManager?.apply?.(
+        interaction?.context?.services?.board?.activeObjectManager?.apply?.(
           new Set([draft].filter(Boolean)),
         );
       }
@@ -245,7 +245,7 @@ function createMockModifier(onProcess) {
         )
         .filter((objectId) => objectId != null);
       if (objectIds.length > 0) {
-        context.acc?.boardApi?.discardActiveObjects?.(objectIds);
+        context.services?.boardApi?.discardActiveObjects?.(objectIds);
       }
     }
 

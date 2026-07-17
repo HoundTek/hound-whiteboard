@@ -37,7 +37,7 @@ function buildKeyboardTriggerForwardNodeConfig() {
 function buildViewportPositionNodeConfig(direction, baseStep = 200) {
   return {
     handler(packet, ctx = {}) {
-      const viewport = ctx?.services?.viewport ?? ctx?.acc?.viewport;
+      const viewport = ctx?.services?.viewport;
       const zoom = viewport?.zoom ?? 1;
       const step = baseStep / zoom;
       const delta = {
@@ -80,7 +80,7 @@ function buildViewportPositionNodeConfig(direction, baseStep = 200) {
 function buildViewportScaleNodeConfig(scaleTransformer) {
   return {
     handler(packet, ctx = {}) {
-      const viewport = ctx?.services?.viewport ?? ctx?.acc?.viewport;
+      const viewport = ctx?.services?.viewport;
       const triggerSignals = packet.signals.filter(
         (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
       );

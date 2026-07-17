@@ -44,7 +44,7 @@ describe("ObjectChooserTool", () => {
     };
     const stateAccess = createStateAccess();
     const deviceContext = {
-      acc: { boardApi },
+      services: { boardApi },
       path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -79,7 +79,7 @@ describe("ObjectChooserTool", () => {
       objects: [chosenObject],
     });
     const deviceContext = {
-      acc: { boardApi, objects: [chosenObject] },
+      services: { boardApi },
       path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -99,7 +99,7 @@ describe("ObjectChooserTool", () => {
     };
     const stateAccess = createStateAccess();
     const deviceContext = {
-      acc: { boardApi },
+      services: { boardApi },
       path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,
@@ -155,7 +155,7 @@ describe("ObjectChooserTool", () => {
     };
     const stateAccess = createStateAccess();
     const deviceContext = {
-      acc: {
+      services: {
         boardApi,
         board: {
           getObjectById: jest.fn(() => staleBoardObject),
@@ -181,7 +181,7 @@ describe("ObjectChooserTool", () => {
 
     expect(boardApi.addActiveObjects).toHaveBeenCalledWith([32]);
     expect(stateAccess.getState().objects).toEqual([rpcSummary]);
-    expect(deviceContext.acc.board.getObjectById).not.toHaveBeenCalled();
+    expect(deviceContext.services.board.getObjectById).not.toHaveBeenCalled();
     expect(stateAccess.getState()).toEqual({ objects: [rpcSummary] });
   });
 
@@ -193,10 +193,12 @@ describe("ObjectChooserTool", () => {
       objects: [chosenObject],
     });
     const deviceContext = {
-      acc: {
+      services: {
         boardApi: {
           discardActiveObjects,
         },
+      },
+      acc: {
         objects: [chosenObject],
       },
       path: "/viewport/chooser/tool",
@@ -312,7 +314,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        acc: { boardApi },
+        services: { boardApi },
         path: "/test",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
@@ -352,7 +354,7 @@ describe("ObjectChooserTool", () => {
           ],
         },
         {
-          acc: { boardApi },
+          services: { boardApi },
           path: "/test",
           getNodeState: () => ({}),
           setNodeState: () => {},
@@ -370,9 +372,10 @@ describe("ObjectChooserTool", () => {
       const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
       tool.beforeConfirmSelection = () => false;
 
-      const result = tool.confirmSelection({ acc: { board }, path: "/test" }, [
-        chosenObject,
-      ]);
+      const result = tool.confirmSelection(
+        { services: { board }, path: "/test" },
+        [chosenObject],
+      );
 
       expect(result).toBe(false);
     });
@@ -382,7 +385,7 @@ describe("ObjectChooserTool", () => {
       const tool = new TestChooserTool({ chosenObjects: [chosenObject] });
 
       const result = tool.confirmSelection(
-        { acc: { board: {} }, path: "/test" },
+        { services: { board: {} }, path: "/test" },
         [chosenObject],
       );
 
@@ -397,7 +400,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        acc: { boardApi },
+        services: { boardApi },
         path: "/test",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
@@ -442,7 +445,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        acc: { boardApi },
+        services: { boardApi },
         path: "/viewport/chooser",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,
@@ -501,7 +504,7 @@ describe("ObjectChooserTool", () => {
       };
       const stateAccess = createStateAccess();
       const deviceContext = {
-        acc: { boardApi },
+        services: { boardApi },
         path: "/test",
         getNodeState: stateAccess.getState,
         setNodeState: stateAccess.setState,

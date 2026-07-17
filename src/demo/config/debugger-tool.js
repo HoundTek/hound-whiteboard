@@ -19,7 +19,7 @@ class DebuggerTool extends Tool {
   #log = new Logger("Debugger", "DEBUG", logBus);
 
   process(signalPacket, deviceContext = {}) {
-    const board = deviceContext?.services?.board ?? deviceContext?.acc?.board;
+    const board = deviceContext?.services?.board;
     if (!board) {
       this.#log.warn("missing board context", signalPacket);
       return;

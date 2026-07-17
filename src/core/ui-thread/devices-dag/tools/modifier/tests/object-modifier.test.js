@@ -24,7 +24,7 @@ describe("ObjectModifierTool", () => {
         Object.assign(_nodeState, state);
         return { ..._nodeState };
       },
-      acc: {
+      services: {
         viewport: {
           renderer: {
             captureObjectSnapshot(objects) {
@@ -38,8 +38,8 @@ describe("ObjectModifierTool", () => {
             calls.push(["ui", undefined]);
           },
         },
-        object,
       },
+      acc: { object },
       object,
     };
 
@@ -78,7 +78,7 @@ describe("ObjectModifierTool", () => {
         Object.assign(_nodeState2, state);
         return { ..._nodeState2 };
       },
-      acc: { viewport },
+      services: { viewport },
     };
 
     tool.beforeGeometryMutation(modificationContext);
@@ -113,9 +113,11 @@ describe("ObjectModifierTool", () => {
       requestViewportUiRender: jest.fn(),
     };
     const modificationContext = {
-      acc: {
+      services: {
         boardApi: {},
         viewport,
+      },
+      acc: {
         objects: [object],
       },
       object,
@@ -180,7 +182,7 @@ describe("ObjectModifierTool", () => {
       };
 
       tool.applyModifiedObjects(
-        { acc: { boardApi, objects: [object] }, path: "/test" },
+        { services: { boardApi }, acc: { objects: [object] }, path: "/test" },
         [object],
       );
 
@@ -210,7 +212,7 @@ describe("ObjectModifierTool", () => {
       };
 
       const result = tool.applyModifiedObjects(
-        { acc: { boardApi, objects: [object] }, path: "/test" },
+        { services: { boardApi }, acc: { objects: [object] }, path: "/test" },
         [object],
       );
 
@@ -234,7 +236,8 @@ describe("ObjectModifierTool", () => {
 
       tool.applyModifiedObjects(
         {
-          acc: { boardApi, objects: [object], autoUmountOnApply: false },
+          services: { boardApi },
+          acc: { objects: [object], autoUmountOnApply: false },
           dag: { unmount },
           path: "/test",
         },
@@ -262,7 +265,8 @@ describe("ObjectModifierTool", () => {
 
       tool.applyModifiedObjects(
         {
-          acc: { boardApi, objects: [object] },
+          services: { boardApi },
+          acc: { objects: [object] },
           dag: { unmount },
           path: "/test",
         },
@@ -295,7 +299,7 @@ describe("ObjectModifierTool", () => {
           Object.assign(_nodeState3, state);
           return { ..._nodeState3 };
         },
-        acc: { boardApi },
+        services: { boardApi },
         dag: { unmount },
       };
 

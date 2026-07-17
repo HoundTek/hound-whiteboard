@@ -137,9 +137,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
       this._entry.data.points.push({ x: localPoint.x, y: localPoint.y });
     }
 
-    const boardApi =
-      interaction?.context?.services?.boardApi ??
-      interaction?.context?.acc?.boardApi;
+    const boardApi = interaction?.context?.services?.boardApi;
     if (!boardApi || this.objectId == null) {
       return;
     }
@@ -160,9 +158,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
       this._entry.data.points[index] = { x: localPoint.x, y: localPoint.y };
     }
 
-    const boardApi =
-      interaction?.context?.services?.boardApi ??
-      interaction?.context?.acc?.boardApi;
+    const boardApi = interaction?.context?.services?.boardApi;
     if (!boardApi || this.objectId == null) {
       return;
     }

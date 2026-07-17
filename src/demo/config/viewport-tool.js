@@ -39,8 +39,7 @@ class ViewportTool extends Tool {
   onFlush;
 
   process(signalPacket, deviceContext = {}) {
-    const viewport =
-      deviceContext?.services?.viewport ?? deviceContext?.acc?.viewport;
+    const viewport = deviceContext?.services?.viewport;
     if (!viewport) return;
 
     for (const signal of signalPacket?.signals ?? []) {

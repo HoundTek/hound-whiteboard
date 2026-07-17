@@ -48,13 +48,13 @@ SubDAG 内的工具不经过 `wrapToolForHandoff` 包装，其完成检测由 `w
 sequenceDiagram
     participant First as first tool
     participant Wrap as wrapToolForHandoff
-    participant Cb as createCompleteCallback<br/>(onToolComplete)
+    participant Cb as createHandoffCompletionHandler
     participant Second as second tool
     participant Prefix as prefix node.state
 
     First->>First: completeAction()
     First->>Wrap: action:complete(result)
-    Wrap->>Cb: onToolComplete(objects)
+    Wrap->>Cb: onComplete(objects)
     Cb->>Second: receiveHandoffObjects(objects)
     Note over Second: _overlayModifiedObjects = objects
     Note over Second: syncUiOverlay(context)
@@ -190,16 +190,16 @@ Handoff prefix 全程不持有 `objects`。它的职责局限于：
 
 ### `wrapToolForHandoff(tool, options)`
 
-将 Tool 包装为 handoff-ready handler。订阅 `action:complete` 事件，收到后桥接对象并调用 `onToolComplete(objects)`。
+将 Tool 包装为 handoff-ready handler。订阅 `action:complete` 事件，收到后桥接对象并调用完成回调。
 
 | 选项               | 类型      | 默认值  | 作用                                               |
 | ------------------ | --------- | ------- | -------------------------------------------------- |
-| `bridgeObjects`    | `boolean` | `false` | 完成时将事件结果规整后传入 `onToolComplete`        |
+| `bridgeObjects`    | `boolean` | `false` | 完成时将事件结果规整后传入完成回调                 |
 | `completeOnCancel` | `boolean` | `false` | 收到 `cancel` 信号时丢弃对象后通知完成，传入空数组 |
 
 ### `wrapSubDAGForHandoff(subDAGDef, options)`
 
-在子树根节点满足 `shouldComplete` 条件（默认检测 `end` 信号）时，从 `context.acc?.objects` 读取对象并调用 `onToolComplete(objects)`。
+在子树根节点满足 `shouldComplete` 条件（默认检测 `end` 信号）时，从 `node.state.objects` 读取对象并调用完成回调。
 
 - SubDAG（`subDAGDef.nodes instanceof Map`）：为根节点 handler 追加完成通知包装，保留子树结构
 - 非 SubDAG（flat `{ handler }` 对象）：直接替换 `nodes.handler`

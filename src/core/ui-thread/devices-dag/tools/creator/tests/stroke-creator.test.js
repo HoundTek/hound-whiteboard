@@ -28,12 +28,13 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
       return { ..._nodeState };
     },
     _nodeState,
-    acc: {
+    services: {
       board,
       boardApi,
       viewport,
+    },
+    acc: {
       objectId,
-      ownerChunkId: 1,
     },
   };
 
@@ -169,8 +170,8 @@ describe("StrokeCreatorTool", () => {
   test("cancel 信号应重置正在创建的对象并撤销 transient 对象", () => {
     const tool = new StrokeCreatorTool();
     const { deviceContext } = createBoardDeviceContext(1);
-    const board = deviceContext.acc.board;
-    const boardApi = deviceContext.acc.boardApi;
+    const board = deviceContext.services.board;
+    const boardApi = deviceContext.services.boardApi;
     const discardSpy = jest.spyOn(boardApi, "discardActiveObjects");
 
     tool.process(
@@ -186,7 +187,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
-      { acc: { board, boardApi, objectId: 1, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 1 } },
     );
 
     expect(discardSpy).toHaveBeenCalledWith([1]);
@@ -197,7 +198,7 @@ describe("StrokeCreatorTool", () => {
   test("首次创建对象时应写回本地草稿并调用 createObject", () => {
     const tool = new StrokeCreatorTool();
     const { deviceContext } = createBoardDeviceContext(9);
-    const boardApi = deviceContext.acc.boardApi;
+    const boardApi = deviceContext.services.boardApi;
 
     tool.process(
       {
@@ -220,7 +221,7 @@ describe("StrokeCreatorTool", () => {
   test("显式提供 boardApi 时应通过 appendListItem 累计路径点并在 end 后提交", () => {
     const tool = new StrokeCreatorTool();
     const { deviceContext } = createBoardDeviceContext(20);
-    const boardApi = deviceContext.acc.boardApi;
+    const boardApi = deviceContext.services.boardApi;
     const createSpy = jest.spyOn(boardApi, "createObject");
     const appendSpy = jest.spyOn(boardApi, "appendListItem");
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -280,7 +281,7 @@ describe("StrokeCreatorTool", () => {
       discardActiveObjects: jest.fn(),
     };
     const deviceContext = {
-      acc: {
+      services: {
         board,
         boardApi,
       },
@@ -363,7 +364,7 @@ describe("StrokeCreatorTool", () => {
   test("创建完成后应通过 commitObjects 提交笔画对象", () => {
     const tool = new StrokeCreatorTool();
     const { deviceContext } = createBoardDeviceContext(21);
-    const boardApi = deviceContext.acc.boardApi;
+    const boardApi = deviceContext.services.boardApi;
 
     tool.process(
       {
@@ -387,7 +388,7 @@ describe("StrokeCreatorTool", () => {
   test("取消创建后不应提交对象", () => {
     const tool = new StrokeCreatorTool();
     const { deviceContext } = createBoardDeviceContext(22);
-    const boardApi = deviceContext.acc.boardApi;
+    const boardApi = deviceContext.services.boardApi;
 
     tool.process(
       {
@@ -412,8 +413,8 @@ describe("StrokeCreatorTool", () => {
   test("连续两次创建应生成两个不同笔画对象", () => {
     const tool = new StrokeCreatorTool();
     const { deviceContext } = createBoardDeviceContext(31);
-    const board = deviceContext.acc.board;
-    const boardApi = deviceContext.acc.boardApi;
+    const board = deviceContext.services.board;
+    const boardApi = deviceContext.services.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -421,7 +422,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 31 } },
     );
 
     const firstObject = tool._entry;
@@ -431,7 +432,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, boardApi, objectId: 31, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 31 } },
     );
 
     tool.process(
@@ -439,7 +440,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(4, 5) } }],
       },
-      { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 32 } },
     );
 
     const secondObject = tool._entry;
@@ -449,7 +450,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { acc: { board, boardApi, objectId: 32, ownerChunkId: 1 } },
+      { services: { board, boardApi }, acc: { objectId: 32 } },
     );
 
     expect(firstObject).not.toBe(secondObject);

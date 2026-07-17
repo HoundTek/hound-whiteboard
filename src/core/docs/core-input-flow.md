@@ -70,16 +70,21 @@ flowchart LR
 
 `Board` 自己不做设备语义判断，只负责把已经归属的信号送进唯一的白板级设备图。
 
-### 3. viewport 根节点补全上下文
+### 3. viewport 根节点声明 services
 
-`Board.createViewport()` 会为 `/${viewportId}` 配置一个节点 handler。当前实现会在该层向后续链路追加：
+`Board.createViewport()` 会为 `/${viewportId}` 配置节点，通过 `services` 声明式注入基础设施：
 
-- `viewport`
+```
+configureNode("/${viewportId}", {
+  services: { board, boardApi, viewport },
+  semantics: { viewport: true },
+})
+```
 
-因此下游设备、prefix、tool 都能从 `ctx.acc` 中读取：
+因此下游设备、prefix、tool 都能从 `ctx.services` 中读取：
 
-- `board`
-- `boardApi`
+- `board`（含 `allocateObjectId` 等方法）
+- `boardApi`（RPC 代理）
 - `viewport`
 
 ### 4. 设备阶段
@@ -111,7 +116,7 @@ prefix 是链路中的前置处理层。当前主要承担：
 - 改写信号形态
 - 维护局部状态机
 - 在多个子节点之间切换活动链路
-- 将局部决策通过 `ctx.acc` 或节点 `state` 传给下游
+- 将动态路由参数通过 `ctx.acc` 传给下游，只读基础设施通过 `ctx.services` 共享
 
 `handoff-handler` 则负责 chooser → modifier 这类两阶段工作流的控制权转移。
 
@@ -162,17 +167,29 @@ Tool 是设备图末端的消费型处理器，只负责：
 
 ## 状态与上下文约定
 
-### `ctx.acc`
+### `ctx.services` — 静态服务上下文
 
-`ctx.acc` 是沿命中路径逐层追加的累积上下文。
+`ctx.services` 是沿 DAG 路径由节点声明式注入的基础设施依赖，handler 只读不可写。
 
 适合放：
 
-- `board`
-- `boardApi`
+- `board`（含 `allocateObjectId` 等方法）
+- `boardApi`（RPC 代理）
 - `viewport`
+
+### `ctx.acc` — 累积上下文
+
+`ctx.acc` 是沿命中路径由上游 handler 返回值逐层追加的运行时控制参数。
+
+适合放：
+
+- `autoCommit`（handoff prefix 注入，控制是否提交）
+- `autoUmountOnApply`（handoff prefix 注入，控制是否自卸载）
+- `objectId`（创建工具链路传递）
+- `objects`（handoff 对象桥接）
 - 一次性回调
-- 只读决策信息
+
+> `ctx.acc` 不包含 `services` 中的静态基础设施依赖；基础设施请通过 `ctx.services` 读取。
 
 ### 节点 `state`
 
@@ -185,6 +202,7 @@ Tool 是设备图末端的消费型处理器，只负责：
 
 ### 当前约束
 
+- `services` 由节点定义注入，handler 返回值无法写入
 - `acc` 只能追加，不应覆盖已有键
 - 跨节点可变共享优先走 `state`
 - Tool 不应承担 prefix 的路由职责

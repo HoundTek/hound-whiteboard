@@ -71,11 +71,11 @@ describe("Tool", () => {
       {
         path: "/viewport/s-pen/pen",
         context: {},
-        acc: { board },
+        services: { board },
       },
     );
 
-    expect(tool.calls[0].context.acc.board.allocateObjectId()).toBe(7);
+    expect(tool.calls[0].context.services.board.allocateObjectId()).toBe(7);
   });
 
   test("createProcessor 应优先使用累积 context 中显式提供的 allocateObjectId", () => {
@@ -103,8 +103,10 @@ describe("Tool", () => {
       { signals: [{ type: "pressure", context: { value: 0.5 } }] },
       {
         path: "/viewport/s-pen/pen",
-        acc: {
+        services: {
           board,
+        },
+        acc: {
           allocateObjectId: explicitAllocateObjectId,
         },
       },
@@ -145,10 +147,12 @@ describe("Tool", () => {
       { signals: [{ type: "trigger", context: {} }] },
       {
         path: "/viewport/s-pen/pen",
-        acc: {
+        services: {
           board,
           boardApi,
           viewport,
+        },
+        acc: {
           customFlag: true,
         },
       },
@@ -156,15 +160,17 @@ describe("Tool", () => {
 
     expect(tool.calls[0].context).toEqual(
       expect.objectContaining({
-        acc: expect.objectContaining({
+        services: expect.objectContaining({
           board,
           boardApi,
           viewport,
+        }),
+        acc: expect.objectContaining({
           customFlag: true,
         }),
       }),
     );
-    expect(tool.calls[0].context.acc.board.allocateObjectId()).toBe(13);
+    expect(tool.calls[0].context.services.board.allocateObjectId()).toBe(13);
     expect(tool.calls[0].context.path).toBe("/viewport/s-pen/pen");
     expect(tool.calls[0].context.semantics).toBeUndefined();
     expect(tool.calls[0].context.eventContext).toBeUndefined();

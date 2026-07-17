@@ -169,7 +169,7 @@ return { stop: true };
 - 共享资源引用（`board`、`boardApi`、`viewport`）
 - 任何与路由决策无关的只读基础设施依赖
 
-**路由参数上下文** 适合放：
+**累积上下文（acc）** 适合放：
 
 - 链路级一次性控制标志（`autoCommit`、`autoUmountOnApply`）
 - 链路级临时参数（`resolvePosition`、`objectId`）

@@ -67,7 +67,7 @@ describe("MultiToolWrapper", () => {
     };
   }
 
-  const defaultCtx = { acc: { board: {}, viewport: {} } };
+  const defaultCtx = { services: { board: {}, viewport: {} } };
 
   /**
    * 创建一个可追踪实例的 spy 工厂函数，使用 builder + createGraph 构建入口节点
@@ -317,7 +317,7 @@ describe("MultiToolWrapper", () => {
     const instances = [];
     const wrapper = new MultiToolWrapper(createTrackedTool(instances));
     const customCtx = {
-      acc: {
+      services: {
         board: { id: "board-1" },
         viewport: { zoom: 2 },
         boardApi: { createObject: jest.fn() },

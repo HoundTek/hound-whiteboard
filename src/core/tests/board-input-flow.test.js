@@ -41,7 +41,7 @@ describe("Board input flow", () => {
       ]);
       expect(tool.calls[0].context).toEqual(
         expect.objectContaining({
-          acc: expect.objectContaining({ board, viewport }),
+          services: expect.objectContaining({ board, viewport }),
           path: "/main/sample-device/tool",
         }),
       );
@@ -99,7 +99,7 @@ describe("Board input flow", () => {
       expect(tool.calls).toHaveLength(1);
       expect(tool.calls[0].context).toEqual(
         expect.objectContaining({
-          acc: expect.objectContaining({ board, viewport }),
+          services: expect.objectContaining({ board, viewport }),
           path: "/main/sample-device/tool",
         }),
       );

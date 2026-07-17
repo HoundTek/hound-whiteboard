@@ -16,6 +16,19 @@ chooser 本身不修改对象几何。它的职责是：
 - 真实命中与对象摘要读取通过 `BoardApiRpc` 发往 Worker
 - 选中对象进入 AOM 后，动态图由 Worker 侧 `ActiveObjectManager` 维护
 
+## 上下文模型
+
+chooser 接收的 `context` 遵循 DevicesDAG 的分层上下文：
+
+- `context.services` — 静态基础设施依赖
+  - `board` — Board 实例
+  - `boardApi` — RPC 代理（`createObject`、`addActiveObjects`、`discardActiveObjects`、`queryObjects` 等）
+  - `viewport` — 视口实例
+- `context.acc` — 动态路由参数（如 `objects` 等）
+- `context.getNodeState() / context.setNodeState()` — 节点状态读写
+
+> 所有基础设施依赖统一通过 `context.services` 读取，不再回退到 `context.acc`。
+
 ## 数据形态
 
 chooser 统一使用 `ObjectSummary` 纯数据条目，通过以下方法处理：

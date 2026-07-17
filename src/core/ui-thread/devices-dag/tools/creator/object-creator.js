@@ -234,9 +234,7 @@ class ObjectCreatorTool extends GestureTool {
    * @protected
    */
   createObjectViaRpc(interaction) {
-    const boardApi =
-      interaction?.context?.services?.boardApi ??
-      interaction?.context?.acc?.boardApi;
+    const boardApi = interaction?.context?.services?.boardApi;
     const objectType = this.getCreatedObjectType();
 
     if (
@@ -286,8 +284,7 @@ class ObjectCreatorTool extends GestureTool {
 
       if (interaction.objectId == null) {
         const allocatedId =
-          interaction?.context?.services?.board?.allocateObjectId?.() ??
-          interaction?.context?.acc?.board?.allocateObjectId?.();
+          interaction?.context?.services?.board?.allocateObjectId?.();
         if (allocatedId != null) {
           interaction.objectId = allocatedId;
         }
@@ -337,7 +334,7 @@ class ObjectCreatorTool extends GestureTool {
    * @returns {void}
    */
   discardCreatedObjects(context = {}) {
-    const boardApi = context?.services?.boardApi ?? context?.acc?.boardApi;
+    const boardApi = context?.services?.boardApi;
     if (boardApi && this.objectId != null) {
       boardApi.discardActiveObjects([this.objectId]);
     }
@@ -491,7 +488,7 @@ class ObjectCreatorTool extends GestureTool {
    */
   commitCreatedObject(interaction) {
     const context = interaction?.context ?? {};
-    const boardApi = context.services?.boardApi ?? context.acc?.boardApi;
+    const boardApi = context.services?.boardApi;
 
     if (boardApi && this.objectId != null) {
       boardApi.commitObjects([this.objectId]);

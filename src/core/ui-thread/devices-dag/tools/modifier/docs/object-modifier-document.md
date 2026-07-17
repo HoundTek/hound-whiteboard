@@ -124,7 +124,7 @@ resolveActiveModifiedObjects(context, objects) {
 读取优先级：
 
 1. `_overlayModifiedObjects`（私有字段，handoff 桥接或自身 process 写入）
-2. `resolveContextObjects`（node state → services / acc fallback，非 handoff 场景兼容）
+2. `resolveContextObjects`（node state）
 
 `_overlayModifiedObjects` 在以下时机写入：
 
