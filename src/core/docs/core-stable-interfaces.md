@@ -133,7 +133,8 @@ board.signalsEventBus.emit("input", {
 ### 稳定语义
 
 - `acc` 是逐层追加的累积上下文视图
-- 可变共享数据优先写入节点 `state`
+- 节点 `state` 是拥有者发布的只读投影；真理源放闭包 / 实例字段
+- `setNodeState` / `delNodeState` 仅限写入自身节点，跨节点写入在 strict 模式抛错、非 strict 模式告警
 - `ctx.state` 是入口快照；写入后若要读取最新值，应调用 `getState()`
 - `routeToChild()` 是向下转发信号的统一方式
 - `signal()` 统一构造 `{ type, context }` 结构

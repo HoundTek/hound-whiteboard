@@ -1643,6 +1643,59 @@ describe("DevicesDAG", () => {
       // async handler 被忽略，无输出
       expect(result.packets).toHaveLength(0);
     });
+
+    test("strict 模式下跨节点 setNodeState 应抛错", () => {
+      const dag = new DevicesDAG({ strict: true });
+      dag.ensureNode("/a/b");
+      dag.ensureNode("/other");
+      dag.configureNode("/a/b", {
+        handler(pkt, ctx) {
+          ctx.setNodeState("/other", { hacked: true });
+          return ctx.stop();
+        },
+      });
+      expect(() =>
+        dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] }),
+      ).toThrow(/cross-node setNodeState/);
+    });
+
+    test("非 strict 模式下跨节点 setNodeState 应告警但仍写入", () => {
+      const dag = new DevicesDAG({ strict: false });
+      const warnEntries = [];
+      const off = logBus.onLevels(["WARN"], (entry) =>
+        warnEntries.push(entry),
+      );
+      dag.ensureNode("/a/b");
+      dag.ensureNode("/other");
+      dag.configureNode("/a/b", {
+        handler(pkt, ctx) {
+          ctx.setNodeState("/other", { hacked: true });
+          return ctx.stop();
+        },
+      });
+      try {
+        dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] });
+        expect(dag.getNodeState("/other")).toMatchObject({ hacked: true });
+        expect(warnEntries.length).toBeGreaterThan(0);
+      } finally {
+        off();
+      }
+    });
+
+    test("写入自身节点不受跨节点限制", () => {
+      const dag = new DevicesDAG({ strict: true });
+      dag.ensureNode("/a/b");
+      dag.configureNode("/a/b", {
+        handler(pkt, ctx) {
+          ctx.setNodeState(ctx.path, { own: 1 });
+          return ctx.stop();
+        },
+      });
+      expect(() =>
+        dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] }),
+      ).not.toThrow();
+      expect(dag.getNodeState("/a/b")).toMatchObject({ own: 1 });
+    });
   });
 
   describe("route trace 与 profiling", () => {

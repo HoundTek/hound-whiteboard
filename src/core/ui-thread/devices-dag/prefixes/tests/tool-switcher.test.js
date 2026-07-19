@@ -312,4 +312,25 @@ describe("createToolSwitcherSubDAG", () => {
     });
     expect(dag.getNodeState("/switcher").routeTarget).toBe("circle");
   });
+
+  test("外部写入 state.routeTarget 不应影响路由（闭包为真理源）", () => {
+    const { dag, toolCalls } = setupSwitcher(
+      [{ name: "stroke" }, { name: "circle" }],
+      "stroke",
+    );
+
+    // 外部写入镜像 state —— 应无效
+    dag.setNodeState("/switcher", { routeTarget: "circle" });
+
+    dag.dispatch({
+      to: "/switcher",
+      signals: [{ type: "position", context: { value: { x: 1, y: 1 } } }],
+    });
+
+    // 路由仍由闭包真理源决定：stroke 收到信号，circle 没有
+    expect(toolCalls.stroke).toHaveLength(1);
+    expect(toolCalls.circle).toHaveLength(0);
+    // 镜像 state 被 handler 重新同步回真理源的值
+    expect(dag.getNodeState("/switcher").routeTarget).toBe("stroke");
+  });
 });

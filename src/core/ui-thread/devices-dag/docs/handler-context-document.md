@@ -75,8 +75,8 @@ process(signalPacket, ctx) {
 | `ctx.setState(nextState)`             | `(Object) => Object`                  | 全量覆盖节点状态                                                       |
 | `ctx.patchState(partial)`             | `(Object) => Object`                  | 浅合并 `{ ...current, ...partial }`                                    |
 | `ctx.getNodeState(pathOrId?)`         | `(string\|number?) => Object`         | 读取任意节点（默认为当前节点）状态                                     |
-| `ctx.setNodeState(pathOrId, state)`   | `(string\|number, Object) => Object`  | 写入任意节点状态                                                       |
-| `ctx.delNodeState(pathOrId, ...keys)` | `(string\|number, ...string) => void` | 删除指定节点的状态键                                                   |
+| `ctx.setNodeState(pathOrId, state)`   | `(string\|number, Object) => Object`  | 发布自身节点状态；跨节点写入被禁止（strict 抛错，非 strict 告警）      |
+| `ctx.delNodeState(pathOrId, ...keys)` | `(string\|number, ...string) => void` | 删除自身节点的状态键；跨节点删除同 `setNodeState` 受限                 |
 
 ### 路由
 

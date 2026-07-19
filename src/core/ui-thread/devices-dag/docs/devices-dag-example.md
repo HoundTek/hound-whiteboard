@@ -119,23 +119,25 @@ const result = dag.dispatch({
 
 ## 带状态的写法
 
-如果需要在设备节点和工具之间共享状态，建议显式写入节点 `state`：
+如果需要让状态可被外部观察，由拥有者发布到自己的节点 `state`（只读投影）：
 
 ```js
 dag.mount("/viewport/main/pen", (packet, context) => {
-  context.setNodeState("/viewport/main/pen", { activeStrokeId: 1 });
+  context.setNodeState(context.path, { activeStrokeId: 1 });
   return { signals: packet.signals };
 });
 ```
 
 工具侧再通过 `deviceContext.getNodeState` 或 `Tool.resolveNodeState()` 读取。
+注意只能写入自身节点——跨节点写入在 strict 模式抛错，非 strict 模式告警。
 
 ## 推荐做法
 
 - 根节点做设备态更新与粗分流
 - 子节点做稳定语义拆分
 - workflow 入口统一挂在 `/workflows/` 下
-- 跨节点共享状态走 `getNodeState` 和 `setNodeState`
+- 状态的真理源放闭包 / 实例字段，需要被观察时发布到自己节点的 `state`
+- 跨节点协作走信号、事件或 `acc`，不直接写对方节点状态
 - 边级信号转换使用 `createEdgePrefix`，不修改节点 handler
 
 ## 相关文档

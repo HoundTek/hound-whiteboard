@@ -568,6 +568,7 @@ class DevicesDAGNode {
       acc,
       depth,
       dag,
+      strict,
     });
 
     let rawResult;
@@ -765,10 +766,11 @@ class DevicesDAGNode {
    * @param {Object} opts.acc - 累积上下文（动态路由参数）
    * @param {number} opts.depth - 递归深度
    * @param {Object|null} opts.dag - DAG 实例
+   * @param {boolean} [opts.strict=false] - strict 模式下跨节点状态写入直接抛出
    * @returns {Object}
    * @private
    */
-  _buildHandlerContext(packet, { path, services, acc, depth, dag }) {
+  _buildHandlerContext(packet, { path, services, acc, depth, dag, strict = false }) {
     const defaultRoute = this.defaultRoute ?? "";
     const resolvedDefaultRoutePath = defaultRoute
       ? joinPath(path, defaultRoute)
@@ -779,6 +781,19 @@ class DevicesDAGNode {
     const readNodeState = () => {
       if (dag) return dag.getNodeState(path);
       return { ...this.state };
+    };
+
+    /**
+     * 跨节点写入检查：节点状态只能由拥有者发布到自己的节点
+     * @param {string|number} pathOrId - 写入目标
+     * @param {string} operation - 操作名（用于错误信息）
+     * @returns {void}
+     */
+    const guardCrossNodeWrite = (pathOrId, operation) => {
+      if (isSelf(pathOrId)) return;
+      const message = `[DevicesDAGNode] cross-node ${operation} from "${path}" to "${pathOrId}". Node state can only be published to the owning node.`;
+      if (strict) throw new Error(message);
+      nodeLog.warn(message);
     };
 
     return {
@@ -813,6 +828,7 @@ class DevicesDAGNode {
         return isSelf(pathOrId) ? { ...this.state } : {};
       },
       setNodeState: (pathOrId = path, state) => {
+        guardCrossNodeWrite(pathOrId, "setNodeState");
         if (dag) return dag.setNodeState(pathOrId, state);
         if (isSelf(pathOrId)) {
           this.state = isPlainObject(state) ? { ...state } : {};
@@ -821,6 +837,7 @@ class DevicesDAGNode {
         return {};
       },
       delNodeState(pathOrId = path, ...keys) {
+        guardCrossNodeWrite(pathOrId, "delNodeState");
         if (dag) {
           const current = dag.getNodeState(pathOrId);
           for (const key of keys) delete current[key];

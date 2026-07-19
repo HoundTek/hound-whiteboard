@@ -189,14 +189,14 @@ return { stop: true };
 
 ### 节点状态的写入约定
 
-节点状态由**该节点的 handler 拥有**。读写规则如下：
+节点状态是**拥有者发布的只读投影**（真理源在拥有者的闭包 / 实例字段）。读写规则如下：
 
 - **读取**：任何代码可以通过 `dag.getNodeState(path)` 或 `handlerContext.getNodeState(path)` 读取任意节点的状态。这是节点状态区别于闭包状态的核心价值——可外部观察。
-- **写入自身**：handler 通过 `handlerContext.setNodeState(handlerContext.path, state)` 写入当前节点的状态。这是最常用的写入方式。
-- **跨节点写入**：仅允许**父节点协调子节点状态**的场景（如 handoff-handler 中父 prefix 切换子节点 phases 时转移数据），属于父节点对其子树的协调职责。除此之外，不应随意写入其他节点的状态。
-- **外部写入**：非 handler 代码不应直接调用 `dag.setNodeState()` 写入。若确有需要（如测试、初始化），应通过图配置层面的 API 完成，而非直接操作节点状态。
+- **发布（写入自身）**：handler 通过 `handlerContext.setNodeState(handlerContext.path, state)` / `patchState` 发布自己节点的投影。这是唯一合法的写入方式。
+- **跨节点写入**：禁止。`ctx.setNodeState` / `ctx.delNodeState` 写入非自身节点时，strict 模式抛错，非 strict 模式经 log 工具告警。需要影响其他节点时，应通过信号、事件或 `acc` 传递，而不是直接改对方状态。
+- **外部写入**：非 handler 代码不应直接调用 `dag.setNodeState()` 写入——投影由拥有者发布，外部写入不产生真实效果，且会被下次发布覆盖。
 
-简而言之，闭包存实现细节，节点状态存可观察数据。节点状态由 handler 拥有，外部只读优先。
+简而言之：闭包管对错（真理源），state 管看见（只读投影）。
 
 ## 路由规则
 

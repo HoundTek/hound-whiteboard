@@ -776,15 +776,12 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       const inner = innerDAG.build();
 
       const wrapped = wrapSubDAGForHandoff(inner, {
-        onComplete(_phase, ctx) {
-          const parentPath = ctx.path.replace(/\/child$/, "");
-          const currentState = ctx.getNodeState?.(parentPath) ?? {};
-          ctx.setNodeState?.(parentPath, {
-            ...currentState,
-            completed: true,
-          });
+        onComplete() {
+          // 通过父 prefix 自有 ctx 发布状态（禁止跨节点写入）
+          outerPublishContext?.patchState?.({ completed: true });
         },
       });
+      let outerPublishContext = null;
       const outerDAG = createSubDAG("/outer");
       const outerRoot = outerDAG
         .node()
@@ -792,6 +789,7 @@ describe("handoff-handler（生命周期钩子模式）", () => {
         .prefix(
           createPrefixNodeHandler({
             handle(packet, ctx) {
+              outerPublishContext = ctx;
               if (ctx.state.completed) {
                 return {
                   stop: true,
@@ -1661,6 +1659,62 @@ describe("handoff-handler（生命周期钩子模式）", () => {
       expect(dag.getNodeState("/viewport/workflow")).toMatchObject({
         phase: "second",
         activeChild: "second",
+      });
+    });
+
+    test("外部写入 state.phase 不应影响路由（闭包为真理源）", () => {
+      const dag = new DevicesDAG();
+      dag.configureNode("/viewport", {
+        services: { board: {}, viewport: {} },
+      });
+
+      const firstCalls = [];
+      const secondCalls = [];
+      const firstTool = new (class extends Tool {
+        process() {
+          firstCalls.push(1);
+        }
+        reset() {}
+      })();
+      const secondTool = new (class extends Tool {
+        process() {
+          secondCalls.push(1);
+        }
+        reset() {}
+      })();
+
+      const subDAG = createHandoffSubDAG({
+        rootPath: "/workflow",
+        first: firstTool,
+        second: secondTool,
+      });
+      dag.mountSubDAG("/viewport", subDAG);
+
+      // 首次 dispatch 初始化镜像 state
+      dag.dispatch({
+        to: "/viewport/workflow",
+        signals: [{ type: "position", context: {} }],
+      });
+      expect(firstCalls).toHaveLength(1);
+
+      // 外部写入镜像 state —— 应无效
+      dag.setNodeState("/viewport/workflow", {
+        phase: "second",
+        activeChild: "second",
+      });
+
+      dag.dispatch({
+        to: "/viewport/workflow",
+        signals: [{ type: "position", context: {} }],
+      });
+
+      // 路由仍由闭包真理源决定：first 收到信号，second 没有
+      expect(firstCalls).toHaveLength(2);
+      expect(secondCalls).toHaveLength(0);
+      // 镜像 state 被 resolveTransition 纠正回真理源的值
+      expect(dag.getNodeState("/viewport/workflow")).toMatchObject({
+        phase: "first",
+        activeChild: "first",
       });
     });
   });

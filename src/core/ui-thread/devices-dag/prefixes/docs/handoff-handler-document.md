@@ -82,13 +82,13 @@ first 完成
   │
   ├── action:complete (ctx, objects)                ← 数据作为事件参数传入
   │
-  ├── createHandoffCompletionHandler
+  ├── handleHandoffComplete
   │     ├── second.receiveHandoffObjects(objects, context)
   │     │     ├── _overlayModifiedObjects = [...]    ← 私有字段写入
   │     │     ├── syncUiOverlay(context)             ← 注册 overlay provider
   │     │     └── requestUiOverlayRefresh(context)   ← 刷新 → 立即显示
-  │     └── switchHandoffPhase(context, "second")
-  │           └── setNodeState({ phase: "second", activeChild: "second" })
+  │     └── handoffPhase = "second"（闭包真理源）
+  │           └── 经 root prefix 自有 ctx 发布投影 { phase, activeChild }
 ```
 
 ### `receiveHandoffObjects(objects, context)`
@@ -163,7 +163,7 @@ Handoff prefix 全程不持有 `objects`。它的职责局限于：
 
 1. 通过 `wrapToolForHandoff` 订阅 `action:complete` 事件
 2. 在回调中调用 `second.receiveHandoffObjects(objects)`
-3. 更新自己的 `node.state.phase` + `activeChild` 控制下一跳路由
+3. 更新闭包变量 `handoffPhase`（真理源）决定下一跳路由，并同步到 `node.state.phase` + `activeChild` 供外部观察（只读镜像）
 4. 通过 `acc` 注入 `autoCommit` 和 `autoUmountOnApply` 控制下游行为
 
 ## 生命周期机制
