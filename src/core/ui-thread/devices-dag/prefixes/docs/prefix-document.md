@@ -45,7 +45,7 @@ prefix 节点现在依赖三条稳定边界：
 | `utils.js`                   | `isPlainObject`, `shallowCloneSignals`        | 内部工具方法                 |
 | `handler.js`                 | `createPrefixNodeHandler`                     | 基础修饰节点处理器           |
 | `multi-tool-handler.js`      | `createMultiToolPrefixHandler`                | 多工具状态机路由             |
-| `repeator-handler.js`        | `createRepeatorPrefixHandler`                 | 信号复制分发                 |
+| `repeater-handler.js`        | `createRepeaterPrefixHandler`                 | 信号复制分发                 |
 | `handoff-handler.js`         | `createHandoffSubDAG`, `wrapSubDAGForHandoff` | first → second 两阶段工作流  |
 | `drag-anchor-handler.js`     | `createDragAnchorPrefixHandler`               | 拖拽位移转换                 |
 | `canvas-to-world-handler.js` | `createCanvasToWorldPrefixHandler`            | canvas 相对坐标→世界坐标转换 |
@@ -57,7 +57,7 @@ flowchart TD
     Tree[DevicesDAG] --> Prefix[Prefix Node]
     Prefix --> Base[createPrefixNodeHandler]
     Base --> Multi[createMultiToolPrefixHandler]
-    Base --> Repeator[createRepeatorPrefixHandler]
+    Base --> Repeater[createRepeaterPrefixHandler]
     Multi --> Handoff[createHandoffSubDAG]
     Handoff --> WrapSub[wrapSubDAGForHandoff]
     Prefix --> Tool[Tool Leaf]
@@ -111,12 +111,12 @@ const handler = createMultiToolPrefixHandler({
 
 `transition.acc` 是 prefix 把控制参数传给当前活动子链的关键途径。
 
-## 信号复制分发：`createRepeatorPrefixHandler`
+## 信号复制分发：`createRepeaterPrefixHandler`
 
-`repeator` 会把输入信号复制为多份，分别发给不同子节点，或同一个子节点的多份副本。
+`repeater` 会把输入信号复制为多份，分别发给不同子节点，或同一个子节点的多份副本。
 
 ```js
-const handler = createRepeatorPrefixHandler({
+const handler = createRepeaterPrefixHandler({
   toChildren: ["tool-a", "tool-b"],
 });
 ```

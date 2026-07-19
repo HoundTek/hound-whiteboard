@@ -8,6 +8,7 @@ import {
   profileFromTrace,
 } from "../index.js";
 import { SignalPacket } from "../signal.js";
+import { logBus } from "../../../../utils/log/log-bus.js";
 
 // DevicesDAG 核心测试
 
@@ -1346,6 +1347,40 @@ describe("DevicesDAG", () => {
       expect(dag._mountedToolInstances.has(tool)).toBe(true);
       dag.unmount("/wf");
       expect(dag._mountedToolInstances.has(tool)).toBe(false);
+    });
+
+    test("unmount 钩子抛错应记录日志且不中断卸载链", () => {
+      const dag = new DevicesDAG();
+      const warnEntries = [];
+      const off = logBus.onLevels(["WARN"], (entry) =>
+        warnEntries.push(entry),
+      );
+
+      const previousUmount = jest.fn();
+      dag.ensureNode("/wf/tool");
+      dag.configureNode("/wf/tool", { umount: previousUmount });
+
+      const tool = {
+        createProcessor() {
+          const processor = () => {};
+          processor.dispose = () => {};
+          return processor;
+        },
+        umount() {
+          throw new Error("umount boom");
+        },
+      };
+      dag.mountWorkflow("/wf/tool", tool);
+
+      try {
+        expect(() => dag.unmount("/wf/tool")).not.toThrow();
+        // tool.umount 抛错不中断卸载链：原卸载钩子仍被执行
+        expect(previousUmount).toHaveBeenCalledTimes(1);
+        // 错误经 log 工具按 WARN 级记录
+        expect(warnEntries.length).toBeGreaterThan(0);
+      } finally {
+        off();
+      }
     });
 
     test("unmount 多入边节点只清除指定路径的入边", () => {

@@ -6,7 +6,7 @@
 
 export { createPrefixNodeHandler } from "./handler.js";
 export { createMultiToolPrefixHandler } from "./multi-tool-handler.js";
-export { createRepeatorPrefixHandler } from "./repeator-handler.js";
+export { createRepeaterPrefixHandler } from "./repeater-handler.js";
 export {
   createHandoffSubDAG,
   wrapSubDAGForHandoff,

@@ -27,6 +27,14 @@ import { isPlainObject, isSubDAGDefinition } from "./dag-utils.js";
 import { DevicesDAGNode } from "./dag-node-edge.js";
 import { DevicesDAGEdge } from "./dag-node-edge.js";
 import { dagToString } from "./dag-debug.js";
+import { Logger } from "../../../utils/log/logger.js";
+import { logBus } from "../../../utils/log/log-bus.js";
+
+/**
+ * 设备图日志
+ * @type {Logger}
+ */
+const dagLog = new Logger("DevicesDAG", "WARN", logBus);
 
 /**
  * 设备图静态服务上下文
@@ -709,24 +717,39 @@ class DevicesDAG {
     node.semantics = { ...node.semantics, tool: true };
     node._toolInstance = workflow;
 
+    node.umount = this._chainToolUmount(node, workflow, processor);
+
+    return node;
+  }
+
+  /**
+   * 串联 tool 卸载钩子链
+   * @description
+   * 生成节点的 umount 钩子：依次执行 `processor.dispose`、`tool.umount` 与原卸载钩子。
+   * `dispose` / `umount` 的错误记录告警日志后不中断后续钩子执行。
+   * @param {DevicesDAGNode} node - 目标节点
+   * @param {import("../tools/tool.js").Tool} tool - 工具实例
+   * @param {Function} processor - 工具处理器（由 `tool.createProcessor()` 生成）
+   * @returns {Function} 卸载钩子
+   * @private
+   */
+  _chainToolUmount(node, tool, processor) {
     const previousUmount = node.umount;
-    node.umount = (handlerContext) => {
+    return (handlerContext) => {
       try {
         processor.dispose?.(handlerContext);
-      } catch {
-        // 静默吞掉 dispose 错误
+      } catch (error) {
+        dagLog.warn(`processor.dispose failed at "${node.path}":`, error);
       }
       try {
-        workflow.umount?.(handlerContext);
-      } catch {
-        // 静默吞掉 umount 错误
+        tool.umount?.(handlerContext);
+      } catch (error) {
+        dagLog.warn(`tool.umount failed at "${node.path}":`, error);
       }
       if (typeof previousUmount === "function") {
         previousUmount(handlerContext);
       }
     };
-
-    return node;
   }
 
   /**
@@ -809,22 +832,7 @@ class DevicesDAG {
       node.semantics = { ...node.semantics, tool: true };
       node._toolInstance = def.tool;
 
-      const previousUmount = node.umount;
-      node.umount = (handlerContext) => {
-        try {
-          processor.dispose?.(handlerContext);
-        } catch {
-          // 静默吞掉 dispose 错误
-        }
-        try {
-          def.tool.umount?.(handlerContext);
-        } catch {
-          // 静默吞掉 umount 错误
-        }
-        if (typeof previousUmount === "function") {
-          previousUmount(handlerContext);
-        }
-      };
+      node.umount = this._chainToolUmount(node, def.tool, processor);
     }
   }
 
@@ -1016,8 +1024,8 @@ class DevicesDAG {
       };
       try {
         root.umount(handlerContext);
-      } catch {
-        // 静默吞掉 umount 错误
+      } catch (error) {
+        dagLog.warn(`umount hook failed at "${nodePath}":`, error);
       }
     }
 

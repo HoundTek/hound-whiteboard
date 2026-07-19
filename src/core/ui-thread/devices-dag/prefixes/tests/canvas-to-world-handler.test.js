@@ -1,7 +1,7 @@
 /**
  * @file 屏幕坐标→世界坐标转换 prefix 测试
  * @description 验证 createCanvasToWorldPrefixHandler 在各种场景下的坐标转换行为。
- * @module core/ui/devices-dag/prefixes/tests/screen-to-world-handler.test
+ * @module core/ui/devices-dag/prefixes/tests/canvas-to-world-handler.test
  * @author Zhou Chenyu
  */
 
@@ -28,7 +28,7 @@ describe("createCanvasToWorldPrefixHandler", () => {
     const dag = new DevicesDAG();
     const viewportId = "vp1";
 
-    // 创建子树：entry → screen-to-world prefix → tool
+    // 创建子树：entry → canvas-to-world prefix → tool
     const builder = createSubDAG("/mouse");
     const entry = builder.node().defaultRoute("pointer");
     const prefixNode = builder

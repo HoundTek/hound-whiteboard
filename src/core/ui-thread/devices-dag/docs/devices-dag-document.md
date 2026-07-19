@@ -348,8 +348,9 @@ viewport.addEdge(
 - `handler` 与 `tool` 不能在同一结构化节点上同时声明
 - 节点身份由 id 决定，路径只是一条可达路由表示
 - `addEdge()` 和 `mountSubDAG()` 在形成环时直接抛错，不允许构造 cyclic 图
-- DAG handler 必须是同步函数；返回 Promise 会在 strict 模式下抛错，非 strict 模式下静默忽略
-- `DevicesDAG` 构造选项 `strict: true` 时，handler 报错直接抛出而非 `console.error` 吞掉
+- DAG handler 必须是同步函数；返回 Promise 会在 strict 模式下抛错，非 strict 模式下经 log 工具告警后忽略
+- `DevicesDAG` 构造选项 `strict: true` 时，handler 报错直接抛出；非 strict 模式下经 log 工具（`utils/log`）记录后继续
+- `dispose` / `umount` 钩子抛错不中断卸载链，错误经 log 工具按 WARN 级记录
 
 ## 相关文档
 

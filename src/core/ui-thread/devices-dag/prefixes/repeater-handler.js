@@ -1,9 +1,9 @@
 /**
- * @file repeator 修饰节点处理器
+ * @file repeater 修饰节点处理器
  * @description
- * 提供 createRepeatorPrefixHandler，基于 createPrefixNodeHandler 实现，
+ * 提供 createRepeaterPrefixHandler，基于 createPrefixNodeHandler 实现，
  * 将输入的信号包复制为多份并发往相同或不同子节点。适合广播、双重副作用等场景。
- * @module core/ui-thread/devices-dag/prefixes/repeator-handler
+ * @module core/ui-thread/devices-dag/prefixes/repeater-handler
  * @author Zhou Chenyu
  */
 
@@ -11,7 +11,7 @@ import { shallowCloneSignals } from "./utils.js";
 import { createPrefixNodeHandler } from "./handler.js";
 
 /**
- * 创建 repeator 修饰节点处理器，将每条信号包复制为多份发出
+ * 创建 repeater 修饰节点处理器，将每条信号包复制为多份发出
  * @description
  * 工厂函数，基于 createPrefixNodeHandler 构建信号复制分发逻辑。
  * 将输入信号包浅克隆后，向 toChildren 指定的每个子节点各发一份。
@@ -19,12 +19,12 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @param {{
  *   toChildren?: string|string[],
  *   cloneSignals?: Function,
- * }} options - repeator 选项
+ * }} options - repeater 选项
  * @param {string|string[]} [options.toChildren] - 目标子节点名。传字符串时单发；传数组时每项各发一份。省略时回退到当前节点的 defaultRoute
  * @param {Function} [options.cloneSignals] - 自定义信号克隆函数。省略时使用浅层展开克隆
  * @returns {import("../devices-dag/dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
-function createRepeatorPrefixHandler(options = {}) {
+function createRepeaterPrefixHandler(options = {}) {
   const cloneFn =
     typeof options.cloneSignals === "function"
       ? options.cloneSignals
@@ -69,4 +69,4 @@ function createRepeatorPrefixHandler(options = {}) {
   });
 }
 
-export { createRepeatorPrefixHandler };
+export { createRepeaterPrefixHandler };

@@ -2,7 +2,7 @@ import { DevicesDAG, createSubDAG } from "../../index.js";
 import {
   createMultiToolPrefixHandler,
   createPrefixNodeHandler,
-  createRepeatorPrefixHandler,
+  createRepeaterPrefixHandler,
 } from "../index.js";
 
 describe("prefix-node", () => {
@@ -136,14 +136,14 @@ describe("prefix-node", () => {
     expect(trace).toEqual(["create", "edit", "create"]);
   });
 
-  test("createRepeatorPrefixHandler 应将信号复制分发到多个子节点", () => {
+  test("createRepeaterPrefixHandler 应将信号复制分发到多个子节点", () => {
     const dag = new DevicesDAG();
     const toolACalls = [];
     const toolBCalls = [];
 
     const _rpb = createSubDAG("/repeater");
     const _rpr = _rpb.node().handler(
-      createRepeatorPrefixHandler({
+      createRepeaterPrefixHandler({
         toChildren: ["tool-a", "tool-b"],
       }),
     );
@@ -157,9 +157,9 @@ describe("prefix-node", () => {
     });
     _rpb.edge("tool-a", _rpr, _rpa);
     _rpb.edge("tool-b", _rpr, _rpb2);
-    const repeatorSubDAG = _rpb.build();
+    const repeaterSubDAG = _rpb.build();
 
-    dag.mountSubDAG("/viewport", repeatorSubDAG);
+    dag.mountSubDAG("/viewport", repeaterSubDAG);
 
     dag.dispatch({
       to: "/viewport/repeater",

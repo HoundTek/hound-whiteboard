@@ -15,6 +15,14 @@
 import { isPlainObject, normalizeHandlerResult } from "./dag-utils.js";
 import { SignalPacket } from "./signal.js";
 import { normalizePath, joinPath } from "../../engine/utils/path.js";
+import { Logger } from "../../../utils/log/logger.js";
+import { logBus } from "../../../utils/log/log-bus.js";
+
+/**
+ * 设备图节点日志
+ * @type {Logger}
+ */
+const nodeLog = new Logger("DevicesDAGNode", "WARN", logBus);
 
 /**
  * 读取节点声明的服务上下文快照
@@ -320,13 +328,12 @@ class DevicesDAGNode {
    * @description
    * 这是设备图的核心路由引擎，原 `DevicesDAG._walkSegments` 的功能。
    *
-   * 流程：
-   * 1. 构造 handlerContext 并调用 `this.handler`
-   * 2. 归一化结果，合并静态服务与累积上下文（禁止覆盖已有键）
-   * 3. 处理 `stop` / `explicitPackets` / `redirect`
-   * 4. 根据 `result.to` / `defaultRoute` / 剩余路径确定下一跳
-   * 5. 沿 `outEdges` 递归调用 `child.dispatch()`
-   * 6. 额外信号包通过 `_routeFrom()` 延迟分发
+   * 流程（各阶段由对应私有方法承担）：
+   * 1. {@link DevicesDAGNode#_invoke} — 构造 handlerContext、调用 handler、归一化结果
+   * 2. 合并静态服务与累积上下文（禁止覆盖已有键），处理 `stop` / `explicitPackets` 终止分支
+   * 3. {@link DevicesDAGNode#_route} — 处理 `redirect`，根据 `result.to` / `defaultRoute` / 剩余路径确定下一跳
+   * 4. 沿 `outEdges` 递归调用 `child.dispatch()`
+   * 5. {@link DevicesDAGNode#_drainDeferred} — 额外信号包通过 `_routeFrom()` 延迟分发
    *
    * 无 handler 的节点（如 ghost）直接透传信号到子节点。
    *
@@ -367,55 +374,19 @@ class DevicesDAGNode {
         label: "Service context",
       });
 
-    /**
-     * 向 trace 数组推送一条记录（仅在 trace 启用时生效）
-     * @param {Object} entry - trace 条目
-     */
-    const pushTrace = (entry) => {
-      if (trace) trace.push({ path, depth, ...entry });
-    };
-
     const pkt = SignalPacket.from(packet);
-    let routeSegments = remainingSegments ?? normalizePath(pkt.to || "");
-    let currentPacket = pkt;
+    const hasHandler =
+      typeof (this.getHandler?.() ?? this.handler) === "function";
 
-    const handler = this.getHandler?.() ?? this.handler;
-    let rawResult;
-    if (typeof handler === "function") {
-      const handlerContext = this._buildHandlerContext(pkt, {
-        path,
-        services: mergedServices,
-        acc: inheritedAcc,
-        depth,
-        dag,
-      });
-      try {
-        rawResult = handler(pkt, handlerContext);
-      } catch (error) {
-        if (strict) throw error;
-        console.error(`[DevicesDAGNode] handler error at "${path}":`, error);
-        rawResult = undefined;
-      }
-      if (rawResult instanceof Promise) {
-        if (strict) {
-          throw new Error(
-            `[DevicesDAGNode] async handler is not supported at "${path}". DAG handlers must be synchronous.`,
-          );
-        }
-        console.warn(
-          `[DevicesDAGNode] async handler at "${path}" was ignored. DAG handlers must be synchronous.`,
-        );
-        rawResult = undefined;
-      }
-    }
-
-    const result =
-      typeof handler === "function"
-        ? normalizeHandlerResult(rawResult)
-        : {
-            packets: [new SignalPacket("", pkt.signals)],
-            explicitPackets: false,
-          };
+    // 1. 调用 handler 并规整结果
+    const result = this._invoke(pkt, {
+      path,
+      services: mergedServices,
+      acc: inheritedAcc,
+      depth,
+      dag,
+      strict,
+    });
 
     const { layer: mergedAcc, changed: accChanged } = mergeContextLayer(
       inheritedAcc,
@@ -426,34 +397,217 @@ class DevicesDAGNode {
       },
     );
 
+    /**
+     * 构造分发返回值（仅在实际变更时携带上下文层）
+     * @param {SignalPacket[]} packets - 收集到的信号包
+     * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }}
+     */
+    const buildReturn = (packets) => ({
+      packets,
+      services: servicesChanged ? mergedServices : undefined,
+      acc: accChanged ? mergedAcc : undefined,
+    });
+
+    // 2. 终止分支
     if (result.stop) {
-      pushTrace({
-        hadHandler: typeof handler === "function",
+      this._trace(trace, {
+        path,
+        depth,
+        hadHandler: hasHandler,
         action: "stop",
         packetsCount: result.packets.length,
         deferredCount: 0,
       });
-      return {
-        packets: result.packets,
-        services: servicesChanged ? mergedServices : undefined,
-        acc: accChanged ? mergedAcc : undefined,
-      };
+      return buildReturn(result.packets);
     }
 
     if (result.explicitPackets && result.packets.length === 0) {
-      pushTrace({
-        hadHandler: typeof handler === "function",
+      this._trace(trace, {
+        path,
+        depth,
+        hadHandler: hasHandler,
         action: "stop-empty",
         packetsCount: 0,
         deferredCount: 0,
       });
+      return buildReturn([]);
+    }
+
+    // 3. 路由决策：确定下一跳路径段、主包、终结包与延迟包
+    const routing = this._route(result, {
+      path,
+      routeSegments: remainingSegments ?? normalizePath(pkt.to || ""),
+      currentPacket: pkt,
+    });
+
+    /**
+     * 分发延迟信号包并收集其结果
+     * @returns {SignalPacket[]}
+     */
+    const drainDeferred = () =>
+      this._drainDeferred(routing.deferredPackets, {
+        path,
+        services: mergedServices,
+        acc: mergedAcc,
+        depth: depth + 1,
+        maxDepth,
+        dag,
+        strict,
+        trace,
+      });
+
+    // 4. 无剩余路径段 → 叶子节点
+    if (routing.routeSegments.length === 0) {
+      this._trace(trace, {
+        path,
+        depth,
+        hadHandler: hasHandler,
+        action: "leaf",
+        packetsCount: routing.finalPackets.length,
+        deferredCount: routing.deferredPackets.length,
+      });
+      return buildReturn([...routing.finalPackets, ...drainDeferred()]);
+    }
+
+    const firstSegment = routing.routeSegments[0];
+    const edge = this.outEdges.get(firstSegment);
+
+    if (!edge) {
+      this._trace(trace, {
+        path,
+        depth,
+        hadHandler: hasHandler,
+        action: "edge-not-found",
+        nextSegment: firstSegment,
+        packetsCount: routing.finalPackets.length,
+        deferredCount: routing.deferredPackets.length,
+      });
+      const allCollected = [...routing.finalPackets, ...drainDeferred()];
+      if (allCollected.length > 0) {
+        return buildReturn(allCollected);
+      }
+      const fallback = edgeNotFoundFallback
+        ? edgeNotFoundFallback(routing.currentPacket)
+        : [];
+      return buildReturn(fallback);
+    }
+
+    this._trace(trace, {
+      path,
+      depth,
+      hadHandler: hasHandler,
+      action: result.redirect ? "redirect" : "route",
+      nextSegment: firstSegment,
+      packetsCount: result.packets.length,
+      deferredCount: routing.deferredPackets.length,
+      accKeys: result.acc ? Object.keys(result.acc) : [],
+    });
+
+    const nextDepth = depth + 1;
+    if (nextDepth > maxDepth) {
+      throw new Error(
+        `Dispatch depth exceeded (${maxDepth}). Possible cycle detected.`,
+      );
+    }
+
+    // 5. 沿出边递归到子节点
+    const childResult = edge.target.dispatch(routing.currentPacket, {
+      path: joinPath(path, firstSegment),
+      services: mergedServices,
+      acc: mergedAcc,
+      depth: nextDepth,
+      maxDepth,
+      dag,
+      strict,
+      trace,
+      edgeNotFoundFallback,
+      remainingSegments: routing.routeSegments.slice(1),
+    });
+
+    return {
+      packets: [
+        ...routing.finalPackets,
+        ...childResult.packets,
+        ...drainDeferred(),
+      ],
+      services:
+        childResult.services || (servicesChanged ? mergedServices : undefined),
+      acc: childResult.acc || (accChanged ? mergedAcc : undefined),
+    };
+  }
+
+  /**
+   * 调用本节点 handler 并规整其结果
+   * @description
+   * 无 handler 的节点（如 ghost）返回透传结果，将信号原样交给后续路由。
+   * handler 抛错时 strict 模式直接抛出，否则记录错误并按无结果处理；
+   * 返回 Promise 的 async handler 在 strict 模式抛错，否则告警并忽略。
+   * @param {SignalPacket} pkt - 输入信号包
+   * @param {Object} options - 调用选项
+   * @param {string} options.path - 当前节点路径
+   * @param {Object} options.services - 合并后的静态服务上下文
+   * @param {Object} options.acc - 继承的累积上下文
+   * @param {number} options.depth - 当前递归深度
+   * @param {Object|null} options.dag - 所属 DAG 实例
+   * @param {boolean} options.strict - strict 模式下 handler 报错直接抛出
+   * @returns {import("./dag.js").DevicesDAGHandlerResult} 规整后的 handler 结果
+   * @private
+   */
+  _invoke(pkt, { path, services, acc, depth, dag, strict }) {
+    const handler = this.getHandler?.() ?? this.handler;
+    if (typeof handler !== "function") {
       return {
-        packets: [],
-        services: servicesChanged ? mergedServices : undefined,
-        acc: accChanged ? mergedAcc : undefined,
+        packets: [new SignalPacket("", pkt.signals)],
+        explicitPackets: false,
       };
     }
 
+    const handlerContext = this._buildHandlerContext(pkt, {
+      path,
+      services,
+      acc,
+      depth,
+      dag,
+    });
+
+    let rawResult;
+    try {
+      rawResult = handler(pkt, handlerContext);
+    } catch (error) {
+      if (strict) throw error;
+      nodeLog.error(`handler error at "${path}":`, error);
+      rawResult = undefined;
+    }
+    if (rawResult instanceof Promise) {
+      if (strict) {
+        throw new Error(
+          `[DevicesDAGNode] async handler is not supported at "${path}". DAG handlers must be synchronous.`,
+        );
+      }
+      nodeLog.warn(
+        `async handler at "${path}" was ignored. DAG handlers must be synchronous.`,
+      );
+      rawResult = undefined;
+    }
+
+    return normalizeHandlerResult(rawResult);
+  }
+
+  /**
+   * 根据 handler 结果决策下一跳路由
+   * @description
+   * 依次处理 `redirect` 改写、主包/延迟包拆分、`defaultRoute` 兜底，
+   * 产出继续下钻所需的路径段、当前包，以及不再下钻的终结包与延迟包。
+   * 所有 `to` 必须是相对路径，绝对路径直接抛错。
+   * @param {import("./dag.js").DevicesDAGHandlerResult} result - 规整后的 handler 结果
+   * @param {Object} options - 路由选项
+   * @param {string} options.path - 当前节点路径（用于错误信息）
+   * @param {string[]} options.routeSegments - 剩余路径段
+   * @param {SignalPacket} options.currentPacket - 当前信号包
+   * @returns {{ routeSegments: string[], currentPacket: SignalPacket, finalPackets: SignalPacket[], deferredPackets: SignalPacket[] }}
+   * @private
+   */
+  _route(result, { path, routeSegments, currentPacket }) {
     const finalPackets = [];
     const deferredPackets = [];
 
@@ -501,112 +655,39 @@ class DevicesDAGNode {
       }
     }
 
-    const deferredResults = [];
-
-    const flushDeferredRoutes = () => {
-      for (const deferredPkt of deferredPackets) {
-        const subResult = this._routeFrom(deferredPkt, {
-          path,
-          services: mergedServices,
-          acc: mergedAcc,
-          depth: depth + 1,
-          maxDepth,
-          dag,
-          strict,
-          trace,
-        });
-        if (subResult.packets.length > 0) {
-          deferredResults.push(...subResult.packets);
-        }
-      }
-    };
-
-    if (routeSegments.length === 0) {
-      pushTrace({
-        hadHandler: typeof handler === "function",
-        action: "leaf",
-        packetsCount: finalPackets.length,
-        deferredCount: deferredPackets.length,
-      });
-      flushDeferredRoutes();
-      return {
-        packets: [...finalPackets, ...deferredResults],
-        services: servicesChanged ? mergedServices : undefined,
-        acc: accChanged ? mergedAcc : undefined,
-      };
-    }
-
-    const firstSegment = routeSegments[0];
-    const edge = this.outEdges.get(firstSegment);
-
-    if (!edge) {
-      pushTrace({
-        hadHandler: typeof handler === "function",
-        action: "edge-not-found",
-        nextSegment: firstSegment,
-        packetsCount: finalPackets.length,
-        deferredCount: deferredPackets.length,
-      });
-      flushDeferredRoutes();
-      const allCollected = [...finalPackets, ...deferredResults];
-      if (allCollected.length > 0) {
-        return {
-          packets: allCollected,
-          services: servicesChanged ? mergedServices : undefined,
-          acc: accChanged ? mergedAcc : undefined,
-        };
-      }
-      const fallback = edgeNotFoundFallback
-        ? edgeNotFoundFallback(currentPacket)
-        : [];
-      return {
-        packets: fallback,
-        services: servicesChanged ? mergedServices : undefined,
-        acc: accChanged ? mergedAcc : undefined,
-      };
-    }
-
-    pushTrace({
-      hadHandler: typeof handler === "function",
-      action: result.redirect ? "redirect" : "route",
-      nextSegment: firstSegment,
-      packetsCount: result.packets.length,
-      deferredCount: deferredPackets.length,
-      accKeys: result.acc ? Object.keys(result.acc) : [],
-    });
-
-    const child = edge.target;
-    const childPath = joinPath(path, firstSegment);
-    const childRemaining = routeSegments.slice(1);
-    const nextDepth = depth + 1;
-    if (nextDepth > maxDepth) {
-      throw new Error(
-        `Dispatch depth exceeded (${maxDepth}). Possible cycle detected.`,
-      );
-    }
-
-    const childResult = child.dispatch(currentPacket, {
-      path: childPath,
-      services: mergedServices,
-      acc: mergedAcc,
-      depth: nextDepth,
-      maxDepth,
-      dag,
-      strict,
-      trace,
-      edgeNotFoundFallback,
-      remainingSegments: childRemaining,
-    });
-
-    flushDeferredRoutes();
-
-    return {
-      packets: [...finalPackets, ...childResult.packets, ...deferredResults],
-      services:
-        childResult.services || (servicesChanged ? mergedServices : undefined),
-      acc: childResult.acc || (accChanged ? mergedAcc : undefined),
-    };
+    return { routeSegments, currentPacket, finalPackets, deferredPackets };
   }
+
+  /**
+   * 分发延迟信号包并收集其结果
+   * @description 额外信号包通过 {@link DevicesDAGNode#_routeFrom} 从当前节点延迟分发。
+   * @param {SignalPacket[]} deferredPackets - 延迟信号包列表
+   * @param {Object} options - 路由选项（同 {@link DevicesDAGNode#_routeFrom}）
+   * @returns {SignalPacket[]} 延迟分发收集到的信号包
+   * @private
+   */
+  _drainDeferred(deferredPackets, options) {
+    const results = [];
+    for (const deferredPkt of deferredPackets) {
+      const subResult = this._routeFrom(deferredPkt, options);
+      if (subResult.packets.length > 0) {
+        results.push(...subResult.packets);
+      }
+    }
+    return results;
+  }
+
+  /**
+   * 向 trace 收集器推送一条记录（仅在 trace 启用时生效）
+   * @param {Array|null} trace - 路由追踪收集器
+   * @param {Object} entry - trace 条目
+   * @returns {void}
+   * @private
+   */
+  _trace(trace, entry) {
+    if (trace) trace.push(entry);
+  }
+
 
   /**
    * 从此节点路由信号包（不处理本节点 handler）
