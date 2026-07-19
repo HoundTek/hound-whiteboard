@@ -2,7 +2,12 @@
 
 ## 概述
 
-`MultiToolWrapper` 是一个泛型包装器，位于 `Tool` 之上。它将一条多指输入流按 `touchId` 分流为多个独立节点图，使设备图保持静态的同时支持多指并发。
+`MultiToolWrapper` 是一个泛型**包装器工具（wrapper tool）**，位于 `Tool` 之上。
+它将一条多指输入流按 `touchId` 分流为多个独立节点图，使设备图保持静态的同时支持多指并发。
+
+作为 wrapper tool，它继承 `Tool` 的全部生命周期钩子（`beginAction`、`completeAction`、
+`endAction` 等），供 tool-switcher 等外部编排统一调用；但 `process()` 不直接消费信号修改白板，
+而是将信号委托给内部动态管理的子工具实例。
 
 ### 解决的问题
 
@@ -92,9 +97,10 @@ touch 的触点数在设计期未知。如果用"动态挂载工具"的方案，
 使用 `createSubDAG` + `DevicesDAGNode.createGraph` 构建每触点的子图模板：
 
 ```js
-import { MultiToolWrapper } from "./tools/multi-tool-wrapper.js";
-import { DevicesDAGNode } from "../dag-node-edge.js";
-import { createSubDAG } from "../index.js";
+import { MultiToolWrapper } from "./tools/wrapper/multi-tool-wrapper.js";
+import { DevicesDAGNode } from "./dag-node-edge.js";
+import { createSubDAG } from "./index.js";
+import { StrokeCreatorTool } from "./tools/creator/stroke-creator-tool.js";
 
 const multiStroke = new MultiToolWrapper((touchId) => {
   const builder = createSubDAG("/touch");
@@ -169,6 +175,6 @@ per-touch 子图通过 `DevicesDAGNode.createGraph()` 创建，脱离主 DAG 运
 
 ## 相关文档
 
-- [touchscreen-device 文档](../../devices/docs/device-document.md)
-- [tool-document.md](./tool-document.md)
-- [gesture-tool-document.md](./gesture-tool-document.md)
+- [touchscreen-device 文档](../../../devices/docs/device-document.md)
+- [工具基类文档（含 wrapper tool 说明）](../../docs/tool-document.md)
+- [手势工具基类](../../docs/gesture-tool-document.md)

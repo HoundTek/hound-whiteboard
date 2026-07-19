@@ -1,14 +1,16 @@
 /**
  * @file MultiToolWrapper 测试
+ * @description 包装器工具：将 touch-contacts 信号按 touchId 分流为独立子图。
+ * @module core/ui-thread/devices-dag/tools/wrapper/tests/multi-tool-wrapper
  * @author Zhou Chenyu
  */
 
 import { jest } from "@jest/globals";
 import { MultiToolWrapper } from "../multi-tool-wrapper.js";
-import { Tool } from "../tool.js";
-import { DevicesDAGNode } from "../../dag-node-edge.js";
-import { createSubDAG } from "../../index.js";
-import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../devices/touchscreen-device.js";
+import { Tool } from "../../tool.js";
+import { DevicesDAGNode } from "../../../dag-node-edge.js";
+import { createSubDAG } from "../../../index.js";
+import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../../devices/touchscreen-device.js";
 
 /**
  * 记录调用历史的 Mock 工具

@@ -11,7 +11,7 @@ import { createKeyboardDevice } from "../../core/ui-thread/devices-dag/devices/k
 import { StrokeCreatorTool } from "../../core/ui-thread/devices-dag/tools/creator/stroke-creator.js";
 import { DevicesDAGNode } from "../../core/ui-thread/devices-dag/dag-node-edge.js";
 import { createSubDAG } from "../../core/ui-thread/devices-dag/index.js";
-import { MultiToolWrapper } from "../../core/ui-thread/devices-dag/tools/multi-tool-wrapper.js";
+import { MultiToolWrapper } from "../../core/ui-thread/devices-dag/tools/wrapper/multi-tool-wrapper.js";
 import { DEMO_STROKE_WIDTH, DEMO_WORKFLOW_NAMES } from "./constants.js";
 
 /**

@@ -1,14 +1,14 @@
 /**
  * @file 多工具并发的 wrapper
  * @description 将一条多指输入流按 touchId 分流为多个独立子图的泛型包装器。
- * @module core/ui-thread/devices-dag/tools/multi-tool-wrapper
+ * @module core/ui-thread/devices-dag/tools/wrapper/multi-tool-wrapper
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../signal.js";
-import { Tool } from "./tool.js";
-import { DevicesDAGNode } from "../dag-node-edge.js";
-import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../devices/touchscreen-device.js";
+import { SignalPacket } from "../../signal.js";
+import { Tool } from "../tool.js";
+import { DevicesDAGNode } from "../../dag-node-edge.js";
+import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../devices/touchscreen-device.js";
 
 /**
  * 多工具并发包装工具
@@ -24,6 +24,11 @@ import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../devices/touchscreen-device.j
  * - 触点抬起 → 送 end 信号，销毁节点
  *
  * 目的是在设备图保持静态（不动态挂载/卸载节点）的前提下实现多指并发。
+ *
+ * `MultiToolWrapper` 属于**包装器工具（wrapper tool）**子类型——它继承 `Tool` 的全部
+ * 生命周期钩子，但本身不直接消费信号修改白板，而是将信号委托给内部子工具实例。
+ * 对外部编排（如 tool-switcher）而言，它呈现为普通的 `Tool` 接口（`beginAction`、
+ * `completeAction`、`endAction`），内部则管理一组动态子图。
  *
  * @example
  * // 单工具 per touch：工厂函数包装 Tool 成节点
@@ -96,7 +101,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 处理 touch-contacts 信号，将每个触点分发给对应的子图
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [deviceContext={}] - 设备图处理器上下文
+   * @param {import("../../dag.js").DevicesDAGHandlerContext} [deviceContext={}] - 设备图处理器上下文
    * @returns {void}
    */
   process(signalPacket, deviceContext = {}) {
@@ -139,7 +144,7 @@ class MultiToolWrapper extends Tool {
 
   /**
    * 构造子图 dispatch 所需的上下文选项
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext|Object} [context={}] - 外层设备上下文
+   * @param {import("../../dag.js").DevicesDAGHandlerContext|Object} [context={}] - 外层设备上下文
    * @returns {Object}
    */
   #buildDispatchContext(context = {}) {
@@ -251,7 +256,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 动作开始
    * @description 首个触点到达时触发。外部 tool-switcher 也可通过此方法同步状态。
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   beginAction(context = {}) {
@@ -262,7 +267,7 @@ class MultiToolWrapper extends Tool {
    * 动作完成（提交所有子工具结果）
    * @description 最后一个触点抬起时自动触发；外部 tool-switcher 也可通过此方法强制结束。
    * 向所有活跃子图发送 end 信号，然后递归清理。
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   completeAction(context = {}) {
@@ -279,7 +284,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 动作取消（丢弃所有子工具结果）
    * @description 向所有活跃子图发送 cancel 信号，然后递归清理并重置。
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   cancelAction(context = {}) {
@@ -296,7 +301,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 优雅结束当前动作
    * @description 向所有活跃子图发送 end 信号并清理。
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   endAction(context = {}) {
