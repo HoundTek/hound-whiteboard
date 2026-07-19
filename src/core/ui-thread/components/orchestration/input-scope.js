@@ -16,7 +16,7 @@ import { joinPath } from "../../../engine/utils/path.js";
  * @description
  * InputScope 是 Viewport 下设备子图与工具 workflow 的接线入口，职责如下：
  * - `mountDevice` — 挂载设备子图（mouse / keyboard / touchscreen 等）
- * - `mountWorkflow` — 挂载工具 workflow（笔画 / 选择 / 视口控制等）
+ * - `mountWorkflow` — 挂载工具 workflow（支持嵌套路径，可挂到子图内部节点）
  * - `addEdge` — 在设备与 workflow 之间建立信号通路（支持边级 prefix）
  * - `removeEdge` / `unmountWorkflow` — 拆除信号通路
  *
@@ -108,11 +108,20 @@ class InputScope {
    * @description
    * 将 workflow（Tool 实例或 SubDAGDefinition）挂载到
    * `/{viewportId}/workflows/{name}` 路径下。
-   * @param {string} name - workflow 名（如 "stroke"/"view-control"）
+   * name 支持嵌套路径（如 "tool-switcher/stroke"），可将工具挂到子图内部的
+   * 透传节点（如 tool-switcher 的子节点）。
+   * 挂载走完整契约：tool 实例注册（禁止重复挂载）、`semantics.tool` 标记、
+   * umount 钩子链（`processor.dispose → tool.umount → 原钩子`）。
+   * 禁止绕过本方法直接给 `node.handler` 赋值。
+   * @param {string} name - workflow 名，支持嵌套路径（如 "stroke"、"tool-switcher/stroke"）
    * @param {import("../../devices-dag/dag.js").Tool|import("../../devices-dag/dag.js").SubDAGDefinition} workflow - workflow 或子图定义
    * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode|import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]}
    */
   mountWorkflow(name, workflow) {
+    if (typeof name !== "string" || !name) {
+      throw new TypeError("mountWorkflow requires a non-empty name.");
+    }
+
     const path = joinPath("/", this._viewportId, "workflows", name);
     return this._dag.mountWorkflow(path, workflow);
   }

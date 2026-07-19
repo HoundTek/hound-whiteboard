@@ -7,7 +7,7 @@
 职责：
 
 - 提供 `mountDevice(name, subDAG)` 挂载设备子图
-- 提供 `mountWorkflow(name, workflow)` 挂载工具 workflow
+- 提供 `mountWorkflow(name, workflow)` 挂载工具 workflow（name 支持嵌套路径）
 - 提供 `addEdge({ from, to, name?, prefix? })` 建立设备到 workflow 的信号通路
 - 提供 `removeEdge` / `unmountWorkflow` 拆除信号通路
 - 所有路径自动补全 `/{viewportId}/` 前缀，调用方只写相对于视口根的路径
@@ -30,6 +30,7 @@ InputScope 的所有方法自动在路径前拼接 `/{viewportId}`：
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `mountDevice("mouse", subDAG)`                                                    | `/{vpId}/mouse`                                                                      |
 | `mountWorkflow("stroke", tool)`                                                   | `/{vpId}/workflows/stroke`                                                           |
+| `mountWorkflow("switcher/stroke", tool)`                                          | `/{vpId}/workflows/switcher/stroke`（嵌套路径，挂到子图内部节点）                    |
 | `addEdge({ from: "mouse/primary", to: "workflows/stroke" })`                      | `/{vpId}/mouse/primary` ──"default"──→ `/{vpId}/workflows/stroke`                    |
 | `addEdge({ from: "keyboard/code/Space", to: "workflows/random-circle", prefix })` | 挂 prefix 于 `/{vpId}/keyboard/code/Space`，再连到 `/{vpId}/workflows/random-circle` |
 | `addEdge({ from: "mouse/primary", to: "workflows/stroke", name: "tool" })`        | 使用边名 `tool` 而非默认的 `default`                                                 |
@@ -50,10 +51,28 @@ scope.mountDevice("keyboard", createKeyboardDevice());
 
 挂载 tool 或 SubDAGDefinition 到 `workflows/{name}`。
 
+`name` 支持嵌套路径（如 `"tool-switcher/stroke"`），典型场景是把工具挂到
+prefix 子图内部的透传节点（如 tool-switcher 的子节点）。所有 Tool 都挂载在
+`/{vpId}/workflows/...` 之下。
+
+挂载走完整契约：tool 实例注册（禁止重复挂载）、`semantics.tool` 标记、
+umount 钩子链（`processor.dispose → tool.umount → 原钩子`）。目标节点已有
+handler 时抛错。
+
 ```javascript
 scope.mountWorkflow("stroke", new StrokeCreatorTool({...}));
 scope.mountWorkflow("random-circle", createRandomCircleSubDAG({...}));
+
+// 把笔画工具挂到 tool-switcher 的 stroke 透传子节点
+scope.mountWorkflow("tool-switcher/stroke", strokeTool);
+
+// handoff 子图挂到 tool-switcher 的 select 透传子节点
+scope.mountWorkflow("tool-switcher/select", createHandoffSubDAG({...}));
 ```
+
+> **约定**：节点的 `handler` 只允许通过 `mountWorkflow`（或子图定义中的
+> `builder.node().handler()`）写入。禁止直接给 `node.handler` 赋值——那会绕过
+> 实例注册与 umount 钩子链，导致卸载行为不一致。
 
 ### addEdge({ from, to, name?, prefix? })
 
@@ -63,7 +82,8 @@ scope.mountWorkflow("random-circle", createRandomCircleSubDAG({...}));
 - `name` — 边名，默认 `"default"`
 - `prefix` — 可选边级 prefix 子图定义
 
-`to` 可省略。省略时创建匿名目标节点，返回的 `DevicesDAGEdge.target` 可供后续挂 handler。
+`to` 可省略。省略时创建匿名目标节点，返回的 `DevicesDAGEdge.target` 可供后续接线参考。
+如需在目标节点上挂工具，请使用 `mountWorkflow` 而非直接给 `node.handler` 赋值。
 
 ```javascript
 // 简单直连
@@ -82,10 +102,6 @@ scope.addEdge({
   to: "workflows/stroke",
   name: "tool",
 });
-
-// 创建匿名目标节点
-const edge = scope.addEdge({ from: "workflows/switcher/stroke" });
-edge.target.handler = strokeProcessor;
 ```
 
 ### removeEdge({ from, edge? })

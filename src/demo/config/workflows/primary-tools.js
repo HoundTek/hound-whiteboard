@@ -41,8 +41,9 @@ function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
  * @description
  * 在 mouse/primary 下游挂载 tool-switcher，按当前激活工具名路由到笔画/圆/选择+修改三个子分支；
  * 同时挂载按钮组设备并建立 toolbar/button-group → tool-switcher 的双输入汇聚。
- * 本函数只做 DAG 装配，不读取 DOM；工具列表与激活回调由调用方传入。
- * @param {import("../../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
+ * 各工具通过 `inputScope.mountWorkflow` 的嵌套路径直接挂到 tool-switcher 的透传子节点上，
+ * 保证实例注册与 umount 钩子链完整。本函数只做 DAG 装配，不读取 DOM；
+ * 工具列表与激活回调由调用方传入。
  * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {Object} options - 配置项
  * @param {Array<{ name: string }>} options.tools - 工具列表
@@ -51,8 +52,7 @@ function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
  * @param {(activeTool: string) => void} [options.onToolChange] - 工具切换回调
  * @returns {void}
  */
-function mountToolSwitcher(board, viewport, options) {
-  const vpId = viewport.viewportId;
+function mountToolSwitcher(viewport, options) {
   const { tools, defaultTool, primaryStrokeTool, onToolChange } = options;
 
   const scope = viewport.inputScope;
@@ -75,44 +75,35 @@ function mountToolSwitcher(board, viewport, options) {
     to: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}`,
   });
 
-  // 3. 笔画分支 — 仅从 tool-switcher/stroke → default 可达
-  const strokeEdge = scope.addEdge({
-    from: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.STROKE}`,
-  });
-  const strokeNode = strokeEdge.target;
-  const strokeProcessor = primaryStrokeTool.createProcessor();
-  strokeNode.handler = strokeProcessor;
-  strokeNode.semantics = { ...strokeNode.semantics, tool: true };
+  // 3. 笔画分支 — 挂到 tool-switcher/stroke 透传子节点
+  scope.mountWorkflow(
+    `${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.STROKE}`,
+    primaryStrokeTool,
+  );
 
-  // 4. 圆分支 — 仅从 tool-switcher/circle → default 可达
+  // 4. 圆分支 — 挂到 tool-switcher/circle 透传子节点
   const circleCreatorTool = new CircleCreatorTool({
     property: {
       strokeColor: DEMO_CIRCLE_STROKE_COLOR,
       strokeWidth: DEMO_STROKE_WIDTH,
     },
   });
-  const circleEdge = scope.addEdge({
-    from: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.CIRCLE}`,
-  });
-  const circleNode = circleEdge.target;
-  const circleProcessor = circleCreatorTool.createProcessor();
-  circleNode.handler = circleProcessor;
-  circleNode.semantics = { ...circleNode.semantics, tool: true };
+  scope.mountWorkflow(
+    `${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.CIRCLE}`,
+    circleCreatorTool,
+  );
 
-  // 5. 选择+修改分支（handoff）— 仅从 tool-switcher/select → default 可达
+  // 5. 选择+修改分支（handoff）— 挂到 tool-switcher/select 透传子节点
   const selectHandoffSubDAG = createHandoffSubDAG({
     rootPath: `/`,
     first: new RectangleObjectChooserTool(),
     second: new CommonObjectModifierTool(),
     autoBridgeObjects: true,
   });
-  const selectEdge = scope.addEdge({
-    from: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.SELECT}`,
-  });
-  board.devicesDAG.mountSubDAG("", {
-    ...selectHandoffSubDAG,
-    rootPath: selectEdge.target.path,
-  });
+  scope.mountWorkflow(
+    `${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}/${DEMO_TOOL_NAMES.SELECT}`,
+    selectHandoffSubDAG,
+  );
 
   // 6. 双输入汇聚：toolbar/button-group → tool-switcher
   scope.addEdge({

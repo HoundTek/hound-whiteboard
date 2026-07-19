@@ -94,7 +94,7 @@ async function bootstrapWhiteboard() {
 
   const toolbar = attachToolbarAdapter(board, viewport);
   if (toolbar) {
-    mountToolSwitcher(board, viewport, {
+    mountToolSwitcher(viewport, {
       tools: toolbar.tools,
       defaultTool: toolbar.defaultTool,
       primaryStrokeTool: demoResults.primaryStrokeTool,
