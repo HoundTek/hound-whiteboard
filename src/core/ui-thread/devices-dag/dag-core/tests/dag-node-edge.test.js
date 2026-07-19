@@ -1,4 +1,4 @@
-import { DevicesDAGNode, DevicesDAGEdge } from "../index.js";
+import { DevicesDAGNode, DevicesDAGEdge } from "../../index.js";
 
 describe("DevicesDAGNode", () => {
   describe("构造与初始状态", () => {

@@ -117,7 +117,7 @@ class TestGestureTool extends GestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    */
   beforeAction(context) {
@@ -126,7 +126,7 @@ class TestGestureTool extends GestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {*}
    */
   performAction(context) {
@@ -135,7 +135,7 @@ class TestGestureTool extends GestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {*} result - 动作结果
    */
   afterAction(context, result) {
@@ -144,14 +144,14 @@ class TestGestureTool extends GestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    */
   discardAction(context) {
     this.calls.push(["discardAction", context.path ?? ""]);
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    */
   clearOverlayState(context = {}) {
     this.calls.push(["clearOverlayState", context.path ?? ""]);
@@ -266,7 +266,7 @@ class TestMultiGestureTool extends MultiGestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    */
   beforeAction(context) {
@@ -275,7 +275,7 @@ class TestMultiGestureTool extends MultiGestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {*}
    */
   performAction(context) {
@@ -284,7 +284,7 @@ class TestMultiGestureTool extends MultiGestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {*} result - 动作结果
    */
   afterAction(context, result) {
@@ -293,14 +293,14 @@ class TestMultiGestureTool extends MultiGestureTool {
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    */
   discardAction(context) {
     this.calls.push(["discardAction", context.path ?? ""]);
   }
 
   /**
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    */
   clearOverlayState(context = {}) {
     this.calls.push(["clearOverlayState", context.path ?? ""]);

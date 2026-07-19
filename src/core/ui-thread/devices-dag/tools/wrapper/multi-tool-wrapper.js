@@ -5,9 +5,9 @@
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../../signal.js";
+import { SignalPacket } from "../../dag-core/signal.js";
 import { Tool } from "../tool.js";
-import { DevicesDAGNode } from "../../dag-node-edge.js";
+import { DevicesDAGNode } from "../../dag-core/dag-node-edge.js";
 import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../devices/touchscreen-device.js";
 
 /**
@@ -101,7 +101,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 处理 touch-contacts 信号，将每个触点分发给对应的子图
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../../dag.js").DevicesDAGHandlerContext} [deviceContext={}] - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [deviceContext={}] - 设备图处理器上下文
    * @returns {void}
    */
   process(signalPacket, deviceContext = {}) {
@@ -144,7 +144,7 @@ class MultiToolWrapper extends Tool {
 
   /**
    * 构造子图 dispatch 所需的上下文选项
-   * @param {import("../../dag.js").DevicesDAGHandlerContext|Object} [context={}] - 外层设备上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext|Object} [context={}] - 外层设备上下文
    * @returns {Object}
    */
   #buildDispatchContext(context = {}) {
@@ -256,7 +256,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 动作开始
    * @description 首个触点到达时触发。外部 tool-switcher 也可通过此方法同步状态。
-   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   beginAction(context = {}) {
@@ -267,7 +267,7 @@ class MultiToolWrapper extends Tool {
    * 动作完成（提交所有子工具结果）
    * @description 最后一个触点抬起时自动触发；外部 tool-switcher 也可通过此方法强制结束。
    * 向所有活跃子图发送 end 信号，然后递归清理。
-   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   completeAction(context = {}) {
@@ -284,7 +284,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 动作取消（丢弃所有子工具结果）
    * @description 向所有活跃子图发送 cancel 信号，然后递归清理并重置。
-   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   cancelAction(context = {}) {
@@ -301,7 +301,7 @@ class MultiToolWrapper extends Tool {
   /**
    * 优雅结束当前动作
    * @description 向所有活跃子图发送 end 信号并清理。
-   * @param {import("../../dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   endAction(context = {}) {

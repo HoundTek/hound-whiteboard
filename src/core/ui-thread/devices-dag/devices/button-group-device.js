@@ -6,7 +6,7 @@
  */
 
 import { createSubDAG } from "../index.js";
-import { SignalPacket } from "../signal.js";
+import { SignalPacket } from "../dag-core/signal.js";
 import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
 
 /**
@@ -30,7 +30,7 @@ const BUTTON_GROUP_DEVICE_SIGNAL_TYPES = Object.freeze({
  * @param {Array<{name: string}>} [options.tools] - 允许的工具名列表（空数组时不校验）
  * @param {string} [options.defaultTool] - 默认激活工具，省略时使用 tools[0].name
  * @param {(state: {activeTool: string}) => void} [options.onUpdate] - 按钮状态变更回调（输出信道→DOM）
- * @returns {import("../dag.js").SubDAGDefinition & {
+ * @returns {import("../dag-type.js").SubDAGDefinition & {
  *   getState: () => { activeTool: string },
  *   resetState: () => void,
  * }}
@@ -52,8 +52,8 @@ function createButtonGroupDevice(options = {}) {
    * 3. 通知 DOM 回调
    * 4. 发出 tool-switch 信号到下游（tool-switcher prefix）
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../dag.js").DevicesDAGHandlerContext} ctx - 设备图处理器上下文
-   * @returns {import("../dag.js").DevicesDAGHandlerResult}
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} ctx - 设备图处理器上下文
+   * @returns {import("../dag-type.js").DevicesDAGHandlerResult}
    */
   const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "" });

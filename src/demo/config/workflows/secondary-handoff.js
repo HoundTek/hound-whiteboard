@@ -23,7 +23,7 @@ import {
  * 构建键盘 trigger → 指定类型信号的转发 prefix handler
  * @description Enter 转 success、Escape 转 cancel，路由到 handoff modifier 阶段。
  * @param {string} targetType - 目标信号类型
- * @returns {{ handler: import("../../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildSignalForwardNodeConfig(targetType) {
   return {

@@ -52,7 +52,7 @@ class InputScope {
 
   /**
    * 白板级设备图
-   * @type {import("../../devices-dag/dag.js").DevicesDAG}
+   * @type {import("../../devices-dag/dag-type.js").DevicesDAG}
    */
   _dag;
 
@@ -77,7 +77,7 @@ class InputScope {
 
   /**
    * 获取白板级设备图
-   * @type {import("../../devices-dag/dag.js").DevicesDAG}
+   * @type {import("../../devices-dag/dag-type.js").DevicesDAG}
    */
   get dag() {
     return this._dag;
@@ -89,8 +89,8 @@ class InputScope {
    * 将子图定义挂载到 `/{viewportId}/{name}` 路径下。
    * name 为空时使用子图自身的 rootPath（兼容旧子图定义）。
    * @param {string} name - 设备名（如 "mouse"/"keyboard"）
-   * @param {import("../../devices-dag/dag.js").SubDAGDefinition} subDAG - 设备子图定义
-   * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]}
+   * @param {import("../../devices-dag/dag-type.js").SubDAGDefinition} subDAG - 设备子图定义
+   * @returns {import("../../devices-dag/dag-type.js").DevicesDAGNode[]}
    */
   mountDevice(name, subDAG) {
     if (!subDAG || typeof subDAG !== "object") {
@@ -114,8 +114,8 @@ class InputScope {
    * umount 钩子链（`processor.dispose → tool.umount → 原钩子`）。
    * 禁止绕过本方法直接给 `node.handler` 赋值。
    * @param {string} name - workflow 名，支持嵌套路径（如 "stroke"、"tool-switcher/stroke"）
-   * @param {import("../../devices-dag/dag.js").Tool|import("../../devices-dag/dag.js").SubDAGDefinition} workflow - workflow 或子图定义
-   * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode|import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]}
+   * @param {import("../../devices-dag/dag-type.js").Tool|import("../../devices-dag/dag-type.js").SubDAGDefinition} workflow - workflow 或子图定义
+   * @returns {import("../../devices-dag/dag-type.js").DevicesDAGNode|import("../../devices-dag/dag-type.js").DevicesDAGNode[]}
    */
   mountWorkflow(name, workflow) {
     if (typeof name !== "string" || !name) {
@@ -137,7 +137,7 @@ class InputScope {
    * @param {string} [options.to=""] - 目标节点路径（相对于视口根，如 "workflows/stroke"）
    * @param {string} [options.name="default"] - 边名
    * @param {Object} [options.prefix] - 边级 prefix 子图定义
-   * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGEdge|undefined}
+   * @returns {import("../../devices-dag/dag-type.js").DevicesDAGEdge|undefined}
    */
   addEdge({ from, to = "", name = "default", prefix }) {
     if (typeof from !== "string") {
@@ -193,8 +193,8 @@ class InputScope {
 
   /**
    * 在已挂载的单源单汇子图中找到汇节点（入度>0 且出度为 0 或其出边目标不在集合内）
-   * @param {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode[]} nodes - 子图节点列表
-   * @returns {import("../../devices-dag/dag-node-edge.js").DevicesDAGNode|undefined}
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGNode[]} nodes - 子图节点列表
+   * @returns {import("../../devices-dag/dag-type.js").DevicesDAGNode|undefined}
    * @private
    */
   _findPrefixSink(nodes) {

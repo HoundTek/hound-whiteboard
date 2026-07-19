@@ -6,9 +6,9 @@ import {
   createSubDAG,
   traceToString,
   profileFromTrace,
-} from "../index.js";
+} from "../../index.js";
 import { SignalPacket } from "../signal.js";
-import { logBus } from "../../../../utils/log/log-bus.js";
+import { logBus } from "../../../../../utils/log/log-bus.js";
 
 // DevicesDAG 核心测试
 

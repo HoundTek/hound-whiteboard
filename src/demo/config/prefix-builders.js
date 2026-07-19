@@ -11,7 +11,7 @@ import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/d
  * 构建键盘触发信号转发 prefix handler
  * @description
  * 过滤出 trigger 信号并返回，路由依赖 defaultRoute 自动走边。
- * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildKeyboardTriggerForwardNodeConfig() {
   return {
@@ -32,7 +32,7 @@ function buildKeyboardTriggerForwardNodeConfig() {
  * viewport 从 handlerContext.context 获取；路由依赖 defaultRoute。
  * @param {{ x: number, y: number }} direction - 位移方向（单位向量）
  * @param {number} [baseStep=200] - 缩放为 1 时的位移步长
- * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildViewportPositionNodeConfig(direction, baseStep = 200) {
   return {
@@ -75,7 +75,7 @@ function buildViewportPositionNodeConfig(direction, baseStep = 200) {
  * 将 trigger 信号转为 scale 信号，缩放值由 scaleTransformer 函数计算。
  * viewport 从 handlerContext.context 获取；路由依赖 defaultRoute。
  * @param {(currentZoom: number) => number} scaleTransformer - 缩放变换函数
- * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildViewportScaleNodeConfig(scaleTransformer) {
   return {
@@ -102,7 +102,7 @@ function buildViewportScaleNodeConfig(scaleTransformer) {
 /**
  * 构建视口刷新 prefix handler
  * @description 将 trigger 信号转为 flush 信号，路由依赖 defaultRoute。
- * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildViewportFlushNodeConfig() {
   return {
@@ -129,7 +129,7 @@ function buildViewportFlushNodeConfig() {
  * @description 将 trigger 信号转为 displacement 信号，附上对应方向向量。
  * @param {string} code - 键位编码（如 "KeyW"）
  * @param {{ x: number, y: number }} vector - 方向向量
- * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildWasdNodeConfig(code, vector) {
   return {
@@ -164,7 +164,7 @@ function buildWasdNodeConfig(code, vector) {
  * 动态函数 (signals) => string，或 (signals) => ({ type, context })。
  * @param {string | ((signals: object[]) => string | { type: string, context?: Object })} type - 调试信号类型或解析函数
  * @param {Object} [debugContext={}] - 调试上下文附加数据（默认合并到 signal.context）
- * @returns {{ handler: import("../../core/devices-dag/dag.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
   return {

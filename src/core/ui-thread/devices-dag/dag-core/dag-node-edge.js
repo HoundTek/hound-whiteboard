@@ -8,15 +8,15 @@
  * 可独立于 {@link DevicesDAG} 完成信号分发。
  *
  * DevicesDAGEdge 连接两个节点，边名在源节点下唯一。
- * @module core/ui-thread/devices-dag/dag-node-edge
+ * @module core/ui-thread/devices-dag/dag-core/dag-node-edge
  * @author Zhou Chenyu
  */
 
 import { isPlainObject, normalizeHandlerResult } from "./dag-utils.js";
 import { SignalPacket } from "./signal.js";
-import { normalizePath, joinPath } from "../../engine/utils/path.js";
-import { Logger } from "../../../utils/log/logger.js";
-import { logBus } from "../../../utils/log/log-bus.js";
+import { normalizePath, joinPath } from "../../../engine/utils/path.js";
+import { Logger } from "../../../../utils/log/logger.js";
+import { logBus } from "../../../../utils/log/log-bus.js";
 
 /**
  * 设备图节点日志
@@ -94,7 +94,7 @@ class DevicesDAGNode {
 
   /**
    * 节点处理器
-   * @type {import("./devices-dag.js").DevicesDAGHandler|null}
+   * @type {import("../dag-type.js").DevicesDAGHandler|null}
    */
   handler;
 
@@ -118,7 +118,7 @@ class DevicesDAGNode {
 
   /**
    * 节点卸载钩子
-   * @type {import("./devices-dag.js").DevicesDAGNodeUmountHandler|null}
+   * @type {import("../dag-type.js").DevicesDAGNodeUmountHandler|null}
    */
   umount;
 
@@ -165,7 +165,7 @@ class DevicesDAGNode {
 
   /**
    * 设置节点处理器
-   * @param {import("./devices-dag.js").DevicesDAGHandler|null} handler - 处理器函数
+   * @param {import("../dag-type.js").DevicesDAGHandler|null} handler - 处理器函数
    * @returns {DevicesDAGNode} 返回当前节点以链式调用
    */
   setHandler(handler) {
@@ -205,7 +205,7 @@ class DevicesDAGNode {
 
   /**
    * 设置卸载钩子
-   * @param {import("./devices-dag.js").DevicesDAGNodeUmountHandler|null} umountHandler - 卸载回调
+   * @param {import("../dag-type.js").DevicesDAGNodeUmountHandler|null} umountHandler - 卸载回调
    * @returns {DevicesDAGNode} 返回当前节点以链式调用
    */
   setUmountHandler(umountHandler) {
@@ -215,7 +215,7 @@ class DevicesDAGNode {
 
   /**
    * 获取节点处理器
-   * @returns {import("./devices-dag.js").DevicesDAGHandler|null} 返回处理器函数或 null
+   * @returns {import("../dag-type.js").DevicesDAGHandler|null} 返回处理器函数或 null
    */
   getHandler() {
     return typeof this.handler === "function" ? this.handler : null;
@@ -247,7 +247,7 @@ class DevicesDAGNode {
 
   /**
    * 获取卸载钩子
-   * @returns {import("./devices-dag.js").DevicesDAGNodeUmountHandler|null}
+   * @returns {import("../dag-type.js").DevicesDAGNodeUmountHandler|null}
    */
   getUmountHandler() {
     return typeof this.umount === "function" ? this.umount : null;
@@ -261,7 +261,7 @@ class DevicesDAGNode {
    *
    * 节点的 tool 通过 `createProcessor()` 转为 handler，不注册到全局 tool 表。
    *
-   * @param {import("./dag.js").SubDAGDefinition} subDAGDef - 子图定义
+   * @param {import("../dag-type.js").SubDAGDefinition} subDAGDef - 子图定义
    * @returns {DevicesDAGNode} 根入口节点
    */
   static createGraph(subDAGDef) {
@@ -550,7 +550,7 @@ class DevicesDAGNode {
    * @param {number} options.depth - 当前递归深度
    * @param {Object|null} options.dag - 所属 DAG 实例
    * @param {boolean} options.strict - strict 模式下 handler 报错直接抛出
-   * @returns {import("./dag.js").DevicesDAGHandlerResult} 规整后的 handler 结果
+   * @returns {import("../dag-type.js").DevicesDAGHandlerResult} 规整后的 handler 结果
    * @private
    */
   _invoke(pkt, { path, services, acc, depth, dag, strict }) {
@@ -600,7 +600,7 @@ class DevicesDAGNode {
    * 依次处理 `redirect` 改写、主包/延迟包拆分、`defaultRoute` 兜底，
    * 产出继续下钻所需的路径段、当前包，以及不再下钻的终结包与延迟包。
    * 所有 `to` 必须是相对路径，绝对路径直接抛错。
-   * @param {import("./dag.js").DevicesDAGHandlerResult} result - 规整后的 handler 结果
+   * @param {import("../dag-type.js").DevicesDAGHandlerResult} result - 规整后的 handler 结果
    * @param {Object} options - 路由选项
    * @param {string} options.path - 当前节点路径（用于错误信息）
    * @param {string[]} options.routeSegments - 剩余路径段

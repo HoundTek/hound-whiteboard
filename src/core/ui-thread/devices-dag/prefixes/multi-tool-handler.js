@@ -32,7 +32,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @property {import("../devices-dag/signal.js").SignalPacket} signalPacket - 当前已规整的输入信号包
  * @property {Object} state - 当前节点状态快照（含 activeChild、phase 等）
  * @property {string|undefined} fromPhase - 当前阶段，即 state.phase
- * @property {import("../devices-dag/dag.js").DevicesDAGHandlerContext} prefixContext - DAG 处理器上下文，含 setState、routeToChild、stop、delNodeState、services 及 acc
+ * @property {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} prefixContext - DAG 处理器上下文，含 setState、routeToChild、stop、delNodeState、services 及 acc
  */
 
 /**
@@ -46,7 +46,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * @param {string} [options.defaultChild=""] - 默认活动子节点名，用作 fallback
  * @param {Object} [options.initialState={}] - 额外初始状态，与 { activeChild: defaultChild } 合并
  * @param {(params: MultiToolResolveParams) => MultiToolTransitionResult} options.resolveTransition - 状态机决策函数
- * @returns {import("../devices-dag/dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
+ * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createMultiToolPrefixHandler(options = {}) {
   const defaultChild =
@@ -65,8 +65,8 @@ function createMultiToolPrefixHandler(options = {}) {
   /**
    * 状态机路由处理函数
    * @param {import("../devices-dag/signal.js").SignalPacket} packet - 已规整的输入信号包
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} prefixContext - DAG 处理器上下文
-   * @returns {import("../devices-dag/dag.js").DevicesDAGHandlerResult}
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} prefixContext - DAG 处理器上下文
+   * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandlerResult}
    */
   return createPrefixNodeHandler({
     initialState: {

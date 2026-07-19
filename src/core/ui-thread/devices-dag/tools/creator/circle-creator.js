@@ -233,7 +233,7 @@ class CircleCreatorTool extends SingleGestureObjectCreatorTool {
 
   /**
    * 清理 overlay 临时状态
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @protected
    */
   clearOverlayState(context = {}) {

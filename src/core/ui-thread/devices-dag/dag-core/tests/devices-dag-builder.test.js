@@ -4,7 +4,7 @@ import {
   DevicesDAGNode,
   DevicesDAGEdge,
   createSubDAG,
-} from "../index.js";
+} from "../../index.js";
 import { SignalPacket } from "../signal.js";
 
 describe("createSubDAG (Builder DSL)", () => {

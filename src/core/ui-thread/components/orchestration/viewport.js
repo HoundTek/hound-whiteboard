@@ -271,7 +271,7 @@ class Viewport {
 
   /**
    * 当前白板级唯一设备图
-   * @type {import("../../devices-dag/dag.js").DevicesDAG}
+   * @type {import("../../devices-dag/dag-type.js").DevicesDAG}
    */
   get devicesDAG() {
     return this.board?.devicesDAG;

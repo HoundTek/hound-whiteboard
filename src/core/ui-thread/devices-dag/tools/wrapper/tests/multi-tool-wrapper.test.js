@@ -8,7 +8,7 @@
 import { jest } from "@jest/globals";
 import { MultiToolWrapper } from "../multi-tool-wrapper.js";
 import { Tool } from "../../tool.js";
-import { DevicesDAGNode } from "../../../dag-node-edge.js";
+import { DevicesDAGNode } from "../../../dag-core/dag-node-edge.js";
 import { createSubDAG } from "../../../index.js";
 import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../../devices/touchscreen-device.js";
 

@@ -74,7 +74,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 从节点 state 读取当前拖拽状态
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {RectangleSelectionDragState}
    */
   resolveSelectionDragState(context = {}) {
@@ -90,7 +90,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 将拖拽状态写回当前工具节点
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Partial<RectangleSelectionDragState>} [dragState={}] - 新拖拽状态
    * @returns {Object}
    */
@@ -108,7 +108,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 清空当前工具节点中的拖拽状态
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   clearSelectionDragState(context = {}) {
@@ -159,7 +159,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   /**
    * 用新位置更新框选矩形
    * @param {Vector} position - 最新拖拽位置
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    */
   updateSelectionRegion(position, context) {
@@ -178,7 +178,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 当前是否有框选矩形
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    */
   hasSelectionRegion(context) {
@@ -187,7 +187,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 清理当前框选状态
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   clearSelectionRegion(context = {}) {
@@ -197,7 +197,7 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
 
   /**
    * 获取当前框选矩形
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {RectangleRange|null}
    */
   getSelectionRegion(context) {

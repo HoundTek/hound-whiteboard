@@ -7,7 +7,7 @@
 
 import { createSubDAG } from "../../core/ui-thread/devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../core/ui-thread/devices-dag/prefixes/index.js";
-import { SignalPacket } from "../../core/ui-thread/devices-dag/signal.js";
+import { SignalPacket } from "../../core/ui-thread/devices-dag/dag-core/signal.js";
 import { CircleCreatorTool } from "../../core/ui-thread/devices-dag/tools/creator/circle-creator.js";
 import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/tools/creator/object-creator.js";
 import { Vector } from "../../core/engine/utils/math.js";
@@ -36,7 +36,7 @@ const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
  *   maxRadius?: number,
  *   property?: Record<string, any>,
  * }} [options={}] - 随机圆工作流配置
- * @returns {import("../../core/devices-dag/dag.js").SubDAGDefinition} 可直接传入 inputScope.mountWorkflow(name, subDAG) 的结构化子树定义
+ * @returns {import("../../core/devices-dag/dag-type.js").SubDAGDefinition} 可直接传入 inputScope.mountWorkflow(name, subDAG) 的结构化子树定义
  * @see CircleCreatorTool
  * @example
  * const subDAG = createRandomCircleSubDAG({

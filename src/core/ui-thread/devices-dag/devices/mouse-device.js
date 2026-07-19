@@ -13,7 +13,7 @@ import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
  * @description
  * 五个通道路由节点（pointer / primary / secondary / auxiliary / wheel）
  * 均只设 defaultRoute = "default"，不再接受外部 processor 定制。
- * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
+ * @returns {import("../devices-dag/dag-type.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeButtons: {primary: boolean, secondary: boolean, auxiliary: boolean},

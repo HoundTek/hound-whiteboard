@@ -22,7 +22,7 @@ import { logBus } from "../../../../utils/log/log-bus.js";
  *   label?: string,
  * }} [options={}] - 配置选项
  * @param {string} [options.label="SignalLog"] - Logger 子名称，便于区分多个 log handler
- * @returns {import("../devices-dag/dag.js").DevicesDAGHandler}
+ * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandler}
  *
  * @example
  * builder

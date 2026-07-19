@@ -13,7 +13,7 @@ import {
   OBJECT_MODIFIER_SIGNAL_TYPES,
 } from "./object-modifier.js";
 import { BasicObject } from "../../../../engine/objects/basic-obj.js";
-import { SignalPacket } from "../../signal.js";
+import { SignalPacket } from "../../dag-core/signal.js";
 
 /**
  * 通用对象修改工具类
@@ -210,7 +210,7 @@ class CommonObjectModifierTool extends GestureBasedObjectModifierTool {
    * @description 覆写基类 process，在 success 提交后清空初始位置缓存，
    * 确保下一轮新对象的 handoff 中 beginGesture 能重新记录。
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   process(signalPacket, context = {}) {

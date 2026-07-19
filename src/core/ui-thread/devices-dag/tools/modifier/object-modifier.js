@@ -6,7 +6,7 @@
  */
 
 import { GestureTool } from "../gesture-tool.js";
-import { SignalPacket } from "../../signal.js";
+import { SignalPacket } from "../../dag-core/signal.js";
 import { BasicObject } from "../../../../engine/objects/basic-obj.js";
 import { RectangleRange } from "../../../../engine/range/index.js";
 import { Vector } from "../../../../engine/utils/math.js";
@@ -34,7 +34,7 @@ const OBJECT_MODIFIER_SIGNAL_TYPES = Object.freeze({
  * 修改手势交互上下文
  * @typedef {Object} ModifyGestureInteraction
  * @property {SignalPacket} signalPacket - 输入信号包
- * @property {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+ * @property {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
  * @property {Array<{type: string, context?: *}>} signals - 信号列表
  * @property {Vector|null} position - 世界坐标位置
  * @property {Vector|null} displacement - 相对位移
@@ -99,7 +99,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 规整本次修改涉及的对象集合
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    */
@@ -172,7 +172,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 通过 RPC 写入对象绝对位置
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {import("../../shared/types.js").LightweightObjectEntry} objectEntry - 当前对象条目
    * @param {{ x: number, y: number }} position - 新位置
    * @returns {void}
@@ -206,7 +206,7 @@ class ObjectModifierTool extends GestureTool {
    * 存完后触发 UI overlay 刷新，使 overlay 系统立即收集工具的条目。
    * 已被同步的情况下重复调用不会重复写入。
    * @param {Array<Object>} objects - handoff 桥接的对象摘要
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文（用于触发 overlay 刷新）
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文（用于触发 overlay 刷新）
    * @returns {void}
    */
   receiveHandoffObjects(objects, context = {}) {
@@ -225,7 +225,7 @@ class ObjectModifierTool extends GestureTool {
    * @description
    * 优先从私有字段 _overlayModifiedObjects 读取（handoff 桥接或自身 process 写入）。
    * 私有字段为空时回退到 resolveModifiedObjects（原生非 handoff 场景兼容）。
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    */
@@ -238,7 +238,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 在对象几何修改前记录旧快照
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    */
   beforeGeometryMutation(context, objects) {
@@ -257,7 +257,7 @@ class ObjectModifierTool extends GestureTool {
    * @description
    * boardApi 存在时 Core 侧 RPC handler 已自动触发 ViewportRenderer 输出刷新，
    * 此处仅刷新 UI overlay。非 boardApi 路径自行失效 live 脏区。
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    */
   afterGeometryMutation(context, objects) {
@@ -278,7 +278,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 以统一的快照协议包装一次几何修改
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Function} mutate - 实际执行修改的回调
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @param {{ captureSnapshot?: boolean }} [options={}] - 选项对象
@@ -300,7 +300,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 解析当前动作应提交的对象集合
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    * @protected
@@ -319,7 +319,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 决定是否执行 apply
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<BasicObject>} objects - 已解析的活动对象
    * @returns {boolean}
    * @protected
@@ -330,7 +330,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：动作执行前校验
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    * @protected
    */
@@ -360,7 +360,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：执行对象提交流程
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    * @protected
    */
@@ -393,7 +393,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 提交成功后的扩展钩子
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<BasicObject>} objects - 已提交的对象
    * @param {boolean} result - 提交结果
    * @returns {void}
@@ -403,7 +403,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：动作完成后的通知
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {boolean} result - 动作结果
    * @returns {void}
    * @protected
@@ -418,7 +418,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：丢弃当前动作持有对象
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
@@ -438,7 +438,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 清理 modifier 的 overlay 临时状态
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
@@ -449,7 +449,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 将当前修改对象提交回静态图
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {boolean}
    */
@@ -467,7 +467,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 在修改工具被卸载时撤销未提交的活动对象引用
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   umount(context = {}) {
@@ -525,7 +525,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 优先通过 context.resolvePosition 解析，否则从 position 信号中读取。
    * 所有路径的结果都会经过 Vector.parse 归一化为 Vector。
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {Vector|null}
    * @protected
    */
@@ -546,7 +546,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   /**
    * 从信号包中提取相对位移
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {Vector|null}
    * @protected
    */
@@ -562,7 +562,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   /**
    * 从信号包中提取修改交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {import("../../shared/types.js").LightweightObjectEntry[]} objects - 当前活动的修改对象
    * @returns {ModifyGestureInteraction} 交互上下文
    * @protected
@@ -582,7 +582,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   /**
    * 处理信号包（手势驱动）
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   process(signalPacket, context = {}) {
@@ -643,7 +643,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
   /**
    * 处理 success 信号：结束手势并提交修改到静态图
    * @param {ModifyGestureInteraction} interaction - 当前交互上下文
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {import("../../shared/types.js").LightweightObjectEntry[]} objects - 活动对象
    * @private
    */
@@ -675,7 +675,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 2. displacement 作为无状态增量直接累加到对象位置
    * 3. 两者可在同一帧并存：position 先算，displacement 再叠，锚点跟随位移
    * @param {ModifyGestureInteraction} interaction - 当前交互上下文
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {import("../../shared/types.js").LightweightObjectEntry[]} objects - 活动对象
    * @private
    */
@@ -813,7 +813,7 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
 
   /**
    * 工具节点被卸载时清理手势状态
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   umount(context = {}) {

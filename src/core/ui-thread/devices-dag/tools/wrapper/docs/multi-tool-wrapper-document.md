@@ -98,7 +98,7 @@ touch 的触点数在设计期未知。如果用"动态挂载工具"的方案，
 
 ```js
 import { MultiToolWrapper } from "./tools/wrapper/multi-tool-wrapper.js";
-import { DevicesDAGNode } from "./dag-node-edge.js";
+import { DevicesDAGNode } from "./dag-core/dag-node-edge.js";
 import { createSubDAG } from "./index.js";
 import { StrokeCreatorTool } from "./tools/creator/stroke-creator-tool.js";
 

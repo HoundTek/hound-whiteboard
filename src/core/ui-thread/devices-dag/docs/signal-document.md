@@ -23,10 +23,10 @@
 - `to`：当前包要继续路由到的节点路径
 - `signals`：当前时刻要一起处理的信号列表
 
-当前代码里，这个结构集中抽象为 [../signal.js](../signal.js) 中的 `SignalPacket` 类，对应源码路径：
+当前代码里，这个结构集中抽象为 [../dag-core/signal.js](../dag-core/signal.js) 中的 `SignalPacket` 类，对应源码路径：
 
 ```text
-src/ui-thread/devices-dag/signal.js
+src/ui-thread/devices-dag/dag-core/signal.js
 ```
 
 ## `SignalPacket` 的作用

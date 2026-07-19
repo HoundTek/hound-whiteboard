@@ -16,7 +16,7 @@ import { createPrefixNodeHandler } from "./handler.js";
  * Vector 或 { x, y }，即 DOM 坐标减去 canvas.getBoundingClientRect().left/top），
  * 用视口的 origin + zoom 直接转为世界坐标，替换回 value。
  * 非 position 信号原样透传。视口不可达时原样透传所有信号。
- * @returns {import("../dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
+ * @returns {import("../dag-type.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  *
  * @example
  * // 作为 edge prefix 插入 mouse device 与 workflow 之间

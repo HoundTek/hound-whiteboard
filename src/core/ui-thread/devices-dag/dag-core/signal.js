@@ -1,7 +1,7 @@
 /**
  * @file 信号包抽象
  * @description 定义设备图和工具系统中流动的信号包结构。
- * @module core/ui-thread/devices-dag/signal
+ * @module core/ui-thread/devices-dag/dag-core/signal
  * @author Zhou Chenyu
  */
 

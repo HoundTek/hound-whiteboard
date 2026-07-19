@@ -49,7 +49,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 将选择条目回填为真实对象实例（若可解析）
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {import("../../shared/types.js").ObjectSummary} objectEntry - 对象摘要
    * @returns {import("../../shared/types.js").ObjectSummary}
    * @protected
@@ -60,7 +60,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 批量回填选择条目为真实对象实例（若可解析）
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<import("../../shared/types.js").ObjectSummary>|import("../../shared/types.js").ObjectSummary} objects - 对象摘要或摘要集合
    * @returns {Array<import("../../shared/types.js").ObjectSummary>}
    * @protected
@@ -75,7 +75,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 解析对象主判定范围在世界空间中的范围
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {import("../../shared/types.js").ObjectSummary} objectEntry - 候选对象摘要
    * @returns {Range | undefined}
    */
@@ -106,7 +106,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 判断对象主判定范围是否与给定选择范围相交
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {import("../../shared/types.js").ObjectSummary} objectEntry - 候选对象摘要
    * @param {Range} selectionWorldRange - 选择范围
    * @returns {boolean}
@@ -132,7 +132,7 @@ class ObjectChooserTool extends GestureTool {
    * @param {{
    *   viewport?: import("../../components/orchestration/viewport.js").Viewport,
    *   renderer?: import("../../components/renderer/ui-renderer.js").UiRenderer,
-   *   deviceContext?: import("../../devices-dag/dag.js").DevicesDAGHandlerContext,
+   *   deviceContext?: import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext,
    * }} [overlayContext={}] - overlay 上下文
    * @returns {import("../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
@@ -164,7 +164,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 决定是否确认当前选择钩子
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    * @protected
    */
@@ -174,7 +174,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 确认选择后的扩展钩子
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<import("../../shared/types.js").ObjectSummary>} objects - 已确认的对象摘要
    * @returns {void}
    * @protected
@@ -188,7 +188,7 @@ class ObjectChooserTool extends GestureTool {
    * 触发选择确认校验与确认后的扩展钩子。
    * 与 creator 的 completeCreatedObject、modifier 的 applyModifiedObjects
    * 构成统一的完成确认语义入口。
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Array<import("../../shared/types.js").ObjectSummary>} objects - 待确认的对象摘要
    * @returns {boolean}
    */
@@ -286,7 +286,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：确认前校验
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    * @protected
    */
@@ -299,7 +299,7 @@ class ObjectChooserTool extends GestureTool {
    * @description
    * 选择动作允许异步提交，因此此处覆写 completeAction，用 unifyActionResult 统一同步/异步路径。
    * 仅在 confirmSelection 成功时发送 `action:complete`。
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {Array<import("../../shared/types.js").ObjectSummary>|Promise<Array<import("../../shared/types.js").ObjectSummary>>}
    */
   completeAction(context) {
@@ -310,7 +310,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 将选中对象写入上下文并按需触发生命周期钩子
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {import("../../shared/types.js").ObjectSummary[]} objects - 选中对象
    * @returns {Array<import("../../shared/types.js").ObjectSummary>}
    * @private
@@ -333,7 +333,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：清理 overlay 临时状态
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
@@ -344,7 +344,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：撤销当前已激活选择
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
@@ -362,7 +362,7 @@ class ObjectChooserTool extends GestureTool {
    * 用新的选择结果替换当前选择
    * @description
    * 丢弃旧选择、激活新对象、写回设备上下文与节点状态。
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {import("../../shared/types.js").ObjectSummary[]} [nextObjects=[]] - 新选择结果
    * @returns {import("../../shared/types.js").ObjectSummary[]}
    */
@@ -397,7 +397,7 @@ class ObjectChooserTool extends GestureTool {
    * @description
    * 默认实现使用 getSelectionRegion 获取区域，走 boardApi.hitTest + queryObjects。
    * 子类可直接覆写此方法以提供自定义选择逻辑。
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {import("../../shared/types.js").ObjectSummary[]|Promise<import("../../shared/types.js").ObjectSummary[]>}
    */
   submitSelection(context) {
@@ -422,7 +422,7 @@ class ObjectChooserTool extends GestureTool {
    * @description
    * 在 position 信号到达时由 GestureTool 调用。子类应在此更新选择区域的几何形状。
    * @param {Vector} position - 最新位置
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    * @abstract
    */
@@ -432,7 +432,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 当前是否已有有效的选择区域
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    * @abstract
    */
@@ -442,7 +442,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 清理当前选择区域
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    * @abstract
    */
@@ -452,7 +452,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 获取当前选择区域（供默认 submitSelection 使用）
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {RectangleRange|null}
    * @abstract
    */
@@ -466,7 +466,7 @@ class ObjectChooserTool extends GestureTool {
    * 在交给 GestureTool 路由前，先同步清理已失效的 overlay 选择状态，
    * 避免 handoff 清空 nodeState 后显示旧选中框。
    * @param {Object} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void|Promise<void>}
    */
   process(signalPacket, context = {}) {
@@ -482,7 +482,7 @@ class ObjectChooserTool extends GestureTool {
 
   /**
    * 工具节点被卸载时撤销当前选择
-   * @param {import("../../devices-dag/dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   umount(context = {}) {

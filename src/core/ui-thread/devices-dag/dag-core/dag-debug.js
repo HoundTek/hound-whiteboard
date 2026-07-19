@@ -3,7 +3,7 @@
  * @description
  * 提供 DevicesDAG 的文本树形表示（dagToString）、Mermaid 流程图生成（dagToMermaid）、
  * 路由追踪格式化（traceToString）与性能摘要（profileFromTrace）。
- * @module core/ui-thread/devices-dag/dag-debug
+ * @module core/ui-thread/devices-dag/dag-core/dag-debug
  * @author Zhou Chenyu
  */
 

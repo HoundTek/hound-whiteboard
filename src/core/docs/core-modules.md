@@ -38,6 +38,11 @@
 
 #### 根目录
 
+- `dag-type.js`：公共类型定义（typedef 与核心类别名）
+- `index.js`：统一 re-export 入口
+
+#### `dag-core/`（引擎）
+
 - `dag.js`：`DevicesDAG` 核心实现
 - `dag-builder.js`：`createSubDAG()` DSL
 - `dag-node-edge.js`：节点与边定义

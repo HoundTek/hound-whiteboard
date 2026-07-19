@@ -13,12 +13,12 @@
  * const subDAG = builder.build();
  * dag.mountSubDAG("", subDAG);
  * ```
- * @module core/ui-thread/devices-dag/dag-builder
+ * @module core/ui-thread/devices-dag/dag-core/dag-builder
  * @author Zhou Chenyu
  */
 
 import { isPlainObject } from "./dag-utils.js";
-import { joinPath, normalizePath } from "../../engine/utils/path.js";
+import { joinPath, normalizePath } from "../../../engine/utils/path.js";
 
 /**
  * 子图节点构建器
@@ -60,7 +60,7 @@ class DAGNodeBuilder {
 
   /**
    * 设置节点处理器
-   * @param {import("./devices-dag.js").DevicesDAGHandler|null} handler
+   * @param {import("../dag-type.js").DevicesDAGHandler|null} handler
    * @returns {DAGNodeBuilder}
    */
   handler(handler) {
@@ -82,7 +82,7 @@ class DAGNodeBuilder {
 
   /**
    * 标记为 prefix 语义并设置处理器
-   * @param {import("./devices-dag.js").DevicesDAGHandler|null} handler
+   * @param {import("../dag-type.js").DevicesDAGHandler|null} handler
    * @param {Object} [semantics={}]
    * @returns {DAGNodeBuilder}
    */
@@ -134,7 +134,7 @@ class DAGNodeBuilder {
 
   /**
    * 设置卸载钩子
-   * @param {import("./devices-dag.js").DevicesDAGNodeUmountHandler|null} umountHandler
+   * @param {import("../dag-type.js").DevicesDAGNodeUmountHandler|null} umountHandler
    * @returns {DAGNodeBuilder}
    */
   umount(umountHandler) {
@@ -193,13 +193,13 @@ class DAGBuilder {
 
   /**
    * 节点定义（局部 id → 定义）
-   * @type {Map<number, import("./devices-dag.js").SubDAGNodeDefinition>}
+   * @type {Map<number, import("../dag-type.js").SubDAGNodeDefinition>}
    */
   _nodeDefs;
 
   /**
    * 边定义列表
-   * @type {import("./devices-dag.js").SubDAGEdgeDefinition[]}
+   * @type {import("../dag-type.js").SubDAGEdgeDefinition[]}
    */
   _edges;
 
@@ -286,7 +286,7 @@ class DAGBuilder {
 
   /**
    * 生成子图定义
-   * @returns {import("./devices-dag.js").SubDAGDefinition}
+   * @returns {import("../dag-type.js").SubDAGDefinition}
    */
   build() {
     return {
@@ -300,7 +300,7 @@ class DAGBuilder {
 
   /**
    * @param {number} localId
-   * @param {Partial<import("./devices-dag.js").SubDAGNodeDefinition>} patch
+   * @param {Partial<import("../dag-type.js").SubDAGNodeDefinition>} patch
    */
   _setNodeDef(localId, patch) {
     const existing = this._nodeDefs.get(localId);

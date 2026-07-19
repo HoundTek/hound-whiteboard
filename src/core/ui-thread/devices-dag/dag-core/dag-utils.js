@@ -7,7 +7,7 @@
  * `isPlainObject` 是多个模块共用的基础判断，
  * `normalizeHandlerResult` 将 handler 的各种返回形式统一为
  * `{ packets, explicitPackets, ... }` 结构。
- * @module core/ui-thread/devices-dag/dag-utils
+ * @module core/ui-thread/devices-dag/dag-core/dag-utils
  * @author Zhou Chenyu
  */
 
@@ -49,7 +49,7 @@ function isSubDAGDefinition(value) {
  * @param {*} rawResult - handler 的原始返回值
  * @param {{ defaultTo?: string }} [options={}] - 规整选项
  * @param {string} [options.defaultTo] - 信号包缺省 to 字段值
- * @returns {import("./dag.js").DevicesDAGHandlerResult} 标准结果结构
+ * @returns {import("../dag-type.js").DevicesDAGHandlerResult} 标准结果结构
  */
 function normalizeHandlerResult(rawResult, options = {}) {
   if (

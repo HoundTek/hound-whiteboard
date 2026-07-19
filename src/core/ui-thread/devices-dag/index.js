@@ -4,18 +4,18 @@
  * @author Zhou Chenyu
  */
 
-export { DevicesDAG } from "./dag.js";
+export { DevicesDAG } from "./dag-core/dag.js";
 export {
   isPlainObject,
   isSubDAGDefinition,
   normalizeHandlerResult,
-} from "./dag-utils.js";
-export { DevicesDAGNode, DevicesDAGEdge } from "./dag-node-edge.js";
-export { DAGBuilder, DAGNodeBuilder, createSubDAG } from "./dag-builder.js";
+} from "./dag-core/dag-utils.js";
+export { DevicesDAGNode, DevicesDAGEdge } from "./dag-core/dag-node-edge.js";
+export { DAGBuilder, DAGNodeBuilder, createSubDAG } from "./dag-core/dag-builder.js";
 export {
   dagToString,
   dagToMermaid,
   traceToString,
   profileFromTrace,
-} from "./dag-debug.js";
-export { SignalPacket } from "./signal.js";
+} from "./dag-core/dag-debug.js";
+export { SignalPacket } from "./dag-core/signal.js";

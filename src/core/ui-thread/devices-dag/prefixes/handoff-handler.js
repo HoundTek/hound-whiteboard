@@ -41,15 +41,15 @@ import {
  *
  * @param {{
  *   rootPath?: string,
- *   first: Tool|import("../devices-dag/dag.js").SubDAGDefinition,
- *   second: Tool|import("../devices-dag/dag.js").SubDAGDefinition,
+ *   first: Tool|import("../devices-dag/dag-type.js").SubDAGDefinition,
+ *   second: Tool|import("../devices-dag/dag-type.js").SubDAGDefinition,
  *   autoBridgeObjects?: boolean,
  * }} options - handoff 子树配置
  * @param {string} [options.rootPath="/handoff"] - 子树根路径
- * @param {Tool|import("../devices-dag/dag.js").SubDAGDefinition} options.first - 第一阶段工具或子图（creator / chooser 等）
- * @param {Tool|import("../devices-dag/dag.js").SubDAGDefinition} options.second - 第二阶段工具或子图（通常为 modifier）
+ * @param {Tool|import("../devices-dag/dag-type.js").SubDAGDefinition} options.first - 第一阶段工具或子图（creator / chooser 等）
+ * @param {Tool|import("../devices-dag/dag-type.js").SubDAGDefinition} options.second - 第二阶段工具或子图（通常为 modifier）
  * @param {boolean} [options.autoBridgeObjects=true] - 是否在 handoff 时自动桥接对象上下文
- * @returns {import("../devices-dag/dag.js").SubDAGDefinition}
+ * @returns {import("../devices-dag/dag-type.js").SubDAGDefinition}
  *
  * @example
  *   // creator → modifier（生命周期钩子模式）
@@ -98,7 +98,7 @@ function createHandoffSubDAG(options = {}) {
   /**
    * handoff 完成回调（闭包捕获 handoffPhase）
    * @param {"first"|"second"} phase - 刚完成的阶段
-   * @param {import("../dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Array<*>} [objects] - 桥接对象
    * @returns {void}
    */

@@ -11,7 +11,7 @@
  * @author Zhou Chenyu
  */
 
-import { SignalPacket } from "../signal.js";
+import { SignalPacket } from "../dag-core/signal.js";
 import { isPlainObject } from "./utils.js";
 
 /**
@@ -28,11 +28,11 @@ import { isPlainObject } from "./utils.js";
  *
  * @param {{
  *   initialState?: Object,
- *   handle: import("../devices-dag/dag.js").DevicesDAGHandler | Array<{ path: string, signals: Array<Object> }>
+ *   handle: import("../devices-dag/dag-type.js").DevicesDAGHandler | Array<{ path: string, signals: Array<Object> }>
  * }} options - 修饰节点处理器选项
  * @param {Object} [options.initialState] - 节点初始状态，首次调用时写入缺失的键
- * @param {import("../devices-dag/dag.js").DevicesDAGHandler} options.handle - 核心路由函数
- * @returns {import("../devices-dag/dag.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
+ * @param {import("../devices-dag/dag-type.js").DevicesDAGHandler} options.handle - 核心路由函数
+ * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandler} 可挂载到 DevicesDAG 节点上的处理器函数
  */
 function createPrefixNodeHandler(options = {}) {
   const initialState = isPlainObject(options.initialState)

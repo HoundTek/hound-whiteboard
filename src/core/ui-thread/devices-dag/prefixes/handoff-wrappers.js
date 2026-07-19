@@ -65,9 +65,9 @@ function mergeDAGNodeDefinition(targetNodeDef = {}, sourceNodeDef = {}) {
 
 /**
  * 将 DAG 子图定义附着到目标节点上
- * @param {import("../dag.js").SubDAGDefinition} hostSubDAG
+ * @param {import("../dag-type.js").SubDAGDefinition} hostSubDAG
  * @param {number} hostNodeId
- * @param {import("../dag.js").SubDAGDefinition} subDAGDef
+ * @param {import("../dag-type.js").SubDAGDefinition} subDAGDef
  * @returns {boolean}
  */
 function attachDAGSubDAG(hostSubDAG, hostNodeId, subDAGDef) {
@@ -145,7 +145,7 @@ function normalizeHandoffBridgeObjects(result) {
 /**
  * 丢弃 second 阶段当前持有的活动对象
  * @param {Tool} tool - second 阶段工具实例
- * @param {import("../dag.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+ * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
  * @returns {void}
  */
 function discardSecondPhaseObjects(tool, context = {}) {
@@ -177,9 +177,9 @@ function discardSecondPhaseObjects(tool, context = {}) {
  *   phase: "first"|"second",
  *   bridgeObjects?: boolean,
  *   completeOnCancel?: boolean,
- *   onComplete?: (phase: "first"|"second", context: import("../dag.js").DevicesDAGHandlerContext, objects?: Array<*>) => void,
+ *   onComplete?: (phase: "first"|"second", context: import("../dag-type.js").DevicesDAGHandlerContext, objects?: Array<*>) => void,
  * }} [options={}] - 包装选项
- * @returns {import("../dag.js").DevicesDAGHandler}
+ * @returns {import("../dag-type.js").DevicesDAGHandler}
  */
 function wrapToolForHandoff(tool, options = {}) {
   const {
@@ -253,12 +253,12 @@ function wrapToolForHandoff(tool, options = {}) {
 
 /**
  * 为 subDAG 的根节点追加完成通知包装
- * @param {import("../dag.js").SubDAGDefinition} subDAGDef - 原始子图定义
+ * @param {import("../dag-type.js").SubDAGDefinition} subDAGDef - 原始子图定义
  * @param {Object} [options={}] - 包装选项
  * @param {"first"|"second"} [options.phase="first"] - 当前子图所处的 handoff 阶段
  * @param {Function} [options.shouldComplete] - 决定是否发出完成通知，接收 (packet, context)，省略时在收到 "end" 信号后发出
- * @param {(phase: "first"|"second", context: import("../dag.js").DevicesDAGHandlerContext, objects?: Array<*>) => void} [options.onComplete] - 完成后的阶段切换回调
- * @returns {import("../dag.js").SubDAGDefinition} 包装后的子图定义
+ * @param {(phase: "first"|"second", context: import("../dag-type.js").DevicesDAGHandlerContext, objects?: Array<*>) => void} [options.onComplete] - 完成后的阶段切换回调
+ * @returns {import("../dag-type.js").SubDAGDefinition} 包装后的子图定义
  */
 function wrapSubDAGForHandoff(subDAGDef, options = {}) {
   const { phase = "first", shouldComplete, onComplete = null } = options;

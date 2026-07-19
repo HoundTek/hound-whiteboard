@@ -9,7 +9,7 @@
  */
 
 import { createSubDAG } from "../index.js";
-import { SignalPacket } from "../signal.js";
+import { SignalPacket } from "../dag-core/signal.js";
 import { DEVICE_DEFAULT_ROUTE } from "../devices/constant.js";
 import { BUTTON_GROUP_DEVICE_SIGNAL_TYPES } from "../devices/button-group-device.js";
 
@@ -52,7 +52,7 @@ import { BUTTON_GROUP_DEVICE_SIGNAL_TYPES } from "../devices/button-group-device
  * - 收到其他信号（鼠标 position/end）→ 转发到 routeTarget 对应的子节点
  *
  * @param {ToolSwitcherOptions} [options={}] - 工具切换配置
- * @returns {import("../dag.js").SubDAGDefinition & ToolSwitcherSubDAGDefinition}
+ * @returns {import("../dag-type.js").SubDAGDefinition & ToolSwitcherSubDAGDefinition}
  *
  * @example
  * ```js
@@ -82,8 +82,8 @@ function createToolSwitcherSubDAG(options = {}) {
    * 其余信号（鼠标 position/end）转发到当前路由目标。
    *
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../dag.js").DevicesDAGHandlerContext} ctx - 设备图处理器上下文
-   * @returns {import("../dag.js").DevicesDAGHandlerResult}
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} ctx - 设备图处理器上下文
+   * @returns {import("../dag-type.js").DevicesDAGHandlerResult}
    */
   const routerHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "" });

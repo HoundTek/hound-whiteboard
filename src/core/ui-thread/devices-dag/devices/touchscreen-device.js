@@ -6,14 +6,14 @@
  */
 
 /**
- * @typedef {import("../../devices-dag/dag.js").SubDAGDefinition & {
+ * @typedef {import("../../devices-dag/dag-type.js").SubDAGDefinition & {
  *   clearTouches: () => void,
  *   getActiveTouches: () => Array<{touchId: string, position: any}>,
  * }} TouchscreenSubDAGDefinition
  */
 
 import { createSubDAG } from "../index.js";
-import { SignalPacket } from "../signal.js";
+import { SignalPacket } from "../dag-core/signal.js";
 import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
 
 /**
@@ -27,7 +27,7 @@ const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
 /**
  * 创建一张触摸屏设备子图
  * @param {{onUpdate?: Function}} [options={}] - 触摸屏设备选项
- * @returns {import("../devices-dag/dag.js").SubDAGDefinition & {
+ * @returns {import("../devices-dag/dag-type.js").SubDAGDefinition & {
  *   clearTouches: () => void,
  *   getActiveTouches: () => Array<{touchId: string, position: any}>,
  * }}
@@ -122,7 +122,7 @@ function createTouchscreenDevice(options = {}) {
    * 2. 更新内部触点状态
    * 3. 路由到 contacts 子节点输出聚合的触点报告
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 services.viewport）
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 services.viewport）
    * @returns {Object}
    */
   const rootHandler = (signalPacket, ctx = {}) => {
@@ -142,7 +142,7 @@ function createTouchscreenDevice(options = {}) {
   /**
    * 触点报告处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag.js").DevicesDAGHandlerContext} [ctx={}] - 当前路由上下文
+   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 当前路由上下文
    * @returns {Object}
    */
   const contactsHandler = (signalPacket, ctx = {}) => {
