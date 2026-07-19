@@ -184,6 +184,19 @@ workflow 负责：
 - 一旦设备已经按这些字段把输入分发到正确的子节点或工具叶子，这些字段就不应再成为工具自己的判断条件
 - 因此，“哪个按钮触发了这次输入”应由设备决定；“收到这组稳定信号后做什么”才由工具决定
 
+## 坐标转换约定
+
+`position` 信号携带的坐标分两种：canvas 相对坐标（DOM 事件原始坐标）与世界坐标（白板坐标系）。
+
+约定如下：
+
+- **设备根节点负责完成 canvas→world 转换**——mouse 与 touchscreen 的根 handler 都通过 `viewport.convertCanvasSignalsToWorld` 在分流前完成转换，下游通道节点与工具拿到的已是世界坐标
+- 转换逻辑的唯一实现是 `viewport.convertCanvasSignalsToWorld`，任何转换点都必须委托它，禁止各自重写换算公式
+- **`canvas-to-world-handler` prefix 用于非标准链路**：信号源未经设备根节点转换时（如测试桩、自定义 adapter 直连 workflow），在边上插入该 prefix 补齐转换
+- 工具与下游 prefix 一律假定 `position` 信号已是世界坐标，不再做二次转换
+
+新设备接入时应遵循同一模式：在根 handler 中委托 `viewport.convertCanvasSignalsToWorld` 完成转换，而不是让下游各自处理。
+
 ## 设备挂载
 
 业务侧应优先通过 Viewport 挂载设备：
