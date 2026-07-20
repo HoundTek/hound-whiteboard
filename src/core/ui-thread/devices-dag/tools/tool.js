@@ -380,18 +380,6 @@ class Tool {
   }
 
   /**
-   * 当前工具的 completeAction 是否可能产生异步的 action:complete
-   * @description
-   * 如果为 true，handoff handler 需要在 macrotask 中延迟 cleanup，
-   * 以确保异步 action:complete 在被取消前触发。
-   * 目前只有 ObjectChooserTool（异步框选）需要覆盖此 getter。
-   * @returns {boolean}
-   */
-  get hasAsyncCompleteAction() {
-    return false;
-  }
-
-  /**
    * 动作开始
    * @description
    * 标记当前工具进入活跃动作状态。手势工具在首个 position 信号触发

@@ -75,6 +75,14 @@ class ObjectModifierTool extends GestureTool {
   _pendingActionObjectIds = null;
 
   /**
+   * 提交修改后是否自动卸载当前 workflow 节点
+   * @description wrapper 嵌入场景（如 HandoffWrapperTool）由 wrapper 置为 false，
+   * 阻止 modifier 提交后自卸载，保持两阶段流程的槽位存活。
+   * @type {boolean}
+   */
+  autoUmountOnApply = true;
+
+  /**
    * 收集 modifier 当前声明的兼容 ui overlay
    * @param {{
    *   viewport?: import("../../components/orchestration/viewport.js").Viewport,
@@ -379,7 +387,7 @@ class ObjectModifierTool extends GestureTool {
     boardApi.commitObjects(objectIds);
     this.clearContextObjects(context);
 
-    const autoUmount = context.acc?.autoUmountOnApply !== false;
+    const autoUmount = this.autoUmountOnApply !== false;
     if (
       autoUmount &&
       typeof context.dag?.unmount === "function" &&

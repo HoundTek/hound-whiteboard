@@ -1,14 +1,12 @@
 /**
  * @file 右键选择→修改 handoff workflow 挂载
- * @description 将鼠标右键、Enter/Escape、WASD 汇聚到 handoff 子图。
+ * @description 将鼠标右键、Enter/Escape、WASD 汇聚到 handoff wrapper。
  * @module demo/config/workflows/secondary-handoff
  * @author Zhou Chenyu
  */
 
-import {
-  createEdgePrefix,
-  createHandoffSubDAG,
-} from "../../../core/ui-thread/devices-dag/prefixes/index.js";
+import { createEdgePrefix } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
+import { HandoffWrapperTool } from "../../../core/ui-thread/devices-dag/tools/wrapper/handoff-wrapper.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
 import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../../core/ui-thread/devices-dag/devices/keyboard-device.js";
 import { buildWasdNodeConfig } from "../prefix-builders.js";
@@ -50,14 +48,12 @@ function mountSecondaryHandoff(viewport, secondarySelectionTool) {
   const scope = viewport.inputScope;
   const wfName = DEMO_WORKFLOW_NAMES.SECONDARY_CHOOSER;
 
-  const secondaryHandoffSubDAG = createHandoffSubDAG({
-    rootPath: `/workflows/${wfName}`,
+  const secondaryHandoffTool = new HandoffWrapperTool({
     first: secondarySelectionTool,
     second: new CommonObjectModifierTool(),
-    autoBridgeObjects: true,
   });
 
-  scope.mountWorkflow(wfName, secondaryHandoffSubDAG);
+  scope.mountWorkflow(wfName, secondaryHandoffTool);
 
   scope.addEdge({ from: "mouse/secondary", to: `workflows/${wfName}` });
   scope.addEdge({

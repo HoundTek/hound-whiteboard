@@ -39,7 +39,6 @@ describe("ObjectModifierTool", () => {
           },
         },
       },
-      acc: { object },
       object,
     };
 
@@ -117,9 +116,6 @@ describe("ObjectModifierTool", () => {
         boardApi: {},
         viewport,
       },
-      acc: {
-        objects: [object],
-      },
       object,
     };
 
@@ -182,7 +178,7 @@ describe("ObjectModifierTool", () => {
       };
 
       tool.applyModifiedObjects(
-        { services: { boardApi }, acc: { objects: [object] }, path: "/test" },
+        { services: { boardApi }, path: "/test" },
         [object],
       );
 
@@ -212,7 +208,7 @@ describe("ObjectModifierTool", () => {
       };
 
       const result = tool.applyModifiedObjects(
-        { services: { boardApi }, acc: { objects: [object] }, path: "/test" },
+        { services: { boardApi }, path: "/test" },
         [object],
       );
 
@@ -221,12 +217,13 @@ describe("ObjectModifierTool", () => {
       expect(actionComplete).not.toHaveBeenCalled();
     });
 
-    test("autoUmountOnApply 通过 context 注入 false 时阻止自卸载", () => {
+    test("autoUmountOnApply 置为 false 时阻止自卸载", () => {
       class TestModifier extends ObjectModifierTool {
         modify() {}
       }
 
       const tool = new TestModifier();
+      tool.autoUmountOnApply = false;
       const object = { id: 12 };
       const unmount = jest.fn();
       const boardApi = {
@@ -237,7 +234,6 @@ describe("ObjectModifierTool", () => {
       tool.applyModifiedObjects(
         {
           services: { boardApi },
-          acc: { objects: [object], autoUmountOnApply: false },
           dag: { unmount },
           path: "/test",
         },
@@ -266,7 +262,6 @@ describe("ObjectModifierTool", () => {
       tool.applyModifiedObjects(
         {
           services: { boardApi },
-          acc: { objects: [object] },
           dag: { unmount },
           path: "/test",
         },

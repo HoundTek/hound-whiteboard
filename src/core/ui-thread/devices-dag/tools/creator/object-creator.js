@@ -92,11 +92,21 @@ class ObjectCreatorTool extends GestureTool {
   _pendingActionInteraction;
 
   /**
+   * 动作完成时是否自动将对象提交到静态图
+   * @description wrapper 嵌入场景（如 HandoffWrapperTool）由 wrapper 置为 false，
+   * 阻止对象提前进入静态图，使其留在 AOM 动态图等待 modifier 最终提交。
+   * @type {boolean}
+   */
+  autoCommit;
+
+  /**
+   * @param {{ autoCommit?: boolean }} [options={}] - 配置选项
    * @constructor
    */
-  constructor() {
+  constructor(options = {}) {
     super();
     this.autoActionOnGestureEnd = true;
+    this.autoCommit = options.autoCommit !== false;
     this._entry = null;
     this.objectId = null;
     this.isObjectCreationCompleted = false;
@@ -145,7 +155,7 @@ class ObjectCreatorTool extends GestureTool {
       isGestureCancelled: baseInteraction.hasCancel,
       isObjectEnded: baseInteraction.hasObjectEnd,
       isObjectCancelled: baseInteraction.hasObjectCancel,
-      objectId: positionSignal?.context?.objectId ?? context.acc?.objectId,
+      objectId: positionSignal?.context?.objectId,
       injectedProperty: extractInjectedProperty(signals),
     };
   }
@@ -545,9 +555,9 @@ class ObjectCreatorTool extends GestureTool {
     // finalize 总是执行
     this.finalizeCreatedObject(interaction);
 
-    // handoff 通过 acc.autoCommit = false 阻止提前 commit
+    // handoff wrapper 通过将 autoCommit 置为 false 阻止提前 commit
     // 除此之外通过 beforeCommitCreatedObject 判断
-    const autoCommit = context?.acc?.autoCommit !== false;
+    const autoCommit = this.autoCommit !== false;
     if (autoCommit && this.beforeCommitCreatedObject(interaction) !== false) {
       this.commitCreatedObject(interaction);
     }
