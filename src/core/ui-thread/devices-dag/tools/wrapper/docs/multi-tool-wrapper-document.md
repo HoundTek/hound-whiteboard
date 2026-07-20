@@ -47,20 +47,20 @@ classDiagram
     ▼
 #beginTouch
     │  entry = this.#entryFactory(touchId)
-    │  entry.dispatch(packet, { acc })    // position 信号
+    │  entry.dispatch(packet, { services })    // position 信号
     │  instances.set(touchId, entry)
     │
 触点移动（changedTouchId 在 contacts 中，且已有入口节点）
     │
     ▼
 #updateTouch
-    │  entry.dispatch(packet, { acc })    // position 信号
+    │  entry.dispatch(packet, { services })    // position 信号
     │
 触点抬起（changedTouchId 不在 contacts 中）
     │
     ▼
 #endTouch
-    │  entry.dispatch(packet, { acc })    // end 信号
+    │  entry.dispatch(packet, { services })    // end 信号
     │  #disposeNode(entry)                // 递归清理 handler.dispose
     │  instances.delete(touchId)
 ```
@@ -75,8 +75,7 @@ wrapper 从 `touch-contacts` 信号中提取 `contacts` 和 `changedTouchIds`，
 | 已有触点移动 | 同上                                                       | 已有入口节点的 `dispatch()` |
 | 触点抬起     | `[{type: "end", context: {}}]`                             | 已有入口节点的 `dispatch()` |
 
-`deviceContext`（包含 `services.board`、`services.viewport`、`services.boardApi` 等）作为 `dispatch` 的选项原样透传。
-优先使用 `services` 和 `acc`。
+`deviceContext` 中的 `services`（包含 `board`、`viewport`、`boardApi` 等）作为 `dispatch` 的选项原样透传。
 每个子图入口看到的是同一套上下文。
 
 每触点可配置单工具或多节点子图：
@@ -175,6 +174,7 @@ per-touch 子图通过 `DevicesDAGNode.createGraph()` 创建，脱离主 DAG 运
 
 ## 相关文档
 
+- [wrapper（复合设备 / 组合子）](./wrapper-document.md)
 - [touchscreen-device 文档](../../../devices/docs/device-document.md)
 - [工具基类文档（含 wrapper tool 说明）](../../docs/tool-document.md)
 - [手势工具基类](../../docs/gesture-tool-document.md)

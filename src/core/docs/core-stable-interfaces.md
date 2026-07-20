@@ -118,7 +118,6 @@ board.signalsEventBus.emit("input", {
 - `resolvedDefaultRoutePath`
 - `depth`
 - `signalPacket`
-- `acc`
 - `state`
 - `getState()`
 - `setState(nextState)`
@@ -132,7 +131,6 @@ board.signalsEventBus.emit("input", {
 
 ### 稳定语义
 
-- `acc` 是逐层追加的累积上下文视图
 - 节点 `state` 是拥有者发布的只读投影；真理源放闭包 / 实例字段
 - `setNodeState` / `delNodeState` 仅限写入自身节点，跨节点写入在 strict 模式抛错、非 strict 模式告警
 - `ctx.state` 是入口快照；写入后若要读取最新值，应调用 `getState()`
@@ -146,7 +144,6 @@ board.signalsEventBus.emit("input", {
 ```js
 {
   packets?: SignalPacket[],
-  acc?: Object,
   redirect?: string,
   stop?: boolean,
 }
@@ -155,7 +152,6 @@ board.signalsEventBus.emit("input", {
 ### 稳定语义
 
 - `packets`：后续要继续路由的包列表
-- `acc`：要追加给下游节点的累积上下文
 - `redirect`：覆盖接下来要走的路径段
 - `stop`：立即终止当前链路
 - 若显式返回 `packets: []`，当前链路终止
@@ -206,8 +202,18 @@ board.signalsEventBus.emit("input", {
 - Tool 是 **叶子消费型处理器**，不承担上层路由结构
 - `createProcessor()` 会把 Tool 包装成可挂到 DAG 节点上的 handler
 - overlay provider 的注册/注销由 `createUiOverlayBinding()` 负责
-- 工具共享对象优先走节点 `state` 与 `acc.objects`
+- 工具共享对象优先走节点 `state`
 - 需要显式转发信号时，应由 prefix 或外层 DAG handler 负责；不要把 Tool 当成新的路由层
+
+## 已移除接口（breaking change）
+
+以下接口曾经稳定，现已移除：
+
+- **`ctx.acc` / handler 返回值的 `acc` 字段（累积上下文）**：整体拆除。
+  - 基础设施依赖 → 改用节点声明式 `services`
+  - 工具行为控制标志（`autoCommit`、`autoUmountOnApply`）→ 改用工具的显式实例属性
+  - 其余链路级参数 → 改用信号字段或平铺 context 键（如 `context.resolvePosition`）
+- **handoff / tool-switcher 的 prefix 子图工厂**（`createHandoffSubDAG`、`createToolSwitcherSubDAG`、`createMultiToolPrefixHandler`）：由 `tools/wrapper/` 的 `HandoffWrapperTool`、`ToolSwitcherWrapper` 取代，wrapper 作为普通 Tool 通过 `mountWorkflow` 单节点挂载。
 
 ## Viewport
 
@@ -265,6 +271,7 @@ board.signalsEventBus.emit("input", {
 - [handler 上下文（ctx）用法](../ui-thread/devices-dag/docs/handler-context-document.md)
 - [设备图](../ui-thread/devices-dag/docs/devices-dag-document.md)
 - [设备定义](../ui-thread/devices-dag/devices/docs/device-document.md)
+- [wrapper（复合设备）](../ui-thread/devices-dag/tools/wrapper/docs/wrapper-document.md)
 - [对象创建工具](../ui-thread/devices-dag/tools/creator/docs/object-creator-document.md)
 - [对象选择工具](../ui-thread/devices-dag/tools/chooser/docs/object-chooser-document.md)
 - [对象修改工具](../ui-thread/devices-dag/tools/modifier/docs/object-modifier-document.md)

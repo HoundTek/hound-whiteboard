@@ -57,15 +57,6 @@ process(signalPacket, ctx) {
 
 静态服务由节点定义注入，handler 返回值无法写入。
 
-### 累积上下文
-
-| 成员      | 类型     | 说明                                                                |
-| --------- | -------- | ------------------------------------------------------------------- |
-| `ctx.acc` | `Object` | 单次 dispatch 中由上游 handler 返回值逐层追加的运行时控制参数，只读 |
-
-**规则**：handler 向下游传递运行时参数时，通过返回值 `{ acc: { key: value } }` 写入累积上下文。
-`ctx.acc` 不包含 `services` 中的静态基础设施依赖；这部分请通过 `ctx.services` 读取。
-
 ### 状态管理
 
 | 成员                                  | 类型                                  | 说明                                                                   |
@@ -242,13 +233,12 @@ createPrefixNodeHandler({
 以上接口适用于**所有** DevicesDAG handler，包括：
 
 - 设备根节点（`mouse-device`、`keyboard-device`、`touchscreen-device`）
-- prefix handler（`drag-anchor`、`signal-log`、`multi-tool`、`repeater`、`handoff`）
+- prefix handler（`signal-log`、`repeater`、`canvas-to-world`、`edge-prefix`）
 - 工具 processor（`Tool.createProcessor`）
 - 裸 handler（直接挂在 DAG 节点上的任意函数）
 
 工具 processor 拿到的同样是标准 handler context 全集。
 `ctx.services` 中的 `board`、`boardApi`、`viewport` 由 DAG 上游节点通过节点声明式注入。
-`ctx.acc` 中的 `autoCommit`、`autoUmountOnApply` 等由 handoff prefix 等上游 handler 返回时注入。
 
 ---
 

@@ -18,16 +18,15 @@ chooser 本身不修改对象几何。它的职责是：
 
 ## 上下文模型
 
-chooser 接收的 `context` 遵循 DevicesDAG 的分层上下文：
+chooser 接收的 `context` 遵循 DevicesDAG 的上下文模型：
 
 - `context.services` — 静态基础设施依赖
   - `board` — Board 实例
   - `boardApi` — RPC 代理（`createObject`、`addActiveObjects`、`discardActiveObjects`、`queryObjects` 等）
   - `viewport` — 视口实例
-- `context.acc` — 动态路由参数（如 `objects` 等）
 - `context.getNodeState() / context.setNodeState()` — 节点状态读写
 
-> 所有基础设施依赖统一通过 `context.services` 读取，不再回退到 `context.acc`。
+> 所有基础设施依赖统一通过 `context.services` 读取。
 
 ## 数据形态
 
@@ -174,5 +173,6 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "chooser");
 
 - [rectangle-object-chooser-document.md](./rectangle-object-chooser-document.md)
 - [object-modifier-document.md](../../modifier/docs/object-modifier-document.md)
+- [wrapper-document.md](../../wrapper/docs/wrapper-document.md)
 - [ui-renderer-document.md](../../../../components/renderer/docs/ui-renderer-document.md)
 - [core-runtime-boundaries.md](../../../../../docs/core-runtime-boundaries.md)

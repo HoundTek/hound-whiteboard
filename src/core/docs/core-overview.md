@@ -65,7 +65,7 @@ Engine 不依赖 DOM，也不依赖 Worker 宿主：
 3. `Board` 按 `to` 中的 `viewportId` 把包送进唯一的 `Board.devicesDAG`
 4. `DevicesDAG` 从 `/${viewportId}` 子树继续路由
 5. 设备节点负责把宿主输入规整成稳定设备信号
-6. prefix 节点负责注入参数、状态机、handoff 与局部路由
+6. prefix 节点负责注入参数、边级转换与局部路由；wrapper 节点内部完成顺序/互斥组合（handoff、tool-switcher）
 7. tool 叶子消费最终信号，并通过 `boardApi` 或 `viewport` 修改状态
 
 ### 渲染

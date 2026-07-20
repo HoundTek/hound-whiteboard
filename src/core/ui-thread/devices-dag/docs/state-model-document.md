@@ -5,14 +5,13 @@
 设备图中的可变状态按「归谁写 × 活多久」归类。明确区分它们是编写可维护 prefix / tool 的前提：
 
 - **静态服务上下文（`services`）**：基础设施依赖，由节点声明注入，沿 DAG 路径累积
-- **累积上下文（`acc`）**：单次 dispatch 中由上游 handler 逐层追加的运行时控制参数
 - **状态**：分为**权威状态**与**投影**两个层面——
   - **权威状态（真理源）**：归闭包 / 实例字段。系统中所有状态都是单主的，写所有权天然应封闭
   - **状态投影（`node.state`）**：拥有者主动发布的、全图可寻址的只读投影，唯一职责是可观察性
 
 一句话原则：**闭包管对错，state 管看见。**
 
-## 四种状态
+## 三种状态
 
 ### 静态服务上下文（`services`）
 
@@ -39,33 +38,6 @@
 | `boardApi` | Board 根节点 `/` | BoardApiRpc 代理  |
 | `viewport` | Viewport 根节点  | Viewport 实例引用 |
 
-### 累积上下文（`acc`）
-
-`acc` 是单次 dispatch 中由上游 handler 返回结果时逐层追加的运行时参数。
-它只包含动态路由参数，不包含 `services` 中的静态基础设施依赖。
-
-| 属性     | 说明                               |
-| -------- | ---------------------------------- |
-| 存储位置 | `handlerContext.acc`               |
-| 作用域   | 当前分发链路（单次 `dispatch`）    |
-| 生命周期 | 单次 `dispatch` 结束后丢弃         |
-| 读写规则 | 上游注入，下游只读；不可覆盖已有键 |
-
-`acc` 适合放：
-
-- 链路级一次性控制标志（`autoCommit`、`autoUmountOnApply`）
-- 链路级临时参数（`resolvePosition`、`objectId`）
-- 仅对当前链路生效的轻量元数据
-
-#### 已知 acc 键
-
-| 键                  | 注入方         | 用途                          |
-| ------------------- | -------------- | ----------------------------- |
-| `autoCommit`        | Handoff prefix | false 时阻止 Creator 自动提交 |
-| `autoUmountOnApply` | Handoff prefix | false 时阻止 modifier 自卸载  |
-| `resolvePosition`   | Prefix         | 坐标解析函数                  |
-| `objectId`          | 上游 Prefix    | 预分配的对象 id               |
-
 ### 状态投影（`node.state`）
 
 `node.state` 是**发布层**：拥有者把需要被外界观察的状态发布到自己的节点上，供调试、测试与跨节点读取。它**不是真理源**——真理源永远在拥有者的闭包或实例字段里。
@@ -89,12 +61,12 @@ strict 模式抛错，非 strict 模式经 log 工具告警。外部代码（非
 
 #### 当前已知投影键
 
-| 键            | 发布者                      | 用途                                 |
-| ------------- | --------------------------- | ------------------------------------ |
-| `phase`       | handoff prefix              | 当前工作流阶段（`first` / `second`） |
-| `activeChild` | multi-tool prefix           | 当前活动子节点名                     |
-| `routeTarget` | tool-switcher prefix        | 当前路由目标工具名                   |
-| `objects`     | Tool（`setContextObjects`） | 工具当前持有的对象集合               |
+| 键            | 发布者                       | 用途                                 |
+| ------------- | ---------------------------- | ------------------------------------ |
+| `phase`       | `HandoffWrapperTool`         | 当前工作流阶段（`first` / `second`） |
+| `activeChild` | `HandoffWrapperTool`         | 当前活动子工具名                     |
+| `routeTarget` | `ToolSwitcherWrapper`        | 当前路由目标工具名                   |
+| `objects`     | Tool（`setContextObjects`）  | 工具当前持有的对象集合               |
 
 ### 权威状态（闭包 / 实例字段）
 
@@ -109,7 +81,7 @@ strict 模式抛错，非 strict 模式经 log 工具告警。外部代码（非
 
 闭包 / 实例字段适合放：
 
-- **状态的真理源**——路由类状态机的阶段（`handoffPhase`）、路由目标（`routeTarget`）、工具持有的对象集合
+- **状态的真理源**——路由类状态机的阶段（`HandoffWrapperTool.#phase`）、路由目标（`ToolSwitcherWrapper.#activeName`）、工具持有的对象集合
 - 配置常量（`displacementSignalType`）
 - 懒初始化的处理器（tool `processor`）
 - 临时缓存，不需要暴露给外部
@@ -117,7 +89,7 @@ strict 模式抛错，非 strict 模式经 log 工具告警。外部代码（非
 需要被外界观察的权威状态，由拥有者**发布投影**到自己的 `node.state`：
 
 ```
-闭包变量 handoffPhase = "first"        ← 真理源，路由决策只读它
+实例字段 #phase = "first"               ← 真理源，路由决策只读它
    ↓ 变化时由拥有者发布
 node.state.phase / activeChild         ← 只读投影，仅供观察与调试
 ```
@@ -130,10 +102,10 @@ node.state.phase / activeChild         ← 只读投影，仅供观察与调试
 
 #### 已知权威状态
 
-| 闭包变量       | 所在模块        | 用途                                                       |
-| -------------- | --------------- | ---------------------------------------------------------- |
-| `routeTarget`  | `tool-switcher` | 当前路由目标（通过 `node.state.routeTarget` 投影观察）     |
-| `handoffPhase` | `handoff`       | 当前阶段（通过 `node.state.phase` / `activeChild` 观察）   |
+| 实例字段      | 所在模块              | 用途                                                     |
+| ------------- | --------------------- | -------------------------------------------------------- |
+| `#activeName` | `ToolSwitcherWrapper` | 当前路由目标（通过 `node.state.routeTarget` 投影观察）   |
+| `#phase`      | `HandoffWrapperTool`  | 当前阶段（通过 `node.state.phase` / `activeChild` 观察） |
 
 ## 领域数据归属
 
@@ -151,7 +123,7 @@ first tool 创建对象
 ```
 
 - 每个工具实例在任意时刻都是自己 `objects` 的唯一真相源，`node.state.objects` 只是它发布的投影
-- handoff prefix **不持有** `objects` — 它只负责路由与状态切换
+- `HandoffWrapperTool` **不持有** `objects` — 它只负责相位切换与对象桥接
 
 ## 写入约定
 
@@ -159,10 +131,9 @@ first tool 创建对象
 - **发布（写入自身）**：拥有者通过 `ctx.setState()` / `ctx.patchState()` / `ctx.setNodeState(ctx.path, ...)` 发布自己节点的投影
 - **跨节点写入**：禁止。`ctx.setNodeState` / `ctx.delNodeState` 写入非自身节点时，strict 模式抛错，非 strict 模式经 log 工具告警
 - **外部写入**：非 handler 代码不应调用 `dag.setNodeState()`——投影由拥有者发布，外部写入不产生真实效果
-- **acc 写入**：通过 handler 返回值 `{ acc: { key: value } }` 注入
 
 ## 相关文档
 
 - [设备图](./devices-dag-document.md)
 - [handler 上下文（ctx）用法](./handler-context-document.md)
-- [handoff 工作流](../prefixes/docs/handoff-handler-document.md)
+- [wrapper（复合设备）](../tools/wrapper/docs/wrapper-document.md)

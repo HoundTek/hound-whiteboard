@@ -137,7 +137,7 @@ dag.mount("/viewport/main/pen", (packet, context) => {
 - 子节点做稳定语义拆分
 - workflow 入口统一挂在 `/workflows/` 下
 - 状态的真理源放闭包 / 实例字段，需要被观察时发布到自己节点的 `state`
-- 跨节点协作走信号、事件或 `acc`，不直接写对方节点状态
+- 跨节点协作走信号或事件，不直接写对方节点状态
 - 边级信号转换使用 `createEdgePrefix`，不修改节点 handler
 
 ## 相关文档

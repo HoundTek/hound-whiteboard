@@ -62,12 +62,10 @@
 
 #### `prefixes/`
 
-修饰节点和 workflow 编排工具：
+修饰节点（边级转换、信号观测、复制分发等局部编排）：
 
-- `handoff-handler.js`
-- `edge-prefix.js`
-- `multi-tool-handler.js`
-- 其它局部状态机 / 路由辅助
+- `handler.js` / `repeater-handler.js` / `signal-log-handler.js`
+- `edge-prefix.js` / `canvas-to-world-handler.js`
 
 #### `tools/`
 
@@ -77,6 +75,7 @@
 - `creator/`：创建工具
 - `chooser/`：选择工具
 - `modifier/`：修改工具
+- `wrapper/`：复合工具（顺序 / 互斥组合，如 handoff、tool-switcher）
 
 ## `engine/`
 

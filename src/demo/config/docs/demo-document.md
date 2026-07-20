@@ -8,21 +8,21 @@
 
 - 输入先归属到 Viewport，再进入 Board.devicesDAG
 - 键盘与鼠标链路都通过显式叶子工具消费信号
-- 参数注入、状态切换和对象桥接优先由修饰节点与节点 state 完成
+- 参数注入由修饰节点完成，顺序/互斥组合与对象桥接由 wrapper 完成
 
 ## 已实现内容
 
 ### 左键工具切换
 
 - 鼠标左键进入 `/mouse/primary/default` → `/workflows/tool-switcher`
-- tool-switcher 根据当前激活工具名称路由信号到对应子节点
-- 三个可选工具：
+- tool-switcher 是单个 `ToolSwitcherWrapper` 实例，根据当前激活工具名称把信号转发到内部对应槽位
+- 三个可选工具（均为 wrapper 内部槽位）：
   - **笔画**（`StrokeCreatorTool`）
   - **圆**（`CircleCreatorTool`）
-  - **选择+修改**（`RectangleObjectChooserTool` → `CommonObjectModifierTool` handoff）
+  - **选择+修改**（`HandoffWrapperTool`：`RectangleObjectChooserTool` → `CommonObjectModifierTool`）
 - 通过工具栏按钮（`.toolbar-btn`）切换激活工具
-- 按钮 `pointerdown` 事件发出 `button-press` 信号 → `/viewport/toolbar/button` → 双输入汇聚到 tool-switcher 根节点
-- tool-switcher 的 `onToolChange` 回调更新 DOM 按钮 `.active` 类
+- 按钮 `pointerdown` 事件发出 `button-press` 信号 → `toolbar/button-group` 设备 → 输出 `tool-switch` 信号，双输入汇聚到 tool-switcher 节点
+- button-group 设备的 `onUpdate` 输出信道驱动 `onToolChange` 回调，更新 DOM 按钮 `.active` 类
 - 默认激活工具为笔画
 
 ### 触摸多指笔画
@@ -61,7 +61,7 @@
 - Enter 发 `success` 信号、Escape 发 `cancel` 信号
 - 信号同时到达两条路径：
   - 键盘设备 → `code/Enter` / `code/Escape` → secondary-chooser（右键 handoff）
-  - 直接 emit → `/workflows/tool-switcher` → 经 router 转发到当前激活工具（左键 handoff 也响应）
+  - 直接 emit → `/workflows/tool-switcher` → 经 wrapper 转发到当前激活槽位（左键 handoff 也响应）
 - 各 handoff 按当前 phase 路由：phase=first（chooser）忽略，phase=second（modifier）提交/丢弃修改
 
 ### WASD 位移 → handoff modifier
@@ -139,13 +139,12 @@
 - 随机圆 workflow 挂载到 `/workflows/create-circle`；`code/Space` 通过边级 prefix 接入
 - 设备节点只负责信号产出（trigger / release / cancel）；信号转换由边级 `prefix` 完成
 - 修饰节点（`createEdgePrefix`）插在设备节点与 workflow 之间的 `"default"` 边上
-- creator / chooser 与 modifier 的上下文共享以当前节点 `state` 为边界，handoff 通过回调和对象桥接完成
+- creator / chooser 与 modifier 的上下文共享以工具的私有字段为权威来源，`HandoffWrapperTool` 通过 `action:complete` 订阅和对象桥接完成两阶段流转
 - 视口、调试各 workflow 通过 `edge.prefix` 多前驱模式汇聚；WASD 通过 `edge.prefix` 注入到 handoff 工作流
 - 屏幕坐标在 Viewport 层转换为世界坐标后进入工具链
 - 触摸设备通过 `viewport.convertCanvasSignalsToWorld()` 完成 canvas→world 坐标转换
 - 多指并发通过 `MultiToolWrapper` 在工具内部分流，设备图保持静态
-- tool-switcher 通过 `createToolSwitcherSubDAG` 创建具有双输入汇聚的路由子图，
-  挂载在 `mouse/primary` 下游接收鼠标信号，同时接受 `toolbar/button` 路径的切换信号
-- 各工具（笔画、圆、选择-handoff）单独挂载为独立 workflow，通过 `addEdge` 连接到 tool-switcher 子节点
+- tool-switcher 是单个 `ToolSwitcherWrapper` 实例，通过一次 `mountWorkflow` 挂载在 `mouse/primary` 下游接收鼠标信号，同时接受 `toolbar/button-group` 路径的 `tool-switch` 切换信号
+- 各工具（笔画、圆、选择-handoff）作为 wrapper 内部槽位由 `ToolSwitcherWrapper` 托管，不再单独挂载
 - Enter/Escape 同时发往 keyboard device（供右键 handoff）和 tool-switcher（供左键选择工具），
   实现全局 modifier 确认/取消

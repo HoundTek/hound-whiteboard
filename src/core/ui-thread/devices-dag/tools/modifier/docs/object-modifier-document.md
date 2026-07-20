@@ -108,7 +108,7 @@ modifier 同时接受：
 ## 权威数据来源
 
 modifier 以私有字段 `_overlayModifiedObjects` 作为当前活动对象的唯一权威数据来源。
-不依赖 node state 或 acc 中的对象引用。
+node state 仅作为非 handoff 场景的 fallback 来源。
 
 ### `resolveActiveModifiedObjects(context, objects)`
 
@@ -170,27 +170,28 @@ modifier 在 handoff 中通常作为 second 阶段：
 
 ### 包装方式
 
-handoff 通过 `wrapToolForHandoff(second, { completeOnCancel: true })` 包装：
+`HandoffWrapperTool` 把 modifier 作为内部槽位托管：
 
-- 订阅 `action:complete` 事件感知 `success`
-- `cancel` 信号到达时调用 `tool.discardAction()` 后通知完成
+- 构造期一次性订阅 modifier 的 `action:complete` 事件感知 `success`
+- 构造期把实例属性 `autoUmountOnApply`（默认 `true`）置为 `false`，阻止提交后自卸载
+- `cancel` 信号到达时由 wrapper 调用 `tool.discardAction()` 丢弃活动对象，并切回 first 阶段
 
 ### 对象同步协议
 
 modifier 通过 `receiveHandoffObjects(objects, context)` 接收 handoff 桥接的对象：
 
-1. first 完成时由 `createCompleteCallback` 立即调用
+1. first 完成时由 wrapper 的完成回调立即调用
 2. 写入 `_overlayModifiedObjects` 私有字段
 3. 调用 `syncUiOverlay(context)` 注册 overlay provider
 4. 调用 `requestUiOverlayRefresh(context)` 刷新 UI
 
 后续信号到达 modifier 的 `process()` 时，`resolveActiveModifiedObjects` 优先从私有字段读取。
-handoff 不修改 modifier 的 node state。
+wrapper 不修改 modifier 的 node state。
 
 ### 阶段切换
 
 - first → second：`receiveHandoffObjects` 同步完成后切换
-- second → first：modifier 的 `action:complete` 或 `cancel` 完成后切换。handoff 不清理 modifier 的 node state，由 modifier 自己的 `clearOverlayState` 管理
+- second → first：modifier 的 `action:complete` 或 `cancel` 完成后切换。wrapper 不清理 modifier 的 node state，由 modifier 自己的 `clearOverlayState` 管理
 
 ## `applyModifiedObjects()`
 
@@ -212,5 +213,6 @@ handoff 不修改 modifier 的 node state。
 
 - [object-creator-document.md](../../creator/docs/object-creator-document.md)
 - [object-chooser-document.md](../../chooser/docs/object-chooser-document.md)
+- [wrapper-document.md](../../wrapper/docs/wrapper-document.md)
 - [active-object-manager-document.md](../../../../../engine/orchestration/docs/active-object-manager-document.md)
 - [core-runtime-boundaries.md](../../../../../docs/core-runtime-boundaries.md)

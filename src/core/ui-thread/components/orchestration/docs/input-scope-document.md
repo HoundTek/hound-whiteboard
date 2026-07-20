@@ -51,9 +51,8 @@ scope.mountDevice("keyboard", createKeyboardDevice());
 
 挂载 tool 或 SubDAGDefinition 到 `workflows/{name}`。
 
-`name` 支持嵌套路径（如 `"tool-switcher/stroke"`），典型场景是把工具挂到
-prefix 子图内部的透传节点（如 tool-switcher 的子节点）。所有 Tool 都挂载在
-`/{vpId}/workflows/...` 之下。
+`name` 支持嵌套路径（如 `"parent-workflow/child"`），典型场景是把工具挂到
+已存在子图的内部节点。所有 Tool 都挂载在 `/{vpId}/workflows/...` 之下。
 
 挂载走完整契约：tool 实例注册（禁止重复挂载）、`semantics.tool` 标记、
 umount 钩子链（`processor.dispose → tool.umount → 原钩子`）。目标节点已有
@@ -63,11 +62,14 @@ handler 时抛错。
 scope.mountWorkflow("stroke", new StrokeCreatorTool({...}));
 scope.mountWorkflow("random-circle", createRandomCircleSubDAG({...}));
 
-// 把笔画工具挂到 tool-switcher 的 stroke 透传子节点
-scope.mountWorkflow("tool-switcher/stroke", strokeTool);
-
-// handoff 子图挂到 tool-switcher 的 select 透传子节点
-scope.mountWorkflow("tool-switcher/select", createHandoffSubDAG({...}));
+// handoff 两阶段工作流是单个 wrapper tool，一次挂载完成
+scope.mountWorkflow(
+  "secondary-chooser",
+  new HandoffWrapperTool({
+    first: new RectangleObjectChooserTool(),
+    second: new CommonObjectModifierTool(),
+  }),
+);
 ```
 
 > **约定**：节点的 `handler` 只允许通过 `mountWorkflow`（或子图定义中的
@@ -155,4 +157,4 @@ Viewport 构造函数自动创建 `InputScope(board, this)`。接线操作通过
 - [viewport-document.md](./viewport-document.md)
 - [board-document.md](./board-document.md)
 - [devices-dag-document.md](../../../devices-dag/docs/devices-dag-document.md)
-- [handoff-handler-document.md](../../../devices-dag/prefixes/docs/handoff-handler-document.md)
+- [wrapper-document.md](../../../devices-dag/tools/wrapper/docs/wrapper-document.md)

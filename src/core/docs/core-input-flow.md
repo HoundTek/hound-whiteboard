@@ -11,7 +11,8 @@
 - `Board.signalsEventBus.emit("input", packet)`
 - `Board.devicesDAG.dispatch()` 从根节点逐段向下路由
 - device 节点规整输入
-- prefix 节点执行参数注入、状态机、handoff 或局部路由
+- prefix 节点执行参数注入、边级转换或局部路由
+- wrapper 节点内部完成顺序/互斥组合（handoff、tool-switcher）
 - tool 叶子消费最终信号
 
 本文涉及的线程边界见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
@@ -24,7 +25,7 @@ flowchart LR
     Bus --> DAG[Board.devicesDAG]
     DAG --> ViewportRoot[/viewportId]
     ViewportRoot --> Device[Device SubDAG]
-    Device --> Prefix[Prefix / Handoff]
+    Device --> Prefix[Prefix / Wrapper]
     Prefix --> Tool[Tool Leaf]
     Tool --> RPC[BoardApiRpc / Viewport]
 ```
@@ -107,18 +108,19 @@ configureNode("/${viewportId}", {
 - keyboard：从原始 `keydown` / `keyup` 规整为 `trigger` / `trigger-repeat` / `release` / `cancel`
 - touchscreen：多触点摘要或 contact 类信号
 
-### 5. prefix / handoff 阶段
+### 5. prefix / wrapper 阶段
 
 prefix 是链路中的前置处理层。当前主要承担：
 
 - 记录或观察信号
 - 生成派生参数
 - 改写信号形态
-- 维护局部状态机
-- 在多个子节点之间切换活动链路
-- 将动态路由参数通过 `ctx.acc` 传给下游，只读基础设施通过 `ctx.services` 共享
+- 边级坐标与信号转换
 
-`handoff-handler` 则负责 chooser → modifier 这类两阶段工作流的控制权转移。
+wrapper（`tools/wrapper/`）是复合工具节点，对外是单个 Tool，内部完成组合逻辑：
+
+- `HandoffWrapperTool` 负责 chooser / creator → modifier 这类两阶段顺序工作流的控制权转移
+- `ToolSwitcherWrapper` 负责 1-of-N 互斥工具路由
 
 ### 6. tool 阶段
 
@@ -177,20 +179,6 @@ Tool 是设备图末端的消费型处理器，只负责：
 - `boardApi`（RPC 代理）
 - `viewport`
 
-### `ctx.acc` — 累积上下文
-
-`ctx.acc` 是沿命中路径由上游 handler 返回值逐层追加的运行时控制参数。
-
-适合放：
-
-- `autoCommit`（handoff prefix 注入，控制是否提交）
-- `autoUmountOnApply`（handoff prefix 注入，控制是否自卸载）
-- `objectId`（创建工具链路传递）
-- `objects`（handoff 对象桥接）
-- 一次性回调
-
-> `ctx.acc` 不包含 `services` 中的静态基础设施依赖；基础设施请通过 `ctx.services` 读取。
-
 ### 节点 `state`
 
 节点 `state` 适合放：
@@ -203,7 +191,6 @@ Tool 是设备图末端的消费型处理器，只负责：
 ### 当前约束
 
 - `services` 由节点定义注入，handler 返回值无法写入
-- `acc` 只能追加，不应覆盖已有键
 - 跨节点可变共享优先走 `state`
 - Tool 不应承担 prefix 的路由职责
 - 路由始终逐层向下，不支持向上冒泡到兄弟节点
@@ -232,6 +219,7 @@ Tool 是设备图末端的消费型处理器，只负责：
 
 - [设备图](../ui-thread/devices-dag/docs/devices-dag-document.md)
 - [设备定义](../ui-thread/devices-dag/devices/docs/device-document.md)
+- [wrapper（复合设备）](../ui-thread/devices-dag/tools/wrapper/docs/wrapper-document.md)
 - [对象创建工具](../ui-thread/devices-dag/tools/creator/docs/object-creator-document.md)
 - [对象选择工具](../ui-thread/devices-dag/tools/chooser/docs/object-chooser-document.md)
 - [对象修改工具](../ui-thread/devices-dag/tools/modifier/docs/object-modifier-document.md)

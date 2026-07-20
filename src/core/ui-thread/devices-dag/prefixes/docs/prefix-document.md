@@ -29,26 +29,23 @@ prefix 节点现在依赖三条稳定边界：
 - **局部向下路由**：后续包只能继续发给当前节点的后代
 - **节点 state**：保存可变共享数据，例如锚点、活动 child、桥接对象
 - **静态 services**：声明式注入的基础设施依赖，例如 `board`、`boardApi`、`viewport`
-- **累积上下文 acc**：由 handler 返回值逐层追加的运行时控制参数，例如 `autoCommit`
 
-这里需要特别区分三件事：
+这里需要特别区分两件事：
 
 - 节点 state 适合保存跨多次输入仍然需要保留的局部状态
 - services 适合保存声明式注入的只读基础设施
-- acc 适合保存单次 dispatch 内的路由控制参数
 
 ## 模块清单
 
-| 文件                         | 导出                                          | 用途                         |
-| ---------------------------- | --------------------------------------------- | ---------------------------- |
-| `index.js`                   | 统一导出入口                                  | 集中导出全部公开 API         |
-| `utils.js`                   | `isPlainObject`, `shallowCloneSignals`        | 内部工具方法                 |
-| `handler.js`                 | `createPrefixNodeHandler`                     | 基础修饰节点处理器           |
-| `multi-tool-handler.js`      | `createMultiToolPrefixHandler`                | 多工具状态机路由             |
-| `repeater-handler.js`        | `createRepeaterPrefixHandler`                 | 信号复制分发                 |
-| `handoff-handler.js`         | `createHandoffSubDAG`, `wrapSubDAGForHandoff` | first → second 两阶段工作流  |
-| `drag-anchor-handler.js`     | `createDragAnchorPrefixHandler`               | 拖拽位移转换                 |
-| `canvas-to-world-handler.js` | `createCanvasToWorldPrefixHandler`            | canvas 相对坐标→世界坐标转换 |
+| 文件                         | 导出                                 | 用途                         |
+| ---------------------------- | ------------------------------------ | ---------------------------- |
+| `index.js`                   | 统一导出入口                         | 集中导出全部公开 API         |
+| `utils.js`                   | `isPlainObject`, `shallowCloneSignals` | 内部工具方法               |
+| `handler.js`                 | `createPrefixNodeHandler`            | 基础修饰节点处理器           |
+| `repeater-handler.js`        | `createRepeaterPrefixHandler`        | 信号复制分发                 |
+| `signal-log-handler.js`      | `createSignalLogPrefixHandler`       | 信号观测与日志               |
+| `edge-prefix.js`             | `createEdgePrefix`                   | 边级 prefix 子图包装         |
+| `canvas-to-world-handler.js` | `createCanvasToWorldPrefixHandler`   | canvas 相对坐标→世界坐标转换 |
 
 ## 关系图
 
@@ -56,10 +53,10 @@ prefix 节点现在依赖三条稳定边界：
 flowchart TD
     Tree[DevicesDAG] --> Prefix[Prefix Node]
     Prefix --> Base[createPrefixNodeHandler]
-    Base --> Multi[createMultiToolPrefixHandler]
-    Base --> Repeater[createRepeaterPrefixHandler]
-    Multi --> Handoff[createHandoffSubDAG]
-    Handoff --> WrapSub[wrapSubDAGForHandoff]
+    Prefix --> Repeater[createRepeaterPrefixHandler]
+    Prefix --> SignalLog[createSignalLogPrefixHandler]
+    Prefix --> EdgePrefix[createEdgePrefix]
+    Prefix --> CanvasToWorld[createCanvasToWorldPrefixHandler]
     Prefix --> Tool[Tool Leaf]
 ```
 
@@ -83,34 +80,6 @@ const handler = createPrefixNodeHandler({
 
 若不需要 `initialState`，可以直接用裸 handler，拿到的 ctx 也有同样的 helper。
 
-## 多工具状态机：`createMultiToolPrefixHandler`
-
-基于基础处理器构建，通过 `resolveTransition` 回调实现状态驱动的子节点路由。
-
-当前路由决策对象的稳定字段有：
-
-| 字段         | 类型      | 语义                                |
-| ------------ | --------- | ----------------------------------- |
-| `child`      | `string`  | 路由到特定子节点                    |
-| `consume`    | `boolean` | 消费信号，不继续转发                |
-| `to`         | `string`  | 覆盖默认 child 路径，仍然只指向后代 |
-| `patchState` | `Object`  | 合并到当前状态                      |
-| `state`      | `Object`  | 直接替换当前状态                    |
-| `signals`    | `Array`   | 改写下发信号                        |
-| `acc`        | `Object`  | 追加到下游累积上下文                |
-
-```js
-const handler = createMultiToolPrefixHandler({
-  defaultChild: "first",
-  initialState: { activeChild: "first", phase: "first" },
-  resolveTransition({ state }) {
-    return { child: state.activeChild };
-  },
-});
-```
-
-`transition.acc` 是 prefix 把控制参数传给当前活动子链的关键途径。
-
 ## 信号复制分发：`createRepeaterPrefixHandler`
 
 `repeater` 会把输入信号复制为多份，分别发给不同子节点，或同一个子节点的多份副本。
@@ -122,42 +91,6 @@ const handler = createRepeaterPrefixHandler({
 ```
 
 若未显式提供 `toChildren`，它会回退到当前节点的 `defaultRoute`。
-
-## Handoff 工作流：`createHandoffSubDAG`
-
-详细文档见 [handoff-handler-document.md](./handoff-handler-document.md)。
-
-`createHandoffSubDAG` 把 first → second 的两阶段工作流封装成一棵结构化子树。典型场景包括 creator → modifier、chooser → modifier、SubDAGDefinition → modifier。
-
-辅助函数：
-
-- `wrapSubDAGForHandoff(subDAGDef, options)`：子树根节点满足条件时触发完成回调
-- handler 内部桥接：在 first / second 节点 handler 中临时订阅工具钩子，触发完成回调
-
-first 完成时通过 `receiveHandoffObjects` 将对象同步到 second 工具的私有字段，
-不依赖 node state 或 acc。通过 `acc.autoCommit = false` 控制下游行为。
-
-## 拖拽位移转换：`createDragAnchorPrefixHandler`
-
-`createDragAnchorPrefixHandler` 将位置序列转换为累计位移 `{ x, y }`，并输出 `displacement` 信号。
-
-工作流程：
-
-1. 每次收到 `position` 信号：计算从锚点出发的累计位移并替换：
-   - 首个 `position` 同时记录锚点，位移为 `{x: 0, y: 0}`
-   - 后续 `position` 基于锚点计算累计位移
-2. 同包中非 `position` 信号**保留不变**，仅 `position` 被替换为 `displacement`
-3. `end` 信号：清空锚点，但同包中的 `position` 仍转为 `displacement` 后再转发
-
-信号变换示意：
-
-```text
-输入: [position, customA, end]  ->  输出: [customA, end, displacement]   （end 分支，仍替换 position）
-输入: [position, customB]       ->  输出: [customB, displacement]        （锚点就绪时替换）
-输入: [position]                ->  输出: [displacement]                 （仅 position 时）
-```
-
-> **注意**：`GestureBasedObjectModifierTool` 及其子类 `CommonObjectModifierTool` 直接消费 `position` 信号，不再需要 `drag-anchor` 前缀转换。此 prefix 仍可用于其他需要累计位移的消费方。
 
 ## 子树构建
 
@@ -177,12 +110,11 @@ viewport.mountSubDAG("", builder.build());
 - `handler` 与 `tool` 不能在同一结构化节点上同时声明
 - prefix 语义通过 `semantics` 标记表达，不引入新的节点类
 - 节点状态通过 `getNodeState()` / `setNodeState()` 显式管理
-- first / second 的切换使用累积 `context` 中的回调完成
-- handoff 通过生命周期钩子订阅实现完成通知，不替换工具方法
+- first → second 顺序流与 1-of-N 互斥路由不属于 prefix 职责，由 `tools/wrapper/` 的 wrapper tool 承担
 
 ## 相关文档
 
-- [handoff-handler-document.md](./handoff-handler-document.md)
+- [wrapper（复合设备）](../../tools/wrapper/docs/wrapper-document.md)
 - [handler 上下文（ctx）用法](../../docs/handler-context-document.md)
 - [设备图](../../docs/devices-dag-document.md)
 - [对象创建工具](../../tools/creator/docs/object-creator-document.md)

@@ -116,7 +116,7 @@ Creator 的 `completeAction` 具有独特的非对称语义：
 4. `afterCompleteCreatedObject(interaction, completedObject)` — **总是**执行
 5. `super.afterAction(context, completedObject)` — 触发 `action:complete`
 
-即：finalize 和通知始终执行，commit 受控于 beforeCommit。handoff 通过注入 `acc.autoCommit = false` 拦截 commit。
+即：finalize 和通知始终执行，commit 受控于 beforeCommit 与实例属性 `autoCommit`。`HandoffWrapperTool` 在接管 creator 时将其 `autoCommit` 置为 `false` 拦截 commit。
 
 ## 信号分派
 
@@ -237,4 +237,4 @@ Creator 扩展为 `buildInteractionContext`，额外提供 `injectedProperty`、
 - [object-creator-document.md](../creator/docs/object-creator-document.md)
 - [object-chooser-document.md](../chooser/docs/object-chooser-document.md)
 - [object-modifier-document.md](../modifier/docs/object-modifier-document.md)
-- [handoff-handler-document.md](../../prefixes/docs/handoff-handler-document.md)
+- [wrapper-document.md](../wrapper/docs/wrapper-document.md)

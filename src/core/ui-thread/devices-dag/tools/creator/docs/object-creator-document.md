@@ -129,7 +129,8 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 决定 `finalize` 后是否把对象提交到静态图。
 
 - 默认返回 `true`
-- handoff 模式下通过注入 `acc.autoCommit = false` 阻止提交，对象继续留在 AOM 动态图中
+- 实例属性 `autoCommit`（默认 `true`）为 `false` 时跳过 commit，对象继续留在 AOM 动态图中
+- `HandoffWrapperTool` 接管 creator 时会在构造期把 `autoCommit` 置为 `false`
 
 ### `afterCompleteCreatedObject(interaction, completedObject)`
 
@@ -141,12 +142,12 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 
 creator 不直接持有 modifier 引用。
 
-handoff 的接入点：
+`HandoffWrapperTool` 的接入点：
 
-1. `beforeCommitCreatedObject()` — 被 `acc.autoCommit` 取代拦截职责
-2. `action:complete` 事件 — handoff `wrapToolForHandoff` 订阅该事件
+1. 构造期把 creator 的实例属性 `autoCommit` 置为 `false`，阻止对象提前进入静态图
+2. 构造期一次性订阅 creator 的 `action:complete` 事件
 
-创建完成后，handoff wrapper 从 `action:complete` 事件结果中取得 `_entry`，通过 `onComplete(phase, context, objects)` 回调桥接给 modifier。
+创建完成后，wrapper 从 `action:complete` 事件结果中取得 `_entry`，通过 modifier 的 `receiveHandoffObjects(objects, context)` 桥接给 modifier。
 
 ## 子类差异
 
@@ -176,5 +177,6 @@ handoff 的接入点：
 
 - [object-modifier-document.md](../../modifier/docs/object-modifier-document.md)
 - [object-chooser-document.md](../../chooser/docs/object-chooser-document.md)
+- [wrapper-document.md](../../wrapper/docs/wrapper-document.md)
 - [core-data-model.md](../../../../../docs/core-data-model.md)
 - [core-runtime-boundaries.md](../../../../../docs/core-runtime-boundaries.md)

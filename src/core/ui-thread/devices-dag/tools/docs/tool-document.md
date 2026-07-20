@@ -6,11 +6,11 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 
 ### 职责边界
 
-| 层面       | 做什么                                 | 谁做                  |
-| ---------- | -------------------------------------- | --------------------- |
-| 信号预处理 | 锚点、参数注入、局部路由、状态机       | 修饰节点              |
-| 对象编排   | first → second 切换、对象桥接          | `createHandoffSubDAG` |
-| 末端消费   | 创建对象、修改对象、选择对象、更新视口 | Tool                  |
+| 层面       | 做什么                                 | 谁做                 |
+| ---------- | -------------------------------------- | -------------------- |
+| 信号预处理 | 锚点、参数注入、局部路由、状态机       | 修饰节点             |
+| 对象编排   | first → second 切换、对象桥接          | `HandoffWrapperTool` |
+| 末端消费   | 创建对象、修改对象、选择对象、更新视口 | Tool                 |
 
 ### Tool 只做三件事
 
@@ -18,11 +18,11 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 2. 消费信号：修改白板对象或状态
 3. 默认不继续转发：它不是新的路由层
 
-所有 orchestration 都已经上移到 prefix 层。新的稳定模型优先使用：
+编排职责已经上移到 prefix 层与 wrapper 层。新的稳定模型优先使用：
 
-- 修饰节点路由
+- 修饰节点路由（边级转换、参数注入）
+- wrapper 组合（顺序流、互斥选择）
 - 节点 `state`
-- 累积 `context` 中的回调
 
 仓库中仍有少量旧工具保留兼容型完成信号输出，但那不再是新的首选设计。
 
@@ -44,24 +44,16 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 
 - `path`
 - `services`
-- `acc`
 - `getNodeState`
 - `setNodeState`
 
-这里的 `services` 和 `acc` 来自 DevicesDAG 的分层上下文。
-`services` 通常会携带：
+这里的 `services` 来自 DevicesDAG 的声明式服务上下文，通常会携带：
 
 - `board`（含 `allocateObjectId` 等方法）
 - `boardApi`（RPC 代理）
 - `viewport`
 
-`acc` 通常会携带：
-
-- `autoCommit`（handoff 注入，控制是否提交）
-- `autoUmountOnApply`（handoff 注入，控制是否自卸载）
-
-基础设施依赖（`board`、`boardApi`、`viewport`）统一通过 `context.services` 读取，
-动态路由参数（`autoCommit`、`autoUmountOnApply` 等）通过 `context.acc` 读取。
+基础设施依赖（`board`、`boardApi`、`viewport`）统一通过 `context.services` 读取。
 
 ## 对象上下文辅助方法
 
@@ -218,6 +210,7 @@ unsub();
 ## 相关文档
 
 - [手势工具基类](./gesture-tool-document.md)
+- [wrapper（复合设备）](../wrapper/docs/wrapper-document.md)
 - [设备图](../../docs/devices-dag-document.md)
 - [Core 输入流](../../../../docs/core-input-flow.md)
 - [阶段性稳定接口](../../../../docs/core-stable-interfaces.md)
