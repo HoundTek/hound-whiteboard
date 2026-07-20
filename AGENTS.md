@@ -57,7 +57,7 @@ src/
 
 - **Tool** — 设备图末端消费型处理器，不转发信号。生命周期：`beginInteraction → handleSignal* → endInteraction → success`
 - **信号类型** — `position`（绝对坐标，驱动手势状态机）、`displacement`（相对位移，无状态增量）、`end`、`success`
-- **输入路由** — 设备 → DAG → 工具处理器。handoff 通过 `prefixes/` 转移控制权
+- **输入路由** — 设备 → DAG → 工具处理器。顺序/互斥组合（handoff、tool-switcher）由 `tools/wrapper/` 下的 wrapper tool 承担（`HandoffWrapperTool` / `ToolSwitcherWrapper`），作为普通 Tool 单节点挂载
 - **对象模型** — `BasicObject` 基类，`Stroke`/`Container`/`two-dim`/`one-dim` 子类
 
 ## 代码规范

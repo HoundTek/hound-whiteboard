@@ -35,11 +35,15 @@ src/core/
 │   │   └── circle-creator.test.js
 │   ├── modifier/tests/
 │   │   └── common-object-modifier.test.js
-│   └── chooser/tests/
-│       ├── obj-chooser.test.js
-│       └── rectangle-object-chooser.test.js
+│   ├── chooser/tests/
+│   │   ├── obj-chooser.test.js
+│   │   └── rectangle-object-chooser.test.js
+│   └── wrapper/tests/
+│       ├── wrapper-tool.test.js      ← WrapperTool 基座
+│       ├── handoff-wrapper.test.js   ← handoff 机制 + 真实工具集成
+│       └── switcher-wrapper.test.js  ← tool-switcher 路由
 └── prefixs/tests/
-    └── handoff-handler.test.js    ← handoff 机制 + 真实工具集成
+    └── prefix-node.test.js          ← prefix 基础设施
 ```
 
 **规则**：
