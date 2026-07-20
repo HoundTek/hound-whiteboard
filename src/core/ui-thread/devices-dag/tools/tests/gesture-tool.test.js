@@ -324,7 +324,6 @@ class TestMultiGestureTool extends MultiGestureTool {
 function createContext(overrides = {}) {
   return {
     path: "/gesture-test",
-    acc: {},
     ...overrides,
   };
 }

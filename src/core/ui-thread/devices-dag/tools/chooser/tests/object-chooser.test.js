@@ -198,9 +198,6 @@ describe("ObjectChooserTool", () => {
           discardActiveObjects,
         },
       },
-      acc: {
-        objects: [chosenObject],
-      },
       path: "/viewport/chooser/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,

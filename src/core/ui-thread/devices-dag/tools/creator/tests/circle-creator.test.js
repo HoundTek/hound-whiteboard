@@ -20,9 +20,6 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
         boardApi,
         viewport,
       },
-      acc: {
-        objectId,
-      },
     },
   };
 }
@@ -254,6 +251,10 @@ describe("CircleCreatorTool", () => {
     const { deviceContext } = createBoardDeviceContext(201);
     const board = deviceContext.services.board;
     const boardApi = deviceContext.services.boardApi;
+    board.allocateObjectId = jest
+      .fn()
+      .mockReturnValueOnce(201)
+      .mockReturnValueOnce(202);
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -261,7 +262,7 @@ describe("CircleCreatorTool", () => {
         to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { services: { board, boardApi }, acc: { objectId: 201 } },
+      { services: { board, boardApi } },
     );
 
     const firstObject = tool._entry;
@@ -274,7 +275,7 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { services: { board, boardApi }, acc: { objectId: 201 } },
+      { services: { board, boardApi } },
     );
 
     tool.process(
@@ -282,7 +283,7 @@ describe("CircleCreatorTool", () => {
         to: "/viewport/circle",
         signals: [{ type: "position", context: { value: new Vector(6, 7) } }],
       },
-      { services: { board, boardApi }, acc: { objectId: 202 } },
+      { services: { board, boardApi } },
     );
 
     const secondObject = tool._entry;
@@ -295,7 +296,7 @@ describe("CircleCreatorTool", () => {
           { type: "end", context: {} },
         ],
       },
-      { services: { board, boardApi }, acc: { objectId: 202 } },
+      { services: { board, boardApi } },
     );
 
     expect(firstObject).not.toBe(secondObject);

@@ -232,13 +232,7 @@ function createMockModifier(onProcess) {
     afterApplyModifiedObjects(ctx, objects) {}
 
     discardAction(context = {}) {
-      const objects =
-        context.getNodeState?.(context.path)?.objects ??
-        (Array.isArray(context.acc?.objects)
-          ? context.acc.objects
-          : context.acc?.objects
-            ? [context.acc.objects]
-            : []);
+      const objects = context.getNodeState?.(context.path)?.objects ?? [];
       const objectIds = objects
         .map((objectEntry) =>
           typeof objectEntry?.id === "number" ? objectEntry.id : null,

@@ -28,9 +28,6 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
       boardApi,
       viewport,
     },
-    acc: {
-      objectId,
-    },
   };
 
   return { board, boardApi, deviceContext };
@@ -230,13 +227,14 @@ describe("ObjectCreatorTool — property 信号", () => {
 
       tool.objectId = 1;
       tool._entry = { id: 1, type: "test" };
-      tool.completeCreatedObject({ context: { acc: {} } });
+      const context = {};
+      tool.completeCreatedObject({ context });
 
       expect(actionComplete).toHaveBeenCalledTimes(1);
-      expect(actionComplete).toHaveBeenCalledWith(
-        expect.objectContaining({ acc: {} }),
-        { id: 1, type: "test" },
-      );
+      expect(actionComplete).toHaveBeenCalledWith(context, {
+        id: 1,
+        type: "test",
+      });
     });
 
     test("beforeCommitCreatedObject 返回 false 时阻止 commitObjects", () => {
@@ -293,7 +291,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.objectId = 4;
       tool._entry = { id: 4 };
 
-      tool.completeCreatedObject({ context: { acc: {} } });
+      tool.completeCreatedObject({ context: {} });
 
       expect(actionComplete).toHaveBeenCalledTimes(1);
     });

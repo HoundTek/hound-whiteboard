@@ -110,9 +110,6 @@ describe("RectangleObjectChooserTool", () => {
         boardApi,
         viewport: { requestViewportUiRender: jest.fn() },
       },
-      acc: {
-        objects: [previousSummary],
-      },
       path: "/main/mouse/secondary/tool",
       getNodeState: stateAccess.getState,
       setNodeState: stateAccess.setState,

@@ -153,9 +153,6 @@ class MultiToolWrapper extends Tool {
     if (context.services) {
       dispatchContext.services = context.services;
     }
-    if (context.acc) {
-      dispatchContext.acc = context.acc;
-    }
 
     return dispatchContext;
   }

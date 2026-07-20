@@ -29,7 +29,6 @@ class MockTool extends Tool {
         value: s.context?.value ?? null,
       })),
       serviceKeys: Object.keys(context?.services ?? {}),
-      accKeys: Object.keys(context?.acc ?? {}),
     });
   }
 
@@ -334,7 +333,6 @@ describe("MultiToolWrapper", () => {
     expect(instances[0].calls[0].serviceKeys).toEqual(
       expect.arrayContaining(["board", "viewport", "boardApi"]),
     );
-    expect(instances[0].calls[0].accKeys).toEqual([]);
   });
 
   test("per-touch handoff 子图：entry → first → second，end 信号触发移交", () => {

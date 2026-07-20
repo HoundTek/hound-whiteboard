@@ -33,9 +33,6 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
       boardApi,
       viewport,
     },
-    acc: {
-      objectId,
-    },
   };
 
   return { deviceContext };
@@ -187,7 +184,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "cancel", context: {} }],
       },
-      { services: { board, boardApi }, acc: { objectId: 1 } },
+      { services: { board, boardApi } },
     );
 
     expect(discardSpy).toHaveBeenCalledWith([1]);
@@ -415,6 +412,10 @@ describe("StrokeCreatorTool", () => {
     const { deviceContext } = createBoardDeviceContext(31);
     const board = deviceContext.services.board;
     const boardApi = deviceContext.services.boardApi;
+    board.allocateObjectId = jest
+      .fn()
+      .mockReturnValueOnce(31)
+      .mockReturnValueOnce(32);
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
 
     tool.process(
@@ -422,7 +423,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(1, 2) } }],
       },
-      { services: { board, boardApi }, acc: { objectId: 31 } },
+      { services: { board, boardApi } },
     );
 
     const firstObject = tool._entry;
@@ -432,7 +433,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { services: { board, boardApi }, acc: { objectId: 31 } },
+      { services: { board, boardApi } },
     );
 
     tool.process(
@@ -440,7 +441,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "position", context: { value: new Vector(4, 5) } }],
       },
-      { services: { board, boardApi }, acc: { objectId: 32 } },
+      { services: { board, boardApi } },
     );
 
     const secondObject = tool._entry;
@@ -450,7 +451,7 @@ describe("StrokeCreatorTool", () => {
         to: "/viewport/stroke",
         signals: [{ type: "end", context: {} }],
       },
-      { services: { board, boardApi }, acc: { objectId: 32 } },
+      { services: { board, boardApi } },
     );
 
     expect(firstObject).not.toBe(secondObject);

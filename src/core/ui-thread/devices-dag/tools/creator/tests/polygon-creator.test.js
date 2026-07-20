@@ -28,9 +28,6 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
         boardApi,
         viewport,
       },
-      acc: {
-        objectId,
-      },
     },
   };
 }
@@ -151,7 +148,7 @@ describe("PolygonCreatorTool", () => {
         to: "/viewport/polygon",
         signals: [{ type: "object-cancel", context: {} }],
       },
-      { services: { board, boardApi }, acc: { objectId: 10 } },
+      { services: { board, boardApi } },
     );
 
     expect(discardSpy).toHaveBeenCalledWith([10]);

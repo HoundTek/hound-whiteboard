@@ -233,7 +233,7 @@ function mermaidNodeLabel(node) {
  * 将路由追踪数组格式化为可读文本
  * @description
  * 每行一个节点，显示路径、深度、动作和包数量。
- * @param {Array<{path: string, depth: number, hadHandler: boolean, action: string, nextSegment?: string, packetsCount: number, deferredCount: number, accKeys?: string[]}>} trace - 路由追踪数组
+ * @param {Array<{path: string, depth: number, hadHandler: boolean, action: string, nextSegment?: string, packetsCount: number, deferredCount: number}>} trace - 路由追踪数组
  * @returns {string} 格式化后的追踪文本
  */
 function traceToString(trace) {
@@ -250,8 +250,6 @@ function traceToString(trace) {
     if (entry.nextSegment) parts.push(`→${entry.nextSegment}`);
     if (entry.packetsCount > 0) parts.push(`pkts=${entry.packetsCount}`);
     if (entry.deferredCount > 0) parts.push(`deferred=${entry.deferredCount}`);
-    if (entry.accKeys?.length > 0)
-      parts.push(`acc=[${entry.accKeys.join(",")}]`);
     return parts.join(" ");
   });
 

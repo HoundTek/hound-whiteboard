@@ -341,7 +341,6 @@ class DevicesDAGNode {
    * @param {Object} [options={}] - 路由选项
    * @param {string} [options.path=""] - 当前节点的路径
    * @param {Object} [options.services={}] - 静态服务上下文
-   * @param {Object} [options.acc={}] - 累积上下文（仅包含动态路由参数）
    * @param {number} [options.depth=0] - 当前递归深度
    * @param {number} [options.maxDepth=32] - 最大递归深度
    * @param {Object|null} [options.dag=null] - 所属 DAG 实例（用于跨节点状态管理）
@@ -349,13 +348,12 @@ class DevicesDAGNode {
    * @param {Array|null} [options.trace=null] - 路由追踪收集器，传入数组时自动记录遍历路径
    * @param {(packet: SignalPacket) => SignalPacket[]} [options.edgeNotFoundFallback] - 边不存在时的回退
    * @param {string[]|null} [options.remainingSegments=null] - 剩余路径段（用于边查找，独立于 packet.to）
-   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }} 分发结果
+   * @returns {{ packets: SignalPacket[], services?: Object }} 分发结果
    */
   dispatch(packet, options = {}) {
     const {
       path = this.path ?? "",
       services,
-      acc,
       depth = 0,
       maxDepth = 32,
       dag = null,
@@ -366,11 +364,9 @@ class DevicesDAGNode {
     } = options;
 
     const inheritedServices = snapshotServices(services);
-    const inheritedAcc = isPlainObject(acc) ? { ...acc } : {};
 
     const { layer: mergedServices, changed: servicesChanged } =
       mergeContextLayer(inheritedServices, this.getServices(), {
-        forbidden: inheritedAcc,
         label: "Service context",
       });
 
@@ -382,30 +378,19 @@ class DevicesDAGNode {
     const result = this._invoke(pkt, {
       path,
       services: mergedServices,
-      acc: inheritedAcc,
       depth,
       dag,
       strict,
     });
 
-    const { layer: mergedAcc, changed: accChanged } = mergeContextLayer(
-      inheritedAcc,
-      result.acc,
-      {
-        forbidden: mergedServices,
-        label: "Accumulated context",
-      },
-    );
-
     /**
      * 构造分发返回值（仅在实际变更时携带上下文层）
      * @param {SignalPacket[]} packets - 收集到的信号包
-     * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }}
+     * @returns {{ packets: SignalPacket[], services?: Object }}
      */
     const buildReturn = (packets) => ({
       packets,
       services: servicesChanged ? mergedServices : undefined,
-      acc: accChanged ? mergedAcc : undefined,
     });
 
     // 2. 终止分支
@@ -448,7 +433,6 @@ class DevicesDAGNode {
       this._drainDeferred(routing.deferredPackets, {
         path,
         services: mergedServices,
-        acc: mergedAcc,
         depth: depth + 1,
         maxDepth,
         dag,
@@ -500,7 +484,6 @@ class DevicesDAGNode {
       nextSegment: firstSegment,
       packetsCount: result.packets.length,
       deferredCount: routing.deferredPackets.length,
-      accKeys: result.acc ? Object.keys(result.acc) : [],
     });
 
     const nextDepth = depth + 1;
@@ -514,7 +497,6 @@ class DevicesDAGNode {
     const childResult = edge.target.dispatch(routing.currentPacket, {
       path: joinPath(path, firstSegment),
       services: mergedServices,
-      acc: mergedAcc,
       depth: nextDepth,
       maxDepth,
       dag,
@@ -532,7 +514,6 @@ class DevicesDAGNode {
       ],
       services:
         childResult.services || (servicesChanged ? mergedServices : undefined),
-      acc: childResult.acc || (accChanged ? mergedAcc : undefined),
     };
   }
 
@@ -546,14 +527,13 @@ class DevicesDAGNode {
    * @param {Object} options - 调用选项
    * @param {string} options.path - 当前节点路径
    * @param {Object} options.services - 合并后的静态服务上下文
-   * @param {Object} options.acc - 继承的累积上下文
    * @param {number} options.depth - 当前递归深度
    * @param {Object|null} options.dag - 所属 DAG 实例
    * @param {boolean} options.strict - strict 模式下 handler 报错直接抛出
    * @returns {import("../dag-type.js").DevicesDAGHandlerResult} 规整后的 handler 结果
    * @private
    */
-  _invoke(pkt, { path, services, acc, depth, dag, strict }) {
+  _invoke(pkt, { path, services, depth, dag, strict }) {
     const handler = this.getHandler?.() ?? this.handler;
     if (typeof handler !== "function") {
       return {
@@ -565,7 +545,6 @@ class DevicesDAGNode {
     const handlerContext = this._buildHandlerContext(pkt, {
       path,
       services,
-      acc,
       depth,
       dag,
       strict,
@@ -697,14 +676,13 @@ class DevicesDAGNode {
    * 不调用本节点的 handler，仅做边查找与子节点递归。
    * @param {SignalPacket} packet - 信号包
    * @param {Object} options - 路由选项（同 {@link DevicesDAGNode#dispatch}）
-   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }}
+   * @returns {{ packets: SignalPacket[], services?: Object }}
    * @private
    */
   _routeFrom(packet, options = {}) {
     const {
       path = this.path ?? "",
       services,
-      acc,
       depth = 0,
       maxDepth = 32,
       dag = null,
@@ -713,7 +691,6 @@ class DevicesDAGNode {
     } = options;
 
     const inheritedServices = snapshotServices(services);
-    const inheritedAcc = isPlainObject(acc) ? { ...acc } : {};
     const segments = normalizePath(packet.to || "");
 
     if (segments.length === 0) {
@@ -723,13 +700,13 @@ class DevicesDAGNode {
           { ...options, depth },
         );
       }
-      return { packets: [], services: undefined, acc: undefined };
+      return { packets: [], services: undefined };
     }
 
     const firstSegment = segments[0];
     const edge = this.outEdges.get(firstSegment);
     if (!edge) {
-      return { packets: [], services: undefined, acc: undefined };
+      return { packets: [], services: undefined };
     }
 
     const child = edge.target;
@@ -745,7 +722,6 @@ class DevicesDAGNode {
     return child.dispatch(packet, {
       path: childPath,
       services: inheritedServices,
-      acc: inheritedAcc,
       depth: nextDepth,
       maxDepth,
       dag,
@@ -763,14 +739,13 @@ class DevicesDAGNode {
    * @param {Object} opts - 上下文构建选项
    * @param {string} opts.path - 节点路径
    * @param {Object} opts.services - 静态服务上下文
-   * @param {Object} opts.acc - 累积上下文（动态路由参数）
    * @param {number} opts.depth - 递归深度
    * @param {Object|null} opts.dag - DAG 实例
    * @param {boolean} [opts.strict=false] - strict 模式下跨节点状态写入直接抛出
    * @returns {Object}
    * @private
    */
-  _buildHandlerContext(packet, { path, services, acc, depth, dag, strict = false }) {
+  _buildHandlerContext(packet, { path, services, depth, dag, strict = false }) {
     const defaultRoute = this.defaultRoute ?? "";
     const resolvedDefaultRoutePath = defaultRoute
       ? joinPath(path, defaultRoute)
@@ -806,7 +781,6 @@ class DevicesDAGNode {
       depth,
       signalPacket: packet,
       services: snapshotServices(services),
-      acc: isPlainObject(acc) ? { ...acc } : {},
       state: readNodeState(),
       getState: readNodeState,
       setState: (nextState) => {

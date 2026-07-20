@@ -312,48 +312,42 @@ describe("DevicesDAG", () => {
     });
   });
 
-  describe("dispatch 累积上下文", () => {
-    test("dispatch 应沿路径累积上下文且不可覆盖已有键", () => {
+  describe("dispatch 服务上下文", () => {
+    test("节点声明的 services 键与上游冲突时应抛错", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b");
-      dag.configureNode("/a", {
-        handler(_pkt, _ctx) {
-          return { acc: { layer: "a" } };
-        },
+      dag.configureNode("/", {
+        services: { layer: "a" },
       });
-      dag.configureNode("/a/b", {
-        handler(_pkt, _ctx) {
-          return { acc: { layer: "b" } };
-        },
+      dag.configureNode("/a", {
+        services: { layer: "b" },
       });
 
-      // layer 在 a 层已注入，b 层再注入同名应该抛错
+      // layer 在 "/" 层已声明，"/a" 层再声明同名键应抛错
       expect(() =>
         dag.dispatch({ to: "/a/b", signals: [{ type: "test" }] }),
       ).toThrow(/already exists/i);
     });
 
-    test("dispatch 应让下游 handler 读取上游注入的累积上下文", () => {
+    test("dispatch 应让下游 handler 读取路径上声明的 services", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b");
       dag.configureNode("/a", {
-        handler(_pkt, _ctx) {
-          return { acc: { injected: 42 } };
-        },
+        services: { injected: 42 },
       });
-      const bContext = [];
+      const bServices = [];
       dag.configureNode("/a/b", {
         handler(_pkt, ctx) {
-          bContext.push(ctx.acc);
+          bServices.push(ctx.services.injected);
         },
       });
 
       dag.dispatch({ to: "/a/b", signals: [{ type: "test" }] });
 
-      expect(bContext[0].injected).toBe(42);
+      expect(bServices[0]).toBe(42);
     });
 
-    test("节点声明的 services 应通过 context.services 下发，并保留 acc 兼容视图", () => {
+    test("节点声明的 services 应通过 context.services 下发", () => {
       const dag = new DevicesDAG();
       const viewport = { id: "vp-1" };
       const snapshots = [];
@@ -369,7 +363,6 @@ describe("DevicesDAG", () => {
         handler(_pkt, ctx) {
           snapshots.push({
             services: { ...ctx.services },
-            acc: { ...ctx.acc },
           });
         },
       });
@@ -380,10 +373,9 @@ describe("DevicesDAG", () => {
         board: { id: "board-1" },
         viewport,
       });
-      expect(snapshots[0].acc).toEqual({});
     });
 
-    test("getServiceContext 应只聚合静态 services，不混入 acc", () => {
+    test("getServiceContext 应聚合路径上的静态 services", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b");
       dag.configureNode("/", {
@@ -392,23 +384,13 @@ describe("DevicesDAG", () => {
       dag.configureNode("/a", {
         services: { viewport: { id: "vp-1" } },
       });
-      dag.configureNode("/a/b", {
-        handler() {
-          return { acc: { autoCommit: false } };
-        },
-      });
 
       const serviceContext = dag.getServiceContext("/a/b");
-      const dispatchResult = dag.dispatch({
-        to: "/a/b",
-        signals: [{ type: "test" }],
-      });
 
       expect(serviceContext).toEqual({
         board: { id: "board-1" },
         viewport: { id: "vp-1" },
       });
-      expect(dispatchResult.acc).toEqual({ autoCommit: false });
     });
   });
 
@@ -449,7 +431,7 @@ describe("DevicesDAG", () => {
   });
 
   describe("dispatch 多入边节点", () => {
-    test("dispatch 沿一条路径到达多入边节点时上下文只沿该路径累积", () => {
+    test("dispatch 沿一条路径到达多入边节点时 services 只沿该路径累积", () => {
       const dag = new DevicesDAG();
       // 构建两条路径到达同一个叶子节点
       // 路径 A: root --route-a--> interA --leaf--> shared-leaf
@@ -461,20 +443,16 @@ describe("DevicesDAG", () => {
       dag.addEdge("/route-b", "leaf", "/shared-leaf");
 
       dag.configureNode("/route-a", {
-        handler(_pkt, _ctx) {
-          return { acc: { via: "route-a" } };
-        },
+        services: { via: "route-a" },
       });
       dag.configureNode("/route-b", {
-        handler(_pkt, _ctx) {
-          return { acc: { via: "route-b" } };
-        },
+        services: { via: "route-b" },
       });
 
-      const leafContexts = [];
+      const leafVias = [];
       dag.configureNode("/shared-leaf", {
         handler(_pkt, ctx) {
-          leafContexts.push(ctx.acc);
+          leafVias.push(ctx.services.via);
         },
       });
 
@@ -483,8 +461,7 @@ describe("DevicesDAG", () => {
       // 走 route-b
       dag.dispatch({ to: "/route-b/leaf", signals: [{ type: "t" }] });
 
-      expect(leafContexts[0].via).toBe("route-a");
-      expect(leafContexts[1].via).toBe("route-b");
+      expect(leafVias).toEqual(["route-a", "route-b"]);
     });
   });
 
@@ -819,72 +796,45 @@ describe("DevicesDAG", () => {
       expect(calls).toEqual([["auto"]]);
     });
 
-    test("根 handler 注入的初始 context 应传递到下游 handler", () => {
+    test("根节点声明的 services 应传递到下游 handler", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a");
 
-      // 通过根 handler 注入初始上下文
       dag.configureNode("/", {
-        handler() {
-          return { acc: { initialKey: "initialVal" } };
-        },
+        services: { initialKey: "initialVal" },
       });
 
       const ctxSnap = [];
       dag.configureNode("/a", {
         handler(_pkt, ctx) {
-          ctxSnap.push({ ...ctx.acc });
+          ctxSnap.push(ctx.services.initialKey);
         },
       });
 
       dag.dispatch({ to: "/a", signals: [{ type: "t" }] });
 
-      expect(ctxSnap[0].initialKey).toBe("initialVal");
+      expect(ctxSnap[0]).toBe("initialVal");
     });
 
-    test("多节点逐层注入不同 context key 应全部可见", () => {
+    test("多节点逐层声明的 services 键应全部可见", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b/c");
 
       dag.configureNode("/a", {
-        handler() {
-          return { acc: { layerA: 1 } };
-        },
+        services: { layerA: 1 },
       });
       dag.configureNode("/a/b", {
-        handler() {
-          return { acc: { layerB: 2 } };
-        },
+        services: { layerB: 2 },
       });
-      const finalCtx = [];
+      const finalServices = [];
       dag.configureNode("/a/b/c", {
         handler(_pkt, ctx) {
-          finalCtx.push({ ...ctx.acc });
+          finalServices.push({ ...ctx.services });
         },
       });
 
       dag.dispatch({ to: "/a/b/c", signals: [{ type: "t" }] });
-      expect(finalCtx[0]).toEqual({ layerA: 1, layerB: 2 });
-    });
-
-    test("handler 返回非纯对象的 context 应被忽略", () => {
-      const dag = new DevicesDAG();
-      dag.ensureNode("/a/b");
-
-      dag.configureNode("/a", {
-        handler() {
-          return { acc: "not-a-plain-object" };
-        },
-      });
-      dag.configureNode("/a/b", {
-        handler(_pkt, ctx) {
-          ctx.snap = { ...ctx.acc };
-        },
-      });
-
-      expect(() =>
-        dag.dispatch({ to: "/a/b", signals: [{ type: "t" }] }),
-      ).not.toThrow();
+      expect(finalServices[0]).toEqual({ layerA: 1, layerB: 2 });
     });
 
     test("redirect 后 handler 返回 packets.to 应正确变更路径", () => {
@@ -1703,7 +1653,7 @@ describe("DevicesDAG", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b");
       dag.configureNode("/a", {
-        handler: () => ({ acc: { layer: "a" } }),
+        handler() {},
       });
 
       const result = dag.dispatchWithTrace({
@@ -1752,7 +1702,7 @@ describe("DevicesDAG", () => {
       const dag = new DevicesDAG();
       dag.ensureNode("/a/b");
       dag.configureNode("/a", {
-        handler: () => ({ acc: { mark: true } }),
+        handler() {},
       });
 
       const result = dag.dispatchWithTrace({

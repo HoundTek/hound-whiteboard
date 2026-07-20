@@ -21,26 +21,12 @@
  */
 
 /**
- * 设备图处理器累积上下文
- * @description
- * 沿单次 dispatch 链路由 handler 返回值逐层追加的运行时参数，通常用于控制下游工具行为，
- * 例如 handoff 场景中的 `autoCommit` 与 `autoUmountOnApply`。
- * 这部分上下文不包含 `services` 中的静态基础设施依赖。
- * @typedef {Object} DevicesDAGAccumulatedContext
- * @property {boolean} [autoCommit] - false 时阻止 Creator 自动提交到静态图
- * @property {boolean} [autoUmountOnApply] - false 时阻止 Modifier 提交后自卸载
- * @property {Function} [resolvePosition] - 由 prefix 注入的坐标解析函数
- * @property {number} [objectId] - 由上游注入的预分配对象 id
- */
-
-/**
  * 设备图处理器上下文
  * @description
- * 处理器上下文包含当前节点元数据、静态服务、累积上下文以及节点状态访问接口，
+ * 处理器上下文包含当前节点元数据、静态服务以及节点状态访问接口，
  * 供节点处理器在处理信号包时使用。
  *
- * `services` 是沿 DAG 路径静态声明并累积的基础设施依赖；
- * `acc` 是单次 dispatch 中由上游 handler 返回值逐层追加的运行时参数。
+ * `services` 是沿 DAG 路径静态声明并累积的基础设施依赖。
  *
  * @typedef {Object} DevicesDAGHandlerContext
  * @property {DevicesDAGNode} node - 当前正在处理的节点
@@ -52,7 +38,6 @@
  * @property {number} depth - 当前分发深度
  * @property {SignalPacket|undefined} signalPacket - 当前已规整的输入信号包
  * @property {DevicesDAGServiceContext} services - 静态服务上下文
- * @property {DevicesDAGAccumulatedContext} acc - 累积上下文（仅包含动态路由参数）
  * @property {Object} state - 当前节点状态的只读快照
  * @property {() => any} getState - 重读节点最新状态
  * @property {(nextState: Object) => Object} setState - 全量写入节点状态
@@ -68,7 +53,6 @@
  * 设备图处理器输出
  * @typedef {Object} DevicesDAGHandlerResult
  * @property {SignalPacket[]} packets - 继续路由到后继节点的信号包列表
- * @property {DevicesDAGAccumulatedContext} [acc] - 要合并到累积上下文的键值对
  * @property {string} [redirect] - 覆盖 dispatcher 原本要走的下一段出边名
  * @property {boolean} [stop] - 强制终止当前链路路由
  */

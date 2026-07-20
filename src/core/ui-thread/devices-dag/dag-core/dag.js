@@ -44,10 +44,6 @@ const dagLog = new Logger("DevicesDAG", "WARN", logBus);
  */
 
 /**
- * @typedef {import("../dag-type.js").DevicesDAGAccumulatedContext} DevicesDAGAccumulatedContext
- */
-
-/**
  * @typedef {import("../dag-type.js").DevicesDAGHandlerContext} DevicesDAGHandlerContext
  */
 
@@ -766,10 +762,10 @@ class DevicesDAG {
   /**
    * 从根节点开始分发信号包
    * @description
-   * 静态服务上下文由路径上的节点 `services` 声明提供，累积上下文从空对象开始逐层累积。
+   * 静态服务上下文由路径上的节点 `services` 声明提供。
    * 核心路由逻辑委托给 {@link DevicesDAGNode#dispatch}。
    * @param {SignalPacket|Record<string, any>} packet - 信号包
-   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object }} 分发结果
+   * @returns {{ packets: SignalPacket[], services?: Object }} 分发结果
    */
   dispatch(packet) {
     const startPacket = SignalPacket.from(packet, { defaultTo: "" });
@@ -795,7 +791,6 @@ class DevicesDAG {
     return this._ghost.dispatch(new SignalPacket(to, startPacket.signals), {
       path: "",
       services: {},
-      acc: {},
       depth: 0,
       maxDepth: this._maxDispatchDepth,
       strict: this._strict,
@@ -810,7 +805,7 @@ class DevicesDAG {
    * 与 {@link DevicesDAG#dispatch} 行为一致，额外收集路由追踪信息。
    * 返回结果中包含 `trace` 数组，可通过 `traceToString()` 格式化。
    * @param {SignalPacket|Record<string, any>} packet - 信号包
-   * @returns {{ packets: SignalPacket[], services?: Object, acc?: Object, trace: Array }} 分发结果与追踪信息
+   * @returns {{ packets: SignalPacket[], services?: Object, trace: Array }} 分发结果与追踪信息
    */
   dispatchWithTrace(packet) {
     const trace = [];
@@ -837,7 +832,6 @@ class DevicesDAG {
       {
         path: "",
         services: {},
-        acc: {},
         depth: 0,
         maxDepth: this._maxDispatchDepth,
         strict: this._strict,
@@ -945,7 +939,6 @@ class DevicesDAG {
         depth: 0,
         signalPacket: undefined,
         services: { ...context },
-        acc: {},
         getNodeState: (pathOrId) => this.getNodeState(pathOrId),
         setNodeState: (pathOrId, state) => this.setNodeState(pathOrId, state),
       };

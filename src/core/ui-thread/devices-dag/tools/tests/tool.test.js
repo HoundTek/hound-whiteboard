@@ -23,7 +23,7 @@ describe("Tool", () => {
       {
         path: "/viewport/s-pen/pen",
         context: {},
-        acc: { customFlag: true },
+        customFlag: true,
       },
     );
 
@@ -36,13 +36,10 @@ describe("Tool", () => {
         },
         context: expect.objectContaining({
           path: "/viewport/s-pen/pen",
-          acc: expect.objectContaining({
-            customFlag: true,
-          }),
+          customFlag: true,
         }),
       },
     ]);
-    expect(tool.calls[0].context.acc.allocateObjectId).toBeUndefined();
   });
 
   test("createProcessor 应默认暴露来自 Board 的 allocateObjectId", () => {
@@ -78,7 +75,7 @@ describe("Tool", () => {
     expect(tool.calls[0].context.services.board.allocateObjectId()).toBe(7);
   });
 
-  test("createProcessor 应优先使用累积 context 中显式提供的 allocateObjectId", () => {
+  test("createProcessor 应优先使用 services 中显式提供的 allocateObjectId", () => {
     class TestTool extends Tool {
       calls = [];
 
@@ -105,14 +102,12 @@ describe("Tool", () => {
         path: "/viewport/s-pen/pen",
         services: {
           board,
-        },
-        acc: {
           allocateObjectId: explicitAllocateObjectId,
         },
       },
     );
 
-    expect(tool.calls[0].context.acc.allocateObjectId()).toBe(11);
+    expect(tool.calls[0].context.services.allocateObjectId()).toBe(11);
     expect(explicitAllocateObjectId).toHaveBeenCalledTimes(1);
   });
 
@@ -152,9 +147,6 @@ describe("Tool", () => {
           boardApi,
           viewport,
         },
-        acc: {
-          customFlag: true,
-        },
       },
     );
 
@@ -164,9 +156,6 @@ describe("Tool", () => {
           board,
           boardApi,
           viewport,
-        }),
-        acc: expect.objectContaining({
-          customFlag: true,
         }),
       }),
     );

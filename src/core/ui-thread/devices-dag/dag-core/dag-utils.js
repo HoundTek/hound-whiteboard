@@ -56,14 +56,10 @@ function normalizeHandlerResult(rawResult, options = {}) {
     isPlainObject(rawResult) &&
     (Array.isArray(rawResult.packets) ||
       "stop" in rawResult ||
-      "redirect" in rawResult ||
-      "acc" in rawResult)
+      "redirect" in rawResult)
   ) {
-    const acc = isPlainObject(rawResult.acc) ? { ...rawResult.acc } : undefined;
-
     return {
       ...rawResult,
-      acc,
       packets: SignalPacket.normalizeResult(rawResult.packets ?? [], options),
       explicitPackets: Object.prototype.hasOwnProperty.call(
         rawResult,
@@ -83,8 +79,7 @@ function normalizeHandlerResult(rawResult, options = {}) {
         isPlainObject(item) &&
         (Array.isArray(item.packets) ||
           "stop" in item ||
-          "redirect" in item ||
-          "acc" in item)
+          "redirect" in item)
       ) {
         packets.push(
           ...SignalPacket.normalizeResult(item.packets ?? [], options),
