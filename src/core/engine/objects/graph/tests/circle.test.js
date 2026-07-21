@@ -133,4 +133,62 @@ describe("CircleObject", () => {
       expect(Vector.nearlyEq(range.center, new Vector(0, 0))).toBe(true);
     });
   });
+
+  describe("渲染留白", () => {
+    test("无 transform 时留白为描边宽度的一半", () => {
+      const circle = new CircleObject(
+        50,
+        new Vector(0, 0),
+        { strokeWidth: 4 },
+        { radius: 3 },
+      );
+
+      expect(circle.getRenderPadding()).toBe(2);
+    });
+
+    test("非均匀缩放 transform 时留白按最大轴向缩放", () => {
+      const circle = new CircleObject(
+        51,
+        new Vector(0, 0),
+        { strokeWidth: 4 },
+        { radius: 3 },
+      );
+      circle.setTransform(new Matrix(2, 0, 0, 1));
+
+      expect(circle.getRenderPadding()).toBe(4);
+    });
+
+    test("旋转分量按轴向量长度计入缩放", () => {
+      const circle = new CircleObject(
+        52,
+        new Vector(0, 0),
+        { strokeWidth: 4 },
+        { radius: 3 },
+      );
+      // a=0, b=2, c=-2, d=0：两轴向量长度均为 2
+      circle.setTransform(new Matrix(0, 2, -2, 0));
+
+      expect(circle.getRenderPadding()).toBeCloseTo(4);
+    });
+
+    test("缩小 transform 时留白同步缩小", () => {
+      const circle = new CircleObject(
+        53,
+        new Vector(0, 0),
+        { strokeWidth: 4 },
+        { radius: 3 },
+      );
+      circle.setTransform(new Matrix(0.5, 0, 0, 0.5));
+
+      expect(circle.getRenderPadding()).toBe(1);
+    });
+
+    test("默认描边属性下留白按默认描边宽度计算", () => {
+      const circle = new CircleObject(54, new Vector(0, 0), {}, { radius: 3 });
+      circle.setTransform(new Matrix(2, 0, 0, 2));
+
+      // DEFAULT_CIRCLE_PROPERTY.strokeWidth = 3，最大轴向缩放为 2
+      expect(circle.getRenderPadding()).toBe(3);
+    });
+  });
 });

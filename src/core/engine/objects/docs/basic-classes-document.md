@@ -52,7 +52,7 @@
 | `calculateConvexHull()`             | 计算凸包                                     |
 | `getRange()`                        | 获取主判定范围                               |
 | `setProperty(property)`             | 合并属性                                     |
-| `getRenderPadding()`                | 从属性动态推导渲染留白                       |
+| `getRenderPadding()`                | 从属性动态推导渲染留白（描边宽度一半 × transform 最大轴向缩放） |
 | `isErasable()`                      | 是否可擦                                     |
 | `isDirected()`                      | 是否有向                                     |
 | `render(ctx)`                       | 渲染对象                                     |

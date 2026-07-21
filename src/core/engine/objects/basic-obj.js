@@ -157,6 +157,8 @@ class BasicObject {
    * 获取对象渲染额外留白
    * @description
    * 返回值单位为对象空间中的长度，供活动层 dirty rect 在换算到屏幕空间后补足描边、端点与抗锯齿留白。
+   * canvas 描边宽度随 transform 缩放，因此描边留白需乘以 transform 的最大轴向缩放，
+   * 保证带变换对象的脏区仍能覆盖实际渲染范围。
    * @returns {number} 额外留白
    */
   getRenderPadding() {
@@ -170,7 +172,11 @@ class BasicObject {
       return 0;
     }
 
-    return Math.max(...strokeWidthCandidates) / 2;
+    const transform = this.transform;
+    const scaleX = transform ? Math.hypot(transform.a, transform.b) : 1;
+    const scaleY = transform ? Math.hypot(transform.c, transform.d) : 1;
+
+    return (Math.max(...strokeWidthCandidates) / 2) * Math.max(scaleX, scaleY);
   }
 
   /**
