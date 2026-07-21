@@ -131,4 +131,105 @@ describe("BoardApiRpc", () => {
 
     await expect(queryPromise).rejects.toThrow("BoardApiRpc destroyed.");
   });
+
+  describe("批处理顺序屏障", () => {
+    test("modifyObject 批缓冲应先于 commitObjects 发出", () => {
+      const endpoint = new FakeRpcEndpoint();
+      const boardApi = new BoardApiRpc(endpoint);
+
+      // 不 await：批缓冲仍挂起时直接发起顺序调用，验证 #call 的同步 flush 屏障
+      boardApi.modifyObject(1, { data: { radius: 5 } });
+      boardApi.commitObjects([1]).catch(() => { });
+
+      expect(endpoint.postedMessages).toHaveLength(2);
+      expect(endpoint.postedMessages[0].type).toBe("rpc-batch");
+      expect(endpoint.postedMessages[0].items).toEqual([
+        {
+          method: "modifyObject",
+          objectId: 1,
+          patch: { data: { radius: 5 } },
+        },
+      ]);
+      expect(endpoint.postedMessages[1].type).toBe("rpc");
+      expect(endpoint.postedMessages[1].method).toBe("commitObjects");
+      expect(endpoint.postedMessages[1].params).toEqual({ objectIds: [1] });
+
+      boardApi.destroy();
+    });
+
+    test("appendListItem 批缓冲应先于 deleteObjects 发出", () => {
+      const endpoint = new FakeRpcEndpoint();
+      const boardApi = new BoardApiRpc(endpoint);
+
+      boardApi.appendListItem(2, "points", [{ x: 1, y: 1 }]);
+      boardApi.deleteObjects([2]).catch(() => { });
+
+      expect(endpoint.postedMessages).toHaveLength(2);
+      expect(endpoint.postedMessages[0].type).toBe("rpc-batch");
+      expect(endpoint.postedMessages[0].items).toEqual([
+        {
+          method: "appendListItem",
+          objectId: 2,
+          key: "points",
+          items: [{ x: 1, y: 1 }],
+        },
+      ]);
+      expect(endpoint.postedMessages[1].type).toBe("rpc");
+      expect(endpoint.postedMessages[1].method).toBe("deleteObjects");
+
+      boardApi.destroy();
+    });
+
+    test("同帧多次 modifyObject 应合并为一条批消息且 patch 按规则合并", () => {
+      const endpoint = new FakeRpcEndpoint();
+      const boardApi = new BoardApiRpc(endpoint);
+
+      boardApi.modifyObject(1, {
+        position: { x: 1, y: 1 },
+        data: { radius: 1 },
+      });
+      boardApi.modifyObject(1, {
+        position: { x: 2, y: 2 },
+        data: { stroke: 3 },
+      });
+      boardApi.commitObjects([1]).catch(() => { });
+
+      expect(endpoint.postedMessages).toHaveLength(2);
+      expect(endpoint.postedMessages[0].type).toBe("rpc-batch");
+      expect(endpoint.postedMessages[0].items).toEqual([
+        {
+          method: "modifyObject",
+          objectId: 1,
+          patch: {
+            position: { x: 2, y: 2 },
+            data: { radius: 1, stroke: 3 },
+          },
+        },
+      ]);
+
+      boardApi.destroy();
+    });
+
+    test("无后续顺序调用时批缓冲应随微任务自动 flush", async () => {
+      const endpoint = new FakeRpcEndpoint();
+      const boardApi = new BoardApiRpc(endpoint);
+
+      const modifyPromise = boardApi.modifyObject(1, { data: { radius: 5 } });
+      expect(endpoint.postedMessages).toHaveLength(0);
+
+      await modifyPromise;
+
+      expect(endpoint.postedMessages).toHaveLength(1);
+      expect(endpoint.postedMessages[0].type).toBe("rpc-batch");
+      expect(endpoint.postedMessages[0].items).toEqual([
+        {
+          method: "modifyObject",
+          objectId: 1,
+          patch: { data: { radius: 5 } },
+        },
+      ]);
+
+      boardApi.destroy();
+    });
+  });
 });
