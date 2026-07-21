@@ -8,7 +8,8 @@
 import { createSubDAG } from "../../core/ui-thread/devices-dag/index.js";
 import { createPrefixNodeHandler } from "../../core/ui-thread/devices-dag/prefixes/index.js";
 import { SignalPacket } from "../../core/ui-thread/devices-dag/dag-core/signal.js";
-import { CircleCreatorTool } from "../../core/ui-thread/devices-dag/tools/creator/circle-creator.js";
+import { CircleDataCreatorTool } from "../../core/ui-thread/devices-dag/tools/creator/circle/data-creator.js";
+import { createCircleRadiusProcessor } from "../../core/ui-thread/devices-dag/tools/creator/circle/radius-processor.js";
 import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/tools/creator/object-creator.js";
 import { Vector } from "../../core/engine/utils/math.js";
 import { isPlainObject } from "../../core/ui-thread/devices-dag/prefixes/utils.js";
@@ -27,7 +28,7 @@ const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
  * 创建随机圆修饰节点工作流
  * @description
  * 工厂函数，接收配置选项后一次性生成包含 random-circle-generator prefix、
- * circle-params prefix 和 CircleCreatorTool 的三层修饰节点子树。
+ * circle-params prefix 和 CircleDataCreatorTool 的三层修饰节点子树。
  * 无需手动实例化工具类，挂载后任意 trigger 信号即可生成随机圆。
  * @param {{
  *   rootPath: string,
@@ -37,7 +38,7 @@ const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
  *   property?: Record<string, any>,
  * }} [options={}] - 随机圆工作流配置
  * @returns {import("../../core/devices-dag/dag-type.js").SubDAGDefinition} 可直接传入 inputScope.mountWorkflow(name, subDAG) 的结构化子树定义
- * @see CircleCreatorTool
+ * @see CircleDataCreatorTool
  * @example
  * const subDAG = createRandomCircleSubDAG({
  *   rootPath: "/workflows/random-circle",
@@ -62,7 +63,10 @@ function createRandomCircleSubDAG(options = {}) {
     options.property && Object.hasOwn(options.property, "fillColor"),
   );
 
-  const tool = new CircleCreatorTool({ property: baseProperty });
+  const tool = new CircleDataCreatorTool({
+    property: baseProperty,
+    processor: createCircleRadiusProcessor(),
+  });
 
   const builder = createSubDAG(rootPath);
 
@@ -122,7 +126,7 @@ function createRandomCircleSubDAG(options = {}) {
     )
     .defaultRoute("params");
 
-  // circle-params prefix 节点，接收随机圆参数信号并转换为工具输入信号路由到 CircleCreatorTool
+  // circle-params prefix 节点，接收随机圆参数信号并转换为工具输入信号路由到 CircleDataCreatorTool
   const paramsNode = builder
     .node()
     .prefix(
@@ -196,7 +200,7 @@ function createRandomCircleSubDAG(options = {}) {
     )
     .defaultRoute("tool");
 
-  // CircleCreatorTool 节点，接收信号并创建圆对象
+  // CircleDataCreatorTool 节点，接收信号并创建圆对象
   const toolNode = builder.node().tool(tool);
 
   builder.edge("params", root, paramsNode);

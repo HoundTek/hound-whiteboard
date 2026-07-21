@@ -8,7 +8,10 @@
 import { createButtonGroupDevice } from "../../../core/ui-thread/devices-dag/devices/button-group-device.js";
 import { HandoffWrapperTool } from "../../../core/ui-thread/devices-dag/tools/wrapper/handoff-wrapper.js";
 import { ToolSwitcherWrapper } from "../../../core/ui-thread/devices-dag/tools/wrapper/switcher-wrapper.js";
-import { CircleCreatorTool } from "../../../core/ui-thread/devices-dag/tools/creator/circle-creator.js";
+import { CircleDataCreatorTool } from "../../../core/ui-thread/devices-dag/tools/creator/circle/data-creator.js";
+import { createCircleRadiusProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/circle/radius-processor.js";
+import { createCircleDiameterProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/circle/diameter-processor.js";
+import { createCircleBoundingProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/circle/bounding-processor.js";
 import { RectangleObjectChooserTool } from "../../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
 import {
@@ -64,11 +67,22 @@ function mountToolSwitcher(viewport, options) {
   scope.mountDevice("toolbar/button-group", buttonGroupDef);
 
   // 2. tool-switcher wrapper：按激活工具名路由 mouse/primary 信号
-  const circleCreatorTool = new CircleCreatorTool({
-    property: {
-      strokeColor: DEMO_CIRCLE_STROKE_COLOR,
-      strokeWidth: DEMO_STROKE_WIDTH,
-    },
+  // 三种圆创建手势共享 CircleDataCreatorTool，仅 processor 不同
+  const circleProperty = {
+    strokeColor: DEMO_CIRCLE_STROKE_COLOR,
+    strokeWidth: DEMO_STROKE_WIDTH,
+  };
+  const circleCreatorTool = new CircleDataCreatorTool({
+    property: circleProperty,
+    processor: createCircleRadiusProcessor(),
+  });
+  const circleDiameterCreatorTool = new CircleDataCreatorTool({
+    property: circleProperty,
+    processor: createCircleDiameterProcessor(),
+  });
+  const circleBoundingCreatorTool = new CircleDataCreatorTool({
+    property: circleProperty,
+    processor: createCircleBoundingProcessor(),
   });
   const selectHandoffTool = new HandoffWrapperTool({
     first: new RectangleObjectChooserTool(),
@@ -78,6 +92,8 @@ function mountToolSwitcher(viewport, options) {
     tools: [
       { name: DEMO_TOOL_NAMES.STROKE, tool: primaryStrokeTool },
       { name: DEMO_TOOL_NAMES.CIRCLE, tool: circleCreatorTool },
+      { name: DEMO_TOOL_NAMES.CIRCLE_DIAMETER, tool: circleDiameterCreatorTool },
+      { name: DEMO_TOOL_NAMES.CIRCLE_BOUNDING, tool: circleBoundingCreatorTool },
       { name: DEMO_TOOL_NAMES.SELECT, tool: selectHandoffTool },
     ],
     defaultTool,

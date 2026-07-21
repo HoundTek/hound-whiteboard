@@ -28,6 +28,8 @@ const DEMO_VIEWPORT_SCALE_FACTOR = 0.5;
 const DEMO_TOOL_NAMES = Object.freeze({
   STROKE: "stroke",
   CIRCLE: "circle",
+  CIRCLE_DIAMETER: "circle-diameter",
+  CIRCLE_BOUNDING: "circle-bounding",
   SELECT: "select",
 });
 
