@@ -62,7 +62,7 @@ class ObjectCreatorTool extends GestureTool {
    * 纯数据对象，遵循 LightweightObjectEntry 协议，不再持有 BasicObject 实例。
    * 手势期几何读写均通过此对象完成，Worker 侧同步通过 RPC fire-and-forget 平行维护。
    * 子类的 `create()` 实现应设置 `type` 字段与其 `getCreatedObjectType()` 返回值一致。
-   * @type {import("../../shared/types.js").LightweightObjectEntry | null}
+   * @type {import("../../../../../engine/types/types.js").LightweightObjectEntry | null}
    */
   _entry;
 
@@ -188,8 +188,8 @@ class ObjectCreatorTool extends GestureTool {
   resolveCreatedObjectProperty(interaction) {
     const baseProperty =
       this.property &&
-      typeof this.property === "object" &&
-      !Array.isArray(this.property)
+        typeof this.property === "object" &&
+        !Array.isArray(this.property)
         ? this.property
         : {};
 
@@ -336,6 +336,40 @@ class ObjectCreatorTool extends GestureTool {
    */
   syncCreatedObjectContext(context = {}, localState = this._entry) {
     return this.setContextObjects(context, localState ? [localState] : []);
+  }
+
+  /**
+   * 应用手势 processor 编译出的对象补丁
+   * @description
+   * 手势 processor 的唯一写入口：先更新本地 `_entry`
+   * （position 规整为 Vector、data 合并、transform 存 `{a,b,c,d}` 纯对象），
+   * 再通过 RPC fire-and-forget 平行维护 Worker 侧对象。
+   * patch 形状与 `boardApi.modifyObject(objectId, patch)` 的补丁契约一致。
+   * @param {import("./gesture/two-point-processor.js").GesturePatch} patch - 手势补丁
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
+   */
+  applyGesturePatch(patch, interaction) {
+    if (!patch || typeof patch !== "object") {
+      return;
+    }
+
+    if (this._entry) {
+      if (patch.position) {
+        this._entry.position = new Vector(patch.position.x, patch.position.y);
+      }
+      if (patch.data && typeof patch.data === "object") {
+        Object.assign(this._entry.data, patch.data);
+      }
+      if (patch.transform && typeof patch.transform === "object") {
+        this._entry.transform = { ...patch.transform };
+      }
+    }
+
+    const boardApi = interaction?.context?.services?.boardApi;
+    if (boardApi && this.objectId != null) {
+      boardApi.modifyObject(this.objectId, patch);
+    }
   }
 
   /**
@@ -514,7 +548,7 @@ class ObjectCreatorTool extends GestureTool {
    * @returns {void}
    * @protected
    */
-  afterCompleteCreatedObject(interaction, completedObject) {}
+  afterCompleteCreatedObject(interaction, completedObject) { }
 
   /**
    * 完成整个对象创建（编排钩子流程）
@@ -658,7 +692,7 @@ class ObjectCreatorTool extends GestureTool {
  * @description
  * 一次对象创建只对应一个手势。手势结束即对象结束，手势取消即对象取消。
  */
-class SingleGestureObjectCreatorTool extends ObjectCreatorTool {}
+class SingleGestureObjectCreatorTool extends ObjectCreatorTool { }
 
 /**
  * 多手势对象创建工具

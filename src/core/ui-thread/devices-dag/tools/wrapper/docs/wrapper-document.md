@@ -92,7 +92,7 @@ wrapper 构造时自动适配子工具的提交语义（显式实例属性）：
 const switcher = new ToolSwitcherWrapper({
   tools: [
     { name: "stroke", tool: strokeTool },
-    { name: "circle", createTool: () => new CircleCreatorTool({...}) },
+    { name: "circle", createTool: () => new CircleDataCreatorTool({ processor: createCircleRadiusProcessor() }) },
     { name: "select", tool: selectHandoff },
   ],
   defaultTool: "stroke",

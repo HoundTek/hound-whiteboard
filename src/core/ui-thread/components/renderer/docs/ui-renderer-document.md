@@ -99,7 +99,8 @@ createCompatSelectionEntriesForSummaries(objects, "modifier", viewport);
 
 ### circle creator point + path
 
-`CircleCreatorTool.collectUiOverlayEntries()` 返回两个 overlay：
+`CircleDataCreatorTool.collectUiOverlayEntries()` 委托给组合的手势 processor，
+圆心+半径手势返回两个 overlay：
 
 | source          | type    | 说明                 |
 | --------------- | ------- | -------------------- |

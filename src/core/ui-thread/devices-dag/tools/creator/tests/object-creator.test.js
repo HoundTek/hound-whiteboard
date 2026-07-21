@@ -1,5 +1,6 @@
 import { jest } from "@jest/globals";
-import { CircleCreatorTool } from "../circle-creator.js";
+import { CircleDataCreatorTool } from "../circle/data-creator.js";
+import { createCircleRadiusProcessor } from "../circle/radius-processor.js";
 import { SingleGestureObjectCreatorTool } from "../object-creator.js";
 import { Vector } from "../../../../../engine/utils/math.js";
 function createBoardDeviceContext(objectId, { viewport } = {}) {
@@ -35,8 +36,9 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
 
 describe("ObjectCreatorTool — property 信号", () => {
   test("Phase 1 带 property 信号 → 对象使用注入属性覆盖默认属性", () => {
-    const tool = new CircleCreatorTool({
+    const tool = new CircleDataCreatorTool({
       property: { strokeColor: "#000", fillColor: "#fff" },
+      processor: createCircleRadiusProcessor(),
     });
     const { deviceContext } = createBoardDeviceContext(201);
 
@@ -66,8 +68,9 @@ describe("ObjectCreatorTool — property 信号", () => {
   });
 
   test("property 信号为 null / 非对象 → injectedProperty 为 null，对象使用默认属性", () => {
-    const tool = new CircleCreatorTool({
+    const tool = new CircleDataCreatorTool({
       property: { strokeColor: "#000" },
+      processor: createCircleRadiusProcessor(),
     });
     const { deviceContext } = createBoardDeviceContext(202);
 
@@ -87,8 +90,9 @@ describe("ObjectCreatorTool — property 信号", () => {
   });
 
   test("无 property 信号 → 对象使用默认属性", () => {
-    const tool = new CircleCreatorTool({
+    const tool = new CircleDataCreatorTool({
       property: { strokeColor: "#abc" },
+      processor: createCircleRadiusProcessor(),
     });
     const { deviceContext } = createBoardDeviceContext(203);
 
@@ -105,7 +109,9 @@ describe("ObjectCreatorTool — property 信号", () => {
   });
 
   test("buildInteractionContext 在基类中提取 injectedProperty", () => {
-    const tool = new CircleCreatorTool();
+    const tool = new CircleDataCreatorTool({
+      processor: createCircleRadiusProcessor(),
+    });
     const { deviceContext } = createBoardDeviceContext(204);
 
     const interaction = tool.buildInteractionContext(
@@ -124,7 +130,9 @@ describe("ObjectCreatorTool — property 信号", () => {
   });
 
   test("property 为数组值 → injectedProperty 为 null", () => {
-    const tool = new CircleCreatorTool();
+    const tool = new CircleDataCreatorTool({
+      processor: createCircleRadiusProcessor(),
+    });
     const { deviceContext } = createBoardDeviceContext(205);
 
     const interaction = tool.buildInteractionContext(
@@ -142,7 +150,9 @@ describe("ObjectCreatorTool — property 信号", () => {
   });
 
   test("显式提供 boardApi 时仍应将本地草稿对象写回上下文", () => {
-    const tool = new CircleCreatorTool();
+    const tool = new CircleDataCreatorTool({
+      processor: createCircleRadiusProcessor(),
+    });
     const { boardApi, deviceContext } = createBoardDeviceContext(206);
 
     tool.process(
@@ -164,7 +174,9 @@ describe("ObjectCreatorTool — property 信号", () => {
   });
 
   test("RPC 风格 boardApi 下应直接创建本地草稿对象，不再回填 board 实例", () => {
-    const tool = new CircleCreatorTool();
+    const tool = new CircleDataCreatorTool({
+      processor: createCircleRadiusProcessor(),
+    });
     const board = {
       allocateObjectId: jest.fn(() => 901),
       getObjectById: jest.fn(() => undefined),
@@ -297,7 +309,9 @@ describe("ObjectCreatorTool — property 信号", () => {
     });
 
     test("process 完整周期（position → end）触发 action:complete", () => {
-      const tool = new CircleCreatorTool();
+      const tool = new CircleDataCreatorTool({
+      processor: createCircleRadiusProcessor(),
+    });
       const actionComplete = jest.fn();
       const { deviceContext } = createBoardDeviceContext(301);
       tool.on("action:complete", actionComplete);

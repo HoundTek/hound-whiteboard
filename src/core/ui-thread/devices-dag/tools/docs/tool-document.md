@@ -98,7 +98,7 @@ Tool 与 prefix 可以在同一条链路上协作，但边界不同：
 
 - 前置 prefix 负责生成随机 `position`、`radius` 和颜色属性
 - 参数 prefix 负责把随机参数改写为圆工具可消费的信号序列
-- `CircleCreatorTool` 只负责消费这些稳定信号并创建对象
+- `CircleDataCreatorTool` 只负责消费这些稳定信号并创建对象
 
 对应路径是：
 

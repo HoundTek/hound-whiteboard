@@ -31,8 +31,12 @@ src/core/
 ├── tools/
 │   ├── creator/tests/
 │   │   ├── stroke-creator.test.js  ← StrokeCreatorTool 所有测试
-│   │   ├── polygon-creator.test.js
-│   │   └── circle-creator.test.js
+│   │   └── polygon-creator.test.js
+│   ├── creator/circle/tests/
+│   │   ├── data-creator.test.js    ← CircleDataCreatorTool 生命周期
+│   │   └── processors.test.js      ← 三种圆手势 interpret + 端到端
+│   ├── creator/gesture/tests/
+│   │   └── two-point-processor.test.js
 │   ├── modifier/tests/
 │   │   └── common-object-modifier.test.js
 │   ├── chooser/tests/

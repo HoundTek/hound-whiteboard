@@ -28,7 +28,7 @@ import { WrapperTool } from "./wrapper-tool.js";
  * const switcher = new ToolSwitcherWrapper({
  *   tools: [
  *     { name: "stroke", tool: strokeTool },
- *     { name: "circle", createTool: () => new CircleCreatorTool() },
+ *     { name: "circle", createTool: () => new CircleDataCreatorTool({ processor: createCircleRadiusProcessor() }) },
  *   ],
  *   defaultTool: "stroke",
  * });

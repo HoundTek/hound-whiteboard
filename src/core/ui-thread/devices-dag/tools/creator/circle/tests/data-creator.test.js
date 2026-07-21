@@ -1,6 +1,15 @@
 import { jest } from "@jest/globals";
-import { CircleCreatorTool } from "../circle-creator.js";
-import { Vector } from "../../../../../engine/utils/math.js";
+import { CircleDataCreatorTool } from "../data-creator.js";
+import { createCircleRadiusProcessor } from "../radius-processor.js";
+import { Vector } from "../../../../../../engine/utils/math.js";
+
+function createTool(options = {}) {
+  return new CircleDataCreatorTool({
+    processor: createCircleRadiusProcessor(),
+    ...options,
+  });
+}
+
 function createBoardDeviceContext(objectId, { viewport } = {}) {
   const board = {
     allocateObjectId: jest.fn(() => objectId),
@@ -24,9 +33,14 @@ function createBoardDeviceContext(objectId, { viewport } = {}) {
   };
 }
 
-describe("CircleCreatorTool", () => {
+describe("CircleDataCreatorTool（圆心+半径手势）", () => {
+  test("processor 为必传参数，缺失时抛错", () => {
+    expect(() => new CircleDataCreatorTool()).toThrow();
+    expect(() => new CircleDataCreatorTool({})).toThrow();
+  });
+
   test("单手势起点为圆心，终点决定半径", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(101);
 
     tool.process(
@@ -54,7 +68,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("结束点过近时使用固定半径，固定半径由 viewport.zoom 决定", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(102, {
       viewport: { zoom: 2 },
     });
@@ -82,7 +96,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("显式提供 boardApi 时应通过 RPC 创建并提交圆对象", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(104);
     const boardApi = deviceContext.services.boardApi;
     const createSpy = jest.spyOn(boardApi, "createObject");
@@ -124,7 +138,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("RPC 风格 boardApi 下应维护本地草稿半径并提交", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const board = {
       allocateObjectId: jest.fn(() => 702),
     };
@@ -170,7 +184,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("结束手势时应通过 boardApi.commitObjects 提交对象", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(103);
     const boardApi = deviceContext.services.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -195,7 +209,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("未提供 viewport 时应以默认 zoom=1 计算固定半径", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(401);
 
     tool.process(
@@ -221,7 +235,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("结束手势后应通过 commitObjects 提交圆对象", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(110);
     const boardApi = deviceContext.services.boardApi;
     const commitSpy = jest.spyOn(boardApi, "commitObjects");
@@ -247,7 +261,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("连续两次创建应生成两个不同圆对象", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(201);
     const board = deviceContext.services.board;
     const boardApi = deviceContext.services.boardApi;
@@ -307,7 +321,7 @@ describe("CircleCreatorTool", () => {
   });
 
   test("起始点与结束点完全相同时应使用固定半径（默认 zoom=1）", () => {
-    const tool = new CircleCreatorTool();
+    const tool = createTool();
     const { deviceContext } = createBoardDeviceContext(301);
 
     tool.process(
