@@ -8,6 +8,7 @@
 
 - `GraphObject`
 - `CircleObject`
+- `EllipseObject`
 - `PolygonObject`
 
 它们都属于 **不可擦、可定向** 的图形对象。
@@ -51,6 +52,30 @@ src/engine/objects/graph/graph.js
 - `_onDataChange()` 在 `radius` 变化后更新凸包与边界矩形
 - `serialize()` 追加 `type: "CircleObject"`
 
+## `EllipseObject`
+
+`EllipseObject` 定义于 `ellipse.js`。
+
+### 当前核心数据
+
+| 名称                   | 描述         |
+| ---------------------- | ------------ |
+| `data.radiusX`         | x 轴半径     |
+| `data.radiusY`         | y 轴半径     |
+| `property.fillColor`   | 填充色       |
+| `property.strokeColor` | 描边色       |
+| `property.strokeWidth` | 描边宽度     |
+| `rich.convexHullRange` | 椭圆凸包范围 |
+| `rich.boundingBox`     | 边界矩形     |
+
+### 当前行为
+
+- `position` 为椭圆中心，双轴半径存于 `data`，非轴对齐/额外缩放经 `transform` 表达
+- `getRange()` 返回变换后的 `EllipseRange`
+- `_onDataChange()` 在 `radiusX` / `radiusY` 变化后更新凸包与边界矩形
+- `render()` 使用 `ctx.ellipse()` 直接绘制
+- `serialize()` 追加 `type: "EllipseObject"`
+
 ## `PolygonObject`
 
 `PolygonObject` 定义于 `polygon.js`。
@@ -78,7 +103,7 @@ src/engine/objects/graph/graph.js
 ## 当前状态
 
 - `GraphObject` 已作为图形对象族公共基类落地
-- `CircleObject` 与 `PolygonObject` 已接入统一反序列化入口
+- `CircleObject`、`EllipseObject` 与 `PolygonObject` 已接入统一反序列化入口
 - `graph3d.js` 仍不是当前主交互链路中的稳定对象类型，应视为预留或扩展模块
 
 ## 相关文档
