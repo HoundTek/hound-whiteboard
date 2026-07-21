@@ -32,6 +32,13 @@ const DEMO_TOOL_NAMES = Object.freeze({
 });
 
 /**
+ * demo 按钮组设备写入共享状态 store 的键
+ * @description 按钮组设备的 stateKey 无默认值，由接线层显式注册；多个按钮组共存时各自注册互不相同的键。
+ * @type {string}
+ */
+const DEMO_BUTTON_GROUP_STATE_KEY = "activeTool";
+
+/**
  * demo workflow 名注册表
  * @readonly
  * @enum {string}
@@ -144,6 +151,7 @@ const DEMO_KEYBOARD_INPUT_CODES = Object.freeze([
 export {
   CANCEL_KEY,
   DEBUG_KEYS,
+  DEMO_BUTTON_GROUP_STATE_KEY,
   DEMO_CIRCLE_STROKE_COLOR,
   DEMO_KEYBOARD_INPUT_CODES,
   DEMO_PRIMARY_STROKE_COLOR,

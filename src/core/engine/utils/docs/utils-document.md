@@ -8,6 +8,7 @@
 
 - 容器结构：`chain.js`、`queue.js`、`deque.js`
 - 图与事件：`directed-graph.js`、`event-bus.js`
+- 共享状态：`shared-state-store.js`
 - 计数与随机：`counter-pool.js`、`random.js`
 - 数学与几何：`math.js`、`math3d.js`、`math-algorithm.js`
 - 逻辑路径：`path.js`
@@ -25,6 +26,7 @@
 - [path-document.md](./path-document.md)
 - [queue-document.md](./queue-document.md)
 - [random-document.md](./random-document.md)
+- [shared-state-store-document.md](./shared-state-store-document.md)
 
 ## 目录关系
 

@@ -12,6 +12,7 @@ import { CircleCreatorTool } from "../../../core/ui-thread/devices-dag/tools/cre
 import { RectangleObjectChooserTool } from "../../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
 import {
+  DEMO_BUTTON_GROUP_STATE_KEY,
   DEMO_CIRCLE_STROKE_COLOR,
   DEMO_STROKE_WIDTH,
   DEMO_TOOL_NAMES,
@@ -40,27 +41,25 @@ function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
  * 在 mouse/primary 下游挂载单个 ToolSwitcherWrapper，按当前激活工具名
  * 在笔画/圆/选择+修改三个内部槽位间路由；选择+修改分支为 HandoffWrapperTool。
  * 同时挂载按钮组设备并建立 toolbar/button-group → tool-switcher 的双输入汇聚。
- * 本函数只做 DAG 装配，不读取 DOM；工具列表与激活回调由调用方传入。
+ * 按钮组设备通过 sharedState 发布当前激活工具，DOM 高亮由工具栏适配器订阅同步。
+ * 本函数只做 DAG 装配，不读取 DOM；工具列表由调用方传入。
  * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
  * @param {Object} options - 配置项
  * @param {Array<{ name: string }>} options.tools - 工具列表
  * @param {string} options.defaultTool - 默认激活工具名
  * @param {import("../../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} options.primaryStrokeTool - 笔画工具实例
- * @param {(activeTool: string) => void} [options.onToolChange] - 工具切换回调
  * @returns {void}
  */
 function mountToolSwitcher(viewport, options) {
-  const { tools, defaultTool, primaryStrokeTool, onToolChange } = options;
+  const { tools, defaultTool, primaryStrokeTool } = options;
 
   const scope = viewport.inputScope;
 
-  // 1. 按钮组设备：接收 button-press 信号，维护当前激活工具名
+  // 1. 按钮组设备：接收 button-press 信号，经 sharedState 发布当前激活工具名
   const buttonGroupDef = createButtonGroupDevice({
     tools,
     defaultTool,
-    onUpdate({ activeTool }) {
-      onToolChange?.(activeTool);
-    },
+    stateKey: DEMO_BUTTON_GROUP_STATE_KEY,
   });
   scope.mountDevice("toolbar/button-group", buttonGroupDef);
 

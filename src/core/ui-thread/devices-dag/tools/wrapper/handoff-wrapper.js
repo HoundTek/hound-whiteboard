@@ -213,7 +213,7 @@ class HandoffWrapperTool extends WrapperTool {
   }
 
   /**
-   * 优雅结束当前动作
+   * 结束当前动作
    * @description 对当前相位工具调用 `endAction`。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {*} 当前相位工具 endAction 的返回值

@@ -6,6 +6,7 @@
  */
 
 /**
+ * 触摸屏设备子图定义
  * @typedef {import("../../devices-dag/dag-type.js").SubDAGDefinition & {
  *   clearTouches: () => void,
  *   getActiveTouches: () => Array<{touchId: string, position: any}>,
@@ -26,16 +27,10 @@ const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
 
 /**
  * 创建一张触摸屏设备子图
- * @param {{onUpdate?: Function}} [options={}] - 触摸屏设备选项
- * @returns {import("../devices-dag/dag-type.js").SubDAGDefinition & {
- *   clearTouches: () => void,
- *   getActiveTouches: () => Array<{touchId: string, position: any}>,
- * }}
+ * @returns {TouchscreenSubDAGDefinition}
  */
-function createTouchscreenDevice(options = {}) {
+function createTouchscreenDevice() {
   const activeTouches = new Map();
-  const onUpdate =
-    typeof options.onUpdate === "function" ? options.onUpdate : null;
   let lastChangedTouchIds = [];
 
   /**
@@ -108,11 +103,6 @@ function createTouchscreenDevice(options = {}) {
     }
 
     lastChangedTouchIds = Array.from(new Set(changedTouchIds));
-    onUpdate?.({
-      contacts: getActiveTouches(),
-      changedTouchIds: [...lastChangedTouchIds],
-      activeTouchIds: Array.from(activeTouches.keys()),
-    });
   };
 
   /**
@@ -123,7 +113,7 @@ function createTouchscreenDevice(options = {}) {
    * 3. 路由到 contacts 子节点输出聚合的触点报告
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 services.viewport）
-   * @returns {Object}
+   * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandlerResult}
    */
   const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
@@ -143,7 +133,7 @@ function createTouchscreenDevice(options = {}) {
    * 触点报告处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 当前路由上下文
-   * @returns {Object}
+   * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandlerResult}
    */
   const contactsHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });

@@ -9,6 +9,7 @@
 
 import { CounterPool } from "../../../engine/utils/counter-pool.js";
 import { EventBus } from "../../../engine/utils/event-bus.js";
+import { SharedStateStore } from "../../../engine/utils/shared-state-store.js";
 import { DevicesDAG } from "../../devices-dag/index.js";
 import { BoardApiRpc } from "../../../bridges/board-api-rpc.js";
 import { Viewport } from "./viewport.js";
@@ -79,6 +80,15 @@ class Board {
   devicesDAG;
 
   /**
+   * 跨信道会话状态的共享存储
+   * @description
+   * 服务于"多个设备与图外 UI 必须达成一致"的场景（如按钮组与工具栏高亮）。
+   * 多写者 LWW，订阅同步通知；DAG 内经 `services.sharedState` 注入。
+   * @type {SharedStateStore}
+   */
+  sharedState;
+
+  /**
    * 对象 id 池
    * @type {CounterPool}
    */
@@ -107,12 +117,14 @@ class Board {
       maxDispatchDepth: 32,
       strict: globalThis.__JEST__ === true,
     });
+    this.sharedState = new SharedStateStore();
 
     // 根节点 services：声明全局共享基础设施依赖
     const board = this;
     this.devicesDAG.configureNode("/", {
       services: {
         board,
+        sharedState: this.sharedState,
         get boardApi() {
           return board.getBoardApi();
         },

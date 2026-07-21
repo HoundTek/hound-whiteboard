@@ -61,11 +61,11 @@ class ToolSwitcherWrapper extends WrapperTool {
   /**
    * @param {{
    *   tools: Array<{ name: string, tool?: Tool, createTool?: () => Tool }>,
-   *   defaultTool?: string,
+   *   defaultTool: string,
    * }} options - 工具切换配置
    * @param {Array<{ name: string, tool?: Tool, createTool?: () => Tool }>} options.tools - 工具条目列表，`tool` 与 `createTool` 二选一
-   * @param {string} [options.defaultTool] - 默认路由目标，省略时使用 tools[0].name
-   * @throws {TypeError} 条目缺少 name、tool/createTool 未正确二选一或 tool 不是 Tool 实例时抛出
+   * @param {string} options.defaultTool - 默认路由目标（必传，无默认值——初始路由是接线决策），必须在 tools 列表中
+   * @throws {TypeError} 条目缺少 name、tool/createTool 未正确二选一、tool 不是 Tool 实例，或 defaultTool 缺失/不在 tools 列表中时抛出
    */
   constructor({ tools = [], defaultTool } = {}) {
     super();
@@ -113,11 +113,19 @@ class ToolSwitcherWrapper extends WrapperTool {
       }
     }
 
-    this.#defaultName =
-      typeof defaultTool === "string" && defaultTool
-        ? defaultTool
-        : tools[0].name;
-    this.#activeName = this.#defaultName;
+    if (typeof defaultTool !== "string" || !defaultTool) {
+      throw new TypeError(
+        "ToolSwitcherWrapper requires a non-empty defaultTool option.",
+      );
+    }
+    if (!this.#entries.has(defaultTool)) {
+      throw new TypeError(
+        `ToolSwitcherWrapper: defaultTool "${defaultTool}" is not in the tools list.`,
+      );
+    }
+
+    this.#defaultName = defaultTool;
+    this.#activeName = defaultTool;
   }
 
   /**
@@ -153,7 +161,7 @@ class ToolSwitcherWrapper extends WrapperTool {
    * @description
    * `tool-switch` 信号（携带 `context.activeTool`）切换路由目标：
    * 校验目标在工具列表中，先确保新槽位实例化，再对旧工具调用
-   * `endAction` 让其优雅收尾；该信号不再向下转发。
+   * `endAction` 完成其手头动作；该信号不再向下转发。
    * 其他信号转发到当前活跃槽位，并按需镜像 `routeTarget` 到节点 state。
    * @param {SignalPacket|Object} signalPacket - 输入信号包
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
@@ -192,7 +200,7 @@ class ToolSwitcherWrapper extends WrapperTool {
   }
 
   /**
-   * 优雅结束当前动作
+   * 结束当前动作
    * @description 传播到当前活跃工具。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {*} 当前活跃工具 endAction 的返回值

@@ -420,9 +420,9 @@ class Tool {
   }
 
   /**
-   * 优雅结束当前动作（外部调用入口）
+   * 结束当前动作（外部调用入口）
    * @description
-   * 供 tool-switcher 等外部模块调用，在切换工具前让当前工具优雅结束当前工作。
+   * 供 tool-switcher 等外部模块调用，在切换工具前让当前工具完成手头工作并结束。
    * 默认调用 completeAction。手势工具会先完成手势再提交动作。
    * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {*}

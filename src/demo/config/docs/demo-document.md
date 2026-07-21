@@ -22,7 +22,7 @@
   - **选择+修改**（`HandoffWrapperTool`：`RectangleObjectChooserTool` → `CommonObjectModifierTool`）
 - 通过工具栏按钮（`.toolbar-btn`）切换激活工具
 - 按钮 `pointerdown` 事件发出 `button-press` 信号 → `toolbar/button-group` 设备 → 输出 `tool-switch` 信号，双输入汇聚到 tool-switcher 节点
-- button-group 设备的 `onUpdate` 输出信道驱动 `onToolChange` 回调，更新 DOM 按钮 `.active` 类
+- button-group 设备将当前激活工具名写入 `board.sharedState`（键 `activeTool`），工具栏适配器订阅该键更新 DOM 按钮 `.active` 类
 - 默认激活工具为笔画
 
 ### 触摸多指笔画

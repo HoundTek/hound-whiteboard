@@ -17,6 +17,7 @@
  * @property {Object} [board] - Board 实例（含 allocateObjectId 等方法）
  * @property {Object} [viewport] - Viewport 实例（含 registerUiOverlayProvider / requestViewportUiRender 等）
  * @property {Object} [boardApi] - Board API RPC 代理（含 createObject / commitObjects / discardActiveObjects / modifyObject / queryObjects 等）
+ * @property {Object} [sharedState] - 跨信道会话状态的共享存储（SharedStateStore，含 get / set / subscribe / getSnapshot）
  * @property {Function} [allocateObjectId] - 分配对象 id 的便捷函数（优先于 board.allocateObjectId）
  */
 
@@ -129,4 +130,4 @@
  * @typedef {import("./tools/tool.js").Tool} Tool
  */
 
-export {};
+export { };

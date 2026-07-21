@@ -7,6 +7,7 @@
 
 import { Vector } from "../../core/engine/utils/math.js";
 import {
+  DEMO_BUTTON_GROUP_STATE_KEY,
   DEMO_KEYBOARD_INPUT_CODES,
   DEMO_TOOL_NAMES,
   DEMO_WORKFLOW_NAMES,
@@ -221,10 +222,11 @@ function attachKeyboardAdapter(viewport, board, demoLog) {
  * 绑定工具栏按钮适配器
  * @description
  * 读取 .toolbar-btn 按钮列表，将 pointerdown 翻译为 button-press 信号发往按钮组设备；
- * 返回工具列表、默认工具名与激活切换回调，供 mountToolSwitcher 使用。
+ * 订阅 sharedState 的激活工具键同步 DOM 高亮（订阅后立即应用一次当前值）。
+ * 返回工具列表与默认工具名，供 mountToolSwitcher 使用。
  * @param {import("../../core/ui-thread/components/orchestration/board.js").Board} board - 白板实例
  * @param {import("../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
- * @returns {{ tools: Array<{ name: string }>, defaultTool: string, onToolChange: (activeTool: string) => void, cleanup: () => void } | null}
+ * @returns {{ tools: Array<{ name: string }>, defaultTool: string, cleanup: () => void } | null}
  */
 function attachToolbarAdapter(board, viewport) {
   const vpId = viewport.viewportId;
@@ -257,20 +259,30 @@ function attachToolbarAdapter(board, viewport) {
   const defaultTool = buttons[0]?.dataset.tool ?? DEMO_TOOL_NAMES.STROKE;
 
   /**
-   * 工具切换回调：同步 DOM 按钮 active 类
+   * 同步 DOM 按钮 active 类
    * @param {string} activeTool - 当前激活工具名
    * @returns {void}
    */
-  const onToolChange = (activeTool) => {
+  const applyActiveTool = (activeTool) => {
     buttons.forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tool === activeTool);
     });
   };
 
+  // 订阅 sharedState 同步高亮；订阅后立即应用一次当前值（无值时用默认工具兜底）
+  const unsubscribe = board.sharedState.subscribe(
+    DEMO_BUTTON_GROUP_STATE_KEY,
+    (activeTool) => applyActiveTool(activeTool ?? defaultTool),
+  );
+  applyActiveTool(
+    board.sharedState.get(DEMO_BUTTON_GROUP_STATE_KEY) ??
+    defaultTool,
+  );
+  unbinds.push(unsubscribe);
+
   return {
     tools,
     defaultTool,
-    onToolChange,
     cleanup: () => unbinds.forEach((fn) => fn()),
   };
 }

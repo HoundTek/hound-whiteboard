@@ -27,7 +27,11 @@
 **设备 = 输入信道 + 输出信道组成的集合，万物皆设备。** 这是 Unix 哲学的类比——Unix 中万物皆文件，输入系统中万物皆设备，这也是“设备图”名称的由来。
 
 - **输入信道**：外部事件 → 语义信号。例如 mouse 把 DOM 事件规整为 `position` / `end` 信号。
-- **输出信道**：设备 → 外部的反向通知。例如 button-group 设备通过 `onUpdate` 回调通知工具栏更新高亮。输出信道是设备的一等组成部分，不是违规。
+- **输出信道**：设备 → 外部的反向通知。例如 button-group 设备发布当前激活工具名，驱动 DOM 工具栏高亮。输出信道是设备的一等组成部分，不是违规。
+
+**输出信道的标准接口是共享状态 store**（`SharedStateStore`，挂在 `Board` 上）。store 本身也是一台设备：输入信道是 `set` / `subscribe`，输出信道是变更通知。于是 `button-group | store | DOM` 构成一条 Unix 管线式的三段链——按钮组只管写入，DOM 只管订阅，互不知道对方存在。
+
+这把输出信道从"构造时焊死的回调"变成"标准插座"：接线移到外部，设备无需知道消费者。button-group 设备的 `onUpdate` 特设回调已按此退役；touchscreen 设备的 `onUpdate` 也已移除——其载荷与 `touch-contacts` 信号完全重复且零消费者，将来图外需要触点信息时应走 sharedState。
 
 wrapper（`tools/wrapper/`）是复合设备：输入信道是上游信号，输出信道是转发给内部子工具的信号，内部组合对外不可见。对外部编排而言，它呈现为普通 `Tool` 接口，与单工具设备遵循同一套挂载契约。详见 [wrapper 文档](../../tools/wrapper/docs/wrapper-document.md)。
 
@@ -257,4 +261,5 @@ viewport.mountSubDAG("/presentation", createKeyboardDevice());
 
 - [设备图](../../docs/devices-dag-document.md)
 - [键盘设备](./keyboard-device-document.md)
+- [shared-state-store](../../../../engine/utils/docs/shared-state-store-document.md)
 - [输入流](../../../../docs/core-input-flow.md)

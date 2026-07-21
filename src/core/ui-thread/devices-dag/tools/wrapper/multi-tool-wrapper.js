@@ -296,7 +296,7 @@ class MultiToolWrapper extends Tool {
   }
 
   /**
-   * 优雅结束当前动作
+   * 结束当前动作
    * @description 向所有活跃子图发送 end 信号并清理。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}

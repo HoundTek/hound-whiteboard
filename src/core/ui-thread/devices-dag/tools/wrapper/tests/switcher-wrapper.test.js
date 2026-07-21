@@ -60,6 +60,25 @@ describe("ToolSwitcherWrapper", () => {
         () => new ToolSwitcherWrapper({ tools: [{ name: "a", tool: {} }] }),
       ).toThrow(TypeError);
     });
+
+    test("缺少 defaultTool 时应抛错", () => {
+      expect(
+        () =>
+          new ToolSwitcherWrapper({
+            tools: [{ name: "a", tool: new CollectingTool() }],
+          }),
+      ).toThrow(TypeError);
+    });
+
+    test("defaultTool 不在工具列表中时应抛错", () => {
+      expect(
+        () =>
+          new ToolSwitcherWrapper({
+            tools: [{ name: "a", tool: new CollectingTool() }],
+            defaultTool: "b",
+          }),
+      ).toThrow(TypeError);
+    });
   });
 
   test("常规信号默认路由到 defaultTool 的子工具", () => {

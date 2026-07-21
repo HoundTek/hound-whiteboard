@@ -23,6 +23,7 @@
 - `createViewport(rootElement, { width, height }, viewportId)`
 - `allocateObjectId()`
 - `getBoardApi()`
+- `sharedState`
 
 `Board.signalsEventBus` 当前稳定的输入相关事件包括：
 
@@ -40,6 +41,27 @@ board.signalsEventBus.emit("input", {
 - `to` 必须已包含目标 `viewportId`
 - `Board` 会把它分发到唯一的 `Board.devicesDAG`
 - 初始 dispatch context 会附带 `{ board, boardApi }`
+
+## SharedStateStore
+
+`Board.sharedState` 是跨信道会话状态的共享存储，服务于"多个设备 + 图外 UI 必须达成一致"的场景。
+
+当前稳定接口：
+
+- `get(key)`
+- `set(key, value)`
+- `subscribe(key, callback)` — 返回退订函数
+- `getSnapshot()`
+
+### 稳定语义
+
+- 多写者 LWW，不做访问控制，最后写入获胜
+- `set` 在值变化时同步通知该键全部订阅者；`Object.is` 相同则跳过
+- 订阅者会收到自己写入的回声，需自行容忍
+- 订阅者禁止在回调内同步 dispatch 进设备图
+- 写 store 不等于触发图内行为——以工具切换为例，完整切换 = `set` store + 发 `tool-switch` 信号
+
+DAG 内经 `services.sharedState` 注入，图外代码持 `Board` 引用直接访问。详见 [shared-state-store 文档](../engine/utils/docs/shared-state-store-document.md)。
 
 ## BoardApiRpc
 
@@ -214,6 +236,8 @@ board.signalsEventBus.emit("input", {
   - 工具行为控制标志（`autoCommit`、`autoUmountOnApply`）→ 改用工具的显式实例属性
   - 其余链路级参数 → 改用信号字段或平铺 context 键（如 `context.resolvePosition`）
 - **handoff / tool-switcher 的 prefix 子图工厂**（`createHandoffSubDAG`、`createToolSwitcherSubDAG`、`createMultiToolPrefixHandler`）：由 `tools/wrapper/` 的 `HandoffWrapperTool`、`ToolSwitcherWrapper` 取代，wrapper 作为普通 Tool 通过 `mountWorkflow` 单节点挂载。
+- **button-group 设备的 `onUpdate` 构造选项**：输出信道改走共享状态——设备写入 `services.sharedState`（键为必传的 `stateKey` 选项，由接线层注册，无默认值），消费者（如 DOM 工具栏）通过 `board.sharedState.subscribe` 订阅，接线移到设备外部。
+- **touchscreen 设备的 `onUpdate` 构造选项**：载荷与 `touch-contacts` 信号完全重复且零消费者，已删除；`createTouchscreenDevice()` 不再接受参数。
 
 ## Viewport
 

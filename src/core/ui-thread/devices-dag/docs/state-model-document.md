@@ -8,10 +8,11 @@
 - **状态**：分为**权威状态**与**投影**两个层面——
   - **权威状态（真理源）**：归闭包 / 实例字段。系统中所有状态都是单主的，写所有权天然应封闭
   - **状态投影（`node.state`）**：拥有者主动发布的、全图可寻址的只读投影，唯一职责是可观察性
+- **共享状态（`SharedStateStore`）**：跨信道会话状态，挂在 Board 上，多写者 LWW，供 DAG 内设备与图外 UI 达成一致
 
 一句话原则：**闭包管对错，state 管看见。**
 
-## 三种状态
+## 四种状态
 
 ### 静态服务上下文（`services`）
 
@@ -32,22 +33,23 @@
 
 #### 已知 services 键
 
-| 键         | 声明方           | 用途              |
-| ---------- | ---------------- | ----------------- |
-| `board`    | Board 根节点 `/` | Board 实例引用    |
-| `boardApi` | Board 根节点 `/` | BoardApiRpc 代理  |
-| `viewport` | Viewport 根节点  | Viewport 实例引用 |
+| 键            | 声明方           | 用途                               |
+| ------------- | ---------------- | ---------------------------------- |
+| `board`       | Board 根节点 `/` | Board 实例引用                     |
+| `boardApi`    | Board 根节点 `/` | BoardApiRpc 代理                   |
+| `viewport`    | Viewport 根节点  | Viewport 实例引用                  |
+| `sharedState` | Board 根节点 `/` | 跨信道会话状态的共享存储（见下文） |
 
 ### 状态投影（`node.state`）
 
 `node.state` 是**发布层**：拥有者把需要被外界观察的状态发布到自己的节点上，供调试、测试与跨节点读取。它**不是真理源**——真理源永远在拥有者的闭包或实例字段里。
 
-| 属性     | 说明                                                     |
-| -------- | -------------------------------------------------------- |
-| 存储位置 | `DevicesDAGNode.state`                                   |
-| 作用域   | 全图可读；仅拥有者可写                                   |
-| 生命周期 | 节点存续期间                                             |
-| 读写规则 | **读取完全开放**；写入仅限拥有者对自身节点（发布语义）   |
+| 属性     | 说明                                                   |
+| -------- | ------------------------------------------------------ |
+| 存储位置 | `DevicesDAGNode.state`                                 |
+| 作用域   | 全图可读；仅拥有者可写                                 |
+| 生命周期 | 节点存续期间                                           |
+| 读写规则 | **读取完全开放**；写入仅限拥有者对自身节点（发布语义） |
 
 `node.state` 适合放：
 
@@ -61,23 +63,23 @@ strict 模式抛错，非 strict 模式经 log 工具告警。外部代码（非
 
 #### 当前已知投影键
 
-| 键            | 发布者                       | 用途                                 |
-| ------------- | ---------------------------- | ------------------------------------ |
-| `phase`       | `HandoffWrapperTool`         | 当前工作流阶段（`first` / `second`） |
-| `activeChild` | `HandoffWrapperTool`         | 当前活动子工具名                     |
-| `routeTarget` | `ToolSwitcherWrapper`        | 当前路由目标工具名                   |
-| `objects`     | Tool（`setContextObjects`）  | 工具当前持有的对象集合               |
+| 键            | 发布者                      | 用途                                 |
+| ------------- | --------------------------- | ------------------------------------ |
+| `phase`       | `HandoffWrapperTool`        | 当前工作流阶段（`first` / `second`） |
+| `activeChild` | `HandoffWrapperTool`        | 当前活动子工具名                     |
+| `routeTarget` | `ToolSwitcherWrapper`       | 当前路由目标工具名                   |
+| `objects`     | Tool（`setContextObjects`） | 工具当前持有的对象集合               |
 
 ### 权威状态（闭包 / 实例字段）
 
 权威状态是数据的**唯一真相源**，归拥有者的闭包或实例字段持有。系统中所有状态都是单主的——每个状态只有一个写入者，因此写所有权天然应封闭在拥有者内部。
 
-| 属性     | 说明                       |
-| -------- | -------------------------- |
+| 属性     | 说明                        |
+| -------- | --------------------------- |
 | 存储位置 | handler 工厂闭包 / 实例字段 |
-| 作用域   | 仅拥有者自身可访问         |
-| 生命周期 | handler 实例存续期间       |
-| 读写规则 | 彻底私有，外部不可见不可写 |
+| 作用域   | 仅拥有者自身可访问          |
+| 生命周期 | handler 实例存续期间        |
+| 读写规则 | 彻底私有，外部不可见不可写  |
 
 闭包 / 实例字段适合放：
 
@@ -106,6 +108,37 @@ node.state.phase / activeChild         ← 只读投影，仅供观察与调试
 | ------------- | --------------------- | -------------------------------------------------------- |
 | `#activeName` | `ToolSwitcherWrapper` | 当前路由目标（通过 `node.state.routeTarget` 投影观察）   |
 | `#phase`      | `HandoffWrapperTool`  | 当前阶段（通过 `node.state.phase` / `activeChild` 观察） |
+
+### 共享状态（`SharedStateStore`）
+
+共享状态是第四种状态模型，定位为**跨信道会话状态**——服务于"多个设备 + 图外 UI 必须达成一致"的场景（如按钮组设备与 DOM 工具栏的高亮一致）。它守住边界，不给其他场景用：单链路的参数传递走信号，基础设施依赖走 `services`，节点可观察状态走 `node.state`。
+
+| 属性     | 说明                                       |
+| -------- | ------------------------------------------ |
+| 存储位置 | `SharedStateStore` 实例（挂在 `Board` 上） |
+| 作用域   | 整个 Board：DAG 内设备与图外 UI 共享       |
+| 生命周期 | Board 存续期间                             |
+| 读写规则 | 多写者 LWW；订阅同步通知                   |
+
+语义约束（详见 [shared-state-store 文档](../../../engine/utils/docs/shared-state-store-document.md)）：
+
+- **多写者 LWW**：任何写者可 `set` 任意键，不做访问控制，最后写入获胜
+- **同步通知与回声容忍**：`set` 后同步通知该键订阅者；订阅者会收到自己写入的回声
+- **重入禁令**：订阅者禁止在回调内同步 dispatch 进设备图
+- **写 store ≠ 切换工具**：写入共享状态只完成状态发布这一半。以工具切换为例，完整切换 = `set` store + 发 `tool-switch` 信号，`ToolSwitcherWrapper` 只认信号载荷
+
+DAG 内经 `services.sharedState` 注入，图外代码持 `Board` 引用直接访问（`board.sharedState`）。
+
+#### 键契约登记表
+
+| 键           | 写入方            | 用途                         |
+| ------------ | ----------------- | ---------------------------- |
+| `activeTool` | button-group 设备 | 当前激活工具名（demo 注册） |
+
+键没有默认值——创建按钮组设备时由接线层经必传的 `stateKey` 选项显式指定（demo 注册于
+`demo/config/constants.js` 的 `DEMO_BUTTON_GROUP_STATE_KEY`）。多个按钮组各自操控不同的
+tool-switcher 时，必须为各实例传入互不相同的键（如 `primaryTool` / `secondaryTool`），
+各实例写入各自的键、互不干扰。
 
 ## 领域数据归属
 
@@ -137,3 +170,4 @@ first tool 创建对象
 - [设备图](./devices-dag-document.md)
 - [handler 上下文（ctx）用法](./handler-context-document.md)
 - [wrapper（复合设备）](../tools/wrapper/docs/wrapper-document.md)
+- [shared-state-store](../../../engine/utils/docs/shared-state-store-document.md)

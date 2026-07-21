@@ -102,9 +102,11 @@ scope.mountWorkflow("tool-switcher", switcher);
 
 ### 路由规则
 
-- `tool-switch` 信号（`context.activeTool` 为目标名）：校验目标在工具列表中；先确保新槽位实例化，再对旧工具调用 `endAction(context)` 让其优雅收尾；该信号不再向下转发
+- `tool-switch` 信号（`context.activeTool` 为目标名）：校验目标在工具列表中；先确保新槽位实例化，再对旧工具调用 `endAction(context)` 完成其手头动作；该信号不再向下转发
 - 其他信号：转发到当前活跃槽位
 - 路由目标镜像键：`routeTarget`
+
+wrapper 是信号驱动的，信号载荷即权威——它不读共享状态。当前激活工具的会话状态已收编到共享状态 store（button-group 设备写入 `activeTool` 键，供 DOM 工具栏等图外消费者订阅），与 `routeTarget` 各司其职：store 管跨信道一致，`routeTarget` 管图内路由。
 
 ### 懒实例化
 
@@ -137,3 +139,4 @@ scope.mountWorkflow("tool-switcher", switcher);
 - [对象选择工具](../../chooser/docs/object-chooser-document.md)
 - [对象修改工具](../../modifier/docs/object-modifier-document.md)
 - [修饰节点](../../../prefixes/docs/prefix-document.md)
+- [shared-state-store](../../../../../engine/utils/docs/shared-state-store-document.md)

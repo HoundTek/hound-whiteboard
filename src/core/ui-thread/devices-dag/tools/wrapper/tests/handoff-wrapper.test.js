@@ -314,7 +314,7 @@ describe("HandoffWrapperTool", () => {
     // 外部（如 tool-switcher 切换）强制结束当前动作
     wrapper.endAction({ services });
 
-    // first 的手势被优雅完成 → action:complete → 相位切到 second
+    // first 的手势正常完成 → action:complete → 相位切到 second
     expect(stroke.isGestureActive).toBe(false);
     expect(wrapper.getDebugInfo().phase).toBe("second");
     expect(modifier._overlayModifiedObjects).toHaveLength(1);

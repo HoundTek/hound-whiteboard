@@ -221,7 +221,7 @@ class GestureTool extends Tool {
   clearOverlayState(context = {}) { }
 
   /**
-   * 优雅结束当前动作
+   * 结束当前动作
    * @description
    * 供 tool-switcher 或 end-action 信号调用。
    * 先完成当前手势（写最后的路径点等），再提交动作。
@@ -451,7 +451,7 @@ class GestureTool extends Tool {
  */
 class MultiGestureTool extends GestureTool {
   /**
-   * 优雅结束当前动作（多手势语义）
+   * 结束当前动作（多手势语义）
    * @description
    * 多手势模式下，结束动作等同于提交整个对象（等同 object-end 语义）。
    * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}]

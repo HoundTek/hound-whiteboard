@@ -98,7 +98,6 @@ async function bootstrapWhiteboard() {
       tools: toolbar.tools,
       defaultTool: toolbar.defaultTool,
       primaryStrokeTool: demoResults.primaryStrokeTool,
-      onToolChange: toolbar.onToolChange,
     });
   }
 
