@@ -1,33 +1,14 @@
 /**
  * @file 对象创建工具
- * @description 提供对象创建流程与信号类型定义的工具基类。
+ * @description 提供对象创建流程的工具基类。
  * @module core/ui-thread/devices-dag/tools/creator/object-creator
  * @author Zhou Chenyu
  */
 
 import { Vector } from "../../../../engine/utils/math.js";
 import { SignalPacket } from "../../dag-core/signal.js";
+import { SIGNAL_TYPES } from "../../dag-core/signal-types.js";
 import { GestureTool } from "../gesture-tool.js";
-
-/**
- * 对象创建工具相关信号类型常量
- * @readonly
- * @enum {string}
- * @description
- * 定义对象创建工具处理的信号类型，包括位置更新、手势结束/取消、对象结束/取消等。
- * 这些信号类型用于工具在处理输入时识别不同的交互阶段和事件。
- * @author Zhou Chenyu
- */
-const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
-  POSITION: "position",
-  PROPERTY: "property",
-  GESTURE_END: "end",
-  GESTURE_CANCEL: "cancel",
-  OBJECT_END: "object-end",
-  OBJECT_CANCEL: "object-cancel",
-  END: "end",
-  CANCEL: "cancel",
-});
 
 /**
  * 从信号列表中提取 prefix 注入的对象属性
@@ -36,7 +17,7 @@ const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
  */
 function extractInjectedProperty(signals) {
   const propertySignal = signals.find(
-    (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+    (signal) => signal.type === SIGNAL_TYPES.PROPERTY,
   );
   const value = propertySignal?.context?.value;
   return value && typeof value === "object" && !Array.isArray(value)
@@ -145,7 +126,7 @@ class ObjectCreatorTool extends GestureTool {
     const baseInteraction = super.buildInteraction(normalizedPacket, context);
     const signals = normalizedPacket.signals;
     const positionSignal = signals.find(
-      (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+      (signal) => signal.type === SIGNAL_TYPES.POSITION,
     );
 
     return {
@@ -478,15 +459,16 @@ class ObjectCreatorTool extends GestureTool {
   /**
    * 解析已完成对象的局部外接矩形
    * @description
-   * 子类覆写此方法，在 `finalizeCreatedObject` 中被调用，
+   * 子类必须覆写此方法，在 `finalizeCreatedObject` 中被调用，
    * 将计算结果回填到 `this._entry.boundingBox`，使创建态条目
    * 可以被 modifier 直接消费（准入检测、overlay 渲染）。
    * @param {Object} interaction - 当前交互上下文
-   * @returns {{ left: number, top: number, width: number, height: number }|undefined} 局部外接矩形
+   * @returns {{ left: number, top: number, width: number, height: number }} 局部外接矩形
    * @protected
+   * @abstract
    */
   resolveCreatedObjectBoundingBox(interaction) {
-    return undefined;
+    throw new Error("Method not implemented.");
   }
 
   /**
@@ -506,17 +488,31 @@ class ObjectCreatorTool extends GestureTool {
    * 固化对象上下文（同步到 node state、标记完成）
    * @description
    * 无论后续是否 commit，此步骤始终执行。
-   * 同时回填 `boundingBox`，确保条目在后续 handoff 桥接时
-   * 携带完整的几何边界信息。
+   * 同时校验并回填 `boundingBox`，确保条目在后续 handoff 桥接时
+   * 携带完整的几何边界信息。entry 协议违例（type 不匹配、
+   * boundingBox 缺失）会抛错——modifier 的准入检测依赖这些字段，
+   * 缺失时宁可显式失败也不让对象静默不可选。
    * @param {Object} interaction - 当前交互上下文
    * @protected
    */
   finalizeCreatedObject(interaction) {
     const context = interaction?.context ?? {};
-    const boundingBox = this.resolveCreatedObjectBoundingBox(interaction);
-    if (boundingBox && this._entry) {
-      this._entry.boundingBox = boundingBox;
+
+    if (this._entry?.type !== this.getCreatedObjectType()) {
+      throw new Error(
+        `${this.constructor.name}: entry.type (${this._entry?.type}) must match getCreatedObjectType() (${this.getCreatedObjectType()}). ` +
+          "Check the `create()` implementation against the LightweightObjectEntry protocol.",
+      );
     }
+
+    const boundingBox = this.resolveCreatedObjectBoundingBox(interaction);
+    if (!boundingBox) {
+      throw new Error(
+        `${this.constructor.name}: resolveCreatedObjectBoundingBox() must return a bounding box. ` +
+          "The handoff/modifier admission check depends on entry.boundingBox.",
+      );
+    }
+    this._entry.boundingBox = boundingBox;
 
     this.syncCreatedObjectContext(context, this._entry);
     this.isObjectCreationCompleted = true;
@@ -779,5 +775,4 @@ export {
   ObjectCreatorTool,
   SingleGestureObjectCreatorTool,
   MultiGestureObjectCreatorTool,
-  OBJECT_CREATOR_SIGNAL_TYPES,
 };

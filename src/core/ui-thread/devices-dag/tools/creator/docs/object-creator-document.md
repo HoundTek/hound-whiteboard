@@ -89,11 +89,16 @@ Worker 侧真实对象与 `_entry` 通过 `objectId` 关联，但引用互不共
 
 `finalizeCreatedObject` 中调用 `resolveCreatedObjectBoundingBox()` 钩子，将计算出的局部外接矩形写入 `_entry.boundingBox`。
 
+这一步是**强制校验**而非君子协定：`resolveCreatedObjectBoundingBox()` 是抽象方法，
+`finalizeCreatedObject` 会校验 `entry.type` 与 `getCreatedObjectType()` 一致且
+boundingBox 非空，违例直接抛错——modifier 的准入检测（`resolveModifiedObjectWorldRect`）
+和 overlay 渲染依赖这些字段，缺失时显式失败好过对象静默不可选。
+
 各子类的实现：
 
-| 子类                    | 计算方式                                                                            |
-| ----------------------- | ----------------------------------------------------------------------------------- |
-| `StrokeCreatorTool`     | `data.points` 的 min/max                                                            |
+| 子类                     | 计算方式                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| `StrokeCreatorTool`      | `data.points` 的 min/max                                                            |
 | `CircleDataCreatorTool`  | `rx = r·hypot(a, b)`、`ry = r·hypot(c, d)`（transform 感知；无 transform 时为正圆） |
 | `EllipseDataCreatorTool` | `rx = radiusX·hypot(a, b)`、`ry = radiusY·hypot(c, d)`（transform 感知）            |
 | `PolygonCreatorTool`     | `data.points` 的 min/max                                                            |

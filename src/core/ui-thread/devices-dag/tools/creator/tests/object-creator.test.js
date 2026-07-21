@@ -227,10 +227,16 @@ describe("ObjectCreatorTool — property 信号", () => {
   describe("生命周期钩子", () => {
     test("completeCreatedObject 后触发 action:complete 通知", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
-        create() {}
-        beginGesture() {}
-        updateGesture() {}
-        completeGesture() {}
+        create() { }
+        getCreatedObjectType() {
+          return "test";
+        }
+        resolveCreatedObjectBoundingBox() {
+          return { left: 0, top: 0, width: 0, height: 0 };
+        }
+        beginGesture() { }
+        updateGesture() { }
+        completeGesture() { }
       }
 
       const tool = new TestCreator();
@@ -246,15 +252,22 @@ describe("ObjectCreatorTool — property 信号", () => {
       expect(actionComplete).toHaveBeenCalledWith(context, {
         id: 1,
         type: "test",
+        boundingBox: { left: 0, top: 0, width: 0, height: 0 },
       });
     });
 
     test("beforeCommitCreatedObject 返回 false 时阻止 commitObjects", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
-        create() {}
-        beginGesture() {}
-        updateGesture() {}
-        completeGesture() {}
+        create() { }
+        getCreatedObjectType() {
+          return "test";
+        }
+        resolveCreatedObjectBoundingBox() {
+          return { left: 0, top: 0, width: 0, height: 0 };
+        }
+        beginGesture() { }
+        updateGesture() { }
+        completeGesture() { }
       }
 
       const tool = new TestCreator();
@@ -262,7 +275,7 @@ describe("ObjectCreatorTool — property 信号", () => {
 
       tool.beforeCommitCreatedObject = () => false;
       tool.objectId = 2;
-      tool._entry = { id: 2 };
+      tool._entry = { id: 2, type: "test" };
       tool.completeCreatedObject({ context: { services: { boardApi } } });
 
       expect(boardApi.commitObjects).not.toHaveBeenCalled();
@@ -271,17 +284,23 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     test("beforeCommitCreatedObject 默认返回 true → 对象通过 boardApi 提交", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
-        create() {}
-        beginGesture() {}
-        updateGesture() {}
-        completeGesture() {}
+        create() { }
+        getCreatedObjectType() {
+          return "test";
+        }
+        resolveCreatedObjectBoundingBox() {
+          return { left: 0, top: 0, width: 0, height: 0 };
+        }
+        beginGesture() { }
+        updateGesture() { }
+        completeGesture() { }
       }
 
       const tool = new TestCreator();
       const boardApi = { commitObjects: jest.fn() };
 
       tool.objectId = 3;
-      tool._entry = { id: 3 };
+      tool._entry = { id: 3, type: "test" };
       tool.completeCreatedObject({ context: { services: { boardApi } } });
 
       expect(boardApi.commitObjects).toHaveBeenCalledWith([3]);
@@ -290,10 +309,16 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     test("beforeCommit 返回 false 时 action:complete 仍然触发", () => {
       class TestCreator extends SingleGestureObjectCreatorTool {
-        create() {}
-        beginGesture() {}
-        updateGesture() {}
-        completeGesture() {}
+        create() { }
+        getCreatedObjectType() {
+          return "test";
+        }
+        resolveCreatedObjectBoundingBox() {
+          return { left: 0, top: 0, width: 0, height: 0 };
+        }
+        beginGesture() { }
+        updateGesture() { }
+        completeGesture() { }
       }
 
       const tool = new TestCreator();
@@ -301,7 +326,7 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.on("action:complete", actionComplete);
       tool.beforeCommitCreatedObject = () => false;
       tool.objectId = 4;
-      tool._entry = { id: 4 };
+      tool._entry = { id: 4, type: "test" };
 
       tool.completeCreatedObject({ context: {} });
 
@@ -310,8 +335,8 @@ describe("ObjectCreatorTool — property 信号", () => {
 
     test("process 完整周期（position → end）触发 action:complete", () => {
       const tool = new CircleDataCreatorTool({
-      processor: createCircleRadiusProcessor(),
-    });
+        processor: createCircleRadiusProcessor(),
+      });
       const actionComplete = jest.fn();
       const { deviceContext } = createBoardDeviceContext(301);
       tool.on("action:complete", actionComplete);
@@ -330,6 +355,74 @@ describe("ObjectCreatorTool — property 信号", () => {
       tool.process({ signals: [{ type: "end" }] }, deviceContext);
 
       expect(actionComplete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("entry 协议校验", () => {
+    test("entry.type 与 getCreatedObjectType() 不匹配时 finalize 应抛错", () => {
+      class BadTypeCreator extends SingleGestureObjectCreatorTool {
+        create() { }
+        getCreatedObjectType() {
+          return "ExpectedObject";
+        }
+        resolveCreatedObjectBoundingBox() {
+          return { left: 0, top: 0, width: 0, height: 0 };
+        }
+        beginGesture() { }
+        updateGesture() { }
+        completeGesture() { }
+      }
+
+      const tool = new BadTypeCreator();
+      tool.objectId = 11;
+      tool._entry = { id: 11, type: "WrongObject" };
+
+      expect(() => tool.completeCreatedObject({ context: {} })).toThrow(
+        /entry\.type.*must match getCreatedObjectType/,
+      );
+    });
+
+    test("resolveCreatedObjectBoundingBox 未覆写时 finalize 应抛错", () => {
+      class NoBoundingBoxCreator extends SingleGestureObjectCreatorTool {
+        create() { }
+        getCreatedObjectType() {
+          return "test";
+        }
+        beginGesture() { }
+        updateGesture() { }
+        completeGesture() { }
+      }
+
+      const tool = new NoBoundingBoxCreator();
+      tool.objectId = 12;
+      tool._entry = { id: 12, type: "test" };
+
+      expect(() => tool.completeCreatedObject({ context: {} })).toThrow(
+        "Method not implemented.",
+      );
+    });
+
+    test("resolveCreatedObjectBoundingBox 返回空时 finalize 应抛错并提示 handoff 依赖", () => {
+      class EmptyBoundingBoxCreator extends SingleGestureObjectCreatorTool {
+        create() { }
+        getCreatedObjectType() {
+          return "test";
+        }
+        resolveCreatedObjectBoundingBox() {
+          return undefined;
+        }
+        beginGesture() { }
+        updateGesture() { }
+        completeGesture() { }
+      }
+
+      const tool = new EmptyBoundingBoxCreator();
+      tool.objectId = 13;
+      tool._entry = { id: 13, type: "test" };
+
+      expect(() => tool.completeCreatedObject({ context: {} })).toThrow(
+        /resolveCreatedObjectBoundingBox\(\) must return a bounding box/,
+      );
     });
   });
 });
