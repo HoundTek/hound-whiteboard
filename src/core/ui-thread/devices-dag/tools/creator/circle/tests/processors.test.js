@@ -8,10 +8,6 @@ import {
   interpretCircleDiameter,
   createCircleDiameterProcessor,
 } from "../diameter-processor.js";
-import {
-  interpretCircleBounding,
-  createCircleBoundingProcessor,
-} from "../bounding-processor.js";
 import { Vector } from "../../../../../../engine/utils/math.js";
 
 function createBoardDeviceContext(objectId, { viewport } = {}) {
@@ -74,25 +70,6 @@ describe("interpret 纯函数", () => {
     expect(patch.position.serialize()).toEqual({ x: 3, y: 4 });
     expect(patch.data.radius).toBeCloseTo(5);
   });
-
-  test("外接矩形：短轴分量恒为单位，长轴分量 ≥ 1", () => {
-    const wide = interpretCircleBounding(new Vector(0, 0), new Vector(10, 6));
-    expect(wide.position.serialize()).toEqual({ x: 5, y: 3 });
-    expect(wide.data.radius).toBeCloseTo(3);
-    expect(wide.transform).toEqual({ a: 10 / 6, b: 0, c: 0, d: 1 });
-    expect(Math.min(Math.abs(wide.transform.a), Math.abs(wide.transform.d))).toBe(1);
-
-    const tall = interpretCircleBounding(new Vector(0, 0), new Vector(6, 10));
-    expect(tall.transform).toEqual({ a: 1, b: 0, c: 0, d: 10 / 6 });
-    expect(Math.min(Math.abs(tall.transform.a), Math.abs(tall.transform.d))).toBe(1);
-  });
-
-  test("外接矩形：零点尺寸退化为半径 0 的正圆", () => {
-    const patch = interpretCircleBounding(new Vector(3, 3), new Vector(3, 3));
-    expect(patch.position.serialize()).toEqual({ x: 3, y: 3 });
-    expect(patch.data.radius).toBe(0);
-    expect(patch.transform).toEqual({ a: 1, b: 0, c: 0, d: 1 });
-  });
 });
 
 describe("直径手势端到端", () => {
@@ -133,62 +110,33 @@ describe("直径手势端到端", () => {
   });
 });
 
-describe("外接矩形手势端到端", () => {
-  test("拖出外接矩形后生成 transform 表达的椭圆", () => {
+describe("transform 补丁", () => {
+  test("applyGesturePatch 写入 transform 后，外接框解析应考虑 transform", () => {
     const tool = new CircleDataCreatorTool({
-      processor: createCircleBoundingProcessor(),
+      processor: createCircleRadiusProcessor(),
     });
     const { deviceContext } = createBoardDeviceContext(601);
     const boardApi = deviceContext.services.boardApi;
 
-    processGesture(
-      tool,
-      deviceContext,
-      [new Vector(0, 0), new Vector(24, 16)],
+    processGesture(tool, deviceContext, [new Vector(0, 0), new Vector(8, 0)]);
+
+    tool.applyGesturePatch(
+      { transform: { a: 2, b: 0, c: 0, d: 1 } },
+      { context: deviceContext },
     );
 
-    expect(tool._entry.position.serialize()).toEqual({ x: 12, y: 8 });
-    expect(tool._entry.data.radius).toBeCloseTo(8);
-    expect(tool._entry.transform).toEqual({ a: 1.5, b: 0, c: 0, d: 1 });
+    expect(tool._entry.transform).toEqual({ a: 2, b: 0, c: 0, d: 1 });
     expect(boardApi.modifyObject).toHaveBeenCalledWith(
       601,
       expect.objectContaining({
-        data: { radius: 8 },
-        transform: { a: 1.5, b: 0, c: 0, d: 1 },
+        transform: { a: 2, b: 0, c: 0, d: 1 },
       }),
     );
-  });
-
-  test("外接矩形的外接框解析考虑 transform", () => {
-    const tool = new CircleDataCreatorTool({
-      processor: createCircleBoundingProcessor(),
-    });
-    const { deviceContext } = createBoardDeviceContext(602);
-
-    processGesture(
-      tool,
-      deviceContext,
-      [new Vector(0, 0), new Vector(24, 16)],
-    );
-
     expect(tool.resolveCreatedObjectBoundingBox({})).toEqual({
-      left: -12,
+      left: -16,
       top: -8,
-      width: 24,
+      width: 32,
       height: 16,
     });
-  });
-
-  test("点击未拖动时生成固定半径的正圆", () => {
-    const tool = new CircleDataCreatorTool({
-      processor: createCircleBoundingProcessor(),
-    });
-    const { deviceContext } = createBoardDeviceContext(603);
-
-    processGesture(tool, deviceContext, [new Vector(5, 5), new Vector(5, 5)]);
-
-    expect(tool._entry.position.serialize()).toEqual({ x: 5, y: 5 });
-    expect(tool._entry.data.radius).toBeCloseTo(16);
-    expect(tool._entry.transform).toEqual({ a: 1, b: 0, c: 0, d: 1 });
   });
 });

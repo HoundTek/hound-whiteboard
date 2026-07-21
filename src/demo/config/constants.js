@@ -29,7 +29,7 @@ const DEMO_TOOL_NAMES = Object.freeze({
   STROKE: "stroke",
   CIRCLE: "circle",
   CIRCLE_DIAMETER: "circle-diameter",
-  CIRCLE_BOUNDING: "circle-bounding",
+  ELLIPSE: "ellipse",
   SELECT: "select",
 });
 

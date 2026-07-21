@@ -11,7 +11,8 @@ import { ToolSwitcherWrapper } from "../../../core/ui-thread/devices-dag/tools/w
 import { CircleDataCreatorTool } from "../../../core/ui-thread/devices-dag/tools/creator/circle/data-creator.js";
 import { createCircleRadiusProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/circle/radius-processor.js";
 import { createCircleDiameterProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/circle/diameter-processor.js";
-import { createCircleBoundingProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/circle/bounding-processor.js";
+import { EllipseDataCreatorTool } from "../../../core/ui-thread/devices-dag/tools/creator/ellipse/data-creator.js";
+import { createEllipseBoundingProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/ellipse/bounding-processor.js";
 import { RectangleObjectChooserTool } from "../../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
 import {
@@ -67,7 +68,7 @@ function mountToolSwitcher(viewport, options) {
   scope.mountDevice("toolbar/button-group", buttonGroupDef);
 
   // 2. tool-switcher wrapper：按激活工具名路由 mouse/primary 信号
-  // 三种圆创建手势共享 CircleDataCreatorTool，仅 processor 不同
+  // 两种圆创建手势共享 CircleDataCreatorTool，椭圆使用独立的 EllipseDataCreatorTool
   const circleProperty = {
     strokeColor: DEMO_CIRCLE_STROKE_COLOR,
     strokeWidth: DEMO_STROKE_WIDTH,
@@ -80,9 +81,9 @@ function mountToolSwitcher(viewport, options) {
     property: circleProperty,
     processor: createCircleDiameterProcessor(),
   });
-  const circleBoundingCreatorTool = new CircleDataCreatorTool({
+  const ellipseCreatorTool = new EllipseDataCreatorTool({
     property: circleProperty,
-    processor: createCircleBoundingProcessor(),
+    processor: createEllipseBoundingProcessor(),
   });
   const selectHandoffTool = new HandoffWrapperTool({
     first: new RectangleObjectChooserTool(),
@@ -93,7 +94,7 @@ function mountToolSwitcher(viewport, options) {
       { name: DEMO_TOOL_NAMES.STROKE, tool: primaryStrokeTool },
       { name: DEMO_TOOL_NAMES.CIRCLE, tool: circleCreatorTool },
       { name: DEMO_TOOL_NAMES.CIRCLE_DIAMETER, tool: circleDiameterCreatorTool },
-      { name: DEMO_TOOL_NAMES.CIRCLE_BOUNDING, tool: circleBoundingCreatorTool },
+      { name: DEMO_TOOL_NAMES.ELLIPSE, tool: ellipseCreatorTool },
       { name: DEMO_TOOL_NAMES.SELECT, tool: selectHandoffTool },
     ],
     defaultTool,

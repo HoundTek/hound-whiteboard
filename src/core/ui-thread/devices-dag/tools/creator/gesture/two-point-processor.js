@@ -22,7 +22,7 @@
 
 /**
  * 两点手势 overlay 收集函数
- * @typedef {(anchor: import("../../../../../engine/utils/math.js").Vector, current: import("../../../../../engine/utils/math.js").Vector) => import("../../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]} TwoPointCollectOverlay
+ * @typedef {(anchor: import("../../../../../engine/utils/math.js").Vector, current: import("../../../../../engine/utils/math.js").Vector) => import("../../../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]} TwoPointCollectOverlay
  */
 
 /**
@@ -187,7 +187,7 @@ class TwoPointGestureProcessor {
    * 收集当前手势声明的 overlay 条目
    * @param {import("../object-creator.js").ObjectCreatorTool} creator - 宿主数据创建器
    * @param {Object} [overlayContext={}] - overlay 上下文
-   * @returns {import("../../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
+   * @returns {import("../../../../components/renderer/ui-overlay-factory.js").UiOverlayEntry[]}
    */
   collectUiOverlayEntries(creator, overlayContext = {}) {
     if (!this._anchor || !this._current) {

@@ -20,7 +20,7 @@
   - **笔画**（`StrokeCreatorTool`）
   - **圆**（`CircleDataCreatorTool` + 圆心半径 processor）
   - **直径圆**（`CircleDataCreatorTool` + 直径 processor）
-  - **椭圆**（`CircleDataCreatorTool` + 外接矩形 processor，椭圆经 transform 表达）
+  - **椭圆**（`EllipseDataCreatorTool` + 外接矩形 processor，创建独立的 `EllipseObject`）
   - **选择+修改**（`HandoffWrapperTool`：`RectangleObjectChooserTool` → `CommonObjectModifierTool`）
 - 通过工具栏按钮（`.toolbar-btn`）切换激活工具
 - 按钮 `pointerdown` 事件发出 `button-press` 信号 → `toolbar/button-group` 设备 → 输出 `tool-switch` 信号，双输入汇聚到 tool-switcher 节点
