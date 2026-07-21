@@ -6,12 +6,10 @@
  */
 
 import { SignalPacket } from "../dag-core/signal.js";
+import { SIGNAL_TYPES } from "../dag-core/signal-types.js";
 import { Vector } from "../../../engine/utils/math.js";
 import { Tool } from "./tool.js";
-import {
-  GESTURE_TOOL_SIGNAL_TYPES,
-  unifyActionResult,
-} from "./gesture-signal-types.js";
+import { unifyActionResult } from "./gesture-signal-types.js";
 
 /**
  * 手势交互上下文
@@ -81,7 +79,7 @@ class GestureTool extends Tool {
     }
 
     const positionSignal = signalPacket.signals.find(
-      (signal) => signal.type === GESTURE_TOOL_SIGNAL_TYPES.POSITION,
+      (signal) => signal.type === SIGNAL_TYPES.POSITION,
     );
     const rawPosition =
       positionSignal?.context?.value ?? positionSignal?.context?.position;
@@ -102,22 +100,22 @@ class GestureTool extends Tool {
       signals,
       position: this._extractPosition(signalPacket, context),
       hasCancel: signals.some(
-        (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.GESTURE_CANCEL,
+        (signal) => signal?.type === SIGNAL_TYPES.CANCEL,
       ),
       hasEnd: signals.some(
-        (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.GESTURE_END,
+        (signal) => signal?.type === SIGNAL_TYPES.END,
       ),
       hasObjectCancel: signals.some(
-        (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.OBJECT_CANCEL,
+        (signal) => signal?.type === SIGNAL_TYPES.OBJECT_CANCEL,
       ),
       hasObjectEnd: signals.some(
-        (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.OBJECT_END,
+        (signal) => signal?.type === SIGNAL_TYPES.OBJECT_END,
       ),
       hasSuccess: signals.some(
-        (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.SUCCESS,
+        (signal) => signal?.type === SIGNAL_TYPES.SUCCESS,
       ),
       hasEndAction: signals.some(
-        (signal) => signal?.type === GESTURE_TOOL_SIGNAL_TYPES.END_ACTION,
+        (signal) => signal?.type === SIGNAL_TYPES.END_ACTION,
       ),
     };
   }
@@ -539,4 +537,4 @@ class MultiGestureTool extends GestureTool {
   }
 }
 
-export { GESTURE_TOOL_SIGNAL_TYPES, GestureTool, MultiGestureTool, unifyActionResult };
+export { GestureTool, MultiGestureTool, unifyActionResult };

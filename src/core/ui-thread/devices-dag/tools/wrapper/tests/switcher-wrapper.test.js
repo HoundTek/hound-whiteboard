@@ -7,10 +7,9 @@
 import { jest } from "@jest/globals";
 import { DevicesDAG } from "../../../index.js";
 import { ToolSwitcherWrapper } from "../switcher-wrapper.js";
-import { BUTTON_GROUP_DEVICE_SIGNAL_TYPES } from "../../../devices/button-group-device.js";
 import { CollectingTool } from "../../../../../test-support/mock-tools.js";
 
-const TOOL_SWITCH = BUTTON_GROUP_DEVICE_SIGNAL_TYPES.TOOL_SWITCH;
+const TOOL_SWITCH = "tool-switch";
 
 /**
  * 挂载 switcher wrapper 到测试 DAG

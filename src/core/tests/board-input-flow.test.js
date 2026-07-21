@@ -1,10 +1,7 @@
 import { Board } from "../ui-thread/components/orchestration/board.js";
 import { createSubDAG } from "../ui-thread/devices-dag/index.js";
 import { createEdgePrefix } from "../ui-thread/devices-dag/prefixes/index.js";
-import {
-  KEYBOARD_DEVICE_SIGNAL_TYPES,
-  createKeyboardDevice,
-} from "../ui-thread/devices-dag/devices/keyboard-device.js";
+import { createKeyboardDevice } from "../ui-thread/devices-dag/devices/keyboard-device.js";
 import { CollectingTool } from "../test-support/mock-tools.js";
 import { createWorkerBoardContext } from "../test-support/worker-mode-fixtures.js";
 
@@ -149,7 +146,7 @@ describe("Board input flow", () => {
             const signals = packet.signals
               .filter(
                 (signal) =>
-                  signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+                  signal.type === "trigger",
               )
               .map(() => ({
                 type: "position",

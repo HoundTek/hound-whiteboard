@@ -25,7 +25,7 @@ import { createSubDAG } from "../index.js";
  * const prefix = createEdgePrefix({
  *   handler(packet) {
  *     const triggerSignals = packet.signals.filter(
- *       (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+ *       (signal) => signal.type === SIGNAL_TYPES.TRIGGER,
  *     );
  *     if (triggerSignals.length > 0) {
  *       return {

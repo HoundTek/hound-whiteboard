@@ -6,9 +6,9 @@
  */
 
 import { SignalPacket } from "../../dag-core/signal.js";
+import { SIGNAL_TYPES } from "../../dag-core/signal-types.js";
 import { Tool } from "../tool.js";
 import { DevicesDAGNode } from "../../dag-core/dag-node-edge.js";
-import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../devices/touchscreen-device.js";
 
 /**
  * 多工具并发包装工具
@@ -110,13 +110,13 @@ class MultiToolWrapper extends Tool {
     const firstSignal = packet.signals?.[0];
 
     // 处理 end-action 信号（外部强制结束，如 tool-switcher 切换）
-    if (firstSignal?.type === "end-action") {
+    if (firstSignal?.type === SIGNAL_TYPES.END_ACTION) {
       return this.endAction(deviceContext);
     }
 
     if (
       !firstSignal ||
-      firstSignal.type !== TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS
+      firstSignal.type !== SIGNAL_TYPES.TOUCH_CONTACTS
     ) {
       return;
     }

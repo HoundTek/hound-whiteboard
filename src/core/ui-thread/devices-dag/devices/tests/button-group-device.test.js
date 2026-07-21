@@ -6,13 +6,10 @@
 
 import { jest } from "@jest/globals";
 import { DevicesDAG } from "../../index.js";
-import {
-  createButtonGroupDevice,
-  BUTTON_GROUP_DEVICE_SIGNAL_TYPES,
-} from "../button-group-device.js";
+import { createButtonGroupDevice } from "../button-group-device.js";
 import { SharedStateStore } from "../../../../engine/utils/shared-state-store.js";
 
-const TOOL_SWITCH = BUTTON_GROUP_DEVICE_SIGNAL_TYPES.TOOL_SWITCH;
+const TOOL_SWITCH = "tool-switch";
 const ACTIVE_TOOL = "activeTool";
 
 const TOOLS = [{ name: "stroke" }, { name: "circle" }, { name: "select" }];

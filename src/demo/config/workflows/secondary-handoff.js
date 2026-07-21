@@ -8,7 +8,7 @@
 import { createEdgePrefix } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
 import { HandoffWrapperTool } from "../../../core/ui-thread/devices-dag/tools/wrapper/handoff-wrapper.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
-import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../../core/ui-thread/devices-dag/devices/keyboard-device.js";
+import { SIGNAL_TYPES } from "../../../core/ui-thread/devices-dag/dag-core/signal-types.js";
 import { buildWasdNodeConfig } from "../prefix-builders.js";
 import {
   CANCEL_KEY,
@@ -27,7 +27,7 @@ function buildSignalForwardNodeConfig(targetType) {
   return {
     handler(packet, ctx = {}) {
       const triggerSignals = packet.signals.filter(
-        (s) => s.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        (s) => s.type === SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
       return ctx.routeToChild(ctx.defaultRoute || "", [

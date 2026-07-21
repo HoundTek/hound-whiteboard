@@ -6,7 +6,7 @@
  */
 
 import { SignalPacket } from "../../dag-core/signal.js";
-import { BUTTON_GROUP_DEVICE_SIGNAL_TYPES } from "../../devices/button-group-device.js";
+import { SIGNAL_TYPES } from "../../dag-core/signal-types.js";
 import { WrapperTool } from "./wrapper-tool.js";
 
 /**
@@ -171,7 +171,7 @@ class ToolSwitcherWrapper extends WrapperTool {
     const packet = SignalPacket.from(signalPacket);
 
     const switchSignal = packet.signals.find(
-      (signal) => signal?.type === BUTTON_GROUP_DEVICE_SIGNAL_TYPES.TOOL_SWITCH,
+      (signal) => signal?.type === SIGNAL_TYPES.TOOL_SWITCH,
     );
 
     if (switchSignal) {

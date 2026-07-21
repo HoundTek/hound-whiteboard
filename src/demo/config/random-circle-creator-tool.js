@@ -10,7 +10,7 @@ import { createPrefixNodeHandler } from "../../core/ui-thread/devices-dag/prefix
 import { SignalPacket } from "../../core/ui-thread/devices-dag/dag-core/signal.js";
 import { CircleDataCreatorTool } from "../../core/ui-thread/devices-dag/tools/creator/circle/data-creator.js";
 import { createCircleRadiusProcessor } from "../../core/ui-thread/devices-dag/tools/creator/circle/radius-processor.js";
-import { OBJECT_CREATOR_SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/tools/creator/object-creator.js";
+import { SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/dag-core/signal-types.js";
 import { Vector } from "../../core/engine/utils/math.js";
 import { isPlainObject } from "../../core/ui-thread/devices-dag/prefixes/utils.js";
 
@@ -21,7 +21,7 @@ import { isPlainObject } from "../../core/ui-thread/devices-dag/prefixes/utils.j
  */
 const RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES = Object.freeze({
   RADIUS: "radius",
-  PROPERTY: OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+  PROPERTY: SIGNAL_TYPES.PROPERTY,
 });
 
 /**
@@ -107,7 +107,7 @@ function createRandomCircleSubDAG(options = {}) {
           return ctx.routeToChild("params", [
             ctx.signal("position", { x: centerX, y: centerY }),
             ctx.signal(RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS, radius),
-            ctx.signal(OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY, {
+            ctx.signal(SIGNAL_TYPES.PROPERTY, {
               ...baseProperty,
               strokeColor: hasCustomStrokeColor
                 ? baseProperty.strokeColor
@@ -141,7 +141,7 @@ function createRandomCircleSubDAG(options = {}) {
               signal.type === RANDOM_CIRCLE_PREFIX_SIGNAL_TYPES.RADIUS,
           );
           const propertySignal = packet.signals.find(
-            (signal) => signal.type === OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+            (signal) => signal.type === SIGNAL_TYPES.PROPERTY,
           );
           const position = positionSignal?.context?.value;
           const radius = radiusSignal?.context?.value;
@@ -160,7 +160,7 @@ function createRandomCircleSubDAG(options = {}) {
           const signalsA = [
             ctx.signal("position", position),
             ctx.signal(
-              OBJECT_CREATOR_SIGNAL_TYPES.PROPERTY,
+              SIGNAL_TYPES.PROPERTY,
               isPlainObject(propertySignal?.context?.value)
                 ? propertySignal.context.value
                 : { ...baseProperty },

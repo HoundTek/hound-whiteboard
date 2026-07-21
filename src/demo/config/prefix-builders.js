@@ -5,7 +5,7 @@
  * @author Zhou Chenyu
  */
 
-import { KEYBOARD_DEVICE_SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/devices/keyboard-device.js";
+import { SIGNAL_TYPES } from "../../core/ui-thread/devices-dag/dag-core/signal-types.js";
 
 /**
  * 构建键盘触发信号转发 prefix handler
@@ -17,7 +17,7 @@ function buildKeyboardTriggerForwardNodeConfig() {
   return {
     handler(packet, ctx = {}) {
       const triggerSignals = packet.signals.filter(
-        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        (signal) => signal.type === SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
       return ctx.routeToChild(ctx.defaultRoute || "", triggerSignals);
@@ -45,7 +45,7 @@ function buildViewportPositionNodeConfig(direction, baseStep = 200) {
         y: (direction?.y ?? 0) * step,
       };
       const triggerSignals = packet.signals.filter(
-        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        (signal) => signal.type === SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
 
@@ -82,7 +82,7 @@ function buildViewportScaleNodeConfig(scaleTransformer) {
     handler(packet, ctx = {}) {
       const viewport = ctx?.services?.viewport;
       const triggerSignals = packet.signals.filter(
-        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        (signal) => signal.type === SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
 
@@ -108,7 +108,7 @@ function buildViewportFlushNodeConfig() {
   return {
     handler(packet, ctx = {}) {
       const triggerSignals = packet.signals.filter(
-        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        (signal) => signal.type === SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
       return ctx.routeToChild(ctx.defaultRoute || "", [
@@ -137,8 +137,8 @@ function buildWasdNodeConfig(code, vector) {
       const movementSignals = packet.signals
         .filter(
           (signal) =>
-            signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER ||
-            signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER_REPEAT,
+            signal.type === SIGNAL_TYPES.TRIGGER ||
+            signal.type === SIGNAL_TYPES.TRIGGER_REPEAT,
         )
         .map((signal) =>
           ctx.signal(
@@ -170,7 +170,7 @@ function buildKeyboardDebugNodeConfig(type, debugContext = {}) {
   return {
     handler(packet, ctx = {}) {
       const triggerSignals = packet.signals.filter(
-        (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        (signal) => signal.type === SIGNAL_TYPES.TRIGGER,
       );
       if (triggerSignals.length === 0) return ctx.stop();
 

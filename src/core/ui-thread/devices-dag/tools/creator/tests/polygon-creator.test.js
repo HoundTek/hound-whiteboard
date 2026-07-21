@@ -1,7 +1,6 @@
 import { jest } from "@jest/globals";
 import { PolygonCreatorTool } from "../polygon-creator.js";
 import { Vector } from "../../../../../engine/utils/math.js";
-import { OBJECT_CREATOR_SIGNAL_TYPES } from "../object-creator.js";
 import { createMouseDevice } from "../../../devices/mouse-device.js";
 import {
   createWorkerBoardContext,
@@ -197,10 +196,10 @@ describe("PolygonCreatorTool", () => {
         to: "/viewport/polygon",
         signals: [
           {
-            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            type: "position",
             context: { value: new Vector(5, 5) },
           },
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+          { type: "end", context: {} },
         ],
       },
       deviceContext,
@@ -210,7 +209,7 @@ describe("PolygonCreatorTool", () => {
       {
         to: "/viewport/polygon",
         signals: [
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+          { type: "object-end", context: {} },
         ],
       },
       deviceContext,
@@ -235,7 +234,7 @@ describe("PolygonCreatorTool", () => {
         to: "/viewport/polygon",
         signals: [
           {
-            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            type: "position",
             context: { value: new Vector(5, 5) },
           },
         ],
@@ -252,7 +251,7 @@ describe("PolygonCreatorTool", () => {
         to: "/viewport/polygon",
         signals: [
           {
-            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            type: "position",
             context: { value: new Vector(8, 9) },
           },
         ],
@@ -278,10 +277,10 @@ describe("PolygonCreatorTool", () => {
         to: "/viewport/polygon",
         signals: [
           {
-            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            type: "position",
             context: { value: new Vector(5, 5) },
           },
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+          { type: "end", context: {} },
         ],
       },
       deviceContext,
@@ -291,7 +290,7 @@ describe("PolygonCreatorTool", () => {
       {
         to: "/viewport/polygon",
         signals: [
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+          { type: "object-end", context: {} },
         ],
       },
       deviceContext,
@@ -335,10 +334,10 @@ describe("PolygonCreatorTool", () => {
       {
         signals: [
           {
-            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            type: "position",
             context: { value: new Vector(5, 5) },
           },
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+          { type: "end", context: {} },
         ],
       },
       deviceContext,
@@ -346,7 +345,7 @@ describe("PolygonCreatorTool", () => {
     tool.process(
       {
         signals: [
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+          { type: "object-end", context: {} },
         ],
       },
       deviceContext,
@@ -374,10 +373,10 @@ describe("PolygonCreatorTool", () => {
         to: "/viewport/polygon",
         signals: [
           {
-            type: OBJECT_CREATOR_SIGNAL_TYPES.POSITION,
+            type: "position",
             context: { value: new Vector(5, 5) },
           },
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.END, context: {} },
+          { type: "end", context: {} },
         ],
       },
       deviceContext,
@@ -387,7 +386,7 @@ describe("PolygonCreatorTool", () => {
       {
         to: "/viewport/polygon",
         signals: [
-          { type: OBJECT_CREATOR_SIGNAL_TYPES.OBJECT_END, context: {} },
+          { type: "object-end", context: {} },
         ],
       },
       deviceContext,

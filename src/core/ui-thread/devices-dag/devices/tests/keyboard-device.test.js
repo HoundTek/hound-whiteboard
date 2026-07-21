@@ -1,9 +1,6 @@
 import { DevicesDAG, createSubDAG } from "../index.js";
 import { createEdgePrefix } from "../../prefixes/index.js";
-import {
-  createKeyboardDevice,
-  KEYBOARD_DEVICE_SIGNAL_TYPES,
-} from "../keyboard-device.js";
+import { createKeyboardDevice } from "../keyboard-device.js";
 import { CollectingTool } from "../../../../test-support/mock-tools.js";
 
 function toPlainPackets(packets) {
@@ -25,7 +22,7 @@ describe("keyboard-device", () => {
     const prefix = createEdgePrefix({
       handler(packet) {
         const triggerSignals = packet.signals.filter(
-          (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+          (signal) => signal.type === "trigger",
         );
         return triggerSignals.length === 0 ? [] : { signals: triggerSignals };
       },
@@ -126,7 +123,7 @@ describe("keyboard-device", () => {
         to: "",
         signals: [
           {
-            type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+            type: "trigger",
             context: {
               code: "Space",
               key: " ",
@@ -276,7 +273,7 @@ describe("keyboard-device", () => {
         handler(packet) {
           const signals = packet.signals
             .filter(
-              (signal) => signal.type === KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+              (signal) => signal.type === "trigger",
             )
             .map((signal) => ({
               type: "position",

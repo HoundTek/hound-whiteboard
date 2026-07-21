@@ -6,14 +6,8 @@
  */
 
 import { createSubDAG, SignalPacket } from "../index.js";
+import { SIGNAL_TYPES } from "../dag-core/signal-types.js";
 import { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";
-
-const KEYBOARD_DEVICE_SIGNAL_TYPES = {
-  TRIGGER: "trigger",
-  TRIGGER_REPEAT: "trigger-repeat",
-  RELEASE: "release",
-  CANCEL: "cancel",
-};
 
 /**
  * 创建一张键盘设备子图
@@ -75,7 +69,7 @@ function createKeyboardDevice() {
 
     if (descriptor.type === "keydown" && !descriptor.repeat) {
       return {
-        type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER,
+        type: SIGNAL_TYPES.TRIGGER,
         context: {
           ...signal.context,
           sourceType: descriptor.type,
@@ -85,7 +79,7 @@ function createKeyboardDevice() {
 
     if (descriptor.type === "keydown" && descriptor.repeat) {
       return {
-        type: KEYBOARD_DEVICE_SIGNAL_TYPES.TRIGGER_REPEAT,
+        type: SIGNAL_TYPES.TRIGGER_REPEAT,
         context: {
           ...signal.context,
           sourceType: descriptor.type,
@@ -95,7 +89,7 @@ function createKeyboardDevice() {
 
     if (descriptor.type === "keyup" || descriptor.type === "end") {
       return {
-        type: KEYBOARD_DEVICE_SIGNAL_TYPES.RELEASE,
+        type: SIGNAL_TYPES.RELEASE,
         context: {
           ...signal.context,
           sourceType: descriptor.type,
@@ -105,7 +99,7 @@ function createKeyboardDevice() {
 
     if (descriptor.type === "cancel") {
       return {
-        type: KEYBOARD_DEVICE_SIGNAL_TYPES.CANCEL,
+        type: SIGNAL_TYPES.CANCEL,
         context: {
           ...signal.context,
           sourceType: descriptor.type,
@@ -140,14 +134,14 @@ function createKeyboardDevice() {
   const cloneKeyState = (state) =>
     state
       ? {
-          code: state.code,
-          key: state.key,
-          repeat: Boolean(state.repeat),
-          ctrlKey: Boolean(state.ctrlKey),
-          shiftKey: Boolean(state.shiftKey),
-          altKey: Boolean(state.altKey),
-          metaKey: Boolean(state.metaKey),
-        }
+        code: state.code,
+        key: state.key,
+        repeat: Boolean(state.repeat),
+        ctrlKey: Boolean(state.ctrlKey),
+        shiftKey: Boolean(state.shiftKey),
+        altKey: Boolean(state.altKey),
+        metaKey: Boolean(state.metaKey),
+      }
       : null;
 
   /**
@@ -211,9 +205,9 @@ function createKeyboardDevice() {
     ),
     lastEvent: lastEvent
       ? {
-          type: lastEvent.type,
-          ...cloneKeyState(lastEvent),
-        }
+        type: lastEvent.type,
+        ...cloneKeyState(lastEvent),
+      }
       : null,
   });
 
@@ -346,4 +340,4 @@ function createKeyboardDevice() {
     .build();
 }
 
-export { KEYBOARD_DEVICE_SIGNAL_TYPES, createKeyboardDevice };
+export { createKeyboardDevice };

@@ -10,7 +10,6 @@ import { MultiToolWrapper } from "../multi-tool-wrapper.js";
 import { Tool } from "../../tool.js";
 import { DevicesDAGNode } from "../../../dag-core/dag-node-edge.js";
 import { createSubDAG } from "../../../index.js";
-import { TOUCHSCREEN_DEVICE_SIGNAL_TYPES } from "../../../devices/touchscreen-device.js";
 
 /**
  * 记录调用历史的 Mock 工具
@@ -38,7 +37,7 @@ class MockTool extends Tool {
 }
 
 describe("MultiToolWrapper", () => {
-  const CONTACTS = TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS;
+  const CONTACTS = "touch-contacts";
 
   /**
    * 构造一个 touch-contacts 信号包

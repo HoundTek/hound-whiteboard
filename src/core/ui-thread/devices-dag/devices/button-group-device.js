@@ -7,15 +7,8 @@
 
 import { createSubDAG } from "../index.js";
 import { SignalPacket } from "../dag-core/signal.js";
+import { SIGNAL_TYPES } from "../dag-core/signal-types.js";
 import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
-
-/**
- * 按钮组设备输出信号类型
- * @type {{TOOL_SWITCH: string}}
- */
-const BUTTON_GROUP_DEVICE_SIGNAL_TYPES = Object.freeze({
-  TOOL_SWITCH: "tool-switch",
-});
 
 /**
  * 按钮组设备配置
@@ -125,7 +118,7 @@ function createButtonGroupDevice(options = {}) {
 
     // 向下游发出 tool-switch 信号
     return ctx.routeToChild(ctx.defaultRoute || "", [
-      ctx.signal(BUTTON_GROUP_DEVICE_SIGNAL_TYPES.TOOL_SWITCH, undefined, {
+      ctx.signal(SIGNAL_TYPES.TOOL_SWITCH, undefined, {
         activeTool,
       }),
     ]);
@@ -164,4 +157,4 @@ function createButtonGroupDevice(options = {}) {
     .build();
 }
 
-export { createButtonGroupDevice, BUTTON_GROUP_DEVICE_SIGNAL_TYPES };
+export { createButtonGroupDevice };

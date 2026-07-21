@@ -15,15 +15,8 @@
 
 import { createSubDAG } from "../index.js";
 import { SignalPacket } from "../dag-core/signal.js";
+import { SIGNAL_TYPES } from "../dag-core/signal-types.js";
 import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
-
-/**
- * 触摸屏设备输出信号类型
- * @type {{CONTACTS: string}}
- */
-const TOUCHSCREEN_DEVICE_SIGNAL_TYPES = Object.freeze({
-  CONTACTS: "touch-contacts",
-});
 
 /**
  * 创建一张触摸屏设备子图
@@ -139,7 +132,7 @@ function createTouchscreenDevice() {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
     const contacts = getActiveTouches();
     return ctx.routeToChild(ctx.defaultRoute || "", [
-      ctx.signal(TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS, undefined, {
+      ctx.signal(SIGNAL_TYPES.TOUCH_CONTACTS, undefined, {
         contacts,
         changedTouchIds: [...lastChangedTouchIds],
         activeTouchIds: contacts.map((contact) => contact.touchId),
@@ -166,4 +159,4 @@ function createTouchscreenDevice() {
     .build();
 }
 
-export { createTouchscreenDevice, TOUCHSCREEN_DEVICE_SIGNAL_TYPES };
+export { createTouchscreenDevice };

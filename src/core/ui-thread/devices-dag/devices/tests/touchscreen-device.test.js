@@ -1,7 +1,4 @@
-import {
-  createTouchscreenDevice,
-  TOUCHSCREEN_DEVICE_SIGNAL_TYPES,
-} from "../touchscreen-device.js";
+import { createTouchscreenDevice } from "../touchscreen-device.js";
 import { DevicesDAG } from "../index.js";
 
 describe("touchscreen-device", () => {
@@ -46,7 +43,7 @@ describe("touchscreen-device", () => {
         to: "",
         signals: [
           {
-            type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
+            type: "touch-contacts",
             context: {
               contacts: [
                 {
@@ -110,7 +107,7 @@ describe("touchscreen-device", () => {
         to: "",
         signals: [
           {
-            type: TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS,
+            type: "touch-contacts",
             context: {
               contacts: [
                 {
