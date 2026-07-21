@@ -78,10 +78,20 @@
 
 `ViewportRenderer` 内部维护两类状态用于对象移动时清除旧像素：
 
-- `#previousAomEntries`：上一帧 AOM drawable 的屏幕范围缓存
+- `#previousAomEntries`：上一帧 AOM drawable 条目缓存，除屏幕范围外还携带 `drawnRects`（该对象上一次实际绘制时使用的 clip 脏区；因不相交而跳过的帧从更早条目继承）
 - `#objectSnapshotRects`：显式记录的几何变更前快照（由 `captureObjectSnapshot()` 写入）
 
-`invalidateActiveObjects()` 同时失效：对象当前屏幕范围 + 快照范围 + 上一帧范围，确保拖拽 / 变形时旧像素被清除。
+`invalidateActiveObjects()` 同时失效：对象当前屏幕范围 + 快照范围 + 上一次实际绘制区域（`drawnRects`），确保拖拽 / 变形时旧像素被清除。
+
+### 清除覆盖不变量
+
+输出层保证：**任一帧实际绘制的像素区域 ⊆ 下一帧清除区域**。
+
+该不变量由 `drawnRects` 从构造上保证——记录的是绘制时实际使用的 clip 区域，
+而非对象自身范围的近似。因此即使渲染留白（`getRenderPadding()`）不足以覆盖
+实际描边溢出（例如带 transform 缩放的对象），旧像素也会在下一帧被正确清除，
+不会产生拉丝残留。`invalidateCachedObjects()` 在对象离开 AOM（commit / delete）时
+同样并入其 `drawnRects`，关闭最后一帧活动绘制溢出静态提交清除集的窗口。
 
 ## 调试 API
 

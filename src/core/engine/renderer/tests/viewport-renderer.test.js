@@ -5,8 +5,9 @@
 import { jest } from "@jest/globals";
 import { ViewportRenderer } from "../viewport-renderer.js";
 import { DirectedGraph } from "../../utils/directed-graph.js";
-import { Vector } from "../../utils/math.js";
+import { Vector, Matrix } from "../../utils/math.js";
 import { BasicObject } from "../../objects/basic-obj.js";
+import { CircleObject } from "../../objects/graph/circle.js";
 import { RectangleRange } from "../../range/rectangle.js";
 import { PathRange } from "../../range/path.js";
 import { Layer } from "../../orchestration/active-object-manager.js";
@@ -729,5 +730,186 @@ describe("ViewportRenderer", () => {
     renderer.renderStaticCacheToCanvas(targetCanvas, [new RectangleRange(0, 0, 20, 20)]);
 
     expect(ctxCalls.some((call) => call[0] === "target" && call[1] === "drawImage")).toBe(true);
+  });
+
+  describe("清除覆盖不变量（drawnRects）", () => {
+    /**
+     * 提取输出层的 clearRect 记录
+     * @param {Array<any>} ctxCalls - 上下文调用记录
+     * @returns {Array<{ left: number, top: number, right: number, bottom: number }>}
+     */
+    function getClearRects(ctxCalls) {
+      return ctxCalls
+        .filter((call) => call[0] === "output" && call[1] === "clearRect")
+        .map((call) => ({
+          left: call[2],
+          top: call[3],
+          right: call[2] + call[4],
+          bottom: call[3] + call[5],
+        }));
+    }
+
+    /**
+     * 断言指定区域被某一清除矩形完整覆盖
+     * @param {Array<any>} ctxCalls - 上下文调用记录
+     * @param {{ left: number, top: number, width: number, height: number }} region - 待覆盖区域
+     */
+    function expectRegionCleared(ctxCalls, region) {
+      const { left, top, width, height } = region;
+      const covered = getClearRects(ctxCalls).some(
+        (rect) =>
+          rect.left <= left &&
+          rect.top <= top &&
+          rect.right >= left + width &&
+          rect.bottom >= top + height,
+      );
+      expect(covered).toBe(true);
+    }
+
+    test("上一帧实际绘制的 clip 区域应被下一帧清除集完整覆盖", () => {
+      const renderCalls = [];
+      const ctxCalls = [];
+      const objectInstance = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+      const outputCtx = createContext("output", ctxCalls);
+      const outputCanvas = createCanvas(800, 600, outputCtx);
+      const { viewport, aom } = createViewportContext({
+        activeObjects: [objectInstance],
+        outputCanvas,
+      });
+
+      const renderer = new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      });
+      renderer._scheduler.scheduleFrame = () => 0;
+
+      renderer.flush();
+      ctxCalls.length = 0;
+
+      // 帧 1：对象移动，同时注入一个远大于对象范围的脏区，
+      // 使对象的绘制 clip 超出自身 screenRect（模拟留白不足时的溢出绘制）
+      objectInstance.position = new Vector(20, 0);
+      renderer.invalidateActiveObjects([objectInstance]);
+      renderer._scheduler.invalidate(new RectangleRange(-50, 0, 100, 10));
+      renderer._scheduler.flush();
+
+      const clipRects = ctxCalls
+        .filter((call) => call[0] === "output" && call[1] === "rect")
+        .map((call) => ({
+          left: call[2],
+          top: call[3],
+          width: call[4],
+          height: call[5],
+        }));
+      expect(clipRects.length).toBeGreaterThan(0);
+      ctxCalls.length = 0;
+
+      // 帧 2：对象再次移动并失效，下一帧清除集必须覆盖帧 1 的全部 clip 区域
+      objectInstance.position = new Vector(100, 0);
+      renderer.invalidateActiveObjects([objectInstance]);
+      renderer._scheduler.flush();
+
+      for (const clipRect of clipRects) {
+        expectRegionCleared(ctxCalls, clipRect);
+      }
+    });
+
+    test("被跳过的对象应继承上一次实际绘制区域", () => {
+      const renderCalls = [];
+      const ctxCalls = [];
+      const objectA = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+      const objectB = new FakeRectObject(2, new Vector(200, 0), renderCalls);
+      const outputCtx = createContext("output", ctxCalls);
+      const outputCanvas = createCanvas(800, 600, outputCtx);
+      const { viewport, aom } = createViewportContext({
+        activeObjects: [objectA, objectB],
+        outputCanvas,
+      });
+
+      const renderer = new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      });
+      renderer._scheduler.scheduleFrame = () => 0;
+
+      renderer.flush();
+      ctxCalls.length = 0;
+
+      // 帧 1：A 移动并在大脏区中绘制（clip 超出自身范围），B 不相交被跳过
+      objectA.position = new Vector(20, 0);
+      renderer.invalidateActiveObjects([objectA]);
+      renderer._scheduler.invalidate(new RectangleRange(15, 0, 30, 10));
+      renderer._scheduler.flush();
+
+      // 帧 2：仅 B 失效（远离 A），A 被跳过，应继承帧 1 的实际绘制区域
+      objectB.position = new Vector(400, 0);
+      renderer.invalidateActiveObjects([objectB]);
+      renderer._scheduler.flush();
+      ctxCalls.length = 0;
+
+      // 帧 3：A 移动并失效，清除集必须覆盖帧 1 继承下来的实际绘制区域
+      objectA.position = new Vector(300, 0);
+      renderer.invalidateActiveObjects([objectA]);
+      renderer._scheduler.flush();
+
+      expectRegionCleared(ctxCalls, { left: 15, top: 0, width: 30, height: 10 });
+    });
+
+    test("invalidateCachedObjects 应并入对象离开 AOM 前的实际绘制区域", () => {
+      const renderCalls = [];
+      const ctxCalls = [];
+      const objectInstance = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+      const outputCtx = createContext("output", ctxCalls);
+      const outputCanvas = createCanvas(800, 600, outputCtx);
+      const { viewport, aom } = createViewportContext({
+        activeObjects: [objectInstance],
+        outputCanvas,
+      });
+
+      const renderer = new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      });
+      renderer._scheduler.scheduleFrame = () => 0;
+
+      renderer.flush();
+
+      // 对象在大脏区中绘制，drawnRects 超出自身 screenRect
+      objectInstance.position = new Vector(20, 0);
+      renderer.invalidateActiveObjects([objectInstance]);
+      renderer._scheduler.invalidate(new RectangleRange(15, 0, 30, 10));
+      renderer._scheduler.flush();
+
+      const dirtyRects = renderer.invalidateCachedObjects([objectInstance]);
+      const covered = dirtyRects.some(
+        (rect) =>
+          rect.left <= 15 &&
+          rect.top <= 0 &&
+          rect.left + rect.width >= 45 &&
+          rect.top + rect.height >= 10,
+      );
+      expect(covered).toBe(true);
+    });
+  });
+
+  test("getObjectScreenRect 应覆盖 transform 缩放后的描边范围", () => {
+    const circleObject = new CircleObject(
+      1,
+      new Vector(50, 50),
+      { strokeWidth: 4 },
+      { radius: 10 },
+    );
+    circleObject.setTransform(new Matrix(2, 0, 0, 1));
+    const outputCanvas = createCanvas(800, 600, createContext("output", []));
+    const { viewport, aom } = createViewportContext({
+      activeObjects: [circleObject],
+      outputCanvas,
+    });
+
+    const renderer = new ViewportRenderer(viewport, aom, {
+      canvas: outputCanvas,
+    });
+
+    // 几何 bbox：(30, 40, 40, 20)；留白 = 4 / 2 * 2 = 4
+    expect(renderer.getObjectScreenRect(circleObject)).toEqual(
+      new RectangleRange(26, 36, 48, 28),
+    );
   });
 });

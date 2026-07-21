@@ -63,8 +63,12 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 上一帧的 AOM drawable 条目缓存
-   * @description 用于在对象移动后同时拿到旧屏幕范围与新屏幕范围，避免输出 canvas 残影。
-   * @type {Array<{ objectId: number, object: BasicObject, screenRect?: RectangleRange }>}
+   * @description
+   * 用于在对象移动后同时拿到旧屏幕范围与新屏幕范围，避免输出 canvas 残影。
+   * 条目额外携带 `drawnRects`：该对象上一次实际绘制时使用的 clip 脏区（跳过帧继承）。
+   * 清除覆盖不变量——任一帧实际绘制的像素区域 ⊆ 下一帧清除区域——
+   * 由 drawnRects 保证，与渲染留白是否精确无关。
+   * @type {Array<{ objectId: number, object: BasicObject, screenRect?: RectangleRange, drawnRects?: RectangleRange[] }>}
    * @private
    */
   #previousAomEntries;
@@ -492,8 +496,10 @@ class ViewportRenderer extends Renderer {
   /**
    * 失效 AOM 对象对应的屏幕脏区（输出层）
    * @description
-   * 仅失效输出 canvas，不动缓存。同时失效对象当前范围 + 快照范围 + 上一帧范围，
+   * 仅失效输出 canvas，不动缓存。同时失效对象当前范围 + 快照范围 + 上一次实际绘制区域，
    * 确保对象位移或几何变化时旧像素也会被清理。
+   * 上一次实际绘制区域取自条目 `drawnRects`（绘制时的 clip 脏区，
+   * 跳过帧继承），而非仅对象自身范围——即使渲染留白不足也不会残留。
    * @param {Iterable<BasicObject>} [objects = []] - 待失效的 AOM 对象集合
    */
   invalidateActiveObjects(objects = []) {
@@ -505,13 +511,14 @@ class ViewportRenderer extends Renderer {
       const rects = [];
       const currentRect = this.getObjectScreenRect(objectInstance);
       const snapshotRect = this.#objectSnapshotRects.get(objectInstance.id);
-      const previousRect = previousEntryIndex.get(
-        objectInstance.id,
-      )?.screenRect;
+      const previousEntry = previousEntryIndex.get(objectInstance.id);
+      const previousDrawnRects =
+        previousEntry?.drawnRects ??
+        (previousEntry?.screenRect ? [previousEntry.screenRect] : []);
 
       if (currentRect) rects.push(currentRect);
       if (snapshotRect) rects.push(snapshotRect);
-      if (previousRect) rects.push(previousRect);
+      rects.push(...previousDrawnRects);
 
       return rects;
     });
@@ -523,7 +530,10 @@ class ViewportRenderer extends Renderer {
           ...this.createDrawableEntries(this.collectActiveDrawables()),
           ...this.#previousAomEntries,
         ]
-          .map((entry) => this.normalizeScreenRect(entry?.screenRect))
+          .flatMap((entry) =>
+            entry?.drawnRects ?? (entry?.screenRect ? [entry.screenRect] : []),
+          )
+          .map((rect) => this.normalizeScreenRect(rect))
           .filter(Boolean);
 
     for (const dirtyRect of targetDirtyRects) {
@@ -534,8 +544,9 @@ class ViewportRenderer extends Renderer {
   /**
    * 失效静态对象对应的屏幕脏区（缓存层 + 输出层）
    * @description
-   * 标记缓存脏，同时失效对象当前范围与旧世界范围（若提供）。
-   * 适用于 commit / delete 等静态图变更场景。
+   * 标记缓存脏，同时失效对象当前范围、旧世界范围（若提供）与
+   * 对象离开 AOM 前最后一次实际绘制区域（`drawnRects`），
+   * 确保 commit / delete 等静态图变更场景下旧像素被完整清理。
    * @param {Iterable<BasicObject>} [objects = []] - 待失效的静态对象集合
    * @param {{ previousWorldRects?: Map<number, RectangleRange> }} [options = {}] - 旧世界范围快照
    * @returns {RectangleRange[]} 实际提交的脏区
@@ -544,6 +555,9 @@ class ViewportRenderer extends Renderer {
     this.#cacheDirty = true;
 
     const previousWorldRects = options.previousWorldRects ?? new Map();
+    const previousEntryIndex = this.indexDrawableEntries(
+      this.#previousAomEntries,
+    );
     const dirtyRects = [];
 
     for (const objectInstance of objects ?? []) {
@@ -558,9 +572,12 @@ class ViewportRenderer extends Renderer {
       const previousRect = previousScreenRect
         ? previousScreenRect.inflate(padding)
         : undefined;
+      const previousDrawnRects =
+        previousEntryIndex.get(objectInstance.id)?.drawnRects ?? [];
 
       if (currentRect) dirtyRects.push(currentRect);
       if (previousRect) dirtyRects.push(previousRect);
+      dirtyRects.push(...previousDrawnRects);
     }
 
     const normalizedRects = dirtyRects.filter(
@@ -753,6 +770,11 @@ class ViewportRenderer extends Renderer {
    * 2. 按脏区从缓存拷贝静态内容到输出
    * 3. 按脏区裁剪绘制 AOM 对象（不相交则跳过）
    * 4. 保存状态供下一帧使用
+   *
+   * 每个实际绘制的条目记录 `drawnRects`（本次使用的 clip 脏区，
+   * 全量帧退化为对象自身范围），作为下一帧失效时的「上一次实际绘制区域」；
+   * 因不相交而跳过的条目从上一帧同 id 条目继承 `drawnRects`——
+   * 其像素仍停留在 canvas 上，必须保留清除依据。
    * @param {Array<RectangleRange>} [dirtyRects] - 可选的屏幕脏区集合
    * @returns {BasicObject[]} 当前渲染的 AOM 对象集合
    * @private
@@ -763,6 +785,9 @@ class ViewportRenderer extends Renderer {
 
     const aomDrawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(aomDrawables);
+    const previousEntryIndex = this.indexDrawableEntries(
+      this.#previousAomEntries,
+    );
     const viewportContext = this.createViewportContext(outputCtx);
     const hasExplicitDirtyRects =
       Array.isArray(dirtyRects) && dirtyRects.length > 0;
@@ -794,8 +819,16 @@ class ViewportRenderer extends Renderer {
       if (
         hasExplicitDirtyRects &&
         !this.intersectsDirtyRects(entry, normalizedDirtyRects)
-      )
+      ) {
+        // 跳过的条目像素仍在 canvas 上，继承上一次实际绘制区域
+        const carriedDrawnRects = previousEntryIndex.get(
+          entry.objectId,
+        )?.drawnRects;
+        if (carriedDrawnRects) {
+          entry.drawnRects = carriedDrawnRects;
+        }
         continue;
+      }
 
       const entryDirtyRects = hasExplicitDirtyRects
         ? this.getEntryDirtyRects(entry, normalizedDirtyRects)
@@ -807,6 +840,11 @@ class ViewportRenderer extends Renderer {
         entry.object,
         entryDirtyRects,
       );
+
+      entry.drawnRects =
+        entryDirtyRects.length > 0
+          ? entryDirtyRects
+          : (entry.screenRect ? [entry.screenRect] : []);
     }
 
     // 保存状态供下一帧使用
