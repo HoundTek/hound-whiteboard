@@ -246,7 +246,7 @@ class BoardApi {
   /**
    * 将 AOM 动态图中的对象写回静态图
    * @param {number[]} objectIds - 要提交的对象 id 列表
-   * @returns {import("../../types/types.js").ApplyResult=} 提交结果
+   * @returns {number[]} 实际提交的对象 id（缺失的 id 被跳过，供调用方对账）
    */
   commitObjects(objectIds) {
     const boardCore = this.#boardCore;
@@ -255,8 +255,9 @@ class BoardApi {
       .map((id) => boardCore.getObjectById(id))
       .filter(Boolean);
     if (objects.length > 0) {
-      return boardCore.activeObjectManager.apply(new Set(objects));
+      boardCore.activeObjectManager.apply(new Set(objects));
     }
+    return objects.map((obj) => obj.id);
   }
 
   /**
@@ -320,11 +321,11 @@ class BoardApi {
           position: { x: obj.position.x, y: obj.position.y },
           transform: obj.transform
             ? {
-                a: obj.transform.a,
-                b: obj.transform.b,
-                c: obj.transform.c,
-                d: obj.transform.d,
-              }
+              a: obj.transform.a,
+              b: obj.transform.b,
+              c: obj.transform.c,
+              d: obj.transform.d,
+            }
             : undefined,
           boundingBox: obj.rich?.boundingBox,
           range: obj.getRange(),

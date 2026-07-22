@@ -425,4 +425,172 @@ describe("ObjectCreatorTool — property 信号", () => {
       );
     });
   });
+
+  describe("创建失败兜底与提交对账", () => {
+    function createFailingBoardDeviceContext(objectId, error) {
+      const board = {
+        allocateObjectId: jest.fn(() => objectId),
+        getObjectById: jest.fn(() => undefined),
+      };
+      const boardApi = {
+        createObject: jest.fn(() => Promise.reject(error)),
+        modifyObject: jest.fn(),
+        commitObjects: jest.fn(async () => []),
+        discardActiveObjects: jest.fn(),
+      };
+
+      const _nodeState = {};
+      const deviceContext = {
+        path: "/test",
+        getNodeState: () => ({ ..._nodeState }),
+        setNodeState: (_pathOrId, state) => {
+          Object.assign(_nodeState, state);
+          return { ..._nodeState };
+        },
+        _nodeState,
+        services: {
+          board,
+          boardApi,
+        },
+      };
+
+      return { board, boardApi, deviceContext };
+    }
+
+    test("createObject 失败应清理本地草稿并闩锁，阻断后续无效 RPC", async () => {
+      global.allowConsoleError();
+      console.error.mockClear();
+      const tool = new CircleDataCreatorTool({
+        processor: createCircleRadiusProcessor(),
+      });
+      const { boardApi, deviceContext } = createFailingBoardDeviceContext(
+        501,
+        new Error("Unsupported object type"),
+      );
+
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
+        },
+        deviceContext,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // 本地状态清理 + 失败告警
+      expect(console.error).toHaveBeenCalled();
+      expect(tool._entry).toBeNull();
+      expect(tool.objectId).toBeNull();
+      expect(tool.isActionActive).toBe(false);
+
+      // 闩锁：同一手势内后续 position 不再重试创建，也不再有新的 modifyObject
+      const modifyCallsAfterFailure = boardApi.modifyObject.mock.calls.length;
+
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: new Vector(5, 5) } }],
+        },
+        deviceContext,
+      );
+
+      expect(boardApi.createObject).toHaveBeenCalledTimes(1);
+      expect(boardApi.modifyObject).toHaveBeenCalledTimes(
+        modifyCallsAfterFailure,
+      );
+      expect(boardApi.discardActiveObjects).not.toHaveBeenCalled();
+    });
+
+    test("失败闩锁在 end 后解除，下一次落笔重新尝试创建", async () => {
+      global.allowConsoleError();
+      console.error.mockClear();
+      const tool = new CircleDataCreatorTool({
+        processor: createCircleRadiusProcessor(),
+      });
+      const { boardApi, deviceContext } = createFailingBoardDeviceContext(
+        502,
+        new Error("Unsupported object type"),
+      );
+
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: new Vector(1, 1) } }],
+        },
+        deviceContext,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(boardApi.createObject).toHaveBeenCalledTimes(1);
+
+      tool.process({ signals: [{ type: "end" }] }, deviceContext);
+
+      // Worker 侧恢复可用，下一次落笔应重新尝试
+      boardApi.createObject.mockImplementation(async () => 502);
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: new Vector(3, 3) } }],
+        },
+        deviceContext,
+      );
+
+      expect(boardApi.createObject).toHaveBeenCalledTimes(2);
+      expect(tool._entry).not.toBeNull();
+    });
+
+    test("commitObjects 回执缺失期望 id 时应告警，包含时不告警", async () => {
+      global.allowConsoleError();
+      console.error.mockClear();
+      const tool = new CircleDataCreatorTool({
+        processor: createCircleRadiusProcessor(),
+      });
+      const { boardApi, deviceContext } = createBoardDeviceContext(503);
+      boardApi.commitObjects = jest.fn(async () => []);
+
+      tool.process(
+        {
+          signals: [{ type: "position", context: { value: new Vector(0, 0) } }],
+        },
+        deviceContext,
+      );
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(8, 0) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining("was lost"),
+      );
+
+      // 正常回执：包含期望 id，不告警
+      console.error.mockClear();
+      const tool2 = new CircleDataCreatorTool({
+        processor: createCircleRadiusProcessor(),
+      });
+      const { boardApi: boardApi2, deviceContext: deviceContext2 } =
+        createBoardDeviceContext(504);
+      boardApi2.commitObjects = jest.fn(async () => [504]);
+
+      tool2.process(
+        {
+          signals: [{ type: "position", context: { value: new Vector(0, 0) } }],
+        },
+        deviceContext2,
+      );
+      tool2.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(8, 0) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext2,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(console.error).not.toHaveBeenCalled();
+    });
+  });
 });

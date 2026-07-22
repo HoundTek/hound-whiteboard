@@ -48,7 +48,7 @@
  * @property {(objectId: number, key: string, index: number, item: any) => Promise<void>} replaceListItem - 替换列表属性元素
  * @property {(objectId: number, key: string, index: number) => Promise<void>} removeListItem - 删除列表属性元素
  * @property {(objectIds: number[]) => Promise<void>} deleteObjects - 删除对象集合
- * @property {(objectIds: number[]) => Promise<void>} commitObjects - 提交活动对象集合
+ * @property {(objectIds: number[]) => Promise<number[]>} commitObjects - 提交活动对象集合，返回实际提交的对象 id
  * @property {(objectIds: number[]) => Promise<void>} addActiveObjects - 将对象加入 AOM
  * @property {(objectIds: number[]) => Promise<void>} discardActiveObjects - 将对象从 AOM 丢弃
  * @property {(ids: number[]) => Promise<import("./types.js").ObjectSummary[]>} queryObjects - 按 id 查询对象摘要
@@ -60,4 +60,4 @@
  * @property {() => Promise<void>} redo - 执行重做
  */
 
-export {};
+export { };

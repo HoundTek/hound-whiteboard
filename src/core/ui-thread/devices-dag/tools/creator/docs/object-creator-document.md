@@ -129,7 +129,9 @@ boardApi.createObject(type, {
 });
 ```
 
-这条调用保持 **fire-and-forget**。当前已额外包裹 `Promise.resolve(...).catch(...)`，防止 Worker 侧 create error 变成 unhandled rejection。
+这条调用保持 **fire-and-forget**。回执经 `rpc-response` 异步返回：创建失败时
+`handleCreationFailure` 会清理本地草稿、置失败闩锁（阻断同一手势内的重复创建与无效 RPC），
+闩锁在 `end` / `umount` 后解除——UI 的 `_entry` 不会与 Worker 状态静默分叉。
 
 ### 高频几何更新
 
@@ -146,7 +148,8 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 
 ### 提交 / 撤销
 
-- 提交：`boardApi.commitObjects([objectId])`
+- 提交：`boardApi.commitObjects([objectId])`——Worker 返回实际提交的 id 列表，
+  creator 对回执对账，期望 id 缺失时告警（对象静默丢失的最后一张网）
 - 撤销：`boardApi.discardActiveObjects([objectId])`
 
 ## 手势流程
@@ -236,7 +239,7 @@ creator 不直接持有 modifier 引用。
 - creator 族已全面适配 Worker mode
 - 本地状态不再依赖 `BasicObject` 子类实例
 - objectId 由 UI 侧 `Board` 同步分配
-- Worker 侧 create error 已有 Promise catch 兜底
+- Worker 侧 create error 由 `handleCreationFailure` 兜底（清理草稿 + 失败闩锁），commit 回执对账
 - circle / ellipse 已完成「数据创建器 + 手势 processor」拆分：圆支持圆心+半径 / 直径两种手势，椭圆经独立 `EllipseObject` + 外接矩形手势创建；stroke / polygon 待跟进
 
 ## 相关文档

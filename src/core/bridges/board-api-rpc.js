@@ -132,7 +132,7 @@ class BoardApiRpc {
       this.#resolveReady = resolve;
       this.#rejectReady = reject;
     });
-    this.#readyPromise.catch(() => {});
+    this.#readyPromise.catch(() => { });
     this.#messageListener = this.#handleEndpointMessage.bind(this);
     this.#batchBuffer = new Map();
     this.#batchPending = false;
@@ -240,9 +240,9 @@ class BoardApiRpc {
       const timer =
         timeoutMs > 0
           ? setTimeout(() => {
-              this.#pending.delete(msgId);
-              reject(createRpcError(`RPC timeout: ${method}`, "RPC_TIMEOUT"));
-            }, timeoutMs)
+            this.#pending.delete(msgId);
+            reject(createRpcError(`RPC timeout: ${method}`, "RPC_TIMEOUT"));
+          }, timeoutMs)
           : null;
 
       this.#pending.set(msgId, {
@@ -395,7 +395,7 @@ class BoardApiRpc {
   /**
    * 将 AOM 动态图中的对象写回静态图
    * @param {number[]} objectIds - 要提交的对象 id 列表
-   * @returns {Promise<void>}
+   * @returns {Promise<number[]>} 实际提交的对象 id 列表
    */
   async commitObjects(objectIds) {
     return this.#call("commitObjects", { objectIds });

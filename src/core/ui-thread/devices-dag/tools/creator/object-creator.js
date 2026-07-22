@@ -73,6 +73,16 @@ class ObjectCreatorTool extends GestureTool {
   _pendingActionInteraction;
 
   /**
+   * 创建失败闩锁
+   * @description
+   * Worker 侧 createObject 失败后置位，阻断同一手势内的重复创建尝试；
+   * 在 `_onEnd` 与 `umount` 中清除，使下一次落笔获得全新机会。
+   * @type {boolean}
+   * @protected
+   */
+  _hasCreationFailed;
+
+  /**
    * 动作完成时是否自动将对象提交到静态图
    * @description wrapper 嵌入场景（如 HandoffWrapperTool）由 wrapper 置为 false，
    * 阻止对象提前进入静态图，使其留在 AOM 动态图等待 modifier 最终提交。
@@ -93,6 +103,7 @@ class ObjectCreatorTool extends GestureTool {
     this.isObjectCreationCompleted = false;
     this._pendingProperty = null;
     this._pendingActionInteraction = null;
+    this._hasCreationFailed = false;
   }
 
   /**
@@ -253,10 +264,7 @@ class ObjectCreatorTool extends GestureTool {
         data,
       }),
     ).catch((error) => {
-      console.error(
-        `[Creator] Failed to create object ${interaction.objectId} via RPC:`,
-        error,
-      );
+      this.handleCreationFailure(error, interaction);
     });
 
     this.objectId = interaction.objectId;
@@ -265,11 +273,43 @@ class ObjectCreatorTool extends GestureTool {
   }
 
   /**
+   * 处理 Worker 侧对象创建失败
+   * @description
+   * createObject 的回执经 rpc-response 异步返回。失败时（如对象类型未在
+   * Worker 侧注册）必须终止本地草稿，否则 UI 的 `_entry` 会与 Worker 状态
+   * 永久分叉：对象看似存在，实则从未被创建。
+   * 处理顺序：先置空 `objectId`（阻断后续 modifyObject/discard 的无效 RPC），
+   * 再清理本地状态并置失败闩锁，最后走标准 cancelAction 收尾
+   * （此时 discard 路径因 objectId 为空不会再发 RPC）。
+   * @param {Error} error - RPC 返回的创建错误
+   * @param {Object} interaction - 当前交互上下文
+   * @returns {void}
+   * @protected
+   */
+  handleCreationFailure(error, interaction) {
+    console.error(
+      `[Creator] Failed to create object ${interaction?.objectId ?? this.objectId} via RPC:`,
+      error,
+    );
+
+    this.objectId = null;
+    this._entry = null;
+    this.isObjectCreationCompleted = false;
+    this.isGestureActive = false;
+    this._hasCreationFailed = true;
+    this.cancelAction(interaction?.context ?? {});
+  }
+
+  /**
    * 确保当前交互已拥有对象实例
    * @param {Object} interaction - 当前交互上下文
    * @returns {boolean} 是否已拥有对象实例
    */
   ensureObject(interaction) {
+    if (this._hasCreationFailed) {
+      return false;
+    }
+
     if (!this._entry || this.isObjectCreationCompleted) {
       this._pendingProperty = interaction?.injectedProperty ?? null;
 
@@ -501,7 +541,7 @@ class ObjectCreatorTool extends GestureTool {
     if (this._entry?.type !== this.getCreatedObjectType()) {
       throw new Error(
         `${this.constructor.name}: entry.type (${this._entry?.type}) must match getCreatedObjectType() (${this.getCreatedObjectType()}). ` +
-          "Check the `create()` implementation against the LightweightObjectEntry protocol.",
+        "Check the `create()` implementation against the LightweightObjectEntry protocol.",
       );
     }
 
@@ -509,7 +549,7 @@ class ObjectCreatorTool extends GestureTool {
     if (!boundingBox) {
       throw new Error(
         `${this.constructor.name}: resolveCreatedObjectBoundingBox() must return a bounding box. ` +
-          "The handoff/modifier admission check depends on entry.boundingBox.",
+        "The handoff/modifier admission check depends on entry.boundingBox.",
       );
     }
     this._entry.boundingBox = boundingBox;
@@ -523,6 +563,9 @@ class ObjectCreatorTool extends GestureTool {
    * @description
    * 仅当 {@link beforeCommitCreatedObject} 返回 true 时由
    * {@link completeCreatedObject} 调用。
+   * 提交回执（Worker 返回的实际提交 id 列表）用于对账：
+   * 期望 id 缺失时告警——正常路径已被创建失败兜底拦截，
+   * 此处是防止对象静默丢失的最后一张网。
    * @param {Object} interaction - 当前交互上下文
    * @protected
    */
@@ -531,7 +574,21 @@ class ObjectCreatorTool extends GestureTool {
     const boardApi = context.services?.boardApi;
 
     if (boardApi && this.objectId != null) {
-      boardApi.commitObjects([this.objectId]);
+      const objectId = this.objectId;
+      Promise.resolve(boardApi.commitObjects([objectId]))
+        .then((committedIds) => {
+          if (Array.isArray(committedIds) && !committedIds.includes(objectId)) {
+            console.error(
+              `[Creator] Object ${objectId} was lost: commitObjects did not report it as committed.`,
+            );
+          }
+        })
+        .catch((error) => {
+          console.error(
+            `[Creator] Failed to commit object ${objectId}:`,
+            error,
+          );
+        });
     }
 
     this.clearContextObjects(context);
@@ -629,6 +686,8 @@ class ObjectCreatorTool extends GestureTool {
    * @protected
    */
   _onEnd(interaction) {
+    this._hasCreationFailed = false;
+
     if (this.isGestureActive) {
       this.completeGesture(interaction);
       this.isGestureActive = false;
@@ -676,6 +735,7 @@ class ObjectCreatorTool extends GestureTool {
     this.isGestureActive = false;
     this.isObjectCreationCompleted = false;
     this._pendingActionInteraction = null;
+    this._hasCreationFailed = false;
     super.umount(context);
   }
 }
@@ -707,6 +767,8 @@ class MultiGestureObjectCreatorTool extends ObjectCreatorTool {
    * @protected
    */
   _onEnd(interaction) {
+    this._hasCreationFailed = false;
+
     if (!this.isGestureActive) {
       return;
     }
