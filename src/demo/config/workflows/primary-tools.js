@@ -18,6 +18,7 @@ import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/to
 import {
   DEMO_BUTTON_GROUP_STATE_KEY,
   DEMO_CIRCLE_STROKE_COLOR,
+  DEMO_DEVICE_PATHS,
   DEMO_STROKE_WIDTH,
   DEMO_TOOL_NAMES,
   DEMO_WORKFLOW_NAMES,
@@ -34,7 +35,7 @@ function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
   const scope = viewport.inputScope;
   scope.mountWorkflow(DEMO_WORKFLOW_NAMES.PRIMARY_STROKE, primaryStrokeTool);
   scope.addEdge({
-    from: "mouse/primary",
+    from: DEMO_DEVICE_PATHS.MOUSE_PRIMARY,
     to: `workflows/${DEMO_WORKFLOW_NAMES.PRIMARY_STROKE}`,
   });
 }
@@ -65,7 +66,7 @@ function mountToolSwitcher(viewport, options) {
     defaultTool,
     stateKey: DEMO_BUTTON_GROUP_STATE_KEY,
   });
-  scope.mountDevice("toolbar/button-group", buttonGroupDef);
+  scope.mountDevice(DEMO_DEVICE_PATHS.TOOLBAR_BUTTON_GROUP, buttonGroupDef);
 
   // 2. tool-switcher wrapper：按激活工具名路由 mouse/primary 信号
   // 两种圆创建手势共享 CircleDataCreatorTool，椭圆使用独立的 EllipseDataCreatorTool
@@ -103,11 +104,11 @@ function mountToolSwitcher(viewport, options) {
 
   // 3. 双输入汇聚：mouse/primary 与 toolbar/button-group → tool-switcher
   scope.addEdge({
-    from: "mouse/primary",
+    from: DEMO_DEVICE_PATHS.MOUSE_PRIMARY,
     to: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}`,
   });
   scope.addEdge({
-    from: "toolbar/button-group",
+    from: DEMO_DEVICE_PATHS.TOOLBAR_BUTTON_GROUP,
     to: `workflows/${DEMO_WORKFLOW_NAMES.TOOL_SWITCHER}`,
   });
 }

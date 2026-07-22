@@ -12,7 +12,7 @@ import { StrokeCreatorTool } from "../../core/ui-thread/devices-dag/tools/creato
 import { DevicesDAGNode } from "../../core/ui-thread/devices-dag/dag-core/dag-node-edge.js";
 import { createSubDAG } from "../../core/ui-thread/devices-dag/index.js";
 import { MultiToolWrapper } from "../../core/ui-thread/devices-dag/tools/wrapper/multi-tool-wrapper.js";
-import { DEMO_STROKE_WIDTH, DEMO_WORKFLOW_NAMES } from "./constants.js";
+import { DEMO_DEVICE_PATHS, DEMO_STROKE_WIDTH, DEMO_WORKFLOW_NAMES } from "./constants.js";
 
 /**
  * 挂载 demo 设备子图与触摸笔画 workflow
@@ -24,9 +24,9 @@ import { DEMO_STROKE_WIDTH, DEMO_WORKFLOW_NAMES } from "./constants.js";
  */
 function mountDemoDevices(viewport) {
   const scope = viewport.inputScope;
-  scope.mountDevice("mouse", createMouseDevice());
-  scope.mountDevice("keyboard", createKeyboardDevice());
-  scope.mountDevice("touchscreen", createTouchscreenDevice());
+  scope.mountDevice(DEMO_DEVICE_PATHS.MOUSE, createMouseDevice());
+  scope.mountDevice(DEMO_DEVICE_PATHS.KEYBOARD, createKeyboardDevice());
+  scope.mountDevice(DEMO_DEVICE_PATHS.TOUCHSCREEN, createTouchscreenDevice());
 
   const touchStrokeTool = new MultiToolWrapper((touchId) => {
     const builder = createSubDAG("/touch");
@@ -42,7 +42,7 @@ function mountDemoDevices(viewport) {
   });
   scope.mountWorkflow(DEMO_WORKFLOW_NAMES.TOUCH_STROKE, touchStrokeTool);
   scope.addEdge({
-    from: "touchscreen/contacts",
+    from: DEMO_DEVICE_PATHS.TOUCHSCREEN_CONTACTS,
     to: `workflows/${DEMO_WORKFLOW_NAMES.TOUCH_STROKE}`,
   });
 }

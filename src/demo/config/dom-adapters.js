@@ -8,6 +8,7 @@
 import { Vector } from "../../core/engine/utils/math.js";
 import {
   DEMO_BUTTON_GROUP_STATE_KEY,
+  DEMO_DEVICE_PATHS,
   DEMO_KEYBOARD_INPUT_CODES,
   DEMO_TOOL_NAMES,
   DEMO_WORKFLOW_NAMES,
@@ -243,7 +244,7 @@ function attachToolbarAdapter(board, viewport) {
     const onPointerDown = (event) => {
       event.preventDefault();
       board.signalsEventBus.emit("input", {
-        to: `/${vpId}/toolbar/button-group`,
+        to: `/${vpId}/${DEMO_DEVICE_PATHS.TOOLBAR_BUTTON_GROUP}`,
         signals: [{ type: "button-press", context: { toolName } }],
       });
     };

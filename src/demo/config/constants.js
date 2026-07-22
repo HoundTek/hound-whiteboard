@@ -41,6 +41,21 @@ const DEMO_TOOL_NAMES = Object.freeze({
 const DEMO_BUTTON_GROUP_STATE_KEY = "activeTool";
 
 /**
+ * demo 设备路径注册表
+ * @description 设备在设备图中的挂载路径，作为挂载与连边的单一事实源。
+ * @readonly
+ * @enum {string}
+ */
+const DEMO_DEVICE_PATHS = Object.freeze({
+  MOUSE: "mouse",
+  MOUSE_PRIMARY: "mouse/primary",
+  KEYBOARD: "keyboard",
+  TOUCHSCREEN: "touchscreen",
+  TOUCHSCREEN_CONTACTS: "touchscreen/contacts",
+  TOOLBAR_BUTTON_GROUP: "toolbar/button-group",
+});
+
+/**
  * demo workflow 名注册表
  * @readonly
  * @enum {string}
@@ -155,6 +170,7 @@ export {
   DEBUG_KEYS,
   DEMO_BUTTON_GROUP_STATE_KEY,
   DEMO_CIRCLE_STROKE_COLOR,
+  DEMO_DEVICE_PATHS,
   DEMO_KEYBOARD_INPUT_CODES,
   DEMO_PRIMARY_STROKE_COLOR,
   DEMO_STROKE_WIDTH,
