@@ -204,6 +204,19 @@ return { stop: true };
 
 Unix 类比：管线 `a | b | c` 组合出来本身仍是一条命令，可以再进管线——handoff / tool-switcher 就是这种"打包好的管线"：内部是多步组合，对外是单个可挂载单元。
 
+## 信号解释的三层机制
+
+「信号 → 语义」的解释工作分布在三层机制上，按职责选址：
+
+- **prefix（图级信号流变换）**：变换需要参与路由、被多个下游复用、或发生在任何具体工具之外时使用。
+  例：random-circle 把 `trigger` 编译为 `position` 序列喂给下游工具。
+- **processor（工具内手势解释）**：绑定特定数据创建器、把 `position` 流编译为 `modifyObject` 补丁、
+  不参与路由时使用。例：circle 的圆心半径 / 直径手势、ellipse 的外接矩形手势。
+- **wrapper（顺序/互斥组合）**：不解释信号，只做工具组合的编排（handoff 顺序流、tool-switcher 互斥路由）。
+
+prefix 与 processor 是同构的信号编译器——都是纯函数式的「信号流 → 语义输出」——
+分别住在图节点与工具内部。选址判据：**需要路由与跨节点复用选 prefix，绑定单一工具选 processor。**
+
 ## 信号类型注册表
 
 信道上跑的信号类型有单一事实源：`dag-core/signal-types.js` 的 `SIGNAL_TYPES`。
