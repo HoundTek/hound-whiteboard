@@ -42,6 +42,36 @@ describe("Tool", () => {
     ]);
   });
 
+  test("createProcessor 应吞掉工具的异步动作结果，不穿透为 handler 返回值", () => {
+    class AsyncTestTool extends Tool {
+      process() {
+        return Promise.resolve([{ id: 1 }]);
+      }
+
+      reset() {}
+    }
+
+    const processor = new AsyncTestTool().createProcessor();
+    const result = processor({ signals: [] }, { path: "/test" });
+
+    expect(result).toBeUndefined();
+  });
+
+  test("createProcessor 应透传工具的同步返回值", () => {
+    class SyncTestTool extends Tool {
+      process() {
+        return { to: "child", signals: [] };
+      }
+
+      reset() {}
+    }
+
+    const processor = new SyncTestTool().createProcessor();
+    const result = processor({ signals: [] }, { path: "/test" });
+
+    expect(result).toEqual({ to: "child", signals: [] });
+  });
+
   test("createProcessor 应默认暴露来自 Board 的 allocateObjectId", () => {
     class TestTool extends Tool {
       calls = [];

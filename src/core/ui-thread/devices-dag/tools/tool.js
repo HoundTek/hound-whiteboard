@@ -104,13 +104,21 @@ class Tool {
 
   /**
    * 创建一个可直接挂载到设备图节点上的处理器
+   * @description
+   * DAG handler 必须是同步的：工具的异步动作结果（如 chooser 的
+   * hitTest 提交）经事件通道（`action:complete` / `afterChoose`）传递，
+   * 不允许穿透为 handler 返回值——DAG 层会忽略并告警。
    * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandler}
    */
   createProcessor() {
     const uiOverlayBinding = this.createUiOverlayBinding();
     const processor = (signalPacket, handlerContext = {}) => {
       uiOverlayBinding?.sync(handlerContext);
-      return this.process(SignalPacket.from(signalPacket), handlerContext);
+      const result = this.process(
+        SignalPacket.from(signalPacket),
+        handlerContext,
+      );
+      return result instanceof Promise ? undefined : result;
     };
 
     processor.dispose = (handlerContext = {}) => {
