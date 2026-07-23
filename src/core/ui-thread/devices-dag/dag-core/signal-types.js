@@ -35,7 +35,7 @@ const SIGNAL_TYPES = Object.freeze({
   END_ACTION: "end-action",
   /** prefix 注入的对象属性（context.value 携带属性对象） */
   PROPERTY: "property",
-  /** 工具切换（button-group 设备 → tool-switcher，context.toolName 携带目标工具名） */
+  /** 工具切换（button-group 设备 → tool-switcher，context.activeTool 携带目标工具名） */
   TOOL_SWITCH: "tool-switch",
   /** 按钮按下（DOM → button-group 设备，context.toolName 携带按钮对应工具名） */
   BUTTON_PRESS: "button-press",

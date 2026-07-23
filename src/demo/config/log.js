@@ -12,6 +12,7 @@ import {
   DEBUG_KEYS,
   RANDOM_CIRCLE_KEY,
   SUBMIT_KEY,
+  TOOL_SWITCH_KEYS,
   VIEWPORT_FLUSH_KEYS,
   VIEWPORT_POSITION_KEYS,
   VIEWPORT_SCALE_KEYS,
@@ -31,6 +32,9 @@ const DEBUG_KEY_CODES = new Set(DEBUG_KEYS.map((k) => k.code));
 /** WASD 键编码集合 */
 const WASD_KEY_CODES = new Set(WASD_KEYS.map((k) => k.code));
 
+/** 数字键切工具键编码集合 */
+const TOOL_SWITCH_KEY_CODES = new Set(TOOL_SWITCH_KEYS);
+
 /**
  * 将键盘编码映射为可读的输入标签
  * @description 分类规则与各 workflow 挂载的键配置同源，避免日志与路由各硬编码一份。
@@ -41,6 +45,7 @@ function classifyKeyInput(code) {
   if (code === RANDOM_CIRCLE_KEY) return "空格随机圆";
   if (code === SUBMIT_KEY) return "成功提交（handoff + tool-switcher）";
   if (code === CANCEL_KEY) return "取消修改（handoff + tool-switcher）";
+  if (TOOL_SWITCH_KEY_CODES.has(code)) return `数字键切换工具 ${code}`;
   if (VIEWPORT_KEY_CODES.has(code)) return `viewport ${code}`;
   if (DEBUG_KEY_CODES.has(code)) return `debug ${code}`;
   if (WASD_KEY_CODES.has(code)) return `WASD ${code}`;
@@ -95,6 +100,15 @@ class DemoLog {
   logPointerInput(label) {
     this.status("当前输入", label);
   }
+
+  /**
+   * 输出数字键快捷键切工具日志
+   * @param {string} toolName - 切换到的工具名
+   * @returns {void}
+   */
+  logToolSwitch(toolName) {
+    this.status("切换工具", toolName);
+  }
 }
 
 /**
@@ -106,6 +120,7 @@ function formatShortcutLegend() {
   return [
     "── 快捷键 ──",
     "左键 : 创建笔画",
+    "数字键 1-9 : 切换激活工具（按工具栏顺序）",
     "右键 : 首次拖拽框选对象 → 再次拖拽修改位置",
     "Enter : 提交修改",
     "Escape : 取消修改",

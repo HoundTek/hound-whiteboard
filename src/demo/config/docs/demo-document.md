@@ -22,9 +22,10 @@
   - **直径圆**（`CircleDataCreatorTool` + 直径 processor）
   - **椭圆**（`EllipseDataCreatorTool` + 外接矩形 processor，创建独立的 `EllipseObject`）
   - **选择+修改**（`HandoffWrapperTool`：`RectangleObjectChooserTool` → `CommonObjectModifierTool`）
-- 通过工具栏按钮（`.toolbar-btn`）切换激活工具
+- 通过工具栏按钮（`.toolbar-btn`）或数字键 `1`-`9` 切换激活工具
 - 按钮 `pointerdown` 事件发出 `button-press` 信号 → `toolbar/button-group` 设备 → 输出 `tool-switch` 信号，双输入汇聚到 tool-switcher 节点
-- button-group 设备将当前激活工具名写入 `board.sharedState`（键 `activeTool`），工具栏适配器订阅该键更新 DOM 按钮 `.active` 类
+- 数字键（keydown，非 repeat）经 `switchTool` 写入 `board.sharedState` 后，把 tool-switch 信号直接 emit 到 tool-switcher；该键信号同时正常流入 keyboard 设备
+- 两条切换路径共用 `switchTool` 完成「校验 + 写 sharedState」，`board.sharedState`（键 `activeTool`）是唯一事实源，工具栏适配器订阅该键更新 DOM 按钮 `.active` 类，DOM 高亮自动联动
 - 默认激活工具为笔画
 
 ### 触摸多指笔画
@@ -102,6 +103,7 @@
 | ------------- | --------------------------------------- |
 | 触摸拖动      | 多指同时创建红色笔画（每指独立）        |
 | 鼠标左键      | 当前激活工具（笔画 / 圆 / 选择+修改）   |
+| 1 - 9         | 切换激活工具（按工具栏顺序）            |
 | 鼠标右键      | 首次框选对象 → 再次拖拽修改             |
 | Enter         | 提交修改（右键 handoff + 左键选择工具） |
 | Esc           | 取消修改（右键 handoff + 左键选择工具） |

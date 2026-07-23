@@ -102,7 +102,7 @@ async function bootstrapWhiteboard() {
   }
 
   attachPointerAdapter(viewport, board, demoLog);
-  attachKeyboardAdapter(viewport, board, demoLog);
+  attachKeyboardAdapter(viewport, board, demoLog, toolbar?.tools);
   attachResizeAdapter(viewport, appLeft);
   attachWheelAdapter(viewport, board, appLeft);
 

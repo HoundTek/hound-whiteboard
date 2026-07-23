@@ -8,6 +8,7 @@
 import { createSubDAG } from "../index.js";
 import { SignalPacket } from "../dag-core/signal.js";
 import { SIGNAL_TYPES } from "../dag-core/signal-types.js";
+import { switchTool } from "../tools/switch-tool.js";
 import { DEVICE_DEFAULT_ROUTE } from "./constant.js";
 
 /**
@@ -102,15 +103,14 @@ function createButtonGroupDevice(options = {}) {
       (s) => s?.type === "button-press" && s?.context?.toolName,
     );
     if (press) {
-      const toolName = press.context.toolName;
-      const isValid =
-        tools.length === 0 || tools.some((t) => t.name === toolName);
-      if (isValid) {
-        if (sharedState) {
-          sharedState.set(stateKey, toolName);
-        } else {
-          localActiveTool = toolName;
-        }
+      const { switched } = switchTool({
+        sharedState,
+        stateKey,
+        toolName: press.context.toolName,
+        allowedTools: tools.map((t) => t.name),
+      });
+      if (switched && !sharedState) {
+        localActiveTool = press.context.toolName;
       }
     }
 
