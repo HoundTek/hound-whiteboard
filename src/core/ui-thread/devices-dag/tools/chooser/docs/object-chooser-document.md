@@ -111,11 +111,13 @@ getSelectionRegion(context)
 
 `replaceSelection(context, objects)` 处理通用的选择替换：
 
-1. 丢弃上一轮选择（`boardApi.discardActiveObjects`）
-2. 清空 context objects
+1. 从 `_selectedObjects` 读取旧选择并丢弃（`boardApi.discardActiveObjects`）
+2. 清空 `_selectedObjects` 真相源与 objects 投影（`clearContextObjects`）
 3. 解析新条目
 4. 激活新对象（`boardApi.addActiveObjects`）
-5. 写回 context
+5. 写入 `_selectedObjects` 并同步发布 objects 投影（`setContextObjects`）
+
+选择集的唯一真相源是实例字段 `_selectedObjects`；`node.state.objects` 只是它同步发布的只读投影，工具逻辑禁止读回。
 
 ## 选择生命周期
 
@@ -156,8 +158,8 @@ renderer.createCompatSelectionEntriesForSummaries(objects, "chooser");
 `umount(context)` 依次执行：
 
 1. `clearSelectionRegion(context)` — 清理子类区域状态
-2. `discardActiveObjects` — 丢弃当前活动对象
-3. `clearContextObjects` — 清空节点上下文
+2. `discardActiveObjects` — 丢弃 `_selectedObjects` 中的当前活动对象
+3. 清空 `_selectedObjects` 真相源与 objects 投影（`clearContextObjects`）
 4. `super.umount()`
 
 ## 与 modifier 的对称性

@@ -57,11 +57,11 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 
 ## 对象上下文辅助方法
 
-Tool 现在提供一组围绕节点 `state` 的对象上下文工具：
+Tool 提供一组围绕节点 `state` 的 objects 投影工具：
 
-- `resolveContextObjects(deviceContext)`
-- `setContextObjects(deviceContext, objects)`
-- `clearContextObjects(deviceContext)`
+- `setContextObjects(deviceContext, objects)` — 将对象集合发布为 `state.objects` 投影
+- `clearContextObjects(deviceContext)` — 清除 `state.objects` 投影
+- `resolveContextObjects(deviceContext)` — 读取 `state.objects` 投影（仅供观察 / 测试）
 - `resolveObjectId(objectEntry)` — 从对象条目提取数字 id
 - `resolveObjectIds(deviceContext, objects)` — 批量提取去重 id 列表
 - `resolveNodeState(deviceContext, statePath)`
@@ -69,9 +69,9 @@ Tool 现在提供一组围绕节点 `state` 的对象上下文工具：
 
 这些方法的设计意图是：
 
-- 优先复用当前节点 `state`
-- 避免 creator、chooser、modifier 依赖同一个可变上下文对象
-- 让父节点到子节点的共享变成显式路径状态同步
+- `state.objects` 是拥有者发布的**只读投影**，唯一职责是可观察性
+- 对象集合的真相源是各工具的实例字段（chooser `_selectedObjects`、modifier `_overlayModifiedObjects`、creator `_entry`）
+- 工具逻辑禁止从投影读回当真相源用；`resolveContextObjects` 仅供观察方与测试读取
 
 ## 默认链路继续
 

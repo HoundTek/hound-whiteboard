@@ -96,12 +96,15 @@ describe("RectangleObjectChooserTool", () => {
       property: {},
       data: { radius: 5 },
     };
-    const stateAccess = createStateAccess({
-      objects: [previousSummary],
-    });
+    const stateAccess = createStateAccess();
     const boardApi = {
-      hitTest: jest.fn(async () => []),
-      queryObjects: jest.fn(async () => []),
+      hitTest: jest
+        .fn()
+        .mockResolvedValueOnce([1])
+        .mockResolvedValueOnce([]),
+      queryObjects: jest.fn(async (ids) =>
+        ids.length > 0 ? [previousSummary] : [],
+      ),
       addActiveObjects: jest.fn(),
       discardActiveObjects: jest.fn(),
     };
@@ -115,6 +118,38 @@ describe("RectangleObjectChooserTool", () => {
       setNodeState: stateAccess.setState,
     };
 
+    // 第一轮真实框选：建立上一轮选择（真相源 _selectedObjects + objects 投影）
+    tool.process(
+      {
+        signals: [
+          {
+            type: "position",
+            context: { value: new Vector(95, 95) },
+          },
+        ],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [
+          {
+            type: "position",
+            context: { value: new Vector(115, 115) },
+          },
+          {
+            type: "end",
+            context: {},
+          },
+        ],
+      },
+      deviceContext,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tool._selectedObjects).toEqual([previousSummary]);
+    expect(stateAccess.getState().objects).toEqual([previousSummary]);
+
+    // 第二轮空框选：未命中任何对象
     tool.process(
       {
         signals: [
@@ -144,7 +179,8 @@ describe("RectangleObjectChooserTool", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(boardApi.discardActiveObjects).toHaveBeenCalledWith([1]);
-    expect(boardApi.addActiveObjects).not.toHaveBeenCalled();
+    expect(boardApi.addActiveObjects).toHaveBeenCalledTimes(1);
+    expect(tool._selectedObjects).toEqual([]);
     expect(stateAccess.getState().objects).toBeUndefined();
     expect(stateAccess.getState()).toEqual({});
   });

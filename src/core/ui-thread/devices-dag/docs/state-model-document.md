@@ -68,7 +68,10 @@ strict 模式抛错，非 strict 模式经 log 工具告警。外部代码（非
 | `phase`       | `HandoffWrapperTool`        | 当前工作流阶段（`first` / `second`） |
 | `activeChild` | `HandoffWrapperTool`        | 当前活动子工具名                     |
 | `routeTarget` | `ToolSwitcherWrapper`       | 当前路由目标工具名                   |
-| `objects`     | Tool（`setContextObjects`） | 工具当前持有的对象集合               |
+| `objects`     | Tool（`setContextObjects`） | 工具当前持有的对象集合投影           |
+
+`objects` 投影只发布、逻辑禁读回：工具逻辑禁止把 `resolveContextObjects` 当真相源用，
+真相源是各工具的实例字段（chooser `_selectedObjects`、modifier `_overlayModifiedObjects`、creator `_entry`）。
 
 ### 权威状态（闭包 / 实例字段）
 
@@ -104,10 +107,13 @@ node.state.phase / activeChild         ← 只读投影，仅供观察与调试
 
 #### 已知权威状态
 
-| 实例字段      | 所在模块              | 用途                                                     |
-| ------------- | --------------------- | -------------------------------------------------------- |
-| `#activeName` | `ToolSwitcherWrapper` | 当前路由目标（通过 `node.state.routeTarget` 投影观察）   |
-| `#phase`      | `HandoffWrapperTool`  | 当前阶段（通过 `node.state.phase` / `activeChild` 观察） |
+| 实例字段                 | 所在模块              | 用途                                                     |
+| ------------------------ | --------------------- | -------------------------------------------------------- |
+| `#activeName`            | `ToolSwitcherWrapper` | 当前路由目标（通过 `node.state.routeTarget` 投影观察）   |
+| `#phase`                 | `HandoffWrapperTool`  | 当前阶段（通过 `node.state.phase` / `activeChild` 观察） |
+| `_selectedObjects`       | `ObjectChooserTool`   | 当前选择集（通过 `node.state.objects` 投影观察）         |
+| `_overlayModifiedObjects` | `ObjectModifierTool`  | 当前编辑中的对象集合（通过 `node.state.objects` 观察）   |
+| `_entry`                 | `ObjectCreatorTool`   | 当前创建中的对象条目（通过 `node.state.objects` 观察）   |
 
 ### 共享状态（`SharedStateStore`）
 
@@ -155,7 +161,8 @@ first tool 创建对象
   → second 实例持有，发布投影 node.state.objects = [...objects]
 ```
 
-- 每个工具实例在任意时刻都是自己 `objects` 的唯一真相源，`node.state.objects` 只是它发布的投影
+- 每个工具实例在任意时刻都是自己 `objects` 的唯一真相源——真相源是实例字段（chooser `_selectedObjects`、modifier `_overlayModifiedObjects`、creator `_entry`），`node.state.objects` 只是它发布的投影
+- 投影只发布，逻辑禁读回：工具逻辑不得通过 `resolveContextObjects` / `getNodeState` 读回 `objects` 投影做决策；读取投影仅限观察、调试与测试
 - `HandoffWrapperTool` **不持有** `objects` — 它只负责相位切换与对象桥接
 
 ## 写入约定

@@ -7,24 +7,22 @@ describe("ObjectModifierTool", () => {
   test("withGeometryMutation 应按快照再失效的顺序包装一次几何修改", () => {
     class TestModifierTool extends ObjectModifierTool {
       modify(modificationContext) {
-        return this.withGeometryMutation(modificationContext, () => {
-          modificationContext.object.changed = true;
-          return "done";
-        });
+        return this.withGeometryMutation(
+          modificationContext,
+          () => {
+            modificationContext.object.changed = true;
+            return "done";
+          },
+          [modificationContext.object],
+        );
       }
     }
 
     const tool = new TestModifierTool();
     const object = { id: 1, changed: false };
-    const _nodeState = { objects: [object] };
     const calls = [];
     const modificationContext = {
       path: "/test",
-      getNodeState: () => ({ ..._nodeState }),
-      setNodeState: (_pathOrId, state) => {
-        Object.assign(_nodeState, state);
-        return { ..._nodeState };
-      },
       services: {
         viewport: {
           renderer: {
@@ -70,19 +68,13 @@ describe("ObjectModifierTool", () => {
       },
       requestViewportUiRender: jest.fn(),
     };
-    const _nodeState2 = { objects: [...objects] };
     const modificationContext = {
       path: "/test",
-      getNodeState: () => ({ ..._nodeState2 }),
-      setNodeState: (_pathOrId, state) => {
-        Object.assign(_nodeState2, state);
-        return { ..._nodeState2 };
-      },
       services: { viewport },
     };
 
-    tool.beforeGeometryMutation(modificationContext);
-    tool.afterGeometryMutation(modificationContext);
+    tool.beforeGeometryMutation(modificationContext, objects);
+    tool.afterGeometryMutation(modificationContext, objects);
 
     expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledWith(
       objects,
@@ -287,7 +279,7 @@ describe("ObjectModifierTool", () => {
         discardActiveObjects,
       };
       const unmount = jest.fn();
-      const _nodeState3 = { objects: [object] };
+      const _nodeState3 = {};
       const context = {
         path: "/test",
         getNodeState: () => ({ ..._nodeState3 }),
@@ -303,9 +295,10 @@ describe("ObjectModifierTool", () => {
       expect(commitObjects).toHaveBeenCalledWith([object.id]);
       expect(unmount).toHaveBeenCalledWith("/test");
 
-      tool.setContextObjects(context, [object]);
+      tool.receiveHandoffObjects([object], context);
       tool.umount(context);
       expect(discardActiveObjects).toHaveBeenCalledWith([object.id]);
+      expect(tool._overlayModifiedObjects).toEqual([]);
     });
   });
 

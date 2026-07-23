@@ -7,16 +7,19 @@ import { SIGNAL_TYPES } from "../../../dag-core/signal-types.js";
 
 /**
  * 构造包含 AOM 的测试上下文
- * 新代码中 resolveActiveModifiedObjects 在没有 activeObjectIndex 时返回空，
- * 因此测试必须提供模拟的 AOM 上下文。
+ * @description
+ * modifier 持有对象的唯一真相源是 `_overlayModifiedObjects`，
+ * 因此上下文构造后通过 `receiveHandoffObjects` 把对象桥接给工具，
+ * 模拟 handoff 流程中 first → second 的对象传递。
+ * @param {CommonObjectModifierTool} tool - 被测修改工具
  * @param {Array|Object} objects - 测试对象（或对象数组）
  * @param {Object} [extra={}] - 额外的 services 属性（如 viewport、boardApi）
  * @returns {{ services: Object }} 可用于 tool.process 的 DAG 上下文
  */
-function aomCtx(objects, extra = {}) {
+function aomCtx(tool, objects, extra = {}) {
   const normalized = Array.isArray(objects) ? objects : [objects];
-  const _nodeState = { objects: normalized.filter(Boolean) };
-  return {
+  const _nodeState = {};
+  const context = {
     path: "/test",
     getNodeState: () => ({ ..._nodeState }),
     setNodeState: (_pathOrId, state) => {
@@ -35,6 +38,8 @@ function aomCtx(objects, extra = {}) {
       ...extra,
     },
   };
+  tool.receiveHandoffObjects(normalized.filter(Boolean), context);
+  return context;
 }
 
 describe("CommonObjectModifierTool", () => {
@@ -64,7 +69,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
 
@@ -73,7 +78,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 23 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(12, 20));
     // 首次 position 抓快照，后续 position 不抓
@@ -101,7 +106,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
 
@@ -110,7 +115,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 23 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(12, 20));
 
@@ -119,7 +124,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 22, y: 28 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(17, 25));
   });
@@ -137,7 +142,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // 锚点=(12,20)，dx=0 → (10, 20)
     expect(object.position).toEqual(new Vector(10, 20));
@@ -146,13 +151,13 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // dx=16-12=4, dy=22-20=2 → (14, 22)
     expect(object.position).toEqual(new Vector(14, 22));
 
     // end 信号
-    tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+    tool.process({ signals: [{ type: "end" }] }, aomCtx(tool, object));
     expect(object.position).toEqual(new Vector(14, 22));
 
     // end 后新一轮手势：锚点从新光标位置开始
@@ -160,7 +165,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 20, y: 22 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // 新锚点=(20,22)，新的 initPos={(14,22)}，dx=0 → (14, 22)
     expect(object.position).toEqual(new Vector(14, 22));
@@ -169,7 +174,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 25, y: 22 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // dx=25-20=5, dy=0 → (19, 22)
     expect(object.position).toEqual(new Vector(19, 22));
@@ -189,7 +194,7 @@ describe("CommonObjectModifierTool", () => {
     const mockDag = {
       unmount: jest.fn(),
     };
-    let nodeState = { objects: [object] };
+    let nodeState = {};
     const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     function makeCtx() {
@@ -204,6 +209,8 @@ describe("CommonObjectModifierTool", () => {
         dag: mockDag,
       };
     }
+
+    tool.receiveHandoffObjects([object], makeCtx());
 
     tool.process(
       {
@@ -253,7 +260,7 @@ describe("CommonObjectModifierTool", () => {
     const commitSpy = boardApi.commitObjects;
     const mockDag = { unmount: jest.fn() };
     const viewport = { requestViewportUiRender: jest.fn() };
-    let nodeState = { objects: [object] };
+    let nodeState = {};
     const context = {
       services: { boardApi, viewport },
       dag: mockDag,
@@ -266,6 +273,8 @@ describe("CommonObjectModifierTool", () => {
         return nodeState;
       },
     };
+
+    tool.receiveHandoffObjects([object], context);
 
     expect(object.position).toEqual(new Vector(10, 20));
 
@@ -319,7 +328,7 @@ describe("CommonObjectModifierTool", () => {
       property: {},
       data: { radius: 5 },
     };
-    const _nodeState = { objects: [summaryLikeObject] };
+    const _nodeState = {};
     const context = {
       path: "/test",
       getNodeState: () => ({ ..._nodeState }),
@@ -332,6 +341,8 @@ describe("CommonObjectModifierTool", () => {
         viewport: { requestViewportUiRender: jest.fn() },
       },
     };
+
+    tool.receiveHandoffObjects([summaryLikeObject], context);
 
     tool.process(
       {
@@ -365,7 +376,7 @@ describe("CommonObjectModifierTool", () => {
       property: {},
       data: { radius: 5 },
     };
-    const _nodeState_inline = { objects: [summaryLikeObject] };
+    const _nodeState_inline = {};
     const modifyObject = jest.fn();
     const context = {
       path: "/test",
@@ -388,6 +399,8 @@ describe("CommonObjectModifierTool", () => {
         viewport: { requestViewportUiRender: jest.fn() },
       },
     };
+
+    tool.receiveHandoffObjects([summaryLikeObject], context);
 
     tool.process(
       {
@@ -415,7 +428,7 @@ describe("CommonObjectModifierTool", () => {
     };
 
     const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
-    tool.process({ signals: [] }, aomCtx(object, { viewport: {} }));
+    tool.process({ signals: [] }, aomCtx(tool, object, { viewport: {} }));
 
     expect(object.position).toEqual(new Vector(5, 5));
   });
@@ -441,7 +454,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 35, y: 35 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     // 锚点=(35,35)，initPos=(10,20)，dx=0 → 对象不动
     expect(object.position).toEqual(new Vector(10, 20));
@@ -453,7 +466,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 40, y: 40 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(15, 25));
   });
@@ -478,7 +491,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 100, y: 200 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
 
     expect(object.position).toEqual(new Vector(10, 20));
@@ -513,7 +526,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 80, y: 50 } } }],
       },
-      aomCtx([objectA, objectB], { viewport }),
+      aomCtx(tool, [objectA, objectB], { viewport }),
     );
     expect(objectA.position).toEqual(new Vector(10, 20));
     expect(objectB.position).toEqual(new Vector(70, 80));
@@ -525,7 +538,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 90, y: 60 } } }],
       },
-      aomCtx([objectA, objectB], { viewport }),
+      aomCtx(tool, [objectA, objectB], { viewport }),
     );
     expect(objectA.position).toEqual(new Vector(20, 30));
     expect(objectB.position).toEqual(new Vector(80, 90));
@@ -557,7 +570,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 5, y: 5 } } }],
       },
-      aomCtx([objectA, objectB], { viewport }),
+      aomCtx(tool, [objectA, objectB], { viewport }),
     );
 
     expect(objectA.position).toEqual(new Vector(10, 20));
@@ -585,7 +598,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 100, y: 200 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20));
     expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
@@ -595,7 +608,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 110, y: 210 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(20, 30));
   });
@@ -613,7 +626,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // 锚点=(12,20)，dx=0 → (10, 20)
     expect(object.position).toEqual(new Vector(10, 20));
@@ -622,7 +635,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 16, y: 20 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // dx=16-12=4, dy=0 → (14, 20)
     expect(object.position).toEqual(new Vector(14, 20));
@@ -634,7 +647,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 17, y: 20 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // 新锚点=(17,20)，新 initPos(14,20)，dx=0 → (14,20)
     expect(object.position).toEqual(new Vector(14, 20));
@@ -643,7 +656,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 20, y: 20 } } }],
       },
-      aomCtx(object),
+      aomCtx(tool, object),
     );
     // dx=20-17=3, dy=0 → (17, 20)
     expect(object.position).toEqual(new Vector(17, 20));
@@ -673,7 +686,7 @@ describe("CommonObjectModifierTool", () => {
           { type: "end" },
         ],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
 
     // 手势启动后立即结束，对象未移动
@@ -688,7 +701,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 20, y: 25 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     expect(object.position).toEqual(new Vector(10, 20)); // 新锚点=(20,25)，dx=0
 
@@ -696,7 +709,7 @@ describe("CommonObjectModifierTool", () => {
       {
         signals: [{ type: "position", context: { value: { x: 25, y: 30 } } }],
       },
-      aomCtx(object, { viewport }),
+      aomCtx(tool, object, { viewport }),
     );
     // dx=25-20=5, dy=30-25=5 → (15, 25)
     expect(object.position).toEqual(new Vector(15, 25));
@@ -716,7 +729,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // 锚点=(12,20)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -725,35 +738,35 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // dx=4, dy=2 → (14, 22)
       expect(object.position).toEqual(new Vector(14, 22));
 
       // end 结束第一轮手势
-      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(tool, object));
 
       // 第二轮手势：锚点 (18, 24)，对象从 (14, 22) 移到 (20, 26)
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 18, y: 24 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 24, y: 28 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // dx=24-18=6, dy=28-24=4 → (20, 26)
       expect(object.position).toEqual(new Vector(20, 26));
 
       // end 结束第二轮手势
-      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(tool, object));
 
       // cancel → 应回退到第一轮手势开始前的初始位置 (10, 20)，不是 (14, 22)
-      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(tool, object));
       expect(object.position).toEqual(new Vector(10, 20));
     });
 
@@ -770,19 +783,19 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 25 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 20, y: 30 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
 
-      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
-      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(tool, object));
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(tool, object));
       // cancel 回退到初始位置
       expect(object.position).toEqual(new Vector(10, 20));
 
@@ -792,7 +805,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 22 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // 新锚点=(12,22)，新 initPos=(10,20)，dx=0 → (10,20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -801,7 +814,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 17, y: 27 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // dx=17-12=5, dy=27-22=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -826,20 +839,20 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 25 } } }],
         },
-        aomCtx(object, { board }),
+        aomCtx(tool, object, { board }),
       );
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 20, y: 30 } } }],
         },
-        aomCtx(object, { board }),
+        aomCtx(tool, object, { board }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
 
       tool.process(
         { signals: [{ type: "success", context: {} }] },
-        aomCtx(object, { board }),
+        aomCtx(tool, object, { board }),
       );
 
       // 模拟新对象（id=2）进入 modifier
@@ -859,7 +872,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 55, y: 65 } } }],
         },
-        aomCtx(object2, { board: board2 }),
+        aomCtx(tool, object2,  { board: board2 }),
       );
       // 锚点=(55,65)，新 initPos=(50,60)，dx=0 → (50,60)
       expect(object2.position).toEqual(new Vector(50, 60));
@@ -868,7 +881,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 60, y: 70 } } }],
         },
-        aomCtx(object2, { board: board2 }),
+        aomCtx(tool, object2,  { board: board2 }),
       );
       // dx=60-55=5, dy=70-65=5 → (55, 65)
       expect(object2.position).toEqual(new Vector(55, 65));
@@ -876,15 +889,15 @@ describe("CommonObjectModifierTool", () => {
   });
 
   describe("手势准入检测——边缘场景", () => {
-    function makeAomCtx(opts = {}) {
+    function makeAomCtx(tool, opts = {}) {
       const { objects, board, viewport } = opts;
       const normalized = objects
         ? Array.isArray(objects)
           ? objects
           : [objects]
         : [];
-      const _nodeState = { objects: normalized.filter(Boolean) };
-      return {
+      const _nodeState = {};
+      const context = {
         path: "/test",
         getNodeState: () => ({ ..._nodeState }),
         setNodeState: (_pathOrId, state) => {
@@ -905,6 +918,8 @@ describe("CommonObjectModifierTool", () => {
           ...(viewport ? { viewport } : {}),
         },
       };
+      tool.receiveHandoffObjects(normalized.filter(Boolean), context);
+      return context;
     }
 
     test("position 恰好在合矩形边界上应通过准入检测", () => {
@@ -929,7 +944,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 10, y: 20 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       expect(object.position).toEqual(new Vector(10, 20));
       // 第二个 position → 确认手势确实激活并能移动
@@ -937,7 +952,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 25 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -948,7 +963,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 60, y: 50 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       expect(object.position).toEqual(new Vector(15, 25));
       // containsPoint 使用 1e-8 容差，边界点应命中
@@ -956,7 +971,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 65, y: 55 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // dx=5, dy=5 → (20, 30)
       expect(object.position).toEqual(new Vector(20, 30));
@@ -985,7 +1000,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       expect(object.position).toEqual(new Vector(10, 20));
       expect(viewport.renderer.captureObjectSnapshot).not.toHaveBeenCalled();
@@ -995,7 +1010,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -1006,7 +1021,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 35, y: 40 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -1033,7 +1048,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -1045,7 +1060,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // 锚点仍为(30,35)，dx=70, dy=165 → (80, 185)
       expect(object.position).toEqual(new Vector(80, 185));
@@ -1053,16 +1068,10 @@ describe("CommonObjectModifierTool", () => {
       expect(viewport.renderer.captureObjectSnapshot).toHaveBeenCalledTimes(1);
     });
 
-    test("经过 AOM 过滤后对象集合为空时不应触发手势", () => {
+    test("未持有任何对象时不应触发手势", () => {
       const object = {
         id: 1,
         position: new Vector(10, 20),
-      };
-
-      const board = {
-        activeObjectManager: {
-          activeObjectIndex: new Map(),
-        },
       };
 
       const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
@@ -1070,9 +1079,10 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
         },
-        makeAomCtx({ objects: [object], board }),
+        makeAomCtx(tool, { objects: [] }),
       );
 
+      expect(tool.isGestureActive).toBe(false);
       expect(object.position).toEqual(new Vector(10, 20));
     });
 
@@ -1097,7 +1107,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 30, y: 35 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // 锚点=(30,35)，dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -1106,7 +1116,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 35, y: 40 } } }],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // dx=5, dy=5 → (15, 25)
       expect(object.position).toEqual(new Vector(15, 25));
@@ -1114,7 +1124,7 @@ describe("CommonObjectModifierTool", () => {
       // end 结束手势
       tool.process(
         { signals: [{ type: "end" }] },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
 
       // 新一轮：position (100, 200) 在外部 → 应拒绝
@@ -1124,7 +1134,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "position", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        makeAomCtx({ objects: [object], viewport }),
+        makeAomCtx(tool, { objects: [object], viewport }),
       );
       // 准入拒绝，对象位置保持在 end 时刻
       expect(object.position).toEqual(new Vector(15, 25));
@@ -1150,13 +1160,16 @@ describe("CommonObjectModifierTool", () => {
 
       const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
       // displacement (3, 5)：直接累加
+      const context = aomCtx(tool, object, { viewport });
+      // receiveHandoffObjects 自身会触发一次 overlay 刷新，清零后只统计 displacement 引起的刷新
+      viewport.requestViewportUiRender.mockClear();
       tool.process(
         {
           signals: [
             { type: "displacement", context: { value: { x: 3, y: 5 } } },
           ],
         },
-        aomCtx(object, { viewport }),
+        context,
       );
       expect(object.position).toEqual(new Vector(13, 25));
       // 手势不应激活
@@ -1182,7 +1195,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // dx=0 → (10, 20)
       expect(object.position).toEqual(new Vector(10, 20));
@@ -1192,7 +1205,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(14, 22));
 
@@ -1203,7 +1216,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 3, y: -1 } } },
           ],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(17, 21));
 
@@ -1213,7 +1226,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 22, y: 25 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(23, 24));
     });
@@ -1231,7 +1244,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(10, 20));
 
@@ -1245,7 +1258,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 3, y: -1 } } },
           ],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(17, 21));
 
@@ -1255,7 +1268,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 20, y: 26 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(21, 25));
     });
@@ -1273,19 +1286,19 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       // position (16, 22)：dx = 4, dy = 2 → (14, 22)
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 16, y: 22 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(14, 22));
 
       // end 结束手势
-      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(tool, object));
       expect(tool.isGestureActive).toBe(false);
 
       // displacement 在 end 后到达：直接累加
@@ -1295,7 +1308,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 5, y: 3 } } },
           ],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(19, 25));
 
@@ -1316,7 +1329,7 @@ describe("CommonObjectModifierTool", () => {
         {
           signals: [{ type: "position", context: { value: { x: 12, y: 20 } } }],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
 
       // 移动 + displacement
@@ -1329,15 +1342,15 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 2, y: 0 } } },
           ],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(16, 22));
 
       // end 结束手势
-      tool.process({ signals: [{ type: "end" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "end" }] }, aomCtx(tool, object));
 
       // cancel → 回退到 initialPos = (10, 20)
-      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(tool, object));
       expect(object.position).toEqual(new Vector(10, 20));
     });
 
@@ -1356,7 +1369,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 3, y: 5 } } },
           ],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(13, 25));
 
@@ -1367,12 +1380,12 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 2, y: 3 } } },
           ],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(15, 28));
 
       // cancel → 回退到 (10, 20)
-      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(object));
+      tool.process({ signals: [{ type: "cancel" }] }, aomCtx(tool, object));
       expect(object.position).toEqual(new Vector(10, 20));
     });
 
@@ -1392,7 +1405,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 100, y: 200 } } },
           ],
         },
-        aomCtx(object),
+        aomCtx(tool, object),
       );
       expect(object.position).toEqual(new Vector(110, 220));
     });
@@ -1408,7 +1421,7 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 5, y: -2 } } },
           ],
         },
-        aomCtx([objectA, objectB]),
+        aomCtx(tool, [objectA, objectB]),
       );
 
       expect(objectA.position).toEqual(new Vector(15, 18));
@@ -1434,13 +1447,13 @@ describe("CommonObjectModifierTool", () => {
             { type: "displacement", context: { value: { x: 7, y: 3 } } },
           ],
         },
-        aomCtx(object, { boardApi }),
+        aomCtx(tool, object, { boardApi }),
       );
       expect(object.position).toEqual(new Vector(17, 23));
 
       tool.process(
         { signals: [{ type: "success", context: {} }] },
-        aomCtx(object, { boardApi }),
+        aomCtx(tool, object, { boardApi }),
       );
       expect(boardApi.commitObjects).toHaveBeenCalledWith([1]);
     });
@@ -1455,7 +1468,7 @@ describe("CommonObjectModifierTool", () => {
         modifyObject: jest.fn(),
       };
       const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
-      const _nodeState_inline2 = { objects: [object] };
+      const _nodeState_inline2 = {};
       const context = {
         path: "/test",
         getNodeState: () => ({ ..._nodeState_inline2 }),
@@ -1467,6 +1480,8 @@ describe("CommonObjectModifierTool", () => {
           boardApi,
         },
       };
+
+      tool.receiveHandoffObjects([object], context);
 
       tool.process(
         {

@@ -241,7 +241,10 @@ class Tool {
   }
 
   /**
-   * 从设备上下文中解析当前对象集合
+   * 读取当前节点状态的 objects 投影
+   * @description
+   * 公开只读 API，供观察方与测试读取工具发布的 objects 投影。
+   * 禁止在工具内部逻辑中把它当作对象集合的真相源——真相源是各工具的实例字段。
    * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Array<*>}
    */
@@ -273,9 +276,10 @@ class Tool {
   }
 
   /**
-   * 将对象集合写入当前节点状态
+   * 将对象集合发布为当前节点状态的 objects 投影
    * @description
-   * 写入节点 `state.objects` 作为领域数据的唯一真相源，供跨 handler 观察。
+   * 投影仅供跨 handler 观察；对象集合的真相源是各工具的实例字段，
+   * 工具逻辑禁止从投影读回。传入空集合时转为清除投影。
    * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {Iterable<*>|*} objects - 对象或对象集合
    * @returns {Array<*>}
@@ -299,9 +303,9 @@ class Tool {
   }
 
   /**
-   * 清理当前节点状态中的对象引用
+   * 清除当前节点状态的 objects 投影
    * @description
-   * 从节点 `state.objects` 中移除对象引用。
+   * 从节点 `state` 中移除 `objects` 投影键；调用方需同步清理自己的实例字段真相源。
    * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */

@@ -25,6 +25,16 @@ import { createCompatSelectionEntriesForSummaries } from "../../../components/re
  */
 class ObjectChooserTool extends GestureTool {
   /**
+   * 选择集唯一真相源——当前已确认选中的对象集合
+   * @description
+   * 工具逻辑（replaceSelection / discardAction / umount / process）只允许读本字段；
+   * `node.state.objects` 仅是本字段同步发布的只读投影，禁止读回当真相源用。
+   * @type {Array<import("../../shared/types.js").ObjectSummary>}
+   * @private
+   */
+  _selectedObjects = [];
+
+  /**
    * overlay 渲染用——当前选中的对象摘要
    * @type {import("../../shared/types.js").ObjectSummary[]}
    * @protected
@@ -341,31 +351,33 @@ class ObjectChooserTool extends GestureTool {
    * @protected
    */
   discardAction(context = {}) {
-    const selectedObjects = this.resolveContextObjects(context);
+    const selectedObjects = this._selectedObjects;
     const boardApi = context?.services?.boardApi;
     const objectIds = this.resolveObjectIds(context, selectedObjects);
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);
     }
+    this._selectedObjects = [];
     this.clearContextObjects(context);
   }
 
   /**
    * 用新的选择结果替换当前选择
    * @description
-   * 丢弃旧选择、激活新对象、写回设备上下文与节点状态。
+   * 丢弃旧选择、激活新对象，更新 `_selectedObjects` 真相源并同步发布 objects 投影。
    * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {import("../../shared/types.js").ObjectSummary[]} [nextObjects=[]] - 新选择结果
    * @returns {import("../../shared/types.js").ObjectSummary[]}
    */
   replaceSelection(context = {}, nextObjects = []) {
-    const previousObjects = this.resolveContextObjects(context).filter(Boolean);
+    const previousObjects = this._selectedObjects.filter(Boolean);
     const boardApi = context.services?.boardApi;
     const previousIds = this.resolveObjectIds(context, previousObjects);
     if (boardApi && previousIds.length > 0) {
       boardApi.discardActiveObjects(previousIds);
     }
 
+    this._selectedObjects = [];
     this.clearContextObjects(context);
 
     const resolvedNextObjects = this.resolveSelectedObjectReferences(
@@ -381,7 +393,11 @@ class ObjectChooserTool extends GestureTool {
     if (boardApi && nextIds.length > 0) {
       boardApi.addActiveObjects(nextIds);
     }
-    return this.setContextObjects(context, resolvedNextObjects);
+    this._selectedObjects = this.setContextObjects(
+      context,
+      resolvedNextObjects,
+    );
+    return this._selectedObjects;
   }
 
   /**
@@ -455,8 +471,9 @@ class ObjectChooserTool extends GestureTool {
   /**
    * 处理一个完整信号包
    * @description
-   * 在交给 GestureTool 路由前，先同步清理已失效的 overlay 选择状态，
-   * 避免 handoff 清空 nodeState 后显示旧选中框。
+   * 在交给 GestureTool 路由前，先按真相源对齐 overlay 选择状态：
+   * `_selectedObjects` 已被清空（discard / umount / 空 replaceSelection）而
+   * overlay 尚未同步时清空 overlay，避免残留旧选中框。
    * @param {Object} signalPacket - 输入信号包
    * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void|Promise<void>}
@@ -464,7 +481,7 @@ class ObjectChooserTool extends GestureTool {
   process(signalPacket, context = {}) {
     if (
       this._overlaySelectedObjects.length > 0 &&
-      !this.resolveNodeState(context).objects
+      this._selectedObjects.length === 0
     ) {
       this._overlaySelectedObjects = [];
     }
@@ -481,12 +498,13 @@ class ObjectChooserTool extends GestureTool {
     this.isActionActive = false;
     this.clearSelectionRegion(context);
     this._overlaySelectedObjects = [];
-    const selectedObjects = this.resolveContextObjects(context);
+    const selectedObjects = this._selectedObjects;
     const boardApi = context?.services?.boardApi;
     const objectIds = this.resolveObjectIds(context, selectedObjects);
     if (boardApi && objectIds.length > 0) {
       boardApi.discardActiveObjects(objectIds);
     }
+    this._selectedObjects = [];
     this.clearContextObjects(context);
     super.umount(context);
   }

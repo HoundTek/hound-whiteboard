@@ -99,15 +99,12 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 规整本次修改涉及的对象集合
+   * @description 仅规整显式传入的对象；不再回退读取 node state 投影。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    */
   resolveModifiedObjects(context, objects) {
-    if (objects == null) {
-      return this.resolveContextObjects(context);
-    }
-
     return this.normalizeObjectCollection(objects);
   }
 
@@ -257,17 +254,17 @@ class ObjectModifierTool extends GestureTool {
   /**
    * 解析当前仍处于 AOM 动态图中的对象集合
    * @description
-   * 优先从私有字段 _overlayModifiedObjects 读取（handoff 桥接或自身 process 写入）。
-   * 私有字段为空时回退到 resolveModifiedObjects（原生非 handoff 场景兼容）。
+   * 真相源是实例字段 `_overlayModifiedObjects`（handoff 桥接或自身 process 写入）；
+   * 显式传入 objects 时直接规整返回。不再回退读取 node state 投影。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {Iterable<BasicObject>|BasicObject} [objects] - 显式传入的对象或对象集合
    * @returns {Array<BasicObject>}
    */
   resolveActiveModifiedObjects(context, objects) {
-    if (this._overlayModifiedObjects.length > 0) {
-      return this._overlayModifiedObjects;
+    if (objects != null) {
+      return this.normalizeObjectCollection(objects);
     }
-    return this.resolveModifiedObjects(context, objects);
+    return this._overlayModifiedObjects;
   }
 
   /**
@@ -411,6 +408,7 @@ class ObjectModifierTool extends GestureTool {
     }
 
     boardApi.commitObjects(objectIds);
+    this._overlayModifiedObjects = [];
     this.clearContextObjects(context);
 
     const autoUmount = this.autoUmountOnApply !== false;
@@ -452,6 +450,7 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：丢弃当前动作持有对象
+   * @description 丢弃后同步清空 `_overlayModifiedObjects` 真相源与 objects 投影。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    * @protected
@@ -465,6 +464,7 @@ class ObjectModifierTool extends GestureTool {
       boardApi.discardActiveObjects(objectIds);
     }
 
+    this._overlayModifiedObjects = [];
     this.clearContextObjects(context);
     this._pendingActionObjects = null;
     this._pendingActionObjectIds = null;
@@ -472,12 +472,14 @@ class ObjectModifierTool extends GestureTool {
 
   /**
    * 清理 modifier 的 overlay 临时状态
+   * @description
+   * overlay 渲染直接以 `_overlayModifiedObjects` 真相源为输入，
+   * 此处仅请求重绘；真相源的清理由 discardAction / performAction / umount 承担。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
   clearOverlayState(context = {}) {
-    this._overlayModifiedObjects = [];
     this.requestUiOverlayRefresh(context);
   }
 
@@ -514,6 +516,7 @@ class ObjectModifierTool extends GestureTool {
       boardApi.discardActiveObjects(objectIds);
     }
 
+    this._overlayModifiedObjects = [];
     this.clearContextObjects(context);
     this._pendingActionObjects = null;
     this._pendingActionObjectIds = null;
@@ -675,6 +678,8 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
    * 无论手势是否激活，都尝试回退对象位置。
    * 手势结束后（end 信号后）cancel 应仍然能回退到手势初始位置，
    * 前提是 processor 的 complete 保留了初始位置缓存。
+   * cancel 只回滚几何，对象仍由本工具持有（`_overlayModifiedObjects` 保留），
+   * 由后续的 discardAction / success / umount 决定归属。
    * @param {ModifyGestureInteraction} interaction - 当前交互上下文
    * @private
    */
@@ -686,7 +691,6 @@ class GestureBasedObjectModifierTool extends ObjectModifierTool {
       { captureSnapshot: false },
     );
     this.isGestureActive = false;
-    this._overlayModifiedObjects = [];
   }
 
   /**
