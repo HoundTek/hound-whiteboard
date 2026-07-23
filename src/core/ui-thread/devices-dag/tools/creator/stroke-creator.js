@@ -23,7 +23,7 @@ import { Vector } from "../../../../engine/utils/math.js";
 class StrokeCreatorTool extends SingleGestureObjectCreatorTool {
   /**
    * 当前正在创建笔画对象的本地状态
-   * @type {import("../../shared/types.js").LightweightObjectEntry & { data: { points: Array<{x:number, y:number}> } } | null}
+   * @type {import("../../../../engine/types/types.js").LightweightObjectEntry & { data: { points: Array<{x:number, y:number}> } } | null}
    */
   _entry;
 

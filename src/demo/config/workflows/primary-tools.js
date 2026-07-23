@@ -29,7 +29,7 @@ import {
  * 将笔画工具直接挂载到鼠标左键
  * @description 不经过 tool-switcher，mouse/primary → primary-stroke 直连，用于测试等无需工具切换的场景。
  * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
- * @param {import("../../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} primaryStrokeTool - 笔画工具实例
+ * @param {import("../../../core/ui-thread/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} primaryStrokeTool - 笔画工具实例
  * @returns {void}
  */
 function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
@@ -53,7 +53,7 @@ function mountPrimaryStrokeTool(viewport, primaryStrokeTool) {
  * @param {Object} options - 配置项
  * @param {Array<{ name: string }>} options.tools - 工具列表
  * @param {string} options.defaultTool - 默认激活工具名
- * @param {import("../../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} options.primaryStrokeTool - 笔画工具实例
+ * @param {import("../../../core/ui-thread/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool} options.primaryStrokeTool - 笔画工具实例
  * @returns {void}
  */
 function mountToolSwitcher(viewport, options) {

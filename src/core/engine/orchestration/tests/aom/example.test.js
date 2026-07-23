@@ -70,7 +70,7 @@ function createExampleBoard() {
 
 /**
  * 断言 layer 的活动态与静态图结构
- * @param {import("../../layer.js").Layer} layer - 待断言的层
+ * @param {import("../../active-object-manager.js").Layer} layer - 待断言的层
  * @param {{
  *   active: boolean,
  *   activeObjects: number[],

@@ -121,7 +121,7 @@ class ChunkObjectManager {
 
   /**
    * 计算一个世界坐标范围覆盖到的区块 id 集合
-   * @param {import("../../../shared/range/range.js").Range} worldRange - 世界坐标范围
+   * @param {import("../range/range.js").Range} worldRange - 世界坐标范围
    * @param {number} chunkWidth - 区块宽
    * @param {number} chunkHeight - 区块高
    * @param {{approximationSegments?: number}} [options] - range 几何计算参数

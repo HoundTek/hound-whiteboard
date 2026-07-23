@@ -67,8 +67,8 @@ export {
  * @param {DebuggerTool} [options.debugTool] - 自定义调试工具实例
  * @returns {{
  *   viewportTool: ViewportTool,
- *   primaryStrokeTool: import("../../core/ui/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool,
- *   secondarySelectionTool: import("../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
+ *   primaryStrokeTool: import("../../core/ui-thread/devices-dag/tools/creator/stroke-creator.js").StrokeCreatorTool,
+ *   secondarySelectionTool: import("../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool,
  *   debugTool: DebuggerTool,
  * }}
  */

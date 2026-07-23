@@ -22,7 +22,7 @@ import {
  * 构建键盘 trigger → 指定类型信号的转发 prefix handler
  * @description Enter 转 success、Escape 转 cancel，路由到 handoff modifier 阶段。
  * @param {string} targetType - 目标信号类型
- * @returns {{ handler: import("../../../core/devices-dag/dag-type.js").DevicesDAGHandler }}
+ * @returns {{ handler: import("../../../core/ui-thread/devices-dag/dag-type.js").DevicesDAGHandler }}
  */
 function buildSignalForwardNodeConfig(targetType) {
   return {
@@ -42,7 +42,7 @@ function buildSignalForwardNodeConfig(targetType) {
  * 挂载右键选择→修改 handoff workflow
  * @description 鼠标右键驱动 chooser 框选；Enter 提交、Escape 取消；WASD 在 modifier 阶段产生 displacement。
  * @param {import("../../../core/ui-thread/components/orchestration/viewport.js").Viewport} viewport - 视口实例
- * @param {import("../../../core/ui/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} secondarySelectionTool - 右键框选工具
+ * @param {import("../../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js").RectangleObjectChooserTool} secondarySelectionTool - 右键框选工具
  * @returns {void}
  */
 function mountSecondaryHandoff(viewport, secondarySelectionTool) {

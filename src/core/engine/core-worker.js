@@ -497,7 +497,7 @@ class CoreWorkerRuntime {
        * 按对象范围刷新 ViewportCore 的静态层
        * @param {import("./objects/basic-obj.js").BasicObject[]} objectInstances - 受影响对象
        * @param {import("./chunk/chunk.js").Chunk[]} fallbackChunks - 回退区块
-       * @param {Map<number, import("../shared/range/index.js").RectangleRange>} previousWorldRects - 旧世界范围快照
+       * @param {Map<number, import("./range/index.js").RectangleRange>} previousWorldRects - 旧世界范围快照
        */
       requestStaticRenderForObjects: (
         objectInstances = [],

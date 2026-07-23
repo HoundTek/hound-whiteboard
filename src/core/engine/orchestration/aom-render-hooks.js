@@ -22,7 +22,7 @@ function createDefaultAomRenderHooks() {
   return {
     /**
      * 刷新活动层（AOM 对象输出层）
-     * @param {import("../../objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象实例
+     * @param {import("../objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象实例
      */
     requestActiveRender(_objectInstances = []) {},
 
@@ -34,9 +34,9 @@ function createDefaultAomRenderHooks() {
 
     /**
      * 按对象范围刷新静态缓存层
-     * @param {import("../../objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象
+     * @param {import("../objects/basic-obj.js").BasicObject[]} _objectInstances - 受影响对象
      * @param {import("../chunk/chunk.js").Chunk[]} _fallbackChunks - 无法走对象级失效时的回退区块
-     * @param {Map<number, import("../../range/index.js").RectangleRange>} [_previousWorldRects] - 对象进入 AOM 前的世界范围快照
+     * @param {Map<number, import("../range/index.js").RectangleRange>} [_previousWorldRects] - 对象进入 AOM 前的世界范围快照
      */
     requestStaticRenderForObjects(
       _objectInstances = [],
@@ -46,7 +46,7 @@ function createDefaultAomRenderHooks() {
 
     /**
      * 刷新能看到指定对象集合的那些 viewport 的视口
-     * @param {import("../../objects/basic-obj.js").BasicObject[]} _objectInstances - 对象实例
+     * @param {import("../objects/basic-obj.js").BasicObject[]} _objectInstances - 对象实例
      */
     flushViewportForObjects(_objectInstances = []) {},
   };

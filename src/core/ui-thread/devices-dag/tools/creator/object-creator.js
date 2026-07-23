@@ -43,7 +43,7 @@ class ObjectCreatorTool extends GestureTool {
    * 纯数据对象，遵循 LightweightObjectEntry 协议，不再持有 BasicObject 实例。
    * 手势期几何读写均通过此对象完成，Worker 侧同步通过 RPC fire-and-forget 平行维护。
    * 子类的 `create()` 实现应设置 `type` 字段与其 `getCreatedObjectType()` 返回值一致。
-   * @type {import("../../../../../engine/types/types.js").LightweightObjectEntry | null}
+   * @type {import("../../../../engine/types/types.js").LightweightObjectEntry | null}
    */
   _entry;
 
@@ -129,7 +129,7 @@ class ObjectCreatorTool extends GestureTool {
   /**
    * 构建 Creator 交互上下文
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Object} 交互上下文
    */
   buildInteractionContext(signalPacket, context = {}) {
@@ -155,7 +155,7 @@ class ObjectCreatorTool extends GestureTool {
   /**
    * 兼容 GestureTool 的交互构建入口
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {Object} 交互上下文
    */
   buildInteraction(signalPacket, context = {}) {
@@ -351,7 +351,7 @@ class ObjectCreatorTool extends GestureTool {
 
   /**
    * 将当前创建对象写回上下文
-   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @param {BasicObject} [objectEntry=this.obj] - 当前对象
    * @returns {Array<BasicObject>}
    */
@@ -395,7 +395,7 @@ class ObjectCreatorTool extends GestureTool {
 
   /**
    * 卸载或结束 workflow 时撤销未提交对象
-   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   discardCreatedObjects(context = {}) {
@@ -621,7 +621,7 @@ class ObjectCreatorTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：完成 Creator 动作
-   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {undefined}
    */
   completeAction(context = {}) {
@@ -666,7 +666,7 @@ class ObjectCreatorTool extends GestureTool {
 
   /**
    * GestureTool 生命周期适配：丢弃当前创建对象
-   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
@@ -724,7 +724,7 @@ class ObjectCreatorTool extends GestureTool {
 
   /**
    * 工具节点被卸载时撤销未提交对象
-   * @param {import("../../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   umount(context = {}) {

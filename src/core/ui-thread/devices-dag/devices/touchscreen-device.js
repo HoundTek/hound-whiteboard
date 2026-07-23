@@ -105,8 +105,8 @@ function createTouchscreenDevice() {
    * 2. 更新内部触点状态
    * 3. 路由到 contacts 子节点输出聚合的触点报告
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 services.viewport）
-   * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandlerResult}
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 处理上下文（含 services.viewport）
+   * @returns {import("../dag-type.js").DevicesDAGHandlerResult}
    */
   const rootHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });
@@ -125,8 +125,8 @@ function createTouchscreenDevice() {
   /**
    * 触点报告处理器
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 当前路由上下文
-   * @returns {import("../devices-dag/dag-type.js").DevicesDAGHandlerResult}
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [ctx={}] - 当前路由上下文
+   * @returns {import("../dag-type.js").DevicesDAGHandlerResult}
    */
   const contactsHandler = (signalPacket, ctx = {}) => {
     const packet = SignalPacket.from(signalPacket, { defaultTo: "/" });

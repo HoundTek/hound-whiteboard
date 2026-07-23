@@ -41,7 +41,7 @@ import { createDefaultPersistenceAdapter } from "../../bridges/persistence-adapt
  * @typedef {Object} AomRenderHooks
  * @property {(objectInstances: BasicObject[]) => void} requestActiveRender
  * @property {(chunks: import("../chunk/chunk.js").Chunk[]) => void} requestStaticRender
- * @property {(objectInstances: BasicObject[], fallbackChunks: import("../chunk/chunk.js").Chunk[], previousWorldRects: Map<number, import("../../../shared/range/index.js").RectangleRange>) => void} requestStaticRenderForObjects
+ * @property {(objectInstances: BasicObject[], fallbackChunks: import("../chunk/chunk.js").Chunk[], previousWorldRects: Map<number, import("../range/index.js").RectangleRange>) => void} requestStaticRenderForObjects
  * @property {(objectInstances: BasicObject[]) => void} flushViewportForObjects
  */
 

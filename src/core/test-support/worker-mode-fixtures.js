@@ -214,7 +214,7 @@ async function flushMicrotasks(_count = 6) {
  * @returns {Promise<{
  *   board: Board,
  *   viewport: import("../ui-thread/components/orchestration/viewport.js").Viewport | null,
- *   runtime: import("../../core-worker.js").CoreWorkerRuntime,
+ *   runtime: import("../engine/core-worker.js").CoreWorkerRuntime,
  *   uiEndpoint: LoopbackMessageEndpoint,
  *   workerHost: LoopbackMessageEndpoint,
  *   rootElement: Object,

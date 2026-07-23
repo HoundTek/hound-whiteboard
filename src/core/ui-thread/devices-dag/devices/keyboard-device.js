@@ -14,7 +14,7 @@ import { DEVICE_DEFAULT_ROUTE, STANDARD_KEYBOARD_CODES } from "./constant.js";
  * @description
  * 仅按活跃键位列表预创建 code 节点；所有 code 节点的 defaultRoute 统一为 "default"。
  * 不再接受 processor / nodeConfigs 等定制参数——设备只负责信号产出，路由由外部通过边级 prefix 完成。
- * @returns {import("../devices-dag/dag-type.js").SubDAGDefinition & {
+ * @returns {import("../dag-type.js").SubDAGDefinition & {
  *   resetState: () => void,
  *   getState: () => {
  *     activeKeys: Array<{

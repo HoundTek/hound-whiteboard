@@ -15,7 +15,7 @@ import { unifyActionResult } from "./gesture-signal-types.js";
  * 手势交互上下文
  * @typedef {Object} GestureInteraction
  * @property {SignalPacket} signalPacket - 输入信号包
- * @property {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+ * @property {import("../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
  * @property {Array<{type: string, context?: *}>} signals - 规整后的信号列表
  * @property {Vector|null} position - 当前世界坐标位置
  * @property {boolean} hasCancel - 是否包含 cancel 信号
@@ -66,7 +66,7 @@ class GestureTool extends Tool {
   /**
    * 从信号包中提取世界坐标位置
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {Vector|null} 规整后的世界坐标
    * @protected
    */
@@ -89,7 +89,7 @@ class GestureTool extends Tool {
   /**
    * 构建统一的手势交互上下文
    * @param {SignalPacket} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {GestureInteraction}
    */
   buildInteraction(signalPacket, context = {}) {
@@ -173,7 +173,7 @@ class GestureTool extends Tool {
 
   /**
    * 动作执行前的控制流钩子
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {boolean}
    * @protected
    */
@@ -183,7 +183,7 @@ class GestureTool extends Tool {
 
   /**
    * 执行动作
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {*} 动作结果
    * @abstract
    */
@@ -193,7 +193,7 @@ class GestureTool extends Tool {
 
   /**
    * 动作完成后的通知钩子
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @param {*} result - 动作结果
    * @returns {void}
    * @protected
@@ -204,7 +204,7 @@ class GestureTool extends Tool {
 
   /**
    * 丢弃当前动作持有的对象或状态
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
@@ -212,7 +212,7 @@ class GestureTool extends Tool {
 
   /**
    * 清理当前工具维护的 overlay 临时状态
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    * @protected
    */
@@ -223,7 +223,7 @@ class GestureTool extends Tool {
    * @description
    * 供 tool-switcher 或 end-action 信号调用。
    * 先完成当前手势（写最后的路径点等），再提交动作。
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {*}
    */
   endAction(context = {}) {
@@ -244,7 +244,7 @@ class GestureTool extends Tool {
 
   /**
    * 编排完整的动作提交流程
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {*} 动作结果
    */
   completeAction(context = {}) {
@@ -263,7 +263,7 @@ class GestureTool extends Tool {
 
   /**
    * 取消当前动作并丢弃状态
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   cancelAction(context = {}) {
@@ -392,7 +392,7 @@ class GestureTool extends Tool {
   /**
    * 处理一个完整信号包
    * @param {SignalPacket|Object} signalPacket - 输入信号包
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
    */
   process(signalPacket, context = {}) {
@@ -452,7 +452,7 @@ class MultiGestureTool extends GestureTool {
    * 结束当前动作（多手势语义）
    * @description
    * 多手势模式下，结束动作等同于提交整个对象（等同 object-end 语义）。
-   * @param {import("../devices-dag/dag-type.js").DevicesDAGHandlerContext} [context={}]
+   * @param {import("../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {*}
    */
   endAction(context = {}) {

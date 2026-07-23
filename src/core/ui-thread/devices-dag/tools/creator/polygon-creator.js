@@ -82,7 +82,7 @@ class PolygonCreatorTool extends MultiGestureObjectCreatorTool {
 
   /**
    * 当前正在创建多边形对象的本地状态
-   * @type {import("../../shared/types.js").LightweightObjectEntry & { data: { points: Array<{x:number, y:number}> } } | null}
+   * @type {import("../../../../engine/types/types.js").LightweightObjectEntry & { data: { points: Array<{x:number, y:number}> } } | null}
    */
   _entry;
 

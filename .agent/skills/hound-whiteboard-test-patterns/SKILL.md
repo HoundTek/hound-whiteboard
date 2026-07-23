@@ -129,10 +129,10 @@ emit("input", {
 
 Displacement 特性：
 
-- **无准入检测**：displacement 信号到达时跳过 `canBeginModifyGesture`
+- **无准入检测**：displacement 信号到达时跳过 `canBeginGesture`
 - **可与 position 叠加**：同帧内先执行 position 手势更新，再累加 displacement 增量
 - **锚点同步**：`DragGestureProcessor.displace` 在平移对象后同步平移各对象基准位置（锚点不动），使后续 position 不产生跳跃
-- **cancel 兼容**：如果手势未激活，`onBeforeDisplacement` 会在首次 displacement 时记录 `_initialPositions`，确保 cancel 能正确回退
+- **cancel 兼容**：如果手势未激活，`DragGestureProcessor.displace` 会在首次 displacement 时记录初始位置，确保 cancel 能正确回退
 
 ### 4. 断言要验证实际效果
 
