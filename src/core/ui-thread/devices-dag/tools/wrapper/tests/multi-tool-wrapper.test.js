@@ -466,5 +466,149 @@ describe("MultiToolWrapper", () => {
       const sessions = wrapper.getSessionDebugInfo();
       expect(sessions[0].sessionId).toBe(0);
     });
+
+    test("getDebugInfo 应返回活跃触点数与逐触点会话摘要", () => {
+      const instances = [];
+      const wrapper = new MultiToolWrapper(createTrackedTool(instances));
+
+      expect(wrapper.getDebugInfo()).toEqual({
+        activeTouchCount: 0,
+        sessions: [],
+      });
+
+      wrapper.process(
+        buildContactsPacket([
+          { touchId: "t1", position: { x: 1, y: 1 } },
+          { touchId: "t2", position: { x: 2, y: 2 } },
+        ]),
+        defaultCtx,
+      );
+
+      const info = wrapper.getDebugInfo();
+      expect(info.activeTouchCount).toBe(2);
+      expect(info.sessions).toHaveLength(2);
+      expect(info.sessions.map((s) => s.touchId)).toEqual(["t1", "t2"]);
+      expect(info.sessions[0].sessionId).toBe(0);
+      expect(info.sessions[1].sessionId).toBe(1);
+    });
+
+    test("触点增减应经 patchState 镜像 activeTouchCount 到节点 state", () => {
+      const instances = [];
+      const wrapper = new MultiToolWrapper(createTrackedTool(instances));
+      const patchState = jest.fn();
+      const ctx = { services: { board: {}, viewport: {} }, patchState };
+
+      wrapper.process(
+        buildContactsPacket([{ touchId: "t1", position: { x: 1, y: 1 } }]),
+        ctx,
+      );
+      expect(patchState).toHaveBeenLastCalledWith({ activeTouchCount: 1 });
+
+      wrapper.process(
+        buildContactsPacket(
+          [{ touchId: "t2", position: { x: 5, y: 5 } }],
+          [{ touchId: "t1", position: { x: 2, y: 2 } }],
+        ),
+        ctx,
+      );
+      expect(patchState).toHaveBeenLastCalledWith({ activeTouchCount: 2 });
+
+      // t1 抬起，剩 t2
+      wrapper.process(
+        buildContactsPacket(
+          [{ touchId: "t1" }],
+          [{ touchId: "t2", position: { x: 5, y: 5 } }],
+        ),
+        ctx,
+      );
+      expect(patchState).toHaveBeenLastCalledWith({ activeTouchCount: 1 });
+
+      // t2 抬起，最后一个触点走 completeAction 路径镜像到 0
+      wrapper.process(buildContactsPacket([{ touchId: "t2" }]), ctx);
+      expect(patchState).toHaveBeenLastCalledWith({ activeTouchCount: 0 });
+    });
+  });
+
+  describe("动作生命周期", () => {
+    test("end-action 信号应强制结束全部触点会话", () => {
+      const instances = [];
+      const wrapper = new MultiToolWrapper(createTrackedTool(instances));
+
+      wrapper.process(
+        buildContactsPacket([
+          { touchId: "0", position: { x: 10, y: 20 } },
+          { touchId: "1", position: { x: 100, y: 200 } },
+        ]),
+        defaultCtx,
+      );
+      expect(wrapper.isActionActive).toBe(true);
+
+      wrapper.process(
+        { signals: [{ type: "end-action", context: {} }] },
+        defaultCtx,
+      );
+
+      // 两个子图都收到 end 信号，会话全部清空，动作结束
+      const [tool0, tool1] = instances;
+      expect(tool0.calls.at(-1).signals).toEqual([{ type: "end", value: null }]);
+      expect(tool1.calls.at(-1).signals).toEqual([{ type: "end", value: null }]);
+      expect(wrapper.getActiveTouchCount()).toBe(0);
+      expect(wrapper.isActionActive).toBe(false);
+    });
+
+    test("触点抬起应递归 dispose 子图全部节点的 handler", () => {
+      const disposes = [];
+
+      const factory = (_touchId) => {
+        const builder = createSubDAG("/touch");
+
+        const makeHandler = (name) => {
+          const handler = (pkt, _ctx) =>
+            name === "entry" ? { to: "next", signals: pkt.signals } : undefined;
+          handler.dispose = jest.fn(() => disposes.push(name));
+          return handler;
+        };
+
+        const entry = builder.node().handler(makeHandler("entry"));
+        const next = builder.node().handler(makeHandler("next"));
+        builder.edge("next", entry, next);
+
+        return DevicesDAGNode.createGraph(builder.build());
+      };
+
+      const wrapper = new MultiToolWrapper(factory);
+
+      wrapper.process(
+        buildContactsPacket([{ touchId: "0", position: { x: 10, y: 20 } }]),
+        defaultCtx,
+      );
+      expect(disposes).toEqual([]);
+
+      wrapper.process(buildContactsPacket([{ touchId: "0" }]), defaultCtx);
+
+      // entry 与 next 的 dispose 都被调用，槽位已销毁
+      expect(disposes).toEqual(["entry", "next"]);
+      expect(wrapper.getActiveTouchCount()).toBe(0);
+      expect(wrapper.getDebugInfo().sessions).toEqual([]);
+    });
+
+    test("cancelAction 应向全部子图发送 cancel 信号并清理", () => {
+      const instances = [];
+      const wrapper = new MultiToolWrapper(createTrackedTool(instances));
+
+      wrapper.process(
+        buildContactsPacket([{ touchId: "0", position: { x: 10, y: 20 } }]),
+        defaultCtx,
+      );
+      expect(wrapper.isActionActive).toBe(true);
+
+      wrapper.cancelAction(defaultCtx);
+
+      expect(instances[0].calls.at(-1).signals).toEqual([
+        { type: "cancel", value: null },
+      ]);
+      expect(wrapper.getActiveTouchCount()).toBe(0);
+      expect(wrapper.isActionActive).toBe(false);
+    });
   });
 });

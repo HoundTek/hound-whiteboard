@@ -7,13 +7,13 @@
 
 import { SignalPacket } from "../../dag-core/signal.js";
 import { SIGNAL_TYPES } from "../../dag-core/signal-types.js";
-import { Tool } from "../tool.js";
 import { DevicesDAGNode } from "../../dag-core/dag-node-edge.js";
+import { WrapperTool } from "./wrapper-tool.js";
 
 /**
  * 多工具并发包装工具
  * @class
- * @extends Tool
+ * @extends WrapperTool
  * @description
  * 接收 touchscreen device 输出的 `touch-contacts` 信号，为每个 touchId
  * 创建一个独立的子图入口节点并通过 {@link DevicesDAGNode#dispatch} 沿边路由信号。
@@ -25,10 +25,11 @@ import { DevicesDAGNode } from "../../dag-core/dag-node-edge.js";
  *
  * 目的是在设备图保持静态（不动态挂载/卸载节点）的前提下实现多指并发。
  *
- * `MultiToolWrapper` 属于**包装器工具（wrapper tool）**子类型——它继承 `Tool` 的全部
- * 生命周期钩子，但本身不直接消费信号修改白板，而是将信号委托给内部子工具实例。
- * 对外部编排（如 tool-switcher）而言，它呈现为普通的 `Tool` 接口（`beginAction`、
- * `completeAction`、`endAction`），内部则管理一组动态子图。
+ * `MultiToolWrapper` 建在 {@link WrapperTool} 基座之上：每个触点的子图入口
+ * 节点登记为基座的动态 node 槽位（`_addNodeSlot`），信号经 `_dispatchToSlot`
+ * 转发，触点抬起时经 `_disposeSlot` 触发 `_teardownSlot` 递归清理子图。
+ * 活跃触点数通过 `context.patchState` 以 `activeTouchCount` 键镜像到
+ * wrapper 自己的节点 state，供外部观察。
  *
  * @example
  * // 单工具 per touch：工厂函数包装 Tool 成节点
@@ -49,7 +50,7 @@ import { DevicesDAGNode } from "../../dag-core/dag-node-edge.js";
  *   return entry;
  * });
  */
-class MultiToolWrapper extends Tool {
+class MultiToolWrapper extends WrapperTool {
   /**
    * 触点到入口节点的工厂函数
    * @type {(touchId: string) => DevicesDAGNode}
@@ -57,8 +58,8 @@ class MultiToolWrapper extends Tool {
   #entryFactory;
 
   /**
-   * touchId 到会话信息的映射
-   * @type {Map<string, { sessionId: number, entry: DevicesDAGNode, createdAt: number }>}
+   * touchId 到会话元信息的映射（入口节点由基座槽位持有）
+   * @type {Map<string, { sessionId: number, createdAt: number }>}
    */
   #instances = new Map();
 
@@ -96,6 +97,18 @@ class MultiToolWrapper extends Tool {
       sessionId: session.sessionId,
       createdAt: session.createdAt,
     }));
+  }
+
+  /**
+   * 获取调试信息
+   * @description 基座可观察性约定：返回活跃触点数与逐触点会话摘要。
+   * @returns {{ activeTouchCount: number, sessions: Array<{ touchId: string, sessionId: number, createdAt: number }> }}
+   */
+  getDebugInfo() {
+    return {
+      activeTouchCount: this.getActiveTouchCount(),
+      sessions: this.getSessionDebugInfo(),
+    };
   }
 
   /**
@@ -143,22 +156,17 @@ class MultiToolWrapper extends Tool {
   }
 
   /**
-   * 构造子图 dispatch 所需的上下文选项
-   * @param {import("../../dag-type.js").DevicesDAGHandlerContext|Object} [context={}] - 外层设备上下文
-   * @returns {Object}
+   * 将活跃触点数镜像到 wrapper 自己的节点 state
+   * @description 基座可观察性约定：替代 per-touch 子图的结构可观察性。
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
    */
-  #buildDispatchContext(context = {}) {
-    const dispatchContext = {};
-
-    if (context.services) {
-      dispatchContext.services = context.services;
-    }
-
-    return dispatchContext;
+  #mirrorTouchCount(context = {}) {
+    context?.patchState?.({ activeTouchCount: this.#instances.size });
   }
 
   /**
-   * 新建触点——创建入口节点并走边路由信号
+   * 新建触点——登记入口节点槽位并走边路由首个 position 信号
    * @param {string} touchId - 触点 id
    * @param {{touchId: string, position: any}} contact - 触点信息
    * @param {Object} deviceContext - 设备上下文
@@ -169,9 +177,9 @@ class MultiToolWrapper extends Tool {
 
     const entry = this.#entryFactory(touchId);
     const sessionId = this.#nextSessionId++;
+    this._addNodeSlot(touchId, entry);
     this.#instances.set(touchId, {
       sessionId,
-      entry,
       createdAt: Date.now(),
     });
 
@@ -182,7 +190,8 @@ class MultiToolWrapper extends Tool {
     const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
     ]);
-    entry.dispatch(packet, this.#buildDispatchContext(deviceContext));
+    this._dispatchToSlot(touchId, packet, deviceContext);
+    this.#mirrorTouchCount(deviceContext);
   }
 
   /**
@@ -193,14 +202,12 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   #updateTouch(touchId, contact, deviceContext) {
-    const session = this.#instances.get(touchId);
-    if (!session) return;
-    const entry = session.entry;
+    if (!this.#instances.has(touchId)) return;
 
     const packet = new SignalPacket("", [
       { type: "position", context: { value: contact.position } },
     ]);
-    entry.dispatch(packet, this.#buildDispatchContext(deviceContext));
+    this._dispatchToSlot(touchId, packet, deviceContext);
   }
 
   /**
@@ -210,29 +217,44 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   #endTouch(touchId, deviceContext) {
-    const session = this.#instances.get(touchId);
-    if (!session) return;
-    const entry = session.entry;
+    if (!this.#instances.has(touchId)) return;
 
     const packet = new SignalPacket("", [{ type: "end", context: {} }]);
-    entry.dispatch(packet, this.#buildDispatchContext(deviceContext));
+    this._dispatchToSlot(touchId, packet, deviceContext);
 
-    // 清理入口节点 handler 的外部资源（如 overlay）
-    this.#disposeNode(entry, deviceContext);
+    // 清理子图节点 handler 的外部资源（如 overlay）
+    this._disposeSlot(touchId, deviceContext);
     this.#instances.delete(touchId);
 
     if (this.#instances.size === 0 && this.isActionActive) {
       this.completeAction(deviceContext);
+    } else {
+      this.#mirrorTouchCount(deviceContext);
     }
   }
 
   /**
-   * 递归清理节点 handler 的 dispose 钩子
+   * 清理单个触点槽位的子图资源
+   * @description
+   * 覆写基座钩子：从入口节点出发沿 outEdges 递归调用各节点 handler 的
+   * `dispose` 钩子，dispose 错误逐节点吞掉，不中断其余节点清理。
+   * @param {{ node: DevicesDAGNode, tool: null, processor: Function|null }} slot - 触点槽位
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   * @protected
+   */
+  _teardownSlot(slot, context = {}) {
+    this.#disposeSubgraphNode(slot.node, context, new Set());
+  }
+
+  /**
+   * 递归清理子图节点 handler 的 dispose 钩子
    * @param {DevicesDAGNode} node - 当前节点
    * @param {Object} deviceContext - 设备上下文
-   * @param {Set<number>} [visited=new Set()] - 已访问节点 id
+   * @param {Set<number>} visited - 已访问节点 id
+   * @returns {void}
    */
-  #disposeNode(node, deviceContext, visited = new Set()) {
+  #disposeSubgraphNode(node, deviceContext, visited) {
     if (!node || visited.has(node.id)) return;
     visited.add(node.id);
 
@@ -246,7 +268,7 @@ class MultiToolWrapper extends Tool {
     }
 
     for (const edge of node.outEdges.values()) {
-      this.#disposeNode(edge.target, deviceContext, visited);
+      this.#disposeSubgraphNode(edge.target, deviceContext, visited);
     }
   }
 
@@ -263,19 +285,19 @@ class MultiToolWrapper extends Tool {
   /**
    * 动作完成（提交所有子工具结果）
    * @description 最后一个触点抬起时自动触发；外部 tool-switcher 也可通过此方法强制结束。
-   * 向所有活跃子图发送 end 信号，然后递归清理。
+   * 向所有活跃子图发送 end 信号，然后递归清理并销毁全部槽位。
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}]
    * @returns {void}
    */
   completeAction(context = {}) {
-    for (const [, session] of this.#instances) {
-      const entry = session.entry;
+    for (const touchId of this._listSlotIds()) {
       const packet = new SignalPacket("", [{ type: "end", context: {} }]);
-      entry.dispatch(packet, this.#buildDispatchContext(context));
-      this.#disposeNode(entry, context);
+      this._dispatchToSlot(touchId, packet, context);
     }
+    this._disposeAllSlots(context);
     this.#instances.clear();
     this.isActionActive = false;
+    this.#mirrorTouchCount(context);
   }
 
   /**
@@ -285,14 +307,14 @@ class MultiToolWrapper extends Tool {
    * @returns {void}
    */
   cancelAction(context = {}) {
-    for (const [, session] of this.#instances) {
-      const entry = session.entry;
+    for (const touchId of this._listSlotIds()) {
       const packet = new SignalPacket("", [{ type: "cancel", context: {} }]);
-      entry.dispatch(packet, this.#buildDispatchContext(context));
-      this.#disposeNode(entry, context);
+      this._dispatchToSlot(touchId, packet, context);
     }
+    this._disposeAllSlots(context);
     this.#instances.clear();
     this.isActionActive = false;
+    this.#mirrorTouchCount(context);
   }
 
   /**
@@ -309,12 +331,15 @@ class MultiToolWrapper extends Tool {
 
   /**
    * 重置所有子图实例
+   * @description 销毁全部触点槽位（不发送 end/cancel 信号）并重置会话计数。
    * @returns {void}
    */
   reset() {
+    this._disposeAllSlots();
     this.#instances.clear();
     this.#nextSessionId = 0;
     this.isActionActive = false;
+    this.#mirrorTouchCount();
   }
 }
 

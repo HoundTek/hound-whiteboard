@@ -7,6 +7,7 @@
 import { jest } from "@jest/globals";
 import { WrapperTool } from "../wrapper-tool.js";
 import { Tool } from "../../tool.js";
+import { DevicesDAGNode } from "../../../dag-core/dag-node-edge.js";
 
 /**
  * 写入同名 state 键的测试工具
@@ -29,7 +30,7 @@ class StateWritingTool extends Tool {
     this.setContextObjects(context, [{ id: this.id }]);
   }
 
-  reset() {}
+  reset() { }
 }
 
 /**
@@ -44,7 +45,7 @@ class TestWrapper extends WrapperTool {
     }
   }
 
-  reset() {}
+  reset() { }
 
   getDebugInfo() {
     return { slots: this._listSlotIds() };
@@ -114,5 +115,78 @@ describe("WrapperTool", () => {
     expect(wrapper._getSlot("a")).toBeUndefined();
     expect(wrapper._getSlot("b")).toBeUndefined();
     expect(wrapper._listSlotIds()).toEqual([]);
+  });
+
+  test("_addNodeSlot 登记预构建节点，dispatch 到达 node.handler", () => {
+    const wrapper = new TestWrapper();
+
+    const handler = jest.fn();
+    const entry = new DevicesDAGNode(0);
+    entry.handler = handler;
+
+    const slot = wrapper._addNodeSlot("touch-0", entry);
+
+    // 槽位形状：node 持有入口节点，无 tool 实例，processor 即 node.handler
+    expect(slot.node).toBe(entry);
+    expect(slot.tool).toBeNull();
+    expect(slot.processor).toBe(handler);
+
+    wrapper._dispatchToSlot(
+      "touch-0",
+      { signals: [{ type: "position", context: { value: { x: 3, y: 4 } } }] },
+      { services: { board: {} }, path: "/wf/multi" },
+    );
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    const [packet, context] = handler.mock.calls[0];
+    expect(packet.signals).toEqual([
+      { type: "position", context: { value: { x: 3, y: 4 } } },
+    ]);
+    expect(context.services.board).toEqual({});
+    expect(context.path).toBe("/wf/multi/touch-0");
+  });
+
+  test("_teardownSlot 覆写后 _disposeSlot 走子类清理逻辑", () => {
+    /**
+     * 覆写 _teardownSlot 的测试 wrapper
+     * @class
+     * @extends TestWrapper
+     */
+    class TeardownWrapper extends TestWrapper {
+      constructor() {
+        super();
+        this.tornDown = [];
+      }
+
+      _teardownSlot(slot, context) {
+        this.tornDown.push({ nodeId: slot.node.id, context });
+      }
+    }
+
+    const wrapper = new TeardownWrapper();
+    const entry = new DevicesDAGNode(7);
+    entry.handler = jest.fn();
+    wrapper._addNodeSlot("touch-0", entry);
+
+    const ctx = { services: { board: {} } };
+    wrapper._disposeSlot("touch-0", ctx);
+
+    // 子类钩子被调用，且槽位已移除
+    expect(wrapper.tornDown).toEqual([{ nodeId: 7, context: ctx }]);
+    expect(wrapper._getSlot("touch-0")).toBeUndefined();
+  });
+
+  test("默认 _teardownSlot 吞掉 dispose 错误，不中断槽位删除", () => {
+    const wrapper = new TestWrapper();
+    const entry = new DevicesDAGNode(0);
+    entry.handler = jest.fn();
+    entry.handler.dispose = jest.fn(() => {
+      throw new Error("dispose failed");
+    });
+    wrapper._addNodeSlot("touch-0", entry);
+
+    expect(() => wrapper._disposeSlot("touch-0", {})).not.toThrow();
+    expect(entry.handler.dispose).toHaveBeenCalledTimes(1);
+    expect(wrapper._getSlot("touch-0")).toBeUndefined();
   });
 });

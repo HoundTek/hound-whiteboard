@@ -20,6 +20,12 @@ import { Tool } from "../tool.js";
  * 不进入真实 DAG 的 shell 节点承载，wrapper 通过 {@link DevicesDAGNode#dispatch}
  * 将信号转发到目标槽位。
  *
+ * 槽位分两类：
+ * - **静态 tool 槽位**（`_addSlot`）：由 Tool 实例创建 shell 节点，
+ *   槽位生命周期与 wrapper 一致（handoff / switcher）
+ * - **动态 node 槽位**（`_addNodeSlot`）：登记外部工厂已构建好的多节点
+ *   子图入口节点，槽位随外部条件动态创建销毁（multi-tool 的 per-touch 子图）
+ *
  * 状态隔离机制：shell 节点不属于任何 DAG（`dag=null`），dispatch 时
  * handlerContext 的 state 读写降级为 shell 节点自身的 `state`，因此各槽位
  * 子工具的节点状态天然隔离。禁止用虚拟路径调真实 `dag.setNodeState` 模拟子节点。
@@ -31,7 +37,7 @@ import { Tool } from "../tool.js";
 class WrapperTool extends Tool {
   /**
    * 子工具槽位表
-   * @type {Map<string, { node: DevicesDAGNode, tool: Tool, processor: Function }>}
+   * @type {Map<string, { node: DevicesDAGNode, tool: Tool|null, processor: Function|null }>}
    */
   #slots = new Map();
 
@@ -69,9 +75,28 @@ class WrapperTool extends Tool {
   }
 
   /**
+   * 登记一个预构建的子图入口节点槽位
+   * @description
+   * 与 `_addSlot` 并存：`_addSlot` 服务「Tool 实例 → shell 节点」的静态槽位，
+   * 本方法服务「外部工厂已构建好多节点子图」的动态槽位——入口节点由调用方
+   * 构建并持有完整子图拓扑（outEdges），wrapper 只负责登记与信号转发。
+   * 槽位形状为 `{ node, tool: null, processor: node.handler ?? null }`，
+   * 无 Tool 实例可持有；子图的递归清理由子类覆写 `_teardownSlot` 完成。
+   * @param {string} scopeId - 槽位标识
+   * @param {DevicesDAGNode} node - 预构建的子图入口节点
+   * @returns {{ node: DevicesDAGNode, tool: null, processor: Function|null }} 新建的槽位
+   * @protected
+   */
+  _addNodeSlot(scopeId, node) {
+    const slot = { node, tool: null, processor: node.handler ?? null };
+    this.#slots.set(scopeId, slot);
+    return slot;
+  }
+
+  /**
    * 获取指定槽位
    * @param {string} scopeId - 槽位标识
-   * @returns {{ node: DevicesDAGNode, tool: Tool, processor: Function }|undefined} 槽位或 undefined
+   * @returns {{ node: DevicesDAGNode, tool: Tool|null, processor: Function|null }|undefined} 槽位或 undefined
    * @protected
    */
   _getSlot(scopeId) {
@@ -154,7 +179,28 @@ class WrapperTool extends Tool {
   }
 
   /**
+   * 清理单个槽位占用的资源
+   * @description
+   * 默认实现调用 `slot.processor?.dispose?.(context)` 并吞掉 dispose 错误，
+   * 避免单个槽位的清理失败中断其余槽位。
+   * 子类可覆写本钩子扩展清理逻辑（如沿子图 outEdges 递归 dispose），
+   * 覆写时应自行保证容错，不要抛出异常。
+   * @param {{ node: DevicesDAGNode, tool: Tool|null, processor: Function|null }} slot - 待清理的槽位
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @returns {void}
+   * @protected
+   */
+  _teardownSlot(slot, context = {}) {
+    try {
+      slot.processor?.dispose?.(context);
+    } catch {
+      // dispose 错误不中断其余槽位清理
+    }
+  }
+
+  /**
    * 销毁指定槽位
+   * @description 先经 `_teardownSlot` 钩子清理槽位资源，再从槽位表删除。
    * @param {string} scopeId - 槽位标识
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
    * @returns {void}
@@ -166,11 +212,7 @@ class WrapperTool extends Tool {
       return;
     }
 
-    try {
-      slot.processor.dispose?.(context);
-    } catch {
-      // dispose 错误不中断其余槽位清理
-    }
+    this._teardownSlot(slot, context);
     this.#slots.delete(scopeId);
   }
 
