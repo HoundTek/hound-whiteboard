@@ -1,6 +1,7 @@
 import { jest } from "@jest/globals";
 import { ObjectModifierTool } from "../object-modifier.js";
 import { RectangleRange } from "../../../../../engine/range/index.js";
+import { Vector } from "../../../../../engine/utils/math.js";
 
 describe("ObjectModifierTool", () => {
   test("withGeometryMutation 应按快照再失效的顺序包装一次几何修改", () => {
@@ -164,7 +165,7 @@ describe("ObjectModifierTool", () => {
   describe("生命周期钩子", () => {
     test("applyModifiedObjects 成功后触发 action:complete 通知", () => {
       class TestModifier extends ObjectModifierTool {
-        modify() {}
+        modify() { }
       }
 
       const tool = new TestModifier();
@@ -192,7 +193,7 @@ describe("ObjectModifierTool", () => {
 
     test("beforeApplyModifiedObjects 返回 false 时阻止 apply", () => {
       class TestModifier extends ObjectModifierTool {
-        modify() {}
+        modify() { }
       }
 
       const tool = new TestModifier();
@@ -219,7 +220,7 @@ describe("ObjectModifierTool", () => {
 
     test("autoUmountOnApply 置为 false 时阻止自卸载", () => {
       class TestModifier extends ObjectModifierTool {
-        modify() {}
+        modify() { }
       }
 
       const tool = new TestModifier();
@@ -248,7 +249,7 @@ describe("ObjectModifierTool", () => {
 
     test("autoUmountOnApply 默认行为 → 提交后自卸载", () => {
       class TestModifier extends ObjectModifierTool {
-        modify() {}
+        modify() { }
       }
 
       const tool = new TestModifier();
@@ -274,7 +275,7 @@ describe("ObjectModifierTool", () => {
 
     test("显式提供 boardApi 时 applyModifiedObjects 和 umount 应走 BoardApi 生命周期", () => {
       class TestModifier extends ObjectModifierTool {
-        modify() {}
+        modify() { }
       }
 
       const tool = new TestModifier();
@@ -305,6 +306,94 @@ describe("ObjectModifierTool", () => {
       tool.setContextObjects(context, [object]);
       tool.umount(context);
       expect(discardActiveObjects).toHaveBeenCalledWith([object.id]);
+    });
+  });
+
+  describe("applyGesturePatch", () => {
+    test("应规整 position、一次性提交补丁并同步更新本地条目", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() { }
+      }
+
+      const tool = new TestModifier();
+      const object = {
+        id: 42,
+        position: { x: 1, y: 2 },
+        data: { radius: 5 },
+        transform: { a: 1, b: 0, c: 0, d: 1 },
+      };
+      const boardApi = { modifyObject: jest.fn() };
+      const patch = {
+        position: { x: 10, y: 20 },
+        data: { radius: 8 },
+        transform: { a: 2, b: 0, c: 0, d: 0.5 },
+      };
+
+      tool.applyGesturePatch(object, patch, {
+        context: { services: { boardApi } },
+      });
+
+      expect(boardApi.modifyObject).toHaveBeenCalledTimes(1);
+      expect(boardApi.modifyObject).toHaveBeenCalledWith(42, patch);
+      expect(object.position).toEqual(new Vector(10, 20));
+      expect(object.data).toEqual({ radius: 8 });
+      expect(object.transform).toEqual({ a: 2, b: 0, c: 0, d: 0.5 });
+    });
+
+    test("data 补丁应与本地已有数据合并而非整体替换", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() { }
+      }
+
+      const tool = new TestModifier();
+      const object = { id: 43, position: { x: 0, y: 0 }, data: { a: 1, b: 2 } };
+
+      tool.applyGesturePatch(object, { data: { b: 3 } }, { context: {} });
+
+      expect(object.data).toEqual({ a: 1, b: 3 });
+    });
+
+    test("objectId 无效或缺少 boardApi 时仅更新本地条目，不发起 RPC", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() { }
+      }
+
+      const tool = new TestModifier();
+      const noIdObject = { position: { x: 0, y: 0 } };
+      const boardApi = { modifyObject: jest.fn() };
+
+      tool.applyGesturePatch(noIdObject, { position: { x: 5, y: 6 } }, {
+        context: { services: { boardApi } },
+      });
+      expect(boardApi.modifyObject).not.toHaveBeenCalled();
+      expect(noIdObject.position).toEqual(new Vector(5, 6));
+
+      const plainObject = { id: 44, position: { x: 0, y: 0 } };
+      tool.applyGesturePatch(plainObject, { position: { x: 7, y: 8 } }, {
+        context: {},
+      });
+      expect(plainObject.position).toEqual(new Vector(7, 8));
+    });
+
+    test("setModifiedObjectPosition 应委托 applyGesturePatch 写入位置", () => {
+      class TestModifier extends ObjectModifierTool {
+        modify() { }
+      }
+
+      const tool = new TestModifier();
+      const object = { id: 45, position: { x: 1, y: 1 } };
+      const boardApi = { modifyObject: jest.fn() };
+
+      tool.setModifiedObjectPosition(
+        { services: { boardApi } },
+        object,
+        { x: 13, y: 24 },
+      );
+
+      expect(object.position).toEqual(new Vector(13, 24));
+      expect(boardApi.modifyObject).toHaveBeenCalledWith(45, {
+        position: { x: 13, y: 24 },
+      });
     });
   });
 });

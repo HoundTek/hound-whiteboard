@@ -15,6 +15,7 @@ import { EllipseDataCreatorTool } from "../../../core/ui-thread/devices-dag/tool
 import { createEllipseBoundingProcessor } from "../../../core/ui-thread/devices-dag/tools/creator/ellipse/bounding-processor.js";
 import { RectangleObjectChooserTool } from "../../../core/ui-thread/devices-dag/tools/chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
+import { DragGestureProcessor } from "../../../core/ui-thread/devices-dag/tools/modifier/gesture/drag-processor.js";
 import {
   DEMO_BUTTON_GROUP_STATE_KEY,
   DEMO_CIRCLE_STROKE_COLOR,
@@ -88,7 +89,7 @@ function mountToolSwitcher(viewport, options) {
   });
   const selectHandoffTool = new HandoffWrapperTool({
     first: new RectangleObjectChooserTool(),
-    second: new CommonObjectModifierTool(),
+    second: new CommonObjectModifierTool({ processor: new DragGestureProcessor() }),
   });
   const switcherWrapper = new ToolSwitcherWrapper({
     tools: [

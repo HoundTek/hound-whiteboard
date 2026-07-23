@@ -67,7 +67,7 @@ scope.mountWorkflow(
   "secondary-chooser",
   new HandoffWrapperTool({
     first: new RectangleObjectChooserTool(),
-    second: new CommonObjectModifierTool(),
+    second: new CommonObjectModifierTool({ processor: new DragGestureProcessor() }),
   }),
 );
 ```

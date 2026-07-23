@@ -37,15 +37,15 @@ prefix 节点现在依赖三条稳定边界：
 
 ## 模块清单
 
-| 文件                         | 导出                                 | 用途                         |
-| ---------------------------- | ------------------------------------ | ---------------------------- |
-| `index.js`                   | 统一导出入口                         | 集中导出全部公开 API         |
-| `utils.js`                   | `isPlainObject`, `shallowCloneSignals` | 内部工具方法               |
-| `handler.js`                 | `createPrefixNodeHandler`            | 基础修饰节点处理器           |
-| `repeater-handler.js`        | `createRepeaterPrefixHandler`        | 信号复制分发                 |
-| `signal-log-handler.js`      | `createSignalLogPrefixHandler`       | 信号观测与日志               |
-| `edge-prefix.js`             | `createEdgePrefix`                   | 边级 prefix 子图包装         |
-| `canvas-to-world-handler.js` | `createCanvasToWorldPrefixHandler`   | canvas 相对坐标→世界坐标转换 |
+| 文件                         | 导出                                   | 用途                         |
+| ---------------------------- | -------------------------------------- | ---------------------------- |
+| `index.js`                   | 统一导出入口                           | 集中导出全部公开 API         |
+| `utils.js`                   | `isPlainObject`, `shallowCloneSignals` | 内部工具方法                 |
+| `handler.js`                 | `createPrefixNodeHandler`              | 基础修饰节点处理器           |
+| `repeater-handler.js`        | `createRepeaterPrefixHandler`          | 信号复制分发                 |
+| `signal-log-handler.js`      | `createSignalLogPrefixHandler`         | 信号观测与日志               |
+| `edge-prefix.js`             | `createEdgePrefix`                     | 边级 prefix 子图包装         |
+| `canvas-to-world-handler.js` | `createCanvasToWorldPrefixHandler`     | canvas 相对坐标→世界坐标转换 |
 
 ## 关系图
 
@@ -98,7 +98,11 @@ const handler = createRepeaterPrefixHandler({
 
 ```js
 const builder = createSubDAG("/mouse/primary/tool");
-const toolNode = builder.node().tool(new CommonObjectModifierTool());
+const toolNode = builder
+  .node()
+  .tool(
+    new CommonObjectModifierTool({ processor: new DragGestureProcessor() }),
+  );
 
 builder.edge("tool", null, toolNode);
 

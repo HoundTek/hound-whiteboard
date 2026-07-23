@@ -10,6 +10,7 @@ import { HandoffWrapperTool } from "../handoff-wrapper.js";
 import { StrokeCreatorTool } from "../../creator/stroke-creator.js";
 import { RectangleObjectChooserTool } from "../../chooser/rectangle-object-chooser.js";
 import { CommonObjectModifierTool } from "../../modifier/common-object-modifier.js";
+import { DragGestureProcessor } from "../../modifier/gesture/drag-processor.js";
 import { Vector } from "../../../../../engine/utils/math.js";
 import { RectangleRange } from "../../../../../engine/range/rectangle.js";
 import {
@@ -89,7 +90,7 @@ describe("HandoffWrapperTool", () => {
 
     test("构造时应将 first 的 autoCommit 与 second 的 autoUmountOnApply 置为 false", () => {
       const stroke = new StrokeCreatorTool();
-      const modifier = new CommonObjectModifierTool();
+      const modifier = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       expect(stroke.autoCommit).toBe(true);
       expect(modifier.autoUmountOnApply).toBe(true);
@@ -103,7 +104,7 @@ describe("HandoffWrapperTool", () => {
 
   test("first 完成 → 相位切到 second，对象桥接到 second 且不提前 commit", () => {
     const stroke = new StrokeCreatorTool();
-    const modifier = new CommonObjectModifierTool();
+    const modifier = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     const wrapper = new HandoffWrapperTool({ first: stroke, second: modifier });
     const { services, boardApi } = createCreatorServices(100);
     const { dag } = mountHandoff(wrapper, services);
@@ -178,7 +179,7 @@ describe("HandoffWrapperTool", () => {
     const object = { id: 7, position: new Vector(5, 5) };
     const first = createMockCreator();
     first._entry = object;
-    const second = new CommonObjectModifierTool();
+    const second = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     const wrapper = new HandoffWrapperTool({ first, second });
 
     const { services, board, boardApi } = createCreatorServices(7);
@@ -213,7 +214,7 @@ describe("HandoffWrapperTool", () => {
     const object = { id: 8, position: new Vector(5, 5) };
     const first = createMockCreator();
     first._entry = object;
-    const second = new CommonObjectModifierTool();
+    const second = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     const wrapper = new HandoffWrapperTool({ first, second });
 
     const { services, board, boardApi, viewport } = createCreatorServices(8);
@@ -297,7 +298,7 @@ describe("HandoffWrapperTool", () => {
 
   test("endAction 传播到当前相位工具并完成其动作", () => {
     const stroke = new StrokeCreatorTool();
-    const modifier = new CommonObjectModifierTool();
+    const modifier = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     const wrapper = new HandoffWrapperTool({ first: stroke, second: modifier });
     const { services } = createCreatorServices(300);
     const { dag } = mountHandoff(wrapper, services);

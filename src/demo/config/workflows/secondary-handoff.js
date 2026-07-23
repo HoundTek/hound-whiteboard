@@ -8,6 +8,7 @@
 import { createEdgePrefix } from "../../../core/ui-thread/devices-dag/prefixes/index.js";
 import { HandoffWrapperTool } from "../../../core/ui-thread/devices-dag/tools/wrapper/handoff-wrapper.js";
 import { CommonObjectModifierTool } from "../../../core/ui-thread/devices-dag/tools/modifier/common-object-modifier.js";
+import { DragGestureProcessor } from "../../../core/ui-thread/devices-dag/tools/modifier/gesture/drag-processor.js";
 import { SIGNAL_TYPES } from "../../../core/ui-thread/devices-dag/dag-core/signal-types.js";
 import { buildWasdNodeConfig } from "../prefix-builders.js";
 import {
@@ -50,7 +51,7 @@ function mountSecondaryHandoff(viewport, secondarySelectionTool) {
 
   const secondaryHandoffTool = new HandoffWrapperTool({
     first: secondarySelectionTool,
-    second: new CommonObjectModifierTool(),
+    second: new CommonObjectModifierTool({ processor: new DragGestureProcessor() }),
   });
 
   scope.mountWorkflow(wfName, secondaryHandoffTool);

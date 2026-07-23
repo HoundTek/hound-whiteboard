@@ -57,7 +57,9 @@ shell 节点不在真实 DAG 中，子图结构可观察性由镜像机制替代
 ```js
 const handoff = new HandoffWrapperTool({
   first: new RectangleObjectChooserTool(),
-  second: new CommonObjectModifierTool(),
+  second: new CommonObjectModifierTool({
+    processor: new DragGestureProcessor(),
+  }),
 });
 scope.mountWorkflow("secondary-chooser", handoff);
 ```
@@ -92,7 +94,11 @@ wrapper 构造时自动适配子工具的提交语义（显式实例属性）：
 const switcher = new ToolSwitcherWrapper({
   tools: [
     { name: "stroke", tool: strokeTool },
-    { name: "circle", createTool: () => new CircleDataCreatorTool({ processor: createCircleRadiusProcessor() }) },
+    {
+      name: "circle",
+      createTool: () =>
+        new CircleDataCreatorTool({ processor: createCircleRadiusProcessor() }),
+    },
     { name: "select", tool: selectHandoff },
   ],
   defaultTool: "stroke",

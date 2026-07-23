@@ -2,7 +2,8 @@ import { jest } from "@jest/globals";
 import { Vector } from "../../../../../engine/utils/math.js";
 import { RectangleRange } from "../../../../../engine/range/rectangle.js";
 import { CommonObjectModifierTool } from "../common-object-modifier.js";
-import { OBJECT_MODIFIER_SIGNAL_TYPES } from "../object-modifier.js";
+import { DragGestureProcessor } from "../gesture/drag-processor.js";
+import { SIGNAL_TYPES } from "../../../dag-core/signal-types.js";
 
 /**
  * 构造包含 AOM 的测试上下文
@@ -37,6 +38,12 @@ function aomCtx(objects, extra = {}) {
 }
 
 describe("CommonObjectModifierTool", () => {
+  test("缺少 processor 时构造应抛错", () => {
+    expect(() => new CommonObjectModifierTool()).toThrow(
+      "GestureBasedObjectModifierTool requires an explicit `processor` option.",
+    );
+  });
+
   test("首个 position 应启动手势，对象不动，第二个 position 才应用位移", () => {
     const object = {
       id: 1,
@@ -50,7 +57,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // 首个 position (15, 23)：锚点 = 光标位置，dx=0 → 对象不动
     tool.process(
@@ -87,7 +94,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // 首个 position (15, 23) → 启动，对象不动
     tool.process(
@@ -123,7 +130,7 @@ describe("CommonObjectModifierTool", () => {
       position: new Vector(10, 20),
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // 第一轮手势
     tool.process(
@@ -183,7 +190,7 @@ describe("CommonObjectModifierTool", () => {
       unmount: jest.fn(),
     };
     let nodeState = { objects: [object] };
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     function makeCtx() {
       return {
@@ -216,7 +223,7 @@ describe("CommonObjectModifierTool", () => {
 
     const result = tool.process(
       {
-        signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
+        signals: [{ type: SIGNAL_TYPES.SUCCESS, context: {} }],
       },
       makeCtx(),
     );
@@ -231,7 +238,7 @@ describe("CommonObjectModifierTool", () => {
   });
 
   test("显式提供 boardApi 时应通过 modifyObject 更新位置并在 success 后提交", () => {
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     const object = {
       id: 501,
       position: new Vector(10, 20),
@@ -283,7 +290,7 @@ describe("CommonObjectModifierTool", () => {
 
     tool.process(
       {
-        signals: [{ type: OBJECT_MODIFIER_SIGNAL_TYPES.SUCCESS, context: {} }],
+        signals: [{ type: SIGNAL_TYPES.SUCCESS, context: {} }],
       },
       context,
     );
@@ -297,7 +304,7 @@ describe("CommonObjectModifierTool", () => {
   });
 
   test("显式提供 boardApi 时应支持 summary-like 上下文对象完成准入与位移", () => {
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     const boardApi = {
       modifyObject: jest.fn(),
       commitObjects: jest.fn(),
@@ -348,7 +355,7 @@ describe("CommonObjectModifierTool", () => {
   });
 
   test("显式提供 RPC boardApi 时不应读取本地 stale activeObjectIndex", () => {
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     const summaryLikeObject = {
       id: 503,
       type: "CircleObject",
@@ -407,7 +414,7 @@ describe("CommonObjectModifierTool", () => {
       position: new Vector(5, 5),
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     tool.process({ signals: [] }, aomCtx(object, { viewport: {} }));
 
     expect(object.position).toEqual(new Vector(5, 5));
@@ -427,7 +434,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // 首个 position (35, 35) 在 world rect (10..60, 20..50) 内 → 启动手势
     tool.process(
@@ -465,7 +472,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
     // position (100, 200) 远在合矩形外
     tool.process(
       {
@@ -499,7 +506,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // 首个 position (80, 50) 在合矩形内 → 准入通过，锚点=(80,50)，对象不动
     tool.process(
@@ -543,7 +550,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // position (5, 5) 在合矩形外
     tool.process(
@@ -571,7 +578,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // combinedRect 为 null → 跳过检测，锚点=(100,200)，对象不动
     tool.process(
@@ -599,7 +606,7 @@ describe("CommonObjectModifierTool", () => {
       position: new Vector(10, 20),
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // 第一轮手势
     tool.process(
@@ -656,7 +663,7 @@ describe("CommonObjectModifierTool", () => {
       },
     };
 
-    const tool = new CommonObjectModifierTool();
+    const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
     // 同一信号包中包含 position + end
     tool.process(
@@ -702,7 +709,7 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 第一轮手势：锚点 (12, 20)，对象从 (10, 20) 移到 (14, 22)
       tool.process(
@@ -756,7 +763,7 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 第一轮：移动并 cancel
       tool.process(
@@ -812,7 +819,7 @@ describe("CommonObjectModifierTool", () => {
         },
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 移动并 success
       tool.process(
@@ -915,7 +922,7 @@ describe("CommonObjectModifierTool", () => {
         },
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 左上角边界 (10, 20) → 锚点=(10,20)，dx=0 → 对象不动
       tool.process(
@@ -969,7 +976,7 @@ describe("CommonObjectModifierTool", () => {
         },
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 第一次：position (100, 200) 在外部 → 拒绝
       tool.process(
@@ -1019,7 +1026,7 @@ describe("CommonObjectModifierTool", () => {
         },
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 首个 position (30, 35)：在内部，启动手势，对象不动
       tool.process(
@@ -1058,7 +1065,7 @@ describe("CommonObjectModifierTool", () => {
         },
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
       tool.process(
         {
           signals: [{ type: "position", context: { value: { x: 15, y: 23 } } }],
@@ -1083,7 +1090,7 @@ describe("CommonObjectModifierTool", () => {
         },
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 第一轮：启动并移动
       tool.process(
@@ -1141,7 +1148,7 @@ describe("CommonObjectModifierTool", () => {
         requestViewportUiRender: jest.fn(),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
       // displacement (3, 5)：直接累加
       tool.process(
         {
@@ -1168,7 +1175,7 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 启动手势：锚点=(12, 20)
       tool.process(
@@ -1217,7 +1224,7 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 启动手势：锚点=(12, 20)
       tool.process(
@@ -1259,7 +1266,7 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 启动并移动：锚点(12, 20) → 位置(10, 20)
       tool.process(
@@ -1302,7 +1309,7 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // 启动手势：锚点(12, 20)，initialPos=(10, 20)
       tool.process(
@@ -1340,9 +1347,9 @@ describe("CommonObjectModifierTool", () => {
         position: new Vector(10, 20),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
-      // 位移 1：对象 → (13, 25)，onBeforeDisplacement 记录 _initialPositions
+      // 位移 1：对象 → (13, 25)，processor.displace 补记 _initialPositions
       tool.process(
         {
           signals: [
@@ -1376,7 +1383,7 @@ describe("CommonObjectModifierTool", () => {
         getRange: () => new RectangleRange(0, 0, 50, 30),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       // displacement 直接移动，不经过 canBeginModifyGesture
       tool.process(
@@ -1394,7 +1401,7 @@ describe("CommonObjectModifierTool", () => {
       const objectA = { id: 1, position: new Vector(10, 20) };
       const objectB = { id: 2, position: new Vector(30, 40) };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
       tool.process(
         {
           signals: [
@@ -1419,7 +1426,7 @@ describe("CommonObjectModifierTool", () => {
         discardActiveObjects: jest.fn(),
       };
 
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
 
       tool.process(
         {
@@ -1447,7 +1454,7 @@ describe("CommonObjectModifierTool", () => {
       const boardApi = {
         modifyObject: jest.fn(),
       };
-      const tool = new CommonObjectModifierTool();
+      const tool = new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
       const _nodeState_inline2 = { objects: [object] };
       const context = {
         path: "/test",

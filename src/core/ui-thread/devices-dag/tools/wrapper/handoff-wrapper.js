@@ -29,7 +29,7 @@ import { WrapperTool } from "./wrapper-tool.js";
  * @example
  * const handoff = new HandoffWrapperTool({
  *   first: new RectangleObjectChooserTool(),
- *   second: new CommonObjectModifierTool(),
+ *   second: new CommonObjectModifierTool({ processor: new DragGestureProcessor() }),
  * });
  */
 class HandoffWrapperTool extends WrapperTool {

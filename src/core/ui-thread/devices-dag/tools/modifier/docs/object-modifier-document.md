@@ -35,7 +35,10 @@ boardApi.modifyObject(objectId, {
 });
 ```
 
-modifier 本地也会同步更新当前条目的 `position`，让后续 position/displacement 计算继续使用最新值。
+所有手势写入统一走 `applyGesturePatch(objectEntry, patch, interaction)` 入口：
+patch 形状与 `modifyObject` 补丁契约一致（`{ position?, data?, transform? }`），
+本地条目同步更新（position → 新 Vector、data 合并、transform 浅拷贝），
+让后续 position/displacement 计算继续使用最新值。
 
 ### 提交
 
@@ -62,11 +65,23 @@ live 层重绘由 Core 侧接管。
 
 ## 手势模型
 
-当前 modifier 主实现是：
+modifier 采用与 creator 一致的「数据工具 + 手势 processor」拆分，分三层：
 
-- `ObjectModifierTool` — 继承 `GestureTool`，提供动作生命周期适配
-- `GestureBasedObjectModifierTool` — 继承 `ObjectModifierTool`，内置手势生命周期 + displacement 双通道
-- `CommonObjectModifierTool` — 继承 `GestureBasedObjectModifierTool`，拖拽移动的默认实现
+- `ObjectModifierTool` — 继承 `GestureTool`，承担对象语义：活动对象解析、
+  `applyGesturePatch` 统一写入口（本地条目同步 + `boardApi.modifyObject` RPC）、
+  提交/撤销生命周期适配
+- `GestureBasedObjectModifierTool` — 继承 `ObjectModifierTool`，承担信号路由：
+  cancel / success / orphan end / spatial 双通道的调度。手势钩子（begin / update /
+  complete / cancel）与 displacement 处理全部委托给必传的 processor
+- `DragGestureProcessor`（`gesture/drag-processor.js`）— 手势状态机：
+  持有锚点、基准位置、初始位置全部手势运行时状态，把 position / displacement
+  流编译为位置补丁并经宿主的 `applyGesturePatch` 应用
+
+processor 为必传构造参数（无默认手势），缺失时构造抛错：
+
+```js
+new CommonObjectModifierTool({ processor: new DragGestureProcessor() });
+```
 
 ### 双通道信号
 
@@ -78,32 +93,39 @@ modifier 同时接受：
 - `cancel`
 - `success`
 
-处理顺序：
+处理顺序（由 `GestureBasedObjectModifierTool.process()` 路由）：
 
-1. `position` 驱动手势状态机
-2. `displacement` 作为无状态增量追加
-3. `end` 结束当前手势
-4. `success` 提交到静态图
-5. `cancel` 回退到初始位置
+1. `position` 驱动手势状态机（`processor.begin` / `processor.update`）
+2. `displacement` 作为无状态增量追加（`processor.displace`）
+3. `end` 结束当前手势（`processor.complete`）
+4. `success` 提交到静态图，随后 `processor.reset()`
+5. `cancel` 回退到初始位置（`processor.cancel`）
 
-### `CommonObjectModifierTool`
-
-当前 demo 的默认 modifier。
+### `DragGestureProcessor`
 
 它维护：
 
-- `_anchorPosition` — 手势起始光标位置
-- `_gestureBasePositions` — 当前手势开始时各对象的基准位置
-- `_initialPositions` — 首次手势开始时各对象的初始位置（仅供 cancel 回退，永不覆盖）
+- `_anchor` — 手势起始光标位置，手势期间固定不动
+- `_basePositions` — 当前手势开始时各对象的基准位置（供 update 计算位移）
+- `_initialPositions` — 首次手势（或首次 displacement）时各对象的初始位置（仅供 cancel 回退，永不覆盖）
 
 语义是：
 
-- 首个 `position` 记录锚点
+- 首个 `position` 记录锚点与基准位置
 - 后续 `position` 以锚点为基准计算位移
-- `displacement` 直接叠加到当前位置，基准位置同步平移
-- `end` 结束手势，保留 `_initialPositions` 供后续 cancel 回退
-- `cancel` 回退到首次手势前的初始位置
-- `success` 提交后清空 `_initialPositions`
+- `displacement` 直接叠加到当前位置，基准位置同步平移（锚点不动，保持光标-对象偏移）
+- `end`（complete）清空锚点与基准位置，保留 `_initialPositions` 供后续 cancel 回退
+- `cancel` 回退到首次手势前的初始位置并清空全部状态
+- `success` 后由工具层调用 `reset()` 清空 `_initialPositions`
+
+### `CommonObjectModifierTool`
+
+当前 demo 的默认 modifier，纯数据侧工具：
+
+- `canBeginGesture` — 合矩形准入检测（position 落在所有对象合矩形内才允许开始手势）
+- 构造函数透传 `options`，装配必传的 `DragGestureProcessor`
+
+不含任何手势状态——锚点、基准位置、初始位置全部由组合的 processor 承担。
 
 ## 权威数据来源
 
@@ -208,6 +230,7 @@ wrapper 不修改 modifier 的 node state。
 - 本地不要求持有真实 `BasicObject` 实例
 - 高频修改仍保持同步本地更新 + fire-and-forget RPC
 - 选中对象的 overlay 已统一走 summary-like 路径
+- modifier 已完成「数据工具 + 手势 processor」拆分：拖拽手势状态机由 `DragGestureProcessor` 承担，`CommonObjectModifierTool` 只保留合矩形准入检测与 processor 装配
 
 ## 相关文档
 
