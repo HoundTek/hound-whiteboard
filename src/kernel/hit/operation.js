@@ -557,6 +557,15 @@ function _validatePayload(record, errors) {
       requireString("objectId");
       if (payload.before === undefined || payload.after === undefined) {
         errors.push("modify-object 载荷缺 before/after 快照");
+      } else if (
+        payload.before === null ||
+        typeof payload.before !== "object" ||
+        Array.isArray(payload.before) ||
+        payload.after === null ||
+        typeof payload.after !== "object" ||
+        Array.isArray(payload.after)
+      ) {
+        errors.push("modify-object 载荷的 before/after 必须是对象快照");
       }
       _validateLayerStackSnapshot(payload, errors);
       if (payload.chunks !== undefined) {

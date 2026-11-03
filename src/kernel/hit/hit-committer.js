@@ -305,6 +305,17 @@ class HitCommitter {
   }
 
   /**
+   * 接收远端记录后推进本 source 的时间水位
+   * @param {import("./operation.js").OperationRecord} record - 已入日志的远端记录
+   * @returns {void}
+   */
+  observeRemoteTime(record) {
+    if (record.source === this.#source && Number.isFinite(record.time)) {
+      this.#lastTime = Math.max(this.#lastTime, record.time);
+    }
+  }
+
+  /**
    * 单调时间推进
    * @returns {number} 时间标记
    * @private

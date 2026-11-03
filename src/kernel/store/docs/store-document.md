@@ -44,7 +44,8 @@ CLI 在板目录另维护 `.cli-choices.json`（choice 驻留种子），不属�
 journaler 订阅操作日志的 append 事件——本地 commit 与远端应用共用同一入日志通道，订阅者由此观察到全部新增记录，无需逐类型效果逻辑。
 
 - **合批**：记录入队后经微任务合批自动落盘；`flush()` 提供可等待的排空洞；`detach()` 退订并排空。
-- **flush 编排**：新记录按 record.source 分组写为各源流的日志段（原子写：临时文件 + rename）→ 对象文件调和 → 区块元数据调和 → 重写 board.json。
+- **flush 编排**：新记录按 record.source 分组写为各源流的日志段（原子写：临时文件 + rename）→ 对象/trash 文件调和 → 区块元数据调和 → 写 source 元数据分片。
+- **失败与重试**：驱动返回 false 或抛错时不得更新对应成功指纹；日志段保留队首，对象、trash、区块与元数据保留下轮重试。显式 `flush()` 汇总各阶段失败并 reject，串行链仍可继续后续 flush；daemon 仅在应落盘内容全部成功后回复 RPC 成功。
 - **流归并**：打开板时各 per-source 流按「source 分组、组内操作序号升序、id 去重、组按 source 字典序拼接」归并——满足操作日志 per-source 序号连续与时间单调的准入校验；树重建按 (时间, author) 确定性定序，与归并顺序无关。
 - **指纹调和**：对象与区块文件按板当前状态对齐——序列化指纹（JSON 串）比对，仅写差异；全部存活对象（objectLoaded 全量）写 `objects/`，trash 条目写 `trash/`（层位边集合归一化为数组），既不存活亦非 trash 的对象从盘上移除。撤销/重做/远端记录引起的任意状态迁移统一收敛。注意此处的「活动对象」指内存中在场对象，与 AOM 三态术语中的「活动对象」不是一回事（AOM 活动态是被选中、正在操作的对象）。
 - **写权仲裁**：远程活动对象（AOM `isRemoteActive`）跳过不写不移除——写权属活动方；部分驻留写端（GUI 开 chunkUnload）以 `removeMissing:false` 关闭缺失移除；元数据按 source 分片（`meta/{source}.json`：本端 + 本会话代写过流的来源），board.json 创建时写一次后只读；读会话以 `writeMeta:false` 保持零写盘；对象与日志段文件均为原子写（临时文件 + rename）。

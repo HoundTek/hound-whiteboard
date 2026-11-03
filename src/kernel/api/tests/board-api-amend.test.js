@@ -114,6 +114,33 @@ describe("amend 分子生命周期事件", () => {
     api.abortMol(molId);
   });
 
+  test("创建型重放保留 begin 初始快照，不与后续 append 重复累计", () => {
+    const { api } = createEnd("a");
+    const objectId = api.createObject("StrokeObject", {
+      id: "a/1",
+      position: { x: 0, y: 0 },
+      property: { width: 2 },
+      data: { points: [{ x: 0, y: 0 }] },
+    });
+    const molId = api.beginMol([objectId], { create: true });
+    api.amendMol(molId, {
+      [objectId]: { append: { key: "points", items: [{ x: 5, y: 0 }] } },
+    });
+    api.amendMol(molId, {
+      [objectId]: { append: { key: "points", items: [{ x: 10, y: 0 }] } },
+    });
+
+    const replay = api.queryMolAmendSince(molId, 0);
+    expect(replay.entries[0].create.data.points).toHaveLength(1);
+    expect(replay.amends).toHaveLength(2);
+    const effectivePoints = [
+      ...replay.entries[0].create.data.points,
+      ...replay.amends.flatMap((frame) => frame.entries[0].patch.append.items),
+    ];
+    expect(effectivePoints).toHaveLength(3);
+    api.abortMol(molId);
+  });
+
   test("amend 支持 append 补丁（创建手势逐点追点）", () => {
     const { boardCore, api } = createEnd("a");
     const objectId = api.createObject("StrokeObject", {

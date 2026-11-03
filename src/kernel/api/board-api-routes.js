@@ -355,6 +355,14 @@ const BOARD_API_ROUTES = {
   },
 
   /**
+   * 从权威日志重建时间回溯树并对齐白板效果
+   */
+  repairChainFromLog: {
+    invoke: (api) => api.repairChainFromLog(),
+    flush: "sync",
+  },
+
+  /**
    * 从本端日志重放派生对象状态并对齐活体（效果层分歧自愈）
    */
   repairStateFromLog: {

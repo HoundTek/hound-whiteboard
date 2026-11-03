@@ -93,6 +93,7 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
   /**
    * 将对象文件对齐到当前白板状态
    * @returns {Promise<void>}
+   * @throws {Error} 对象写入或移除失败时抛出
    *
    * @description
    * 活动对象写入 objects/，trash 对象写入 trash/；内容或位置有变化才落盘；
@@ -110,8 +111,12 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
       liveIds.add(obj.id);
       const prev = lastSync.get(obj.id);
       if (prev?.json === json && prev.location === "objects") continue;
-      await store.writeObject(data);
-      if (prev?.location === "trash") await store.removeTrashObject(obj.id);
+      if ((await store.writeObject(data)) === false) {
+        throw new Error("存储驱动写对象失败");
+      }
+      if (prev?.location === "trash" && (await store.removeTrashObject(obj.id)) === false) {
+        throw new Error("存储驱动移除 trash 对象失败");
+      }
       lastSync.set(obj.id, { location: "objects", json });
     }
     for (const [id, entry] of boardCore.trash) {
@@ -120,16 +125,25 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
       const json = JSON.stringify(normalized);
       const prev = lastSync.get(id);
       if (prev?.json === json && prev.location === "trash") continue;
-      await store.writeTrashEntry(normalized);
-      if (prev?.location === "objects") await store.removeObject(id);
+      if ((await store.writeTrashEntry(normalized)) === false) {
+        throw new Error("存储驱动写 trash 条目失败");
+      }
+      if (prev?.location === "objects" && (await store.removeObject(id)) === false) {
+        throw new Error("存储驱动移除对象失败");
+      }
       lastSync.set(id, { location: "trash", json });
     }
     if (!removeMissing) return;
     for (const [id, prev] of lastSync) {
       if (liveIds.has(id) || boardCore.trash.has(id)) continue;
       if (aom?.isRemoteActive?.(id)) continue;
-      if (prev.location === "objects") await store.removeObject(id);
-      else await store.removeTrashObject(id);
+      if (prev.location === "objects") {
+        if ((await store.removeObject(id)) === false) {
+          throw new Error("存储驱动移除对象失败");
+        }
+      } else if ((await store.removeTrashObject(id)) === false) {
+        throw new Error("存储驱动移除 trash 对象失败");
+      }
       lastSync.delete(id);
     }
   };
@@ -137,6 +151,7 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
   /**
    * 将区块元数据文件对齐到当前层叠图状态
    * @returns {Promise<void>}
+   * @throws {Error} 区块元数据写入失败时抛出
    */
   const reconcileChunks = async () => {
     for (const { chunk } of boardCore.chunkLoaded.values()) {
@@ -147,7 +162,9 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
       };
       const json = JSON.stringify(metadata);
       if (lastChunkSync.get(chunk.id) === json) continue;
-      await store.writeChunkMetadata(chunk.id, metadata);
+      if ((await store.writeChunkMetadata(chunk.id, metadata)) === false) {
+        throw new Error("存储驱动写区块元数据失败");
+      }
       lastChunkSync.set(chunk.id, json);
     }
   };
@@ -158,7 +175,7 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
   /**
    * 执行一轮落盘：日志段（按 record.source 分流，persistStream 过滤）→ 对象调和 → 区块调和 → 板元数据
    * @returns {Promise<void>}
-   * @throws {Error} 任一日志流写失败时抛出（记录保留在队列中下轮重试，调用方可显式上报）
+   * @throws {Error} 任一日志流、对象、区块或元数据写失败时抛出（失败项保留下轮重试，调用方可显式上报）
    *
    * @description
    * 落盘归属由 record.source 决定并经 persistStream 判定：daemon 落自己与 relay 远端来源的流
@@ -227,6 +244,7 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
       try {
         await stage();
       } catch (error) {
+        failures.push(error instanceof Error ? error : new Error(String(error)));
         console.error(`[journaler] ${label}失败，下轮重试：${error?.message ?? error}`);
       }
     }
@@ -240,6 +258,7 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
    * @description 布局 v2：board.json 创建后只读，各写端只写自己负责的 meta/<source>.json；
    * 指纹比对，值不变不重写。
    * @returns {Promise<void>}
+   * @throws {Error} 元数据分片写入失败时抛出
    */
   const writeSourceMetas = async () => {
     if (!writeMeta) return;
@@ -257,7 +276,9 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
       }
       const metaJson = stringifySorted(meta);
       if (metaJson !== lastMetaJson.get(source)) {
-        await store.writeSourceMeta(source, meta);
+        if ((await store.writeSourceMeta(source, meta)) === false) {
+          throw new Error("存储驱动写元数据分片失败");
+        }
         lastMetaJson.set(source, metaJson);
       }
     }

@@ -62,6 +62,60 @@ async function readRecords(store) {
   return (await store.readAllRecords()).records;
 }
 
+/**
+ * 存储失败注入方式
+ * @type {Array<{label: string, shouldThrow: boolean}>}
+ */
+const STORE_FAILURE_MODES = [
+  { label: "返回 false", shouldThrow: false },
+  { label: "抛错", shouldThrow: true },
+];
+
+/**
+ * 验证存储失败会拒绝显式 flush，恢复后重试并落盘
+ * @param {Object} params - 测试参数
+ * @param {BoardCore} params.boardCore - 白板核心
+ * @param {Object} params.store - 会话存储
+ * @param {string} params.method - 注入失败的存储方法名
+ * @param {boolean} params.shouldThrow - 是否抛错而非返回 false
+ * @param {Object} [params.attachOptions={}] - 跟随者挂接选项
+ * @param {(recovered: boolean) => Promise<void>} params.verifyPersisted - 按恢复前后检查实际盘态
+ * @returns {Promise<void>}
+ */
+async function expectStoreFailureRetry({
+  boardCore,
+  store,
+  method,
+  shouldThrow,
+  attachOptions = {},
+  verifyPersisted,
+}) {
+  const journaler = createJournaler({ boardCore, store });
+  journaler.attach(attachOptions);
+  const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+  const original = store[method].bind(store);
+  let failNext = true;
+  let writeCount = 0;
+  store[method] = async (...args) => {
+    writeCount++;
+    if (failNext) {
+      failNext = false;
+      if (shouldThrow) throw new Error("注入写失败");
+      return false;
+    }
+    return original(...args);
+  };
+  try {
+    await expect(journaler.flush()).rejects.toThrow();
+    await verifyPersisted(false);
+    await journaler.flush();
+    await verifyPersisted(true);
+    expect(writeCount).toBe(2);
+  } finally {
+    errorSpy.mockRestore();
+  }
+}
+
 describe("Journaler", () => {
   test("本地 commit 落为段文件，对象快照与元数据同步", async () => {
     const { boardCore, api, store } = setup();
@@ -587,6 +641,149 @@ describe("Journaler", () => {
     const session = await store.loadAll();
     expect(session.meta.objectIdCounters).toEqual({ b: 1 });
   });
+
+  test.each(STORE_FAILURE_MODES)(
+    "writeObject $label：flush 拒绝，恢复后对象实际落盘",
+    async ({ shouldThrow }) => {
+      const { boardCore, api, store } = setup();
+      await store.create();
+      await createStaticStroke(api, "s1");
+
+      await expectStoreFailureRetry({
+        boardCore,
+        store,
+        method: "writeObject",
+        shouldThrow,
+        verifyPersisted: async (recovered) => {
+          expect((await store.readAllObjects()).map((o) => o.id)).toEqual(
+            recovered ? ["s1"] : [],
+          );
+        },
+      });
+    },
+  );
+
+  test.each(STORE_FAILURE_MODES)(
+    "writeTrashEntry $label：flush 拒绝，恢复后 trash 条目实际落盘",
+    async ({ shouldThrow }) => {
+      const { boardCore, api, store } = setup();
+      await store.create();
+      await createStaticStroke(api, "s1");
+      await api.deleteObjects(["s1"]);
+
+      await expectStoreFailureRetry({
+        boardCore,
+        store,
+        method: "writeTrashEntry",
+        shouldThrow,
+        verifyPersisted: async (recovered) => {
+          expect((await store.readAllTrash()).map((e) => e.data.id)).toEqual(
+            recovered ? ["s1"] : [],
+          );
+        },
+      });
+    },
+  );
+
+  test.each(STORE_FAILURE_MODES)(
+    "removeObject $label：flush 拒绝，恢复后移除活动对象旧文件",
+    async ({ shouldThrow }) => {
+      const { boardCore, api, store } = setup();
+      await store.create();
+      await createStaticStroke(api, "s1");
+      const data = boardCore.getAllObjects()[0].serialize();
+      await store.writeObject(data);
+      await api.deleteObjects(["s1"]);
+
+      await expectStoreFailureRetry({
+        boardCore,
+        store,
+        method: "removeObject",
+        shouldThrow,
+        attachOptions: { knownObjects: [data] },
+        verifyPersisted: async (recovered) => {
+          expect((await store.readAllObjects()).map((o) => o.id)).toEqual(
+            recovered ? [] : ["s1"],
+          );
+          expect((await store.readAllTrash()).map((e) => e.data.id)).toEqual(["s1"]);
+        },
+      });
+    },
+  );
+
+  test.each(STORE_FAILURE_MODES)(
+    "removeTrashObject $label：flush 拒绝，恢复后移除 trash 旧文件",
+    async ({ shouldThrow }) => {
+      const { boardCore, api, store } = setup();
+      await store.create();
+      await createStaticStroke(api, "s1");
+      await api.deleteObjects(["s1"]);
+      const entry = boardCore.trash.get("s1");
+      const knownTrash = {
+        data: entry.data,
+        chunks: entry.chunks.map((chunk) => ({
+          chunkId: chunk.chunkId,
+          below: [...chunk.below],
+          above: [...chunk.above],
+        })),
+      };
+      await store.writeTrashEntry(knownTrash);
+      api.undo();
+
+      await expectStoreFailureRetry({
+        boardCore,
+        store,
+        method: "removeTrashObject",
+        shouldThrow,
+        attachOptions: { knownTrash: [knownTrash] },
+        verifyPersisted: async (recovered) => {
+          expect((await store.readAllObjects()).map((o) => o.id)).toEqual(["s1"]);
+          expect((await store.readAllTrash()).map((e) => e.data.id)).toEqual(
+            recovered ? [] : ["s1"],
+          );
+        },
+      });
+    },
+  );
+
+  test.each(STORE_FAILURE_MODES)(
+    "writeChunkMetadata $label：flush 拒绝，恢复后区块元数据实际落盘",
+    async ({ shouldThrow }) => {
+      const { boardCore, api, store } = setup();
+      await store.create();
+      await createStaticStroke(api, "s1");
+
+      await expectStoreFailureRetry({
+        boardCore,
+        store,
+        method: "writeChunkMetadata",
+        shouldThrow,
+        verifyPersisted: async (recovered) => {
+          expect(await store.readAllChunkMetadata()).toHaveLength(recovered ? 1 : 0);
+        },
+      });
+    },
+  );
+
+  test.each(STORE_FAILURE_MODES)(
+    "writeSourceMeta $label：flush 拒绝，恢复后元数据分片实际落盘",
+    async ({ shouldThrow }) => {
+      const { boardCore, store } = setup();
+      await store.create();
+
+      await expectStoreFailureRetry({
+        boardCore,
+        store,
+        method: "writeSourceMeta",
+        shouldThrow,
+        verifyPersisted: async (recovered) => {
+          expect(Object.keys(await store.readAllSourceMeta())).toEqual(
+            recovered ? ["core"] : [],
+          );
+        },
+      });
+    },
+  );
 
   test("写段失败：记录保留队首重试，恢复后无序号空洞，flush 链不毒化", async () => {
     const { boardCore, api, store } = setup();

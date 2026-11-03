@@ -15,6 +15,7 @@ import {
   OPERATION_EFFECT_KINDS,
   getOperationEffectKind,
   compareRecords,
+  validateOperation,
 } from "../hit/operation.js";
 import { Matrix, Vector } from "../utils/math.js";
 import { hashString } from "../utils/hash.js";
@@ -50,6 +51,57 @@ function hasStaticBoardObject(boardCore, objectId) {
     }
   }
   return false;
+}
+
+/**
+ * 生成对象键序无关的确定性 JSON
+ * @param {*} value - 待序列化值
+ * @returns {string} 确定性 JSON
+ */
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * 深拷贝可 JSON 序列化的快照
+ * @param {*} value - 快照值
+ * @returns {*} 独立快照
+ */
+function cloneSnapshot(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+/**
+ * 归一化记录的可选容器字段
+ * @param {Object} record - 操作记录
+ * @returns {Object} 归一化记录
+ */
+function normalizeOperationRecord(record) {
+  return {
+    ...record,
+    molId: record.molId ?? null,
+    supraId: record.supraId ?? null,
+    discard: record.discard ?? false,
+  };
+}
+
+/**
+ * 比较两条同 ID 记录是否语义相同
+ * @param {Object} a - 已入日志记录
+ * @param {Object} b - 待接入记录
+ * @returns {boolean} 是否一致
+ */
+function sameOperationRecord(a, b) {
+  return canonicalJson(normalizeOperationRecord(a)) === canonicalJson(normalizeOperationRecord(b));
 }
 
 /**
@@ -132,7 +184,7 @@ class BoardApi {
    * 进行中的增量式分子表
    * @description molId -> 分子状态（supraKey 归属、逐对象 before 快照与序列水位）；
    * amend 流的唯一载体，endMol 物化或 abortMol 丢弃后移除。原子（帧增量）永不落盘。
-   * @type {Map<string, { supraKey: ?string, create: boolean, objects: Map<string, { before: ?Object }>, seq: number }>}
+   * @type {Map<string, { supraKey: ?string, create: boolean, objects: Map<string, { before: ?Object, create: ?Object }>, seq: number, history: Array<{seq: number, entries: Object[]}> }>}
    * @private
    */
   #mols = new Map();
@@ -392,7 +444,10 @@ class BoardApi {
     const objects = new Map();
     for (const objectId of ids) {
       const obj = this.#requireActiveObject(objectId);
-      objects.set(objectId, { before: options.create === true ? null : obj.serialize() });
+      objects.set(objectId, {
+        before: options.create === true ? null : cloneSnapshot(obj.serialize()),
+        create: options.create === true ? cloneSnapshot(obj.serialize()) : null,
+      });
     }
     const molId = boardCore.hitCommitter.allocateMolId();
     this.#mols.set(molId, {
@@ -407,9 +462,8 @@ class BoardApi {
       molId,
       entries: [...objects].map(([objectId, state]) => {
         const entry = { objectId, before: state.before };
-        if (state.before === null) {
-          // 创建型分子：对端凭初始快照画创建中形态（类型/属性/初始数据）
-          entry.create = boardCore.getObjectById(objectId)?.serialize() ?? null;
+        if (state.create !== null) {
+          entry.create = state.create;
         }
         return entry;
       }),
@@ -570,8 +624,8 @@ class BoardApi {
       seq: mol.seq,
       entries: [...mol.objects].map(([objectId, state]) => {
         const entry = { objectId, before: state.before };
-        if (state.before === null) {
-          entry.create = this.#boardCore.getObjectById(objectId)?.serialize() ?? null;
+        if (state.create !== null) {
+          entry.create = state.create;
         }
         return entry;
       }),
@@ -1171,7 +1225,7 @@ class BoardApi {
         // 已在活动层的对象不重复记录；重新选择已退出的对象（如 choose 被撤销后）
         // 需重新捕获选择前快照并产生选择分子，不能以残留快照为由跳过
         if (boardCore.activeObjectManager.isActive(obj.id)) continue;
-        this.#chooseSnapshots.set(obj.id, obj.serialize());
+        this.#chooseSnapshots.set(obj.id, cloneSnapshot(obj.serialize()));
         committer.commitChoose({
           chunkId: this.#resolveObjectChunkId(obj.id),
           objectId: obj.id,
@@ -1648,14 +1702,66 @@ class BoardApi {
   }
 
   /**
+   * 找出本地活动中尚未提交、不能被日志派生态覆盖的对象
+   * @returns {Set<string>} 受保护对象 id 集合
+   * @private
+   */
+  #uncommittedLocalObjectIds() {
+    const protectedIds = new Set();
+    for (const hold of this.#boardCore.activeObjectManager.queryLocalActivity()) {
+      for (const objectId of hold.ids) {
+        const obj = this.#boardCore.getObjectById(objectId);
+        if (!obj) continue;
+        const before = this.#chooseSnapshots.get(objectId);
+        if (
+          !hasStaticBoardObject(this.#boardCore, objectId) ||
+          before === undefined ||
+          canonicalJson(before) !== canonicalJson(obj.serialize())
+        ) {
+          protectedIds.add(objectId);
+        }
+      }
+    }
+    return protectedIds;
+  }
+
+  /**
+   * 从权威日志重建时间回溯树并对齐白板效果
+   * @returns {{repaired: boolean, fixedIds: string[]}} 修复结果
+   */
+  repairChainFromLog() {
+    if (
+      this.queryOpenMols().length > 0 ||
+      this.#uncommittedLocalObjectIds().size > 0
+    ) {
+      return { repaired: false, fixedIds: [] };
+    }
+    const beforeHash = this.queryChainHash();
+    const beforeRecords = this.#recordsOfChain(
+      this.#boardCore.undoTree.getActiveChain(),
+    );
+    this.#boardCore.undoTree.rebuild();
+    const effectsChanged = this.#transitionEffects(
+      beforeRecords,
+      this.#recordsOfChain(this.#boardCore.undoTree.getActiveChain()),
+    );
+    this.#flushRemoteChoicesNotification();
+    const repaired = effectsChanged || beforeHash !== this.queryChainHash();
+    if (repaired) {
+      this.#boardCore.activityEventBus.emit("hit-changed", { time: Date.now() });
+    }
+    return { repaired, fixedIds: repaired ? ["chain"] : [] };
+  }
+
+  /**
    * 从本端日志重放派生对象状态并对齐活体（效果层分歧自愈）
    * @description 正确性定义为「对象状态 == f(日志)」：scratch 核心按日志序纯增量重放全部
    * 记录得到派生态（undo/redo/折叠随回放自然呈现，永不触发重建），与活体逐对象比对后以
    * remove+add 对齐（addObjectEffect 自带区块落座与层序，绕开跨区块重排位问题），trash 全量
    * 对齐，层位边逐已载区块比对重写（digest 口径不含层序，边级分歧借此通道自愈）。
    * 派生态多出但经卸载路径合法离场（驻留驱逐）的对象不补回内存（部分驻留硬约束，保住 chunkUnload）。
-   * 本地有未闭合分子时活体合法偏离派生态（amend 实时改实例），拒绝修复并待下轮；
-   * 含本地活动对象的区块层位同样合法偏离，跳过对齐。
+   * 本地有未闭合分子时拒绝修复；无 open mol 但有未提交修改的活动对象逐项跳过，
+   * 保留其实例与 choice，含本地活动对象的区块层位同样跳过对齐。
    * @returns {{ repaired: boolean, fixedIds: string[] }} 修复结果；repaired=false 表示被门拒绝或无分歧
    */
   repairStateFromLog() {
@@ -1676,12 +1782,17 @@ class BoardApi {
     );
 
     const affectedChunks = new Set();
-    const fixedIds = [];
+    const fixedIds = new Set();
+    const protectedIds = this.#uncommittedLocalObjectIds();
     const canonical = (obj) => JSON.stringify(obj.serialize());
     const derived = new Map(
       scratchCore.getAllObjects().map((obj) => [obj.id, obj]),
     );
     for (const live of boardCore.getAllObjects()) {
+      if (protectedIds.has(live.id)) {
+        derived.delete(live.id);
+        continue;
+      }
       const want = derived.get(live.id);
       if (want !== undefined && canonical(want) === canonical(live)) {
         derived.delete(live.id);
@@ -1689,17 +1800,17 @@ class BoardApi {
       }
       // 活体多出或数据分歧：先移除（新增与改判的重建统一走下方 addObjectEffect）
       this.#removeObjectEffect(live.id, affectedChunks);
-      fixedIds.push(live.id);
+      fixedIds.add(live.id);
     }
     for (const obj of derived.values()) {
       // 部分驻留硬约束：经卸载路径合法离场的对象不补回内存（保住 chunkUnload）；
       // 效果缺失（非驱逐）照常补回。digest 通道已按全量驻留门控，本约束兜底直接调用（RPC 面）
-      if (boardCore.isObjectEvicted(obj.id)) continue;
+      if (protectedIds.has(obj.id) || boardCore.isObjectEvicted(obj.id)) continue;
       this.#addObjectEffect(
         { objectId: obj.id, data: obj.serialize() },
         affectedChunks,
       );
-      fixedIds.push(obj.id);
+      fixedIds.add(obj.id);
     }
 
     // trash 全量对齐（条目随删除/恢复记录落定，分歧时整体替换）
@@ -1741,18 +1852,18 @@ class BoardApi {
         }
       }
       affectedChunks.add(chunk);
-      fixedIds.push(`chunk:${chunk.id}`);
+      fixedIds.add(`chunk:${chunk.id}`);
     }
 
     if (affectedChunks.size > 0) {
       boardCore.aomRenderHooks.requestStaticRender([...affectedChunks]);
     }
-    const repaired = fixedIds.length > 0 || trashChanged;
+    const repaired = fixedIds.size > 0 || trashChanged;
     if (repaired) {
       // 文档状态变化：UI 工具凭此清理本地失效选中（同远端应用路径）
       boardCore.activityEventBus.emit("hit-changed", { time: Date.now() });
     }
-    return { repaired, fixedIds };
+    return { repaired, fixedIds: [...fixedIds] };
   }
 
   /**
@@ -2586,7 +2697,7 @@ class BoardApi {
       hasStaticBoardObject(boardCore, objectId) &&
       !this.#chooseSnapshots.has(objectId)
     ) {
-      this.#chooseSnapshots.set(objectId, obj.serialize());
+      this.#chooseSnapshots.set(objectId, cloneSnapshot(obj.serialize()));
     }
     // 本地选择优先：撤销该对象的远程活动登记（并发 choose 冲突按链序收敛）
     aom.revokeRemoteActive(objectId);
@@ -2669,11 +2780,26 @@ class BoardApi {
     const boardCore = this.#boardCore;
     const log = boardCore.operationLog;
     const tree = boardCore.undoTree;
-    const list = Array.isArray(records) ? records : [];
+    const input = Array.isArray(records) ? records : [];
+    const list = [];
+    for (const record of input) {
+      const errors = validateOperation(record);
+      if (errors.length > 0) {
+        throw new Error(errors.join("；"));
+      }
+      const existing = log.get(record.id);
+      if (existing !== null) {
+        if (!sameOperationRecord(existing, record)) {
+          throw new Error(`记录 id 内容冲突：${record.id}`);
+        }
+        continue;
+      }
+      list.push(record);
+    }
     const groups = [];
     const bySupra = new Map();
     for (const record of list) {
-      if (record.supraOpId === null) {
+      if (record.supraOpId == null) {
         groups.push([record]);
       } else {
         let group = bySupra.get(record.supraOpId);
@@ -2691,6 +2817,7 @@ class BoardApi {
         if (errors.length > 0) {
           throw new Error(errors.join("；"));
         }
+        boardCore.hitCommitter.observeRemoteTime(record);
         // 远端 add-object 推进对象 id 计数（单调取大）：
         // 同 source 双写端（GUI 直连 + daemon 托管的 CLI add）各自从计数续号，
         // 不推进则 daemon 侧从 0 分配与 GUI 已创建对象撞号
@@ -2708,7 +2835,7 @@ class BoardApi {
       const beforeRecords = this.#recordsOfChain(tree.getActiveChain());
       if (this.#needsReplay(group[group.length - 1])) {
         tree.rebuild();
-      } else if (group[0].supraOpId === null) {
+      } else if (group[0].supraOpId == null) {
         tree.applyRecord(group[0]);
       } else {
         tree.applySupraNode(group);
