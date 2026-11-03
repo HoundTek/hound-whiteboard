@@ -6,76 +6,16 @@
  */
 
 import { parseOperationId } from "../../kernel/hit/operation.js";
-
-/**
- * 计算各来源已追加的最大操作序号
- * @param {Object[]} records - 记录数组
- * @returns {Map<string, number>} 来源到最大序号的映射
- */
-function maxSeqBySource(records) {
-  const map = new Map();
-  for (const record of records) {
-    const { n } = parseOperationId(record.id);
-    if (n > (map.get(record.source) ?? 0)) {
-      map.set(record.source, n);
-    }
-  }
-  return map;
-}
-
-/**
- * 按超分子分组记录
- * @param {Map<string, Object>} pending - 待接入记录表（id → 记录）
- * @returns {Object[][]} 分组结果（独立记录单条成组，超分子成员按来源序号连续段同组）
- *
- * @description
- * 分组键为三级容器模型的 supraId（旧 supraOpId 不再作为分组依据）；旧记录无此字段时按独立记录处理。
- * 成员本就独立有效、分组只为同批美观：同 supraId 成员按来源序号排序后拆成连续段，
- * 段间空洞（超分子存续期间夹入其他提交）不阻塞成员各自接入。
- */
-function groupPending(pending) {
-  const groups = [];
-  const bySupra = new Map();
-  for (const record of pending.values()) {
-    const supraId = record.supraId ?? null;
-    if (supraId === null) {
-      groups.push([record]);
-      continue;
-    }
-    let group = bySupra.get(supraId);
-    if (group === undefined) {
-      group = [];
-      bySupra.set(supraId, group);
-    }
-    group.push(record);
-  }
-  for (const group of bySupra.values()) {
-    group.sort((a, b) => parseOperationId(a.id).n - parseOperationId(b.id).n);
-    let run = [group[0]];
-    groups.push(run);
-    for (let i = 1; i < group.length; i += 1) {
-      const prev = parseOperationId(group[i - 1].id).n;
-      const curr = parseOperationId(group[i].id).n;
-      if (curr !== prev + 1) {
-        run = [];
-        groups.push(run);
-      }
-      run.push(group[i]);
-    }
-  }
-  return groups;
-}
-
-/**
- * 比较两条记录的全序（时间标记 + 来源决胜）
- * @param {Object} a - 记录 a
- * @param {Object} b - 记录 b
- * @returns {number} 比较结果
- */
-function compareRecords(a, b) {
-  if (a.time !== b.time) return a.time - b.time;
-  return a.source < b.source ? -1 : a.source > b.source ? 1 : 0;
-}
+import {
+  createRemoteRecordIngestor,
+  maxSeqBySource,
+} from "./remote-record-ingestor.js";
+import {
+  trackRemoteSource,
+  resetRemoteSource,
+  releaseRemoteSource,
+  releaseRemoteChannel,
+} from "./remote-activity-channels.js";
 
 /**
  * 创建网络协调器
@@ -85,7 +25,7 @@ function compareRecords(a, b) {
  * @param {string} options.url - 中继服务器地址（ws://）
  * @param {string} options.boardId - 板 id（房间）
  * @param {number} [options.windowMs=500] - 延迟容忍窗长（毫秒）
- * @param {number} [options.maxWindows=3] - 连续容忍窗上限（到期后请求全量）
+ * @param {number} [options.maxWindows=3] - 连续容忍窗上限（到期后按 lastSeen 请求缺口）
  * @param {number} [options.digestIntervalMs=30000] - 状态摘要周期（毫秒）
  * @param {number} [options.connectTimeoutMs=3000] - 连接超时（毫秒）；地址无响应（无 error 事件的挂起）时按超时拒绝
  * @param {Function} [options.WebSocketImpl] - WebSocket 实现（默认全局实现）
@@ -94,8 +34,8 @@ function compareRecords(a, b) {
  * @returns {Object} 协调器句柄
  *
  * @description
- * 本地 commit 与 AOM 活动即时广播；远程记录按来源序号连续性与父在日志判定预检后接入，
- * 乱序记录攒批经容忍窗整理；周期摘要校验落后或分歧时请求全量重建。
+ * 本地 commit 与 AOM 活动即时广播；远程记录由共享接入器按序号与依赖预检接入，
+ * 乱序记录攒批经容忍窗整理；周期摘要驱动日志补洞与本地派生重建。
  * INIT 握手（request-init/respond-init）互换未闭合分子清单，对端缺失的在途分子
  * 经 awareness 重放 mol-begin/mol-amend 段（对账只依据 request-init 上的清单）。
  */
@@ -115,17 +55,28 @@ function createNetworkCoordinator(options) {
   } = options;
   const source = boardCore.hitCommitter.source;
   const log = boardCore.operationLog;
+  /**
+   * 本协调器独立的远程活动通道标识
+   * @type {Object}
+   */
+  const activityChannel = {};
+  /**
+   * 本通道已消费的远端分子预览水位
+   * @type {Map<string, {seq: number, closed: boolean}>}
+   */
+  const remoteMolStates = new Map();
+  const ingestor = createRemoteRecordIngestor({
+    boardCore,
+    boardApi,
+    onReject: (error, record) => {
+      console.warn(`[sync] 隔离无法接入的记录 ${record.id}：${error.message}`);
+    },
+  });
 
   /** @type {WebSocket|null} */
   let ws = null;
   /** @type {"closed"|"connecting"|"joined"} */
   let state = "closed";
-  /** @type {Map<string, Object>} 待接入记录（id → 记录） */
-  const pending = new Map();
-  /** @type {Map<string, number>} 各来源下一个期望序号 */
-  const nextSeq = new Map(
-    [...maxSeqBySource(log.toJSON())].map(([s, n]) => [s, n + 1]),
-  );
   /** @type {number} 已连续经过的容忍窗数 */
   let windowsElapsed = 0;
   /** @type {ReturnType<typeof setTimeout>|null} */
@@ -160,6 +111,7 @@ function createNetworkCoordinator(options) {
     unsubscribeAppend = null;
     unsubscribeActivity?.();
     unsubscribeActivity = null;
+    ingestor.close();
   };
 
   /**
@@ -172,10 +124,7 @@ function createNetworkCoordinator(options) {
     ws = null;
     cleanup();
     if (wasJoined) {
-      // 本端离线期间对端活动状态未知，清空待重连后重建
-      for (const { source: remoteSource } of boardApi.queryRemoteChoices()) {
-        boardApi.clearRemoteActivity(remoteSource);
-      }
+      releaseRemoteChannel(boardCore, boardApi, activityChannel);
     }
     if (wasJoined && !closedByUser) {
       onDisconnect?.();
@@ -220,72 +169,20 @@ function createNetworkCoordinator(options) {
   };
 
   /**
-   * 判定分组是否可接入（父在日志、来源序号连续）
-   * @param {Object[]} group - 记录分组
-   * @returns {boolean} 是否可接入
-   */
-  const isGroupApplicable = (group) => {
-    const sorted = [...group].sort(compareRecords);
-    const first = parseOperationId(sorted[0].id);
-    if (first === null) return false;
-    let expected = nextSeq.get(sorted[0].source) ?? 1;
-    for (const record of sorted) {
-      const parsed = parseOperationId(record.id);
-      if (parsed === null || parsed.n !== expected) return false;
-      if (
-        record.parentId !== null &&
-        !log.has(record.parentId) &&
-        !sorted.some((member) => member.id === record.parentId)
-      ) {
-        return false;
-      }
-      expected += 1;
-    }
-    return true;
-  };
-
-  /**
-   * 排空待接入缓冲：逐轮接入全部可接入分组
-   * @returns {void}
-   */
-  const drain = () => {
-    for (;;) {
-      const applicable = groupPending(pending)
-        .filter(isGroupApplicable)
-        .sort((a, b) => compareRecords(a[0], b[0]));
-      if (applicable.length === 0) return;
-      for (const group of applicable) {
-        for (const record of group) pending.delete(record.id);
-        try {
-          boardApi.applyRemoteOperations(group);
-          const last = parseOperationId(group[group.length - 1].id);
-          if (last !== null) {
-            nextSeq.set(group[group.length - 1].source, last.n + 1);
-          }
-        } catch {
-          // 预检未覆盖的竞态：放回缓冲等待后续整理
-          for (const record of group) pending.set(record.id, record);
-          return;
-        }
-      }
-    }
-  };
-
-  /**
    * 容忍窗到期的处理：再整理一轮，连续超窗则请求全量
    * @returns {void}
    */
   const onWindowElapsed = () => {
     windowTimer = null;
-    drain();
-    if (pending.size === 0) {
+    ingestor.drain();
+    if (ingestor.pendingCount === 0) {
       windowsElapsed = 0;
       return;
     }
     windowsElapsed += 1;
     if (windowsElapsed >= maxWindows) {
       windowsElapsed = 0;
-      sendRequestInit();
+      sendRequestInit(localLastSeen());
     }
     scheduleWindow();
   };
@@ -295,28 +192,27 @@ function createNetworkCoordinator(options) {
    * @returns {void}
    */
   const scheduleWindow = () => {
-    if (pending.size === 0 || windowTimer !== null) return;
+    if (ingestor.pendingCount === 0 || windowTimer !== null) return;
     windowTimer = setTimeout(onWindowElapsed, windowMs);
   };
 
   /**
-   * 接入远程记录：去重入缓冲并立即尝试排空
+   * 接入远程记录并维护容忍窗
    * @param {Object[]} records - 远程记录
    * @returns {void}
    */
   const ingestRecords = (records) => {
     for (const record of Array.isArray(records) ? records : []) {
-      if (record?.source === undefined || record?.id === undefined) continue;
-      if (parseOperationId(record.id) === null) continue;
-      // 回环（本端发出经对端转发回来）由 log.has 去重；
-      // 不按 source 跳过：同 source 重开会话的历史补发需要接入
-      if (log.has(record.id) || pending.has(record.id)) continue;
-      pending.set(record.id, record);
+      trackRemoteSource(boardCore, activityChannel, record?.source);
     }
-    drain();
+    ingestor.ingest(records);
     scheduleWindow();
-    if (pending.size === 0) {
+    if (ingestor.pendingCount === 0) {
       windowsElapsed = 0;
+      if (windowTimer !== null) {
+        clearTimeout(windowTimer);
+        windowTimer = null;
+      }
     }
   };
 
@@ -335,8 +231,7 @@ function createNetworkCoordinator(options) {
   });
 
   /**
-   * 处理远程摘要：落后或同长分歧时请求全量重建；日志与 HEAD 一致但派生链校验和分歧时
-   * 请求全量重建自愈；两端均全量驻留且内容校验和分歧时本地重放修复
+   * 处理远程摘要：日志落后或 HEAD 分歧时补缺口；日志一致而派生链分歧时本地重建
    * @param {Object} digest - 远程摘要
    * @returns {void}
    */
@@ -344,21 +239,23 @@ function createNetworkCoordinator(options) {
     if (!digest || typeof digest.logSize !== "number") return;
     const local = localDigest();
     if (digest.logSize > local.logSize) {
-      sendRequestInit();
+      sendRequestInit(localLastSeen());
       return;
     }
     if (digest.logSize === local.logSize && digest.head !== local.head) {
-      sendRequestInit();
+      sendRequestInit(localLastSeen());
       return;
     }
-    // 派生链分歧（日志逐字节一致但树派生不一致）：f(日志) 确定，全量重建自愈
     if (
       typeof digest.chainHash === "string" &&
       digest.logSize === local.logSize &&
       digest.head === local.head &&
       digest.chainHash !== local.chainHash
     ) {
-      sendRequestInit();
+      const result = boardApi.repairChainFromLog();
+      if (result.repaired) {
+        console.warn("[sync] 检测到派生链分歧，已从权威日志重建");
+      }
       return;
     }
     // 效果层分歧（日志逐字节一致但效果未放全）：内容校验和口径为已驻留对象，
@@ -391,6 +288,49 @@ function createNetworkCoordinator(options) {
   const localLastSeen = () => Object.fromEntries(maxSeqBySource(log.toJSON()));
 
   /**
+   * 记录远端分子消息的实际消费水位
+   * @param {Object} data - awareness 负载
+   * @returns {void}
+   */
+  const trackRemoteMols = (data) => {
+    if (data?.kind === "mol-begin" && typeof data.molId === "string") {
+      if (!remoteMolStates.has(data.molId)) {
+        remoteMolStates.set(data.molId, { seq: 0, closed: false });
+      }
+      return;
+    }
+    if (data?.kind === "mol-amend" && Array.isArray(data.mols)) {
+      for (const mol of data.mols) {
+        const state = remoteMolStates.get(mol?.molId);
+        if (!state || state.closed || typeof mol.seq !== "number") continue;
+        state.seq = Math.max(state.seq, mol.seq);
+      }
+      return;
+    }
+    if (
+      (data?.kind === "mol-end" || data?.kind === "mol-abort") &&
+      typeof data.molId === "string"
+    ) {
+      remoteMolStates.set(data.molId, { seq: Infinity, closed: true });
+      if (remoteMolStates.size > 1000) {
+        remoteMolStates.delete(remoteMolStates.keys().next().value);
+      }
+    }
+  };
+
+  /**
+   * 合并本地创建分子与已消费的远端预览水位
+   * @returns {Object[]} INIT 对账清单
+   */
+  const openMolsWithPreviews = () => {
+    const open = new Map(boardApi.queryOpenMols().map((mol) => [mol.molId, mol]));
+    for (const [molId, state] of remoteMolStates) {
+      if (!state.closed && !open.has(molId)) open.set(molId, { molId, seq: state.seq });
+    }
+    return [...open.values()];
+  };
+
+  /**
    * 发送 request-init：携带 lastSeen 增量摘要与本端未闭合分子清单（供对端对账重放）
    * @param {Object<string, number>} [lastSeen] - 本端各来源最大序号（缺省为全量请求）
    * @returns {void}
@@ -399,7 +339,7 @@ function createNetworkCoordinator(options) {
     send({
       type: "request-init",
       ...(lastSeen === undefined ? {} : { lastSeen }),
-      openMols: boardApi.queryOpenMols(),
+      openMols: openMolsWithPreviews(),
     });
   };
 
@@ -501,22 +441,25 @@ function createNetworkCoordinator(options) {
         }, digestIntervalMs);
         return;
       case "peer-joined":
-        // 对端（重）加入：告知我方缺口并同步当前互斥状态
+        // 同 source 新会话不得继承旧连接残留的活动锁
+        resetRemoteSource(boardCore, boardApi, message.source);
         sendRequestInit(localLastSeen());
         rebroadcastLocalActivity();
         return;
       case "peer-left":
-        boardApi.clearRemoteActivity(message.source);
+        releaseRemoteSource(boardCore, boardApi, activityChannel, message.source);
         onAwareness?.({ source: message.source, data: { kind: "peer-left" } });
         return;
       case "records":
         ingestRecords(message.records);
         return;
       case "aom":
+        trackRemoteSource(boardCore, activityChannel, message.source);
         boardApi.applyRemoteActivity(message.event, message.source);
         return;
       case "awareness":
         // volatile 通道：转发给宿主，不进日志不参与收敛
+        trackRemoteMols(message.data);
         onAwareness?.({ source: message.source, data: message.data });
         return;
       case "request-init": {
@@ -560,7 +503,7 @@ function createNetworkCoordinator(options) {
      * @type {number}
      */
     get pendingCount() {
-      return pending.size;
+      return ingestor.pendingCount;
     },
 
     /**
@@ -606,8 +549,11 @@ function createNetworkCoordinator(options) {
           } catch {
             return;
           }
+          if (message === null || typeof message !== "object" || Array.isArray(message)) {
+            return;
+          }
           handleMessage(message);
-          if (message?.type === "joined") {
+          if (message.type === "joined") {
             settled = true;
             clearTimeout(timer);
             resolve();
@@ -651,6 +597,7 @@ function createNetworkCoordinator(options) {
      */
     async close() {
       closedByUser = true;
+      releaseRemoteChannel(boardCore, boardApi, activityChannel);
       cleanup();
       const socket = ws;
       ws = null;

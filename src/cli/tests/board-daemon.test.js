@@ -98,6 +98,34 @@ async function waitFor(fn, timeout = 3000) {
   throw new Error("waitFor 超时");
 }
 
+/**
+ * 连接 daemon 的 GUI 协作通道
+ * @param {number} port - daemon 端口
+ * @param {string} source - 协作来源
+ * @returns {Promise<Object>} 测试客户端
+ */
+async function connectCollab(port, source) {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  const messages = [];
+  ws.addEventListener("message", (event) => {
+    messages.push(JSON.parse(String(event.data)));
+  });
+  await new Promise((resolve, reject) => {
+    ws.addEventListener("open", resolve, { once: true });
+    ws.addEventListener("error", reject, { once: true });
+  });
+  ws.send(JSON.stringify({ type: "join", source }));
+  await waitFor(() => messages.some((message) => message.type === "joined"));
+  return {
+    messages,
+    send: (message) => ws.send(JSON.stringify(message)),
+    close: () => new Promise((resolve) => {
+      ws.addEventListener("close", resolve, { once: true });
+      ws.close();
+    }),
+  };
+}
+
 describe("板 daemon", () => {
   test("RPC 命令执行：增删查与撤销", async () => {
     const { dir, cleanup } = await tempBoard();
@@ -194,6 +222,85 @@ describe("板 daemon", () => {
     await session.close();
     await cleanup();
   });
+
+  test("重复关闭共享同一清理承诺且最终落盘", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const daemon = await startBoardDaemon({
+      rootPath: dir,
+      exitOnZero: false,
+      name: "dt",
+      source: "daemon-close",
+    });
+    const client = await connectDaemonByPath(dir);
+    const id = await client.api.addObject("StrokeObject", {
+      data: { ...STROKE_DATA },
+    });
+    client.close();
+
+    const first = daemon.close();
+    const second = daemon.close();
+    expect(second).toBe(first);
+    await Promise.all([first, second]);
+    const session = await openBoardSession(dir, { source: "cli" });
+    expect(session.boardCore.getObjectById(id)).toBeDefined();
+    await session.close();
+    await cleanup();
+  });
+
+  test("非空板 GUI 重连 daemon 只补缺口，已有记录不重复追加", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const seed = await openBoardSession(dir, { source: "gui" });
+    const firstId = await seed.api.addObject("StrokeObject", {
+      data: { ...STROKE_DATA },
+    });
+    await seed.flush();
+    await seed.close();
+
+    const daemon = await startBoardDaemon({
+      rootPath: dir,
+      exitOnZero: false,
+      name: "dt",
+      source: "daemon",
+    });
+    const gui = await openBoardSession(dir, { source: "gui" });
+    const client = await connectDaemonByPath(dir);
+    let coordinator = null;
+    try {
+      expect(gui.boardCore.getObjectById(firstId)).toBeDefined();
+      const secondId = await gui.api.addObject("StrokeObject", {
+        data: { ...STROKE_DATA },
+      });
+      coordinator = createNetworkCoordinator({
+        boardCore: gui.boardCore,
+        boardApi: gui.api,
+        url: `ws://127.0.0.1:${daemon.port}`,
+        boardId: dir,
+      });
+      await coordinator.connect();
+      await waitFor(async () => (await client.api.queryBoardInfo()).records === 2);
+      expect((await client.api.queryObject(secondId)).id).toBe(secondId);
+
+      await coordinator.close();
+      const thirdId = await gui.api.addObject("StrokeObject", {
+        data: { ...STROKE_DATA },
+      });
+      coordinator = createNetworkCoordinator({
+        boardCore: gui.boardCore,
+        boardApi: gui.api,
+        url: `ws://127.0.0.1:${daemon.port}`,
+        boardId: dir,
+      });
+      await coordinator.connect();
+      await waitFor(async () => (await client.api.queryBoardInfo()).records === 3);
+      expect((await client.api.queryObject(thirdId)).id).toBe(thirdId);
+    } finally {
+      await coordinator?.close();
+      client.close();
+      await gui.close();
+      await daemon.close();
+      await cleanup();
+    }
+  }, 15000);
 
   test("daemon 连中继：CLI 操作与协作端实时互见", async () => {
     const relay = createRelayServer({ port: 0 });
@@ -406,6 +513,62 @@ describe("板 daemon", () => {
       await cleanup();
     }
   }, 20000);
+
+  test("awareness 在 GUI 双端与 relay 之间双向桥接", async () => {
+    const relay = createRelayServer({ port: 0, requestInitMinIntervalMs: 0 });
+    await relay.ready;
+    const relayUrl = `ws://127.0.0.1:${relay.port}`;
+    const { dir, cleanup } = await tempBoard();
+    const daemon = await startBoardDaemon({
+      rootPath: dir,
+      exitOnZero: false,
+      name: "dt",
+      source: "daemon",
+      relayUrl,
+      boardId: "awareness-room",
+    });
+    const peerCore = new BoardCore({
+      width: 800,
+      height: 600,
+      source: "peer",
+      aomRenderHooks: createDefaultAomRenderHooks(),
+      persistenceAdapter: createDefaultPersistenceAdapter(),
+    });
+    const peerApi = new BoardApi(peerCore);
+    const relayMessages = [];
+    const peer = createNetworkCoordinator({
+      boardCore: peerCore,
+      boardApi: peerApi,
+      url: relayUrl,
+      boardId: "awareness-room",
+      onAwareness: (message) => relayMessages.push(message),
+    });
+    await peer.connect();
+    const gui1 = await connectCollab(daemon.port, "gui-1");
+    const gui2 = await connectCollab(daemon.port, "gui-2");
+    try {
+      gui1.send({ type: "awareness", data: { kind: "cursor", point: { x: 1, y: 2 } } });
+      await waitFor(() => relayMessages.some((message) => message.data?.kind === "cursor"));
+      await waitFor(() => gui2.messages.some((message) =>
+        message.type === "awareness" && message.source === "gui-1"
+      ));
+
+      peer.sendAwareness({ kind: "cursor", point: { x: 8, y: 9 } });
+      await waitFor(() => gui1.messages.some((message) =>
+        message.type === "awareness" && message.source === "peer"
+      ));
+      await waitFor(() => gui2.messages.some((message) =>
+        message.type === "awareness" && message.source === "peer"
+      ));
+    } finally {
+      await gui1.close();
+      await gui2.close();
+      await peer.close();
+      await daemon.close();
+      await relay.close();
+      await cleanup();
+    }
+  }, 15000);
 
   test("daemon 先于中继启动：自动重连后参与协作", async () => {
     // 先占一个空闲端口再释放，模拟中继未启动

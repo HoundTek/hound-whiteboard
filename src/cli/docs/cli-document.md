@@ -43,8 +43,8 @@ hwb daemon stop --name board1            # 强制归零关闭
 - **后台启动**：`daemon start` 以 detached 子进程拉起 daemon 并等待就绪（注册表条目出现 + 端口可连通）后立即返回，终端可继续使用
 - **唯一性**：name 与存活 daemon 重复、板目录已被其它活 daemon 持有，均拒绝启动；僵尸条目（进程已死）可覆盖。启动窗口由板目录启动锁 `.daemon-start.lock` 互斥（O_EXCL 抢锁、持有者 pid 判活、死 pid 的 stale 锁自动回收），并发 start 只有一个进程能进入，启动完成后锁即释放
 - **板必须已存在**：先用 `create` 离线建板，再 `daemon start`
-- **强制关闭**：`daemon stop` 无条件关闭（排空 in-flight、落盘、清理板目录 `.daemon.json` 与注册表条目）
-- **中继**：daemon 连了中继（`--relay`）时，GUI 的操作经 daemon 桥接进 relay 房间，跨机协作端实时互见
+- **强制关闭**：`daemon stop` 无条件关闭；关闭过程 single-flight，进入关闭状态即拒绝新任务，随后排空已接收任务、落盘并清理板目录 `.daemon.json` 与注册表条目。重复 shutdown、闲置退出与信号触发等待同一清理承诺。
+- **中继**：daemon 连了中继（`--relay`）时，GUI 的操作与 volatile awareness 经 daemon 桥接进 relay 房间；relay 下行 awareness 同样转发给直连 GUI，跨机协作端实时互见
 
 ### GUI 协作
 

@@ -97,6 +97,12 @@ class CoreWorkerRuntime {
   #boardApi;
 
   /**
+   * 建板代次，使旧连接的完成回调无法挂到后续 BoardCore
+   * @type {number}
+   */
+  #boardGeneration = 0;
+
+  /**
    * 当前 ViewportCore 注册表
    * @type {Map<string, ViewportCore>}
    */
@@ -160,7 +166,7 @@ class CoreWorkerRuntime {
   #unsubscribeHitChanged;
 
   /**
-   * amend 转发器（协调器连接成功时非空）
+   * 板级 amend 转发器，向全部健康同步通道扇出
    * @type {Object | null}
    */
   #amendForwarder;
@@ -176,6 +182,12 @@ class CoreWorkerRuntime {
    * @type {Map<string, ReturnType<typeof setTimeout>>}
    */
   #molPreviewTimers;
+
+  /**
+   * 分子预览消息水位与结束墓碑
+   * @type {Map<string, {seq: number, closed: boolean}>}
+   */
+  #molPreviewStates = new Map();
 
   /**
    * 同步中继地址（createBoard 时记录，供断线重连）
@@ -403,12 +415,22 @@ class CoreWorkerRuntime {
         this.#handleIoResponse(message);
         return;
       case "awareness-send":
-        // UI 上报的 awareness（光标等）：经协调器 volatile 广播
-        this.#coordinator?.sendAwareness(message.data);
+        this.#broadcastAwareness(message.data);
         return;
       default:
         return;
     }
+  }
+
+  /**
+   * 向全部健康同步通道发送 volatile awareness
+   * @param {Object} data - awareness 负载
+   * @returns {void}
+   * @private
+   */
+  #broadcastAwareness(data) {
+    this.#coordinator?.sendAwareness(data);
+    this.#guiCoordinator?.sendAwareness(data);
   }
 
   /**
@@ -544,6 +566,7 @@ class CoreWorkerRuntime {
       throw new Error("BoardCore already created.");
     }
 
+    this.#boardGeneration += 1;
     this.#boardSize = { width: options.width ?? 0, height: options.height ?? 0 };
     const persistence = await this.#setupPersistence(options.rootPath);
 
@@ -592,6 +615,10 @@ class CoreWorkerRuntime {
     );
 
     this.#boardApi = new BoardApi(this.#boardCore);
+    this.#amendForwarder = createAmendForwarder({
+      boardCore: this.#boardCore,
+      sendAwareness: (data) => this.#broadcastAwareness(data),
+    });
 
     if (persistence) {
       this.#boardCore.restoreSession(persistence.session);
@@ -642,7 +669,7 @@ class CoreWorkerRuntime {
    * @private
    *
    * @description
-   * 每次尝试使用新的协调器实例（断线后旧实例已自清理）；成功时挂接 amend 转发器，
+   * 每次尝试使用新的协调器实例（断线后旧实例已自清理）；成功时挂接协调器，
    * 失败起每 3s 自动重试（板存活期间中继后启动也能连上）。
    */
   async #connectCoordinator() {
@@ -653,7 +680,6 @@ class CoreWorkerRuntime {
       assign: (coordinator) => {
         this.#coordinator = coordinator;
       },
-      getCoordinator: () => this.#coordinator,
       scheduleReconnect: () => this.#scheduleCoordinatorReconnect(),
       logConnected: `已连接同步中继：${this.#syncUrl}`,
       logFailedPrefix: "同步中继连接失败，离线运行",
@@ -666,7 +692,6 @@ class CoreWorkerRuntime {
    * @param {string} options.url - WS 地址
    * @param {string} options.boardId - 板标识（relay 侧为房间号，daemon 直连为板根路径）
    * @param {(coordinator: Object) => void} options.assign - 连接成功后的协调器归属赋值
-   * @param {() => Object | null} options.getCoordinator - 读取已归属协调器（amend 转发用）
    * @param {() => void} options.scheduleReconnect - 断线或失败时的重连调度
    * @param {string} options.logConnected - 连接成功日志文案
    * @param {string} options.logFailedPrefix - 连接失败日志前缀
@@ -675,24 +700,28 @@ class CoreWorkerRuntime {
    *
    * @description
    * 每次尝试使用新的协调器实例（断线后旧实例已自清理）；connect 期间板已销毁则
-   * 直接关闭防泄漏；成功时挂接 amend 转发器，失败时关闭实例并调度重连。
+   * 直接关闭防泄漏；成功时挂接协调器，失败时关闭实例并调度重连。
    */
   async #connectSyncChannel({
     url,
     boardId,
     assign,
-    getCoordinator,
     scheduleReconnect,
     logConnected,
     logFailedPrefix,
   }) {
+    const boardCore = this.#boardCore;
+    const boardApi = this.#boardApi;
+    const generation = this.#boardGeneration;
+    if (boardCore === null || boardApi === null) return;
     const coordinator = createNetworkCoordinator({
-      boardCore: this.#boardCore,
-      boardApi: this.#boardApi,
+      boardCore,
+      boardApi,
       url,
       boardId,
       // awareness 下行：volatile 消息（光标等）与成员离开转发 UI
       onAwareness: ({ source, data }) => {
+        if (this.#boardGeneration !== generation) return;
         this.#postMessage({
           type: "awareness",
           awarenessType: data?.kind,
@@ -710,6 +739,7 @@ class CoreWorkerRuntime {
         }
       },
       onDisconnect: () => {
+        if (this.#boardGeneration !== generation) return;
         // 断线瞬间对端手势状态不可信：通知 UI 清空全部预览与光标，重连后重建
         this.#postMessage({ type: "awareness", awarenessType: "disconnect" });
         for (const viewportCore of this.#viewportCores.values()) {
@@ -722,22 +752,20 @@ class CoreWorkerRuntime {
     });
     try {
       await coordinator.connect();
-      if (this.#boardCore === null) {
-        // connect 期间板已销毁：协调器无处挂接，直接关闭防泄漏
+      if (
+        this.#boardGeneration !== generation ||
+        this.#boardCore !== boardCore ||
+        this.#boardApi !== boardApi
+      ) {
         await coordinator.close();
         return;
       }
       assign(coordinator);
-      this.#amendForwarder?.close();
-      this.#amendForwarder = createAmendForwarder({
-        boardCore: this.#boardCore,
-        sendAwareness: (data) => getCoordinator()?.sendAwareness(data),
-      });
       this.#log.info(logConnected);
     } catch (error) {
       this.#log.warn(`${logFailedPrefix}：${error?.message ?? error}`);
       await coordinator.close();
-      scheduleReconnect();
+      if (this.#boardGeneration === generation) scheduleReconnect();
     }
   }
 
@@ -767,7 +795,6 @@ class CoreWorkerRuntime {
       assign: (coordinator) => {
         this.#guiCoordinator = coordinator;
       },
-      getCoordinator: () => this.#guiCoordinator,
       scheduleReconnect: () => this.#scheduleGuiReconnect(),
       logConnected: `已连接板 daemon 协作通道：${daemon.name}（端口 ${daemon.port}）`,
       logFailedPrefix: "板 daemon 协作连接失败",
@@ -858,10 +885,11 @@ class CoreWorkerRuntime {
         if (typeof data.molId !== "string" || !Array.isArray(data.entries)) {
           return;
         }
+        if (this.#molPreviewStates.has(data.molId)) return;
+        this.#molPreviewStates.set(data.molId, { seq: 0, closed: false });
         const ids = this.#molPreviewIds(data.molId);
         for (const entry of data.entries) {
           if (typeof entry?.objectId !== "string") continue;
-          // 修改型取 before 快照，创建型取 create 初始快照
           const position = entry.before?.position ?? entry.create?.position;
           if (
             typeof position?.x !== "number" ||
@@ -882,6 +910,12 @@ class CoreWorkerRuntime {
           if (typeof mol?.molId !== "string" || !Array.isArray(mol.entries)) {
             continue;
           }
+          const state = this.#molPreviewStates.get(mol.molId);
+          if (!state || state.closed) continue;
+          if (typeof mol.seq === "number") {
+            if (mol.seq <= state.seq) continue;
+            state.seq = mol.seq;
+          }
           const ids = this.#molPreviewIds(mol.molId);
           for (const entry of mol.entries) {
             if (typeof entry?.objectId !== "string") continue;
@@ -892,7 +926,6 @@ class CoreWorkerRuntime {
             ) {
               continue;
             }
-            // patch.position 为绝对坐标：直接覆盖，不是增量
             this.#setPreviewPosition(entry.objectId, position);
             ids.add(entry.objectId);
             changed = true;
@@ -904,6 +937,10 @@ class CoreWorkerRuntime {
       case "mol-end":
       case "mol-abort": {
         if (typeof data.molId !== "string") return;
+        this.#molPreviewStates.set(data.molId, { seq: Infinity, closed: true });
+        if (this.#molPreviewStates.size > 1000) {
+          this.#molPreviewStates.delete(this.#molPreviewStates.keys().next().value);
+        }
         changed = this.#dropMolPreview(data.molId);
         break;
       }
@@ -998,6 +1035,7 @@ class CoreWorkerRuntime {
     }
     this.#molPreviewTimers.clear();
     this.#molPreviews.clear();
+    this.#molPreviewStates.clear();
   }
 
   /**
@@ -1221,6 +1259,7 @@ class CoreWorkerRuntime {
    * @returns {Promise<{ ok: boolean }>} 销毁结果
    */
   async destroyBoard() {
+    this.#boardGeneration += 1;
     if (this.#coordinatorRetryTimer !== null) {
       clearTimeout(this.#coordinatorRetryTimer);
       this.#coordinatorRetryTimer = null;

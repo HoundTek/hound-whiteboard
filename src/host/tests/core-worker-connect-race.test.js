@@ -165,6 +165,44 @@ describe("CoreWorker connect/destroy 竞态", () => {
     host.emit({ type: "awareness-send", data: { kind: "cursor" } });
     expect(coordinator.awarenessSent).toHaveLength(0);
   });
+
+  test("旧板 connect 在新板建立后兑现也不得覆盖新协调器", async () => {
+    const host = new FakeWorkerHost();
+    const runtime = new CoreWorkerRuntime(host);
+    runtime.start();
+    const base = coordinatorInstances.length;
+    const oldCreate = rpc(host, "createBoard", {
+      width: 800,
+      height: 600,
+      source: "old",
+      syncUrl: "ws://127.0.0.1:1",
+      boardId: "old-room",
+    });
+    await until(() => coordinatorInstances.length === base + 1, "旧协调器已创建");
+    const oldOne = coordinatorInstances[base];
+    await rpc(host, "destroyBoard", {});
+
+    const newCreate = rpc(host, "createBoard", {
+      width: 800,
+      height: 600,
+      source: "new",
+      syncUrl: "ws://127.0.0.1:2",
+      boardId: "new-room",
+    });
+    await until(() => coordinatorInstances.length === base + 2, "新协调器已创建");
+    const newOne = coordinatorInstances[base + 1];
+    newOne._resolveConnect();
+    await newCreate;
+    oldOne._resolveConnect();
+    await oldCreate;
+
+    expect(oldOne.closed).toBe(true);
+    expect(newOne.closed).toBe(false);
+    host.emit({ type: "awareness-send", data: { kind: "cursor" } });
+    expect(newOne.awarenessSent).toHaveLength(1);
+    expect(oldOne.awarenessSent).toHaveLength(0);
+    await rpc(host, "destroyBoard", {});
+  });
 });
 
 describe("调试重连", () => {

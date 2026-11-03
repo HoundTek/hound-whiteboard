@@ -39,6 +39,24 @@ import { WebSocketServer } from "ws";
  */
 
 /**
+ * 默认单条入站消息上限（16 MiB）
+ * @type {number}
+ */
+const DEFAULT_MAX_PAYLOAD = 16 * 1024 * 1024;
+
+/**
+ * 默认单连接已排队发送字节上限（4 MiB）
+ * @type {number}
+ */
+const DEFAULT_MAX_BUFFERED_AMOUNT = 4 * 1024 * 1024;
+
+/**
+ * 默认 request-init 最小间隔毫秒数
+ * @type {number}
+ */
+const DEFAULT_REQUEST_INIT_MIN_INTERVAL_MS = 1000;
+
+/**
  * 校验非空字符串字段
  * @param {*} value - 待校验值
  * @returns {boolean} 是否合法
@@ -48,14 +66,25 @@ function isNonEmptyString(value) {
 }
 
 /**
- * 向单个连接发送消息
+ * 向单个连接发送消息，背压超限或发送失败时清理连接
  * @param {WebSocket} ws - 连接
  * @param {Object} message - 消息体
+ * @param {number} maxBufferedAmount - 已排队发送字节上限（<=0 不限制）
+ * @param {Function} onError - 背压超限或发送失败回调
  * @returns {void}
  */
-function send(ws, message) {
-  if (ws.readyState === ws.OPEN) {
-    ws.send(JSON.stringify(message));
+function send(ws, message, maxBufferedAmount, onError) {
+  if (ws.readyState !== ws.OPEN) return;
+  if (maxBufferedAmount > 0 && ws.bufferedAmount > maxBufferedAmount) {
+    onError();
+    return;
+  }
+  try {
+    ws.send(JSON.stringify(message), (error) => {
+      if (error) onError();
+    });
+  } catch {
+    onError();
   }
 }
 
@@ -65,6 +94,9 @@ function send(ws, message) {
  * @param {number} [options.port=0] - 监听端口（0 为随机）
  * @param {string} [options.host="127.0.0.1"] - 监听地址（默认仅本机；跨设备需显式传 "0.0.0.0"）
  * @param {number} [options.heartbeatMs=30000] - 心跳间隔毫秒数（<=0 关闭心跳）；一轮未回 pong 的连接被 terminate
+ * @param {number} [options.maxPayload=16777216] - 单条入站消息字节上限，由 ws 在接收时执行（0 不限制）
+ * @param {number} [options.maxBufferedAmount=4194304] - 单连接已排队发送字节上限，超过时 terminate（<=0 不限制）
+ * @param {number} [options.requestInitMinIntervalMs=1000] - 单连接 request-init 最小间隔毫秒数（<=0 不限制）
  * @returns {{ready: Promise<void>, port: number, address: () => Object|string|null, close: () => Promise<void>, roomSize: (boardId: string) => number}} 服务器句柄
  *
  * @description
@@ -73,9 +105,14 @@ function send(ws, message) {
  */
 function createRelayServer(options = {}) {
   const heartbeatMs = options.heartbeatMs ?? 30000;
+  const maxBufferedAmount =
+    options.maxBufferedAmount ?? DEFAULT_MAX_BUFFERED_AMOUNT;
+  const requestInitMinIntervalMs =
+    options.requestInitMinIntervalMs ?? DEFAULT_REQUEST_INIT_MIN_INTERVAL_MS;
   const wss = new WebSocketServer({
     port: options.port ?? 0,
     host: options.host ?? "127.0.0.1",
+    maxPayload: options.maxPayload ?? DEFAULT_MAX_PAYLOAD,
   });
   /**
    * 监听就绪承诺：显式 host 时绑定经 DNS 查找为异步，就绪前 port/address 不可用
@@ -92,6 +129,16 @@ function createRelayServer(options = {}) {
   const rooms = new Map();
 
   /**
+   * 向单个连接发送消息，失败时移出并断开
+   * @param {WebSocket} ws - 连接
+   * @param {Object} message - 消息体
+   * @returns {void}
+   */
+  const sendTo = (ws, message) => {
+    send(ws, message, maxBufferedAmount, () => terminateConnection(ws));
+  };
+
+  /**
    * 向房间内除排除者外全部成员广播
    * @param {Map<string, WebSocket>} room - 房间
    * @param {string|null} exceptSource - 排除的来源
@@ -101,7 +148,7 @@ function createRelayServer(options = {}) {
   const broadcast = (room, exceptSource, message) => {
     for (const [source, ws] of room) {
       if (source === exceptSource) continue;
-      send(ws, message);
+      sendTo(ws, message);
     }
   };
 
@@ -119,6 +166,20 @@ function createRelayServer(options = {}) {
     broadcast(room, null, { type: "peer-left", source: ws.source });
     if (room.size === 0) {
       rooms.delete(ws.boardId);
+    }
+  };
+
+  /**
+   * 移出连接并安全终止底层套接字
+   * @param {WebSocket} ws - 连接
+   * @returns {void}
+   */
+  const terminateConnection = (ws) => {
+    removeConnection(ws);
+    try {
+      ws.terminate();
+    } catch {
+      // 移出已完成，终止异常不再向其他连接扩散
     }
   };
 
@@ -157,7 +218,15 @@ function createRelayServer(options = {}) {
           data: message.data,
         });
         return;
-      case "request-init":
+      case "request-init": {
+        const now = Date.now();
+        if (
+          requestInitMinIntervalMs > 0 &&
+          now - ws.lastRequestInitAt < requestInitMinIntervalMs
+        ) {
+          return;
+        }
+        ws.lastRequestInitAt = now;
         broadcast(room, ws.source, {
           type: "request-init",
           source: ws.source,
@@ -169,11 +238,12 @@ function createRelayServer(options = {}) {
             : {}),
         });
         return;
+      }
       case "respond-init": {
         if (!isNonEmptyString(message.to)) return;
         const target = room.get(message.to);
         if (!target) return;
-        send(target, {
+        sendTo(target, {
           type: "respond-init",
           source: ws.source,
           records: message.records,
@@ -198,6 +268,7 @@ function createRelayServer(options = {}) {
   wss.on("connection", (ws) => {
     // 心跳存活标记：每轮 ping 前置 false，收到 pong 置回 true
     ws.isAlive = true;
+    ws.lastRequestInitAt = -Infinity;
     ws.on("pong", () => {
       ws.isAlive = true;
     });
@@ -232,9 +303,9 @@ function createRelayServer(options = {}) {
         const peers = [...room.keys()].filter((s) => s !== message.source);
         room.set(message.source, ws);
         if (previous && previous !== ws) {
-          previous.terminate();
+          terminateConnection(previous);
         }
-        send(ws, { type: "joined", source: message.source, peers });
+        sendTo(ws, { type: "joined", source: message.source, peers });
         broadcast(room, message.source, {
           type: "peer-joined",
           source: message.source,
@@ -245,12 +316,12 @@ function createRelayServer(options = {}) {
       handleRoomMessage(ws, message);
     });
     ws.on("close", () => removeConnection(ws));
-    ws.on("error", () => removeConnection(ws));
+    ws.on("error", () => terminateConnection(ws));
   });
 
   /**
-   * 心跳定时器：一轮未回 pong 的连接 terminate（经 close 走 removeConnection 广播 peer-left），
-   * 存活连接置假后 ping 一轮；幽灵连接（进程被杀、网络分区等半开状态）借此及时清出房间
+   * 心跳定时器：一轮未回 pong 的连接 terminate 并广播 peer-left，
+   * 存活连接置假后 ping 一轮；ping 失败同样安全清出房间
    * @type {NodeJS.Timeout|null}
    */
   const heartbeat =
@@ -258,11 +329,17 @@ function createRelayServer(options = {}) {
       ? setInterval(() => {
           for (const ws of wss.clients) {
             if (!ws.isAlive) {
-              ws.terminate();
+              terminateConnection(ws);
               continue;
             }
             ws.isAlive = false;
-            ws.ping();
+            try {
+              ws.ping((error) => {
+                if (error) terminateConnection(ws);
+              });
+            } catch {
+              terminateConnection(ws);
+            }
           }
         }, heartbeatMs)
       : null;
