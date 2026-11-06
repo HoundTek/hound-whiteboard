@@ -73,7 +73,7 @@
   "license": "GPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
-    "adm-zip": "0.5.17",
+    "adm-zip": "0.6.1",
     "hidefile": "3",
     "ws": "^8.21.2"
   },
