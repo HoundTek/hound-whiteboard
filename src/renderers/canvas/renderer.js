@@ -321,8 +321,14 @@ class Renderer extends CanvasHost {
 
   /**
    * 将世界坐标变换折算到屏幕坐标
+   * @description
+   * 返回一个把 `setTransform` 折叠进视口缩放与平移的上下文替身。
+   * 方法表在构建时从原上下文上一次性绑定，之后每次调用都是直接函数调用；
+   * 不使用 `Proxy`，因为 Proxy 的每次属性读取都要重新 `bind` 一个新函数,
+   * 而属性读取发生在绘制策略的点循环内，点越多代价越高。
+   * 属性写入与读取经访问器转发到原上下文，避免样式设置滞留在替身上。
    * @param {CanvasRenderingContext2D} ctx - 原始 2D 上下文
-   * @returns {CanvasRenderingContext2D}
+   * @returns {CanvasRenderingContext2D} 视口上下文
    */
   createViewportContext(ctx) {
     const viewport = this.viewport;
@@ -330,34 +336,49 @@ class Renderer extends CanvasHost {
     const originX = viewport?.origin?.x ?? 0;
     const originY = viewport?.origin?.y ?? 0;
 
-    return new Proxy(ctx, {
-      get(target, prop, receiver) {
-        if (prop === "setTransform") {
-          return (a, b, c, d, e, f) => {
-            const translatedE = (e - originX) * zoom;
-            const translatedF = (f - originY) * zoom;
-            return target.setTransform(
-              a * zoom,
-              b * zoom,
-              c * zoom,
-              d * zoom,
-              translatedE,
-              translatedF,
-            );
-          };
+    const viewportContext = {};
+    const visitedNames = new Set();
+
+    for (
+      let source = ctx;
+      source && source !== Object.prototype;
+      source = Object.getPrototypeOf(source)
+    ) {
+      for (const name of Object.getOwnPropertyNames(source)) {
+        if (name === "constructor" || visitedNames.has(name)) continue;
+        visitedNames.add(name);
+
+        const descriptor = Object.getOwnPropertyDescriptor(source, name);
+        if (!descriptor) continue;
+
+        if (typeof descriptor.value === "function") {
+          viewportContext[name] = descriptor.value.bind(ctx);
+          continue;
         }
 
-        const value = Reflect.get(target, prop, target);
-        if (typeof value === "function") {
-          return value.bind(target);
-        }
-        return value;
-      },
+        Object.defineProperty(viewportContext, name, {
+          enumerable: true,
+          configurable: true,
+          get: () => ctx[name],
+          set: (value) => {
+            ctx[name] = value;
+          },
+        });
+      }
+    }
 
-      set(target, prop, value) {
-        return Reflect.set(target, prop, value, target);
-      },
-    });
+    // 覆盖绑定后的 setTransform，叠上视口缩放与平移
+    viewportContext.setTransform = (a, b, c, d, e, f) =>
+      ctx.setTransform(
+        a * zoom,
+        b * zoom,
+        c * zoom,
+        d * zoom,
+        (e - originX) * zoom,
+        (f - originY) * zoom,
+      );
+
+    return viewportContext;
   }
 }
 

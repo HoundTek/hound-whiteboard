@@ -144,25 +144,26 @@ function createFastContext() {
 
 /**
  * 创建带调用计数的 2D 上下文
- * @description 只用于统计绘制调用量，不参与计时——Proxy 拦截本身有显著开销。
+ * @description 以真实空实现上下文的完整方法表为基底逐个包上计数器。
+ * 不使用 catch-all `Proxy`，因为视口上下文需要能枚举出真实存在的方法，
+ * 包裹式代理会让方法表变成空的。
  * @returns {{ ctx: CanvasRenderingContext2D, counts: Record<string, number> }} 计数上下文
  */
 function createCountingContext() {
   const counts = Object.create(null);
-  const ctx = new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        return (...args) => {
-          counts[prop] = (counts[prop] ?? 0) + 1;
-          return prop === "measureText" ? { width: 0 } : undefined;
-        };
-      },
-      set() {
-        return true;
-      },
-    },
-  );
+  const ctx = {};
+
+  for (const [name, value] of Object.entries(createNoopCanvasContext2D())) {
+    if (typeof value !== "function") {
+      ctx[name] = value;
+      continue;
+    }
+    ctx[name] = () => {
+      counts[name] = (counts[name] ?? 0) + 1;
+      return name === "measureText" ? { width: 0 } : undefined;
+    };
+  }
+
   return { ctx, counts };
 }
 
@@ -477,8 +478,7 @@ async function profileScenario(scenario) {
  * 作为「未被计时覆盖的光栅化负载」指标报告。
  * @param {{ strokes: number, points: number }} scenario - 场景规模
  * @returns {Promise<{ commitOps: number, panOps: number, lineTo: number }>} 调用量
- */
-async function countDrawOperations(scenario) {
+ */ async function countDrawOperations(scenario) {
   const counter = createCountingContext();
   const restoreCanvas = installCanvasFactory(() => counter.ctx);
   const restoreFrameHost = installFrameHost();
@@ -614,7 +614,9 @@ function tableBorder(left, middle, right) {
  * @returns {string} 行文本
  */
 function tableRow(cells) {
-  const padded = cells.map((cell, index) => padDisplay(cell, COLUMN_WIDTHS[index]));
+  const padded = cells.map((cell, index) =>
+    padDisplay(cell, COLUMN_WIDTHS[index]),
+  );
   return `  │ ${padded.join(" │ ")} │`;
 }
 
@@ -646,8 +648,20 @@ function printScenario(result, ops) {
   console.log(tableBorder("├", "┼", "┤"));
 
   const rows = [
-    ["提交后静态缓存重建", result.commit, WORKER_BUDGET_MS, ops.commitOps, ops.commitLineTo],
-    ["平移一帧（worker 全链）", result.pan, WORKER_BUDGET_MS, ops.panOps, ops.panLineTo],
+    [
+      "提交后静态缓存重建",
+      result.commit,
+      WORKER_BUDGET_MS,
+      ops.commitOps,
+      ops.commitLineTo,
+    ],
+    [
+      "平移一帧（worker 全链）",
+      result.pan,
+      WORKER_BUDGET_MS,
+      ops.panOps,
+      ops.panLineTo,
+    ],
     ["输出层单帧（缓存未失效）", result.output, WORKER_BUDGET_MS, 0, 0],
     ["帧回传（位图 + 回填）", result.transfer, null, 0, 0],
   ];
@@ -721,10 +735,10 @@ async function main() {
 
   console.log("\n═══════════════════════════════════════════════════");
   console.log("规模曲线（p95，毫秒）");
-  console.log("───────────────────────────────────────────────────────────────");
   console.log(
-    "  总点数  │ 提交重建 │ 平移一帧 │ 输出层 │ 判定",
+    "───────────────────────────────────────────────────────────────",
   );
+  console.log("  总点数  │ 提交重建 │ 平移一帧 │ 输出层 │ 判定");
   let firstOver = null;
   for (const { profile } of results) {
     const over =
