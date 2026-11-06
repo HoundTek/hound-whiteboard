@@ -78,6 +78,7 @@
     "ws": "^8.21.2"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.1.0",
     "@tauri-apps/cli": "^2.11.2",
     "benchmark": "2.1.4",
     "hound-tauri-build": "^0.4.2",

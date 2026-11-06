@@ -183,7 +183,14 @@ Node 里没有 `requestAnimationFrame`，`RenderScheduler` 会回退到 `setTime
 测量窗口内会插入与被测操作无关的额外 flush。测帧相关路径时把 `requestAnimationFrame`
 换成永不回调的替身，由 benchmark 显式调用 `flush()` 驱动每一帧。
 
-### 7. 如何测量每秒操作数
+### 7. 光栅化要用真实 canvas 测
+
+空实现上下文里 canvas 调用全是空函数，只测得到 JavaScript、几何与调度，绘制成本恒为零。
+要衡量渲染成本必须换成真实实现：`bench:frame` 用 `@napi-rs/canvas`，加载不到时自动降级为只跑 JS 侧并告警。
+但不要把光栅器下的 flush 全链当指标：CPU 光栅器在刷新画布表面时会做惰性展平与内存回收，
+那部分开销与绘制无关，还会让读数在几十到几百毫秒间跳。把计时包在绘制策略内部单独累加。
+
+### 8. 如何测量每秒操作数
 
 Helper 内部实现逻辑：
 

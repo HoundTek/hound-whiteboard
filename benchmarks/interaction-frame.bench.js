@@ -1,6 +1,6 @@
 /**
  * @file 交互帧预算基准
- * @description 在真实区块加载路径上测量提交重绘、平移帧、空闲帧与帧回传的 worker 侧耗时，并按 60fps 预算逐项判定。
+ * @description 在真实区块加载路径上分别测量 JS 侧与含光栅化的耗时，并按 60fps 预算逐项判定。
  * @module benchmarks/interaction-frame
  * @author Zhou Chenyu
  */
@@ -10,6 +10,7 @@ import { ViewportCore } from "../src/renderers/canvas/viewport-core.js";
 import { StrokeObject } from "../src/kernel/objects/stroke/stroke.js";
 import { Vector } from "../src/kernel/utils/math.js";
 import { RectangleRange } from "../src/kernel/range/rectangle.js";
+import { OBJECT_DRAW_STRATEGIES } from "../src/renderers/canvas/object-draw-strategies.js";
 import { createNoopCanvasContext2D } from "../src/test-support/noop-canvas.js";
 import { printHeader, printFooter } from "./helpers.js";
 
@@ -72,16 +73,23 @@ const SCENARIOS = Object.freeze([
 ]);
 
 /**
- * 每个采样批次内的迭代次数
- * @type {number}
+ * 测量模式
+ * @description
+ * `js` 用空实现上下文，只覆盖 JavaScript、几何与调度成本，用作光栅化成本的基线；
+ * `raster` 用真实 CPU 光栅器，覆盖到 canvas 实际绘制成本。
+ * @type {{ js: string, raster: string }}
  */
-const BATCH_ITERATIONS = 8;
+const CANVAS_MODES = Object.freeze({ js: "js", raster: "raster" });
 
 /**
- * 采样批次数
- * @type {number}
+ * 各模式的采样配置
+ * @description 光栅化单次耗时长出两个数量级，采样次数相应减少，避免基准跑到分钟级。
+ * @type {Record<string, { batches: number, iterations: number }>}
  */
-const BATCH_COUNT = 25;
+const MEASURE_CONFIG = Object.freeze({
+  [CANVAS_MODES.js]: { batches: 25, iterations: 8 },
+  [CANVAS_MODES.raster]: { batches: 9, iterations: 2 },
+});
 
 /**
  * 预热轮数
@@ -112,8 +120,8 @@ function quantile(sortedSamples, q) {
  * @returns {{ p50: number, p95: number, mean: number }} 单次耗时统计（毫秒）
  */
 function measure(fn, options = {}) {
-  const batches = options.batches ?? BATCH_COUNT;
-  const iterations = options.iterations ?? BATCH_ITERATIONS;
+  const batches = options.batches ?? 25;
+  const iterations = options.iterations ?? 8;
   const warmup = options.warmup ?? WARMUP_ROUNDS;
 
   for (let i = 0; i < warmup; i++) fn();
@@ -134,12 +142,68 @@ function measure(fn, options = {}) {
 }
 
 /**
- * 创建快速空实现 2D 上下文
- * @description 计时用的上下文必须没有任何拦截开销，否则测到的会是拦截器成本而非渲染管线成本。
- * @returns {CanvasRenderingContext2D} 空实现上下文
+ * 采样返回数值的操作
+ * @description 与 `measure` 的区别：样本来自被测操作自己报告的值，而不是墙钟差。
+ * 用于测量「绘制策略内部」的耗时：CPU 光栅器在刷新画布表面时会做惰性展平与回收，
+ * 那部分开销落在 flush 上却与绘制无关，只有向内插才分得开。
+ * @param {() => number} fn - 返回本次耗时（毫秒）的操作
+ * @param {{ batches?: number, iterations?: number, warmup?: number }} [options={}] - 采样配置
+ * @returns {{ p50: number, p95: number, mean: number }} 统计结果（毫秒）
  */
-function createFastContext() {
-  return createNoopCanvasContext2D();
+function measureValue(fn, options = {}) {
+  const batches = options.batches ?? 25;
+  const iterations = options.iterations ?? 8;
+  const warmup = options.warmup ?? WARMUP_ROUNDS;
+
+  for (let i = 0; i < warmup; i++) fn();
+
+  const samples = [];
+  for (let b = 0; b < batches; b++) {
+    let sum = 0;
+    for (let i = 0; i < iterations; i++) sum += fn();
+    samples.push(sum / iterations);
+  }
+  samples.sort((a, b) => a - b);
+
+  return {
+    p50: quantile(samples, 0.5),
+    p95: quantile(samples, 0.95),
+    mean: samples.reduce((sum, value) => sum + value, 0) / samples.length,
+  };
+}
+
+/**
+ * 安装绘制策略计时器
+ * @description 临时包裹注册表中的绘制策略，累加其内部耗时。
+ * 包裹本身有 `performance.now()` 开销（每个对象两次），应只用于隔离测量，
+ * 不要在测全链时启用。
+ * @returns {{ take: () => number, restore: () => void }} 计时器
+ */
+function installDrawTiming() {
+  const originals = new Map();
+  let accumulated = 0;
+
+  for (const [key, strategy] of OBJECT_DRAW_STRATEGIES) {
+    originals.set(key, strategy);
+    OBJECT_DRAW_STRATEGIES.set(key, (ctx, objectInstance) => {
+      const start = performance.now();
+      strategy(ctx, objectInstance);
+      accumulated += performance.now() - start;
+    });
+  }
+
+  return {
+    take() {
+      const value = accumulated;
+      accumulated = 0;
+      return value;
+    },
+    restore() {
+      for (const [key, strategy] of originals) {
+        OBJECT_DRAW_STRATEGIES.set(key, strategy);
+      }
+    },
+  };
 }
 
 /**
@@ -168,22 +232,53 @@ function createCountingContext() {
 }
 
 /**
- * 安装 canvas 工厂
- * @description 同时接管 OffscreenCanvas 构造器，使 ViewportCore 的缓存层与输出层都使用同一上下文。
- * @param {() => CanvasRenderingContext2D} createContext - 上下文工厂
+ * 创建 JS 侧画布工厂
+ * @description 所有绘制调用都是空函数，只保留视口上下文所需的完整方法表。
+ * @returns {(width: number, height: number) => Object} 画布工厂
+ */
+function createJsCanvasFactory() {
+  const context = createNoopCanvasContext2D();
+
+  return (width, height) => ({
+    width,
+    height,
+    getContext: () => context,
+    transferToImageBitmap: () => ({ width, height, close() {} }),
+  });
+}
+
+/**
+ * 创建真实光栅化画布工厂
+ * @description
+ * `@napi-rs/canvas` 没有 `ImageBitmap`，用一张等尺寸快照模拟位图句柄。
+ * 这意味着帧回传路径在这里会多付一次整画布拷贝；浏览器里 `transferToImageBitmap`
+ * 近似免费，所以该行的读数偏悲观，不参与判定。
+ * @param {{ createCanvas: Function }} rasterModule - 真实 canvas 实现
+ * @returns {(width: number, height: number) => Object} 画布工厂
+ */
+function createRasterCanvasFactory(rasterModule) {
+  return (width, height) => {
+    const canvas = rasterModule.createCanvas(width, height);
+    canvas.transferToImageBitmap = () => {
+      const snapshot = rasterModule.createCanvas(width, height);
+      snapshot.getContext("2d").drawImage(canvas, 0, 0);
+      return snapshot;
+    };
+    return canvas;
+  };
+}
+
+/**
+ * 安装画布构造器
+ * @description 接管 `OffscreenCanvas`，使 ViewportCore 的缓存层与输出层都由同一工厂产出。
+ * @param {(width: number, height: number) => Object} createCanvasLike - 画布工厂
  * @returns {() => void} 恢复函数
  */
-function installCanvasFactory(createContext) {
+function installCanvasFactory(createCanvasLike) {
   const previous = globalThis.OffscreenCanvas;
-  const context = createContext();
 
   globalThis.OffscreenCanvas = function OffscreenCanvas(width, height) {
-    return {
-      width,
-      height,
-      getContext: () => context,
-      transferToImageBitmap: () => ({ width, height, close() {} }),
-    };
+    return createCanvasLike(width, height);
   };
 
   return () => {
@@ -225,7 +320,7 @@ function installFrameHost() {
 
 /**
  * 确定性伪随机数发生器
- * @description 让不同轮次、不同规模的场景使用同一套笔迹形状，避免形状差异污染对比。
+ * @description 让不同轮次、不同规模、不同模式的场景使用同一套笔迹形状，避免形状差异污染对比。
  * @param {number} seed - 随机种子
  * @returns {() => number} [0,1) 区间发生器
  */
@@ -283,16 +378,7 @@ async function waitForChunksLoaded(viewport, timeoutMs = 5000) {
  * 每笔提交都经 ActiveObjectManager 的 add / apply，与真实提交路径一致。
  * @param {{ strokes: number, points: number }} scenario - 场景规模
  * @param {{ seed?: number, activeStrokes?: number }} [options={}] - 夹具选项
- * @returns {Promise<{
- *   boardCore: BoardCore,
- *   viewport: ViewportCore,
- *   renderer: import("../src/renderers/canvas/viewport-renderer.js").ViewportRenderer,
- *   staticDrawableCount: number,
- *   activeDrawableCount: number,
- *   loadedChunkCount: number,
- *   frames: Array<Object>,
- *   sampleStroke: StrokeObject,
- * }>} 夹具
+ * @returns {Promise<Object>} 夹具
  */
 async function buildFixture(scenario, options = {}) {
   const seed = options.seed ?? 20261106;
@@ -378,10 +464,11 @@ async function buildFixture(scenario, options = {}) {
 /**
  * 测量一个场景的各帧类型耗时
  * @param {{ strokes: number, points: number }} scenario - 场景规模
+ * @param {{ createCanvasLike: Function, sampleConfig: { batches: number, iterations: number } }} mode - 测量模式
  * @returns {Promise<Object>} 测量结果
  */
-async function profileScenario(scenario) {
-  const restoreCanvas = installCanvasFactory(createFastContext);
+async function profileScenario(scenario, mode) {
+  const restoreCanvas = installCanvasFactory(mode.createCanvasLike);
   const restoreFrameHost = installFrameHost();
 
   try {
@@ -438,8 +525,13 @@ async function profileScenario(scenario) {
       viewport.flushRenderFrame();
     };
 
+    const sampleOptions = {
+      batches: mode.sampleConfig.batches,
+      iterations: mode.sampleConfig.iterations,
+    };
+
     const idleFramesBefore = frames.length;
-    const idle = measure(idleFrame);
+    const idle = measure(idleFrame, sampleOptions);
     const idleFramesProduced = frames.length - idleFramesBefore;
 
     const transferFrame = () => {
@@ -447,10 +539,26 @@ async function profileScenario(scenario) {
       viewport.flushRenderFrame();
     };
 
-    const commit = measure(commitRedraw);
-    const output = measure(outputFrame);
-    const pan = measure(panFrame);
-    const transfer = measure(transferFrame);
+    const commit = measure(commitRedraw, sampleOptions);
+    const output = measure(outputFrame, sampleOptions);
+    const pan = measure(panFrame, sampleOptions);
+    const transfer = measure(transferFrame, sampleOptions);
+
+    // 隔离出绘制策略本身的耗时。CPU 光栅器在刷新表面时会做惰性展平与回收，
+    // 那部分开销落在全链 flush 上却不属于绘制，混在一起无法用于架构决策。
+    let rebuildDraw = null;
+    if (mode.measureDraw) {
+      const timing = installDrawTiming();
+      try {
+        rebuildDraw = measureValue(() => {
+          renderer.invalidateCachedObjects([sampleStroke]);
+          renderer.flush([]);
+          return timing.take();
+        }, sampleOptions);
+      } finally {
+        timing.restore();
+      }
+    }
 
     return {
       label: `${scenario.strokes} 笔 × ${scenario.points} 点`,
@@ -464,6 +572,7 @@ async function profileScenario(scenario) {
       pan,
       transfer,
       idle,
+      rebuildDraw,
       idleFramesProduced,
     };
   } finally {
@@ -474,13 +583,23 @@ async function profileScenario(scenario) {
 
 /**
  * 统计绘制调用量
- * @description 计时用的空上下文不产生光栅化，这里单独统计 canvas 调用次数，
- * 作为「未被计时覆盖的光栅化负载」指标报告。
+ * @description 计时用的上下文不产生光栅化，这里单独统计 canvas 调用次数，
+ * 作为「每次重建要光栅化多少东西」的规模指标报告。
  * @param {{ strokes: number, points: number }} scenario - 场景规模
- * @returns {Promise<{ commitOps: number, panOps: number, lineTo: number }>} 调用量
- */ async function countDrawOperations(scenario) {
+ * @returns {Promise<{ commitOps: number, commitLineTo: number, panOps: number, panLineTo: number }>} 调用量
+ */
+async function countDrawOperations(scenario) {
   const counter = createCountingContext();
-  const restoreCanvas = installCanvasFactory(() => counter.ctx);
+  const restoreCanvas = installCanvasFactory(() => ({
+    width: VIEWPORT_SIZE.width,
+    height: VIEWPORT_SIZE.height,
+    getContext: () => counter.ctx,
+    transferToImageBitmap: () => ({
+      width: VIEWPORT_SIZE.width,
+      height: VIEWPORT_SIZE.height,
+      close() {},
+    }),
+  }));
   const restoreFrameHost = installFrameHost();
 
   try {
@@ -532,6 +651,16 @@ async function profileScenario(scenario) {
  */
 function formatMs(value) {
   return value.toFixed(2).padStart(7);
+}
+
+/**
+ * 格式化百分比
+ * @param {number} ratio - 占比（0~1）
+ * @returns {string} 定宽字符串
+ */
+function formatShare(ratio) {
+  if (!Number.isFinite(ratio)) return "      -";
+  return `${Math.round(ratio * 100)}%`.padStart(7);
 }
 
 /**
@@ -595,7 +724,7 @@ function padDisplay(text, width) {
  * @description 每列单元格的显示宽度；分隔线宽度为内容宽度 + 2（两侧各一个空格）。
  * @type {number[]}
  */
-const COLUMN_WIDTHS = Object.freeze([24, 7, 7, 7, 26, 4]);
+const COLUMN_WIDTHS = Object.freeze([22, 8, 8, 8, 7, 4]);
 
 /**
  * 生成表格边框线
@@ -630,78 +759,116 @@ function formatBudget(budget) {
 }
 
 /**
+ * 格式化可缺省的毫秒列
+ * @param {number | null | undefined} value - 毫秒
+ * @returns {string} 定宽字符串
+ */
+function formatOptionalMs(value) {
+  return typeof value === "number" ? formatMs(value) : "      -";
+}
+
+/**
  * 打印单个场景的测量表
- * @param {Object} result - profileScenario 的结果
+ * @param {Object} profiles - 各模式测量结果
  * @param {Object} ops - countDrawOperations 的结果
  * @returns {boolean} 该场景是否全部达标
  */
-function printScenario(result, ops) {
-  console.log(`\n【${result.label}】`);
+function printScenario(profiles, ops) {
+  const { js, raster } = profiles;
+  const drawP95 = raster?.rebuildDraw?.p95 ?? 0;
+  const hasRaster = raster !== null;
+
+  console.log(`\n【${js.label}】`);
   console.log(
-    `  已加载区块 ${result.loadedChunkCount} 个 · 静态对象 ${result.staticDrawableCount} 个` +
-      ` · 活动对象 ${result.activeDrawableCount} 个 · 总点数 ${result.pointCount.toLocaleString("en-US")}`,
+    `  已加载区块 ${js.loadedChunkCount} 个 · 静态对象 ${js.staticDrawableCount} 个` +
+      ` · 活动对象 ${js.activeDrawableCount} 个 · 总点数 ${js.pointCount.toLocaleString("en-US")}`,
   );
   console.log(tableBorder("┌", "┬", "┐"));
   console.log(
-    tableRow(["帧类型", "p50(ms)", "p95(ms)", "预算", "绘制调用/次", "判定"]),
+    tableRow(["帧类型", "JS p95", "光栅化", "估算合计", "预算", "判定"]),
   );
   console.log(tableBorder("├", "┼", "┤"));
 
+  /**
+   * 估算合计 = JS 全链 + 绘制策略光栅化
+   * @description 两者互不重叠：前者是几何、合图与调度，后者是 canvas 绘制本身。
+   * 平移一帧同样会触发一次全量重建，因此复用同一份光栅化读数。
+   */
+  const drawPart = hasRaster ? drawP95 : null;
   const rows = [
-    [
-      "提交后静态缓存重建",
-      result.commit,
-      WORKER_BUDGET_MS,
-      ops.commitOps,
-      ops.commitLineTo,
-    ],
-    [
-      "平移一帧（worker 全链）",
-      result.pan,
-      WORKER_BUDGET_MS,
-      ops.panOps,
-      ops.panLineTo,
-    ],
-    ["输出层单帧（缓存未失效）", result.output, WORKER_BUDGET_MS, 0, 0],
-    ["帧回传（位图 + 回填）", result.transfer, null, 0, 0],
+    ["commit", "提交重绘（全量重建）", WORKER_BUDGET_MS, drawPart, true],
+    ["pan", "平移一帧（worker 全链）", WORKER_BUDGET_MS, drawPart, true],
+    ["output", "输出层单帧（缓存未失效）", WORKER_BUDGET_MS, null, true],
+    ["transfer", "帧回传（位图 + 回填）", null, null, false],
   ];
 
   let passed = true;
-  for (const [label, stats, budget, opsCount, lineTo] of rows) {
-    const ok = verdict(stats.p95, budget);
-    if (!ok) passed = false;
+  for (const [key, label, budget, rasterPart, judge] of rows) {
+    const jsP95 = js[key].p95;
+    const estimate = jsP95 + (rasterPart ?? 0);
+    const ok = verdict(estimate, budget);
+    if (judge && !ok) passed = false;
+    const opsKey = key === "commit" ? ops.commitOps : key === "pan" ? ops.panOps : 0;
+    const opsLineTo =
+      key === "commit" ? ops.commitLineTo : key === "pan" ? ops.panLineTo : 0;
     const opsText =
-      opsCount > 0
-        ? `${opsCount.toLocaleString("en-US")} (lineTo ${lineTo.toLocaleString("en-US")})`
+      opsKey > 0
+        ? `${opsKey.toLocaleString("en-US")} (lineTo ${opsLineTo.toLocaleString("en-US")})`
         : "-";
     console.log(
       tableRow([
         label,
-        formatMs(stats.p50),
-        formatMs(stats.p95),
+        formatMs(jsP95),
+        formatOptionalMs(rasterPart),
+        formatMs(estimate),
         formatBudget(budget),
-        opsText,
         verdictLabel(ok, budget),
       ]),
     );
+    if (opsText !== "-") {
+      console.log(`    · 绘制调用 / 次：${opsText}`);
+    }
   }
 
   const idleOk =
-    result.idleFramesProduced === 0 && result.idle.p95 <= IDLE_BUDGET_MS;
+    js.idleFramesProduced === 0 && js.idle.p95 <= IDLE_BUDGET_MS;
   if (!idleOk) passed = false;
   console.log(
     tableRow([
       "空闲帧（不应产出帧）",
-      formatMs(result.idle.p50),
-      formatMs(result.idle.p95),
+      formatMs(js.idle.p95),
+      formatOptionalMs(null),
+      formatMs(js.idle.p95),
       formatMs(IDLE_BUDGET_MS),
-      `产出 ${result.idleFramesProduced} 帧`,
       verdictLabel(idleOk, IDLE_BUDGET_MS),
     ]),
   );
   console.log(tableBorder("└", "┴", "┘"));
 
+  if (hasRaster) {
+    console.log(
+      `  诊断：光栅模式 flush 全链 p95 = 提交 ${formatMs(raster.commit.p95)} · 平移 ${formatMs(raster.pan.p95)}；` +
+        `其中绘制 ${formatMs(raster.rebuildDraw.p95)}，其余为 CPU 光栅器的惰性展平与内存回收，浏览器无此项。`,
+    );
+  }
+
   return passed;
+}
+
+/**
+ * 加载真实光栅化实现
+ * @description 缺失时降级为只跑 JS 侧并明确告警，不静默跳过。
+ * @returns {Promise<{ createCanvas: Function } | null>} 真实 canvas 实现
+ */
+async function loadRasterModule() {
+  try {
+    return await import("@napi-rs/canvas");
+  } catch (error) {
+    console.warn(
+      `\n未能加载 @napi-rs/canvas，本次跳过光栅化测量：${error?.message ?? error}`,
+    );
+    return null;
+  }
 }
 
 /**
@@ -716,51 +883,74 @@ async function main() {
       `worker 侧占 ${(WORKER_SHARE * 100).toFixed(0)}% → ${WORKER_BUDGET_MS.toFixed(2)}ms。` +
       `判定取 p95。\n`,
   );
+
+  const rasterModule = await loadRasterModule();
+  const rasterFactory = rasterModule
+    ? createRasterCanvasFactory(rasterModule)
+    : null;
+
   console.log(
-    "测量边界：使用空实现 2D 上下文，因此只覆盖 worker 侧的 JavaScript、几何与调度成本，" +
-      "不含 canvas 光栅化。绘制调用量单独统计，作为未计入部分的下界参考；" +
-      "「帧回传」行的主要成本是全画布位图搬运，空上下文下无意义，故不参与判定。",
+    "口径：JS p95 用空实现上下文，含几何、合图与调度；光栅化只统计绘制策略内部耗时。" +
+      "估算合计 = 两者相加，判定以它为准。",
+  );
+  console.log(
+    "不直接用光栅模式的 flush 全链：CPU 光栅器在刷新画布表面时会做惰性展平与内存回收，" +
+      "那部分开销落在全链上却不属于绘制，浏览器里也没有。",
   );
 
   const results = [];
   let allPassed = true;
 
   for (const scenario of SCENARIOS) {
-    const profile = await profileScenario(scenario);
+    const js = await profileScenario(scenario, {
+      createCanvasLike: createJsCanvasFactory(),
+      sampleConfig: MEASURE_CONFIG[CANVAS_MODES.js],
+      measureDraw: false,
+    });
+    const raster = rasterFactory
+      ? await profileScenario(scenario, {
+          createCanvasLike: rasterFactory,
+          sampleConfig: MEASURE_CONFIG[CANVAS_MODES.raster],
+          measureDraw: true,
+        })
+      : null;
     const ops = await countDrawOperations(scenario);
-    const passed = printScenario(profile, ops);
+
+    const passed = printScenario({ js, raster }, ops);
     allPassed = allPassed && passed;
-    results.push({ profile, ops, passed });
+    results.push({ js, raster, ops, passed });
   }
 
-  console.log("\n═══════════════════════════════════════════════════");
+  console.log("\n═══════════════════════════════════════════════════════════");
   console.log("规模曲线（p95，毫秒）");
+  console.log("───────────────────────────────────────────────────────────────");
   console.log(
-    "───────────────────────────────────────────────────────────────",
+    "  总点数  │ JS 重建 │ 光栅化 │ 估算合计 │ 占帧   │ 判定",
   );
-  console.log("  总点数  │ 提交重建 │ 平移一帧 │ 输出层 │ 判定");
   let firstOver = null;
-  for (const { profile } of results) {
-    const over =
-      profile.commit.p95 > WORKER_BUDGET_MS ||
-      profile.pan.p95 > WORKER_BUDGET_MS;
+  for (const { js, raster } of results) {
+    const drawP95 = raster?.rebuildDraw?.p95 ?? 0;
+    const estimate = js.commit.p95 + drawP95;
+    const over = estimate > WORKER_BUDGET_MS;
     if (over && firstOver === null) {
-      firstOver = profile.strokeCount;
+      firstOver = js.strokeCount;
     }
     console.log(
-      `  ${String(profile.pointCount).padStart(7)} │ ${formatMs(profile.commit.p95)}  │ ${formatMs(profile.pan.p95)}  │ ${formatMs(profile.output.p95)} │ ${over ? "超出预算" : "预算内"}`,
+      `  ${String(js.pointCount).padStart(7)} │ ${formatMs(js.commit.p95)}  │ ` +
+        `${formatOptionalMs(raster ? drawP95 : null)} │ ${formatMs(estimate)}  │ ` +
+        `${formatShare(estimate / FRAME_BUDGET_MS)} │ ${over ? "超出预算" : "预算内"}`,
     );
   }
-  console.log("═══════════════════════════════════════════════════");
+  console.log("═══════════════════════════════════════════════════════════");
 
   if (allPassed) {
-    console.log("\n结论：全部场景在预算内。静态缓存重建尚未构成瓶颈。");
+    console.log("\n结论：全部场景在估算合计上仍低于 worker 侧预算。");
   } else {
     console.log(
-      `\n结论：从 ${firstOver} 笔开始，提交与平移帧的 worker 侧耗时就已吃掉半数以上帧预算。`,
+      `\n结论：从 ${firstOver} 笔开始，估算合计已超过 worker 侧预算。`,
     );
     console.log(
-      "      该规模下平移/缩放与连续落笔无法守住目标帧率，且上述数字尚未计入 canvas 光栅化。",
+      "      光栅化已是主要成本项，几何与调度优化不再是杠杆；要继续下降只能减少每帧重绘的内容量。",
     );
   }
 
