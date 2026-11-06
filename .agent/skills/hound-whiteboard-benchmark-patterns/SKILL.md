@@ -13,15 +13,12 @@ description: Hound Whiteboard 项目的 Benchmark 编写规范与模式。在需
 benchmarks/
 ├── helpers.js                     ← 统一辅助函数
 ├── all.bench.js                   ← 全量运行器
-├── queue.bench.js                 ← 数据结构 benchmark
-├── chain.bench.js
-├── io-bridge.bench.js             ← I/O 桥接层 benchmark
+├── queue.bench.js                 ← 队列数据结构 benchmark
 ├── io-direct.bench.js             ← 直接文件 I/O benchmark
 ├── io-file-granularity.bench.js   ← 文件粒度对比（特殊表格输出）
-├── io-roundtrip.bench.js          ← Electron 环境
-├── io-accumulatable.bench.js      ← Electron 环境
 ├── worker-rpc.bench.js            ← Worker RPC 往返 benchmark
-└── worker-render.bench.js         ← Worker 渲染帧 benchmark
+├── chunk-rebuild.bench.js         ← 区块元数据派生重建 benchmark
+└── interaction-frame.bench.js     ← 交互帧预算判定（特殊表格输出）
 ```
 
 ## 输出格式
@@ -33,6 +30,10 @@ modifyObject RPC 单条往返 x 1,750,771 ops/sec ±22.55% (25,000 runs sampled)
 ```
 
 通过 `benchmarks/helpers.js` 的 `benchmarkSync` / `benchmarkAsync` 自动保证。
+
+**例外**：以「毫秒数对比预算」作为决策单位的 benchmark 用表格输出，因为 ops/sec 回答不了「能不能守住这一帧」。
+目前只有 `io-file-granularity.bench.js` 和 `interaction-frame.bench.js` 采用这种形式；
+新建 benchmark 默认仍走 ops/sec，只有决策单位确实是 ms 或预算时才例外，并在文件头注释说明原因。
 
 ## Helper 函数 API
 
@@ -131,11 +132,12 @@ destroyFixture(fixture.rootPath);
 ## 运行方式
 
 ```bash
-yarn bench:worker        # Worker RPC benchmark
-yarn bench:render        # Worker 渲染帧 benchmark
-yarn bench:io            # I/O Bridge benchmark
-yarn bench:io:direct     # I/O Direct benchmark
-yarn bench               # 全量 benchmark
+yarn bench                 # 全量 benchmark（queue 仅在此执行）
+yarn bench:worker          # Worker RPC 往返
+yarn bench:frame           # 交互帧预算判定
+yarn bench:chunk           # 区块元数据派生重建
+yarn bench:io:direct       # 直接文件 I/O
+yarn bench:io:granularity  # I/O 文件粒度
 ```
 
 全量运行器 `all.bench.js` 按顺序逐一启动子进程执行各 benchmark 文件。
@@ -166,9 +168,22 @@ benchmark 应该反映真实使用路径。例如 Worker RPC benchmark 使用了
 
 ### 4. 清理
 
-IO benchmark 必须在 finally 中删除临时文件。OffscreenCanvas benchmark 必须在结束时调用 `restoreOffscreenCanvas?.()`。不清理会导致后续 benchmark（或测试）运行异常。
+IO benchmark 必须在 finally 中删除临时文件。安装过 canvas 替身的 benchmark 必须在结束时恢复（`restoreOffscreenCanvas?.()`）；
+接管过 `requestAnimationFrame` 的同样要恢复。不清理会导致后续 benchmark（或测试）运行异常。
 
-### 5. 如何测量每秒操作数
+### 5. 夹具自检闸门
+
+测量前必须断言夹具真的有效，例如静态对象数与已加载区块数均大于 0。
+空夹具会让 benchmark 在空转上产出漂亮数字，而且不会随被测代码变慢而变慢，这类基准比没有基准更危险。
+断言失败应当抛错，不应降级为警告。
+
+### 6. 同步驱动帧
+
+Node 里没有 `requestAnimationFrame`，`RenderScheduler` 会回退到 `setTimeout(..., 16)`，
+测量窗口内会插入与被测操作无关的额外 flush。测帧相关路径时把 `requestAnimationFrame`
+换成永不回调的替身，由 benchmark 显式调用 `flush()` 驱动每一帧。
+
+### 7. 如何测量每秒操作数
 
 Helper 内部实现逻辑：
 
