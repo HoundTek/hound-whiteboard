@@ -1,4 +1,6 @@
 import { Renderer } from "../renderer.js";
+import { RectangleRange } from "../../../kernel/range/rectangle.js";
+import { Vector } from "../../../kernel/utils/math.js";
 
 /**
  * 假上下文基类
@@ -152,5 +154,79 @@ describe("Renderer#createViewportContext", () => {
 
     expect(viewportContext.lineTo).toBe(viewportContext.lineTo);
     expect(viewportContext.save).toBe(viewportContext.save);
+  });
+});
+
+describe("Renderer#getObjectWorldRect", () => {
+  /**
+   * 创建带渲染包围盒的桩对象
+   * @param {{ renderBounds?: RectangleRange, range?: RectangleRange, position?: Vector }} [options={}] - 桩选项
+   * @returns {Object} 桩对象
+   */
+  function createStubObject(options = {}) {
+    const stub = {
+      position: options.position ?? new Vector(0, 0),
+    };
+    if (options.renderBounds) {
+      stub.getRenderBounds = () => options.renderBounds;
+    }
+    if (options.range) {
+      stub.getRange = () => options.range;
+    }
+    return stub;
+  }
+
+  test("应使用渲染包围盒并叠加对象位置", () => {
+    const renderer = createRenderer();
+    const stub = createStubObject({
+      renderBounds: new RectangleRange(0, 0, 10, 20),
+      position: new Vector(100, 200),
+    });
+
+    const rect = renderer.getObjectWorldRect(stub);
+
+    expect(rect.left).toBeCloseTo(100, 9);
+    expect(rect.top).toBeCloseTo(200, 9);
+    expect(rect.width).toBeCloseTo(10, 9);
+    expect(rect.height).toBeCloseTo(20, 9);
+  });
+
+  test("渲染包围盒退化时应回退到主判定范围", () => {
+    // 子类未维护 rich.boundingBox 时它是零矩形；
+    // 直接采用会把对象当作零面积，导致漏绘与漏失效。
+    const renderer = createRenderer();
+    const stub = createStubObject({
+      renderBounds: new RectangleRange(0, 0, 0, 0),
+      range: new RectangleRange(0, 0, 30, 40),
+    });
+
+    const rect = renderer.getObjectWorldRect(stub);
+
+    expect(rect.width).toBeCloseTo(30, 9);
+    expect(rect.height).toBeCloseTo(40, 9);
+  });
+
+  test("单点对象退化为零矩形时不影响其他轴向的尺寸", () => {
+    const renderer = createRenderer();
+    const stub = createStubObject({
+      renderBounds: new RectangleRange(0, 0, 25, 0),
+    });
+
+    const rect = renderer.getObjectWorldRect(stub);
+
+    expect(rect.width).toBeCloseTo(25, 9);
+    expect(rect.height).toBeCloseTo(0, 9);
+  });
+
+  test("对象未提供渲染包围盒时应回退到主判定范围", () => {
+    const renderer = createRenderer();
+    const stub = createStubObject({
+      range: new RectangleRange(0, 0, 5, 6),
+    });
+
+    const rect = renderer.getObjectWorldRect(stub);
+
+    expect(rect.width).toBeCloseTo(5, 9);
+    expect(rect.height).toBeCloseTo(6, 9);
   });
 });

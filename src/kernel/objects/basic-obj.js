@@ -90,6 +90,19 @@ class BasicObject {
   }
 
   /**
+   * 获取渲染包围盒
+   * @description
+   * 与 `getRange()` 的区别：`getRange()` 服务于命中测试，子类会返回完整几何（如笔画点列），
+   * 每次取用都可能需要重建几何；本方法只返回盖住该几何的轴对齐矩形，供渲染侧做
+   * 可见性、甩除与脏区判定。
+   * 返回的矩形不含对象位置，调用方按需叠加 `position`。
+   * @returns {RectangleRange} 渲染包围盒
+   */
+  getRenderBounds() {
+    return this.rich.boundingBox;
+  }
+
+  /**
    * 合并对象属性
    * @param {Record<string, any>} [property={}] - 待写入属性
    * @returns {Record<string, any>} 最新属性

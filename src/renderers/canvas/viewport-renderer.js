@@ -411,19 +411,24 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 获取对象的世界矩形范围
-   * @description AOM 命中时走 AOM 的变形感知范围，否则委托基类的静态范围解析。
+   * @description
+   * 先走基类的渲染包围盒快路径：AOM 的范围解析最终也是 `getRange().withPosition()`，
+   * 对笔画等同于逐点复制整条路径，不能挡在快路径前面。
+   * 只有基类解析不出范围时才回退到 AOM。
    * @param {BasicObject} objectInstance - 对象实例
    * @returns {RectangleRange | undefined}
    */
   getObjectWorldRect(objectInstance) {
+    const resolved = super.getObjectWorldRect(objectInstance);
+    if (resolved) return resolved;
+
     try {
       const worldRange = this.#aom?.getObjectWorldRange?.(objectInstance);
       if (worldRange) return RectangleRange.from(worldRange);
     } catch {
       // AOM 范围解析期间对象可能正处于 teardown 中间态，按无范围处理
-      return undefined;
     }
-    return super.getObjectWorldRect(objectInstance);
+    return undefined;
   }
 
   /**

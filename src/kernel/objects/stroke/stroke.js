@@ -41,6 +41,32 @@ const DEFAULT_STROKE_PROPERTY = Object.freeze({
 });
 
 /**
+ * 计算点列的轴对齐包围盒
+ * @description
+ * 直接在原点上取极值，不复制点。
+ * 这里不能走 `RectangleRange.from()`，因为那会先把整个点列克隆一遍；
+ * 本函数在笔画逐点追加的热路径上被反复调用。
+ * @param {Array<Vector>} points - 点列
+ * @returns {RectangleRange} 包围盒，点列为空时返回零矩形
+ */
+function calculatePointBounds(points) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y > maxY) maxY = point.y;
+  }
+
+  if (minX === Infinity) return new RectangleRange(0, 0, 0, 0);
+  return new RectangleRange(minX, minY, maxX - minX, maxY - minY);
+}
+
+/**
  * 笔画类
  * @class
  * @todo 现在的这个笔画类的结构是不支持更换笔刷的。要想有这个功能，必须重构。
@@ -84,9 +110,10 @@ class StrokeObject extends BasicObject {
     }
     this.rich.worldPathRange = new PathRange(transformedPoints);
     this.calculateConvexHull();
-    this.rich.boundingBox = RectangleRange.from(
-      this.rich.convexHullRange.transform(this.transform),
-    );
+    // 包围盒按实际绘制点列计算：局部点凸包经过变换得不出它——
+    // scale > 1 时 insertPoints 的样条插值会跑到控制点凸包外面，
+    // 用凸包矩形做渲染甩除与脏区会漏掉过冲的那一段。
+    this.rich.boundingBox = calculatePointBounds(transformedPoints);
   }
 
   _onDataChange(keys) {

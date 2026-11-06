@@ -43,6 +43,17 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
 }
 
 /**
+ * 判断矩形是否为退化矩形
+ * @description 渲染包围盒未被计算时是零矩形；此时必须回退到主判定范围，
+ * 否则对象会被当作零面积而漏绘、漏失效。
+ * @param {RectangleRange} rect - 待测矩形
+ * @returns {boolean} 是否为退化矩形
+ */
+function isDegenerateRect(rect) {
+  return !(rect.width > 0) && !(rect.height > 0);
+}
+
+/**
  * 渲染器基类
  * @description 封装视口坐标变换、脏区清理、裁剪渲染与渲染调度的通用逻辑。
  * 子类需实现 clear 抽象方法并可按需重写 _getThresholds 钩子。
@@ -146,11 +157,23 @@ class Renderer extends CanvasHost {
 
   /**
    * 获取对象的世界矩形范围
+   * @description
+   * 优先取渲染包围盒：它已在几何变更时算好，取用是 O(1)。
+   * 若改回走 `getRange()`，笔画会因此逐点复制整条路径，
+   * 而本方法在每次重建中对每个对象都要调一次。
+   * 旧对象或外部传入的测试替身可能没有 `getRenderBounds()`，此时回退到主判定范围。
    * @param {BasicObject} objectInstance - 对象实例
    * @returns {RectangleRange | undefined}
    */
   getObjectWorldRect(objectInstance) {
     try {
+      const renderBounds = objectInstance?.getRenderBounds?.();
+      if (renderBounds && !isDegenerateRect(renderBounds)) {
+        return RectangleRange.fromRectLike(
+          renderBounds.withPosition(objectInstance.position),
+        );
+      }
+
       const worldRange = objectInstance
         ?.getRange?.()
         ?.withPosition?.(objectInstance.position);
