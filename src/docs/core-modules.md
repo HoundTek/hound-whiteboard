@@ -15,7 +15,7 @@
 | `cli/`          | 命令行第二前端          | 写命令经持板 daemon 的 WebSocket RPC 执行，读命令可直读板文件         |
 | `ui/`           | UI 线程运行时           | Board、Viewport、DevicesDAG、UiRenderer                               |
 | `demo/`         | 白板 HTML/CSS/JS 入口   | 桌面与 web 两种模式的演示宿主（输入绑定、工具装配、workflow 挂载）    |
-| `benchmarks/`   | 性能基准                | I/O 桥接、队列、Worker 渲染与 RPC 等基准（`yarn bench`）              |
+| `benchmarks/`   | 性能基准                | I/O、队列、Worker RPC/渲染，以及按帧预算判定的交互帧基准（`yarn bench`） |
 | `test-support/` | 测试支撑                | canvas mock、worker-mode fixture、AOM fixture                         |
 | `tests/`        | 跨模块冒烟测试          | Board 输入流、Worker smoke、共享模块 smoke                            |
 | `docs/`         | 架构总览文档            | 当前这组顶层说明文档                                                  |

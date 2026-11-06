@@ -55,6 +55,7 @@
     "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js",
     "bench:worker": "node benchmarks/worker-rpc.bench.js",
     "bench:render": "node benchmarks/worker-render.bench.js",
+    "bench:frame": "node benchmarks/interaction-frame.bench.js",
     "bench:chunk": "node benchmarks/chunk-rebuild.bench.js",
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:modules": "node scripts/ci/check-module-paths.mjs",
