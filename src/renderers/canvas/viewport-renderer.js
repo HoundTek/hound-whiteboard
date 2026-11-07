@@ -130,14 +130,6 @@ class ViewportRenderer extends Renderer {
   #tileStore;
 
   /**
-   * 上一次合成时的视口与画布状态
-   * @description 状态一致说明缓存画布上的合成结果仍然有效，只需补拷重建过的区域。
-   * @type {{ originX: number, originY: number, zoom: number, width: number, height: number } | null}
-   * @private
-   */
-  #lastCompositeState = null;
-
-  /**
    * 缓存层渲染调度器
    * @type {RenderScheduler}
    * @private
@@ -812,21 +804,16 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 用 tile 重建静态缓存
+   * 确保覆盖视口的 tile 已建好且内容最新
    * @description
-   * 只重新光栅化脏 tile，再把覆盖视口的 tile 合成进缓存画布。
+   * 只重新光栅化脏 tile，返回覆盖缓存范围的 tile 列表。
    * 没有脏 tile 时跳过对象收集与层叠排序，平移帧因此只剩合成成本。
+   * @returns {Array<import("./tile-cache.js").TileEntry>}
    * @private
    */
-  #updateCacheFromTiles() {
+  #ensureCleanTiles() {
     const worldRect = this.viewport?.getViewportWorldRect?.();
-    if (!worldRect) {
-      const ctx = this.#cache?.getContext?.("2d") ?? null;
-      if (!ctx) return;
-      const entries = this.createDrawableEntries(this.#collectCacheDrawables());
-      this.#rebuildWholeCache(ctx, entries);
-      return;
-    }
+    if (!worldRect) return [];
 
     const cacheWorldRect = this.#expandWorldRect(
       worldRect,
@@ -835,99 +822,20 @@ class ViewportRenderer extends Renderer {
     const tiles = this.#tileStore.ensure(cacheWorldRect);
     const dirtyTiles = tiles.filter((tile) => this.#tileStore.isDirty(tile));
 
-    const rebuilt = [];
     if (dirtyTiles.length > 0) {
       const items = this.#collectCacheDrawables().map((objectInstance) => ({
         object: objectInstance,
         worldRect: this.getObjectWorldRect(objectInstance),
       }));
       for (const tile of dirtyTiles) {
-        rebuilt.push({ tile, rects: this.#renderTile(tile, items) });
+        this.#renderTile(tile, items);
       }
     }
 
     this.#tileStore.evictOutside(
       this.#expandWorldRect(worldRect, TILE_EVICT_MARGIN_RATIO),
     );
-
-    // 视口没变时缓存画布上的合成仍有效，只需补拷本次重建的区域；
-    // 视口变了（平移、缩放、尺寸变化）才整幅重新合成
-    if (this.#isCompositeStateCurrent()) {
-      if (rebuilt.length > 0) this.#compositeRebuiltRegions(rebuilt);
-    } else {
-      this.#compositeTiles(tiles);
-    }
-    this.#rememberCompositeState();
-  }
-
-  /**
-   * 判断缓存画布上的合成结果是否仍对应当前视口
-   * @returns {boolean}
-   * @private
-   */
-  #isCompositeStateCurrent() {
-    const state = this.#lastCompositeState;
-    if (!state) return false;
-    return (
-      state.originX === (this.viewport?.origin?.x ?? 0) &&
-      state.originY === (this.viewport?.origin?.y ?? 0) &&
-      state.zoom === (this.viewport?.zoom ?? 1) &&
-      state.width === (this.#cache?.width ?? 0) &&
-      state.height === (this.#cache?.height ?? 0)
-    );
-  }
-
-  /**
-   * 记录本次合成时的视口与画布状态
-   * @private
-   */
-  #rememberCompositeState() {
-    this.#lastCompositeState = {
-      originX: this.viewport?.origin?.x ?? 0,
-      originY: this.viewport?.origin?.y ?? 0,
-      zoom: this.viewport?.zoom ?? 1,
-      width: this.#cache?.width ?? 0,
-      height: this.#cache?.height ?? 0,
-    };
-  }
-
-  /**
-   * 只把本次重建的 tile 区域补拷进缓存画布
-   * @param {Array<{ tile: import("./tile-cache.js").TileEntry, rects: RectangleRange[] }>} rebuilt - 重建记录
-   * @private
-   */
-  #compositeRebuiltRegions(rebuilt) {
-    const ctx = this.#cache?.getContext?.("2d") ?? null;
-    if (!ctx) return;
-
-    const zoom = this.viewport?.zoom ?? 1;
-    const origin = this.viewport?.origin ?? { x: 0, y: 0 };
-
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    for (const { tile, rects } of rebuilt) {
-      const screenLeft = (tile.worldX - origin.x) * zoom;
-      const screenTop = (tile.worldY - origin.y) * zoom;
-      for (const rect of rects) {
-        // 源与目标用同一份整数扩边矩形，避免亚像素接缝
-        const left = Math.floor(rect.left);
-        const top = Math.floor(rect.top);
-        const right = Math.ceil(rect.right);
-        const bottom = Math.ceil(rect.bottom);
-        ctx.drawImage(
-          tile.canvas,
-          left,
-          top,
-          right - left,
-          bottom - top,
-          screenLeft + left,
-          screenTop + top,
-          right - left,
-          bottom - top,
-        );
-      }
-    }
-    ctx.restore();
+    return tiles;
   }
 
   /**
@@ -1036,39 +944,56 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 把 tile 合成进静态缓存画布
-   * @param {Array<import("./tile-cache.js").TileEntry>} tiles - 候选 tile
+   * 把 tile 直接合成到目标上下文
+   * @description
+   * 不再经过静态缓存画布，平移省一次全屏拷贝、提交省一次增量拷贝。
+   * 给定脏区时逐区裁剪，只画与该脏区相交的 tile；否则画出视口内全部 tile。
+   * @param {CanvasRenderingContext2D} ctx - 目标上下文
+   * @param {RectangleRange[]} [dirtyRects=[]] - 屏幕脏区
+   * @returns {boolean} 是否完成合成，false 表示视口信息不足需回退缓存拷贝
    * @private
    */
-  #compositeTiles(tiles) {
-    const ctx = this.#cache?.getContext?.("2d") ?? null;
-    if (!ctx) return;
+  #drawTiles(ctx, dirtyRects = []) {
+    if (!this.viewport?.getViewportWorldRect?.()) return false;
 
-    this.#clearCanvas(this.#cache);
-
+    const tiles = this.#ensureCleanTiles();
     const zoom = this.viewport?.zoom ?? 1;
     const origin = this.viewport?.origin ?? { x: 0, y: 0 };
-    const screenRect = this._getViewportRect();
     const tileSize = this.#tileStore.tileSize * zoom;
+    const hasDirtyRects = dirtyRects.length > 0;
+    const clipRects = hasDirtyRects
+      ? dirtyRects
+      : [this._getViewportRect() ?? null];
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    for (const tile of tiles) {
-      const left = (tile.worldX - origin.x) * zoom;
-      const top = (tile.worldY - origin.y) * zoom;
-      if (screenRect) {
+    for (const clipRect of clipRects) {
+      if (hasDirtyRects) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(clipRect.left, clipRect.top, clipRect.width, clipRect.height);
+        ctx.clip();
+      }
+
+      for (const tile of tiles) {
+        const left = (tile.worldX - origin.x) * zoom;
+        const top = (tile.worldY - origin.y) * zoom;
         if (
-          left >= screenRect.right ||
-          top >= screenRect.bottom ||
-          left + tileSize <= screenRect.left ||
-          top + tileSize <= screenRect.top
+          clipRect &&
+          (left >= clipRect.right ||
+            top >= clipRect.bottom ||
+            left + tileSize <= clipRect.left ||
+            top + tileSize <= clipRect.top)
         ) {
           continue;
         }
+        ctx.drawImage(tile.canvas, left, top, tileSize, tileSize);
       }
-      ctx.drawImage(tile.canvas, left, top, tileSize, tileSize);
+
+      if (hasDirtyRects) ctx.restore();
     }
     ctx.restore();
+    return true;
   }
 
   /**
@@ -1095,8 +1020,8 @@ class ViewportRenderer extends Renderer {
     const ctx = this.#cache?.getContext?.("2d") ?? null;
     if (!ctx) return;
 
-    if (this.#useTiles()) {
-      this.#updateCacheFromTiles();
+    if (this.#useTiles() && this.viewport?.getViewportWorldRect?.()) {
+      this.#ensureCleanTiles();
       this.#cacheDirty = false;
       return;
     }
@@ -1239,11 +1164,15 @@ class ViewportRenderer extends Renderer {
       this.clear();
     }
 
-    // 按脏区从缓存拷贝静态内容到输出（无脏区时全量拷贝）
-    if (normalizedDirtyRects.length > 0) {
-      this.#copyCacheRects(outputCtx, normalizedDirtyRects);
-    } else {
-      this.#copyCache(outputCtx);
+    // 静态内容上屏：tile 模式直接合成到输出，其余模式从缓存画布拷贝
+    const tilesDrawn =
+      this.#useTiles() && this.#drawTiles(outputCtx, normalizedDirtyRects);
+    if (!tilesDrawn) {
+      if (normalizedDirtyRects.length > 0) {
+        this.#copyCacheRects(outputCtx, normalizedDirtyRects);
+      } else {
+        this.#copyCache(outputCtx);
+      }
     }
 
     // 按脏区裁剪绘制 AOM 对象：不相交则跳过，相交则裁剪到对应脏区
@@ -1312,6 +1241,17 @@ class ViewportRenderer extends Renderer {
    */
   renderStaticCacheToCanvas(targetCanvas, dirtyRects) {
     if (!targetCanvas) return;
+
+    if (this.#useTiles()) {
+      const tileTargetCtx = targetCanvas.getContext?.("2d") ?? null;
+      if (!tileTargetCtx) return;
+      tileTargetCtx.save();
+      tileTargetCtx.setTransform(1, 0, 0, 1, 0, 0);
+      tileTargetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+      tileTargetCtx.restore();
+      this.#drawTiles(tileTargetCtx, []);
+      return;
+    }
 
     if (this.#cacheDirty && Array.isArray(dirtyRects)) {
       this.#updateCache(dirtyRects);

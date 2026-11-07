@@ -1074,7 +1074,12 @@ describe("ViewportRenderer", () => {
         (position, index) =>
           new FakeRectObject(index + 1, position, renderCalls),
       );
-      const outputCanvas = createCanvas(800, 600, createContext("output", []));
+      const outputCalls = [];
+      const outputCanvas = createCanvas(
+        800,
+        600,
+        createContext("output", outputCalls),
+      );
       const { viewport, aom, chunk } = createViewportContext({
         staticObjects: objects,
         outputCanvas,
@@ -1087,13 +1092,22 @@ describe("ViewportRenderer", () => {
       const cacheCtx = createContext("cache", ctxCalls);
       renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
       renderer.flush();
-      const initialCtxCalls = [...ctxCalls];
+      const initialOutputCalls = [...outputCalls];
+      outputCalls.length = 0;
       ctxCalls.length = 0;
-      return { renderer, viewport, objects, chunk, ctxCalls, initialCtxCalls };
+      return {
+        renderer,
+        viewport,
+        objects,
+        chunk,
+        ctxCalls,
+        outputCalls,
+        initialOutputCalls,
+      };
     }
 
     test("首次 flush 重建覆盖范围内的 tile 并合成可见 tile", () => {
-      const { renderer, initialCtxCalls } = createTileScenario([
+      const { renderer, initialOutputCalls } = createTileScenario([
         new Vector(20, 20),
         new Vector(700, 500),
       ]);
@@ -1105,15 +1119,15 @@ describe("ViewportRenderer", () => {
       expect(info.rebuildCount).toBe(9);
       expect(info.dirtyCount).toBe(0);
 
-      // 视口 800×600 内只有 2×2 块需要合成
-      const composites = initialCtxCalls.filter(
-        (call) => call[0] === "cache" && call[1] === "drawImage",
+      // 视口 800×600 内只有 2×2 块需要合成，且直接画进输出而非缓存画布
+      const composites = initialOutputCalls.filter(
+        (call) => call[0] === "output" && call[1] === "drawImage",
       );
       expect(composites).toHaveLength(4);
     });
 
     test("平移且区块集合不变时不重绘任何 tile，只重新合成", () => {
-      const { renderer, viewport, chunk, ctxCalls } = createTileScenario([
+      const { renderer, viewport, chunk, outputCalls } = createTileScenario([
         new Vector(20, 20),
       ]);
       const before = renderer.getTileDebugInfo().rebuildCount;
@@ -1127,7 +1141,9 @@ describe("ViewportRenderer", () => {
       expect(renderer.getTileDebugInfo().rebuildCount).toBe(before);
       expect(renderer.getTileDebugInfo().dirtyCount).toBe(0);
       expect(
-        ctxCalls.some((call) => call[0] === "cache" && call[1] === "drawImage"),
+        outputCalls.some(
+          (call) => call[0] === "output" && call[1] === "drawImage",
+        ),
       ).toBe(true);
     });
 
@@ -1173,41 +1189,31 @@ describe("ViewportRenderer", () => {
       expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 2);
     });
 
-    test("同一视口下没有 tile 重建时不重新合成", () => {
-      const { renderer, chunk, ctxCalls } = createTileScenario([
-        new Vector(20, 20),
-      ]);
+    test("同一视口下没有内容变化时不重绘任何 tile", () => {
+      const { renderer, chunk } = createTileScenario([new Vector(20, 20)]);
 
       renderer.invalidateChunks([chunk], [chunk]);
       renderer.flush();
 
       expect(renderer.getTileDebugInfo().rebuildCount).toBe(9);
-      expect(
-        ctxCalls.filter(
-          (call) => call[0] === "cache" && call[1] === "drawImage",
-        ),
-      ).toHaveLength(0);
+      expect(renderer.getTileDebugInfo().dirtyCount).toBe(0);
     });
 
-    test("提交后只把重建的小区域补拷进缓存，不整幅重新合成", () => {
-      const { renderer, objects, ctxCalls } = createTileScenario([
+    test("提交后输出只合成与脏区相交的 tile", () => {
+      const { renderer, objects, outputCalls } = createTileScenario([
         new Vector(20, 20),
         new Vector(700, 500),
       ]);
 
       renderer.invalidateCachedObjects([objects[0]]);
-      renderer.flush();
+      // 显式传入脏区，对应生产中输出调度器合并后的 flush
+      renderer.flush([new RectangleRange(20, 20, 10, 10)]);
 
-      const composites = ctxCalls.filter(
-        (call) => call[0] === "cache" && call[1] === "drawImage",
+      const composites = outputCalls.filter(
+        (call) => call[0] === "output" && call[1] === "drawImage",
       );
-      expect(composites.length).toBeGreaterThan(0);
-      for (const call of composites) {
-        // 9 参形式：源矩形来自 tile 内的局部脏区，而不是整块 512
-        expect(call).toHaveLength(11);
-        expect(call[4]).toBeLessThan(512);
-        expect(call[5]).toBeLessThan(512);
-      }
+      // 对象在 (20,20)，脏区只与 tile (0,0) 相交，另一块区域不应重画
+      expect(composites).toHaveLength(1);
     });
 
     test("提交只在 tile 内清理对象覆盖的小区域，不清整幅 tile", () => {
