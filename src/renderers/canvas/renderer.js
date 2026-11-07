@@ -436,10 +436,11 @@ class Renderer extends CanvasHost {
    * 而属性读取发生在绘制策略的点循环内，点越多代价越高。
    * 属性写入与读取经访问器转发到原上下文，避免样式设置滞留在替身上。
    * @param {CanvasRenderingContext2D} ctx - 原始 2D 上下文
+   * @param {{ zoom?: number, origin?: { x: number, y: number } }} [viewportOverride] - 视口覆盖，tile 渲染时传入 tile 自身原点
    * @returns {CanvasRenderingContext2D} 视口上下文
    */
-  createViewportContext(ctx) {
-    const viewport = this.viewport;
+  createViewportContext(ctx, viewportOverride) {
+    const viewport = viewportOverride ?? this.viewport;
     const zoom = viewport?.zoom ?? 1;
     const originX = viewport?.origin?.x ?? 0;
     const originY = viewport?.origin?.y ?? 0;
