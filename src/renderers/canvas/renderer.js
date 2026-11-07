@@ -280,6 +280,69 @@ class Renderer extends CanvasHost {
   }
 
   /**
+   * 清理矩形区域
+   * @description 单位变换下清理，整数扩边避免子像素残留；无效区域跳过。
+   * @param {CanvasRenderingContext2D} ctx - 目标上下文
+   * @param {RectangleRange | Object} rect - 屏幕矩形
+   * @returns {boolean} 是否实际执行了清理
+   */
+  clearRegion(ctx, rect) {
+    const clearRect = expandRectForClear(rect);
+    if (!clearRect) return false;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(
+      clearRect.left,
+      clearRect.top,
+      clearRect.width,
+      clearRect.height,
+    );
+    ctx.restore();
+    return true;
+  }
+
+  /**
+   * 在矩形区域内重绘静态内容
+   * @description
+   * 对整个区域只设一次裁剪，再按条目给定的顺序重绘所有与区域相交的对象。
+   * 条目顺序即层叠顺序，调用方负责按全局 z 序传入，本方法不做排序。
+   * 无屏幕矩形的条目视为与任意区域相交，不做剔除。
+   * 不裁剪的话，跨区域对象的越界部分会盖掉层叠更高但不与区域相交的内容。
+   * @param {CanvasRenderingContext2D} ctx - 目标上下文
+   * @param {CanvasRenderingContext2D} viewportContext - 视口上下文
+   * @param {Array<{screenRect?: RectangleRange, object: BasicObject}>} entries - 按层叠顺序排列的绘制条目
+   * @param {RectangleRange | Object} regionRect - 屏幕矩形
+   * @returns {number} 实际重绘的对象数量
+   */
+  renderRegion(ctx, viewportContext, entries, regionRect) {
+    const clipRect = RectangleRange.fromRectLike(regionRect);
+    if (!clipRect) return 0;
+
+    const drawn = [];
+    for (const entry of entries) {
+      if (!entry?.object) continue;
+      const rect = entry.screenRect;
+      if (rect && !intersectsRanges(rect, clipRect)) continue;
+      drawn.push(entry.object);
+    }
+    if (drawn.length === 0) return 0;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath();
+    ctx.rect(clipRect.left, clipRect.top, clipRect.width, clipRect.height);
+    ctx.clip();
+
+    for (const objectInstance of drawn) {
+      drawObject(viewportContext, objectInstance);
+    }
+
+    ctx.restore();
+    return drawn.length;
+  }
+
+  /**
    * 清理脏区
    * @param {RectangleRange[]} dirtyRects - 脏区集合
    */
@@ -288,18 +351,7 @@ class Renderer extends CanvasHost {
     if (!ctx) return;
 
     for (const dirtyRect of dirtyRects) {
-      const clearRect = expandRectForClear(dirtyRect);
-      if (!clearRect) continue;
-
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(
-        clearRect.left,
-        clearRect.top,
-        clearRect.width,
-        clearRect.height,
-      );
-      ctx.restore();
+      this.clearRegion(ctx, dirtyRect);
     }
   }
 
