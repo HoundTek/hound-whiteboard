@@ -182,10 +182,12 @@ function measureValue(fn, options = {}) {
 function installDrawTiming() {
   const originals = new Map();
   let accumulated = 0;
+  let calls = 0;
 
   for (const [key, strategy] of OBJECT_DRAW_STRATEGIES) {
     originals.set(key, strategy);
     OBJECT_DRAW_STRATEGIES.set(key, (ctx, objectInstance) => {
+      calls++;
       const start = performance.now();
       strategy(ctx, objectInstance);
       accumulated += performance.now() - start;
@@ -196,6 +198,11 @@ function installDrawTiming() {
     take() {
       const value = accumulated;
       accumulated = 0;
+      return value;
+    },
+    takeCalls() {
+      const value = calls;
+      calls = 0;
       return value;
     },
     restore() {
@@ -256,9 +263,47 @@ function createJsCanvasFactory() {
  * @param {{ createCanvas: Function }} rasterModule - 真实 canvas 实现
  * @returns {(width: number, height: number) => Object} 画布工厂
  */
+/**
+ * 位图合成耗时累加器
+ * @description tile 合成与帧回传都是 drawImage，不经绘制策略，必须单独计时，
+ * 否则平移的成本会被藏到表外。
+ * @type {{ value: number }}
+ */
+const rasterBlitTiming = { value: 0 };
+
+/**
+ * 取出并清零位图合成耗时
+ * @returns {number} 毫秒
+ */
+function takeBlitTime() {
+  const value = rasterBlitTiming.value;
+  rasterBlitTiming.value = 0;
+  return value;
+}
+
+/**
+ * 给上下文包上 drawImage 计时
+ * @param {CanvasRenderingContext2D} ctx - 原始上下文
+ * @returns {CanvasRenderingContext2D}
+ */
+function wrapBlitTiming(ctx) {
+  if (!ctx || ctx.__blitTimed) return ctx;
+  const originalDrawImage = ctx.drawImage.bind(ctx);
+  ctx.drawImage = (...args) => {
+    const start = performance.now();
+    originalDrawImage(...args);
+    rasterBlitTiming.value += performance.now() - start;
+  };
+  ctx.__blitTimed = true;
+  return ctx;
+}
+
 function createRasterCanvasFactory(rasterModule) {
   return (width, height) => {
     const canvas = rasterModule.createCanvas(width, height);
+    const getContext = canvas.getContext.bind(canvas);
+    canvas.getContext = (type, ...rest) =>
+      wrapBlitTiming(getContext(type, ...rest));
     canvas.transferToImageBitmap = () => {
       const snapshot = rasterModule.createCanvas(width, height);
       snapshot.getContext("2d").drawImage(canvas, 0, 0);
@@ -507,9 +552,11 @@ async function profileScenario(scenario, mode) {
      * @description 视口变化会同时触发静态层与活动层失效，再经调度器 flush 产出帧。
      */
     const panFrame = () => {
+      // 只在同一批区块内往返：跨过区块边界会触发加载与卸载，
+      // 那测的是「平移进入未缓存区」，不是这里要的「tile 命中」
       panOriginX += panDirection;
       if (panOriginX >= 4) panDirection = -1;
-      if (panOriginX <= -4) panDirection = 1;
+      if (panOriginX <= 0) panDirection = 1;
       viewport.onViewportChange({
         origin: { x: panOriginX, y: 0 },
         zoom: 1,
@@ -548,26 +595,62 @@ async function profileScenario(scenario, mode) {
     // 那部分开销落在全链 flush 上却不属于绘制，混在一起无法用于架构决策。
     let rebuildDraw = null;
     let panDraw = null;
+    let drawBreakdown = null;
     if (mode.measureDraw) {
       const timing = installDrawTiming();
       try {
-        rebuildDraw = measureValue(() => {
+        // 对象绘制与位图合成分别测量：前者随内容量变化，后者是固定尺寸的块拷贝，
+        // 混在一起无法判断该优化哪一边
+        const objectCommit = measureValue(() => {
           renderer.invalidateCachedObjects([sampleStroke]);
           renderer.flush([]);
           return timing.take();
         }, sampleOptions);
-        // 平移仍是全量重建，与提交的局部重绘成本完全不同，必须分开测
-        panDraw = measureValue(() => {
+        const blitCommit = measureValue(() => {
+          renderer.invalidateCachedObjects([sampleStroke]);
+          renderer.flush([]);
+          return takeBlitTime();
+        }, sampleOptions);
+        const objectPan = measureValue(() => {
           panFrame();
           return timing.take();
         }, sampleOptions);
+        const blitPan = measureValue(() => {
+          panFrame();
+          return takeBlitTime();
+        }, sampleOptions);
+        rebuildDraw = {
+          p95: objectCommit.p95 + blitCommit.p95,
+          p50: objectCommit.p50 + blitCommit.p50,
+          mean: objectCommit.mean + blitCommit.mean,
+        };
+        panDraw = {
+          p95: objectPan.p95 + blitPan.p95,
+          p50: objectPan.p50 + blitPan.p50,
+          mean: objectPan.mean + blitPan.mean,
+        };
+        drawBreakdown = { objectCommit, blitCommit, objectPan, blitPan };
       } finally {
         timing.restore();
       }
     }
 
+    // tile 重建次数是「这一帧到底重画了多少内容」的直接证据：
+    // 平移若仍为全量重建，这里会等于可见 tile 数而不是 0
+    const countTileRebuilds = (fn) => {
+      const before = renderer.getTileDebugInfo?.().rebuildCount ?? 0;
+      fn();
+      return (renderer.getTileDebugInfo?.().rebuildCount ?? 0) - before;
+    };
+    const commitTileRebuilds = countTileRebuilds(commitRedraw);
+    const panTileRebuilds = countTileRebuilds(panFrame);
+    const tileInfo = renderer.getTileDebugInfo?.() ?? null;
+
     return {
       label: `${scenario.strokes} 笔 × ${scenario.points} 点`,
+      commitTileRebuilds,
+      panTileRebuilds,
+      tileInfo,
       strokeCount: scenario.strokes,
       pointCount: scenario.strokes * scenario.points,
       loadedChunkCount: fixture.loadedChunkCount,
@@ -580,6 +663,7 @@ async function profileScenario(scenario, mode) {
       idle,
       rebuildDraw,
       panDraw,
+      drawBreakdown,
       idleFramesProduced,
     };
   } finally {
@@ -801,8 +885,8 @@ function printScenario(profiles, ops) {
   const commitDrawPart = hasRaster ? raster.rebuildDraw?.p95 ?? 0 : null;
   const panDrawPart = hasRaster ? raster.panDraw?.p95 ?? 0 : null;
   const rows = [
-    ["commit", "提交重绘（脏区重建）", WORKER_BUDGET_MS, commitDrawPart, true],
-    ["pan", "平移一帧（全量重建）", WORKER_BUDGET_MS, panDrawPart, true],
+    ["commit", "提交重绘（tile 局部）", WORKER_BUDGET_MS, commitDrawPart, true],
+    ["pan", "平移一帧（tile 合成）", WORKER_BUDGET_MS, panDrawPart, true],
     ["output", "输出层单帧（缓存未失效）", WORKER_BUDGET_MS, null, true],
     ["transfer", "帧回传（位图 + 回填）", null, null, false],
   ];
@@ -833,6 +917,17 @@ function printScenario(profiles, ops) {
     if (opsText !== "-") {
       console.log(`    · 绘制调用 / 次：${opsText}`);
     }
+    const tileRebuilds =
+      key === "commit"
+        ? js.commitTileRebuilds
+        : key === "pan"
+          ? js.panTileRebuilds
+          : null;
+    if (tileRebuilds !== null && js.tileInfo?.enabled) {
+      console.log(
+        `    · tile 重建 / 次：${tileRebuilds}（缓存 ${js.tileInfo.tileCount} 块）`,
+      );
+    }
   }
 
   const idleOk =
@@ -853,7 +948,8 @@ function printScenario(profiles, ops) {
   if (hasRaster) {
     console.log(
       `  诊断：光栅模式 flush 全链 p95 = 提交 ${formatMs(raster.commit.p95)} · 平移 ${formatMs(raster.pan.p95)}；` +
-        `其中绘制 提交 ${formatMs(raster.rebuildDraw.p95)} · 平移 ${formatMs(raster.panDraw?.p95 ?? 0)}，其余为 CPU 光栅器的惰性展平与内存回收，浏览器无此项。`,
+        `对象 ${formatMs(raster.drawBreakdown.objectCommit.p95)}+合成 ${formatMs(raster.drawBreakdown.blitCommit.p95)}（提交）· ` +
+        `对象 ${formatMs(raster.drawBreakdown.objectPan.p95)}+合成 ${formatMs(raster.drawBreakdown.blitPan.p95)}（平移）。`,
     );
   }
 
@@ -981,7 +1077,7 @@ async function main() {
   }
   if (firstPanOver !== null) {
     console.log(
-      `      平移路径从 ${firstPanOver} 笔开始超过预算，平移仍是全量重建，与提交无关。`,
+      `      平移路径从 ${firstPanOver} 笔开始超过预算。`,
     );
   }
 

@@ -201,6 +201,18 @@ function createViewportContext(options = {}) {
     getViewportScreenRect() {
       return new RectangleRange(0, 0, 800, 600);
     },
+    ...(options.withWorldRect
+      ? {
+          getViewportWorldRect() {
+            return new RectangleRange(
+              viewport.origin.x,
+              viewport.origin.y,
+              800,
+              600,
+            );
+          },
+        }
+      : {}),
     worldRectToScreenRect(rect, padding = 0) {
       return new RectangleRange(
         rect.left - padding,
@@ -1046,6 +1058,216 @@ describe("ViewportRenderer", () => {
           rect.top + rect.height >= 10,
       );
       expect(covered).toBe(true);
+    });
+  });
+
+  describe("世界空间 tile 缓存", () => {
+    /**
+     * 建立启用 tile 的渲染环境
+     * @param {Vector[]} positions - 各对象位置
+     * @returns {{renderer: ViewportRenderer, viewport: Object, objects: FakeRectObject[], chunk: Object, ctxCalls: Array<any>}}
+     */
+    function createTileScenario(positions) {
+      const renderCalls = [];
+      const ctxCalls = [];
+      const objects = positions.map(
+        (position, index) =>
+          new FakeRectObject(index + 1, position, renderCalls),
+      );
+      const outputCanvas = createCanvas(800, 600, createContext("output", []));
+      const { viewport, aom, chunk } = createViewportContext({
+        staticObjects: objects,
+        outputCanvas,
+        withWorldRect: true,
+      });
+      const renderer = new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      });
+      renderer._scheduler.scheduleFrame = () => 0;
+      const cacheCtx = createContext("cache", ctxCalls);
+      renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
+      renderer.flush();
+      const initialCtxCalls = [...ctxCalls];
+      ctxCalls.length = 0;
+      return { renderer, viewport, objects, chunk, ctxCalls, initialCtxCalls };
+    }
+
+    test("首次 flush 重建覆盖范围内的 tile 并合成可见 tile", () => {
+      const { renderer, initialCtxCalls } = createTileScenario([
+        new Vector(20, 20),
+        new Vector(700, 500),
+      ]);
+
+      const info = renderer.getTileDebugInfo();
+      // 缓存范围为视口外扩 25%：世界 (-200,-150) 到 (1000,750)，覆盖 3×3 块
+      expect(info.enabled).toBe(true);
+      expect(info.tileCount).toBe(9);
+      expect(info.rebuildCount).toBe(9);
+      expect(info.dirtyCount).toBe(0);
+
+      // 视口 800×600 内只有 2×2 块需要合成
+      const composites = initialCtxCalls.filter(
+        (call) => call[0] === "cache" && call[1] === "drawImage",
+      );
+      expect(composites).toHaveLength(4);
+    });
+
+    test("平移且区块集合不变时不重绘任何 tile，只重新合成", () => {
+      const { renderer, viewport, chunk, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+      const before = renderer.getTileDebugInfo().rebuildCount;
+
+      viewport.origin = new Vector(10, 10);
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { origin: { x: 0, y: 0 }, zoom: 1 },
+      });
+      renderer.flush();
+
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before);
+      expect(renderer.getTileDebugInfo().dirtyCount).toBe(0);
+      expect(
+        ctxCalls.some((call) => call[0] === "cache" && call[1] === "drawImage"),
+      ).toBe(true);
+    });
+
+    test("提交对象只重建其覆盖的 tile", () => {
+      const { renderer, objects } = createTileScenario([
+        new Vector(20, 20),
+        new Vector(700, 500),
+      ]);
+      const before = renderer.getTileDebugInfo().rebuildCount;
+
+      renderer.invalidateCachedObjects([objects[0]]);
+      renderer.flush();
+
+      // 对象位于 (20,20)，只落在 tile (0,0) 内
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 1);
+    });
+
+    test("对象旧位置所在的 tile 一并重建", () => {
+      const { renderer, objects } = createTileScenario([
+        new Vector(20, 20),
+        new Vector(700, 500),
+      ]);
+      const before = renderer.getTileDebugInfo().rebuildCount;
+
+      renderer.invalidateCachedObjects([objects[0]], {
+        previousWorldRects: new Map([[1, new RectangleRange(700, 500, 10, 10)]]),
+      });
+      renderer.flush();
+
+      // 新位置 tile (0,0) 与旧位置 tile (1,0) 都要重建，否则旧位置留残影
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 2);
+    });
+
+    test("新加载的区块只重建其覆盖的 tile", () => {
+      const { renderer, chunk } = createTileScenario([new Vector(20, 20)]);
+      const before = renderer.getTileDebugInfo().rebuildCount;
+
+      const loaded = { id: 2, x: 1, y: 0, objectManager: chunk.objectManager };
+      renderer.invalidateChunks([chunk, loaded], [chunk]);
+      renderer.flush();
+
+      // 新区块世界范围 (800,0,800,600)，已分配的 tile 中只有 (1,0) 与 (1,1) 相交
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 2);
+    });
+
+    test("同一视口下没有 tile 重建时不重新合成", () => {
+      const { renderer, chunk, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+
+      renderer.invalidateChunks([chunk], [chunk]);
+      renderer.flush();
+
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(9);
+      expect(
+        ctxCalls.filter(
+          (call) => call[0] === "cache" && call[1] === "drawImage",
+        ),
+      ).toHaveLength(0);
+    });
+
+    test("提交后只把重建的小区域补拷进缓存，不整幅重新合成", () => {
+      const { renderer, objects, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+        new Vector(700, 500),
+      ]);
+
+      renderer.invalidateCachedObjects([objects[0]]);
+      renderer.flush();
+
+      const composites = ctxCalls.filter(
+        (call) => call[0] === "cache" && call[1] === "drawImage",
+      );
+      expect(composites.length).toBeGreaterThan(0);
+      for (const call of composites) {
+        // 9 参形式：源矩形来自 tile 内的局部脏区，而不是整块 512
+        expect(call).toHaveLength(11);
+        expect(call[4]).toBeLessThan(512);
+        expect(call[5]).toBeLessThan(512);
+      }
+    });
+
+    test("提交只在 tile 内清理对象覆盖的小区域，不清整幅 tile", () => {
+      const previousCanvas = globalThis.OffscreenCanvas;
+      const tileClears = [];
+      // 替换 tile 画布实现，直接记录每块 tile 上的清理尺寸
+      globalThis.OffscreenCanvas = class {
+        constructor(width, height) {
+          this.width = width;
+          this.height = height;
+        }
+
+        getContext() {
+          return {
+            save() {},
+            restore() {},
+            setTransform() {},
+            beginPath() {},
+            rect() {},
+            clip() {},
+            drawImage() {},
+            fillRect() {},
+            clearRect: (...args) => tileClears.push(args),
+          };
+        }
+      };
+
+      try {
+        const { renderer, objects } = createTileScenario([
+          new Vector(20, 20),
+          new Vector(700, 500),
+        ]);
+        tileClears.length = 0;
+
+        renderer.invalidateCachedObjects([objects[0]]);
+        renderer.flush();
+
+        expect(tileClears.length).toBeGreaterThan(0);
+        // 对象只占 10×10，任何 512×512 的清理都说明退化成了整块重建
+        for (const [left, top, width, height] of tileClears) {
+          expect(width).toBeLessThan(512);
+          expect(height).toBeLessThan(512);
+        }
+      } finally {
+        globalThis.OffscreenCanvas = previousCanvas;
+      }
+    });
+
+    test("缩放档位非 0 时不使用 tile", () => {
+      const { renderer, viewport, objects } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+      const before = renderer.getTileDebugInfo().rebuildCount;
+
+      viewport.zoom = 2;
+      renderer.invalidateCachedObjects([objects[0]]);
+      renderer.flush();
+
+      expect(renderer.getTileDebugInfo().enabled).toBe(false);
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before);
     });
   });
 
