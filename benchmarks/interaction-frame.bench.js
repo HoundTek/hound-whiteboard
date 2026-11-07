@@ -534,7 +534,9 @@ async function profileScenario(scenario, mode) {
      */
     const commitRedraw = () => {
       renderer.invalidateCachedObjects([sampleStroke]);
-      renderer.flush([]);
+      // 走输出调度器而不是 flush([])：后者等价于整幅输出重画，
+      // 生产路径是调度器合并脏区后只重画相交区域
+      renderer._scheduler.flush();
     };
 
     /**
@@ -602,13 +604,11 @@ async function profileScenario(scenario, mode) {
         // 对象绘制与位图合成分别测量：前者随内容量变化，后者是固定尺寸的块拷贝，
         // 混在一起无法判断该优化哪一边
         const objectCommit = measureValue(() => {
-          renderer.invalidateCachedObjects([sampleStroke]);
-          renderer.flush([]);
+          commitRedraw();
           return timing.take();
         }, sampleOptions);
         const blitCommit = measureValue(() => {
-          renderer.invalidateCachedObjects([sampleStroke]);
-          renderer.flush([]);
+          commitRedraw();
           return takeBlitTime();
         }, sampleOptions);
         const objectPan = measureValue(() => {
@@ -715,7 +715,7 @@ async function countDrawOperations(scenario) {
 
     reset();
     renderer.invalidateCachedObjects([sampleStroke]);
-    renderer.flush([]);
+    renderer._scheduler.flush();
     const commitOps = snapshot();
 
     reset();
