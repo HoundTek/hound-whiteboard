@@ -349,7 +349,9 @@ class Renderer extends CanvasHost {
    * @returns {number} 实际重绘的对象数量
    */
   renderRegion(ctx, viewportContext, entries, regionRect) {
-    const clipRect = RectangleRange.fromRectLike(regionRect);
+    // 裁剪与 clearRegion 使用同一份整数扩边矩形：
+    // 清除按扩边后的范围执行而裁剪不扩的话，边界会被清掉却画不回来，形成一圈白边
+    const clipRect = expandRectForClear(regionRect);
     if (!clipRect) return 0;
 
     const drawn = [];

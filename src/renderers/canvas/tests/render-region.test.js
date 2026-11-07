@@ -174,12 +174,13 @@ describe("Renderer#renderRegion", () => {
       "draw",
       "restore",
     ]);
+    // 裁剪与 clearRegion 共用整数扩边：floor(10.5)=10，ceil(41)=41，ceil(61)=61
     expect(log.find((call) => call[0] === "rect")).toEqual([
       "rect",
-      10.5,
-      20.25,
-      30.5,
-      40.75,
+      10,
+      20,
+      31,
+      41,
     ]);
     expect(log.filter((call) => call[0] === "clip")).toHaveLength(1);
     sharedDrawLog.current = null;
