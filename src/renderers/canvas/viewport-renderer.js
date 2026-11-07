@@ -130,6 +130,14 @@ class ViewportRenderer extends Renderer {
   #tileStore;
 
   /**
+   * 是否允许使用 tile 缓存
+   * @description 关闭后退回经典缓存路径，用于对照测试与线上兜底。
+   * @type {boolean}
+   * @private
+   */
+  #tilesEnabled;
+
+  /**
    * 缓存层渲染调度器
    * @type {RenderScheduler}
    * @private
@@ -163,6 +171,7 @@ class ViewportRenderer extends Renderer {
 
     this.#cache = new OffscreenCanvas(width, height);
     this.#tileStore = new TileStore({ tileSize: options.tileSize });
+    this.#tilesEnabled = options.tiles !== false;
 
     this.#resolveOutputThresholds = createLiveDirtyRectThresholdStrategy();
 
@@ -728,6 +737,7 @@ class ViewportRenderer extends Renderer {
    */
   #useTiles() {
     return (
+      this.#tilesEnabled &&
       (this.viewport?.zoom ?? 1) === 1 &&
       typeof this.viewport?.getViewportWorldRect === "function"
     );

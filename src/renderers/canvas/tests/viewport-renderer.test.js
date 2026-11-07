@@ -1262,6 +1262,41 @@ describe("ViewportRenderer", () => {
       }
     });
 
+    test("选中对象在移动提交后仍由输出层绘制", () => {
+      const renderCalls = [];
+      const outputCalls = [];
+      const active = new FakeRectObject(1, new Vector(20, 20), renderCalls);
+      const outputCanvas = createCanvas(
+        800,
+        600,
+        createContext("output", outputCalls),
+      );
+      const { viewport, aom } = createViewportContext({
+        activeObjects: [active],
+        outputCanvas,
+        withWorldRect: true,
+      });
+      const renderer = new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      });
+      renderer._scheduler.scheduleFrame = () => 0;
+      renderer.flush();
+      renderCalls.length = 0;
+
+      // 移动提交：对象仍选中（在 AOM 中），不进 tile，只能由输出层现画
+      active.position.x = 300;
+      active.position.y = 200;
+      renderer.invalidateCachedObjects([active], {
+        previousWorldRects: new Map([[1, new RectangleRange(20, 20, 10, 10)]]),
+      });
+      renderer.invalidateActiveObjects([active]);
+      renderer.flush();
+
+      expect(renderCalls.filter(([, label]) => label === "output")).toEqual([
+        [1, "output"],
+      ]);
+    });
+
     test("缩放档位非 0 时不使用 tile", () => {
       const { renderer, viewport, objects } = createTileScenario([
         new Vector(20, 20),

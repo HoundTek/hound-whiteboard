@@ -117,6 +117,7 @@ class ViewportCore {
    *   height: number,
    *   postRenderFrame?: (message: Object, transferList?: Transferable[]) => void,
    *   onFrameDirty?: () => void,
+   *   tiles?: boolean,
    * }} options - ViewportCore 初始化选项
    */
   constructor(options) {
@@ -143,6 +144,7 @@ class ViewportCore {
       this.#boardCore.activeObjectManager,
       {
         canvas: new OffscreenCanvas(this.#width, this.#height),
+        tiles: options.tiles,
       },
     );
   }
