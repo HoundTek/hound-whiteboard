@@ -167,6 +167,100 @@ describe("Viewport (constructor unit)", () => {
     }
   });
 
+  /**
+   * 建立带假 Worker 的视口
+   * @param {FakeWorkerEndpoint} worker - 假 Worker 端点
+   * @returns {Viewport}
+   */
+  function createWorkerViewport(worker) {
+    return new Viewport(
+      {
+        rootElement: {},
+        canvas: createNoopCanvas(),
+        uiCanvas: createNoopCanvas(),
+        worker,
+      },
+      {
+        width: 800,
+        height: 600,
+        devicesDAG: new DevicesDAG(),
+        getBoardApi() {
+          return null;
+        },
+      },
+      { width: 800, height: 600 },
+      "main",
+    );
+  }
+
+  /**
+   * 统计已发出的 flush 请求数
+   * @param {FakeWorkerEndpoint} worker - 假 Worker 端点
+   * @returns {number}
+   */
+  function countFlushRequests(worker) {
+    return worker.postedMessages.filter(
+      (message) => message.type === "request-render-flush",
+    ).length;
+  }
+
+  test("连续空帧后 flush 循环休眠，render-dirty 唤醒", () => {
+    const { flushNextFrame, restore } = installMockAnimationFrame();
+    const worker = new FakeWorkerEndpoint();
+
+    try {
+      const viewport = createWorkerViewport(worker);
+      viewport.startWorkerSync();
+
+      // 空板持续无帧产出，循环应在有限次请求后停止自续期
+      for (let i = 0; i < 60; i++) flushNextFrame();
+      const stoppedCount = countFlushRequests(worker);
+      expect(stoppedCount).toBeGreaterThan(0);
+      expect(stoppedCount).toBeLessThanOrEqual(31);
+
+      flushNextFrame();
+      expect(countFlushRequests(worker)).toBe(stoppedCount);
+
+      // worker 内容变脏（如远端编辑）应唤醒循环
+      worker.emit({ type: "render-dirty", viewportId: "main" });
+      flushNextFrame();
+      expect(countFlushRequests(worker)).toBeGreaterThan(stoppedCount);
+
+      viewport.destroy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("持续有帧产出时 flush 循环保持活跃", () => {
+    const { flushNextFrame, restore } = installMockAnimationFrame();
+    const worker = new FakeWorkerEndpoint();
+
+    try {
+      const viewport = createWorkerViewport(worker);
+      viewport.startWorkerSync();
+
+      // 每帧都有回传，空闲计数被重置，不会进入休眠
+      for (let i = 0; i < 45; i++) {
+        worker.emit({
+          type: "render-frame",
+          viewportId: "main",
+          frameId: i + 1,
+          liveBitmap: createNoopImageBitmap(),
+        });
+        flushNextFrame();
+      }
+
+      const before = countFlushRequests(worker);
+      flushNextFrame();
+      expect(countFlushRequests(worker)).toBeGreaterThan(before);
+
+      viewport.destroy();
+    } finally {
+      restore();
+    }
+  });
+
   test("onRenderFrame 应将合成位图绘制到 canvas 并关闭位图", () => {
     const { restore } = installMockAnimationFrame();
     const context = {

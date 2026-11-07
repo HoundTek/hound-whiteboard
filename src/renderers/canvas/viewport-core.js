@@ -102,12 +102,21 @@ class ViewportCore {
   #postRenderFrame;
 
   /**
+   * 帧由净转脏时的通知回调
+   * @description 用于让 UI 侧的渲染循环在空闲休眠后被内容变化唤醒，只在跳变时触发一次。
+   * @type {() => void}
+   * @private
+   */
+  #onFrameDirty;
+
+  /**
    * @param {{
    *   boardCore: BoardCore,
    *   viewportId: string | number,
    *   width: number,
    *   height: number,
    *   postRenderFrame?: (message: Object, transferList?: Transferable[]) => void,
+   *   onFrameDirty?: () => void,
    * }} options - ViewportCore 初始化选项
    */
   constructor(options) {
@@ -124,6 +133,7 @@ class ViewportCore {
     this.#frameId = 0;
     this.#frameDirty = false;
     this.#postRenderFrame = options.postRenderFrame ?? (() => {});
+    this.#onFrameDirty = options.onFrameDirty ?? (() => {});
     this.#chunkLoader = this.#boardCore.createChunkLoader(
       `viewport-${String(this.#viewportId)}`,
     );
@@ -221,6 +231,7 @@ class ViewportCore {
    * 标记当前存在待回传的新帧
    */
   markFrameDirty() {
+    if (!this.#frameDirty) this.#onFrameDirty();
     this.#frameDirty = true;
   }
 
