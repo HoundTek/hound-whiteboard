@@ -303,6 +303,39 @@ class Renderer extends CanvasHost {
   }
 
   /**
+   * 取得对象绘制时应使用的预览坐标
+   * @description 基类不使用预览坐标；子类可重写以支持远程手势等渲染期位置覆盖。
+   * @param {string} objectId - 对象 id
+   * @returns {{ x: number, y: number } | undefined} 预览坐标
+   */
+  getPreviewRenderPosition(objectId) {
+    return undefined;
+  }
+
+  /**
+   * 绘制对象，应用预览坐标
+   * @description
+   * 预览坐标只在绘制瞬间覆盖 position，画完还原，只影响渲染视图不改数据。
+   * @param {CanvasRenderingContext2D} ctx - 绘制上下文
+   * @param {BasicObject} objectInstance - 待绘制对象
+   */
+  drawObjectWithPreview(ctx, objectInstance) {
+    const preview = this.getPreviewRenderPosition(objectInstance.id);
+    if (!preview) {
+      drawObject(ctx, objectInstance);
+      return;
+    }
+
+    const originalX = objectInstance.position.x;
+    const originalY = objectInstance.position.y;
+    objectInstance.position.x = preview.x;
+    objectInstance.position.y = preview.y;
+    drawObject(ctx, objectInstance);
+    objectInstance.position.x = originalX;
+    objectInstance.position.y = originalY;
+  }
+
+  /**
    * 在矩形区域内重绘静态内容
    * @description
    * 对整个区域只设一次裁剪，再按条目给定的顺序重绘所有与区域相交的对象。
@@ -335,7 +368,7 @@ class Renderer extends CanvasHost {
     ctx.clip();
 
     for (const objectInstance of drawn) {
-      drawObject(viewportContext, objectInstance);
+      this.drawObjectWithPreview(viewportContext, objectInstance);
     }
 
     ctx.restore();

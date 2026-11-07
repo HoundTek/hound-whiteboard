@@ -36,6 +36,12 @@ import {
  */
 
 /**
+ * 脏区覆盖视口面积达到该比例时退化为全量重建
+ * @description 局部重建的收益随覆盖面积下降，超过阈值后全量更划算。
+ */
+const CACHE_FULL_REBUILD_AREA_RATIO = 0.4;
+
+/**
  * 视口渲染器
  * @description
  * 在一个类内部管理两个 OffscreenCanvas：`#cache`（静态层预渲染缓存）和 `#output`（最终输出 canvas）。
@@ -649,10 +655,48 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 更新静态缓存（全量重绘）
+   * 取得对象绘制时应使用的预览坐标
+   * @description 剔除用的屏幕矩形仍按数据坐标计算，否则提交进缓存时新预览位置与旧脏区不匹配会残影。
+   * @param {string} objectId - 对象 id
+   * @returns {{ x: number, y: number } | undefined} 预览坐标
+   */
+  getPreviewRenderPosition(objectId) {
+    return this._getPreviewPosition(objectId);
+  }
+
+  /**
+   * 按脏区局部重建静态缓存
    * @description
-   * 临时跳过脏区优化，全量清空缓存 canvas 并重绘所有非 AOM 的静态对象。
-   * @param {RectangleRange[]} dirtyRects - 脏区集合（当前忽略，用于全量重绘触发）
+   * 脏区已由调度器合并，相交矩形会被强制合并，因此各区域互不重叠、不会重复光栅化。
+   * 每个区域内重画所有与之相交的静态对象以保持层叠顺序，裁剪限定在区域内。
+   * @param {CanvasRenderingContext2D} ctx - 缓存上下文
+   * @param {Array<{screenRect?: RectangleRange, object: BasicObject}>} entries - 静态对象条目
+   * @param {RectangleRange[]} dirtyRects - 屏幕脏区
+   * @returns {number} 实际重绘的对象次数
+   * @private
+   */
+  #rebuildCacheRegions(ctx, entries, dirtyRects) {
+    const viewportContext = this.createViewportContext(ctx);
+    let redrawCount = 0;
+
+    for (const dirtyRect of dirtyRects) {
+      const rect = this.normalizeScreenRect(dirtyRect);
+      if (!rect) continue;
+      this.clearRegion(ctx, rect);
+      const intersecting = entries.filter((entry) =>
+        this.intersectsDirtyRects(entry, [rect]),
+      );
+      redrawCount += this.renderRegion(ctx, viewportContext, intersecting, rect);
+    }
+
+    return redrawCount;
+  }
+
+  /**
+   * 更新静态缓存
+   * @description
+   * 有脏区时按脏区局部重建，否则全量重建；脏区覆盖视口超过阈值时也走全量。
+   * @param {RectangleRange[]} dirtyRects - 屏幕脏区集合
    * @private
    */
   #updateCache(dirtyRects) {
@@ -661,29 +705,54 @@ class ViewportRenderer extends Renderer {
 
     const drawables = this.#collectCacheDrawables();
     const drawableEntries = this.createDrawableEntries(drawables);
-    const viewportContext = this.createViewportContext(ctx);
 
-    this.#clearCanvas(this.#cache);
-
-    for (const entry of drawableEntries) {
-      const drawStrategy = OBJECT_DRAW_STRATEGIES.get(entry.object.constructor);
-      if (!drawStrategy) continue;
-      // 远程手势预览坐标：渲染时临时覆盖 position，画完还原（只影响渲染视图，不改数据）
-      const preview = this._getPreviewPosition(entry.object.id);
-      if (preview) {
-        const originalX = entry.object.position.x;
-        const originalY = entry.object.position.y;
-        entry.object.position.x = preview.x;
-        entry.object.position.y = preview.y;
-        drawStrategy(viewportContext, entry.object);
-        entry.object.position.x = originalX;
-        entry.object.position.y = originalY;
-      } else {
-        drawStrategy(viewportContext, entry.object);
-      }
+    if (this.#shouldRebuildWholeCache(dirtyRects)) {
+      this.#rebuildWholeCache(ctx, drawableEntries);
+    } else {
+      this.#rebuildCacheRegions(ctx, drawableEntries, dirtyRects);
     }
 
     this.#cacheDirty = false;
+  }
+
+  /**
+   * 判断本次缓存重建是否应走全量
+   * @param {RectangleRange[]} dirtyRects - 屏幕脏区
+   * @returns {boolean}
+   * @private
+   */
+  #shouldRebuildWholeCache(dirtyRects) {
+    if (!Array.isArray(dirtyRects) || dirtyRects.length === 0) return true;
+
+    const rects = dirtyRects
+      .map((rect) => this.normalizeScreenRect(rect))
+      .filter(Boolean);
+    if (rects.length === 0) return true;
+
+    const viewportArea = (this.#cache?.width ?? 0) * (this.#cache?.height ?? 0);
+    if (!(viewportArea > 0)) return true;
+
+    let coveredArea = 0;
+    for (const rect of rects) {
+      coveredArea += Math.max(0, rect.width) * Math.max(0, rect.height);
+    }
+    return coveredArea / viewportArea >= CACHE_FULL_REBUILD_AREA_RATIO;
+  }
+
+  /**
+   * 全量重建静态缓存
+   * @param {CanvasRenderingContext2D} ctx - 缓存上下文
+   * @param {Array<{screenRect?: RectangleRange, object: BasicObject}>} entries - 静态对象条目
+   * @private
+   */
+  #rebuildWholeCache(ctx, entries) {
+    const viewportContext = this.createViewportContext(ctx);
+    this.#clearCanvas(this.#cache);
+
+    for (const entry of entries) {
+      if (!OBJECT_DRAW_STRATEGIES.has(entry.object.constructor)) continue;
+      this.drawObjectWithPreview(viewportContext, entry.object);
+    }
   }
 
   /**

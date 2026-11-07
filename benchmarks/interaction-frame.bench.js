@@ -547,12 +547,18 @@ async function profileScenario(scenario, mode) {
     // 隔离出绘制策略本身的耗时。CPU 光栅器在刷新表面时会做惰性展平与回收，
     // 那部分开销落在全链 flush 上却不属于绘制，混在一起无法用于架构决策。
     let rebuildDraw = null;
+    let panDraw = null;
     if (mode.measureDraw) {
       const timing = installDrawTiming();
       try {
         rebuildDraw = measureValue(() => {
           renderer.invalidateCachedObjects([sampleStroke]);
           renderer.flush([]);
+          return timing.take();
+        }, sampleOptions);
+        // 平移仍是全量重建，与提交的局部重绘成本完全不同，必须分开测
+        panDraw = measureValue(() => {
+          panFrame();
           return timing.take();
         }, sampleOptions);
       } finally {
@@ -573,6 +579,7 @@ async function profileScenario(scenario, mode) {
       transfer,
       idle,
       rebuildDraw,
+      panDraw,
       idleFramesProduced,
     };
   } finally {
@@ -775,7 +782,6 @@ function formatOptionalMs(value) {
  */
 function printScenario(profiles, ops) {
   const { js, raster } = profiles;
-  const drawP95 = raster?.rebuildDraw?.p95 ?? 0;
   const hasRaster = raster !== null;
 
   console.log(`\n【${js.label}】`);
@@ -789,15 +795,14 @@ function printScenario(profiles, ops) {
   );
   console.log(tableBorder("├", "┼", "┤"));
 
-  /**
-   * 估算合计 = JS 全链 + 绘制策略光栅化
-   * @description 两者互不重叠：前者是几何、合图与调度，后者是 canvas 绘制本身。
-   * 平移一帧同样会触发一次全量重建，因此复用同一份光栅化读数。
-   */
-  const drawPart = hasRaster ? drawP95 : null;
+  // 估算合计 = JS 全链 + 绘制策略光栅化。
+  // 两者互不重叠：前者是几何、合图与调度，后者是 canvas 绘制本身。
+  // 提交走局部脏区重建、平移走全量重建，光栅化读数各自独立测量，不可复用。
+  const commitDrawPart = hasRaster ? raster.rebuildDraw?.p95 ?? 0 : null;
+  const panDrawPart = hasRaster ? raster.panDraw?.p95 ?? 0 : null;
   const rows = [
-    ["commit", "提交重绘（全量重建）", WORKER_BUDGET_MS, drawPart, true],
-    ["pan", "平移一帧（worker 全链）", WORKER_BUDGET_MS, drawPart, true],
+    ["commit", "提交重绘（脏区重建）", WORKER_BUDGET_MS, commitDrawPart, true],
+    ["pan", "平移一帧（全量重建）", WORKER_BUDGET_MS, panDrawPart, true],
     ["output", "输出层单帧（缓存未失效）", WORKER_BUDGET_MS, null, true],
     ["transfer", "帧回传（位图 + 回填）", null, null, false],
   ];
@@ -848,7 +853,7 @@ function printScenario(profiles, ops) {
   if (hasRaster) {
     console.log(
       `  诊断：光栅模式 flush 全链 p95 = 提交 ${formatMs(raster.commit.p95)} · 平移 ${formatMs(raster.pan.p95)}；` +
-        `其中绘制 ${formatMs(raster.rebuildDraw.p95)}，其余为 CPU 光栅器的惰性展平与内存回收，浏览器无此项。`,
+        `其中绘制 提交 ${formatMs(raster.rebuildDraw.p95)} · 平移 ${formatMs(raster.panDraw?.p95 ?? 0)}，其余为 CPU 光栅器的惰性展平与内存回收，浏览器无此项。`,
     );
   }
 
@@ -922,7 +927,7 @@ async function main() {
   }
 
   console.log("\n═══════════════════════════════════════════════════════════");
-  console.log("规模曲线（p95，毫秒）");
+  console.log("规模曲线 · 提交重绘（p95，毫秒）");
   console.log("───────────────────────────────────────────────────────────────");
   console.log(
     "  总点数  │ JS 重建 │ 光栅化 │ 估算合计 │ 占帧   │ 判定",
@@ -943,14 +948,40 @@ async function main() {
   }
   console.log("═══════════════════════════════════════════════════════════");
 
+  // 平移仍走全量重建，是提交路径优化后剩下的主要成本，单独给出基线
+  console.log("\n规模曲线 · 平移一帧（p95，毫秒）");
+  console.log("───────────────────────────────────────────────────────────────");
+  console.log(
+    "  总点数  │ JS 全链 │ 光栅化 │ 估算合计 │ 占帧   │ 判定",
+  );
+  let firstPanOver = null;
+  for (const { js, raster } of results) {
+    const drawP95 = raster?.panDraw?.p95 ?? 0;
+    const estimate = js.pan.p95 + drawP95;
+    const over = estimate > WORKER_BUDGET_MS;
+    if (over && firstPanOver === null) firstPanOver = js.strokeCount;
+    console.log(
+      `  ${String(js.pointCount).padStart(7)} │ ${formatMs(js.pan.p95)}  │ ` +
+        `${formatOptionalMs(raster ? drawP95 : null)} │ ${formatMs(estimate)}  │ ` +
+        `${formatShare(estimate / FRAME_BUDGET_MS)} │ ${over ? "超出预算" : "预算内"}`,
+    );
+  }
+  console.log("═══════════════════════════════════════════════════════════");
+
   if (allPassed) {
     console.log("\n结论：全部场景在估算合计上仍低于 worker 侧预算。");
+  } else if (firstOver !== null) {
+    console.log(
+      `\n结论：提交路径从 ${firstOver} 笔开始超过 worker 侧预算。`,
+    );
   } else {
     console.log(
-      `\n结论：从 ${firstOver} 笔开始，估算合计已超过 worker 侧预算。`,
+      "\n结论：提交路径全部在预算内，超预算的是其他帧类型（见各场景判定）。",
     );
+  }
+  if (firstPanOver !== null) {
     console.log(
-      "      光栅化已是主要成本项，几何与调度优化不再是杠杆；要继续下降只能减少每帧重绘的内容量。",
+      `      平移路径从 ${firstPanOver} 笔开始超过预算，平移仍是全量重建，与提交无关。`,
     );
   }
 
