@@ -1340,6 +1340,10 @@ class CoreWorkerRuntime {
       postRenderFrame: (message, transferList = []) => {
         this.#postMessage(message, transferList);
       },
+      // 内容变脏时主动通知 UI，使其在空闲休眠后能被远端编辑唤醒
+      onFrameDirty: () => {
+        this.#postMessage({ type: "render-dirty", viewportId });
+      },
     });
 
     this.#viewportCores.set(viewportKey, viewportCore);

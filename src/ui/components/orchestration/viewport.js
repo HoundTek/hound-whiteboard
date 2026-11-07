@@ -28,6 +28,12 @@ function resolveAnimationFrameHost() {
 }
 
 /**
+ * 连续多少次 flush 请求无产出后进入休眠
+ * @description 60fps 下约 0.5 秒，覆盖一帧回传的往返延迟，不会把正常空闲误判成沉睡。
+ */
+const FLUSH_IDLE_STOP_FRAMES = 30;
+
+/**
  * 区块二维坐标转回字形 id（纯数学，不依赖 Chunk 模块）
  * @param {number} x - 区块 x 坐标
  * @param {number} y - 区块 y 坐标
@@ -190,6 +196,27 @@ class Viewport {
   #workerSyncStarted;
 
   /**
+   * 连续未产出帧的 flush 请求次数
+   * @type {number}
+   * @private
+   */
+  #idleFlushCount = 0;
+
+  /**
+   * 已收到的 render-frame 总数
+   * @type {number}
+   * @private
+   */
+  #receivedFrameCount = 0;
+
+  /**
+   * 上一次 flush 请求时已收到的帧数
+   * @type {number}
+   * @private
+   */
+  #lastFlushFrameCount = 0;
+
+  /**
    * 下一次 viewport-change 是否强制刷新
    * @type {boolean}
    * @private
@@ -334,6 +361,7 @@ class Viewport {
     }
 
     this.#workerSyncStarted = true;
+    this.#idleFlushCount = 0;
     this.#scheduleViewportSync({ force: true, includeViewportSize: true });
     this.#scheduleRenderFlush();
     return this;
@@ -723,9 +751,16 @@ class Viewport {
       }
       return;
     }
-    if (message.type !== "render-frame") return;
     if (String(message.viewportId) !== String(this.viewportId)) return;
 
+    // worker 内容变脏的主动通知：唤醒已休眠的 flush 循环
+    if (message.type === "render-dirty") {
+      this.#resumeRenderFlush();
+      return;
+    }
+    if (message.type !== "render-frame") return;
+
+    this.#receivedFrameCount++;
     this.onRenderFrame(message);
   }
 
@@ -807,7 +842,22 @@ class Viewport {
   }
 
   /**
+   * 唤醒 render flush 循环
+   * @description 休眠期间收到 worker 的 render-dirty 时调用，重置空闲计数并重新排帧。
+   * @private
+   */
+  #resumeRenderFlush() {
+    this.#idleFlushCount = 0;
+    if (!this.#workerSyncStarted) return;
+    if (this.#pendingFlushRafId != null) return;
+    this.#scheduleRenderFlush();
+  }
+
+  /**
    * 安排下一帧 render flush 请求
+   * @description
+   * 连续多次请求都没有产出帧时进入休眠，不再自续期，
+   * 之后由 worker 的 render-dirty 通知唤醒，避免空闲视口每秒白发几十条消息。
    * @private
    */
   #scheduleRenderFlush() {
@@ -822,6 +872,15 @@ class Viewport {
         type: "request-render-flush",
         viewportId: this.viewportId,
       });
+
+      if (this.#receivedFrameCount === this.#lastFlushFrameCount) {
+        this.#idleFlushCount++;
+      } else {
+        this.#idleFlushCount = 0;
+      }
+      this.#lastFlushFrameCount = this.#receivedFrameCount;
+
+      if (this.#idleFlushCount >= FLUSH_IDLE_STOP_FRAMES) return;
       this.#scheduleRenderFlush();
     });
   }
