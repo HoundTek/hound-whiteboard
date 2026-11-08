@@ -372,6 +372,118 @@ describe("tile 提交路径的像素正确性", () => {
     }
   });
 
+  test("选中并移开相交对象后，下方对象不与选中框相交的部分不应消失", async () => {
+    const scenario = await createRasterScenario();
+    const { host, viewport, aom } = scenario;
+    try {
+      // A 是下方的长斜线，B 与其相交；退化包围盒不会形成静态图邻接，故都用斜线
+      const lower = addStroke(scenario, 1, new Vector(100, 300), [
+        { x: 0, y: 0 },
+        { x: 600, y: 100 },
+      ]);
+      const upper = addStroke(scenario, 2, new Vector(350, 250), [
+        { x: 0, y: 0 },
+        { x: 40, y: 130 },
+      ]);
+      viewport.flushRenderFrame();
+
+      // B 之上再压一个 C，三者层叠相邻
+      const topmost = addStroke(scenario, 3, new Vector(360, 260), [
+        { x: 0, y: 0 },
+        { x: 40, y: 130 },
+      ]);
+      viewport.flushRenderFrame();
+
+      // 显式建立静态图层叠邻接 A→B→C
+      for (const chunk of viewport.chunkLoader.getLoadedChunks()) {
+        chunk.addObject?.(upper, [lower.id], []);
+        chunk.addObject?.(topmost, [upper.id], []);
+      }
+
+      await aom.choose([upper]);
+      viewport.flushRenderFrame();
+
+      // 前置条件：C 必须被 pickup 成非活动层成员，A 仍是纯静态对象
+      expect(aom.has(topmost.id)).toBe(true);
+      expect(aom.has(lower.id)).toBe(false);
+
+      // 把 B 移开，使其不再与 A 相交
+      upper.position.y -= 150;
+      aom.apply([upper]);
+      viewport.flushRenderFrame();
+
+      const ctx = scenario.output.getContext("2d");
+      // A 的左右两端都远离 B 的新旧位置，必须仍然存在
+      const left = ctx.getImageData(150, 308, 1, 1).data[3];
+      const right = ctx.getImageData(600, 383, 1, 1).data[3];
+      expect(left).toBeGreaterThan(0);
+      expect(right).toBeGreaterThan(0);
+    } finally {
+      host.restore();
+    }
+  });
+
+  test("拖动下层对象并提交后，上层非活动成员保持完整", async () => {
+    const scenario = await createRasterScenario();
+    const { host, viewport, aom } = scenario;
+    try {
+      // A 在下，B 在上且与 A 相交；选择 A 时 B 被 pickup 为 inactiveGraph 成员
+      const lower = addStroke(scenario, 1, new Vector(100, 300), [
+        { x: 0, y: 0 },
+        { x: 600, y: 100 },
+      ]);
+      const upper = addStroke(scenario, 2, new Vector(350, 250), [
+        { x: 0, y: 0 },
+        { x: 40, y: 130 },
+      ]);
+      for (const chunk of viewport.chunkLoader.getLoadedChunks()) {
+        chunk.addObject?.(upper, [lower.id], []);
+      }
+      viewport.flushRenderFrame();
+
+      await aom.choose([lower]);
+      viewport.flushRenderFrame();
+
+      // 前置条件：B 必须确实被 pickup 成非活动层成员，否则测的是另一条路径
+      const inactiveAtChoose = aom.layerOrder.flatMap((layer) =>
+        layer.inactiveGraph.getNodes(),
+      );
+      expect(inactiveAtChoose).toEqual([upper.id]);
+
+      // B 的上半段在 A 的包围盒之外，是会被侵蚀的区域
+      const probeX = 352;
+      const probeY = 258;
+      const readProbe = () =>
+        scenario.output.getContext("2d").getImageData(probeX, probeY, 1, 1)
+          .data[3];
+      expect(readProbe()).toBeGreaterThan(0);
+      const pixelsAfterChoose = readPixels(scenario.output);
+
+      // 模拟拖动下层 A：每帧只发活动层失效，与 modifier 手势一致
+      for (let i = 1; i <= 4; i++) {
+        lower.position.y += 10;
+        aom.renderHooks.requestActiveRender([lower]);
+        viewport.flushRenderFrame();
+        expect(readProbe()).toBeGreaterThan(0);
+      }
+
+      aom.apply([lower]);
+      viewport.flushRenderFrame();
+
+      // 提交后 B 退出 AOM 回到静态层，上半段必须仍然画得出
+      expect(readProbe()).toBeGreaterThan(0);
+      const { lost, samples } = countLostPixels(
+        pixelsAfterChoose,
+        readPixels(scenario.output),
+        800,
+        (x, y) => x >= 90 && x <= 710 && y >= 290 && y <= 450,
+      );
+      expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
+    } finally {
+      host.restore();
+    }
+  });
+
   test("反复移动提交不应侵蚀已缓存像素", async () => {
     const scenario = await createRasterScenario();
     const { host, viewport, aom } = scenario;
