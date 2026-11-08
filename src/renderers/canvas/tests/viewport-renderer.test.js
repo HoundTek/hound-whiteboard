@@ -493,7 +493,7 @@ describe("ViewportRenderer", () => {
     expect(dirtyRects[1]).toEqual(new RectangleRange(0, 0, 10, 10));
   });
 
-  test("invalidateCachedObjects 只清理对象覆盖的局部脏区", () => {
+  test("对象进出静态层时缓存走全量重建", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const objectInstance = new FakeRectObject(
@@ -518,13 +518,12 @@ describe("ViewportRenderer", () => {
     renderer.flush();
     ctxCalls.length = 0;
 
+    // 对象进出 AOM 属静态层成员变化：局部重建漏失效会让缓存留下过期像素，
+    // 因此该路径必须全量重建（这是引入局部重建之前的等价行为）
     renderer.invalidateCachedObjects([objectInstance]);
     renderer.flush();
 
-    // 对象只占 20.5,30.5 起的 10×10，远小于视口 40%，走局部重建
-    // 清理时整数扩边：floor(20.5)=20，ceil(40.5)=41，故为 11×11
-    expect(ctxCalls).not.toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
-    expect(ctxCalls).toContainEqual(["cache", "clearRect", 20, 30, 11, 11]);
+    expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
   });
 
   /**
@@ -556,7 +555,7 @@ describe("ViewportRenderer", () => {
     return { renderer, objects, cacheCtx, ctxCalls, renderCalls };
   }
 
-  test("局部脏区重建只重绘与该脏区相交的静态对象", () => {
+  test("成员变化触发全量重建时按层叠顺序重绘全部静态对象", () => {
     const { renderer, objects, ctxCalls, renderCalls } = createCacheScenario([
       new Vector(20, 20),
       new Vector(500, 400),
@@ -565,12 +564,13 @@ describe("ViewportRenderer", () => {
     renderer.invalidateCachedObjects([objects[0]]);
     renderer.flush();
 
+    // 全量重建下两个静态对象都按层叠顺序重绘
     const cacheDraws = renderCalls.filter(([, label]) => label === "cache");
-    expect(cacheDraws).toEqual([[1, "cache"]]);
-    expect(ctxCalls).not.toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
-    expect(ctxCalls.some((call) => call[0] === "cache" && call[1] === "clip")).toBe(
-      true,
-    );
+    expect(cacheDraws).toEqual([
+      [1, "cache"],
+      [2, "cache"],
+    ]);
+    expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
   });
 
   test("脏区覆盖多个对象时按层叠顺序全部重绘", () => {
@@ -600,12 +600,11 @@ describe("ViewportRenderer", () => {
     });
     renderer.flush();
 
-    // 旧位置 (300,300) 与新位置 (20,20) 都要清，否则原地留残影
+    // 成员变化改走全量重建：旧位置与新位置一并被清掉，不会原地留残影
     const cleared = ctxCalls.filter(
       (call) => call[0] === "cache" && call[1] === "clearRect",
     );
-    expect(cleared).toContainEqual(["cache", "clearRect", 20, 20, 10, 10]);
-    expect(cleared).toContainEqual(["cache", "clearRect", 300, 300, 10, 10]);
+    expect(cleared).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
   });
 
   test("脏区面积达到视口阈值时退化为全量重建", () => {
@@ -648,10 +647,10 @@ describe("ViewportRenderer", () => {
     renderer.invalidateCachedObjects([objects[0]]);
     renderer.flush();
 
-    const cacheDraws = renderCalls.filter(([, label]) => label === "cache");
-    expect(cacheDraws).toEqual([[1, "cache"]]);
+    // 预览只影响绘制位置，剔除与失效仍按数据坐标计算
     expect(objects[0].position.x).toBe(20);
     expect(objects[0].position.y).toBe(20);
+    expect(renderCalls.filter(([, label]) => label === "cache").length).toBeGreaterThan(0);
   });
 
   test("invalidateActiveObjects 应同时提交当前/快照/上一帧范围", () => {

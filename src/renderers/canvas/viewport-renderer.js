@@ -158,6 +158,20 @@ class ViewportRenderer extends Renderer {
   #cacheComplete;
 
   /**
+   * 缓存是否必须在下次重建时走全量
+   * @description
+   * 对象进出 AOM（提交、拾取、删除）时置位。
+   * 这类变更下局部重建依赖一串隐含前提：对象的实际绘制范围必须被失效矩形
+   * 完整覆盖（描边外扩、miter 尖角、变换），退出 AOM 的对象必须当帧被纳入
+   * 静态失效。任何一条不成立都会让缓存留下过期像素，而全量重建天然免疫。
+   * 仅区块装卸（平移）不置位：区块的失效矩形本身就是其屏幕矩形，
+   * 覆盖关系成立，且平移每帧都会走这条路，强制全量会吃掉平移性能。
+   * @type {boolean}
+   * @private
+   */
+  #cacheRequiresFullRebuild;
+
+  /**
    * 输出层渲染调度器
    * @type {RenderScheduler}
    * @private
@@ -177,6 +191,7 @@ class ViewportRenderer extends Renderer {
     this.#objectSnapshotRects = new Map();
     this.#cacheDirty = true;
     this.#cacheComplete = false;
+    this.#cacheRequiresFullRebuild = true;
     this.#resolveCacheThresholds = createBaseDirtyRectThresholdStrategy();
 
     const outputCanvas = this._canvas;
@@ -575,6 +590,7 @@ class ViewportRenderer extends Renderer {
    */
   invalidateCachedObjects(objects = [], options = {}) {
     this.#cacheDirty = true;
+    this.#cacheRequiresFullRebuild = true;
 
     const previousWorldRects = options.previousWorldRects ?? new Map();
     const previousEntryIndex = this.indexDrawableEntries(
@@ -1076,6 +1092,8 @@ class ViewportRenderer extends Renderer {
   #shouldRebuildWholeCache(dirtyRects) {
     // 缓存不完整时局部重建会留下永久空白区域，必须先全量重建一次
     if (!this.#cacheComplete) return true;
+    // 静态层成员变化必须全量重建，避免局部重建漏失效导致缓存残留过期像素
+    if (this.#cacheRequiresFullRebuild) return true;
     if (!Array.isArray(dirtyRects) || dirtyRects.length === 0) return true;
 
     const rects = dirtyRects
@@ -1109,6 +1127,7 @@ class ViewportRenderer extends Renderer {
     }
 
     this.#cacheComplete = true;
+    this.#cacheRequiresFullRebuild = false;
   }
 
   /**
