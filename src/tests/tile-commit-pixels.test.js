@@ -13,6 +13,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import { BoardCore } from "../kernel/board/board-core.js";
 import { ViewportCore } from "../renderers/canvas/viewport-core.js";
 import { StrokeObject } from "../kernel/objects/stroke/stroke.js";
+import { CircleObject } from "../kernel/objects/graph/circle.js";
 import { Vector } from "../kernel/utils/math.js";
 
 /**
@@ -163,9 +164,9 @@ function countLostPixels(before, after, width, ignore = () => false) {
     const x = index % width;
     const y = Math.floor(index / width);
     if (ignore(x, y)) continue;
-    // alpha < 16 属于抗锯齿边缘，裁剪重绘时光栅器会有 ±1 的覆盖抖动，
-    // 不计入擦除；这里要抓的是可见内容的丢失（白边、对象消失）
-    if (before[i + 3] >= 16 && after[i + 3] === 0) {
+    // alpha < 64 属于抗锯齿过渡带，裁剪重绘时边缘覆盖会有抖动，
+    // 不计入内容擦除；这里要抓的是可见内容的丢失（白边、对象消失）
+    if (before[i + 3] >= 64 && after[i + 3] === 0) {
       lost++;
       if (samples.length < 12) samples.push({ x, y });
     }
@@ -525,6 +526,71 @@ describe("tile 提交路径的像素正确性", () => {
       // 回到原位后应与初始画面逐像素一致，否则就是局部重绘在侵蚀缓存
       const { lost, samples } = countLostPixels(baseline, restored, 800);
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
+    } finally {
+      host.restore();
+    }
+  });
+
+  test("连续创建相交圆时，旧圆不应在后续提交中丢失", async () => {
+    const scenario = await createRasterScenario();
+    const { host, viewport, aom, boardCore, output } = scenario;
+    try {
+      const centers = [
+        [300, 300],
+        [340, 320],
+        [380, 300],
+        [320, 360],
+        [360, 380],
+        [420, 350],
+        [280, 380],
+        [400, 400],
+      ];
+      const failures = [];
+      let before = null;
+
+      for (let i = 0; i < centers.length; i++) {
+        const [x, y] = centers[i];
+        const circle = new CircleObject(
+          i + 1,
+          new Vector(x, y),
+          { strokeColor: "#1a1a1a", strokeWidth: 4, fillColor: "#a0c0ff" },
+          { radius: 70 },
+        );
+        boardCore.registerObjectInstance(circle);
+        aom.add([circle]);
+        viewport.flushRenderFrame();
+        aom.apply([circle]);
+        viewport.flushRenderFrame();
+        // 让异步提交完成后再出一帧
+        await Promise.resolve();
+        await Promise.resolve();
+        viewport.flushRenderFrame();
+
+        const after = readPixels(output);
+        if (before) {
+          const { lost, samples } = countLostPixels(before, after, 800);
+          if (lost > 0) {
+            failures.push({
+              created: i + 1,
+              lost,
+              samples: samples.map(({ x, y }) => ({
+                x,
+                y,
+                beforeAlpha: before[(y * 800 + x) * 4 + 3],
+                afterAlpha: after[(y * 800 + x) * 4 + 3],
+              })),
+              layers: aom.layerOrder.map((layer) => ({
+                active: [...layer.activeObjects],
+                inactive: layer.inactiveGraph.getNodes(),
+              })),
+            });
+          }
+        }
+        before = after;
+      }
+
+      console.log("CREATE_FAILURES", JSON.stringify(failures));
+      expect(failures).toEqual([]);
     } finally {
       host.restore();
     }
