@@ -20,6 +20,7 @@ import { collectActiveDrawables as _collectActiveDrawables } from "./aom-collect
 import { OBJECT_DRAW_STRATEGIES } from "./object-draw-strategies.js";
 import { RenderScheduler, createRectangleDirtyRectMerger } from "./render-scheduler.js";
 import { TileStore } from "./tile-cache.js";
+import { normalizeCanvasSize } from "./canvas-lifecycle.js";
 import {
   createBaseDirtyRectThresholdStrategy,
   createLiveDirtyRectThresholdStrategy,
@@ -145,6 +146,18 @@ class ViewportRenderer extends Renderer {
   #cacheScheduler;
 
   /**
+   * 缓存画布是否包含完整的静态层图像
+   * @description
+   * 缓存只有在经历“全量重建”后才可信。画布被重置（尺寸变更、销毁重建）后
+   * 内容全部清空，此时若仍按脏区做局部重建，未命中区域会永久残缺：
+   * 后续 `invalidateViewport()` 只清输出、不重建缓存，画面将再无内容。
+   * 该标志为假时一律强制走全量重建。
+   * @type {boolean}
+   * @private
+   */
+  #cacheComplete;
+
+  /**
    * 输出层渲染调度器
    * @type {RenderScheduler}
    * @private
@@ -163,6 +176,7 @@ class ViewportRenderer extends Renderer {
     this.#previousAomEntries = [];
     this.#objectSnapshotRects = new Map();
     this.#cacheDirty = true;
+    this.#cacheComplete = false;
     this.#resolveCacheThresholds = createBaseDirtyRectThresholdStrategy();
 
     const outputCanvas = this._canvas;
@@ -220,8 +234,8 @@ class ViewportRenderer extends Renderer {
    * @returns {boolean} 是否发生了尺寸变化
    */
   resize(width, height) {
-    const nextWidth = Number.isFinite(width) ? width : 0;
-    const nextHeight = Number.isFinite(height) ? height : 0;
+    const nextWidth = normalizeCanvasSize(width);
+    const nextHeight = normalizeCanvasSize(height);
 
     let resized = false;
     if (super.resize(nextWidth, nextHeight)) {
@@ -229,10 +243,15 @@ class ViewportRenderer extends Renderer {
     }
 
     const cacheCanvas = this.#cache;
-    if (cacheCanvas && (cacheCanvas.width !== nextWidth || cacheCanvas.height !== nextHeight)) {
+    if (
+      cacheCanvas &&
+      (cacheCanvas.width !== nextWidth || cacheCanvas.height !== nextHeight)
+    ) {
+      // 尺寸赋值会重置画布内容，缓存自此不再完整
       cacheCanvas.width = nextWidth;
       cacheCanvas.height = nextHeight;
       this.#cacheDirty = true;
+      this.#cacheComplete = false;
       resized = true;
     }
 
@@ -1055,6 +1074,8 @@ class ViewportRenderer extends Renderer {
    * @private
    */
   #shouldRebuildWholeCache(dirtyRects) {
+    // 缓存不完整时局部重建会留下永久空白区域，必须先全量重建一次
+    if (!this.#cacheComplete) return true;
     if (!Array.isArray(dirtyRects) || dirtyRects.length === 0) return true;
 
     const rects = dirtyRects
@@ -1086,6 +1107,8 @@ class ViewportRenderer extends Renderer {
       if (!OBJECT_DRAW_STRATEGIES.has(entry.object.constructor)) continue;
       this.drawObjectWithPreview(viewportContext, entry.object);
     }
+
+    this.#cacheComplete = true;
   }
 
   /**

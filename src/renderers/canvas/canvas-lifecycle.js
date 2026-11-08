@@ -8,6 +8,20 @@
 import { RenderScheduler } from "./render-scheduler.js";
 
 /**
+ * 将画布尺寸归一化为非负整数
+ * @description
+ * canvas 的 width / height 属性是无符号长整型，赋值小数会被截断。
+ * 若用原始小数参与“尺寸是否变化”的比较，比较永远不成立，
+ * 每次同步都会重新赋值并因此重置（清空）画布内容。
+ * @param {number} size - 原始尺寸
+ * @returns {number} 可用于比较与赋值的整数尺寸
+ */
+function normalizeCanvasSize(size) {
+  if (!Number.isFinite(size) || size <= 0) return 0;
+  return Math.round(size);
+}
+
+/**
  * 画布生命周期管理器
  * @description
  * 封装渲染器所需的画布引用持有、尺寸变更、失效请求与调度器生命周期的通用逻辑。
@@ -106,8 +120,8 @@ class CanvasHost {
   resize(width, height) {
     const canvas = this._canvas;
     if (!canvas) return false;
-    const nextWidth = Number.isFinite(width) ? width : 0;
-    const nextHeight = Number.isFinite(height) ? height : 0;
+    const nextWidth = normalizeCanvasSize(width);
+    const nextHeight = normalizeCanvasSize(height);
     if (canvas.width === nextWidth && canvas.height === nextHeight)
       return false;
     canvas.width = nextWidth;
@@ -116,4 +130,4 @@ class CanvasHost {
   }
 }
 
-export { CanvasHost };
+export { CanvasHost, normalizeCanvasSize };
