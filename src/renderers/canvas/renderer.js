@@ -261,7 +261,9 @@ class Renderer extends CanvasHost {
    */
   intersectsDirtyRects(entry, dirtyRects) {
     const rect = entry?.screenRect;
-    if (!rect) return dirtyRects.length === 0;
+    // 范围暂时解析不出的条目（如 teardown 中间态）不能剔除：
+    // 它上一帧的绘制区域已被纳入脏区并清除，剔除就会白帧一帧再恢复
+    if (!rect) return true;
 
     return dirtyRects.some((dirtyRect) => intersectsRanges(rect, dirtyRect));
   }

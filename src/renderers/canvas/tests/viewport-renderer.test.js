@@ -403,6 +403,32 @@ describe("ViewportRenderer", () => {
     expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
   });
 
+  test("几何暂时不可解析的 AOM 对象在非空脏区下仍应绘制", () => {
+    const renderCalls = [];
+    const active = new FakeRectObject(1, new Vector(20, 20), renderCalls);
+    const outputCanvas = createCanvas(800, 600, createContext("output", []));
+    const { viewport, aom } = createViewportContext({
+      activeObjects: [active],
+      outputCanvas,
+    });
+    const renderer = new ViewportRenderer(viewport, aom, {
+      canvas: outputCanvas,
+    });
+    renderer._scheduler.scheduleFrame = () => 0;
+    renderer.flush();
+    renderCalls.length = 0;
+
+    // 模拟 teardown 中间态：世界范围暂时解析不出来，但上一帧已经画过它
+    active.rich.boundingBox = undefined;
+    active.getRange = () => undefined;
+
+    // 上一帧的 drawnRects 会进入脏区并被清除，本帧若被剔除就会白帧
+    renderer.invalidateActiveObjects([active]);
+    renderer.flush([new RectangleRange(0, 0, 100, 100)]);
+
+    expect(renderCalls).toContainEqual([1, "output"]);
+  });
+
   test("预览坐标：静态对象按预览位置渲染且不改数据，end 清除后归位", () => {
     const renderCalls = [];
     const ctxCalls = [];
