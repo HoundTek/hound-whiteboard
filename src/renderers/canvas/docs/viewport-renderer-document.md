@@ -21,7 +21,8 @@
 
 - 维护一个内部的 `#cache` OffscreenCanvas，尺寸与输出 canvas 一致
 - 由 `#cacheScheduler`（`RenderScheduler` 实例）管理缓存层脏区的积累和合并
-- 当 `#cacheDirty = true` 时，在输出帧渲染前主动更新缓存：清空脏区 → 收集非 AOM 的静态图对象 → 按合并后的全局静态图拓扑序绘制
+- 当 `#cacheDirty = true` 时，在输出帧渲染前主动更新缓存：全量清空 → 收集非 AOM 的静态图对象 → 按合并后的全局静态图拓扑序绘制
+- 缓存总是全量重建，不做局部重建（原因见下节「为什么不做局部重建」）
 - 缓存尺寸跟随 `resize()` 同步调整
 
 ### 输出合成
@@ -86,9 +87,21 @@ flowchart TD
 
 ## 脏区策略
 
-- **缓存层调度器**使用 base 层策略（`createBaseDirtyRectThresholdStrategy`），更保守的阈值（高 `viewportCoverageRatio`），减少不必要的缓存重绘
+- **缓存层调度器**使用 base 层策略（`createBaseDirtyRectThresholdStrategy`），仅用于控制刷新批次（缓存总是全量重建，脏区不再决定重建范围）
 - **输出层调度器**使用 live 层策略（`createLiveDirtyRectThresholdStrategy`），更激进的合并阈值（低 `viewportCoverageRatio`），适应逐帧变化的 AOM 输出
 - 双调度器各自独立积累和合并脏区，输出帧渲染前通过 `#flushCacheScheduler()` 协调缓存 > 输出的时序保证
+
+### 为什么不做局部重建
+
+缓存曾经支持按脏区局部重建（只清脏子矩形、只重绘与之相交的对象），已删除：
+
+- 局部重建要正确，必须同时成立：对象的实际绘制范围被失效矩形完整覆盖（描边外扩、miter 尖角、变换）、
+  退出 AOM 的对象当帧被纳入静态失效、不在 AOM 中的对象不会被误纳入缓存
+- 任何一条不成立，缓存就留下过期像素；这类残留叠加 AOM 当帧绘制后，半透明填充表现为整片变暗一帧
+- 实测全量重建的代价与局部重建持平（100/300/600 笔画下倍率 ×0.96 至 ×1.00），收益实际来自输出层的脏区清除与拷贝
+
+世界空间 tile 缓存（`#tileStore`）遵守同一不变式：对象进出 AOM 时整片标脏，
+不做局部标脏（见 `#invalidateTilesForCachedObjects`）。
 
 ## 快照与旧帧追踪
 

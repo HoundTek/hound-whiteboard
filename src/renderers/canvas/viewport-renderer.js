@@ -39,12 +39,6 @@ import {
  */
 
 /**
- * 脏区覆盖视口面积达到该比例时退化为全量重建
- * @description 局部重建的收益随覆盖面积下降，超过阈值后全量更划算。
- */
-const CACHE_FULL_REBUILD_AREA_RATIO = 0.4;
-
-/**
  * tile 缓存相对视口的世界范围外扩比例（单侧）
  * @description 总覆盖为视口的 1.5 倍边长，平移时先命中已缓存的周边 tile。
  */
@@ -146,32 +140,6 @@ class ViewportRenderer extends Renderer {
   #cacheScheduler;
 
   /**
-   * 缓存画布是否包含完整的静态层图像
-   * @description
-   * 缓存只有在经历“全量重建”后才可信。画布被重置（尺寸变更、销毁重建）后
-   * 内容全部清空，此时若仍按脏区做局部重建，未命中区域会永久残缺：
-   * 后续 `invalidateViewport()` 只清输出、不重建缓存，画面将再无内容。
-   * 该标志为假时一律强制走全量重建。
-   * @type {boolean}
-   * @private
-   */
-  #cacheComplete;
-
-  /**
-   * 缓存是否必须在下次重建时走全量
-   * @description
-   * 对象进出 AOM（提交、拾取、删除）时置位。
-   * 这类变更下局部重建依赖一串隐含前提：对象的实际绘制范围必须被失效矩形
-   * 完整覆盖（描边外扩、miter 尖角、变换），退出 AOM 的对象必须当帧被纳入
-   * 静态失效。任何一条不成立都会让缓存留下过期像素，而全量重建天然免疫。
-   * 仅区块装卸（平移）不置位：区块的失效矩形本身就是其屏幕矩形，
-   * 覆盖关系成立，且平移每帧都会走这条路，强制全量会吃掉平移性能。
-   * @type {boolean}
-   * @private
-   */
-  #cacheRequiresFullRebuild;
-
-  /**
    * 输出层渲染调度器
    * @type {RenderScheduler}
    * @private
@@ -190,8 +158,6 @@ class ViewportRenderer extends Renderer {
     this.#previousAomEntries = [];
     this.#objectSnapshotRects = new Map();
     this.#cacheDirty = true;
-    this.#cacheComplete = false;
-    this.#cacheRequiresFullRebuild = true;
     this.#resolveCacheThresholds = createBaseDirtyRectThresholdStrategy();
 
     const outputCanvas = this._canvas;
@@ -206,7 +172,7 @@ class ViewportRenderer extends Renderer {
 
     this.#cacheScheduler = new RenderScheduler({
       mergeDirtyRects: this._createDirtyRectMerger(),
-      flushHandler: (dirtyRects) => this.#cacheFlush(dirtyRects),
+      flushHandler: () => this.#cacheFlush(),
     });
 
     this.#outputScheduler = new RenderScheduler({
@@ -262,11 +228,10 @@ class ViewportRenderer extends Renderer {
       cacheCanvas &&
       (cacheCanvas.width !== nextWidth || cacheCanvas.height !== nextHeight)
     ) {
-      // 尺寸赋值会重置画布内容，缓存自此不再完整
+      // 尺寸赋值会重置画布内容，缓存自此不再可信
       cacheCanvas.width = nextWidth;
       cacheCanvas.height = nextHeight;
       this.#cacheDirty = true;
-      this.#cacheComplete = false;
       resized = true;
     }
 
@@ -590,7 +555,6 @@ class ViewportRenderer extends Renderer {
    */
   invalidateCachedObjects(objects = [], options = {}) {
     this.#cacheDirty = true;
-    this.#cacheRequiresFullRebuild = true;
 
     const previousWorldRects = options.previousWorldRects ?? new Map();
     const previousEntryIndex = this.indexDrawableEntries(
@@ -732,34 +696,6 @@ class ViewportRenderer extends Renderer {
    */
   getPreviewRenderPosition(objectId) {
     return this._getPreviewPosition(objectId);
-  }
-
-  /**
-   * 按脏区局部重建静态缓存
-   * @description
-   * 脏区已由调度器合并，相交矩形会被强制合并，因此各区域互不重叠、不会重复光栅化。
-   * 每个区域内重画所有与之相交的静态对象以保持层叠顺序，裁剪限定在区域内。
-   * @param {CanvasRenderingContext2D} ctx - 缓存上下文
-   * @param {Array<{screenRect?: RectangleRange, object: BasicObject}>} entries - 静态对象条目
-   * @param {RectangleRange[]} dirtyRects - 屏幕脏区
-   * @returns {number} 实际重绘的对象次数
-   * @private
-   */
-  #rebuildCacheRegions(ctx, entries, dirtyRects) {
-    const viewportContext = this.createViewportContext(ctx);
-    let redrawCount = 0;
-
-    for (const dirtyRect of dirtyRects) {
-      const rect = this.normalizeScreenRect(dirtyRect);
-      if (!rect) continue;
-      this.clearRegion(ctx, rect);
-      const intersecting = entries.filter((entry) =>
-        this.intersectsDirtyRects(entry, [rect]),
-      );
-      redrawCount += this.renderRegion(ctx, viewportContext, intersecting, rect);
-    }
-
-    return redrawCount;
   }
 
   /**
@@ -1069,11 +1005,13 @@ class ViewportRenderer extends Renderer {
   /**
    * 更新静态缓存
    * @description
-   * 缩放档位 0 走 tile 重建；其余档位有脏区时按脏区局部重建，否则全量重建。
-   * @param {RectangleRange[]} dirtyRects - 屏幕脏区集合
+   * 缩放档位 0 走 tile 重建，其余档位全量重建。
+   * 局部重建已删除：它依赖一串隐含前提（对象实际绘制范围必须被失效矩形完整覆盖、
+   * 退出 AOM 的对象必须当帧被纳入静态失效），任何一条不成立就会残留过期像素，
+   * 而实测全量重建的代价与局部重建持平。
    * @private
    */
-  #updateCache(dirtyRects) {
+  #updateCache() {
     const ctx = this.#cache?.getContext?.("2d") ?? null;
     if (!ctx) return;
 
@@ -1085,42 +1023,8 @@ class ViewportRenderer extends Renderer {
 
     const drawables = this.#collectCacheDrawables();
     const drawableEntries = this.createDrawableEntries(drawables);
-
-    if (this.#shouldRebuildWholeCache(dirtyRects)) {
-      this.#rebuildWholeCache(ctx, drawableEntries);
-    } else {
-      this.#rebuildCacheRegions(ctx, drawableEntries, dirtyRects);
-    }
-
+    this.#rebuildWholeCache(ctx, drawableEntries);
     this.#cacheDirty = false;
-  }
-
-  /**
-   * 判断本次缓存重建是否应走全量
-   * @param {RectangleRange[]} dirtyRects - 屏幕脏区
-   * @returns {boolean}
-   * @private
-   */
-  #shouldRebuildWholeCache(dirtyRects) {
-    // 缓存不完整时局部重建会留下永久空白区域，必须先全量重建一次
-    if (!this.#cacheComplete) return true;
-    // 静态层成员变化必须全量重建，避免局部重建漏失效导致缓存残留过期像素
-    if (this.#cacheRequiresFullRebuild) return true;
-    if (!Array.isArray(dirtyRects) || dirtyRects.length === 0) return true;
-
-    const rects = dirtyRects
-      .map((rect) => this.normalizeScreenRect(rect))
-      .filter(Boolean);
-    if (rects.length === 0) return true;
-
-    const viewportArea = (this.#cache?.width ?? 0) * (this.#cache?.height ?? 0);
-    if (!(viewportArea > 0)) return true;
-
-    let coveredArea = 0;
-    for (const rect of rects) {
-      coveredArea += Math.max(0, rect.width) * Math.max(0, rect.height);
-    }
-    return coveredArea / viewportArea >= CACHE_FULL_REBUILD_AREA_RATIO;
   }
 
   /**
@@ -1137,20 +1041,16 @@ class ViewportRenderer extends Renderer {
       if (!OBJECT_DRAW_STRATEGIES.has(entry.object.constructor)) continue;
       this.drawObjectWithPreview(viewportContext, entry.object);
     }
-
-    this.#cacheComplete = true;
-    this.#cacheRequiresFullRebuild = false;
   }
 
   /**
    * 缓存调度器 flush 处理器
-   * @description 由缓存层调度器在 rAF 中触发。仅在 #cacheDirty 为真时更新缓存。
-   * @param {RectangleRange[]} cacheDirtyRects - 缓存层脏区集合
+   * @description 由缓存层调度器在 rAF 中触发。仅在 `#cacheDirty` 为真时更新缓存。
    * @private
    */
-  #cacheFlush(cacheDirtyRects) {
+  #cacheFlush() {
     if (this.#cacheDirty) {
-      this.#updateCache(cacheDirtyRects);
+      this.#updateCache();
       this.#cacheDirty = false;
     }
   }
@@ -1167,7 +1067,7 @@ class ViewportRenderer extends Renderer {
       return;
     }
     // 无积压脏区但缓存脏 → 全量重建
-    this.#updateCache([]);
+    this.#updateCache();
     this.#cacheDirty = false;
   }
 
@@ -1318,7 +1218,7 @@ class ViewportRenderer extends Renderer {
     }
 
     if (this.#cacheDirty && Array.isArray(dirtyRects)) {
-      this.#updateCache(dirtyRects);
+      this.#updateCache();
     }
 
     const cacheCanvas = this.#cache;
