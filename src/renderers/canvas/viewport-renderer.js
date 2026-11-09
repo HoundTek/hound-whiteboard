@@ -779,35 +779,18 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 按内容变化标记对象涉及的 tile 失效
+   * 按内容变化标记 tile 失效
    * @description
-   * 覆盖对象当前与旧世界范围，两者之外不需要重绘。
-   * 不传对象表示整体失效，对应静态图结构变化等无明确来源的场景。
+   * 对象进出 AOM 属静态层成员变化，局部失效不可信：tile 的局部脏区只清除
+   * 该子矩形，对象实际绘制范围一旦越出（描边外扩、miter 尖角、变换）就会
+   * 留下过期像素。残留像素叠加 AOM 当帧的绘制，半透明填充表现为整片变暗。
+   * 因此整片标脏，与经典缓存路径的强制全量重建保持同一不变式。
    * @param {Iterable<BasicObject>} [objects=[]] - 待失效对象
-   * @param {Map<string, RectangleRange>} previousWorldRects - 旧世界范围快照
+   * @param {Map<string, RectangleRange>} [previousWorldRects] - 旧世界范围快照
    * @private
    */
   #invalidateTilesForCachedObjects(objects, previousWorldRects) {
-    const list = [...(objects ?? [])].filter(
-      (objectInstance) => objectInstance instanceof BasicObject,
-    );
-    if (list.length === 0) {
-      this.#tileStore.markAllDirty();
-      return;
-    }
-
-    const zoom = this.viewport?.zoom ?? 1;
-    for (const objectInstance of list) {
-      const padding = this.getObjectScreenPadding(objectInstance) / zoom;
-      const currentWorldRect = this.getObjectWorldRect(objectInstance);
-      if (currentWorldRect) {
-        this.#tileStore.markDirtyWorldRect(currentWorldRect.inflate(padding));
-      }
-      const previousWorldRect = previousWorldRects.get(objectInstance.id);
-      if (previousWorldRect) {
-        this.#tileStore.markDirtyWorldRect(previousWorldRect.inflate(padding));
-      }
-    }
+    this.#tileStore.markAllDirty();
   }
 
   /**
@@ -853,6 +836,8 @@ class ViewportRenderer extends Renderer {
    * @description
    * 只重新光栅化脏 tile，返回覆盖缓存范围的 tile 列表。
    * 没有脏 tile 时跳过对象收集与层叠排序，平移帧因此只剩合成成本。
+   * 重建范围限制在视口世界矩形内：缓存外扩区里的 tile 不会被绘制
+   * （合成按脏区裁剪，脏区必在视口内），留到平移揭示时再建。
    * @returns {Array<import("./tile-cache.js").TileEntry>}
    * @private
    */
@@ -865,13 +850,23 @@ class ViewportRenderer extends Renderer {
       TILE_CACHE_MARGIN_RATIO,
     );
     const tiles = this.#tileStore.ensure(cacheWorldRect);
-    const dirtyTiles = tiles.filter((tile) => this.#tileStore.isDirty(tile));
+    const dirtyTiles = tiles.filter(
+      (tile) =>
+        this.#tileStore.isDirty(tile) && intersectsRanges(tile.worldRect, worldRect),
+    );
 
     if (dirtyTiles.length > 0) {
-      const items = this.#collectCacheDrawables().map((objectInstance) => ({
-        object: objectInstance,
-        worldRect: this.getObjectWorldRect(objectInstance),
-      }));
+      const zoom = this.viewport?.zoom ?? 1;
+      // padding 与对象自身相关而与 tile 无关，先算一次，避免 tile 数 × 对象数的重复解析
+      const items = this.#collectCacheDrawables().map((objectInstance) => {
+        const worldRect = this.getObjectWorldRect(objectInstance);
+        if (!worldRect) return { object: objectInstance, paddedWorldRect: undefined };
+        const padding = this.getObjectScreenPadding(objectInstance) / zoom;
+        return {
+          object: objectInstance,
+          paddedWorldRect: worldRect.inflate(padding),
+        };
+      });
       for (const tile of dirtyTiles) {
         this.#renderTile(tile, items);
       }
@@ -907,7 +902,7 @@ class ViewportRenderer extends Renderer {
    * tile 上下文以 tile 世界原点为视口原点，对象按全局层叠顺序绘制并裁剪到 tile 内。
    * 每个 tile 都重画所有与之相交的对象，跨 tile 对象的过绘是保持层叠正确的代价。
    * @param {import("./tile-cache.js").TileEntry} tile - 目标 tile
-   * @param {Array<{object: BasicObject, worldRect?: RectangleRange}>} items - 按层叠顺序排列的静态对象
+   * @param {Array<{object: BasicObject, paddedWorldRect?: RectangleRange}>} items - 按层叠顺序排列的静态对象，已含外扩范围
    * @returns {RectangleRange[]} 本次重建覆盖的 tile 内矩形
    * @private
    */
@@ -930,12 +925,11 @@ class ViewportRenderer extends Renderer {
     const entries = [];
     for (const item of items) {
       const objectInstance = item.object;
-      if (!item.worldRect) {
+      const worldRect = item.paddedWorldRect;
+      if (!worldRect) {
         entries.push({ objectId: objectInstance.id, object: objectInstance });
         continue;
       }
-      const padding = this.getObjectScreenPadding(objectInstance) / zoom;
-      const worldRect = item.worldRect.inflate(padding);
       if (!intersectsRanges(worldRect, tile.worldRect)) continue;
 
       entries.push({
@@ -1012,30 +1006,48 @@ class ViewportRenderer extends Renderer {
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const limitSize = Math.round(tileSize);
     for (const clipRect of clipRects) {
-      if (hasDirtyRects) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(clipRect.left, clipRect.top, clipRect.width, clipRect.height);
-        ctx.clip();
-      }
-
       for (const tile of tiles) {
         const left = (tile.worldX - origin.x) * zoom;
         const top = (tile.worldY - origin.y) * zoom;
+        const right = left + tileSize;
+        const bottom = top + tileSize;
         if (
           clipRect &&
           (left >= clipRect.right ||
             top >= clipRect.bottom ||
-            left + tileSize <= clipRect.left ||
-            top + tileSize <= clipRect.top)
+            right <= clipRect.left ||
+            bottom <= clipRect.top)
         ) {
           continue;
         }
-        ctx.drawImage(tile.canvas, left, top, tileSize, tileSize);
-      }
 
-      if (hasDirtyRects) ctx.restore();
+        // 只搬限定区内那一块：以整图配小裁剪区会把像素搬运量放大数十倍
+        const limitLeft = clipRect ? clipRect.left : left;
+        const limitTop = clipRect ? clipRect.top : top;
+        const limitRight = clipRect ? clipRect.right : right;
+        const limitBottom = clipRect ? clipRect.bottom : bottom;
+        const sourceLeft = Math.max(0, Math.round(limitLeft - left));
+        const sourceTop = Math.max(0, Math.round(limitTop - top));
+        const sourceWidth =
+          Math.min(limitSize, Math.round(limitRight - left)) - sourceLeft;
+        const sourceHeight =
+          Math.min(limitSize, Math.round(limitBottom - top)) - sourceTop;
+        if (sourceWidth <= 0 || sourceHeight <= 0) continue;
+
+        ctx.drawImage(
+          tile.canvas,
+          sourceLeft,
+          sourceTop,
+          sourceWidth,
+          sourceHeight,
+          left + sourceLeft,
+          top + sourceTop,
+          sourceWidth,
+          sourceHeight,
+        );
+      }
     }
     ctx.restore();
     return true;

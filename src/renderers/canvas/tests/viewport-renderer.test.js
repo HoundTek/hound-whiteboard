@@ -1172,34 +1172,19 @@ describe("ViewportRenderer", () => {
       ).toBe(true);
     });
 
-    test("提交对象只重建其覆盖的 tile", () => {
+    test("对象进出 AOM 时整片 tile 重建", () => {
       const { renderer, objects } = createTileScenario([
         new Vector(20, 20),
         new Vector(700, 500),
       ]);
       const before = renderer.getTileDebugInfo().rebuildCount;
+      const tiles = renderer.getTileDebugInfo().tileCount;
 
       renderer.invalidateCachedObjects([objects[0]]);
       renderer.flush();
 
-      // 对象位于 (20,20)，只落在 tile (0,0) 内
-      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 1);
-    });
-
-    test("对象旧位置所在的 tile 一并重建", () => {
-      const { renderer, objects } = createTileScenario([
-        new Vector(20, 20),
-        new Vector(700, 500),
-      ]);
-      const before = renderer.getTileDebugInfo().rebuildCount;
-
-      renderer.invalidateCachedObjects([objects[0]], {
-        previousWorldRects: new Map([[1, new RectangleRange(700, 500, 10, 10)]]),
-      });
-      renderer.flush();
-
-      // 新位置 tile (0,0) 与旧位置 tile (1,0) 都要重建，否则旧位置留残影
-      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 2);
+      // 成员变化下局部失效不可信，必须整片重建，否则残留像素叠加 AOM 绘制
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + tiles);
     });
 
     test("新加载的区块只重建其覆盖的 tile", () => {
@@ -1241,7 +1226,7 @@ describe("ViewportRenderer", () => {
       expect(composites).toHaveLength(1);
     });
 
-    test("提交只在 tile 内清理对象覆盖的小区域，不清整幅 tile", () => {
+    test("对象进出 AOM 时清理整幅 tile", () => {
       const previousCanvas = globalThis.OffscreenCanvas;
       const tileClears = [];
       // 替换 tile 画布实现，直接记录每块 tile 上的清理尺寸
@@ -1277,10 +1262,10 @@ describe("ViewportRenderer", () => {
         renderer.flush();
 
         expect(tileClears.length).toBeGreaterThan(0);
-        // 对象只占 10×10，任何 512×512 的清理都说明退化成了整块重建
-        for (const [left, top, width, height] of tileClears) {
-          expect(width).toBeLessThan(512);
-          expect(height).toBeLessThan(512);
+        // 成员变化走整块重建：每块 tile 都是整幅清理，不留任何局部残留
+        for (const [, , width, height] of tileClears) {
+          expect(width).toBe(512);
+          expect(height).toBe(512);
         }
       } finally {
         globalThis.OffscreenCanvas = previousCanvas;
