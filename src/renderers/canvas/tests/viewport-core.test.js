@@ -38,6 +38,7 @@ describe("ViewportCore", () => {
    *   boardWidth?: number,
    *   boardHeight?: number,
    *   viewportId?: string,
+   *   tiles?: boolean,
    * }} [options={}] - 测试选项
    * @returns {{ boardCore: BoardCore, viewportCore: ViewportCore, postedFrames: Array<{ message: Object, transferList: Transferable[] }> }}
    */
@@ -55,6 +56,7 @@ describe("ViewportCore", () => {
       postRenderFrame(message, transferList = []) {
         postedFrames.push({ message, transferList });
       },
+      tiles: options.tiles,
     });
 
     return { boardCore, viewportCore, postedFrames };
@@ -94,6 +96,30 @@ describe("ViewportCore", () => {
     expect(requestActiveSpy).toHaveBeenCalledTimes(1);
     expect(viewportCore.origin).toEqual(new Vector(120, 80));
     expect(viewportCore.zoom).toBe(2);
+  });
+
+  test("tile 模式下视口原点量化到整数", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 1,
+    });
+
+    // 小数目标坐标会被 canvas 实现自行 snap，导致 tile 内容相位偏移
+    expect(viewportCore.origin).toEqual(new Vector(120, 81));
+  });
+
+  test("非 tile 模式保留亚像素视口原点", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+
+    // 缩放档位非 0 时走经典路径，保留亚像素平移以获得平滑效果
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 2,
+    });
+
+    expect(viewportCore.origin).toEqual(new Vector(120.4, 80.6));
   });
 
   test("flushRenderFrame 应输出 render-frame 消息并将位图画回源 OffscreenCanvas", () => {

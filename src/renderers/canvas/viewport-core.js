@@ -43,6 +43,13 @@ class ViewportCore {
    * @type {ChunkLoader}
    * @private
    */
+  /**
+   * 是否启用世界空间 tile 缓存
+   * @type {boolean}
+   * @private
+   */
+  #tilesEnabled;
+
   #chunkLoader;
 
   /**
@@ -139,6 +146,7 @@ class ViewportCore {
       `viewport-${String(this.#viewportId)}`,
     );
 
+    this.#tilesEnabled = options.tiles === true;
     this.#renderer = new ViewportRenderer(
       this,
       this.#boardCore.activeObjectManager,
@@ -505,12 +513,19 @@ class ViewportCore {
         : Number.isFinite(nextState.zoom) && nextState.zoom > 0
           ? nextState.zoom
           : this.zoom;
+    // tile 合成要求整数视口原点：小数目标坐标会被 canvas 实现自行 snap，
+    // 导致 tile 内容相对真实世界位置出现亚像素相位偏移（描边粗细两侧不一致）。
+    // 缩放档位 0 才走 tile，其余档位保留亚像素平移以获得平滑效果。
+    const quantizedOrigin =
+      this.#tilesEnabled && nextZoom === 1
+        ? new Vector(Math.round(nextOrigin.x), Math.round(nextOrigin.y))
+        : nextOrigin;
     const originUnchanged =
-      nextOrigin.x === previousViewportState.origin.x &&
-      nextOrigin.y === previousViewportState.origin.y;
+      quantizedOrigin.x === previousViewportState.origin.x &&
+      quantizedOrigin.y === previousViewportState.origin.y;
     const zoomUnchanged = nextZoom === previousViewportState.zoom;
 
-    this.#origin = nextOrigin;
+    this.#origin = quantizedOrigin;
     this.#zoom = nextZoom;
 
     if (!forceRefresh && !resized && originUnchanged && zoomUnchanged) {
