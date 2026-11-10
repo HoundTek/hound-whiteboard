@@ -66,6 +66,7 @@ src/
 └── demo/                    # 白板 HTML/CSS/JS 入口（桌面与 web 模式）
 src-tauri/                   # Rust 后端（Cargo workspace）
 benchmarks/                  # 性能基准
+dev/                         # 开发期文档与实验（probes/ 为渲染诊断探针，见 dev/probes/README.md）
 scripts/                     # CI 检查与 demo 静态服务脚本
 └── ci/                      # 文档链接 / @module 路径检查
 ```
