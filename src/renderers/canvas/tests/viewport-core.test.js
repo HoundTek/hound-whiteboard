@@ -98,6 +98,20 @@ describe("ViewportCore", () => {
     expect(viewportCore.zoom).toBe(2);
   });
 
+  test("不传 tiles 时渲染器与原点量化取同一个默认值", () => {
+    const { viewportCore } = createViewportCoreContext();
+
+    // 渲染器默认启用 tile，量化判定必须一致，否则合成会退化为小数目标坐标
+    expect(viewportCore.renderer.getTileDebugInfo().enabled).toBe(true);
+
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 1,
+    });
+
+    expect(viewportCore.origin).toEqual(new Vector(120, 81));
+  });
+
   test("tile 模式下视口原点量化到整数", () => {
     const { viewportCore } = createViewportCoreContext({ tiles: true });
 

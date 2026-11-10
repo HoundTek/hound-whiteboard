@@ -10,7 +10,10 @@
 import { RectangleRange } from "../../kernel/range/index.js";
 import { Vector } from "../../kernel/utils/math.js";
 import { Chunk } from "../../kernel/chunk/chunk.js";
-import { CHUNK_LOAD_STRATEGIES, ChunkLoader } from "../../kernel/chunk/chunk-loader.js";
+import {
+  CHUNK_LOAD_STRATEGIES,
+  ChunkLoader,
+} from "../../kernel/chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../../kernel/chunk/chunk-object-manager.js";
 import { ViewportRenderer } from "./viewport-renderer.js";
 import { BoardCore } from "../../kernel/board/board-core.js";
@@ -146,13 +149,17 @@ class ViewportCore {
       `viewport-${String(this.#viewportId)}`,
     );
 
-    this.#tilesEnabled = options.tiles === true;
+    // tile 开关只在此处归一化一次。
+    // 渲染器的启用判定与原点的整数量化必须取同一个值，
+    // 否则会出现渲染器开 tile 而原点未量化的错配，
+    // 导致合成退化为小数目标坐标，描边相位偏移回归
+    this.#tilesEnabled = options.tiles !== false;
     this.#renderer = new ViewportRenderer(
       this,
       this.#boardCore.activeObjectManager,
       {
         canvas: new OffscreenCanvas(this.#width, this.#height),
-        tiles: options.tiles,
+        tiles: this.#tilesEnabled,
         tileSize: options.tileSize,
       },
     );
@@ -425,7 +432,10 @@ class ViewportCore {
    * @param {import("../../kernel/chunk/chunk.js").Chunk[]} [previousChunks=[]] - 视口变化前可见区块
    * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState={}] - 旧视口状态
    */
-  requestViewportStaticRefresh(previousChunks = [], previousViewportState = {}) {
+  requestViewportStaticRefresh(
+    previousChunks = [],
+    previousViewportState = {},
+  ) {
     const currentChunks = this.syncChunkBufferWithViewport();
     this.markFrameDirty();
 
@@ -581,7 +591,11 @@ class ViewportCore {
     // 零尺寸画布（浏览器布局就绪前）整帧跳过：调度 flush 与 transferToImageBitmap
     // 都会对 0×0 画布抛错；保留 frameDirty，resize 后正常出帧
     const outputCanvas = this.#renderer?.outputCanvas;
-    if (!outputCanvas || outputCanvas.width === 0 || outputCanvas.height === 0) {
+    if (
+      !outputCanvas ||
+      outputCanvas.width === 0 ||
+      outputCanvas.height === 0
+    ) {
       return false;
     }
 
