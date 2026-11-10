@@ -27,7 +27,14 @@
 | `screenshot-blend.mjs` | 截图的差异是否为全局混合（整体变暗/变亮） | `node dev/probes/screenshot-blend.mjs` | 逐通道回归斜率、R²、变暗/变亮像素数 |
 | `screenshot-seam.mjs` | 截图里是否存在贯穿整片的直线分割（接缝） | `node dev/probes/screenshot-seam.mjs` | 列/行差异剖面的尖峰位置 |
 
-截图类探针的图片路径写在脚本顶部的 `files` 数组里，用前改一下。
+截图类探针从命令行接收三张图片：
+
+```bash
+node dev/probes/screenshot-blend.mjs a.png b.png c.png
+BOX=224,216,471,445 node dev/probes/screenshot-blend.mjs a.png b.png c.png
+```
+
+`BOX` 指定画布区域，省略时用 `224,216,471,445`（已知样本的位置）。
 
 ## 渲染帧指纹探针
 

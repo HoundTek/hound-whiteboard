@@ -1,7 +1,7 @@
 /**
  * @file tile 合成与经典缓存路径的逐像素差分
  * @description 同一场景、同一视口状态下，比较 tiles 开与关的输出图像。
- * @author zhouc_yu
+ * @author Zhou Chenyu
  */
 import { createCanvas } from "@napi-rs/canvas";
 import { BoardCore } from "../../src/kernel/board/board-core.js";

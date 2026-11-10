@@ -1,7 +1,7 @@
 /**
  * @file tile 整片重建与经典全量重建的提交成本对比
  * @description 成员变化下两条路径都走全量，比较 tile 模式是否引入额外开销。
- * @author zhouc_yu
+ * @author Zhou Chenyu
  */
 import { createCanvas } from "@napi-rs/canvas";
 import { BoardCore } from "../../src/kernel/board/board-core.js";

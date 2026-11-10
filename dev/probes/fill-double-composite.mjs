@@ -1,7 +1,7 @@
 /**
  * @file 半透明填充下的逐帧双组合检测
  * @description 每帧增量输出必须与强制全量重建的结果一致；填充半透明，重复绘制会变暗。
- * @author zhouc_yu
+ * @author Zhou Chenyu
  */
 import { createCanvas } from "@napi-rs/canvas";
 import { BoardCore } from "../../src/kernel/board/board-core.js";

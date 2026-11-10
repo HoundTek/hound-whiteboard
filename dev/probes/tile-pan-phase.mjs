@@ -1,7 +1,7 @@
 /**
  * @file 平移帧的 tile 相位一致性
  * @description tile 按某个 origin 光栅化后，视口平移会让合成偏移变成小数。
- * @author zhouc_yu
+ * @author Zhou Chenyu
  */
 import { createCanvas } from "@napi-rs/canvas";
 import { BoardCore } from "../../src/kernel/board/board-core.js";

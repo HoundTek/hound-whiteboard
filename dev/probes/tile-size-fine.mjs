@@ -1,7 +1,7 @@
 /**
  * @file 小视口下的 tile 边长扫描
  * @description 小视口下 512 边长会造成数倍过绘，扫描更小边长是否更划算。
- * @author zhouc_yu
+ * @author Zhou Chenyu
  */
 import { createCanvas } from "@napi-rs/canvas";
 import { BoardCore } from "../../src/kernel/board/board-core.js";

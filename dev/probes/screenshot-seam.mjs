@@ -1,16 +1,44 @@
 /**
  * @file 在三张截图中寻找 tile 边界特征（贯穿整片的直线分割）
  * @description 逐列/逐行统计相邻截图的差异，若 tile 边界问题存在，差异会集中在单列或单行。
- * @author zhouc_yu
+ * @author Zhou Chenyu
  */
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { readFileSync } from "node:fs";
 
-const files = [
-  "/Users/zhouc_yu/Desktop/闪001.png",
-  "/Users/zhouc_yu/Desktop/闪002.png",
-  "/Users/zhouc_yu/Desktop/闪003.png",
-];
+/**
+ * 从命令行参数取得三张对比截图
+ * @description 用法为 node <script>.mjs a.png b.png c.png，缺参数时打印用法并退出。
+ * @returns {string[]} 截图路径
+ */
+function resolveFiles() {
+  const files = process.argv.slice(2);
+  if (files.length < 3) {
+    console.error("用法: node " + process.argv[1] + " <第一帧.png> <第二帧.png> <第三帧.png>");
+    console.error("另可用 BOX=left,top,right,bottom 指定画布区域");
+    process.exit(1);
+  }
+  return files.slice(0, 3);
+}
+
+/**
+ * 取得画布区域
+ * @description 默认值为已知样本的位置，用 BOX 环境变量覆盖。
+ * @returns {{ left: number, top: number, right: number, bottom: number }} 区域
+ */
+function resolveBox() {
+  const raw = process.env.BOX;
+  if (!raw) return { left: 224, top: 216, right: 471, bottom: 445 };
+  const parts = raw.split(",").map((value) => Number(value.trim()));
+  if (parts.length !== 4 || parts.some((value) => !Number.isFinite(value))) {
+    console.error("BOX 需要四个逗号分隔的数字，例如 BOX=224,216,471,445");
+    process.exit(1);
+  }
+  const [left, top, right, bottom] = parts;
+  return { left, top, right, bottom };
+}
+
+const files = resolveFiles();
 
 /**
  * 读取截图的像素
