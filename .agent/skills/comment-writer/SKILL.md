@@ -74,7 +74,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
  * @file BoardApi 同线程实现
  * @description
  * 提供 BoardApi 接口的同线程实现，直接调用 BoardCore 的同步/异步方法。
- * P2 阶段保持同步封装，P3 切为 RPC 实现后保持相同方法签名。
+ * 方法签名与 RPC 实现保持一致，调用方可无差别切换。
  * @module kernel/api/board-api
  * @author Zhou Chenyu
  */

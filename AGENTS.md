@@ -17,11 +17,15 @@ yarn build:quick                # 仅构建（跳过依赖安装和图标）
 
 # 测试
 yarn test                       # 运行全部测试
-npx jest path/to/test.test.js   # 运行单个测试文件
-npx jest -t "pattern"           # 按名称过滤
+
+# 单文件 / 按名称过滤：yarn test 的 flag 内联在脚本里，npx 直接调用不继承，需自带 NODE_OPTIONS
+NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' \
+  npx jest path/to/test.test.js # 运行单个测试文件
+NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' \
+  npx jest -t "pattern"         # 按名称过滤
 
 # CI 检查
-yarn ci-check                   # 文档链接 + @module 路径一致性检查
+yarn ci-check                   # 文档链接 + @module 路径 + kernel 许可证头检查
 
 # 基准测试
 yarn bench                      # 全部基准
@@ -37,7 +41,7 @@ yarn cli <命令> [--daemon <名> | --path <板目录>]   # 读写板文件（�
 yarn cli daemon start --name <名> --path <板目录>   # 启动板 daemon（持板 + RPC）
 ```
 
-运行测试需要 `NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage'`（`package.json` 已配好）。
+`yarn test` 已在脚本内联 `--experimental-vm-modules` 与 `--localstorage-file`，无需额外环境变量；`npx jest` 直接调用时不继承这些 flag，需自带 `NODE_OPTIONS`（IDE 侧由 `.vscode/settings.json` 的 `jest.nodeEnv` 注入）。
 
 ## 项目结构
 
@@ -75,8 +79,8 @@ scripts/                     # CI 检查与 demo 静态服务脚本
 
 ## 架构关键概念
 
-- **Tool** — 设备图末端消费型处理器，不转发信号。生命周期：`beginInteraction → handleSignal* → endInteraction → success`
-- **信号类型** — `position`（绝对坐标，驱动手势状态机）、`displacement`（相对位移，无状态增量）、`end`、`success`
+- **Tool** — 设备图末端消费型处理器，不转发信号。生命周期钩子：`beginAction → completeAction`（提交），取消路径 `discardAction`（丢弃），`endAction` 默认转 `completeAction`；详见 [tool-document](src/ui/devices-dag/tools/docs/tool-document.md#生命周期钩子系统)
+- **信号类型** — `position`（绝对坐标，驱动手势状态机）、`displacement`（相对位移，无状态增量）、`end`、`success`；完整清单见 `src/ui/devices-dag/dag-core/signal-types.js` 的 `SIGNAL_TYPES`
 - **输入路由** — 设备 → DAG → 工具处理器。顺序/互斥组合（handoff、tool-switcher）由 `tools/wrapper/` 下的 wrapper tool 承担（`HandoffWrapperTool` / `ToolSwitcherWrapper`），作为普通 Tool 单节点挂载
 - **对象模型** — `BasicObject` 基类，`Stroke`/`graph` 子类
 - **AOM 三态术语** — 对象相对 AOM 动态图有三种状态：**活动对象**（被选中、正在操作，位于层的 `activeObjects`）、**非活动（层）对象**（被 pickup 一并纳入 AOM 的层成员，位于层的 `inactiveGraph`）、**不在 AOM 中的对象**（纯静态图，`aom.has(id) === false`）。“非活动对象”仍在 AOM 中，与“不在 AOM 中的对象”不是一回事。成员归属判定：`aom.isActive(id)` 仅活动对象，`aom.has(id)` 覆盖活动与非活动层成员
@@ -90,7 +94,7 @@ scripts/                     # CI 检查与 demo 静态服务脚本
 /**
  * @file 简短描述，不加句号
  * @description 一句话职责说明，以句号结尾。
- * @module {kernel|canvas|host|ui|io|cli}/{path/to/module}
+ * @module {kernel|canvas|host|ui|io|cli|demo|utils|test-support}/{path/to/module}
  * @author {git config user.name}
  */
 ```
