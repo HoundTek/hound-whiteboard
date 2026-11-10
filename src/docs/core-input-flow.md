@@ -59,11 +59,7 @@ flowchart LR
 
 ### 2. `Board` 作为唯一 DAG 入口
 
-`Board.signalsEventBus` 当前处理一类输入相关事件：
-
-- `input`
-
-其中 `input` 的稳定语义是：
+`Board.signalsEventBus` 只绑定 `input` 一类事件（`ui/components/orchestration/board.js:368`），语义是：
 
 1. `Board` 直接调用 `devicesDAG.dispatch({ to, signals })`（无 context 参数）
 2. DAG 从根节点逐段向下路由，`to` 中的 `viewportId` 段定位到对应视口子树
@@ -87,12 +83,7 @@ configureNode("/${viewportId}", {
 })
 ```
 
-`board` / `boardApi` / `sharedState` 来自根节点 `/` 的 services（`Board` 构造时注入），不在视口节点重复声明。因此下游设备、prefix、tool 都能从 `ctx.services` 中读取：
-
-- `board`（含 `allocateObjectId` 等方法）
-- `boardApi`（RPC 代理）
-- `sharedState`
-- `viewport`
+视口节点只补 `viewport`，其余同根节点 `/`；下游设备、prefix、tool 从 `ctx.services` 读取，清单见后文「`ctx.services` — 静态服务上下文」。
 
 ### 4. 设备阶段
 
@@ -165,7 +156,7 @@ Tool 是设备图末端的消费型处理器，只负责：
 
 - `/<viewportId>/workflows/primary-stroke`
 - `/<viewportId>/workflows/secondary-chooser`
-- `/<viewportId>/workflows/random-circle`
+- `/<viewportId>/workflows/create-circle`
 - `/<viewportId>/workflows/viewport`
 
 需要注意：
@@ -215,12 +206,7 @@ Tool 是设备图末端的消费型处理器，只负责：
 
 ### workflow 通过边连接设备叶子
 
-当前推荐做法不是把业务逻辑写回设备内部，而是：
-
-1. 设备只负责产出稳定信号
-2. workflow 作为独立入口挂在 `/<viewportId>/workflows/`
-3. 设备叶子通过边把信号引到 workflow
-4. 需要时用 prefix 做边级转换
+设备叶子只产出稳定信号，workflow 作为独立入口挂载；挂载位置与边级转换约定见上文「workflow 挂载约定」。
 
 ## 相关文档
 

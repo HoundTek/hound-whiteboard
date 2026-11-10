@@ -1,8 +1,6 @@
 # 区块加载器文档
 
-本文档提供 `ChunkLoader` 的概述。
-
-`ChunkLoader` 是区块实例的直接持有者。它负责缓存区块对象，并提供按区块 id 或二维坐标访问、卸载与清空的统一入口。
+`ChunkLoader` 是区块实例的直接持有者。
 
 ## 模块定位
 
@@ -19,7 +17,7 @@
 
 - 表达“当前区块”
 - 维护连续矩形缓冲区边界
-- 决定 TEMP/FULL 的真正加载实现
+- 决定 TEMP/FULL 的真正加载实现（`ChunkLoader` 自身只负责发事件）
 - 决定对象何时被真正装入 `BoardCore.objectLoaded`
 
 ## 核心字段
@@ -34,14 +32,25 @@
 
 ## 访问模型
 
+| 方法                                                                       | 职责                   | 与既有方法的差异                                                                           |
+| -------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
+| `trackChunk(chunk)`                                                        | 把区块实例纳入持有范围 | 不解析 id，也不执行卸载钩子；输入不是 `Chunk` 时抛 `TypeError`                             |
+| `untrackChunkById(chunkId)`                                                | 仅从持有关系中移除区块 | 跳过 `unloadChunk` 钩子，这正是它与 `unloadChunkById(...)` 的分工                          |
+| `emitLoadRequest(chunk, { strategy, direction, source, alreadyBuffered })` | 发出 `REQUEST_LOAD`    | 只发事件，不改持有关系；`strategy` 取值来自 `CHUNK_LOAD_STRATEGIES`（`"temp"` / `"full"`） |
+| `emitUnloadRequest(chunk, { source })`                                     | 发出 `REQUEST_UNLOAD`  | 只发事件，不执行卸载钩子，也不移除持有                                                     |
+| `getLoadedChunks()`                                                        | 返回持有区块的数组快照 | 只读取快照，不改动持有关系                                                                 |
+
+`ViewportCore` 的视口维护路径用的就是这一组方法：先 `getLoadedChunks()` 取快照，再对新区块 `emitLoadRequest(chunk, { strategy: CHUNK_LOAD_STRATEGIES.FULL })`，对离开范围的区块 `emitUnloadRequest(chunk)` 后 `untrackChunkById(chunk.id)`。
+
 ### `getChunkById(chunkId)`
 
 当前流程：
 
-1. 若当前已持有该区块，直接返回缓存实例
-2. 若未持有，优先调用 `resolveChunkById(chunkId)`
-3. 若未提供解析器，则回退到 `Chunk.fromId(chunkId)`
-4. 将结果纳入当前 `ChunkLoader` 持有范围
+1. `chunkId` 不是正整数时直接返回 `undefined`
+2. 若当前已持有该区块，直接返回缓存实例
+3. 若未持有，优先调用 `resolveChunkById(chunkId)`
+4. 若未提供解析器，则回退到 `Chunk.fromId(chunkId)`
+5. 结果若是 `Chunk` 则纳入持有并返回，否则返回 `undefined`
 
 ### `getChunkByCoordinate(x, y)`
 
@@ -82,15 +91,13 @@
 - `BoardCore.getChunkById(...)` / `getChunkByCoordinate(...)` 都委托给这个根 loader
 - `BoardCore.createChunkLoader(requesterId)` 可创建新的独立 loader
 
-也就是说，这里的“Board”应理解为 **Worker 侧 `BoardCore`**，而不是 UI 侧 `Board` facade。
+本文件的 Board 均指 Worker 侧 `BoardCore`；UI 侧 `Board` facade 不参与区块持有。
 
 ## 与 ViewportCore / AOM 的关系
 
 - `ViewportCore` 当前通过 `boardCore.createChunkLoader(...)` 持有自己的视口区块集合
 - `ActiveObjectManager` 在跨区块操作中也会创建临时 loader
 - 这些 loader 通过事件总线向 `BoardCore` 请求 TEMP / FULL 加载与卸载
-
-`ChunkLoader` 自身只负责发事件，不负责完成真正的 FULL/TEMP 语义。
 
 ## 事件接口
 
@@ -102,7 +109,7 @@
 
 对应常量定义在 `CHUNK_LOAD_EVENTS`。
 
-## 实现状态
+## 当前状态
 
 - 已实现：区块实例持有、按 id/坐标获取、按 id 卸载、清空持有集合，以及区块加载相关事件发射
 - 已接线：`BoardCore` 根 loader、`ViewportCore` loader、AOM 临时 loader

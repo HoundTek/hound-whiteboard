@@ -52,26 +52,15 @@ UI 与 Worker 共用：
 
 ### `BoardCore`
 
-`BoardCore` 是 Worker 侧真实白板状态，关键字段包括：
+`BoardCore` 定义在 `src/kernel/board/board-core.js`，是 Worker 侧真实白板状态，关键字段按用途分组：
 
-- `width` / `height`
-- `rootPath`
-- `undoTree`
-- `operationLog`
-- `hitCommitter`
-- `trash`
-- `activityEventBus`
-- `chunkLoaded`
-- `objectLoaded`
-- `chunkLoadEventBus`
-- `rootChunkLoader`
-- `persistenceAdapter`
-- `aomRenderHooks`
-- `activeObjectManager`
-- `#objectCoverChunks`
-- `#objectIdCounters`
-
-在当前实现里，真正的对象、区块与提交关系都以 Worker 中的 `BoardCore` 为准。
+- 板级参数：`width` / `height`（板尺寸）、`rootPath`（板目录）
+- 持久化：`persistenceAdapter`（区块元数据与对象的读写契约）、`trash`（已删除对象的内存回收站，撤销删除的回图依据）
+- 日志与撤销：`operationLog`（hit 记录池）、`undoTree`（时间回溯树）、`hitCommitter`（分子操作的 commit 边界单点）
+- 区块装载：`chunkLoaded`（区块被哪些加载器以何种策略持有）、`objectLoaded`（当前驻留对象）、`chunkLoadEventBus`、`rootChunkLoader`
+- 渲染钩子：`aomRenderHooks`（AOM 到渲染失效的注入式钩子）
+- 动态图：`activeObjectManager`（活动对象动态图）、`activityEventBus`（AOM 活动事件总线）
+- 私有：`#objectCoverChunks`（对象覆盖区块索引的唯一权威副本）、`#objectIdCounters`（各来源的已分配 id 计数，随板元数据持久化）
 
 ## objectId 模型
 
@@ -82,11 +71,7 @@ UI 与 Worker 共用：
 3. `BoardApiRpc.createObject(type, { id, ... })` 把显式 id 发往 Worker
 4. Worker 校验重复 id 后创建对象并加入 AOM；已上报的 id 池计数随会话元数据持久化，重开时续种防碰撞
 
-这意味着：
-
-- UI 线程是 **id 分配者**
-- Worker 线程是 **id 校验者与使用者**
-- `BoardCore.allocateObjectId(source)` 负责 Core 内部创建对象（如数据擦除分裂）的 id 分配；`BoardApi.addObject` 在持板侧串行完成分配与提交，供非本地前端（CLI / daemon 客户端）使用
+角色：UI 分配、Worker 校验。`BoardCore.allocateObjectId(source)` 负责 Core 内部创建对象（如数据擦除分裂）的 id 分配；`BoardApi.addObject` 在持板侧串行完成分配与提交，供非本地前端（CLI / daemon 客户端）使用。
 
 ## 区块级模型
 
@@ -162,7 +147,7 @@ Map<chunkId, {
 | 场景   | 来源                                     | 特征                                                           |
 | ------ | ---------------------------------------- | -------------------------------------------------------------- |
 | 创建态 | creator `_entry`                         | `position` 往往是 `Vector`，通常还没有 `range` / `boundingBox` |
-| 摘要态 | `queryObjects()` / `hitTest()` / handoff | `position` 是纯对象快照，并附带 `range` / `boundingBox`        |
+| 摘要态 | Worker 侧摘要反序列化                    | `position` 是纯对象快照，并附带 `range` / `boundingBox`        |
 
 消费端通常通过 `Vector.parse()` 之类的逻辑统一处理两种 `position` 形态。
 
@@ -180,6 +165,8 @@ Map<chunkId, {
 - `range`
 - `property`
 - `data`
+
+`queryObjects()` 返回 `ObjectSummary`；`hitTest()` 只返回 objectId 列表，消费端随后经 `queryObjects()` 取摘要。其字段是 `LightweightObjectEntry` 的超集，顶层另多 `isActive` / `choice`，查询结果按 `ObjectSummary` 接即可。
 
 ## 动态图与静态图
 
@@ -312,10 +299,7 @@ flowchart LR
 
 它们更接近设计目标或局部桥接语义，而非所有运行时场景的统一现实。
 
-相对地，以下已是代码保证的稳定事实：
-
-- `delete-object` 记录必须携带 `chunks` 层位边（删除时刻各区块的 `below` / `above` 前驱后继）
-- `trash/{objectId}.json` 条目含同样的 `chunks` 层位边，跨会话撤销删除据此按原层位回图
+相对地，`delete-object` 记录与 trash 条目的 `chunks` 层位边是代码保证，本节其余叙述仅为局部实现。
 
 ## 术语定义
 

@@ -22,7 +22,7 @@
 {board}/
   board.json                        # 板级元数据（创建时写一次，之后只读）
   meta/{source}.json                # per-source 元数据分片（计数与时间水位）
-  objects/{objectId}.json           # 活动对象快照
+  objects/{objectId}.json           # 对象快照
   trash/{objectId}.json             # trash 条目
   chunks/{chunkId}.json             # 区块元数据
   hit/{source}/seg-{NNNNNN}.jsonl   # per-source 操作日志流
@@ -31,7 +31,7 @@
 
 > [!NOTE]
 >
-> `.daemon.json` 由持板 daemon 进程维护（name/port 等连接信息，停止时清理），不属于 kernel store 布局本身；GUI 开板时由 core-worker 读取（core-worker.js:779）探测活 daemon，读者在板目录中会碰到。
+> `.daemon.json` 由持板 daemon 进程维护（name/port 等连接信息，停止时清理），不属于 kernel store 布局本身；GUI 开板时由 core-worker 的建板流程读取（探测活 daemon），用户在板目录中会看到该文件。
 
 ## 各文件与目录说明
 
@@ -74,7 +74,7 @@ per-source 元数据分片（原子写）。各写端只写自己负责的分片
 
 对象 id 含斜杠（如 `demo/1`），文件名经 `encodeURIComponent` 编码（如 `demo%2F1.json`）。
 
-内容由日志跟随者按当前板状态调和写入：序列化指纹比对，仅写差异。写权属活动方（AOM 仲裁）：远程活动对象跳过不写，等待其作者落盘。
+落盘由日志跟随者按状态调和（见『日志跟随者』）。
 
 ### `trash/{objectId}.json`
 
@@ -106,7 +106,7 @@ trash 条目文件，文件名编码规则与活动对象相同。内容为完�
 - `tierGraph`：区块静态层叠图的数组化结果（`DirectedGraph.toArray()`）
 - `objectCoverIndex`：对象覆盖区块索引，`Array<[objectId, number[]]>`（盘上恒为空——覆盖索引权威副本在 BoardCore，重开时由 tierGraph 节点集表达归属）
 
-由日志跟随者按当前层叠图状态调和写入（指纹比对，仅写差异）。
+落盘由日志跟随者按状态调和（见『日志跟随者』）。
 
 > [!NOTE]
 >
@@ -129,13 +129,13 @@ trash 条目文件，文件名编码规则与活动对象相同。内容为完�
 `kernel/store/journaler` 订阅操作日志的 append 事件（本地 commit 与远端应用共用同一入日志通道），微任务合批后自动落盘。每轮 flush 按序执行：
 
 1. 队列中的新记录按 record.source 分组，每组写为一段 `hit/{source}/seg-{N}.jsonl`（各写端只写自己的流；daemon 代写 relay 远端来源的流）
-2. 对象文件调和：活动对象写 `objects/`，trash 条目写 `trash/`，既非活动亦非 trash 的对象从盘上移除；**写权仲裁**——远程活动对象（AOM `isRemoteActive`）跳过不写不移除（写权属活动方）；部分驻留写端（GUI 开 chunkUnload）以 `removeMissing:false` 关闭缺失移除，防止误删未加载对象的文件
+2. 对象文件调和：板上现存的非 trash 对象（含非活动层成员）写 `objects/`，trash 条目写 `trash/`，板上已不存在的对象文件从盘上移除；**写权仲裁**——远程活动对象（AOM `isRemoteActive`）跳过不写不移除（写权属活动方）；部分驻留写端（GUI 开 chunkUnload）以 `removeMissing:false` 关闭缺失移除，防止误删未加载对象的文件
 3. 区块元数据调和：层叠图与覆盖索引指纹比对，仅写差异
 4. 写本端（与代写来源）的 `meta/{source}.json` 分片；读会话以 `writeMeta:false` 保持零写盘
 
 调和以板当前状态为准，撤销/重做/远端记录引起的任意状态迁移统一收敛，无逐类型效果逻辑。
 
-### 写权矩阵（布局 v2）
+### 写权矩阵（现行布局）
 
 | 文件                                    | 谁写                                                   | 冲突兜底                           |
 | --------------------------------------- | ------------------------------------------------------ | ---------------------------------- |

@@ -4,13 +4,14 @@
 
 > [!NOTE]
 >
-> **实现状态**：中继服务器（无状态纯转发、板即房间）、网络协调器（本地广播、远程接入、延迟容忍窗、增量 INIT 补齐、周期摘要校验、断线清理、连接超时与自动重连、lastSeen 增量握手、在途分子对账、AOM 活动状态重广播）、GUI 接入（core-worker 携带 syncUrl 自动连接）、CLI daemon 化、awareness 通道与分子中间帧预览（amend 通道）均已落地并通过跨设备（Windows + macOS）双 Tauri 窗口实测。
+> **当前状态**：中继服务器（无状态纯转发、板即房间）、网络协调器（本地广播、远程接入、延迟容忍窗、增量 INIT 补齐、周期摘要校验、断线清理、连接超时与自动重连、lastSeen 增量握手、在途分子对账、AOM 活动状态重广播）、GUI 接入（core-worker 携带 syncUrl 自动连接）、CLI daemon 化、awareness 通道与分子中间帧预览（amend 通道）均已落地并通过跨设备（Windows + macOS）双 Tauri 窗口实测。
 
 ## 模块定位
 
 同步层是内核的传输宿主：kernel 保持零网络依赖，`applyRemoteOperations` 是唯一远端接入缝。中继与协调器全部在 `src/host/sync/`：
 
 - `network-coordinator.js`：BoardApi 的同步薄包装，订阅日志与活动事件、维护连接与 INIT/digest
+- `amend-forwarder.js`：订阅内核分子 amend 事件，begin/end/abort 即时转发，中间帧按 33ms 节流合批后经 volatile 通道发出
 - `remote-record-ingestor.js`：relay 与 daemon 共用的记录去重、依赖预检、pending 与权威水位接入器
 - `remote-activity-channels.js`：按 BoardCore、来源与通道登记远程活动引用，控制断线清理
 - `relay-server.js`：无状态中继，房间成员管理、消息护栏与房间内广播
@@ -65,8 +66,8 @@ flowchart LR
 | 服务器 → 客户端 | `{type:"awareness", source, data}`                            | awareness 转发（可丢、不进日志）                    |
 | 客户端 → 服务器 | `{type:"request-init", lastSeen?, openMols?}`                 | 请求增量日志（无 lastSeen 为全量；openMols 供对账） |
 | 服务器 → 客户端 | `{type:"request-init", source, lastSeen?, openMols?}`         | 增量请求转发                                        |
-| 客户端 → 服务器 | `{type:"respond-init", to, records, openMols?}`                 | 定向缺口响应（无 lastSeen 请求时为全量）            |
-| 服务器 → 客户端 | `{type:"respond-init", source, records, openMols?}`             | 定向转发（仅目标收到）                              |
+| 客户端 → 服务器 | `{type:"respond-init", to, records, openMols?}`               | 定向缺口响应（无 lastSeen 请求时为全量）            |
+| 服务器 → 客户端 | `{type:"respond-init", source, records, openMols?}`           | 定向转发（仅目标收到）                              |
 | 客户端 → 服务器 | `{type:"digest", digest}`                                     | 周期状态摘要（默认 30s）                            |
 | 服务器 → 客户端 | `{type:"digest", source, digest}`                             | 摘要转发                                            |
 
@@ -88,7 +89,7 @@ flowchart LR
 - **微任务合批**：同一同步行程内连续产生的记录合为一批发出（如 endSupra 强制闭合在途分子并追加 close-supra 的同步连发），接收端同批接入；成员记录本就独立有效，合批只为同批美观（接入侧按 supraId 成组同批应用，见下）。
 - 订阅 `activityEventBus`：手势内 choose/commit 事件即时广播（choose 记录即时入日志挂 supraId、随记录通道收敛；此通道提供手势内的即时互斥与实时可见性，不等记录通道）。choose 事件携带 `choice`（命名选择名，匿名缺省）；unchoose/commit 事件按（来源，对象）注销，无需携带。
 - **awareness 通道**：光标位置经 `sendAwareness` 走 volatile 通道广播，接收端由 `onAwareness` 回调转发宿主（只画不存）；peer-left 以 `{kind:"peer-left"}` 通知，供接收端清理远程光标。远程选择的装饰走 aom 可靠通道与 remote-activity 通知，不经 volatile 通道。
-- **分子中间帧预览**：分子写入口在内核事件总线发射 amend 事件（begin-mol / amend / end-mol / abort-mol），`amend-forwarder` 负责转发：begin-mol 即时发出（不合批）；amend 按 33ms 间隔节流合批（position/transform/data 绝对值后帧盖前帧、append items 按序累积、seq 取批内最大）打包为 mol-amend 发出；end-mol 先冲出残余缓冲再即时发 mol-end，abort-mol 丢弃该分子缓冲后即时发 mol-abort。均经 volatile 通道广播；接收端只画不存，丢了不补，分子记录经可靠通道到达后按记录定格归位。本端断线时协调器经 `onDisconnect` 通知 UI 清空全部预览与光标（对端手势状态不可信），重连后各自重建。
+- **分子中间帧预览**：分子写入口在内核事件总线发射 amend 事件（begin-mol / amend / end-mol / abort-mol），`amend-forwarder.js` 负责转发：begin-mol 即时发出（不合批）；amend 按 33ms 间隔节流合批（position/transform/data 绝对值后帧盖前帧、append items 按序累积、seq 取批内最大）打包为 mol-amend 发出；end-mol 先冲出残余缓冲再即时发 mol-end，abort-mol 丢弃该分子缓冲后即时发 mol-abort。均经 volatile 通道广播；接收端只画不存，丢了不补，分子记录经可靠通道到达后按记录定格归位。本端断线时协调器经 `onDisconnect` 通知 UI 清空全部预览与光标（对端手势状态不可信），重连后各自重建。
 
 ### 远端 → 本地
 
@@ -98,7 +99,7 @@ flowchart LR
 - **延迟容忍窗**：乱序记录（来源序号空洞 / 父或语义目标未达）入缓冲，500ms 窗到再整理；连续 3 窗仍未补齐则携带 lastSeen 请求缺口。
 - **增量 INIT（lastSeen 握手）**：join 与 peer-joined 时互发 request-init 携带各来源最大序号（lastSeen）；respond-init 仅携带缺口记录（增量请求无缺口时不回应，无 lastSeen 时全量回应供新成员加入）。离线期间的操作是本地日志的未同步段，重连后双向补发缺口即收敛，增量 anti-entropy 之外的兜底仍是周期摘要。
 - **在途分子对账**：request-init 合并本端创建的 openMols 与已消费远端分子的 molId/seq 水位；收到请求时按对方清单对账——对方缺此 molId 则重发 mol-begin（entries 含 begin 时的 create 快照）与全部 amend 段，对方 seq 落后则只补其后的 amend 段。接收端按 molId/seq 去重，结束墓碑阻止旧帧复活预览；CoreWorker 的本地 awareness/amend 扇出到 relay 与 daemon，daemon 再在直连 GUI 与 relay 间桥接。
-- **重连与 AOM 重同步**：socket 断开时按通道释放远程活动来源，只有最后一个持有该来源的通道离开才清锁；同 source 新会话 peer-joined 先清旧活动，再按当前 hold 重广播 choose。宿主每 3s 自动重连。
+- **重连与 AOM 重同步**：socket 断开或收到 peer-left 时按通道释放远程活动来源，只有最后一个持有该来源的通道离开才清锁；同 source 新会话 peer-joined 先清旧活动，再按当前 hold 重广播 choose。宿主每 3s 自动重连。
 
 接入时序（新成员 B 加入已有成员 A 的房间）：
 
@@ -122,7 +123,6 @@ sequenceDiagram
 ```
 
 - **周期摘要**：30s 广播 `{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`；日志落后或同长 HEAD 分歧时携带 lastSeen 请求缺口。日志与 HEAD 一致但 chainHash 分歧时经 `repairChainFromLog` 从权威日志重建 undo tree 并对齐效果，无需重收相同记录；stateHash 分歧时经 `repairStateFromLog` 对齐活体、trash 与已载区块层位边。stateHash 口径为**已驻留**对象数据与 trash，仅两端均全量驻留（`fullResidency`）时可比；任一端 openMols > 0 时跳过本轮对象比对。修复保护本地未提交对象与 choice，有未提交工作的对象延期修复，无修改的持有选择保留。
-- **断线清理**：peer-left 只释放到达它的通道；同一来源在其他健康通道仍有登记时保留活动锁，最后一个通道离开才清除该来源的远程活动。
 
 ### 连接生命周期
 
@@ -137,9 +137,7 @@ sequenceDiagram
 
 ## 设计约束
 
-- 中继无状态：断线期间的消息不缓存，重连后靠 lastSeen 增量握手补齐，周期摘要触发日志补洞与本地派生重建。
-- 同 source 踢旧迎新：中继按 source 唯一定位成员，同 source 新连接到达时旧连接被 terminate（同机双开需显式区分身份）。
-- 远程选择经 awareness overlay 呈现：按来源着色的选中框与来源标签，装饰刷新由 remote-activity 通知驱动（不经 volatile 通道）。
+- 远程选择装饰经 `remote-activity` 通知刷新（aom 可靠通道，不走 awareness volatile 通道）：按来源着色的选中框与来源标签。
 - 浏览器（无 Tauri）打开 demo 为内存板：同步照常，浏览器端自身内容不落盘；落盘由持板 daemon 兜底承担（relay 来源的记录经 daemon 接入时落盘）。
 
 ## 相关文档

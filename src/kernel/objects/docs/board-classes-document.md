@@ -29,20 +29,13 @@
 src/kernel/objects/graph/
 ```
 
-当前核心成员：
-
-- `GraphObject`
-- `CircleObject`
-- `EllipseObject`
-- `PolygonObject`
-
 它们的共同特征是：
 
 - 派生自 `BasicObject`
 - `isDirected()` 返回 `true`
 - `isErasable()` 返回 `false`
 
-详见 [图形对象文档](../graph/graph-classes-document.md)。
+详见 [图形对象文档](./graph-classes-document.md)。
 
 ## 笔画对象族
 
@@ -63,7 +56,7 @@ src/kernel/objects/stroke/stroke.js
 - `isErasable()` 返回 `true`
 - `eraseData(trailPoints, radius)` 按橡皮轨迹返回剩余点段（`null` 未命中、空数组整笔擦没），供 Core 侧分流回写 / 分裂 / 删除
 
-详见 [笔画对象文档](../stroke/stroke-classes-document.md)。
+详见 [笔画对象文档](./stroke-classes-document.md)。
 
 ## 对象持久化
 
@@ -75,15 +68,16 @@ src/kernel/objects/object-deserializer.js
 
 中的 `deserialize()`。
 
+序列化数据须含 `type` 字符串（如 `"CircleObject"`），由 `parserRegistry` 分派；新增类型用同模块 `registerDeserializer(type, parser)` 注册。
+
 这样可以把对象类型分发逻辑收敛在一处，避免业务层散落 `if/else` 或 `switch(type)`。
 
 ## 当前状态
 
-- `BasicObject`、`GraphObject`、`CircleObject`、`EllipseObject`、`PolygonObject`、`StrokeObject` 都已有明确运行时代码
-- 统一反序列化入口已接通 Circle / Ellipse / Polygon / Stroke
+- 统一反序列化入口已接通 CircleObject / EllipseObject / PolygonObject / StrokeObject
 
 ## 相关文档
 
 - [基础类型文档](./basic-classes-document.md)
-- [图形对象文档](../graph/graph-classes-document.md)
-- [笔画对象文档](../stroke/stroke-classes-document.md)
+- [图形对象文档](./graph-classes-document.md)
+- [笔画对象文档](./stroke-classes-document.md)

@@ -1,13 +1,13 @@
 # random 文档
 
-本文档提供 `src/kernel/utils/random.js` 的概述。
-
 ## 模块职责
 
 `random.js` 提供两类能力：
 
 - `randomInt(min, max)`：生成密码学安全随机整数
 - `RandomNumberPool`：维护一个不重复数字池
+
+`randomInt` 为模块内部函数（未导出），仅供 `RandomNumberPool.generate()` 使用。
 
 该模块主要用于需要唯一编号但又不希望顺序暴露的场景。
 
@@ -47,16 +47,16 @@
 | `remove(num)`           | 释放一个数字           | `(number) => boolean`                  |
 | `rename(num)`           | 生成新数字并移除旧数字 | `(number) => number`                   |
 
-## 行为特点
+### 行为特点
 
 - `initFromArray()` 只会接受落在 `[min, max]` 范围内的值。
 - `generate()` 在池已满时会抛出异常。
 - `rename(num)` 的执行顺序是先生成新数字，再移除旧数字，因此调用时需要保证池中仍有可用空间。
-- `length` 是逻辑占用数，不一定等于原始输入数组长度。
+- `length` 为已占用数字数量，可能小于 `initFromArray()` 传入数组的长度，因越界值与重复值被丢弃。
 
 ## 在仓库中的典型用途
 
-- 活动对象或节点的随机唯一编号
+- 层 id 与 ChunkLoader 请求 id 的随机唯一编号（见 AOM 的 `layerPool` / `chunkLoaderIdPool`）
 - 测试中需要可回收的唯一数字池
 - 不希望直接使用单调递增 id 的临时标识分配
 

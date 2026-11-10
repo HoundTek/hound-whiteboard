@@ -9,7 +9,7 @@
 - 容器结构：`queue.js`
 - 图与事件：`directed-graph.js`、`event-bus.js`
 - 共享状态：`shared-state-store.js`
-- 计数与随机：`counter-pool.js`、`random.js`、`incremental-id-pool.js`（带来源命名空间的 id 分配）
+- 计数与随机：`counter-pool.js`、`random.js`、`incremental-id-pool.js`
 - 哈希：`hash.js`（FNV-1a，digest stateHash 基础设施）
 - 数学与几何：`math.js`、`math-algorithm.js`
 - 逻辑路径：`path.js`
@@ -28,11 +28,8 @@
 
 ## 目录关系
 
-- 这一层服务于 `src/kernel/`、`src/ui/` 和 `src/kernel/` 中的各模块。
-- `math.js` 和 `math-algorithm.js` 负责几何表达与交互计算。
-- `queue.js`、`directed-graph.js` 负责提供基础容器。
-- `path.js` 只处理 Core 内部逻辑路径，不处理操作系统文件路径。
-- 与文件系统或安全 IO 相关的能力不在这里，而在 `src/utils/` 下维护。
+- 这一层服务于 `src/kernel/`、`src/ui/`、`src/host/` 和 `src/renderers/` 中的各模块。
+- `path.js` 只处理 Core 内部逻辑路径，不处理操作系统文件路径；与文件系统或安全 IO 相关的能力在 `src/utils/` 下维护。
 
 ## 使用建议
 
@@ -45,5 +42,3 @@
 ## 当前状态
 
 - 模块分组已覆盖 `src/kernel/utils/` 下现有模块；`hash.js` 与 `incremental-id-pool.js` 暂无单模块文档。
-- 文档按当前实现描述，不把未来扩展写成既有能力。
-- 若后续新增工具模块，建议继续沿用“总览区块 + 单模块文档”的组织方式。

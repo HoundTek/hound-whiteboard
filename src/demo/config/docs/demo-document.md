@@ -168,7 +168,7 @@ demo 固定以 Worker 模式运行（`board.enableWorkerMode(worker)`），右�
 | 按键          | 功能                                                |
 | ------------- | --------------------------------------------------- |
 | 触摸拖动      | 多指同时创建红色笔画（每指独立）                    |
-| 鼠标左键      | 当前激活工具（笔画 / 圆 / 椭圆 / 选择+修改 / 橡皮） |
+| 鼠标左键      | 当前激活工具（笔画 / 圆 / 直径圆 / 椭圆 / 选择+修改 / 橡皮） |
 | 1 - 9         | 切换激活工具（按工具栏顺序）                        |
 | 橡皮（左键）  | 拖动擦除笔画（工具栏/数字键切换到橡皮后）           |
 | 鼠标右键      | 首次框选对象 → 再次拖拽修改                         |
@@ -194,7 +194,7 @@ demo 固定以 Worker 模式运行（`board.enableWorkerMode(worker)`），右�
 
 该 demo 主要验证：
 
-- 工具挂载与卸载流程
+- 工具挂载流程
 - 设备信号在 Viewport / DevicesDAG 中的逐层下传
 - 边级 prefix 注入与信号转换
 - append-only `context` 与节点 `state` 的协作边界
@@ -213,13 +213,7 @@ demo 固定以 Worker 模式运行（`board.enableWorkerMode(worker)`），右�
 - 修饰节点（`createEdgePrefix`）插在设备节点与 workflow 之间的 `"default"` 边上
 - creator / chooser 与 modifier 的上下文共享以工具的私有字段为权威来源，`HandoffWrapperTool` 通过 `action:complete` 订阅和对象桥接完成两阶段流转
 - 视口、调试各 workflow 通过 `edge.prefix` 多前驱模式汇聚；WASD 通过 `edge.prefix` 注入到 handoff 工作流
-- 屏幕坐标在 Viewport 层转换为世界坐标后进入工具链
 - 触摸设备通过 `viewport.convertCanvasSignalsToWorld()` 完成 canvas→world 坐标转换
-- 多指并发通过 `MultiToolWrapper` 在工具内部分流，设备图保持静态
-- tool-switcher 是单个 `ToolSwitcherWrapper` 实例，通过一次 `mountWorkflow` 挂载在 `mouse/primary` 下游接收鼠标信号，同时接受 `toolbar/button-group` 路径的 `tool-switch` 切换信号
-- 各工具（笔画、圆、选择-handoff）作为 wrapper 内部槽位由 `ToolSwitcherWrapper` 托管，不再单独挂载
-- Enter/Escape 同时发往 keyboard device（供右键 handoff）和 tool-switcher（供左键选择工具），
-  实现全局 modifier 确认/取消
 
 ## 相关文档
 

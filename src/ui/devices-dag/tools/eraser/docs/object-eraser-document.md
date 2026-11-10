@@ -16,7 +16,7 @@
 
 | 术语           | 定义                                                        |
 | -------------- | ----------------------------------------------------------- |
-| 橡皮轨迹       | 一次手势期间光标经过的路径，携橡皮尺寸，用 Range 表示       |
+| 橡皮轨迹       | 一次手势期间光标经过的路径，携橡皮尺寸，以世界坐标点列表示  |
 | 特征（trait）  | 附加在对象上的渲染层，在对象渲染范围内额外渲染，类似 shader |
 | 合成擦除笔画   | FC 创建的笔画型对象，渲染时用合成模式透出背景               |
 | `isErasable()` | 对象是否支持 FD 擦除的准入标记，只门控 FD，与 FT / FC 无关  |
@@ -86,7 +86,7 @@ classDiagram
 
 `isErasable()` 只表达"对象是否支持通过修改 `data` 来擦除"，不限制 FT / FC。
 
-此外，已被选中的对象（活动对象）不参与 FD 擦除，与选择逻辑的互斥一致；非活动层成员（被 pickup 一并纳入 AOM）与静态对象均可擦除。
+此外，已被选中的对象（本地或远程活动）不参与 FD 擦除，与选择逻辑的互斥一致；非活动层成员（被 pickup 一并纳入 AOM）与静态对象均可擦除。
 
 ### 处理流程
 
@@ -128,7 +128,8 @@ classDiagram
 整笔擦没（无剩余点段）走删除路径，对象节点与其边由 `deleteObjects` 清理，不经重建。
 
 ### 语义特征
-- 橡皮尺寸与轨迹平滑度影响切割精度
+
+- 橡皮半径参与命中阈值（笔画世界宽度一半 + 半径）；轨迹按原始点段发送，不做平滑
 
 ## FT 对象擦除工具（For Trait）
 
@@ -197,16 +198,12 @@ ctx.globalCompositeOperation = "destination-out"; // 透出背景的效果
 - 视觉与数据不一致：被擦除的对象在图里仍然完整，命中测试、选择框、导出都按完整对象处理。这是合成擦除的固有语义
 - 分层语义（非限制）：`ViewportRenderer` 的 `#cache` 静态层 + `#output` 输出层结构中，AOM 对象始终叠画在静态内容之上，这是正确语义。对象被选中进入 AOM 时，`ActiveObjectManager.pickup()` 会沿静态图把 z-order 在其之上的下游相交对象一并纳入 AOM，合成擦除笔画随之进入输出层叠画；且 `destination-out` 作用于输出 canvas 上已合成的像素（含缓存拷贝），因此被擦内容不会因选中、拖拽而视觉恢复
 
-## 实现状态
+## 当前状态
 
-FD 已实现：几何原语（`range/segment-math.js` 的距离判定）、`StrokeObject.eraseData` 切割、`BoardApi.eraseData` Core 入口（含活动对象互斥）、RPC 贯通、`DataObjectEraserTool` 与 demo 接线均已落地。FT / FC 未实现，对应章节为设计意向。文中引用的既有事实以当前代码为准：
+FD 的落地范围：几何原语（`range/segment-math.js` 的距离判定）、`StrokeObject.eraseData` 切割、`BoardApi.eraseData` Core 入口（含活动对象互斥）、RPC 贯通、`DataObjectEraserTool` 与 demo 接线。文中引用的既有事实以当前代码为准：
 
-- `StrokeObject.isErasable()` 返回 `true`，`GraphObject` / `Container` 返回 `false`
 - `ObjectSummary.data` 携带完整类型专属数据（如 `points`）
 - `boardApi` 已提供 `hitTest` / `queryObjects` / `modifyObject` / `createObject` / `deleteObjects`
-- 各对象 `render()` 硬编码 `source-over`
-- `ViewportRenderer` 采用 `#cache` 静态层 + `#output` 合成的两层结构，AOM 对象叠画在静态内容之上
-- `ActiveObjectManager.pickup()` 会把选中对象在静态图下游（z-order 之上）的相交对象一并纳入 AOM
 - 分子操作模型见操作文档；`hit/operation.js` 已落地完整的分子操作记录模型——九类操作记录（八种分子类型 + close-supra 折叠记录），含三级容器字段（`molId` / `supraId` / `discard`）、校验与排序辅助
 
 ## 相关文档
@@ -214,7 +211,7 @@ FD 已实现：几何原语（`range/segment-math.js` 的距离判定）、`Stro
 - [工具基类](../../docs/tool-document.md)
 - [手势工具基类](../../docs/gesture-tool-document.md)
 - [对象修改工具](../../modifier/docs/object-modifier-document.md)
-- [笔画对象](../../../../../kernel/objects/stroke/stroke-classes-document.md)
+- [笔画对象](../../../../../kernel/objects/docs/stroke-classes-document.md)
 - [基础类型文档](../../../../../kernel/objects/docs/basic-classes-document.md)
 - [视口渲染器](../../../../../renderers/canvas/docs/viewport-renderer-document.md)
 - [操作文档](../../../../../kernel/hit/docs/operation-document.md)

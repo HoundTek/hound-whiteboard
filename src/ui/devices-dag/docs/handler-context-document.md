@@ -2,7 +2,7 @@
 
 ## 概述
 
-所有 DevicesDAG 节点 handler 的 `handler(packet, ctx)` 签名的第二个参数 `ctx`，即 `DevicesDAGHandlerContext`，由 `DevicesDAGNode._buildHandlerContext` 在分发时统一构建。所有 handler（设备根节点、prefix handler、工具 processor）拿到的都是同一套接口。
+所有 DevicesDAG 节点 handler 的 `handler(packet, ctx)` 签名的第二个参数 `ctx`，即 `DevicesDAGHandlerContext`，由 `DevicesDAGNode._buildHandlerContext` 在分发时统一构建。所有 handler（设备根节点、prefix handler、工具 processor，以及直接挂在节点上的裸 handler）拿到的都是同一套接口。
 
 `createPrefixNodeHandler` 仅在此基础上为 `ctx.state` / `ctx.getState()` 叠加 `initialState` 默认值，不引入额外字段。
 
@@ -39,15 +39,16 @@ process(signalPacket, ctx) {
 
 ### 节点信息
 
-| 成员               | 类型             | 说明                                |
-| ------------------ | ---------------- | ----------------------------------- |
-| `ctx.path`         | `string`         | 当前节点路径（如 `/mouse/primary`） |
-| `ctx.dag`          | `DevicesDAG`     | 所属设备图实例                      |
-| `ctx.node`         | `DevicesDAGNode` | 当前节点                            |
-| `ctx.semantics`    | `Object`         | 节点语义元数据快照                  |
-| `ctx.defaultRoute` | `string`         | 当前节点默认出边名                  |
-| `ctx.depth`        | `number`         | 当前分发深度                        |
-| `ctx.signalPacket` | `SignalPacket`   | 当前输入信号包                      |
+| 成员                           | 类型             | 说明                                |
+| ------------------------------ | ---------------- | ----------------------------------- |
+| `ctx.path`                     | `string`         | 当前节点路径（如 `/mouse/primary`） |
+| `ctx.dag`                      | `DevicesDAG`     | 所属设备图实例                      |
+| `ctx.node`                     | `DevicesDAGNode` | 当前节点                            |
+| `ctx.semantics`                | `Object`         | 节点语义元数据快照                  |
+| `ctx.defaultRoute`             | `string`         | 当前节点默认出边名                  |
+| `ctx.resolvedDefaultRoutePath` | `string`         | 默认出边的绝对路径                  |
+| `ctx.depth`                    | `number`         | 当前分发深度                        |
+| `ctx.signalPacket`             | `SignalPacket`   | 当前输入信号包                      |
 
 ### 静态服务上下文
 
@@ -66,7 +67,7 @@ process(signalPacket, ctx) {
 | `ctx.setState(nextState)`             | `(Object) => Object`                  | 全量覆盖节点状态                                                       |
 | `ctx.patchState(partial)`             | `(Object) => Object`                  | 浅合并 `{ ...current, ...partial }`                                    |
 | `ctx.getNodeState(pathOrId?)`         | `(string\|number?) => Object`         | 读取任意节点（默认为当前节点）状态                                     |
-| `ctx.setNodeState(pathOrId, state)`   | `(string\|number, Object) => Object`  | 发布自身节点状态；跨节点写入被禁止（strict 抛错，非 strict 告警）      |
+| `ctx.setNodeState(pathOrId, state)`   | `(string\|number, Object) => Object`  | 发布自身节点状态；跨节点写入受限（strict 抛错，非 strict 告警但仍写入） |
 | `ctx.delNodeState(pathOrId, ...keys)` | `(string\|number, ...string) => void` | 删除自身节点的状态键；跨节点删除同 `setNodeState` 受限                 |
 
 ### 路由
@@ -117,6 +118,20 @@ handler(packet, ctx) {
 // node.state = { phase: "idle", anchor: { x: 10, y: 20 } }
 ctx.state; // { phase: "idle", anchor: { x: 10, y: 20 } }
 dag.getNodeState(path); // { phase: "idle", anchor: { x: 10, y: 20 } }  ← 形状一致
+```
+
+`createPrefixNodeHandler` 的包装形态：
+
+```js
+createPrefixNodeHandler({
+  initialState: { anchor: null },
+  handle(packet, ctx) {
+    // 首次调用时 node.state 已写入 { anchor: null }
+    // ctx.state 与 dag.getNodeState(ctx.path) 形状一致
+    ctx.patchState({ anchor: current });
+    return ctx.routeToChild("tool", packet.signals);
+  },
+});
 ```
 
 ### 写入
@@ -207,38 +222,6 @@ handler(packet, ctx) {
   ]);
 }
 ```
-
----
-
-## createPrefixNodeHandler 的职责
-
-`createPrefixNodeHandler` 的唯一作用是在首次调用时将 `initialState` 写入节点 state。handler 拿到的仍是标准 `DevicesDAGHandlerContext`。
-
-```js
-createPrefixNodeHandler({
-  initialState: { anchor: null },
-  handle(packet, ctx) {
-    // 首次调用时 node.state 已写入 { anchor: null }
-    // ctx.state 与 dag.getNodeState(ctx.path) 形状一致
-    ctx.patchState({ anchor: current });
-    return ctx.routeToChild("tool", packet.signals);
-  },
-});
-```
-
----
-
-## 适用于所有 handler
-
-以上接口适用于**所有** DevicesDAG handler，包括：
-
-- 设备根节点（`mouse-device`、`keyboard-device`、`touchscreen-device`）
-- prefix handler（`signal-log`、`repeater`、`canvas-to-world`、`edge-prefix`）
-- 工具 processor（`Tool.createProcessor`）
-- 裸 handler（直接挂在 DAG 节点上的任意函数）
-
-工具 processor 拿到的同样是标准 handler context 全集。
-`ctx.services` 中的 `board`、`boardApi`、`viewport` 由 DAG 上游节点通过节点声明式注入。
 
 ---
 

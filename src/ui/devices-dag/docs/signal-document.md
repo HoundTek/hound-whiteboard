@@ -64,21 +64,30 @@ src/ui/devices-dag/dag-core/signal.js
 
 ## 信号类型
 
-`signals` 数组中的每个信号都由 `type + context` 组成。`type` 不做枚举封闭，允许自由扩展。
+`signals` 数组中的每个信号都由 `type + context` 组成。`type` 分两层：
 
-当前常见信号包括：
+- **框架级信号**必须取 `SIGNAL_TYPES`（[signal-types.js](../dag-core/signal-types.js)）中的值，禁止在模块内另立本地枚举
+- **应用/演示级类型**（如 demo 的 `trigger`、`radius`、`debug:*`）不进注册表，由应用层自行声明
 
-- `position`：位置类信号，`context.value` 通常为 `{ x, y }`
-- `pressure`：压力类信号，`context.value` 通常为 `number`
-- `tilt`：倾角类信号，`context.value` 通常为 `number`
-- `rotate`：旋转类信号，`context.value` 通常为 `number`
-- `end`：当前交互结束
-- `cancel`：当前交互取消
+框架级信号共 15 个：
 
-针对具体设备，还会出现更稳定的设备层信号，例如：
+| type | 含义 |
+| --- | --- |
+| `position` | 世界坐标绝对位置，`context.value` 携带 Vector 兼容值，驱动手势状态机 |
+| `displacement` | 相对位移，无状态增量、无准入检测，可与 `position` 同帧叠加 |
+| `end` | 手势结束 |
+| `cancel` | 手势取消 |
+| `object-end` / `object-cancel` | 多手势对象结束 / 取消 |
+| `success` | 显式提交动作 |
+| `delete` | 删除当前持有的活动对象 |
+| `end-action` | 外部强制结束动作（如 tool-switcher 切换时终结当前工具动作） |
+| `property` | prefix 注入的对象属性（`context.value` 携带属性对象） |
+| `tool-switch` | 工具切换（`context.activeTool` 携带目标工具名） |
+| `button-press` | 按钮按下（`context.toolName` 携带按钮对应工具名） |
+| `touch-contacts` | 触摸触点聚合（`context.contacts` 携带触点列表） |
+| `trigger` / `trigger-repeat` / `release` | 键盘按下 / 按住重复 / 释放 |
 
-- keyboard：`trigger` / `trigger-repeat` / `release` / `cancel`
-- touchscreen：`contacts` 一类的多触点摘要信号
+设备层只负责把宿主输入规整成上述类型，不引入新的框架级类型。
 
 ## 多信号与多触点
 
@@ -86,7 +95,7 @@ src/ui/devices-dag/dag-core/signal.js
 
 例如触摸屏设备可能在同一包中携带多条 `position` 信号；此时通常通过 `context.touchId`、`context.pointerId` 等字段区分不同触点。
 
-这也是为什么信号设计采用“开放信号集 + context 扩展字段”的组合，而不是固定的闭合事件枚举。
+这也是为什么注册表只固定 `type` 取值、把可变部分交给 `context` 扩展字段。
 
 ## 当前设计约束
 
@@ -95,7 +104,7 @@ src/ui/devices-dag/dag-core/signal.js
 - 它不表达对象权威数据
 - 它不直接等同于 DOM 事件
 
-工具与设备都应按“开放信号集”设计，而不是硬编码成少数固定事件。
+工具与设备只能消费 `SIGNAL_TYPES` 中的框架级类型；需要新语义时先在注册表增项，而不是在模块内硬编码字符串。
 
 ## 相关文档
 

@@ -1,8 +1,6 @@
 # 视口渲染器文档
 
-本文档提供 `ViewportRenderer` 的概述。
-
-`ViewportRenderer` 在一个类内管理两个 OffscreenCanvas：`#cache`（静态层预渲染缓存）和 `#output`（最终输出 canvas）。它将静态图对象（不在 AOM 中的对象）绘制到 `#cache`，最终帧输出时将 `#cache` 拷贝到 `#output` 再叠画 AOM 中的对象，形成完整合成输出。
+`ViewportRenderer` 在一个类内管理两个 OffscreenCanvas：`#cache`（静态层预渲染缓存）和 `#output`（最终输出 canvas）。它将静态图对象（不在 AOM 中的对象）绘制到 `#cache`，最终帧输出时将静态内容合成到 `#output`（非 tile 分支从 `#cache` 拷贝，tile 分支直接合成）再叠画 AOM 中的对象，形成完整合成输出。
 
 它统一了静态缓存与输出合成的职责，内部分别由缓存层调度器和输出层调度器管理各自的脏区合并策略，消除了双渲染器时代的时序竞态。
 
@@ -19,10 +17,11 @@
 
 ### 缓存管理
 
+- 静态内容的缓存更新分两条路径，由 `#useTiles()` 判定：为真时（`tiles` 开启、缩放档位 0、视口能提供世界矩形）静态内容由 `#drawTiles()` 直接合成到输出、缓存按脏 tile 局部重建；为假时全量重建 `#cache` 再拷贝到输出
 - 维护一个内部的 `#cache` OffscreenCanvas，尺寸与输出 canvas 一致
 - 由 `#cacheScheduler`（`RenderScheduler` 实例）管理缓存层脏区的积累和合并
 - 当 `#cacheDirty = true` 时，在输出帧渲染前主动更新缓存：全量清空 → 收集非 AOM 的静态图对象 → 按合并后的全局静态图拓扑序绘制
-- 缓存总是全量重建，不做局部重建（原因见下节「为什么不做局部重建」）
+- 非 tile 分支的缓存总是全量重建，不做局部重建（原因见下节「为什么不做局部重建」）
 - 缓存尺寸跟随 `resize()` 同步调整
 
 ### 输出合成
@@ -37,7 +36,7 @@
 - 全量刷新时使用 `#copyCache()`，脏区刷新时使用 `#copyCacheRects()`
 - `flush()` 作为兼容入口仍保持完整的缓存+输出流水线
 
-### 三种失效路径
+### 失效路径
 
 | 方法                                                     | 场景                                   | 调度器                      | 效果                      |
 | -------------------------------------------------------- | -------------------------------------- | --------------------------- | ------------------------- |
@@ -87,13 +86,13 @@ flowchart TD
 
 ## 脏区策略
 
-- **缓存层调度器**使用 base 层策略（`createBaseDirtyRectThresholdStrategy`），仅用于控制刷新批次（缓存总是全量重建，脏区不再决定重建范围）
+- **缓存层调度器**使用 base 层策略（`createBaseDirtyRectThresholdStrategy`），仅用于控制刷新批次（重建范围见下文「为什么不做局部重建」）
 - **输出层调度器**使用 live 层策略（`createLiveDirtyRectThresholdStrategy`），更激进的合并阈值（低 `viewportCoverageRatio`），适应逐帧变化的 AOM 输出
 - 双调度器各自独立积累和合并脏区，输出帧渲染前通过 `#flushCacheScheduler()` 协调缓存 > 输出的时序保证
 
 ### 为什么不做局部重建
 
-缓存只按整帧重建，不做局部重建。
+非 tile 分支的缓存只按整帧重建；tile 分支按脏 tile 局部重建。
 
 局部重建要正确必须同时成立：
 
@@ -105,7 +104,7 @@ flowchart TD
 
 实测全量重建的代价与局部重建持平（100/300/600 笔画下倍率 ×0.96 至 ×1.00），收益实际来自输出层的脏区清除与拷贝
 
-世界空间 tile 缓存（`#tileStore`）遵守同一不变式：对象进出 AOM 时整片标脏，不做局部标脏（见 `#invalidateTilesForCachedObjects`）。
+世界空间 tile 缓存（`#tileStore`）遵守同一不变式：对象进出 AOM 时整库标脏（`markAllDirty()`），不做局部标脏（见 `#invalidateTilesForCachedObjects`）。
 
 ### tile 边长随视口自适应
 
@@ -172,7 +171,7 @@ const renderer = new ViewportRenderer(viewport, activeObjectManager, {
 - 第二参数：ActiveObjectManager（可选，可通过 `setActiveObjectManager()` 后续设置）
 - 第三参数：选项对象，`canvas` 指定输出 canvas
 
-## 当前实现状态
+## 当前状态
 
 - 已实现：单渲染器合成、双调度器（缓存层 + 输出层）、缓存更新、输出合成、AOM 对象收集、AOM 排除过滤、对象级脏区失效、区块级脏区失效、快照追踪、调试 API
 - 已接入：`ViewportCore`、`core-worker.js` 渲染钩子、`kernel/board/aom-render-hooks.js`（kernel 侧钩子接口）、`object-modifier.js`

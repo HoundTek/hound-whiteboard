@@ -52,7 +52,7 @@ modifyObject RPC 单条往返 x 1,750,771 ops/sec ±22.55% (25,000 runs sampled)
 
 - `label` — 测试名称，显示在输出行中
 - `iterations` — 每轮迭代次数
-- `rounds` — 轮数（默认 5），影响 ±% 的可靠性
+- `rounds` — 轮数（默认 5）；对 ±% 的定量影响见「注意事项 2」
 - `fn` — 被测函数。`benchmarkSync` 接收 `() => void`；`benchmarkAsync` 接收 `(i: number) => Promise<void>`
 
 ## 模式一：同步操作（benchmarkSync）
@@ -105,16 +105,24 @@ printFooter();
 
 ## 模式三：带 Fixture 的 IO Benchmark
 
-适用于每次操作需创建/销毁资源的场景。**注意资源泄露**：
+适用于每次操作需创建/销毁资源的场景。**注意资源泄露**（`createFixture` / `destroyFixture` 是各 bench 文件内的局部辅助函数，不从 `helpers.js` 导入）：
 
 ```js
-benchmarkAsync("Renderer File#cat", 80, ROUNDS, async () => {
-  const fixture = createFixture();
+async function createFixture() {
+  const rootPath = fs.mkdtempSync(path.join(os.tmpdir(), "hound-bench-"));
+  const driver = createNodeDriver(rootPath);
+  const { rootId } = await driver.registerRoot(rootPath);
+  const d = bindRoot(driver, rootId);
+  await d.write("docs/note.txt", "hello benchmark");
+  return { rootPath, d };
+}
+
+benchmarkAsync("Direct read", 200, ROUNDS, async () => {
+  const fixture = await createFixture();
   try {
-    const rendererFile = new RendererFile(fixture.dir, "note", "txt");
-    await rendererFile.cat();
+    await fixture.d.read("docs/note.txt");
   } finally {
-    destroyFixture(fixture.rootPath); // ← 必须在 finally 中清理
+    fs.rmSync(fixture.rootPath, { recursive: true, force: true });
   }
 });
 ```
@@ -122,11 +130,11 @@ benchmarkAsync("Renderer File#cat", 80, ROUNDS, async () => {
 如果 fixture 可以被复用（只创建一次，后续操作不修改），可以在 benchmark 外创建，在 benchmark fn 中只执行操作部分：
 
 ```js
-const fixture = createFixture();
-benchmarkSync("Direct File#cat", 2000, ROUNDS, () => {
-  fixture.noteFile.cat(); // 不修改 fixture
-});
-destroyFixture(fixture.rootPath);
+const fixture = await createFixture();
+benchmarkAsync("Direct read", 2000, ROUNDS, () =>
+  fixture.d.read("docs/note.txt"),
+);
+fs.rmSync(fixture.rootPath, { recursive: true, force: true });
 ```
 
 ## 运行方式
@@ -156,7 +164,7 @@ yarn bench:io:granularity  # I/O 文件粒度
 
 ### 1. 异步函数内存管理
 
-`benchmarkAsync` 在 loopback Worker 模式下每个 `await fn()` 产生 Promise 闭包。对于单次操作 < 1 µs 的极快操作，大量微任务堆积可能导致 OOM。建议将 iterations 限制在 5,000–10,000 范围内，配合 rounds=5 已足够获得稳定数据。
+`benchmarkAsync` 在 loopback Worker 模式下每个 `await fn()` 产生 Promise 闭包。对于单次操作 < 1 µs 的极快操作，大量微任务堆积可能导致 OOM。建议将 iterations 限制在 5,000–10,000 范围内，配合 rounds=5 已足够获得稳定数据。此上限优先于「每轮总耗时应至少数十毫秒」的原则：OOM 风险高于计时精度，不足的部分靠增加 `rounds` 累积样本量。
 
 ### 2. 计时器分辨率对 ±% 的影响
 
@@ -194,7 +202,7 @@ Node 里没有 `requestAnimationFrame`，`RenderScheduler` 会回退到 `setTime
 
 Helper 内部实现逻辑：
 
-1. 预热 50 次（确保 JIT 编译完成）
+1. 每轮先预热 50 次（确保 JIT 编译完成），`rounds` 轮共预热 50 × rounds 次
 2. 运行 `iterations` 次，记录总耗时
 3. 计算 `ops/sec = iterations / (elapsed_ms / 1000)`
 4. 重复 `rounds` 轮，计算均值和变异系数

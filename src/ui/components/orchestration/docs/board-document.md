@@ -17,6 +17,8 @@ Worker 侧真实白板核心参见 [board-core-document.md](../../../../kernel/b
 
 `Board` 本身**不持有本地 `BoardCore` 实例**。Worker 侧状态通过 RPC 访问。
 
+demo 默认走 `enableWorkerMode()` 路径。
+
 ## 当前职责
 
 ### 输入总线
@@ -25,15 +27,6 @@ Worker 侧真实白板核心参见 [board-core-document.md](../../../../kernel/b
 
 - `input`：把输入包送到 `devicesDAG.dispatch()`
 
-### Viewport 管理
-
-`Board.createViewport(...)`：
-
-- 创建 UI 侧 `Viewport`
-- 把 viewport 注册到 `Board.viewports`
-- 为 `/${viewportId}` 节点补充 viewport 上下文
-- 异步调用 `boardApi.createViewport(...)` 在 Worker 中创建 `ViewportCore`
-
 ### Worker mode 初始化
 
 `enableWorkerMode(worker, options)`：
@@ -41,9 +34,9 @@ Worker 侧真实白板核心参见 [board-core-document.md](../../../../kernel/b
 1. 确认当前还没有创建任何 viewport
 2. 创建 `BoardApiRpc`
 3. 挂接 io-invoke-forwarder（worker 内驱动的文件操作经主线程转发到 Tauri invoke）
-4. 等待 Worker 发送 `ready`
+4. 等待 Worker 发送 `ready`（超时可经 `options.readyTimeoutMs` 覆盖，回退到 `options.timeoutMs`）
 5. 调用 `boardApi.createBoard({ width, height, rootPath, source, syncUrl, boardId })`（超时可经 `options.createBoardTimeoutMs` 覆盖，默认 20s——持久化首开含 daemon 拉起，Rust 侧就绪轮询上限 15s）
-6. 按 `getObjectIdCounters` 续种对象 id 池（避免重开后分配碰撞）
+6. 续种对象 id 池（见下文「objectId 分配」）
 7. 缓存 `#boardApi` 与 `#worker`
 
 ### objectId 分配
@@ -80,7 +73,7 @@ Worker 侧真实白板核心参见 [board-core-document.md](../../../../kernel/b
 2. 创建 viewport 相关 DOM 节点
 3. 构造 UI 侧 `Viewport`
 4. 注册到 `Board.viewports`
-5. 用 `devicesDAG.configureNode(viewportId, ...)` 为 viewport 根节点补充 `viewport` 上下文
+5. 用 `devicesDAG.configureNode(viewportId, ...)` 为 `/${viewportId}` 节点补充 `viewport` 上下文
 6. 异步创建 Worker 侧 `ViewportCore`
 7. 在成功后调用 `viewport.startWorkerSync()`
 
@@ -95,13 +88,6 @@ workflow 通过 `viewport.inputScope.mountWorkflow(name, workflow)` 挂到：
 再经 `viewport.inputScope.addEdge({ from, to })` 把设备节点接到这个 workflow。
 
 这是一条 **Board 层约定**，而不是 `DevicesDAG` 的硬性限制。
-
-## 当前状态
-
-- `Board` 是 UI facade，不缓存本地 `BoardCore`
-- demo 默认走 `enableWorkerMode()` 路径
-- `createViewport()` 创建 UI 侧 `Viewport`，Worker 侧则创建 `ViewportCore`
-- `objectId` 由 `Board` 自身分配
 
 ## 设计约束
 

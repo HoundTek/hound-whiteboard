@@ -1,7 +1,5 @@
 # 区块对象管理器文档
 
-本文档提供 `ChunkObjectManager` 的概述。
-
 `ChunkObjectManager` 负责管理单区块内的静态图与覆盖区块索引，是 Worker 侧区块关系数据维护的核心组件。
 
 ## 概述
@@ -19,7 +17,7 @@
 | 名称          | 描述                                       | 类型                              |
 | ------------- | ------------------------------------------ | --------------------------------- |
 | `staticGraph` | 区块静态层叠图，仅存对象 id 与层关系       | `DirectedGraph`                   |
-| `board`       | 所属白板引用；当前主路径通常是 `BoardCore` | `BoardCore \| Board \| undefined` |
+| `board`       | 所属白板引用                               | `BoardCore \| undefined`          |
 | `id`          | 当前区块 id                                | `number`                          |
 
 ## 对象覆盖索引模型
@@ -56,15 +54,15 @@
 ### 覆盖范围重算
 
 - `syncObjectCoverChunksForObject(obj, chunkWidth, chunkHeight)`
-- `syncAllObjectCoverChunks(chunkWidth, chunkHeight)`
 - `calculateCoveredChunkIdsForRange(worldRange, chunkWidth, chunkHeight)`（静态方法）
 
 当前算法会：
 
-1. 从对象主判定范围 `obj.getRange()` 得到世界范围
+1. 从对象主判定范围 `obj.getRange().withPosition(obj.position)` 得到世界范围
 2. 计算候选区块边界框
 3. 逐区块做 range 相交判断
 4. 生成覆盖区块 id 集合
+5. 结果为空则回退为当前区块 id `this.id`
 
 ## 区块元数据读写
 
@@ -110,7 +108,7 @@ chunks/{chunkId}.json
 - 会被 [active-object-manager-document.md](../../board/docs/active-object-manager-document.md) 的跨区块逻辑间接依赖
 - 底层图结构依赖 `src/kernel/utils/directed-graph.js`
 
-## 当前实现状态
+## 当前状态
 
 - 已实现：静态图管理、覆盖区块索引管理、区块元数据加载/保存（经 `board.persistenceAdapter` 注入缝）、通过 `board` 间接获取对象实例、基于 `Range` 的覆盖区块计算
 - 已接线：对象创建/提交路径上的覆盖索引同步、AOM 跨区块操作读取覆盖索引

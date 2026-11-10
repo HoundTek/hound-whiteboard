@@ -47,6 +47,8 @@ src/
         └── switcher-wrapper.test.js  ← tool-switcher 路由
 ```
 
+（节选：`creator/ellipse/tests/`、`creator/eraser/tests/`、`modifier/gesture/tests/`、`tools/tests/` 等同样按此规则组织，未在树中展开。）
+
 **规则**：
 
 1. `board-input-flow.test.js` **禁止**放置具体工具的端到端测试 — 只放路由基础设施测试（使用 `CollectingTool` 等通用 Mock）
@@ -65,7 +67,7 @@ board.width = 800; // ← 必须！否则 chunkWidth = 0
 board.height = 600; // ← 必须！否则 chunkHeight = 0
 ```
 
-`Viewport.chunkWidth` 的 getter 是 `this.board?.width ?? 0`。不设置则 `worldToChunk` 返回 null → `resolveOwnerChunkId` 返回 undefined → `ensureObject` 返回 false → **对象创建静默失败**。如果测试不涉及位置→区块解析（如纯 DAG 路由测试、Mock 测试），可以省略。
+`Viewport.chunkWidth` 的 getter 是 `this.board?.width ?? 0`。不设置则 `worldToChunk` 返回 null，`ensureObject` 随即返回 false，**对象创建静默失败**。如果测试不涉及位置→区块解析（如纯 DAG 路由测试、Mock 测试），可以省略。
 
 ### 2. dispatch 时必须传递上下文
 
@@ -89,11 +91,10 @@ viewport.devicesDAG.dispatch(
 
 `GestureBasedObjectModifierTool`（包括 `CommonObjectModifierTool`）同时接受 `position`（绝对坐标）和 `displacement`（相对位移）两种信号：
 
-| 信号           | 行为                                                 |
-| -------------- | ---------------------------------------------------- |
-| `position`     | 驱动手势状态机（begin → update → end/cancel）        |
-| `displacement` | 无状态增量，直接累加到对象位置，不参与手势状态机     |
-| 同一帧两者并存 | position 先算 → displacement 再叠 → 锚点跟随位移同步 |
+| 信号           | 行为                                             |
+| -------------- | ------------------------------------------------ |
+| `position`     | 驱动手势状态机（begin → update → end/cancel）    |
+| `displacement` | 无状态增量，直接累加到对象位置，不参与手势状态机 |
 
 ```js
 // ✅ position 信号（绝对世界坐标）
@@ -133,7 +134,7 @@ Displacement 特性：
 
 ### 4. 断言要验证实际效果
 
-不要只检查"对象非空"或"AOM 大小不变"。直接验证对象状态：
+不要只检查对象非空，或只断言 AOM 里有 1 个对象。直接验证对象状态：
 
 ```js
 // ✅ 强断言：验证位置确实变了

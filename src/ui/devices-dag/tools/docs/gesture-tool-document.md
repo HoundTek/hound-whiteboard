@@ -78,13 +78,13 @@ classDiagram
 beginGesture  →  updateGesture*  →  completeGesture / cancelGesture
 ```
 
-| 方法                           | 触发条件                   | 职责                                  |
-| ------------------------------ | -------------------------- | ------------------------------------- |
-| `canBeginGesture(interaction)` | 首个 `position` 信号到达时 | 准入检测；返回 `false` 则拒绝开始手势 |
-| `beginGesture(interaction)`    | 准入通过后                 | 记录锚点、创建草稿、初始化状态        |
-| `updateGesture(interaction)`   | 后续每个 `position` 信号   | 追加路径点、更新选择区域、计算位移    |
-| `completeGesture(interaction)` | `end` 信号到达时           | 清理临时状态（手势结束，不提交）      |
-| `cancelGesture(interaction)`   | `cancel` 信号到达时        | 回滚到手势前状态                      |
+| 方法                           | 触发条件                                    | 职责                                  |
+| ------------------------------ | ------------------------------------------- | ------------------------------------- |
+| `canBeginGesture(interaction)` | 首个 `position` 信号到达时                  | 准入检测；返回 `false` 则拒绝开始手势 |
+| `beginGesture(interaction)`    | 准入通过后                                  | 记录锚点、创建草稿、初始化状态        |
+| `updateGesture(interaction)`   | 后续每个 `position` 信号                    | 追加路径点、更新选择区域、计算位移    |
+| `completeGesture(interaction)` | `end` / `success` / `end-action` 信号到达时 | 清理临时状态（手势结束，不提交）      |
+| `cancelGesture(interaction)`   | `cancel` 信号到达时                         | 回滚到手势前状态                      |
 
 `GestureTool` 不直接处理 `displacement` 信号，这一通道由 `GestureBasedObjectModifierTool` 自行处理。
 
@@ -122,7 +122,9 @@ Creator 的 `completeAction` 具有独特的非对称语义：
 
 ```mermaid
 flowchart TD
-    S[process(signalPacket, context)] --> OC{"hasObjectCancel?"}
+    S[process(signalPacket, context)] --> EA{"hasEndAction?"}
+    EA -->|是| EAA[_onEndAction]
+    EA -->|否| OC{"hasObjectCancel?"}
     OC -->|是| OCC[_onObjectCancel]
     OC -->|否| C{"hasCancel?"}
     C -->|是| CC[_onCancel]
@@ -138,12 +140,13 @@ flowchart TD
 
 ### 优先级
 
-1. `object-cancel` — 最高优先级，丢弃整个对象
-2. `cancel` — 取消当前手势
-3. `object-end` — 结束整个对象（多手势模式专用）
-4. `success` — 显式提交动作
-5. `position` — 驱动手势状态机
-6. `end` — 结束手势 + 可选自动动作
+1. `end-action` — 最高优先级，结束手势并提交动作（tool-switcher / handoff 的结束入口）
+2. `object-cancel` — 丢弃整个对象
+3. `cancel` — 取消当前手势
+4. `object-end` — 结束整个对象（多手势模式专用）
+5. `success` — 显式提交动作
+6. `position` — 驱动手势状态机
+7. `end` — 结束手势 + 可选自动动作
 
 ### 默认语义（GestureTool）
 
@@ -197,9 +200,9 @@ tool.on("action:complete", (context, result) => {
 });
 ```
 
-## 创建 Processor
+## process 入口
 
-`GestureTool` 不覆写 `Tool.createProcessor()`，但 `GestureBasedObjectModifierTool` 覆写了 `process()` 以添加 displacement 双通道的支持。三种族的 process 入口统一走 `GestureTool.process()`。
+`GestureTool` 不覆写 `Tool.createProcessor()`。Modifier 族覆写 `process()` 以增加 displacement 通道，其余两族直接复用 `GestureTool.process()`。
 
 ## 三族对比
 
@@ -226,6 +229,7 @@ tool.on("action:complete", (context, result) => {
   hasObjectCancel,
   hasObjectEnd,
   hasSuccess,
+  hasEndAction,
 }
 ```
 

@@ -12,7 +12,7 @@
 flowchart LR
     subgraph 父类调度
         P[process]
-        F[_finalizeSelection]
+        F[_onEnd]
         A[_applySelection]
     end
 
@@ -42,7 +42,7 @@ flowchart LR
 
 ### `hasSelectionRegion(context)`
 
-检查节点 state 中 `worldRect` 是否存在。
+检查节点 state 中 `selectionWorldRect` 是否存在（`resolveSelectionDragState` 返回对象中名为 `worldRect`）。
 
 ### `clearSelectionRegion(context)`
 
@@ -50,7 +50,7 @@ flowchart LR
 
 ### `getSelectionRegion(context)`
 
-返回节点 state 中的 `worldRect`，供父类默认 `submitSelection` 做命中检测。
+返回节点 state 中的 `selectionWorldRect`，供父类默认 `submitSelection` 做命中检测。
 
 ## 拖拽状态
 
@@ -71,7 +71,7 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-    participant F as _finalizeSelection
+    participant F as _onEnd
     participant S as submitSelection<br/>（父类默认）
     participant B as boardApi
 
@@ -83,15 +83,18 @@ sequenceDiagram
     S-->>F: summaries
 ```
 
-异步路径由父类 `_finalizeSelection` 自动处理。
+异步提交由 `completeAction()` 经 `unifyActionResult` 统一处理，落盘路径仍走 `_applySelection()`。
 
 ## overlay
 
 `collectUiOverlayEntries()` 只返回拖拽过程中的矩形选择框，不返回选中对象的外框高亮：
 
+- `source: "rectangle-selection-drag"`
 - `type: "rect"`
-- `worldRect: dragState.worldRect`
+- `geometry.worldRect`，取自实例字段 `_overlayDragState.worldRect`
 - 半透明蓝色填充 + 1px 虚线边框
+
+`_overlayDragState` 与「拖拽状态」节的节点 state 字段是两套状态：`updateSelectionRegion` 同时写两处，`clearSelectionRegion` 同时清两处。
 
 ```js
 // 颜色常量
@@ -114,10 +117,10 @@ RECTANGLE_SELECTION_OVERLAY_LINE_DASH = [4, 4];
 classDiagram
     class ObjectChooserTool {
       #process(signalPacket, context)
-      #_finalizeSelection(context)
+      #_onEnd(interaction)
       #_applySelection(context, objects)
-      #replaceSelection(context, objects)
-      #submitSelection(context)
+      +replaceSelection(context, objects)
+      +submitSelection(context)
       #updateSelectionRegion(position, context)*
       #hasSelectionRegion(context)*
       #clearSelectionRegion(context)*

@@ -1,7 +1,5 @@
 # path 文档
 
-本文档提供 `src/kernel/utils/path.js` 的概述。
-
 ## 模块职责
 
 `path.js` 提供 Core 层内部使用的逻辑路径工具。
@@ -11,23 +9,22 @@
 ## 路径表示约定
 
 - 根路径表示为 `/`
-- 内部片段数组不包含根节点本身
+- 绝对路径片段数组首元素是 `/` 作绝对标记，其余片段不含斜杠
 - 输出统一使用 `/` 作为分隔符
 - 空片段和多余斜杠会在规整阶段被清理
 
 ## API
 
-| 名称                                           | 描述                               | 类型                         |
-| ---------------------------------------------- | ---------------------------------- | ---------------------------- |
-| `normalizePath(path = "/")`                    | 将路径规整为片段数组               | `(string) => string[]`       |
-| `toAbsolutePath(segments = [])`                | 将片段数组转回绝对路径             | `(string[]) => string`       |
-| `joinPath(...parts)`                           | 拼接多个路径段并输出绝对路径       | `(string[]) => string`       |
-| `resolvePath(basePath = "/", targetPath = "")` | 在基准路径上解析相对路径或绝对路径 | `(string, string) => string` |
+| 名称                                          | 描述                               | 类型                         |
+| --------------------------------------------- | ---------------------------------- | ---------------------------- |
+| `normalizePath(path = "")`                    | 将路径规整为片段数组               | `(string) => string[]`       |
+| `joinPath(...parts)`                          | 首段为 `/` 时输出绝对路径          | `(string[]) => string`       |
+| `resolvePath(basePath = "", targetPath = "")` | 在基准路径上解析相对路径或绝对路径 | `(string, string) => string` |
 
 ## 行为特点
 
-- `normalizePath()` 会去除空片段、空白字符和多余斜杠。
-- `toAbsolutePath([])` 会回到根路径 `/`。
+- `normalizePath()` 会去除空片段和多余斜杠。
+- `joinPath("/")` 输出 `/`，`joinPath()` 输出 `""`。
 - `joinPath()` 不区分输入片段是否带前后斜杠，输出始终规整。
 - `resolvePath()` 支持 `.` 和 `..` 相对片段，也支持直接传入绝对目标路径。
 

@@ -42,21 +42,34 @@ UI Kit 另由 [HoundTek/hound-react-ui-kit](https://github.com/HoundTek/hound-re
 ## 项目结构
 
 ```
-src/
-├── kernel/        # 内核包（零 canvas/DOM：对象、几何、区块、BoardCore、AOM、hit、store、BoardApi）
-├── renderers/     # 渲染插件（canvas 渲染器、绘制策略注册表）
-├── host/          # 组合根与通道（core-worker、bridges/RPC、IO 转发、sync/ 协作同步）
-├── io/            # 安全文件操作（core 契约 / driver / adapter / api）
-├── cli/           # 命令行第二前端（板 daemon 持板，读写经 BoardApi 契约）
-├── ui/            # UI front（Board、Viewport、DevicesDAG、Tools、overlay）
-├── docs/          # 架构文档
-├── demo/          # 白板 HTML/CSS/JS 入口（桌面与 web 模式）
-├── test-support/  # 测试 mock 支撑
-├── tests/         # 跨包冒烟 / 集成测试
-└── utils/         # 应用级工具（log）
-src-tauri/         # Rust 后端（Cargo workspace）
-benchmarks/        # 性能基准
-scripts/           # CI 检查与 demo 静态服务脚本
+.
+├── src/
+│   ├── kernel/                  # 内核包（零 canvas/DOM：文档 + 操作 + 持久化）
+│   │   ├── objects/             # 对象模型（BasicObject、Stroke、graph/）
+│   │   ├── range/               # 几何
+│   │   ├── chunk/               # 区块（空间分区）
+│   │   ├── board/               # Board 权威状态（BoardCore 静态图 / AOM / render-hooks 缝）
+│   │   ├── hit/                 # 操作日志与时间回溯树
+│   │   ├── store/               # 会话存储（per-source 日志流与 meta 分片、写权仲裁落盘、恢复）
+│   │   ├── api/                 # BoardApi 契约面
+│   │   ├── utils/               # 内核工具（id 池、图、数学）
+│   │   └── types/               # 类型定义
+│   ├── renderers/
+│   │   └── canvas/              # canvas 渲染插件（viewport-renderer、绘制策略注册表）
+│   ├── host/                    # 组合根 + 通道（core-worker、debug-helper、bridges/、sync/ 协作同步）
+│   ├── io/                      # 安全文件操作（core 契约 / driver / adapter）
+│   ├── cli/                     # 命令行第二前端（板 daemon 持板，读写经 BoardApi 契约）
+│   ├── ui/                      # UI front（Board / Viewport / DevicesDAG / Tools / overlay）
+│   ├── utils/                   # 应用级工具（log）
+│   ├── docs/                    # 架构文档
+│   ├── test-support/            # 测试 mock 支撑
+│   ├── tests/                   # 跨包冒烟 / 集成测试
+│   └── demo/                    # 白板 HTML/CSS/JS 入口（桌面与 web 模式）
+├── src-tauri/                   # Rust 后端（Cargo workspace）
+├── benchmarks/                  # 性能基准
+├── dev/                         # 开发期文档与实验（probes/ 为渲染诊断探针，见 dev/probes/README.md）
+└── scripts/                     # CI 检查与 demo 静态服务脚本
+    └── ci/                      # 文档链接 / @module 路径检查
 ```
 
 ## 准备工作
@@ -64,7 +77,7 @@ scripts/           # CI 检查与 demo 静态服务脚本
 确保已安装：
 
 - [Node.js](https://nodejs.org/) ≥ 18
-- [Rust](https://rustup.rs/) ≥ 1.70
+- [Rust](https://rustup.rs/)（版本以 `src-tauri` 依赖要求为准）
 - [Tauri CLI](https://v2.tauri.app/)（通过 `cargo install tauri-cli` 或随 `yarn` 自动管理）
 
 ## 快速开始
@@ -161,13 +174,14 @@ hwb.off();
 
 ### 测试与 CI
 
-| 命令                 | 说明                                        |
-| -------------------- | ------------------------------------------- |
-| `yarn test`          | 运行全部测试                                |
-| `yarn ci-check`      | 运行文档链接检查 + `@module` 路径一致性检查 |
-| `yarn check:docs`    | 检查文档内部链接是否有效                    |
-| `yarn check:modules` | 检查文件头 `@module` 路径与实际目录是否一致 |
-| `yarn bench`         | 运行全部性能基准                            |
+| 命令                 | 说明                                                |
+| -------------------- | --------------------------------------------------- |
+| `yarn test`          | 运行全部测试                                        |
+| `yarn ci-check`      | 运行文档链接 + `@module` 路径 + kernel 许可证头检查 |
+| `yarn check:docs`    | 检查文档内部链接是否有效                            |
+| `yarn check:modules` | 检查文件头 `@module` 路径与实际目录是否一致         |
+| `yarn check:license` | 检查 `src/kernel/` 文件是否带 MIT 许可证头          |
+| `yarn bench`         | 运行全部性能基准                                    |
 
 CI 流水线定义见 `.github/workflows/ci.yml`，推送到 `master` / `develop` 或向 `master` 提 PR 时自动运行。
 
@@ -211,14 +225,12 @@ CI 流水线定义见 `.github/workflows/ci.yml`，推送到 `master` / `develop
 
 ### 移动端
 
-| 命令                 | 说明                |
-| -------------------- | ------------------- |
-| `yarn init:android`  | 初始化 Android 项目 |
-| `yarn dev:android`   | Android 开发模式    |
-| `yarn build:android` | Android 构建        |
-| `yarn init:ios`      | 初始化 iOS 项目     |
-| `yarn dev:ios`       | iOS 开发模式        |
-| `yarn build:ios`     | iOS 构建            |
+| 命令                | 说明                |
+| ------------------- | ------------------- |
+| `yarn init:android` | 初始化 Android 项目 |
+| `yarn init:ios`     | 初始化 iOS 项目     |
+
+两者均为首次一次性初始化，完成后改用「开发」「构建」两节的 `dev` / `build` 命令。
 
 ### 清理
 
@@ -236,17 +248,7 @@ CI 流水线定义见 `.github/workflows/ci.yml`，推送到 `master` / `develop
 
 构建系统已迁至 `hound-tauri-build` npm 包，图标配置文件位于 `node_modules/hound-tauri-build/icon-config.json`，可自定义各平台的源文件和输出目录。
 
-### 图标源文件优先级
-
-每个平台按优先级查找图标源文件：
-
-| 平台    | 优先级                                             |
-| ------- | -------------------------------------------------- |
-| macOS   | `icon-mac.png` > `icon-desktop.png` > `icon.png`   |
-| Windows | `icon-win.png` > `icon-desktop.png` > `icon.png`   |
-| Linux   | `icon-linux.png` > `icon-desktop.png` > `icon.png` |
-| Android | `icon-android.png` > `icon.png`                    |
-| iOS     | `icon-ios.png` > `icon.png`                        |
+每平台按 `icon-<平台>.png` → `icon-desktop.png` → `icon.png` 依次回退；移动端两级，跳过 `icon-desktop.png`。
 
 ## 文档
 

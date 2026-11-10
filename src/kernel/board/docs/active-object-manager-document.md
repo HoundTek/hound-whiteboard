@@ -1,7 +1,5 @@
 # 活动对象管理器文档
 
-本文档提供 `ActiveObjectManager` 的概述。
-
 ## 概述
 
 `ActiveObjectManager`（AOM）管理“当前处于交互态”的对象集合与临时层关系。
@@ -83,7 +81,7 @@ AOM 本身不依赖 DOM，也不直接持有 viewport 列表。它通过 `render
 
 choice 是活动对象的命名分组维度：每个活动对象恰好属于一个本地 choice（未显式命名时落匿名桶 `~`），命名 choice 即 CLI 的 choice 与协作展示的标签。同一对象在同端只属一个 choice（显式指派迁移、腾空自动删除）；不同端的同名 choice 经 `"{source}/{choice}"` 形态区分。
 
-注册表与 hit 记录衔接：choose / unchoose 的分子操作记录载荷携带命名选择名（`choice` 字段，匿名选择不记录，见[操作文档](../../hit/docs/operation-document.md)），重放与远端凭以恢复成员归属；跨端同名 choice 的区分形态 `"{source}/{choice}"` 与记录中的 `choice` 字段（仅本地名，不含 source 前缀）是同一命名空间的两个视角。
+注册表与 hit 记录衔接：choose / unchoose 的分子操作记录载荷携带命名选择名（`choice` 字段，匿名选择不记录，见[操作文档](../../hit/docs/operation-document.md)），重放与远端凭以恢复成员归属。记录中的 `choice` 字段只存本地名，不含 source 前缀。
 
 不变量：注册表只覆盖活动对象。对象退出活动集（apply/discard/dormant 统一经 `unregisterTrackedActiveObject`）时成员关系自动解除，调用方无需感知。
 
@@ -186,7 +184,7 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 
 在测试路径下：
 
-- `Board` 注入的 `board-render-hooks` 直接驱动本地 `BoardCore` 渲染器
+- `BoardCore` 以 `aomRenderHooks` 选项注入 `createDefaultAomRenderHooks()`，直接驱动本地渲染器
 
 ## 主要流程
 
@@ -282,6 +280,8 @@ AOM 用两类快照支持对象级静态失效：
 
 这两类快照让 `apply` / `discard` 能同时失效旧几何与新几何，避免静态层残影。
 
+`#objectCoverChunks` 是 `BoardCore` 上的集中式对象覆盖区块索引（objectId → 覆盖的区块 id 集合），全 BoardCore 唯一权威副本。
+
 ## 与 tools 的关系
 
 ### creator
@@ -299,15 +299,6 @@ AOM 用两类快照支持对象级静态失效：
 - 只编辑当前仍在 AOM 中的对象
 - `success` 最终走 `apply()`
 - `cancel` 走 `discard()`
-
-## 当前状态
-
-- AOM 作为 Worker 侧真实语义核心运行
-- `choose` / `discard` / `apply` 全部支持对象级静态失效
-- 渲染副作用通过 hooks 抽离
-- `pickup` 采用双队列 BFS + 批量 TempLoad，已加载区块零开销，未加载区块并行加载
-- `apply` 提交前 FullLoad 所有相关区块，确保层叠关系计算正确
-- `objectCoverChunks` 集中在 `BoardCore` 统一管理
 
 ## 相关文档
 

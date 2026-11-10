@@ -1,7 +1,5 @@
 # UI overlay 条目工厂文档
 
-本文档提供 `ui-overlay-factory.js` 的概述。
-
 ## 概述
 
 `ui-overlay-factory.js` 提供一组纯函数，负责创建 overlay 条目、归一化混合格式的条目、以及处理世界坐标到屏幕坐标的转换。不依赖任何类实例。
@@ -27,8 +25,6 @@
 }
 ```
 
-归一化时自动转换 world→screen 坐标并注入默认 draw 函数。
-
 ## 导出函数
 
 ### 坐标辅助
@@ -46,11 +42,13 @@
 
 ### 条目工厂
 
-| 函数                                                                  | 说明                                                     |
-| --------------------------------------------------------------------- | -------------------------------------------------------- |
-| `createCompatSelectionEntriesForSummaries(summaries, role, viewport)` | 基于 summary-like 条目生成兼容选择框条目（含组合大矩形） |
-| `createPointOverlayEntry(worldPoint, style)`                          | 创建点类型 overlay 条目（circle 圆心等）                 |
-| `createPathOverlayEntry(worldPoints, style)`                          | 创建路径类型 overlay 条目（线段、参考线等）              |
+| 函数                                                                  | 说明                                                                                             |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `createCompatSelectionEntriesForSummaries(summaries, role, viewport)` | 基于 summary-like 条目生成兼容选择框条目（含组合大矩形）                                         |
+| `createPointOverlayEntry(worldPoint, options)`                        | 创建点类型 overlay 条目（circle 圆心等）；options 可含 `radius` / `source` 等                    |
+| `createPathOverlayEntry(worldPoints, options)`                          | 创建路径类型 overlay 条目（线段、参考线等）；options 可含 `closePath` / `lineWidth` / `source` 等  |
+
+summary-like 条目需提供 `worldRect`，或 `position` 配合 `range` / `boundingBox` / `rich.boundingBox` 之一；`role` 用于拼接 `source` 后缀（如 `chooser`、`modifier`）。
 
 ### 条目归一化
 
@@ -68,7 +66,7 @@ normalizeOverlayEntry(entry, viewport, {
 });
 ```
 
-provider 返回的条目必须含 `geometry`，无 geometry 的条目被 normalize 丢弃。`draw` 由 normalize 按 type 注入，provider 也可自备 draw 覆盖。
+provider 返回的条目必须含 `geometry`，无 geometry 的条目被 normalize 丢弃；未识别 type 或无法注入 draw 的条目同样被丢弃。`draw` 由 normalize 按 type 注入，provider 也可自备 draw 覆盖。
 
 ## 与 UiRenderer 的关系
 

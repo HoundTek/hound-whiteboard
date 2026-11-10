@@ -1,7 +1,5 @@
 # 区块类文档
 
-本文档提供 `Chunk` 的概述。
-
 `Chunk` 是单区块生命周期管理单元，负责维护区块 id、由 id 推导出的二维坐标，以及协调本区块对象管理器的加载与卸载。
 
 ## 核心职责
@@ -18,7 +16,7 @@
 | --------------- | ------------------------------------------ | --------------------------------- |
 | `id`            | 区块唯一标识                               | `number`                          |
 | `x` / `y`       | 区块二维坐标                               | `number`                          |
-| `board`         | 所属白板引用，当前主路径通常是 `BoardCore` | `BoardCore \| Board \| undefined` |
+| `board`         | 所属白板引用，由 `BoardCore` 创建时挂载    | `BoardCore \| Board \| undefined` |
 | `objectManager` | 区块对象管理器                             | `ChunkObjectManager \| undefined` |
 | `isLoad`        | 当前是否已加载                             | `boolean`                         |
 | `isTempLoad`    | 当前是否处于临时加载状态                   | `boolean`                         |
@@ -58,7 +56,7 @@
 
 当前实现非常轻量：
 
-1. 若已完整加载，直接返回 `false`
+1. 若已完整加载，resolve 为 `false`
 2. 若尚未加载，先执行 `loadTemp()`
 3. 将 `isTempLoad` 置为 `false`
 
@@ -91,7 +89,7 @@
 
 - 确保存在 `objectManager`
 - 向静态图加入对象节点
-- 根据 `below` / `above` 建立层叠边
+- 根据 `below` / `above` 建立层叠边；不在本区块静态图中的节点直接跳过（视为位于其他区块）
 
 对象实例的白板级注册由调用方经 `BoardCore.registerObjectInstance` 显式完成。
 
@@ -106,6 +104,8 @@
 
 | 名称                                                | 描述                         |
 | --------------------------------------------------- | ---------------------------- |
+| `fromId(chunkId)`                                   | 由区块 id 创建区块实例       |
+| `fromCoordinate(x, y)`                              | 由二维坐标创建区块实例       |
 | `idToCoordinate(id)`                                | id 转二维坐标                |
 | `coordinateToId(x, y)`                              | 二维坐标转 id                |
 | `isValidChunkIdentity(id, x, y)`                    | 判断区块 id 与坐标是否匹配   |
@@ -118,11 +118,9 @@
 | `unload()`                                          | 完整卸载区块                 |
 | `unloadTemp()`                                      | 卸载临时加载区块             |
 
-## 实现状态
+## 当前状态
 
-- 已实现：区块 id/坐标换算、区块实例化、静态图基础对象增删、临时加载、完整加载状态切换、卸载与降级入口
-- 已接线：区块元数据加载由 `ChunkObjectManager` 负责，对象实例同步由 `BoardCore` 协调
-- 当前约束：`loadFull()` 与 `downgradeToTemp()` 主要表达状态语义，真正的对象装载/释放并不在 `Chunk` 内部完成
+- `Chunk` 内部只维护加载状态与静态图；对象实例的装载与释放由 `BoardCore` 承担
 
 ## 相关文档
 

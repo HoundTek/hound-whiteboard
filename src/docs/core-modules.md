@@ -15,6 +15,7 @@
 | `cli/`          | 命令行第二前端          | 写命令经持板 daemon 的 WebSocket RPC 执行，读命令可直读板文件         |
 | `ui/`           | UI 线程运行时           | Board、Viewport、DevicesDAG、UiRenderer                               |
 | `demo/`         | 白板 HTML/CSS/JS 入口   | 桌面与 web 两种模式的演示宿主（输入绑定、工具装配、workflow 挂载）    |
+| `utils/`        | 跨模块共享工具          | device-identity、log、safe-io、short-id                               |
 | `benchmarks/`   | 性能基准                | I/O、队列、Worker RPC/渲染，以及按帧预算判定的交互帧基准（`yarn bench`） |
 | `test-support/` | 测试支撑                | canvas mock、worker-mode fixture、AOM fixture                         |
 | `tests/`        | 跨模块冒烟测试          | Board 输入流、Worker smoke、共享模块 smoke                            |
@@ -34,11 +35,11 @@ flowchart BT
     renderers --> kernel
     host --> renderers
     ui --> host
-    io -. 注入 PersistenceAdapter .-> host
+    host -. 借用 io 的 PersistenceAdapter .-> io
     cli -. 经 BoardApi 契约 .-> host
 ```
 
-依赖方向自下而上：`kernel/` 零 canvas/DOM，被各层复用；`renderers/` 与 `host/` 依次构建其上；`ui/` 经 `host/bridges/` 的 RPC 触达 Worker 权威。`io/` 与 `cli/` 不参与分层主干，作为旁挂包在 host 组合根处接线（io 注入持久化缝，cli 复用 BoardApi 契约面）。
+依赖方向自下而上：`kernel/` 被各层复用；`renderers/` 与 `host/` 依次构建其上；`ui/` 经 `host/bridges/` 的 RPC 触达 Worker 权威。`io/` 与 `cli/` 不参与分层主干，作为旁挂包在 host 组合根处接线（io 注入持久化缝，cli 复用 BoardApi 契约面）。
 
 ## `ui/`
 
@@ -163,19 +164,6 @@ flowchart BT
 - `chunk-loader.js`：区块加载器与加载事件
 - `chunk-object-manager.js`：静态图与覆盖区块索引管理
 
-### `renderers/canvas/`
-
-- `viewport-core.js`：Worker 侧视口状态、区块缓冲、渲染帧输出
-- `renderer.js`：`Renderer` 基类（继承 `CanvasHost`）
-- `object-draw-strategies.js`：对象类型到 Canvas2D 绘制策略的注册表
-- `canvas-lifecycle.js`：Canvas 生命周期管理
-- `render-scheduler.js`：渲染调度器
-- `dirty-rect-strategy-shared.js`：脏区策略
-- `viewport-renderer.js`：Worker 侧视口渲染器
-- `aom-collect-utils.js`：AOM 渲染收集辅助
-
-`ViewportRenderer` 建立在 `renderers/canvas/` 的 `Renderer` 基类之上，在单类内管理静态缓存与输出合成。
-
 ### `kernel/hit/`
 
 - `operation.js`：八类分子操作 + 闭合超分子记录 `close-supra`（载荷、校验、id 构造、时钟环比较；`close-supra` 触发超分子折叠）
@@ -223,3 +211,16 @@ flowchart BT
 - `event-bus.js`、`queue.js`
 - `counter-pool.js`、`incremental-id-pool.js`（来源命名空间字符串 id 分配）、`random.js`
 - `hash.js`（FNV-1a 字符串哈希，状态摘要比对用）、`shared-state-store.js`（跨信道共享状态存储）
+
+## `renderers/`
+
+- `viewport-core.js`：Worker 侧视口状态、区块缓冲、渲染帧输出
+- `renderer.js`：`Renderer` 基类（继承 `CanvasHost`）
+- `object-draw-strategies.js`：对象类型到 Canvas2D 绘制策略的注册表
+- `canvas-lifecycle.js`：Canvas 生命周期管理
+- `render-scheduler.js`：渲染调度器
+- `dirty-rect-strategy-shared.js`：脏区策略
+- `viewport-renderer.js`：Worker 侧视口渲染器
+- `aom-collect-utils.js`：AOM 渲染收集辅助
+
+`ViewportRenderer` 建立在 `renderers/canvas/` 的 `Renderer` 基类之上，在单类内管理静态缓存与输出合成。

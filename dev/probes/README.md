@@ -19,9 +19,9 @@
 | 脚本 | 测什么 | 用法 | 关键输出 |
 | --- | --- | --- | --- |
 | `tile-diff.mjs` | tiles 开与关的输出是否逐像素一致 | `node dev/probes/tile-diff.mjs` | 差异像素数、最大通道差。**期望全为 0** |
-| `tile-pan-phase.mjs` | 平移帧的 tile 相位是否与全量渲染一致 | `node dev/probes/tile-pan-phase.mjs` | 同上。亚像素平移也应全为 0 |
+| `tile-pan-phase.mjs` | 平移帧的 tile 相位是否与全量渲染一致 | `node dev/probes/tile-pan-phase.mjs` | 差异像素数与最大通道差（亚像素平移也应全为 0） |
 | `tile-size-fine.mjs` | tile 边长对提交成本的影响 | `W=900 H=700 node dev/probes/tile-size-fine.mjs` | 各边长的 p95 耗时与块数 |
-| `tile-commit-cost.mjs` | 提交成本：tile 模式 vs 经典全量 | `W=900 H=700 node dev/probes/tile-commit-cost.mjs` | 倍率（期望 ≤ 1.1） |
+| `tile-commit-cost.mjs` | 提交成本：tile 模式 vs 经典全量 | `W=900 H=700 node dev/probes/tile-commit-cost.mjs` | 倍率：≤ 1.1 正常，> 1.5 判为卡顿 |
 | `fill-double-composite.mjs` | 是否存在同一内容被合成两遍 | `node dev/probes/fill-double-composite.mjs` | 失败帧数。**期望 0** |
 | `screenshot-mask.mjs` | 两张截图的差异是矩形块还是沿笔画形状 | `node dev/probes/screenshot-mask.mjs` | ink 掩码差集、包围盒填充率、字符画 |
 | `screenshot-blend.mjs` | 截图的差异是否为全局混合（整体变暗/变亮） | `node dev/probes/screenshot-blend.mjs` | 逐通道回归斜率、R²、变暗/变亮像素数 |
@@ -37,7 +37,7 @@ Worker 位图与合成画布各降采样成 33×33 指纹，可以检出：
 - 位图跳变（`bitmapJump`）：Worker 产出层内容突变
 - 画布跳变（`canvasJump`）：UI 合成层内容突变
 - 瞬时跳变（`transient`）：A 到 B 又回到 A 的闪烁
-- 两者是否一致（`bitmapLuma === canvasLuma` 即问题在 Worker 产出层）
+- 分层判断：位图跳变而画布不跳变 → 问题在 Worker 产出层；反之在 UI 合成层
 
 `render-frame-probe.test.js` 会随 `yarn test` 一起跑，守着这个模块本身。
 
@@ -48,8 +48,23 @@ Worker 位图与合成画布各降采样成 33×33 指纹，可以检出：
 1. `src/renderers/canvas/viewport-renderer.js`：每次 `flush()` 结束记录本帧决策
    （脏区数量、是否全清、本次走了 tile 还是经典路径），随 `render-frame` 消息发出
 2. `src/kernel/types/message-types.js`：`render-frame` 消息增加该字段
-3. `src/ui/components/orchestration/viewport.js`：收到帧后调用
-   `probe.record({ bitmap, canvas })`，异常时打印
+3. `src/ui/components/orchestration/viewport.js`：收到帧后采样，异常时打印
+
+```js
+import { createRenderFrameProbe } from "../../../dev/probes/render-frame-probe.js";
+
+const probe = createRenderFrameProbe({ enabled: true });
+
+// 收到帧后调用；缺尺寸时 fingerprint 返回 null，采样静默丢弃
+probe.sampleFrame({
+  bitmap,
+  bitmapWidth,
+  bitmapHeight,
+  canvas,
+  canvasWidth,
+  canvasHeight,
+});
+```
 
 接线后复现问题，检查 `probe.getAnomalies()`。
 
@@ -62,7 +77,7 @@ Worker 位图与合成画布各降采样成 33×33 指纹，可以检出：
 | 内容局部消失 | `screenshot-mask.mjs` | 差集包围盒填充率接近 1（矩形块）而非沿笔画 |
 | 笔画一段粗一段细 | `tile-diff.mjs` | 存在非零差异且落在 tile 边界附近 |
 | 平移时画面发虚 | `tile-pan-phase.mjs` | 亚像素平移出现非零差异 |
-| 提交卡顿 | `tile-commit-cost.mjs` | 倍率 > 1.5 |
+| 提交卡顿 | `tile-commit-cost.mjs` | 倍率 ≤ 1.1 正常；> 1.5 判为卡顿；其间结合 p95 耗时判断 |
 
 ## 两个教训
 

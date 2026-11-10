@@ -1,7 +1,5 @@
 # 画布生命周期管理器文档
 
-本文档提供 `CanvasHost` 的概述。
-
 ## 概述
 
 `CanvasHost` 是所有渲染器（`Renderer`、`UiRenderer`）的画布生命周期基类，封装画布引用持有、尺寸变更、失效请求与渲染调度器初始化的通用逻辑。不涉及具体绘制逻辑。
@@ -19,9 +17,8 @@ CanvasHost          — 画布生命周期 + 调度器（canvas-lifecycle.js）
 
 ### 画布管理
 
-- 存储 `_canvas` 引用
-- 提供 `canvas` getter
-- 暴露 `resize(width, height)` 方法，仅在宽高发生变化时修改画布尺寸
+- 提供 `canvas` getter 与 `_getContext()`；后者取 2D 上下文，`canvas` 为空时返回 `null`
+- 暴露 `resize(width, height)` 方法，入参经归一化取整后与当前尺寸比较，返回是否发生变化
 
 ### 调度器初始化
 
@@ -33,8 +30,8 @@ _initScheduler(mergeDirtyRects, flushHandler);
 
 ### 失效请求
 
-- `invalidate(rect)`：提交脏区到调度器
-- `invalidateViewport()`：提交整个视口
+- `invalidate(rect)`：提交脏区到调度器。需在 `_initScheduler()` 之后调用：调度器未初始化时直接返回 `false`，不排队；返回 `true` 表示本次新排了一帧，已有帧在排队时同样返回 `false`
+- `invalidateViewport()`：提交整个视口。仅当视口屏幕矩形宽高均大于 0 时提交，否则不发请求
 
 ## 字段
 
@@ -43,10 +40,6 @@ _initScheduler(mergeDirtyRects, flushHandler);
 | `viewport`   | `Viewport`                  | 绑定的视口实例 |
 | `_canvas`    | `HTMLCanvasElement \| null` | 目标画布引用   |
 | `_scheduler` | `RenderScheduler \| null`   | 渲染调度器实例 |
-
-## 与 Renderer 基类的关系
-
-`_canvas` / `_scheduler` / `viewport` 字段与 `invalidate()` / `invalidateViewport()` / `resize()` / `_getContext()` 方法由 `CanvasHost` 统一持有，`Renderer` 侧只声明自身绘制逻辑，不重复声明这些成员。
 
 ## 相关文档
 

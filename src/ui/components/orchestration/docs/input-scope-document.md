@@ -34,7 +34,7 @@ InputScope 的所有方法自动在路径前拼接 `/{viewportId}`：
 | `addEdge({ from: "mouse/primary", to: "workflows/stroke" })`                      | `/{vpId}/mouse/primary` ──"default"──→ `/{vpId}/workflows/stroke`                    |
 | `addEdge({ from: "keyboard/code/Space", to: "workflows/random-circle", prefix })` | 挂 prefix 于 `/{vpId}/keyboard/code/Space`，再连到 `/{vpId}/workflows/random-circle` |
 | `addEdge({ from: "mouse/primary", to: "workflows/stroke", name: "tool" })`        | 使用边名 `tool` 而非默认的 `default`                                                 |
-| `addEdge({ from: "workflows/switcher/stroke" })`                                  | 省略 to，创建匿名目标节点                                                            |
+| `addEdge({ from: "mouse/primary" })`                                              | `/{vpId}/mouse/primary` ──"default"──→ 匿名目标节点（先建边占位，稍后接目标）        |
 
 ## API
 
@@ -51,8 +51,7 @@ scope.mountDevice("keyboard", createKeyboardDevice());
 
 挂载 tool 或 SubDAGDefinition 到 `workflows/{name}`。
 
-`name` 支持嵌套路径（如 `"parent-workflow/child"`），典型场景是把工具挂到
-已存在子图的内部节点。所有 Tool 都挂载在 `/{vpId}/workflows/...` 之下。
+`name` 支持嵌套路径（如 `"parent-workflow/child"`），典型场景是把工具挂到已存在子图的内部节点。
 
 挂载走完整契约：tool 实例注册（禁止重复挂载）、`semantics.tool` 标记、
 umount 钩子链（`processor.dispose → tool.umount → 原钩子`）。目标节点已有
@@ -85,7 +84,6 @@ scope.mountWorkflow(
 - `prefix` — 可选边级 prefix 子图定义
 
 `to` 可省略。省略时创建匿名目标节点，返回的 `DevicesDAGEdge.target` 可供后续接线参考。
-如需在目标节点上挂工具，请使用 `mountWorkflow` 而非直接给 `node.handler` 赋值。
 
 ```javascript
 // 简单直连
@@ -115,7 +113,8 @@ scope.addEdge({
 
 ### unmountWorkflow(name, edgesToRemove?)
 
-卸载 workflow 节点。可选传入入边列表一并拆除。
+卸载 workflow 节点。`edgesToRemove` 为可选入边列表，元素形状 `[{ from, edge? }]`，元素含义同
+`removeEdge`。这些边先于节点卸载被移除；单独删边不会卸载节点，卸载钩子链最终由本方法执行。
 
 ## 与 Viewport 的关系
 

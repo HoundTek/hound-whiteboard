@@ -31,7 +31,7 @@ sub.info("Specific message"); // logger → "MyModule:SubComponent"
 ### 调试日志（带自适应降采样）
 
 ```js
-// 仅在开发环境、不频繁时才会输出
+// 仅当 level ≤ DEBUG 时输出，高频调用时自动降采样
 log.debug("Dirty rects:", dirtyRects);
 ```
 
@@ -47,7 +47,9 @@ log.throttledError("disk-full", "No space left on device");
 
 ## 全局初始化
 
-在应用入口 `main.js` 中：
+仓库现状：各模块自建 Logger，例如 `src/host/core-worker.js:283` 的 `new Logger("CoreWorker", "INFO", logBus)`。控制台输出器由 `src/demo/whiteboard.js:34` 挂载全部级别，`src/host/core-worker.js:319` 另挂一份只订阅 DEBUG。
+
+以下为示例，非仓库现状：
 
 ```js
 import { Logger } from "./utils/log/logger.js";
@@ -99,6 +101,8 @@ new Logger(name, level?, bus?)
   meta: { throttled: true, throttleKey: "chunk-miss" }
 }
 ```
+
+`throttled` / `throttleKey` 只由 `throttled*` 方法附加；其余条目的 `meta` 为 `{}`，或为子 Logger 传入 meta 的合并结果。
 
 ### LogBus
 
@@ -171,11 +175,11 @@ function renderFrame() {
 }
 ```
 
-### 场景四：重复告警抑制
+### 场景四：高频信息抑制
 
 ```js
-// 视口平移时不断触发，但 200ms 内只记一次
-log.throttledWarn("chunk-miss", `Chunk ${chunkId} not found`);
+// 缓冲区每次同步都打一条 info，但 200ms 内只记一次
+log.throttledInfo("buffer-sync", `Buffer synced, ${chunks.length} chunks`);
 ```
 
 ## 级别说明
@@ -187,6 +191,8 @@ log.throttledWarn("chunk-miss", `Chunk ${chunkId} not found`);
 | WARN   | 2   | 开启 | 开启 | 非预期但可恢复的情况         |
 | ERROR  | 3   | 开启 | 开启 | 需关注的问题                 |
 | SILENT | 4   | —    | —    | 关闭所有日志                 |
+
+表中「生产」「开发」两列为推荐配置，由调用方用 `setLevel` 设置；模块不按环境自动切换级别。
 
 生产环境建议设为 `"WARN"`，仅输出警告和错误：
 

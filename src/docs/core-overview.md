@@ -61,7 +61,7 @@ Worker 层负责真正的数据与渲染权威：
 - `kernel/hit/`：操作日志与时间回溯树（撤销/重做权威）
 - `kernel/store/`：会话存储（日志跟随者增量落盘与会话恢复）
 - `renderers/canvas/`：`ViewportRenderer` 与 Worker 侧脏区绘制
-- `host/sync/`：协作同步（`network-coordinator` 协调器、`relay-server` 无状态中继、`amend-forwarder` amend 转发）；周期 digest（`{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`）与 openMols 对账，chainHash 分歧请求全量重建，stateHash 分歧（仅两端全量驻留时可比）经 `repairStateFromLog` 效果层自愈
+- `host/sync/`：协作同步（`network-coordinator` 协调器、`relay-server` 无状态中继、`amend-forwarder` amend 转发）与周期 digest 对账
 
 ### Kernel 层
 
@@ -69,7 +69,7 @@ Kernel 不依赖 DOM，也不依赖 Worker 宿主：
 
 - `kernel/objects/`：对象模型、反序列化
 - `kernel/range/`：几何范围与相交判断
-- `renderers/canvas/`：渲染器基类、调度器
+- `renderers/canvas/`：其中的渲染器基类与调度器（不含 `ViewportRenderer`）
 - `kernel/types/`：跨线程共享类型定义
 - `kernel/utils/`：数学、图结构、事件总线、路径工具、计数池
 
@@ -85,7 +85,7 @@ Kernel 不依赖 DOM，也不依赖 Worker 宿主：
 6. `BoardApiRpc.createViewport(...)` 在 Worker 中创建 `ViewportCore`
 7. `Viewport.startWorkerSync()` 启动 `viewport-change` 与 `request-render-flush` 循环
 
-`createBoard` 携带有效 `rootPath` 时，Worker 侧先探测板目录 `.daemon.json`（core-worker.js:779）：有活 daemon 则只读挂载、零写盘，经协作通道直连；无则装配 tauri driver 自行落盘并请求宿主 spawn daemon（周期重试探测）。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js:614-615，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（whiteboard.js:51-52）。
+`createBoard` 携带有效 `rootPath` 时，Worker 侧先探测板目录 `.daemon.json`（core-worker.js:827）：有活 daemon 则只读挂载、零写盘，经协作通道直连；无则装配 tauri driver 自行落盘并请求宿主 spawn daemon（周期重试探测）。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js:656，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（demo/whiteboard.js:57-66）。
 
 ### demo web 模式
 
@@ -136,7 +136,7 @@ web 模式以 `yarn relay`（启动 WebSocket 中继）+ `yarn demo:web`（静�
 - 对象、范围、渲染器基类的纯逻辑复用
 - Worker / UI / Node 测试之间共享的数据结构与算法
 - JSDoc typedef 与协议约定
-- 文档与操作的权威模型（hit）与持久化逻辑（store，文件原理由外部注入）
+- 文档与操作的权威模型（hit）与持久化逻辑（`kernel/store/`，文件读写的 `SessionDriver` 由外部注入）
 
 ## 协作同步
 
@@ -159,7 +159,7 @@ sequenceDiagram
 
 本地操作 commit 后经中继广播；对端在 500ms 延迟容忍窗内把远程记录接入 `applyRemoteOperations`（窗内乱序按确定性定序吸收）。每 30s 周期交换 digest 对账，`chainHash`（活动链校验和，驻留无关）分歧时请求全量重建；`stateHash`（已驻留对象口径，仅两端全量驻留时可比）分歧时经 `repairStateFromLog` 从本端日志重放派生状态并对齐活体（效果层修复，不改写日志）。
 
-## 当前实现状态
+## 当前状态
 
 - Worker mode 是当前主路径
 - `Board` / `Viewport` / `BoardApiRpc` / `BoardCore` / `ViewportCore` 已接通

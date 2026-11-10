@@ -38,7 +38,7 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 
 ## 上下文模型
 
-`Tool.createProcessor(toolContext)` 会生成一个可直接挂到 DevicesDAG 节点上的 handler。这个 handler 会把 `DevicesDAGHandlerContext` 规整成 `deviceContext`。
+`Tool.createProcessor()` 无参，生成一个可直接挂到 DevicesDAG 节点上的 handler。handler 调用时收到的 `DevicesDAGHandlerContext` 即 `process()` 的 `deviceContext`，不做字段转换。
 
 当前推荐直接依赖的顶层字段有：
 
@@ -155,12 +155,12 @@ Tool 基类提供了一套发布-订阅式生命周期钩子，允许外部观�
 
 - **通知型钩子**通过 `_emit` 触发，不参与控制流
 - **控制型钩子**是可覆盖的实例方法，返回 `bool` 决定流程是否继续
-- 钩子名称约定为语义化字符串：`"afterCreate"`、`"afterApply"` 等
+- 钩子名称采用 namespace 格式：`"action:complete"`、`"gesture:begin"` 等
 
 ```js
 // 注册监听
-const unsub = tool.on("afterCreate", (interaction, obj) => {
-  console.log("对象创建完成", obj);
+const unsub = tool.on("action:complete", (context, result) => {
+  console.log("动作完成", result);
 });
 
 // 取消监听
@@ -179,8 +179,6 @@ unsub();
 
 此外，`GestureTool` 还提供手势层事件：`"gesture:begin"`、`"gesture:update"`、`"gesture:end"`、`"gesture:cancel"`。
 
-控制型钩子返回 `false` 即阻止该生命周期步骤继续执行。
-
 ## 子类约定
 
 自定义工具通常只需要实现：
@@ -194,7 +192,7 @@ unsub();
 
 如果工具需要在 `uiCanvas` 上声明兼容 overlay，可额外覆写：
 
-- `collectUiOverlayEntries({ deviceContext, viewport, renderer })`
+- `collectUiOverlayEntries({ viewport, renderer })`
 
 该方法返回的条目会通过 viewport 上注册的 provider 交给 `UiRenderer`。
 

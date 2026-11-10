@@ -10,17 +10,8 @@
 
 它是 `DAGNodeBuilder.prefix(handler)` 自动写入节点元数据的一个标记。
 
-它的作用是：
-
-- 让调试和文档层知道这个节点承担 prefix 职责
-- 让阅读 `semantics` 的调用方快速区分普通节点、prefix 节点和 tool 节点
-- 不引入新的运行时分发分支
-
-这意味着：
-
-- prefix 仍然是普通 `DevicesDAGNode`
-- dispatcher 不会因为 `semantics.prefix` 自动改写路径
-- 真正的控制逻辑仍由 `handler`、节点 state 和累积 `context` 决定
+- 标记只供调试与文档识别：调试与文档层据此判断该节点承担 prefix 职责，阅读 `semantics` 的调用方据此区分普通节点、prefix 节点和 tool 节点
+- dispatch 行为不变：dispatcher 不会因为 `semantics.prefix` 自动改写路径，节点的实际行为仍由 `handler`、节点 state 和累积 `context` 决定
 
 ## 当前协作模型
 
@@ -62,7 +53,7 @@ flowchart TD
 
 ## 基础处理器：`createPrefixNodeHandler`
 
-`createPrefixNodeHandler` 是最轻量的 handler 工厂。它的唯一额外职责是提供 `initialState` 默认值合并——使 `ctx.state` 自动包含初始默认值。
+`createPrefixNodeHandler` 是最轻量的 handler 工厂。它的唯一额外职责是在首次调用时把 `initialState` 中缺失的默认键写入节点 state，之后调用不做合并，`ctx.state` 由此带上初始默认值。
 
 状态管理（`state` / `getState` / `setState` / `patchState`）和路由操作（`routeToChild` / `stop`）**均来自 DevicesDAG 的标准上下文**，不由本模块注入。
 
@@ -98,13 +89,16 @@ const handler = createRepeaterPrefixHandler({
 
 ```js
 const builder = createSubDAG("/mouse/primary/tool");
+const prefixNode = builder
+  .node()
+  .prefix(createCanvasToWorldPrefixHandler());
 const toolNode = builder
   .node()
   .tool(
     new CommonObjectModifierTool({ processor: new DragGestureProcessor() }),
   );
 
-builder.edge("tool", null, toolNode);
+builder.edge("tool", prefixNode, toolNode);
 
 viewport.inputScope.mountDevice("mouse/primary/tool", builder.build());
 ```
@@ -113,7 +107,7 @@ viewport.inputScope.mountDevice("mouse/primary/tool", builder.build());
 
 - `handler` 与 `tool` 不能在同一结构化节点上同时声明
 - prefix 语义通过 `semantics` 标记表达，不引入新的节点类
-- 节点状态通过 `getNodeState()` / `setNodeState()` 显式管理
+- 节点状态：自节点读写用 `ctx.state` / `patchState`；按路径读写用 `getNodeState(path)` / `setNodeState(path)`，跨节点写受限
 - first → second 顺序流与 1-of-N 互斥路由不属于 prefix 职责，由 `tools/wrapper/` 的 wrapper tool 承担
 
 ## 相关文档
