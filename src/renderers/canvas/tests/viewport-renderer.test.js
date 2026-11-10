@@ -1317,6 +1317,161 @@ describe("ViewportRenderer", () => {
       }
     });
 
+    test("缩放变更时用上一帧缩放合成，不重建 tile", () => {
+      const { renderer, viewport, chunk, outputCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+      outputCalls.length = 0;
+      const rebuildsBefore = renderer.getTileDebugInfo().rebuildCount;
+
+      // 连续手势的典型单步：1.2 倍
+      viewport.zoom = 1.2;
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
+      });
+      renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(rebuildsBefore);
+      const draws = outputCalls.filter(
+        (call) => call[0] === "output" && call[1] === "drawImage",
+      );
+      // 快照按 1.2 倍拉伸后合成一次，而不是逐对象重绘
+      expect(draws).toHaveLength(1);
+      // 记录格式为 [label, method, image, offsetX, offsetY, width, height]
+      expect(draws[0][5]).toBeCloseTo(800 * 1.2);
+      expect(draws[0][6]).toBeCloseTo(600 * 1.2);
+    });
+
+    test("手势结束时立即提交预览并重建", () => {
+      const { renderer, viewport, chunk, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+
+      // 进入预览
+      viewport.zoom = 1.2;
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
+      });
+      renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+      ctxCalls.length = 0;
+
+      // 输入侧显式收尾：不等空闲定时器，立刻换成清晰帧
+      expect(renderer.commitZoomPreview()).toBe(true);
+      renderer.flush([]);
+
+      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      // 重复调用不应触发多余重建
+      expect(renderer.commitZoomPreview()).toBe(false);
+    });
+
+    test("离散缩放跳变不进入预览", () => {
+      const { renderer, viewport, chunk, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+      ctxCalls.length = 0;
+
+      // 按键一次缩放一倍属于离散跳变，预览只会让用户看到一帧发糊的画面
+      viewport.zoom = 2;
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
+      });
+      renderer.flush([]);
+
+      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+    });
+
+    test("缩小不进入预览，直接重建缓存", () => {
+      const { renderer, viewport, chunk, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+      ctxCalls.length = 0;
+
+      // 缩小会露出快照未覆盖的区域，留白比重新光栅化更刺眼
+      viewport.zoom = 0.5;
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
+      });
+      renderer.flush([]);
+
+      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+    });
+
+    test("累计拉伸超过两倍时退出预览改为重建", () => {
+      const { renderer, viewport, chunk, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+
+      // 连续小步放大，逐步累积到超过两倍
+      ctxCalls.length = 0;
+      let previousZoom = 1;
+      for (const nextZoom of [1.2, 1.44, 1.728]) {
+        viewport.zoom = nextZoom;
+        renderer.invalidateChunks([chunk], [chunk], {
+          previousViewportState: { zoom: previousZoom, origin: { x: 0, y: 0 } },
+        });
+        renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+        previousZoom = nextZoom;
+      }
+      // 前置断言：累计 1.728 倍仍在阈值内，预览期间不得重建缓存
+      expect(ctxCalls).not.toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      ctxCalls.length = 0;
+
+      // 相对快照累积到 2.07 倍，超出阈值，退出预览并重建
+      viewport.zoom = 2.0736;
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { zoom: previousZoom, origin: { x: 0, y: 0 } },
+      });
+      renderer.flush([]);
+
+      // 缩放档位非 1 时 tile 关闭，判据是缓存被全量重建
+      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+    });
+
+    test("缩放停止后重建一帧清晰内容", () => {
+      jest.useFakeTimers();
+      try {
+        const { renderer, viewport, chunk, ctxCalls } = createTileScenario([
+          new Vector(20, 20),
+        ]);
+        viewport.zoom = 1.2;
+        renderer.invalidateChunks([chunk], [chunk], {
+          previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
+        });
+        renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+
+        ctxCalls.length = 0;
+        jest.advanceTimersByTime(200);
+
+        // 定时器必须让输出重新绘制，否则画面停留在拉伸预览上
+        expect(renderer._scheduler.framePending).toBe(true);
+        renderer.flush([]);
+        expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test("预览期间静态内容变化立即退出预览", () => {
+      const { renderer, viewport, chunk, objects, ctxCalls } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+      viewport.zoom = 1.2;
+      ctxCalls.length = 0;
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
+      });
+      renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+      // 前置断言：预览期间不得重建缓存
+      expect(ctxCalls).not.toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+
+      ctxCalls.length = 0;
+      renderer.invalidateCachedObjects([objects[0]]);
+      renderer.flush([new RectangleRange(20, 20, 10, 10)]);
+
+      // 退出预览后重新走正常重建路径
+      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+    });
+
     test("选中对象在移动提交后仍由输出层绘制", () => {
       const renderCalls = [];
       const outputCalls = [];

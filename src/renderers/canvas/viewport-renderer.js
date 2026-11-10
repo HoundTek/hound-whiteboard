@@ -51,6 +51,29 @@ const TILE_CACHE_MARGIN_RATIO = 0.25;
 const TILE_EVICT_MARGIN_RATIO = 0.5;
 
 /**
+ * 缩放预览允许的累计拉伸倍数
+ * @description
+ * 预览把上一帧位图按缩放比拉伸后合成，拉伸越大越显模糊。
+ * 相对快照累计超过该倍数时改为立即重建一帧清晰内容。
+ */
+const ZOOM_PREVIEW_MAX_SCALE = 2;
+
+/**
+ * 判定连续缩放手势的单步最大变化倍数
+ * @description
+ * 只有单步变化足够小才说明是连续手势（触控板捏合、滚轮缩放这类逐帧小步）。
+ * 按键一次缩放一倍属于离散跳变，走预览只会让用户看到一帧发糊的画面，
+ * 因此仍按原路径重建。
+ */
+const ZOOM_PREVIEW_MAX_STEP = 1.25;
+
+/**
+ * 缩放停止后触发清晰重建的等待时间（毫秒）
+ * @description 手势连续缩放期间不断重置该定时器，停手后才重建。
+ */
+const ZOOM_PREVIEW_SETTLE_MS = 150;
+
+/**
  * tile 边长的上限
  * @description 单块位图过大时整块重建代价过高，也失去分块的意义。
  */
@@ -170,6 +193,36 @@ class ViewportRenderer extends Renderer {
   #outputScheduler;
 
   /**
+   * 缩放预览状态
+   * @description 非空时输出层直接缩放合成 `snapshot`，跳过缓存与 tile 重建。
+   * @type {{ zoom: number, origin: { x: number, y: number }, snapshot: CanvasImageSource } | null}
+   * @private
+   */
+  #zoomPreview;
+
+  /**
+   * 缩放预览的清晰重建定时器
+   * @type {ReturnType<typeof setTimeout> | null}
+   * @private
+   */
+  #zoomPreviewTimer;
+
+  /**
+   * 是否已产出过至少一帧
+   * @description 没有可预览的上一帧时不能进入缩放预览。
+   * @type {boolean}
+   * @private
+   */
+  #hasRenderedFrame;
+
+  /**
+   * 缩放预览的快照画布
+   * @type {OffscreenCanvas | null}
+   * @private
+   */
+  #zoomPreviewCanvas;
+
+  /**
    * @param {import("./viewport-core.js").ViewportCore} viewport - 目标视口
    * @param {ActiveObjectManager | undefined} aom - 活动对象管理器
    * @param {{ canvas?: HTMLCanvasElement | OffscreenCanvas | null }} [options = {}] - 初始化选项
@@ -194,6 +247,11 @@ class ViewportRenderer extends Renderer {
         resolveTileSize(this._canvas?.width, this._canvas?.height),
     });
     this.#tilesEnabled = options.tiles !== false;
+
+    this.#zoomPreview = null;
+    this.#zoomPreviewTimer = null;
+    this.#hasRenderedFrame = false;
+    this.#zoomPreviewCanvas = null;
 
     this.#resolveOutputThresholds = createLiveDirtyRectThresholdStrategy();
 
@@ -244,6 +302,9 @@ class ViewportRenderer extends Renderer {
   resize(width, height) {
     const nextWidth = normalizeCanvasSize(width);
     const nextHeight = normalizeCanvasSize(height);
+
+    // 快照尺寸与新画布不匹配，缩放预览必须作废
+    this.#exitZoomPreview();
 
     let resized = false;
     if (super.resize(nextWidth, nextHeight)) {
@@ -540,6 +601,9 @@ class ViewportRenderer extends Renderer {
    * @param {Iterable<BasicObject>} [objects = []] - 待失效的 AOM 对象集合
    */
   invalidateActiveObjects(objects = []) {
+    // 有活动对象在动说明正在绘制，缩放预览的旧帧不再可信
+    if (objects?.length > 0) this.#exitZoomPreview();
+
     const previousEntryIndex = this.indexDrawableEntries(
       this.#previousAomEntries,
     );
@@ -589,6 +653,8 @@ class ViewportRenderer extends Renderer {
    * @returns {RectangleRange[]} 实际提交的脏区
    */
   invalidateCachedObjects(objects = [], options = {}) {
+    // 静态层内容变化后上一帧不再可信，立即退出预览改为重建
+    this.#exitZoomPreview();
     this.#cacheDirty = true;
 
     const previousWorldRects = options.previousWorldRects ?? new Map();
@@ -637,12 +703,18 @@ class ViewportRenderer extends Renderer {
    * @param {{ previousViewportState?: { origin?: { x: number, y: number }, zoom?: number } }} [options = {}] - 旧视口状态
    */
   invalidateChunks(chunks = [], previousChunks = [], options = {}) {
+    const previousViewportState = options.previousViewportState ?? {};
+
+    // 缩放期间走预览：不重建缓存与 tile，只把上一帧按新倍率缩放合成
+    if (this.#tryEnterZoomPreview(previousViewportState)) {
+      return;
+    }
+
     this.#cacheDirty = true;
 
     this.#invalidateTilesForChunks(chunks, previousChunks, options);
 
     const dirtyRectMap = new Map();
-    const previousViewportState = options.previousViewportState ?? {};
 
     for (const chunk of previousChunks) {
       if (!chunk?.id || dirtyRectMap.has(`prev:${chunk.id}`)) continue;
@@ -731,6 +803,175 @@ class ViewportRenderer extends Renderer {
    */
   getPreviewRenderPosition(objectId) {
     return this._getPreviewPosition(objectId);
+  }
+
+  /**
+   * 缩放变更时尝试进入预览路径
+   * @description
+   * 缩放是连续运动，逐帧重新光栅化全部静态对象会成为主要开销（600 笔画约 17ms）。
+   * 预览把上一帧位图按缩放比拉伸合成，单帧成本降到一次 drawImage。
+   * 三个条件同时满足才启用：单步变化小（连续手势）、方向为放大（快照覆盖视口）、
+   * 相对快照的累计拉伸不超过可接受模糊度。
+   * 缩小会露出快照未覆盖的区域，留白比重新光栅化更刺眼，因此直接重建。
+   * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState={}] - 变更前视口状态
+   * @returns {boolean} 是否已接管本次渲染
+   * @private
+   */
+  #tryEnterZoomPreview(previousViewportState = {}) {
+    const previousZoom = previousViewportState?.zoom;
+    const zoom = this.viewport?.zoom ?? 1;
+    if (!Number.isFinite(previousZoom) || previousZoom <= 0 || previousZoom === zoom) {
+      return false;
+    }
+    if (!this.#hasRenderedFrame) return false;
+
+    const current = this.#zoomPreview;
+    const baseZoom = current ? current.zoom : previousZoom;
+    const accumulatedScale = zoom / baseZoom;
+    const stepScale = zoom / previousZoom;
+
+    // 缩小会露出快照未覆盖的区域，整片空白比重绘更刺眼
+    if (stepScale < 1 || accumulatedScale < 1) {
+      this.#exitZoomPreview();
+      return false;
+    }
+    // 离散跳变（按键一次缩放一倍）不属于连续手势
+    if (stepScale > ZOOM_PREVIEW_MAX_STEP) {
+      this.#exitZoomPreview();
+      return false;
+    }
+    // 累计拉伸超过可接受模糊度
+    if (accumulatedScale > ZOOM_PREVIEW_MAX_SCALE) {
+      this.#exitZoomPreview();
+      return false;
+    }
+
+    if (!current) {
+      const snapshot = this.#captureZoomPreviewSnapshot();
+      if (!snapshot) return false;
+      this.#zoomPreview = {
+        zoom: previousZoom,
+        origin: {
+          x: previousViewportState?.origin?.x ?? 0,
+          y: previousViewportState?.origin?.y ?? 0,
+        },
+        snapshot,
+      };
+    }
+
+    this.#scheduleZoomPreviewSettle();
+    return true;
+  }
+
+  /**
+   * 拷贝当前输出画布作为预览源
+   * @returns {CanvasImageSource | null} 快照，无法拷贝时返回 null
+   * @private
+   */
+  #captureZoomPreviewSnapshot() {
+    const source = this._canvas;
+    const width = source?.width ?? 0;
+    const height = source?.height ?? 0;
+    if (!(width > 0) || !(height > 0)) return null;
+
+    if (
+      !this.#zoomPreviewCanvas ||
+      this.#zoomPreviewCanvas.width !== width ||
+      this.#zoomPreviewCanvas.height !== height
+    ) {
+      this.#zoomPreviewCanvas = new OffscreenCanvas(width, height);
+    }
+
+    const ctx = this.#zoomPreviewCanvas.getContext?.("2d");
+    if (!ctx) return null;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(source, 0, 0);
+    return this.#zoomPreviewCanvas;
+  }
+
+  /**
+   * 结束缩放预览并请求一帧清晰渲染
+   * @description
+   * 手势结束有两条来源：输入侧显式通知（`force` 刷新、显式 flush），
+   * 以及空闲兜底定时器。两者共用本方法，保证行为一致。
+   * 无预览在跑时直接返回，不产生额外重建。
+   * @returns {boolean} 是否结束了一次进行中的预览
+   */
+  commitZoomPreview() {
+    const hadPreview = this.#zoomPreview !== null;
+    this.#exitZoomPreview();
+    if (!hadPreview) return false;
+
+    // 按最终倍率重建清晰内容。必须同时失效输出调度器，
+    // 否则输出帧不会重绘，画面会停留在拉伸预览上
+    this.#cacheDirty = true;
+    this.#tileStore.markAllDirty();
+    this.invalidateViewport();
+    return true;
+  }
+
+  /**
+   * 重置预览的清晰重建定时器
+   * @description 兜底路径：输入源不发结束信号时，停手 150ms 后自动提交预览。
+   * @private
+   */
+  #scheduleZoomPreviewSettle() {
+    if (this.#zoomPreviewTimer !== null) {
+      clearTimeout(this.#zoomPreviewTimer);
+    }
+    this.#zoomPreviewTimer = setTimeout(() => {
+      this.#zoomPreviewTimer = null;
+      if (this.commitZoomPreview()) {
+        this.viewport?.markFrameDirty?.();
+      }
+    }, ZOOM_PREVIEW_SETTLE_MS);
+  }
+
+  /**
+   * 退出缩放预览
+   * @private
+   */
+  #exitZoomPreview() {
+    if (this.#zoomPreviewTimer !== null) {
+      clearTimeout(this.#zoomPreviewTimer);
+      this.#zoomPreviewTimer = null;
+    }
+    this.#zoomPreview = null;
+  }
+
+  /**
+   * 用预览快照渲染输出帧
+   * @description 快照按 `zoom / 快照倍率` 拉伸，并按原点差平移，保证世界坐标位置不变。
+   * @param {CanvasRenderingContext2D} ctx - 输出画布上下文
+   * @private
+   */
+  #renderZoomPreview(ctx) {
+    const preview = this.#zoomPreview;
+    if (!preview) return;
+
+    const zoom = this.viewport?.zoom ?? 1;
+    const origin = this.viewport?.origin ?? { x: 0, y: 0 };
+    const scale = zoom / preview.zoom;
+    const offsetX = (preview.origin.x - origin.x) * zoom;
+    const offsetY = (preview.origin.y - origin.y) * zoom;
+    const snapshotWidth = preview.snapshot?.width ?? 0;
+    const snapshotHeight = preview.snapshot?.height ?? 0;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.clear();
+    if (snapshotWidth > 0 && snapshotHeight > 0) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(
+        preview.snapshot,
+        offsetX,
+        offsetY,
+        snapshotWidth * scale,
+        snapshotHeight * scale,
+      );
+    }
+    ctx.restore();
   }
 
   /**
@@ -1140,6 +1381,14 @@ class ViewportRenderer extends Renderer {
   #renderOutput(dirtyRects) {
     const outputCtx = this._getContext();
     if (!outputCtx) return [];
+
+    // 缩放预览直接缩放合成上一帧，跳过缓存拷贝与 AOM 重绘
+    if (this.#zoomPreview) {
+      this.#renderZoomPreview(outputCtx);
+      return [];
+    }
+
+    this.#hasRenderedFrame = true;
 
     const aomDrawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(aomDrawables);

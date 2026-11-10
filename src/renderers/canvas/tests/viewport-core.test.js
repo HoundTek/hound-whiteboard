@@ -112,6 +112,23 @@ describe("ViewportCore", () => {
     expect(viewportCore.origin).toEqual(new Vector(120, 81));
   });
 
+  test("显式刷新与 force 变更都应结束缩放预览", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+    const commitSpy = jest.spyOn(viewportCore.renderer, "commitZoomPreview");
+
+    // force 变更表示输入侧已收尾
+    viewportCore.onViewportChange({
+      origin: { x: 0, y: 0 },
+      zoom: 1.2,
+      force: true,
+    });
+    expect(commitSpy).toHaveBeenCalledTimes(1);
+
+    // 显式 flush 同样表示这一帧必须清晰
+    viewportCore.flushViewportRender();
+    expect(commitSpy).toHaveBeenCalledTimes(2);
+  });
+
   test("tile 模式下视口原点量化到整数", () => {
     const { viewportCore } = createViewportCoreContext({ tiles: true });
 

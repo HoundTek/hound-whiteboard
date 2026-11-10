@@ -464,6 +464,9 @@ class ViewportCore {
     const viewportRect = this.getViewportScreenRect();
     if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
 
+    // 显式 flush 等同于「这一帧必须清晰」，结束缩放预览
+    this.#renderer?.commitZoomPreview?.();
+
     this.syncChunkBufferWithViewport();
     this.markFrameDirty();
     this.#renderer?.invalidate(viewportRect);
@@ -531,6 +534,11 @@ class ViewportCore {
       this.#tilesEnabled && nextZoom === 1
         ? new Vector(Math.round(nextOrigin.x), Math.round(nextOrigin.y))
         : nextOrigin;
+    // 输入侧显式要求刷新，说明手势已经收尾，缩放预览必须立即换成清晰帧
+    if (forceRefresh) {
+      this.#renderer?.commitZoomPreview?.();
+    }
+
     const originUnchanged =
       quantizedOrigin.x === previousViewportState.origin.x &&
       quantizedOrigin.y === previousViewportState.origin.y;

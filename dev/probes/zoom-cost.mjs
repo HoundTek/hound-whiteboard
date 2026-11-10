@@ -112,13 +112,15 @@ async function setup(strokeCount) {
  * @returns {Promise<{ zoom: number, pan: number }>}
  */
 async function measure(strokeCount) {
-  const { viewport } = await setup(strokeCount);
-  const zoomTimes = [];
+  const { viewport, renderer } = await setup(strokeCount);
+  const zoomInTimes = [];
+  const zoomOutTimes = [];
   const panTimes = [];
-  let zoom = 1;
 
-  for (let i = 0; i < 20; i++) {
-    zoom *= i % 2 === 0 ? 1.02 : 1 / 1.02;
+  // 连续放大：触控板双指放大这类连续手势
+  let zoom = 1;
+  for (let i = 0; i < 12; i++) {
+    zoom *= 1.02;
     const start = performance.now();
     viewport.onViewportChange({
       origin: { x: 0, y: 0 },
@@ -126,8 +128,68 @@ async function measure(strokeCount) {
       viewportSize: { width: W, height: H },
     });
     viewport.flushRenderFrame();
-    zoomTimes.push(performance.now() - start);
+    zoomInTimes.push(performance.now() - start);
   }
+
+  // 连续缩小
+  const zoomOutClears = { count: 0 };
+  const probeCtx = renderer.getStaticCache().getContext("2d");
+  const probeClearRect = probeCtx.clearRect.bind(probeCtx);
+  probeCtx.clearRect = (...args) => {
+    zoomOutClears.count++;
+    return probeClearRect(...args);
+  };
+  for (let i = 0; i < 12; i++) {
+    zoom /= 1.02;
+    const start = performance.now();
+    viewport.onViewportChange({
+      origin: { x: 0, y: 0 },
+      zoom,
+      viewportSize: { width: W, height: H },
+    });
+    viewport.flushRenderFrame();
+    zoomOutTimes.push(performance.now() - start);
+  }
+
+  probeCtx.clearRect = probeClearRect;
+
+  // 离散步进：对应 + / - 键一次缩放一倍
+  const stepTimes = { in: [], out: [] };
+  const cacheClears = { in: 0, out: 0 };
+  const cacheCtx = renderer.getStaticCache().getContext("2d");
+  const originalClearRect = cacheCtx.clearRect.bind(cacheCtx);
+  let counting = null;
+  cacheCtx.clearRect = (...args) => {
+    if (counting === "in") cacheClears.in++;
+    if (counting === "out") cacheClears.out++;
+    return originalClearRect(...args);
+  };
+
+  for (const direction of ["in", "out"]) {
+    counting = direction;
+    let stepZoom = direction === "in" ? 1 : 1;
+    for (let i = 0; i < 6; i++) {
+      stepZoom *= direction === "in" ? 2 : 0.5;
+      const start = performance.now();
+      viewport.onViewportChange({
+        origin: { x: 0, y: 0 },
+        zoom: stepZoom,
+        viewportSize: { width: W, height: H },
+      });
+      viewport.flushRenderFrame();
+      stepTimes[direction].push(performance.now() - start);
+    }
+    counting = null;
+    // 回到 1 倍并重建，避免下一次测量继承上一次的状态
+    viewport.onViewportChange({
+      origin: { x: 0, y: 0 },
+      zoom: 1,
+      viewportSize: { width: W, height: H },
+      force: true,
+    });
+    viewport.flushRenderFrame();
+  }
+  cacheCtx.clearRect = originalClearRect;
 
   // 同一缩放档位下的平移作为对照
   viewport.onViewportChange({
@@ -152,14 +214,25 @@ async function measure(strokeCount) {
     const sorted = [...values].sort((a, b) => a - b);
     return sorted[Math.floor(sorted.length * 0.95)];
   };
-  return { zoom: p95(zoomTimes), pan: p95(panTimes) };
+  return {
+    zoomIn: p95(zoomInTimes),
+    zoomOut: p95(zoomOutTimes),
+    stepIn: p95(stepTimes.in),
+    stepOut: p95(stepTimes.out),
+    stepCacheClears: cacheClears,
+    zoomOutClears: zoomOutClears.count,
+    pan: p95(panTimes),
+  };
 }
 
 try {
   for (const strokeCount of [100, 300, 600]) {
     const result = await measure(strokeCount);
     console.log(
-      `${String(strokeCount).padStart(4)} 笔画 | 缩放帧 p95=${result.zoom.toFixed(2).padStart(6)}ms | 平移帧 p95=${result.pan.toFixed(2).padStart(5)}ms`,
+      `${String(strokeCount).padStart(4)} 笔画 | 缩放帧 放大=${result.zoomIn.toFixed(2)}ms 缩小=${result.zoomOut.toFixed(2)}ms` +
+        ` | 2x 步进 放大=${result.stepIn.toFixed(2)}ms 缩小=${result.stepOut.toFixed(2)}ms` +
+        ` | 缓存重建 放大=${result.stepCacheClears.in} 次 缩小=${result.stepCacheClears.out} 次` +
+        ` | 平移=${result.pan.toFixed(2)}ms | 小步缩小缓存重建=${result.zoomOutClears} 次`,
     );
   }
 } finally {
