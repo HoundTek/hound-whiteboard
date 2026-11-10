@@ -303,21 +303,21 @@ flowchart LR
     JR -->|本端与代写来源| META["meta/{source}.json"]
 ```
 
-### 当前不要过度假设的语义
+### 未统一保证的语义
 
-以下内容不应再写成“已经由代码保证的稳定事实”：
+以下两条只在部分运行时场景成立，不构成跨实现约束：
 
-- 每个对象 JSON 一定包含 `ownerChunkId`
-- 对象一定按 `objects/chunk{chunkId}/{objectId}.json` 组织
+- 每个对象 JSON 包含 `ownerChunkId`
+- 对象按 `objects/chunk{chunkId}/{objectId}.json` 组织
 
-这些更接近设计目标或局部桥接语义，而不是当前所有运行时场景下的统一现实。
+它们更接近设计目标或局部桥接语义，而非所有运行时场景的统一现实。
 
 相对地，以下已是代码保证的稳定事实：
 
 - `delete-object` 记录必须携带 `chunks` 层位边（删除时刻各区块的 `below` / `above` 前驱后继）
 - `trash/{objectId}.json` 条目含同样的 `chunks` 层位边，跨会话撤销删除据此按原层位回图
 
-## 关键术语
+## 术语定义
 
 - **SignalPacket**：输入系统中的标准信号包，形如 `{ to, signals }`
 - **LightweightObjectEntry**：UI 工具链共享的轻量对象协议

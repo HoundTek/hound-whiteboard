@@ -193,7 +193,7 @@ describe("情景五：撤销与迟到的改挂范围内节点", () => {
     o1: undo("a", 3, 5, "a/op-2", "b/op-2"),
   });
 
-  test("A 端：O1 先应用，X 迟到落入改挂范围（触发重建，X 同时进入原位置与撤消分支）", () => {
+  test("A 端：O1 先应用，X 迟到落入改挂范围（触发重建，X 同时进入原位置与撤销分支）", () => {
     const r = records();
     const endA = createEnd("a");
     const endB = createEnd("b");

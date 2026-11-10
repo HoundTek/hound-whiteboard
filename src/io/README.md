@@ -39,7 +39,7 @@ import { createTauriDriver } from "./driver/tauri.js";
 import { createPersistenceAdapter } from "./adapter/persistence.js";
 
 const driver = createTauriDriver();
-const rootId = await driver.registerRoot(boardPath);
+const { rootId } = await driver.registerRoot(boardPath);
 const adapter = createPersistenceAdapter({ driver, rootId });
 
 const boardCore = new BoardCore({ persistenceAdapter: adapter, ... });

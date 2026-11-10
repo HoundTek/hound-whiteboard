@@ -46,7 +46,7 @@ _initScheduler(mergeDirtyRects, flushHandler);
 
 ## 与 Renderer 基类的关系
 
-`Renderer` 原手写维护 `_canvas` / `_scheduler` / `viewport` 字段以及 `invalidate()` / `invalidateViewport()` / `resize()` / `_getContext()` 方法。这些已全部上提至 `CanvasHost`，`Renderer` 不再重复声明。
+`_canvas` / `_scheduler` / `viewport` 字段与 `invalidate()` / `invalidateViewport()` / `resize()` / `_getContext()` 方法由 `CanvasHost` 统一持有，`Renderer` 侧只声明自身绘制逻辑，不重复声明这些成员。
 
 ## 相关文档
 

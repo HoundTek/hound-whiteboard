@@ -495,3 +495,8 @@ graph BT
 ### 甲、乙依次取消选择
 
 **静态图**不变，**动态图**为空。
+
+## 相关文档
+
+- [层叠图文档](./tier-graph-document.md)
+- [活动对象管理器文档](./active-object-manager-document.md)

@@ -46,7 +46,7 @@ const OPERATION_EFFECT_KINDS = Object.freeze({
 });
 
 /**
- * 对象级操作类型：效果落在白板文档状态上，可被撤消操作抵消
+ * 对象级操作类型：效果落在白板文档状态上，可被撤销操作抵消
  * @type {Readonly<OperationType[]>}
  */
 const WHITEBOARD_OPERATION_TYPES = Object.freeze([
@@ -394,7 +394,7 @@ function createMoveHeadOperation(fields) {
 /**
  * 构造撤销操作记录
  * @param {Object} fields - 公共属性，同 _buildRecord 的 fields
- * @param {string} fields.targetNodeId - 撤消操作的目标节点 id（缺省为活动链末端，由调用方解析后记录）
+ * @param {string} fields.targetNodeId - 撤销操作的目标节点 id（缺省为活动链末端，由调用方解析后记录）
  * @param {string} fields.previousHeadId - 撤销前的 HEAD 位置（视图与可重做栈投影使用）
  * @returns {OperationRecord} 撤销操作记录
  */

@@ -118,16 +118,11 @@ renderer 最多只能发出一个受限意图，例如：
 
 ## 5. 与当前仓库的对应关系
 
-从仓库结构看，这份笔记和当前工程已经有明显对应点：
+Electron 时期的桥接入口（`src/preload-io.js`、`src/io-bridge-*.js`、`src/core/bridges/*`）已随 Tauri 2 迁移删除。现行对应位置：
 
-- `src/preload-io.js`
-- `src/io-bridge-common.js`
-- `src/io-bridge-main.js`
-- `src/core/bridges/file-operate-bridge-common.js`
-- `src/core/bridges/file-operate-bridge-main.js`
-- `src/core/bridges/file-operate-bridge-renderer.js`
-
-这说明项目已经在往“桥接能力收口”的方向设计。这里的安全约束，本质上是在为这条路线做原则补充。
+- `src/io/`：安全文件操作框架（core 路径 DSL 与权限策略、driver 契约、adapter 实现）
+- `src/host/bridges/io-invoke-forwarder.js`：Worker 内的文件操作转发到主线程 Tauri invoke
+- `src-tauri/src/commands/`：Rust 可信执行面（`safe_io_*` 命令族的注册与文件系统实现）
 
 可以把它落实为下面几条仓库级约束：
 

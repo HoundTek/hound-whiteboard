@@ -103,7 +103,7 @@ choice 是活动对象的命名分组维度：每个活动对象恰好属于一�
 | `clearBaseObjectSnapshots(objects)`                                           | 清理快照                                                             |
 | `registerActiveObject(obj)`                                                   | 将对象实例注册到活动索引                                             |
 | `unregisterTrackedActiveObject(objectId)`                                     | 从活动索引移除对象                                                   |
-| `findBoardObjectInstance(objectId)`                                             | 在 AOM 和 BoardCore 中查找对象实例                                   |
+| `findBoardObjectInstance(objectId)`                                           | 在 AOM 和 BoardCore 中查找对象实例                                   |
 | `getObjectWorldRange(obj)`                                                    | 获取对象世界坐标范围                                                 |
 | `calculateCoveredChunkIds(obj)`                                               | 计算对象覆盖区块集合                                                 |
 | `resolveObjectChunk(obj)`                                                     | 解析对象所在的起始区块                                               |
@@ -202,7 +202,8 @@ AOM 当前通过 `renderHooks` 发起渲染请求：
 2. 创建新的顶层活动层
 3. 调用 `requestActiveRender()`
 
-> ⚠️ 当前实现在此步骤也调用了 `requestStaticRenderForObjects()`，但由于对象此前从未进入静态图，base 层无对应像素需要隐藏，该调用是多余的。[todo] 移除。
+> [!NOTE]
+> 当前实现在此步骤也调用了 `requestStaticRenderForObjects()`，但由于对象此前从未进入静态图，base 层无对应像素需要隐藏，该调用是多余的。[todo] 移除。
 
 ### `pickup(startFrom)`
 

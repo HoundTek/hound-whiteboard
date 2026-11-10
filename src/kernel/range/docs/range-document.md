@@ -1,8 +1,8 @@
-# range 模块设计
+# range 模块文档
 
 本文档概述 `src/kernel/range/` 下范围类型的职责、关系和相交算法。
 
-## 术语约定
+## 术语定义
 
 - **点列**：范围按顺序展开后的二维点序列，`toPoints()` 的统一输出形式。
 - **边界线段**：由点列中相邻两点构成的线段；若范围闭合，还包括末点到首点的闭合线段。
@@ -103,3 +103,8 @@
 **`intersectsRangesByType` 集中管理特化。** 15 组无序组合的显式分派集中在 `intersections.js`，不通过 `index.js` 暴露。包围盒快速排除的共享实现放在 `bounds.js`。
 
 **单顶点探针。** `intersectsClosedRanges` 和 `intersectsPathWithArea` 中的点包含检测仅需测一个顶点：对于闭合形状，若完全在另一个形状内部，则所有顶点均在内部；对于路径，若全在面积内则所有顶点均在内部，若部分在内则必有边界穿越（由 `anySegmentIntersection` 覆盖）。因此将 O(L·R) 的 `anyPointContained` 替换为 O(R) 的单顶点 `containsPoint` 调用。
+
+## 相关文档
+
+- [核心模块](../../../docs/core-modules.md)
+- [基础对象类](../../objects/docs/basic-classes-document.md)

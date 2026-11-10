@@ -1,4 +1,4 @@
-# 键盘设备
+# 键盘设备文档
 
 ## 概述
 
@@ -151,9 +151,10 @@ import {
 import { SIGNAL_TYPES } from "../dag-core/signal-types.js";
 ```
 
-## ⚠️ 一个 Tool 实例只能挂载到一个节点
+## 一个 Tool 实例只能挂载到一个节点
 
-**不要将同一个 Tool 实例通过 `mountWorkflow` 挂载到多个不同的 DAG 节点上。**
+> [!WARNING]
+> 不要将同一个 Tool 实例通过 `mountWorkflow` 挂载到多个不同的 DAG 节点上。
 
 原因：
 

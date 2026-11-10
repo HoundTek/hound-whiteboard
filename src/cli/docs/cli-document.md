@@ -52,7 +52,7 @@ GUI 打开板时检测板目录 `.daemon.json`：有活 daemon 直接作为**协
 
 ## 命令寻址
 
-- **写命令**（add/delete/undo/redo/choose/unchoose/modify）：只能 `--daemon <name>` 寻址，给 `--path` 直接报错
+- **写命令**（add/delete/undo/redo/choose/unchoose/modify）：用 `--daemon <name>` 或 `--path <板目录>` 寻址；`--path` 形态先探测板目录持有 daemon，有则同走 RPC，无则自治直写自己分片
 - **读命令**（info/list/show/ops/tree/choices）：`--daemon <name>` 经 daemon 查询，或 `--path <板目录>` 直读板文件（不接 daemon），二选一且互斥
 - **create**：离线建板，只认 `--path`
 - `--daemon` 与 `--path` 同时给出时报错

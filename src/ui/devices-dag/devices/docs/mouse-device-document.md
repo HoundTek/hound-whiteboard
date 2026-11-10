@@ -1,4 +1,4 @@
-# 鼠标设备
+# 鼠标设备文档
 
 ## 概述
 
@@ -142,7 +142,7 @@ const BUTTON_MASKS = {
 import { createMouseDevice, DEVICE_DEFAULT_ROUTE } from "../devices/index.js";
 ```
 
-## ⚠️ 鼠标坐标参考系
+## 鼠标坐标参考系
 
 进入鼠标设备的 `position` 信号 `context.value` 应为 **canvas 相对坐标**（即 DOM 坐标减去 `canvas.getBoundingClientRect().left/top`）。
 

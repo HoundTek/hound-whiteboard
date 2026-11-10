@@ -103,6 +103,8 @@ yarn demo:web
 http://127.0.0.1:8000/demo/whiteboard.html?relay=ws://127.0.0.1:8377&source=Alice
 ```
 
+demo 侧工具配置与三条验证边界见 [demo-document.md](src/demo/config/docs/demo-document.md)。
+
 ### Tauri 应用窗口
 
 在 Tauri 应用窗口的开发者控制台中执行：
@@ -249,9 +251,13 @@ CI 流水线定义见 `.github/workflows/ci.yml`，推送到 `master` / `develop
 ## 文档
 
 - 核心架构文档（[src/docs/](src/docs/)）：[架构总览](src/docs/core-overview.md)、[核心模块](src/docs/core-modules.md)、[数据模型](src/docs/core-data-model.md)、[输入流](src/docs/core-input-flow.md)、[输入编码](src/docs/core-input-encoding.md)、[运行时边界](src/docs/core-runtime-boundaries.md)、[稳定接口](src/docs/core-stable-interfaces.md)、[文件结构](src/docs/file-structure.md)
+- 渲染：[视口渲染器](src/renderers/canvas/docs/viewport-renderer-document.md)、[视口核心](src/renderers/canvas/docs/viewport-core-document.md)、[渲染调度器](src/renderers/canvas/docs/render-scheduler-document.md)、[Canvas 生命周期](src/renderers/canvas/docs/canvas-lifecycle-document.md)
 - 协作同步：[src/host/sync/docs/sync-document.md](src/host/sync/docs/sync-document.md)
 - CLI：[src/cli/docs/cli-document.md](src/cli/docs/cli-document.md)
 - 模块文档：各核心模块的 `docs/` 目录下有 `*-document.md`（如 `src/kernel/board/docs/`、`src/ui/devices-dag/docs/`）
+- 模块索引：[kernel/utils](src/kernel/utils/docs/utils-document.md)、[utils](src/utils/utils-document.md)
+- 概念设计（尚无运行时代码）：[取景框](src/ui/frame/docs/frame-document.md)、[导引链](src/ui/frame/docs/guiding-chain-document.md)、[演示序列构想](dev/whiteboard-guided-navigation-and-presentation-mode.md)
+- 开发期文档：[dev/probes/README.md](dev/probes/README.md)（渲染诊断探针）、[安全边界存档](dev/electron-security-boundary-and-safe-io.md)（Electron 时期设计笔记）
 
 ## 许可
 

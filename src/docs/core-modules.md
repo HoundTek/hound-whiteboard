@@ -123,11 +123,17 @@ flowchart BT
 - `board-api-rpc.js`：UI 侧 RPC 客户端（`rpc` / `rpc-batch` / `rpc-response`）
 - `io-invoke-forwarder.js`：worker 内驱动的文件操作转发到主线程 Tauri invoke
 
+### `host/debug-helper.js`
+
+- Worker 侧调试辅助：处理 UI 侧的 `debug-request` 消息，把 Worker 内部状态（图结构、运行时快照）输出到控制台
+
 ### `host/sync/`
 
 - `network-coordinator.js`：BoardApi 的同步宿主薄包装——本地操作经中继广播，远程记录经延迟容忍窗接入 `applyRemoteOperations`；周期 digest（`{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`）比对、openMols 对账，chainHash 分歧请求全量重建，stateHash 分歧（仅两端全量驻留时可比）经 `repairStateFromLog` 自愈
 - `relay-server.js`：按板房间组织的 WebSocket 无状态中继（成员管理、消息转发、INIT 定向），不缓存任何记录
 - `amend-forwarder.js`：订阅内核分子生命周期 amend 事件，begin/end/abort 即时转发，中间帧节流合批后经协调器 volatile 通道广播
+- `remote-record-ingestor.js`：为各同步通道提供共享的记录去重、依赖预检、乱序缓冲与权威日志水位驱动接入
+- `remote-activity-channels.js`：按 BoardCore 与连接通道跟踪远程活动来源，最后一个通道离开时清理对应来源的活动锁
 - `start-relay.js`：中继启动入口（`node src/host/sync/start-relay.js [端口]`）
 
 ## `io/`
@@ -160,7 +166,7 @@ flowchart BT
 ### `renderers/canvas/`
 
 - `viewport-core.js`：Worker 侧视口状态、区块缓冲、渲染帧输出
-- `renderer.js`：`BaseRenderer` 基类
+- `renderer.js`：`Renderer` 基类（继承 `CanvasHost`）
 - `object-draw-strategies.js`：对象类型到 Canvas2D 绘制策略的注册表
 - `canvas-lifecycle.js`：Canvas 生命周期管理
 - `render-scheduler.js`：渲染调度器
@@ -168,7 +174,7 @@ flowchart BT
 - `viewport-renderer.js`：Worker 侧视口渲染器
 - `aom-collect-utils.js`：AOM 渲染收集辅助
 
-`ViewportRenderer` 建立在 `renderers/canvas/` 的 `BaseRenderer` 基类之上，在单类内管理静态缓存与输出合成。
+`ViewportRenderer` 建立在 `renderers/canvas/` 的 `Renderer` 基类之上，在单类内管理静态缓存与输出合成。
 
 ### `kernel/hit/`
 
@@ -201,6 +207,8 @@ flowchart BT
 
 - `range.js`、`rectangle.js`、`ellipse.js`、`polygon.js`、`path.js`、`rope.js`
 - `bounds.js`、`geometry.js`、`intersections.js`、`conversion.js`、`segment-math.js`
+
+详见 [../kernel/range/docs/range-document.md](../kernel/range/docs/range-document.md)。
 
 ### `kernel/types/`
 

@@ -1,4 +1,4 @@
-# 工具基类
+# 工具基类文档
 
 ## 概述
 
@@ -62,7 +62,7 @@ Tool 提供一组围绕节点 `state` 的 objects 投影工具：
 - `setContextObjects(deviceContext, objects)` — 将对象集合发布为 `state.objects` 投影
 - `clearContextObjects(deviceContext)` — 清除 `state.objects` 投影
 - `resolveContextObjects(deviceContext)` — 读取 `state.objects` 投影（仅供观察 / 测试）
-- `resolveObjectId(objectEntry)` — 从对象条目提取数字 id
+- `resolveObjectId(objectEntry)` — 从对象条目提取字符串 id（`{source}/{n}`），非法条目返回 `null`
 - `resolveObjectIds(deviceContext, objects)` — 批量提取去重 id 列表
 - `resolveNodeState(deviceContext, statePath)`
 - `writeNodeState(deviceContext, nextState, statePath)`
@@ -73,17 +73,17 @@ Tool 提供一组围绕节点 `state` 的 objects 投影工具：
 - 对象集合的真相源是各工具的实例字段（chooser `_selectedObjects`、modifier `_overlayModifiedObjects`、creator `_entry`）
 - 工具逻辑禁止从投影读回当真相源用；`resolveContextObjects` 仅供观察方与测试读取
 
-## 默认链路继续
+## 默认后继的转发
 
-`continueToDefaultPath(signalPacket, deviceContext)` 会在满足以下条件时返回一个新的相对转发包：
+Tool 本身不转发信号（见「职责边界」）。需要“先消费一部分信号、再把同一包交给默认后继”的节点由 prefix / handler 承担：
 
-- 当前节点声明了 `defaultRoute`
-- 已经解析出 `resolvedDefaultRoutePath`
-- 对应子节点真实存在
+```js
+return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
+```
 
-如果条件不满足，则返回 `undefined`。
+`ctx.routeToChild(to, signals?)` 是向下转发信号的唯一规范方式，不传 `signals` 时复用当前 `signalPacket.signals`；详见 [handler 上下文用法](../../docs/handler-context-document.md#ctxroutetochildto-signals)。
 
-它适合那种“工具先消费一部分信号，再把同一包继续交给默认后继节点”的局部链路。
+Tool 侧没有对应方法：工具消费完信号即结束，不持有子节点路由表。
 
 ## 与 prefix 的边界
 

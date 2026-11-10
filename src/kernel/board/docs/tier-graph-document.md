@@ -137,4 +137,10 @@ $$
 
 将指定对象集 $\mathbb{A}$ 中各对象从 $\mathbf{D}$ 中其当前所在的活动层移除，执行动态图清理，再为 $\mathbb{A}$ 中各对象按其原有层间关系在 $\mathbf{D}$ 中创建新层并置于顶部。
 
-其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“置顶”一节。
+其实现状态：[todo] 动态图语义定义如上，`ActiveObjectManager` 尚无对应方法（当前无「置顶」入口）。
+
+## 相关文档
+
+- [层叠图的逐步推演](./tier-graph-example.md)
+- [活动对象管理器](./active-object-manager-document.md)
+- [BoardCore](./board-core-document.md)

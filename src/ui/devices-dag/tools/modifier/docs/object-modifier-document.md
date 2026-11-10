@@ -260,12 +260,11 @@ wrapper 不修改 modifier 的 node state。
 
 ## `applyModifiedObjects()`
 
-`success` 信号最终会触发：
+`success` 信号经 `applyModifiedObjects(context, objects)` 进入 `GestureTool` 生命周期：
 
-1. `resolveActiveModifiedObjects()`
-2. `beforeApplyModifiedObjects()`
-3. `boardApi.commitObjects(objectIds)`
-4. `afterApplyModifiedObjects()`
+1. `beforeAction()`：`resolveActionObjects()` 取提交集合（内部回退到 `resolveActiveModifiedObjects()`）→ `beforeApplyModifiedObjects()` 可否决 → 取 `services.boardApi`
+2. `performAction()`：`boardApi.commitObjects(objectIds, { supraKey: context?.services?.supraKey })`，随后清空 `_overlayModifiedObjects` 与 node state 投影，按 `autoUmountOnApply` 决定是否 `unmount`
+3. `afterAction()`：`afterApplyModifiedObjects(context, objects, result)`
 
 ## 当前状态
 

@@ -76,7 +76,7 @@ Worker 不解析 DOM 事件，也不持有 DevicesDAG。
 
 尤其要注意：
 
-- 共享的渲染基类位于 `renderers/canvas/`（`BaseRenderer`、`RenderScheduler`）
+- 共享的渲染基类位于 `renderers/canvas/`（`Renderer`、`RenderScheduler`）
 - Worker 专用渲染器也位于 `renderers/canvas/`（`ViewportRenderer`）
 - 对象与 range 在 `kernel/objects/` 和 `kernel/range/` 下
 

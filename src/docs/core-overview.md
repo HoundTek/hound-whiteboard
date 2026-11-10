@@ -1,6 +1,6 @@
 # HoundWhiteboard Core 总览
 
-本文档提供 `src/kernel/` + `src/ui/` + `src/host/bridges/` 当前实现的总览，重点说明 UI 线程、Worker 线程与 engine 核心层如何协作。
+本文档提供 `src/kernel/` + `src/ui/` + `src/host/bridges/` 当前实现的总览，重点说明 UI 线程、Worker 线程与 kernel 核心层如何协作。
 
 更细的路径级边界见 [core-runtime-boundaries.md](./core-runtime-boundaries.md)。
 
@@ -170,7 +170,7 @@ sequenceDiagram
 - 持久化已接通：demo 以 `~/hound-whiteboard/demo-board` 为板目录运行，撤销历史穿越重开
 - CLI 前端已接通：写命令经持板 daemon 执行（`src/cli/`），读命令可直读板文件；本机所有权模型为「一个板文件夹一个持板 daemon，CLI/TUI/MCP/GUI 均为其客户端」——GUI 打开板时只读挂载并经协作通道直连 daemon（零写盘），无 daemon 时由宿主 spawn（引用计数 hold/release 管理生命周期）；relay 只承载跨机协作，多 CLI 并发安全（详见 cli-document.md daemon 章节）
 
-## 关键术语
+## 术语定义
 
 - **SignalPacket**：输入系统里的标准信号包，形如 `{ to, signals }`
 - **静态图**：区块内稳定层叠关系，保存在 `ChunkObjectManager.staticGraph`

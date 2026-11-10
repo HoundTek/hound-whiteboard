@@ -14,14 +14,14 @@
 
 ## 核心字段
 
-| 名称                                                 | 描述                                       | 类型                              |
-| ---------------------------------------------------- | ------------------------------------------ | --------------------------------- |
-| `id`                                                 | 区块唯一标识                               | `number`                          |
-| `x` / `y`                                            | 区块二维坐标                               | `number`                          |
-| `board`                                              | 所属白板引用，当前主路径通常是 `BoardCore` | `BoardCore \| Board \| undefined` |
-| `objectManager`                                      | 区块对象管理器                             | `ChunkObjectManager \| undefined` |
-| `isLoad`                                             | 当前是否已加载                             | `boolean`                         |
-| `isTempLoad`                                         | 当前是否处于临时加载状态                   | `boolean`                         |
+| 名称            | 描述                                       | 类型                              |
+| --------------- | ------------------------------------------ | --------------------------------- |
+| `id`            | 区块唯一标识                               | `number`                          |
+| `x` / `y`       | 区块二维坐标                               | `number`                          |
+| `board`         | 所属白板引用，当前主路径通常是 `BoardCore` | `BoardCore \| Board \| undefined` |
+| `objectManager` | 区块对象管理器                             | `ChunkObjectManager \| undefined` |
+| `isLoad`        | 当前是否已加载                             | `boolean`                         |
+| `isTempLoad`    | 当前是否处于临时加载状态                   | `boolean`                         |
 
 ## 区块 id 与坐标
 

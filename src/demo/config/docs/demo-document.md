@@ -220,3 +220,10 @@ demo 固定以 Worker 模式运行（`board.enableWorkerMode(worker)`），右�
 - 各工具（笔画、圆、选择-handoff）作为 wrapper 内部槽位由 `ToolSwitcherWrapper` 托管，不再单独挂载
 - Enter/Escape 同时发往 keyboard device（供右键 handoff）和 tool-switcher（供左键选择工具），
   实现全局 modifier 确认/取消
+
+## 相关文档
+
+- [Core 输入流](../../../docs/core-input-flow.md)
+- [设备图](../../../ui/devices-dag/docs/devices-dag-document.md)
+- [多工具并发包装器](../../../ui/devices-dag/tools/wrapper/docs/multi-tool-wrapper-document.md)
+- [同步层](../../../host/sync/docs/sync-document.md)
