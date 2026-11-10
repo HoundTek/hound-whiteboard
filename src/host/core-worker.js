@@ -552,22 +552,25 @@ class CoreWorkerRuntime {
     }
   }
 
-/**
- * 创建 Worker 侧 BoardCore
- * @param {{ width?: number, height?: number, rootPath?: string, source?: string }} [options={}] - Board 初始化选项
- * @returns {Promise<{ ok: boolean }>} 创建结果
- *
- * @description
- * rootPath 有效时进入持久化协作模式：可写挂载板目录（GUI 落自己的日志流与活动对象文件，
- * board.json 由 daemon 单写），探测或拉起板 daemon 后经协作通道双向同步；既有板从会话存储恢复（树、对象、trash、层叠图、计数器）。
- */
+  /**
+   * 创建 Worker 侧 BoardCore
+   * @param {{ width?: number, height?: number, rootPath?: string, source?: string }} [options={}] - Board 初始化选项
+   * @returns {Promise<{ ok: boolean }>} 创建结果
+   *
+   * @description
+   * rootPath 有效时进入持久化协作模式：可写挂载板目录（GUI 落自己的日志流与活动对象文件，
+   * board.json 由 daemon 单写），探测或拉起板 daemon 后经协作通道双向同步；既有板从会话存储恢复（树、对象、trash、层叠图、计数器）。
+   */
   async createBoard(options = {}) {
     if (this.#boardCore) {
       throw new Error("BoardCore already created.");
     }
 
     this.#boardGeneration += 1;
-    this.#boardSize = { width: options.width ?? 0, height: options.height ?? 0 };
+    this.#boardSize = {
+      width: options.width ?? 0,
+      height: options.height ?? 0,
+    };
     const persistence = await this.#setupPersistence(options.rootPath);
 
     // 盘上板配置优先：板尺寸是文档数据（决定区块划分），重开必须与原值一致
@@ -939,7 +942,9 @@ class CoreWorkerRuntime {
         if (typeof data.molId !== "string") return;
         this.#molPreviewStates.set(data.molId, { seq: Infinity, closed: true });
         if (this.#molPreviewStates.size > 1000) {
-          this.#molPreviewStates.delete(this.#molPreviewStates.keys().next().value);
+          this.#molPreviewStates.delete(
+            this.#molPreviewStates.keys().next().value,
+          );
         }
         changed = this.#dropMolPreview(data.molId);
         break;
@@ -1119,7 +1124,9 @@ class CoreWorkerRuntime {
       this.#log.warn(`板 daemon 拉起失败：${error?.message ?? error}`);
     }
     if (daemon === null) {
-      this.#log.warn(`板 daemon 暂不可用，按单机模式开板（盘即兜底）：${rootPath}`);
+      this.#log.warn(
+        `板 daemon 暂不可用，按单机模式开板（盘即兜底）：${rootPath}`,
+      );
     }
     return {
       adapter: createPersistenceAdapter({ driver, rootId }),
@@ -1344,6 +1351,7 @@ class CoreWorkerRuntime {
       onFrameDirty: () => {
         this.#postMessage({ type: "render-dirty", viewportId });
       },
+      tiles: true,
     });
 
     this.#viewportCores.set(viewportKey, viewportCore);
