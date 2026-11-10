@@ -153,6 +153,7 @@ class ViewportCore {
       {
         canvas: new OffscreenCanvas(this.#width, this.#height),
         tiles: options.tiles,
+        tileSize: options.tileSize,
       },
     );
   }

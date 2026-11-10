@@ -1110,8 +1110,10 @@ describe("ViewportRenderer", () => {
         outputCanvas,
         withWorldRect: true,
       });
+      // 固定 tile 边长，让网格算术与视口尺寸解耦（自适应策略由独立用例覆盖）
       const renderer = new ViewportRenderer(viewport, aom, {
         canvas: outputCanvas,
+        tileSize: 512,
       });
       renderer._scheduler.scheduleFrame = () => 0;
       const cacheCtx = createContext("cache", ctxCalls);
@@ -1130,6 +1132,49 @@ describe("ViewportRenderer", () => {
         initialOutputCalls,
       };
     }
+
+    test("tile 边长按视口尺寸自适应，控制在 4 至 6 块", () => {
+      /**
+       * 建一个指定视口尺寸的渲染器
+       * @param {number} width - 视口宽
+       * @param {number} height - 视口高
+       * @returns {{
+       *   tileSize: number,
+       *   tileCount: number,
+       * }} tile 边长与块数
+       */
+      const inspect = (width, height) => {
+        const outputCanvas = createCanvas(
+          width,
+          height,
+          createContext("probe", []),
+        );
+        const { viewport, aom } = createViewportContext({
+          staticObjects: [],
+          outputCanvas,
+          withWorldRect: true,
+          viewportSize: { width, height },
+        });
+        const renderer = new ViewportRenderer(viewport, aom, {
+          canvas: outputCanvas,
+        });
+        renderer._scheduler.scheduleFrame = () => 0;
+        renderer.flush();
+        return {
+          tileSize: renderer.getTileDebugInfo().tileSize,
+          tileCount: renderer.getTileDebugInfo().tileCount,
+        };
+      };
+
+      // 900x700 用 512 会切出 12 块，合成成本是经典路径的 2.3 倍；1024 只切 4 到 6 块
+      const medium = inspect(900, 700);
+      expect(medium.tileSize).toBe(1024);
+      expect(medium.tileCount).toBeLessThanOrEqual(6);
+      // 小视口回落到默认边长
+      expect(inspect(400, 300).tileSize).toBe(512);
+      // 大视口封顶，避免单块位图过大
+      expect(inspect(1400, 1100).tileSize).toBe(2048);
+    });
 
     test("首次 flush 重建覆盖范围内的 tile 并合成可见 tile", () => {
       const { renderer, initialOutputCalls } = createTileScenario([

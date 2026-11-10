@@ -19,7 +19,7 @@ import { ActiveObjectManager } from "../../kernel/board/active-object-manager.js
 import { collectActiveDrawables as _collectActiveDrawables } from "./aom-collect-utils.js";
 import { OBJECT_DRAW_STRATEGIES } from "./object-draw-strategies.js";
 import { RenderScheduler, createRectangleDirtyRectMerger } from "./render-scheduler.js";
-import { TileStore } from "./tile-cache.js";
+import { TileStore, DEFAULT_TILE_SIZE } from "./tile-cache.js";
 import { normalizeCanvasSize } from "./canvas-lifecycle.js";
 import {
   createBaseDirtyRectThresholdStrategy,
@@ -49,6 +49,29 @@ const TILE_CACHE_MARGIN_RATIO = 0.25;
  * @description 保留范围大于覆盖范围，避免在缓存边界往返平移时反复分配位图。
  */
 const TILE_EVICT_MARGIN_RATIO = 0.5;
+
+/**
+ * tile 边长的上限
+ * @description 单块位图过大时整块重建代价过高，也失去分块的意义。
+ */
+const TILE_MAX_SIZE = 2048;
+
+/**
+ * 按视口尺寸推导 tile 边长
+ * @description
+ * tile 合成的成本主要由 tile 块数决定（每块位图需要独立搬运），而非光栅化面积。
+ * 目标是把视口内的可见 tile 控制在 4 至 6 块。实测 900x700 视口下：
+ * 边长 512 时 12 块，提交耗时是经典路径的 2.3 倍；边长 1024 时 6 块，反超经典路径。
+ * @param {number} width - 画布宽
+ * @param {number} height - 画布高
+ * @returns {number} tile 边长
+ */
+function resolveTileSize(width, height) {
+  const maxSide = Math.max(width ?? 0, height ?? 0);
+  if (!(maxSide > 0)) return DEFAULT_TILE_SIZE;
+  const power = 2 ** Math.ceil(Math.log2(maxSide));
+  return Math.min(TILE_MAX_SIZE, Math.max(DEFAULT_TILE_SIZE, power));
+}
 
 /**
  * 视口渲染器
@@ -165,7 +188,11 @@ class ViewportRenderer extends Renderer {
     const height = outputCanvas?.height ?? 0;
 
     this.#cache = new OffscreenCanvas(width, height);
-    this.#tileStore = new TileStore({ tileSize: options.tileSize });
+    this.#tileStore = new TileStore({
+      tileSize:
+        options.tileSize ??
+        resolveTileSize(this._canvas?.width, this._canvas?.height),
+    });
     this.#tilesEnabled = options.tiles !== false;
 
     this.#resolveOutputThresholds = createLiveDirtyRectThresholdStrategy();
@@ -231,6 +258,14 @@ class ViewportRenderer extends Renderer {
       // 尺寸赋值会重置画布内容，缓存自此不再可信
       cacheCanvas.width = nextWidth;
       cacheCanvas.height = nextHeight;
+      this.#cacheDirty = true;
+      resized = true;
+    }
+
+    // tile 边长随视口尺寸重新推导：块数变了就必须重建 tile 存储
+    const nextTileSize = resolveTileSize(nextWidth, nextHeight);
+    if (nextTileSize !== this.#tileStore.tileSize) {
+      this.#tileStore = new TileStore({ tileSize: nextTileSize });
       this.#cacheDirty = true;
       resized = true;
     }
@@ -991,11 +1026,12 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 读取 tile 缓存调试信息
-   * @returns {{ enabled: boolean, tileCount: number, dirtyCount: number, rebuildCount: number }}
+   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number }}
    */
   getTileDebugInfo() {
     return {
       enabled: this.#useTiles(),
+      tileSize: this.#tileStore.tileSize,
       tileCount: this.#tileStore.size,
       dirtyCount: this.#tileStore.countDirty(),
       rebuildCount: this.#tileStore.rebuildCount,
