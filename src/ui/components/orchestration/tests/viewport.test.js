@@ -122,6 +122,48 @@ function installMockAnimationFrame() {
 }
 
 describe("Viewport (constructor unit)", () => {
+  test("位图按设备像素分配时视口几何仍取 CSS 像素", () => {
+    const worker = new FakeWorkerEndpoint();
+    const canvas = createNoopCanvas();
+    const uiCanvas = createNoopCanvas();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi() {
+        return null;
+      },
+    };
+
+    const viewport = new Viewport(
+      { rootElement: {}, canvas, uiCanvas, worker },
+      board,
+      { width: 800, height: 600 },
+      "main",
+    );
+
+    // 高 DPR：位图是 CSS 尺寸的两倍
+    canvas.width = 1600;
+    canvas.height = 1200;
+
+    // 几何计算必须留在 CSS 空间，否则区块解析与指针映射会整体错位
+    expect({ width: viewport.width, height: viewport.height }).toEqual({
+      width: 800,
+      height: 600,
+    });
+    expect({
+      width: viewport.getViewportScreenRect().width,
+      height: viewport.getViewportScreenRect().height,
+    }).toEqual({ width: 800, height: 600 });
+    // 位图尺寸单独可读，供像素缓冲相关代码使用
+    expect({ w: viewport.deviceWidth, h: viewport.deviceHeight }).toEqual({
+      w: 1600,
+      h: 1200,
+    });
+
+    viewport.destroy();
+  });
+
   test("startWorkerSync 应发送初始 viewport-change 消息", () => {
     const { flushNextFrame, restore } = installMockAnimationFrame();
     const worker = new FakeWorkerEndpoint();
@@ -158,12 +200,64 @@ describe("Viewport (constructor unit)", () => {
         origin: { x: 0, y: 0 },
         zoom: 1,
         viewportSize: { width: 800, height: 600 },
+        // node 环境没有 devicePixelRatio，倍率归一化为 1
+        devicePixelRatio: 1,
         force: true,
       });
 
       viewport.destroy();
     } finally {
       restore();
+    }
+  });
+
+  test("高 DPR 下位图放大而指针映射与几何保持 CSS 坐标", () => {
+    const previousRatio = globalThis.devicePixelRatio;
+    globalThis.devicePixelRatio = 2;
+    const worker = new FakeWorkerEndpoint();
+    const canvas = createNoopCanvas();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi() {
+        return null;
+      },
+    };
+
+    try {
+      const viewport = new Viewport(
+        {
+          rootElement: {},
+          canvas,
+          uiCanvas: createNoopCanvas(),
+          worker,
+        },
+        board,
+        { width: 800, height: 600 },
+        "main",
+      );
+
+      // 位图按倍率分配，画布 CSS 布局仍由样式控制为 800×600
+      expect({ w: canvas.width, h: canvas.height }).toEqual({
+        w: 1600,
+        h: 1200,
+      });
+      expect({ w: viewport.width, h: viewport.height }).toEqual({
+        w: 800,
+        h: 600,
+      });
+
+      // 同一 CSS 屏幕点在 DPR=2 下必须落到同一个世界坐标
+      viewport.setViewportState({ origin: new Vector(10, 20), zoom: 2 });
+      const world = viewport.screenPointToWorld(new Vector(120, 90));
+      expect(world.x).toBeCloseTo(10 + 120 / 2, 6);
+      expect(world.y).toBeCloseTo(20 + 90 / 2, 6);
+
+      viewport.destroy();
+    } finally {
+      if (previousRatio === undefined) delete globalThis.devicePixelRatio;
+      else globalThis.devicePixelRatio = previousRatio;
     }
   });
 
@@ -304,7 +398,14 @@ describe("Viewport (constructor unit)", () => {
       });
 
       expect(context.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
-      expect(context.drawImage).toHaveBeenCalledWith(liveBitmap, 0, 0);
+      // 显式目标尺寸：位图与画布倍率不一致时也不会错位
+      expect(context.drawImage).toHaveBeenCalledWith(
+        liveBitmap,
+        0,
+        0,
+        800,
+        600,
+      );
       expect(liveBitmap.closed).toBe(true);
       expect(invalidateViewportSpy).toHaveBeenCalledTimes(1);
 

@@ -1589,6 +1589,10 @@ class CoreWorkerRuntime {
       return;
     }
 
+    // 倍率可能在会话中变化（跨屏拖动），先同步再按新倍率 resize
+    if (Number.isFinite(message?.devicePixelRatio)) {
+      viewportCore.setDevicePixelRatio?.(message.devicePixelRatio);
+    }
     viewportCore.onViewportChange({
       origin: message?.origin,
       zoom: message?.zoom,

@@ -312,19 +312,52 @@ class Viewport {
   }
 
   /**
-   * 当前视口画布宽度
+   * 设备像素倍率
+   * @description
+   * 显示层位图按该倍率分配，绘制与几何坐标仍是 CSS 像素。
+   * 限制在 [1, 8]，避免异常 DPR 分配出超大位图。
    * @type {number}
    */
-  get width() {
-    return this.canvas?.width ?? this.#width ?? 0;
+  get devicePixelRatio() {
+    const ratio = globalThis.devicePixelRatio;
+    if (!Number.isFinite(ratio) || ratio <= 0) return 1;
+    return Math.min(8, Math.max(1, ratio));
   }
 
   /**
-   * 当前视口画布高度
+   * 当前视口宽度（CSS 像素）
+   * @description
+   * 视口几何一律以 CSS 像素为准：屏幕矩形、世界矩形、指针映射与 worker 同步都用它。
+   * 位图尺寸（设备像素）另见 deviceWidth，高 DPR 下两者不相等。
+   * @type {number}
+   */
+  get width() {
+    return this.#width;
+  }
+
+  /**
+   * 当前视口高度（CSS 像素）
    * @type {number}
    */
   get height() {
-    return this.canvas?.height ?? this.#height ?? 0;
+    return this.#height;
+  }
+
+  /**
+   * 当前视口位图宽度（设备像素）
+   * @description 只在真正碰像素缓冲（分配、清屏、拷贝）时使用，几何计算不得取它。
+   * @type {number}
+   */
+  get deviceWidth() {
+    return this.canvas?.width ?? this.#width;
+  }
+
+  /**
+   * 当前视口位图高度（设备像素）
+   * @type {number}
+   */
+  get deviceHeight() {
+    return this.canvas?.height ?? this.#height;
   }
 
   /**
@@ -498,8 +531,15 @@ class Viewport {
     this.#height = nextHeight;
 
     let resized = false;
+    // 显示层位图按设备像素分配，避免浏览器把整块画布放大导致笔画发虚；
+    // ui 覆盖层保持 CSS 尺寸（只画叠加线条，放大代价可接受）
+    const deviceScale = this.devicePixelRatio;
     resized =
-      this.#resizeCanvas(this.#canvas, nextWidth, nextHeight) || resized;
+      this.#resizeCanvas(
+        this.#canvas,
+        Math.max(1, Math.round(nextWidth * deviceScale)),
+        Math.max(1, Math.round(nextHeight * deviceScale)),
+      ) || resized;
     resized = this.uiRenderer?.resize(nextWidth, nextHeight) || resized;
 
     if (resized) {
@@ -684,8 +724,10 @@ class Viewport {
     const { liveBitmap } = frameData ?? {};
 
     if (liveBitmap && this.#canvasCtx) {
-      this.#canvasCtx.clearRect(0, 0, this.width, this.height);
-      this.#canvasCtx.drawImage(liveBitmap, 0, 0);
+      const canvas = this.#canvas;
+      this.#canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+      // 显式给出目标尺寸：位图与画布的设备倍率不一致时也不会错位
+      this.#canvasCtx.drawImage(liveBitmap, 0, 0, canvas.width, canvas.height);
       liveBitmap.close();
     }
 
@@ -710,7 +752,12 @@ class Viewport {
 
     this.#worker.removeEventListener("message", this.#workerMessageListener);
     this.#awarenessListeners.clear();
-    this.#canvasCtx?.clearRect(0, 0, this.width, this.height);
+    this.#canvasCtx?.clearRect(
+      0,
+      0,
+      this.deviceWidth,
+      this.deviceHeight,
+    );
   }
 
   /**
@@ -830,6 +877,8 @@ class Viewport {
           width: this.width,
           height: this.height,
         };
+        // worker 侧拿不到显示环境倍率，必须由 UI 告知
+        payload.devicePixelRatio = this.devicePixelRatio;
       }
       if (this.#pendingViewportForce) {
         payload.force = true;

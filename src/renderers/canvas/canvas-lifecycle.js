@@ -22,6 +22,17 @@ function normalizeCanvasSize(size) {
 }
 
 /**
+ * 归一化设备像素倍率
+ * @description 限制在 [1, 8] 内，避免异常 DPR 分配出超大位图。
+ * @param {number} [ratio] - 原始倍率
+ * @returns {number} 可用的倍率
+ */
+function normalizeDeviceScale(ratio) {
+  if (!Number.isFinite(ratio) || ratio <= 0) return 1;
+  return Math.min(8, Math.max(1, ratio));
+}
+
+/**
  * 画布生命周期管理器
  * @description
  * 封装渲染器所需的画布引用持有、尺寸变更、失效请求与调度器生命周期的通用逻辑。
@@ -51,12 +62,24 @@ class CanvasHost {
   _scheduler;
 
   /**
+   * 位图像素相对 CSS 像素的倍率
+   * @description
+   * 高分屏下位图尺寸应为 CSS 尺寸的 DPR 倍，否则浏览器会把整块画布放大，
+   * 笔画边缘发虚、细节丢失。所有绘制坐标仍以 CSS 像素表达，
+   * 由上下文上的 `setTransform` 统一乘上本倍率。
+   * @type {number}
+   * @protected
+   */
+  _deviceScale;
+
+  /**
    * @param {import("../../kernel/types/types.js").ViewportLike} viewport - 目标视口
    * @param {{ canvas?: HTMLCanvasElement | null }} [options={}] - 初始化选项
    */
   constructor(viewport, options = {}) {
     this.viewport = viewport;
     this._canvas = options.canvas ?? null;
+    this._deviceScale = normalizeDeviceScale(options.devicePixelRatio);
     this._scheduler = null;
   }
 
@@ -120,14 +143,37 @@ class CanvasHost {
   resize(width, height) {
     const canvas = this._canvas;
     if (!canvas) return false;
-    const nextWidth = normalizeCanvasSize(width);
-    const nextHeight = normalizeCanvasSize(height);
+    // 入参是 CSS 尺寸，位图按设备倍率放大；尺寸未变时返回 false 以免重置画布内容
+    const nextWidth = normalizeCanvasSize(
+      normalizeCanvasSize(width) * this._deviceScale,
+    );
+    const nextHeight = normalizeCanvasSize(
+      normalizeCanvasSize(height) * this._deviceScale,
+    );
     if (canvas.width === nextWidth && canvas.height === nextHeight)
       return false;
     canvas.width = nextWidth;
     canvas.height = nextHeight;
     return true;
   }
+
+  /**
+   * 设置设备像素倍率
+   * @description 倍率变化后需再调一次 resize 才会按新倍率换算位图尺寸。
+   * @param {number} devicePixelRatio - 新倍率
+   * @returns {void}
+   */
+  setDevicePixelRatio(devicePixelRatio) {
+    this._deviceScale = normalizeDeviceScale(devicePixelRatio);
+  }
+
+  /**
+   * 当前设备像素倍率
+   * @type {number}
+   */
+  get deviceScale() {
+    return this._deviceScale;
+  }
 }
 
-export { CanvasHost, normalizeCanvasSize };
+export { CanvasHost, normalizeCanvasSize, normalizeDeviceScale };

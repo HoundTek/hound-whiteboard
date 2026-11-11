@@ -245,6 +245,7 @@ class ViewportRenderer extends Renderer {
       tileSize:
         options.tileSize ??
         resolveTileSize(this._canvas?.width, this._canvas?.height),
+      deviceScale: this._deviceScale,
     });
     this.#tilesEnabled = options.tiles !== false;
 
@@ -312,21 +313,31 @@ class ViewportRenderer extends Renderer {
     }
 
     const cacheCanvas = this.#cache;
+    // 缓存画布与输出位图同一坐标空间（设备像素），才能在 1:1 拷贝下不失真
+    const nextDeviceWidth = normalizeCanvasSize(nextWidth * this._deviceScale);
+    const nextDeviceHeight = normalizeCanvasSize(nextHeight * this._deviceScale);
     if (
       cacheCanvas &&
-      (cacheCanvas.width !== nextWidth || cacheCanvas.height !== nextHeight)
+      (cacheCanvas.width !== nextDeviceWidth ||
+        cacheCanvas.height !== nextDeviceHeight)
     ) {
       // 尺寸赋值会重置画布内容，缓存自此不再可信
-      cacheCanvas.width = nextWidth;
-      cacheCanvas.height = nextHeight;
+      cacheCanvas.width = nextDeviceWidth;
+      cacheCanvas.height = nextDeviceHeight;
       this.#cacheDirty = true;
       resized = true;
     }
 
     // tile 边长随视口尺寸重新推导：块数变了就必须重建 tile 存储
     const nextTileSize = resolveTileSize(nextWidth, nextHeight);
-    if (nextTileSize !== this.#tileStore.tileSize) {
-      this.#tileStore = new TileStore({ tileSize: nextTileSize });
+    if (
+      nextTileSize !== this.#tileStore.tileSize ||
+      this.#tileStore.deviceScale !== this._deviceScale
+    ) {
+      this.#tileStore = new TileStore({
+        tileSize: nextTileSize,
+        deviceScale: this._deviceScale,
+      });
       this.#cacheDirty = true;
       resized = true;
     }
@@ -752,6 +763,7 @@ class ViewportRenderer extends Renderer {
     if (cacheCanvas.width === 0 || cacheCanvas.height === 0) return;
 
     ctx.save();
+    // 缓存与输出同尺寸同坐标空间，纯位图搬运不叠任何变换
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     draw(ctx, cacheCanvas);
     ctx.restore();
@@ -778,18 +790,24 @@ class ViewportRenderer extends Renderer {
   #copyCacheRects(ctx, rects) {
     if (!Array.isArray(rects)) return;
     this.#withCacheCopyContext(ctx, (targetCtx, cacheCanvas) => {
+      const scale = this._deviceScale ?? 1;
       for (const rect of rects) {
         if (!(rect instanceof RectangleRange)) continue;
+        // 源与目标都在设备像素空间
+        const left = Math.round(rect.left * scale);
+        const top = Math.round(rect.top * scale);
+        const width = Math.round(rect.width * scale);
+        const height = Math.round(rect.height * scale);
         targetCtx.drawImage(
           cacheCanvas,
-          rect.left,
-          rect.top,
-          rect.width,
-          rect.height,
-          rect.left,
-          rect.top,
-          rect.width,
-          rect.height,
+          left,
+          top,
+          width,
+          height,
+          left,
+          top,
+          width,
+          height,
         );
       }
     });
@@ -969,6 +987,8 @@ class ViewportRenderer extends Renderer {
     const snapshotWidth = preview.snapshot?.width ?? 0;
     const snapshotHeight = preview.snapshot?.height ?? 0;
 
+    // 快照与输出都是设备像素位图，拉伸量按设备倍率换算
+    const deviceScale = this._deviceScale ?? 1;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.clear();
@@ -976,8 +996,8 @@ class ViewportRenderer extends Renderer {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(
         preview.snapshot,
-        offsetX,
-        offsetY,
+        offsetX * deviceScale,
+        offsetY * deviceScale,
         snapshotWidth * scale,
         snapshotHeight * scale,
       );
@@ -1227,9 +1247,11 @@ class ViewportRenderer extends Renderer {
       ? dirtyRects
       : [this._getViewportRect() ?? null];
 
+    // tile 位图与输出位图都在设备像素空间，坐标统一乘倍率后 1:1 搬运
+    const deviceScale = this._deviceScale ?? 1;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const limitSize = Math.round(tileSize);
+    const limitSize = Math.round(tileSize * deviceScale);
     for (const clipRect of clipRects) {
       for (const tile of tiles) {
         const left = (tile.worldX - origin.x) * zoom;
@@ -1251,12 +1273,20 @@ class ViewportRenderer extends Renderer {
         const limitTop = clipRect ? clipRect.top : top;
         const limitRight = clipRect ? clipRect.right : right;
         const limitBottom = clipRect ? clipRect.bottom : bottom;
-        const sourceLeft = Math.max(0, Math.round(limitLeft - left));
-        const sourceTop = Math.max(0, Math.round(limitTop - top));
+        const sourceLeft = Math.max(
+          0,
+          Math.round((limitLeft - left) * deviceScale),
+        );
+        const sourceTop = Math.max(
+          0,
+          Math.round((limitTop - top) * deviceScale),
+        );
         const sourceWidth =
-          Math.min(limitSize, Math.round(limitRight - left)) - sourceLeft;
+          Math.min(limitSize, Math.round((limitRight - left) * deviceScale)) -
+          sourceLeft;
         const sourceHeight =
-          Math.min(limitSize, Math.round(limitBottom - top)) - sourceTop;
+          Math.min(limitSize, Math.round((limitBottom - top) * deviceScale)) -
+          sourceTop;
         if (sourceWidth <= 0 || sourceHeight <= 0) continue;
 
         ctx.drawImage(
@@ -1265,8 +1295,8 @@ class ViewportRenderer extends Renderer {
           sourceTop,
           sourceWidth,
           sourceHeight,
-          left + sourceLeft,
-          top + sourceTop,
+          Math.round(left * deviceScale) + sourceLeft,
+          Math.round(top * deviceScale) + sourceTop,
           sourceWidth,
           sourceHeight,
         );
@@ -1274,6 +1304,14 @@ class ViewportRenderer extends Renderer {
     }
     ctx.restore();
     return true;
+  }
+
+  /**
+   * 单块 tile 的位图边长（设备像素）
+   * @returns {number} 位图边长
+   */
+  getTileBitmapSize() {
+    return this.#tileStore.bitmapSize;
   }
 
   /**
@@ -1524,7 +1562,14 @@ class ViewportRenderer extends Renderer {
     targetCtx.save();
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
     targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
-    targetCtx.drawImage(cacheCanvas, 0, 0);
+    // 调试目标画布尺寸由调用方决定，显式给出目标尺寸避免高位图下只画出左上角
+    targetCtx.drawImage(
+      cacheCanvas,
+      0,
+      0,
+      targetCanvas.width,
+      targetCanvas.height,
+    );
     targetCtx.restore();
   }
 }

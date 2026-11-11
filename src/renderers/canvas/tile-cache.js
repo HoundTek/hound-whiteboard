@@ -58,6 +58,15 @@ class TileStore {
   #createCanvas;
 
   /**
+   * tile 位图像素相对世界单位的倍率
+   * @description
+   * 高分屏下 tile 必须按设备像素分配位图，否则合成到高位图输出时会被放大，
+   * 描边发虚。tileSize 仍以世界单位表达，位图尺寸 = tileSize × deviceScale。
+   * @type {number}
+   */
+  deviceScale;
+
+  /**
    * 已分配的 tile
    * @type {Map<string, TileEntry>}
    * @private
@@ -72,12 +81,22 @@ class TileStore {
   rebuildCount = 0;
 
   /**
-   * @param {{ tileSize?: number, createCanvas?: (width: number, height: number) => OffscreenCanvas | HTMLCanvasElement }} [options={}] - 配置项
+   * @param {{ tileSize?: number, deviceScale?: number, createCanvas?: (width: number, height: number) => OffscreenCanvas | HTMLCanvasElement }} [options={}] - 配置项
    */
   constructor(options = {}) {
     this.tileSize = options.tileSize ?? DEFAULT_TILE_SIZE;
+    const scale = options.deviceScale;
+    this.deviceScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
     this.#createCanvas =
       options.createCanvas ?? ((width, height) => new OffscreenCanvas(width, height));
+  }
+
+  /**
+   * 单块 tile 的位图边长（设备像素）
+   * @type {number}
+   */
+  get bitmapSize() {
+    return Math.max(1, Math.round(this.tileSize * this.deviceScale));
   }
 
   /**
@@ -261,7 +280,7 @@ class TileStore {
       worldX,
       worldY,
       worldRect: new RectangleRange(worldX, worldY, this.tileSize, this.tileSize),
-      canvas: this.#createCanvas(this.tileSize, this.tileSize),
+      canvas: this.#createCanvas(this.bitmapSize, this.bitmapSize),
       dirty: true,
       dirtyRects: [],
     };

@@ -43,6 +43,21 @@ function normalizeDirtyRectsForScreenUpdate(dirtyRects = []) {
 }
 
 /**
+ * 在 CSS 像素空间下重置上下文变换
+ * @description
+ * 绘制坐标一律以 CSS 像素表达，位图则按设备倍率放大。
+ * 直接写 `setTransform(1,0,0,1,0,0)` 会把坐标当成设备像素，
+ * DPR>1 时只能覆盖左上角一小块，因此必须统一乘上设备倍率。
+ * @param {CanvasRenderingContext2D} ctx - 目标上下文
+ * @param {number} [scale=1] - 设备像素倍率
+ * @returns {void}
+ */
+function applyCssTransform(ctx, scale = 1) {
+  const factor = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  ctx.setTransform(factor, 0, 0, factor, 0, 0);
+}
+
+/**
  * 判断矩形是否为退化矩形
  * @description 渲染包围盒未被计算时是零矩形；此时必须回退到主判定范围，
  * 否则对象会被当作零面积而漏绘、漏失效。
@@ -293,7 +308,7 @@ class Renderer extends CanvasHost {
     if (!clearRect) return false;
 
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    applyCssTransform(ctx, this._deviceScale);
     ctx.clearRect(
       clearRect.left,
       clearRect.top,
@@ -366,7 +381,7 @@ class Renderer extends CanvasHost {
     if (drawn.length === 0) return 0;
 
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    applyCssTransform(ctx, this._deviceScale);
     ctx.beginPath();
     ctx.rect(clipRect.left, clipRect.top, clipRect.width, clipRect.height);
     ctx.clip();
@@ -420,7 +435,7 @@ class Renderer extends CanvasHost {
     }
 
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    applyCssTransform(ctx, this._deviceScale);
     ctx.beginPath();
     for (const clipRect of clipRects) {
       ctx.rect(clipRect.left, clipRect.top, clipRect.width, clipRect.height);
@@ -480,19 +495,25 @@ class Renderer extends CanvasHost {
       }
     }
 
-    // 覆盖绑定后的 setTransform，叠上视口缩放与平移
+    // 覆盖绑定后的 setTransform，叠上视口缩放、平移与设备像素倍率
+    const deviceScale = this._deviceScale ?? 1;
     viewportContext.setTransform = (a, b, c, d, e, f) =>
       ctx.setTransform(
-        a * zoom,
-        b * zoom,
-        c * zoom,
-        d * zoom,
-        (e - originX) * zoom,
-        (f - originY) * zoom,
+        a * zoom * deviceScale,
+        b * zoom * deviceScale,
+        c * zoom * deviceScale,
+        d * zoom * deviceScale,
+        (e - originX) * zoom * deviceScale,
+        (f - originY) * zoom * deviceScale,
       );
 
     return viewportContext;
   }
 }
 
-export { Renderer, expandRectForClear, normalizeDirtyRectsForScreenUpdate };
+export {
+  Renderer,
+  expandRectForClear,
+  normalizeDirtyRectsForScreenUpdate,
+  applyCssTransform,
+};

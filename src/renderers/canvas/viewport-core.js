@@ -128,6 +128,7 @@ class ViewportCore {
    *   postRenderFrame?: (message: Object, transferList?: Transferable[]) => void,
    *   onFrameDirty?: () => void,
    *   tiles?: boolean,
+   *   devicePixelRatio?: number,
    * }} options - ViewportCore 初始化选项
    */
   constructor(options) {
@@ -153,16 +154,23 @@ class ViewportCore {
     // 渲染器的启用判定与原点的整数量化必须取同一个值，
     // 否则会出现渲染器开 tile 而原点未量化的错配，
     // 导致合成退化为小数目标坐标，描边相位偏移回归
+    // 位图按设备像素分配，绘制坐标仍保持 CSS 像素
+    const devicePixelRatio = options.devicePixelRatio ?? 1;
     this.#tilesEnabled = options.tiles !== false;
     this.#renderer = new ViewportRenderer(
       this,
       this.#boardCore.activeObjectManager,
       {
-        canvas: new OffscreenCanvas(this.#width, this.#height),
+        canvas: new OffscreenCanvas(
+          Math.max(1, Math.round(this.#width * devicePixelRatio)),
+          Math.max(1, Math.round(this.#height * devicePixelRatio)),
+        ),
         tiles: this.#tilesEnabled,
         tileSize: options.tileSize,
+        devicePixelRatio,
       },
     );
+    this.#renderer.resize(this.#width, this.#height);
   }
 
   /**
@@ -630,6 +638,16 @@ class ViewportCore {
 
     this.#frameDirty = false;
     return true;
+  }
+
+  /**
+   * 设置设备像素倍率
+   * @description 倍率变化后需再触发一次带视口尺寸的变更，才会按新倍率重分配位图。
+   * @param {number} devicePixelRatio - 新倍率
+   * @returns {void}
+   */
+  setDevicePixelRatio(devicePixelRatio) {
+    this.#renderer?.setDevicePixelRatio?.(devicePixelRatio);
   }
 
   /**
