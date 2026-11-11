@@ -60,7 +60,16 @@ class ViewportTool extends Tool {
       if (signal?.type === "scale") {
         const scale = signal?.context?.value;
         if (Number.isFinite(scale) && scale > 0) {
-          viewport.setViewportScaleAroundCenter?.(scale);
+          const anchor = signal?.context?.anchor;
+          if (
+            anchor &&
+            Number.isFinite(anchor.x) &&
+            Number.isFinite(anchor.y)
+          ) {
+            viewport.setViewportScale?.(scale, anchor);
+          } else {
+            viewport.setViewportScaleAroundCenter?.(scale);
+          }
           this.onViewportChange?.(
             viewport,
             signal,

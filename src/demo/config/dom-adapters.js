@@ -364,7 +364,7 @@ function attachHistoryAdapter(board, viewport) {
  */
 function attachDeleteAdapter(board, viewport) {
   const button = document.getElementById("delete-btn");
-  if (!button) return () => { };
+  if (!button) return () => {};
 
   /**
    * 点击删除按钮：向 tool-switcher workflow 发送 delete 信号
@@ -440,8 +440,7 @@ function attachToolbarAdapter(board, viewport) {
     (activeTool) => applyActiveTool(activeTool ?? defaultTool),
   );
   applyActiveTool(
-    board.sharedState.get(DEMO_BUTTON_GROUP_STATE_KEY) ??
-    defaultTool,
+    board.sharedState.get(DEMO_BUTTON_GROUP_STATE_KEY) ?? defaultTool,
   );
   unbinds.push(unsubscribe);
 
@@ -462,10 +461,13 @@ function attachToolbarAdapter(board, viewport) {
  * @param {HTMLElement} appLeft - 左侧容器元素
  * @param {Object} [options={}] - 可选参数
  * @param {number} [options.sensitivity=1] - 滚动敏感度系数（越大平移越快）
+ * @param {number} [options.pinchPixelsPerDoubling=100] - 捏合放大一倍的纵向像素量（越小缩放越快）
  * @returns {() => void} 解绑函数
  */
 function attachWheelAdapter(viewport, board, appLeft, options = {}) {
   const sensitivity = options.sensitivity ?? 1;
+  // 捏合缩放的换算口径：纵向捏合多少像素相当于放大一倍
+  const pixelsPerDoubling = options.pinchPixelsPerDoubling ?? 100;
 
   // 不同 deltaMode 到像素的转换因子
   const LINE_HEIGHT = 16;
@@ -495,24 +497,78 @@ function attachWheelAdapter(viewport, board, appLeft, options = {}) {
   };
 
   /**
+   * 事件是否为捏合缩放
+   * @description
+   * 触控板捏合在各平台都以 `wheel` + `ctrlKey` 派发（macOS 触控板、Windows 精确触控板一致），
+   * 普通滚轮不会带修饰键，因此这个判据不会误伤双指滚动平移。
+   * @param {WheelEvent} event - 滚轮事件
+   * @returns {boolean} 是否捏合缩放
+   */
+  const isPinchZoom = (event) => event.ctrlKey === true;
+
+  /**
+   * 由滚动量推导缩放倍率
+   * @description
+   * 指数映射：相邻事件倍率相乘，捏合过程连续且与事件频率无关。
+   * 口径是「纵向捏合 `pixelsPerDoubling` 像素放大一倍」，与滚轮缩放同向（下滚缩小）。
+   * @param {number} deltaY - 归一化后的纵向滚动像素
+   * @returns {number} 缩放倍率
+   */
+  const resolveZoomFactor = (deltaY) => 2 ** (-deltaY / pixelsPerDoubling);
+
+  /**
+   * 计算指针在画布上的 CSS 坐标
+   * @param {WheelEvent} event - 滚轮事件
+   * @returns {Vector} 画布坐标
+   */
+  const resolveCanvasPoint = (event) => {
+    const rect = appLeft.getBoundingClientRect?.();
+    return new Vector(
+      event.clientX - (rect?.left ?? 0),
+      event.clientY - (rect?.top ?? 0),
+    );
+  };
+
+  /**
    * 滚轮事件处理器
-   * @param {WheelEvent} event
+   * @description
+   * 带 `ctrlKey` 的滚轮是捏合缩放：以指针为锚点调整倍率，锚点下的世界坐标保持不动。
+   * 其余滚轮是平移。两者的信号类型不同，缩放走 `scale`、平移走 `position`。
+   * @param {WheelEvent} event - 滚轮事件
    * @returns {void}
    */
   const onWheel = (event) => {
     event.preventDefault();
 
     const zoom = viewport.zoom ?? 1;
-    const origin = viewport.origin;
     const pixelDelta = deltaToPixels(event);
+    const to = `/${viewport.viewportId}/workflows/${DEMO_WORKFLOW_NAMES.VIEWPORT}`;
 
+    if (isPinchZoom(event)) {
+      board.signalsEventBus.emit("input", {
+        to,
+        signals: [
+          {
+            type: "scale",
+            context: {
+              value: zoom * resolveZoomFactor(pixelDelta.y),
+              anchor: resolveCanvasPoint(event),
+              sourceType: "pinch",
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    const origin = viewport.origin;
     const newOrigin = new Vector(
-      origin.x + pixelDelta.x * sensitivity / zoom,
-      origin.y + pixelDelta.y * sensitivity / zoom,
+      origin.x + (pixelDelta.x * sensitivity) / zoom,
+      origin.y + (pixelDelta.y * sensitivity) / zoom,
     );
 
     board.signalsEventBus.emit("input", {
-      to: `/${viewport.viewportId}/workflows/${DEMO_WORKFLOW_NAMES.VIEWPORT}`,
+      to,
       signals: [
         {
           type: "position",
