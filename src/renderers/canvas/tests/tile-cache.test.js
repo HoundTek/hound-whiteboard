@@ -182,32 +182,63 @@ describe("TileStore#markDirtyWorldRect", () => {
   });
 });
 
-describe("TileStore#evictOutside", () => {
-  test("逐出完全不相交的 tile，保留相交的", () => {
-    const { store, canvases } = createStore();
+describe("TileStore#evictToBudget", () => {
+  /**
+   * 建一个字节预算刚好放得下指定块数的存储
+   * @param {number} tileCount - 允许的块数
+   * @returns {{ store: TileStore, canvases: Array<Object> }}
+   */
+  function createBudgetStore(tileCount) {
+    const factory = createCanvasFactory();
+    const store = new TileStore({
+      tileSize: 256,
+      createCanvas: factory.createCanvas,
+      maxBytes: tileCount * 256 * 256 * 4,
+    });
+    return { store, canvases: factory.canvases };
+  }
+
+  test("按最近最少使用逐出，超预算后保留最新访问的块", () => {
+    const { store, canvases } = createBudgetStore(2);
+    const [first] = store.ensure(new RectangleRange(0, 0, 10, 10));
+    const [second] = store.ensure(new RectangleRange(300, 0, 10, 10));
+
+    // 重新访问第一块，它应变成最近使用，逐出时轮到第二块
+    store.ensure(new RectangleRange(0, 0, 10, 10));
+    store.ensure(new RectangleRange(600, 0, 10, 10));
+
+    // ensure 只分配不逐出，预算在帧末统一收敛
+    expect(store.size).toBe(3);
+    expect(store.evictToBudget()).toBe(1);
+    expect(store.size).toBe(2);
+    expect(store.usedBytes).toBe(2 * 256 * 256 * 4);
+
+    // 被逐出的是第二块，再次覆盖它需要重新分配位图
+    store.ensure(new RectangleRange(300, 0, 10, 10));
+    expect(canvases).toHaveLength(4);
+    expect(second).toBeDefined();
+  });
+
+  test("预算充足时不逐出", () => {
+    const { store } = createBudgetStore(100);
     store.ensure(new RectangleRange(0, 0, 2000, 2000));
-    expect(store.size).toBe(16);
 
-    const evicted = store.evictOutside(new RectangleRange(0, 0, 100, 100));
-
-    expect(evicted).toBe(15);
-    expect(store.size).toBe(1);
-
-    // 保留下来的 tile 不需要重新分配
-    store.ensure(new RectangleRange(0, 0, 100, 100));
-    expect(canvases).toHaveLength(16);
+    expect(store.size).toBe(64);
+    expect(store.evictToBudget()).toBe(0);
+    expect(store.size).toBe(64);
   });
 
   test("逐出后再次 ensure 会重新分配且为脏", () => {
-    const { store } = createStore();
+    const { store } = createBudgetStore(1);
     const rect = new RectangleRange(0, 0, 100, 100);
     const [tile] = store.ensure(rect);
     store.markRebuilt(tile);
 
-    store.evictOutside(new RectangleRange(5000, 5000, 10, 10));
+    store.ensure(new RectangleRange(5000, 5000, 10, 10));
+    store.evictToBudget();
     const [recreated] = store.ensure(rect);
 
-    expect(store.size).toBe(1);
     expect(recreated.dirty).toBe(true);
+    expect(store.usedBytes).toBe(store.size * 256 * 256 * 4);
   });
 });

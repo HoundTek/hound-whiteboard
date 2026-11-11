@@ -1197,17 +1197,15 @@ describe("ViewportRenderer", () => {
       };
     }
 
-    test("tile 边长按视口尺寸自适应，控制在 4 至 6 块", () => {
+    test("tile 边长与视口尺寸解耦，缓存字节随视口面积而非块边长增长", () => {
       /**
        * 建一个指定视口尺寸的渲染器
        * @param {number} width - 视口宽
        * @param {number} height - 视口高
-       * @returns {{
-       *   tileSize: number,
-       *   tileCount: number,
-       * }} tile 边长与块数
+       * @param {number} [devicePixelRatio] - 设备倍率
+       * @returns {{ tileSize: number, tileCount: number, bytes: number }}
        */
-      const inspect = (width, height) => {
+      const inspect = (width, height, devicePixelRatio = 1) => {
         const outputCanvas = createCanvas(
           width,
           height,
@@ -1221,23 +1219,25 @@ describe("ViewportRenderer", () => {
         });
         const renderer = new ViewportRenderer(viewport, aom, {
           canvas: outputCanvas,
+          devicePixelRatio,
         });
         renderer._scheduler.scheduleFrame = () => 0;
         renderer.flush();
-        return {
-          tileSize: renderer.getTileDebugInfo().tileSize,
-          tileCount: renderer.getTileDebugInfo().tileCount,
-        };
+        return renderer.getTileDebugInfo();
       };
 
-      // 900x700 用 512 会切出 12 块，合成成本是经典路径的 2.3 倍；1024 只切 4 到 6 块
-      const medium = inspect(900, 700);
-      expect(medium.tileSize).toBe(1024);
-      expect(medium.tileCount).toBeLessThanOrEqual(6);
-      // 小视口回落到默认边长
-      expect(inspect(400, 300).tileSize).toBe(512);
-      // 大视口封顶，避免单块位图过大
-      expect(inspect(1400, 1100).tileSize).toBe(2048);
+      // 边长固定：大视口不再推到 2048，避免单块位图与覆盖面积一起膨胀
+      expect(inspect(900, 700).tileSize).toBe(256);
+      expect(inspect(1920, 1080).tileSize).toBe(256);
+
+      // 规格里 900x700 在倍率 2 下曾占 96MB，现在必须压到一个视口面积量级
+      const highDpi = inspect(900, 700, 2);
+      expect(highDpi.bytes).toBeLessThanOrEqual(28 * 1024 * 1024);
+
+      // 每块位图 = (边长 × 倍率)²，字节数必须与块数一致
+      expect(highDpi.bytes).toBe(
+        highDpi.tileCount * (256 * 2) * (256 * 2) * 4,
+      );
     });
 
     test("首次 flush 重建覆盖范围内的 tile 并合成可见 tile", () => {
@@ -1281,19 +1281,33 @@ describe("ViewportRenderer", () => {
       ).toBe(true);
     });
 
-    test("对象进出 AOM 时整片 tile 重建", () => {
+    test("对象进出 AOM 时只重建其范围覆盖的 tile", () => {
       const { renderer, objects } = createTileScenario([
         new Vector(20, 20),
         new Vector(700, 500),
       ]);
       const before = renderer.getTileDebugInfo().rebuildCount;
-      const tiles = renderer.getTileDebugInfo().tileCount;
 
       renderer.invalidateCachedObjects([objects[0]]);
       renderer.flush();
 
-      // 成员变化下局部失效不可信，必须整片重建，否则残留像素叠加 AOM 绘制
-      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + tiles);
+      // 局部失效依赖「着墨范围 ⊆ 包围盒 ⊕ 留白」这条不变式（draw-bounds 测试守住）
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 1);
+    });
+
+    test("对象移动时旧范围覆盖的 tile 也要标脏", () => {
+      const { renderer, objects } = createTileScenario([new Vector(20, 20)]);
+      const before = renderer.getTileDebugInfo().rebuildCount;
+
+      // 旧范围在另一块 tile 上：只标当前范围会把它留成残留像素
+      renderer.invalidateCachedObjects([objects[0]], {
+        previousWorldRects: new Map([
+          [objects[0].id, new RectangleRange(600, 400, 10, 10)],
+        ]),
+      });
+      renderer.flush();
+
+      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 2);
     });
 
     test("新加载的区块只重建其覆盖的 tile", () => {
@@ -1335,7 +1349,7 @@ describe("ViewportRenderer", () => {
       expect(composites).toHaveLength(1);
     });
 
-    test("对象进出 AOM 时清理整幅 tile", () => {
+    test("对象进出 AOM 时只清理对象覆盖的一小块", () => {
       const previousCanvas = globalThis.OffscreenCanvas;
       const tileClears = [];
       // 替换 tile 画布实现，直接记录每块 tile 上的清理尺寸
@@ -1371,10 +1385,10 @@ describe("ViewportRenderer", () => {
         renderer.flush();
 
         expect(tileClears.length).toBeGreaterThan(0);
-        // 成员变化走整块重建：每块 tile 都是整幅清理，不留任何局部残留
+        // 只清理对象范围加留白的那一小块，其余像素保持不动
         for (const [, , width, height] of tileClears) {
-          expect(width).toBe(512);
-          expect(height).toBe(512);
+          expect(width).toBeLessThanOrEqual(16);
+          expect(height).toBeLessThanOrEqual(16);
         }
       } finally {
         globalThis.OffscreenCanvas = previousCanvas;

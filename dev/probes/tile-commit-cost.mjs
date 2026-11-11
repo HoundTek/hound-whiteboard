@@ -57,6 +57,7 @@ async function measure(strokeCount, tiles) {
     height: H,
     postRenderFrame() {},
     tiles,
+    ...(process.env.TILE_SIZE ? { tileSize: Number(process.env.TILE_SIZE) } : {}),
   });
   viewport.onViewportChange({
     origin: { x: 0, y: 0 },

@@ -17,7 +17,22 @@ const MAX_TILE_DIRTY_RECTS = 8;
  * 默认 tile 边长（像素）
  * @description 世界尺寸等于像素尺寸除以缩放档位，档位固定时世界尺寸也固定。
  */
-const DEFAULT_TILE_SIZE = 512;
+/**
+ * 默认 tile 边长（CSS 像素）
+ * @description
+ * tile 在屏幕空间恒为此尺寸，与缩放和视口无关。
+ * 取 256 是为了让缓存面积贴近视口面积：块越大，外扩区与网格取整的浪费越大，
+ * 900x700 的视口配 1024 的块时，外扩后要铺 3 列，覆盖面积是视口的 3.4 倍。
+ * @type {number}
+ */
+const DEFAULT_TILE_SIZE = 256;
+
+/**
+ * 默认 tile 缓存字节预算
+ * @description 超预算按最近最少使用逐出。多层缓存的总额度由调用方统一控制。
+ * @type {number}
+ */
+const DEFAULT_TILE_BUDGET_BYTES = 64 * 1024 * 1024;
 
 /**
  * 单块 tile 记录
@@ -58,6 +73,13 @@ class TileStore {
   #createCanvas;
 
   /**
+   * 已分配字节数
+   * @type {number}
+   * @private
+   */
+  #usedBytes = 0;
+
+  /**
    * tile 位图像素相对世界单位的倍率
    * @description
    * 高分屏下 tile 必须按设备像素分配位图，否则合成到高位图输出时会被放大，
@@ -89,6 +111,16 @@ class TileStore {
     this.deviceScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
     this.#createCanvas =
       options.createCanvas ?? ((width, height) => new OffscreenCanvas(width, height));
+    this.maxBytes = options.maxBytes ?? DEFAULT_TILE_BUDGET_BYTES;
+  }
+
+  /**
+   * 当前已分配的字节数
+   * @description 按位图边长与每像素 4 字节计，是缓存内存的真实占用。
+   * @type {number}
+   */
+  get usedBytes() {
+    return this.#usedBytes;
   }
 
   /**
@@ -154,6 +186,9 @@ class TileStore {
         if (!tile) {
           tile = this.#createTile(tx, ty);
           this.#tiles.set(key, tile);
+          this.#usedBytes += tile.bytes;
+        } else {
+          this.touch(tile);
         }
         result.push(tile);
       }
@@ -216,19 +251,29 @@ class TileStore {
   }
 
   /**
-   * 逐出与世界矩形完全不相交的 tile
-   * @description 保留范围应大于常用覆盖范围，避免边界往返时反复分配。
-   * @param {RectangleRange | Object} keepWorldRect - 保留的世界矩形
+   * 标记 tile 为最近使用
+   * @description Map 按插入顺序迭代，删后重插即可把它移到队尾。
+   * @param {TileEntry} tile - 被访问的 tile
+   */
+  touch(tile) {
+    if (!tile) return;
+    this.#tiles.delete(tile.key);
+    this.#tiles.set(tile.key, tile);
+  }
+
+  /**
+   * 按字节预算逐出最近最少使用的 tile
+   * @description
+   * 只按最近使用时间逐出，不按屏幕位置：多档缩放共用一个预算时，
+   * 空间规则会把刚离开但马上要回来的档位扔掉。
    * @returns {number} 被逐出的 tile 数量
    */
-  evictOutside(keepWorldRect) {
-    const keepRect = RectangleRange.fromRectLike(keepWorldRect);
-    if (!keepRect) return 0;
-
+  evictToBudget() {
     let evicted = 0;
     for (const [key, tile] of this.#tiles) {
-      if (intersectsRanges(tile.worldRect, keepRect)) continue;
+      if (this.#usedBytes <= this.maxBytes) break;
       this.#tiles.delete(key);
+      this.#usedBytes -= tile.bytes;
       evicted++;
     }
     return evicted;
@@ -261,6 +306,7 @@ class TileStore {
    */
   clear() {
     this.#tiles.clear();
+    this.#usedBytes = 0;
   }
 
   /**
@@ -273,6 +319,7 @@ class TileStore {
   #createTile(tx, ty) {
     const worldX = tx * this.tileSize;
     const worldY = ty * this.tileSize;
+    const bitmapSize = this.bitmapSize;
     return {
       key: this.key(tx, ty),
       tx,
@@ -280,11 +327,12 @@ class TileStore {
       worldX,
       worldY,
       worldRect: new RectangleRange(worldX, worldY, this.tileSize, this.tileSize),
-      canvas: this.#createCanvas(this.bitmapSize, this.bitmapSize),
+      canvas: this.#createCanvas(bitmapSize, bitmapSize),
+      bytes: bitmapSize * bitmapSize * 4,
       dirty: true,
       dirtyRects: [],
     };
   }
 }
 
-export { TileStore, DEFAULT_TILE_SIZE };
+export { TileStore, DEFAULT_TILE_SIZE, DEFAULT_TILE_BUDGET_BYTES };

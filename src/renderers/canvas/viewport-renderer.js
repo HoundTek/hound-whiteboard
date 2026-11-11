@@ -40,15 +40,11 @@ import {
 
 /**
  * tile 缓存相对视口的世界范围外扩比例（单侧）
- * @description 总覆盖为视口的 1.5 倍边长，平移时先命中已缓存的周边 tile。
+ * @description
+ * 总覆盖为视口的 1.2 倍边长。外扩是内存与平移命中率的交换项：
+ * 缓存字节数约等于视口面积乘以 `(1 + 2 × 该值)²`，这里取 0.10 使覆盖面积只多 44%。
  */
-const TILE_CACHE_MARGIN_RATIO = 0.25;
-
-/**
- * tile 逐出保留范围的外扩比例（单侧）
- * @description 保留范围大于覆盖范围，避免在缓存边界往返平移时反复分配位图。
- */
-const TILE_EVICT_MARGIN_RATIO = 0.5;
+const TILE_CACHE_MARGIN_RATIO = 0.1;
 
 /**
  * 缩放预览允许的累计拉伸倍数
@@ -72,29 +68,6 @@ const ZOOM_PREVIEW_MAX_STEP = 1.25;
  * @description 手势连续缩放期间不断重置该定时器，停手后才重建。
  */
 const ZOOM_PREVIEW_SETTLE_MS = 150;
-
-/**
- * tile 边长的上限
- * @description 单块位图过大时整块重建代价过高，也失去分块的意义。
- */
-const TILE_MAX_SIZE = 2048;
-
-/**
- * 按视口尺寸推导 tile 边长
- * @description
- * tile 合成的成本主要由 tile 块数决定（每块位图需要独立搬运），而非光栅化面积。
- * 目标是把视口内的可见 tile 控制在 4 至 6 块。实测 900x700 视口下：
- * 边长 512 时 12 块，提交耗时是经典路径的 2.3 倍；边长 1024 时 6 块，反超经典路径。
- * @param {number} width - 画布宽
- * @param {number} height - 画布高
- * @returns {number} tile 边长
- */
-function resolveTileSize(width, height) {
-  const maxSide = Math.max(width ?? 0, height ?? 0);
-  if (!(maxSide > 0)) return DEFAULT_TILE_SIZE;
-  const power = 2 ** Math.ceil(Math.log2(maxSide));
-  return Math.min(TILE_MAX_SIZE, Math.max(DEFAULT_TILE_SIZE, power));
-}
 
 /**
  * 视口渲染器
@@ -179,6 +152,13 @@ class ViewportRenderer extends Renderer {
   #tilesEnabled;
 
   /**
+   * tile 缓存相对视口的外扩比例
+   * @type {number}
+   * @private
+   */
+  #tileCacheMargin = TILE_CACHE_MARGIN_RATIO;
+
+  /**
    * 缓存层渲染调度器
    * @type {RenderScheduler}
    * @private
@@ -241,11 +221,14 @@ class ViewportRenderer extends Renderer {
     const height = outputCanvas?.height ?? 0;
 
     this.#cache = new OffscreenCanvas(width, height);
+    this.#tileCacheMargin =
+      Number.isFinite(options.tileCacheMargin) && options.tileCacheMargin >= 0
+        ? options.tileCacheMargin
+        : TILE_CACHE_MARGIN_RATIO;
     this.#tileStore = new TileStore({
-      tileSize:
-        options.tileSize ??
-        resolveTileSize(this._canvas?.width, this._canvas?.height),
+      tileSize: options.tileSize ?? DEFAULT_TILE_SIZE,
       deviceScale: this._deviceScale,
+      maxBytes: options.tileBudgetBytes,
     });
     this.#tilesEnabled = options.tiles !== false;
 
@@ -328,15 +311,12 @@ class ViewportRenderer extends Renderer {
       resized = true;
     }
 
-    // tile 边长随视口尺寸重新推导：块数变了就必须重建 tile 存储
-    const nextTileSize = resolveTileSize(nextWidth, nextHeight);
-    if (
-      nextTileSize !== this.#tileStore.tileSize ||
-      this.#tileStore.deviceScale !== this._deviceScale
-    ) {
+    // tile 位图按设备像素分配，倍率变了就必须重建；边长与视口尺寸解耦，不随窗口变化
+    if (this.#tileStore.deviceScale !== this._deviceScale) {
       this.#tileStore = new TileStore({
-        tileSize: nextTileSize,
+        tileSize: this.#tileStore.tileSize,
         deviceScale: this._deviceScale,
+        maxBytes: this.#tileStore.maxBytes,
       });
       this.#cacheDirty = true;
       resized = true;
@@ -1018,16 +998,28 @@ class ViewportRenderer extends Renderer {
   /**
    * 按内容变化标记 tile 失效
    * @description
-   * 对象进出 AOM 属静态层成员变化，局部失效不可信：tile 的局部脏区只清除
-   * 该子矩形，对象实际绘制范围一旦越出（描边外扩、miter 尖角、变换）就会
-   * 留下过期像素。残留像素叠加 AOM 当帧的绘制，半透明填充表现为整片变暗。
-   * 因此整片标脏，与经典缓存路径的强制全量重建保持同一不变式。
+   * 只标记对象当前世界范围与旧世界范围覆盖的 tile。这依赖一条不变式：
+   * 对象的着墨范围必须落在 `getRange()` 加 `getRenderPadding()` 之内，
+   * 由 `draw-bounds` 测试守住（连接样式与端点样式因此限定在能保证该不变式的取值）。
+   * 旧范围一侧同样要标脏，否则对象被拾取或移走后原位置会残留像素；
+   * 残留像素叠加 AOM 当帧的绘制时，半透明填充会表现为整片变暗。
    * @param {Iterable<BasicObject>} [objects=[]] - 待失效对象
    * @param {Map<string, RectangleRange>} [previousWorldRects] - 旧世界范围快照
    * @private
    */
   #invalidateTilesForCachedObjects(objects, previousWorldRects) {
-    this.#tileStore.markAllDirty();
+    const zoom = this.viewport?.zoom ?? 1;
+    for (const objectInstance of objects ?? []) {
+      const padding = this.getObjectScreenPadding(objectInstance) / (zoom || 1);
+      const currentRect = this.getObjectWorldRect(objectInstance);
+      if (currentRect) {
+        this.#tileStore.markDirtyWorldRect(currentRect.inflate(padding));
+      }
+      const previousRect = previousWorldRects?.get?.(objectInstance.id);
+      if (previousRect) {
+        this.#tileStore.markDirtyWorldRect(previousRect.inflate(padding));
+      }
+    }
   }
 
   /**
@@ -1084,7 +1076,7 @@ class ViewportRenderer extends Renderer {
 
     const cacheWorldRect = this.#expandWorldRect(
       worldRect,
-      TILE_CACHE_MARGIN_RATIO,
+      this.#tileCacheMargin,
     );
     const tiles = this.#tileStore.ensure(cacheWorldRect);
     const dirtyTiles = tiles.filter(
@@ -1109,9 +1101,7 @@ class ViewportRenderer extends Renderer {
       }
     }
 
-    this.#tileStore.evictOutside(
-      this.#expandWorldRect(worldRect, TILE_EVICT_MARGIN_RATIO),
-    );
+    this.#tileStore.evictToBudget();
     return tiles;
   }
 
@@ -1248,6 +1238,7 @@ class ViewportRenderer extends Renderer {
     const limitSize = Math.round(tileSize * deviceScale);
     for (const clipRect of clipRects) {
       for (const tile of tiles) {
+        this.#tileStore.touch(tile);
         const left = (tile.worldX - origin.x) * zoom;
         const top = (tile.worldY - origin.y) * zoom;
         const right = left + tileSize;
@@ -1310,7 +1301,7 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 读取 tile 缓存调试信息
-   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number }}
+   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number, bytes: number }}
    */
   getTileDebugInfo() {
     return {
@@ -1319,6 +1310,7 @@ class ViewportRenderer extends Renderer {
       tileCount: this.#tileStore.size,
       dirtyCount: this.#tileStore.countDirty(),
       rebuildCount: this.#tileStore.rebuildCount,
+      bytes: this.#tileStore.usedBytes,
     };
   }
 
