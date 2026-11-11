@@ -175,7 +175,8 @@ choice 全量修改（--position/--transform/--property/--data）仅单成员 ch
 
 - **并发安全**：持板侧 id 分配原子化（`addObject` 的计数上报在异步让出前完成），daemon 的 RPC 经串行队列逐个执行（invoke + 落盘不交错），关闭前排空 in-flight——多 CLI 并发不撞号、不丢操作
 - **读命令零写盘**：直读会话挂接时以盘上对象、trash 条目、区块元数据与板元数据为调和种子（种子形状即 `loadAll` 的输出形状，trash 条目 id 在 `entry.data.id`），板元数据按排序指纹比对，值不变不落盘
-- **板上配置优先**：板尺寸是文档数据（决定区块划分），重开时以 `board.json` 的 `boardConfig` 为准；0 值视为未知，不写入也不抢占调用方显式配置
+- **板上配置优先**：`boardConfig.width/height` 是**区块边长**（决定盘上区块划分），重开时以 `board.json` 为准
+- 白板没有尺寸概念：世界无限，`width/height` 只描述存储与载入的粒度，默认 1024，创建后不可更改
 - **协作身份贯穿**：`--source` 在 daemon 启动时注入（省略时按注册表 name→source 映射分配独立 `daemon-*` 身份，不继承 GUI 身份——双写端不同 source，撞号结构性排除）；操作记录 source、Core 侧 id 子命名空间与对象 id 池同前缀；id 池计数经 `reportObjectIdCounter` 随板元数据持久化，跨进程续号
 
 ## 设计约束
@@ -183,7 +184,7 @@ choice 全量修改（--position/--transform/--property/--data）仅单成员 ch
 - 无交互与渲染能力：CLI 面向文档操作，不表达视口、选择与 overlay 状态
 - 写路径多写端分片（布局 v2）：各写端（GUI / daemon）只写自己 source 的日志流与自己影响的对象文件（AOM 活动性仲裁），board.json 仍由 daemon 单写；读命令直读只读已落盘状态，与持板者无竞态
 - daemon 是协作枢纽而非写路径单点：写命令优先经 daemon RPC（快路径），daemon 不在时 CLI 自治直写自己分片（慢路径，零依赖）；GUI 断线同样继续落盘（各自分片 + 原子写 + 重开归并兜底）
-- 板尺寸未知的板（`boardConfig` 缺失且未传 `--width/--height`）上执行 `add` 会因无法解析区块而失败，需显式指定尺寸
+- `--chunk-width` / `--chunk-height` 只在建板时生效；改区块边长会让盘上区块归属全部错位，因此创建后不可更改
 
 ## 相关文档
 

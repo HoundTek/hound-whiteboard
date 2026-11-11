@@ -112,6 +112,16 @@ describe("ViewportCore", () => {
     expect(viewportCore.origin).toEqual(new Vector(120, 81));
   });
 
+  test("越界缩放被夹取到可用区间", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+
+    viewportCore.onViewportChange({ zoom: 0.001 });
+    expect(viewportCore.zoom).toBeCloseTo(0.05, 12);
+
+    viewportCore.onViewportChange({ zoom: 1000 });
+    expect(viewportCore.zoom).toBeCloseTo(32, 12);
+  });
+
   test("显式刷新与 force 变更都应结束缩放预览", () => {
     const { viewportCore } = createViewportCoreContext({ tiles: true });
     const commitSpy = jest.spyOn(viewportCore.renderer, "commitZoomPreview");

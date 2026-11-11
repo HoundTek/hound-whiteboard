@@ -27,7 +27,7 @@ describe("CLI .hwb 打包", () => {
   async function setupBoard() {
     const { dir, cleanup } = tempBoardDir();
     const hwb = path.join(dir, "..", "board.hwb");
-    await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+    await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
     const daemon = await startTestDaemon("zip-test", dir, { source: "cli" });
     await runCli([
       "add",

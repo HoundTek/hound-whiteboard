@@ -48,7 +48,7 @@ describe("CLI 只读命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("readonly-test", dir, { source: "cli" });
       const { stdout: id } = await runCli([
         "add",
@@ -82,7 +82,7 @@ describe("CLI 只读命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("readonly-multi", dir, { source: "cli" });
       const ids = [];
       for (let i = 0; i < 2; i++) {
@@ -124,7 +124,7 @@ describe("CLI 只读命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("readonly-test", dir, { source: "cli" });
       await runCli([
         "add",

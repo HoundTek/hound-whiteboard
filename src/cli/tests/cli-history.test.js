@@ -24,7 +24,7 @@ describe("CLI 历史命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("hist-test", dir, { source: "cli" });
       const { stdout: id1 } = await runCli([
         "add",
@@ -70,7 +70,7 @@ describe("CLI 历史命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("hist-test", dir, { source: "cli" });
       await runCli([
         "add",
@@ -102,7 +102,7 @@ describe("CLI 历史命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("hist-test", dir, { source: "cli" });
       await runCli([
         "add",

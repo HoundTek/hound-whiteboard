@@ -100,7 +100,7 @@ export default {
         "board-id": "Relay room name (defaults to the board directory path)",
         port: "Listening port (auto-assigned when omitted)",
       },
-      examples: `hwb create --path ~/boards/a --width 800 --height 600
+      examples: `hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024
 hwb daemon start --name board1 --path ~/boards/a
 hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --board-id demo`,
     },
@@ -130,15 +130,16 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
     },
     create: {
       summary: "Create an empty board offline; fails if the board directory already exists",
-      usage: "create --path <board-dir> [--width <px>] [--height <px>] [--source <identity>] [--json]",
+      usage:
+        "create --path <board-dir> [--chunk-width <world-units>] [--chunk-height <world-units>] [--source <identity>] [--json]",
       description:
-        "Creates a board offline without a daemon. Board size is document data (it determines chunking); when omitted the size is unknown and later add commands need explicit dimensions.",
+        "Creates a board offline without a daemon. chunk-width / chunk-height are the chunk edges (storage and load granularity, default 1024); a board has no size of its own and the world is infinite. Chunk edges determine the on-disk chunk grid and cannot change after creation.",
       flag: {
         path: "Board directory (~ expansion supported)",
-        width: "Board width in pixels (default 0, i.e. unknown)",
-        height: "Board height in pixels (default 0, i.e. unknown)",
+        "chunk-width": "Chunk width in world units (default 1024)",
+        "chunk-height": "Chunk height in world units (default 1024)",
       },
-      examples: "hwb create --path ~/boards/a --width 800 --height 600",
+      examples: "hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024",
     },
     export: {
       summary: "Export a board as .hwb (flat zip, without .daemon.json)",

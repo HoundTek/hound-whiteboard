@@ -13,6 +13,50 @@ import { ChunkObjectManager } from "../../chunk/chunk-object-manager.js";
 import { createDefaultAomRenderHooks } from "../aom-render-hooks.js";
 import { createDefaultPersistenceAdapter } from "../persistence-adapter.js";
 
+describe("区块边长配置", () => {
+  test("不传时使用默认 1024，非法值同样回退", () => {
+    for (const options of [{}, { width: 0, height: 0 }, { width: -1, height: Number.NaN }]) {
+      const boardCore = new BoardCore({
+        ...options,
+        aomRenderHooks: createDefaultAomRenderHooks(),
+        persistenceAdapter: createDefaultPersistenceAdapter(),
+      });
+      expect({ w: boardCore.width, h: boardCore.height }).toEqual({
+        w: 1024,
+        h: 1024,
+      });
+    }
+  });
+
+  test("长宽可独立设置，对象归属按各自边长计算", () => {
+    const boardCore = new BoardCore({
+      width: 512,
+      height: 256,
+      aomRenderHooks: createDefaultAomRenderHooks(),
+      persistenceAdapter: createDefaultPersistenceAdapter(),
+    });
+
+    // 512×256 的网格里 (600, 300) 落在 (1, 1) 格 = id 3
+    const chunkId = Chunk.worldToChunkId({ x: 600, y: 300 }, 512, 256);
+    expect(chunkId).toBe(3);
+    expect(Chunk.idToCoordinate(3)).toEqual({ x: 1, y: 1 });
+    void boardCore;
+  });
+
+  test("会话元数据持久化区块边长", () => {
+    const boardCore = new BoardCore({
+      width: 512,
+      height: 768,
+      aomRenderHooks: createDefaultAomRenderHooks(),
+      persistenceAdapter: createDefaultPersistenceAdapter(),
+    });
+    expect(boardCore.collectSessionMeta().boardConfig).toEqual({
+      width: 512,
+      height: 768,
+    });
+  });
+});
+
 describe("Board chunk grid", () => {
   test("Chunk 的回字形 id 与二维坐标应可双向转换", () => {
     const samples = [

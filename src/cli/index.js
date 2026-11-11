@@ -361,8 +361,9 @@ async function main() {
     const board = resolveBoardPath(flags.path);
     const session = await openBoardSession(board, {
       create: true,
-      width: Number(flags.width ?? 0) || 0,
-      height: Number(flags.height ?? 0) || 0,
+      // 区块边长决定盘上区块划分，只在建板时生效
+      width: Number(flags["chunk-width"] ?? 0) || undefined,
+      height: Number(flags["chunk-height"] ?? 0) || undefined,
       source: flags.source ?? "cli",
     });
     session.rootPath = board;

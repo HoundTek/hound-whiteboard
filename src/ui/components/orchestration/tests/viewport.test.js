@@ -211,6 +211,43 @@ describe("Viewport (constructor unit)", () => {
     }
   });
 
+  test("缩放被夹取在 5% 到 3200% 之间", () => {
+    const worker = new FakeWorkerEndpoint();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi: () => null,
+    };
+    const viewport = new Viewport(
+      {
+        rootElement: {},
+        canvas: createNoopCanvas(),
+        uiCanvas: createNoopCanvas(),
+        worker,
+      },
+      board,
+      { width: 800, height: 600 },
+      "main",
+    );
+
+    try {
+      // 越界缩放会让区块加载窗口按 1/zoom² 膨胀，必须夹住
+      viewport.setViewportState({ zoom: 0.001 });
+      expect(viewport.zoom).toBeCloseTo(0.05, 12);
+      viewport.setViewportState({ zoom: 1000 });
+      expect(viewport.zoom).toBeCloseTo(32, 12);
+
+      // 区间内不受影响
+      viewport.setViewportState({ zoom: 0.5 });
+      expect(viewport.zoom).toBeCloseTo(0.5, 12);
+      viewport.setViewportState({ zoom: 3 });
+      expect(viewport.zoom).toBeCloseTo(3, 12);
+    } finally {
+      viewport.destroy();
+    }
+  });
+
   test("高 DPR 下位图放大而指针映射与几何保持 CSS 坐标", () => {
     const previousRatio = globalThis.devicePixelRatio;
     globalThis.devicePixelRatio = 2;

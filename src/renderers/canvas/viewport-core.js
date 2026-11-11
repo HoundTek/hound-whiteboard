@@ -17,6 +17,7 @@ import {
 import { ChunkObjectManager } from "../../kernel/chunk/chunk-object-manager.js";
 import { ViewportRenderer } from "./viewport-renderer.js";
 import { BoardCore } from "../../kernel/board/board-core.js";
+import { clampViewportZoom } from "./viewport-zoom.js";
 
 /**
  * Worker 侧视口核心
@@ -529,11 +530,12 @@ class ViewportCore {
               nextState.origin?.x ?? this.origin.x,
               nextState.origin?.y ?? this.origin.y,
             );
+    // 输入侧应已夹取，这里兜底：消息可来自任意前端
     const nextZoom =
       nextState.zoom === undefined
         ? this.zoom
         : Number.isFinite(nextState.zoom) && nextState.zoom > 0
-          ? nextState.zoom
+          ? clampViewportZoom(nextState.zoom)
           : this.zoom;
     // tile 合成要求整数视口原点：小数目标坐标会被 canvas 实现自行 snap，
     // 导致 tile 内容相对真实世界位置出现亚像素相位偏移（描边粗细两侧不一致）。

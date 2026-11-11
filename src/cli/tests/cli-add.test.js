@@ -29,7 +29,7 @@ describe("CLI add 命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon(DAEMON, dir, { source: "cli" });
       const id = (
         await runCli([
@@ -59,7 +59,7 @@ describe("CLI add 命令", () => {
     const dataFile = path.join(dir, "stroke.json");
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon(DAEMON, dir, { source: "cli" });
       writeFileSync(dataFile, JSON.stringify(JSON.parse(STROKE_DATA)));
       await expect(
@@ -89,7 +89,7 @@ describe("CLI add 命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon(DAEMON, dir, { source: "cli" });
       const id = (
         await runCli([
@@ -129,7 +129,7 @@ describe("CLI add 命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon(DAEMON, dir, { source: "cli" });
       // PowerShell 会吃掉内嵌双引号：{color: "#f00"} 到达进程时已成 {color: #f00}
       const { stdout: id } = await runCli([
@@ -168,7 +168,7 @@ describe("CLI add 命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon(DAEMON, dir, { source: "cli" });
       await runCli([
         "add",
@@ -202,7 +202,7 @@ describe("CLI add 命令", () => {
     // daemon 模式操作作者为 daemon 身份（--source 注入持板侧）
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon(DAEMON, dir, { source: "alice" });
       const id = (
         await runCli([

@@ -10,6 +10,7 @@
 import { RectangleRange } from "../../../kernel/range/index.js";
 import { Vector } from "../../../kernel/utils/math.js";
 import { UiRenderer } from "../renderer/ui-renderer.js";
+import { clampViewportZoom } from "../../../renderers/canvas/viewport-zoom.js";
 import { InputScope } from "./input-scope.js";
 
 /**
@@ -441,11 +442,12 @@ class Viewport {
               nextState.origin?.x ?? this.origin.x,
               nextState.origin?.y ?? this.origin.y,
             );
+    // 缩放范围与渲染器共用同一口径：越界会让区块加载窗口爆炸
     const nextZoom =
       nextState.zoom === undefined
         ? this.zoom
         : Number.isFinite(nextState.zoom) && nextState.zoom > 0
-          ? nextState.zoom
+          ? clampViewportZoom(nextState.zoom)
           : this.zoom;
     const originChanged =
       nextOrigin.x !== this.origin.x || nextOrigin.y !== this.origin.y;

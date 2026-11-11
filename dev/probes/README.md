@@ -26,6 +26,10 @@
 | `screenshot-mask.mjs` | 两张截图的差异是矩形块还是沿笔画形状 | `node dev/probes/screenshot-mask.mjs` | ink 掩码差集、包围盒填充率、字符画 |
 | `screenshot-blend.mjs` | 截图的差异是否为全局混合（整体变暗/变亮） | `node dev/probes/screenshot-blend.mjs` | 逐通道回归斜率、R²、变暗/变亮像素数 |
 | `screenshot-seam.mjs` | 截图里是否存在贯穿整片的直线分割（接缝） | `node dev/probes/screenshot-seam.mjs` | 列/行差异剖面的尖峰位置 |
+| `chunk-size.mjs` | 区块边长的取舍依据：窗口区块数、元数据读取、对象载入 | `node dev/probes/chunk-size.mjs` | 各候选边长的窗口区块数、元数据读取耗时、单区块载入耗时 |
+| `daemon-memory.mjs` | daemon 全量驻留的内存占用 | `node --expose-gc dev/probes/daemon-memory.mjs` | 目录大小、开板耗时、驻留对象数、堆增量（约 12KB/笔迹） |
+| `zoom-collect.mjs` | 缩小方向的成本归属 | `node dev/probes/zoom-collect.mjs` | 已载区块数、收集耗时、深缩放整帧耗时 |
+| `zoom-extremes.mjs` | 缩放两端的代价（用于确定缩放上下限） | `node dev/probes/zoom-extremes.mjs` | 各档位的已载区块数、收集耗时、单帧耗时 |
 
 截图类探针从命令行接收三张图片：
 

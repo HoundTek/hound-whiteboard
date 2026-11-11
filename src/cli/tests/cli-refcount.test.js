@@ -32,7 +32,7 @@ describe("CLI daemon 引用计数", () => {
   /** 起进程内 daemon 并建板 */
   async function setup() {
     const { dir, cleanup } = tempBoardDir();
-    await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+    await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
     const daemon = await startTestDaemon(DAEMON, dir, { source: "cli" });
     return { dir, daemon, cleanup };
   }
@@ -80,7 +80,7 @@ describe("CLI daemon 引用计数", () => {
     const { dir, daemon, cleanup } = await setup();
     const { dir: other, cleanup: otherCleanup } = tempBoardDir();
     try {
-      await runCli(["create", "--path", other, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", other, "--chunk-width", "800", "--chunk-height", "600"]);
       // 同名不同板
       await expect(
         runCli(["daemon", "start", "--name", DAEMON, "--path", other]),

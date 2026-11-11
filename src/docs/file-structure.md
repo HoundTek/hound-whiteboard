@@ -49,7 +49,7 @@
 字段含义：
 
 - `formatVersion`：布局版本号
-- `boardConfig`：板宽高；板尺寸是文档数据（决定区块划分），恢复时以盘上配置为准
+- `boardConfig`：区块边长；它决定盘上区块划分（区块 id 由世界坐标与边长算出），恢复时以盘上配置为准。世界无限，板没有尺寸
 - `lastTime` / `coreIdCounters` / `objectIdCounters`（存量兜底）：新写入落在 `meta/{source}.json` 分片；读取时板级字段与分片归并（计数按 key 并入，lastTime 取全源最大）
 - `nextSegmentSeq`（已退役）：v1 单流的全局段序号；per-source 流的下一段序号由各流目录内最大段序直接恢复
 

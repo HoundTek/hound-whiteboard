@@ -51,8 +51,8 @@ const TOPICS = [
     group: "offline",
     flags: [
       f("path", "ph.boardDir"),
-      f("width", "ph.px"),
-      f("height", "ph.px"),
+      f("chunk-width", "ph.px"),
+      f("chunk-height", "ph.px"),
       f("source", "ph.identity"),
       f("json"),
     ],

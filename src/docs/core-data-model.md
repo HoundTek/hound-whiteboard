@@ -54,7 +54,7 @@ UI 与 Worker 共用：
 
 `BoardCore` 定义在 `src/kernel/board/board-core.js`，是 Worker 侧真实白板状态，关键字段按用途分组：
 
-- 板级参数：`width` / `height`（板尺寸）、`rootPath`（板目录）
+- 板级参数：`width` / `height`（**区块边长**，存储与载入粒度）、`rootPath`（板目录）。世界无限，板本身没有尺寸
 - 持久化：`persistenceAdapter`（区块元数据与对象的读写契约）、`trash`（已删除对象的内存回收站，撤销删除的回图依据）
 - 日志与撤销：`operationLog`（hit 记录池）、`undoTree`（时间回溯树）、`hitCommitter`（分子操作的 commit 边界单点）
 - 区块装载：`chunkLoaded`（区块被哪些加载器以何种策略持有）、`objectLoaded`（当前驻留对象）、`chunkLoadEventBus`、`rootChunkLoader`
