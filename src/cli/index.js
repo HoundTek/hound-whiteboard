@@ -16,6 +16,7 @@ import { resolveCliIdentity } from "./cli-identity.js";
 import {
   isValidDaemonName,
   readEntry,
+  removeEntry,
   isEntryAlive,
   listEntries,
 } from "./daemon-registry.js";
@@ -84,18 +85,23 @@ async function runDaemonStart(flags) {
     }
     // 重复 start 同板 = 引用 +1（误操作安全：不会因重复 start 报错，也不会被一次 release 误关）
     const session = await connectDaemonByName(name);
-    if (session === null) {
+    if (session !== null) {
+      try {
+        const result = await session.api.hold();
+        console.log(t("out.daemonRefUp", { name, refCount: result.refCount }));
+      } finally {
+        session.close();
+      }
+      return;
+    }
+    // 探活与连接之间 daemon 可能刚好退出，留下僵尸条目。
+    // 端口仍通说明是真实连接故障，应当报错；端口已断则清掉条目按新建流程重来
+    if (await isEntryAlive(registered)) {
       throw new Error(
         t("err.daemonConnectFailed", { name, port: registered.port }),
       );
     }
-    try {
-      const result = await session.api.hold();
-      console.log(t("out.daemonRefUp", { name, refCount: result.refCount }));
-    } finally {
-      session.close();
-    }
-    return;
+    await removeEntry(name);
   }
   // 分支 2：新创建（含僵尸覆盖）
   // 板必须已存在（create 建板）；board.json 是板的标志文件

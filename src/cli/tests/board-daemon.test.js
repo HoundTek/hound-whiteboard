@@ -10,10 +10,15 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
+import { WebSocketServer } from "ws";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { startBoardDaemon, readDaemonDescriptor } from "../board-daemon.js";
-import { daemonIdentityFile } from "../daemon-registry.js";
+import {
+  daemonIdentityFile,
+  daemonsDir,
+  writeEntry,
+} from "../daemon-registry.js";
 import { connectDaemonByPath } from "../daemon-client.js";
 import { openBoardSession } from "../board-session.js";
 import { createRelayServer } from "../../host/sync/relay-server.js";
@@ -1100,7 +1105,9 @@ describe("GUI 附属 daemon 闲置自退出", () => {
       exitOnZero: false,
       name: "gui-idle-hold",
       source: "daemon-c",
-      idleExitMs: 100,
+      // 闲置窗口必须长于 CLI 子进程的启动时间：
+      // 100ms 时子进程常常还没连上，daemon 已自退出，测的就不再是引用计数规则
+      idleExitMs: 2000,
     });
     const run = (argv) =>
       execFileAsync(process.execPath, [CLI_PATH, ...argv], {
@@ -1113,6 +1120,45 @@ describe("GUI 附属 daemon 闲置自退出", () => {
       expect(await readDaemonDescriptor(dir)).not.toBeNull();
     } finally {
       await daemon.close();
+      await cleanup();
+    }
+  }, 30000);
+
+  test("探活通过但连接失败的僵尸条目会被清除并重建", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const name = "zombie-entry";
+    // 探活连接断开后才关闭监听：探活必然成功，随后的真实握手一定连不上，
+    // 精确复现「探活与连接之间 daemon 退出」的窗口。
+    // 探活走 WebSocket，假 daemon 必须是真 WS 服务器才能被判为存活
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await new Promise((resolve) => server.once("listening", resolve));
+    server.on("connection", (socket) => {
+      // 首个连接（探活）建立后立刻停止监听，已有连接保持
+      server.close();
+      socket.on("error", () => {});
+    });
+    const port = server.address().port;
+    await fs.mkdir(path.join(daemonsDir(), "registry"), { recursive: true });
+    await writeEntry({ name, rootPath: dir, port, source: "daemon-x", refCount: 1 });
+
+    try {
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        [CLI_PATH, "daemon", "start", "--name", name, "--path", dir],
+        { env: process.env },
+      );
+      // 僵尸条目被清掉后按新建流程处理，而不是把瞬时竞态抛成连接失败
+      expect(stdout).toContain(name);
+      const desc = await readDaemonDescriptor(dir);
+      expect(desc?.port).not.toBe(port);
+    } finally {
+      // 新建流程会拉起真实 daemon，必须显式停掉，否则进程泄漏到后续用例
+      await execFileAsync(
+        process.execPath,
+        [CLI_PATH, "daemon", "stop", "--name", name],
+        { env: process.env },
+      ).catch(() => {});
+      server.close();
       await cleanup();
     }
   }, 30000);
