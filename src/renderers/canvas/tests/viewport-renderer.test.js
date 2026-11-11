@@ -551,8 +551,9 @@ describe("ViewportRenderer", () => {
     });
 
     expect(dirtyRects).toHaveLength(2);
-    expect(dirtyRects[0]).toEqual(new RectangleRange(20, 30, 10, 10));
-    expect(dirtyRects[1]).toEqual(new RectangleRange(0, 0, 10, 10));
+    // 范围各向外扩 2 像素抗锯齿余量
+    expect(dirtyRects[0]).toEqual(new RectangleRange(18, 28, 14, 14));
+    expect(dirtyRects[1]).toEqual(new RectangleRange(-2, -2, 14, 14));
   });
 
   test("对象进出静态层时缓存走全量重建", () => {
@@ -854,7 +855,7 @@ describe("ViewportRenderer", () => {
     expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "clip")).toBe(true);
   });
 
-  test("getObjectScreenRect 应为 PathRange 额外补足栅格化 padding", () => {
+  test("getObjectScreenRect 应为对象补足栅格化 padding", () => {
     const objectInstance = new FakePathObject(1, new Vector(0, 0));
     const outputCanvas = createCanvas(800, 600, createContext("output", []));
     const { viewport, aom } = createViewportContext({ outputCanvas });
@@ -873,7 +874,8 @@ describe("ViewportRenderer", () => {
 
     const screenRect = renderer.getObjectScreenRect(objectInstance);
 
-    expect(screenRect).toEqual(new RectangleRange(-5, -5, 30, 10));
+    // 所有对象类型都补同一份抗锯齿留白
+    expect(screenRect).toEqual(new RectangleRange(-6, -6, 32, 12));
   });
 
   test("invalidateChunks 应提交新旧区块对应的屏幕脏区", () => {
@@ -1602,9 +1604,9 @@ describe("ViewportRenderer", () => {
       canvas: outputCanvas,
     });
 
-    // 几何 bbox：(30, 40, 40, 20)；留白 = 4 / 2 * 2 = 4
+    // 几何 bbox：(30, 40, 40, 20)；留白 = 4 / 2 * 2 = 4，再加 2 像素抗锯齿余量
     expect(renderer.getObjectScreenRect(circleObject)).toEqual(
-      new RectangleRange(26, 36, 48, 28),
+      new RectangleRange(24, 34, 52, 32),
     );
   });
 });

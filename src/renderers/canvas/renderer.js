@@ -12,7 +12,14 @@ import { createRectangleDirtyRectMerger } from "./render-scheduler.js";
 import { CanvasHost } from "./canvas-lifecycle.js";
 import { drawObject } from "./object-draw-strategies.js";
 
-const PATH_RASTERIZATION_SCREEN_PADDING = 1;
+/**
+ * 抗锯齿留白（屏幕像素）
+ * @description
+ * 光栅化会让着墨比几何边界多出约 1 像素，且边缘的覆盖率会在最后一像素内渐变。
+ * 留白取 2 是为了让脏区完整覆盖这圈渐变色带：只留 1 像素时，边缘对比度最高的
+ * 那几个像素会被裁剪掉，与不做裁剪的全量重建产生可见差异。
+ */
+const RASTERIZATION_SCREEN_PADDING = 2;
 
 /**
  * 用于 clearRect 时对脏区做整数扩边，避免子像素残留
@@ -211,13 +218,9 @@ class Renderer extends CanvasHost {
       Number.isFinite(objectPadding) && objectPadding > 0
         ? objectPadding * (this.viewport?.zoom ?? 1)
         : 0;
-    const objectRange = objectInstance?.getRange?.();
-
-    if (objectRange instanceof PathRange) {
-      return basePadding + PATH_RASTERIZATION_SCREEN_PADDING;
-    }
-
-    return basePadding;
+    // 抗锯齿会让着墨越过几何边界约 1 像素，所有对象类型都要留出这段余量，
+    // 否则按包围盒失效时会留下一条细边
+    return basePadding + RASTERIZATION_SCREEN_PADDING;
   }
 
   /**

@@ -39,6 +39,48 @@ const DEFAULT_STROKE_PROPERTY = Object.freeze({
 });
 
 /**
+ * 允许的线段连接样式
+ * @description
+ * miter 的尖角长度是 `miterLimit × width / 2`，默认 `miterLimit` 为 10，
+ * 最坏可达 5 倍线宽，与包围盒没有比例关系：按包围盒加留白扩出的脏区仍会漏掉尖角。
+ * 局部失效依赖「着墨范围 ⊆ 包围盒 ⊕ 留白」这条不变式（由绘制边界测试守住），
+ * 因此只允许能守住它的取值。笔刷体系确定之前先只保留 round 与 bevel。
+ * @type {ReadonlyArray<string>}
+ */
+const SUPPORTED_LINE_JOINS = Object.freeze(["round", "bevel"]);
+
+/**
+ * 允许的线段端点样式
+ * @description
+ * square 端点的方角斜向伸出 `width / 2 × √2`，超过按半线宽计算的留白；
+ * 要支持它必须同时把留白放大到 `width / 2 × √2`。
+ * @type {ReadonlyArray<string>}
+ */
+const SUPPORTED_LINE_CAPS = Object.freeze(["round", "butt"]);
+
+/**
+ * 归一化线段连接样式
+ * @param {string} [value] - 原始取值
+ * @returns {string} 可用取值
+ */
+function normalizeLineJoin(value) {
+  return SUPPORTED_LINE_JOINS.includes(value)
+    ? value
+    : DEFAULT_STROKE_PROPERTY.lineJoin;
+}
+
+/**
+ * 归一化线段端点样式
+ * @param {string} [value] - 原始取值
+ * @returns {string} 可用取值
+ */
+function normalizeLineCap(value) {
+  return SUPPORTED_LINE_CAPS.includes(value)
+    ? value
+    : DEFAULT_STROKE_PROPERTY.lineCap;
+}
+
+/**
  * 计算点列的轴对齐包围盒
  * @description
  * 直接在原点上取极值，不复制点。
@@ -74,6 +116,8 @@ class StrokeObject extends BasicObject {
   constructor(id, position, property = {}, data = {}) {
     super(id, position, property, data);
     this.property = { ...DEFAULT_STROKE_PROPERTY, ...this.property };
+    this.property.lineJoin = normalizeLineJoin(this.property.lineJoin);
+    this.property.lineCap = normalizeLineCap(this.property.lineCap);
     this.rich.localPathRange = new PathRange([]);
     this.rich.worldPathRange = new PathRange([]);
     this._onDataChange(Object.keys(data));
