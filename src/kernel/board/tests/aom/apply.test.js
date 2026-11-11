@@ -637,11 +637,14 @@ describe("ActiveObjectManager/apply", () => {
         ),
       });
 
-      board.addObject(circle, 1);
-      board.addObject(stroke, 1);
+      const chunk = board.getChunkById(1);
+      chunk.addObject(circle);
+      chunk.addObject(stroke);
+      board.registerObjectInstance(circle, { coveredChunkIds: new Set([1]) });
+      board.registerObjectInstance(stroke, { coveredChunkIds: new Set([1]) });
 
       // 手动建立静态边缘：圆(1) → 线(2)，表示线在圆之上
-      const graph = board.getChunkById(1).objectManager.staticGraph;
+      const graph = chunk.objectManager.staticGraph;
       graph.addEdgeUnsafe(1, 2);
 
       expect(graph.hasEdge(1, 2)).toBe(true);

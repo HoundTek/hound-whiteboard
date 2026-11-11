@@ -616,41 +616,6 @@ class BoardCore {
   }
 
   /**
-   * 添加对象到白板核心
-   * @param {BasicObject} obj - 要添加的对象
-   */
-  addObject(obj) {
-    if (!(obj instanceof BasicObject)) {
-      throw new TypeError("Invalid object instance.");
-    }
-    const chunkId = Chunk.worldToChunkId(obj.position, this.width, this.height);
-    if (chunkId == null) {
-      throw new Error("Cannot resolve chunk for object position.");
-    }
-    const chunk = this.getChunkById(chunkId);
-    if (!chunk) {
-      this.#log.throttledWarn(
-        "chunk-not-exist",
-        `Chunk ${chunkId} does not exist.`,
-      );
-      throw new Error("Chunk not exist.");
-    }
-
-    chunk.addObject(obj);
-
-    let coveredChunkIds = new Set([chunk.id]);
-    if (chunk.objectManager) {
-      coveredChunkIds = chunk.objectManager.syncObjectCoverChunksForObject(
-        obj,
-        this.width,
-        this.height,
-      );
-    }
-
-    this.registerObjectInstance(obj, { coveredChunkIds });
-  }
-
-  /**
    * 按区块加载对象实例到白板级对象表
    * @param {Chunk | number} chunkOrId - 区块实例或区块 id
    * @param {string} [boardRootPath=this.rootPath] - 白板根路径
