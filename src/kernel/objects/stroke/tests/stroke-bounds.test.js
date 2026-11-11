@@ -25,7 +25,7 @@ function createStroke(points, options = {}) {
 
 /**
  * 直角折线点列
- * @description 拐点处曲率突变的样条插值会跑到局部凸包外面，用来验证包围盒覆盖。
+ * @description 含直角拐点与长直段，用于验证包围盒与实际绘制点列一致。
  * @returns {Array<{x: number, y: number}>} 点列
  */
 function rightAnglePoints() {
@@ -38,20 +38,32 @@ function rightAnglePoints() {
   ];
 }
 
-/**
- * 判断外矩形是否完全包住内矩形
- * @param {RectangleRange} outer - 外矩形
- * @param {RectangleRange} inner - 内矩形
- * @returns {boolean} 是否包含
- */
-function containsRect(outer, inner) {
-  return (
-    outer.left <= inner.left &&
-    outer.top <= inner.top &&
-    outer.right >= inner.right &&
-    outer.bottom >= inner.bottom
-  );
-}
+describe("StrokeObject 世界点列", () => {
+  test("放大缩小时世界点列的点数与 data.points 一致", () => {
+    const points = rightAnglePoints();
+    for (const scale of [0.25, 1, 3, 8]) {
+      const stroke = createStroke(points, {
+        transform: new Matrix(scale, 0, 0, scale),
+      });
+      // 渲染点列与橡皮擦判定点列同一份数据：插点或抽稀都会改变几何与擦除语义
+      expect(stroke.rich.worldPathRange.points).toHaveLength(points.length);
+      expect(stroke.getRange().points).toHaveLength(points.length);
+    }
+  });
+
+  test("变换只做坐标映射，不改变点列形状特征", () => {
+    const points = rightAnglePoints();
+    const stroke = createStroke(points, {
+      transform: new Matrix(3, 0, 0, 3),
+    });
+    const worldPoints = stroke.rich.worldPathRange.points;
+    // 直角拐点经过等比缩放后仍然是直角拐点
+    expect(worldPoints[2].x).toBeCloseTo(300, 9);
+    expect(worldPoints[2].y).toBeCloseTo(0, 9);
+    expect(worldPoints[3].x).toBeCloseTo(300, 9);
+    expect(worldPoints[3].y).toBeCloseTo(180, 9);
+  });
+});
 
 describe("StrokeObject#getRenderBounds", () => {
   test("包围盒应等于实际绘制点列的包围盒", () => {
@@ -78,30 +90,6 @@ describe("StrokeObject#getRenderBounds", () => {
     expect(bounds.left).toBeCloseTo(0, 9);
     expect(bounds.top).toBeCloseTo(0, 9);
     expect(bounds.width).toBeCloseTo(10, 9);
-  });
-
-  test("缩放后包围盒应覆盖样条插值的过冲，而不只是控制点凸包", () => {
-    // scale > 1 时 calculateRichDatas 会经 insertPoints 插入样条点，
-    // 插值会跑到控制点凸包外侧。若用凸包矩形当渲染包围盒，
-    // 过冲的那一段会落在失效区域之外，留下残影。
-    const stroke = createStroke(rightAnglePoints(), {
-      transform: new Matrix(3, 0, 0, 3),
-    });
-
-    const bounds = stroke.getRenderBounds();
-    const hullBounds = RectangleRange.from(
-      stroke.rich.convexHullRange.transform(stroke.transform),
-    );
-
-    // 夹具自检：该形状在 scale=3 下确实存在过冲，旧的凸包矩形盖不住实际绘制点
-    expect(containsRect(hullBounds, bounds)).toBe(false);
-    // 真正的约束：渲染包围盒必须包住每一个实际绘制点
-    for (const point of stroke.rich.worldPathRange.toPoints()) {
-      expect(point.x).toBeGreaterThanOrEqual(bounds.left - 1e-9);
-      expect(point.x).toBeLessThanOrEqual(bounds.right + 1e-9);
-      expect(point.y).toBeGreaterThanOrEqual(bounds.top - 1e-9);
-      expect(point.y).toBeLessThanOrEqual(bounds.bottom + 1e-9);
-    }
   });
 
   test("追加点后包围盒应随之更新", () => {

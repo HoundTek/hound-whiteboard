@@ -32,8 +32,8 @@ src/kernel/objects/stroke/stroke.js
 ## 当前行为
 
 - `_onDataChange()` 在 `points` 变化后重建路径范围与富数据
-- `calculateRichDatas()` 会同步世界路径、凸包与包围盒
-- `setTransform()` 是修改 `transform` 的唯一入口；不经过它直接改 `transform` 不会刷新 `worldPathRange`、`convexHullRange`、`boundingBox`（`_onDataChange()` 不监听 transform）
+- `calculateRichDatas()` 会同步世界路径与包围盒
+- `setTransform()` 是修改 `transform` 的唯一入口；不经过它直接改 `transform` 不会刷新 `worldPathRange`、`boundingBox`（`_onDataChange()` 不监听 transform）
 - `getRange()` 返回 `worldPathRange`
 - `eraseData(trailPoints, radius)` 逐线段判定擦除命中，`trailPoints` 为世界坐标
   - 阈值 = 橡皮半径 + 笔画世界宽度的一半；宽度随 transform 缩放，按 `sqrt(|det|)` 折算到世界坐标

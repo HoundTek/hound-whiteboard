@@ -9,13 +9,11 @@
 import { Matrix, Vector } from "../../utils/math.js";
 import {
   PathRange,
-  PolygonRange,
   RectangleRange,
   pointToPolylineDistance,
   pointToSegmentDistance,
   segmentSegmentDistance,
 } from "../../range/index.js";
-import { calcConvexHull, insertPoints } from "../../utils/math-algorithm.js";
 import { BasicObject } from "../basic-obj.js";
 
 const DEFAULT_STROKE_PROPERTY = Object.freeze({
@@ -78,7 +76,6 @@ class StrokeObject extends BasicObject {
     this.property = { ...DEFAULT_STROKE_PROPERTY, ...this.property };
     this.rich.localPathRange = new PathRange([]);
     this.rich.worldPathRange = new PathRange([]);
-    this.rich.convexHullRange = new PolygonRange([]);
     this._onDataChange(Object.keys(data));
   }
 
@@ -93,7 +90,6 @@ class StrokeObject extends BasicObject {
   calculateRichDatas() {
     if (this.rich.localPathRange.points.length === 0) {
       this.rich.worldPathRange = new PathRange([]);
-      this.rich.convexHullRange = new PolygonRange([]);
       this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
       return;
     }
@@ -101,18 +97,7 @@ class StrokeObject extends BasicObject {
     let transformedPoints = this.rich.localPathRange.points.map((p) =>
       Vector.mulMatrix(this.transform, p),
     );
-    // 将其平滑（插点或删点）
-    let scale = Math.sqrt(this.transform.det());
-    if (scale > 1) {
-      transformedPoints = insertPoints(transformedPoints, Math.round(scale));
-    } else if (scale < 1) {
-      // [todo] 删点
-    }
     this.rich.worldPathRange = new PathRange(transformedPoints);
-    this.calculateConvexHull();
-    // 包围盒按实际绘制点列计算：局部点凸包经过变换得不出它——
-    // scale > 1 时 insertPoints 的样条插值会跑到控制点凸包外面，
-    // 用凸包矩形做渲染甩除与脏区会漏掉过冲的那一段。
     this.rich.boundingBox = calculatePointBounds(transformedPoints);
   }
 
@@ -127,12 +112,6 @@ class StrokeObject extends BasicObject {
   setTransform(trans) {
     this.transform = trans;
     this.calculateRichDatas();
-  }
-
-  calculateConvexHull() {
-    this.rich.convexHullRange = new PolygonRange(
-      calcConvexHull(this.rich.localPathRange.points),
-    );
   }
 
   /**
@@ -164,7 +143,8 @@ class StrokeObject extends BasicObject {
     const scale = Math.sqrt(Math.abs(this.transform.det()));
     const threshold = radius + (this.property.width * scale) / 2;
 
-    // 逐点变换到世界坐标；禁用插点平滑以保持与 data.points 的索引对应
+    // 逐点变换到世界坐标，与 data.points 保持索引对应：
+    // 橡皮擦按相邻点线段判定并直接写回 data.points，点列不得增删
     const worldPoints = localPoints.map((point) => {
       const transformed = Vector.mulMatrix(this.transform, point);
       return new Vector(

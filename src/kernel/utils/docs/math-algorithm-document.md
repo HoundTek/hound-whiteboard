@@ -45,7 +45,8 @@
 
 ## 在仓库中的典型用途
 
-- 凸包与插点：`src/kernel/objects/stroke/stroke.js` 用 `calcConvexHull()` 维护笔画外接范围、用 `insertPoints()` 在放大时插点平滑；`src/kernel/objects/graph/polygon.js` 用 `calcConvexHull()` 维护多边形外接范围。
+- 凸包：`src/kernel/objects/graph/polygon.js` 用 `calcConvexHull()` 维护多边形外接范围。
+- 插点：`insertPoints()` 目前没有生产调用方，作为备用的曲线细分工具保留。
 - 缠绕数：`src/kernel/range/geometry.js` 用 `ropeNailIntersect()` 的返回值做奇偶与非零两类点包含判定；点落在边或顶点附近时返回 `NaN`，调用方按“包含”处理。
 
 ## 当前状态
