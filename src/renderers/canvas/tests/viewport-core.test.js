@@ -25,7 +25,17 @@ describe("ViewportCore", () => {
     restoreOffscreenCanvas = installNoopOffscreenCanvas();
   });
 
+  /**
+   * 本文件创建的视口，用例结束后统一销毁
+   * @description
+   * 渲染器的调度器用真实定时器排帧；不销毁的话，定时器会在环境拆除后
+   * （假 OffscreenCanvas 已恢复）继续刷新缓存，抛出未捕获的 ReferenceError。
+   * @type {ViewportCore[]}
+   */
+  const createdViewports = [];
+
   afterEach(() => {
+    while (createdViewports.length > 0) createdViewports.pop().destroy();
     restoreOffscreenCanvas?.();
     restoreOffscreenCanvas = null;
   });
@@ -59,6 +69,7 @@ describe("ViewportCore", () => {
       tiles: options.tiles,
     });
 
+    createdViewports.push(viewportCore);
     return { boardCore, viewportCore, postedFrames };
   }
 
