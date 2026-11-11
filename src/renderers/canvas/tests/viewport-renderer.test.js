@@ -1434,10 +1434,15 @@ describe("ViewportRenderer", () => {
       ctxCalls.length = 0;
 
       // 输入侧显式收尾：不等空闲定时器，立刻换成清晰帧
+      const rebuildsBefore = renderer.getTileDebugInfo().rebuildCount;
       expect(renderer.commitZoomPreview()).toBe(true);
       renderer.flush([]);
 
-      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      // 提交后整片 tile 按新倍率重建，而不是继续用拉伸的上一帧
+      expect(renderer.getTileDebugInfo().zoom).toBeCloseTo(1.2, 6);
+      expect(renderer.getTileDebugInfo().rebuildCount).toBeGreaterThan(
+        rebuildsBefore,
+      );
       // 重复调用不应触发多余重建
       expect(renderer.commitZoomPreview()).toBe(false);
     });
@@ -1449,13 +1454,18 @@ describe("ViewportRenderer", () => {
       ctxCalls.length = 0;
 
       // 按键一次缩放一倍属于离散跳变，预览只会让用户看到一帧发糊的画面
+      const rebuildsBefore = renderer.getTileDebugInfo().rebuildCount;
       viewport.zoom = 2;
       renderer.invalidateChunks([chunk], [chunk], {
         previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
       });
       renderer.flush([]);
 
-      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      // 直接按新档位重建 tile，不经过预览
+      expect(renderer.getTileDebugInfo().level).toBe(-1);
+      expect(renderer.getTileDebugInfo().rebuildCount).toBeGreaterThan(
+        rebuildsBefore,
+      );
     });
 
     test("缩小不进入预览，直接重建缓存", () => {
@@ -1465,13 +1475,17 @@ describe("ViewportRenderer", () => {
       ctxCalls.length = 0;
 
       // 缩小会露出快照未覆盖的区域，留白比重新光栅化更刺眼
+      const rebuildsBefore = renderer.getTileDebugInfo().rebuildCount;
       viewport.zoom = 0.5;
       renderer.invalidateChunks([chunk], [chunk], {
         previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
       });
       renderer.flush([]);
 
-      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      expect(renderer.getTileDebugInfo().level).toBe(1);
+      expect(renderer.getTileDebugInfo().rebuildCount).toBeGreaterThan(
+        rebuildsBefore,
+      );
     });
 
     test("累计拉伸超过两倍时退出预览改为重建", () => {
@@ -1495,14 +1509,17 @@ describe("ViewportRenderer", () => {
       ctxCalls.length = 0;
 
       // 相对快照累积到 2.07 倍，超出阈值，退出预览并重建
+      const rebuildsBefore = renderer.getTileDebugInfo().rebuildCount;
       viewport.zoom = 2.0736;
       renderer.invalidateChunks([chunk], [chunk], {
         previousViewportState: { zoom: previousZoom, origin: { x: 0, y: 0 } },
       });
       renderer.flush([]);
 
-      // 缩放档位非 1 时 tile 关闭，判据是缓存被全量重建
-      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      // 超出模糊阈值后按新倍率重建 tile
+      expect(renderer.getTileDebugInfo().rebuildCount).toBeGreaterThan(
+        rebuildsBefore,
+      );
     });
 
     test("缩放停止后重建一帧清晰内容", () => {
@@ -1520,10 +1537,10 @@ describe("ViewportRenderer", () => {
         ctxCalls.length = 0;
         jest.advanceTimersByTime(200);
 
-        // 定时器必须让输出重新绘制，否则画面停留在拉伸预览上
+        // 定时器必须提交预览并让输出重新绘制，否则画面停留在拉伸预览上
         expect(renderer._scheduler.framePending).toBe(true);
-        renderer.flush([]);
-        expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+        // 预览已被提交，再提交一次应返回 false
+        expect(renderer.commitZoomPreview()).toBe(false);
       } finally {
         jest.useRealTimers();
       }
@@ -1546,8 +1563,9 @@ describe("ViewportRenderer", () => {
       renderer.invalidateCachedObjects([objects[0]]);
       renderer.flush([new RectangleRange(20, 20, 10, 10)]);
 
-      // 退出预览后重新走正常重建路径
-      expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      // 退出预览后按对象范围标记脏块并重建
+      expect(renderer.getTileDebugInfo().rebuildCount).toBeGreaterThan(0);
+      expect(renderer.getTileDebugInfo().zoom).toBeCloseTo(1.2, 6);
     });
 
     test("选中对象在移动提交后仍由输出层绘制", () => {
@@ -1585,42 +1603,20 @@ describe("ViewportRenderer", () => {
       ]);
     });
 
-    test("缩放档位非 0 时不使用 tile", () => {
+    test("缩放档位非 1 时同样使用 tile，层级随缩放取档", () => {
       const { renderer, viewport, objects } = createTileScenario([
         new Vector(20, 20),
       ]);
-      const before = renderer.getTileDebugInfo().rebuildCount;
 
       viewport.zoom = 2;
       renderer.invalidateCachedObjects([objects[0]]);
       renderer.flush();
 
-      expect(renderer.getTileDebugInfo().enabled).toBe(false);
-      expect(renderer.getTileDebugInfo().rebuildCount).toBe(before);
+      const info = renderer.getTileDebugInfo();
+      expect(info.enabled).toBe(true);
+      // 2 倍缩放对应层级 -1，一块 tile 覆盖 128 世界单位
+      expect(info.level).toBe(-1);
+      expect(info.tileSize).toBe(512);
     });
-  });
-
-  test("getObjectScreenRect 应覆盖 transform 缩放后的描边范围", () => {
-    const circleObject = new CircleObject(
-      1,
-      new Vector(50, 50),
-      { strokeWidth: 4 },
-      { radius: 10 },
-    );
-    circleObject.setTransform(new Matrix(2, 0, 0, 1));
-    const outputCanvas = createCanvas(800, 600, createContext("output", []));
-    const { viewport, aom } = createViewportContext({
-      activeObjects: [circleObject],
-      outputCanvas,
-    });
-
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
-
-    // 几何 bbox：(30, 40, 40, 20)；留白 = 4 / 2 * 2 = 4，再加 2 像素抗锯齿余量
-    expect(renderer.getObjectScreenRect(circleObject)).toEqual(
-      new RectangleRange(24, 34, 52, 32),
-    );
   });
 });

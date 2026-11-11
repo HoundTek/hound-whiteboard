@@ -11,6 +11,7 @@ import { RectangleRange } from "../../../kernel/range/index.js";
 import { Vector } from "../../../kernel/utils/math.js";
 import { UiRenderer } from "../renderer/ui-renderer.js";
 import { clampViewportZoom } from "../../../renderers/canvas/viewport-zoom.js";
+import { quantizeOriginToDevicePixel } from "../../../renderers/canvas/tile-grid.js";
 import { InputScope } from "./input-scope.js";
 
 /**
@@ -243,7 +244,7 @@ class Viewport {
    * @param {string} viewportId - 视口 id
    */
   constructor(
-    { rootElement, canvas, uiCanvas, worker },
+    { rootElement, canvas, uiCanvas, worker, useTiles = true },
     board,
     { width, height },
     viewportId,
@@ -258,6 +259,12 @@ class Viewport {
     this.#width = Number.isFinite(width) ? width : 0;
     this.#height = Number.isFinite(height) ? height : 0;
     this._zoom = 1;
+    /**
+     * 是否与 worker 侧同样启用 tile
+     * @description 启用时视口原点吸附到整数设备像素，与渲染侧保持同一口径。
+     * @type {boolean}
+     */
+    this.useTiles = useTiles;
     this.#pendingViewportRafId = null;
     this.#pendingFlushRafId = null;
     this.#workerSyncStarted = false;
@@ -453,7 +460,19 @@ class Viewport {
       nextOrigin.x !== this.origin.x || nextOrigin.y !== this.origin.y;
     const zoomChanged = nextZoom !== this.zoom;
 
-    this._origin = nextOrigin;
+    // 与 worker 侧同一口径：tile 贴图要求原点是整数设备像素，
+    // 否则指针换算用的原点与渲染用的原点会差半个像素
+    let resolvedOrigin = nextOrigin;
+    if (this.useTiles) {
+      const snapped = quantizeOriginToDevicePixel(
+        nextOrigin,
+        nextZoom,
+        this.devicePixelRatio,
+      );
+      resolvedOrigin = new Vector(snapped.x, snapped.y);
+    }
+
+    this._origin = resolvedOrigin;
     this._zoom = nextZoom;
 
     if (!originChanged && !zoomChanged) {

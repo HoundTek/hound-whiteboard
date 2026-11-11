@@ -117,7 +117,7 @@ describe("TileStore#markDirtyWorldRect", () => {
 
     expect(marked).toBe(1);
     expect(store.countDirty()).toBe(1);
-    expect(tiles.find((tile) => store.isDirty(tile))?.key).toBe("0,0");
+    expect(tiles.find((tile) => store.isDirty(tile))?.key).toBe("0:0,0");
   });
 
   test("跨区域矩形标记所有相交 tile", () => {
@@ -130,7 +130,7 @@ describe("TileStore#markDirtyWorldRect", () => {
     const dirtyKeys = tiles
       .filter((tile) => store.isDirty(tile))
       .map((tile) => tile.key);
-    expect(dirtyKeys.sort()).toEqual(["0,0", "1,0"]);
+    expect(dirtyKeys.sort()).toEqual(["0:0,0", "0:1,0"]);
   });
 
   test("内容变化记为局部脏区而不是整块重建", () => {

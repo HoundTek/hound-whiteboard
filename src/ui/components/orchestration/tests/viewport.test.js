@@ -211,6 +211,38 @@ describe("Viewport (constructor unit)", () => {
     }
   });
 
+  test("视口原点吸附到整数设备像素，与渲染侧同一口径", () => {
+    const worker = new FakeWorkerEndpoint();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi: () => null,
+    };
+    const viewport = new Viewport(
+      {
+        rootElement: {},
+        canvas: createNoopCanvas(),
+        uiCanvas: createNoopCanvas(),
+        worker,
+      },
+      board,
+      { width: 800, height: 600 },
+      "main",
+    );
+
+    try {
+      viewport.setViewportState({ origin: { x: 120.37, y: 80.62 }, zoom: 2 });
+      const unit = 2 * viewport.devicePixelRatio;
+      // 吸附单位是「缩放 × 设备倍率」，误差不超过半个设备像素
+      expect(Math.abs(viewport.origin.x * unit - Math.round(viewport.origin.x * unit))).toBeLessThan(1e-9);
+      expect(Math.abs(viewport.origin.y * unit - Math.round(viewport.origin.y * unit))).toBeLessThan(1e-9);
+      expect(Math.abs(viewport.origin.x - 120.37)).toBeLessThanOrEqual(0.5 / unit);
+    } finally {
+      viewport.destroy();
+    }
+  });
+
   test("缩放被夹取在 5% 到 3200% 之间", () => {
     const worker = new FakeWorkerEndpoint();
     const board = {

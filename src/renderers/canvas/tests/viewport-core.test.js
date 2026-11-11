@@ -162,10 +162,25 @@ describe("ViewportCore", () => {
     expect(viewportCore.origin).toEqual(new Vector(120, 81));
   });
 
-  test("非 tile 模式保留亚像素视口原点", () => {
+  test("tile 模式把视口原点吸附到整数设备像素", () => {
     const { viewportCore } = createViewportCoreContext({ tiles: true });
 
-    // 缩放档位非 0 时走经典路径，保留亚像素平移以获得平滑效果
+    // 设备像素 = 世界坐标 × 缩放 × 设备倍率，2 倍缩放下吸附单位是半个世界单位
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 2,
+    });
+
+    const origin = viewportCore.origin;
+    expect(origin.x * 2).toBe(Math.round(origin.x * 2));
+    expect(origin.y * 2).toBe(Math.round(origin.y * 2));
+    expect(Math.abs(origin.x - 120.4)).toBeLessThanOrEqual(0.25);
+    expect(Math.abs(origin.y - 80.6)).toBeLessThanOrEqual(0.25);
+  });
+
+  test("非 tile 模式保留亚像素视口原点", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: false });
+
     viewportCore.onViewportChange({
       origin: { x: 120.4, y: 80.6 },
       zoom: 2,

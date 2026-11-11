@@ -20,6 +20,11 @@ import { collectActiveDrawables as _collectActiveDrawables } from "./aom-collect
 import { OBJECT_DRAW_STRATEGIES } from "./object-draw-strategies.js";
 import { RenderScheduler, createRectangleDirtyRectMerger } from "./render-scheduler.js";
 import { TileStore, DEFAULT_TILE_SIZE } from "./tile-cache.js";
+import {
+  tileBoundaryDevice,
+  tileContentOrigin,
+  tileLocalDevice,
+} from "./tile-grid.js";
 import { normalizeCanvasSize } from "./canvas-lifecycle.js";
 import {
   createBaseDirtyRectThresholdStrategy,
@@ -311,16 +316,8 @@ class ViewportRenderer extends Renderer {
       resized = true;
     }
 
-    // tile 位图按设备像素分配，倍率变了就必须重建；边长与视口尺寸解耦，不随窗口变化
-    if (this.#tileStore.deviceScale !== this._deviceScale) {
-      this.#tileStore = new TileStore({
-        tileSize: this.#tileStore.tileSize,
-        deviceScale: this._deviceScale,
-        maxBytes: this.#tileStore.maxBytes,
-      });
-      this.#cacheDirty = true;
-      resized = true;
-    }
+    // tile 位图按设备像素分配，倍率变化由 setRasterScale 统一处理，视口尺寸不参与
+
 
     return resized;
   }
@@ -982,15 +979,14 @@ class ViewportRenderer extends Renderer {
   /**
    * 当前是否使用世界空间 tile 缓存
    * @description
-   * 仅在缩放档位 0（zoom 为 1）且视口能提供世界矩形时启用，其余情况走既有全量/脏区重建。
-   * 视口接口不完整时退回经典路径，避免把局部重建退化成全量。
+   * 视口能提供世界矩形时启用。tile 的格子间距随缩放取档，像素内容始终按当前缩放光栅化，
+   * 因此任何缩放档位都能用；视口接口不完整时退回经典路径。
    * @returns {boolean}
    * @private
    */
   #useTiles() {
     return (
       this.#tilesEnabled &&
-      (this.viewport?.zoom ?? 1) === 1 &&
       typeof this.viewport?.getViewportWorldRect === "function"
     );
   }
@@ -1074,6 +1070,11 @@ class ViewportRenderer extends Renderer {
     const worldRect = this.viewport?.getViewportWorldRect?.();
     if (!worldRect) return [];
 
+    const zoom = this.viewport?.zoom ?? 1;
+    const deviceScale = this._deviceScale ?? 1;
+    // 像素内容取决于缩放与设备倍率，两者变化会让整片 tile 失效
+    this.#tileStore.setRasterScale(zoom, deviceScale);
+
     const cacheWorldRect = this.#expandWorldRect(
       worldRect,
       this.#tileCacheMargin,
@@ -1085,15 +1086,14 @@ class ViewportRenderer extends Renderer {
     );
 
     if (dirtyTiles.length > 0) {
-      const zoom = this.viewport?.zoom ?? 1;
       // padding 与对象自身相关而与 tile 无关，先算一次，避免 tile 数 × 对象数的重复解析
       const items = this.#collectCacheDrawables().map((objectInstance) => {
-        const worldRect = this.getObjectWorldRect(objectInstance);
-        if (!worldRect) return { object: objectInstance, paddedWorldRect: undefined };
+        const paddedWorldRect = this.getObjectWorldRect(objectInstance);
+        if (!paddedWorldRect) return { object: objectInstance, paddedWorldRect: undefined };
         const padding = this.getObjectScreenPadding(objectInstance) / zoom;
         return {
           object: objectInstance,
-          paddedWorldRect: worldRect.inflate(padding),
+          paddedWorldRect: paddedWorldRect.inflate(padding),
         };
       });
       for (const tile of dirtyTiles) {
@@ -1141,12 +1141,18 @@ class ViewportRenderer extends Renderer {
     }
 
     const zoom = this.viewport?.zoom ?? 1;
-    const tileSize = this.#tileStore.tileSize;
-    const fullRect = new RectangleRange(0, 0, tileSize, tileSize);
+    const deviceScale = this._deviceScale ?? 1;
+    const cssWidth = tile.deviceRect.width / deviceScale;
+    const cssHeight = tile.deviceRect.height / deviceScale;
+    const fullRect = new RectangleRange(0, 0, cssWidth, cssHeight);
 
+    // 内容原点只由块边界决定，与视口原点无关，因此平移不需要重新光栅化
     const viewportContext = this.createViewportContext(ctx, {
       zoom,
-      origin: { x: tile.worldX, y: tile.worldY },
+      origin: {
+        x: tileContentOrigin(tile.boundaryLeft, zoom, deviceScale),
+        y: tileContentOrigin(tile.boundaryTop, zoom, deviceScale),
+      },
     });
 
     const entries = [];
@@ -1159,14 +1165,24 @@ class ViewportRenderer extends Renderer {
       }
       if (!intersectsRanges(worldRect, tile.worldRect)) continue;
 
+      const left =
+        tileLocalDevice(
+          worldRect.left,
+          tile.boundaryLeft,
+          zoom,
+          deviceScale,
+        ) / deviceScale;
+      const top =
+        tileLocalDevice(worldRect.top, tile.boundaryTop, zoom, deviceScale) /
+        deviceScale;
       entries.push({
         objectId: objectInstance.id,
         object: objectInstance,
         screenRect: new RectangleRange(
-          (worldRect.left - tile.worldX) * zoom,
-          (worldRect.top - tile.worldY) * zoom,
-          worldRect.width * zoom,
-          worldRect.height * zoom,
+          left,
+          top,
+          (worldRect.width * zoom * deviceScale) / deviceScale,
+          (worldRect.height * zoom * deviceScale) / deviceScale,
         ),
       });
     }
@@ -1181,7 +1197,7 @@ class ViewportRenderer extends Renderer {
     // 局部脏区只重绘 tile 内的小块，其余像素保持不动
     const rebuiltRects = [];
     for (const worldRect of tile.dirtyRects) {
-      const localRect = this.#worldRectToTileRect(worldRect, tile, zoom);
+      const localRect = this.#worldRectToTileRect(worldRect, tile);
       if (!localRect) continue;
       this.clearRegion(ctx, localRect);
       this.renderRegion(ctx, viewportContext, entries, localRect);
@@ -1199,12 +1215,31 @@ class ViewportRenderer extends Renderer {
    * @returns {RectangleRange | undefined} tile 内矩形，完全在外时返回 undefined
    * @private
    */
-  #worldRectToTileRect(worldRect, tile, zoom) {
-    const tileSize = this.#tileStore.tileSize;
-    const left = Math.max(0, (worldRect.left - tile.worldX) * zoom);
-    const top = Math.max(0, (worldRect.top - tile.worldY) * zoom);
-    const right = Math.min(tileSize, (worldRect.right - tile.worldX) * zoom);
-    const bottom = Math.min(tileSize, (worldRect.bottom - tile.worldY) * zoom);
+  #worldRectToTileRect(worldRect, tile) {
+    const zoom = this.viewport?.zoom ?? 1;
+    const deviceScale = this._deviceScale ?? 1;
+    const cssWidth = tile.deviceRect.width / deviceScale;
+    const cssHeight = tile.deviceRect.height / deviceScale;
+    const left = Math.max(
+      0,
+      tileLocalDevice(worldRect.left, tile.boundaryLeft, zoom, deviceScale) /
+        deviceScale,
+    );
+    const top = Math.max(
+      0,
+      tileLocalDevice(worldRect.top, tile.boundaryTop, zoom, deviceScale) /
+        deviceScale,
+    );
+    const right = Math.min(
+      cssWidth,
+      tileLocalDevice(worldRect.right, tile.boundaryLeft, zoom, deviceScale) /
+        deviceScale,
+    );
+    const bottom = Math.min(
+      cssHeight,
+      tileLocalDevice(worldRect.bottom, tile.boundaryTop, zoom, deviceScale) /
+        deviceScale,
+    );
     if (right <= left || bottom <= top) return undefined;
     return new RectangleRange(left, top, right - left, bottom - top);
   }
@@ -1220,58 +1255,65 @@ class ViewportRenderer extends Renderer {
    * @private
    */
   #drawTiles(ctx, dirtyRects = []) {
-    if (!this.viewport?.getViewportWorldRect?.()) return false;
+    const viewportWorldRect = this.viewport?.getViewportWorldRect?.();
+    if (!viewportWorldRect) return false;
 
     const tiles = this.#ensureCleanTiles();
     const zoom = this.viewport?.zoom ?? 1;
     const origin = this.viewport?.origin ?? { x: 0, y: 0 };
-    const tileSize = this.#tileStore.tileSize * zoom;
-    const hasDirtyRects = dirtyRects.length > 0;
-    const clipRects = hasDirtyRects
-      ? dirtyRects
-      : [this._getViewportRect() ?? null];
-
-    // tile 位图与输出位图都在设备像素空间，坐标统一乘倍率后 1:1 搬运
     const deviceScale = this._deviceScale ?? 1;
+    // 原点已吸附到整数设备像素，因此贴图位置全是整数，搬运不需要重采样
+    const originDeviceX = origin.x * zoom * deviceScale;
+    const originDeviceY = origin.y * zoom * deviceScale;
+    const viewportRect = this._getViewportRect();
+
+    const toDeviceClip = (rect) => ({
+      left: rect.left * deviceScale,
+      top: rect.top * deviceScale,
+      right: (rect.left + rect.width) * deviceScale,
+      bottom: (rect.top + rect.height) * deviceScale,
+    });
+    const clipRects =
+      dirtyRects.length > 0
+        ? dirtyRects.map(toDeviceClip)
+        : viewportRect
+          ? [toDeviceClip(viewportRect)]
+          : [null];
+
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const limitSize = Math.round(tileSize * deviceScale);
     for (const clipRect of clipRects) {
       for (const tile of tiles) {
-        this.#tileStore.touch(tile);
-        const left = (tile.worldX - origin.x) * zoom;
-        const top = (tile.worldY - origin.y) * zoom;
-        const right = left + tileSize;
-        const bottom = top + tileSize;
+        const destLeft = tile.boundaryLeft - originDeviceX;
+        const destTop = tile.boundaryTop - originDeviceY;
+        const tileWidth = tile.deviceRect.width;
+        const tileHeight = tile.deviceRect.height;
         if (
           clipRect &&
-          (left >= clipRect.right ||
-            top >= clipRect.bottom ||
-            right <= clipRect.left ||
-            bottom <= clipRect.top)
+          (destLeft >= clipRect.right ||
+            destTop >= clipRect.bottom ||
+            destLeft + tileWidth <= clipRect.left ||
+            destTop + tileHeight <= clipRect.top)
         ) {
           continue;
         }
 
+        this.#tileStore.touch(tile);
         // 只搬限定区内那一块：以整图配小裁剪区会把像素搬运量放大数十倍
-        const limitLeft = clipRect ? clipRect.left : left;
-        const limitTop = clipRect ? clipRect.top : top;
-        const limitRight = clipRect ? clipRect.right : right;
-        const limitBottom = clipRect ? clipRect.bottom : bottom;
-        const sourceLeft = Math.max(
-          0,
-          Math.round((limitLeft - left) * deviceScale),
-        );
-        const sourceTop = Math.max(
-          0,
-          Math.round((limitTop - top) * deviceScale),
-        );
-        const sourceWidth =
-          Math.min(limitSize, Math.round((limitRight - left) * deviceScale)) -
-          sourceLeft;
-        const sourceHeight =
-          Math.min(limitSize, Math.round((limitBottom - top) * deviceScale)) -
-          sourceTop;
+        const sourceLeft = clipRect
+          ? Math.max(0, Math.round(clipRect.left) - destLeft)
+          : 0;
+        const sourceTop = clipRect
+          ? Math.max(0, Math.round(clipRect.top) - destTop)
+          : 0;
+        const sourceRight = clipRect
+          ? Math.min(tileWidth, Math.round(clipRect.right) - destLeft)
+          : tileWidth;
+        const sourceBottom = clipRect
+          ? Math.min(tileHeight, Math.round(clipRect.bottom) - destTop)
+          : tileHeight;
+        const sourceWidth = sourceRight - sourceLeft;
+        const sourceHeight = sourceBottom - sourceTop;
         if (sourceWidth <= 0 || sourceHeight <= 0) continue;
 
         ctx.drawImage(
@@ -1280,8 +1322,8 @@ class ViewportRenderer extends Renderer {
           sourceTop,
           sourceWidth,
           sourceHeight,
-          Math.round(left * deviceScale) + sourceLeft,
-          Math.round(top * deviceScale) + sourceTop,
+          destLeft + sourceLeft,
+          destTop + sourceTop,
           sourceWidth,
           sourceHeight,
         );
@@ -1301,7 +1343,7 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 读取 tile 缓存调试信息
-   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number, bytes: number }}
+   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number, bytes: number, level: number, zoom: number }}
    */
   getTileDebugInfo() {
     return {
@@ -1311,6 +1353,8 @@ class ViewportRenderer extends Renderer {
       dirtyCount: this.#tileStore.countDirty(),
       rebuildCount: this.#tileStore.rebuildCount,
       bytes: this.#tileStore.usedBytes,
+      level: this.#tileStore.level,
+      zoom: this.#tileStore.zoom,
     };
   }
 

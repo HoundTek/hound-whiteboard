@@ -6,6 +6,13 @@
  */
 
 import { intersectsRanges, RectangleRange } from "../../kernel/range/index.js";
+import {
+  levelForZoom,
+  tileDeviceRect,
+  tileRangeForWorldRect,
+  tileScreenSizeDevice,
+  tileWorldRect,
+} from "./tile-grid.js";
 
 /**
  * 单块 tile 允许的局部脏区数量上限
@@ -92,6 +99,19 @@ class TileStore {
   maxBytes;
 
   /**
+   * 当前位图对应的缩放倍率
+   * @description 像素内容是缩放的连续函数，倍率一变整片 tile 都不能再用。
+   * @type {number}
+   */
+  zoom = 1;
+
+  /**
+   * 当前层级，决定格子间距
+   * @type {number}
+   */
+  level = 0;
+
+  /**
    * 已分配的 tile
    * @type {Map<string, TileEntry>}
    * @private
@@ -127,11 +147,12 @@ class TileStore {
   }
 
   /**
-   * 单块 tile 的位图边长（设备像素）
+   * 单块 tile 的标称位图边长（设备像素）
+   * @description 实际位图按每块取整后的屏幕矩形分配，与标称值最多相差 1 像素。
    * @type {number}
    */
   get bitmapSize() {
-    return Math.max(1, Math.round(this.tileSize * this.deviceScale));
+    return Math.max(1, Math.round(this.screenSizeDevice));
   }
 
   /**
@@ -149,7 +170,7 @@ class TileStore {
    * @returns {string}
    */
   key(tx, ty) {
-    return `${tx},${ty}`;
+    return `${this.level}:${tx},${ty}`;
   }
 
   /**
@@ -160,15 +181,65 @@ class TileStore {
   rangeForWorldRect(rect) {
     const normalized = RectangleRange.fromRectLike(rect);
     if (!normalized) return undefined;
-
-    // 右边界用 ceil 减一：减去固定 epsilon 在大坐标下会被浮点精度吞掉，
-    // 恰好落在分界线上的右边界不应多算一块 tile
+    const range = tileRangeForWorldRect(
+      {
+        left: normalized.left,
+        top: normalized.top,
+        right: normalized.left + normalized.width,
+        bottom: normalized.top + normalized.height,
+      },
+      this.level,
+      this.tileSize,
+    );
     return {
-      minTx: Math.floor(normalized.left / this.tileSize),
-      minTy: Math.floor(normalized.top / this.tileSize),
-      maxTx: Math.ceil(normalized.right / this.tileSize) - 1,
-      maxTy: Math.ceil(normalized.bottom / this.tileSize) - 1,
+      minTx: range.minIx,
+      minTy: range.minIy,
+      maxTx: range.maxIx,
+      maxTy: range.maxIy,
     };
+  }
+
+  /**
+   * 单块屏幕边长（设备像素）
+   * @type {number}
+   */
+  get screenSizeDevice() {
+    return tileScreenSizeDevice(
+      this.level,
+      this.zoom,
+      this.deviceScale,
+      this.tileSize,
+    );
+  }
+
+  /**
+   * 同步栅格化参数，参数变化时丢弃全部 tile
+   * @description 像素内容取决于缩放与设备倍率，两者任一变化都必须重新光栅化。
+   * @param {number} zoom - 缩放倍率
+   * @param {number} deviceScale - 设备像素倍率
+   * @returns {boolean} 是否发生了失效
+   */
+  setRasterScale(zoom, deviceScale) {
+    const nextZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const nextScale =
+      Number.isFinite(deviceScale) && deviceScale > 0 ? deviceScale : 1;
+    if (nextZoom === this.zoom && nextScale === this.deviceScale) return false;
+    this.zoom = nextZoom;
+    this.deviceScale = nextScale;
+    this.level = levelForZoom(nextZoom);
+    this.clear();
+    return true;
+  }
+
+  /**
+   * 计算单块 tile 的屏幕矩形（设备像素）
+   * @param {number} tx - 横向块序号
+   * @param {number} ty - 纵向块序号
+   * @param {{ x: number, y: number }} originDevice - 视口原点（设备像素）
+   * @returns {{ left: number, top: number, width: number, height: number }} 屏幕矩形
+   */
+  deviceRect(tx, ty) {
+    return tileDeviceRect(tx, ty, this.screenSizeDevice);
   }
 
   /**
@@ -320,18 +391,28 @@ class TileStore {
    * @private
    */
   #createTile(tx, ty) {
-    const worldX = tx * this.tileSize;
-    const worldY = ty * this.tileSize;
-    const bitmapSize = this.bitmapSize;
+    const world = tileWorldRect(tx, ty, this.level, this.tileSize);
+    const rect = this.deviceRect(tx, ty);
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
     return {
       key: this.key(tx, ty),
       tx,
       ty,
-      worldX,
-      worldY,
-      worldRect: new RectangleRange(worldX, worldY, this.tileSize, this.tileSize),
-      canvas: this.#createCanvas(bitmapSize, bitmapSize),
-      bytes: bitmapSize * bitmapSize * 4,
+      level: this.level,
+      worldX: world.left,
+      worldY: world.top,
+      worldRect: new RectangleRange(
+        world.left,
+        world.top,
+        world.width,
+        world.height,
+      ),
+      boundaryLeft: rect.left,
+      boundaryTop: rect.top,
+      deviceRect: { width, height },
+      canvas: this.#createCanvas(width, height),
+      bytes: width * height * 4,
       dirty: true,
       dirtyRects: [],
     };
