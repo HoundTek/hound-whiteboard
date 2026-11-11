@@ -250,6 +250,8 @@ describe("tile 模式下选中与提交", () => {
       expect(aom.has(strokes[0].id)).toBe(true);
       expect(output.count("stroke")).toBeGreaterThan(0);
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -282,6 +284,8 @@ describe("tile 模式下选中与提交", () => {
       );
       expect(drawnSomewhere).toBe(true);
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -300,6 +304,8 @@ describe("tile 模式下选中与提交", () => {
       expect(aom.has(moved.id)).toBe(false);
       expect(renderer.getTileDebugInfo().rebuildCount).toBeGreaterThan(before);
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });

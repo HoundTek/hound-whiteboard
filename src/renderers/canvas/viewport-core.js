@@ -637,6 +637,8 @@ class ViewportCore {
    */
   destroy() {
     this.#chunkLoader.destroy();
+    // 渲染器持调度器与预览定时器，不停会在销毁后继续排帧
+    this.#renderer?.destroy?.();
     this.#frameDirty = false;
   }
 }

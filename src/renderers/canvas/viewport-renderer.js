@@ -891,6 +891,17 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
+   * 销毁渲染器
+   * @description 停掉两个调度器与预览定时器，销毁后不再排帧也不再创建画布。
+   * @returns {void}
+   */
+  destroy() {
+    this.#exitZoomPreview();
+    this.#cacheScheduler.cancel();
+    this.#outputScheduler.cancel();
+  }
+
+  /**
    * 结束缩放预览并请求一帧清晰渲染
    * @description
    * 手势结束有两条来源：输入侧显式通知（`force` 刷新、显式 flush），

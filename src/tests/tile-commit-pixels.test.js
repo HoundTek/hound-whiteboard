@@ -198,6 +198,8 @@ describe("tile 提交路径的像素正确性", () => {
       const { lost, samples } = countLostPixels(before, after, 800);
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -223,6 +225,8 @@ describe("tile 提交路径的像素正确性", () => {
       const { lost, samples } = countLostPixels(before, after, 800);
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -268,6 +272,8 @@ describe("tile 提交路径的像素正确性", () => {
       );
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -326,6 +332,8 @@ describe("tile 提交路径的像素正确性", () => {
       );
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -369,6 +377,8 @@ describe("tile 提交路径的像素正确性", () => {
       );
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -420,6 +430,8 @@ describe("tile 提交路径的像素正确性", () => {
       expect(left).toBeGreaterThan(0);
       expect(right).toBeGreaterThan(0);
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -481,6 +493,8 @@ describe("tile 提交路径的像素正确性", () => {
       );
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -527,6 +541,8 @@ describe("tile 提交路径的像素正确性", () => {
       const { lost, samples } = countLostPixels(baseline, restored, 800);
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -592,6 +608,8 @@ describe("tile 提交路径的像素正确性", () => {
       console.log("CREATE_FAILURES", JSON.stringify(failures));
       expect(failures).toEqual([]);
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -635,6 +653,8 @@ describe("tile 提交路径的像素正确性", () => {
         );
       }
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
@@ -676,6 +696,8 @@ describe("tile 提交路径的像素正确性", () => {
       );
       expect({ lost, samples }).toEqual({ lost: 0, samples: [] });
     } finally {
+      // 先停调度器再撤掉假 canvas：否则排上的帧会在无 OffscreenCanvas 环境下继续光栅化
+      viewport.destroy();
       host.restore();
     }
   });
