@@ -453,21 +453,18 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 在当前已加载区块内解析静态对象实例
-   * @param {Iterable<*>} chunks - 当前已加载区块
+   * 解析静态对象实例
    * @param {string} objectId - 对象 id
    * @returns {BasicObject | undefined}
+   *
+   * @description
+   * 对象查找全部走索引（活动对象表、失活层暂存表、已载对象表），与区块数量无关，
+   * 因此不需要传入已载区块集合；传入集合只会让每次查找多建一份 O(区块数) 的数组。
    */
-  resolveStaticObjectFromChunks(chunks, objectId) {
-    const loadedChunks = Array.from(chunks).filter(Boolean);
-    const candidateChunkIds = loadedChunks
-      .map((chunk) => chunk?.id)
-      .filter((chunkId) => Number.isInteger(chunkId));
-
+  resolveStaticObjectFromChunks(objectId) {
     const objectInstance =
       this.viewport?.board?.activeObjectManager?.findBoardObjectInstance?.(
         objectId,
-        candidateChunkIds,
       ) ?? this.viewport?.board?.getObjectById?.(objectId);
 
     return objectInstance instanceof BasicObject ? objectInstance : undefined;
@@ -510,10 +507,7 @@ class ViewportRenderer extends Renderer {
 
     const drawables = [];
     for (const objectId of mergedGraph.getTopologicalOrder()) {
-      const objectInstance = this.resolveStaticObjectFromChunks(
-        chunks,
-        objectId,
-      );
+      const objectInstance = this.resolveStaticObjectFromChunks(objectId);
       if (!(objectInstance instanceof BasicObject)) continue;
 
       drawables.push(objectInstance);

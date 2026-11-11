@@ -341,6 +341,68 @@ describe("ViewportRenderer", () => {
     ]);
   });
 
+  test("collectStaticDrawables 解析对象时不扫描已载区块", () => {
+    // 每次读取区块 id 都记一笔：按区块重建候选集合的写法会让计数随区块数膨胀
+    let idReads = 0;
+    const chunks = [];
+    for (let index = 0; index < 200; index++) {
+      const graph = new DirectedGraph();
+      graph.addNodeUnsafe(index + 1);
+      chunks.push({
+        get id() {
+          idReads++;
+          return index + 1;
+        },
+        objectManager: { staticGraph: graph },
+      });
+    }
+
+    const objectMap = new Map();
+    for (let index = 0; index < 200; index++) {
+      objectMap.set(
+        index + 1,
+        new FakeRectObject(index + 1, new Vector(0, 0), []),
+      );
+    }
+
+    const aom = {
+      has() {
+        return false;
+      },
+      findBoardObjectInstance(objectId) {
+        return objectMap.get(objectId);
+      },
+      activeObjects: new Set(),
+      activeObjectIndex: new Map(),
+      layerOrder: [],
+    };
+
+    const renderer = new ViewportRenderer(
+      {
+        board: {
+          getObjectById(objectId) {
+            return objectMap.get(objectId);
+          },
+          activeObjectManager: aom,
+        },
+        chunkLoader: {
+          getLoadedChunks() {
+            return chunks;
+          },
+        },
+        origin: new Vector(0, 0),
+        zoom: 1,
+        chunkWidth: 800,
+        chunkHeight: 600,
+      },
+      aom,
+      { canvas: createCanvas(800, 600, createContext("output", [])) },
+    );
+
+    expect(renderer.collectStaticDrawables()).toHaveLength(200);
+    expect(idReads).toBe(0);
+  });
+
   test("collectActiveDrawables 应按 layerOrder / inactive 语义收集 AOM 对象", () => {
     const calls = [];
     const object1 = new FakeRectObject(1, new Vector(0, 0), calls);

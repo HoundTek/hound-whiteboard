@@ -422,14 +422,10 @@ class ActiveObjectManager {
     }
 
     for (const context of contexts ?? []) {
-      const coveredChunkIds = context?.coveredChunkIds ?? new Set();
       for (const objectId of context?.relatedObjectIds ?? []) {
         if (invalidationObjectMap.has(objectId)) continue;
 
-        const objectInstance = this.findBoardObjectInstance(
-          objectId,
-          coveredChunkIds,
-        );
+        const objectInstance = this.findBoardObjectInstance(objectId);
         if (!(objectInstance instanceof BasicObject)) continue;
 
         invalidationObjectMap.set(objectId, objectInstance);

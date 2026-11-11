@@ -30,6 +30,8 @@
 | `daemon-memory.mjs` | daemon 全量驻留的内存占用 | `node --expose-gc dev/probes/daemon-memory.mjs` | 目录大小、开板耗时、驻留对象数、堆增量（约 12KB/笔迹） |
 | `zoom-collect.mjs` | 缩小方向的成本归属 | `node dev/probes/zoom-collect.mjs` | 已载区块数、收集耗时、深缩放整帧耗时 |
 | `zoom-extremes.mjs` | 缩放两端的代价（用于确定缩放上下限） | `node dev/probes/zoom-extremes.mjs` | 各档位的已载区块数、收集耗时、单帧耗时 |
+| `collect-cost.mjs` | 缩小方向静态层的收集成本 | `node dev/probes/collect-cost.mjs` | 已载区块数、`collectStaticDrawables` 中位与最快耗时 |
+| `chunk-unload.mjs` | 缩小再放大后区块是否回落 | `node dev/probes/chunk-unload.mjs` | 各档位的已载区块数、驻留对象数、单帧耗时。**必须用持久化板**，内存模式按设计不卸载 |
 
 截图类探针从命令行接收三张图片：
 
