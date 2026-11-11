@@ -75,6 +75,29 @@ const ZOOM_PREVIEW_MAX_STEP = 1.25;
 const ZOOM_PREVIEW_SETTLE_MS = 150;
 
 /**
+ * 比较两个对象或区块标识
+ * @description 数字按数值比较，其余按字符串比较，保证任意输入都有全序。
+ * @param {string | number} left - 左侧标识
+ * @param {string | number} right - 右侧标识
+ * @returns {number} 比较结果
+ */
+function compareObjectKeys(left, right) {
+  if (typeof left === "number" && typeof right === "number") {
+    return left - right;
+  }
+  return String(left).localeCompare(String(right));
+}
+
+/**
+ * 按标识排序节点
+ * @param {Array<string | number>} nodes - 节点标识集合
+ * @returns {Array<string | number>} 排序后的副本
+ */
+function sortNodes(nodes) {
+  return [...nodes].sort(compareObjectKeys);
+}
+
+/**
  * 视口渲染器
  * @description
  * 在一个类内部管理两个 OffscreenCanvas：`#cache`（静态层预渲染缓存）和 `#output`（最终输出 canvas）。
@@ -454,23 +477,29 @@ class ViewportRenderer extends Renderer {
    */
   mergeStaticGraphs(chunks) {
     const mergedGraph = new DirectedGraph();
+    // 顺序只由集合决定，不依赖加载先后：区块按 id 排序、块内节点按键排序。
+    // 拓扑排序对入度为 0 的节点按插入顺序出队，插入顺序不稳定会让互不相干的对象
+    // 在区块异步加载时来回换层。
+    const orderedChunks = [...chunks]
+      .filter(Boolean)
+      .sort((left, right) => compareObjectKeys(left.id, right.id));
 
-    for (const chunk of chunks) {
+    for (const chunk of orderedChunks) {
       const staticGraph = chunk?.objectManager?.staticGraph;
       if (!staticGraph) continue;
 
-      for (const node of staticGraph.getNodes?.() ?? []) {
+      for (const node of sortNodes(staticGraph.getNodes?.() ?? [])) {
         if (!mergedGraph.hasNode(node)) {
           mergedGraph.addNodeUnsafe(node);
         }
       }
     }
 
-    for (const chunk of chunks) {
+    for (const chunk of orderedChunks) {
       const staticGraph = chunk?.objectManager?.staticGraph;
       if (!staticGraph) continue;
 
-      for (const node of staticGraph.getNodes?.() ?? []) {
+      for (const node of sortNodes(staticGraph.getNodes?.() ?? [])) {
         for (const neighbor of staticGraph.neighborsUnsafe?.(node) ?? []) {
           if (!mergedGraph.hasNode(neighbor)) {
             mergedGraph.addNodeUnsafe(neighbor);

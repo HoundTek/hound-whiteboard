@@ -165,7 +165,9 @@ function createViewportContext(options = {}) {
       return objectMap.get(objectId);
     },
     getObjectWorldRange(objectInstance) {
-      return objectInstance?.getRange?.()?.withPosition?.(objectInstance.position);
+      return objectInstance
+        ?.getRange?.()
+        ?.withPosition?.(objectInstance.position);
     },
   };
 
@@ -230,6 +232,27 @@ function createViewportContext(options = {}) {
   };
 }
 
+/**
+ * 本文件创建的渲染器
+ * @description 渲染器持有缩放预览定时器，不销毁会在环境拆除后继续重建 tile。
+ * @type {ViewportRenderer[]}
+ */
+const createdRenderers = [];
+
+/**
+ * 登记渲染器以便用例结束后销毁
+ * @param {ViewportRenderer} renderer - 渲染器
+ * @returns {ViewportRenderer} 同一个渲染器
+ */
+function trackRenderer(renderer) {
+  createdRenderers.push(renderer);
+  return renderer;
+}
+
+afterEach(() => {
+  while (createdRenderers.length > 0) createdRenderers.pop().destroy();
+});
+
 describe("ViewportRenderer", () => {
   /**
    * OffscreenCanvas 恢复函数
@@ -252,9 +275,11 @@ describe("ViewportRenderer", () => {
     const outputCanvas = createCanvas(800, 600, outputCtx);
     const { viewport, aom } = createViewportContext({ outputCanvas });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
 
     expect(renderer._scheduler).toBeDefined();
     expect(renderer.canvas).toBe(outputCanvas);
@@ -285,8 +310,18 @@ describe("ViewportRenderer", () => {
     graph2.addNodeUnsafe(3);
     graph2.addEdgeUnsafe(2, 3);
 
-    const chunk1 = { id: 1, x: 0, y: 0, objectManager: { staticGraph: graph1 } };
-    const chunk2 = { id: 2, x: 1, y: 0, objectManager: { staticGraph: graph2 } };
+    const chunk1 = {
+      id: 1,
+      x: 0,
+      y: 0,
+      objectManager: { staticGraph: graph1 },
+    };
+    const chunk2 = {
+      id: 2,
+      x: 1,
+      y: 0,
+      objectManager: { staticGraph: graph2 },
+    };
 
     const aom = {
       has() {
@@ -332,9 +367,11 @@ describe("ViewportRenderer", () => {
       },
     };
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: createCanvas(800, 600, createContext("output", [])),
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: createCanvas(800, 600, createContext("output", [])),
+      }),
+    );
 
     expect(renderer.collectStaticDrawables().map((obj) => obj.id)).toEqual([
       1, 2, 3,
@@ -377,30 +414,34 @@ describe("ViewportRenderer", () => {
       layerOrder: [],
     };
 
-    const renderer = new ViewportRenderer(
-      {
-        board: {
-          getObjectById(objectId) {
-            return objectMap.get(objectId);
+    const renderer = trackRenderer(
+      new ViewportRenderer(
+        {
+          board: {
+            getObjectById(objectId) {
+              return objectMap.get(objectId);
+            },
+            activeObjectManager: aom,
           },
-          activeObjectManager: aom,
-        },
-        chunkLoader: {
-          getLoadedChunks() {
-            return chunks;
+          chunkLoader: {
+            getLoadedChunks() {
+              return chunks;
+            },
           },
+          origin: new Vector(0, 0),
+          zoom: 1,
+          chunkWidth: 800,
+          chunkHeight: 600,
         },
-        origin: new Vector(0, 0),
-        zoom: 1,
-        chunkWidth: 800,
-        chunkHeight: 600,
-      },
-      aom,
-      { canvas: createCanvas(800, 600, createContext("output", [])) },
+        aom,
+        { canvas: createCanvas(800, 600, createContext("output", [])) },
+      ),
     );
 
     expect(renderer.collectStaticDrawables()).toHaveLength(200);
-    expect(idReads).toBe(0);
+    // 区块 id 只在排序时读取，次数与对象数无关；
+    // 若退回「每个对象重建一份候选区块数组」，这里会随 200 × 200 膨胀
+    expect(idReads).toBeLessThanOrEqual(200 * 4);
   });
 
   test("collectActiveDrawables 应按 layerOrder / inactive 语义收集 AOM 对象", () => {
@@ -427,9 +468,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
 
     const drawables = renderer.collectActiveDrawables();
     expect(drawables.map((obj) => obj.id)).toEqual([1, 2, 3]);
@@ -449,9 +492,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
 
     const cacheCtx = createContext("cache", ctxCalls);
     renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
@@ -462,7 +507,9 @@ describe("ViewportRenderer", () => {
       [1, "cache"],
       [2, "output"],
     ]);
-    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
+    expect(
+      ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage"),
+    ).toBe(true);
   });
 
   test("几何暂时不可解析的 AOM 对象在非空脏区下仍应绘制", () => {
@@ -473,9 +520,11 @@ describe("ViewportRenderer", () => {
       activeObjects: [active],
       outputCanvas,
     });
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
     renderer.flush();
     renderCalls.length = 0;
@@ -502,9 +551,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     const cacheCtx = createContext("cache", ctxCalls);
     renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
 
@@ -516,7 +567,16 @@ describe("ViewportRenderer", () => {
     const previewTransform = ctxCalls
       .filter((call) => call[0] === "cache" && call[1] === "setTransform")
       .at(-1);
-    expect(previewTransform).toEqual(["cache", "setTransform", 1, 0, 0, 1, 30, 40]);
+    expect(previewTransform).toEqual([
+      "cache",
+      "setTransform",
+      1,
+      0,
+      0,
+      1,
+      30,
+      40,
+    ]);
 
     // 清除预览（手势终点）：渲染回到数据位置
     renderer.clearPreviewPosition("1");
@@ -525,26 +585,39 @@ describe("ViewportRenderer", () => {
     const restoredTransform = ctxCalls
       .filter((call) => call[0] === "cache" && call[1] === "setTransform")
       .at(-1);
-    expect(restoredTransform).toEqual(["cache", "setTransform", 1, 0, 0, 1, 0, 0]);
+    expect(restoredTransform).toEqual([
+      "cache",
+      "setTransform",
+      1,
+      0,
+      0,
+      1,
+      0,
+      0,
+    ]);
   });
 
   test("invalidateCachedObjects 应返回当前/旧范围对应的屏幕脏区", () => {
     const renderCalls = [];
-    const objectInstance = new FakeRectObject(1, new Vector(20, 30), renderCalls);
+    const objectInstance = new FakeRectObject(
+      1,
+      new Vector(20, 30),
+      renderCalls,
+    );
     const outputCanvas = createCanvas(800, 600, createContext("output", []));
     const { viewport, aom } = createViewportContext({
       staticObjects: [objectInstance],
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
 
-    const previousWorldRects = new Map([
-      [1, new RectangleRange(0, 0, 10, 10)],
-    ]);
+    const previousWorldRects = new Map([[1, new RectangleRange(0, 0, 10, 10)]]);
 
     const dirtyRects = renderer.invalidateCachedObjects([objectInstance], {
       previousWorldRects,
@@ -570,9 +643,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
 
     const cacheCtx = createContext("cache", ctxCalls);
@@ -598,17 +673,18 @@ describe("ViewportRenderer", () => {
     const renderCalls = [];
     const ctxCalls = [];
     const objects = positions.map(
-      (position, index) =>
-        new FakeRectObject(index + 1, position, renderCalls),
+      (position, index) => new FakeRectObject(index + 1, position, renderCalls),
     );
     const outputCanvas = createCanvas(800, 600, createContext("output", []));
     const { viewport, aom } = createViewportContext({
       staticObjects: objects,
       outputCanvas,
     });
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
     const cacheCtx = createContext("cache", ctxCalls);
     renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
@@ -696,7 +772,9 @@ describe("ViewportRenderer", () => {
     renderer.flush();
 
     expect(ctxCalls).toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
-    expect(renderCalls.filter(([, label]) => label === "cache")).toHaveLength(1);
+    expect(renderCalls.filter(([, label]) => label === "cache")).toHaveLength(
+      1,
+    );
   });
 
   test("预览坐标不影响剔除用的屏幕矩形", () => {
@@ -713,7 +791,9 @@ describe("ViewportRenderer", () => {
     // 预览只影响绘制位置，剔除与失效仍按数据坐标计算
     expect(objects[0].position.x).toBe(20);
     expect(objects[0].position.y).toBe(20);
-    expect(renderCalls.filter(([, label]) => label === "cache").length).toBeGreaterThan(0);
+    expect(
+      renderCalls.filter(([, label]) => label === "cache").length,
+    ).toBeGreaterThan(0);
   });
 
   test("invalidateActiveObjects 应同时提交当前/快照/上一帧范围", () => {
@@ -725,9 +805,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
 
     renderer.flush();
@@ -753,9 +835,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
 
     renderer.flush();
@@ -773,11 +857,22 @@ describe("ViewportRenderer", () => {
       [2, "output"],
     ]);
     // 脏区清空：不应是全视口清空
-    expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    expect(ctxCalls).not.toContainEqual([
+      "output",
+      "clearRect",
+      0,
+      0,
+      800,
+      600,
+    ]);
     // 脏区拷贝或全量拷贝均应进行
-    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
+    expect(
+      ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage"),
+    ).toBe(true);
     // AOM 对象按脏区裁剪渲染
-    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "clip")).toBe(true);
+    expect(
+      ctxCalls.some((call) => call[0] === "output" && call[1] === "clip"),
+    ).toBe(true);
   });
 
   test("远离脏区的 AOM 对象应被跳过不渲染", () => {
@@ -792,9 +887,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
 
     renderer.flush();
@@ -825,9 +922,11 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
 
     renderer.flush();
@@ -848,11 +947,22 @@ describe("ViewportRenderer", () => {
       renderCalls.filter((call) => call[0] === 1 && call[1] === "cache"),
     ).toHaveLength(0);
     // 脏区清空：不应是全视口清空
-    expect(ctxCalls).not.toContainEqual(["output", "clearRect", 0, 0, 800, 600]);
+    expect(ctxCalls).not.toContainEqual([
+      "output",
+      "clearRect",
+      0,
+      0,
+      800,
+      600,
+    ]);
     // 脏区拷贝或全量拷贝均应进行
-    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage")).toBe(true);
+    expect(
+      ctxCalls.some((call) => call[0] === "output" && call[1] === "drawImage"),
+    ).toBe(true);
     // AOM 对象按脏区裁剪渲染
-    expect(ctxCalls.some((call) => call[0] === "output" && call[1] === "clip")).toBe(true);
+    expect(
+      ctxCalls.some((call) => call[0] === "output" && call[1] === "clip"),
+    ).toBe(true);
   });
 
   test("getObjectScreenRect 应为对象补足栅格化 padding", () => {
@@ -868,9 +978,11 @@ describe("ViewportRenderer", () => {
         rect.height * this.zoom,
       );
     };
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
 
     const screenRect = renderer.getObjectScreenRect(objectInstance);
 
@@ -881,9 +993,11 @@ describe("ViewportRenderer", () => {
   test("invalidateChunks 应提交新旧区块对应的屏幕脏区", () => {
     const outputCanvas = createCanvas(800, 600, createContext("output", []));
     const { viewport, aom } = createViewportContext({ outputCanvas });
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer._scheduler.scheduleFrame = () => 0;
 
     const invalidateSpy = jest.spyOn(renderer, "invalidate");
@@ -898,9 +1012,11 @@ describe("ViewportRenderer", () => {
   test("resize 应同时调整输出 canvas 与静态缓存尺寸", () => {
     const outputCanvas = createCanvas(800, 600, createContext("output", []));
     const { viewport, aom } = createViewportContext({ outputCanvas });
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
 
     const resized = renderer.resize(1024, 768);
 
@@ -960,9 +1076,11 @@ describe("ViewportRenderer", () => {
       activeObjects: [activeObject],
       outputCanvas,
     });
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     renderer.getStaticCache().getContext = jest.fn(() =>
       createReceiverSensitiveContext("cache"),
     );
@@ -982,15 +1100,21 @@ describe("ViewportRenderer", () => {
       outputCanvas,
     });
 
-    const renderer = new ViewportRenderer(viewport, aom, {
-      canvas: outputCanvas,
-    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, {
+        canvas: outputCanvas,
+      }),
+    );
     const cacheCtx = createContext("cache", ctxCalls);
     renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
 
-    renderer.renderStaticCacheToCanvas(targetCanvas, [new RectangleRange(0, 0, 20, 20)]);
+    renderer.renderStaticCacheToCanvas(targetCanvas, [
+      new RectangleRange(0, 0, 20, 20),
+    ]);
 
-    expect(ctxCalls.some((call) => call[0] === "target" && call[1] === "drawImage")).toBe(true);
+    expect(
+      ctxCalls.some((call) => call[0] === "target" && call[1] === "drawImage"),
+    ).toBe(true);
   });
 
   describe("清除覆盖不变量（drawnRects）", () => {
@@ -1030,7 +1154,11 @@ describe("ViewportRenderer", () => {
     test("上一帧实际绘制的 clip 区域应被下一帧清除集完整覆盖", () => {
       const renderCalls = [];
       const ctxCalls = [];
-      const objectInstance = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+      const objectInstance = new FakeRectObject(
+        1,
+        new Vector(0, 0),
+        renderCalls,
+      );
       const outputCtx = createContext("output", ctxCalls);
       const outputCanvas = createCanvas(800, 600, outputCtx);
       const { viewport, aom } = createViewportContext({
@@ -1038,9 +1166,11 @@ describe("ViewportRenderer", () => {
         outputCanvas,
       });
 
-      const renderer = new ViewportRenderer(viewport, aom, {
-        canvas: outputCanvas,
-      });
+      const renderer = trackRenderer(
+        new ViewportRenderer(viewport, aom, {
+          canvas: outputCanvas,
+        }),
+      );
       renderer._scheduler.scheduleFrame = () => 0;
 
       renderer.flush();
@@ -1086,9 +1216,11 @@ describe("ViewportRenderer", () => {
         outputCanvas,
       });
 
-      const renderer = new ViewportRenderer(viewport, aom, {
-        canvas: outputCanvas,
-      });
+      const renderer = trackRenderer(
+        new ViewportRenderer(viewport, aom, {
+          canvas: outputCanvas,
+        }),
+      );
       renderer._scheduler.scheduleFrame = () => 0;
 
       renderer.flush();
@@ -1111,13 +1243,22 @@ describe("ViewportRenderer", () => {
       renderer.invalidateActiveObjects([objectA]);
       renderer._scheduler.flush();
 
-      expectRegionCleared(ctxCalls, { left: 15, top: 0, width: 30, height: 10 });
+      expectRegionCleared(ctxCalls, {
+        left: 15,
+        top: 0,
+        width: 30,
+        height: 10,
+      });
     });
 
     test("invalidateCachedObjects 应并入对象离开 AOM 前的实际绘制区域", () => {
       const renderCalls = [];
       const ctxCalls = [];
-      const objectInstance = new FakeRectObject(1, new Vector(0, 0), renderCalls);
+      const objectInstance = new FakeRectObject(
+        1,
+        new Vector(0, 0),
+        renderCalls,
+      );
       const outputCtx = createContext("output", ctxCalls);
       const outputCanvas = createCanvas(800, 600, outputCtx);
       const { viewport, aom } = createViewportContext({
@@ -1125,9 +1266,11 @@ describe("ViewportRenderer", () => {
         outputCanvas,
       });
 
-      const renderer = new ViewportRenderer(viewport, aom, {
-        canvas: outputCanvas,
-      });
+      const renderer = trackRenderer(
+        new ViewportRenderer(viewport, aom, {
+          canvas: outputCanvas,
+        }),
+      );
       renderer._scheduler.scheduleFrame = () => 0;
 
       renderer.flush();
@@ -1175,10 +1318,12 @@ describe("ViewportRenderer", () => {
         withWorldRect: true,
       });
       // 固定 tile 边长，让网格算术与视口尺寸解耦（自适应策略由独立用例覆盖）
-      const renderer = new ViewportRenderer(viewport, aom, {
-        canvas: outputCanvas,
-        tileSize: 512,
-      });
+      const renderer = trackRenderer(
+        new ViewportRenderer(viewport, aom, {
+          canvas: outputCanvas,
+          tileSize: 512,
+        }),
+      );
       renderer._scheduler.scheduleFrame = () => 0;
       const cacheCtx = createContext("cache", ctxCalls);
       renderer.getStaticCache().getContext = jest.fn(() => cacheCtx);
@@ -1217,10 +1362,12 @@ describe("ViewportRenderer", () => {
           withWorldRect: true,
           viewportSize: { width, height },
         });
-        const renderer = new ViewportRenderer(viewport, aom, {
-          canvas: outputCanvas,
-          devicePixelRatio,
-        });
+        const renderer = trackRenderer(
+          new ViewportRenderer(viewport, aom, {
+            canvas: outputCanvas,
+            devicePixelRatio,
+          }),
+        );
         renderer._scheduler.scheduleFrame = () => 0;
         renderer.flush();
         return renderer.getTileDebugInfo();
@@ -1235,9 +1382,7 @@ describe("ViewportRenderer", () => {
       expect(highDpi.bytes).toBeLessThanOrEqual(28 * 1024 * 1024);
 
       // 每块位图 = (边长 × 倍率)²，字节数必须与块数一致
-      expect(highDpi.bytes).toBe(
-        highDpi.tileCount * (256 * 2) * (256 * 2) * 4,
-      );
+      expect(highDpi.bytes).toBe(highDpi.tileCount * (256 * 2) * (256 * 2) * 4);
     });
 
     test("首次 flush 重建覆盖范围内的 tile 并合成可见 tile", () => {
@@ -1293,6 +1438,61 @@ describe("ViewportRenderer", () => {
 
       // 局部失效依赖「着墨范围 ⊆ 包围盒 ⊕ 留白」这条不变式（draw-bounds 测试守住）
       expect(renderer.getTileDebugInfo().rebuildCount).toBe(before + 1);
+    });
+
+    test("静态绘制顺序与区块传入顺序无关", () => {
+      const renderCalls = [];
+      const objects = new Map([
+        [3, new FakeRectObject(3, new Vector(0, 0), renderCalls)],
+        [5, new FakeRectObject(5, new Vector(10, 0), renderCalls)],
+      ]);
+      const graphLow = new DirectedGraph();
+      graphLow.addNodeUnsafe(3);
+      const graphHigh = new DirectedGraph();
+      graphHigh.addNodeUnsafe(5);
+      const chunkLow = { id: 1, objectManager: { staticGraph: graphLow } };
+      const chunkHigh = { id: 2, objectManager: { staticGraph: graphHigh } };
+
+      const aom = {
+        has() {
+          return false;
+        },
+        findBoardObjectInstance(objectId) {
+          return objects.get(objectId);
+        },
+        activeObjects: new Set(),
+        activeObjectIndex: new Map(),
+        layerOrder: [],
+      };
+      const renderer = trackRenderer(
+        new ViewportRenderer(
+          {
+            board: {
+              getObjectById(objectId) {
+                return objects.get(objectId);
+              },
+              activeObjectManager: aom,
+            },
+            origin: new Vector(0, 0),
+            zoom: 1,
+            chunkWidth: 800,
+            chunkHeight: 600,
+          },
+          aom,
+          { canvas: createCanvas(800, 600, createContext("output", [])) },
+        ),
+      );
+
+      // 区块异步加载，传入顺序每帧都可能不同；绘制顺序必须只由集合决定
+      const forward = renderer
+        .mergeStaticGraphs([chunkLow, chunkHigh])
+        .map((object) => object.id);
+      const reverse = renderer
+        .mergeStaticGraphs([chunkHigh, chunkLow])
+        .map((object) => object.id);
+
+      expect(forward).toEqual(reverse);
+      expect(forward).toEqual([3, 5]);
     });
 
     test("对象移动时旧范围覆盖的 tile 也要标脏", () => {
@@ -1505,7 +1705,14 @@ describe("ViewportRenderer", () => {
         previousZoom = nextZoom;
       }
       // 前置断言：累计 1.728 倍仍在阈值内，预览期间不得重建缓存
-      expect(ctxCalls).not.toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      expect(ctxCalls).not.toContainEqual([
+        "cache",
+        "clearRect",
+        0,
+        0,
+        800,
+        600,
+      ]);
       ctxCalls.length = 0;
 
       // 相对快照累积到 2.07 倍，超出阈值，退出预览并重建
@@ -1547,9 +1754,8 @@ describe("ViewportRenderer", () => {
     });
 
     test("预览期间静态内容变化立即退出预览", () => {
-      const { renderer, viewport, chunk, objects, ctxCalls } = createTileScenario([
-        new Vector(20, 20),
-      ]);
+      const { renderer, viewport, chunk, objects, ctxCalls } =
+        createTileScenario([new Vector(20, 20)]);
       viewport.zoom = 1.2;
       ctxCalls.length = 0;
       renderer.invalidateChunks([chunk], [chunk], {
@@ -1557,7 +1763,14 @@ describe("ViewportRenderer", () => {
       });
       renderer.flush([new RectangleRange(0, 0, 800, 600)]);
       // 前置断言：预览期间不得重建缓存
-      expect(ctxCalls).not.toContainEqual(["cache", "clearRect", 0, 0, 800, 600]);
+      expect(ctxCalls).not.toContainEqual([
+        "cache",
+        "clearRect",
+        0,
+        0,
+        800,
+        600,
+      ]);
 
       ctxCalls.length = 0;
       renderer.invalidateCachedObjects([objects[0]]);
@@ -1582,9 +1795,11 @@ describe("ViewportRenderer", () => {
         outputCanvas,
         withWorldRect: true,
       });
-      const renderer = new ViewportRenderer(viewport, aom, {
-        canvas: outputCanvas,
-      });
+      const renderer = trackRenderer(
+        new ViewportRenderer(viewport, aom, {
+          canvas: outputCanvas,
+        }),
+      );
       renderer._scheduler.scheduleFrame = () => 0;
       renderer.flush();
       renderCalls.length = 0;
