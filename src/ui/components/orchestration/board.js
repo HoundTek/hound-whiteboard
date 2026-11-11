@@ -85,6 +85,18 @@ class Board {
   rootPath;
 
   /**
+   * 同步中继地址（不传则离线运行）
+   * @type {string | undefined}
+   */
+  syncUrl;
+
+  /**
+   * 同步房间 id（缺省取 rootPath：板即房间）
+   * @type {string | undefined}
+   */
+  boardId;
+
+  /**
    * 视口列表
    * @type {Map<string, Viewport>}
    */
@@ -140,18 +152,10 @@ class Board {
     this.rootPath = isValidBoardRootPath(options.rootPath)
       ? options.rootPath
       : undefined;
-    /**
-     * 同步中继地址（不传则离线运行）
-     * @type {string|undefined}
-     */
     this.syncUrl =
       typeof options.syncUrl === "string" && options.syncUrl !== ""
         ? options.syncUrl
         : undefined;
-    /**
-     * 同步房间 id（缺省取 rootPath：板即房间）
-     * @type {string|undefined}
-     */
     this.boardId =
       typeof options.boardId === "string" && options.boardId !== ""
         ? options.boardId

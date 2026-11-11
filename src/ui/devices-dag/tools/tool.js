@@ -71,16 +71,27 @@ class Tool {
   _hooks;
 
   /**
+   * 缓存的 ui overlay 绑定
+   * @description
+   * 未计算时为 undefined；工具未声明 overlay 条目时缓存 null；
+   * 其余情况缓存 `createUiOverlayBinding` 生成的绑定对象。
+   * @type {{ sync: Function, cleanup: Function } | null | undefined}
+   * @private
+   */
+  _cachedUiOverlayBinding;
+
+  /**
+   * 当前动作是否活跃
+   * @type {boolean}
+   */
+  isActionActive;
+
+  /**
    * 初始化工具实例
    * @constructor
    */
   constructor() {
     this._hooks = null;
-
-    /**
-     * 当前动作是否活跃
-     * @type {boolean}
-     */
     this.isActionActive = false;
   }
 

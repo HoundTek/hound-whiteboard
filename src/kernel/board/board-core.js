@@ -136,6 +136,13 @@ class BoardCore {
   rootChunkLoader;
 
   /**
+   * AOM 活动事件总线（ephemeral）
+   * @description 本地 choose/unchoose/commit 手势事件即时广播通道；不经日志，同步宿主订阅后转发中继。
+   * @type {EventBus}
+   */
+  activityEventBus;
+
+  /**
    * 持久化适配器
    * @description 用于替代直接 import boardFileOperateBridge。
    *   内存模式使用 createDefaultPersistenceAdapter()，文件模式注入 io 包的 createPersistenceAdapter()。
@@ -230,11 +237,6 @@ class BoardCore {
     this.chunkLoaded = new Map();
     this.objectLoaded = new Map();
     this.chunkLoadEventBus = new EventBus();
-    /**
-     * AOM 活动事件总线（ephemeral）
-     * @description 本地 choose/unchoose/commit 手势事件即时广播通道；不经日志，同步宿主订阅后转发中继。
-     * @type {EventBus}
-     */
     this.activityEventBus = new EventBus();
     this.rootChunkLoader = new ChunkLoader({
       resolveChunkById: (chunkId) =>

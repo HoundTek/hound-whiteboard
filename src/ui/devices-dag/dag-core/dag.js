@@ -26,10 +26,7 @@ import {
 import { SignalPacket } from "./signal.js";
 import { CounterPool } from "../../../kernel/utils/counter-pool.js";
 import { isPlainObject, isSubDAGDefinition } from "./dag-utils.js";
-import {
-  wouldCreateCycle,
-  applyNodeDefinitionToNode,
-} from "./dag-utils.js";
+import { wouldCreateCycle, applyNodeDefinitionToNode } from "./dag-utils.js";
 import { DevicesDAGNode } from "./dag-node-edge.js";
 import { DevicesDAGEdge } from "./dag-node-edge.js";
 import { dagToString } from "./dag-debug.js";
@@ -164,7 +161,13 @@ class DevicesDAG {
   _mountedSubDAGDefs;
 
   /**
-   * 根节点
+   * 幽灵节点（-1，分发起点，对外不可见）
+   * @type {DevicesDAGNode}
+   */
+  _ghost;
+
+  /**
+   * 根节点（id = 0，路径 "/"），通过边 "/" 从幽灵节点可达
    * @type {DevicesDAGNode}
    */
   _root;
@@ -182,11 +185,9 @@ class DevicesDAG {
     this._mountedToolInstances = new Set();
     this._mountedSubDAGDefs = new WeakSet();
 
-    // 幽灵节点（-1，分发起点，对外不可见）
     this._ghost = this._createNode(-1);
     this._ghost.semantics = { ghost: true };
 
-    // 真实根节点（id = 0，路径 "/"），通过边 "/" 从幽灵节点可达
     this._root = this._createNode(0);
     this._connectNodes(this._ghost, "/", this._root);
     this._root.semantics = { root: true };

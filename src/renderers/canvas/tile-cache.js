@@ -14,10 +14,6 @@ import { intersectsRanges, RectangleRange } from "../../kernel/range/index.js";
 const MAX_TILE_DIRTY_RECTS = 8;
 
 /**
- * 默认 tile 边长（像素）
- * @description 世界尺寸等于像素尺寸除以缩放档位，档位固定时世界尺寸也固定。
- */
-/**
  * 默认 tile 边长（CSS 像素）
  * @description
  * tile 在屏幕空间恒为此尺寸，与缩放和视口无关。
@@ -87,6 +83,13 @@ class TileStore {
    * @type {number}
    */
   deviceScale;
+
+  /**
+   * tile 缓存字节预算
+   * @description 实际占用超过预算时按最近最少使用逐出 tile。
+   * @type {number}
+   */
+  maxBytes;
 
   /**
    * 已分配的 tile

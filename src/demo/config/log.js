@@ -58,14 +58,16 @@ function classifyKeyInput(code) {
  */
 class DemoLog {
   /**
+   * 底层 logger 实例
+   * @type {Logger}
+   */
+  logger;
+
+  /**
    * @param {string} [name="Demo"] - logger 通道名
    * @param {string} [level="INFO"] - logger 级别
    */
   constructor(name = "Demo", level = "INFO") {
-    /**
-     * 底层 logger 实例
-     * @type {Logger}
-     */
     this.logger = new Logger(name, level, logBus);
   }
 
