@@ -8,7 +8,7 @@
 
 ## 定位
 
-CLI 是白板的**第二前端**：写命令（add/delete/undo/redo/choose/unchoose/modify）一律经持板 daemon 的 WebSocket RPC 执行（与 GUI 调 BoardApi 同一条路，天然并发安全、与 GUI 实时互见）；读命令（info/list/show/ops/tree/choices）既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 daemon 存活）。
+CLI 是白板的**第二前端**：写命令（add/delete/undo/redo/choose/unchoose/modify）一律经持板 daemon 的 WebSocket RPC 执行（与 GUI 调 BoardApi 同一条路，天然并发安全、与 GUI 实时互见）；读命令（info/list/show/inspect/ops/tree/choices）既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 daemon 存活）。
 
 ## daemon 与注册表
 
@@ -53,7 +53,7 @@ GUI 打开板时检测板目录 `.daemon.json`：有活 daemon 直接作为**协
 ## 命令寻址
 
 - **写命令**（add/delete/undo/redo/choose/unchoose/modify）：用 `--daemon <name>` 或 `--path <板目录>` 寻址；`--path` 形态先探测板目录持有 daemon，有则同走 RPC，无则自治直写自己分片
-- **读命令**（info/list/show/ops/tree/choices）：`--daemon <name>` 经 daemon 查询，或 `--path <板目录>` 直读板文件（不接 daemon），二选一且互斥
+- **读命令**（info/list/show/inspect/ops/tree/choices）：`--daemon <name>` 经 daemon 查询，或 `--path <板目录>` 直读板文件（不接 daemon），二选一且互斥
 - **create**：离线建板，只认 `--path`
 - `--daemon` 与 `--path` 同时给出时报错
 
@@ -94,6 +94,7 @@ hwb <命令> [--daemon <名> | --path <板目录>] [--标志 值]
 | `info`                                                                                                | 打印板元数据与统计（板配置、记录数、HEAD、活动链 chain、对象/trash 计数、id 计数器）                                                                                     |
 | `list`                                                                                                | 列出活动对象（id、类型）与 trash 条目                                                                                                                                    |
 | `show <对象id>`                                                                                       | 打印单个对象的序列化数据                                                                                                                                                 |
+| `inspect <对象id...>`                                                                                 | 打印对象诊断详情：AOM 成员身份、引用计数、覆盖区块与几何数据快照                                                                                                         |
 | `add --type <类型> [--data '<json>' \| "@文件"] [--property '<json>'] [--position x,y]`               | 创建并提交对象，打印新对象 id（写命令）                                                                                                                                  |
 | `delete <对象id...>`                                                                                  | 删除对象（移入 trash，可撤销；写命令）                                                                                                                                   |
 | `undo [<操作id>]` / `redo`                                                                            | 撤销 / 重做一步（写命令）                                                                                                                                                |
@@ -141,8 +142,8 @@ CLI 全部用户可见文本（帮助、错误消息、状态输出）走消息�
 
 所有命令支持 `--json` 标志，输出分两种模式：
 
-- **默认（人类可读）**：`create` 输出 `板已创建：<路径>`；`export`/`import` 输出 `已导出/已导入：<路径>`；`daemon start/stop/status` 输出状态文本；`info` 输出板配置/记录/活动链/计数行；`list` 输出对象与 trash 行列表；`show` 输出 `id 类型` 标题加数据；`ops` 每条记录一行；`tree` 输出缩进回溯树；`undo`/`redo`/`delete`/`choose`/`unchoose`/`modify` 输出 `xxx ok（...）` 文本；`add` 输出单行对象 id（脚本捕获用）。
-- **`--json`（纯 JSON）**：所有命令 stdout 只输出一个可整体 `JSON.parse` 的结构——`info`/`list`/`show`/`ops`/`choices` 输出查询面原始结构，`tree` 输出回溯树原始结构，`daemon status` 输出条目（含 `alive`），`export`/`import` 输出 `{"out"|"root", ...}`，`add` 输出 `{"id": ...}`，`undo`/`redo` 输出 `{"undone" 或 "redone" 布尔, "targetNodeId"}`，`delete` 输出 `{"deleted": [...]}`，`modify` 输出 `{"objectId" 或 "choice", "committed" 或 "pending"}`，`unchoose` 输出 `{"choice", "action", "dropped"}`。
+- **默认（人类可读）**：`create` 输出 `板已创建：<路径>`；`export`/`import` 输出 `已导出/已导入：<路径>`；`daemon start/stop/status` 输出状态文本；`info` 输出板配置/记录/活动链/计数行；`list` 输出对象与 trash 行列表；`show` 输出 `id 类型` 标题加数据，`inspect` 每个对象一行状态摘要加详情 JSON；`ops` 每条记录一行；`tree` 输出缩进回溯树；`undo`/`redo`/`delete`/`choose`/`unchoose`/`modify` 输出 `xxx ok（...）` 文本；`add` 输出单行对象 id（脚本捕获用）。
+- **`--json`（纯 JSON）**：所有命令 stdout 只输出一个可整体 `JSON.parse` 的结构——`info`/`list`/`show`/`inspect`/`ops`/`choices` 输出查询面原始结构，`tree` 输出回溯树原始结构，`daemon status` 输出条目（含 `alive`），`export`/`import` 输出 `{"out"|"root", ...}`，`add` 输出 `{"id": ...}`，`undo`/`redo` 输出 `{"undone" 或 "redone" 布尔, "targetNodeId"}`，`delete` 输出 `{"deleted": [...]}`，`modify` 输出 `{"objectId" 或 "choice", "committed" 或 "pending"}`，`unchoose` 输出 `{"choice", "action", "dropped"}`。
 
 错误一律经 stderr 打印并以退出码 1 结束，不混入 stdout。
 

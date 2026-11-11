@@ -67,6 +67,7 @@ const TOPICS = [
   { name: "info", key: "info", group: "read", flags: [...TARGETING, f("json")] },
   { name: "list", key: "list", group: "read", flags: [...TARGETING, f("json")] },
   { name: "show", key: "show", group: "read", flags: [...TARGETING, f("json")] },
+  { name: "inspect", key: "inspect", group: "read", flags: [...TARGETING, f("json")] },
   {
     name: "ops",
     key: "ops",

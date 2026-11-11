@@ -179,6 +179,13 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
         "Prints the full serialized data of a single object (default mode adds a header line with id and type).",
       examples: "hwb show cli/1 --daemon board1",
     },
+    inspect: {
+      summary: "Print object diagnostics",
+      usage: "inspect <object-id...> [--daemon <name> | --path <board-dir>] [--json]",
+      description:
+        "Prints the runtime state of one or more objects: AOM membership, load count, covered chunks and geometry snapshot. show reports document content; inspect reports how the object sits on the board.",
+      examples: "hwb inspect cli/1 cli/2 --daemon board1",
+    },
     ops: {
       summary: "Print operation record details",
       usage: "ops [--source <source>] [--type <type>] [--limit N] [--daemon <name> | --path <board-dir>] [--json]",
@@ -315,6 +322,7 @@ hwb unchoose batch --apply --daemon board1`,
     exportNeedOut: "export requires --out {file}.",
     importNeedFile: "import requires a .hwb file path.",
     showNeedId: "show requires an object id.",
+    inspectNeedId: "inspect requires at least one object id.",
     objectNotFound: "Object not found: {ids}",
     deleteNeedIds: "delete requires at least one object id.",
     chooseNeedIds: "choose requires at least one object id.",

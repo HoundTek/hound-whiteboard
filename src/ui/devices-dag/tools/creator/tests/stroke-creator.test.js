@@ -923,7 +923,7 @@ describe("StrokeCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._entry.id]),
+          board.getBoardApi().queryObjectDetails([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
             id: tool._entry.id,
@@ -986,7 +986,7 @@ describe("StrokeCreatorTool", () => {
         await flushMicrotasks();
 
         await expect(
-          board.getBoardApi().queryObjects([tool._entry.id]),
+          board.getBoardApi().queryObjectDetails([tool._entry.id]),
         ).resolves.toEqual([
           expect.objectContaining({
             id: tool._entry.id,

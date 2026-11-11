@@ -19,6 +19,10 @@ import {
 } from "../hit/operation.js";
 import { Matrix, Vector } from "../utils/math.js";
 import { hashString } from "../utils/hash.js";
+import {
+  buildObjectDetails,
+  buildObjectSummary,
+} from "./object-summary.js";
 import { IncrementalIdPool } from "../utils/incremental-id-pool.js";
 import { intersectsRanges, RectangleRange } from "../range/index.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
@@ -1608,33 +1612,36 @@ class BoardApi {
    * @returns {import("../types/types.js").ObjectSummary[]} 对象摘要列表
    */
   queryObjects(ids) {
+    return this.#collectObjects(ids).map((obj) =>
+      buildObjectSummary(this.#boardCore, obj),
+    );
+  }
+
+  /**
+   * 按 id 查询对象详情
+   * @description
+   * 在摘要之外带回几何数据快照、属性快照、引用计数与覆盖区块，供调试与命令行诊断。
+   * 返回体会随几何复杂度增长（一条笔迹带完整点数组），不得用在框选、手势等高频路径。
+   * @param {string[]} ids - 对象 id 列表
+   * @returns {import("../types/types.js").ObjectDetails[]} 对象详情列表
+   */
+  queryObjectDetails(ids) {
+    return this.#collectObjects(ids).map((obj) =>
+      buildObjectDetails(this.#boardCore, obj),
+    );
+  }
+
+  /**
+   * 按 id 收集已驻留对象
+   * @param {string[]} ids - 对象 id 列表
+   * @returns {import("../objects/basic-obj.js").BasicObject[]} 存在的对象
+   * @private
+   */
+  #collectObjects(ids) {
     const boardCore = this.#boardCore;
     const idList = Array.isArray(ids) ? ids : [];
-    const aom = boardCore.activeObjectManager;
-
     return idList
-      .map((objectId) => {
-        const obj = boardCore.getObjectById(objectId);
-        if (!obj) return null;
-        const isActive = aom.isActive(objectId);
-        return {
-          id: obj.id,
-          type: obj.constructor.name,
-          isActive,
-          choice: aom.choiceOf(objectId),
-          position: { x: obj.position.x, y: obj.position.y },
-          transform: {
-            a: obj.transform.a,
-            b: obj.transform.b,
-            c: obj.transform.c,
-            d: obj.transform.d,
-          },
-          boundingBox: obj.rich.boundingBox,
-          range: obj.getRange(),
-          property: { ...obj.property },
-          data: { ...obj.data },
-        };
-      })
+      .map((objectId) => boardCore.getObjectById(objectId))
       .filter(Boolean);
   }
 

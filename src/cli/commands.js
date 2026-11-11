@@ -29,10 +29,7 @@ import { isValidChoiceName } from "../kernel/board/active-object-manager.js";
  */
 function relaxJsonText(text) {
   let relaxed = text.replace(/'/g, '"');
-  relaxed = relaxed.replace(
-    /([{,]\s*)([a-zA-Z_$][\w$]*)(\s*:)/g,
-    '$1"$2"$3',
-  );
+  relaxed = relaxed.replace(/([{,]\s*)([a-zA-Z_$][\w$]*)(\s*:)/g, '$1"$2"$3');
   relaxed = relaxed.replace(
     /([:\[,]\s*)(#[0-9a-fA-F]{3,8}|[a-zA-Z_$][\w$-]*)(\s*[,}\]])/g,
     (match, prefix, value, suffix) => {
@@ -61,7 +58,9 @@ function parseLenientJson(text, flagName = "--data") {
     try {
       return JSON.parse(relaxJsonText(text));
     } catch (error) {
-      throw new Error(t("err.invalidJson", { flag: flagName, message: error.message }));
+      throw new Error(
+        t("err.invalidJson", { flag: flagName, message: error.message }),
+      );
     }
   }
 }
@@ -123,7 +122,11 @@ async function cmdExport(flags) {
     throw new Error(t("err.exportNeedOut", { file: t("ph.file") }));
   }
   await exportBoard(boardRoot, outFile);
-  printResult(flags, { out: outFile, root: boardRoot }, t("out.exported", { file: outFile }));
+  printResult(
+    flags,
+    { out: outFile, root: boardRoot },
+    t("out.exported", { file: outFile }),
+  );
 }
 
 /**
@@ -190,7 +193,10 @@ async function cmdInfo(session, _args, flags) {
       head: info.head ?? t("out.infoHeadNone"),
     }),
     t("out.infoChain", {
-      chain: info.chain.length > 0 ? info.chain.join(" → ") : t("out.infoChainEmpty"),
+      chain:
+        info.chain.length > 0
+          ? info.chain.join(" → ")
+          : t("out.infoChainEmpty"),
     }),
     t("out.infoObjects", { objects: info.objects, trash: info.trash }),
   ];
@@ -251,6 +257,38 @@ async function cmdShow(session, args, flags) {
 }
 
 /**
+ * inspect 命令：打印对象诊断详情
+ * @description
+ * 与 show 的区别是关注点不同：show 输出对象自身的序列化数据（文档内容），
+ * inspect 输出对象在板上的运行态（AOM 成员身份、引用计数、覆盖区块、几何数据快照），
+ * 用于回答「它为什么没被渲染 / 为什么还在内存里 / 落在哪些区块」。
+ * @param {Object} session - 板会话
+ * @param {string[]} args - 位置参数（对象 id，可多个）
+ * @param {Object} flags - 标志（json）
+ * @returns {Promise<void>}
+ */
+async function cmdInspect(session, args, flags) {
+  if (args.length === 0) throw new Error(t("err.inspectNeedId"));
+  const details = await session.api.queryObjectDetails(args);
+  const found = new Set((details ?? []).map((item) => String(item?.id)));
+  const missing = args.filter((id) => !found.has(String(id)));
+  if (missing.length > 0) {
+    throw new Error(t("err.objectNotFound", { ids: missing.join(", ") }));
+  }
+
+  if (flags.json === true) {
+    console.log(JSON.stringify(details, null, 2));
+    return;
+  }
+  for (const detail of details) {
+    console.log(
+      `${detail.id}  ${detail.type}  active=${detail.isActive}  refs=${detail.loadedCount}  chunks=[${detail.coveredChunkIds.join(", ")}]`,
+    );
+    console.log(JSON.stringify(detail, null, 2));
+  }
+}
+
+/**
  * add 命令：创建并提交一个对象
  * @param {Object} session - 板会话
  * @param {string[]} _args - 位置参数（未使用）
@@ -284,7 +322,11 @@ async function cmdAdd(session, _args, flags) {
 async function cmdDelete(session, args, flags) {
   if (args.length === 0) throw new Error(t("err.deleteNeedIds"));
   await session.api.deleteObjects(args);
-  printResult(flags, { deleted: args }, t("out.deleted", { ids: args.join(", ") }));
+  printResult(
+    flags,
+    { deleted: args },
+    t("out.deleted", { ids: args.join(", ") }),
+  );
 }
 
 /**
@@ -563,7 +605,8 @@ async function resolveChoiceMembers(session, name) {
  */
 async function cmdChoose(session, args, flags) {
   const name = typeof flags.choice === "string" ? flags.choice : null;
-  if (!name) throw new Error(t("err.chooseNeedChoice", { choice: t("ph.choice") }));
+  if (!name)
+    throw new Error(t("err.chooseNeedChoice", { choice: t("ph.choice") }));
   if (!isValidChoiceName(name)) {
     throw new Error(t("err.invalidChoiceName", { name }));
   }
@@ -602,7 +645,8 @@ async function cmdChoices(session, _args, flags) {
       registered.add(name);
       out[name] = ids.map((id) => ({ id, missing: false, active: true }));
     }
-  }  for (const [name, ids] of Object.entries(buffer.choices)) {
+  }
+  for (const [name, ids] of Object.entries(buffer.choices)) {
     if (registered.has(name)) continue;
     const summaries = await session.api.queryObjects(ids);
     out[name] = ids.map((id, i) => ({
@@ -701,7 +745,8 @@ async function cmdModify(session, args, flags) {
     return;
   }
   const id = args[0];
-  if (!id) throw new Error(t("err.modifyNeedTarget", { choice: t("ph.choice") }));
+  if (!id)
+    throw new Error(t("err.modifyNeedTarget", { choice: t("ph.choice") }));
   // 注册表权威（对象摘要携带所属 choice 名）；未驻留时回退 buffer 文件（重启后未恢复的 choice）
   const summary = await queryOne(session, id);
   const owner = summary.choice ?? (await findChoiceOf(session.rootPath, id));
@@ -810,6 +855,7 @@ const COMMANDS = {
   info: { run: cmdInfo },
   list: { run: cmdList },
   show: { run: cmdShow },
+  inspect: { run: cmdInspect },
   add: { run: cmdAdd },
   delete: { run: cmdDelete },
   undo: { run: cmdUndo },
@@ -830,6 +876,7 @@ const READ_COMMANDS = new Set([
   "info",
   "list",
   "show",
+  "inspect",
   "ops",
   "tree",
   "choices",

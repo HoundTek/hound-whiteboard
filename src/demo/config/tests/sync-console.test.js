@@ -209,6 +209,19 @@ describe("hwb 调试与操作命令", () => {
     expect(api.repairStateFromLog).toHaveBeenCalledTimes(1);
   });
 
+  test("inspect 经 queryObjectDetails 取回数据而不发调试请求", async () => {
+    const { board, api } = makeFakeBoard();
+    api.queryObjectDetails = jest.fn().mockResolvedValue([{ id: "a/1" }]);
+    setupEnv({ getBoard: () => board });
+
+    const result = await globalThis.hwb.inspect(["a/1"]);
+
+    expect(api.queryObjectDetails).toHaveBeenCalledWith(["a/1"]);
+    expect(result).toEqual([{ id: "a/1" }]);
+    // 与 objects 的分工：inspect 取回数据，不走 Worker 侧打印
+    expect(api.requestDebug).not.toHaveBeenCalled();
+  });
+
   test("reconnect 与调试查询经 requestDebug 发送，id 参数归一化", () => {
     const { board, api } = makeFakeBoard();
     setupEnv({ getBoard: () => board });

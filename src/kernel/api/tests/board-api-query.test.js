@@ -121,6 +121,74 @@ describe("BoardApi 查询面", () => {
     expect(api.queryObject("test/999")).toBeNull();
   });
 
+  test("queryObjects 只返回纯数据瘦摘要，不夹带几何快照", async () => {
+    const { api } = createEnd("test");
+    const id = await api.addObject("StrokeObject", {
+      position: { x: 5, y: 6 },
+      data: { ...STROKE_DATA },
+    });
+
+    const [summary] = api.queryObjects([id]);
+    expect(Object.keys(summary).sort()).toEqual([
+      "boundingBox",
+      "choice",
+      "id",
+      "isActive",
+      "position",
+      "transform",
+      "type",
+    ]);
+    // 摘要会在框选与手势高频路径上跨 worker 边界，带点数组就会放大成几十 KB
+    expect(summary.data).toBeUndefined();
+    expect(summary.property).toBeUndefined();
+    // range 是类实例，克隆后方法丢失，跨端消费方只能退回 boundingBox
+    expect(summary.range).toBeUndefined();
+  });
+
+  test("queryObjects 的消息体积不随笔迹点数增长", async () => {
+    const { api } = createEnd("test");
+    const points = Array.from({ length: 500 }, (_, i) => ({ x: i, y: i % 7 }));
+    const id = await api.addObject("StrokeObject", {
+      position: { x: 0, y: 0 },
+      data: { ...STROKE_DATA, points },
+    });
+
+    const summaryBytes = JSON.stringify(api.queryObjects([id])).length;
+    const detailBytes = JSON.stringify(api.queryObjectDetails([id])).length;
+
+    expect(summaryBytes).toBeLessThan(512);
+    // 详情带完整点数组，体积必须显著更大：证明两者口径确实不同
+    expect(detailBytes).toBeGreaterThan(summaryBytes * 10);
+  });
+
+  test("queryObjectDetails 在摘要之外带回属性、几何、引用计数与覆盖区块", async () => {
+    const { api } = createEnd("test");
+    const id = await api.addObject("StrokeObject", {
+      position: { x: 5, y: 6 },
+      data: { ...STROKE_DATA },
+    });
+
+    const [detail] = api.queryObjectDetails([id]);
+    expect(detail.id).toBe(id);
+    expect(detail.isActive).toBe(false);
+    expect(detail.position).toEqual({ x: 5, y: 6 });
+    expect(detail.data.points).toEqual(STROKE_DATA.points);
+    expect(detail.property).toEqual(expect.objectContaining({ color: "#000000" }));
+    expect(detail.loadedCount).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(detail.coveredChunkIds)).toBe(true);
+  });
+
+  test("queryObjectDetails 跳过不存在的 id", async () => {
+    const { api } = createEnd("test");
+    const id = await api.addObject("StrokeObject", {
+      position: { x: 0, y: 0 },
+      data: { ...STROKE_DATA },
+    });
+    expect(api.queryObjectDetails([id, "test/999"]).map((d) => d.id)).toEqual([
+      id,
+    ]);
+  });
+
   test("queryOperations 支持来源/类型过滤与 limit 取末尾", async () => {
     const { api } = createEnd("test");
     const id = await api.addObject("StrokeObject", { data: { ...STROKE_DATA } });

@@ -178,6 +178,13 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
       description: "打印单个对象的完整序列化数据（默认模式带 id 与类型标题行）。",
       examples: "hwb show cli/1 --daemon board1",
     },
+    inspect: {
+      summary: "打印对象诊断详情",
+      usage: "inspect <对象id...> [--daemon <名> | --path <板目录>] [--json]",
+      description:
+        "打印一个或多个对象的运行态：AOM 成员身份、引用计数、覆盖区块与几何数据快照。与 show 的分工是「对象在板上处于什么状态」而非「对象的文档内容」。",
+      examples: "hwb inspect cli/1 cli/2 --daemon board1",
+    },
     ops: {
       summary: "打印操作记录明细",
       usage: "ops [--source <来源>] [--type <类型>] [--limit N] [--daemon <名> | --path <板目录>] [--json]",
@@ -314,6 +321,7 @@ hwb unchoose batch --apply --daemon board1`,
     exportNeedOut: "export 需要 --out {file}。",
     importNeedFile: "import 需要 .hwb 文件路径。",
     showNeedId: "show 需要一个对象 id。",
+    inspectNeedId: "inspect 需要至少一个对象 id。",
     objectNotFound: "对象不存在：{ids}",
     deleteNeedIds: "delete 需要至少一个对象 id。",
     chooseNeedIds: "choose 需要至少一个对象 id。",
