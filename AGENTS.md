@@ -95,8 +95,39 @@ applyModifiedObjects(modificationContext, objects) { ... }
 applyModifiedObjects(modificationContext, objects) { ... }
 ```
 
-- 私有成员以 `_` 开头，标记 `@private`
+- 私有成员以 `_` 或 `#` 开头，标记 `@private`
 - 常量用 `UPPER_SNAKE_CASE`
+- **字段声明写在类体顶层**：所有实例字段先在类体开头声明并写 JSDoc，构造函数里只做赋值，不在构造函数内补注释
+
+```javascript
+// ✅ Good — 字段与注释都在顶层
+class ViewportRenderer {
+  /**
+   * 渲染调度器
+   * @type {RenderScheduler}
+   * @private
+   */
+  _scheduler;
+
+  constructor(options) {
+    this._scheduler = new RenderScheduler(options);
+  }
+}
+
+// ❌ Bad — 注释写在构造函数里，字段没有顶层声明
+class ViewportRenderer {
+  constructor(options) {
+    /**
+     * 渲染调度器
+     * @type {RenderScheduler}
+     */
+    this._scheduler = new RenderScheduler(options);
+  }
+}
+```
+
+- **不要在子类重声明父类已声明的字段**。类字段声明会在 `super()` 返回后把该字段重置为 `undefined`，会把父类构造函数设置的值冲掉
+- 字段是否属于本类：赋值出现在本类构造函数里、且父类没有该声明，才在本类顶层声明
 - **开发期路线编号（Kx/Px/Sx 等阶段代号）不进入代码库**：提交信息、代码注释、文档一律写机制语义本身，路线追踪留在私有计划文档
 - 详细规范见 `.agent/skills/comment-writer/SKILL.md`，文档规范见 `.agent/skills/doc-writer/SKILL.md`
 
