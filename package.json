@@ -61,7 +61,9 @@
     "check:license": "node scripts/ci/check-kernel-license.mjs",
     "check:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "ci-check": "yarn check:docs && yarn check:modules && yarn check:license",
-    "prepare": "husky"
+    "prepare": "husky",
+    "probe:web": "HWB_DEMO_ROOT=. HWB_DEMO_ENTRY=/dev/web-probe/index.html node scripts/serve-demo.mjs 8010",
+    "probe:parity": "node dev/probes/parity.node.mjs"
   },
   "author": "Frank Steven",
   "contributors": [

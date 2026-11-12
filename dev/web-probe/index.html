@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hound Whiteboard 真机成本测量</title>
+    <style>
+      body { font: 13px/1.6 ui-monospace, Menlo, monospace; margin: 24px; color: #1a1a1a; }
+      h1 { font-size: 15px; margin: 0 0 4px; }
+      p { color: #666; margin: 0 0 16px; }
+      table { border-collapse: collapse; margin-top: 12px; }
+      th, td { text-align: left; padding: 4px 16px 4px 0; border-bottom: 1px solid #eee; }
+      td.ms { text-align: right; font-variant-numeric: tabular-nums; }
+      #status { margin-top: 12px; color: #666; }
+      canvas { margin-top: 16px; border: 1px solid #ddd; max-width: 100%; }
+    </style>
+  </head>
+  <body>
+    <h1>真机成本测量</h1>
+    <p>与 <code>dev/probes/parity.node.mjs</code> 跑同一份场景（<code>dev/probes/scenarios.js</code>）。</p>
+    <div id="caps"></div>
+    <table id="results">
+      <thead><tr><th>配置</th><th>场景</th><th class="ms">p50</th><th class="ms">p95</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div id="status">准备中…</div>
+    <canvas id="vis" width="600" height="450"></canvas>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>
