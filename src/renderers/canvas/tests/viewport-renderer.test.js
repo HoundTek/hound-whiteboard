@@ -1549,7 +1549,7 @@ describe("ViewportRenderer", () => {
       expect(composites).toHaveLength(1);
     });
 
-    test("对象进出 AOM 时只清理对象覆盖的一小块", () => {
+    test("对象进出 AOM 时整块重画受影响的那一块", () => {
       const previousCanvas = globalThis.OffscreenCanvas;
       const tileClears = [];
       // 替换 tile 画布实现，直接记录每块 tile 上的清理尺寸
@@ -1585,10 +1585,10 @@ describe("ViewportRenderer", () => {
         renderer.flush();
 
         expect(tileClears.length).toBeGreaterThan(0);
-        // 只清理对象范围加留白的那一小块，其余像素保持不动
+        // 受影响的那一块整块重画：局部重画会在脏区边界留下直边
         for (const [, , width, height] of tileClears) {
-          expect(width).toBeLessThanOrEqual(16);
-          expect(height).toBeLessThanOrEqual(16);
+          expect(width).toBe(512);
+          expect(height).toBe(512);
         }
       } finally {
         globalThis.OffscreenCanvas = previousCanvas;

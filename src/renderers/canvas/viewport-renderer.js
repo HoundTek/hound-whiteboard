@@ -1216,24 +1216,13 @@ class ViewportRenderer extends Renderer {
       });
     }
 
-    if (tile.dirty) {
-      this.clearRegion(ctx, fullRect);
-      this.renderRegion(ctx, viewportContext, entries, fullRect);
-      this.#tileStore.markRebuilt(tile);
-      return [fullRect];
-    }
-
-    // 局部脏区只重绘 tile 内的小块，其余像素保持不动
-    const rebuiltRects = [];
-    for (const worldRect of tile.dirtyRects) {
-      const localRect = this.#worldRectToTileRect(worldRect, tile);
-      if (!localRect) continue;
-      this.clearRegion(ctx, localRect);
-      this.renderRegion(ctx, viewportContext, entries, localRect);
-      rebuiltRects.push(localRect);
-    }
+    // 只重建受影响的块，但整块重画。
+    // 局部脏区重画会把穿过脏区边界的对象按裁剪后的形状再画一遍，
+    // 提交后能在边界上看到一条直边；整块重画不会切任何对象。
+    this.clearRegion(ctx, fullRect);
+    this.renderRegion(ctx, viewportContext, entries, fullRect);
     this.#tileStore.markRebuilt(tile);
-    return rebuiltRects;
+    return [fullRect];
   }
 
   /**

@@ -238,6 +238,57 @@ describe("tile 局部失效的像素一致性", () => {
     ).toBeGreaterThan(200);
   });
 
+  test("提交跨越多块 tile 的笔迹后，输出与从零渲染一致", async () => {
+    /**
+     * 渲染场景
+     * @param {Object} options - 场景选项
+     * @returns {Promise<Uint8ClampedArray>} 像素
+     */
+    async function render(options) {
+      const context = await createContext({ tiles: true });
+      try {
+        const { circle } = buildScene(context);
+        const { boardCore, aom, viewport } = context;
+        void circle;
+        if (!options.commitLater) {
+          // 直接建出最终场景
+          const stroke = new StrokeObject(
+            9,
+            new Vector(40, 20),
+            { color: "rgba(200,30,30,0.7)", width: 12 },
+            { points: [{ x: 0, y: 0 }, { x: 160, y: 60 }, { x: 260, y: -20 }] },
+          );
+          boardCore.registerObjectInstance(stroke);
+          aom.add([stroke]);
+          aom.apply([stroke]);
+          viewport.flushRenderFrame();
+          return readPixels(context);
+        }
+
+        // 先渲染一次，再提交笔迹：命中局部脏区重绘路径
+        viewport.flushRenderFrame();
+        const stroke = new StrokeObject(
+          9,
+          new Vector(40, 20),
+          { color: "rgba(200,30,30,0.7)", width: 12 },
+          { points: [{ x: 0, y: 0 }, { x: 160, y: 60 }, { x: 260, y: -20 }] },
+        );
+        boardCore.registerObjectInstance(stroke);
+        aom.add([stroke]);
+        aom.apply([stroke]);
+        viewport.flushRenderFrame();
+        return readPixels(context);
+      } finally {
+        context.viewport.destroy?.();
+      }
+    }
+
+    const incremental = await render({ commitLater: true });
+    const fromScratch = await render({ commitLater: false });
+    const { mismatched, maxDiff } = comparePixels(incremental, fromScratch);
+    expect({ mismatched, maxDiff }).toEqual({ mismatched: 0, maxDiff: 0 });
+  });
+
   test("经典路径下移动后旧位置同样不残留像素", async () => {
     const pixels = await renderScenario({ tiles: false, moveStroke: true });
     expect(countInk(pixels, { left: 40, top: 40, width: 160, height: 70 })).toBe(0);
