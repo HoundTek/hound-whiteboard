@@ -15,12 +15,6 @@ import {
 } from "./tile-grid.js";
 
 /**
- * 单块 tile 允许的局部脏区数量上限
- * @description 超过后记为整块重建，避免大量小区域逐个裁剪重绘反而更贵。
- */
-const MAX_TILE_DIRTY_RECTS = 8;
-
-/**
  * 默认 tile 边长（CSS 像素）
  * @description
  * tile 在屏幕空间恒为此尺寸，与缩放和视口无关。
@@ -48,7 +42,6 @@ const DEFAULT_TILE_BUDGET_BYTES = 64 * 1024 * 1024;
  * @property {RectangleRange} worldRect - 世界范围
  * @property {OffscreenCanvas | HTMLCanvasElement} canvas - 位图画布
  * @property {boolean} dirty - 是否需要整块重新光栅化
- * @property {RectangleRange[]} dirtyRects - 需要局部重绘的世界矩形
  */
 
 /**
@@ -133,7 +126,8 @@ class TileStore {
     const scale = options.deviceScale;
     this.deviceScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
     this.#createCanvas =
-      options.createCanvas ?? ((width, height) => new OffscreenCanvas(width, height));
+      options.createCanvas ??
+      ((width, height) => new OffscreenCanvas(width, height));
     this.maxBytes = options.maxBytes ?? DEFAULT_TILE_BUDGET_BYTES;
   }
 
@@ -271,11 +265,11 @@ class TileStore {
   }
 
   /**
-   * 把内容变化的世界矩形记为相关 tile 的局部脏区
+   * 按世界矩形标记相关 tile 为脏
    * @description
-   * 局部脏区让提交只重绘 tile 内的一小块，而不是整幅 512×512。
+   * 只决定「重建哪些块」，不为块内的小块记录矩形：块内一律整块重画，
+   * 局部裁剪重画会把穿过裁剪边界的对象按裁剪后的形状再画一遍，留下可见直边。
    * 尚未创建的 tile 无需标记，创建时即为整块脏。
-   * 单块 tile 的脏区数量超过上限时退化为整块重建。
    * @param {RectangleRange | Object} worldRect - 内容发生变化的世界矩形
    * @returns {number} 被标记的 tile 数量
    */
@@ -289,11 +283,7 @@ class TileStore {
       for (let tx = range.minTx; tx <= range.maxTx; tx++) {
         const tile = this.#tiles.get(this.key(tx, ty));
         if (!tile || tile.dirty) continue;
-        tile.dirtyRects.push(rect);
-        if (tile.dirtyRects.length > MAX_TILE_DIRTY_RECTS) {
-          tile.dirty = true;
-          tile.dirtyRects.length = 0;
-        }
+        tile.dirty = true;
         marked++;
       }
     }
@@ -309,7 +299,6 @@ class TileStore {
     for (const tile of this.#tiles.values()) {
       if (tile.dirty) continue;
       tile.dirty = true;
-      tile.dirtyRects.length = 0;
       marked++;
     }
     return marked;
@@ -321,7 +310,7 @@ class TileStore {
    * @returns {boolean} 整块脏或存在局部脏区
    */
   isDirty(tile) {
-    return tile.dirty || tile.dirtyRects.length > 0;
+    return tile.dirty;
   }
 
   /**
@@ -359,7 +348,6 @@ class TileStore {
    */
   markRebuilt(tile) {
     tile.dirty = false;
-    tile.dirtyRects.length = 0;
     this.rebuildCount++;
   }
 
@@ -414,7 +402,6 @@ class TileStore {
       canvas: this.#createCanvas(width, height),
       bytes: width * height * 4,
       dirty: true,
-      dirtyRects: [],
     };
   }
 }

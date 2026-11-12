@@ -7,10 +7,7 @@
  * @author Zhou Chenyu
  */
 
-import {
-  Renderer,
-  normalizeDirtyRectsForScreenUpdate,
-} from "./renderer.js";
+import { Renderer, normalizeDirtyRectsForScreenUpdate } from "./renderer.js";
 import { BasicObject } from "../../kernel/objects/basic-obj.js";
 import { RectangleRange } from "../../kernel/range/rectangle.js";
 import { intersectsRanges } from "../../kernel/range/index.js";
@@ -18,7 +15,10 @@ import { DirectedGraph } from "../../kernel/utils/directed-graph.js";
 import { ActiveObjectManager } from "../../kernel/board/active-object-manager.js";
 import { collectActiveDrawables as _collectActiveDrawables } from "./aom-collect-utils.js";
 import { OBJECT_DRAW_STRATEGIES } from "./object-draw-strategies.js";
-import { RenderScheduler, createRectangleDirtyRectMerger } from "./render-scheduler.js";
+import {
+  RenderScheduler,
+  createRectangleDirtyRectMerger,
+} from "./render-scheduler.js";
 import { TileStore, DEFAULT_TILE_SIZE } from "./tile-cache.js";
 import {
   tileBoundaryDevice,
@@ -30,7 +30,6 @@ import {
   createBaseDirtyRectThresholdStrategy,
   createLiveDirtyRectThresholdStrategy,
 } from "./dirty-rect-strategy-shared.js";
-
 
 /**
  * @typedef {Object} ViewportRendererInvalidateActiveOptions
@@ -326,7 +325,9 @@ class ViewportRenderer extends Renderer {
     const cacheCanvas = this.#cache;
     // 缓存画布与输出位图同一坐标空间（设备像素），才能在 1:1 拷贝下不失真
     const nextDeviceWidth = normalizeCanvasSize(nextWidth * this._deviceScale);
-    const nextDeviceHeight = normalizeCanvasSize(nextHeight * this._deviceScale);
+    const nextDeviceHeight = normalizeCanvasSize(
+      nextHeight * this._deviceScale,
+    );
     if (
       cacheCanvas &&
       (cacheCanvas.width !== nextDeviceWidth ||
@@ -340,7 +341,6 @@ class ViewportRenderer extends Renderer {
     }
 
     // tile 位图按设备像素分配，倍率变化由 setRasterScale 统一处理，视口尺寸不参与
-
 
     return resized;
   }
@@ -362,7 +362,8 @@ class ViewportRenderer extends Renderer {
    */
   #createOutputDirtyRectMerger() {
     return createRectangleDirtyRectMerger({
-      getThresholds: () => this.#resolveOutputThresholds(this.viewport?.zoom ?? 1),
+      getThresholds: () =>
+        this.#resolveOutputThresholds(this.viewport?.zoom ?? 1),
       getViewportRect: () => this._getViewportRect(),
     });
   }
@@ -639,14 +640,16 @@ class ViewportRenderer extends Renderer {
       dirtyRects.length > 0
         ? dirtyRects
         : [
-          ...this.createDrawableEntries(this.collectActiveDrawables()),
-          ...this.#previousAomEntries,
-        ]
-          .flatMap((entry) =>
-            entry?.drawnRects ?? (entry?.screenRect ? [entry.screenRect] : []),
-          )
-          .map((rect) => this.normalizeScreenRect(rect))
-          .filter(Boolean);
+            ...this.createDrawableEntries(this.collectActiveDrawables()),
+            ...this.#previousAomEntries,
+          ]
+            .flatMap(
+              (entry) =>
+                entry?.drawnRects ??
+                (entry?.screenRect ? [entry.screenRect] : []),
+            )
+            .map((rect) => this.normalizeScreenRect(rect))
+            .filter(Boolean);
 
     for (const dirtyRect of targetDirtyRects) {
       this.#outputScheduler.invalidate(dirtyRect);
@@ -838,7 +841,11 @@ class ViewportRenderer extends Renderer {
   #tryEnterZoomPreview(previousViewportState = {}) {
     const previousZoom = previousViewportState?.zoom;
     const zoom = this.viewport?.zoom ?? 1;
-    if (!Number.isFinite(previousZoom) || previousZoom <= 0 || previousZoom === zoom) {
+    if (
+      !Number.isFinite(previousZoom) ||
+      previousZoom <= 0 ||
+      previousZoom === zoom
+    ) {
       return false;
     }
     if (!this.#hasRenderedFrame) return false;
@@ -1058,7 +1065,9 @@ class ViewportRenderer extends Renderer {
    * @private
    */
   #invalidateTilesForChunks(chunks, previousChunks, options = {}) {
-    const current = [...(chunks ?? [])].filter((chunk) => chunk?.id !== undefined);
+    const current = [...(chunks ?? [])].filter(
+      (chunk) => chunk?.id !== undefined,
+    );
     const previous = [...(previousChunks ?? [])].filter(
       (chunk) => chunk?.id !== undefined,
     );
@@ -1111,14 +1120,16 @@ class ViewportRenderer extends Renderer {
     const tiles = this.#tileStore.ensure(cacheWorldRect);
     const dirtyTiles = tiles.filter(
       (tile) =>
-        this.#tileStore.isDirty(tile) && intersectsRanges(tile.worldRect, worldRect),
+        this.#tileStore.isDirty(tile) &&
+        intersectsRanges(tile.worldRect, worldRect),
     );
 
     if (dirtyTiles.length > 0) {
       // padding 与对象自身相关而与 tile 无关，先算一次，避免 tile 数 × 对象数的重复解析
       const items = this.#collectCacheDrawables().map((objectInstance) => {
         const paddedWorldRect = this.getObjectWorldRect(objectInstance);
-        if (!paddedWorldRect) return { object: objectInstance, paddedWorldRect: undefined };
+        if (!paddedWorldRect)
+          return { object: objectInstance, paddedWorldRect: undefined };
         const padding = this.getObjectScreenPadding(objectInstance) / zoom;
         return {
           object: objectInstance,
@@ -1195,12 +1206,8 @@ class ViewportRenderer extends Renderer {
       if (!intersectsRanges(worldRect, tile.worldRect)) continue;
 
       const left =
-        tileLocalDevice(
-          worldRect.left,
-          tile.boundaryLeft,
-          zoom,
-          deviceScale,
-        ) / deviceScale;
+        tileLocalDevice(worldRect.left, tile.boundaryLeft, zoom, deviceScale) /
+        deviceScale;
       const top =
         tileLocalDevice(worldRect.top, tile.boundaryTop, zoom, deviceScale) /
         deviceScale;
@@ -1223,43 +1230,6 @@ class ViewportRenderer extends Renderer {
     this.renderRegion(ctx, viewportContext, entries, fullRect);
     this.#tileStore.markRebuilt(tile);
     return [fullRect];
-  }
-
-  /**
-   * 把世界矩形换算成 tile 内的像素矩形并裁剪到 tile 边界
-   * @param {RectangleRange} worldRect - 世界矩形
-   * @param {import("./tile-cache.js").TileEntry} tile - 目标 tile
-   * @param {number} zoom - 当前缩放
-   * @returns {RectangleRange | undefined} tile 内矩形，完全在外时返回 undefined
-   * @private
-   */
-  #worldRectToTileRect(worldRect, tile) {
-    const zoom = this.viewport?.zoom ?? 1;
-    const deviceScale = this._deviceScale ?? 1;
-    const cssWidth = tile.deviceRect.width / deviceScale;
-    const cssHeight = tile.deviceRect.height / deviceScale;
-    const left = Math.max(
-      0,
-      tileLocalDevice(worldRect.left, tile.boundaryLeft, zoom, deviceScale) /
-        deviceScale,
-    );
-    const top = Math.max(
-      0,
-      tileLocalDevice(worldRect.top, tile.boundaryTop, zoom, deviceScale) /
-        deviceScale,
-    );
-    const right = Math.min(
-      cssWidth,
-      tileLocalDevice(worldRect.right, tile.boundaryLeft, zoom, deviceScale) /
-        deviceScale,
-    );
-    const bottom = Math.min(
-      cssHeight,
-      tileLocalDevice(worldRect.bottom, tile.boundaryTop, zoom, deviceScale) /
-        deviceScale,
-    );
-    if (right <= left || bottom <= top) return undefined;
-    return new RectangleRange(left, top, right - left, bottom - top);
   }
 
   /**
@@ -1498,9 +1468,7 @@ class ViewportRenderer extends Renderer {
 
     // 脏区归一化并扩边到整数边界，确保 clearRect / drawImage 使用一致的 rect
     const normalizedDirtyRects = hasExplicitDirtyRects
-      ? normalizeDirtyRectsForScreenUpdate(
-        this.collectDirtyRects(dirtyRects),
-      )
+      ? normalizeDirtyRectsForScreenUpdate(this.collectDirtyRects(dirtyRects))
       : [];
 
     // 按脏区清空输出 canvas（无脏区时全量清空）
@@ -1552,7 +1520,9 @@ class ViewportRenderer extends Renderer {
       entry.drawnRects =
         entryDirtyRects.length > 0
           ? entryDirtyRects
-          : (entry.screenRect ? [entry.screenRect] : []);
+          : entry.screenRect
+            ? [entry.screenRect]
+            : [];
     }
 
     // 保存状态供下一帧使用

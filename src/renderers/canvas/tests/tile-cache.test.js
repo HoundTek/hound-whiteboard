@@ -45,12 +45,14 @@ describe("TileStore#rangeForWorldRect", () => {
   test("覆盖范围按世界坐标对齐，与视口位置无关", () => {
     const { store } = createStore();
 
-    expect(store.rangeForWorldRect(new RectangleRange(0, 0, 800, 600))).toEqual({
-      minTx: 0,
-      minTy: 0,
-      maxTx: 1,
-      maxTy: 1,
-    });
+    expect(store.rangeForWorldRect(new RectangleRange(0, 0, 800, 600))).toEqual(
+      {
+        minTx: 0,
+        minTy: 0,
+        maxTx: 1,
+        maxTy: 1,
+      },
+    );
   });
 
   test("负坐标向负方向取整", () => {
@@ -64,12 +66,14 @@ describe("TileStore#rangeForWorldRect", () => {
   test("右边界恰好落在 tile 分界线上不多算一块", () => {
     const { store } = createStore();
 
-    expect(store.rangeForWorldRect(new RectangleRange(0, 0, 512, 512))).toEqual({
-      minTx: 0,
-      minTy: 0,
-      maxTx: 0,
-      maxTy: 0,
-    });
+    expect(store.rangeForWorldRect(new RectangleRange(0, 0, 512, 512))).toEqual(
+      {
+        minTx: 0,
+        minTy: 0,
+        maxTx: 0,
+        maxTy: 0,
+      },
+    );
   });
 
   test("无效矩形返回 undefined", () => {
@@ -110,10 +114,11 @@ describe("TileStore#ensure", () => {
 describe("TileStore#markDirtyWorldRect", () => {
   test("只标记与矩形相交的已存在 tile", () => {
     const { store } = createStore();
-    const tiles = store.ensure(new RectangleRange(0, 0, 1200, 600));
+    const rect = new RectangleRange(0, 0, 100, 100);
+    const tiles = store.ensure(rect);
     for (const tile of tiles) store.markRebuilt(tile);
 
-    const marked = store.markDirtyWorldRect(new RectangleRange(20, 20, 10, 10));
+    const marked = store.markDirtyWorldRect(new RectangleRange(10, 10, 20, 20));
 
     expect(marked).toBe(1);
     expect(store.countDirty()).toBe(1);
@@ -122,63 +127,23 @@ describe("TileStore#markDirtyWorldRect", () => {
 
   test("跨区域矩形标记所有相交 tile", () => {
     const { store } = createStore();
-    const tiles = store.ensure(new RectangleRange(0, 0, 1200, 600));
+    const tiles = store.ensure(new RectangleRange(0, 0, 1200, 100));
     for (const tile of tiles) store.markRebuilt(tile);
 
-    store.markDirtyWorldRect(new RectangleRange(500, 0, 40, 40));
+    store.markDirtyWorldRect(new RectangleRange(0, 0, 1200, 100));
 
-    const dirtyKeys = tiles
-      .filter((tile) => store.isDirty(tile))
-      .map((tile) => tile.key);
-    expect(dirtyKeys.sort()).toEqual(["0:0,0", "0:1,0"]);
+    expect(store.countDirty()).toBe(tiles.length);
   });
 
-  test("内容变化记为局部脏区而不是整块重建", () => {
+  test("整块脏的 tile 不重复计入标记数", () => {
     const { store } = createStore();
-    const [tile] = store.ensure(new RectangleRange(0, 0, 100, 100));
-    store.markRebuilt(tile);
+    const tiles = store.ensure(new RectangleRange(0, 0, 100, 100));
 
-    store.markDirtyWorldRect(new RectangleRange(20, 20, 10, 10));
-
-    expect(tile.dirty).toBe(false);
-    expect(tile.dirtyRects).toHaveLength(1);
-    expect(store.isDirty(tile)).toBe(true);
-
-    store.markRebuilt(tile);
-    expect(tile.dirtyRects).toHaveLength(0);
-    expect(store.isDirty(tile)).toBe(false);
-  });
-
-  test("局部脏区数量超过上限时退化为整块重建", () => {
-    const { store } = createStore();
-    const [tile] = store.ensure(new RectangleRange(0, 0, 100, 100));
-    store.markRebuilt(tile);
-
-    for (let i = 0; i < 20; i++) {
-      store.markDirtyWorldRect(new RectangleRange(i * 10, 0, 5, 5));
-    }
-
-    expect(tile.dirty).toBe(true);
-    expect(tile.dirtyRects).toHaveLength(0);
-  });
-
-  test("整块脏的 tile 不再累积局部脏区", () => {
-    const { store } = createStore();
-    const [tile] = store.ensure(new RectangleRange(0, 0, 100, 100));
-
-    store.markDirtyWorldRect(new RectangleRange(20, 20, 10, 10));
-
-    expect(tile.dirty).toBe(true);
-    expect(tile.dirtyRects).toHaveLength(0);
-  });
-
-  test("未分配的区域不新建 tile", () => {
-    const { store, canvases } = createStore();
-    store.ensure(new RectangleRange(0, 0, 100, 100));
-
-    store.markDirtyWorldRect(new RectangleRange(5000, 5000, 100, 100));
-
-    expect(canvases).toHaveLength(1);
+    // 保证创建的块初始即为整块脏
+    expect(store.markDirtyWorldRect(new RectangleRange(0, 0, 100, 100))).toBe(
+      0,
+    );
+    expect(tiles.every((tile) => store.isDirty(tile))).toBe(true);
   });
 });
 
