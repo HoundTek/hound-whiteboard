@@ -197,6 +197,7 @@ async function measureConfig(config, record) {
   const viewport = config.viewport;
   const fixture = await createFixture({
     strokes: config.strokes,
+    points: config.points,
     tiles: config.tiles,
   });
   const { aom, boardCore } = fixture;
@@ -268,24 +269,40 @@ async function measureConfig(config, record) {
  * @description 三个维度各自变化，其余保持 1200×900、300 笔画、DPR 2。
  * @type {Array<{ label: string, viewport: Object, strokes: number, tiles: boolean }>}
  */
-export const SWEEP = Object.freeze([
-  { label: "基准 1200×900｜300 笔", viewport: VIEWPORT, strokes: 300, tiles: true },
-  { label: "基准 1200×900｜300 笔", viewport: VIEWPORT, strokes: 300, tiles: false },
-  { label: "小视口 900×700｜300 笔", viewport: { width: 900, height: 700 }, strokes: 300, tiles: true },
-  { label: "大视口 1920×1080｜300 笔", viewport: { width: 1920, height: 1080 }, strokes: 300, tiles: true },
-  { label: "轻载 1200×900｜150 笔", viewport: VIEWPORT, strokes: 150, tiles: true },
-  { label: "重载 1200×900｜600 笔", viewport: VIEWPORT, strokes: 600, tiles: true },
-]);
+export const SWEEPS = Object.freeze({
+  // 对象数扫描：固定单笔 120 点，改变笔数
+  count: [
+    { label: "重载 1200×900｜600 笔", viewport: VIEWPORT, strokes: 600, points: 120, tiles: true },
+    { label: "基准 1200×900｜300 笔", viewport: VIEWPORT, strokes: 300, points: 120, tiles: true },
+    { label: "基准 1200×900｜300 笔", viewport: VIEWPORT, strokes: 300, points: 120, tiles: false },
+    { label: "小视口 900×700｜300 笔", viewport: { width: 900, height: 700 }, strokes: 300, points: 120, tiles: true },
+    { label: "大视口 1920×1080｜300 笔", viewport: { width: 1920, height: 1080 }, strokes: 300, points: 120, tiles: true },
+    { label: "轻载 1200×900｜150 笔", viewport: VIEWPORT, strokes: 150, points: 120, tiles: true },
+  ],
+  // 点数扫描：固定 300 笔，只改单笔点数
+  points: [
+    { label: "300 笔 × 30 点", viewport: VIEWPORT, strokes: 300, points: 30, tiles: true },
+    { label: "300 笔 × 120 点", viewport: VIEWPORT, strokes: 300, points: 120, tiles: true },
+    { label: "300 笔 × 480 点", viewport: VIEWPORT, strokes: 300, points: 480, tiles: true },
+  ],
+});
+
+/**
+ * 默认扫描
+ * @type {string}
+ */
+export const DEFAULT_SWEEP = "count";
 
 /**
  * 运行全部场景
- * @param {{ onProgress?: (row: Object) => void }} [options={}] - 运行选项
+ * @param {{ onProgress?: (row: Object) => void, sweep?: string }} [options={}] - 运行选项
  * @returns {Promise<Array<Object>>} 结果行
  */
 export async function runScenarios(options = {}) {
   const report = options.onProgress ?? (() => {});
   const rows = [];
-  for (const config of SWEEP) {
+  const sweep = SWEEPS[options.sweep ?? DEFAULT_SWEEP] ?? SWEEPS[DEFAULT_SWEEP];
+  for (const config of sweep) {
     await measureConfig(config, (row) => {
       rows.push(row);
       report(row);

@@ -4,7 +4,7 @@
  * @author Zhou Chenyu
  */
 
-import { createFixture, runScenarios, VIEWPORT } from "../probes/scenarios.js";
+import { createFixture, DEFAULT_SWEEP, runScenarios, SWEEPS, VIEWPORT } from "../probes/scenarios.js";
 
 const statusLine = document.getElementById("status");
 const body = document.querySelector("#results tbody");
@@ -50,7 +50,13 @@ printCapabilities();
 if (typeof OffscreenCanvas === "undefined") {
   statusLine.textContent = "当前浏览器没有 OffscreenCanvas，场景无法运行。";
 } else {
+  // 用 ?sweep=points 切换成点数扫描，默认对象数扫描
+  const sweepName = new URLSearchParams(location.search).get("sweep") ?? DEFAULT_SWEEP;
+  const sweep = SWEEPS[sweepName] ?? SWEEPS[DEFAULT_SWEEP];
+  statusLine.textContent = `扫描：${sweepName}（${sweep.length} 组）`;
+
   const results = await runScenarios({
+    sweep: sweepName,
     onProgress(row) {
       appendRow(row);
       statusLine.textContent = `${row.group}｜${row.name} 完成`;
