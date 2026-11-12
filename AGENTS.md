@@ -161,6 +161,7 @@ class ViewportRenderer {
 | `hound-whiteboard-test-patterns`      | 添加/迁移/审查测试           |
 | `hound-whiteboard-benchmark-patterns` | 添加/迁移/审查 benchmark     |
 | `hound-whiteboard-git-convention`     | 准备提交时加载，确保格式一致 |
+| `hound-whiteboard-git-merge`          | 编写或审查 PR 正文时加载     |
 
 ## Git 提交
 
