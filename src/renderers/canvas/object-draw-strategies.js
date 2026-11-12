@@ -12,6 +12,22 @@ import {
 import { CircleObject } from "../../kernel/objects/graph/circle.js";
 import { EllipseObject } from "../../kernel/objects/graph/ellipse.js";
 import { PolygonObject } from "../../kernel/objects/graph/polygon.js";
+import { ObjectPathCache } from "./object-path-cache.js";
+
+/**
+ * 路径编译缓存
+ * @description 全进程共用一份：Path2D 存世界坐标，跨视口、跨缩放、跨帧都能复用。
+ * @type {ObjectPathCache}
+ */
+const pathCache = new ObjectPathCache();
+
+/**
+ * 取路径缓存统计
+ * @returns {{ entries: number, bytes: number, builds: number, fallbacks: number }} 统计
+ */
+function getPathCacheStats() {
+  return pathCache.stats();
+}
 
 /**
  * 绘制笔迹对象
@@ -31,7 +47,7 @@ function renderStroke(ctx, object) {
     return;
   }
 
-  const transformedPoints = object.rich.worldPathRange.points;
+  const transformedPoints = object.getWorldPathRange().points;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, object.position.x, object.position.y);
   ctx.strokeStyle = object.property.color;
@@ -46,10 +62,16 @@ function renderStroke(ctx, object) {
     ctx.fillStyle = object.property.color;
     ctx.fill();
   } else {
-    for (let i = 1; i < transformedPoints.length; i++) {
-      ctx.lineTo(transformedPoints[i].x, transformedPoints[i].y);
+    // 编译路径可跨帧、跨视口复用；环境不支持 Path2D 时回退到逐点构建
+    const compiledPath = pathCache.acquire(object);
+    if (compiledPath) {
+      ctx.stroke(compiledPath);
+    } else {
+      for (let i = 1; i < transformedPoints.length; i++) {
+        ctx.lineTo(transformedPoints[i].x, transformedPoints[i].y);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
   }
   ctx.restore();
 }
@@ -186,4 +208,4 @@ function drawObject(ctx, object) {
   strategy(ctx, object);
 }
 
-export { drawObject, OBJECT_DRAW_STRATEGIES };
+export { drawObject, OBJECT_DRAW_STRATEGIES, getPathCacheStats };

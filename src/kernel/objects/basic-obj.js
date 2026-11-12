@@ -58,6 +58,13 @@ class BasicObject {
   data = {};
 
   /**
+   * 几何版本号
+   * @type {number}
+   * @description 任何影响几何的变更都会自增，供渲染侧判定派生缓存是否过期。不参与序列化。
+   */
+  geometryVersion = 0;
+
+  /**
    * 运行时计算派生的富数据
    * @type {Record<string, any>}
    * @description 存放从原始数据计算派生的运行时结构，如边界矩形、凸包、变换后的路径等。此字段不参与持久化。
@@ -166,6 +173,15 @@ class BasicObject {
    * @protected
    */
   _onDataChange(keys) { }
+
+  /**
+   * 让几何版本号自增
+   * @description 几何或变换发生变化时调用，使渲染侧的路径缓存与派生缓存作废。
+   * @protected
+   */
+  bumpGeometryVersion() {
+    this.geometryVersion += 1;
+  }
 
   /**
    * 获取对象渲染额外留白

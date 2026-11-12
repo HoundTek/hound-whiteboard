@@ -46,7 +46,7 @@ describe("StrokeObject 世界点列", () => {
         transform: new Matrix(scale, 0, 0, scale),
       });
       // 渲染点列与橡皮擦判定点列同一份数据：插点或抽稀都会改变几何与擦除语义
-      expect(stroke.rich.worldPathRange.points).toHaveLength(points.length);
+      expect(stroke.getWorldPathRange().points).toHaveLength(points.length);
       expect(stroke.getRange().points).toHaveLength(points.length);
     }
   });
@@ -56,7 +56,7 @@ describe("StrokeObject 世界点列", () => {
     const stroke = createStroke(points, {
       transform: new Matrix(3, 0, 0, 3),
     });
-    const worldPoints = stroke.rich.worldPathRange.points;
+    const worldPoints = stroke.getWorldPathRange().points;
     // 直角拐点经过等比缩放后仍然是直角拐点
     expect(worldPoints[2].x).toBeCloseTo(300, 9);
     expect(worldPoints[2].y).toBeCloseTo(0, 9);
@@ -70,7 +70,7 @@ describe("StrokeObject#getRenderBounds", () => {
     const stroke = createStroke(rightAnglePoints());
 
     const bounds = stroke.getRenderBounds();
-    const actual = RectangleRange.from(stroke.rich.worldPathRange);
+    const actual = RectangleRange.from(stroke.getWorldPathRange());
 
     expect(bounds.left).toBeCloseTo(actual.left, 9);
     expect(bounds.top).toBeCloseTo(actual.top, 9);

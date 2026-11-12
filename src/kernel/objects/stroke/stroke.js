@@ -119,7 +119,11 @@ class StrokeObject extends BasicObject {
     this.property.lineJoin = normalizeLineJoin(this.property.lineJoin);
     this.property.lineCap = normalizeLineCap(this.property.lineCap);
     this.rich.localPathRange = new PathRange([]);
-    this.rich.worldPathRange = new PathRange([]);
+    /**
+     * 世界坐标点列的惰性缓存
+     * @type {{ version: number, pathRange: PathRange } | null}
+     */
+    this.rich.worldPathRangeCache = null;
     this._onDataChange(Object.keys(data));
   }
 
@@ -132,17 +136,52 @@ class StrokeObject extends BasicObject {
   }
 
   calculateRichDatas() {
-    if (this.rich.localPathRange.points.length === 0) {
-      this.rich.worldPathRange = new PathRange([]);
+    const points = this.rich.localPathRange.points;
+    this.rich.worldPathRangeCache = null;
+    this.bumpGeometryVersion();
+
+    if (points.length === 0) {
       this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
       return;
     }
 
-    let transformedPoints = this.rich.localPathRange.points.map((p) =>
+    // 精确包围盒仍需逐点变换，但不再把世界点数组留在内存里
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const point of points) {
+      const world = Vector.mulMatrix(this.transform, point);
+      if (world.x < minX) minX = world.x;
+      if (world.y < minY) minY = world.y;
+      if (world.x > maxX) maxX = world.x;
+      if (world.y > maxY) maxY = world.y;
+    }
+    this.rich.boundingBox = new RectangleRange(minX, minY, maxX - minX, maxY - minY);
+  }
+
+  /**
+   * 取世界坐标点列
+   * @description
+   * 首次调用时按当前变换物化并缓存，几何变更后由 `geometryVersion` 判定过期。
+   * 派生数据只在这一步产生，不在构造期常驻。
+   * @returns {PathRange} 世界坐标点列
+   */
+  getWorldPathRange() {
+    const cached = this.rich.worldPathRangeCache;
+    if (cached && cached.version === this.geometryVersion) {
+      return cached.pathRange;
+    }
+
+    const points = this.rich.localPathRange.points.map((p) =>
       Vector.mulMatrix(this.transform, p),
     );
-    this.rich.worldPathRange = new PathRange(transformedPoints);
-    this.rich.boundingBox = calculatePointBounds(transformedPoints);
+    const pathRange = new PathRange(points);
+    this.rich.worldPathRangeCache = {
+      version: this.geometryVersion,
+      pathRange,
+    };
+    return pathRange;
   }
 
   _onDataChange(keys) {
@@ -257,7 +296,7 @@ class StrokeObject extends BasicObject {
   }
 
   getRange() {
-    return this.rich.worldPathRange;
+    return this.getWorldPathRange();
   }
 
   serialize() {
