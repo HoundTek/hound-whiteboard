@@ -422,7 +422,7 @@ async function waitForChunksLoaded(viewport, timeoutMs = 5000) {
  * @description 走真实区块加载路径：先按 2x 视口范围加载区块，再把笔迹提交进这些区块的静态图。
  * 每笔提交都经 ActiveObjectManager 的 add / apply，与真实提交路径一致。
  * @param {{ strokes: number, points: number }} scenario - 场景规模
- * @param {{ seed?: number, activeStrokes?: number }} [options={}] - 夹具选项
+ * @param {{ seed?: number, activeStrokes?: number, tiles?: boolean }} [options={}] - 夹具选项
  * @returns {Promise<Object>} 夹具
  */
 async function buildFixture(scenario, options = {}) {
@@ -446,6 +446,8 @@ async function buildFixture(scenario, options = {}) {
     postRenderFrame(message) {
       frames.push(message);
     },
+    // 不传时 ViewportCore 默认开 tile，与产品一致
+    ...(options.tiles === undefined ? {} : { tiles: options.tiles }),
   });
 
   // force 必须为 true：初始状态与目标状态相同会被判定为无变化而跳过加载
@@ -517,7 +519,7 @@ async function profileScenario(scenario, mode) {
   const restoreFrameHost = installFrameHost();
 
   try {
-    const fixture = await buildFixture(scenario);
+    const fixture = await buildFixture(scenario, { tiles: mode.tiles });
     const { viewport, renderer, sampleStroke, frames } = fixture;
 
     // 场景自检：静态图与区块都为空时，后面的数字全是空转，必须显式失败
@@ -1008,6 +1010,13 @@ async function main() {
       sampleConfig: MEASURE_CONFIG[CANVAS_MODES.js],
       measureDraw: false,
     });
+    // 经典路径只跑 JS 侧：tile 与全量重建的差别在调度与合图，光栅化面积两者相同
+    const classic = await profileScenario(scenario, {
+      createCanvasLike: createJsCanvasFactory(),
+      sampleConfig: MEASURE_CONFIG[CANVAS_MODES.js],
+      measureDraw: false,
+      tiles: false,
+    });
     const raster = rasterFactory
       ? await profileScenario(scenario, {
           createCanvasLike: rasterFactory,
@@ -1019,7 +1028,7 @@ async function main() {
 
     const passed = printScenario({ js, raster }, ops);
     allPassed = allPassed && passed;
-    results.push({ js, raster, ops, passed });
+    results.push({ js, classic, raster, ops, passed });
   }
 
   console.log("\n═══════════════════════════════════════════════════════════");
@@ -1042,9 +1051,20 @@ async function main() {
         `${formatShare(estimate / FRAME_BUDGET_MS)} │ ${over ? "超出预算" : "预算内"}`,
     );
   }
+  console.log("\n规模曲线 · tile 与经典路径（JS p95，毫秒）");
+  console.log("───────────────────────────────────────────────────────────────");
+  console.log(
+    "  总点数  │ 提交 经典 │ 提交 tile │ 平移 经典 │ 平移 tile",
+  );
+  for (const { classic, js } of results) {
+    console.log(
+      `  ${String(js.pointCount).padStart(7)} │ ${formatMs(classic.commit.p95)} │ ` +
+        `${formatMs(js.commit.p95)} │ ${formatMs(classic.pan.p95)} │ ${formatMs(js.pan.p95)}`,
+    );
+  }
   console.log("═══════════════════════════════════════════════════════════");
 
-  // 平移仍走全量重建，是提交路径优化后剩下的主要成本，单独给出基线
+  // 平移在 tile 路径下按块增量合成，用来对照经典路径的全量重建
   console.log("\n规模曲线 · 平移一帧（p95，毫秒）");
   console.log("───────────────────────────────────────────────────────────────");
   console.log(
