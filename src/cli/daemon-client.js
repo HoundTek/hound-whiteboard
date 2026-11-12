@@ -99,6 +99,7 @@ async function connectDescriptor(desc) {
       queryOperations: (options) => invoke("queryOperations", options ?? {}),
       queryUndoTree: () => invoke("queryUndoTree", {}),
       queryObjects: (ids) => invoke("queryObjects", { ids }),
+      queryObjectDetails: (ids) => invoke("queryObjectDetails", { ids }),
       queryChoices: () => invoke("queryChoices", {}),
       addActiveObjects: (ids, options) =>
         invoke("addActiveObjects", { objectIds: ids, options }),
@@ -169,7 +170,9 @@ async function shutdownDaemon(name) {
     throw new Error(t("err.daemonNotRegistered", { name }));
   }
   if (!(await isEntryAlive(desc))) {
-    throw new Error(t("err.daemonStoppedUnreachable", { name, port: desc.port }));
+    throw new Error(
+      t("err.daemonStoppedUnreachable", { name, port: desc.port }),
+    );
   }
   const session = await connectDescriptor(desc);
   if (session === null) {

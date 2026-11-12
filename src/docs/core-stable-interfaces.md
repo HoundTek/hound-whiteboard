@@ -54,7 +54,7 @@ board.signalsEventBus.emit("input", {
 
 ### 稳定语义
 
-- 多写者 LWW，不做访问控制，最后写入获胜
+- 多写者、无访问控制，最后写入获胜
 - `set` 在值变化时同步通知该键全部订阅者；`Object.is` 相同则跳过
 - 订阅者会收到自己写入的回声，需自行容忍
 - 订阅者禁止在回调内同步 dispatch 进设备图
@@ -63,6 +63,8 @@ board.signalsEventBus.emit("input", {
 DAG 内经 `services.sharedState` 注入，图外代码持 `Board` 引用直接访问。详见 [shared-state-store 文档](../kernel/utils/docs/shared-state-store-document.md)。
 
 ## BoardApiRpc
+
+实现位于 `host/bridges/board-api-rpc.js`。
 
 当前可以稳定依赖的 `BoardApiRpc` 方法包括：
 
@@ -170,7 +172,7 @@ DAG 内经 `services.sharedState` 注入，图外代码持 `Board` 引用直接�
 
 ### 稳定语义
 
-- 节点 `state` 是拥有者发布的只读投影；真理源放闭包 / 实例字段
+- 节点 `state` 是拥有者发布的只读投影；真相源放闭包 / 实例字段
 - `setNodeState` / `delNodeState` 仅限写入自身节点，跨节点写入在 strict 模式抛错、非 strict 模式告警
 - `ctx.state` 是入口快照；写入后若要读取最新值，应调用 `getState()`
 - `routeToChild()` 是向下转发信号的统一方式
@@ -238,11 +240,10 @@ DAG 内经 `services.sharedState` 注入，图外代码持 `Board` 引用直接�
 
 ### 稳定语义
 
-- Tool 是 **叶子消费型处理器**，不承担上层路由结构
+- Tool 是 **叶子消费型处理器**；需要转发信号时由 prefix 或外层 DAG handler 负责，不要把 Tool 当成路由层
 - `createProcessor()` 会把 Tool 包装成可挂到 DAG 节点上的 handler
 - overlay provider 的注册/注销由 `createUiOverlayBinding()` 负责
 - 工具共享对象优先走节点 `state`
-- 需要显式转发信号时，应由 prefix 或外层 DAG handler 负责；不要把 Tool 当成新的路由层
 
 ## 已移除接口（breaking change）
 
@@ -310,9 +311,9 @@ DAG 内经 `services.sharedState` 注入，图外代码持 `Board` 引用直接�
 
 以下能力当前不要在业务文档里写成“已可依赖实现”：
 
-- 完整文件模式默认已接通
-- `/workflows/` 是 `DevicesDAG` 的硬约束
-- 旧术语 `processor` / `defaultPath` / `configure` 事件等仍应被继续扩展
+- 完整文件模式默认已接通（勿采用此说法）
+- `/workflows/` 是 `DevicesDAG` 的硬约束（勿采用此说法；实为 Board / Viewport 层的约定）
+- 旧术语 `processor` / `defaultPath` / `configure` 事件可继续扩展（勿采用此说法）
 
 ## 相关文档
 

@@ -390,6 +390,61 @@ describe("AwarenessOverlay", () => {
     overlay.stop();
   });
 
+  test("重复 begin、重复或乱序 seq 不重复 append，结束后旧 begin 不复活", async () => {
+    const boardApi = createMockBoardApi();
+    const viewport = createMockViewport();
+    const overlay = new AwarenessOverlay({ boardApi, viewport });
+    overlay.start();
+    await overlay.refresh();
+    const provider = viewport.registerUiOverlayProvider.mock.calls[0][0];
+    const begin = {
+      kind: "mol-begin",
+      molId: "dev-b/mol-dup",
+      entries: [{
+        objectId: "b/dup",
+        before: null,
+        create: {
+          type: "StrokeObject",
+          id: "b/dup",
+          position: { x: 0, y: 0 },
+          property: { width: 2 },
+          data: { points: [{ x: 0, y: 0 }] },
+        },
+      }],
+    };
+    const amend = {
+      kind: "mol-amend",
+      mols: [{
+        molId: "dev-b/mol-dup",
+        seq: 1,
+        entries: [{
+          objectId: "b/dup",
+          patch: { append: { key: "points", items: [{ x: 10, y: 0 }, { x: 20, y: 0 }] } },
+        }],
+      }],
+    };
+    viewport.emitAwareness({ type: "awareness", awarenessType: begin.kind, source: "dev-b", data: begin });
+    viewport.emitAwareness({ type: "awareness", awarenessType: amend.kind, source: "dev-b", data: amend });
+    viewport.emitAwareness({ type: "awareness", awarenessType: begin.kind, source: "dev-b", data: begin });
+    viewport.emitAwareness({ type: "awareness", awarenessType: amend.kind, source: "dev-b", data: amend });
+
+    const creation = provider().find((e) => e.objectId === "b/dup");
+    const context = {
+      save: jest.fn(), restore: jest.fn(), beginPath: jest.fn(),
+      moveTo: jest.fn(), lineTo: jest.fn(), stroke: jest.fn(),
+    };
+    creation.draw(context, { viewport: { origin: { x: 0, y: 0 }, zoom: 1 } });
+    expect(context.lineTo).toHaveBeenCalledTimes(2);
+
+    viewport.emitAwareness({
+      type: "awareness", awarenessType: "mol-end", source: "dev-b",
+      data: { kind: "mol-end", molId: "dev-b/mol-dup" },
+    });
+    viewport.emitAwareness({ type: "awareness", awarenessType: begin.kind, source: "dev-b", data: begin });
+    expect(provider().find((e) => e.objectId === "b/dup")).toBeUndefined();
+    overlay.stop();
+  });
+
   test("创建中预览：圆按 radius 中间帧更新轮廓，mol-abort 清除", async () => {
     const boardApi = createMockBoardApi();
     const viewport = createMockViewport();

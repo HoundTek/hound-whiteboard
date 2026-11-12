@@ -51,8 +51,8 @@ const TOPICS = [
     group: "offline",
     flags: [
       f("path", "ph.boardDir"),
-      f("width", "ph.px"),
-      f("height", "ph.px"),
+      f("chunk-width", "ph.px"),
+      f("chunk-height", "ph.px"),
       f("source", "ph.identity"),
       f("json"),
     ],
@@ -67,6 +67,7 @@ const TOPICS = [
   { name: "info", key: "info", group: "read", flags: [...TARGETING, f("json")] },
   { name: "list", key: "list", group: "read", flags: [...TARGETING, f("json")] },
   { name: "show", key: "show", group: "read", flags: [...TARGETING, f("json")] },
+  { name: "inspect", key: "inspect", group: "read", flags: [...TARGETING, f("json")] },
   {
     name: "ops",
     key: "ops",

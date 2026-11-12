@@ -281,7 +281,7 @@ class HitCommitter {
    * @description 记录目标节点与撤销前 HEAD 位置（视图与可重做栈投影使用）；退化/分叉改挂/被吸收在应用时确定。
    * 撤销不属于任何超分子：即使携带 supraKey 也独立成录、即时上树。
    * @param {Object} effect - 效果摘要
-   * @param {string} effect.targetNodeId - 撤消操作的目标节点 id（缺省为活动链末端，由调用方解析后传入）
+   * @param {string} effect.targetNodeId - 撤销操作的目标节点 id（缺省为活动链末端，由调用方解析后传入）
    * @returns {import("./operation.js").OperationRecord} 撤销操作记录
    */
   commitUndo(effect) {
@@ -302,6 +302,17 @@ class HitCommitter {
    */
   commitRedo(effect) {
     return this.#emit(createRedoOperation, effect);
+  }
+
+  /**
+   * 接收远端记录后推进本 source 的时间水位
+   * @param {import("./operation.js").OperationRecord} record - 已入日志的远端记录
+   * @returns {void}
+   */
+  observeRemoteTime(record) {
+    if (record.source === this.#source && Number.isFinite(record.time)) {
+      this.#lastTime = Math.max(this.#lastTime, record.time);
+    }
   }
 
   /**

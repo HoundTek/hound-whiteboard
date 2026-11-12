@@ -25,7 +25,17 @@ describe("ViewportCore", () => {
     restoreOffscreenCanvas = installNoopOffscreenCanvas();
   });
 
+  /**
+   * 本文件创建的视口，用例结束后统一销毁
+   * @description
+   * 渲染器的调度器用真实定时器排帧；不销毁的话，定时器会在环境拆除后
+   * （假 OffscreenCanvas 已恢复）继续刷新缓存，抛出未捕获的 ReferenceError。
+   * @type {ViewportCore[]}
+   */
+  const createdViewports = [];
+
   afterEach(() => {
+    while (createdViewports.length > 0) createdViewports.pop().destroy();
     restoreOffscreenCanvas?.();
     restoreOffscreenCanvas = null;
   });
@@ -38,6 +48,7 @@ describe("ViewportCore", () => {
    *   boardWidth?: number,
    *   boardHeight?: number,
    *   viewportId?: string,
+   *   tiles?: boolean,
    * }} [options={}] - 测试选项
    * @returns {{ boardCore: BoardCore, viewportCore: ViewportCore, postedFrames: Array<{ message: Object, transferList: Transferable[] }> }}
    */
@@ -55,8 +66,10 @@ describe("ViewportCore", () => {
       postRenderFrame(message, transferList = []) {
         postedFrames.push({ message, transferList });
       },
+      tiles: options.tiles,
     });
 
+    createdViewports.push(viewportCore);
     return { boardCore, viewportCore, postedFrames };
   }
 
@@ -94,6 +107,86 @@ describe("ViewportCore", () => {
     expect(requestActiveSpy).toHaveBeenCalledTimes(1);
     expect(viewportCore.origin).toEqual(new Vector(120, 80));
     expect(viewportCore.zoom).toBe(2);
+  });
+
+  test("不传 tiles 时渲染器与原点量化取同一个默认值", () => {
+    const { viewportCore } = createViewportCoreContext();
+
+    // 渲染器默认启用 tile，量化判定必须一致，否则合成会退化为小数目标坐标
+    expect(viewportCore.renderer.getTileDebugInfo().enabled).toBe(true);
+
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 1,
+    });
+
+    expect(viewportCore.origin).toEqual(new Vector(120, 81));
+  });
+
+  test("越界缩放被夹取到可用区间", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+
+    viewportCore.onViewportChange({ zoom: 0.001 });
+    expect(viewportCore.zoom).toBeCloseTo(0.05, 12);
+
+    viewportCore.onViewportChange({ zoom: 1000 });
+    expect(viewportCore.zoom).toBeCloseTo(32, 12);
+  });
+
+  test("显式刷新与 force 变更都应结束缩放预览", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+    const commitSpy = jest.spyOn(viewportCore.renderer, "commitZoomPreview");
+
+    // force 变更表示输入侧已收尾
+    viewportCore.onViewportChange({
+      origin: { x: 0, y: 0 },
+      zoom: 1.2,
+      force: true,
+    });
+    expect(commitSpy).toHaveBeenCalledTimes(1);
+
+    // 显式 flush 同样表示这一帧必须清晰
+    viewportCore.flushViewportRender();
+    expect(commitSpy).toHaveBeenCalledTimes(2);
+  });
+
+  test("tile 模式下视口原点量化到整数", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 1,
+    });
+
+    // 小数目标坐标会被 canvas 实现自行 snap，导致 tile 内容相位偏移
+    expect(viewportCore.origin).toEqual(new Vector(120, 81));
+  });
+
+  test("tile 模式把视口原点吸附到整数设备像素", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: true });
+
+    // 设备像素 = 世界坐标 × 缩放 × 设备倍率，2 倍缩放下吸附单位是半个世界单位
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 2,
+    });
+
+    const origin = viewportCore.origin;
+    expect(origin.x * 2).toBe(Math.round(origin.x * 2));
+    expect(origin.y * 2).toBe(Math.round(origin.y * 2));
+    expect(Math.abs(origin.x - 120.4)).toBeLessThanOrEqual(0.25);
+    expect(Math.abs(origin.y - 80.6)).toBeLessThanOrEqual(0.25);
+  });
+
+  test("非 tile 模式保留亚像素视口原点", () => {
+    const { viewportCore } = createViewportCoreContext({ tiles: false });
+
+    viewportCore.onViewportChange({
+      origin: { x: 120.4, y: 80.6 },
+      zoom: 2,
+    });
+
+    expect(viewportCore.origin).toEqual(new Vector(120.4, 80.6));
   });
 
   test("flushRenderFrame 应输出 render-frame 消息并将位图画回源 OffscreenCanvas", () => {

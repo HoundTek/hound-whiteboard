@@ -27,9 +27,9 @@ describe("CLI 查询命令", () => {
         "create",
         "--path",
         dir,
-        "--width",
+        "--chunk-width",
         "800",
-        "--height",
+        "--chunk-height",
         "600",
       ]);
       expect(info.boardConfig).toEqual({ width: 800, height: 600 });
@@ -44,7 +44,7 @@ describe("CLI 查询命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("inspect-test", dir, { source: "cli" });
       const { stdout: id } = await runCli([
         "add",
@@ -84,7 +84,7 @@ describe("CLI 查询命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("inspect-test", dir, { source: "cli" });
       const { stdout: emptyOut } = await runCli(["tree", "--path", dir]);
       expect(emptyOut).toContain("（空树）");
@@ -135,7 +135,7 @@ describe("CLI 查询命令", () => {
     let daemonA = null;
     let daemonB = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       // 两个不同身份的 daemon 顺序持板各写一条记录（各自源流）
       daemonA = await startTestDaemon("inspect-shard-a", dir, { source: "sa" });
       await runCli([

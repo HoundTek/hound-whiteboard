@@ -1,7 +1,7 @@
 /**
  * @file 日志系统统一导出
  * @description 汇集所有日志相关模块。
- * @module utils/log
+ * @module utils/log/index
  * @author Zhou Chenyu
  */
 

@@ -41,7 +41,19 @@ fn wait_for_daemon(board_path: &Path, timeout: Duration) -> Option<u16> {
     None
 }
 
-/// 板不存在时创建骨架（board.json + 目录布局；板尺寸写入 boardConfig）
+/// 默认区块边长（世界单位），与 kernel 侧 DEFAULT_CHUNK_SIZE 保持一致
+const DEFAULT_CHUNK_SIZE: f64 = 1024.0;
+
+/// 归一化区块边长（非正数或缺失时回退默认值）
+fn normalize_chunk_size(size: Option<f64>) -> f64 {
+    match size {
+        Some(value) if value.is_finite() && value > 0.0 => value,
+        _ => DEFAULT_CHUNK_SIZE,
+    }
+}
+
+/// 板不存在时创建骨架（board.json + 目录布局）
+/// width / height 是区块边长（决定盘上区块划分），不是板尺寸：世界无限
 fn ensure_board_skeleton(board_path: &Path, width: Option<f64>, height: Option<f64>) {
     let meta_file = board_path.join("board.json");
     if meta_file.exists() {
@@ -51,16 +63,16 @@ fn ensure_board_skeleton(board_path: &Path, width: Option<f64>, height: Option<f
     let _ = fs::create_dir_all(board_path.join("trash"));
     let _ = fs::create_dir_all(board_path.join("hit"));
     let _ = fs::create_dir_all(board_path.join("chunks"));
-    let mut meta = serde_json::json!({
+    let meta = serde_json::json!({
         "formatVersion": 1,
         "lastTime": 0,
         "nextSegmentSeq": 1,
+        // 区块边长始终写入：重开时按盘上值决定区块划分
+        "boardConfig": {
+            "width": normalize_chunk_size(width),
+            "height": normalize_chunk_size(height),
+        },
     });
-    if let (Some(w), Some(h)) = (width, height) {
-        if w > 0.0 && h > 0.0 {
-            meta["boardConfig"] = serde_json::json!({ "width": w, "height": h });
-        }
-    }
     let _ = fs::write(&meta_file, serde_json::to_string_pretty(&meta).unwrap_or_default());
 }
 

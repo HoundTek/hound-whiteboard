@@ -13,15 +13,12 @@ description: Hound Whiteboard 项目的 Benchmark 编写规范与模式。在需
 benchmarks/
 ├── helpers.js                     ← 统一辅助函数
 ├── all.bench.js                   ← 全量运行器
-├── queue.bench.js                 ← 数据结构 benchmark
-├── chain.bench.js
-├── io-bridge.bench.js             ← I/O 桥接层 benchmark
+├── queue.bench.js                 ← 队列数据结构 benchmark
 ├── io-direct.bench.js             ← 直接文件 I/O benchmark
 ├── io-file-granularity.bench.js   ← 文件粒度对比（特殊表格输出）
-├── io-roundtrip.bench.js          ← Electron 环境
-├── io-accumulatable.bench.js      ← Electron 环境
 ├── worker-rpc.bench.js            ← Worker RPC 往返 benchmark
-└── worker-render.bench.js         ← Worker 渲染帧 benchmark
+├── chunk-rebuild.bench.js         ← 区块元数据派生重建 benchmark
+└── interaction-frame.bench.js     ← 交互帧预算判定（特殊表格输出）
 ```
 
 ## 输出格式
@@ -33,6 +30,10 @@ modifyObject RPC 单条往返 x 1,750,771 ops/sec ±22.55% (25,000 runs sampled)
 ```
 
 通过 `benchmarks/helpers.js` 的 `benchmarkSync` / `benchmarkAsync` 自动保证。
+
+**例外**：以「毫秒数对比预算」作为决策单位的 benchmark 用表格输出，因为 ops/sec 回答不了「能不能守住这一帧」。
+目前只有 `io-file-granularity.bench.js` 和 `interaction-frame.bench.js` 采用这种形式；
+新建 benchmark 默认仍走 ops/sec，只有决策单位确实是 ms 或预算时才例外，并在文件头注释说明原因。
 
 ## Helper 函数 API
 
@@ -51,7 +52,7 @@ modifyObject RPC 单条往返 x 1,750,771 ops/sec ±22.55% (25,000 runs sampled)
 
 - `label` — 测试名称，显示在输出行中
 - `iterations` — 每轮迭代次数
-- `rounds` — 轮数（默认 5），影响 ±% 的可靠性
+- `rounds` — 轮数（默认 5）；对 ±% 的定量影响见「注意事项 2」
 - `fn` — 被测函数。`benchmarkSync` 接收 `() => void`；`benchmarkAsync` 接收 `(i: number) => Promise<void>`
 
 ## 模式一：同步操作（benchmarkSync）
@@ -104,16 +105,24 @@ printFooter();
 
 ## 模式三：带 Fixture 的 IO Benchmark
 
-适用于每次操作需创建/销毁资源的场景。**注意资源泄露**：
+适用于每次操作需创建/销毁资源的场景。**注意资源泄露**（`createFixture` / `destroyFixture` 是各 bench 文件内的局部辅助函数，不从 `helpers.js` 导入）：
 
 ```js
-benchmarkAsync("Renderer File#cat", 80, ROUNDS, async () => {
-  const fixture = createFixture();
+async function createFixture() {
+  const rootPath = fs.mkdtempSync(path.join(os.tmpdir(), "hound-bench-"));
+  const driver = createNodeDriver(rootPath);
+  const { rootId } = await driver.registerRoot(rootPath);
+  const d = bindRoot(driver, rootId);
+  await d.write("docs/note.txt", "hello benchmark");
+  return { rootPath, d };
+}
+
+benchmarkAsync("Direct read", 200, ROUNDS, async () => {
+  const fixture = await createFixture();
   try {
-    const rendererFile = new RendererFile(fixture.dir, "note", "txt");
-    await rendererFile.cat();
+    await fixture.d.read("docs/note.txt");
   } finally {
-    destroyFixture(fixture.rootPath); // ← 必须在 finally 中清理
+    fs.rmSync(fixture.rootPath, { recursive: true, force: true });
   }
 });
 ```
@@ -121,21 +130,22 @@ benchmarkAsync("Renderer File#cat", 80, ROUNDS, async () => {
 如果 fixture 可以被复用（只创建一次，后续操作不修改），可以在 benchmark 外创建，在 benchmark fn 中只执行操作部分：
 
 ```js
-const fixture = createFixture();
-benchmarkSync("Direct File#cat", 2000, ROUNDS, () => {
-  fixture.noteFile.cat(); // 不修改 fixture
-});
-destroyFixture(fixture.rootPath);
+const fixture = await createFixture();
+benchmarkAsync("Direct read", 2000, ROUNDS, () =>
+  fixture.d.read("docs/note.txt"),
+);
+fs.rmSync(fixture.rootPath, { recursive: true, force: true });
 ```
 
 ## 运行方式
 
 ```bash
-yarn bench:worker        # Worker RPC benchmark
-yarn bench:render        # Worker 渲染帧 benchmark
-yarn bench:io            # I/O Bridge benchmark
-yarn bench:io:direct     # I/O Direct benchmark
-yarn bench               # 全量 benchmark
+yarn bench                 # 全量 benchmark（queue 仅在此执行）
+yarn bench:worker          # Worker RPC 往返
+yarn bench:frame           # 交互帧预算判定
+yarn bench:chunk           # 区块元数据派生重建
+yarn bench:io:direct       # 直接文件 I/O
+yarn bench:io:granularity  # I/O 文件粒度
 ```
 
 全量运行器 `all.bench.js` 按顺序逐一启动子进程执行各 benchmark 文件。
@@ -154,7 +164,7 @@ yarn bench               # 全量 benchmark
 
 ### 1. 异步函数内存管理
 
-`benchmarkAsync` 在 loopback Worker 模式下每个 `await fn()` 产生 Promise 闭包。对于单次操作 < 1 µs 的极快操作，大量微任务堆积可能导致 OOM。建议将 iterations 限制在 5,000–10,000 范围内，配合 rounds=5 已足够获得稳定数据。
+`benchmarkAsync` 在 loopback Worker 模式下每个 `await fn()` 产生 Promise 闭包。对于单次操作 < 1 µs 的极快操作，大量微任务堆积可能导致 OOM。建议将 iterations 限制在 5,000–10,000 范围内，配合 rounds=5 已足够获得稳定数据。此上限优先于「每轮总耗时应至少数十毫秒」的原则：OOM 风险高于计时精度，不足的部分靠增加 `rounds` 累积样本量。
 
 ### 2. 计时器分辨率对 ±% 的影响
 
@@ -166,13 +176,33 @@ benchmark 应该反映真实使用路径。例如 Worker RPC benchmark 使用了
 
 ### 4. 清理
 
-IO benchmark 必须在 finally 中删除临时文件。OffscreenCanvas benchmark 必须在结束时调用 `restoreOffscreenCanvas?.()`。不清理会导致后续 benchmark（或测试）运行异常。
+IO benchmark 必须在 finally 中删除临时文件。安装过 canvas 替身的 benchmark 必须在结束时恢复（`restoreOffscreenCanvas?.()`）；
+接管过 `requestAnimationFrame` 的同样要恢复。不清理会导致后续 benchmark（或测试）运行异常。
 
-### 5. 如何测量每秒操作数
+### 5. 夹具自检闸门
+
+测量前必须断言夹具真的有效，例如静态对象数与已加载区块数均大于 0。
+空夹具会让 benchmark 在空转上产出漂亮数字，而且不会随被测代码变慢而变慢，这类基准比没有基准更危险。
+断言失败应当抛错，不应降级为警告。
+
+### 6. 同步驱动帧
+
+Node 里没有 `requestAnimationFrame`，`RenderScheduler` 会回退到 `setTimeout(..., 16)`，
+测量窗口内会插入与被测操作无关的额外 flush。测帧相关路径时把 `requestAnimationFrame`
+换成永不回调的替身，由 benchmark 显式调用 `flush()` 驱动每一帧。
+
+### 7. 光栅化要用真实 canvas 测
+
+空实现上下文里 canvas 调用全是空函数，只测得到 JavaScript、几何与调度，绘制成本恒为零。
+要衡量渲染成本必须换成真实实现：`bench:frame` 用 `@napi-rs/canvas`，加载不到时自动降级为只跑 JS 侧并告警。
+但不要把光栅器下的 flush 全链当指标：CPU 光栅器在刷新画布表面时会做惰性展平与内存回收，
+那部分开销与绘制无关，还会让读数在几十到几百毫秒间跳。把计时包在绘制策略内部单独累加。
+
+### 8. 如何测量每秒操作数
 
 Helper 内部实现逻辑：
 
-1. 预热 50 次（确保 JIT 编译完成）
+1. 每轮先预热 50 次（确保 JIT 编译完成），`rounds` 轮共预热 50 × rounds 次
 2. 运行 `iterations` 次，记录总耗时
 3. 计算 `ops/sec = iterations / (elapsed_ms / 1000)`
 4. 重复 `rounds` 轮，计算均值和变异系数

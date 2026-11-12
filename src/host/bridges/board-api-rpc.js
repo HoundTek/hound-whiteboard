@@ -479,6 +479,16 @@ class BoardApiRpc {
   }
 
   /**
+   * 按 id 查询对象详情
+   * @description 返回体含几何数据快照，仅用于调试与命令行诊断。
+   * @param {string[]} ids - 对象 id 列表
+   * @returns {Promise<Object[]>} 对象详情列表
+   */
+  async queryObjectDetails(ids) {
+    return this.#call("queryObjectDetails", { ids });
+  }
+
+  /**
    * 列出本端的命名选择
    * @returns {Promise<{ name: string, ids: string[] }[]>} 命名选择列表
    */

@@ -179,6 +179,14 @@ const BOARD_API_ROUTES = {
   },
 
   /**
+   * 按 id 查询对象详情（调试用胖返回体）
+   */
+  queryObjectDetails: {
+    invoke: (api, p) => api.queryObjectDetails(p.ids),
+    flush: "none",
+  },
+
+  /**
    * 列出本端的命名选择
    */
   queryChoices: {
@@ -352,6 +360,14 @@ const BOARD_API_ROUTES = {
   queryChainHash: {
     invoke: (api) => api.queryChainHash(),
     flush: "none",
+  },
+
+  /**
+   * 从权威日志重建时间回溯树并对齐白板效果
+   */
+  repairChainFromLog: {
+    invoke: (api) => api.repairChainFromLog(),
+    flush: "sync",
   },
 
   /**

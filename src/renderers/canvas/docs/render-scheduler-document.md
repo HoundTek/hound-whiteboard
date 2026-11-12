@@ -1,12 +1,10 @@
 # 渲染调度器文档
 
-本文档提供 `RenderScheduler` 的概述。
-
 渲染调度器用于把多次连续的失效请求合并到一次 flush 中执行。它不关心对象语义，也不直接操作任何画布。它只负责“何时把一批脏区交给渲染器处理”。
 
 ## 模块定位
 
-`RenderScheduler` 当前是各渲染器内部的通用调度层。`ViewportRenderer` 与 `UiRenderer` 在构造时各自创建自己的 `_scheduler` 实例。
+`RenderScheduler` 当前是各渲染器内部的通用调度层。`UiRenderer` 在构造时创建一个 `_scheduler` 实例；`ViewportRenderer` 创建 cache / output 两个调度器实例，`_scheduler` 指向其中的输出层，详见「与各渲染器之间的关系」。
 
 它的边界是：
 
@@ -65,6 +63,13 @@
 
 在当前活动层渲染链里，传入的实际数据通常是 `RectangleRange`。
 
+### #scheduleGeneration
+
+- 类型：`number`
+- 含义：调度代次计数器，`@private`
+
+`invalidate(rect)` 启动新帧时递增该计数，并把新代次捕获进闭包；`scheduleFrame` 的回调执行前比对当前代次，不匹配就直接返回。`flush()` 也会递增代次，使已在途的延迟回调自动跳过。这层校验保证手动 `flush()` 之后不会被残留回调重复 flush，`ViewportCore.flushRenderFrame()` 直接调用 `_scheduler.flush()` 的路径依赖它。
+
 ### scheduleFrame
 
 - 类型：调度函数
@@ -76,12 +81,6 @@
 
 - 类型：脏区合并函数
 - 默认行为：对 `RectangleRange` 做一轮“相交/相接必合并，近邻且额外扫描面积可控时也合并”的聚合；非矩形输入保持原样透传
-
-当前默认实现已经不只是简单并集：
-
-- 相交或相接矩形会直接合并
-- 横向或纵向间隔很小的近邻矩形，也会在额外扫描面积可控时合并
-- 过远、或合并后会引入过大空白区域的矩形，会保持分离
 
 这意味着当前策略更偏向“减少高频操作时的小矩形数量”，但仍然会控制过度合并带来的额外扫描面积。
 
@@ -110,7 +109,7 @@
 - 类型：flush 回调
 - 默认行为：空函数
 
-在当前 Viewport 链路中，`flushHandler` 最终会指向 `ViewportRenderer.flush(dirtyRects)`。
+在当前 Viewport 链路中，`flushHandler` 最终绑定到 `ViewportRenderer.#outputFlush(dirtyRects)`。公开方法 `ViewportRenderer.flush(dirtyRects)` 是它的等价代理，同样是先冲刷缓存层调度器、再渲染输出。
 
 ## 工作流程
 
@@ -121,8 +120,9 @@
 1. 若传入了脏区，则加入 `dirtyRects`
 2. 若当前已有待执行帧，则直接返回 `false`
 3. 若当前没有待执行帧，则标记 `framePending = true`
-4. 调用 `scheduleFrame(() => this.flush())`
-5. 返回 `true`
+4. 递增 `#scheduleGeneration`，并把新代次捕获进回调闭包
+5. 调用 `scheduleFrame(...)`，回调执行时先校验代次，不匹配则直接返回、不执行 flush
+6. 返回 `true`
 
 这里的返回值表达的是“这次调用是否新启动了一次调度”，而不是“这次调用是否真的提交了脏区”。
 
@@ -133,22 +133,23 @@
 1. 使用 `mergeDirtyRects([...this.dirtyRects])` 得到本次要处理的脏区
 2. 复位 `framePending`
 3. 清空内部脏区缓存
-4. 调用 `flushHandler(mergedRects)`
+4. 递增 `#scheduleGeneration`，使已在途的延迟回调自动跳过
+5. 调用 `flushHandler(mergedRects)`
 
 因此，`flush()` 是真正把调度状态转换为渲染动作的边界点。
 
 ### clear()
 
-`clear()` 只负责清空积压脏区，不负责取消已经排队的帧。
-
-这说明当前调度器没有引入更复杂的“取消帧”或“替换帧任务”语义，而是保持最小实现。
+`clear()` 只负责清空积压脏区，不负责取消已经排队的帧，也不改动 `#scheduleGeneration`。
 
 ## 与各渲染器之间的关系
 
-当前接入方式是每个渲染器在构造时创建自己的 `_scheduler`：
+当前接入方式是每个渲染器在构造时创建自己的调度器实例：
 
-- `ViewportRenderer` 构造时创建 `_scheduler`，flush handler 绑定到 `this.flush`
-- `UiRenderer` 构造时直接创建 `_scheduler`，flush handler 绑定到 `this.flush`
+- `UiRenderer` 构造时创建 `_scheduler`，flush handler 绑定到 `this.flush`
+- `ViewportRenderer` 构造时创建 `#cacheScheduler` 与 `#outputScheduler` 两个调度器，flush handler 分别绑定到 `#cacheFlush()` 与 `#outputFlush(dirtyRects)`，`_scheduler` 指向输出层 `#outputScheduler`
+
+Viewport 链路因此是 cache / output 双层调度：`#cacheScheduler` 负责缓存层的脏区合并与缓存重建，`#outputScheduler` 负责输出层的脏区合并与上屏。`ViewportRenderer.invalidate(rect)` 同时喂给两个调度器，返回值取两者“是否新启动了一次调度”的逻辑或。输出层 flush 时先冲刷缓存层调度器：`#outputFlush` 先调 `#flushCacheScheduler()`，缓存脏且有积压脏区就 `#cacheScheduler.flush()`，缓存脏但无积压脏区就全量重建缓存，之后才渲染输出。这条级联让缓存层即使只由输出层带起，也会在输出前完成刷新。`ViewportCore.flushRenderFrame()` 直接调用 `_scheduler.flush()`，走的是输出层。
 
 各渲染器通过 `this.invalidate(rect)` 提交脏区到自己的调度器。
 
@@ -158,15 +159,14 @@
 - 渲染器决定 flush 时画什么
 - Viewport 负责触发时机（视口变化、区块变化等），由 Viewport 调用渲染器的 `invalidate()` / `invalidateViewport()` 推动渲染
 
-## 当前实现状态
+## 当前状态
 
 - 已实现：多次 `invalidate(...)` 合并到单次调度、可替换的 `scheduleFrame`、可替换的 `mergeDirtyRects`、可替换的 `flushHandler`、手动 `flush()` 与 `clear()`。
 - 已验证：同一帧周期内的多次失效请求只会触发一次调度；`flush()` 会先走 `mergeDirtyRects(...)` 再调用处理器。
-- 已接入：`ViewportRenderer`、`UiRenderer` 均在内部持有 `_scheduler` 实例，各渲染器的 `invalidate()` 直接委托给 `_scheduler.invalidate()`。
+- 已接入：`UiRenderer` 内部持有 `_scheduler` 实例，`invalidate()` 直接委托给 `_scheduler.invalidate()`；`ViewportRenderer` 内部持有 `#cacheScheduler` 与 `#outputScheduler`，`invalidate()` 同时委托给两者。
 - 已实现的默认聚合：重叠/相接矩形合并、近邻矩形的受控合并、非矩形输入透传。
 - 已实现的宿主参数化：base/live 可分别注入不同阈值；并支持“整视口”退化。
-- `collapseLargeRect`：当脏区覆盖视口的比例超过 `viewportCoverageRatio` 时，该脏区退化为整视口。
-- 待完善：更强的聚类策略、按操作类型动态调整阈值、不同渲染层按真实代价模型继续细化参数。
+- 更强的聚类策略、按操作类型动态调整阈值、不同渲染层按真实代价模型继续细化参数。[todo]
 
 ## 相关文档
 

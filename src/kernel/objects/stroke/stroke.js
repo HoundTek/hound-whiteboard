@@ -9,13 +9,11 @@
 import { Matrix, Vector } from "../../utils/math.js";
 import {
   PathRange,
-  PolygonRange,
   RectangleRange,
   pointToPolylineDistance,
   pointToSegmentDistance,
   segmentSegmentDistance,
 } from "../../range/index.js";
-import { calcConvexHull, insertPoints } from "../../utils/math-algorithm.js";
 import { BasicObject } from "../basic-obj.js";
 
 const DEFAULT_STROKE_PROPERTY = Object.freeze({
@@ -41,6 +39,74 @@ const DEFAULT_STROKE_PROPERTY = Object.freeze({
 });
 
 /**
+ * 允许的线段连接样式
+ * @description
+ * miter 的尖角长度是 `miterLimit × width / 2`，默认 `miterLimit` 为 10，
+ * 最坏可达 5 倍线宽，与包围盒没有比例关系：按包围盒加留白扩出的脏区仍会漏掉尖角。
+ * 局部失效依赖「着墨范围 ⊆ 包围盒 ⊕ 留白」这条不变式（由绘制边界测试守住），
+ * 因此只允许能守住它的取值。笔刷体系确定之前先只保留 round 与 bevel。
+ * @type {ReadonlyArray<string>}
+ */
+const SUPPORTED_LINE_JOINS = Object.freeze(["round", "bevel"]);
+
+/**
+ * 允许的线段端点样式
+ * @description
+ * square 端点的方角斜向伸出 `width / 2 × √2`，超过按半线宽计算的留白；
+ * 要支持它必须同时把留白放大到 `width / 2 × √2`。
+ * @type {ReadonlyArray<string>}
+ */
+const SUPPORTED_LINE_CAPS = Object.freeze(["round", "butt"]);
+
+/**
+ * 归一化线段连接样式
+ * @param {string} [value] - 原始取值
+ * @returns {string} 可用取值
+ */
+function normalizeLineJoin(value) {
+  return SUPPORTED_LINE_JOINS.includes(value)
+    ? value
+    : DEFAULT_STROKE_PROPERTY.lineJoin;
+}
+
+/**
+ * 归一化线段端点样式
+ * @param {string} [value] - 原始取值
+ * @returns {string} 可用取值
+ */
+function normalizeLineCap(value) {
+  return SUPPORTED_LINE_CAPS.includes(value)
+    ? value
+    : DEFAULT_STROKE_PROPERTY.lineCap;
+}
+
+/**
+ * 计算点列的轴对齐包围盒
+ * @description
+ * 直接在原点上取极值，不复制点。
+ * 这里不能走 `RectangleRange.from()`，因为那会先把整个点列克隆一遍；
+ * 本函数在笔画逐点追加的热路径上被反复调用。
+ * @param {Array<Vector>} points - 点列
+ * @returns {RectangleRange} 包围盒，点列为空时返回零矩形
+ */
+function calculatePointBounds(points) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y > maxY) maxY = point.y;
+  }
+
+  if (minX === Infinity) return new RectangleRange(0, 0, 0, 0);
+  return new RectangleRange(minX, minY, maxX - minX, maxY - minY);
+}
+
+/**
  * 笔画类
  * @class
  * @todo 现在的这个笔画类的结构是不支持更换笔刷的。要想有这个功能，必须重构。
@@ -50,9 +116,14 @@ class StrokeObject extends BasicObject {
   constructor(id, position, property = {}, data = {}) {
     super(id, position, property, data);
     this.property = { ...DEFAULT_STROKE_PROPERTY, ...this.property };
+    this.property.lineJoin = normalizeLineJoin(this.property.lineJoin);
+    this.property.lineCap = normalizeLineCap(this.property.lineCap);
     this.rich.localPathRange = new PathRange([]);
-    this.rich.worldPathRange = new PathRange([]);
-    this.rich.convexHullRange = new PolygonRange([]);
+    /**
+     * 世界坐标点列的惰性缓存
+     * @type {{ version: number, pathRange: PathRange } | null}
+     */
+    this.rich.worldPathRangeCache = null;
     this._onDataChange(Object.keys(data));
   }
 
@@ -65,28 +136,52 @@ class StrokeObject extends BasicObject {
   }
 
   calculateRichDatas() {
-    if (this.rich.localPathRange.points.length === 0) {
-      this.rich.worldPathRange = new PathRange([]);
-      this.rich.convexHullRange = new PolygonRange([]);
+    const points = this.rich.localPathRange.points;
+    this.rich.worldPathRangeCache = null;
+    this.bumpGeometryVersion();
+
+    if (points.length === 0) {
       this.rich.boundingBox = new RectangleRange(0, 0, 0, 0);
       return;
     }
 
-    let transformedPoints = this.rich.localPathRange.points.map((p) =>
+    // 精确包围盒仍需逐点变换，但不再把世界点数组留在内存里
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const point of points) {
+      const world = Vector.mulMatrix(this.transform, point);
+      if (world.x < minX) minX = world.x;
+      if (world.y < minY) minY = world.y;
+      if (world.x > maxX) maxX = world.x;
+      if (world.y > maxY) maxY = world.y;
+    }
+    this.rich.boundingBox = new RectangleRange(minX, minY, maxX - minX, maxY - minY);
+  }
+
+  /**
+   * 取世界坐标点列
+   * @description
+   * 首次调用时按当前变换物化并缓存，几何变更后由 `geometryVersion` 判定过期。
+   * 派生数据只在这一步产生，不在构造期常驻。
+   * @returns {PathRange} 世界坐标点列
+   */
+  getWorldPathRange() {
+    const cached = this.rich.worldPathRangeCache;
+    if (cached && cached.version === this.geometryVersion) {
+      return cached.pathRange;
+    }
+
+    const points = this.rich.localPathRange.points.map((p) =>
       Vector.mulMatrix(this.transform, p),
     );
-    // 将其平滑（插点或删点）
-    let scale = Math.sqrt(this.transform.det());
-    if (scale > 1) {
-      transformedPoints = insertPoints(transformedPoints, Math.round(scale));
-    } else if (scale < 1) {
-      // [todo] 删点
-    }
-    this.rich.worldPathRange = new PathRange(transformedPoints);
-    this.calculateConvexHull();
-    this.rich.boundingBox = RectangleRange.from(
-      this.rich.convexHullRange.transform(this.transform),
-    );
+    const pathRange = new PathRange(points);
+    this.rich.worldPathRangeCache = {
+      version: this.geometryVersion,
+      pathRange,
+    };
+    return pathRange;
   }
 
   _onDataChange(keys) {
@@ -100,12 +195,6 @@ class StrokeObject extends BasicObject {
   setTransform(trans) {
     this.transform = trans;
     this.calculateRichDatas();
-  }
-
-  calculateConvexHull() {
-    this.rich.convexHullRange = new PolygonRange(
-      calcConvexHull(this.rich.localPathRange.points),
-    );
   }
 
   /**
@@ -137,7 +226,8 @@ class StrokeObject extends BasicObject {
     const scale = Math.sqrt(Math.abs(this.transform.det()));
     const threshold = radius + (this.property.width * scale) / 2;
 
-    // 逐点变换到世界坐标；禁用插点平滑以保持与 data.points 的索引对应
+    // 逐点变换到世界坐标，与 data.points 保持索引对应：
+    // 橡皮擦按相邻点线段判定并直接写回 data.points，点列不得增删
     const worldPoints = localPoints.map((point) => {
       const transformed = Vector.mulMatrix(this.transform, point);
       return new Vector(
@@ -206,7 +296,7 @@ class StrokeObject extends BasicObject {
   }
 
   getRange() {
-    return this.rich.worldPathRange;
+    return this.getWorldPathRange();
   }
 
   serialize() {

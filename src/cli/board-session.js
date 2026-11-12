@@ -6,7 +6,10 @@
  */
 
 import { BoardApi } from "../kernel/api/board-api.js";
-import { BoardCore } from "../kernel/board/board-core.js";
+import {
+  BoardCore,
+  DEFAULT_CHUNK_SIZE,
+} from "../kernel/board/board-core.js";
 import { createJournaler } from "../kernel/store/journaler.js";
 import { createSessionStore } from "../kernel/store/session-store.js";
 import { bindRoot } from "../io/driver/io-driver.js";
@@ -16,12 +19,20 @@ import { resolveBoardPath } from "./board-path.js";
 import { t } from "./i18n.js";
 
 /**
+ * 归一化区块边长
+ * @param {number} [size] - 原始边长
+ * @returns {number} 可用的区块边长
+ */
+const normalizeChunkSize = (size) =>
+  Number.isFinite(size) && size > 0 ? size : DEFAULT_CHUNK_SIZE;
+
+/**
  * 打开（或创建并打开）一个板会话
  * @param {string} rootPath - 板目录（绝对路径 / ~ 路径 / 板名）
  * @param {Object} [options={}] - 会话选项
  * @param {boolean} [options.create=false] - 板目录不存在时创建空板
- * @param {number} [options.width=0] - 新建板的宽度（重开时以盘上配置为准）
- * @param {number} [options.height=0] - 新建板的高度
+ * @param {number} [options.width] - 新建板的区块边长（重开时以盘上配置为准）
+ * @param {number} [options.height] - 同上（纵向）
  * @param {string} [options.source="cli"] - 协作身份（记录的 source 与新对象 id 前缀）
  * @param {(source: string) => boolean} [options.persistStream] - 日志流落盘判定（daemon 用：不落直连客户端的流）
  * @param {boolean} [options.writeMeta=true] - 是否写本端元数据分片（读会话置 false 保持零写盘）
@@ -49,19 +60,17 @@ async function openBoardSession(rootPath, options = {}) {
   if (!exists) {
     // 布局 v2：board.json 创建时写一次（含 boardConfig），之后只读；
     // 计数与时间水位归 meta/<source>.json 分片
-    const width = options.width || 0;
-    const height = options.height || 0;
-    await store.create(
-      width > 0 && height > 0 ? { boardConfig: { width, height } } : {},
-    );
+    const width = normalizeChunkSize(options.width);
+    const height = normalizeChunkSize(options.height);
+    await store.create({ boardConfig: { width, height } });
   }
 
   const session = await store.loadAll();
   const meta = session.meta;
   // 盘上板配置优先：板尺寸是文档数据（决定区块划分），重开必须与原值一致
   const boardCore = new BoardCore({
-    width: meta?.boardConfig?.width || options.width || 0,
-    height: meta?.boardConfig?.height || options.height || 0,
+    width: meta?.boardConfig?.width || options.width,
+    height: meta?.boardConfig?.height || options.height,
     rootPath,
     source: options.source ?? "cli",
     hitRecords: session.records.length ? session.records : undefined,

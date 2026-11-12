@@ -2,7 +2,7 @@
 
 /**
  * @file 文件头路径检查
- * @description 扫描 src/core 与 src/renderers 下所有 .js 文件，验证 @module 路径与实际文件路径一致。
+ * @description 扫描各包根目录下所有 .js 文件，验证 @module 路径与实际文件路径一致。
  * @module scripts/ci/check-module-paths
  */
 
@@ -28,6 +28,8 @@ const ROOTS = [
   { dir: path.join(ROOT, "src", "io"), prefix: "io/" },
   { dir: path.join(ROOT, "src", "cli"), prefix: "cli/" },
   { dir: path.join(ROOT, "src", "ui"), prefix: "ui/" },
+  { dir: path.join(ROOT, "src", "demo"), prefix: "demo/" },
+  { dir: path.join(ROOT, "src", "utils"), prefix: "utils/" },
   { dir: path.join(ROOT, "src", "test-support"), prefix: "test-support/" },
 ];
 
@@ -74,18 +76,22 @@ for (const { dir, prefix } of ROOTS) {
     if (normalizedModule !== actualPath) {
       mismatched++;
       errors.push(
-        `${path.relative(ROOT, file)}\n    module: ${modulePath}\n    actual: ${prefix}${actualPath}`
+        `${path.relative(ROOT, file)}\n    module: ${modulePath}\n    actual: ${prefix}${actualPath}`,
       );
     }
   }
 }
 
 if (mismatched > 0) {
-  console.error(`\n✗ 文件头路径检查失败 — ${mismatched}/${checked} 个文件的 @module 与实际路径不符:\n`);
+  console.error(
+    `\n✗ 文件头路径检查失败 — ${mismatched}/${checked} 个文件的 @module 与实际路径不符:\n`,
+  );
   for (const err of errors) {
     console.error(`  ${err}\n`);
   }
   process.exit(1);
 } else {
-  console.log(`✓ 文件头路径检查通过 — ${checked} 个文件的 @module 与实际路径一致`);
+  console.log(
+    `✓ 文件头路径检查通过 — ${checked} 个文件的 @module 与实际路径一致`,
+  );
 }

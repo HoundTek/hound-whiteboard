@@ -1,4 +1,4 @@
-# 工具基类
+# 工具基类文档
 
 ## 概述
 
@@ -38,7 +38,7 @@ Tool 是设备图末端的消费型处理器，只做叶子节点。
 
 ## 上下文模型
 
-`Tool.createProcessor(toolContext)` 会生成一个可直接挂到 DevicesDAG 节点上的 handler。这个 handler 会把 `DevicesDAGHandlerContext` 规整成 `deviceContext`。
+`Tool.createProcessor()` 无参，生成一个可直接挂到 DevicesDAG 节点上的 handler。handler 调用时收到的 `DevicesDAGHandlerContext` 即 `process()` 的 `deviceContext`，不做字段转换。
 
 当前推荐直接依赖的顶层字段有：
 
@@ -62,7 +62,7 @@ Tool 提供一组围绕节点 `state` 的 objects 投影工具：
 - `setContextObjects(deviceContext, objects)` — 将对象集合发布为 `state.objects` 投影
 - `clearContextObjects(deviceContext)` — 清除 `state.objects` 投影
 - `resolveContextObjects(deviceContext)` — 读取 `state.objects` 投影（仅供观察 / 测试）
-- `resolveObjectId(objectEntry)` — 从对象条目提取数字 id
+- `resolveObjectId(objectEntry)` — 从对象条目提取字符串 id（`{source}/{n}`），非法条目返回 `null`
 - `resolveObjectIds(deviceContext, objects)` — 批量提取去重 id 列表
 - `resolveNodeState(deviceContext, statePath)`
 - `writeNodeState(deviceContext, nextState, statePath)`
@@ -73,17 +73,17 @@ Tool 提供一组围绕节点 `state` 的 objects 投影工具：
 - 对象集合的真相源是各工具的实例字段（chooser `_selectedObjects`、modifier `_overlayModifiedObjects`、creator `_entry`）
 - 工具逻辑禁止从投影读回当真相源用；`resolveContextObjects` 仅供观察方与测试读取
 
-## 默认链路继续
+## 默认后继的转发
 
-`continueToDefaultPath(signalPacket, deviceContext)` 会在满足以下条件时返回一个新的相对转发包：
+Tool 本身不转发信号（见「职责边界」）。需要“先消费一部分信号、再把同一包交给默认后继”的节点由 prefix / handler 承担：
 
-- 当前节点声明了 `defaultRoute`
-- 已经解析出 `resolvedDefaultRoutePath`
-- 对应子节点真实存在
+```js
+return ctx.routeToChild(ctx.defaultRoute || "", packet.signals);
+```
 
-如果条件不满足，则返回 `undefined`。
+`ctx.routeToChild(to, signals?)` 是向下转发信号的唯一规范方式，不传 `signals` 时复用当前 `signalPacket.signals`；详见 [handler 上下文用法](../../docs/handler-context-document.md#ctxroutetochildto-signals)。
 
-它适合那种“工具先消费一部分信号，再把同一包继续交给默认后继节点”的局部链路。
+Tool 侧没有对应方法：工具消费完信号即结束，不持有子节点路由表。
 
 ## 与 prefix 的边界
 
@@ -155,12 +155,12 @@ Tool 基类提供了一套发布-订阅式生命周期钩子，允许外部观�
 
 - **通知型钩子**通过 `_emit` 触发，不参与控制流
 - **控制型钩子**是可覆盖的实例方法，返回 `bool` 决定流程是否继续
-- 钩子名称约定为语义化字符串：`"afterCreate"`、`"afterApply"` 等
+- 钩子名称采用 namespace 格式：`"action:complete"`、`"gesture:begin"` 等
 
 ```js
 // 注册监听
-const unsub = tool.on("afterCreate", (interaction, obj) => {
-  console.log("对象创建完成", obj);
+const unsub = tool.on("action:complete", (context, result) => {
+  console.log("动作完成", result);
 });
 
 // 取消监听
@@ -179,8 +179,6 @@ unsub();
 
 此外，`GestureTool` 还提供手势层事件：`"gesture:begin"`、`"gesture:update"`、`"gesture:end"`、`"gesture:cancel"`。
 
-控制型钩子返回 `false` 即阻止该生命周期步骤继续执行。
-
 ## 子类约定
 
 自定义工具通常只需要实现：
@@ -194,7 +192,7 @@ unsub();
 
 如果工具需要在 `uiCanvas` 上声明兼容 overlay，可额外覆写：
 
-- `collectUiOverlayEntries({ deviceContext, viewport, renderer })`
+- `collectUiOverlayEntries({ viewport, renderer })`
 
 该方法返回的条目会通过 viewport 上注册的 provider 交给 `UiRenderer`。
 

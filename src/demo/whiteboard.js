@@ -67,8 +67,6 @@ async function bootstrapWhiteboard() {
     boardId: "demo-board",
   });
   boardRef = board;
-  board.width = 800;
-  board.height = 600;
 
   const appLeft = document.getElementById("app-left");
   const foregroundLayer = document.getElementById("app-foreground-layer");

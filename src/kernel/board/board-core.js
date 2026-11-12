@@ -56,6 +56,26 @@ import { createDefaultPersistenceAdapter } from "./persistence-adapter.js";
  */
 
 /**
+ * 默认区块边长（世界单位）
+ * @description
+ * 区块是存储与载入的粒度单位；世界是无限的，白板本身没有尺寸。
+ * 取值依据实测：1024 时 10% 缩放的加载窗口约 285 个区块、元数据读取约 17ms；
+ * 单区块在常见笔画密度下约 650 个对象，进入新区域载入约 12ms。
+ * 更小的块会让深缩放时区块数暴涨，更大的块会让单次载入出现 50ms 以上卡顿。
+ * @type {number}
+ */
+const DEFAULT_CHUNK_SIZE = 1024;
+
+/**
+ * 归一化区块边长
+ * @param {number} [size] - 原始边长
+ * @returns {number} 可用的区块边长
+ */
+function normalizeChunkSize(size) {
+  return Number.isFinite(size) && size > 0 ? size : DEFAULT_CHUNK_SIZE;
+}
+
+/**
  * 白板核心类
  * @description
  * BoardCore 是白板在 Worker 中的纯数据/逻辑实现。
@@ -114,6 +134,13 @@ class BoardCore {
    * @type {ChunkLoader}
    */
   rootChunkLoader;
+
+  /**
+   * AOM 活动事件总线（ephemeral）
+   * @description 本地 choose/unchoose/commit 手势事件即时广播通道；不经日志，同步宿主订阅后转发中继。
+   * @type {EventBus}
+   */
+  activityEventBus;
 
   /**
    * 持久化适配器
@@ -197,21 +224,19 @@ class BoardCore {
    *   now?: () => number,
    *   coreIdCounters?: Object<string, number>,
    *   objectIdCounters?: Object<string, number>,
+   *
+   * @description
+   * `width` / `height` 是区块边长（决定盘上区块划分），不是板尺寸。
    * }} [options={}] - 白板核心初始化选项
    */
   constructor(options = {}) {
     this.#log = new Logger("BoardCore", "INFO", logBus);
-    this.width = options.width ?? 0;
-    this.height = options.height ?? 0;
+    this.width = normalizeChunkSize(options.width);
+    this.height = normalizeChunkSize(options.height);
     this.rootPath = options.rootPath;
     this.chunkLoaded = new Map();
     this.objectLoaded = new Map();
     this.chunkLoadEventBus = new EventBus();
-    /**
-     * AOM 活动事件总线（ephemeral）
-     * @description 本地 choose/unchoose/commit 手势事件即时广播通道；不经日志，同步宿主订阅后转发中继。
-     * @type {EventBus}
-     */
     this.activityEventBus = new EventBus();
     this.rootChunkLoader = new ChunkLoader({
       resolveChunkById: (chunkId) =>
@@ -483,10 +508,8 @@ class BoardCore {
       coreIdCounters[source] = allocator.counter;
     }
     return {
-      // 板尺寸为 0 表示未知（未设置），不写入元数据，避免覆盖调用方显式配置
-      ...(this.width > 0 && this.height > 0
-        ? { boardConfig: { width: this.width, height: this.height } }
-        : {}),
+      // 区块边长决定盘上区块划分，重开必须与原值一致
+      boardConfig: { width: this.width, height: this.height },
       coreIdCounters,
       objectIdCounters: Object.fromEntries(this.#objectIdCounters),
     };
@@ -590,41 +613,6 @@ class BoardCore {
    */
   unsetObjectCoverChunks(objectId) {
     this.#objectCoverChunks.delete(objectId);
-  }
-
-  /**
-   * 添加对象到白板核心
-   * @param {BasicObject} obj - 要添加的对象
-   */
-  addObject(obj) {
-    if (!(obj instanceof BasicObject)) {
-      throw new TypeError("Invalid object instance.");
-    }
-    const chunkId = Chunk.worldToChunkId(obj.position, this.width, this.height);
-    if (chunkId == null) {
-      throw new Error("Cannot resolve chunk for object position.");
-    }
-    const chunk = this.getChunkById(chunkId);
-    if (!chunk) {
-      this.#log.throttledWarn(
-        "chunk-not-exist",
-        `Chunk ${chunkId} does not exist.`,
-      );
-      throw new Error("Chunk not exist.");
-    }
-
-    chunk.addObject(obj);
-
-    let coveredChunkIds = new Set([chunk.id]);
-    if (chunk.objectManager && this.width > 0 && this.height > 0) {
-      coveredChunkIds = chunk.objectManager.syncObjectCoverChunksForObject(
-        obj,
-        this.width,
-        this.height,
-      );
-    }
-
-    this.registerObjectInstance(obj, { coveredChunkIds });
   }
 
   /**
@@ -1095,4 +1083,4 @@ function isValidBoardRootPath(boardRootPath) {
   return typeof boardRootPath === "string" && boardRootPath.trim() !== "";
 }
 
-export { BoardCore };
+export { BoardCore, DEFAULT_CHUNK_SIZE };

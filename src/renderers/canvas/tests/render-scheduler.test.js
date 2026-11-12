@@ -30,6 +30,30 @@ describe("RenderScheduler", () => {
     expect(scheduler.dirtyRects).toEqual([]);
   });
 
+  test("cancel 应清空脏区并让已排上的回调失效", () => {
+    const scheduledCallbacks = [];
+    const flushed = [];
+    const scheduler = new RenderScheduler({
+      scheduleFrame(callback) {
+        scheduledCallbacks.push(callback);
+        return scheduledCallbacks.length;
+      },
+      flushHandler(dirtyRects) {
+        flushed.push(dirtyRects);
+      },
+    });
+
+    scheduler.invalidate({ id: 1 });
+    scheduler.cancel();
+
+    expect(scheduler.dirtyRects).toEqual([]);
+    expect(scheduler.framePending).toBe(false);
+
+    // 销毁后已排上的回调必须自跳过，否则会在无画布环境下继续光栅化
+    scheduledCallbacks[0](0);
+    expect(flushed).toEqual([]);
+  });
+
   test("flush 应先合并脏区再调用处理器", () => {
     const flushed = [];
     const scheduler = new RenderScheduler({

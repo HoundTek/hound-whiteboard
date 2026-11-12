@@ -291,7 +291,7 @@ describe("whiteboard demo worker mode", () => {
       expect(primaryStrokeTool._entry.id).toBe("1");
 
       // object 在 commit 前不在 Worker 侧
-      const summaries = await board.getBoardApi().queryObjects(["1"]);
+      const summaries = await board.getBoardApi().queryObjectDetails(["1"]);
       expect(summaries).toHaveLength(1);
       expect(summaries[0]).toMatchObject({
         id: "1",

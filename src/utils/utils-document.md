@@ -10,15 +10,16 @@
 
 ## 模块分组
 
-- 安全文件访问框架：`io/`（Tauri 2 / kernel / host 三端可用）
+- 安全文件访问框架（不在本目录）：`src/io/`（Tauri 2 / kernel / host 三端可用）
 - 日志系统：`log/`
+- 协作身份：`device-identity.js`、`short-id.js`（暂无单模块文档）
 
 ## 与 kernel utils 的边界
 
 - `src/utils/` 负责应用级运行时工具（日志）。
 - `src/kernel/utils/` 负责内核通用容器、数学工具和逻辑路径。
 
-若你要查看队列、双端队列、图结构、矩阵和逻辑路径，请转到 [../kernel/utils/docs/utils-document.md](../kernel/utils/docs/utils-document.md)。
+若你要查看队列、图结构、矩阵和逻辑路径，请转到 [../kernel/utils/docs/utils-document.md](../kernel/utils/docs/utils-document.md)。
 
 ## 使用建议
 

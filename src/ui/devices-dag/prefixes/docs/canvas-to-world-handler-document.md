@@ -1,4 +1,4 @@
-# canvas-to-world-handler
+# canvas-to-world-handler 文档
 
 ## 概述
 
@@ -12,20 +12,15 @@
 
 - 优先委托 `viewport.convertCanvasSignalsToWorld` 完成转换，保证与设备内转换逻辑一致
 - 该方法不存在时回退到手动换算：`worldX = canvasX / viewport.zoom + viewport.origin.x`，`worldY = canvasY / viewport.zoom + viewport.origin.y`
-- 输入信号中的 `position` 信号：取出 `context.value`（应为 canvas 相对坐标 `Vector` 或 `{ x, y }`）
-- 输出：`context.value` 替换为世界坐标 `Vector`
+- 输入信号中的 `position` 信号：取出 `signal.context.value`（应为 canvas 相对坐标 `Vector` 或 `{ x, y }`）
+- 输出：`signal.context.value` 替换为世界坐标 `Vector`
 - 非 `position` 信号：原样透传
 
-如果 `ctx.services.viewport` 不可达或缺少 `zoom` 字段，所有信号原样透传，不发生转换报错。
-
-## 依赖
-
-- 视口实例来自 `ctx.services.viewport`（由 `Board.createViewport` 在 `/<viewportId>` 节点声明）
-- 优先使用 `viewport.convertCanvasSignalsToWorld`；缺失时回退到直接读取 `viewport.origin` 与 `viewport.zoom`
+如果 `ctx.services.viewport` 不可达、`zoom` 非 number 或缺少 `origin`，所有信号原样透传，不发生转换报错。视口实例由 `Board.createViewport` 在 `/<viewportId>` 节点声明。
 
 ## 用法
 
-仅当信号源未经过标准设备根节点时使用，例如自定义 adapter 直连 workflow：
+仅当信号源未经过标准设备根节点时使用（标准链路已由设备根节点转换，再挂会二次转换），例如自定义 adapter 直连 workflow：
 
 ```js
 import {
@@ -42,8 +37,6 @@ scope.addEdge({
   }),
 });
 ```
-
-> **警告**：不要把它插在 mouse / touchscreen 设备通道下游——设备根节点已转换，再转一次会得到错误坐标。
 
 ## 输入坐标系约定
 

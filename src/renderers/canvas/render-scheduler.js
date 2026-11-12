@@ -402,6 +402,19 @@ class RenderScheduler {
   }
 
   /**
+   * 取消积压的帧调度
+   * @description
+   * 销毁视口时调用：清空脏区并递增代次，使已经排上的回调自动跳过，
+   * 避免视口销毁后仍继续光栅化。
+   * @returns {void}
+   */
+  cancel() {
+    this.dirtyRects.length = 0;
+    this.framePending = false;
+    this.#scheduleGeneration++;
+  }
+
+  /**
    * 清空积压脏区
    */
   clear() {

@@ -81,9 +81,30 @@
  * @property {Point2D} position - 世界坐标位置
  * @property {TransformMatrix2D | undefined} [transform] - 对象变换矩阵
  * @property {import("../range/rectangle.js").RectangleRange} boundingBox - 外接矩形
- * @property {import("../range/range.js").Range} range - 主判定范围
- * @property {Record<string, any>} property - 属性快照
- * @property {Record<string, any>} data - 类型专属几何数据快照（如 points、radius、text）
+ *
+ * @description
+ * 摘要只含纯数据且不含随笔迹点数增长的字段：它会在框选、手势 `hit:changed`、
+ * 远程选择刷新等高频路径上跨 worker 边界。诊断或命令行需要几何快照与运行态时取详情。
+ * 刻意不含主判定范围：它是类实例，结构化克隆后方法丢失，跨端只能退回外接矩形。
+ */
+
+/**
+ * 跨线程对象详情
+ * @typedef {Object} ObjectDetails
+ * @property {string} id - 对象 id
+ * @property {string} type - 对象类型名
+ * @property {boolean} isActive - 是否在 AOM 动态图中
+ * @property {string | undefined} [choice] - 所属命名选择（本地 choice）名；匿名选择或无选择时缺省
+ * @property {Point2D} position - 世界坐标位置
+ * @property {TransformMatrix2D | undefined} [transform] - 对象变换矩阵
+ * @property {import("../range/rectangle.js").RectangleRange} boundingBox - 外接矩形
+ * @property {Record<string, any>} property - 样式属性快照
+ * @property {Record<string, any>} data - 类型专属几何数据快照（如 points、radius）
+ * @property {number} loadedCount - 该对象在当前端被引用的次数
+ * @property {number[]} coveredChunkIds - 该对象覆盖的区块 id（升序）
+ *
+ * @description
+ * 详情是摘要的超集，体积随笔迹点数增长，只用于调试与命令行诊断，不得放进高频路径。
  */
 
 export { };

@@ -10,10 +10,15 @@
 import { RectangleRange } from "../../kernel/range/index.js";
 import { Vector } from "../../kernel/utils/math.js";
 import { Chunk } from "../../kernel/chunk/chunk.js";
-import { CHUNK_LOAD_STRATEGIES, ChunkLoader } from "../../kernel/chunk/chunk-loader.js";
+import {
+  CHUNK_LOAD_STRATEGIES,
+  ChunkLoader,
+} from "../../kernel/chunk/chunk-loader.js";
 import { ChunkObjectManager } from "../../kernel/chunk/chunk-object-manager.js";
 import { ViewportRenderer } from "./viewport-renderer.js";
 import { BoardCore } from "../../kernel/board/board-core.js";
+import { clampViewportZoom } from "./viewport-zoom.js";
+import { quantizeOriginToDevicePixel } from "./tile-grid.js";
 
 /**
  * Worker 侧视口核心
@@ -43,6 +48,13 @@ class ViewportCore {
    * @type {ChunkLoader}
    * @private
    */
+  /**
+   * 是否启用世界空间 tile 缓存
+   * @type {boolean}
+   * @private
+   */
+  #tilesEnabled;
+
   #chunkLoader;
 
   /**
@@ -102,12 +114,23 @@ class ViewportCore {
   #postRenderFrame;
 
   /**
+   * 帧由净转脏时的通知回调
+   * @description 用于让 UI 侧的渲染循环在空闲休眠后被内容变化唤醒，只在跳变时触发一次。
+   * @type {() => void}
+   * @private
+   */
+  #onFrameDirty;
+
+  /**
    * @param {{
    *   boardCore: BoardCore,
    *   viewportId: string | number,
    *   width: number,
    *   height: number,
    *   postRenderFrame?: (message: Object, transferList?: Transferable[]) => void,
+   *   onFrameDirty?: () => void,
+   *   tiles?: boolean,
+   *   devicePixelRatio?: number,
    * }} options - ViewportCore 初始化选项
    */
   constructor(options) {
@@ -124,17 +147,32 @@ class ViewportCore {
     this.#frameId = 0;
     this.#frameDirty = false;
     this.#postRenderFrame = options.postRenderFrame ?? (() => {});
+    this.#onFrameDirty = options.onFrameDirty ?? (() => {});
     this.#chunkLoader = this.#boardCore.createChunkLoader(
       `viewport-${String(this.#viewportId)}`,
     );
 
+    // tile 开关只在此处归一化一次。
+    // 渲染器的启用判定与原点的整数量化必须取同一个值，
+    // 否则会出现渲染器开 tile 而原点未量化的错配，
+    // 导致合成退化为小数目标坐标，描边相位偏移回归
+    // 位图按设备像素分配，绘制坐标仍保持 CSS 像素
+    const devicePixelRatio = options.devicePixelRatio ?? 1;
+    this.#tilesEnabled = options.tiles !== false;
     this.#renderer = new ViewportRenderer(
       this,
       this.#boardCore.activeObjectManager,
       {
-        canvas: new OffscreenCanvas(this.#width, this.#height),
+        canvas: new OffscreenCanvas(
+          Math.max(1, Math.round(this.#width * devicePixelRatio)),
+          Math.max(1, Math.round(this.#height * devicePixelRatio)),
+        ),
+        tiles: this.#tilesEnabled,
+        tileSize: options.tileSize,
+        devicePixelRatio,
       },
     );
+    this.#renderer.resize(this.#width, this.#height);
   }
 
   /**
@@ -221,6 +259,7 @@ class ViewportCore {
    * 标记当前存在待回传的新帧
    */
   markFrameDirty() {
+    if (!this.#frameDirty) this.#onFrameDirty();
     this.#frameDirty = true;
   }
 
@@ -403,7 +442,10 @@ class ViewportCore {
    * @param {import("../../kernel/chunk/chunk.js").Chunk[]} [previousChunks=[]] - 视口变化前可见区块
    * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState={}] - 旧视口状态
    */
-  requestViewportStaticRefresh(previousChunks = [], previousViewportState = {}) {
+  requestViewportStaticRefresh(
+    previousChunks = [],
+    previousViewportState = {},
+  ) {
     const currentChunks = this.syncChunkBufferWithViewport();
     this.markFrameDirty();
 
@@ -431,6 +473,9 @@ class ViewportCore {
   flushViewportRender() {
     const viewportRect = this.getViewportScreenRect();
     if (viewportRect.width <= 0 || viewportRect.height <= 0) return;
+
+    // 显式 flush 等同于「这一帧必须清晰」，结束缩放预览
+    this.#renderer?.commitZoomPreview?.();
 
     this.syncChunkBufferWithViewport();
     this.markFrameDirty();
@@ -486,18 +531,36 @@ class ViewportCore {
               nextState.origin?.x ?? this.origin.x,
               nextState.origin?.y ?? this.origin.y,
             );
+    // 输入侧应已夹取，这里兜底：消息可来自任意前端
     const nextZoom =
       nextState.zoom === undefined
         ? this.zoom
         : Number.isFinite(nextState.zoom) && nextState.zoom > 0
-          ? nextState.zoom
+          ? clampViewportZoom(nextState.zoom)
           : this.zoom;
+    // tile 贴图要求原点落在整数设备像素上：块边界取整后，只有整数像素平移
+    // 才能保证旧块的像素内容仍然对齐，否则每帧都要重新光栅化。
+    // 缩放与设备倍率都参与换算，误差始终不超过半个设备像素，与放大倍数无关。
+    let quantizedOrigin = nextOrigin;
+    if (this.#tilesEnabled) {
+      const snapped = quantizeOriginToDevicePixel(
+        nextOrigin,
+        nextZoom,
+        this.#renderer?.deviceScale ?? 1,
+      );
+      quantizedOrigin = new Vector(snapped.x, snapped.y);
+    }
+    // 输入侧显式要求刷新，说明手势已经收尾，缩放预览必须立即换成清晰帧
+    if (forceRefresh) {
+      this.#renderer?.commitZoomPreview?.();
+    }
+
     const originUnchanged =
-      nextOrigin.x === previousViewportState.origin.x &&
-      nextOrigin.y === previousViewportState.origin.y;
+      quantizedOrigin.x === previousViewportState.origin.x &&
+      quantizedOrigin.y === previousViewportState.origin.y;
     const zoomUnchanged = nextZoom === previousViewportState.zoom;
 
-    this.#origin = nextOrigin;
+    this.#origin = quantizedOrigin;
     this.#zoom = nextZoom;
 
     if (!forceRefresh && !resized && originUnchanged && zoomUnchanged) {
@@ -552,7 +615,11 @@ class ViewportCore {
     // 零尺寸画布（浏览器布局就绪前）整帧跳过：调度 flush 与 transferToImageBitmap
     // 都会对 0×0 画布抛错；保留 frameDirty，resize 后正常出帧
     const outputCanvas = this.#renderer?.outputCanvas;
-    if (!outputCanvas || outputCanvas.width === 0 || outputCanvas.height === 0) {
+    if (
+      !outputCanvas ||
+      outputCanvas.width === 0 ||
+      outputCanvas.height === 0
+    ) {
       return false;
     }
 
@@ -582,10 +649,22 @@ class ViewportCore {
   }
 
   /**
+   * 设置设备像素倍率
+   * @description 倍率变化后需再触发一次带视口尺寸的变更，才会按新倍率重分配位图。
+   * @param {number} devicePixelRatio - 新倍率
+   * @returns {void}
+   */
+  setDevicePixelRatio(devicePixelRatio) {
+    this.#renderer?.setDevicePixelRatio?.(devicePixelRatio);
+  }
+
+  /**
    * 销毁当前 ViewportCore
    */
   destroy() {
     this.#chunkLoader.destroy();
+    // 渲染器持调度器与预览定时器，不停会在销毁后继续排帧
+    this.#renderer?.destroy?.();
     this.#frameDirty = false;
   }
 }

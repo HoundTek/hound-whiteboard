@@ -14,6 +14,7 @@ import { DevicesDAG } from "../../devices-dag/index.js";
 import { BoardApiRpc } from "../../../host/bridges/board-api-rpc.js";
 import { attachIoInvokeForwarder } from "../../../host/bridges/io-invoke-forwarder.js";
 import { Viewport } from "./viewport.js";
+import { DEFAULT_CHUNK_SIZE } from "../../../kernel/board/board-core.js";
 import { joinPath } from "../../../kernel/utils/path.js";
 import { Logger } from "../../../utils/log/logger.js";
 import { logBus } from "../../../utils/log/log-bus.js";
@@ -66,13 +67,13 @@ class Board {
   #detachIoForwarder;
 
   /**
-   * 白板宽度
+   * 区块宽（世界单位；存储与载入粒度，不是板尺寸）
    * @type {number}
    */
   width;
 
   /**
-   * 白板高度
+   * 区块高（世界单位）
    * @type {number}
    */
   height;
@@ -82,6 +83,18 @@ class Board {
    * @type {string | undefined}
    */
   rootPath;
+
+  /**
+   * 同步中继地址（不传则离线运行）
+   * @type {string | undefined}
+   */
+  syncUrl;
+
+  /**
+   * 同步房间 id（缺省取 rootPath：板即房间）
+   * @type {string | undefined}
+   */
+  boardId;
 
   /**
    * 视口列表
@@ -127,23 +140,22 @@ class Board {
    * }} [options={}] - 白板初始化选项
    */
   constructor(options = {}) {
-    this.width = options.width ?? 0;
-    this.height = options.height ?? 0;
+    // width/height 是区块边长（存储与载入粒度），不是板尺寸：世界无限
+    this.width =
+      Number.isFinite(options.width) && options.width > 0
+        ? options.width
+        : DEFAULT_CHUNK_SIZE;
+    this.height =
+      Number.isFinite(options.height) && options.height > 0
+        ? options.height
+        : DEFAULT_CHUNK_SIZE;
     this.rootPath = isValidBoardRootPath(options.rootPath)
       ? options.rootPath
       : undefined;
-    /**
-     * 同步中继地址（不传则离线运行）
-     * @type {string|undefined}
-     */
     this.syncUrl =
       typeof options.syncUrl === "string" && options.syncUrl !== ""
         ? options.syncUrl
         : undefined;
-    /**
-     * 同步房间 id（缺省取 rootPath：板即房间）
-     * @type {string|undefined}
-     */
     this.boardId =
       typeof options.boardId === "string" && options.boardId !== ""
         ? options.boardId
@@ -177,7 +189,7 @@ class Board {
   }
 
   /**
-   * 当前区块宽（等于白板宽度）
+   * 当前区块宽
    * @type {number}
    */
   get chunkWidth() {
@@ -185,7 +197,7 @@ class Board {
   }
 
   /**
-   * 当前区块高（等于白板高度）
+   * 当前区块高
    * @type {number}
    */
   get chunkHeight() {

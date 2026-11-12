@@ -1,4 +1,4 @@
-# 多工具并发包装器
+# 多工具并发包装器文档
 
 ## 概述
 
@@ -75,6 +75,7 @@ classDiagram
     │  _dispatchToSlot(touchId, packet, ctx)   // end 信号
     │  _disposeSlot(touchId, ctx)              // 触发 _teardownSlot：沿 outEdges 递归 handler.dispose
     │  instances.delete(touchId)
+    │  最后一个触点 → completeAction(ctx)    // 提交各子图结果
 ```
 
 ### 信号转发方式
@@ -112,7 +113,7 @@ touch 的触点数在设计期未知。如果用"动态挂载工具"的方案，
 import { MultiToolWrapper } from "./tools/wrapper/multi-tool-wrapper.js";
 import { DevicesDAGNode } from "./dag-core/dag-node-edge.js";
 import { createSubDAG } from "./index.js";
-import { StrokeCreatorTool } from "./tools/creator/stroke-creator-tool.js";
+import { StrokeCreatorTool } from "./tools/creator/stroke-creator.js";
 
 const multiStroke = new MultiToolWrapper((touchId) => {
   const builder = createSubDAG("/touch");
@@ -155,11 +156,11 @@ viewport.inputScope.addEdge({
 
 ## 设计约束
 
-- 只消费 `touch-contacts` 信号（`TOUCHSCREEN_DEVICE_SIGNAL_TYPES.CONTACTS`），其他信号静默跳过
+- 只消费 `touch-contacts` 信号（`SIGNAL_TYPES.TOUCH_CONTACTS`）；`end-action` 转 `endAction`，其余信号静默跳过
 - 入口节点工厂函数每次触点按下时调用，返回 `DevicesDAGNode` 实例
 - `reset()` 销毁全部触点槽位并清空会话，不会触发 `end` 信号
 - 不处理 `cancel` 信号——触点 `touchcancel` 到设备层时已转为 `changedTouchId` 不在 `contacts` 中的情况，走 `#endTouch` 路径
-- `#endTouch` 在发送 `end` 信号后经 `_teardownSlot` 递归遍历子图节点调用 `handler.dispose()` 清理外部资源（如 overlay）
+- `#endTouch` 发送 `end` 信号后走 `_disposeSlot` → `_teardownSlot`，子图节点 handler 的外部资源（如 overlay）在槽位销毁时清理，递归过程见上文实例生命周期的流程图注释
 
 ## 会话模型
 

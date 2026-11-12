@@ -8,7 +8,7 @@
 
 - 所有集合均用大写黑板体表示，如集合 $\mathbb{A}$
 - 所有对象均用小写正粗体表示，如对象 $\mathbf{a}$，如未特殊说明，字母相同的对象与点被视为对应的，比如 $\mathbf{a}$ 在图上对应的点为 $A$
-- 所有的图均用大写花体表示，如图 $\mathcal{G}$
+- 除动态状态图 $\mathbf{D}$ 外，所有的图均用大写花体表示，如图 $\mathcal{G}$
 - 所有图上的点均用大写斜体表示，如点 $A$
 - 所有函数和自然数变量均用小写斜体表示，如 $f(x)$
 - 函数 $V(\mathcal{G})$ 用以获取图 $\mathcal{G}$ 的点集
@@ -21,13 +21,13 @@
 
 对于一个区块上的对象，我们可以用有向无环图来表示对象间的层级关系（可以不连通）。
 
-我们维护一张有向无环图：静态状态图 $\mathcal{S}$。还会维护一个由 $n$ 个三元组 $(s_i, \mathbb{A}_i, \mathcal{D}_i)$ 构成的有序序列，称为动态状态图 $\mathbf{D}$。其中 $s_i \in \{\text{active}, \text{inactive}\}$ 表示该层当前是否仍是活动层。它们并称层叠图。为方便起见，$P \in \mathbf{D}$ 表示点 $P$ 属于 $\mathbf{D}$ 中某一层的活动对象集或非活动子图。
+我们维护一张有向无环图：静态状态图 $\mathcal{S}$。还会维护一个由 $n$ 个三元组 $(s_i, \mathbb{A}_i, \mathcal{D}_i)$ 构成的有序序列，称为动态状态图 $\mathbf{D}$。下标由小到大即层由下到上。其中 $s_i \in \{\text{active}, \text{inactive}\}$ 表示该层当前是否仍是活动层。它们并称层叠图。为方便起见，$P \in \mathbf{D}$ 表示点 $P$ 属于 $\mathbf{D}$ 中某一层的活动对象集或非活动子图。
 
 静态状态图表示最后一次刷新时对象间的层级关系。若 $P, Q \in V(\mathcal{S})$ 且存在边 $P \to Q$，则表示 $P$、$Q$ 间有交集，且 $\mathbf{p}$ 在 $\mathbf{q}$ 之下。
 
 动态状态图表示下次刷新时对象额外应遵循的层级关系，用于确定对象间谁应在谁之上。若 $P, Q \in \mathbf{D}$ 且 $P \xrightarrow{*} Q$，则在下次刷新时，若 $\mathbf{p}$、$\mathbf{q}$ 间有交集，则表示 $\mathbf{p}$ 应在 $\mathbf{q}$ 之下。
 
-当某层 $s_i = \text{inactive}$ 时，$\mathbb{A}_i$ 中保留下来的点不再表示“当前活动对象”，而是按 $\mathcal{D}_i$ 的语义处理：它们仍保留在动态图结构里，但在 duplicate 判断、层级恢复等逻辑中视为非活动点。
+当某层 $s_i = \text{inactive}$ 时，$\mathbb{A}_i$ 中保留下来的点不再表示“当前活动对象”，而是按 $\mathcal{D}_i$ 的语义处理。
 
 ## 层叠图基础操作
 
@@ -35,7 +35,7 @@
 
 动态状态图 $\mathbf{D}$ 由若干层 $(s_i, \mathbb{A}_i, \mathcal{D}_i)$ 按序构成，层与层之间存在上下顺序关系。
 
-注册某层即向 $\mathbf{D}$ 中添加一个新层 $(s_{n+1}, \mathbb{A}_{n+1}, \mathcal{D}_{n+1})$，并给定其在顺序中的位置。新注册的层默认满足 $s_{n+1} = \text{active}$。
+注册某层即向 $\mathbf{D}$ 中添加一个新层 $(s_{n+1}, \mathbb{A}_{n+1}, \mathcal{D}_{n+1})$，置于序列末尾，即最上方。新注册的层默认满足 $s_{n+1} = \text{active}$。
 
 其实现见 [active-object-manager-document.md](./active-object-manager-document.md)。
 
@@ -73,14 +73,7 @@
 
 ### 在白板上选择对象
 
-将被选择的对象所对应的点集记为 $\mathbb{A}$（活动点集）。选择过程分四步：
-
-```mermaid
-flowchart LR
-    A["① 提取子图<br/>从 S 中提取以 A 为源点的<br/>最大可达子图 G"] --> B["② 计算层数<br/>取各路径上活动点<br/>计数的最大值"]
-    B --> C["③ 构造新层<br/>活动点入活动对象集<br/>非活动点入非活动子图（仅留同层边）"]
-    C --> D["④ 合并入动态图<br/>按层数升序并入 D<br/>（旧层之下 + 唯一性约束）"]
-```
+将被选择的对象所对应的点集记为 $\mathbb{A}$（活动点集）。选择过程分以下四步。
 
 #### 提取子图
 
@@ -102,10 +95,9 @@ $$
 
 该定义等价于：
 
-- 活动点的后继 → 层数至少比前驱大 $1$
-- 非活动点的后继 → 层数至少与前驱相同
-
-因此，若某个活动点的后继本身不是被选中的活动点，那么它不会自动升到更高一层。示例二、示例五里的 $E \to F$ 就属于这种情况：$F$ 与 $E$ 同层，而不是与 $C$ 同层。
+- **后继为活动点的边**：层数至少比前驱大 $1$
+- **后继为非活动点的边**：层数至少与前驱相同
+- 取所有可能取值中的最小值
 
 #### 构造新层
 
@@ -129,6 +121,8 @@ $$
 
 提交活动对象是指将活动点集 $\mathbb{A}$ 从动态状态图 $\mathbf{D}$ 移回静态状态图 $\mathcal{S}$。
 
+每个区块各维护一张 $\mathcal{S}$。对象跨区块移动时，需要同时处理原区块与当前覆盖区块。
+
 首先，对于每个 $\mathbf{a} \in \mathbb{A}$，从不再覆盖的旧区块 $\mathcal{S}$ 中移除节点 $A$ 和关联边，并清空当前覆盖区块中 $A$ 的所有旧边。
 
 然后，对每个 $\mathbf{a} \in \mathbb{A}$：
@@ -137,7 +131,7 @@ $$
 2. 结合 $\mathbf{D}$ 中层与层的上下关系，确定 $\mathbf{a}$ 在 $\mathcal{S}$ 中应处于哪些对象之上、哪些对象之下
 3. 将上述关系以边的形式写入 $\mathcal{S}$
 
-所有对象提交完毕后，并不要求立即把对应层结构从 $\mathbf{D}$ 中删除，而是会先把相关层标记为 inactive，再对 $\mathbf{D}$ 执行清理。
+所有对象提交完毕后，把相关层标记为 inactive，然后对 $\mathbf{D}$ 执行清理。
 
 其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“提交并取消选择”一节。
 
@@ -145,4 +139,10 @@ $$
 
 将指定对象集 $\mathbb{A}$ 中各对象从 $\mathbf{D}$ 中其当前所在的活动层移除，执行动态图清理，再为 $\mathbb{A}$ 中各对象按其原有层间关系在 $\mathbf{D}$ 中创建新层并置于顶部。
 
-其实现见 [active-object-manager-document.md](./active-object-manager-document.md) 的“置顶”一节。
+其实现状态：[todo] 动态图语义定义如上，`ActiveObjectManager` 尚无对应方法（当前无「置顶」入口）。
+
+## 相关文档
+
+- [层叠图的逐步推演](./tier-graph-example.md)
+- [活动对象管理器](./active-object-manager-document.md)
+- [BoardCore](./board-core-document.md)

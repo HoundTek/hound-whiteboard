@@ -37,6 +37,8 @@ chooser 统一使用 `ObjectSummary` 纯数据条目，通过以下方法处理�
 - `resolveObjectSelectionWorldRange()` — 世界范围解析
 - `resolveObjectIds()` — 提取对象 id（字符串）
 
+选择集的唯一真相源是实例字段 `_selectedObjects`；`node.state.objects` 只是它同步发布的只读投影，工具逻辑禁止读回。
+
 ## process 调度
 
 `ObjectChooserTool` 继承 `GestureTool`，`GestureTool.process()` 自动编排手势生命周期。
@@ -77,14 +79,7 @@ classDiagram
       #getSelectionRegion(context)
       +collectUiOverlayEntries(overlayContext)
     }
-    class LassoChooserTool {
-      #updateSelectionRegion(position, context)
-      #hasSelectionRegion(context)
-      #clearSelectionRegion(context)
-      #getSelectionRegion(context)
-    }
     ObjectChooserTool <|-- RectangleObjectChooserTool
-    ObjectChooserTool <|-- LassoChooserTool
 ```
 
 | Hook                                       | 职责                                              |
@@ -107,7 +102,7 @@ getSelectionRegion(context)
   → ObjectSummary[]
 ```
 
-子类可覆写此方法以自定义命中方式。例如点选用 `"enclosed"` 模式、路径选用多边形命中。
+子类可覆写此方法以自定义命中方式（逐对象范围判断由 `objectIntersectsSelectionRange` 提供）。
 
 `replaceSelection(context, objects)` 处理通用的选择替换：
 
@@ -121,11 +116,10 @@ discard / add 调用均携带 handoff 注入槽位上下文的 `supraKey`
 （`context.services.supraKey`），挂入会话超分子；`discardAction` / `umount`
 中的 discard 同理。
 
-选择集的唯一真相源是实例字段 `_selectedObjects`；`node.state.objects` 只是它同步发布的只读投影，工具逻辑禁止读回。
-
 ## 选择生命周期
 
-`_onEnd` 由 `GestureTool.process()` 触发，调用 `completeAction`。Chooser 覆写了 `completeAction` 以处理异步命中检测：
+`_onEnd` 由 `GestureTool.process()` 触发，调用 `completeAction`。Chooser 覆写 `completeAction`，
+经 `unifyActionResult` 统一同步与异步命中检测：
 
 ```mermaid
 sequenceDiagram
@@ -160,8 +154,12 @@ sequenceDiagram
 ```js
 import { createCompatSelectionEntriesForSummaries } from "../../../components/renderer/ui-overlay-factory.js";
 
+const objects = this._overlaySelectedObjects;
 createCompatSelectionEntriesForSummaries(objects, "chooser", viewport);
 ```
+
+`objects` 取自 overlay 专用字段 `_overlaySelectedObjects`，由 `_applySelection` 写入、`clearOverlayState` 清空，
+不是真相源 `_selectedObjects`。无 `renderer` 或选择集为空时，`collectUiOverlayEntries` 直接返回空数组。
 
 兼容 summary-like 条目和 plain `boundingBox` / `worldRect`。子类可在 `collectUiOverlayEntries` 中通过 `super.collectUiOverlayEntries()` 组合基类结果后附加自己的区域 overlay。
 
@@ -173,15 +171,6 @@ createCompatSelectionEntriesForSummaries(objects, "chooser", viewport);
 2. `discardActiveObjects` — 丢弃 `_selectedObjects` 中的当前活动对象
 3. 清空 `_selectedObjects` 真相源与 objects 投影（`clearContextObjects`）
 4. `super.umount()`
-
-## 与 modifier 的对称性
-
-两个工具族共用同一模式：父类骨架（`GestureTool`）处理信号调度与生命周期，子类通过 hook 注入具体行为。
-
-| 工具族   | 继承自        | 手势 hook                                          | 动作 hook                        |
-| -------- | ------------- | -------------------------------------------------- | -------------------------------- |
-| modifier | `GestureTool` | `canBeginGesture` / `beginGesture` / `...`         | `beforeAction` / `performAction` |
-| chooser  | `GestureTool` | `beginGesture` / `updateGesture` / `cancelGesture` | `completeAction`（异步支持）     |
 
 ## 相关文档
 

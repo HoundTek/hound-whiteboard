@@ -24,7 +24,7 @@ describe("CLI choice/modify 命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("choice-test", dir, { source: "cli" });
       const { stdout: id1 } = await runCli([
         "add", "--daemon", "choice-test", "--type", "StrokeObject", "--data", STROKE_DATA,
@@ -62,7 +62,7 @@ describe("CLI choice/modify 命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("choice-test", dir, { source: "cli" });
       const { stdout: id1 } = await runCli([
         "add", "--daemon", "choice-test", "--type", "StrokeObject", "--data", STROKE_DATA,
@@ -114,7 +114,7 @@ describe("CLI choice/modify 命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("choice-test", dir, { source: "cli" });
       const { stdout: id1 } = await runCli([
         "add", "--daemon", "choice-test", "--type", "StrokeObject", "--data", STROKE_DATA,

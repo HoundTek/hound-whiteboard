@@ -305,9 +305,12 @@ class UndoTree {
     // 同源新工作洗刷该来源已登记的重做资格（与 applyRecord 同规则）
     const lastMember = members[members.length - 1];
     this.#washRegistry(lastMember.source, lastMember.time, parseOperationId(lastMember.id)?.n ?? 0);
-    // 成员增量到达幂等：节点已存在时不重复建节点（成员全集由数据池凭 shareId 提供）
+    // 旧形态成员分批到达时并入既有节点，效果重放读取同一成员全集
     const existing = this.getActiveNode(shareId);
     if (existing !== null) {
+      existing.memberIds = [
+        ...new Set([...existing.memberIds, ...members.map((member) => member.id)]),
+      ];
       return existing;
     }
     const info = { memberIds: members.map((member) => member.id) };
@@ -324,7 +327,7 @@ class UndoTree {
    * 目标不在活动链上时被吸收（无结构变化）；目标为活动链末端时退化为 HEAD 回退；
    * 目标在链中段时在目标父节点处分叉：目标与 HEAD 之间的链（不含目标）改挂到分叉点，
    * 原位置按 (时间, author) 截断——不晚于撤销操作的节点留在原位置（凭同一 share id 共享数据），
-   * 晚于的只存在于撤消分支；HEAD 移到新末端。撤销本身不产生节点。
+   * 晚于的只存在于撤销分支；HEAD 移到新末端。撤销本身不产生节点。
    * 生效撤销登记入册（含来源与时间），作为后续重做生效判定的纯日志谓词依据；被吸收的撤销不登记。
    * @param {import("./operation.js").OperationRecord} record - 撤销操作记录
    * @returns {null}
@@ -627,7 +630,7 @@ class UndoTree {
    * @description 清空结构状态后按单元定序逐条应用。派生单元：旧日志形态（supraOpId）成员
    * 并入其超分子组，凝聚为单节点；其余记录各自独立应用——三级容器模型的分子归并
    * （同 molId 相邻并入）与超分子折叠（close-supra 触发）在应用时发生。两种日志形态
-   * 混合同一棵树收敛。
+   * 混合同一棵树收敛；undo/move-head/redo 在语义目标尚未应用时按确定顺序推迟。
    * @returns {void}
    */
   rebuild() {
@@ -656,12 +659,36 @@ class UndoTree {
       const reprB = Array.isArray(b) ? b[b.length - 1] : b;
       return compareRecords(reprA, reprB);
     });
-    for (const unit of units) {
+    const appliedIds = new Set();
+    /**
+     * 应用一个派生单元并登记其记录
+     * @param {Object|Object[]} unit - 单条记录或旧超分子成员组
+     * @returns {void}
+     */
+    const applyUnit = (unit) => {
       if (Array.isArray(unit)) {
         this.applySupraNode(unit);
+        for (const record of unit) appliedIds.add(record.id);
       } else {
         this.applyRecord(unit);
+        appliedIds.add(unit.id);
       }
+    };
+    while (units.length > 0) {
+      let index = units.findIndex((unit) => {
+        if (Array.isArray(unit)) return true;
+        let dependency = null;
+        if (unit.type === OPERATION_TYPES.UNDO || unit.type === OPERATION_TYPES.MOVE_HEAD) {
+          dependency = unit.payload.targetNodeId;
+        } else if (unit.type === OPERATION_TYPES.REDO) {
+          dependency = unit.payload.targetUndoId;
+        }
+        return dependency === null || appliedIds.has(dependency);
+      });
+      // 缺失目标或循环依赖的损坏日志仍按确定顺序落地，由效果修复与校验和暴露问题
+      if (index === -1) index = 0;
+      const [unit] = units.splice(index, 1);
+      applyUnit(unit);
     }
   }
 

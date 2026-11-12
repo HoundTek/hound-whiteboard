@@ -17,12 +17,12 @@
 
 ## 渲染层分工
 
-| 层           | 线程   | 渲染内容                | 来源                  |
-| ------------ | ------ | ----------------------- | --------------------- |
-| base/live    | Worker | 静态对象 + AOM 活动对象 | `liveBitmap` 合成分片 |
-| ui (overlay) | UI     | 选择框、编辑手柄等      | `UiRenderer` 即时绘制 |
+| 层           | 线程   | 渲染内容                | 来源                        |
+| ------------ | ------ | ----------------------- | --------------------------- |
+| base/live    | Worker | 静态对象 + AOM 活动对象 | `liveBitmap`（Worker 合成） |
+| ui (overlay) | UI     | 选择框、编辑手柄等      | `UiRenderer` 即时绘制       |
 
-base/live 的合成像素内容来自 Worker（`liveBitmap` 已合成两层），overlay 始终留在 UI 线程。
+`liveBitmap` 为 base + live 两层的合成结果，overlay 始终留在 UI 线程。
 
 ## 视口控制接口
 
@@ -56,25 +56,23 @@ base/live 的合成像素内容来自 Worker（`liveBitmap` 已合成两层）�
 
 ## Frame 协议
 
-`Viewport` 通过 postMessage 与 Worker 侧的 `ViewportCore` 通信：
+`Viewport` 通过 postMessage 与 Worker 侧的 `ViewportCore` 通信。需先调用 `viewport.startWorkerSync()`，视口同步与 flush 循环才会启动。
 
 **UI → Worker**：
 
 - `viewport-change`：视口状态变更（origin / zoom / size）
-- `request-render-flush`：请求立即产出渲染帧
+- `request-render-flush`：发起新一轮 flush（rAF 循环，空闲后休眠）
 - `awareness-send`：awareness 负载上行（`sendAwareness` 发出），core-worker 转协调器 volatile 广播
 
 **Worker → UI**：
 
 - `render-frame`：含 `liveBitmap`（已合成 base + live 层）
+- `render-dirty`：Worker 内容变脏时通知 UI 唤醒休眠的 flush 循环
 - `awareness`：协作感知下行，`awarenessType` 区分载荷（`remote-activity` / `hit-changed` / `cursor` / `mol-begin` / `mol-amend` / `mol-end` / `mol-abort` / `peer-left` / `disconnect`）；`Viewport` 分发到 `addAwarenessListener` 注册的监听器
 
 ## 当前状态
 
-- `Viewport` 作为 UI 视口 facade 运行
 - demo 默认走 `Viewport` 路径
-- base/live 合成由 Worker 完成，UI 侧通过 `liveBitmap` 接收合成帧
-- overlay 始终在 UI 线程由 `UiRenderer` 绘制
 
 ## 相关文档
 

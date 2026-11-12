@@ -1,12 +1,12 @@
-# 鼠标设备
+# 鼠标设备文档
 
 ## 概述
 
-鼠标设备负责把宿主层已经确认归属到某个 Viewport 的鼠标输入，翻译成 Core 内稳定的设备信号。
+鼠标设备接收宿主层已经确认归属到某个 Viewport 的鼠标输入，按按钮状态把已翻译好的设备信号分流到各通道。
 
 根路径固定为 `/mouse`，整体结构由 `createSubDAG("/mouse")` 构建。
 
-`createMouseDevice()` **不接受任何参数**——设备内部预创建五个通道路由节点（`pointer`、`primary`、`secondary`、`auxiliary`、`wheel`），每个节点统一 `defaultRoute = "default"`。设备不负责信号转换，只负责根据按钮状态把输入信号分流到对应的设备通道。
+`createMouseDevice()` **不接受任何参数**——设备内部预创建五个通道路由节点（`pointer`、`primary`、`secondary`、`auxiliary`、`wheel`），每个节点统一 `defaultRoute = "default"`。设备不做 DOM 事件→信号的翻译（宿主适配层负责），但根节点会做一次 canvas→world 转换，其余工作是根据按钮状态把输入信号分流到对应的设备通道。
 
 ## 节点结构
 
@@ -35,7 +35,12 @@ mouse/ (root handler: 更新状态 + 分流)
 └── wheel/ ← 滚轮信号
 ```
 
-五个通道路由节点均**不带 handler**，统一 `defaultRoute: "default"`。外部 workflow 通过 mount 事件的 edge 直接挂载到通道节点的 `"default"` 边上。
+五个通道路由节点均**不带 handler**，统一 `defaultRoute: "default"`。外部接入分两步：`inputScope.mountDevice` 在 `/{viewportId}` 下挂载设备子图，`inputScope.addEdge` 把 workflow 目标节点接到通道节点的 `"default"` 边上。
+
+```js
+scope.mountDevice("mouse", createMouseDevice());
+scope.addEdge({ from: "mouse/primary", to: "workflows/primary-stroke" });
+```
 
 ### 外部接入
 
@@ -54,13 +59,14 @@ flowchart LR
 
 ## 信号语义
 
-鼠标设备接收宿主层传入的信号，`position` 信号的 `context.value` 应为 canvas 相对坐标。
+鼠标设备接收宿主层传入的信号：`position` 信号的 `context.value` 是 canvas 相对坐标（DOM 坐标减去 `canvas.getBoundingClientRect().left/top`），通道节点输出的 `context.value` 已是世界坐标。`createCanvasToWorldPrefixHandler` 使用同一套转换逻辑（委托 `viewport.convertCanvasSignalsToWorld`），用于非标准场景下在设备与 workflow 之间插入边级 prefix，详见 [canvas-to-world-handler 文档](../../prefixes/docs/canvas-to-world-handler-document.md)。
 
-根节点 handler 做三件事：
+根节点 handler 做四件事：
 
 1. 将 position 信号的 canvas 相对坐标转为世界坐标
 2. 更新设备内部状态（按钮掩码、最近位置）
-3. 根据按钮状态决定路由目标
+3. 为按钮 1→0 跳变合成缺失的 end 信号
+4. 根据按钮状态决定路由目标
 
 坐标转换规则：`worldX = canvasX / viewport.zoom + viewport.origin.x`，`worldY = canvasY / viewport.zoom + viewport.origin.y`。
 
@@ -141,12 +147,6 @@ const BUTTON_MASKS = {
 ```js
 import { createMouseDevice, DEVICE_DEFAULT_ROUTE } from "../devices/index.js";
 ```
-
-## ⚠️ 鼠标坐标参考系
-
-进入鼠标设备的 `position` 信号 `context.value` 应为 **canvas 相对坐标**（即 DOM 坐标减去 `canvas.getBoundingClientRect().left/top`）。
-
-坐标转换在鼠标设备根节点中自动完成，下游通道节点输出的 `context.value` 已是世界坐标。`createCanvasToWorldPrefixHandler` 使用同一套转换逻辑（委托 `viewport.convertCanvasSignalsToWorld`），用于非标准场景下在设备与 workflow 之间插入边级 prefix。详见 [canvas-to-world-handler 文档](../../prefixes/docs/canvas-to-world-handler-document.md)。
 
 ## 设计要点
 

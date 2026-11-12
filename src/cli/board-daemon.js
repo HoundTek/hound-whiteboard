@@ -11,7 +11,19 @@ import { t } from "./i18n.js";
 import { BOARD_API_ROUTES } from "../kernel/api/board-api-routes.js";
 import { createNetworkCoordinator } from "../host/sync/network-coordinator.js";
 import { createAmendForwarder } from "../host/sync/amend-forwarder.js";
-import { parseOperationId } from "../kernel/hit/operation.js";
+import {
+  createRemoteRecordIngestor,
+  maxSeqBySource,
+} from "../host/sync/remote-record-ingestor.js";
+import {
+  trackRemoteSource,
+  resetRemoteSource,
+  releaseRemoteChannel,
+} from "../host/sync/remote-activity-channels.js";
+import {
+  parseOperationId,
+  validateOperation,
+} from "../kernel/hit/operation.js";
 import {
   isValidDaemonName,
   resolveDaemonIdentity,
@@ -243,13 +255,28 @@ async function startBoardDaemonLocked(options) {
     source,
     persistStream: (s) => ![...collabClients.values()].includes(s),
   });
+  const collabIngestor = createRemoteRecordIngestor({
+    boardCore: session.boardCore,
+    boardApi: session.api,
+    onReject: (error, record) => {
+      console.warn(`[daemon] 隔离无法接入的记录 ${record.id}：${error.message}`);
+    },
+  });
 
   // 可选连中继：失败降级单机并每 3s 自动重试（中继可能后于 daemon 启动）；断线后同周期自动重连
   let coordinator = null;
   let amendForwarder = null;
   let relayRetryTimer = null;
-  /** @type {boolean} daemon 已关闭：关闭后到达的 onDisconnect 不得再调度重试 */
+  /**
+   * daemon 已关闭：关闭后到达的 onDisconnect 不得再调度重试
+   * @type {boolean}
+   */
   let closed = false;
+  /**
+   * 共享关闭承诺，保证重复触发等待同一次清理
+   * @type {Promise<void>|null}
+   */
+  let closePromise = null;
   const scheduleRelayRetry = () => {
     if (closed) return;
     if (relayRetryTimer !== null) return;
@@ -265,15 +292,25 @@ async function startBoardDaemonLocked(options) {
       boardApi: session.api,
       url: options.relayUrl,
       boardId: options.boardId ?? rootPath,
+      onAwareness: ({ source: remoteSource, data }) => {
+        collabBroadcast({ type: "awareness", source: remoteSource, data });
+      },
       onDisconnect: () => scheduleRelayRetry(),
     });
     try {
       await next.connect();
+      if (closed) {
+        await next.close();
+        return;
+      }
       coordinator = next;
       amendForwarder?.close();
       amendForwarder = createAmendForwarder({
         boardCore: session.boardCore,
-        sendAwareness: (data) => coordinator?.sendAwareness(data),
+        sendAwareness: (data) => {
+          coordinator?.sendAwareness(data);
+          collabBroadcast({ type: "awareness", source, data });
+        },
       });
       relayRetryTimer = null;
       console.log(
@@ -481,6 +518,7 @@ async function startBoardDaemonLocked(options) {
   const removeCollabClient = (ws) => {
     if (!collabClients.has(ws)) return;
     collabClients.delete(ws);
+    releaseRemoteChannel(session.boardCore, session.api, ws);
     clientRefs = Math.max(0, clientRefs - 1);
     // 并发写注册表可能失败（tmp 冲突），镜像失败不影响进程内权威计数
     void syncRefCount().catch(() => {});
@@ -506,6 +544,13 @@ async function startBoardDaemonLocked(options) {
   });
 
   /**
+   * 计算本端各来源已连续追加的最大序号
+   * @returns {Object<string, number>} 来源到最大序号的映射
+   */
+  const localLastSeen = () =>
+    Object.fromEntries(maxSeqBySource(session.boardCore.operationLog.toJSON()));
+
+  /**
    * 按请求方 lastSeen 过滤缺口记录（无 lastSeen 为全量）
    * @param {Object} [lastSeen] - 请求方各来源最大序号
    * @returns {Object[]} 缺口记录
@@ -521,7 +566,7 @@ async function startBoardDaemonLocked(options) {
   };
 
   /**
-   * 处理协作 digest：落后或分歧时请求全量重建
+   * 处理协作 digest：日志落后时补缺口，派生链分歧时本地重建
    * @param {Object} digest - 对端摘要
    * @param {Object} ws - 对端连接
    * @returns {void}
@@ -534,6 +579,7 @@ async function startBoardDaemonLocked(options) {
         JSON.stringify({
           type: "request-init",
           source,
+          lastSeen: localLastSeen(),
           openMols: session.api.queryOpenMols(),
         }),
       );
@@ -544,25 +590,19 @@ async function startBoardDaemonLocked(options) {
         JSON.stringify({
           type: "request-init",
           source,
+          lastSeen: localLastSeen(),
           openMols: session.api.queryOpenMols(),
         }),
       );
       return;
     }
-    // 派生链分歧（日志逐字节一致但树派生不一致）：请求全量重建自愈
     if (
       typeof digest.chainHash === "string" &&
       digest.logSize === local.logSize &&
       digest.head === local.head &&
       digest.chainHash !== local.chainHash
     ) {
-      ws.send(
-        JSON.stringify({
-          type: "request-init",
-          source,
-          openMols: session.api.queryOpenMols(),
-        }),
-      );
+      session.api.repairChainFromLog();
     }
   };
 
@@ -577,6 +617,7 @@ async function startBoardDaemonLocked(options) {
       case "join": {
         if (collabClients.has(ws)) return;
         if (typeof message.source !== "string" || message.source === "") return;
+        resetRemoteSource(session.boardCore, session.api, message.source);
         collabClients.set(ws, message.source);
         clientRefs += 1;
         cancelIdleExit();
@@ -593,6 +634,7 @@ async function startBoardDaemonLocked(options) {
           JSON.stringify({
             type: "request-init",
             source,
+            lastSeen: localLastSeen(),
             openMols: session.api.queryOpenMols(),
           }),
         );
@@ -601,23 +643,33 @@ async function startBoardDaemonLocked(options) {
       }
       case "records": {
         if (!Array.isArray(message.records)) return;
-        await session.api.applyRemoteOperations(message.records);
+        const validRecords = message.records.filter(
+          (record) => validateOperation(record).length === 0,
+        );
+        for (const record of validRecords) {
+          trackRemoteSource(session.boardCore, ws, record.source);
+        }
+        collabIngestor.ingest(validRecords);
         await session.flush();
         // 桥接进 relay 房间（若 daemon 连了中继）：GUI 的操作对远端可见
-        coordinator?.sendRecords(message.records);
+        coordinator?.sendRecords(validRecords);
         return;
       }
       case "aom": {
         if (message.event === undefined || message.event === null) return;
-        session.api.applyRemoteActivity(
-          message.event,
-          message.source ?? "collab",
-        );
+        const remoteSource = message.source ?? "collab";
+        trackRemoteSource(session.boardCore, ws, remoteSource);
+        session.api.applyRemoteActivity(message.event, remoteSource);
         return;
       }
       case "awareness": {
         if (message.data === undefined || message.data === null) return;
+        const remoteSource = message.source ?? collabClients.get(ws) ?? "collab";
         coordinator?.sendAwareness(message.data);
+        collabBroadcast(
+          { type: "awareness", source: remoteSource, data: message.data },
+          remoteSource,
+        );
         return;
       }
       case "request-init": {
@@ -636,7 +688,10 @@ async function startBoardDaemonLocked(options) {
       }
       case "respond-init": {
         if (Array.isArray(message.records) && message.records.length > 0) {
-          await session.api.applyRemoteOperations(message.records);
+          for (const record of message.records) {
+            trackRemoteSource(session.boardCore, ws, record?.source);
+          }
+          collabIngestor.ingest(message.records);
           await session.flush();
         }
         return;
@@ -663,6 +718,10 @@ async function startBoardDaemonLocked(options) {
   };
 
   wss.on("connection", (ws) => {
+    if (closed) {
+      ws.terminate();
+      return;
+    }
     ws.on("message", (data) => {
       let message;
       try {
@@ -674,6 +733,12 @@ async function startBoardDaemonLocked(options) {
         // 强制停机：响应后异步关闭（close 内部排空既有 RPC），不入队列避免自死锁
         ws.send(JSON.stringify({ id: message.id, ok: true, result: null }));
         closeAndExit();
+        return;
+      }
+      if (closed) {
+        if (typeof message?.id === "number" && typeof message?.route === "string") {
+          ws.send(JSON.stringify({ id: message.id, ok: false, error: "daemon 正在关闭" }));
+        }
         return;
       }
       if (message?.route === "daemon-hold") {
@@ -728,36 +793,40 @@ async function startBoardDaemonLocked(options) {
   // 如 GUI 侧开板超时回退内存模式）；首个客户端 join 时取消
   scheduleIdleExit();
 
-  const close = async () => {
-    if (closed) return;
+  const close = () => {
+    if (closePromise !== null) return closePromise;
     closed = true;
-    // 排空 in-flight RPC：关闭前最后一次落盘不截断
-    await queue.drain();
-    detachCollabSubscriptions();
-    cancelIdleExit();
-    if (relayRetryTimer !== null) {
-      clearTimeout(relayRetryTimer);
-      relayRetryTimer = null;
-    }
-    for (const ws of wss.clients) {
-      try {
-        // terminate 立即终止（close 是握手式，未完成握手的连接会让 wss.close 回调挂起）
-        ws.terminate();
-      } catch {
-        /* 忽略单个客户端关闭失败 */
+    closePromise = (async () => {
+      // 停止接收新任务后，再排空已接收的 RPC 与协作消息
+      await queue.drain();
+      detachCollabSubscriptions();
+      collabIngestor.close();
+      cancelIdleExit();
+      if (relayRetryTimer !== null) {
+        clearTimeout(relayRetryTimer);
+        relayRetryTimer = null;
       }
-    }
-    await new Promise((resolve) => wss.close(resolve));
-    amendForwarder?.close();
-    if (coordinator) {
-      await coordinator.close();
-    }
-    await session.flush();
-    await session.close();
-    // 排空镜像写再删除条目：飞行中的 writeEntry 会让条目复活
-    await refSyncTail;
-    await fs.rm(path.join(rootPath, DAEMON_FILE), { force: true });
-    await removeEntry(name);
+      for (const ws of wss.clients) {
+        try {
+          // terminate 立即终止（close 是握手式，未完成握手的连接会让 wss.close 回调挂起）
+          ws.terminate();
+        } catch {
+          /* 忽略单个客户端关闭失败 */
+        }
+      }
+      await new Promise((resolve) => wss.close(resolve));
+      amendForwarder?.close();
+      if (coordinator) {
+        await coordinator.close();
+      }
+      await session.flush();
+      await session.close();
+      // 排空镜像写再删除条目：飞行中的 writeEntry 会让条目复活
+      await refSyncTail;
+      await fs.rm(path.join(rootPath, DAEMON_FILE), { force: true });
+      await removeEntry(name);
+    })();
+    return closePromise;
   };
 
   return { name, rootPath, port, source, close };

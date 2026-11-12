@@ -17,11 +17,15 @@ yarn build:quick                # 仅构建（跳过依赖安装和图标）
 
 # 测试
 yarn test                       # 运行全部测试
-npx jest path/to/test.test.js   # 运行单个测试文件
-npx jest -t "pattern"           # 按名称过滤
+
+# 单文件 / 按名称过滤：yarn test 的 flag 内联在脚本里，npx 直接调用不继承，需自带 NODE_OPTIONS
+NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' \
+  npx jest path/to/test.test.js # 运行单个测试文件
+NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' \
+  npx jest -t "pattern"         # 按名称过滤
 
 # CI 检查
-yarn ci-check                   # 文档链接 + @module 路径一致性检查
+yarn ci-check                   # 文档链接 + @module 路径 + kernel 许可证头检查
 
 # 基准测试
 yarn bench                      # 全部基准
@@ -37,47 +41,20 @@ yarn cli <命令> [--daemon <名> | --path <板目录>]   # 读写板文件（�
 yarn cli daemon start --name <名> --path <板目录>   # 启动板 daemon（持板 + RPC）
 ```
 
-运行测试需要 `NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage'`（`package.json` 已配好）。
+IDE 侧由 `.vscode/settings.json` 的 `jest.nodeEnv` 注入 flag。
 
 ## 项目结构
 
-```
-src/
-├── kernel/                  # 内核包（零 canvas/DOM：文档 + 操作 + 持久化）
-│   ├── objects/             # 对象模型（BasicObject、Stroke、graph/）
-│   ├── range/               # 几何
-│   ├── chunk/               # 区块（空间分区）
-│   ├── board/               # Board 权威状态（BoardCore 静态图 / AOM / render-hooks 缝）
-│   ├── hit/                 # 操作日志与时间回溯树
-│   ├── store/               # 会话存储（per-source 日志流与 meta 分片、写权仲裁落盘、恢复）
-│   ├── api/                 # BoardApi 契约面
-│   ├── utils/               # 内核工具（id 池、图、数学）
-│   └── types/               # 类型定义
-├── renderers/
-│   └── canvas/              # canvas 渲染插件（viewport-renderer、绘制策略注册表）
-├── host/                    # 组合根 + 通道（core-worker、debug-helper、bridges/、sync/ 协作同步）
-├── io/                      # 安全文件操作（core 契约 / driver / adapter）
-├── cli/                     # 命令行第二前端（板 daemon 持板，读写经 BoardApi 契约）
-├── ui/                      # UI front（Board / Viewport / DevicesDAG / Tools / overlay）
-├── utils/                   # 应用级工具（log）
-├── docs/                    # 架构文档
-├── test-support/            # 测试 mock 支撑
-├── tests/                   # 跨包冒烟 / 集成测试
-└── demo/                    # 白板 HTML/CSS/JS 入口（桌面与 web 模式）
-src-tauri/                   # Rust 后端（Cargo workspace）
-benchmarks/                  # 性能基准
-scripts/                     # CI 检查与 demo 静态服务脚本
-└── ci/                      # 文档链接 / @module 路径检查
-```
+目录树见 [README.md 的项目结构](README.md#项目结构)。
 
 核心模块下有 `docs/{name}-document.md` 和 `tests/` 目录。
 
 ## 架构关键概念
 
-- **Tool** — 设备图末端消费型处理器，不转发信号。生命周期：`beginInteraction → handleSignal* → endInteraction → success`
-- **信号类型** — `position`（绝对坐标，驱动手势状态机）、`displacement`（相对位移，无状态增量）、`end`、`success`
+- **Tool** — 设备图末端消费型处理器，不转发信号。生命周期钩子：`beginAction → completeAction`（提交），取消路径 `discardAction`（丢弃），`endAction` 默认转 `completeAction`；详见 [tool-document](src/ui/devices-dag/tools/docs/tool-document.md#生命周期钩子系统)
+- **信号类型** — `position`（绝对坐标，驱动手势状态机）、`displacement`（相对位移，无状态增量）、`end`、`success`；完整清单见 `src/ui/devices-dag/dag-core/signal-types.js` 的 `SIGNAL_TYPES`
 - **输入路由** — 设备 → DAG → 工具处理器。顺序/互斥组合（handoff、tool-switcher）由 `tools/wrapper/` 下的 wrapper tool 承担（`HandoffWrapperTool` / `ToolSwitcherWrapper`），作为普通 Tool 单节点挂载
-- **对象模型** — `BasicObject` 基类，`Stroke`/`graph` 子类
+- **对象模型** — `BasicObject` 基类，`StrokeObject`（`src/kernel/objects/stroke/`）与 `GraphObject`（`src/kernel/objects/graph/`）子类
 - **AOM 三态术语** — 对象相对 AOM 动态图有三种状态：**活动对象**（被选中、正在操作，位于层的 `activeObjects`）、**非活动（层）对象**（被 pickup 一并纳入 AOM 的层成员，位于层的 `inactiveGraph`）、**不在 AOM 中的对象**（纯静态图，`aom.has(id) === false`）。“非活动对象”仍在 AOM 中，与“不在 AOM 中的对象”不是一回事。成员归属判定：`aom.isActive(id)` 仅活动对象，`aom.has(id)` 覆盖活动与非活动层成员
 - **命名选择（choice）** — 活动对象的命名分组：每个活动对象恰好属于一个本地 choice（未命名落匿名桶 `~`）。注册表（`queryChoices`）是权威状态，对象退出活动集时成员关系自动解除；跨端以 `"{source}/{choice}"` 区分同名 choice
 
@@ -89,7 +66,7 @@ scripts/                     # CI 检查与 demo 静态服务脚本
 /**
  * @file 简短描述，不加句号
  * @description 一句话职责说明，以句号结尾。
- * @module {kernel|canvas|host|ui|io|cli}/{path/to/module}
+ * @module {kernel|canvas|host|ui|io|cli|demo|utils|test-support}/{path/to/module}
  * @author {git config user.name}
  */
 ```
@@ -118,8 +95,39 @@ applyModifiedObjects(modificationContext, objects) { ... }
 applyModifiedObjects(modificationContext, objects) { ... }
 ```
 
-- 私有成员以 `_` 开头，标记 `@private`
+- 私有成员以 `_` 或 `#` 开头，标记 `@private`
 - 常量用 `UPPER_SNAKE_CASE`
+- **字段声明写在类体顶层**：所有实例字段先在类体开头声明并写 JSDoc，构造函数里只做赋值，不在构造函数内补注释
+
+```javascript
+// ✅ Good — 字段与注释都在顶层
+class ViewportRenderer {
+  /**
+   * 渲染调度器
+   * @type {RenderScheduler}
+   * @private
+   */
+  _scheduler;
+
+  constructor(options) {
+    this._scheduler = new RenderScheduler(options);
+  }
+}
+
+// ❌ Bad — 注释写在构造函数里，字段没有顶层声明
+class ViewportRenderer {
+  constructor(options) {
+    /**
+     * 渲染调度器
+     * @type {RenderScheduler}
+     */
+    this._scheduler = new RenderScheduler(options);
+  }
+}
+```
+
+- **不要在子类重声明父类已声明的字段**。类字段声明会在 `super()` 返回后把该字段重置为 `undefined`，会把父类构造函数设置的值冲掉
+- 字段是否属于本类：赋值出现在本类构造函数里、且父类没有该声明，才在本类顶层声明
 - **开发期路线编号（Kx/Px/Sx 等阶段代号）不进入代码库**：提交信息、代码注释、文档一律写机制语义本身，路线追踪留在私有计划文档
 - 详细规范见 `.agent/skills/comment-writer/SKILL.md`，文档规范见 `.agent/skills/doc-writer/SKILL.md`
 
@@ -127,13 +135,13 @@ applyModifiedObjects(modificationContext, objects) { ... }
 
 ### 结构
 
-测试文件与源码同级放在 `tests/` 目录。**工具端到端测试放在工具目录下，不要放在 `board-input-flow.test.js`。**
+测试文件与源码同级放在 `tests/` 目录。**工具端到端测试放在工具目录下的 `tests/`（即 `src/ui/devices-dag/tools/<tool>/tests/`），不要放在 `src/tests/board-input-flow.test.js`。**
 
 ### 关键坑点
 
-1. **`board.width` / `board.height` 必须设置** — 涉及位置→区块解析时，创建 `Viewport` 后必须设 `board.width` / `board.height`，否则 `chunkWidth=0` → `worldToChunk` 返回 null → 对象创建静默失败
+1. **`board.width` / `board.height` 是区块边长，不是板尺寸** — 默认 1024，创建时归一化，不会是 0；世界本身无限大。改它会改变持久化落盘的粒度，且创建后不可变
 2. **DAG dispatch 必须传 `{ board, viewport }` 上下文** — 直接 dispatch 时手动传入；通过 `board.signalsEventBus.emit("input", ...)` 则自动携带
-3. **modifier 双通道** — `position`（绝对坐标，手势状态机）和 `displacement`（相对位移，无状态增量）可同帧叠加。displacement 无准入检测，锚点自动同步
+3. **modifier 双通道** — 见「信号类型」的 `position`/`displacement`；两者可同帧叠加，displacement 无准入检测、锚点自动同步
 4. **断言要验证实际效果** — 验证位置/状态变化，不要只 `.not.toBeNull()`
 
 详见 `.agent/skills/hound-whiteboard-test-patterns/SKILL.md`。
@@ -153,6 +161,7 @@ applyModifiedObjects(modificationContext, objects) { ... }
 | `hound-whiteboard-test-patterns`      | 添加/迁移/审查测试           |
 | `hound-whiteboard-benchmark-patterns` | 添加/迁移/审查 benchmark     |
 | `hound-whiteboard-git-convention`     | 准备提交时加载，确保格式一致 |
+| `hound-whiteboard-git-merge`          | 编写或审查 PR 正文时加载     |
 
 ## Git 提交
 

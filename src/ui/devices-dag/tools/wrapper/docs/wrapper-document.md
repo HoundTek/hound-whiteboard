@@ -1,4 +1,4 @@
-# wrapper（复合设备 / 组合子）
+# wrapper（复合设备 / 组合子）文档
 
 ## 概述
 
@@ -41,13 +41,13 @@ shell 节点的 `dag` 为 `null`，因此 dispatch 上下文的 state 读写降�
 
 shell 节点不在真实 DAG 中，子图结构可观察性由镜像机制替代：
 
-- 子类必须把可观察状态（`phase` / `activeName` 等）通过 `context.patchState` 镜像到 wrapper 自己的节点 state，供 `dag.getNodeState` 观察
+- 子类必须把可观察状态通过 `context.patchState` 镜像到 wrapper 自己的节点 state，供 `dag.getNodeState` 观察：handoff 镜像 `activeChild`（取值为当前相位），switcher 镜像 `routeTarget`
 - 子类必须提供 `getDebugInfo()` 供调试
 
 ### 生命周期
 
 - `endAction(context)` / `cancelAction(context)`：由子类传播到当前活跃槽位的子工具
-- `umount(context)`：取消活跃动作并 dispose 全部槽位（`_teardownSlot`：依次 `processor.dispose` + `tool.umount`（槽位上下文））
+- `umount(context)`：取消活跃动作并 dispose 全部槽位
 - `reset()`：重置组合状态（相位 / 路由目标），**不销毁槽位**
 
 ## HandoffWrapperTool
@@ -78,7 +78,7 @@ scope.mountWorkflow("secondary-chooser", handoff);
 
 一次「选择 → 修改 → 提交」会话共用一个 supraId（`#sessionKey`）：
 
-- first 相位信号到达即 `beginSupra(sessionKey)` 开启会话超分子；
+- first 相位信号到达即经 `services.boardApi.beginSupra`（可选方法，宿主未提供时静默跳过）开启会话超分子；
   key 取模块级单调序号（`handoff/{seq}`），跨 wrapper 实例唯一
 - second 完成、second 相位 cancel（Esc = discard 型 unchoose 闭合）、
   `endAction` / `cancelAction` / `umount` 均 `endSupra` 闭合：
@@ -125,7 +125,7 @@ scope.mountWorkflow("tool-switcher", switcher);
 - 其他信号：转发到当前活跃槽位
 - 路由目标镜像键：`routeTarget`
 
-wrapper 是信号驱动的，信号载荷即权威——它不读共享状态。当前激活工具的会话状态已收编到共享状态 store（button-group 设备写入 `activeTool` 键，供 DOM 工具栏等图外消费者订阅），与 `routeTarget` 各司其职：store 管跨信道一致，`routeTarget` 管图内路由。
+wrapper 只信信号载荷，不从 store 读路由。`activeTool` 由 button-group 设备写入共享状态 store，供 DOM 工具栏等图外消费者订阅，`routeTarget` 只管图内路由。
 
 ### 懒实例化
 
@@ -146,7 +146,7 @@ wrapper 是信号驱动的，信号载荷即权威——它不读共享状态。
 | 建槽方法 | `_addSlot(scopeId, tool)`                 | `_addNodeSlot(scopeId, node)`                  |
 | 槽位内容 | Tool 实例 + 基座创建的 shell 节点         | 外部工厂预构建的子图入口节点（`tool=null`）    |
 | 生命周期 | 与 wrapper 一致（构造/首次激活时建槽）    | 随触点动态创建销毁（per-touch）                |
-| 清理方式 | 默认 `_teardownSlot`：依次 `processor.dispose` + `tool.umount` | 覆写 `_teardownSlot`：沿 outEdges 递归 dispose |
+| 清理方式 | 默认 `_teardownSlot`（见下） | 覆写 `_teardownSlot`：沿 outEdges 递归 dispose |
 
 基座为此提供两个扩展点：
 
@@ -173,3 +173,4 @@ wrapper 是信号驱动的，信号载荷即权威——它不读共享状态。
 - [对象修改工具](../../modifier/docs/object-modifier-document.md)
 - [修饰节点](../../../prefixes/docs/prefix-document.md)
 - [shared-state-store](../../../../../kernel/utils/docs/shared-state-store-document.md)
+- [操作文档 · 超分子操作](../../../../../kernel/hit/docs/operation-document.md#超分子操作)

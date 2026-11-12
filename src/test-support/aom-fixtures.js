@@ -147,8 +147,8 @@ function createBoardCoreAomFixture(options = {}) {
       throw new Error("Cannot resolve chunk for object position.");
     }
 
-    ensureLoadedChunk(ownerChunkId);
-    boardCore.addObject(obj);
+    // 静态落座走区块原语：层位边由 AOM 提交或同步效果应用负责，这里只做占位
+    ensureLoadedChunk(ownerChunkId).addObject(obj);
 
     const coveredChunkIds = new Set(
       seedOptions.coveredChunkIds ??
@@ -157,6 +157,7 @@ function createBoardCoreAomFixture(options = {}) {
     );
     coveredChunkIds.add(ownerChunkId);
     boardCore.setObjectCoverChunks(obj.id, coveredChunkIds);
+    boardCore.registerObjectInstance(obj, { coveredChunkIds });
 
     for (const chunkId of coveredChunkIds) {
       const chunk = ensureLoadedChunk(chunkId);

@@ -33,7 +33,7 @@ graph TB
 
   CP["console-printer.js<br/>控制台输出器"]
 
-  EB["core/utils/event-bus.js<br/>EventBus（基类）"]
+  EB["kernel/utils/event-bus.js<br/>EventBus（基类）"]
 
   LG --> L
   LG --> AS
@@ -102,7 +102,7 @@ emit(level, entry) {
 }
 ```
 
-这使得一个消费者可以选择"只收 ERROR"（`on("ERROR", handler)`），也可以选择"收全部"（`onAny(handler)`），二者互不干扰。一个 entry 发射时两种订阅者都会收到。
+这使得一个消费者可以选择"只收 ERROR"（`on("ERROR", handler)`），也可以选择"收全部"（`onAny(handler)`），二者互不干扰。
 
 ### 自适应采样
 
@@ -110,15 +110,15 @@ emit(level, entry) {
 
 核心逻辑：
 
-- 追踪上次放行的时间戳 `lastTime`。
+- 追踪上次放行的时间戳 `#lastTime`。
 - 距上次不足 `minGapMs`（默认 10ms）时视为"密集突发"。
-- 密集期间按 **衰减采样率** 决定是否放行：`rate = max(minRate, 1 / (skipCount + 1))`。
+- 密集期间按 **衰减采样率** 决定是否放行：`rate = max(minRate, 1 / (#skipCount + 1))`。
 - 每次跳过使采样率按 `1/n` 衰减，迅速压低到 `minRate`。
-- 间隔恢复后 `skipCount` 归零，回到满采样。
+- 间隔恢复后 `#skipCount` 归零，回到满采样。
 
-效果：60fps 渲染循环中 debug 日志 100 条/帧 → 实际放行约 3-5 条/秒。
+效果：60fps 渲染循环中 debug 日志 100 条/帧时，放行率随跳过计数衰减到 `minRate` 下限（默认 0.05，即 5%），高频调用继续压低不了放行率。
 
-首次调用和 reset 后使用 `lastTime === null` 作为初始状态标记，避免 `Date.now()` 为 0 时与真实时间戳冲突。
+首次调用和 reset 后使用 `#lastTime === null` 作为初始状态标记，避免 `Date.now()` 为 0 时与真实时间戳冲突。
 
 ### 源头节流
 

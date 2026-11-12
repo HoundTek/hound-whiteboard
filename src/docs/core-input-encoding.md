@@ -15,7 +15,7 @@
 - 决定设备图内部路由
 - 直接修改 `BoardCore` 状态
 
-这些职责分别属于：
+这些职责属于以下模块：
 
 - 宿主归属判断
 - Device / DevicesDAG
@@ -45,6 +45,7 @@
 - `signals` 必须是数组
 - 每个信号至少包含 `type`
 - 信号载荷统一放在 `context`
+- 下文示例中的 `viewport`、`viewport-id` 均为占位 viewportId，实际值由宿主填写
 
 ## Viewport 归属
 
@@ -95,6 +96,27 @@ canvasY = clientY - canvas.getBoundingClientRect().top
 宿主层在编码鼠标信号时应完成 canvas 偏移扣除。世界坐标转换由鼠标设备根节点自动完成，不在编码层处理。
 
 `displacement`（相对位移）信号不经宿主编码，由 prefix 在图内合成（如 WASD 方向键 prefix 把 `trigger` 规整为携带方向向量的 `displacement`，见 `src/demo/config/prefix-builders.js:129-145`）。
+
+最小示例：
+
+```javascript
+{
+  to: "/viewport/mouse",
+  signals: [
+    {
+      type: "position",
+      context: {
+        value: { x: 120, y: 240 },
+        button: -1,
+        buttons: 0,
+        domEvent: "pointermove",
+      },
+    },
+  ],
+}
+```
+
+鼠标设备根节点挂在 `/<viewportId>/mouse` 段下（见 [鼠标设备](../ui/devices-dag/devices/docs/mouse-device-document.md)）。宿主直接发到该路径即可，内部的 `pointer` / `primary` / `secondary` / `auxiliary` / `wheel` 通道路径由设备根节点按按钮状态分流，编码层不必写出。
 
 ## 键盘输入约定
 
@@ -212,11 +234,7 @@ canvasY = clientY - canvas.getBoundingClientRect().top
 
 是否把一次宿主事件编码成一个信号还是多个信号，应按“同一时刻需要被一起处理的信息”决定。
 
-例如：
-
-- 一个 `mouseup` 可以编码成同包内的 `position + end`
-- 一个 PointerEvent 可以同时编码出 `position + pressure`
-- 一次 TouchEvent 可以编码成多条 `position` / `end` / `cancel`
+例如一次 TouchEvent 可以编码成多条 `position` / `end` / `cancel`。
 
 ## 当前不冻结的部分
 

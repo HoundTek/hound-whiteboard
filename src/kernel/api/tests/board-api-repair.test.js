@@ -113,6 +113,50 @@ describe("日志重放自愈（效果层分歧修复）", () => {
     A.api.endMol(molId);
   });
 
+  test("无 open mol 的未提交本地修改与 choice 不被修复回滚", async () => {
+    const A = createEnd("a");
+    await createStaticStroke(A.api, "a/1");
+    await A.api.addActiveObjects(["a/1"], { choice: "hold" });
+    A.api.modifyObject("a/1", { position: { x: 99, y: 88 } });
+    const before = A.api.queryStateHash();
+
+    expect(A.api.repairStateFromLog()).toEqual({ repaired: false, fixedIds: [] });
+    expect(A.api.repairChainFromLog()).toEqual({ repaired: false, fixedIds: [] });
+    expect(A.api.queryStateHash()).toBe(before);
+    expect(A.api.queryObject("a/1").position).toEqual({ x: 99, y: 88 });
+    expect(A.boardCore.activeObjectManager.isActive("a/1")).toBe(true);
+    expect(A.api.queryChoices()).toEqual([{ name: "hold", ids: ["a/1"] }]);
+  });
+
+  test("嵌套列表修改不改写选择前快照，修复保护后可正确提交", async () => {
+    const A = createEnd("a");
+    await createStaticStroke(A.api, "a/1");
+    await A.api.addActiveObjects(["a/1"], { choice: "hold" });
+    A.api.appendListItem("a/1", "points", [{ x: 20, y: 0 }]);
+
+    expect(A.api.repairStateFromLog().repaired).toBe(false);
+    expect(A.api.queryObject("a/1").data.points).toHaveLength(3);
+    await A.api.commitObjects(["a/1"]);
+    const modify = A.boardCore.operationLog.toJSON().find(
+      (record) => record.type === "modify-object",
+    );
+    expect(modify.payload.before.data.points).toHaveLength(2);
+    expect(modify.payload.after.data.points).toHaveLength(3);
+  });
+
+  test("无修改的命名选择不妨碍其它对象修复且保留持有", async () => {
+    const A = createEnd("a");
+    await createStaticStroke(A.api, "a/1");
+    await createStaticStroke(A.api, "a/2", 300);
+    await A.api.addActiveObjects(["a/1"], { choice: "hold" });
+    A.boardCore.getObjectById("a/2").position.x = 999;
+
+    const result = A.api.repairStateFromLog();
+    expect(result.fixedIds).toEqual(["a/2"]);
+    expect(A.api.queryObject("a/2").position).toEqual({ x: 100, y: 300 });
+    expect(A.api.queryChoices()).toEqual([{ name: "hold", ids: ["a/1"] }]);
+  });
+
   test("部分驻留：修复不把覆盖区块未载的对象补回内存（保住 chunkUnload）", async () => {
     const A = createEnd("a");
     await createStaticStroke(A.api, "a/1");

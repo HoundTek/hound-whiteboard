@@ -15,7 +15,8 @@
 | `cli/`          | 命令行第二前端          | 写命令经持板 daemon 的 WebSocket RPC 执行，读命令可直读板文件         |
 | `ui/`           | UI 线程运行时           | Board、Viewport、DevicesDAG、UiRenderer                               |
 | `demo/`         | 白板 HTML/CSS/JS 入口   | 桌面与 web 两种模式的演示宿主（输入绑定、工具装配、workflow 挂载）    |
-| `benchmarks/`   | 性能基准                | I/O 桥接、队列、Worker 渲染与 RPC 等基准（`yarn bench`）              |
+| `utils/`        | 跨模块共享工具          | device-identity、log、safe-io、short-id                               |
+| `benchmarks/`   | 性能基准                | I/O、队列、Worker RPC/渲染，以及按帧预算判定的交互帧基准（`yarn bench`） |
 | `test-support/` | 测试支撑                | canvas mock、worker-mode fixture、AOM fixture                         |
 | `tests/`        | 跨模块冒烟测试          | Board 输入流、Worker smoke、共享模块 smoke                            |
 | `docs/`         | 架构总览文档            | 当前这组顶层说明文档                                                  |
@@ -34,11 +35,11 @@ flowchart BT
     renderers --> kernel
     host --> renderers
     ui --> host
-    io -. 注入 PersistenceAdapter .-> host
+    host -. 借用 io 的 PersistenceAdapter .-> io
     cli -. 经 BoardApi 契约 .-> host
 ```
 
-依赖方向自下而上：`kernel/` 零 canvas/DOM，被各层复用；`renderers/` 与 `host/` 依次构建其上；`ui/` 经 `host/bridges/` 的 RPC 触达 Worker 权威。`io/` 与 `cli/` 不参与分层主干，作为旁挂包在 host 组合根处接线（io 注入持久化缝，cli 复用 BoardApi 契约面）。
+依赖方向自下而上：`kernel/` 被各层复用；`renderers/` 与 `host/` 依次构建其上；`ui/` 经 `host/bridges/` 的 RPC 触达 Worker 权威。`io/` 与 `cli/` 不参与分层主干，作为旁挂包在 host 组合根处接线（io 注入持久化缝，cli 复用 BoardApi 契约面）。
 
 ## `ui/`
 
@@ -123,11 +124,17 @@ flowchart BT
 - `board-api-rpc.js`：UI 侧 RPC 客户端（`rpc` / `rpc-batch` / `rpc-response`）
 - `io-invoke-forwarder.js`：worker 内驱动的文件操作转发到主线程 Tauri invoke
 
+### `host/debug-helper.js`
+
+- Worker 侧调试辅助：处理 UI 侧的 `debug-request` 消息，把 Worker 内部状态（图结构、运行时快照）输出到控制台
+
 ### `host/sync/`
 
 - `network-coordinator.js`：BoardApi 的同步宿主薄包装——本地操作经中继广播，远程记录经延迟容忍窗接入 `applyRemoteOperations`；周期 digest（`{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`）比对、openMols 对账，chainHash 分歧请求全量重建，stateHash 分歧（仅两端全量驻留时可比）经 `repairStateFromLog` 自愈
 - `relay-server.js`：按板房间组织的 WebSocket 无状态中继（成员管理、消息转发、INIT 定向），不缓存任何记录
 - `amend-forwarder.js`：订阅内核分子生命周期 amend 事件，begin/end/abort 即时转发，中间帧节流合批后经协调器 volatile 通道广播
+- `remote-record-ingestor.js`：为各同步通道提供共享的记录去重、依赖预检、乱序缓冲与权威日志水位驱动接入
+- `remote-activity-channels.js`：按 BoardCore 与连接通道跟踪远程活动来源，最后一个通道离开时清理对应来源的活动锁
 - `start-relay.js`：中继启动入口（`node src/host/sync/start-relay.js [端口]`）
 
 ## `io/`
@@ -156,19 +163,6 @@ flowchart BT
 - `chunk.js`：区块实体
 - `chunk-loader.js`：区块加载器与加载事件
 - `chunk-object-manager.js`：静态图与覆盖区块索引管理
-
-### `renderers/canvas/`
-
-- `viewport-core.js`：Worker 侧视口状态、区块缓冲、渲染帧输出
-- `renderer.js`：`BaseRenderer` 基类
-- `object-draw-strategies.js`：对象类型到 Canvas2D 绘制策略的注册表
-- `canvas-lifecycle.js`：Canvas 生命周期管理
-- `render-scheduler.js`：渲染调度器
-- `dirty-rect-strategy-shared.js`：脏区策略
-- `viewport-renderer.js`：Worker 侧视口渲染器
-- `aom-collect-utils.js`：AOM 渲染收集辅助
-
-`ViewportRenderer` 建立在 `renderers/canvas/` 的 `BaseRenderer` 基类之上，在单类内管理静态缓存与输出合成。
 
 ### `kernel/hit/`
 
@@ -202,6 +196,8 @@ flowchart BT
 - `range.js`、`rectangle.js`、`ellipse.js`、`polygon.js`、`path.js`、`rope.js`
 - `bounds.js`、`geometry.js`、`intersections.js`、`conversion.js`、`segment-math.js`
 
+详见 [../kernel/range/docs/range-document.md](../kernel/range/docs/range-document.md)。
+
 ### `kernel/types/`
 
 - `types.js`（含 `ViewportLike` 等共享 typedef）
@@ -215,3 +211,16 @@ flowchart BT
 - `event-bus.js`、`queue.js`
 - `counter-pool.js`、`incremental-id-pool.js`（来源命名空间字符串 id 分配）、`random.js`
 - `hash.js`（FNV-1a 字符串哈希，状态摘要比对用）、`shared-state-store.js`（跨信道共享状态存储）
+
+## `renderers/`
+
+- `viewport-core.js`：Worker 侧视口状态、区块缓冲、渲染帧输出
+- `renderer.js`：`Renderer` 基类（继承 `CanvasHost`）
+- `object-draw-strategies.js`：对象类型到 Canvas2D 绘制策略的注册表
+- `canvas-lifecycle.js`：Canvas 生命周期管理
+- `render-scheduler.js`：渲染调度器
+- `dirty-rect-strategy-shared.js`：脏区策略
+- `viewport-renderer.js`：Worker 侧视口渲染器
+- `aom-collect-utils.js`：AOM 渲染收集辅助
+
+`ViewportRenderer` 建立在 `renderers/canvas/` 的 `Renderer` 基类之上，在单类内管理静态缓存与输出合成。

@@ -1,7 +1,5 @@
 # UI 覆盖层渲染器文档
 
-本文档提供 `UiRenderer` 的概述。
-
 ## 概述
 
 `UiRenderer` 运行在 UI 线程，负责把 overlay 绘制到 `uiCanvas`。
@@ -19,7 +17,7 @@
 - **UI only**：`UiRenderer` 直接操作 `Viewport.uiCanvas`
 - **不进入 Worker**：Worker 侧没有 `UiRenderer`
 - **不持有 AOM**：`ActiveObjectManager` 是 Worker 侧模块，`UiRenderer` 不引用 AOM。overlay 所需的对象信息通过工具节点 state 或 provider 回调传入
-- **输入来源**：工具节点 state、summary-like 条目、provider 回调
+- **输入来源**：工具节点 state、summary-like 条目、provider 回调。creator、chooser、modifier 都可能推动 ui 层刷新，但 `UiRenderer` 仅消费 provider 产出的条目，不关心数据来源
 
 ## 类层次
 
@@ -56,7 +54,7 @@ provider 签名：`(context: { viewport: Viewport, renderer: UiRenderer }) => an
 
 ### 条目规整
 
-条目归一化由 `ui-overlay-factory.js` 中的纯函数 `normalizeOverlayEntry` 处理。输入的条目必须含 `geometry` 字段，无 geometry 的条目被 normalize 丢弃。
+条目归一化由 `ui-overlay-factory.js` 中的纯函数 `normalizeOverlayEntry` 处理。无 geometry，或无法注入 `draw`（未知 `type`、`path` 少于两点等）的条目被静默丢弃。
 
 归一化处理：
 
@@ -64,11 +62,9 @@ provider 签名：`(context: { viewport: Viewport, renderer: UiRenderer }) => an
 2. 清理已转换的 world 字段
 3. 为未提供 `draw` 的条目注入对应类型的默认绘制函数
 
-`createCompatSelectionEntriesForSummaries` 负责从 Worker RPC 返回的 summary 构建 entry，外部无需手动转换。
-
 ### 选择框条目生成
 
-选择框条目的生成由 `ui-overlay-factory.js` 中的 `createCompatSelectionEntriesForSummaries` 纯函数负责，不再挂在 `UiRenderer` 实例上。
+选择框条目由 `ui-overlay-factory.js` 中的纯函数 `createCompatSelectionEntriesForSummaries` 生成：直接接收 Worker RPC 返回的 summary，外部无需手动转换。该函数不挂在 `UiRenderer` 实例上。
 
 ## 当前默认 overlay 来源
 
@@ -141,7 +137,7 @@ createCompatSelectionEntriesForSummaries(objects, "modifier", viewport);
 | `point` | `screenPoint` / `worldPoint` + `radius`          |
 | `path`  | `screenPoints[]` / `worldPoints[]` + `closePath` |
 
-world 字段在归一化阶段由 `normalizeOverlayEntry` 转为 screen 字段后清空。
+world 字段转换与清理见「条目规整」。
 
 ### style
 
@@ -158,27 +154,18 @@ world 字段在归一化阶段由 `normalizeOverlayEntry` 转为 screen 字段�
 - `requestViewportUiRender()` 通过 `UiRenderer.invalidateViewport()` 请求刷新
 - `resizeRenderLayers()` 时会同步调整 `uiCanvas` 尺寸
 
-## 与 tools 的关系
-
-`UiRenderer` 不持有 AOM（AOM 为纯 Worker 侧模块）。overlay 所需的对象信息通过以下渠道传入：
-
-- tool 当前写入的 node state（通过 `deviceContext` 读取）
-- tool 注册的 overlay provider
-
-creator、chooser、modifier 都可能推动 ui 层刷新，但 `UiRenderer` 仅消费 provider 产出的条目，不关心数据来源。
-
 ## 实例方法一览
 
-| 方法                                  | 职责                                 |
-| ------------------------------------- | ------------------------------------ |
-| `constructor(viewport, options)`      | 初始化 CanvasHost，创建调度器        |
-| `registerOverlayProvider(provider)`   | 注册自定义 overlay provider          |
-| `unregisterOverlayProvider(provider)` | 注销 provider                        |
-| `collectProviderOverlayEntries()`     | 收集并归一化所有 provider 条目       |
-| `drawRectEntry(context, entry)`       | 绘制矩形条目                         |
-| `drawPointEntry(context, entry)`      | 绘制点（填充圆点）条目               |
-| `drawPathEntry(context, entry)`       | 绘制路径（折线/闭合路径）条目        |
-| `flush(dirtyRects)`                   | 执行 UI 覆盖层刷新                   |
+| 方法                                  | 职责                           |
+| ------------------------------------- | ------------------------------ |
+| `constructor(viewport, options)`      | 初始化 CanvasHost，创建调度器  |
+| `registerOverlayProvider(provider)`   | 注册自定义 overlay provider    |
+| `unregisterOverlayProvider(provider)` | 注销 provider                  |
+| `collectProviderOverlayEntries()`     | 收集并归一化所有 provider 条目 |
+| `drawRectEntry(context, entry)`       | 绘制矩形条目                   |
+| `drawPointEntry(context, entry)`      | 绘制点（填充圆点）条目         |
+| `drawPathEntry(context, entry)`       | 绘制路径（折线/闭合路径）条目  |
+| `flush(dirtyRects)`                   | 执行 UI 覆盖层刷新             |
 
 ## 相关文档
 

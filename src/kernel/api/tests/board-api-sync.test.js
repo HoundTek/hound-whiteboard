@@ -193,7 +193,7 @@ describe("情景五：撤销与迟到的改挂范围内节点", () => {
     o1: undo("a", 3, 5, "a/op-2", "b/op-2"),
   });
 
-  test("A 端：O1 先应用，X 迟到落入改挂范围（触发重建，X 同时进入原位置与撤消分支）", () => {
+  test("A 端：O1 先应用，X 迟到落入改挂范围（触发重建，X 同时进入原位置与撤销分支）", () => {
     const r = records();
     const endA = createEnd("a");
     const endB = createEnd("b");
@@ -543,5 +543,96 @@ describe("远端修改的区块归属同步", () => {
     expect([...(B.boardCore.getObjectCoverChunks("a/1") ?? [])]).toEqual([
       fromChunk,
     ]);
+  });
+});
+
+describe("远端记录写入边界", () => {
+  test("已有记录幂等，同 ID 不同内容显式拒绝", () => {
+    const A = createEnd("a");
+    const record = add("a", 1, 100);
+    expect(A.api.applyRemoteOperations([record])).toEqual({ applied: 1 });
+    const before = A.boardCore.getObjectById("a1").serialize();
+
+    expect(A.api.applyRemoteOperations([record])).toEqual({ applied: 0 });
+    expect(A.boardCore.operationLog.size).toBe(1);
+    expect(A.boardCore.getObjectById("a1").serialize()).toEqual(before);
+
+    const conflict = JSON.parse(JSON.stringify(record));
+    conflict.payload.data.position.x = 999;
+    expect(() => A.api.applyRemoteOperations([conflict])).toThrow("内容冲突");
+    expect(A.boardCore.getObjectById("a1").serialize()).toEqual(before);
+  });
+
+  test("整批预校验失败时不写入前缀记录", () => {
+    const A = createEnd("a");
+    const first = add("a", 1, 100);
+    const invalid = add("a", 2, 200, "a/op-1");
+    delete invalid.payload.data;
+
+    expect(() => A.api.applyRemoteOperations([first, invalid])).toThrow("data");
+    expect(A.boardCore.operationLog.size).toBe(0);
+    expect(A.boardCore.getObjectById("a1") == null).toBe(true);
+
+    expect(A.api.applyRemoteOperations([first])).toEqual({ applied: 1 });
+    expect(A.boardCore.getObjectById("a1")).toBeDefined();
+  });
+
+  test("旧形态超分子迟到成员并入既有节点并补齐对象效果", () => {
+    const A = createEnd("a");
+    const first = add("a", 1, 100);
+    const second = add("a", 2, 200, "a/op-1");
+    first.supraOpId = "a/op-1";
+    second.supraOpId = "a/op-1";
+
+    A.api.applyRemoteOperations([first]);
+    A.api.applyRemoteOperations([second]);
+    expect(A.boardCore.undoTree.head.memberIds).toEqual(["a/op-1", "a/op-2"]);
+    expect(A.boardCore.getObjectById("a1")).toBeDefined();
+    expect(A.boardCore.getObjectById("a2")).toBeDefined();
+  });
+
+  test("undo 目标迟到造成的派生链分歧可从相同日志重建", () => {
+    const a1 = add("a", 1, 10000);
+    const c1 = add("c", 1, 20000);
+    const b1 = add("b", 1, 100);
+    const b2 = undo("b", 2, 200, "a/op-1", "c/op-1");
+    b2.parentId = "c/op-1";
+    const canonical = createEnd("canonical");
+    const divergent = createEnd("divergent");
+    canonical.api.applyRemoteOperations([b1, a1, c1, b2]);
+    divergent.api.applyRemoteOperations([b1, c1, b2]);
+    divergent.api.applyRemoteOperations([a1]);
+
+    expect(divergent.boardCore.operationLog.toJSON().map((r) => r.id).sort()).toEqual(
+      canonical.boardCore.operationLog.toJSON().map((r) => r.id).sort(),
+    );
+    expect(divergent.api.queryChainHash()).not.toBe(canonical.api.queryChainHash());
+    expect(divergent.api.repairChainFromLog().repaired).toBe(true);
+    expect(divergent.api.queryChainHash()).toBe(canonical.api.queryChainHash());
+    expect(divergent.api.queryStateHash()).toBe(canonical.api.queryStateHash());
+    expect(divergent.boardCore.getObjectById("a1") == null).toBe(true);
+  });
+
+  test("同源较新远端记录推进后续本地提交时间水位", async () => {
+    const boardCore = new BoardCore({
+      width: 800,
+      height: 600,
+      source: "a",
+      now: () => 150,
+      aomRenderHooks: createDefaultAomRenderHooks(),
+      persistenceAdapter: createDefaultPersistenceAdapter(),
+    });
+    const api = new BoardApi(boardCore);
+    api.applyRemoteOperations([add("a", 1, 200)]);
+    api.createObject("StrokeObject", {
+      id: "a/local",
+      position: { x: 0, y: 0 },
+      property: { width: 2 },
+      data: { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
+    });
+    await api.commitObjects(["a/local"]);
+
+    expect(boardCore.operationLog.get("a/op-2").time).toBe(200);
+    expect(boardCore.getObjectById("a/local")).toBeDefined();
   });
 });

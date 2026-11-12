@@ -54,14 +54,16 @@
     "bench:io:direct": "node benchmarks/io-direct.bench.js",
     "bench:io:granularity": "node benchmarks/io-file-granularity.bench.js",
     "bench:worker": "node benchmarks/worker-rpc.bench.js",
-    "bench:render": "node benchmarks/worker-render.bench.js",
+    "bench:frame": "node benchmarks/interaction-frame.bench.js",
     "bench:chunk": "node benchmarks/chunk-rebuild.bench.js",
     "check:docs": "node scripts/ci/check-doc-links.mjs",
     "check:modules": "node scripts/ci/check-module-paths.mjs",
     "check:license": "node scripts/ci/check-kernel-license.mjs",
     "check:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "ci-check": "yarn check:docs && yarn check:modules && yarn check:license",
-    "prepare": "husky"
+    "prepare": "husky",
+    "probe:web": "HWB_DEMO_ROOT=. HWB_DEMO_ENTRY=/dev/web-probe/index.html node scripts/serve-demo.mjs 8010",
+    "probe:parity": "node dev/probes/parity.node.mjs"
   },
   "author": "Frank Steven",
   "contributors": [
@@ -73,11 +75,12 @@
   "license": "GPL-3.0-only",
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
-    "adm-zip": "0.5.17",
+    "adm-zip": "0.6.1",
     "hidefile": "3",
     "ws": "^8.21.2"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.1.0",
     "@tauri-apps/cli": "^2.11.2",
     "benchmark": "2.1.4",
     "hound-tauri-build": "^0.4.2",

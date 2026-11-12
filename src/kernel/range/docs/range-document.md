@@ -1,8 +1,8 @@
-# range 模块设计
+# range 模块文档
 
 本文档概述 `src/kernel/range/` 下范围类型的职责、关系和相交算法。
 
-## 术语约定
+## 术语定义
 
 - **点列**：范围按顺序展开后的二维点序列，`toPoints()` 的统一输出形式。
 - **边界线段**：由点列中相邻两点构成的线段；若范围闭合，还包括末点到首点的闭合线段。
@@ -10,7 +10,7 @@
 - **矩形参数**：`RectangleRange` 由 `left`、`top`、`width`、`height` 四个量确定。
 - **面积范围**：具有内部区域的范围类型，当前包括 `RectangleRange`、`PolygonRange`、`RopeRange`、`EllipseRange`。
 - **路径范围**：只由边界线段构成、不携带内部区域的范围类型，当前对应 `PathRange`。
-- **绳钉值**：`ropeNailIntersect()` 返回的有符号计数值。`PolygonRange` 使用其绝对值奇偶判定内部，`RopeRange` 使用其非零性判定内部。
+- **绳钉值**：`ropeNailIntersect()` 返回的有符号计数值。
 
 ## 模块清单
 
@@ -71,13 +71,13 @@
 | `Ellipse`    | O(1)        | O(P)      | O(R)     | O(1)      | O(S)           |
 | `Path`       | O(S)        | O(S+P)    | O(S+R)   | O(S)      | O(N log N + k) |
 
-符号：P = 多边形顶点数，R = 绳圈控制点数，S = 路径采样点数，N = S₁ + S₂，k << S₁·S₂
+符号：P = 多边形顶点数，R = 绳圈控制点数，S = 路径采样点数，L = 一侧边界线段数（左侧 L₁、右侧 L₂），N = S₁ + S₂，k << S₁·S₂
 
 ### Sweep and Prune
 
-`intersections.anySegmentIntersection` 使用 Sweep and Prune 替代朴素双循环：
+`segment-math.anySegmentIntersection` 使用 Sweep and Prune 替代朴素双循环：
 
-- 朴素: O(L·R) — 所有左右线段两两配对
+- 朴素: O(L₁·L₂) — 所有左右线段两两配对
 - S&P: O(N log N + k) — 按 minX 排序，只测 x 投影重叠的异源对
 
 当任一侧线段数不超过 8 时回退朴素路径（常数开销更低）。
@@ -102,4 +102,9 @@
 
 **`intersectsRangesByType` 集中管理特化。** 15 组无序组合的显式分派集中在 `intersections.js`，不通过 `index.js` 暴露。包围盒快速排除的共享实现放在 `bounds.js`。
 
-**单顶点探针。** `intersectsClosedRanges` 和 `intersectsPathWithArea` 中的点包含检测仅需测一个顶点：对于闭合形状，若完全在另一个形状内部，则所有顶点均在内部；对于路径，若全在面积内则所有顶点均在内部，若部分在内则必有边界穿越（由 `anySegmentIntersection` 覆盖）。因此将 O(L·R) 的 `anyPointContained` 替换为 O(R) 的单顶点 `containsPoint` 调用。
+**单顶点探针。** `intersectsClosedRanges` 和 `intersectsPathWithArea` 中的点包含检测仅需测一个顶点：对于闭合形状，要么全在另一个形状内部（测一个顶点即可命中），要么有边界穿越（由 `anySegmentIntersection` 覆盖）；对于路径，若全在面积内则所有顶点均在内部，若部分在内则必有边界穿越（由 `anySegmentIntersection` 覆盖）。因此将逐顶点枚举的 `anyPointContained` 替换为 O(顶点数) 的单次 `containsPoint` 调用。
+
+## 相关文档
+
+- [核心模块](../../../docs/core-modules.md)
+- [基础对象类](../../objects/docs/basic-classes-document.md)

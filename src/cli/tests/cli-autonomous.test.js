@@ -46,7 +46,7 @@ describe("CLI 自治写（布局 v2 离线语义）", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
 
       // 自治写：对象 id 带 cli-* 持久身份前缀
       const { stdout: id1 } = await runCli([
@@ -100,7 +100,7 @@ describe("CLI 自治写（布局 v2 离线语义）", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("auto-fast", dir, { source: "dsrc" });
 
       // --path 写命令探测到活 daemon：操作作者为 daemon 身份（经 RPC 串行分配）

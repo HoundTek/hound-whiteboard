@@ -253,6 +253,48 @@ describe("网络协调器", () => {
     }
   });
 
+  test("双协调器共享日志时交替推进同一来源，重复 INIT 后无待接入残留", async () => {
+    server = createRelayServer({ port: 0 });
+    await server.ready;
+    const remote = createEnd("x");
+    await createStroke(remote.api, "x/1");
+    const op1 = remote.boardCore.operationLog.get("x/op-1");
+    await createStroke(remote.api, "x/2", 100);
+    const op2 = remote.boardCore.operationLog.get("x/op-2");
+
+    const shared = createEnd("shared");
+    const first = createNetworkCoordinator({
+      boardCore: shared.boardCore,
+      boardApi: shared.api,
+      url: `ws://127.0.0.1:${server.port}`,
+      boardId: "room-1",
+    });
+    const second = createNetworkCoordinator({
+      boardCore: shared.boardCore,
+      boardApi: shared.api,
+      url: `ws://127.0.0.1:${server.port}`,
+      boardId: "room-2",
+    });
+    await first.connect();
+    await second.connect();
+    ends.push({ coordinator: first }, { coordinator: second });
+    const raw1 = await connectRawClient(server.port, "room-1", "x");
+    const raw2 = await connectRawClient(server.port, "room-2", "x");
+
+    raw1.send({ type: "records", records: [op1] });
+    await until(() => shared.boardCore.operationLog.has("x/op-1"), "通道一接入 op-1");
+    raw2.send({ type: "records", records: [op1, op2] });
+    await until(() => shared.boardCore.operationLog.has("x/op-2"), "通道二接入 op-2");
+    raw2.send({ type: "records", records: [op1, op2] });
+
+    expect(logIds(shared.boardCore)).toEqual(["x/op-1", "x/op-2"]);
+    expect(second.pendingCount).toBe(0);
+    expect(shared.boardCore.getObjectById("x/1")).toBeDefined();
+    expect(shared.boardCore.getObjectById("x/2")).toBeDefined();
+    await raw1.close();
+    await raw2.close();
+  });
+
   test("并发创建：两端各自新增后互见对方对象", async () => {
     server = createRelayServer({ port: 0 });
     await server.ready;
@@ -347,6 +389,70 @@ describe("网络协调器", () => {
     );
 
     await raw.close();
+  });
+
+  test("同 source 新会话顶替时清除旧连接遗留活动锁", async () => {
+    server = createRelayServer({ port: 0 });
+    await server.ready;
+    const a = await connectEnd("a", server.port, "board-1");
+    const b = await connectEnd("b", server.port, "board-1");
+    ends = [a, b];
+    await createStroke(a.api, "a/1");
+    await until(() => b.boardCore.getObjectById("a/1") != null, "对象同步");
+    await a.api.addActiveObjects(["a/1"], { choice: "hold" });
+    await until(
+      () => b.boardCore.activeObjectManager.isRemoteActive("a/1"),
+      "旧连接活动锁",
+    );
+
+    const replacement = await connectEnd("a", server.port, "board-1");
+    ends.push(replacement);
+    await until(
+      () => !b.boardCore.activeObjectManager.isRemoteActive("a/1"),
+      "新会话不继承旧活动锁",
+    );
+  });
+
+  test("同一来源经双通道到达时，单通道离开不清除健康通道活动锁", async () => {
+    server = createRelayServer({ port: 0 });
+    await server.ready;
+    const shared = createEnd("shared");
+    const first = createNetworkCoordinator({
+      boardCore: shared.boardCore,
+      boardApi: shared.api,
+      url: `ws://127.0.0.1:${server.port}`,
+      boardId: "room-1",
+    });
+    const second = createNetworkCoordinator({
+      boardCore: shared.boardCore,
+      boardApi: shared.api,
+      url: `ws://127.0.0.1:${server.port}`,
+      boardId: "room-2",
+    });
+    await first.connect();
+    await second.connect();
+    ends.push({ coordinator: first }, { coordinator: second });
+    const raw1 = await connectRawClient(server.port, "room-1", "x");
+    const raw2 = await connectRawClient(server.port, "room-2", "x");
+    const event = { kind: "choose", ids: ["x/1"] };
+    raw1.send({ type: "aom", event });
+    raw2.send({ type: "aom", event });
+    await until(
+      () => shared.boardCore.activeObjectManager.isRemoteActive("x/1"),
+      "双通道活动锁",
+    );
+
+    await raw1.close();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(shared.boardCore.activeObjectManager.isRemoteActive("x/1")).toBe(true);
+    await first.close();
+    expect(shared.boardCore.activeObjectManager.isRemoteActive("x/1")).toBe(true);
+    await second.close();
+    await until(
+      () => !shared.boardCore.activeObjectManager.isRemoteActive("x/1"),
+      "主动关闭最后通道才清锁",
+    );
+    await raw2.close();
   });
 
   test("AOM 远程活动跨端互斥：远程 choose 锁定、unchoose 解锁", async () => {
@@ -626,13 +732,20 @@ describe("网络协调器", () => {
     expect(b.boardCore.getObjectById("a/1").position.x).toBe(5);
   });
 
-  test("派生链校验和分歧触发全量重建请求", async () => {
+  test("派生链校验和分歧直接本地重建，不重复请求相同日志", async () => {
     server = createRelayServer({ port: 0 });
     await server.ready;
     const a = await connectEnd("a", server.port, "board-1");
     ends = [a];
+    const repair = a.api.repairChainFromLog;
+    let repairCalls = 0;
+    a.api.repairChainFromLog = () => {
+      repairCalls += 1;
+      return repair.call(a.api);
+    };
 
     const raw = await connectRawClient(server.port, "board-1", "watcher");
+    raw.messages.length = 0;
     raw.send({
       type: "digest",
       digest: {
@@ -643,10 +756,8 @@ describe("网络协调器", () => {
         objects: 0,
       },
     });
-    await until(
-      () => raw.messages.some((m) => m.type === "request-init"),
-      "链校验和分歧触发 request-init",
-    );
+    await until(() => repairCalls === 1, "链校验和分歧触发本地重建");
+    expect(raw.messages.some((m) => m.type === "request-init")).toBe(false);
     await raw.close();
   });
 
@@ -889,6 +1000,38 @@ describe("网络协调器", () => {
       .filter((frame) => frame.molId === molId);
     expect(amendFrames.map((frame) => frame.seq)).toEqual([1, 2]);
     expect(amendFrames[1].entries[0].patch.position).toEqual({ x: 60, y: 0 });
+  });
+
+  test("真实接收端在 INIT 中上报远端分子 seq 水位", async () => {
+    server = createRelayServer({ port: 0, requestInitMinIntervalMs: 0 });
+    await server.ready;
+    const a = await connectEnd("a", server.port, "board-1");
+    const b = await connectEnd("b", server.port, "board-1");
+    ends = [a, b];
+    await createStroke(a.api, "a/1");
+    await until(() => b.boardCore.getObjectById("a/1") != null, "基线对象同步");
+    const forwarder = createAmendForwarder({
+      boardCore: a.boardCore,
+      sendAwareness: (data) => a.coordinator.sendAwareness(data),
+    });
+    try {
+      await a.api.addActiveObjects(["a/1"]);
+      const molId = a.api.beginMol(["a/1"]);
+      a.api.amendMol(molId, { "a/1": { position: { x: 20, y: 0 } } });
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const watcher = await connectRawClient(server.port, "board-1", "watcher");
+      await until(
+        () => watcher.messages.some((message) =>
+          message.type === "request-init" &&
+          message.source === "b" &&
+          message.openMols?.some((mol) => mol.molId === molId && mol.seq === 1)
+        ),
+        "接收端广告真实远端预览水位",
+      );
+      await watcher.close();
+    } finally {
+      forwarder.close();
+    }
   });
 
   test("对账只补对端 seq 之后的 amend 段（已持 begin 不重发）", async () => {

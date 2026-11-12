@@ -244,6 +244,14 @@ class ActiveObjectManager {
   renderHooks;
 
   /**
+   * 清层后待随静态失效提交的退出对象
+   * @description 键为对象 id，保证同一对象不会被重复失效。
+   * @type {Map<string, BasicObject>}
+   * @private
+   */
+  _pendingExitingObjects = new Map();
+
+  /**
    * 区块加载器 id 池
    * @type {RandomNumberPool}
    */
@@ -376,6 +384,18 @@ class ActiveObjectManager {
     const normalizedObjects = Array.from(objects, (item) =>
       this.requireObjectInstance(item),
     );
+
+    // 清层时退出 AOM 的对象（含 inactiveGraph 非活动成员）随本次失效一并提交。
+    // 它们此后由静态层绘制，漏掉的话只剩与脏区相交的部分能被重画。
+    if (this._pendingExitingObjects.size > 0) {
+      const seen = new Set(normalizedObjects.map((item) => item.id));
+      for (const [objectId, objectInstance] of this._pendingExitingObjects) {
+        if (seen.has(objectId)) continue;
+        normalizedObjects.push(objectInstance);
+      }
+      this._pendingExitingObjects.clear();
+    }
+
     const normalizedChunks = Array.from(fallbackChunks).filter(Boolean);
     const previousWorldRects = new Map(this.baseObjectSnapshotWorldRanges);
 
@@ -402,14 +422,10 @@ class ActiveObjectManager {
     }
 
     for (const context of contexts ?? []) {
-      const coveredChunkIds = context?.coveredChunkIds ?? new Set();
       for (const objectId of context?.relatedObjectIds ?? []) {
         if (invalidationObjectMap.has(objectId)) continue;
 
-        const objectInstance = this.findBoardObjectInstance(
-          objectId,
-          coveredChunkIds,
-        );
+        const objectInstance = this.findBoardObjectInstance(objectId);
         if (!(objectInstance instanceof BasicObject)) continue;
 
         invalidationObjectMap.set(objectId, objectInstance);
@@ -1354,9 +1370,36 @@ class ActiveObjectManager {
       if (commitLayers.length > 0) {
         this._writeLayersToBoard(commitLayers);
       }
+      // 清层前收集所有将退出 AOM 的对象，包括 inactiveGraph 的非活动层成员。
+      // 它们此后完全由静态层绘制，必须按完整范围失效静态缓存；
+      // 只对活动对象发失效的话，非活动成员就只剩与脏区相交的部分能被重画。
+      const exitingObjects = [];
+      const seenExitingIds = new Set();
+      for (const layer of purgingLayers) {
+        const objectIds = [
+          ...layer.activeObjects,
+          ...layer.inactiveGraph.getNodes(),
+        ];
+        for (const objectId of objectIds) {
+          if (seenExitingIds.has(objectId)) continue;
+          seenExitingIds.add(objectId);
+          const objectInstance =
+            layer._dormantInstances?.get(objectId) ??
+            this.findBoardObjectInstance(objectId);
+          if (objectInstance instanceof BasicObject) {
+            exitingObjects.push(objectInstance);
+          }
+        }
+      }
+
       for (const layer of purgingLayers) {
         this.purgeLayerMappings(layer);
         layer.clear();
+      }
+      // 退出对象并入下一次静态失效统一提交，不单独触发刷新，
+      // 避免 apply/discard 的失效次数与快照语义发生变化
+      for (const objectInstance of exitingObjects) {
+        this._pendingExitingObjects.set(objectInstance.id, objectInstance);
       }
     }
     this.layerOrder.splice(0, count);

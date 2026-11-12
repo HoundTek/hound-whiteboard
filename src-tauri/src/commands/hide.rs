@@ -37,12 +37,6 @@ fn set_hidden_attr(p: &Path, hidden: bool) -> Result<(), String> {
     Ok(())
 }
 
-/// 非 Windows 平台无属性可设置
-#[cfg(not(windows))]
-fn set_hidden_attr(_p: &Path, _hidden: bool) -> Result<(), String> {
-    Ok(())
-}
-
 /// 隐藏路径
 ///
 /// 返回 Some(新路径) 表示发生了重命名（Unix 语义），None 表示路径未变（Windows 语义）。

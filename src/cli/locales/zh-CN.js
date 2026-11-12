@@ -100,7 +100,7 @@ export default {
         "board-id": "中继房间名（省略时取板目录路径）",
         port: "监听端口（省略时自动分配）",
       },
-      examples: `hwb create --path ~/boards/a --width 800 --height 600
+      examples: `hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024
 hwb daemon start --name board1 --path ~/boards/a
 hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --board-id demo`,
     },
@@ -130,15 +130,16 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
     },
     create: {
       summary: "离线创建空板；板目录已存在时报错",
-      usage: "create --path <板目录> [--width <像素>] [--height <像素>] [--source <身份>] [--json]",
+      usage:
+        "create --path <板目录> [--chunk-width <世界单位>] [--chunk-height <世界单位>] [--source <身份>] [--json]",
       description:
-        "离线建板，不接 daemon。板尺寸是文档数据（决定区块划分），省略时板尺寸未知，后续 add 需显式指定尺寸。",
+        "离线建板，不接 daemon。chunk-width / chunk-height 是区块边长（存储与载入粒度，默认 1024）；白板本身没有尺寸，世界无限。区块边长决定盘上区块划分，创建后不可更改。",
       flag: {
         path: "板目录（支持 ~ 展开）",
-        width: "板宽（像素，默认 0 即未知）",
-        height: "板高（像素，默认 0 即未知）",
+        "chunk-width": "区块宽（世界单位，默认 1024）",
+        "chunk-height": "区块高（世界单位，默认 1024）",
       },
-      examples: "hwb create --path ~/boards/a --width 800 --height 600",
+      examples: "hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024",
     },
     export: {
       summary: "导出板为 .hwb（zip 平铺，不含 .daemon.json）",
@@ -177,6 +178,13 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
       usage: "show <对象id> [--daemon <名> | --path <板目录>] [--json]",
       description: "打印单个对象的完整序列化数据（默认模式带 id 与类型标题行）。",
       examples: "hwb show cli/1 --daemon board1",
+    },
+    inspect: {
+      summary: "打印对象诊断详情",
+      usage: "inspect <对象id...> [--daemon <名> | --path <板目录>] [--json]",
+      description:
+        "打印一个或多个对象的运行态：AOM 成员身份、引用计数、覆盖区块与几何数据快照。与 show 的分工是「对象在板上处于什么状态」而非「对象的文档内容」。",
+      examples: "hwb inspect cli/1 cli/2 --daemon board1",
     },
     ops: {
       summary: "打印操作记录明细",
@@ -314,6 +322,7 @@ hwb unchoose batch --apply --daemon board1`,
     exportNeedOut: "export 需要 --out {file}。",
     importNeedFile: "import 需要 .hwb 文件路径。",
     showNeedId: "show 需要一个对象 id。",
+    inspectNeedId: "inspect 需要至少一个对象 id。",
     objectNotFound: "对象不存在：{ids}",
     deleteNeedIds: "delete 需要至少一个对象 id。",
     chooseNeedIds: "choose 需要至少一个对象 id。",

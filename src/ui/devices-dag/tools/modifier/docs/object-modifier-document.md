@@ -82,7 +82,7 @@ live 层重绘由 Core 侧接管。
 
 ## 手势模型
 
-modifier 采用与 creator 一致的「数据工具 + 手势 processor」拆分，分三层：
+modifier 采用与 creator 一致的「数据工具 + 手势 processor」拆分，分四层：
 
 - `ObjectModifierTool` — 继承 `GestureTool`，承担对象语义：活动对象解析、
   `applyGesturePatch` 统一写入口（本地条目同步 + amend 流 / 回退 `modifyObject` RPC）、
@@ -93,6 +93,9 @@ modifier 采用与 creator 一致的「数据工具 + 手势 processor」拆分�
 - `DragGestureProcessor`（`gesture/drag-processor.js`）— 手势状态机：
   持有锚点、基准位置、初始位置全部手势运行时状态，把 position / displacement
   流编译为位置补丁并经宿主的 `applyGesturePatch` 应用
+- `CommonObjectModifierTool`（`common-object-modifier.js`）— 继承
+  `GestureBasedObjectModifierTool`，只剩合矩形准入检测与 processor 装配，
+  demo 实例化的就是这个类
 
 processor 为必传构造参数（无默认手势），缺失时构造抛错：
 
@@ -109,17 +112,23 @@ modifier 同时接受：
 - `end`
 - `cancel`
 - `success`
+- `delete`
+- `hit:changed`
 
 处理顺序（由 `GestureBasedObjectModifierTool.process()` 路由）：
 
 1. `hit:changed` 失效清理（`#pruneStaleObjects`，见下文「hit 变更失效清理」）
-2. `cancel`：分子在途（手势进行中取消）走 `abortMol`——内核全量还原到手势
+2. `delete`：手势在途时先 `abortMol` 丢弃 amend 流并复位手势状态，再
+   `deleteObjects(objectIds, { supraKey })` 永久删除持有对象，随后 `completeAction`
+   清空 `_overlayModifiedObjects` 并经 `afterAction` 发出 `action:complete`
+   复位 wrapper 相位
+3. `cancel`：分子在途（手势进行中取消）走 `abortMol`——内核全量还原到手势
    before（position/data/transform），本地条目回写手势起点；无在途分子走旧路径
    `processor.cancel` 回退到初始位置
-3. `success`：先 `endMol` 物化在途分子（松手已闭合的幂等空操作），
+4. `success`：先 `endMol` 物化在途分子（松手已闭合的幂等空操作），
    再 `commitObjects` 提交到静态图，随后 `processor.reset()`
-4. orphan `end`（无位置信号的孤立 end）：结束当前手势并 `endMol` 物化
-5. spatial：`position` 驱动手势状态机（`processor.begin` / `processor.update`），
+5. orphan `end`（无位置信号的孤立 end）：结束当前手势并 `endMol` 物化
+6. spatial：`position` 驱动手势状态机（`processor.begin` / `processor.update`），
    `displacement` 作为无状态增量追加（`processor.displace`）；
    首帧 position/displacement 经 `#ensureMol` 开启分子
 
@@ -241,18 +250,6 @@ modifier 在 handoff 中通常作为 second 阶段：
 - 构造期把实例属性 `autoUmountOnApply`（默认 `true`）置为 `false`，阻止提交后自卸载
 - `cancel` 信号到达时由 wrapper 调用 `tool.discardAction()` 丢弃活动对象，并切回 first 阶段
 
-### 对象同步协议
-
-modifier 通过 `receiveHandoffObjects(objects, context)` 接收 handoff 桥接的对象：
-
-1. first 完成时由 wrapper 的完成回调立即调用
-2. 写入 `_overlayModifiedObjects` 私有字段
-3. 调用 `syncUiOverlay(context)` 注册 overlay provider
-4. 调用 `requestUiOverlayRefresh(context)` 刷新 UI
-
-后续信号到达 modifier 的 `process()` 时，`resolveActiveModifiedObjects` 从实例字段 `_overlayModifiedObjects` 读取。
-wrapper 不修改 modifier 的 node state。
-
 ### 阶段切换
 
 - first → second：`receiveHandoffObjects` 同步完成后切换
@@ -260,20 +257,11 @@ wrapper 不修改 modifier 的 node state。
 
 ## `applyModifiedObjects()`
 
-`success` 信号最终会触发：
+`success` 信号经 `applyModifiedObjects(context, objects)` 进入 `GestureTool` 生命周期：
 
-1. `resolveActiveModifiedObjects()`
-2. `beforeApplyModifiedObjects()`
-3. `boardApi.commitObjects(objectIds)`
-4. `afterApplyModifiedObjects()`
-
-## 当前状态
-
-- modifier 已完全适配 Worker mode
-- 本地不要求持有真实 `BasicObject` 实例
-- 高频修改仍保持同步本地更新 + fire-and-forget RPC
-- 选中对象的 overlay 已统一走 summary-like 路径
-- modifier 已完成「数据工具 + 手势 processor」拆分：拖拽手势状态机由 `DragGestureProcessor` 承担，`CommonObjectModifierTool` 只保留合矩形准入检测与 processor 装配
+1. `beforeAction()`：`resolveActionObjects()` 取提交集合（内部回退到 `resolveActiveModifiedObjects()`）→ `beforeApplyModifiedObjects()` 可否决 → 取 `services.boardApi`
+2. `performAction()`：`boardApi.commitObjects(objectIds, { supraKey: context?.services?.supraKey })`，随后清空 `_overlayModifiedObjects` 与 node state 投影，按 `autoUmountOnApply` 决定是否 `unmount`
+3. `afterAction()`：`afterApplyModifiedObjects(context, objects, result)`
 
 ## 相关文档
 

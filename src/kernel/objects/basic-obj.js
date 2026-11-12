@@ -58,6 +58,13 @@ class BasicObject {
   data = {};
 
   /**
+   * 几何版本号
+   * @type {number}
+   * @description 任何影响几何的变更都会自增，供渲染侧判定派生缓存是否过期。不参与序列化。
+   */
+  geometryVersion = 0;
+
+  /**
    * 运行时计算派生的富数据
    * @type {Record<string, any>}
    * @description 存放从原始数据计算派生的运行时结构，如边界矩形、凸包、变换后的路径等。此字段不参与持久化。
@@ -86,6 +93,19 @@ class BasicObject {
    * @returns {Range} 主判定范围
    */
   getRange() {
+    return this.rich.boundingBox;
+  }
+
+  /**
+   * 获取渲染包围盒
+   * @description
+   * 与 `getRange()` 的区别：`getRange()` 服务于命中测试，子类会返回完整几何（如笔画点列），
+   * 每次取用都可能需要重建几何；本方法只返回盖住该几何的轴对齐矩形，供渲染侧做
+   * 可见性、甩除与脏区判定。
+   * 返回的矩形不含对象位置，调用方按需叠加 `position`。
+   * @returns {RectangleRange} 渲染包围盒
+   */
+  getRenderBounds() {
     return this.rich.boundingBox;
   }
 
@@ -153,6 +173,15 @@ class BasicObject {
    * @protected
    */
   _onDataChange(keys) { }
+
+  /**
+   * 让几何版本号自增
+   * @description 几何或变换发生变化时调用，使渲染侧的路径缓存与派生缓存作废。
+   * @protected
+   */
+  bumpGeometryVersion() {
+    this.geometryVersion += 1;
+  }
 
   /**
    * 获取对象渲染额外留白

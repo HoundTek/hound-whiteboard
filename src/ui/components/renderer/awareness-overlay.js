@@ -161,6 +161,13 @@ class AwarenessOverlay {
   #molIndex = new Map();
 
   /**
+   * 分子消息水位与结束墓碑
+   * @type {Map<string, {source: string, seq: number, closed: boolean}>}
+   * @private
+   */
+  #molStates = new Map();
+
+  /**
    * @param {Object} options - 选项
    * @param {Object} options.boardApi - BoardApi RPC 面（须含 queryRemoteChoices 与 queryObjects）
    * @param {import("../orchestration/viewport.js").Viewport} options.viewport - 视口实例
@@ -213,6 +220,7 @@ class AwarenessOverlay {
     this.#cursors.clear();
     this.#previews.clear();
     this.#molIndex.clear();
+    this.#molStates.clear();
     this.#groups = [];
     this.#viewport.uiRenderer?.invalidateViewport?.();
   }
@@ -263,6 +271,7 @@ class AwarenessOverlay {
     this.#cursors.clear();
     this.#previews.clear();
     this.#molIndex.clear();
+    this.#molStates.clear();
     this.#viewport.uiRenderer?.invalidateViewport?.();
   }
 
@@ -305,12 +314,15 @@ class AwarenessOverlay {
         if (typeof data.molId !== "string" || !Array.isArray(data.entries)) {
           return;
         }
+        if (this.#molStates.has(data.molId)) return;
+        this.#molStates.set(data.molId, { source, seq: 0, closed: false });
         for (const entry of data.entries) {
           if (typeof entry?.objectId !== "string") continue;
           const preview = this.#previews.get(entry.objectId) ?? { source };
           if (preview.source !== source) continue;
+          preview.appended = new Map();
+          preview.replacements = [];
           if (entry.create && typeof entry.create === "object") {
-            // 创建中预览：类型与初始数据到位，后续 amend 滚动更新
             preview.type = entry.create.type;
             preview.property = { ...(entry.create.property ?? {}) };
             preview.data = { ...(entry.create.data ?? {}) };
@@ -319,7 +331,6 @@ class AwarenessOverlay {
             }
             this.#applyPreviewPosition(preview, entry.create.position);
           } else {
-            // 修改型预览：以 before 快照的 position 起步
             this.#applyPreviewPosition(preview, entry.before?.position);
           }
           this.#previews.set(entry.objectId, preview);
@@ -334,10 +345,15 @@ class AwarenessOverlay {
           if (typeof mol?.molId !== "string" || !Array.isArray(mol.entries)) {
             continue;
           }
+          const state = this.#molStates.get(mol.molId);
+          if (!state || state.closed || state.source !== source) continue;
+          if (typeof mol.seq === "number") {
+            if (mol.seq <= state.seq) continue;
+            state.seq = mol.seq;
+          }
           for (const entry of mol.entries) {
             if (typeof entry?.objectId !== "string") continue;
             const preview = this.#previews.get(entry.objectId);
-            // amend 不建条目：无 begin 的尾随批次不得复活已清理的预览
             if (!preview || preview.source !== source) continue;
             const patch = entry.patch;
             if (patch && typeof patch === "object") {
@@ -346,7 +362,6 @@ class AwarenessOverlay {
                 preview.transform = { ...patch.transform };
               }
               if (patch.data && typeof patch.data === "object") {
-                // data 补丁按键合并（如圆的 radius 随手势更新）
                 preview.data = { ...preview.data, ...patch.data };
               }
               if (typeof patch.append?.key === "string") {
@@ -365,11 +380,14 @@ class AwarenessOverlay {
       case "mol-end":
       case "mol-abort": {
         if (typeof data.molId !== "string") return;
+        this.#molStates.set(data.molId, { source, seq: Infinity, closed: true });
+        if (this.#molStates.size > 1000) {
+          this.#molStates.delete(this.#molStates.keys().next().value);
+        }
         const ids = this.#molIndex.get(data.molId);
         if (ids !== undefined) {
           this.#molIndex.delete(data.molId);
           for (const objectId of ids) {
-            // 分子物化完成 / 中止：预览使命结束（提交后按记录呈现）
             if (this.#previews.delete(objectId)) changed = true;
           }
         }
@@ -420,6 +438,9 @@ class AwarenessOverlay {
    */
   #dropSourcePreviews(source) {
     let changed = false;
+    for (const [molId, state] of this.#molStates) {
+      if (state.source === source) this.#molStates.delete(molId);
+    }
     for (const [objectId, preview] of this.#previews) {
       if (preview.source === source) {
         this.#previews.delete(objectId);

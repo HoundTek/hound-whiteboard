@@ -48,7 +48,7 @@ describe("CLI 只读命令", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("readonly-test", dir, { source: "cli" });
       const { stdout: id } = await runCli([
         "add",
@@ -78,11 +78,53 @@ describe("CLI 只读命令", () => {
     }
   });
 
+  test("inspect 输出对象诊断详情", async () => {
+    const { dir, cleanup } = tempBoardDir();
+    let daemon = null;
+    try {
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
+      daemon = await startTestDaemon("readonly-multi", dir, { source: "cli" });
+      const ids = [];
+      for (let i = 0; i < 2; i++) {
+        const { stdout } = await runCli([
+          "add",
+          "--daemon",
+          "readonly-multi",
+          "--type",
+          "CircleObject",
+          "--data",
+          "{radius: 10}",
+        ]);
+        ids.push(stdout.trim());
+      }
+
+      const { stdout } = await runCli([
+        "inspect",
+        ...ids,
+        "--daemon",
+        "readonly-multi",
+        "--json",
+      ]);
+      const details = JSON.parse(stdout);
+      expect(details.map((item) => item.id)).toEqual(ids);
+      // 详情比摘要多带诊断字段
+      for (const detail of details) {
+        expect(detail.data).toBeDefined();
+        expect(detail.property).toBeDefined();
+        expect(typeof detail.loadedCount).toBe("number");
+        expect(Array.isArray(detail.coveredChunkIds)).toBe(true);
+      }
+    } finally {
+      if (daemon) await daemon.close();
+      cleanup();
+    }
+  });
+
   test("写命令后板文件正常更新", async () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", "--path", dir, "--width", "800", "--height", "600"]);
+      await runCli(["create", "--path", dir, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("readonly-test", dir, { source: "cli" });
       await runCli([
         "add",

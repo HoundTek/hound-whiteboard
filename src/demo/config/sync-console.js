@@ -185,30 +185,31 @@ function installSyncConsole({ getBoard } = {}) {
      */
     help() {
       console.log(`HWB 控制台命令
-── 同步配置 ──
-  hwb.setRelay(url)      设置中继地址（形如 ws://192.168.1.5:8377），自动刷新
-  hwb.setSource(source)  设置本端身份（同机多窗口需互不相同），自动刷新
-  hwb.setBoard(path)     设置板目录路径，自动刷新
-  hwb.status()           打印当前同步配置
-  hwb.off()              清除全部同步配置回离线，自动刷新
-── 操作 ──
-  hwb.undo()             撤销
-  hwb.redo()             重做
-── 同步调试 ──
-  hwb.digest()           打印本端同步摘要（stateHash / chainHash / openMols）
-  hwb.tree()             打印时间回溯树结构（queryUndoTree）
-  hwb.repair()           手动触发日志重放自愈（repairStateFromLog）
-  hwb.reconnect()        关闭并重建全部同步通道（relay / daemon）
-── 调试查询（输出见控制台，同调试工具）──
-  hwb.chunkLoad()        区块加载状态
-  hwb.chunks(ids?)       区块静态图详情（ids 为区块 id 或数组，缺省全部已载）
-  hwb.objectLoad()       对象加载状态
-  hwb.objects(ids?, chunks?) 对象详情（按对象 id 或区块 id，缺省全部已载）
-  hwb.aom()              AOM 分层状态
-  hwb.hit()              hit 全景（回溯树 / 日志 / 对象状态 / 操作数据）
-  hwb.board()            白板摘要
-  hwb.viewport(ids?)     视口信息（缺省全部视口）
-  hwb.devices(mode?)     设备图（mode "mermaid" 输出 Mermaid，缺省树形文本）`);
+同步配置
+  hwb.setRelay(url)            设置中继地址（形如 ws://192.168.1.5:8377），自动刷新
+  hwb.setSource(source)        设置本端身份（同机多窗口需互不相同），自动刷新
+  hwb.setBoard(path)           设置板目录路径，自动刷新
+  hwb.status()                 打印当前同步配置
+  hwb.off()                    清除全部同步配置回离线，自动刷新
+操作
+  hwb.undo()                   撤销
+  hwb.redo()                   重做
+同步调试
+  hwb.digest()                 打印本端同步摘要（stateHash / chainHash / openMols）
+  hwb.tree()                   打印时间回溯树结构（queryUndoTree）
+  hwb.repair()                 手动触发日志重放自愈（repairStateFromLog）
+  hwb.reconnect()              关闭并重建全部同步通道（relay / daemon）
+调试查询
+  hwb.chunkLoad()              区块加载状态
+  hwb.chunks(ids?)             区块静态图详情（ids 为区块 id 或数组，缺省全部已载）
+  hwb.objectLoad()             对象加载状态
+  hwb.objects(ids?, chunks?)   对象详情（按对象 id 或区块 id，缺省全部已载）
+  await hwb.inspect(ids)       对象诊断详情（返回数据，可在代码里继续处理）
+  hwb.aom()                    AOM 分层状态
+  hwb.hit()                    hit 全景（回溯树 / 日志 / 对象状态 / 操作数据）
+  hwb.board()                  白板摘要
+  hwb.viewport(ids?)           视口信息（缺省全部视口）
+  hwb.devices(mode?)           设备图（mode "mermaid" 输出 Mermaid，缺省树形文本）`);
     },
 
     /**
@@ -311,6 +312,26 @@ function installSyncConsole({ getBoard } = {}) {
      */
     objects(ids, chunks) {
       debug("objectsDetail", { objectIds: idsOf(ids), chunkIds: idsOf(chunks) });
+    },
+
+    /**
+     * 对象诊断详情（返回数据，可在控制台继续处理）
+     * @description 与 objects 的分工：objects 在 Worker 侧打印，inspect 把数据带回本端。
+     * @param {string|string[]} ids - 对象 id 或数组
+     * @returns {Promise<import("../../kernel/types/types.js").ObjectDetails[]>|void} 详情列表
+     */
+    inspect(ids) {
+      const idList = idsOf(ids);
+      if (idList.length === 0) {
+        console.warn("hwb.inspect(ids)：需要对象 id 或 id 数组");
+        return;
+      }
+      const api = apiOf();
+      if (!api) {
+        console.warn("hwb.inspect：board 未就绪");
+        return;
+      }
+      return api.queryObjectDetails(idList);
     },
 
     /**

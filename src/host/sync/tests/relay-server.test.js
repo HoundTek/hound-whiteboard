@@ -6,6 +6,7 @@
  */
 
 import { jest } from "@jest/globals";
+import { EventEmitter } from "node:events";
 import { WebSocket as WsClient } from "ws";
 import { createRelayServer } from "../relay-server.js";
 
@@ -77,6 +78,87 @@ async function joinClient(port, boardId, source) {
   client.send({ type: "join", boardId, source });
   await client.waitFor((m) => m.type === "joined");
   return client;
+}
+
+/**
+ * mock relay 模块的递增加载标识
+ * @type {number}
+ */
+let mockRelayModuleId = 0;
+
+/**
+ * 创建可手动触发连接事件的 mock 中继
+ * @param {Object} [options={}] - 中继选项
+ * @returns {Promise<{server: Object, wss: EventEmitter}>} 中继与 mock WebSocketServer
+ */
+async function createMockRelay(options = {}) {
+  const wss = new EventEmitter();
+  wss.clients = new Set();
+  wss.address = () => ({ address: "127.0.0.1", port: 0 });
+  wss.close = (callback) => callback();
+  const MockWebSocketServer = function (serverOptions) {
+    wss.options = serverOptions;
+    return wss;
+  };
+  jest.unstable_mockModule("ws", () => ({
+    WebSocketServer: MockWebSocketServer,
+  }));
+  const { createRelayServer: createMockServer } = await import(
+    `../relay-server.js?mock=${mockRelayModuleId++}`
+  );
+  return {
+    server: createMockServer({ heartbeatMs: 0, ...options }),
+    wss,
+  };
+}
+
+/**
+ * 接入一个 mock 客户端并完成 join
+ * @param {EventEmitter} wss - mock WebSocketServer
+ * @param {string} source - 来源标识
+ * @returns {EventEmitter} 带 WebSocket 发送桩的客户端
+ */
+function joinMockClient(wss, source) {
+  const ws = new EventEmitter();
+  ws.OPEN = 1;
+  ws.CLOSED = 3;
+  ws.readyState = ws.OPEN;
+  ws.bufferedAmount = 0;
+  ws.send = jest.fn((data, callback) => callback?.());
+  ws.ping = jest.fn((callback) => callback?.());
+  ws.terminate = jest.fn(() => {
+    if (ws.readyState === ws.CLOSED) return;
+    ws.readyState = ws.CLOSED;
+    wss.clients.delete(ws);
+    ws.emit("close");
+  });
+  wss.clients.add(ws);
+  wss.emit("connection", ws);
+  ws.emit(
+    "message",
+    JSON.stringify({ type: "join", boardId: "board-1", source }),
+  );
+  ws.send.mockClear();
+  return ws;
+}
+
+/**
+ * 向 mock 客户端注入一条入站消息
+ * @param {EventEmitter} ws - mock 客户端
+ * @param {Object} message - 消息体
+ * @returns {void}
+ */
+function emitMockMessage(ws, message) {
+  ws.emit("message", JSON.stringify(message));
+}
+
+/**
+ * 读取 mock 客户端已发送的 JSON 消息
+ * @param {EventEmitter} ws - mock 客户端
+ * @returns {Object[]} 已发送消息
+ */
+function mockSentMessages(ws) {
+  return ws.send.mock.calls.map(([payload]) => JSON.parse(payload));
 }
 
 describe("同步中继服务器", () => {

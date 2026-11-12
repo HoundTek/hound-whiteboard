@@ -32,8 +32,8 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 
 - `@file` — 简短的文件名或职责描述
 - `@description` — 一句话说明文件职责，必须打句号
-- `@module` — 路径格式为 `{kernel|canvas|host|ui|io|cli}/{path/to/module}`，与源码路径对应（各包根目录即前缀）
-- `@author` — 作者名。不确定时执行 `git config user.name`
+- `@module` — 路径格式为 `{kernel|canvas|host|ui|io|cli|demo|utils|test-support}/{path/to/module}`，与源码路径对应（`src` 下各包目录即前缀；`renderers` 自身不作前缀，其子目录如 `canvas` 直接作前缀）
+- `@author` — 作者名。不确定时执行 `git config user.name` 或 `git config --global user.name`
 
 ### 测试文件
 
@@ -54,8 +54,6 @@ description: Write and unify JSDoc, inline comments, and file headers following 
 
 `check-module-paths.mjs` 会自动跳过 `.test.js` 文件。
 
-作者名可执行 `git config user.name`、`git config --global user.name` 获取。
-
 单行示例：
 
 ```javascript
@@ -74,7 +72,7 @@ description: Write and unify JSDoc, inline comments, and file headers following 
  * @file BoardApi 同线程实现
  * @description
  * 提供 BoardApi 接口的同线程实现，直接调用 BoardCore 的同步/异步方法。
- * P2 阶段保持同步封装，P3 切为 RPC 实现后保持相同方法签名。
+ * 方法签名与 RPC 实现保持一致，调用方可无差别切换。
  * @module kernel/api/board-api
  * @author Zhou Chenyu
  */
@@ -183,7 +181,8 @@ const OBJECT_CREATOR_SIGNAL_TYPES = Object.freeze({
 
 ```javascript
 /**
- * 对象创建生命周期完成通知。
+ * 对象创建生命周期完成通知
+ * @description
  * handoff 通过 {@link Tool#on|on('afterCreate', ...)} 订阅。
  * @param {Object} interaction - 当前交互上下文
  * @param {BasicObject} completedObject - 已完成的对象
@@ -215,7 +214,7 @@ afterCompleteCreatedObject(interaction, completedObject) {
 
 ## 工作方式
 
-1. 先找最近的现有样本，归纳目标文件当前风格
+1. 按「参考基线」选定样本
 2. 只在目标范围内补注释，不顺手重写无关内容
 3. 如果现有代码和注释存在偏差，以当前实现为准
 4. 如果信息不足以写出准确注释，保留最小化、可验证的描述，不要编造行为

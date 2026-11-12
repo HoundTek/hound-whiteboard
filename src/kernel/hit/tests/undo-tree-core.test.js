@@ -229,7 +229,7 @@ describe("撤销", () => {
     expect(op2.children.includes(activeOp3)).toBe(false);
   });
 
-  test("截断：晚于撤销操作的节点只存在于撤消分支", () => {
+  test("截断：晚于撤销操作的节点只存在于撤销分支", () => {
     const { log, tree } = applyAll(
       makeAdd("alice", 1, 100),
       makeAdd("alice", 2, 200),

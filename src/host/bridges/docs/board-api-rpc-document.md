@@ -59,9 +59,9 @@ sequenceDiagram
 
 ## API 面
 
-所有方法返回 `Promise`。参数格式见 [board-api-types.js](../../../kernel/types/board-api-types.js)。
+除 `isReady` / `onBatchError` / `requestDebug` 外，方法均返回 `Promise`。参数格式见 [board-api-types.js](../../../kernel/types/board-api-types.js)。
 
-Worker 侧分发由路由表 [board-api-routes.js](../../../kernel/api/board-api-routes.js) 承担。路由表是更全集：`queryStateHash` / `repairStateFromLog` / `queryMolAmendSince` / `applyRemoteOperations` 等方法不经 `BoardApiRpc` 客户端封装，仅经路由分发（CoreWorkerRuntime 与 CLI daemon 复用同表）。
+Worker 侧分发由路由表 [board-api-routes.js](../../../kernel/api/board-api-routes.js) 承担。部分方法仅在路由表出现，如 `queryMolAmendSince` / `applyRemoteOperations`，不经 `BoardApiRpc` 客户端封装（CoreWorkerRuntime 与 CLI daemon 复用同表）。
 
 ### 板面生命周期
 
@@ -96,7 +96,7 @@ Worker 侧分发由路由表 [board-api-routes.js](../../../kernel/api/board-api
 | `replaceListItem(objectId, key, index, item)` | 替换列表属性指定索引元素。同帧覆盖                                        |
 | `removeListItem(objectId, key, index)`        | 删除列表属性指定索引元素                                                  |
 
-所有高频写入方法（含增量式分子的 `amendMol`）同帧内合并为单条 `rpc-batch` 消息发送，减少 Worker 侧消息处理开销。
+同帧合并规则见下文「批处理机制」。
 
 ### 批处理控制
 
@@ -168,7 +168,7 @@ Worker 侧分发由路由表 [board-api-routes.js](../../../kernel/api/board-api
 
 `modifyObject`、`appendListItem`、`replaceListItem`、`removeListItem`、`amendMol` 使用微任务级批处理：
 
-1. 调用时，参数存入 `#batchBuffer`（map key 为 `method:objectId:key:index`；`amendMol` 为 `amendMol:{molId}`）
+1. 调用时，参数存入 `#batchBuffer`（key 由 method 与该方法的定位参数拼接，如 `modifyObject:{objectId}`、`appendListItem:{objectId}:{key}`、`replaceListItem:{objectId}:{key}:{index}`；`amendMol` 为 `amendMol:{molId}`）
 2. 同 key 的后续调用自动合并（`modifyObject` 的 patch 逐字段合入，`appendListItem` 的 items 合并为数组，`amendMol` 的 patchesByObject 逐对象合并 patch）
 3. 在下一个微任务中执行 `#flushBatchNow`，将所有缓冲条目打包为单条 `rpc-batch` 消息发送（携带递增 batchId）
 4. 发送前若有非批处理方法调用（如 `createObject`、`endMol`），会自动触发 `#flushBatchNow` 确保时序正确

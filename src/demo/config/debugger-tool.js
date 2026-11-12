@@ -1,7 +1,7 @@
 /**
  * @file 调试工具
  * @description 提供基于键盘信号的白板调试查询能力。
- * @module core/tools/debugger-tool
+ * @module demo/config/debugger-tool
  * @author Zhou Chenyu
  */
 

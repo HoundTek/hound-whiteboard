@@ -122,6 +122,48 @@ function installMockAnimationFrame() {
 }
 
 describe("Viewport (constructor unit)", () => {
+  test("位图按设备像素分配时视口几何仍取 CSS 像素", () => {
+    const worker = new FakeWorkerEndpoint();
+    const canvas = createNoopCanvas();
+    const uiCanvas = createNoopCanvas();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi() {
+        return null;
+      },
+    };
+
+    const viewport = new Viewport(
+      { rootElement: {}, canvas, uiCanvas, worker },
+      board,
+      { width: 800, height: 600 },
+      "main",
+    );
+
+    // 高 DPR：位图是 CSS 尺寸的两倍
+    canvas.width = 1600;
+    canvas.height = 1200;
+
+    // 几何计算必须留在 CSS 空间，否则区块解析与指针映射会整体错位
+    expect({ width: viewport.width, height: viewport.height }).toEqual({
+      width: 800,
+      height: 600,
+    });
+    expect({
+      width: viewport.getViewportScreenRect().width,
+      height: viewport.getViewportScreenRect().height,
+    }).toEqual({ width: 800, height: 600 });
+    // 位图尺寸单独可读，供像素缓冲相关代码使用
+    expect({ w: viewport.deviceWidth, h: viewport.deviceHeight }).toEqual({
+      w: 1600,
+      h: 1200,
+    });
+
+    viewport.destroy();
+  });
+
   test("startWorkerSync 应发送初始 viewport-change 消息", () => {
     const { flushNextFrame, restore } = installMockAnimationFrame();
     const worker = new FakeWorkerEndpoint();
@@ -158,8 +200,223 @@ describe("Viewport (constructor unit)", () => {
         origin: { x: 0, y: 0 },
         zoom: 1,
         viewportSize: { width: 800, height: 600 },
+        // node 环境没有 devicePixelRatio，倍率归一化为 1
+        devicePixelRatio: 1,
         force: true,
       });
+
+      viewport.destroy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("视口原点吸附到整数设备像素，与渲染侧同一口径", () => {
+    const worker = new FakeWorkerEndpoint();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi: () => null,
+    };
+    const viewport = new Viewport(
+      {
+        rootElement: {},
+        canvas: createNoopCanvas(),
+        uiCanvas: createNoopCanvas(),
+        worker,
+      },
+      board,
+      { width: 800, height: 600 },
+      "main",
+    );
+
+    try {
+      viewport.setViewportState({ origin: { x: 120.37, y: 80.62 }, zoom: 2 });
+      const unit = 2 * viewport.devicePixelRatio;
+      // 吸附单位是「缩放 × 设备倍率」，误差不超过半个设备像素
+      expect(Math.abs(viewport.origin.x * unit - Math.round(viewport.origin.x * unit))).toBeLessThan(1e-9);
+      expect(Math.abs(viewport.origin.y * unit - Math.round(viewport.origin.y * unit))).toBeLessThan(1e-9);
+      expect(Math.abs(viewport.origin.x - 120.37)).toBeLessThanOrEqual(0.5 / unit);
+    } finally {
+      viewport.destroy();
+    }
+  });
+
+  test("缩放被夹取在 5% 到 3200% 之间", () => {
+    const worker = new FakeWorkerEndpoint();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi: () => null,
+    };
+    const viewport = new Viewport(
+      {
+        rootElement: {},
+        canvas: createNoopCanvas(),
+        uiCanvas: createNoopCanvas(),
+        worker,
+      },
+      board,
+      { width: 800, height: 600 },
+      "main",
+    );
+
+    try {
+      // 越界缩放会让区块加载窗口按 1/zoom² 膨胀，必须夹住
+      viewport.setViewportState({ zoom: 0.001 });
+      expect(viewport.zoom).toBeCloseTo(0.05, 12);
+      viewport.setViewportState({ zoom: 1000 });
+      expect(viewport.zoom).toBeCloseTo(32, 12);
+
+      // 区间内不受影响
+      viewport.setViewportState({ zoom: 0.5 });
+      expect(viewport.zoom).toBeCloseTo(0.5, 12);
+      viewport.setViewportState({ zoom: 3 });
+      expect(viewport.zoom).toBeCloseTo(3, 12);
+    } finally {
+      viewport.destroy();
+    }
+  });
+
+  test("高 DPR 下位图放大而指针映射与几何保持 CSS 坐标", () => {
+    const previousRatio = globalThis.devicePixelRatio;
+    globalThis.devicePixelRatio = 2;
+    const worker = new FakeWorkerEndpoint();
+    const canvas = createNoopCanvas();
+    const board = {
+      width: 800,
+      height: 600,
+      devicesDAG: new DevicesDAG(),
+      getBoardApi() {
+        return null;
+      },
+    };
+
+    try {
+      const viewport = new Viewport(
+        {
+          rootElement: {},
+          canvas,
+          uiCanvas: createNoopCanvas(),
+          worker,
+        },
+        board,
+        { width: 800, height: 600 },
+        "main",
+      );
+
+      // 位图按倍率分配，画布 CSS 布局仍由样式控制为 800×600
+      expect({ w: canvas.width, h: canvas.height }).toEqual({
+        w: 1600,
+        h: 1200,
+      });
+      expect({ w: viewport.width, h: viewport.height }).toEqual({
+        w: 800,
+        h: 600,
+      });
+
+      // 同一 CSS 屏幕点在 DPR=2 下必须落到同一个世界坐标
+      viewport.setViewportState({ origin: new Vector(10, 20), zoom: 2 });
+      const world = viewport.screenPointToWorld(new Vector(120, 90));
+      expect(world.x).toBeCloseTo(10 + 120 / 2, 6);
+      expect(world.y).toBeCloseTo(20 + 90 / 2, 6);
+
+      viewport.destroy();
+    } finally {
+      if (previousRatio === undefined) delete globalThis.devicePixelRatio;
+      else globalThis.devicePixelRatio = previousRatio;
+    }
+  });
+
+  /**
+   * 建立带假 Worker 的视口
+   * @param {FakeWorkerEndpoint} worker - 假 Worker 端点
+   * @returns {Viewport}
+   */
+  function createWorkerViewport(worker) {
+    return new Viewport(
+      {
+        rootElement: {},
+        canvas: createNoopCanvas(),
+        uiCanvas: createNoopCanvas(),
+        worker,
+      },
+      {
+        width: 800,
+        height: 600,
+        devicesDAG: new DevicesDAG(),
+        getBoardApi() {
+          return null;
+        },
+      },
+      { width: 800, height: 600 },
+      "main",
+    );
+  }
+
+  /**
+   * 统计已发出的 flush 请求数
+   * @param {FakeWorkerEndpoint} worker - 假 Worker 端点
+   * @returns {number}
+   */
+  function countFlushRequests(worker) {
+    return worker.postedMessages.filter(
+      (message) => message.type === "request-render-flush",
+    ).length;
+  }
+
+  test("连续空帧后 flush 循环休眠，render-dirty 唤醒", () => {
+    const { flushNextFrame, restore } = installMockAnimationFrame();
+    const worker = new FakeWorkerEndpoint();
+
+    try {
+      const viewport = createWorkerViewport(worker);
+      viewport.startWorkerSync();
+
+      // 空板持续无帧产出，循环应在有限次请求后停止自续期
+      for (let i = 0; i < 60; i++) flushNextFrame();
+      const stoppedCount = countFlushRequests(worker);
+      expect(stoppedCount).toBeGreaterThan(0);
+      expect(stoppedCount).toBeLessThanOrEqual(31);
+
+      flushNextFrame();
+      expect(countFlushRequests(worker)).toBe(stoppedCount);
+
+      // worker 内容变脏（如远端编辑）应唤醒循环
+      worker.emit({ type: "render-dirty", viewportId: "main" });
+      flushNextFrame();
+      expect(countFlushRequests(worker)).toBeGreaterThan(stoppedCount);
+
+      viewport.destroy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("持续有帧产出时 flush 循环保持活跃", () => {
+    const { flushNextFrame, restore } = installMockAnimationFrame();
+    const worker = new FakeWorkerEndpoint();
+
+    try {
+      const viewport = createWorkerViewport(worker);
+      viewport.startWorkerSync();
+
+      // 每帧都有回传，空闲计数被重置，不会进入休眠
+      for (let i = 0; i < 45; i++) {
+        worker.emit({
+          type: "render-frame",
+          viewportId: "main",
+          frameId: i + 1,
+          liveBitmap: createNoopImageBitmap(),
+        });
+        flushNextFrame();
+      }
+
+      const before = countFlushRequests(worker);
+      flushNextFrame();
+      expect(countFlushRequests(worker)).toBeGreaterThan(before);
 
       viewport.destroy();
     } finally {
@@ -210,7 +467,14 @@ describe("Viewport (constructor unit)", () => {
       });
 
       expect(context.clearRect).toHaveBeenCalledWith(0, 0, 800, 600);
-      expect(context.drawImage).toHaveBeenCalledWith(liveBitmap, 0, 0);
+      // 显式目标尺寸：位图与画布倍率不一致时也不会错位
+      expect(context.drawImage).toHaveBeenCalledWith(
+        liveBitmap,
+        0,
+        0,
+        800,
+        600,
+      );
       expect(liveBitmap.closed).toBe(true);
       expect(invalidateViewportSpy).toHaveBeenCalledTimes(1);
 

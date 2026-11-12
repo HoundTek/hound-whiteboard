@@ -19,7 +19,7 @@ const benchmarks = [
   { name: "IO Direct", file: "io-direct.bench.js" },
   { name: "IO File Granularity", file: "io-file-granularity.bench.js" },
   { name: "Worker RPC", file: "worker-rpc.bench.js" },
-  { name: "Worker Render", file: "worker-render.bench.js" },
+  { name: "Interaction Frame", file: "interaction-frame.bench.js" },
   { name: "Chunk Rebuild", file: "chunk-rebuild.bench.js" },
 ];
 

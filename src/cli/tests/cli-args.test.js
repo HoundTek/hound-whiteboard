@@ -46,7 +46,7 @@ describe("CLI 通用标志", () => {
     const { dir, cleanup } = tempBoardDir();
     let daemon = null;
     try {
-      await runCli(["create", `--path=${dir}`, "--width", "800", "--height", "600"]);
+      await runCli(["create", `--path=${dir}`, "--chunk-width", "800", "--chunk-height", "600"]);
       daemon = await startTestDaemon("args-test", dir, { source: "cli" });
       const { stdout: id } = await runCli([
         "add",

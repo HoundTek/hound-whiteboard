@@ -10,6 +10,8 @@
 import { RectangleRange } from "../../../kernel/range/index.js";
 import { Vector } from "../../../kernel/utils/math.js";
 import { UiRenderer } from "../renderer/ui-renderer.js";
+import { clampViewportZoom } from "../../../renderers/canvas/viewport-zoom.js";
+import { quantizeOriginToDevicePixel } from "../../../renderers/canvas/tile-grid.js";
 import { InputScope } from "./input-scope.js";
 
 /**
@@ -26,6 +28,12 @@ function resolveAnimationFrameHost() {
 
   return { request, cancel };
 }
+
+/**
+ * 连续多少次 flush 请求无产出后进入休眠
+ * @description 60fps 下约 0.5 秒，覆盖一帧回传的往返延迟，不会把正常空闲误判成沉睡。
+ */
+const FLUSH_IDLE_STOP_FRAMES = 30;
 
 /**
  * 区块二维坐标转回字形 id（纯数学，不依赖 Chunk 模块）
@@ -190,6 +198,27 @@ class Viewport {
   #workerSyncStarted;
 
   /**
+   * 连续未产出帧的 flush 请求次数
+   * @type {number}
+   * @private
+   */
+  #idleFlushCount = 0;
+
+  /**
+   * 已收到的 render-frame 总数
+   * @type {number}
+   * @private
+   */
+  #receivedFrameCount = 0;
+
+  /**
+   * 上一次 flush 请求时已收到的帧数
+   * @type {number}
+   * @private
+   */
+  #lastFlushFrameCount = 0;
+
+  /**
    * 下一次 viewport-change 是否强制刷新
    * @type {boolean}
    * @private
@@ -215,7 +244,7 @@ class Viewport {
    * @param {string} viewportId - 视口 id
    */
   constructor(
-    { rootElement, canvas, uiCanvas, worker },
+    { rootElement, canvas, uiCanvas, worker, useTiles = true },
     board,
     { width, height },
     viewportId,
@@ -230,6 +259,12 @@ class Viewport {
     this.#width = Number.isFinite(width) ? width : 0;
     this.#height = Number.isFinite(height) ? height : 0;
     this._zoom = 1;
+    /**
+     * 是否与 worker 侧同样启用 tile
+     * @description 启用时视口原点吸附到整数设备像素，与渲染侧保持同一口径。
+     * @type {boolean}
+     */
+    this.useTiles = useTiles;
     this.#pendingViewportRafId = null;
     this.#pendingFlushRafId = null;
     this.#workerSyncStarted = false;
@@ -285,19 +320,52 @@ class Viewport {
   }
 
   /**
-   * 当前视口画布宽度
+   * 设备像素倍率
+   * @description
+   * 显示层位图按该倍率分配，绘制与几何坐标仍是 CSS 像素。
+   * 限制在 [1, 8]，避免异常 DPR 分配出超大位图。
    * @type {number}
    */
-  get width() {
-    return this.canvas?.width ?? this.#width ?? 0;
+  get devicePixelRatio() {
+    const ratio = globalThis.devicePixelRatio;
+    if (!Number.isFinite(ratio) || ratio <= 0) return 1;
+    return Math.min(8, Math.max(1, ratio));
   }
 
   /**
-   * 当前视口画布高度
+   * 当前视口宽度（CSS 像素）
+   * @description
+   * 视口几何一律以 CSS 像素为准：屏幕矩形、世界矩形、指针映射与 worker 同步都用它。
+   * 位图尺寸（设备像素）另见 deviceWidth，高 DPR 下两者不相等。
+   * @type {number}
+   */
+  get width() {
+    return this.#width;
+  }
+
+  /**
+   * 当前视口高度（CSS 像素）
    * @type {number}
    */
   get height() {
-    return this.canvas?.height ?? this.#height ?? 0;
+    return this.#height;
+  }
+
+  /**
+   * 当前视口位图宽度（设备像素）
+   * @description 只在真正碰像素缓冲（分配、清屏、拷贝）时使用，几何计算不得取它。
+   * @type {number}
+   */
+  get deviceWidth() {
+    return this.canvas?.width ?? this.#width;
+  }
+
+  /**
+   * 当前视口位图高度（设备像素）
+   * @type {number}
+   */
+  get deviceHeight() {
+    return this.canvas?.height ?? this.#height;
   }
 
   /**
@@ -334,6 +402,7 @@ class Viewport {
     }
 
     this.#workerSyncStarted = true;
+    this.#idleFlushCount = 0;
     this.#scheduleViewportSync({ force: true, includeViewportSize: true });
     this.#scheduleRenderFlush();
     return this;
@@ -380,17 +449,30 @@ class Viewport {
               nextState.origin?.x ?? this.origin.x,
               nextState.origin?.y ?? this.origin.y,
             );
+    // 缩放范围与渲染器共用同一口径：越界会让区块加载窗口爆炸
     const nextZoom =
       nextState.zoom === undefined
         ? this.zoom
         : Number.isFinite(nextState.zoom) && nextState.zoom > 0
-          ? nextState.zoom
+          ? clampViewportZoom(nextState.zoom)
           : this.zoom;
     const originChanged =
       nextOrigin.x !== this.origin.x || nextOrigin.y !== this.origin.y;
     const zoomChanged = nextZoom !== this.zoom;
 
-    this._origin = nextOrigin;
+    // 与 worker 侧同一口径：tile 贴图要求原点是整数设备像素，
+    // 否则指针换算用的原点与渲染用的原点会差半个像素
+    let resolvedOrigin = nextOrigin;
+    if (this.useTiles) {
+      const snapped = quantizeOriginToDevicePixel(
+        nextOrigin,
+        nextZoom,
+        this.devicePixelRatio,
+      );
+      resolvedOrigin = new Vector(snapped.x, snapped.y);
+    }
+
+    this._origin = resolvedOrigin;
     this._zoom = nextZoom;
 
     if (!originChanged && !zoomChanged) {
@@ -470,8 +552,15 @@ class Viewport {
     this.#height = nextHeight;
 
     let resized = false;
+    // 显示层位图按设备像素分配，避免浏览器把整块画布放大导致笔画发虚；
+    // ui 覆盖层保持 CSS 尺寸（只画叠加线条，放大代价可接受）
+    const deviceScale = this.devicePixelRatio;
     resized =
-      this.#resizeCanvas(this.#canvas, nextWidth, nextHeight) || resized;
+      this.#resizeCanvas(
+        this.#canvas,
+        Math.max(1, Math.round(nextWidth * deviceScale)),
+        Math.max(1, Math.round(nextHeight * deviceScale)),
+      ) || resized;
     resized = this.uiRenderer?.resize(nextWidth, nextHeight) || resized;
 
     if (resized) {
@@ -656,8 +745,10 @@ class Viewport {
     const { liveBitmap } = frameData ?? {};
 
     if (liveBitmap && this.#canvasCtx) {
-      this.#canvasCtx.clearRect(0, 0, this.width, this.height);
-      this.#canvasCtx.drawImage(liveBitmap, 0, 0);
+      const canvas = this.#canvas;
+      this.#canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+      // 显式给出目标尺寸：位图与画布的设备倍率不一致时也不会错位
+      this.#canvasCtx.drawImage(liveBitmap, 0, 0, canvas.width, canvas.height);
       liveBitmap.close();
     }
 
@@ -682,7 +773,12 @@ class Viewport {
 
     this.#worker.removeEventListener("message", this.#workerMessageListener);
     this.#awarenessListeners.clear();
-    this.#canvasCtx?.clearRect(0, 0, this.width, this.height);
+    this.#canvasCtx?.clearRect(
+      0,
+      0,
+      this.deviceWidth,
+      this.deviceHeight,
+    );
   }
 
   /**
@@ -723,9 +819,16 @@ class Viewport {
       }
       return;
     }
-    if (message.type !== "render-frame") return;
     if (String(message.viewportId) !== String(this.viewportId)) return;
 
+    // worker 内容变脏的主动通知：唤醒已休眠的 flush 循环
+    if (message.type === "render-dirty") {
+      this.#resumeRenderFlush();
+      return;
+    }
+    if (message.type !== "render-frame") return;
+
+    this.#receivedFrameCount++;
     this.onRenderFrame(message);
   }
 
@@ -795,6 +898,8 @@ class Viewport {
           width: this.width,
           height: this.height,
         };
+        // worker 侧拿不到显示环境倍率，必须由 UI 告知
+        payload.devicePixelRatio = this.devicePixelRatio;
       }
       if (this.#pendingViewportForce) {
         payload.force = true;
@@ -807,7 +912,22 @@ class Viewport {
   }
 
   /**
+   * 唤醒 render flush 循环
+   * @description 休眠期间收到 worker 的 render-dirty 时调用，重置空闲计数并重新排帧。
+   * @private
+   */
+  #resumeRenderFlush() {
+    this.#idleFlushCount = 0;
+    if (!this.#workerSyncStarted) return;
+    if (this.#pendingFlushRafId != null) return;
+    this.#scheduleRenderFlush();
+  }
+
+  /**
    * 安排下一帧 render flush 请求
+   * @description
+   * 连续多次请求都没有产出帧时进入休眠，不再自续期，
+   * 之后由 worker 的 render-dirty 通知唤醒，避免空闲视口每秒白发几十条消息。
    * @private
    */
   #scheduleRenderFlush() {
@@ -822,6 +942,15 @@ class Viewport {
         type: "request-render-flush",
         viewportId: this.viewportId,
       });
+
+      if (this.#receivedFrameCount === this.#lastFlushFrameCount) {
+        this.#idleFlushCount++;
+      } else {
+        this.#idleFlushCount = 0;
+      }
+      this.#lastFlushFrameCount = this.#receivedFrameCount;
+
+      if (this.#idleFlushCount >= FLUSH_IDLE_STOP_FRAMES) return;
       this.#scheduleRenderFlush();
     });
   }

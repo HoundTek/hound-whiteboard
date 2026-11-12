@@ -1,4 +1,4 @@
-# 键盘设备
+# 键盘设备文档
 
 ## 概述
 
@@ -6,7 +6,7 @@
 
 根路径固定为 `/keyboard`，整体结构由 `createSubDAG("/keyboard")` 构建。
 
-`createKeyboardDevice()` **不接受任何参数**——设备内部预创建了 `STANDARD_KEYBOARD_CODES`（105 个标准键位）的全部 code 节点，每个 code 节点统一 `defaultRoute = "default"`。设备不负责信号转换，只负责从原始键盘事件中稳定产出 `trigger` / `trigger-repeat` / `release` / `cancel` 四类工具层信号。
+`createKeyboardDevice()` **不接受任何参数**——设备内部预创建了 `STANDARD_KEYBOARD_CODES`（105 个标准键位）的全部 code 节点，每个 code 节点统一 `defaultRoute = "default"`。设备不负责把工具层信号转成 `position` / `displacement`，只负责从原始键盘事件中稳定产出 `trigger` / `trigger-repeat` / `release` / `cancel` 四类工具层信号。
 
 ## 节点结构
 
@@ -50,7 +50,7 @@ keyboard/ (root handler: 更新状态 + 分流)
     └── ... 共 105 个
 ```
 
-所有 105 个 code 节点（从 `KeyA` 到 `ContextMenu`）均**不带 handler**，统一 `defaultRoute: "default"`。外部通过 `edge.prefix` 在"code 节点 → workflow"的边上插入修饰节点来完成信号转换。
+所有 105 个 code 节点（从 `KeyA` 到 `ContextMenu`）均**不带 handler**，统一 `defaultRoute: "default"`。
 
 ### 外部接入
 
@@ -151,9 +151,10 @@ import {
 import { SIGNAL_TYPES } from "../dag-core/signal-types.js";
 ```
 
-## ⚠️ 一个 Tool 实例只能挂载到一个节点
+## 一个 Tool 实例只能挂载到一个节点
 
-**不要将同一个 Tool 实例通过 `mountWorkflow` 挂载到多个不同的 DAG 节点上。**
+> [!WARNING]
+> 不要将同一个 Tool 实例通过 `mountWorkflow` 挂载到多个不同的 DAG 节点上。
 
 原因：
 
@@ -176,7 +177,7 @@ const wasdPrefix = (code, vector) =>
             s.type === SIGNAL_TYPES.TRIGGER_REPEAT,
         )
         .map((s) => ({
-          type: "position",
+          type: "displacement",
           context: { value: { ...vector }, code, sourceType: s.type },
         }));
       return signals.length === 0 ? [] : { signals };
@@ -233,7 +234,9 @@ scope.mountWorkflow("viewport", ViewportTool);
 scope.addEdge({
   from: "keyboard/code/ArrowUp",
   to: "workflows/viewport",
-  prefix: createEdgePrefix(buildViewportPositionNodeConfig({ x: 0, y: -200 })),
+  prefix: createEdgePrefix(
+    buildViewportPositionNodeConfig({ x: 0, y: -1 }, 200),
+  ),
 });
 
 // 鼠标设备不需要 prefix（信号直接可被工具消费）
@@ -245,10 +248,9 @@ prefix handler 不应指定 `to:`。路由由 `defaultRoute: "default"` 自动�
 
 ## 设计要点
 
-- `createKeyboardDevice()` 无参数：预创建全部 105 个标准 code 节点，不依赖外部配置
-- 设备只负责信号产出：原始键盘事件 → `trigger` / `release` / `cancel`
+- `createKeyboardDevice()` 无参数：预创建全部 105 个标准 code 节点，`defaultRoute` 统一为 `"default"`
+- 设备只负责信号产出：原始键盘事件 → `trigger` / `trigger-repeat` / `release` / `cancel`
 - 信号转换交给 `edge.prefix`：在 mount 时注入，不修改设备节点
-- 所有 code 节点 `defaultRoute` 统一为 `"default"`：handler 不写 `to:` 时自动走边
 - 多键位汇聚到同一 workflow：通过 `edge.prefix` 各走各的 prefix，汇聚到共享 workflow 节点
 - 常量从 `devices/constant.js` 集中管理，`devices/index.js` 统一导出
 

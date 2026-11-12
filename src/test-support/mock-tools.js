@@ -42,6 +42,12 @@ class CollectingTool extends Tool {
  */
 function createMockCreator(onProcess) {
   return new (class extends GestureTool {
+    /**
+     * 是否已完成对象创建
+     * @type {boolean}
+     */
+    isObjectCreationCompleted;
+
     constructor() {
       super();
       this.isObjectCreationCompleted = false;

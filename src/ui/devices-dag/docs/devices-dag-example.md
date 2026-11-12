@@ -1,5 +1,7 @@
 # 设备图示例
 
+本文是 [设备图文档](./devices-dag-document.md) 的示例部分，用一张完整 demo 图说明节点组织与边连接；图示沿用 `dagToMermaid` 的输出约定。
+
 ## 整体结构
 
 下图展示一个典型白板 Demo 的完整 DevicesDAG 结构（使用 `dagToMermaid` 约定）：
@@ -54,9 +56,8 @@ flowchart TD
 下面用一个简化的手写笔设备示例说明当前推荐写法：
 
 - 输入子图用 `createSubDAG(rootPath)` 构建
-- 根节点只做分流
+- 根节点做设备态更新与粗分流
 - `defaultRoute` 只表示默认出边
-- workflow 入口挂到 `/workflows/` 下，设备节点通过边连接到它
 
 ## 示例代码
 
@@ -81,10 +82,8 @@ const root = builder.node().handler((packet) => ({
   signals: packet.signals,
 }));
 const pointer = builder.node().defaultRoute("tool");
-const toolNode = builder.node();
 
 builder.edge("pointer", root, pointer);
-builder.edge("tool", pointer, toolNode);
 
 const penSubDAG = builder.build();
 
@@ -92,11 +91,12 @@ const dag = new DevicesDAG();
 const tool = new PenTool();
 
 dag.mountSubDAG("/viewport/main", penSubDAG);
-dag.mountWorkflow("/viewport/main/workflows/pen", tool, {
-  board,
-  viewport,
-});
-dag.addEdge("/viewport/main/pen/pointer", "tool", "/viewport/main/workflows/pen");
+dag.mountWorkflow("/viewport/main/workflows/pen", tool);
+dag.addEdge(
+  "/viewport/main/pen/pointer",
+  "tool",
+  "/viewport/main/workflows/pen",
+);
 
 const result = dag.dispatch({
   to: "/viewport/main/pen",
@@ -114,7 +114,7 @@ const result = dag.dispatch({
 1. 输入先到 `/viewport/main/pen`
 2. 根节点 handler 把包转发到相对路径 `pointer`
 3. `/viewport/main/pen/pointer` 没有 handler，但声明了 `defaultRoute: "tool"`
-4. 设备图沿 `tool` 出边把输入继续送到 workflow 入口，逻辑路由路径仍表现为 `/viewport/main/pen/pointer/tool`
+4. 设备图沿 `tool` 出边把输入继续送到 workflow 入口，工具收到的 `context.path` 是 `/viewport/main/pen/pointer/tool`，而该节点自身 `path` 仍是 `/viewport/main/workflows/pen`
 5. `PenTool.process()` 消费最终信号包
 
 ## 带状态的写法
@@ -136,7 +136,7 @@ dag.mount("/viewport/main/pen", (packet, context) => {
 - 根节点做设备态更新与粗分流
 - 子节点做稳定语义拆分
 - workflow 入口统一挂在 `/workflows/` 下
-- 状态的真理源放闭包 / 实例字段，需要被观察时发布到自己节点的 `state`
+- 状态的真相源放闭包 / 实例字段，需要被观察时发布到自己节点的 `state`
 - 跨节点协作走信号或事件，不直接写对方节点状态
 - 边级信号转换使用 `createEdgePrefix`，不修改节点 handler
 

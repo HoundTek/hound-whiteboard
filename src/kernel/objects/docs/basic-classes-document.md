@@ -50,10 +50,10 @@
 | `getRange()`                        | 获取主判定范围                               |
 | `setProperty(property)`             | 合并属性                                     |
 | `getRenderPadding()`                | 从属性动态推导渲染留白（描边宽度一半 × transform 最大轴向缩放） |
-| `isErasable()`                      | 是否可擦                                     |
+| `isErasable()`                      | 能否被对象擦除工具擦除；返回 true 时必须重写 `eraseData` |
 | `eraseData(trailPoints, radius)`    | 按橡皮轨迹擦除对象数据；与 `isErasable` 配对，返回剩余数据片段（`null` 未命中、空数组整体擦没），供 Core 侧分流回写 / 分裂 / 删除 |
-| `isDirected()`                      | 是否有向                                     |
-| `render(ctx)`                       | 渲染对象                                     |
+| `isDirected()`                      | 能否自定义旋转中心                           |
+| `getRenderBounds()`                 | 渲染包围盒（不含 `position`，供可见性、甩除与脏区判定；绘制由 `renderers/canvas` 按类型分派） |
 | `serialize()`                       | 序列化对象                                   |
 | `static parse(obj)`                 | 从序列化数据恢复对象                         |
 
@@ -99,7 +99,9 @@
 - `property`
 - `data`
 
-具体子类会在此基础上追加 `type`，例如：
+具体子类会在此基础上追加 `type`，并把 `data` 覆盖为 `{ ...this.data }`：基类骨架里的 `data` 为空对象，不覆盖则该字段持久化为空。
+
+例如：
 
 - `CircleObject` → `type: "CircleObject"`
 - `EllipseObject` → `type: "EllipseObject"`
@@ -128,13 +130,8 @@ src/kernel/objects/object-deserializer.js
 - `CircleObject`
 - `EllipseObject`
 
-## 当前状态
-
-- `BasicObject` 是当前对象体系最稳定的公共根类
-- `deserialize()` 已接通 Circle / Ellipse / Polygon / Stroke 四类对象
-
 ## 相关文档
 
 - [白板对象文档](./board-classes-document.md)
-- [图形对象文档](../graph/graph-classes-document.md)
-- [笔画对象文档](../stroke/stroke-classes-document.md)
+- [图形对象文档](./graph-classes-document.md)
+- [笔画对象文档](./stroke-classes-document.md)

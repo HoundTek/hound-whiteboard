@@ -1,7 +1,5 @@
 # shared-state-store 文档
 
-本文档提供 `src/kernel/utils/shared-state-store.js` 的概述。
-
 ## 模块职责
 
 `shared-state-store.js` 提供跨信道会话状态的共享存储 `SharedStateStore`。

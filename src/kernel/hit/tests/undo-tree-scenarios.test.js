@@ -135,7 +135,7 @@ const expectScenario14Tree = (tree) => {
   expect(childrenOf(tree, "b/op-1")).toEqual(["a/op-2", "b/op-2"]);
 };
 
-describe("情景一：跨节点撤消与并发新增", () => {
+describe("情景一：跨节点撤销与并发新增", () => {
   test("回放路径", () => {
     expectScenario14Tree(replay(scenario14Records()));
   });
@@ -146,7 +146,7 @@ describe("情景一：跨节点撤消与并发新增", () => {
     expectScenario14Tree(applyInOrder(order));
   });
 
-  test("增量路径 A 端：O1 先于 B3 到达（B3 按父亲 id 落位撤消分支）", () => {
+  test("增量路径 A 端：O1 先于 B3 到达（B3 按父亲 id 落位撤销分支）", () => {
     expectScenario14Tree(applyInOrder(scenario14Records()));
   });
 });
@@ -256,7 +256,7 @@ describe("情景四：全程离线，最后一次性完全同步", () => {
 });
 
 describe("情景五：撤销与迟到的改挂范围内节点", () => {
-  test("回放路径：X 同时留在原位置与撤消分支", () => {
+  test("回放路径：X 同时留在原位置与撤销分支", () => {
     const tree = replay([
       add("a", 1, 0, null),
       add("b", 1, 1, "a/op-1"),

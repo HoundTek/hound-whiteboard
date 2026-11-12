@@ -6,7 +6,7 @@
 
 ```
 src/io/
-├── core/                  # 纯 JS 零依赖（任何 JS 运行时可用）
+├── core/                  # 路径 DSL 与权限策略
 │   ├── dsl.js             # 路径 DSL：相对路径校验与规范化
 │   └── policy.js          # 权限键、预设、操作映射与检查
 ├── driver/                # IoDriver 执行器契约 + 平台实现（全部 async）
@@ -27,23 +27,30 @@ src/io/
 
 ## Web / Worker 边界
 
-- **无 Tauri 环境抛错**：`createTauriDriver()` 默认从 `window.__TAURI__` 解析 invoke；纯浏览器（web demo）等无 Tauri 环境下解析失败直接抛错（`tauri.js` 的 `getDefaultInvoke`），此时应注入自定义 transport 或换用 memory/node 驱动。
+- **无 Tauri 环境抛错**：`createTauriDriver()` 默认从 `window.__TAURI__`，或 `window.__TAURI_INTERNALS__`，解析 invoke；纯浏览器（web demo）等无 Tauri 环境下解析失败直接抛错（`tauri.js` 的 `getDefaultInvoke`），此时应注入自定义 transport 或换用 memory/node 驱动。
 - **worker 内转发**：worker 线程没有主线程的 Tauri invoke。worker 内驱动注入转发 transport，把调用打包为 `io-invoke` 消息发给主线程；主线程由 `attachIoInvokeForwarder`（`src/host/bridges/io-invoke-forwarder.js`）监听，经 Tauri invoke 执行后回传 `io-response`。invoke 惰性解析：内存模式永不触发 `io-invoke`，无 Tauri 环境下挂接无害。
 
 ## 使用
 
-生产两条路径（`src/cli/board-session.js`、`src/host/core-worker.js`）直接使用 driver + adapter：
+生产两条装配路径：
+
+- `src/host/core-worker.js`：Tauri 驱动注册 root，`createPersistenceAdapter({ driver, rootId })` 产出 adapter，作为 `persistenceAdapter` 注入 `BoardCore`。
+- `src/cli/board-session.js`：node 驱动 `registerRoot` 后 `createSessionStore(bindRoot(driver, rootId))`，BoardCore 由 store 的 `loadAll` 恢复，再接 `createJournaler`。此路径不经过 adapter。
+
+core-worker 侧装配：
 
 ```js
 import { createTauriDriver } from "./driver/tauri.js";
 import { createPersistenceAdapter } from "./adapter/persistence.js";
 
 const driver = createTauriDriver();
-const rootId = await driver.registerRoot(boardPath);
+const { rootId } = await driver.registerRoot(boardPath, { read: true, write: true });
 const adapter = createPersistenceAdapter({ driver, rootId });
 
 const boardCore = new BoardCore({ persistenceAdapter: adapter, ... });
 ```
+
+权限默认全部为 false：`registerRoot` 缺省权限时按 `RootPermissions` 默认值注册，未声明权限的 root 上所有操作都返回安全值（null/false/[]）。构造权限对象见 `core/policy.js`（`getPreset` / `mergePermissions` / `checkPermissions`）。
 
 存储布局：`chunks/{chunkId}.json`、`objects/{encodeURIComponent(objectId)}.json`（与 session-store 同一命名，见 `src/docs/file-structure.md`）。
 

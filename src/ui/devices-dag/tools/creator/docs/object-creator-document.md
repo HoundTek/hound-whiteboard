@@ -67,7 +67,7 @@ creator 不再持有本地 `BasicObject` 实例。
 
 ```js
 {
-  id: string,                        // 来源命名空间字符串（如 "ui/42"）
+  id: string,                        // 对象 id（即 objectId；命名空间字符串，如 "ui/42"）
   type: string,                      // 对象类型名（如 "StrokeObject"）
   position: Vector | { x, y },
   transform?: { a, b, c, d },        // 由手势补丁写入（对象变换）
@@ -102,8 +102,6 @@ boundingBox 非空，违例直接抛错——modifier 的准入检测（`resolve
 | `CircleDataCreatorTool`  | `rx = r·hypot(a, b)`、`ry = r·hypot(c, d)`（transform 感知；无 transform 时为正圆） |
 | `EllipseDataCreatorTool` | `rx = radiusX·hypot(a, b)`、`ry = radiusY·hypot(c, d)`（transform 感知）            |
 | `PolygonCreatorTool`     | `data.points` 的 min/max                                                            |
-
-回填 `boundingBox` 后，当 handoff 把 `_entry` 桥接给 modifier 时，modifier 可以直接做准入检测（`resolveModifiedObjectWorldRect`）和 overlay 渲染。
 
 ## objectId 分配
 
@@ -142,7 +140,7 @@ boardApi.createObject(type, {
 
 - `StrokeCreatorTool` → `_appendCreatedObjectItems()` → `amendMol(molId, { [id]: { append: { key: "points", items } } })`
 - `CircleDataCreatorTool` → `applyGesturePatch()` → `amendMol(molId, { [id]: patch })`（patch 可含 `position` / `data` / `transform`）
-- `PolygonCreatorTool` → 追加顶点经 amend 的 append patch；顶点替换（`replaceListItem`）无对应 amend 语义，仍直调
+- `PolygonCreatorTool` → 追加顶点经 amend 的 append patch；顶点替换无对应 amend 语义，仍直调 `boardApi.replaceListItem`
 
 Worker 模式下 `beginMol` 经 RPC 异步确认：确认前 append 条目按序缓冲（增量必须保序）、
 绝对量补丁覆盖合并，molId 到达后按序补发（同 key 连续 append 折叠为一条 amend）。
@@ -166,7 +164,7 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 
 ## 手势流程
 
-### `SingleGestureObjectCreatorTool`
+### `SingleGestureObjectCreatorTool`（`object-creator.js`）
 
 适用于单次手势完成整个对象创建的工具，例如：
 
@@ -185,7 +183,7 @@ Core 侧的 mutation RPC handler 在修改 AOM 对象后自动触发 live 层脏
 组合了 processor 的 creator（如 `CircleDataCreatorTool`）将这四个手势钩子与
 overlay 收集全部委托给 processor，自身只保留数据侧实现。
 
-### `MultiGestureObjectCreatorTool`
+### `MultiGestureObjectCreatorTool`（`object-creator.js`）
 
 适用于多次手势逐步构造一个对象的工具，例如：
 
@@ -225,23 +223,23 @@ creator 不直接持有 modifier 引用。
 
 ## 子类差异
 
-### `StrokeCreatorTool`
+### `StrokeCreatorTool`（`stroke-creator.js`）
 
 - `_entry.data.points` 维护局部路径点列
 - 每次 position 追加一个点
 
-### `CircleDataCreatorTool`
+### `CircleDataCreatorTool`（`circle/data-creator.js`）
 
 - `_entry.data.radius` 维护半径
 - 手势解释全部由组合的 processor 承担（圆心+半径 / 直径）；点击未拖动时由
   processor 的 `resolveFallbackPatch` 回退到固定半径策略
 
-### `EllipseDataCreatorTool`
+### `EllipseDataCreatorTool`（`ellipse/data-creator.js`）
 
 - `_entry.data.radiusX` / `radiusY` 维护双轴半径，position 为椭圆中心
 - 手势解释由组合的 processor 承担（外接矩形），fallback 同样回退到固定半径
 
-### `PolygonCreatorTool`
+### `PolygonCreatorTool`（`polygon-creator.js`）
 
 - `_entry.data.points` 维护顶点列表
 - 通过 `appendPoint()` / `replacePoint()` 更新当前顶点

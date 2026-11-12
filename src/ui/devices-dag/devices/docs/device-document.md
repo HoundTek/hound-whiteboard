@@ -1,4 +1,4 @@
-# 设备定义
+# 设备定义文档
 
 ## 概述
 
@@ -95,18 +95,24 @@ const device = builder
   .build();
 ```
 
-构建器支持：
+构建器支持两组 API。
+
+`DAGBuilder` 级：
 
 - `node()`：声明一个节点并返回 `DAGNodeBuilder`
 - `edge(name, from, to)`：声明一条有向边
+- `expose(api)`：暴露设备级 API
+- `build()`：生成 `SubDAGDefinition`
+
+`DAGNodeBuilder` 级：
+
 - `prefix(fn, semantics)`：把节点标记为修饰节点语义，并设置 `handler`
 - `handler(fn)`：设置节点处理器
 - `defaultRoute(name)`：设置默认出边
 - `semantics(meta)`：写入节点职责语义元数据
+- `services(services)`：声明静态服务集合
 - `tool(toolInstance, toolContext)`：把某个节点声明为工具节点
 - `umount(fn)`：设置节点卸载钩子
-- `expose(api)`：暴露设备级 API
-- `build()`：生成 `SubDAGDefinition`
 
 当前 builder 用显式节点和显式边描述链路。例如随机圆 workflow 可表达为：
 
@@ -204,11 +210,10 @@ workflow 负责：
 约定如下：
 
 - **设备根节点负责完成 canvas→world 转换**——mouse 与 touchscreen 的根 handler 都通过 `viewport.convertCanvasSignalsToWorld` 在分流前完成转换，下游通道节点与工具拿到的已是世界坐标
-- 转换逻辑的唯一实现是 `viewport.convertCanvasSignalsToWorld`，任何转换点都必须委托它，禁止各自重写换算公式
+- canvas→world 换算只在 `viewport.convertCanvasSignalsToWorld` 内实现，转换点一律委托它，下游通道节点与工具不做二次转换
 - **`canvas-to-world-handler` prefix 用于非标准链路**：信号源未经设备根节点转换时（如测试桩、自定义 adapter 直连 workflow），在边上插入该 prefix 补齐转换
-- 工具与下游 prefix 一律假定 `position` 信号已是世界坐标，不再做二次转换
 
-新设备接入时应遵循同一模式：在根 handler 中委托 `viewport.convertCanvasSignalsToWorld` 完成转换，而不是让下游各自处理。
+新设备接入时应遵循同一模式。`viewport` 取自 `ctx.services.viewport`，由装配层 `configureNode(path, { services: { viewport } })` 或 builder 的 `.services()` 注入。
 
 ## 设备挂载
 
@@ -233,7 +238,7 @@ viewport.inputScope.mountDevice("presentation/keyboard", createKeyboardDevice())
 - 私有运行态，例如 `Map`、`Set`、最近一次事件
 - 对外可观测快照，通过 `getState()` 返回
 
-如果设备需要被测试、调试或热切换重置，建议额外暴露 `resetState()`。
+如果设备需要被测试或调试，建议额外暴露 `resetState()`，由装配层或测试显式调用。
 
 需要跨节点共享的短生命周期状态，不建议继续塞回设备对象本身；更适合写入 `DevicesDAG` 节点 `state`。
 

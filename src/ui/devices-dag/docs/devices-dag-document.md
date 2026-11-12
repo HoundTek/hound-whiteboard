@@ -1,4 +1,4 @@
-# 设备图
+# 设备图文档
 
 ## 概述
 
@@ -107,8 +107,7 @@ handler 的原生返回值可以是多种形式——单个 `SignalPacket`、数
 
 **3. `redirect` 与默认出边**
 
-- `redirect` 的优先级高于主包 `to` 和节点 `defaultRoute`
-- `redirect` 和主包 `to` 同时存在时，后者覆盖前者（redirect 先作用，主包 to 再覆盖）
+- `redirect` 与主包 `to` 同时存在时，按下列顺序确定路径：`redirect` 先写路径 → 主包 `to` 覆盖 → 主包 `to` 为空且节点有 `defaultRoute` 时被默认出边覆盖
 
 ### 返回值样例
 
@@ -139,7 +138,7 @@ return { stop: true };
 - `path`：当前节点的活动路径
 - `semantics`：当前节点职责语义快照
 - `defaultRoute`：默认路径
-- `resolvedDefaultRoutePath`
+- `resolvedDefaultRoutePath`：`defaultRoute` 解析后的绝对路径（由 `joinPath(path, defaultRoute)` 得出）
 - `depth`：当前路由深度
 - `signalPacket`：当前信号包
 - `services`：静态服务上下文
@@ -187,14 +186,14 @@ return { stop: true };
 
 ### 节点状态的写入约定
 
-节点状态是**拥有者发布的只读投影**（真理源在拥有者的闭包 / 实例字段）。读写规则如下：
+节点状态是**拥有者发布的只读投影**（真相源在拥有者的闭包 / 实例字段）。读写规则如下：
 
 - **读取**：任何代码可以通过 `dag.getNodeState(path)` 或 `handlerContext.getNodeState(path)` 读取任意节点的状态。这是节点状态区别于闭包状态的核心价值——可外部观察。
 - **发布（写入自身）**：handler 通过 `handlerContext.setNodeState(handlerContext.path, state)` / `patchState` 发布自己节点的投影。这是唯一合法的写入方式。
 - **跨节点写入**：禁止。`ctx.setNodeState` / `ctx.delNodeState` 写入非自身节点时，strict 模式抛错，非 strict 模式经 log 工具告警。需要影响其他节点时，应通过信号或事件传递，而不是直接改对方状态。
 - **外部写入**：非 handler 代码不应直接调用 `dag.setNodeState()` 写入——投影由拥有者发布，外部写入不产生真实效果，且会被下次发布覆盖。
 
-简而言之：闭包管对错（真理源），state 管看见（只读投影）。
+简而言之：闭包管对错（真相源），state 管看见（只读投影）。
 
 ## 设计判据（并发论点）
 
@@ -284,7 +283,7 @@ flowchart TD
 | `"transform"` | 接收上游信号做变换后转发                  | `circle-params`：接收 position+radius → 变换为三阶段信号的 sequence                         |
 | `"inspect"`   | 被动观测/记录信号元数据，原样转发给子节点 | `debug` prefix：记录 entryIndex/path/originalTo 后原样路由到 report 子节点                  |
 
-`prefixKind` 则是更细粒度的业务角色标签（如 `"random-circle-generator"`、`"circle-params"`），用于在日志/调试中快速识别前缀节点类型。
+`prefixKind` 则是更细粒度的业务角色标签（如 `"random-circle-generator"`、`"circle-params"`），用于在日志/调试中快速识别修饰节点类型。
 
 ## 挂载模型
 
@@ -324,7 +323,7 @@ workflow 节点统一挂载到 `/<viewportId>/workflows/` 路径下，通过有�
 /<viewportId>/keyboard/code/Space --"create-circle"--> /<viewportId>/workflows/create-circle
 ```
 
-`mountWorkflow` 的第一个参数现在是 workflow 在 `/workflows/` 下的路径，不再是设备子路径。设备节点与 workflow 的连接通过 `addEdge` 在 wiring 层完成。
+`DevicesDAG.mountWorkflow(path, workflow)` 的 `path` 是含 `/workflows/` 的绝对路径；`InputScope.mountWorkflow(name, workflow)` 的 `name` 是相对 `/workflows/` 的名字（可含嵌套段）。设备节点与 workflow 的连接通过 `addEdge` 在 wiring 层完成。
 
 需要把工具挂到子图内部的已存在节点时，`InputScope.mountWorkflow` 的 name 支持嵌套路径（如 `"parent-workflow/child"`），同样走完整挂载契约。
 

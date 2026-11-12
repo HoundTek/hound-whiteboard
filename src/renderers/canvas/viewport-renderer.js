@@ -7,22 +7,29 @@
  * @author Zhou Chenyu
  */
 
-import {
-  Renderer,
-  normalizeDirtyRectsForScreenUpdate,
-} from "./renderer.js";
+import { Renderer, normalizeDirtyRectsForScreenUpdate } from "./renderer.js";
 import { BasicObject } from "../../kernel/objects/basic-obj.js";
 import { RectangleRange } from "../../kernel/range/rectangle.js";
+import { intersectsRanges } from "../../kernel/range/index.js";
 import { DirectedGraph } from "../../kernel/utils/directed-graph.js";
 import { ActiveObjectManager } from "../../kernel/board/active-object-manager.js";
 import { collectActiveDrawables as _collectActiveDrawables } from "./aom-collect-utils.js";
 import { OBJECT_DRAW_STRATEGIES } from "./object-draw-strategies.js";
-import { RenderScheduler, createRectangleDirtyRectMerger } from "./render-scheduler.js";
+import {
+  RenderScheduler,
+  createRectangleDirtyRectMerger,
+} from "./render-scheduler.js";
+import { TileStore, DEFAULT_TILE_SIZE } from "./tile-cache.js";
+import {
+  tileBoundaryDevice,
+  tileContentOrigin,
+  tileLocalDevice,
+} from "./tile-grid.js";
+import { normalizeCanvasSize } from "./canvas-lifecycle.js";
 import {
   createBaseDirtyRectThresholdStrategy,
   createLiveDirtyRectThresholdStrategy,
 } from "./dirty-rect-strategy-shared.js";
-
 
 /**
  * @typedef {Object} ViewportRendererInvalidateActiveOptions
@@ -34,6 +41,60 @@ import {
  * @property {Iterable<BasicObject>} [objects=[]] - 待失效的静态对象集合
  * @property {Map<string, RectangleRange>} [previousWorldRects] - 对象进入 AOM 前的世界范围快照
  */
+
+/**
+ * tile 缓存相对视口的世界范围外扩比例（单侧）
+ * @description
+ * 总覆盖为视口的 1.2 倍边长。外扩是内存与平移命中率的交换项：
+ * 缓存字节数约等于视口面积乘以 `(1 + 2 × 该值)²`，这里取 0.10 使覆盖面积只多 44%。
+ */
+const TILE_CACHE_MARGIN_RATIO = 0.1;
+
+/**
+ * 缩放预览允许的累计拉伸倍数
+ * @description
+ * 预览把上一帧位图按缩放比拉伸后合成，拉伸越大越显模糊。
+ * 相对快照累计超过该倍数时改为立即重建一帧清晰内容。
+ */
+const ZOOM_PREVIEW_MAX_SCALE = 2;
+
+/**
+ * 判定连续缩放手势的单步最大变化倍数
+ * @description
+ * 只有单步变化足够小才说明是连续手势（触控板捏合、滚轮缩放这类逐帧小步）。
+ * 按键一次缩放一倍属于离散跳变，走预览只会让用户看到一帧发糊的画面，
+ * 因此仍按原路径重建。
+ */
+const ZOOM_PREVIEW_MAX_STEP = 1.25;
+
+/**
+ * 缩放停止后触发清晰重建的等待时间（毫秒）
+ * @description 手势连续缩放期间不断重置该定时器，停手后才重建。
+ */
+const ZOOM_PREVIEW_SETTLE_MS = 150;
+
+/**
+ * 比较两个对象或区块标识
+ * @description 数字按数值比较，其余按字符串比较，保证任意输入都有全序。
+ * @param {string | number} left - 左侧标识
+ * @param {string | number} right - 右侧标识
+ * @returns {number} 比较结果
+ */
+function compareObjectKeys(left, right) {
+  if (typeof left === "number" && typeof right === "number") {
+    return left - right;
+  }
+  return String(left).localeCompare(String(right));
+}
+
+/**
+ * 按标识排序节点
+ * @param {Array<string | number>} nodes - 节点标识集合
+ * @returns {Array<string | number>} 排序后的副本
+ */
+function sortNodes(nodes) {
+  return [...nodes].sort(compareObjectKeys);
+}
 
 /**
  * 视口渲染器
@@ -103,6 +164,28 @@ class ViewportRenderer extends Renderer {
   #resolveOutputThresholds;
 
   /**
+   * 世界空间 tile 缓存
+   * @type {TileStore}
+   * @private
+   */
+  #tileStore;
+
+  /**
+   * 是否允许使用 tile 缓存
+   * @description 关闭后退回经典缓存路径，用于对照测试与线上兜底。
+   * @type {boolean}
+   * @private
+   */
+  #tilesEnabled;
+
+  /**
+   * tile 缓存相对视口的外扩比例
+   * @type {number}
+   * @private
+   */
+  #tileCacheMargin = TILE_CACHE_MARGIN_RATIO;
+
+  /**
    * 缓存层渲染调度器
    * @type {RenderScheduler}
    * @private
@@ -115,6 +198,36 @@ class ViewportRenderer extends Renderer {
    * @private
    */
   #outputScheduler;
+
+  /**
+   * 缩放预览状态
+   * @description 非空时输出层直接缩放合成 `snapshot`，跳过缓存与 tile 重建。
+   * @type {{ zoom: number, origin: { x: number, y: number }, snapshot: CanvasImageSource } | null}
+   * @private
+   */
+  #zoomPreview;
+
+  /**
+   * 缩放预览的清晰重建定时器
+   * @type {ReturnType<typeof setTimeout> | null}
+   * @private
+   */
+  #zoomPreviewTimer;
+
+  /**
+   * 是否已产出过至少一帧
+   * @description 没有可预览的上一帧时不能进入缩放预览。
+   * @type {boolean}
+   * @private
+   */
+  #hasRenderedFrame;
+
+  /**
+   * 缩放预览的快照画布
+   * @type {OffscreenCanvas | null}
+   * @private
+   */
+  #zoomPreviewCanvas;
 
   /**
    * @param {import("./viewport-core.js").ViewportCore} viewport - 目标视口
@@ -135,12 +248,27 @@ class ViewportRenderer extends Renderer {
     const height = outputCanvas?.height ?? 0;
 
     this.#cache = new OffscreenCanvas(width, height);
+    this.#tileCacheMargin =
+      Number.isFinite(options.tileCacheMargin) && options.tileCacheMargin >= 0
+        ? options.tileCacheMargin
+        : TILE_CACHE_MARGIN_RATIO;
+    this.#tileStore = new TileStore({
+      tileSize: options.tileSize ?? DEFAULT_TILE_SIZE,
+      deviceScale: this._deviceScale,
+      maxBytes: options.tileBudgetBytes,
+    });
+    this.#tilesEnabled = options.tiles !== false;
+
+    this.#zoomPreview = null;
+    this.#zoomPreviewTimer = null;
+    this.#hasRenderedFrame = false;
+    this.#zoomPreviewCanvas = null;
 
     this.#resolveOutputThresholds = createLiveDirtyRectThresholdStrategy();
 
     this.#cacheScheduler = new RenderScheduler({
       mergeDirtyRects: this._createDirtyRectMerger(),
-      flushHandler: (dirtyRects) => this.#cacheFlush(dirtyRects),
+      flushHandler: () => this.#cacheFlush(),
     });
 
     this.#outputScheduler = new RenderScheduler({
@@ -183,8 +311,11 @@ class ViewportRenderer extends Renderer {
    * @returns {boolean} 是否发生了尺寸变化
    */
   resize(width, height) {
-    const nextWidth = Number.isFinite(width) ? width : 0;
-    const nextHeight = Number.isFinite(height) ? height : 0;
+    const nextWidth = normalizeCanvasSize(width);
+    const nextHeight = normalizeCanvasSize(height);
+
+    // 快照尺寸与新画布不匹配，缩放预览必须作废
+    this.#exitZoomPreview();
 
     let resized = false;
     if (super.resize(nextWidth, nextHeight)) {
@@ -192,12 +323,24 @@ class ViewportRenderer extends Renderer {
     }
 
     const cacheCanvas = this.#cache;
-    if (cacheCanvas && (cacheCanvas.width !== nextWidth || cacheCanvas.height !== nextHeight)) {
-      cacheCanvas.width = nextWidth;
-      cacheCanvas.height = nextHeight;
+    // 缓存画布与输出位图同一坐标空间（设备像素），才能在 1:1 拷贝下不失真
+    const nextDeviceWidth = normalizeCanvasSize(nextWidth * this._deviceScale);
+    const nextDeviceHeight = normalizeCanvasSize(
+      nextHeight * this._deviceScale,
+    );
+    if (
+      cacheCanvas &&
+      (cacheCanvas.width !== nextDeviceWidth ||
+        cacheCanvas.height !== nextDeviceHeight)
+    ) {
+      // 尺寸赋值会重置画布内容，缓存自此不再可信
+      cacheCanvas.width = nextDeviceWidth;
+      cacheCanvas.height = nextDeviceHeight;
       this.#cacheDirty = true;
       resized = true;
     }
+
+    // tile 位图按设备像素分配，倍率变化由 setRasterScale 统一处理，视口尺寸不参与
 
     return resized;
   }
@@ -219,7 +362,8 @@ class ViewportRenderer extends Renderer {
    */
   #createOutputDirtyRectMerger() {
     return createRectangleDirtyRectMerger({
-      getThresholds: () => this.#resolveOutputThresholds(this.viewport?.zoom ?? 1),
+      getThresholds: () =>
+        this.#resolveOutputThresholds(this.viewport?.zoom ?? 1),
       getViewportRect: () => this._getViewportRect(),
     });
   }
@@ -310,21 +454,18 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
-   * 在当前已加载区块内解析静态对象实例
-   * @param {Iterable<*>} chunks - 当前已加载区块
+   * 解析静态对象实例
    * @param {string} objectId - 对象 id
    * @returns {BasicObject | undefined}
+   *
+   * @description
+   * 对象查找全部走索引（活动对象表、失活层暂存表、已载对象表），与区块数量无关，
+   * 因此不需要传入已载区块集合；传入集合只会让每次查找多建一份 O(区块数) 的数组。
    */
-  resolveStaticObjectFromChunks(chunks, objectId) {
-    const loadedChunks = Array.from(chunks).filter(Boolean);
-    const candidateChunkIds = loadedChunks
-      .map((chunk) => chunk?.id)
-      .filter((chunkId) => Number.isInteger(chunkId));
-
+  resolveStaticObjectFromChunks(objectId) {
     const objectInstance =
       this.viewport?.board?.activeObjectManager?.findBoardObjectInstance?.(
         objectId,
-        candidateChunkIds,
       ) ?? this.viewport?.board?.getObjectById?.(objectId);
 
     return objectInstance instanceof BasicObject ? objectInstance : undefined;
@@ -337,23 +478,29 @@ class ViewportRenderer extends Renderer {
    */
   mergeStaticGraphs(chunks) {
     const mergedGraph = new DirectedGraph();
+    // 顺序只由集合决定，不依赖加载先后：区块按 id 排序、块内节点按键排序。
+    // 拓扑排序对入度为 0 的节点按插入顺序出队，插入顺序不稳定会让互不相干的对象
+    // 在区块异步加载时来回换层。
+    const orderedChunks = [...chunks]
+      .filter(Boolean)
+      .sort((left, right) => compareObjectKeys(left.id, right.id));
 
-    for (const chunk of chunks) {
+    for (const chunk of orderedChunks) {
       const staticGraph = chunk?.objectManager?.staticGraph;
       if (!staticGraph) continue;
 
-      for (const node of staticGraph.getNodes?.() ?? []) {
+      for (const node of sortNodes(staticGraph.getNodes?.() ?? [])) {
         if (!mergedGraph.hasNode(node)) {
           mergedGraph.addNodeUnsafe(node);
         }
       }
     }
 
-    for (const chunk of chunks) {
+    for (const chunk of orderedChunks) {
       const staticGraph = chunk?.objectManager?.staticGraph;
       if (!staticGraph) continue;
 
-      for (const node of staticGraph.getNodes?.() ?? []) {
+      for (const node of sortNodes(staticGraph.getNodes?.() ?? [])) {
         for (const neighbor of staticGraph.neighborsUnsafe?.(node) ?? []) {
           if (!mergedGraph.hasNode(neighbor)) {
             mergedGraph.addNodeUnsafe(neighbor);
@@ -367,10 +514,7 @@ class ViewportRenderer extends Renderer {
 
     const drawables = [];
     for (const objectId of mergedGraph.getTopologicalOrder()) {
-      const objectInstance = this.resolveStaticObjectFromChunks(
-        chunks,
-        objectId,
-      );
+      const objectInstance = this.resolveStaticObjectFromChunks(objectId);
       if (!(objectInstance instanceof BasicObject)) continue;
 
       drawables.push(objectInstance);
@@ -411,19 +555,24 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 获取对象的世界矩形范围
-   * @description AOM 命中时走 AOM 的变形感知范围，否则委托基类的静态范围解析。
+   * @description
+   * 先走基类的渲染包围盒快路径：AOM 的范围解析最终也是 `getRange().withPosition()`，
+   * 对笔画等同于逐点复制整条路径，不能挡在快路径前面。
+   * 只有基类解析不出范围时才回退到 AOM。
    * @param {BasicObject} objectInstance - 对象实例
    * @returns {RectangleRange | undefined}
    */
   getObjectWorldRect(objectInstance) {
+    const resolved = super.getObjectWorldRect(objectInstance);
+    if (resolved) return resolved;
+
     try {
       const worldRange = this.#aom?.getObjectWorldRange?.(objectInstance);
       if (worldRange) return RectangleRange.from(worldRange);
     } catch {
       // AOM 范围解析期间对象可能正处于 teardown 中间态，按无范围处理
-      return undefined;
     }
-    return super.getObjectWorldRect(objectInstance);
+    return undefined;
   }
 
   /**
@@ -464,6 +613,9 @@ class ViewportRenderer extends Renderer {
    * @param {Iterable<BasicObject>} [objects = []] - 待失效的 AOM 对象集合
    */
   invalidateActiveObjects(objects = []) {
+    // 有活动对象在动说明正在绘制，缩放预览的旧帧不再可信
+    if (objects?.length > 0) this.#exitZoomPreview();
+
     const previousEntryIndex = this.indexDrawableEntries(
       this.#previousAomEntries,
     );
@@ -488,14 +640,16 @@ class ViewportRenderer extends Renderer {
       dirtyRects.length > 0
         ? dirtyRects
         : [
-          ...this.createDrawableEntries(this.collectActiveDrawables()),
-          ...this.#previousAomEntries,
-        ]
-          .flatMap((entry) =>
-            entry?.drawnRects ?? (entry?.screenRect ? [entry.screenRect] : []),
-          )
-          .map((rect) => this.normalizeScreenRect(rect))
-          .filter(Boolean);
+            ...this.createDrawableEntries(this.collectActiveDrawables()),
+            ...this.#previousAomEntries,
+          ]
+            .flatMap(
+              (entry) =>
+                entry?.drawnRects ??
+                (entry?.screenRect ? [entry.screenRect] : []),
+            )
+            .map((rect) => this.normalizeScreenRect(rect))
+            .filter(Boolean);
 
     for (const dirtyRect of targetDirtyRects) {
       this.#outputScheduler.invalidate(dirtyRect);
@@ -513,6 +667,8 @@ class ViewportRenderer extends Renderer {
    * @returns {RectangleRange[]} 实际提交的脏区
    */
   invalidateCachedObjects(objects = [], options = {}) {
+    // 静态层内容变化后上一帧不再可信，立即退出预览改为重建
+    this.#exitZoomPreview();
     this.#cacheDirty = true;
 
     const previousWorldRects = options.previousWorldRects ?? new Map();
@@ -545,6 +701,8 @@ class ViewportRenderer extends Renderer {
       (dirtyRect) => dirtyRect instanceof RectangleRange,
     );
 
+    this.#invalidateTilesForCachedObjects(objects, previousWorldRects);
+
     for (const dirtyRect of normalizedRects) {
       this.invalidate(dirtyRect);
     }
@@ -559,10 +717,18 @@ class ViewportRenderer extends Renderer {
    * @param {{ previousViewportState?: { origin?: { x: number, y: number }, zoom?: number } }} [options = {}] - 旧视口状态
    */
   invalidateChunks(chunks = [], previousChunks = [], options = {}) {
+    const previousViewportState = options.previousViewportState ?? {};
+
+    // 缩放期间走预览：不重建缓存与 tile，只把上一帧按新倍率缩放合成
+    if (this.#tryEnterZoomPreview(previousViewportState)) {
+      return;
+    }
+
     this.#cacheDirty = true;
 
+    this.#invalidateTilesForChunks(chunks, previousChunks, options);
+
     const dirtyRectMap = new Map();
-    const previousViewportState = options.previousViewportState ?? {};
 
     for (const chunk of previousChunks) {
       if (!chunk?.id || dirtyRectMap.has(`prev:${chunk.id}`)) continue;
@@ -600,6 +766,7 @@ class ViewportRenderer extends Renderer {
     if (cacheCanvas.width === 0 || cacheCanvas.height === 0) return;
 
     ctx.save();
+    // 缓存与输出同尺寸同坐标空间，纯位图搬运不叠任何变换
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     draw(ctx, cacheCanvas);
     ctx.restore();
@@ -626,70 +793,608 @@ class ViewportRenderer extends Renderer {
   #copyCacheRects(ctx, rects) {
     if (!Array.isArray(rects)) return;
     this.#withCacheCopyContext(ctx, (targetCtx, cacheCanvas) => {
+      const scale = this._deviceScale ?? 1;
       for (const rect of rects) {
         if (!(rect instanceof RectangleRange)) continue;
+        // 源与目标都在设备像素空间
+        const left = Math.round(rect.left * scale);
+        const top = Math.round(rect.top * scale);
+        const width = Math.round(rect.width * scale);
+        const height = Math.round(rect.height * scale);
         targetCtx.drawImage(
           cacheCanvas,
-          rect.left,
-          rect.top,
-          rect.width,
-          rect.height,
-          rect.left,
-          rect.top,
-          rect.width,
-          rect.height,
+          left,
+          top,
+          width,
+          height,
+          left,
+          top,
+          width,
+          height,
         );
       }
     });
   }
 
   /**
-   * 更新静态缓存（全量重绘）
+   * 取得对象绘制时应使用的预览坐标
+   * @description 剔除用的屏幕矩形仍按数据坐标计算，否则提交进缓存时新预览位置与旧脏区不匹配会残影。
+   * @param {string} objectId - 对象 id
+   * @returns {{ x: number, y: number } | undefined} 预览坐标
+   */
+  getPreviewRenderPosition(objectId) {
+    return this._getPreviewPosition(objectId);
+  }
+
+  /**
+   * 缩放变更时尝试进入预览路径
    * @description
-   * 临时跳过脏区优化，全量清空缓存 canvas 并重绘所有非 AOM 的静态对象。
-   * @param {RectangleRange[]} dirtyRects - 脏区集合（当前忽略，用于全量重绘触发）
+   * 缩放是连续运动，逐帧重新光栅化全部静态对象会成为主要开销（600 笔画约 17ms）。
+   * 预览把上一帧位图按缩放比拉伸合成，单帧成本降到一次 drawImage。
+   * 三个条件同时满足才启用：单步变化小（连续手势）、方向为放大（快照覆盖视口）、
+   * 相对快照的累计拉伸不超过可接受模糊度。
+   * 缩小会露出快照未覆盖的区域，留白比重新光栅化更刺眼，因此直接重建。
+   * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState={}] - 变更前视口状态
+   * @returns {boolean} 是否已接管本次渲染
    * @private
    */
-  #updateCache(dirtyRects) {
-    const ctx = this.#cache?.getContext?.("2d") ?? null;
-    if (!ctx) return;
+  #tryEnterZoomPreview(previousViewportState = {}) {
+    const previousZoom = previousViewportState?.zoom;
+    const zoom = this.viewport?.zoom ?? 1;
+    if (
+      !Number.isFinite(previousZoom) ||
+      previousZoom <= 0 ||
+      previousZoom === zoom
+    ) {
+      return false;
+    }
+    if (!this.#hasRenderedFrame) return false;
 
-    const drawables = this.#collectCacheDrawables();
-    const drawableEntries = this.createDrawableEntries(drawables);
-    const viewportContext = this.createViewportContext(ctx);
+    const current = this.#zoomPreview;
+    const baseZoom = current ? current.zoom : previousZoom;
+    const accumulatedScale = zoom / baseZoom;
+    const stepScale = zoom / previousZoom;
 
-    this.#clearCanvas(this.#cache);
+    // 缩小会露出快照未覆盖的区域，整片空白比重绘更刺眼
+    if (stepScale < 1 || accumulatedScale < 1) {
+      this.#exitZoomPreview();
+      return false;
+    }
+    // 离散跳变（按键一次缩放一倍）不属于连续手势
+    if (stepScale > ZOOM_PREVIEW_MAX_STEP) {
+      this.#exitZoomPreview();
+      return false;
+    }
+    // 累计拉伸超过可接受模糊度
+    if (accumulatedScale > ZOOM_PREVIEW_MAX_SCALE) {
+      this.#exitZoomPreview();
+      return false;
+    }
 
-    for (const entry of drawableEntries) {
-      const drawStrategy = OBJECT_DRAW_STRATEGIES.get(entry.object.constructor);
-      if (!drawStrategy) continue;
-      // 远程手势预览坐标：渲染时临时覆盖 position，画完还原（只影响渲染视图，不改数据）
-      const preview = this._getPreviewPosition(entry.object.id);
-      if (preview) {
-        const originalX = entry.object.position.x;
-        const originalY = entry.object.position.y;
-        entry.object.position.x = preview.x;
-        entry.object.position.y = preview.y;
-        drawStrategy(viewportContext, entry.object);
-        entry.object.position.x = originalX;
-        entry.object.position.y = originalY;
-      } else {
-        drawStrategy(viewportContext, entry.object);
+    if (!current) {
+      const snapshot = this.#captureZoomPreviewSnapshot();
+      if (!snapshot) return false;
+      this.#zoomPreview = {
+        zoom: previousZoom,
+        origin: {
+          x: previousViewportState?.origin?.x ?? 0,
+          y: previousViewportState?.origin?.y ?? 0,
+        },
+        snapshot,
+      };
+    }
+
+    this.#scheduleZoomPreviewSettle();
+    return true;
+  }
+
+  /**
+   * 拷贝当前输出画布作为预览源
+   * @returns {CanvasImageSource | null} 快照，无法拷贝时返回 null
+   * @private
+   */
+  #captureZoomPreviewSnapshot() {
+    const source = this._canvas;
+    const width = source?.width ?? 0;
+    const height = source?.height ?? 0;
+    if (!(width > 0) || !(height > 0)) return null;
+
+    if (
+      !this.#zoomPreviewCanvas ||
+      this.#zoomPreviewCanvas.width !== width ||
+      this.#zoomPreviewCanvas.height !== height
+    ) {
+      this.#zoomPreviewCanvas = new OffscreenCanvas(width, height);
+    }
+
+    const ctx = this.#zoomPreviewCanvas.getContext?.("2d");
+    if (!ctx) return null;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(source, 0, 0);
+    return this.#zoomPreviewCanvas;
+  }
+
+  /**
+   * 销毁渲染器
+   * @description 停掉两个调度器与预览定时器，销毁后不再排帧也不再创建画布。
+   * @returns {void}
+   */
+  destroy() {
+    this.#exitZoomPreview();
+    this.#cacheScheduler.cancel();
+    this.#outputScheduler.cancel();
+  }
+
+  /**
+   * 结束缩放预览并请求一帧清晰渲染
+   * @description
+   * 手势结束有两条来源：输入侧显式通知（`force` 刷新、显式 flush），
+   * 以及空闲兜底定时器。两者共用本方法，保证行为一致。
+   * 无预览在跑时直接返回，不产生额外重建。
+   * @returns {boolean} 是否结束了一次进行中的预览
+   */
+  commitZoomPreview() {
+    const hadPreview = this.#zoomPreview !== null;
+    this.#exitZoomPreview();
+    if (!hadPreview) return false;
+
+    // 按最终倍率重建清晰内容。必须同时失效输出调度器，
+    // 否则输出帧不会重绘，画面会停留在拉伸预览上
+    this.#cacheDirty = true;
+    this.#tileStore.markAllDirty();
+    this.invalidateViewport();
+    return true;
+  }
+
+  /**
+   * 重置预览的清晰重建定时器
+   * @description 兜底路径：输入源不发结束信号时，停手 150ms 后自动提交预览。
+   * @private
+   */
+  #scheduleZoomPreviewSettle() {
+    if (this.#zoomPreviewTimer !== null) {
+      clearTimeout(this.#zoomPreviewTimer);
+    }
+    this.#zoomPreviewTimer = setTimeout(() => {
+      this.#zoomPreviewTimer = null;
+      if (this.commitZoomPreview()) {
+        this.viewport?.markFrameDirty?.();
+      }
+    }, ZOOM_PREVIEW_SETTLE_MS);
+  }
+
+  /**
+   * 退出缩放预览
+   * @private
+   */
+  #exitZoomPreview() {
+    if (this.#zoomPreviewTimer !== null) {
+      clearTimeout(this.#zoomPreviewTimer);
+      this.#zoomPreviewTimer = null;
+    }
+    this.#zoomPreview = null;
+  }
+
+  /**
+   * 用预览快照渲染输出帧
+   * @description 快照按 `zoom / 快照倍率` 拉伸，并按原点差平移，保证世界坐标位置不变。
+   * @param {CanvasRenderingContext2D} ctx - 输出画布上下文
+   * @private
+   */
+  #renderZoomPreview(ctx) {
+    const preview = this.#zoomPreview;
+    if (!preview) return;
+
+    const zoom = this.viewport?.zoom ?? 1;
+    const origin = this.viewport?.origin ?? { x: 0, y: 0 };
+    const scale = zoom / preview.zoom;
+    const offsetX = (preview.origin.x - origin.x) * zoom;
+    const offsetY = (preview.origin.y - origin.y) * zoom;
+    const snapshotWidth = preview.snapshot?.width ?? 0;
+    const snapshotHeight = preview.snapshot?.height ?? 0;
+
+    // 快照与输出都是设备像素位图，拉伸量按设备倍率换算
+    const deviceScale = this._deviceScale ?? 1;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.clear();
+    if (snapshotWidth > 0 && snapshotHeight > 0) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(
+        preview.snapshot,
+        offsetX * deviceScale,
+        offsetY * deviceScale,
+        snapshotWidth * scale,
+        snapshotHeight * scale,
+      );
+    }
+    ctx.restore();
+  }
+
+  /**
+   * 当前是否使用世界空间 tile 缓存
+   * @description
+   * 视口能提供世界矩形时启用。tile 的格子间距随缩放取档，像素内容始终按当前缩放光栅化，
+   * 因此任何缩放档位都能用；视口接口不完整时退回经典路径。
+   * @returns {boolean}
+   * @private
+   */
+  #useTiles() {
+    return (
+      this.#tilesEnabled &&
+      typeof this.viewport?.getViewportWorldRect === "function"
+    );
+  }
+
+  /**
+   * 按内容变化标记 tile 失效
+   * @description
+   * 只标记对象当前世界范围与旧世界范围覆盖的 tile。这依赖一条不变式：
+   * 对象的着墨范围必须落在 `getRange()` 加 `getRenderPadding()` 之内，
+   * 由 `draw-bounds` 测试守住（连接样式与端点样式因此限定在能保证该不变式的取值）。
+   * 旧范围一侧同样要标脏，否则对象被拾取或移走后原位置会残留像素；
+   * 残留像素叠加 AOM 当帧的绘制时，半透明填充会表现为整片变暗。
+   * @param {Iterable<BasicObject>} [objects=[]] - 待失效对象
+   * @param {Map<string, RectangleRange>} [previousWorldRects] - 旧世界范围快照
+   * @private
+   */
+  #invalidateTilesForCachedObjects(objects, previousWorldRects) {
+    const zoom = this.viewport?.zoom ?? 1;
+    for (const objectInstance of objects ?? []) {
+      const padding = this.getObjectScreenPadding(objectInstance) / (zoom || 1);
+      const currentRect = this.getObjectWorldRect(objectInstance);
+      if (currentRect) {
+        this.#tileStore.markDirtyWorldRect(currentRect.inflate(padding));
+      }
+      const previousRect = previousWorldRects?.get?.(objectInstance.id);
+      if (previousRect) {
+        this.#tileStore.markDirtyWorldRect(previousRect.inflate(padding));
+      }
+    }
+  }
+
+  /**
+   * 按区块集合差集标记 tile 失效
+   * @description
+   * 只处理新加载与已卸载的区块。平移会让同一批区块的屏幕矩形全部变化，
+   * 但其世界内容并未改变，若按屏幕脏区标记会导致平移时全部 tile 重建。
+   * @param {Iterable<*>} chunks - 当前区块集合
+   * @param {Iterable<*>} previousChunks - 变更前区块集合
+   * @param {Object} [options={}] - 失效选项
+   * @private
+   */
+  #invalidateTilesForChunks(chunks, previousChunks, options = {}) {
+    const current = [...(chunks ?? [])].filter(
+      (chunk) => chunk?.id !== undefined,
+    );
+    const previous = [...(previousChunks ?? [])].filter(
+      (chunk) => chunk?.id !== undefined,
+    );
+    if (current.length === 0 && previous.length === 0) return;
+
+    const currentIds = new Set(current.map((chunk) => chunk.id));
+    const previousIds = new Set(previous.map((chunk) => chunk.id));
+    if (
+      current.length === previous.length &&
+      current.every((chunk) => previousIds.has(chunk.id))
+    ) {
+      return;
+    }
+
+    for (const chunk of current) {
+      if (previousIds.has(chunk.id)) continue;
+      const worldRect = this.getChunkWorldRect(chunk);
+      if (worldRect) this.#tileStore.markDirtyWorldRect(worldRect);
+    }
+    for (const chunk of previous) {
+      if (currentIds.has(chunk.id)) continue;
+      const worldRect = this.getChunkWorldRect(chunk);
+      if (worldRect) this.#tileStore.markDirtyWorldRect(worldRect);
+    }
+  }
+
+  /**
+   * 确保覆盖视口的 tile 已建好且内容最新
+   * @description
+   * 只重新光栅化脏 tile，返回覆盖缓存范围的 tile 列表。
+   * 没有脏 tile 时跳过对象收集与层叠排序，平移帧因此只剩合成成本。
+   * 重建范围限制在视口世界矩形内：缓存外扩区里的 tile 不会被绘制
+   * （合成按脏区裁剪，脏区必在视口内），留到平移揭示时再建。
+   * @returns {Array<import("./tile-cache.js").TileEntry>}
+   * @private
+   */
+  #ensureCleanTiles() {
+    const worldRect = this.viewport?.getViewportWorldRect?.();
+    if (!worldRect) return [];
+
+    const zoom = this.viewport?.zoom ?? 1;
+    const deviceScale = this._deviceScale ?? 1;
+    // 像素内容取决于缩放与设备倍率，两者变化会让整片 tile 失效
+    this.#tileStore.setRasterScale(zoom, deviceScale);
+
+    const cacheWorldRect = this.#expandWorldRect(
+      worldRect,
+      this.#tileCacheMargin,
+    );
+    const tiles = this.#tileStore.ensure(cacheWorldRect);
+    const dirtyTiles = tiles.filter(
+      (tile) =>
+        this.#tileStore.isDirty(tile) &&
+        intersectsRanges(tile.worldRect, worldRect),
+    );
+
+    if (dirtyTiles.length > 0) {
+      // padding 与对象自身相关而与 tile 无关，先算一次，避免 tile 数 × 对象数的重复解析
+      const items = this.#collectCacheDrawables().map((objectInstance) => {
+        const paddedWorldRect = this.getObjectWorldRect(objectInstance);
+        if (!paddedWorldRect)
+          return { object: objectInstance, paddedWorldRect: undefined };
+        const padding = this.getObjectScreenPadding(objectInstance) / zoom;
+        return {
+          object: objectInstance,
+          paddedWorldRect: paddedWorldRect.inflate(padding),
+        };
+      });
+      for (const tile of dirtyTiles) {
+        this.#renderTile(tile, items);
       }
     }
 
+    this.#tileStore.evictToBudget();
+    return tiles;
+  }
+
+  /**
+   * 按单侧比例外扩世界矩形
+   * @param {RectangleRange} worldRect - 原世界矩形
+   * @param {number} ratio - 单侧外扩比例
+   * @returns {RectangleRange}
+   * @private
+   */
+  #expandWorldRect(worldRect, ratio) {
+    const marginX = worldRect.width * ratio;
+    const marginY = worldRect.height * ratio;
+    return new RectangleRange(
+      worldRect.left - marginX,
+      worldRect.top - marginY,
+      worldRect.width + marginX * 2,
+      worldRect.height + marginY * 2,
+    );
+  }
+
+  /**
+   * 重新光栅化单块 tile
+   * @description
+   * tile 上下文以 tile 世界原点为视口原点，对象按全局层叠顺序绘制并裁剪到 tile 内。
+   * 每个 tile 都重画所有与之相交的对象，跨 tile 对象的过绘是保持层叠正确的代价。
+   * @param {import("./tile-cache.js").TileEntry} tile - 目标 tile
+   * @param {Array<{object: BasicObject, paddedWorldRect?: RectangleRange}>} items - 按层叠顺序排列的静态对象，已含外扩范围
+   * @returns {RectangleRange[]} 本次重建覆盖的 tile 内矩形
+   * @private
+   */
+  #renderTile(tile, items) {
+    const ctx = tile.canvas?.getContext?.("2d") ?? null;
+    if (!ctx) {
+      this.#tileStore.markRebuilt(tile);
+      return [];
+    }
+
+    const zoom = this.viewport?.zoom ?? 1;
+    const deviceScale = this._deviceScale ?? 1;
+    const cssWidth = tile.deviceRect.width / deviceScale;
+    const cssHeight = tile.deviceRect.height / deviceScale;
+    const fullRect = new RectangleRange(0, 0, cssWidth, cssHeight);
+
+    // 内容原点只由块边界决定，与视口原点无关，因此平移不需要重新光栅化
+    const viewportContext = this.createViewportContext(ctx, {
+      zoom,
+      origin: {
+        x: tileContentOrigin(tile.boundaryLeft, zoom, deviceScale),
+        y: tileContentOrigin(tile.boundaryTop, zoom, deviceScale),
+      },
+    });
+
+    const entries = [];
+    for (const item of items) {
+      const objectInstance = item.object;
+      const worldRect = item.paddedWorldRect;
+      if (!worldRect) {
+        entries.push({ objectId: objectInstance.id, object: objectInstance });
+        continue;
+      }
+      if (!intersectsRanges(worldRect, tile.worldRect)) continue;
+
+      const left =
+        tileLocalDevice(worldRect.left, tile.boundaryLeft, zoom, deviceScale) /
+        deviceScale;
+      const top =
+        tileLocalDevice(worldRect.top, tile.boundaryTop, zoom, deviceScale) /
+        deviceScale;
+      entries.push({
+        objectId: objectInstance.id,
+        object: objectInstance,
+        screenRect: new RectangleRange(
+          left,
+          top,
+          (worldRect.width * zoom * deviceScale) / deviceScale,
+          (worldRect.height * zoom * deviceScale) / deviceScale,
+        ),
+      });
+    }
+
+    // 只重建受影响的块，但整块重画。
+    // 局部脏区重画会把穿过脏区边界的对象按裁剪后的形状再画一遍，
+    // 提交后能在边界上看到一条直边；整块重画不会切任何对象。
+    this.clearRegion(ctx, fullRect);
+    this.renderRegion(ctx, viewportContext, entries, fullRect);
+    this.#tileStore.markRebuilt(tile);
+    return [fullRect];
+  }
+
+  /**
+   * 把 tile 直接合成到目标上下文
+   * @description
+   * 不再经过静态缓存画布，平移省一次全屏拷贝、提交省一次增量拷贝。
+   * 给定脏区时逐区裁剪，只画与该脏区相交的 tile；否则画出视口内全部 tile。
+   * @param {CanvasRenderingContext2D} ctx - 目标上下文
+   * @param {RectangleRange[]} [dirtyRects=[]] - 屏幕脏区
+   * @returns {boolean} 是否完成合成，false 表示视口信息不足需回退缓存拷贝
+   * @private
+   */
+  #drawTiles(ctx, dirtyRects = []) {
+    const viewportWorldRect = this.viewport?.getViewportWorldRect?.();
+    if (!viewportWorldRect) return false;
+
+    const tiles = this.#ensureCleanTiles();
+    const zoom = this.viewport?.zoom ?? 1;
+    const origin = this.viewport?.origin ?? { x: 0, y: 0 };
+    const deviceScale = this._deviceScale ?? 1;
+    // 原点已吸附到整数设备像素，因此贴图位置全是整数，搬运不需要重采样
+    const originDeviceX = origin.x * zoom * deviceScale;
+    const originDeviceY = origin.y * zoom * deviceScale;
+    const viewportRect = this._getViewportRect();
+
+    const toDeviceClip = (rect) => ({
+      left: rect.left * deviceScale,
+      top: rect.top * deviceScale,
+      right: (rect.left + rect.width) * deviceScale,
+      bottom: (rect.top + rect.height) * deviceScale,
+    });
+    const clipRects =
+      dirtyRects.length > 0
+        ? dirtyRects.map(toDeviceClip)
+        : viewportRect
+          ? [toDeviceClip(viewportRect)]
+          : [null];
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (const clipRect of clipRects) {
+      for (const tile of tiles) {
+        const destLeft = tile.boundaryLeft - originDeviceX;
+        const destTop = tile.boundaryTop - originDeviceY;
+        const tileWidth = tile.deviceRect.width;
+        const tileHeight = tile.deviceRect.height;
+        if (
+          clipRect &&
+          (destLeft >= clipRect.right ||
+            destTop >= clipRect.bottom ||
+            destLeft + tileWidth <= clipRect.left ||
+            destTop + tileHeight <= clipRect.top)
+        ) {
+          continue;
+        }
+
+        this.#tileStore.touch(tile);
+        // 只搬限定区内那一块：以整图配小裁剪区会把像素搬运量放大数十倍
+        const sourceLeft = clipRect
+          ? Math.max(0, Math.round(clipRect.left) - destLeft)
+          : 0;
+        const sourceTop = clipRect
+          ? Math.max(0, Math.round(clipRect.top) - destTop)
+          : 0;
+        const sourceRight = clipRect
+          ? Math.min(tileWidth, Math.round(clipRect.right) - destLeft)
+          : tileWidth;
+        const sourceBottom = clipRect
+          ? Math.min(tileHeight, Math.round(clipRect.bottom) - destTop)
+          : tileHeight;
+        const sourceWidth = sourceRight - sourceLeft;
+        const sourceHeight = sourceBottom - sourceTop;
+        if (sourceWidth <= 0 || sourceHeight <= 0) continue;
+
+        ctx.drawImage(
+          tile.canvas,
+          sourceLeft,
+          sourceTop,
+          sourceWidth,
+          sourceHeight,
+          destLeft + sourceLeft,
+          destTop + sourceTop,
+          sourceWidth,
+          sourceHeight,
+        );
+      }
+    }
+    ctx.restore();
+    return true;
+  }
+
+  /**
+   * 单块 tile 的位图边长（设备像素）
+   * @returns {number} 位图边长
+   */
+  getTileBitmapSize() {
+    return this.#tileStore.bitmapSize;
+  }
+
+  /**
+   * 读取 tile 缓存调试信息
+   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number, bytes: number, level: number, zoom: number }}
+   */
+  getTileDebugInfo() {
+    return {
+      enabled: this.#useTiles(),
+      tileSize: this.#tileStore.tileSize,
+      tileCount: this.#tileStore.size,
+      dirtyCount: this.#tileStore.countDirty(),
+      rebuildCount: this.#tileStore.rebuildCount,
+      bytes: this.#tileStore.usedBytes,
+      level: this.#tileStore.level,
+      zoom: this.#tileStore.zoom,
+    };
+  }
+
+  /**
+   * 更新静态缓存
+   * @description
+   * 缩放档位 0 走 tile 重建，其余档位全量重建。
+   * 局部重建已删除：它依赖一串隐含前提（对象实际绘制范围必须被失效矩形完整覆盖、
+   * 退出 AOM 的对象必须当帧被纳入静态失效），任何一条不成立就会残留过期像素，
+   * 而实测全量重建的代价与局部重建持平。
+   * @private
+   */
+  #updateCache() {
+    const ctx = this.#cache?.getContext?.("2d") ?? null;
+    if (!ctx) return;
+
+    if (this.#useTiles() && this.viewport?.getViewportWorldRect?.()) {
+      this.#ensureCleanTiles();
+      this.#cacheDirty = false;
+      return;
+    }
+
+    const drawables = this.#collectCacheDrawables();
+    const drawableEntries = this.createDrawableEntries(drawables);
+    this.#rebuildWholeCache(ctx, drawableEntries);
     this.#cacheDirty = false;
   }
 
   /**
-   * 缓存调度器 flush 处理器
-   * @description 由缓存层调度器在 rAF 中触发。仅在 #cacheDirty 为真时更新缓存。
-   * @param {RectangleRange[]} cacheDirtyRects - 缓存层脏区集合
+   * 全量重建静态缓存
+   * @param {CanvasRenderingContext2D} ctx - 缓存上下文
+   * @param {Array<{screenRect?: RectangleRange, object: BasicObject}>} entries - 静态对象条目
    * @private
    */
-  #cacheFlush(cacheDirtyRects) {
+  #rebuildWholeCache(ctx, entries) {
+    const viewportContext = this.createViewportContext(ctx);
+    this.#clearCanvas(this.#cache);
+
+    for (const entry of entries) {
+      if (!OBJECT_DRAW_STRATEGIES.has(entry.object.constructor)) continue;
+      this.drawObjectWithPreview(viewportContext, entry.object);
+    }
+  }
+
+  /**
+   * 缓存调度器 flush 处理器
+   * @description 由缓存层调度器在 rAF 中触发。仅在 `#cacheDirty` 为真时更新缓存。
+   * @private
+   */
+  #cacheFlush() {
     if (this.#cacheDirty) {
-      this.#updateCache(cacheDirtyRects);
+      this.#updateCache();
       this.#cacheDirty = false;
     }
   }
@@ -706,7 +1411,7 @@ class ViewportRenderer extends Renderer {
       return;
     }
     // 无积压脏区但缓存脏 → 全量重建
-    this.#updateCache([]);
+    this.#updateCache();
     this.#cacheDirty = false;
   }
 
@@ -744,6 +1449,14 @@ class ViewportRenderer extends Renderer {
     const outputCtx = this._getContext();
     if (!outputCtx) return [];
 
+    // 缩放预览直接缩放合成上一帧，跳过缓存拷贝与 AOM 重绘
+    if (this.#zoomPreview) {
+      this.#renderZoomPreview(outputCtx);
+      return [];
+    }
+
+    this.#hasRenderedFrame = true;
+
     const aomDrawables = this.collectActiveDrawables();
     const drawableEntries = this.createDrawableEntries(aomDrawables);
     const previousEntryIndex = this.indexDrawableEntries(
@@ -755,9 +1468,7 @@ class ViewportRenderer extends Renderer {
 
     // 脏区归一化并扩边到整数边界，确保 clearRect / drawImage 使用一致的 rect
     const normalizedDirtyRects = hasExplicitDirtyRects
-      ? normalizeDirtyRectsForScreenUpdate(
-        this.collectDirtyRects(dirtyRects),
-      )
+      ? normalizeDirtyRectsForScreenUpdate(this.collectDirtyRects(dirtyRects))
       : [];
 
     // 按脏区清空输出 canvas（无脏区时全量清空）
@@ -767,11 +1478,15 @@ class ViewportRenderer extends Renderer {
       this.clear();
     }
 
-    // 按脏区从缓存拷贝静态内容到输出（无脏区时全量拷贝）
-    if (normalizedDirtyRects.length > 0) {
-      this.#copyCacheRects(outputCtx, normalizedDirtyRects);
-    } else {
-      this.#copyCache(outputCtx);
+    // 静态内容上屏：tile 模式直接合成到输出，其余模式从缓存画布拷贝
+    const tilesDrawn =
+      this.#useTiles() && this.#drawTiles(outputCtx, normalizedDirtyRects);
+    if (!tilesDrawn) {
+      if (normalizedDirtyRects.length > 0) {
+        this.#copyCacheRects(outputCtx, normalizedDirtyRects);
+      } else {
+        this.#copyCache(outputCtx);
+      }
     }
 
     // 按脏区裁剪绘制 AOM 对象：不相交则跳过，相交则裁剪到对应脏区
@@ -805,7 +1520,9 @@ class ViewportRenderer extends Renderer {
       entry.drawnRects =
         entryDirtyRects.length > 0
           ? entryDirtyRects
-          : (entry.screenRect ? [entry.screenRect] : []);
+          : entry.screenRect
+            ? [entry.screenRect]
+            : [];
     }
 
     // 保存状态供下一帧使用
@@ -841,8 +1558,19 @@ class ViewportRenderer extends Renderer {
   renderStaticCacheToCanvas(targetCanvas, dirtyRects) {
     if (!targetCanvas) return;
 
+    if (this.#useTiles()) {
+      const tileTargetCtx = targetCanvas.getContext?.("2d") ?? null;
+      if (!tileTargetCtx) return;
+      tileTargetCtx.save();
+      tileTargetCtx.setTransform(1, 0, 0, 1, 0, 0);
+      tileTargetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+      tileTargetCtx.restore();
+      this.#drawTiles(tileTargetCtx, []);
+      return;
+    }
+
     if (this.#cacheDirty && Array.isArray(dirtyRects)) {
-      this.#updateCache(dirtyRects);
+      this.#updateCache();
     }
 
     const cacheCanvas = this.#cache;
@@ -852,7 +1580,14 @@ class ViewportRenderer extends Renderer {
     targetCtx.save();
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
     targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
-    targetCtx.drawImage(cacheCanvas, 0, 0);
+    // 调试目标画布尺寸由调用方决定，显式给出目标尺寸避免高位图下只画出左上角
+    targetCtx.drawImage(
+      cacheCanvas,
+      0,
+      0,
+      targetCanvas.width,
+      targetCanvas.height,
+    );
     targetCtx.restore();
   }
 }

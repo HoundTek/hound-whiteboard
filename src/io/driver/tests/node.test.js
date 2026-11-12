@@ -38,9 +38,12 @@ describe("createNodeDriver", () => {
 describe("node fs 操作", () => {
   test("write/read 往返真实文件", async () => {
     const { d } = await setup();
-    expect(await d.write("a.txt", "hello")).toBe(true);
+    const writeOk = await d.write("a.txt", "hello");
+    const fileExists = fs.existsSync(path.join(tmpRoot, "a.txt"));
+
+    // safe() 会把 fs 错误吞成 false，失败时先区分「写入被拒」与「文件消失」
+    expect({ writeOk, fileExists }).toEqual({ writeOk: true, fileExists: true });
     expect(await d.read("a.txt")).toBe("hello");
-    expect(fs.existsSync(path.join(tmpRoot, "a.txt"))).toBe(true);
   });
 
   test("write 自动创建父目录", async () => {
