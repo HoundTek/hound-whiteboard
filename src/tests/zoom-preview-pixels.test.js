@@ -3,8 +3,8 @@
  */
 
 /**
- * @file 缩放预览的像素回归测试
- * @description 断言预览帧确实把上一帧内容画出来了，防止裁剪路径写错导致整屏白屏。
+ * @file 缩放预览与缩小重建的像素回归测试
+ * @description 断言放大预览帧把上一帧内容画出来、缩小后整帧重建不留白，防止裁剪路径写错导致整屏白屏。
  * @module host/zoom-preview-pixels-test
  * @author Zhou Chenyu
  */
@@ -166,10 +166,10 @@ describe("缩放预览的像素输出", () => {
     }
   });
 
-  test("缩小预览的外圈包含活动层对象，不被静态层盖住", async () => {
+  test("缩小后活动层对象仍然压在上层", async () => {
     const { viewport, renderer, boardCore, aom } = await createFilledViewport();
     try {
-      // 活动层对象放在缩小时会落到外圈的位置
+      // 活动层对象放在缩小时会挪出原视野的位置
       const active = new CircleObject(99, new Vector(370, 280), {
         strokeColor: "#00ff00",
         fillColor: "#00ff00",
@@ -188,7 +188,7 @@ describe("缩放预览的像素输出", () => {
       });
       viewport.flushRenderFrame();
 
-      // 缩小时快照只占中心，该点在右下外圈，必须由外圈补画画上活动层对象
+      // 缩小走整帧重建，该点在右下角，仍必须画上活动层对象
       const canvas = renderer.canvas;
       const pixel = Array.from(
         canvas.getContext("2d").getImageData(296, 224, 1, 1).data,
@@ -209,7 +209,7 @@ describe("缩放预览的像素输出", () => {
       });
       viewport.flushRenderFrame();
 
-      // 缩小后快照只占中心，外圈必须现画，整屏同样不能留白
+      // 缩小走整帧重建，整屏同样不能留白
       expect(opaqueRatio(renderer)).toBeGreaterThan(0.95);
     } finally {
       viewport.destroy();

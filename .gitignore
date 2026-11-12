@@ -18,6 +18,10 @@ yarn-error.log*
 .npm
 .yarn-integrity
 
+# Agent tooling artifacts
+.pi-subagents/
+.crush/
+
 # IDEs and editors
 .idea/
 *.swp

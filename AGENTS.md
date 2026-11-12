@@ -139,7 +139,7 @@ class ViewportRenderer {
 
 ### 关键坑点
 
-1. **`board.width` / `board.height` 必须设置** — 涉及位置→区块解析时，创建 `Viewport` 后必须设 `board.width` / `board.height`，否则 `chunkWidth=0` → `worldToChunk` 返回 null → 对象创建静默失败
+1. **`board.width` / `board.height` 是区块边长，不是板尺寸** — 默认 1024，创建时归一化，不会是 0；世界本身无限大。改它会改变持久化落盘的粒度，且创建后不可变
 2. **DAG dispatch 必须传 `{ board, viewport }` 上下文** — 直接 dispatch 时手动传入；通过 `board.signalsEventBus.emit("input", ...)` 则自动携带
 3. **modifier 双通道** — 见「信号类型」的 `position`/`displacement`；两者可同帧叠加，displacement 无准入检测、锚点自动同步
 4. **断言要验证实际效果** — 验证位置/状态变化，不要只 `.not.toBeNull()`

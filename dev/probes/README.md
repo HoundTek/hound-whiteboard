@@ -32,6 +32,18 @@
 | `zoom-extremes.mjs` | 缩放两端的代价（用于确定缩放上下限） | `node dev/probes/zoom-extremes.mjs` | 各档位的已载区块数、收集耗时、单帧耗时 |
 | `collect-cost.mjs` | 缩小方向静态层的收集成本 | `node dev/probes/collect-cost.mjs` | 已载区块数、`collectStaticDrawables` 中位与最快耗时 |
 | `chunk-unload.mjs` | 缩小再放大后区块是否回落 | `node dev/probes/chunk-unload.mjs` | 各档位的已载区块数、驻留对象数、单帧耗时。**必须用持久化板**，内存模式按设计不卸载 |
+| `bbox-honesty.mjs` | 着墨范围是否超出 `getRange()` 加渲染留白 | `node dev/probes/bbox-honesty.mjs` | 13 组配置的溢出像素数与溢出方向，用于确定 lineJoin / lineCap 白名单 |
+| `dirty-redraw-cost.mjs` | 块内局部重绘与整块重画的成本对比 | `W=900 H=700 node dev/probes/dirty-redraw-cost.mjs` | 两种策略下的提交成本 |
+| `dpr-cost.mjs` | 设备像素比对渲染成本的影响 | `node dev/probes/dpr-cost.mjs` | DPR=1/2 下的提交与平移耗时 |
+| `tile-count.mjs` | 视口尺寸与缩放档位切出多少块 | `W=900 H=700 node dev/probes/tile-count.mjs` | 各缩放档位的块数 |
+| `tile-blit-count.mjs` | 合成一帧搬运多少次位图 | `node dev/probes/tile-blit-count.mjs` | 每帧 `drawImage` 次数 |
+| `tile-memory.mjs` | tile 缓存的内存占用是否受字节预算约束 | `node dev/probes/tile-memory.mjs` | 各视口与 DPR 下的驻留字节数。**期望不超过 64MB 预算** |
+| `tile-size-tradeoff.mjs` | tile 边长的成本曲线 | `node dev/probes/tile-size-tradeoff.mjs` | 各边长的块数、提交与平移耗时 |
+| `tile-zoom-pan.mjs` | 任意缩放档位下的平移成本与覆盖率 | `node dev/probes/tile-zoom-pan.mjs` | 各缩放档位的帧耗时、覆盖率、接缝像素数 |
+| `zoom-cost.mjs` | 缩放档位对单帧耗时的影响 | `node dev/probes/zoom-cost.mjs` | 各档位耗时 |
+| `zoom-preview.mjs` | 缩放预览帧的成本 | `node dev/probes/zoom-preview.mjs` | 预览帧与整帧重建的耗时对比 |
+| `zoom-change-cost.mjs` | 改变缩放档位这一动作本身的成本 | `node dev/probes/zoom-change-cost.mjs` | 各档位的换档耗时 |
+| `render-frame-probe.js` | 运行期抓取单帧渲染状态（被 UI 调试面引用） | 由 `render-frame-probe.test.js` 覆盖 | 帧内的绘制顺序、活动对象、脏区与 tile 状态 |
 
 截图类探针从命令行接收三张图片：
 
