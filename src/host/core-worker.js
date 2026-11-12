@@ -1153,6 +1153,15 @@ class CoreWorkerRuntime {
     // destroy 不得 release）；无活 daemon 时 spawn 成功的新实例初始创建者引用归本会话。
     // 仅「本次会话内经 Rust spawn 成功」记 ownership，其余情况一律不 release
     const liveBefore = await this.#probeLiveBoardDaemon();
+    // 已有活 daemon：直接接入，不再请求 spawn
+    // Rust 侧不是真正幂等：它总是起一个 node 进程，而脚本发现注册表同名且存活会抛错退出
+    if (liveBefore !== null) {
+      this.#guiDaemonOwned = false;
+      this.#log.info(
+        `复用已在运行的板 daemon：${liveBefore.name}（端口 ${liveBefore.port}）`,
+      );
+      return liveBefore;
+    }
     const spawned = await this.#forwardIoInvoke("spawn_board_daemon", {
       path: rootPath,
       name,
