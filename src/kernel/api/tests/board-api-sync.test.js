@@ -99,11 +99,11 @@ const redo = (source, n, time, targetUndoId) =>
  * 按到达顺序逐条喂入一端
  * @param {BoardApi} api - BoardApi 实例
  * @param {import("../../hit/operation.js").OperationRecord[]} records - 记录序列
- * @returns {void}
+ * @returns {Promise<void>}
  */
-const feed = (api, records) => {
+const feed = async (api, records) => {
   for (const record of records) {
-    api.applyRemoteOperations([record]);
+    await api.applyRemoteOperations([record]);
   }
 };
 
@@ -153,12 +153,12 @@ describe("情景四：全程离线，最后一次性完全同步", () => {
     b3: add("b", 3, 5, "b/op-2"),
   });
 
-  test("A 端增量视角：本地 A1、A2、U，后收 B1、B2、B3（B1/B2 落在 U 前，触发重建）", () => {
+  test("A 端增量视角：本地 A1、A2、U，后收 B1、B2、B3（B1/B2 落在 U 前，触发重建）", async () => {
     const r = records();
     const endA = createEnd("a");
     const endB = createEnd("b");
-    feed(endA.api, [r.a1, r.a2, r.u, r.b1, r.b2, r.b3]);
-    feed(endB.api, [r.b1, r.b2, r.b3, r.a1, r.a2, r.u]);
+    await feed(endA.api, [r.a1, r.a2, r.u, r.b1, r.b2, r.b3]);
+    await feed(endB.api, [r.b1, r.b2, r.b3, r.a1, r.a2, r.u]);
     expectConverged(
       [endA, endB],
       ["a/op-1", "b/op-1", "b/op-2", "b/op-3"],
@@ -168,12 +168,12 @@ describe("情景四：全程离线，最后一次性完全同步", () => {
     expect(endA.boardCore.undoTree.isOnActiveChain("a/op-2")).toBe(false);
   });
 
-  test("B 端增量视角：本地 B1、B2、B3，后收 A1、A2、U（U 纯应用）", () => {
+  test("B 端增量视角：本地 B1、B2、B3，后收 A1、A2、U（U 纯应用）", async () => {
     const r = records();
     const endA = createEnd("a");
     const endB = createEnd("b");
-    feed(endB.api, [r.b1, r.b2, r.b3, r.a1, r.a2, r.u]);
-    feed(endA.api, [r.a1, r.a2, r.u, r.b1, r.b2, r.b3]);
+    await feed(endB.api, [r.b1, r.b2, r.b3, r.a1, r.a2, r.u]);
+    await feed(endA.api, [r.a1, r.a2, r.u, r.b1, r.b2, r.b3]);
     expectConverged(
       [endA, endB],
       ["a/op-1", "b/op-1", "b/op-2", "b/op-3"],
@@ -193,12 +193,12 @@ describe("情景五：撤销与迟到的改挂范围内节点", () => {
     o1: undo("a", 3, 5, "a/op-2", "b/op-2"),
   });
 
-  test("A 端：O1 先应用，X 迟到落入改挂范围（触发重建，X 同时进入原位置与撤销分支）", () => {
+  test("A 端：O1 先应用，X 迟到落入改挂范围（触发重建，X 同时进入原位置与撤销分支）", async () => {
     const r = records();
     const endA = createEnd("a");
     const endB = createEnd("b");
-    feed(endA.api, [r.a1, r.b1, r.a2, r.b2, r.o1, r.x]);
-    feed(endB.api, [r.a1, r.b1, r.a2, r.b2, r.x, r.o1]);
+    await feed(endA.api, [r.a1, r.b1, r.a2, r.b2, r.o1, r.x]);
+    await feed(endB.api, [r.a1, r.b1, r.a2, r.b2, r.x, r.o1]);
     expectConverged(
       [endA, endB],
       ["a/op-1", "b/op-1", "b/op-2", "b/op-3"],
@@ -223,14 +223,14 @@ describe("情景八：三方撤销、重做与新增赛跑", () => {
     o4: add("c", 2, 6, "c/op-1"),
   });
 
-  test("A 端全程纯应用 / B 端 O1 落在 O3 前触发重建 / C 端 O2 落在 O4 前触发重建", () => {
+  test("A 端全程纯应用 / B 端 O1 落在 O3 前触发重建 / C 端 O2 落在 O4 前触发重建", async () => {
     const r = records();
     const endA = createEnd("a");
     const endB = createEnd("b");
     const endC = createEnd("c");
-    feed(endA.api, [r.a1, r.b1, r.c1, r.o1, r.o2, r.o3, r.o4]);
-    feed(endB.api, [r.a1, r.b1, r.c1, r.o3, r.o1, r.o2, r.o4]);
-    feed(endC.api, [r.a1, r.b1, r.c1, r.o4, r.o1, r.o2, r.o3]);
+    await feed(endA.api, [r.a1, r.b1, r.c1, r.o1, r.o2, r.o3, r.o4]);
+    await feed(endB.api, [r.a1, r.b1, r.c1, r.o3, r.o1, r.o2, r.o4]);
+    await feed(endC.api, [r.a1, r.b1, r.c1, r.o4, r.o1, r.o2, r.o3]);
     // 撤 → 重做 → 再撤：B 的撤销是最后生效的意图；C2 的父不在活动链按时间插入
     expectConverged(
       [endA, endB, endC],
@@ -251,12 +251,12 @@ describe("情景九：重做与并发新增", () => {
     o3: redo("a", 4, 5, "a/op-3"),
   });
 
-  test("A 端：本地重做先生效，O2 到达触发重建后重做仍保持；B 端：纯应用殊途同归", () => {
+  test("A 端：本地重做先生效，O2 到达触发重建后重做仍保持；B 端：纯应用殊途同归", async () => {
     const r = records();
     const endA = createEnd("a");
     const endB = createEnd("b");
-    feed(endA.api, [r.a1, r.b1, r.a2, r.o1, r.o3, r.o2]);
-    feed(endB.api, [r.a1, r.b1, r.a2, r.o2, r.o1, r.o3]);
+    await feed(endA.api, [r.a1, r.b1, r.a2, r.o1, r.o3, r.o2]);
+    await feed(endB.api, [r.a1, r.b1, r.a2, r.o2, r.o1, r.o3]);
     // 远端（b）的并发新工作不洗刷 a 的重做：A2 按时间标记插回 B2 之前
     expectConverged(
       [endA, endB],
@@ -290,15 +290,15 @@ describe("重做与并发新增的投递交错（回归）", () => {
    * 增量泵：把 from 端新记录以线上 JSON 形态投递给 to 端
    * @param {{ boardCore: BoardCore, api: BoardApi }} from - 发送端
    * @param {{ boardCore: BoardCore, api: BoardApi }} to - 接收端
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  const pump = (from, to) => {
+  const pump = async (from, to) => {
     const seen = new Set(to.boardCore.operationLog.toJSON().map((r) => r.id));
     const fresh = from.boardCore.operationLog
       .toJSON()
       .filter((r) => !seen.has(r.id));
     if (fresh.length > 0) {
-      to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
+      await to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
     }
   };
 
@@ -306,16 +306,16 @@ describe("重做与并发新增的投递交错（回归）", () => {
     const A = createEnd("a");
     const B = createEnd("b");
     await create(A, "a/1");
-    pump(A, B);
+    await pump(A, B);
     expect(A.api.undo().undone).toBe(true);
     await create(B, "b/1");
     // A 的撤销先到 B（同源保序：重做在其撤销之后到达）；
     // B 的新增先于 A 的重做到达 A（曾洗掉 A 的重做资格：本端不发效果、对端生效，双端永久分歧）
-    pump(A, B);
-    pump(B, A);
+    await pump(A, B);
+    await pump(B, A);
     expect(A.api.redo().redone).toBe(true);
     expect(A.boardCore.getObjectById("a/1")).toBeDefined();
-    pump(A, B);
+    await pump(A, B);
 
     // 两端收敛：x 与 y 都在，日志与 HEAD 一致
     const digest = (end) =>
@@ -346,13 +346,13 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
     const A = createEnd("a");
     const B = createEnd("b");
     // 增量泵：把 from 端新记录以线上 JSON 形态投递给 to 端
-    const pump = (from, to) => {
+    const pump = async (from, to) => {
       const seen = new Set(to.boardCore.operationLog.toJSON().map((r) => r.id));
       const fresh = from.boardCore.operationLog
         .toJSON()
         .filter((r) => !seen.has(r.id));
       if (fresh.length > 0) {
-        to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
+        await to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
       }
     };
 
@@ -363,7 +363,7 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
       data: { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
     });
     await A.api.commitObjects(["a/1"]);
-    pump(A, B);
+    await pump(A, B);
 
     // remote-activity 通知计数：装饰层凭它重拉对象摘要（选中框归位的触发缝）
     const notices = [];
@@ -371,14 +371,14 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
 
     A.api.beginSupra("S");
     await A.api.addActiveObjects(["a/1"], { supraKey: "S" });
-    pump(A, B);
+    await pump(A, B);
     expect(B.api.queryRemoteChoices()).toEqual([{ source: "a", ids: ["a/1"] }]);
     expect(notices).toHaveLength(1);
 
     const molId = A.api.beginMol(["a/1"], { supraKey: "S" });
     A.api.amendMol(molId, { "a/1": { position: { x: 200, y: 200 } } });
     A.api.endMol(molId);
-    pump(A, B);
+    await pump(A, B);
     expect(B.api.queryObject("a/1").position).toEqual({ x: 200, y: 200 });
     // 远程活动对象的修改效果同样触发装饰刷新通知（否则选中框停留在选择前缓存）
     expect(notices).toHaveLength(2);
@@ -387,7 +387,7 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
     // Enter：提交与闭合同批到达；折叠是纯树操作，远端效果零回滚
     await A.api.commitObjects(["a/1"], { supraKey: "S" });
     A.api.endSupra("S");
-    pump(A, B);
+    await pump(A, B);
     expect(B.api.queryObject("a/1").position).toEqual({ x: 200, y: 200 });
     expect(B.api.queryRemoteChoices()).toEqual([]);
     expect(B.boardCore.activeObjectManager.has("a/1")).toBe(false);
@@ -395,20 +395,20 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
 
     // 远端撤销聚合：对端同步回选择前
     A.api.undo();
-    pump(A, B);
+    await pump(A, B);
     expect(B.api.queryObject("a/1").position).toEqual({ x: 100, y: 100 });
   });
 
   test("多对象手势：同分子成员增量归并后远端效果不丢（第二对象不回弹）", async () => {
     const A = createEnd("a");
     const B = createEnd("b");
-    const pump = (from, to) => {
+    const pump = async (from, to) => {
       const seen = new Set(to.boardCore.operationLog.toJSON().map((r) => r.id));
       const fresh = from.boardCore.operationLog
         .toJSON()
         .filter((r) => !seen.has(r.id));
       if (fresh.length > 0) {
-        to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
+        await to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
       }
     };
 
@@ -421,14 +421,14 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
       });
       await A.api.commitObjects([`a/${n}`]);
     }
-    pump(A, B);
+    await pump(A, B);
 
     const notices = [];
     B.boardCore.activityEventBus.on("remote-activity", (e) => notices.push(e));
 
     A.api.beginSupra("S");
     await A.api.addActiveObjects(["a/1", "a/2"], { supraKey: "S" });
-    pump(A, B);
+    await pump(A, B);
 
     // 一次手势覆盖两个对象：同 molId 的两条 modify 同批到达，第二条增量归并进分子节点
     const molId = A.api.beginMol(["a/1", "a/2"], { supraKey: "S" });
@@ -437,7 +437,7 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
       "a/2": { position: { x: 200, y: 300 } },
     });
     A.api.endMol(molId);
-    pump(A, B);
+    await pump(A, B);
     // 归并就地改节点：过渡序列若取在树变更后，第二条成员的效果会被判为零过渡丢掉
     expect(B.api.queryObject("a/1").position).toEqual({ x: 200, y: 100 });
     expect(B.api.queryObject("a/2").position).toEqual({ x: 200, y: 300 });
@@ -445,13 +445,13 @@ describe("远端会话全序列应用（实时双端驱动）", () => {
 
     await A.api.commitObjects(["a/1", "a/2"], { supraKey: "S" });
     A.api.endSupra("S");
-    pump(A, B);
+    await pump(A, B);
     expect(B.api.queryObject("a/1").position).toEqual({ x: 200, y: 100 });
     expect(B.api.queryObject("a/2").position).toEqual({ x: 200, y: 300 });
     expect(B.api.queryRemoteChoices()).toEqual([]);
 
     A.api.undo();
-    pump(A, B);
+    await pump(A, B);
     expect(B.api.queryObject("a/1").position).toEqual({ x: 100, y: 100 });
     expect(B.api.queryObject("a/2").position).toEqual({ x: 100, y: 300 });
   });
@@ -478,15 +478,15 @@ describe("远端修改的区块归属同步", () => {
    * 双端泵：把 from 的新记录喂给 to
    * @param {{ boardCore: BoardCore, api: BoardApi }} from - 来源端
    * @param {{ boardCore: BoardCore, api: BoardApi }} to - 目标端
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  const pump = (from, to) => {
+  const pump = async (from, to) => {
     const seen = new Set(to.boardCore.operationLog.toJSON().map((r) => r.id));
     const fresh = from.boardCore.operationLog
       .toJSON()
       .filter((r) => !seen.has(r.id));
     if (fresh.length > 0) {
-      to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
+      await to.api.applyRemoteOperations(JSON.parse(JSON.stringify(fresh)));
     }
   };
 
@@ -504,7 +504,7 @@ describe("远端修改的区块归属同步", () => {
       data: { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
     });
     await A.api.commitObjects(["a/1"]);
-    pump(A, B);
+    await pump(A, B);
     return { A, B };
   };
 
@@ -517,7 +517,7 @@ describe("远端修改的区块归属同步", () => {
     await A.api.addActiveObjects(["a/1"]);
     A.api.modifyObject("a/1", { position: { x: 950, y: 150 } });
     await A.api.commitObjects(["a/1"]);
-    pump(A, B);
+    await pump(A, B);
 
     // 远端应用 modify 后：对象从原区块静态图迁出、迁入目标区块，覆盖索引同步
     expect(chunksOf(B.boardCore, "a/1")).toEqual([toChunk]);
@@ -534,11 +534,11 @@ describe("远端修改的区块归属同步", () => {
     await A.api.addActiveObjects(["a/1"]);
     A.api.modifyObject("a/1", { position: { x: 950, y: 150 } });
     await A.api.commitObjects(["a/1"]);
-    pump(A, B);
+    await pump(A, B);
     expect(chunksOf(B.boardCore, "a/1")).toEqual([toChunk]);
 
     A.api.undo();
-    pump(A, B);
+    await pump(A, B);
     expect(chunksOf(B.boardCore, "a/1")).toEqual([fromChunk]);
     expect([...(B.boardCore.getObjectCoverChunks("a/1") ?? [])]).toEqual([
       fromChunk,
@@ -547,51 +547,55 @@ describe("远端修改的区块归属同步", () => {
 });
 
 describe("远端记录写入边界", () => {
-  test("已有记录幂等，同 ID 不同内容显式拒绝", () => {
+  test("已有记录幂等，同 ID 不同内容显式拒绝", async () => {
     const A = createEnd("a");
     const record = add("a", 1, 100);
-    expect(A.api.applyRemoteOperations([record])).toEqual({ applied: 1 });
+    expect(await A.api.applyRemoteOperations([record])).toEqual({ applied: 1 });
     const before = A.boardCore.getObjectById("a1").serialize();
 
-    expect(A.api.applyRemoteOperations([record])).toEqual({ applied: 0 });
+    expect(await A.api.applyRemoteOperations([record])).toEqual({ applied: 0 });
     expect(A.boardCore.operationLog.size).toBe(1);
     expect(A.boardCore.getObjectById("a1").serialize()).toEqual(before);
 
     const conflict = JSON.parse(JSON.stringify(record));
     conflict.payload.data.position.x = 999;
-    expect(() => A.api.applyRemoteOperations([conflict])).toThrow("内容冲突");
+    await expect(A.api.applyRemoteOperations([conflict])).rejects.toThrow(
+      "内容冲突",
+    );
     expect(A.boardCore.getObjectById("a1").serialize()).toEqual(before);
   });
 
-  test("整批预校验失败时不写入前缀记录", () => {
+  test("整批预校验失败时不写入前缀记录", async () => {
     const A = createEnd("a");
     const first = add("a", 1, 100);
     const invalid = add("a", 2, 200, "a/op-1");
     delete invalid.payload.data;
 
-    expect(() => A.api.applyRemoteOperations([first, invalid])).toThrow("data");
+    await expect(
+      A.api.applyRemoteOperations([first, invalid]),
+    ).rejects.toThrow("data");
     expect(A.boardCore.operationLog.size).toBe(0);
     expect(A.boardCore.getObjectById("a1") == null).toBe(true);
 
-    expect(A.api.applyRemoteOperations([first])).toEqual({ applied: 1 });
+    expect(await A.api.applyRemoteOperations([first])).toEqual({ applied: 1 });
     expect(A.boardCore.getObjectById("a1")).toBeDefined();
   });
 
-  test("旧形态超分子迟到成员并入既有节点并补齐对象效果", () => {
+  test("旧形态超分子迟到成员并入既有节点并补齐对象效果", async () => {
     const A = createEnd("a");
     const first = add("a", 1, 100);
     const second = add("a", 2, 200, "a/op-1");
     first.supraOpId = "a/op-1";
     second.supraOpId = "a/op-1";
 
-    A.api.applyRemoteOperations([first]);
-    A.api.applyRemoteOperations([second]);
+    await A.api.applyRemoteOperations([first]);
+    await A.api.applyRemoteOperations([second]);
     expect(A.boardCore.undoTree.head.memberIds).toEqual(["a/op-1", "a/op-2"]);
     expect(A.boardCore.getObjectById("a1")).toBeDefined();
     expect(A.boardCore.getObjectById("a2")).toBeDefined();
   });
 
-  test("undo 目标迟到造成的派生链分歧可从相同日志重建", () => {
+  test("undo 目标迟到造成的派生链分歧可从相同日志重建", async () => {
     const a1 = add("a", 1, 10000);
     const c1 = add("c", 1, 20000);
     const b1 = add("b", 1, 100);
@@ -599,9 +603,9 @@ describe("远端记录写入边界", () => {
     b2.parentId = "c/op-1";
     const canonical = createEnd("canonical");
     const divergent = createEnd("divergent");
-    canonical.api.applyRemoteOperations([b1, a1, c1, b2]);
-    divergent.api.applyRemoteOperations([b1, c1, b2]);
-    divergent.api.applyRemoteOperations([a1]);
+    await canonical.api.applyRemoteOperations([b1, a1, c1, b2]);
+    await divergent.api.applyRemoteOperations([b1, c1, b2]);
+    await divergent.api.applyRemoteOperations([a1]);
 
     expect(divergent.boardCore.operationLog.toJSON().map((r) => r.id).sort()).toEqual(
       canonical.boardCore.operationLog.toJSON().map((r) => r.id).sort(),
@@ -623,7 +627,7 @@ describe("远端记录写入边界", () => {
       persistenceAdapter: createDefaultPersistenceAdapter(),
     });
     const api = new BoardApi(boardCore);
-    api.applyRemoteOperations([add("a", 1, 200)]);
+    await api.applyRemoteOperations([add("a", 1, 200)]);
     api.createObject("StrokeObject", {
       id: "a/local",
       position: { x: 0, y: 0 },

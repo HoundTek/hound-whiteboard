@@ -14,7 +14,7 @@
  * @param {() => Object} [params.collectMeta] - 附加板元数据收集器（flush 时并入 board.json）
  * @param {(source: string) => boolean} [params.persistStream] - 日志流落盘判定（默认全落；GUI 只落本端流，daemon 不落直连客户端的流）
  * @param {boolean} [params.writeMeta=true] - 是否写本端元数据分片 meta/<source>.json（读会话置 false 保持零写盘）
- * @param {boolean} [params.removeMissing=true] - 是否移除「既非活动亦非 trash」的对象文件（部分驻留的 GUI 必须关闭，否则会误删未加载对象的文件）
+ * @param {boolean} [params.removeMissing=true] - 是否移除「既非已知对象亦非 trash」的对象文件；显式删除不受此开关影响
  * @returns {Object} 跟随者操作面
  *
  * @description
@@ -97,13 +97,17 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
    *
    * @description
    * 活动对象写入 objects/，trash 对象写入 trash/；内容或位置有变化才落盘；
-   * 既非活动亦非 trash（如撤销新增）的对象从盘上移除（removeMissing 关闭时跳过——
-   * 部分驻留的写端无法区分「未加载」与「已消失」）。
+   * live 集合取板内已知对象（覆盖索引/静态图节点，驻留无关），显式删除队列独立落盘；
+   * removeMissing 仅控制「未显式登记、也不在已知集合/trash」的缺失对象扫尾。
    * 远程活动对象（写权属活动方）整条跳过，不写不移除。
    */
   const reconcileObjects = async () => {
     const aom = boardCore.activeObjectManager;
-    const liveIds = new Set();
+    const liveIds = new Set(
+      typeof boardCore.getKnownObjectIds === "function"
+        ? boardCore.getKnownObjectIds()
+        : boardCore.getAllObjects().map((obj) => obj.id),
+    );
     for (const obj of boardCore.getAllObjects()) {
       if (aom?.isRemoteActive?.(obj.id)) continue;
       const data = obj.serialize();
@@ -133,6 +137,23 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
       }
       lastSync.set(id, { location: "trash", json });
     }
+
+    const removedIds = boardCore.getRemovedObjectIds?.() ?? [];
+    const clearedRemovedIds = [];
+    for (const id of removedIds) {
+      if (aom?.isRemoteActive?.(id)) continue;
+      clearedRemovedIds.push(id);
+      if (liveIds.has(id) || boardCore.trash.has(id)) continue;
+      if ((await store.removeObject(id)) === false) {
+        throw new Error("存储驱动移除对象失败");
+      }
+      if ((await store.removeTrashObject(id)) === false) {
+        throw new Error("存储驱动移除 trash 对象失败");
+      }
+      lastSync.delete(id);
+    }
+    boardCore.clearRemovedObjectIds?.(clearedRemovedIds);
+
     if (!removeMissing) return;
     for (const [id, prev] of lastSync) {
       if (liveIds.has(id) || boardCore.trash.has(id)) continue;

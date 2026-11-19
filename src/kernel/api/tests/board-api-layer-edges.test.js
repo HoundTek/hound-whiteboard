@@ -158,7 +158,7 @@ describe("层位边效果记录与重放", () => {
 
     // 重放端从零应用全部记录：层位边集合与实况端逐边一致
     const B = createEnd("b");
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
     expect(collectLayerEdges(B.boardCore)).toEqual(collectLayerEdges(A.boardCore));
     expect(hasLayerEdge(B.boardCore, "x", "a")).toBe(false);
   });
@@ -169,7 +169,7 @@ describe("层位边效果记录与重放", () => {
     await createStaticStroke(A.api, "x");
     await createStaticStroke(A.api, "y");
     const baseLength = A.boardCore.operationLog.toJSON().length;
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
     expect(hasLayerEdge(B.boardCore, "x", "y")).toBe(true);
 
     // A 把 y 移走并提交：实况端 y 的层位边被清
@@ -181,7 +181,7 @@ describe("层位边效果记录与重放", () => {
 
     // 增量到达（不经全量重放）：B 的层位边与 A 收敛一致
     const delta = A.boardCore.operationLog.toJSON().slice(baseLength);
-    B.api.applyRemoteOperations(delta);
+    await B.api.applyRemoteOperations(delta);
     expect(hasLayerEdge(B.boardCore, "x", "y")).toBe(false);
     expect(collectLayerEdges(B.boardCore)).toEqual(collectLayerEdges(A.boardCore));
   });
@@ -239,7 +239,7 @@ describe("层位边效果记录与重放", () => {
 
     // 重放端从零应用全部记录：层位边集合与实况端逐边一致
     const B = createEnd("b");
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
     expect(collectLayerEdges(B.boardCore)).toEqual(collectLayerEdges(A.boardCore));
 
     // 撤销擦除：原笔恢复（数据与两侧层位边），分裂段移除
@@ -265,7 +265,7 @@ describe("层位边效果记录与重放", () => {
     });
 
     const B = createEnd("b");
-    const { applied } = B.api.applyRemoteOperations(legacyLog);
+    const { applied } = await B.api.applyRemoteOperations(legacyLog);
     expect(applied).toBe(2);
     // 几何居上：后创建的 y 压在 x 之上，与实况端一致
     expect(B.boardCore.getObjectById("y")).toBeDefined();
@@ -279,7 +279,7 @@ describe("层位边效果记录与重放", () => {
     const A = createEnd("a", now);
     const B = createEnd("b", now);
     await createStaticStroke(A.api, "y");
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
 
     // A 选择 y 并移动（会话期间 B 并发创建 z，A 提交时不知道 z）
     A.api.beginSupra("S");
@@ -305,10 +305,10 @@ describe("层位边效果记录与重放", () => {
 
     // 交换日志：z.add 的日志序先于 A 的 unchoose（A 侧触发尾段过渡，B 侧纯追加）；
     // 各端只投递对方未见的记录（按 source 过滤避免重复投递）
-    A.api.applyRemoteOperations(
+    await A.api.applyRemoteOperations(
       B.boardCore.operationLog.toJSON().filter((record) => record.source === "b"),
     );
-    B.api.applyRemoteOperations(
+    await B.api.applyRemoteOperations(
       A.boardCore.operationLog.toJSON().filter((record) => record.source === "a").slice(1),
     );
 
@@ -328,7 +328,7 @@ describe("层位边效果记录与重放", () => {
     await createStaticStroke(A.api, "x");
     await createStaticStroke(A.api, "y");
     const baseLength = A.boardCore.operationLog.toJSON().length;
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
     expect(hasLayerEdge(B.boardCore, "x", "y")).toBe(true);
 
     // A 先把 x 挪走（切断 x→y 的 pickup 关联），再挪回原地压上：x 居上（主张 y→x）
@@ -353,10 +353,10 @@ describe("层位边效果记录与重放", () => {
     expect(hasLayerEdge(B.boardCore, "x", "y")).toBe(true);
 
     // 交换日志：B 的 unchoose 日志序更晚，其主张（x→y）在两端胜出（各端只投递对方未见的记录）
-    A.api.applyRemoteOperations(
+    await A.api.applyRemoteOperations(
       B.boardCore.operationLog.toJSON().filter((record) => record.source === "b"),
     );
-    B.api.applyRemoteOperations(
+    await B.api.applyRemoteOperations(
       A.boardCore.operationLog
         .toJSON()
         .filter((record) => record.source === "a")
@@ -403,7 +403,7 @@ describe("层位边效果记录与重放", () => {
       densePoints.push({ x, y: 100 });
     }
     await createStaticStroke(A.api, "s1", densePoints);
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
 
     // B 并发创建跨越刀口的 z（与 s1 的两段都相交）：z 居上（边 s1→z）
     await createStaticStroke(B.api, "z", [
@@ -423,10 +423,10 @@ describe("层位边效果记录与重放", () => {
     const [splitId] = result.created;
 
     // 交换日志：z.add 日志序先于擦除记录（各端只投递对方未见的记录）
-    A.api.applyRemoteOperations(
+    await A.api.applyRemoteOperations(
       B.boardCore.operationLog.toJSON().filter((record) => record.source === "b"),
     );
-    B.api.applyRemoteOperations(
+    await B.api.applyRemoteOperations(
       A.boardCore.operationLog.toJSON().filter((record) => record.source === "a").slice(1),
     );
 

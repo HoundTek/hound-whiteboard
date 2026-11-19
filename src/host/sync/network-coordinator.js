@@ -170,11 +170,18 @@ function createNetworkCoordinator(options) {
 
   /**
    * 容忍窗到期的处理：再整理一轮，连续超窗则请求全量
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  const onWindowElapsed = () => {
+  const onWindowElapsed = async () => {
     windowTimer = null;
-    ingestor.drain();
+    try {
+      await ingestor.drain();
+    } catch (error) {
+      console.error(
+        `[sync] 容忍窗排空失败：${error?.message ?? error}`,
+      );
+      return;
+    }
     if (ingestor.pendingCount === 0) {
       windowsElapsed = 0;
       return;
@@ -199,13 +206,20 @@ function createNetworkCoordinator(options) {
   /**
    * 接入远程记录并维护容忍窗
    * @param {Object[]} records - 远程记录
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  const ingestRecords = (records) => {
+  const ingestRecords = async (records) => {
     for (const record of Array.isArray(records) ? records : []) {
       trackRemoteSource(boardCore, activityChannel, record?.source);
     }
-    ingestor.ingest(records);
+    try {
+      await ingestor.ingest(records);
+    } catch (error) {
+      console.error(
+        `[sync] 接入远端记录失败：${error?.message ?? error}`,
+      );
+      return;
+    }
     scheduleWindow();
     if (ingestor.pendingCount === 0) {
       windowsElapsed = 0;
@@ -451,7 +465,7 @@ function createNetworkCoordinator(options) {
         onAwareness?.({ source: message.source, data: { kind: "peer-left" } });
         return;
       case "records":
-        ingestRecords(message.records);
+        void ingestRecords(message.records);
         return;
       case "aom":
         trackRemoteSource(boardCore, activityChannel, message.source);
@@ -479,7 +493,7 @@ function createNetworkCoordinator(options) {
         return;
       }
       case "respond-init":
-        ingestRecords(message.records);
+        void ingestRecords(message.records);
         return;
       case "digest":
         handleDigest(message.digest);

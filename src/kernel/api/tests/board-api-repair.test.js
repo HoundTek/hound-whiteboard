@@ -56,7 +56,7 @@ describe("日志重放自愈（效果层分歧修复）", () => {
     A.api.endSupra("S");
 
     // B 全量应用 = f(日志) 参照；无分歧时两端校验和相等
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
     const wantHash = B.api.queryStateHash();
     expect(A.api.queryStateHash()).toBe(wantHash);
 
@@ -83,7 +83,7 @@ describe("日志重放自愈（效果层分歧修复）", () => {
     const B = createEnd("b");
     await createStaticStroke(A.api, "a/1");
     await A.api.deleteObjects(["a/1"]);
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
     const wantHash = B.api.queryStateHash();
     expect(A.api.queryStateHash()).toBe(wantHash);
 
@@ -182,7 +182,7 @@ describe("活动链校验和（驻留无关）", () => {
     const A = createEnd("a");
     const B = createEnd("b");
     await createStaticStroke(A.api, "a/1");
-    B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
+    await B.api.applyRemoteOperations(A.boardCore.operationLog.toJSON());
     expect(A.api.queryChainHash()).toBe(B.api.queryChainHash());
 
     // 对象实例离场（驻留变化）不影响链校验和

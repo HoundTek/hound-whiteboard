@@ -50,6 +50,7 @@
 - `unsetObjectCoverChunks(objectId)`
 - `serializeObjectCoverChunks()`
 - `loadObjectCoverChunksFromData(coverIndexData)`
+- `syncCoverIndexFromGraph()`
 
 ### 覆盖范围重算
 
@@ -79,6 +80,8 @@ chunks/{chunkId}.json
 - `tierGraph`
 - `objectCoverIndex`
 
+解析 `tierGraph` 后调用 `syncCoverIndexFromGraph()`，把静态图节点归属并回 `BoardCore` 的覆盖索引；懒加载区块因此也能补齐。
+
 ### `saveChunkMetadata()`
 
 无参，经 `board.persistenceAdapter` 把：
@@ -88,7 +91,7 @@ chunks/{chunkId}.json
 
 写回同一个 `chunks/{chunkId}.json`。
 
-其中覆盖索引由 `BoardCore` 集中持有，`serializeObjectCoverChunks()` 恒返回空数组，盘上的 `objectCoverIndex` 恒为空。
+其中覆盖索引由 `BoardCore` 集中持有，`serializeObjectCoverChunks()` 恒返回空数组，盘上的 `objectCoverIndex` 恒为空；恢复与懒加载时按区块静态图重建，不依赖盘上的空数组。
 
 ### 重要说明
 
@@ -110,7 +113,7 @@ chunks/{chunkId}.json
 
 ## 当前状态
 
-- 已实现：静态图管理、覆盖区块索引管理、区块元数据加载/保存（经 `board.persistenceAdapter` 注入缝）、通过 `board` 间接获取对象实例、基于 `Range` 的覆盖区块计算
+- 已实现：静态图管理、覆盖区块索引管理、恢复/懒加载后按静态图重建覆盖索引、区块元数据加载/保存（经 `board.persistenceAdapter` 注入缝）、通过 `board` 间接获取对象实例、基于 `Range` 的覆盖区块计算
 - 已接线：对象创建/提交路径上的覆盖索引同步、AOM 跨区块操作读取覆盖索引
 
 ## 相关文档

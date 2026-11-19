@@ -443,6 +443,28 @@ class BoardCore {
   }
 
   /**
+   * 获取板内已知对象 id 集合
+   * @description 覆盖索引、驻留对象与已载区块静态图节点的并集，不随对象驱逐而缩小。
+   * @returns {Set<string>} 已知对象 id 集合
+   */
+  getKnownObjectIds() {
+    const ids = new Set(this.#objectCoverChunks.keys());
+
+    for (const objectId of this.objectLoaded.keys()) {
+      ids.add(objectId);
+    }
+
+    for (const { chunk } of this.chunkLoaded.values()) {
+      const graph = chunk?.objectManager?.staticGraph;
+      for (const objectId of graph?.getNodes?.() ?? []) {
+        ids.add(objectId);
+      }
+    }
+
+    return ids;
+  }
+
+  /**
    * 本端来源标识（操作记录 source 与对象 id 前缀；写端身份）
    * @type {string}
    */
@@ -459,7 +481,7 @@ class BoardCore {
    * @returns {void}
    *
    * @description
-   * 打开既有板时调用：层叠图与覆盖索引先回填（决定对象注册时的加载计数），
+   * 打开既有板时调用：层叠图先回填、覆盖索引按静态图重建（决定对象注册时的加载计数），
    * 随后注册活动对象实例，最后恢复 trash 条目（含层位边，供跨会话撤销删除使用）。
    */
   restoreSession({ chunkMetadataList = [], objects = [], trash = [] } = {}) {
@@ -471,7 +493,8 @@ class BoardCore {
       }
       chunk.objectManager.staticGraph = DirectedGraph.parse(tierGraph);
       chunk.objectManager.loadObjectCoverChunksFromData(objectCoverIndex);
-      // 层叠图与覆盖索引已从盘上恢复，区块即完整加载态
+      chunk.objectManager.syncCoverIndexFromGraph();
+      // 层叠图已回填、覆盖索引已按静态图重建，区块即完整加载态
       chunk.isLoad = true;
       chunk.isTempLoad = false;
     }
@@ -616,6 +639,20 @@ class BoardCore {
   }
 
   /**
+   * 读取对象覆盖区块集合，缺失时回退到指定区块
+   * @param {string} objectId - 对象 id
+   * @param {number} fallbackChunkId - 覆盖索引缺失或为空时的回退区块 id
+   * @returns {Set<number>} 覆盖区块集合
+   * @private
+   */
+  #getEffectiveCoverChunkIds(objectId, fallbackChunkId) {
+    const coveredChunkIds = this.getObjectCoverChunks(objectId);
+    return coveredChunkIds && coveredChunkIds.size > 0
+      ? coveredChunkIds
+      : new Set([fallbackChunkId]);
+  }
+
+  /**
    * 按区块加载对象实例到白板级对象表
    * @param {Chunk | number} chunkOrId - 区块实例或区块 id
    * @param {string} [boardRootPath=this.rootPath] - 白板根路径
@@ -649,7 +686,7 @@ class BoardCore {
         );
         continue;
       }
-      const coveredChunkIds = this.getObjectCoverChunks(obj.id);
+      const coveredChunkIds = this.#getEffectiveCoverChunkIds(obj.id, chunk.id);
       this.registerObjectInstance(obj, { coveredChunkIds });
       loadedObjects.set(obj.id, obj);
     }
@@ -692,6 +729,44 @@ class BoardCore {
   #evictedObjectIds = new Set();
 
   /**
+   * 待删除对象 id 队列
+   * @description 对象真正离开白板（不进入 trash）时登记，由 journaler 落盘后清理。
+   * @type {Set<string>}
+   * @private
+   */
+  #removedObjectIds = new Set();
+
+  /**
+   * 登记对象已从白板真正移除
+   * @param {string} objectId - 对象 id
+   * @returns {void}
+   */
+  markObjectRemoved(objectId) {
+    if (typeof objectId === "string" && objectId !== "") {
+      this.#removedObjectIds.add(objectId);
+    }
+  }
+
+  /**
+   * 读取待删除对象 id
+   * @returns {string[]} 对象 id 列表
+   */
+  getRemovedObjectIds() {
+    return [...this.#removedObjectIds];
+  }
+
+  /**
+   * 清理已处理的对象 id
+   * @param {Iterable<string>} objectIds - 已处理的对象 id
+   * @returns {void}
+   */
+  clearRemovedObjectIds(objectIds) {
+    for (const objectId of objectIds) {
+      this.#removedObjectIds.delete(objectId);
+    }
+  }
+
+  /**
    * 对象是否处于驻留驱逐状态（经卸载路径合法离场）
    * @param {string} objectId - 对象 id
    * @returns {boolean} 是否被驱逐
@@ -708,6 +783,45 @@ class BoardCore {
    */
   isFullResidency() {
     return this.#evictedObjectIds.size === 0;
+  }
+
+  /**
+   * 断言对象驻留不变式
+   * @description 区块被 FULL 持有时，区块必须完整加载，其静态图全部节点必须驻留，
+   * 且每个节点的覆盖索引包含该区块。
+   * @returns {void}
+   * @throws {Error} 不变式被违反时抛出
+   */
+  assertResidencyInvariant() {
+    for (const [chunkId, chunkState] of this.chunkLoaded) {
+      if ((chunkState.fullLoadedCount ?? 0) <= 0) continue;
+
+      const chunk = chunkState.chunk;
+      if (!chunk?.isLoad || chunk.isTempLoad) {
+        throw new Error(
+          `驻留不变式违反：区块 ${chunkId} 被 FULL 持有但未完整加载`,
+        );
+      }
+
+      const graph = chunk.objectManager?.staticGraph;
+      if (!graph) {
+        throw new Error(`驻留不变式违反：区块 ${chunkId} 缺少静态图`);
+      }
+
+      for (const objectId of graph.getNodes()) {
+        if (!this.objectLoaded.has(objectId)) {
+          throw new Error(
+            `驻留不变式违反：区块 ${chunkId} 的静态图节点 ${objectId} 未驻留`,
+          );
+        }
+        const coveredChunkIds = this.getObjectCoverChunks(objectId);
+        if (!coveredChunkIds?.has(chunkId)) {
+          throw new Error(
+            `驻留不变式违反：对象 ${objectId} 的覆盖索引缺少区块 ${chunkId}`,
+          );
+        }
+      }
+    }
   }
 
   /**
@@ -738,9 +852,10 @@ class BoardCore {
       const entry = this.objectLoaded.get(objectId);
       if (!entry) continue;
 
-      const coveredChunkIds = this.getObjectCoverChunks(objectId);
-      const effectiveChunkIds =
-        coveredChunkIds.size > 0 ? coveredChunkIds : new Set([chunk.id]);
+      const effectiveChunkIds = this.#getEffectiveCoverChunkIds(
+        objectId,
+        chunk.id,
+      );
       entry.loadedCount = this.#countFullLoadReferences(effectiveChunkIds);
 
       // chunkUnload 关闭时（CLI / daemon 常驻持板）对象不从内存移除，查询面口径保持全量
@@ -798,11 +913,10 @@ class BoardCore {
     const { previousStrategy, effectiveStrategy } =
       this.#registerChunkLoadRequest(chunk.id, requesterId, strategy);
 
-    const shouldSyncChunkObjects =
-      (chunk.objectManager?.staticGraph.getNodes().length ?? 0) > 0;
-
     if (effectiveStrategy === CHUNK_LOAD_STRATEGIES.FULL) {
       const changed = await chunk.loadFull();
+      const shouldSyncChunkObjects =
+        (chunk.objectManager?.staticGraph.getNodes().length ?? 0) > 0;
       if (
         previousStrategy !== CHUNK_LOAD_STRATEGIES.FULL &&
         shouldSyncChunkObjects
@@ -1046,9 +1160,10 @@ class BoardCore {
    * @private
    */
   async #syncObjectEntryForChunk(chunk, objectId) {
-    const coveredChunkIds = this.getObjectCoverChunks(objectId);
-    const effectiveChunkIds =
-      coveredChunkIds.size > 0 ? coveredChunkIds : new Set([chunk.id]);
+    const effectiveChunkIds = this.#getEffectiveCoverChunkIds(
+      objectId,
+      chunk.id,
+    );
     const loadedCount = this.#countFullLoadReferences(effectiveChunkIds);
 
     if (loadedCount > 0) {

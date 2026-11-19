@@ -649,7 +649,7 @@ async function startBoardDaemonLocked(options) {
         for (const record of validRecords) {
           trackRemoteSource(session.boardCore, ws, record.source);
         }
-        collabIngestor.ingest(validRecords);
+        await collabIngestor.ingest(validRecords);
         await session.flush();
         // 桥接进 relay 房间（若 daemon 连了中继）：GUI 的操作对远端可见
         coordinator?.sendRecords(validRecords);
@@ -691,7 +691,7 @@ async function startBoardDaemonLocked(options) {
           for (const record of message.records) {
             trackRemoteSource(session.boardCore, ws, record?.source);
           }
-          collabIngestor.ingest(message.records);
+          await collabIngestor.ingest(message.records);
           await session.flush();
         }
         return;

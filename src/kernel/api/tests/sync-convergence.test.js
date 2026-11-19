@@ -174,12 +174,12 @@ describe("同步收敛性质", () => {
 
       /**
        * 投递一步：随机挑一个父已满足的（接收端, 来源）对投递下一批
-       * @returns {boolean} 是否投递成功
+       * @returns {Promise<boolean>} 是否投递成功
        *
        * @description
        * 投递粒度与真实通道一致：超分子成员同批完整到达（发送侧重微任务合批保证原子性）。
        */
-      const deliverOne = () => {
+      const deliverOne = async () => {
         const eligible = [];
         for (const end of ends) {
           const receiver = end.boardCore.hitCommitter.source;
@@ -215,16 +215,16 @@ describe("同步收敛性质", () => {
             i++;
           }
         }
-        end.api.applyRemoteOperations(batch);
+        await end.api.applyRemoteOperations(batch);
         cursors.get(receiver).set(source, cursor + batch.length);
         return true;
       };
 
       /**
        * 全部未投递记录排空
-       * @returns {void}
+       * @returns {Promise<void>}
        */
-      const drainAll = () => {
+      const drainAll = async () => {
         for (let guard = 0; guard < 10000; guard++) {
           const remaining = END_SOURCES.some((receiver) =>
             END_SOURCES.some(
@@ -234,7 +234,7 @@ describe("同步收敛性质", () => {
             ),
           );
           if (!remaining) return;
-          if (!deliverOne()) {
+          if (!(await deliverOne())) {
             throw new Error("投递死锁：无父已满足的待投递记录");
           }
         }
@@ -251,10 +251,10 @@ describe("同步收敛性质", () => {
         }
         harvest();
         while (rand() < 0.6) {
-          if (!deliverOne()) break;
+          if (!(await deliverOne())) break;
         }
       }
-      drainAll();
+      await drainAll();
 
       const [first, ...rest] = ends.map((end) =>
         JSON.stringify(digestOf(end.boardCore)),

@@ -582,6 +582,46 @@ describe("Journaler", () => {
     expect((await store.readAllObjects()).map((o) => o.id)).toEqual(["s1"]);
   });
 
+  test("removeMissing:true 时已驱逐但仍在静态图中的对象文件保留", async () => {
+    const { boardCore, api, store } = setup();
+    await store.create();
+    const journaler = createJournaler({ boardCore, store });
+    journaler.attach();
+    await createStaticStroke(api, "s1");
+    await journaler.flush();
+    expect((await store.readAllObjects()).map((o) => o.id)).toEqual(["s1"]);
+
+    // 模拟区块卸载：对象实例离场，覆盖索引与静态图仍在
+    const chunkId = [...boardCore.chunkLoaded.keys()][0];
+    boardCore.chunkLoaded.get(chunkId).fullLoadedCount = 0;
+    boardCore.unloadChunkObjectEntries(chunkId);
+    expect(boardCore.getObjectById("s1")).toBeUndefined();
+    expect(boardCore.isObjectEvicted("s1")).toBe(true);
+    expect(boardCore.getKnownObjectIds().has("s1")).toBe(true);
+    await journaler.flush();
+    expect((await store.readAllObjects()).map((o) => o.id)).toEqual(["s1"]);
+  });
+
+  test("removeMissing:false 时撤销新增仍删除对象文件", async () => {
+    const { boardCore, api, store } = setup();
+    await store.create();
+    const journaler = createJournaler({
+      boardCore,
+      store,
+      removeMissing: false,
+    });
+    journaler.attach();
+    await createStaticStroke(api, "s1");
+    await journaler.flush();
+    expect((await store.readAllObjects()).map((o) => o.id)).toEqual(["s1"]);
+
+    const { undone } = api.undo();
+    expect(undone).toBe(true);
+    expect(boardCore.getObjectById("s1")).toBeUndefined();
+    await journaler.flush();
+    expect(await store.readAllObjects()).toHaveLength(0);
+  });
+
   test("writeMeta:false 时 flush 不重写 board.json", async () => {
     const { boardCore, api, store } = setup();
     await store.create();

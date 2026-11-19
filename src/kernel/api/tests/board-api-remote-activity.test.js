@@ -121,12 +121,12 @@ describe("AOM 远程活动", () => {
 
     // a 创建对象并同步到 b
     await createStroke(a.api, "a/1");
-    b.api.applyRemoteOperations(recordsOf(a.boardCore));
+    await b.api.applyRemoteOperations(recordsOf(a.boardCore));
 
     // a 选择对象（choose 记录），同步到 b
     await a.api.addActiveObjects(["a/1"]);
     const chooseRecords = recordsOf(a.boardCore).slice(1);
-    b.api.applyRemoteOperations(chooseRecords);
+    await b.api.applyRemoteOperations(chooseRecords);
 
     expect(
       b.boardCore.activeObjectManager.isRemoteActive("a/1"),
@@ -146,7 +146,7 @@ describe("AOM 远程活动", () => {
     // a 放弃选择（unchoose 记录），同步到 b 后解锁
     await a.api.discardActiveObjects(["a/1"]);
     const unchooseRecords = recordsOf(a.boardCore).slice(2);
-    b.api.applyRemoteOperations(unchooseRecords);
+    await b.api.applyRemoteOperations(unchooseRecords);
     expect(b.boardCore.activeObjectManager.isRemoteActive("a/1")).toBe(false);
   });
 
@@ -155,7 +155,7 @@ describe("AOM 远程活动", () => {
     const b = createEnd("b");
 
     await createStroke(a.api, "a/1");
-    b.api.applyRemoteOperations(recordsOf(a.boardCore));
+    await b.api.applyRemoteOperations(recordsOf(a.boardCore));
 
     // 两端并发 choose 同一对象
     await a.api.addActiveObjects(["a/1"]);
@@ -164,8 +164,8 @@ describe("AOM 远程活动", () => {
     // 互喂 choose 记录：双方都忽略对方的远程登记（本地优先）
     const aChoose = recordsOf(a.boardCore).slice(1);
     const bChoose = recordsOf(b.boardCore).slice(1);
-    a.api.applyRemoteOperations(bChoose);
-    b.api.applyRemoteOperations(aChoose);
+    await a.api.applyRemoteOperations(bChoose);
+    await b.api.applyRemoteOperations(aChoose);
 
     expect(a.boardCore.activeObjectManager.isActive("a/1")).toBe(true);
     expect(b.boardCore.activeObjectManager.isActive("a/1")).toBe(true);

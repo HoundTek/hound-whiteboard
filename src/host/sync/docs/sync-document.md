@@ -93,7 +93,7 @@ flowchart LR
 
 ### 远端 → 本地
 
-- **统一接入**：`remote-record-ingestor` 由 relay 协调器与 daemon 直连通道共用，负责记录去重、结构预检、pending 缓冲与分组排空；`applyRemoteOperations` 对已有记录幂等，同 ID 内容冲突显式拒绝，整批校验在写入前完成。
+- **统一接入**：`remote-record-ingestor` 由 relay 协调器与 daemon 直连通道共用，负责记录去重、结构预检、pending 缓冲与分组排空；`applyRemoteOperations` 对已有记录幂等，同 ID 内容冲突显式拒绝，整批校验在写入前完成。接入为异步：先按记录点名的区块（`payload.chunkId`、`payload.chunks`、对象快照几何覆盖）做区块级 FullLoad，再写日志并应用效果；预加载失败在写日志前抛出，记录留给调用方重试。
 - **权威水位**：每轮 drain 从 operationLog 重算各 source 的连续前缀，其他通道或本地提交推进日志后经微任务唤醒 pending；多协调器共享 BoardCore 时不持有会过期的私有序号水位。
 - **依赖预检**：除来源序号与 parentId 外，undo/move-head 的 targetNodeId、redo 的 targetUndoId 也必须先到；合法缺依赖记录继续等待，确定非法记录隔离并告警，不触发周期性全量请求放大。
 - **延迟容忍窗**：乱序记录（来源序号空洞 / 父或语义目标未达）入缓冲，500ms 窗到再整理；连续 3 窗仍未补齐则携带 lastSeen 请求缺口。

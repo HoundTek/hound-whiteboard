@@ -34,6 +34,13 @@ UI 侧的 `Board` facade 通过 `BoardApiRpc` 与 Worker 侧的 `BoardCore` 通�
 | `persistenceAdapter`  | 持久化适配器接口，内存模式使用默认实现，文件模式为 `createPersistenceAdapter`         |
 | `aomRenderHooks`      | 注入式渲染钩子，替代 AOM 对 viewport/renderer 的直接依赖                              |
 | `#objectCoverChunks`  | 集中式对象覆盖区块索引（objectId → Set&lt;chunkId&gt;），全 BoardCore 唯一权威副本    |
+| `#removedObjectIds`   | 待删除对象 id 队列：真正离开白板的对象由 journaler 显式删除文件                       |
+
+## 对象活性与显式删除
+
+- `getKnownObjectIds()` 返回覆盖索引键、驻留对象 id 与已载区块静态图节点的并集；它不随对象驱逐而缩小，供 journaler 做驻留无关的活性判定。
+- 真正移除对象（撤销新增、创建型分子中止等）调用 `markObjectRemoved(id)` 登记；移入 trash 不算真正移除。
+- `journaler` 处理完显式删除后调用 `clearRemovedObjectIds(ids)`；删除失败时保留队列，下轮重试。
 
 ## Chunk 加载生命周期
 
@@ -79,7 +86,7 @@ unsetObjectCoverChunks(objectId); // 删除
 `BoardCore` 自身不直接落盘：区块元数据与对象读写经 `persistenceAdapter`（内存模式为 `createDefaultPersistenceAdapter()` 空实现，文件模式为 `createPersistenceAdapter({ driver, rootId })`）；会话级落盘与恢复由 store 层承担（见[会话存储内核文档](../../store/docs/store-document.md)、[文件结构文档](../../../docs/file-structure.md)）：
 
 - **分片落盘（布局 v2）**：日志分片、写权仲裁、元数据分片细则见会话存储内核文档。
-- **会话恢复**：打开既有板时 `restoreSession({ chunkMetadataList, objects, trash })` 先回填各区块层叠图与覆盖索引（决定对象注册时的加载计数，恢复的区块标记完整加载态），再注册活动对象实例，最后恢复 trash 条目（含层位边，供跨会话撤销删除）。
+- **会话恢复**：打开既有板时 `restoreSession({ chunkMetadataList, objects, trash })` 先回填各区块层叠图，并按各区块静态图重建覆盖索引（盘上 `objectCoverIndex` 仍为空；重建保证恢复后的对象归属与加载计数可算），恢复的区块标记完整加载态；再注册活动对象实例，最后恢复 trash 条目（含层位边，供跨会话撤销删除）。
 
 内存模式下所有操作无副作用。
 

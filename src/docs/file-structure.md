@@ -129,7 +129,7 @@ trash 条目文件，文件名编码规则与活动对象相同。内容为完�
 `kernel/store/journaler` 订阅操作日志的 append 事件（本地 commit 与远端应用共用同一入日志通道），微任务合批后自动落盘。每轮 flush 按序执行：
 
 1. 队列中的新记录按 record.source 分组，每组写为一段 `hit/{source}/seg-{N}.jsonl`（各写端只写自己的流；daemon 代写 relay 远端来源的流）
-2. 对象文件调和：板上现存的非 trash 对象（含非活动层成员）写 `objects/`，trash 条目写 `trash/`，板上已不存在的对象文件从盘上移除；**写权仲裁**——远程活动对象（AOM `isRemoteActive`）跳过不写不移除（写权属活动方）；部分驻留写端（GUI 开 chunkUnload）以 `removeMissing:false` 关闭缺失移除，防止误删未加载对象的文件
+2. 对象文件调和：板上现存的非 trash 对象（含非活动层成员）写 `objects/`，trash 条目写 `trash/`；对象活性取板内已知集合（覆盖索引/静态图节点，驻留无关），真正移除的对象经显式删除队列落盘，未登记的缺失对象由 `removeMissing` 扫尾；**写权仲裁**——远程活动对象（AOM `isRemoteActive`）跳过不写不移除（写权属活动方）；GUI 开 chunkUnload 时仍以 `removeMissing:false` 防止误删远端对象
 3. 区块元数据调和：层叠图与覆盖索引指纹比对，仅写差异
 4. 写本端（与代写来源）的 `meta/{source}.json` 分片；读会话以 `writeMeta:false` 保持零写盘
 

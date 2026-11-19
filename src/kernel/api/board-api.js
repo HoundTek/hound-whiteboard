@@ -576,6 +576,8 @@ class BoardApi {
         // 创建型中止：暂存对象随分子一并移除（尚未物化，无需记录）
         boardCore.activeObjectManager.discard(new Set([obj]));
         boardCore.objectLoaded.delete(objectId);
+        boardCore.unsetObjectCoverChunks(objectId);
+        boardCore.markObjectRemoved(objectId);
         continue;
       }
       this.#applyObjectPatch(obj, {
@@ -702,6 +704,7 @@ class BoardApi {
       deletePayloads.set(objectId, { data: snapshot, chunks: trashChunks });
 
       boardCore.objectLoaded.delete(objectId);
+      boardCore.unsetObjectCoverChunks(objectId);
       this.#chooseSnapshots.delete(objectId);
     }
 
@@ -1343,6 +1346,8 @@ class BoardApi {
 
     for (const objectId of transientObjectIds) {
       boardCore.objectLoaded.delete(objectId);
+      boardCore.unsetObjectCoverChunks(objectId);
+      boardCore.markObjectRemoved(objectId);
     }
     this.#emitActivity(
       "unchoose",
@@ -1784,9 +1789,8 @@ class BoardApi {
       aomRenderHooks: createDefaultAomRenderHooks(),
       persistenceAdapter: createDefaultPersistenceAdapter(),
     });
-    new BoardApi(scratchCore).applyRemoteOperations(
-      boardCore.operationLog.toJSON(),
-    );
+    const scratchApi = new BoardApi(scratchCore);
+    scratchApi.#applyRemoteOperationsCore(boardCore.operationLog.toJSON());
 
     const affectedChunks = new Set();
     const fixedIds = new Set();
@@ -2241,9 +2245,10 @@ class BoardApi {
             this.#stitchUnrecordedIntersections(obj, payload.chunks.after, affectedChunks, "above");
           }
           this.#markRemoteChoicesDirtyIfRemoteActive(payload.objectId);
-        } else {
-          // 对象在 trash 中：快照随链上修改滚动，恢复时拿到的是当前状态
-          this.#patchTrashSnapshot(payload.objectId, payload.after);
+        } else if (!this.#patchTrashSnapshot(payload.objectId, payload.after)) {
+          console.warn(
+            `[board-api] 重放 MODIFY 时对象不可用，已跳过：${payload.objectId}`,
+          );
         }
         break;
       }
@@ -2321,8 +2326,12 @@ class BoardApi {
             this.#restoreRecordedLayerEdges(payload.objectId, payload.chunks.before, affectedChunks);
           }
           this.#markRemoteChoicesDirtyIfRemoteActive(payload.objectId);
-        } else {
-          this.#patchTrashSnapshot(payload.objectId, payload.before);
+        } else if (
+          !this.#patchTrashSnapshot(payload.objectId, payload.before)
+        ) {
+          console.warn(
+            `[board-api] 逆放 MODIFY 时对象不可用，已跳过：${payload.objectId}`,
+          );
         }
         break;
       }
@@ -2520,13 +2529,15 @@ class BoardApi {
       aom.unregisterTrackedActiveObject(objectId);
     }
     boardCore.objectLoaded.delete(objectId);
+    boardCore.unsetObjectCoverChunks(objectId);
+    boardCore.markObjectRemoved(objectId);
   }
 
   /**
    * 将修改快照滚入 trash 条目
    * @param {string} objectId - 对象 id
    * @param {Object} [snapshot] - 全量快照（after 或 before）
-   * @returns {void}
+   * @returns {boolean} 是否写入了 trash 快照
    * @private
    *
    * @description
@@ -2534,8 +2545,9 @@ class BoardApi {
    */
   #patchTrashSnapshot(objectId, snapshot) {
     const entry = this.#boardCore.trash.get(objectId);
-    if (!entry || snapshot === undefined || snapshot === null) return;
+    if (!entry || snapshot === undefined || snapshot === null) return false;
     entry.data = JSON.parse(JSON.stringify(snapshot));
+    return true;
   }
 
   /**
@@ -2568,7 +2580,7 @@ class BoardApi {
    * 应用记录携带的层位边（after 语义）
    * @description 清主体在各记录区块的旧边，按记录写回（过滤已不存在的节点）——
    * 重放/远端/重做的层位效果以记录为准，不经本地几何重算：复制的是效果而非重执行。
-   * 记录区块未加载时跳过（加载后由后续对账收敛）。
+   * 写边时同步对象覆盖索引；记录区块未加载时告警并跳过（加载后由后续对账收敛）。
    * @param {string} objectId - 对象 id
    * @param {Array<{chunkId: string, below: Iterable<string>, above: Iterable<string>}>} chunksEntries - 层位边集合
    * @param {Set<import("../chunk/chunk.js").Chunk>} [affectedChunks] - 受影响区块集合（输出参数）
@@ -2577,10 +2589,17 @@ class BoardApi {
    */
   #applyRecordedLayerEdges(objectId, chunksEntries, affectedChunks) {
     const boardCore = this.#boardCore;
+    const touchedChunkIds = new Set();
     for (const entry of chunksEntries ?? []) {
-      const chunk = boardCore.getChunkById(Number(entry.chunkId));
+      const chunkId = Number(entry.chunkId);
+      const chunk = boardCore.getChunkById(chunkId);
       const graph = chunk?.objectManager?.staticGraph;
-      if (!graph) continue;
+      if (!graph) {
+        console.warn(
+          `[board-api] 层位边目标区块未加载，已跳过：对象 ${objectId}，区块 ${String(entry.chunkId)}`,
+        );
+        continue;
+      }
       if (!graph.hasNode(objectId)) graph.addNodeUnsafe(objectId);
       graph.deleteAllEdgesOfNode(objectId);
       for (const id of entry.below ?? []) {
@@ -2589,7 +2608,16 @@ class BoardApi {
       for (const id of entry.above ?? []) {
         addLayerEdgeIfAcyclic(graph, objectId, id);
       }
+      touchedChunkIds.add(chunk.id);
       affectedChunks?.add(chunk);
+    }
+    if (touchedChunkIds.size > 0) {
+      const coveredChunkIds = boardCore.getObjectCoverChunks(objectId);
+      const nextChunkIds = new Set(coveredChunkIds ?? []);
+      for (const chunkId of touchedChunkIds) {
+        nextChunkIds.add(chunkId);
+      }
+      boardCore.setObjectCoverChunks(objectId, nextChunkIds);
     }
   }
 
@@ -2613,12 +2641,25 @@ class BoardApi {
     for (const entry of chunksEntries ?? []) {
       const chunk = boardCore.getChunkById(Number(entry.chunkId));
       const graph = chunk?.objectManager?.staticGraph;
-      if (!graph?.hasNode(obj.id)) continue;
+      if (!graph) {
+        console.warn(
+          `[board-api] 缝合目标区块未加载，已跳过：对象 ${obj.id}，区块 ${String(entry.chunkId)}`,
+        );
+        continue;
+      }
+      if (!graph.hasNode(obj.id)) continue;
       const recorded = new Set([...(entry.below ?? []), ...(entry.above ?? [])]);
       for (const nodeId of graph.getNodes()) {
         if (nodeId === obj.id || recorded.has(nodeId)) continue;
         if (aom.has(nodeId)) continue;
-        const nodeRect = getObjectWorldRect(boardCore.getObjectById(nodeId));
+        const nodeObj = boardCore.getObjectById(nodeId);
+        if (!nodeObj) {
+          console.warn(
+            `[board-api] 缝合时相交对象不可用，已跳过：主体 ${obj.id}，对象 ${nodeId}`,
+          );
+          continue;
+        }
+        const nodeRect = getObjectWorldRect(nodeObj);
         if (!nodeRect || !intersectsRanges(rect, nodeRect)) continue;
         const [from, to] = position === "above" ? [nodeId, obj.id] : [obj.id, nodeId];
         if (addLayerEdgeIfAcyclic(graph, from, to)) {
@@ -2777,16 +2818,27 @@ class BoardApi {
 
   /**
    * 应用远端到达的分子操作记录
-   * @description 同步插件的入口：记录入日志后按「插入与重放的边界」分流——纯插入/纯应用走增量；
+   * @description 同步插件的入口：先校验/去重并确保记录点名的区块共驻留，
+   * 再入日志并按「插入与重放的边界」分流——纯插入/纯应用走增量；
    * 旧操作落在上下文敏感操作之前时全量重建（f(日志) 兜底），再经链过渡对齐白板效果。
    * 同批的超分子成员聚合为一组应用。
    * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
-   * @returns {{ applied: number }} 应用条数
+   * @returns {Promise<{ applied: number }>} 应用条数
    */
-  applyRemoteOperations(records) {
-    const boardCore = this.#boardCore;
-    const log = boardCore.operationLog;
-    const tree = boardCore.undoTree;
+  async applyRemoteOperations(records) {
+    const list = this.#filterIncomingRecords(records);
+    await this.#ensureRecordsCoResident(list);
+    return this.#applyIncomingRecords(list);
+  }
+
+  /**
+   * 校验远端记录并过滤已存在的重复项
+   * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
+   * @returns {import("../hit/operation.js").OperationRecord[]} 待写入记录
+   * @private
+   */
+  #filterIncomingRecords(records) {
+    const log = this.#boardCore.operationLog;
     const input = Array.isArray(records) ? records : [];
     const list = [];
     for (const record of input) {
@@ -2803,6 +2855,209 @@ class BoardApi {
       }
       list.push(record);
     }
+    return list;
+  }
+
+  /**
+   * 收集记录点名的区块 id
+   * @description 取 payload.chunkId、payload.chunks（数组或 before/after 形态）、
+   * 对象覆盖索引，以及从对象快照几何计算的覆盖区块。
+   * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
+   * @returns {Set<number>} 区块 id 集合
+   * @private
+   */
+  #collectRecordChunkIds(records) {
+    const boardCore = this.#boardCore;
+    const chunkIds = new Set();
+    const addChunkId = (value) => {
+      const chunkId = Number(value);
+      if (Number.isInteger(chunkId) && chunkId > 0) chunkIds.add(chunkId);
+    };
+    const addChunksEntries = (entries) => {
+      for (const entry of entries ?? []) addChunkId(entry?.chunkId);
+    };
+    const addSnapshotCover = (snapshot) => {
+      if (snapshot === undefined || snapshot === null) return;
+      if (boardCore.width <= 0 || boardCore.height <= 0) return;
+      let obj;
+      try {
+        obj = deserialize(snapshot);
+      } catch {
+        return;
+      }
+      const rect = getObjectWorldRect(obj);
+      if (!rect) return;
+      for (const chunkId of ChunkObjectManager.calculateCoveredChunkIdsForRange(
+        rect,
+        boardCore.width,
+        boardCore.height,
+      )) {
+        chunkIds.add(chunkId);
+      }
+    };
+
+    const collectRecord = (record) => {
+      const payload = record?.payload ?? {};
+      addChunkId(payload.chunkId);
+      const chunks = payload.chunks;
+      if (Array.isArray(chunks)) {
+        addChunksEntries(chunks);
+      } else if (chunks && typeof chunks === "object") {
+        addChunksEntries(chunks.before);
+        addChunksEntries(chunks.after);
+      }
+      if (typeof payload.objectId === "string") {
+        for (const chunkId of boardCore.getObjectCoverChunks(
+          payload.objectId,
+        ) ?? []) {
+          chunkIds.add(chunkId);
+        }
+      }
+      switch (record?.type) {
+        case OPERATION_TYPES.ADD_OBJECT:
+        case OPERATION_TYPES.DELETE_OBJECT:
+          addSnapshotCover(payload.data);
+          break;
+        case OPERATION_TYPES.MODIFY_OBJECT:
+          addSnapshotCover(payload.before);
+          addSnapshotCover(payload.after);
+          break;
+        default:
+          break;
+      }
+    };
+
+    for (const record of records) collectRecord(record);
+    for (const record of this.#collectRecordsAffectedByTreeOperations(
+      records,
+    )) {
+      collectRecord(record);
+    }
+
+    return chunkIds;
+  }
+
+  /**
+   * 收集撤销/重做/MOVE_HEAD 记录会触及的成员记录
+   * @param {import("../hit/operation.js").OperationRecord[]} records - 到达记录
+   * @returns {import("../hit/operation.js").OperationRecord[]} 被回放的成员记录
+   * @private
+   */
+  #collectRecordsAffectedByTreeOperations(records) {
+    const boardCore = this.#boardCore;
+    const tree = boardCore.undoTree;
+    const log = boardCore.operationLog;
+    const affected = [];
+    const collectNode = (nodeId) => {
+      if (typeof nodeId !== "string") return;
+      const node = tree.findNode(nodeId);
+      if (!node) return;
+      for (const id of node.memberIds) {
+        const record = log.get(id);
+        if (record) affected.push(record);
+      }
+    };
+
+    for (const record of records) {
+      if (
+        record.type === OPERATION_TYPES.UNDO ||
+        record.type === OPERATION_TYPES.MOVE_HEAD
+      ) {
+        collectNode(record.payload?.targetNodeId);
+      } else if (record.type === OPERATION_TYPES.REDO) {
+        const undoRecord = log.get(record.payload?.targetUndoId);
+        collectNode(undoRecord?.payload?.targetNodeId);
+      }
+    }
+
+    return affected;
+  }
+
+  /**
+   * 确保记录点名的区块共驻留
+   * @description 区块级 FullLoad，保留到 journaler 下一轮落盘后再释放；
+   * 加载完成后校验重放前置条件，失败时在写日志前抛出。
+   * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
+   * @returns {Promise<void>}
+   * @private
+   */
+  async #ensureRecordsCoResident(records) {
+    if (records.length === 0) return;
+    const boardCore = this.#boardCore;
+    const chunkIds = this.#collectRecordChunkIds(records);
+    const chunksToLoad = [];
+    for (const chunkId of chunkIds) {
+      const chunk = boardCore.getChunkById(chunkId);
+      if (chunk) chunksToLoad.push(chunk);
+    }
+    if (chunksToLoad.length > 0) {
+      const loader = await boardCore.loadChunksAndWaitComplete(
+        chunksToLoad,
+        `remote-replay-${Date.now().toString(36)}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
+      );
+      loader.destroy(300);
+    }
+    this.#assertRecordsCoResident(records, chunkIds);
+  }
+
+  /**
+   * 校验记录重放的前置驻留条件
+   * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
+   * @param {Set<number>} chunkIds - 记录点名的区块 id
+   * @returns {void}
+   * @throws {Error} 区块未能共驻留，或纯应用批次的 MODIFY 目标不可达时抛出
+   * @private
+   */
+  #assertRecordsCoResident(records, chunkIds) {
+    const boardCore = this.#boardCore;
+    for (const chunkId of chunkIds) {
+      const chunk = boardCore.getChunkById(chunkId);
+      if (!chunk?.objectManager?.staticGraph) {
+        throw new Error(`远端回放前区块 ${chunkId} 未能共驻留`);
+      }
+    }
+
+    const hasTreeOperation = records.some(
+      (record) =>
+        record.type === OPERATION_TYPES.UNDO ||
+        record.type === OPERATION_TYPES.MOVE_HEAD ||
+        record.type === OPERATION_TYPES.REDO,
+    );
+    if (hasTreeOperation) return;
+
+    const addedObjectIds = new Set();
+    for (const record of records) {
+      const objectId = record?.payload?.objectId;
+      if (record.type === OPERATION_TYPES.ADD_OBJECT) {
+        if (typeof objectId === "string") addedObjectIds.add(objectId);
+        continue;
+      }
+      if (record.type !== OPERATION_TYPES.MODIFY_OBJECT) continue;
+      if (typeof objectId !== "string" || addedObjectIds.has(objectId)) {
+        continue;
+      }
+      if (!boardCore.getObjectById(objectId) && !boardCore.trash.has(objectId)) {
+        throw new Error(
+          `远端回放前对象 ${objectId} 既非驻留也不在 trash（区块 ${String(
+            record?.payload?.chunkId ?? "?",
+          )}）`,
+        );
+      }
+    }
+  }
+
+  /**
+   * 将已校验的记录写入日志并应用效果
+   * @param {import("../hit/operation.js").OperationRecord[]} list - 待写入记录
+   * @returns {{ applied: number }} 应用条数
+   * @private
+   */
+  #applyIncomingRecords(list) {
+    const boardCore = this.#boardCore;
+    const log = boardCore.operationLog;
+    const tree = boardCore.undoTree;
     const groups = [];
     const bySupra = new Map();
     for (const record of list) {
@@ -2862,6 +3117,16 @@ class BoardApi {
       });
     }
     return { applied };
+  }
+
+  /**
+   * 同步应用远端记录（scratch 重放，无共驻留预热）
+   * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
+   * @returns {{ applied: number }} 应用条数
+   * @private
+   */
+  #applyRemoteOperationsCore(records) {
+    return this.#applyIncomingRecords(this.#filterIncomingRecords(records));
   }
 
   /**

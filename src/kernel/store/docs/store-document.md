@@ -48,7 +48,7 @@ journaler 订阅操作日志的 append 事件——本地 commit 与远端应用
 - **失败与重试**：驱动返回 false 或抛错时不得更新对应成功指纹；日志段保留队首，对象、trash、区块与元数据保留下轮重试。显式 `flush()` 汇总各阶段失败并 reject，串行链仍可继续后续 flush；daemon 仅在应落盘内容全部成功后回复 RPC 成功。
 - **流归并**：打开板时各 per-source 流按「source 分组、组内操作序号升序、id 去重、组按 source 字典序拼接」归并——满足操作日志 per-source 序号连续与时间单调的准入校验；树重建按 (时间, author) 确定性定序，与归并顺序无关。
 - **指纹调和**：对象与区块文件按板当前状态对齐——序列化指纹（JSON 串）比对，仅写差异；遍历 `objectLoaded` 注册表写入 `objects/`（未驻留区块中的对象不在该表内，故部分驻留写端必须关闭缺失移除，见写权仲裁），trash 条目写 `trash/`（层位边集合归一化为数组），既不在该表内亦非 trash 的对象从盘上移除。撤销/重做/远端记录引起的任意状态迁移统一收敛。注意此处的「活动对象」指内存中在场对象，与 AOM 三态术语中的「活动对象」不是一回事（AOM 活动态是被选中、正在操作的对象）。
-- **写权仲裁**：远程活动对象（AOM `isRemoteActive`）跳过不写不移除——写权属活动方；部分驻留写端（GUI 开 chunkUnload）以 `removeMissing:false` 关闭缺失移除；日志流按 `persistStream` 过滤：GUI 只落本端 source 的流，daemon 落自己与 relay 远端来源的流、不落直连客户端流；元数据按 source 分片（`meta/{source}.json`：本端 + 本会话代写过流的来源）；读会话以 `writeMeta:false` 保持零写盘。
+- **写权仲裁**：远程活动对象（AOM `isRemoteActive`）跳过不写不移除——写权属活动方；对象活性取板内已知集合（覆盖索引/静态图节点，驻留无关），真正移除的对象经显式删除队列落盘，`removeMissing` 仅控制未登记缺失对象的扫尾（GUI 仍以 `removeMissing:false` 防误删远端对象）；日志流按 `persistStream` 过滤：GUI 只落本端 source 的流，daemon 落自己与 relay 远端来源的流、不落直连客户端流；元数据按 source 分片（`meta/{source}.json`：本端 + 本会话代写过流的来源）；读会话以 `writeMeta:false` 保持零写盘。
 - **指纹种子**：打开既有板时以盘上内容为种子挂接（含各源流的下一段序号 `nextSegmentSeqBySource`，由各流目录内最大段序恢复），首轮 flush 不做无谓重写。
 
 ## 会话恢复
@@ -57,7 +57,7 @@ journaler 订阅操作日志的 append 事件——本地 commit 与远端应用
 
 1. `hitRecords` 经 `OperationLog.fromJSON` 重建日志，`UndoTree.rebuild()` 重建时间回溯树——撤销/重做历史穿越重开。
 2. `lastTime` 续给 commit 边界的时间标记，`coreIdCounters` 续给 Core 侧对象 id 分配器，`objectIdCounters` 续给 UI 侧对象 id 池（UI 经 `reportObjectIdCounter` 上报，随板元数据持久化）。
-3. `restoreSession` 回填区块层叠图与覆盖索引、注册对象实例、恢复 trash 条目；恢复的区块标记完整加载态（层叠图与对象已从盘上就绪，不再走懒加载等待）。
+3. `restoreSession` 回填区块层叠图并按静态图重建覆盖索引、注册对象实例、恢复 trash 条目；恢复的区块标记完整加载态（层叠图与对象已从盘上就绪，不再走懒加载等待）。
 
 ## 关键设计点
 

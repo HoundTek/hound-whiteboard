@@ -210,6 +210,21 @@ class ChunkObjectManager {
   }
 
   /**
+   * 将静态图节点登记到白板覆盖索引
+   * @description 覆盖索引由 BoardCore 集中持有；恢复或懒加载后按静态图成员关系补齐当前区块归属。
+   * @returns {void}
+   */
+  syncCoverIndexFromGraph() {
+    if (!this.board) return;
+    for (const objectId of this.staticGraph.getNodes()) {
+      const coveredChunkIds = this.board.getObjectCoverChunks?.(objectId);
+      const nextChunkIds = new Set(coveredChunkIds ?? []);
+      nextChunkIds.add(this.id);
+      this.board.setObjectCoverChunks?.(objectId, nextChunkIds);
+    }
+  }
+
+  /**
    * 加载区块元数据（层叠图 + 覆盖索引）
    * @returns {Promise<void>} 加载完成
    * @description
@@ -225,6 +240,7 @@ class ChunkObjectManager {
 
     this.staticGraph = DirectedGraph.parse(tierGraph);
     this.loadObjectCoverChunksFromData(objectCoverIndex);
+    this.syncCoverIndexFromGraph();
   }
 
   /**

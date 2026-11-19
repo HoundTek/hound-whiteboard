@@ -271,7 +271,7 @@ const BOARD_API_ROUTES = {
    */
   applyRemoteOperations: {
     invoke: (api, p) => api.applyRemoteOperations(p.records),
-    flush: "sync",
+    flush: "async",
   },
 
   /**

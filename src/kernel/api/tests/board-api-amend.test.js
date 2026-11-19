@@ -238,7 +238,7 @@ describe("amend 分子生命周期事件", () => {
     const b = createEnd("b");
 
     await createStroke(a.api, "a/1");
-    b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON());
+    await b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON());
 
     const messages = collectAmends(b.boardCore);
 
@@ -248,7 +248,7 @@ describe("amend 分子生命周期事件", () => {
     a.api.amendMol(molId, { "a/1": { position: { x: 9, y: 9 } } });
     a.api.endMol(molId);
     await a.api.commitObjects(["a/1"]);
-    b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON().slice(1));
+    await b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON().slice(1));
 
     expect(messages).toHaveLength(0);
     expect(b.boardCore.getObjectById("a/1").position.x).toBe(9);

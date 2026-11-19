@@ -407,7 +407,7 @@ describe("撤销语义三分（场景推演）", () => {
 
     // 对端并发操作插入在超分子成员之间（时间标记 125 介于 mov1 与 mov2 之间）
     await createStaticStroke(bob.api, "b1", [{ x: 500, y: 500 }, { x: 510, y: 500 }]);
-    alice.api.applyRemoteOperations(bob.boardCore.operationLog.toArray());
+    await alice.api.applyRemoteOperations(bob.boardCore.operationLog.toArray());
 
     dragOnce(alice.api, "s1", { x: 80, y: 0 }, "S");
     await alice.api.commitObjects(["s1"], { supraKey: "S" });

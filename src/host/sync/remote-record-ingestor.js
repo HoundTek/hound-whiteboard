@@ -174,9 +174,9 @@ function createRemoteRecordIngestor(options) {
 
   /**
    * 排空全部当前可接入分组
-   * @returns {{applied: number, pending: number, rejected: number}} 本轮接入统计
+   * @returns {Promise<{applied: number, pending: number, rejected: number}>} 本轮接入统计
    */
-  const drain = () => {
+  const drain = async () => {
     let applied = 0;
     if (draining || closed) {
       return { applied, pending: pending.size, rejected: rejected.size };
@@ -198,7 +198,7 @@ function createRemoteRecordIngestor(options) {
           }
           if (fresh.length === 0) continue;
           try {
-            const result = boardApi.applyRemoteOperations(fresh);
+            const result = await boardApi.applyRemoteOperations(fresh);
             applied += result.applied;
             for (const record of fresh) pending.delete(record.id);
           } catch (error) {
@@ -221,7 +221,13 @@ function createRemoteRecordIngestor(options) {
 
   const unsubscribeAppend = log.onAppend(() => {
     queueMicrotask(() => {
-      if (!draining && !closed) drain();
+      if (!draining && !closed) {
+        void drain().catch((error) => {
+          console.error(
+            `[remote-record-ingestor] 排空失败：${error?.message ?? error}`,
+          );
+        });
+      }
     });
   });
 
@@ -229,9 +235,9 @@ function createRemoteRecordIngestor(options) {
     /**
      * 接收一批远端记录并立即尝试接入
      * @param {Object[]} records - 记录数组
-     * @returns {{applied: number, pending: number, rejected: number}} 接入统计
+     * @returns {Promise<{applied: number, pending: number, rejected: number}>} 接入统计
      */
-    ingest(records) {
+    async ingest(records) {
       if (closed) return { applied: 0, pending: pending.size, rejected: rejected.size };
       for (const record of Array.isArray(records) ? records : []) {
         if (record?.id === undefined || rejected.has(record.id) || log.has(record.id) || pending.has(record.id)) {
@@ -249,7 +255,7 @@ function createRemoteRecordIngestor(options) {
 
     /**
      * 重新整理待接入记录
-     * @returns {{applied: number, pending: number, rejected: number}} 接入统计
+     * @returns {Promise<{applied: number, pending: number, rejected: number}>} 接入统计
      */
     drain,
 

@@ -260,11 +260,11 @@ describe("日志记录携带 choice", () => {
     const b = createEnd("b");
 
     await createStroke(a.api, "a/1");
-    b.api.applyRemoteOperations(recordsOf(a.boardCore));
+    await b.api.applyRemoteOperations(recordsOf(a.boardCore));
 
     // a 命名选择并提交，全量日志喂给 b（等价 INIT 重建路径）
     await a.api.addActiveObjects(["a/1"], { choice: "hold" });
-    b.api.applyRemoteOperations(recordsOf(a.boardCore).slice(1));
+    await b.api.applyRemoteOperations(recordsOf(a.boardCore).slice(1));
 
     expect(b.boardCore.activeObjectManager.remoteChoicesOf("a/1")).toEqual([
       { source: "a", name: "hold" },
@@ -272,7 +272,7 @@ describe("日志记录携带 choice", () => {
 
     // a 提交（unchoose 记录携带 choice），b 精准注销该命名选择
     await a.api.commitObjects(["a/1"]);
-    b.api.applyRemoteOperations(recordsOf(a.boardCore).slice(2));
+    await b.api.applyRemoteOperations(recordsOf(a.boardCore).slice(2));
     expect(b.boardCore.activeObjectManager.isRemoteActive("a/1")).toBe(false);
   });
 
@@ -415,7 +415,7 @@ describe("awareness 查询面与变更通知", () => {
 
     await createStroke(a.api, "a/1");
     await createStroke(a.api, "a/2");
-    b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON());
+    await b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON());
 
     /** @type {Object[]} */
     const notices = [];
@@ -424,7 +424,7 @@ describe("awareness 查询面与变更通知", () => {
     // 两条 choose 记录（不同 choice）同批到达：回放后合批为一次通知
     await a.api.addActiveObjects(["a/1"], { choice: "x" });
     await a.api.addActiveObjects(["a/2"], { choice: "y" });
-    b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON().slice(2));
+    await b.api.applyRemoteOperations(a.boardCore.operationLog.toJSON().slice(2));
 
     expect(notices).toHaveLength(1);
     expect(b.api.queryRemoteChoices()).toHaveLength(2);
