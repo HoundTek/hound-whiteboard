@@ -43,7 +43,7 @@ flowchart LR
 
 GUI 打开持久化板时不再探测或连接 daemon：GUI 自己 claim 板目录、自己落盘，并由 Rust host 在 `127.0.0.1` 开 owner RPC 端点（claim transport 记录 host/port/token）。CLI `--path` 经该端点读写，请求携带 CLI source；owner 端按 source 切换 `HitCommitter`，CLI 的 undo/redo 只作用于自己的操作。
 
-daemon 侧的 `join`/collab 客户端协议保留为过渡路径，A3 将移除；本机端之间仍不走 relay，relay 只承载跨机协作。
+daemon 不再参与 GUI 协作协议：GUI 持盘时 daemon 只代理 CLI RPC，无 owner 时才自己持盘并作为房间成员连接 relay；GUI 退出释放 claim 后 proxy daemon 接管为 owner。本机端之间仍不走 relay，relay 只承载跨机协作。
 
 ## 消息协议（JSON over WebSocket）
 

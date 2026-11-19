@@ -57,6 +57,7 @@ IDE 侧由 `.vscode/settings.json` 的 `jest.nodeEnv` 注入 flag。
 - **对象模型** — `BasicObject` 基类，`StrokeObject`（`src/kernel/objects/stroke/`）与 `GraphObject`（`src/kernel/objects/graph/`）子类
 - **AOM 三态术语** — 对象相对 AOM 动态图有三种状态：**活动对象**（被选中、正在操作，位于层的 `activeObjects`）、**非活动（层）对象**（被 pickup 一并纳入 AOM 的层成员，位于层的 `inactiveGraph`）、**不在 AOM 中的对象**（纯静态图，`aom.has(id) === false`）。“非活动对象”仍在 AOM 中，与“不在 AOM 中的对象”不是一回事。成员归属判定：`aom.isActive(id)` 仅活动对象，`aom.has(id)` 覆盖活动与非活动层成员
 - **命名选择（choice）** — 活动对象的命名分组：每个活动对象恰好属于一个本地 choice（未命名落匿名桶 `~`）。注册表（`queryChoices`）是权威状态，对象退出活动集时成员关系自动解除；跨端以 `"{source}/{choice}"` 区分同名 choice
+- **owner 驻留** — 对象实例按区块 FULL 持有；daemon owner 默认部分驻留（`--resident-chunks`，默认 32），开板不读对象文件，查询/写/undo 路由前经 `invokeBoardApiRoute` 准备驻留；AOM 成员所在区块固定不驱逐，对象类型索引按需扫描 `objects/`
 
 ## 代码规范
 

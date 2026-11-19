@@ -12,7 +12,7 @@
 | `renderers/`    | 渲染插件                | canvas 渲染器、绘制策略注册表                                         |
 | `host/`         | 组合根与通道            | core-worker、bridges（RPC、IO 转发）、sync（协作同步）              |
 | `io/`           | 安全文件操作            | 路径 DSL 与权限策略、driver 三实现、PersistenceAdapter 实现、对外 api |
-| `cli/`          | 命令行第二前端          | 写命令经持板 daemon 的 WebSocket RPC 执行，读命令可直读板文件         |
+| `cli/`          | 命令行第二前端          | 写命令经当前 owner 的 RPC 执行，读命令可直读板文件                     |
 | `ui/`           | UI 线程运行时           | Board、Viewport、DevicesDAG、UiRenderer                               |
 | `demo/`         | 白板 HTML/CSS/JS 入口   | 桌面与 web 两种模式的演示宿主（输入绑定、工具装配、workflow 挂载）    |
 | `utils/`        | 跨模块共享工具          | device-identity、log、safe-io、short-id                               |
@@ -143,7 +143,7 @@ flowchart BT
 
 ## `cli/`
 
-`cli/` 是命令行第二前端：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 RPC 执行——daemon owner 直接落盘，GUI owner 走本地 owner RPC（请求携带 CLI source），GUI 持盘时的 daemon 是 proxy；GUI 退出释放 claim 后 proxy daemon 接管板目录并转为 owner。读命令既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 owner 存活）。本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」。详见 [../cli/docs/cli-document.md](../cli/docs/cli-document.md)。
+`cli/` 是命令行第二前端：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 RPC 执行——daemon owner 直接落盘（按区块部分驻留），GUI owner 走本地 owner RPC（请求携带 CLI source），GUI 持盘时的 daemon 是 proxy；GUI 退出释放 claim 后 proxy daemon 接管板目录并转为 owner。读命令既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 owner 存活）。本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」。详见 [../cli/docs/cli-document.md](../cli/docs/cli-document.md)。
 
 ## `kernel/`
 

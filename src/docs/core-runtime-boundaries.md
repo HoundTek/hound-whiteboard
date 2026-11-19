@@ -38,7 +38,7 @@
 | `kernel/types/**`                                          | Kernel   | 跨线程共享 typedef 与协议                                       |
 | `kernel/utils/**`                                          | Kernel   | 数学、图结构、事件总线、路径、计数池                            |
 | `io/**`                                                    | 按 driver 分 | core（路径 DSL 与权限策略）任意环境；tauri driver 在 Worker 内经 invoke 转发到主线程；node driver 在 CLI / daemon 进程；memory driver 任意环境 |
-| `cli/**`                                                   | CLI      | 独立 Node 进程；写命令经持板 daemon 的 WebSocket RPC，读命令可直读板文件 |
+| `cli/**`                                                   | CLI      | 独立 Node 进程；写命令经当前 owner（daemon 或 GUI owner）的 RPC，读命令可直读板文件 |
 | `test-support/**`                                          | Any      | 测试 mock 与 fixture                                            |
 
 ## `ui/`（UI 线程）
@@ -152,6 +152,7 @@ Worker 不解析 DOM 事件，也不持有 DevicesDAG。
 - 进程内装配完整 Core：`BoardCore` + `BoardApi` + node driver + 日志跟随者落盘 + WebSocket RPC 服务
 - 本机端（CLI / TUI / MCP）写命令经当前 owner 的 RPC 串行执行；GUI 作为 owner 时开本地 owner RPC 端点，CLI 请求携带自己的 source
 - 启动时已有活 GUI owner 则进入 proxy（只转发 RPC、不落盘）；GUI 退出并释放 claim 后，daemon 经请求触发或轮询接管板目录、打开 BoardCore 并转为 owner
+- owner 模式按区块部分驻留：开板不读对象文件，查询/写/undo 路由前按需 FullLoad；`--resident-chunks` 控制 FULL 持有预算，LRU 驱逐且固定 AOM 成员区块
 - daemon 连了中继时，本机端的操作经 daemon 桥接进 relay 房间；relay 只承载跨机协作
 - 无 daemon 时 CLI 读命令以 `--path` 自治直读板文件（node driver，零写盘）
 

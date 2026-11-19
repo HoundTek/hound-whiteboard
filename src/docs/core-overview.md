@@ -15,7 +15,7 @@
 
 其中 `src/kernel/` + `src/ui/` + `src/host/bridges/` 主要覆盖后 3 层。
 
-四层之外有两个独立包：`src/io/`（安全文件操作，core / driver / adapter / api 分层，经 PersistenceAdapter 缝注入组合根）与 `src/cli/`（命令行第二前端，独立 Node 进程，写命令经持板 daemon 的 WebSocket RPC 执行）。
+四层之外有两个独立包：`src/io/`（安全文件操作，core / driver / adapter / api 分层，经 PersistenceAdapter 缝注入组合根）与 `src/cli/`（命令行第二前端，独立 Node 进程，写命令经当前 owner 的 WebSocket RPC 执行，无 owner 时自治直写）。
 
 ### 四端一板部署全景
 
@@ -168,7 +168,7 @@ sequenceDiagram
 - `hitTest`、`queryObjects`、`queryChunkObjects` 已接到 Worker 权威状态
 - `undo` / `redo` 已接通（含侧栏按钮与快捷键）
 - 持久化已接通：demo 以 `~/hound-whiteboard/demo-board` 为板目录运行，撤销历史穿越重开
-- CLI 前端已接通：写命令经当前 owner（daemon owner/proxy 或 GUI owner 的本地 RPC），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，无 GUI 时 daemon 是 owner，GUI 持盘时 daemon 是 proxy，GUI 退出释放 claim 后 proxy daemon 接管为 owner；CLI 请求携带自己的 source。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
+- CLI 前端已接通：写命令经当前 owner（daemon owner/proxy 或 GUI owner 的本地 RPC），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，无 GUI 时 daemon 是 owner，GUI 持盘时 daemon 是 proxy，GUI 退出释放 claim 后 proxy daemon 接管为 owner；daemon owner 按区块部分驻留（`--resident-chunks`，默认 32），对象实例由路由按需加载。CLI 请求携带自己的 source。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
 
 ## 术语定义
 

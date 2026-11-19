@@ -9,7 +9,7 @@
 - **Kernel** — 对象模型、几何、区块、BoardCore 静态图、AOM 动态图、操作日志（hit）、会话存储（store）与 BoardApi 契约；零 canvas/DOM，可运行于 Worker、UI 线程或 Node 环境
 - **Renderer 插件** — canvas 渲染器贴附内核同宿运行：脏区渲染、位图合成、对象绘制策略注册表；渲染过程不过桥，RPC 只过操作与帧
 - **Host** — 组合根与通道：Core Worker 宿主与 bridges，决定内核与渲染器进程内直连（standalone）还是 RPC 绑定（Worker）；`sync/` 协作同步层（network-coordinator 协调器、relay-server 无状态中继、amend-forwarder 中间帧转发）
-- **CLI** — 命令行第二前端：Node 环境经 BoardApi 契约读写板文件，写命令经持板 daemon 执行（与 GUI 实时互见、并发安全）
+- **CLI** — 命令行第二前端：Node 环境经 BoardApi 契约读写板文件，写命令经当前 owner（GUI 的本地 owner RPC，或无 GUI 时的 daemon）执行；daemon owner 按区块懒加载对象，无 owner 时 CLI 自治直写自己分片
 - **Devices DAG** — 输入设备路由图，将鼠标/键盘/触摸等输入信号路由到对应的工具处理器
 - **Tool System** — 创建、选择、修改、擦除等交互工具
 
@@ -161,7 +161,7 @@ hwb.off();
 
 详细命令面与使用说明见 [src/cli/docs/cli-document.md](src/cli/docs/cli-document.md)。
 
-注意：CLI 默认直接对文件读写，不会与 GUI 同步；板目录有活 daemon 时自动改经 daemon 执行，daemon 连中继后与 GUI 实时互见。
+注意：CLI 读命令可 `--path` 直读板文件（零写盘）；写命令先探测当前 owner，有 owner 时经其 RPC 执行（GUI 走本地 owner RPC，daemon owner 走 daemon RPC），无 owner 时自治直写自己分片。GUI 退出后 proxy daemon 接管板目录，CLI 继续可用。
 
 ### 协作同步
 

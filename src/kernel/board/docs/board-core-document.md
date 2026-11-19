@@ -34,7 +34,22 @@ UI 侧的 `Board` facade 通过 `BoardApiRpc` 与 Worker 侧的 `BoardCore` 通�
 | `persistenceAdapter`  | 持久化适配器接口，内存模式使用默认实现，文件模式为 `createPersistenceAdapter`         |
 | `aomRenderHooks`      | 注入式渲染钩子，替代 AOM 对 viewport/renderer 的直接依赖                              |
 | `#objectCoverChunks`  | 集中式对象覆盖区块索引（objectId → Set&lt;chunkId&gt;），全 BoardCore 唯一权威副本    |
+| `#objectTypes`        | 对象类型索引（objectId → type），部分驻留下无需实例即可回答对象清单                   |
+| `#residencyManager`   | 区块驻留缓存（owner 部分驻留时由 daemon 注入），未设置时按需使用临时 loader           |
 | `#removedObjectIds`   | 待删除对象 id 队列：真正离开白板的对象由 journaler 显式删除文件                       |
+
+## 对象驻留与懒加载
+
+部分驻留让 owner 不必把所有对象实例留在内存；对象被加载 **⟺** 其覆盖区块中至少一个被 FULL 持有。
+
+- `restoreSession(session, { chunksTemp: true })`：只回填区块静态图与覆盖索引，区块标记 TEMP，不注册对象实例；后续 FULL 请求经 `loadFull()` + `syncChunkObjectEntries()` 从 `objects/` 读回对象。
+- `setObjectIndexLoader(fn)` / `ensureObjectTypeIndex()`：类型索引加载器（通常扫描 `objects/`），部分驻留下无需实例即可回答对象清单；`getKnownObjectEntries()` 先列驻留对象，再补覆盖索引中的未驻留对象。
+- `getKnownObjectIds()` 与 `isObjectKnown()` 不随驱逐缩小；`isFullResidency()` 要求无驱逐标记且驻留对象数覆盖全部已知对象，懒加载/部分驻留端返回 false，digest 的 `stateHash` 比对据此门控。
+- `ensureObjectsResident(ids)` / `ensureChunksResident(ids)`：有驻留管理器时交给缓存，否则用临时 loader FullLoad 并返回 `destroy(300)` 的释放函数；`ensureChunkMetadata(ids)` 只加载 TEMP 元数据。
+- `loadChunksIntoLoader(loader, chunks)`：让指定 loader 以 FULL 持有区块并等待加载完成，供驻留缓存复用。
+- `getPinnedChunkIds()`：AOM 全部成员（活动对象、pickup 的非活动层成员、远程选择成员）覆盖区块的并集；`unloadChunkObjectEntries` 与 `#syncObjectEntryForChunk` 也不会移除任何仍在 AOM 中的对象。
+
+区块缓存本身见 [residency-cache-document.md](./residency-cache-document.md)。
 
 ## 对象活性与显式删除
 
@@ -86,7 +101,7 @@ unsetObjectCoverChunks(objectId); // 删除
 `BoardCore` 自身不直接落盘：区块元数据与对象读写经 `persistenceAdapter`（内存模式为 `createDefaultPersistenceAdapter()` 空实现，文件模式为 `createPersistenceAdapter({ driver, rootId })`）；会话级落盘与恢复由 store 层承担（见[会话存储内核文档](../../store/docs/store-document.md)、[文件结构文档](../../../docs/file-structure.md)）：
 
 - **分片落盘（布局 v2）**：日志分片、写权仲裁、元数据分片细则见会话存储内核文档。
-- **会话恢复**：打开既有板时 `restoreSession({ chunkMetadataList, objects, trash })` 先回填各区块层叠图，并按各区块静态图重建覆盖索引（盘上 `objectCoverIndex` 仍为空；重建保证恢复后的对象归属与加载计数可算），恢复的区块标记完整加载态；再注册活动对象实例，最后恢复 trash 条目（含层位边，供跨会话撤销删除）。
+- **会话恢复**：打开既有板时 `restoreSession({ chunkMetadataList, objects, trash }, { chunksTemp })` 先回填各区块层叠图，并按各区块静态图重建覆盖索引（盘上 `objectCoverIndex` 仍为空；重建保证恢复后的对象归属与加载计数可算）。默认恢复的区块标记完整加载态并注册活动对象实例；`chunksTemp: true` 时区块只标记 TEMP、不注册对象，供 daemon owner 懒加载。最后恢复 trash 条目（含层位边，供跨会话撤销删除）。
 
 内存模式下所有操作无副作用。
 

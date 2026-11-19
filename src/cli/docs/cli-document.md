@@ -4,7 +4,7 @@
 
 > [!NOTE]
 >
-> **当前状态**：daemon 管理（start/hold/release/stop/status，按 name 注册表寻址，引用计数模型）、`create` 离线建板、`.hwb` 打包（export/import）、十五个板命令、daemon 连接与直读双寻址、GUI owner claim 与本地 owner RPC 端点（GUI 自己落盘，relay 只管跨机）、`--json` 输出契约、并发安全（RPC 串行队列 + 持板侧原子 id 分配）与端到端测试均已落地。
+> **当前状态**：daemon 管理（start/hold/release/stop/status，按 name 注册表寻址，引用计数模型）、`create` 离线建板、`.hwb` 打包（export/import）、十五个板命令、daemon 连接与直读双寻址、GUI owner claim 与本地 owner RPC 端点（GUI 自己落盘，relay 只管跨机）、daemon owner/proxy 两态与 GUI 退出后自动接管、daemon owner 按区块部分驻留（`--resident-chunks`）、`--json` 输出契约、并发安全（RPC 串行队列 + 持板侧原子 id 分配）与端到端测试均已落地。
 
 ## 定位
 
@@ -31,7 +31,7 @@ daemon 进程内维护引用计数（创建者引用 1）：
 - CLI 短命令不计数（用之前确保 daemon 在，用完不持有）
 
 ```bash
-hwb daemon start --name board1 --path ~/boards/a [--source 身份] [--relay ws://...] [--board-id 房间]
+hwb daemon start --name board1 --path ~/boards/a [--source 身份] [--relay ws://...] [--board-id 房间] [--resident-chunks 32]
 hwb daemon status [--name board1]        # 显示 refCount；省略 name 列出全部（含僵尸条目）
 hwb daemon start --name board1 --path ~/boards/a   # 同名同板已存活：引用 +1（幂等，不重启）
 hwb daemon release --name board1         # 引用 -1，归零自动退出
@@ -42,6 +42,7 @@ hwb daemon stop --name board1            # 强制归零关闭
 - **唯一性**：board 目录的写权由 `.owner.json` owner claim 标记（ownerId/pid/source/transport/claimedAt）；name 与存活 daemon 重复拒绝；活 daemon owner 存在时拒绝第二个 daemon；活 GUI owner 存在时启动 proxy daemon（GUI 退出后自动接管为 owner）。僵尸条目（进程已死）可覆盖。启动窗口由板目录 owner 锁 `.owner.lock` 互斥（O_EXCL 抢锁、持有者 pid 判活、死 pid 的 stale 锁自动回收），并发 start 只有一个进程能进入，启动完成后锁即释放
 - **板必须已存在**：先用 `create` 离线建板，再 `daemon start`
 - **强制关闭**：`daemon stop` 无条件关闭；关闭过程 single-flight，进入关闭状态即拒绝新任务，随后排空已接收任务、落盘（owner 模式）并清理板目录 `.owner.json`（仅 owner 模式）与注册表条目。重复 shutdown 与信号触发等待同一清理承诺。
+- **部分驻留**：owner 模式开板只读日志、trash 与区块元数据，对象实例按区块懒加载；`--resident-chunks` 设 FULL 持有预算（默认 32），LRU 按区块驱逐，AOM 成员（含 pickup 的非活动层成员）所在区块固定。`list` 首次扫描 `objects/` 生成类型索引，查询/写/undo/redo 路由前按需 FullLoad。GUI 持盘时的 proxy→owner 接管也走同一模式。
 - **中继**：仅 owner 模式连中继（`--relay`）；proxy 模式不连 relay，GUI owner 自己直连 relay。`--board-id` 指定 relay 房间，决定与其他端会合；省略时取板目录路径
 
 ### GUI owner 与 daemon 代理
@@ -52,7 +53,7 @@ GUI 退出后 proxy daemon 接管板目录，时序如下：
 
 1. GUI 销毁先设 closing 门闸（新 owner RPC 请求立即返回「owner 正在关闭」），排空在途板操作，再 flush 写完日志流与对象文件；
 2. flush 完成后才停止 owner RPC 并删除 `.owner.json`；flush 期间 claim 仍可连，daemon 不会提前抢盘；
-3. daemon 以 `.owner.json` 为准：claim 消失或持有者已死时重新认领、打开 BoardCore，注册表 `mode` 改为 `owner`；有 `--relay` 时此时才连中继；
+3. daemon 以 `.owner.json` 为准：claim 消失或持有者已死时重新认领、以部分驻留模式打开 BoardCore，注册表 `mode` 改为 `owner`；有 `--relay` 时此时才连中继；
 4. 交接由 CLI 请求触发（代理调用失败时当场尝试一次）或默认每 1s 轮询兜底（`handoverPollMs`）；空窗期不排队，交接失败的请求立即报错，由下一次请求或轮询重试；
 5. 交接后 daemon 用自己持久化的 source 分配 id 与落盘，CLI 继续经同一 daemon 端口读写，不需重连。
 
@@ -90,7 +91,7 @@ hwb <命令> [--daemon <名> | --path <板目录>] [--标志 值]
 
 | 命令                                                                                                  | 说明                                                                                                                                                                     |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `daemon start --name <名> --path <板目录> [--source <身份>] [--relay <中继地址>] [--board-id <房间>]` | 后台启动持板 daemon；同名同板已存活时引用 +1（幂等）                                                                                                                     |
+| `daemon start --name <名> --path <板目录> [--source <身份>] [--relay <中继地址>] [--board-id <房间>] [--resident-chunks <区块数>]` | 后台启动持板 daemon；同名同板已存活时引用 +1（幂等）                                                                                                                     |
 | `daemon release --name <名>`                                                                          | 引用 -1；归零则 daemon 自动退出                                                                                                                                          |
 | `daemon stop --name <名>`                                                                             | 强制归零关闭（无条件，清理 `.owner.json` 与注册表条目）                                                                                                                  |
 | `daemon status [--name <名>]`                                                                         | 查单个 daemon（name/refCount/板目录/端口/身份/启动时间/存活）；省略 name 列出全部                                                                                        |
