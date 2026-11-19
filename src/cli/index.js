@@ -21,6 +21,7 @@ import {
   listEntries,
 } from "./daemon-registry.js";
 import { isOwnerClaimAlive, readOwnerClaim } from "./board-claim.js";
+import { connectOwnerByClaim } from "./owner-client.js";
 import { OWNER_TRANSPORT_KINDS } from "../kernel/board/owner-claim.js";
 import { resolveBoardPath } from "./board-path.js";
 import { parseArgv } from "./args.js";
@@ -422,7 +423,8 @@ async function main() {
       }
       return;
     }
-    // 写命令：优先走持有 daemon（快路径）；无 daemon 则自治直写自己分片（布局 v2 离线语义）
+    // 写命令：优先走当前 owner；无 owner 则自治直写自己分片（布局 v2 离线语义）
+    const source = flags.source ?? (await resolveCliIdentity());
     const live = await connectDaemonByPath(board);
     if (live !== null) {
       live.mode = "daemon";
@@ -435,15 +437,27 @@ async function main() {
     }
     const ownerClaim = await readOwnerClaim(board);
     if (ownerClaim !== null && (await isOwnerClaimAlive(ownerClaim))) {
-      throw new Error(
-        ownerClaim.transport.kind === OWNER_TRANSPORT_KINDS.GUI
-          ? t("err.boardOwnedByGui")
-          : t("err.boardOwnedByOther"),
-      );
+      if (ownerClaim.transport.kind === OWNER_TRANSPORT_KINDS.GUI) {
+        const owner = await connectOwnerByClaim(ownerClaim, {
+          rootPath: board,
+          source,
+        });
+        if (owner === null) {
+          throw new Error(t("err.ownerRpcConnectFailed"));
+        }
+        owner.mode = "owner";
+        try {
+          await spec.run(owner, args, flags);
+        } finally {
+          owner.close();
+        }
+        return;
+      }
+      throw new Error(t("err.boardOwnedByOther"));
     }
     const session = await openBoardSession(board, {
       create: false,
-      source: flags.source ?? (await resolveCliIdentity()),
+      source,
     });
     session.rootPath = board;
     session.mode = "file";

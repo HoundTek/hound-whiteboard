@@ -1,6 +1,6 @@
 /**
- * @file CLI owner 写保护测试
- * @description 验证活 GUI owner 存在时 --path 写命令拒绝直写，避免双写。
+ * @file CLI owner 写路径测试
+ * @description 验证活 GUI owner 存在时 --path 写命令经 owner RPC 执行，而不是直接写目录。
  * @module cli/tests/owner-write-guard.test
  * @author Zhou Chenyu
  */
@@ -18,12 +18,47 @@ import {
 
 setupCliTestEnv();
 
-describe("CLI owner 写保护", () => {
-  test("活 GUI owner 存在时 --path 写命令拒绝直写", async () => {
+/**
+ * 启动假 GUI owner 服务
+ * @param {string} token - token
+ * @returns {Promise<{server: WebSocketServer, port: number, requests: Object[]}>} 服务与请求记录
+ */
+async function createFakeOwnerServer(token) {
+  const requests = [];
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await once(server, "listening");
+  server.on("connection", (ws) => {
+    ws.once("message", (data) => {
+      let auth;
+      try {
+        auth = JSON.parse(String(data));
+      } catch {
+        ws.close();
+        return;
+      }
+      if (auth?.token !== token) {
+        ws.send(JSON.stringify({ ok: false }));
+        ws.close();
+        return;
+      }
+      ws.send(JSON.stringify({ ok: true }));
+      ws.on("message", (requestData) => {
+        const request = JSON.parse(String(requestData));
+        requests.push(request);
+        ws.send(
+          JSON.stringify({ id: request.id, ok: true, result: "cli-test/1" }),
+        );
+      });
+    });
+  });
+  return { server, port: server.address().port, requests };
+}
+
+describe("CLI owner 写路径", () => {
+  test("活 GUI owner 存在时 --path 写命令经 owner RPC 执行", async () => {
     const { dir, cleanup } = tempBoardDir();
-    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-    await once(server, "listening");
-    const port = server.address().port;
+    const token = "owner-test-token";
+    const fake = await createFakeOwnerServer(token);
     const claim = {
       ownerId: "gui-test-owner",
       pid: process.pid,
@@ -32,8 +67,8 @@ describe("CLI owner 写保护", () => {
       transport: {
         kind: "gui",
         host: "127.0.0.1",
-        port,
-        token: "test-token",
+        port: fake.port,
+        token,
       },
       claimedAt: new Date().toISOString(),
     };
@@ -42,25 +77,26 @@ describe("CLI owner 写保护", () => {
       await createTestBoard(dir);
       await claimBoard(dir, claim);
 
-      let error = null;
-      try {
-        await runCli([
-          "add",
-          "--path",
-          dir,
-          "--type",
-          "StrokeObject",
-          "--data",
-          STROKE_DATA,
-        ]);
-      } catch (caught) {
-        error = caught;
-      }
-      expect(error).not.toBeNull();
-      expect(error.stderr).toContain("GUI 持有");
+      const { stdout } = await runCli([
+        "add",
+        "--path",
+        dir,
+        "--type",
+        "StrokeObject",
+        "--data",
+        STROKE_DATA,
+        "--source",
+        "cli-test",
+      ]);
+      expect(stdout).toContain("cli-test/1");
+      expect(fake.requests).toHaveLength(1);
+      expect(fake.requests[0]).toMatchObject({
+        route: "addObject",
+        source: "cli-test",
+      });
     } finally {
       await releaseOwnerClaim(dir, claim.ownerId).catch(() => {});
-      server.close();
+      fake.server.close();
       cleanup();
     }
   });

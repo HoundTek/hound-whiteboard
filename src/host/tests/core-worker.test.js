@@ -140,9 +140,14 @@ describe("CoreWorkerRuntime 批处理错误回执", () => {
         ],
       });
 
-      const batchError = host.postedMessages.find(
-        (message) => message.type === "rpc-batch-error",
-      );
+      let batchError;
+      for (let i = 0; i < 100; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        batchError = host.postedMessages.find(
+          (message) => message.type === "rpc-batch-error",
+        );
+        if (batchError) break;
+      }
       expect(batchError).toBeDefined();
       expect(batchError.batchId).toBe(7);
       expect(batchError.errors).toHaveLength(2);
@@ -164,10 +169,16 @@ describe("CoreWorkerRuntime 批处理错误回执", () => {
         method: "queryObjects",
         params: { ids: ["s1"] },
       });
-      const queryResponse = host.postedMessages.find(
-        (message) =>
-          message.type === "rpc-response" && message.msgId === "query-1",
-      );
+      let queryResponse;
+      for (let i = 0; i < 100; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        queryResponse = host.postedMessages.find(
+          (message) =>
+            message.type === "rpc-response" && message.msgId === "query-1",
+        );
+        if (queryResponse) break;
+      }
+      expect(queryResponse).toBeDefined();
       expect(queryResponse.result).toHaveLength(1);
       expect(queryResponse.result[0].id).toBe("s1");
     } finally {

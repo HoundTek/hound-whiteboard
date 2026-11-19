@@ -1,6 +1,6 @@
 # CLI 文档
 
-本文档提供 Hound Whiteboard 命令行前端（`src/cli/`）的概述与使用说明：写操作经当前 owner 执行（daemon RPC；GUI owner 的直连在 A2b 接入），读操作可经 daemon 查询或直读板文件，全程 Node 环境，不依赖 GUI、Worker 与渲染管线。
+本文档提供 Hound Whiteboard 命令行前端（`src/cli/`）的概述与使用说明：写操作经当前 owner 执行（daemon RPC 或 GUI owner 的本地 RPC），读操作可经 daemon 查询或直读板文件，全程 Node 环境，不依赖 Worker 与渲染管线。
 
 > [!NOTE]
 >
@@ -8,7 +8,7 @@
 
 ## 定位
 
-CLI 是白板的**第二前端**：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 WebSocket RPC 执行（daemon owner 走 daemon RPC；GUI owner 的直连在 A2b 接入，A2a 期间拒绝直写）；读命令（info/list/show/inspect/ops/tree/choices）既可经 daemon 查询，也可 `--path` 直读板文件（零写盘）。
+CLI 是白板的**第二前端**：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 WebSocket RPC 执行（daemon owner 走 daemon RPC；GUI owner 走本地 owner RPC，请求携带 CLI source）；读命令（info/list/show/inspect/ops/tree/choices）既可经 daemon 查询，也可 `--path` 直读板文件（零写盘）。
 
 ## daemon 与注册表
 
@@ -48,11 +48,11 @@ hwb daemon stop --name board1            # 强制归零关闭
 
 ### GUI 协作
 
-GUI 打开持久化板时经 Rust `start_owner_rpc` claim 板目录并开本地 owner RPC 端点（host/port/token）；GUI 自己落盘，不再探测/spawn/连接 daemon。已有活 owner（例如 CLI 启动的 daemon）时开板失败，提示先停止对应 owner。GUI 正常关窗走销毁路径，停止 owner RPC 并释放 claim；宿主进程被强杀时 claim 端口探测会判 stale，下次开板可回收。本机端（CLI/TUI/MCP/GUI）之间不走 relay；relay 只承载跨机协作。
+GUI 打开持久化板时经 Rust `start_owner_rpc` claim 板目录并开本地 owner RPC 端点（host/port/token）；GUI 自己落盘，不再探测/spawn/连接 daemon。CLI `--path` 经该端点读写，请求携带 CLI source；owner 端按 source 切换 `HitCommitter`，CLI 的 undo/redo 只作用于自己的操作。已有活 owner（例如 CLI 启动的 daemon）时开板失败，提示先停止对应 owner。GUI 正常关窗走销毁路径，停止 owner RPC 并释放 claim；宿主进程被强杀时 claim 端口探测会判 stale，下次开板可回收。本机端（CLI/TUI/MCP/GUI）之间不走 relay；relay 只承载跨机协作。
 
 ## 命令寻址
 
-- **写命令**（add/delete/undo/redo/choose/unchoose/modify）：`--daemon <name>` 经 daemon RPC；`--path` 先探测当前 owner，daemon owner 同走 RPC，GUI owner 暂时拒绝直写（A2b 接入 owner RPC），无 owner 时自治直写自己分片
+- **写命令**（add/delete/undo/redo/choose/unchoose/modify）：`--daemon <name>` 经 daemon RPC；`--path` 先探测当前 owner，daemon owner 同走 RPC，GUI owner 走本地 owner RPC（带 token 与 CLI source），无 owner 时自治直写自己分片
 - **读命令**（info/list/show/inspect/ops/tree/choices）：`--daemon <name>` 经 daemon 查询，或 `--path <板目录>` 直读板文件（不接 daemon），二选一且互斥
 - **create**：离线建板，只认 `--path`
 - `--daemon` 与 `--path` 同时给出时报错
@@ -168,7 +168,7 @@ choice 全量修改（--position/--transform/--property/--data）仅单成员 ch
 
 ## 会话生命周期
 
-- **写命令**：`--daemon` 按 name 查注册表 → 连 owner daemon → 经 RPC 执行（owner 侧同步完成 + 响应前落盘）→ 断开；`--path` 先探测当前 owner：daemon owner 同走 RPC，GUI owner 暂时拒绝直写（A2b 接入 owner RPC），无 owner 时**自治**：自己加载（对象直读 + 各流归并）→ 执行 → 落自己分片（`hit/<cli-*>/` + `meta/<cli-*>.json` + 影响的对象文件）→ 关闭。自治身份取 `~/.hound-whiteboard/cli-identity.json`（首启生成 `cli-*` 持久化）
+- **写命令**：`--daemon` 按 name 查注册表 → 连 owner daemon → 经 RPC 执行（owner 侧同步完成 + 响应前落盘）→ 断开；`--path` 先探测当前 owner：daemon owner 同走 RPC，GUI owner 经 token 连接本地 owner RPC（请求携带 CLI source），无 owner 时**自治**：自己加载（对象直读 + 各流归并）→ 执行 → 落自己分片（`hit/<cli-*>/` + `meta/<cli-*>.json` + 影响的对象文件）→ 关闭。自治身份取 `~/.hound-whiteboard/cli-identity.json`（首启生成 `cli-*` 持久化）
 - **读命令直读**：CLI 进程内开 BoardApi 会话加载板（`writeMeta:false` 保持零写盘）→ 查询 → flush（指纹种子保证零写盘）→ 关闭。这个形态使每次直读都走一遍恢复路径——撤销、trash、id 续号在跨进程场景下的正确性被持续检验
 
 ## 关键设计点
@@ -183,7 +183,7 @@ choice 全量修改（--position/--transform/--property/--data）仅单成员 ch
 
 - 无交互与渲染能力：CLI 面向文档操作，不表达视口、选择与 overlay 状态
 - 写路径由 owner 独占（布局 v2）：owner 写日志流与对象文件（AOM 活动性仲裁）；GUI owner 写全部来源流，CLI daemon owner 写其负责的流。非 owner 不直接写目录，读命令直读已落盘状态，与 owner 无竞态
-- daemon 是 CLI 的 owner/代理：写命令经 owner RPC（快路径）；无 owner 时 CLI 自治直写自己分片（慢路径，零依赖）；GUI owner 的直连在 A2b 接入
+- daemon 是 CLI 的 owner/代理：写命令经 owner RPC（快路径）；无 owner 时 CLI 自治直写自己分片（慢路径，零依赖）；GUI owner 经本地 owner RPC 直连
 - `--chunk-width` / `--chunk-height` 只在建板时生效；改区块边长会让盘上区块归属全部错位，因此创建后不可更改
 
 ## 相关文档

@@ -213,10 +213,10 @@ class CoreWorkerRuntime {
   #ownerRpc = null;
 
   /**
-   * owner RPC 请求串行链
+   * 板操作串行链（UI RPC、owner RPC 共用，保证 source 切换期间不混入其它操作）
    * @type {Promise<void>}
    */
-  #ownerRpcQueue = Promise.resolve();
+  #boardOpQueue = Promise.resolve();
 
   /**
    * GUI 板尺寸（createBoard 时记录，建板骨架用）
@@ -266,7 +266,7 @@ class CoreWorkerRuntime {
     this.#syncBoardId = null;
     this.#coordinatorRetryTimer = null;
     this.#ownerRpc = null;
-    this.#ownerRpcQueue = Promise.resolve();
+    this.#boardOpQueue = Promise.resolve();
     this.#boardSize = { width: 0, height: 0 };
     this.#ioPending = new Map();
     this.#ioMsgSeq = 0;
@@ -403,6 +403,18 @@ class CoreWorkerRuntime {
   }
 
   /**
+   * 将板操作排入串行链
+   * @param {() => * | Promise<*>} task - 板操作
+   * @returns {Promise<*>} 操作结果
+   * @private
+   */
+  #enqueueBoardOp(task) {
+    const run = this.#boardOpQueue.then(task, task);
+    this.#boardOpQueue = run.catch(() => {});
+    return run;
+  }
+
+  /**
    * 处理 RPC 请求消息
    * @param {{ msgId?: string, method?: string, params?: Record<string, any> }} message - RPC 请求消息
    * @returns {void}
@@ -417,45 +429,32 @@ class CoreWorkerRuntime {
       return;
     }
 
-    try {
-      const result = this.#dispatchRpc(method, params);
-      if (result instanceof Promise) {
-        result
-          .then((value) => {
-            this.#postMessage({
-              type: "rpc-response",
-              msgId,
-              result: value,
-            });
-          })
-          .catch((error) => {
-            this.#postMessage({
-              type: "rpc-response",
-              msgId,
-              error: {
-                code: error?.code ?? "INTERNAL_ERROR",
-                message: error?.message ?? String(error),
-              },
-            });
-          });
-        return;
-      }
-
-      this.#postMessage({
-        type: "rpc-response",
-        msgId,
-        result,
+    const isLifecycle =
+      method === "createBoard" ||
+      method === "destroyBoard" ||
+      method === "createViewport" ||
+      method === "destroyViewport";
+    const run = isLifecycle
+      ? Promise.resolve().then(() => this.#dispatchRpc(method, params))
+      : this.#enqueueBoardOp(() => this.#dispatchRpc(method, params));
+    run
+      .then((value) => {
+        this.#postMessage({
+          type: "rpc-response",
+          msgId,
+          result: value,
+        });
+      })
+      .catch((error) => {
+        this.#postMessage({
+          type: "rpc-response",
+          msgId,
+          error: {
+            code: error?.code ?? "INTERNAL_ERROR",
+            message: error?.message ?? String(error),
+          },
+        });
       });
-    } catch (error) {
-      this.#postMessage({
-        type: "rpc-response",
-        msgId,
-        error: {
-          code: error?.code ?? "INTERNAL_ERROR",
-          message: error?.message ?? String(error),
-        },
-      });
-    }
   }
 
   /**
@@ -473,31 +472,33 @@ class CoreWorkerRuntime {
     }
 
     const errors = [];
-    items.forEach((item, index) => {
-      try {
-        const { method, ...params } = item;
-        this.#invokeBoardApi(method, params);
-      } catch (error) {
-        errors.push({
-          index,
-          method: item?.method ?? "unknown",
-          code: error?.code ?? "INTERNAL_ERROR",
-          message: error?.message ?? String(error),
-        });
-        this.#log.error(
-          `Batch item failed: ${item?.method ?? "unknown"}`,
-          error,
-        );
-      }
+    const tasks = items.map((item, index) => {
+      const { method, ...params } = item;
+      return this.#enqueueBoardOp(() => this.#invokeBoardApi(method, params)).catch(
+        (error) => {
+          errors.push({
+            index,
+            method: item?.method ?? "unknown",
+            code: error?.code ?? "INTERNAL_ERROR",
+            message: error?.message ?? String(error),
+          });
+          this.#log.error(
+            `Batch item failed: ${item?.method ?? "unknown"}`,
+            error,
+          );
+        },
+      );
     });
 
-    if (errors.length > 0) {
-      this.#postMessage({
-        type: "rpc-batch-error",
-        batchId: message?.batchId,
-        errors,
-      });
-    }
+    Promise.all(tasks).then(() => {
+      if (errors.length > 0) {
+        this.#postMessage({
+          type: "rpc-batch-error",
+          batchId: message?.batchId,
+          errors,
+        });
+      }
+    });
   }
 
   /**
@@ -506,13 +507,14 @@ class CoreWorkerRuntime {
    * @returns {void}
    *
    * @description
-   * 经 BOARD_API_ROUTES 分发；写路由在响应前 flush journaler，保证 CLI 拿到结果时已落盘。
-   * 请求串行执行，避免并发写交错。
+   * 经 BOARD_API_ROUTES 分发；请求按来源声明的 source 执行，写路由在响应前 flush journaler，
+   * 保证 CLI 拿到结果时已落盘。与 UI RPC 共用串行链，source 切换期间不混入其它操作。
    */
   #handleOwnerRpcMessage(message) {
     const requestId = message?.requestId;
     const route = message?.route;
     const params = message?.params ?? {};
+    const source = typeof message?.source === "string" ? message.source : undefined;
     if (typeof requestId !== "string" || typeof route !== "string") {
       this.#log.warn("Ignoring malformed owner rpc message.", message);
       return;
@@ -520,20 +522,26 @@ class CoreWorkerRuntime {
 
     const run = async () => {
       try {
-        if (this.#boardApi === null) {
+        if (this.#boardCore === null || this.#boardApi === null) {
           throw new Error("BoardApi is not initialized.");
         }
         const entry = BOARD_API_ROUTES[route];
         if (!entry) {
           throw new Error(`未知 route：${route}`);
         }
-        const result = await entry.invoke(this.#boardApi, params);
-        if (entry.flush !== "none") {
-          if (this.#journaler !== null) {
-            await this.#journaler.flush();
+        const execute = async () => {
+          const result = await entry.invoke(this.#boardApi, params);
+          if (entry.flush !== "none") {
+            if (this.#journaler !== null) {
+              await this.#journaler.flush();
+            }
+            this.#scheduleFlushRenderFrames();
           }
-          this.#scheduleFlushRenderFrames();
-        }
+          return result;
+        };
+        const result = source
+          ? await this.#boardCore.runAsSource(source, execute)
+          : await execute();
         this.#postMessage({
           type: "owner-rpc-response",
           requestId,
@@ -550,8 +558,7 @@ class CoreWorkerRuntime {
       }
     };
 
-    const next = this.#ownerRpcQueue.then(run, run);
-    this.#ownerRpcQueue = next.catch(() => {});
+    this.#enqueueBoardOp(run);
   }
 
   /**
@@ -1076,6 +1083,8 @@ class CoreWorkerRuntime {
    */
   async destroyBoard() {
     this.#boardGeneration += 1;
+    // 先等在途板操作结束，避免 owner RPC 的 source 切换跨过销毁边界
+    await this.#boardOpQueue.catch(() => {});
     if (this.#coordinatorRetryTimer !== null) {
       clearTimeout(this.#coordinatorRetryTimer);
       this.#coordinatorRetryTimer = null;

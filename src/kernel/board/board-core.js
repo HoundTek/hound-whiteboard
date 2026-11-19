@@ -212,6 +212,18 @@ class BoardCore {
   #log;
 
   /**
+   * 物理时间来源（透传给按 source 懒创建的 HitCommitter）
+   * @type {(() => number) | undefined}
+   */
+  #now;
+
+  /**
+   * 按 source 缓存的 HitCommitter（共享日志与回溯树）
+   * @type {Map<string, HitCommitter>}
+   */
+  #committerTable = new Map();
+
+  /**
    * @param {{
    *   width?: number,
    *   height?: number,
@@ -231,6 +243,7 @@ class BoardCore {
    */
   constructor(options = {}) {
     this.#log = new Logger("BoardCore", "INFO", logBus);
+    this.#now = options.now;
     this.width = normalizeChunkSize(options.width);
     this.height = normalizeChunkSize(options.height);
     this.rootPath = options.rootPath;
@@ -470,6 +483,54 @@ class BoardCore {
    */
   get source() {
     return this.hitCommitter.source;
+  }
+
+  /**
+   * 获取指定 source 的 HitCommitter
+   * @param {string} source - 来源标识
+   * @returns {HitCommitter} 共享日志与回溯树的提交器
+   */
+  getCommitterForSource(source) {
+    if (source === this.hitCommitter.source) return this.hitCommitter;
+    let committer = this.#committerTable.get(source);
+    if (!committer) {
+      committer = new HitCommitter({
+        source,
+        log: this.operationLog,
+        tree: this.undoTree,
+        now: this.#now,
+        lastTime: this.operationLog.getLastTime(source),
+      });
+      this.#committerTable.set(source, committer);
+    }
+    return committer;
+  }
+
+  /**
+   * 以指定 source 执行一段板操作
+   * @param {string} source - 来源标识
+   * @param {() => * | Promise<*>} fn - 板操作
+   * @returns {Promise<*>} 操作结果
+   *
+   * @description
+   * 临时切换 `hitCommitter`，让对象 id 前缀、记录 source 与 undo/redo 默认目标都按调用方身份计算；
+   * 调用方必须保证操作串行，避免切换期间混入其它 source 的操作。
+   */
+  async runAsSource(source, fn) {
+    if (
+      typeof source !== "string" ||
+      source === "" ||
+      source === this.hitCommitter.source
+    ) {
+      return fn();
+    }
+    const previousCommitter = this.hitCommitter;
+    this.hitCommitter = this.getCommitterForSource(source);
+    try {
+      return await fn();
+    } finally {
+      this.hitCommitter = previousCommitter;
+    }
   }
 
   /**

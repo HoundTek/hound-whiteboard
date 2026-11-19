@@ -168,7 +168,7 @@ sequenceDiagram
 - `hitTest`、`queryObjects`、`queryChunkObjects` 已接到 Worker 权威状态
 - `undo` / `redo` 已接通（含侧栏按钮与快捷键）
 - 持久化已接通：demo 以 `~/hound-whiteboard/demo-board` 为板目录运行，撤销历史穿越重开
-- CLI 前端已接通：写命令经当前 owner（daemon RPC；GUI owner 的直连在 A2b 接入），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，CLI 启动的 daemon 是另一种 owner；`--path` 遇活 GUI owner 时拒绝直写。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
+- CLI 前端已接通：写命令经当前 owner（daemon RPC 或 GUI owner 的本地 RPC），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，CLI 启动的 daemon 是另一种 owner；CLI 请求携带自己的 source。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
 
 ## 术语定义
 

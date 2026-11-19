@@ -371,6 +371,10 @@ async fn handle_connection(
             continue;
         };
         let params = request.get("params").cloned().unwrap_or(Value::Null);
+        let source = request
+            .get("source")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         let request_id = Uuid::new_v4().to_string();
         let (tx, rx) = oneshot::channel();
         pending.lock().await.insert(request_id.clone(), tx);
@@ -380,6 +384,7 @@ async fn handle_connection(
                 "requestId": request_id,
                 "route": route,
                 "params": params,
+                "source": source,
             }),
         );
         if emitted.is_err() {

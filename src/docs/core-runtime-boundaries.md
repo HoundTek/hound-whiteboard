@@ -150,7 +150,7 @@ Worker 不解析 DOM 事件，也不持有 DevicesDAG。
 持板 daemon 是独立 Node 进程，每块板同时最多一个：
 
 - 进程内装配完整 Core：`BoardCore` + `BoardApi` + node driver + 日志跟随者落盘 + WebSocket RPC 服务
-- 本机端（CLI / TUI / MCP）写命令经当前 owner 的 RPC 串行执行；GUI 作为 owner 时开本地 owner RPC 端点，CLI 直连在 A2b 接入
+- 本机端（CLI / TUI / MCP）写命令经当前 owner 的 RPC 串行执行；GUI 作为 owner 时开本地 owner RPC 端点，CLI 请求携带自己的 source
 - daemon 连了中继时，本机端的操作经 daemon 桥接进 relay 房间；relay 只承载跨机协作
 - 无 daemon 时 CLI 读命令以 `--path` 自治直读板文件（node driver，零写盘）
 

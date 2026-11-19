@@ -1,6 +1,6 @@
 /**
- * @file daemon 客户端
- * @description 按 daemon name（或板目录描述）连接板 daemon 的 WebSocket RPC 客户端；提供与 BoardApi 同契约的会话面。
+ * @file daemon / owner RPC 客户端
+ * @description 按 daemon name、板目录描述或 owner claim 连接 WebSocket RPC；提供与 BoardApi 同契约的会话面。
  * @module cli/daemon-client
  * @author Zhou Chenyu
  */
@@ -11,21 +11,17 @@ import { t } from "./i18n.js";
 
 /** 单次调用的超时毫秒数 */
 const INVOKE_TIMEOUT_MS = 10000;
-/** 连接 daemon 的超时毫秒数 */
+/** 连接 daemon / owner 的超时毫秒数 */
 const CONNECT_TIMEOUT_MS = 5000;
 
 /**
- * 连接一个 daemon 描述对象
- * @param {Object} desc - daemon 描述（含 port/source/rootPath）
- * @returns {Promise<Object|null>} 会话面（api/source/rootPath/close）；连不上时为 null
- *
- * @description
- * 会话面 api 的方法与 BoardApi 同契约，经 RPC 转发；rootPath 为 daemon 持有的板目录
- * （choice buffer 等板目录侧文件操作凭此定位）。
+ * 建立并等待 WebSocket 连接
+ * @param {string} url - WS 地址
+ * @returns {Promise<WebSocket|null>} 已连接 socket；超时或失败时为 null
  */
-async function connectDescriptor(desc) {
-  const ws = await new Promise((resolve) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${desc.port}`);
+function openSocket(url) {
+  return new Promise((resolve) => {
+    const socket = new WebSocket(url);
     const timer = setTimeout(() => {
       try {
         socket.close();
@@ -43,7 +39,66 @@ async function connectDescriptor(desc) {
       resolve(null);
     });
   });
+}
+
+/**
+ * 发送 token 首帧并等待鉴权结果
+ * @param {WebSocket} ws - 已连接 socket
+ * @param {string} token - owner token
+ * @returns {Promise<boolean>} 是否鉴权成功
+ */
+function authenticate(ws, token) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      ws.removeEventListener("message", onMessage);
+      ws.removeEventListener("error", onError);
+      resolve(ok);
+    };
+    const onMessage = (event) => {
+      let message;
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (message?.ok === true) finish(true);
+      else if (message?.ok === false) finish(false);
+    };
+    const onError = () => finish(false);
+    const timer = setTimeout(() => finish(false), CONNECT_TIMEOUT_MS);
+    ws.addEventListener("message", onMessage);
+    ws.addEventListener("error", onError);
+    ws.send(JSON.stringify({ token }));
+  });
+}
+
+/**
+ * 创建 RPC 会话面
+ * @param {{ url: string, token?: string, source?: string, rootPath?: string }} options - 连接选项
+ * @returns {Promise<Object|null>} 会话面（api/source/rootPath/close）；连不上或鉴权失败时为 null
+ *
+ * @description
+ * 无 token 时按 daemon 协议直连；有 token 时先发 `{token}` 并等待 `{ok:true}`。
+ * 每次请求携带调用方 source，owner 端据此切换 HitCommitter。
+ */
+async function createRpcSession({ url, token, source, rootPath }) {
+  const ws = await openSocket(url);
   if (!ws) return null;
+  if (typeof token === "string" && token !== "") {
+    const authenticated = await authenticate(ws, token);
+    if (!authenticated) {
+      try {
+        ws.close();
+      } catch {
+        /* 忽略 */
+      }
+      return null;
+    }
+  }
 
   let nextId = 1;
   const pending = new Map();
@@ -61,7 +116,7 @@ async function connectDescriptor(desc) {
     if (message.ok) {
       entry.resolve(message.result);
     } else {
-      entry.reject(new Error(message.error ?? "daemon 调用失败"));
+      entry.reject(new Error(message.error ?? "RPC 调用失败"));
     }
   });
 
@@ -77,16 +132,20 @@ async function connectDescriptor(desc) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
-        reject(new Error(`daemon 调用超时：${route}`));
+        reject(new Error(`RPC 调用超时：${route}`));
       }, INVOKE_TIMEOUT_MS);
       pending.set(id, { resolve, reject, timer });
-      ws.send(JSON.stringify({ id, route, params }));
+      const request = { id, route, params };
+      if (typeof source === "string" && source !== "") {
+        request.source = source;
+      }
+      ws.send(JSON.stringify(request));
     });
   }
 
   return {
-    source: desc.source,
-    rootPath: desc.rootPath,
+    source,
+    rootPath,
     api: {
       addObject: (type, props) => invoke("addObject", { type, props }),
       deleteObjects: (ids) => invoke("deleteObjects", { objectIds: ids }),
@@ -126,6 +185,23 @@ async function connectDescriptor(desc) {
       }
     },
   };
+}
+
+/**
+ * 连接一个 daemon 描述对象
+ * @param {Object} desc - daemon 描述（含 port/source/rootPath）
+ * @returns {Promise<Object|null>} 会话面（api/source/rootPath/close）；连不上时为 null
+ *
+ * @description
+ * 会话面 api 的方法与 BoardApi 同契约，经 RPC 转发；rootPath 为 daemon 持有的板目录
+ * （choice buffer 等板目录侧文件操作凭此定位）。
+ */
+async function connectDescriptor(desc) {
+  return createRpcSession({
+    url: `ws://127.0.0.1:${desc.port}`,
+    source: desc.source,
+    rootPath: desc.rootPath,
+  });
 }
 
 /**
@@ -192,4 +268,9 @@ async function shutdownDaemon(name) {
   return false;
 }
 
-export { connectDaemonByName, connectDaemonByPath, shutdownDaemon };
+export {
+  createRpcSession,
+  connectDaemonByName,
+  connectDaemonByPath,
+  shutdownDaemon,
+};

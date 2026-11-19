@@ -187,10 +187,18 @@ async function rpcCall(host, handler, method, params = {}) {
  * @param {string} requestId - 请求 id
  * @param {string} route - route 名
  * @param {Object} [params] - 参数
+ * @param {string} [source] - 调用方 source
  * @returns {Promise<Object>} worker 响应
  */
-async function ownerRpcCall(host, handler, requestId, route, params = {}) {
-  host.emit({ type: "owner-rpc-request", requestId, route, params });
+async function ownerRpcCall(
+  host,
+  handler,
+  requestId,
+  route,
+  params = {},
+  source,
+) {
+  host.emit({ type: "owner-rpc-request", requestId, route, params, source });
   for (let i = 0; i < 200; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await pumpIoOnce(host, handler);
@@ -366,6 +374,66 @@ describe("CoreWorker 持久化接线", () => {
       const unknown = await ownerRpcCall(host, handler, "r2", "nope");
       expect(unknown.ok).toBe(false);
       expect(unknown.error).toContain("未知 route");
+    } finally {
+      await destroyRuntime(runtime, host, handler);
+    }
+  });
+
+  test("owner RPC 按请求 source 执行并保留 per-source 撤销", async () => {
+    const { host, handler, runtime } = await setup();
+    try {
+      const ownerObjectId = await rpcCall(host, handler, "addObject", {
+        type: "StrokeObject",
+        props: {
+          position: { x: 0, y: 0 },
+          property: { width: 2 },
+          data: { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
+        },
+      });
+      expect(ownerObjectId).toMatch(/^demo\//);
+
+      const cliAdd = await ownerRpcCall(
+        host,
+        handler,
+        "r1",
+        "addObject",
+        {
+          type: "StrokeObject",
+          props: {
+            position: { x: 20, y: 0 },
+            property: { width: 2 },
+            data: { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
+          },
+        },
+        "cli-1",
+      );
+      expect(cliAdd.ok).toBe(true);
+      expect(cliAdd.result).toMatch(/^cli-1\//);
+
+      const ops = await ownerRpcCall(
+        host,
+        handler,
+        "r2",
+        "queryOperations",
+        {},
+        "cli-1",
+      );
+      expect(ops.ok).toBe(true);
+      expect(ops.result.some((record) => record.source === "cli-1")).toBe(true);
+
+      const undo = await ownerRpcCall(host, handler, "r3", "undo", {}, "cli-1");
+      expect(undo.ok).toBe(true);
+      const list = await ownerRpcCall(
+        host,
+        handler,
+        "r4",
+        "queryObjectList",
+        {},
+        "cli-1",
+      );
+      const ids = list.result.objects.map((obj) => obj.id);
+      expect(ids).toContain(ownerObjectId);
+      expect(ids).not.toContain(cliAdd.result);
     } finally {
       await destroyRuntime(runtime, host, handler);
     }

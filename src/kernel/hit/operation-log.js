@@ -92,6 +92,15 @@ class OperationLog {
   }
 
   /**
+   * 读取某 source 已追加记录的最大时间标记
+   * @param {string} source - 来源标识
+   * @returns {number} 最大时间标记；无记录时为 0
+   */
+  getLastTime(source) {
+    return this.#lastTime.get(source) ?? 0;
+  }
+
+  /**
    * 分配某 source 的下一个操作 id
    * @param {string} source - 发起者标识
    * @returns {string} 操作 id，形如 `"{source}/op-{n}"`
