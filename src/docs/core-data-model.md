@@ -278,7 +278,7 @@ stateDiagram-v2
 
 协作端周期交换 digest（`{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`）做对账：`logSize` / `head` 比对日志水位，`openMols` 对账未闭合分子，`chainHash` 是活动链的确定性校验和（驻留无关），`stateHash` 是已驻留对象状态的确定性校验和（仅两端全量驻留时可比）。`chainHash` 分歧时请求全量重建；`stateHash` 分歧时经 `repairStateFromLog` 自愈——从本端日志重放派生对象状态并对齐活体（效果层修复，不改写日志）。
 
-落盘权威属于 owner：每块板由一个 owner 独占落盘（进程内 BoardCore + 日志跟随者）。GUI 作为 owner 时由 Worker 内装配的日志跟随者直接落盘并开本地 owner RPC 端点；CLI 启动的 daemon 作为 owner 时由 daemon 落盘。非 owner 不直接写目录。
+落盘权威属于 owner：每块板由一个 owner 独占落盘（进程内 BoardCore + 日志跟随者）。GUI 作为 owner 时由 Worker 内装配的日志跟随者直接落盘并开本地 owner RPC 端点；CLI 启动的 daemon 作为 owner 时由 daemon 落盘，GUI 退出释放 claim 后 proxy daemon 接管落盘。非 owner 不直接写目录。
 
 ```mermaid
 flowchart LR

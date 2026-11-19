@@ -850,6 +850,196 @@ describe("板 daemon", () => {
     }
   }, 15000);
 
+  test("GUI owner 退出后 daemon 轮询接管板目录并转为 owner", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const token = "owner-handover-token";
+    const fake = await createFakeOwnerServer(token);
+    const claim = {
+      ownerId: "gui-owner-handover",
+      pid: process.pid,
+      source: "gui-test",
+      boardId: null,
+      transport: {
+        kind: "gui",
+        host: "127.0.0.1",
+        port: fake.port,
+        token,
+      },
+      claimedAt: new Date().toISOString(),
+    };
+    let daemon = null;
+    try {
+      await claimBoard(dir, claim);
+      daemon = await startBoardDaemon({
+        rootPath: dir,
+        exitOnZero: false,
+        name: "handover-dt",
+        source: "daemon-h",
+        handoverPollMs: 50,
+      });
+      expect(daemon.mode).toBe("proxy");
+
+      // 模拟 GUI 关闭：断开代理连接、释放 claim（flush 已在其销毁流程内完成）
+      for (const ws of fake.server.clients) ws.terminate();
+      fake.server.close();
+      await releaseOwnerClaim(dir, claim.ownerId);
+
+      await waitFor(
+        async () => (await readEntry("handover-dt"))?.mode === "owner",
+        5000,
+      );
+      expect(daemon.mode).toBe("owner");
+      const ownerClaim = await readOwnerClaim(dir);
+      expect(ownerClaim?.transport).toMatchObject({
+        kind: "daemon",
+        name: "handover-dt",
+        port: daemon.port,
+      });
+      expect(ownerClaim?.source).toBe("daemon-h");
+
+      // 交接后按板目录寻址可直接读写，且用 daemon 自己的 source 落盘
+      const client = await connectDaemonByPath(dir);
+      expect(client).not.toBeNull();
+      const id = await client.api.addObject("StrokeObject", {
+        data: { ...STROKE_DATA },
+      });
+      expect(id).toBe("daemon-h/1");
+      client.close();
+    } finally {
+      await daemon?.close();
+      expect(await readOwnerClaim(dir)).toBeNull();
+      await releaseOwnerClaim(dir, claim.ownerId).catch(() => {});
+      fake.server.close();
+      await cleanup();
+    }
+  }, 20000);
+
+  test("proxy daemon 在请求触发下接管板目录", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const token = "owner-handover-req-token";
+    const fake = await createFakeOwnerServer(token);
+    const claim = {
+      ownerId: "gui-owner-handover-req",
+      pid: process.pid,
+      source: "gui-test",
+      boardId: null,
+      transport: {
+        kind: "gui",
+        host: "127.0.0.1",
+        port: fake.port,
+        token,
+      },
+      claimedAt: new Date().toISOString(),
+    };
+    let daemon = null;
+    try {
+      await claimBoard(dir, claim);
+      // 轮询间隔设得足够长：本次交接只能由请求失败触发
+      daemon = await startBoardDaemon({
+        rootPath: dir,
+        exitOnZero: false,
+        name: "handover-req",
+        source: "daemon-h2",
+        handoverPollMs: 60000,
+      });
+      expect(daemon.mode).toBe("proxy");
+
+      for (const ws of fake.server.clients) ws.terminate();
+      fake.server.close();
+      await releaseOwnerClaim(dir, claim.ownerId);
+      // 让本地回环的 FIN 先到达，确保代理会话已不可写
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const client = await connectDaemonByName("handover-req");
+      expect(client).not.toBeNull();
+      const id = await client.api.addObject("StrokeObject", {
+        data: { ...STROKE_DATA },
+      });
+      expect(id).toBe("daemon-h2/1");
+      expect(daemon.mode).toBe("owner");
+      expect((await readEntry("handover-req")).mode).toBe("owner");
+      expect((await readOwnerClaim(dir))?.transport).toMatchObject({
+        kind: "daemon",
+        name: "handover-req",
+      });
+      client.close();
+    } finally {
+      await daemon?.close();
+      await releaseOwnerClaim(dir, claim.ownerId).catch(() => {});
+      fake.server.close();
+      await cleanup();
+    }
+  }, 20000);
+
+  test("新 GUI 重新持盘时 proxy 不接管，继续转发 RPC", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const oldFake = await createFakeOwnerServer("owner-old-token");
+    const newFake = await createFakeOwnerServer("owner-new-token");
+    const oldClaim = {
+      ownerId: "gui-owner-old",
+      pid: process.pid,
+      source: "gui-test",
+      boardId: null,
+      transport: {
+        kind: "gui",
+        host: "127.0.0.1",
+        port: oldFake.port,
+        token: "owner-old-token",
+      },
+      claimedAt: new Date().toISOString(),
+    };
+    const newClaim = {
+      ...oldClaim,
+      ownerId: "gui-owner-new",
+      transport: {
+        kind: "gui",
+        host: "127.0.0.1",
+        port: newFake.port,
+        token: "owner-new-token",
+      },
+    };
+    let daemon = null;
+    try {
+      await claimBoard(dir, oldClaim);
+      daemon = await startBoardDaemon({
+        rootPath: dir,
+        exitOnZero: false,
+        name: "handover-alive",
+        source: "daemon-h3",
+        handoverPollMs: 60000,
+      });
+      expect(daemon.mode).toBe("proxy");
+
+      // 另一 GUI 接手：旧 claim 释放后立刻写入新 claim
+      await releaseOwnerClaim(dir, oldClaim.ownerId);
+      await claimBoard(dir, newClaim);
+      for (const ws of oldFake.server.clients) ws.terminate();
+      oldFake.server.close();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const client = await connectDaemonByName("handover-alive");
+      expect(client).not.toBeNull();
+      const id = await client.api.addObject("StrokeObject", {
+        data: { ...STROKE_DATA },
+      });
+      expect(id).toBe("daemon-c/1");
+      expect(daemon.mode).toBe("proxy");
+      expect(newFake.requests).toHaveLength(1);
+      expect(newFake.requests[0]).toMatchObject({
+        route: "addObject",
+        source: "daemon-h3",
+      });
+      expect((await readOwnerClaim(dir))?.ownerId).toBe("gui-owner-new");
+      client.close();
+    } finally {
+      await daemon?.close();
+      await releaseOwnerClaim(dir, newClaim.ownerId).catch(() => {});
+      oldFake.server.close();
+      newFake.server.close();
+      await cleanup();
+    }
+  }, 20000);
+
   test("CLI daemon start 在 GUI owner 下进入 proxy", async () => {
     const { dir, cleanup } = await tempBoard();
     const token = "owner-proxy-cli-token";

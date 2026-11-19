@@ -28,6 +28,7 @@ import {
 } from "../kernel/board/owner-claim.js";
 import {
   acquireOwnerLock,
+  claimBoard,
   isOwnerClaimAlive,
   readOwnerClaim,
   releaseOwnerClaim,
@@ -96,12 +97,14 @@ async function readDaemonDescriptor(rootPath) {
  * @param {string} [options.relayUrl] - 中继地址；省略时 daemon 不参与协作
  * @param {number} [options.port=0] - 监听端口（0 为随机）
  * @param {string} [options.host="127.0.0.1"] - 监听地址
+ * @param {number} [options.handoverPollMs=1000] - proxy 模式下轮询 GUI claim 是否消失并接管的间隔（毫秒，0 关闭轮询）
  * @param {boolean} [options.exitOnZero=true] - 引用归零时是否退出进程
  * @returns {Promise<{name: string, rootPath: string, port: number, source: string, mode: string, close: Function}>} daemon 句柄
  *
  * @description
  * 无活 owner 时进入 owner 模式：写 `.owner.json`、打开 BoardCore 并落盘。
- * 已有活 GUI owner 时进入 proxy 模式：不打开 BoardCore、不写 claim，只把 CLI RPC 转发给 GUI owner。
+ * 已有活 GUI owner 时进入 proxy 模式：不打开 BoardCore、不写 claim，只把 CLI RPC 转发给 GUI owner；
+ * GUI 关闭并释放 claim 后，daemon 经请求触发或轮询接管板目录并切换为 owner 模式。
  * 已有活 daemon owner 时拒绝启动。
  *
  * 启动全程持有板目录 owner 锁（.owner.lock）；所有退出路径（含中途失败）都释放锁。
@@ -187,6 +190,8 @@ async function startBoardDaemonLocked(options) {
   let amendForwarder = null;
   /** @type {ReturnType<typeof setTimeout>|null} relay 重连定时器 */
   let relayRetryTimer = null;
+  /** @type {ReturnType<typeof setInterval>|null} proxy 模式下 GUI claim 消失轮询定时器 */
+  let handoverTimer = null;
   /** @type {Promise<void>} 注册表镜像写队列 */
   let refSyncTail = Promise.resolve();
   let wss = null;
@@ -234,7 +239,12 @@ async function startBoardDaemonLocked(options) {
    * @throws {Error} owner 不存在或连接/鉴权失败时
    */
   const ensureProxySession = async () => {
-    if (ownerSession !== null) return ownerSession;
+    if (ownerSession !== null) {
+      if (ownerSession.isOpen()) return ownerSession;
+      // 缓存的代理连接已断（GUI 关闭）：丢弃后按最新 claim 重连
+      ownerSession.close();
+      ownerSession = null;
+    }
     const latestClaim = await readOwnerClaim(rootPath);
     if (
       latestClaim === null ||
@@ -299,6 +309,70 @@ async function startBoardDaemonLocked(options) {
     }, 3000);
   };
 
+  /**
+   * 尝试从 proxy 模式接管板目录
+   * @returns {Promise<boolean>} 是否完成交接
+   *
+   * @description
+   * 以 `.owner.json` 为准：claim 仍可连时不动盘，消失或持有者已死时重新认领、
+   * 打开 BoardCore 并切换为 owner 模式。GUI 关闭时先 flush 再释放 claim，
+   * 因此认领成功即代表盘上数据已完整。
+   * 空窗不排队：失败直接返回 false，由下一次请求或轮询重试。
+   */
+  const tryHandoverToOwner = async () => {
+    if (closed || mode !== DAEMON_MODE_PROXY) return false;
+    const latestClaim = await readOwnerClaim(rootPath);
+    if (latestClaim !== null && (await isOwnerClaimAlive(latestClaim))) {
+      return false;
+    }
+    const nextClaim = createDaemonOwnerClaim({
+      name,
+      pid: process.pid,
+      source,
+      boardId: options.boardId ?? null,
+      host: options.host ?? "127.0.0.1",
+      port,
+    });
+    try {
+      await claimBoard(rootPath, nextClaim);
+    } catch {
+      // GUI flush 期间 claim 仍可连，或与另一请求者竞争失败：留给下一轮
+      return false;
+    }
+    let nextSession = null;
+    try {
+      nextSession = await openBoardSession(rootPath, { source });
+    } catch {
+      await releaseOwnerClaim(rootPath, nextClaim.ownerId).catch(() => {});
+      return false;
+    }
+    if (closed) {
+      await nextSession.close().catch(() => {});
+      await releaseOwnerClaim(rootPath, nextClaim.ownerId).catch(() => {});
+      return false;
+    }
+    session = nextSession;
+    claim = nextClaim;
+    ownerSession?.close();
+    ownerSession = null;
+    mode = DAEMON_MODE_OWNER;
+    desc = { ...desc, mode };
+    if (handoverTimer !== null) {
+      clearInterval(handoverTimer);
+      handoverTimer = null;
+    }
+    try {
+      await writeEntry(desc);
+    } catch {
+      // 注册表镜像失败不影响 daemon 继续持板
+    }
+    console.log(`[daemon] GUI 已退出，已接管板目录 ${rootPath}`);
+    if (options.relayUrl) {
+      void connectRelay();
+    }
+    return true;
+  };
+
   try {
     if (mode === DAEMON_MODE_OWNER) {
       session = await openBoardSession(rootPath, { source });
@@ -352,6 +426,15 @@ async function startBoardDaemonLocked(options) {
       await ensureProxySession();
     }
     await writeEntry(desc);
+    if (mode === DAEMON_MODE_PROXY) {
+      const pollMs = options.handoverPollMs ?? 1000;
+      if (pollMs > 0) {
+        handoverTimer = setInterval(() => {
+          void queue.enqueue(() => tryHandoverToOwner()).catch(() => {});
+        }, pollMs);
+        handoverTimer.unref?.();
+      }
+    }
   } catch (error) {
     if (wss !== null) {
       await new Promise((resolve) => wss.close(resolve)).catch(() => {});
@@ -382,6 +465,10 @@ async function startBoardDaemonLocked(options) {
       if (relayRetryTimer !== null) {
         clearTimeout(relayRetryTimer);
         relayRetryTimer = null;
+      }
+      if (handoverTimer !== null) {
+        clearInterval(handoverTimer);
+        handoverTimer = null;
       }
       amendForwarder?.close();
       if (coordinator !== null) {
@@ -466,19 +553,52 @@ async function startBoardDaemonLocked(options) {
         return;
       }
       if (typeof message?.id === "number" && typeof message?.route === "string") {
-        queue.enqueue(() =>
-          mode === DAEMON_MODE_PROXY
-            ? handleProxyRpc(ws, message, ensureProxySession, source, () => {
-                ownerSession?.close();
-                ownerSession = null;
-              })
-            : handleOwnerRpc(session, ws, message),
-        );
+        queue.enqueue(async () => {
+          if (mode === DAEMON_MODE_OWNER) {
+            await handleOwnerRpc(session, ws, message);
+            return;
+          }
+          try {
+            const proxy = await ensureProxySession();
+            const result = await proxy.invoke(
+              message.route,
+              message.params ?? {},
+              message.source ?? source,
+            );
+            ws.send(
+              JSON.stringify({ id: message.id, ok: true, result: result ?? null }),
+            );
+          } catch (error) {
+            ownerSession?.close();
+            ownerSession = null;
+            // GUI 已退出：就地完成交接，让本次请求继续由 daemon 执行
+            if (await tryHandoverToOwner()) {
+              await handleOwnerRpc(session, ws, message);
+              return;
+            }
+            ws.send(
+              JSON.stringify({
+                id: message.id,
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          }
+        });
       }
     });
   });
 
-  return { name, rootPath, port, source, mode, close };
+  return {
+    name,
+    rootPath,
+    port,
+    source,
+    get mode() {
+      return mode;
+    },
+    close,
+  };
 }
 
 /**
@@ -503,44 +623,6 @@ async function handleOwnerRpc(session, ws, message) {
     }
     ws.send(JSON.stringify({ id, ok: true, result: result ?? null }));
   } catch (error) {
-    ws.send(
-      JSON.stringify({
-        id,
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
-  }
-}
-
-/**
- * 分发 proxy 模式的 RPC 消息
- * @param {Object} ws - WebSocket 连接
- * @param {Object} message - RPC 消息
- * @param {Function} ensureProxySession - 获取/重连 owner 会话
- * @param {string} source - daemon 身份（请求未携带 source 时使用）
- * @param {Function} onFailure - 请求失败时重置 owner 会话
- * @returns {Promise<void>}
- * @private
- */
-async function handleProxyRpc(
-  ws,
-  message,
-  ensureProxySession,
-  source,
-  onFailure,
-) {
-  const { id, route, params, source: requestSource } = message ?? {};
-  try {
-    const ownerSession = await ensureProxySession();
-    const result = await ownerSession.invoke(
-      route,
-      params ?? {},
-      requestSource ?? source,
-    );
-    ws.send(JSON.stringify({ id, ok: true, result: result ?? null }));
-  } catch (error) {
-    onFailure?.();
     ws.send(
       JSON.stringify({
         id,

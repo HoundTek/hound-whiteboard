@@ -213,6 +213,12 @@ class CoreWorkerRuntime {
   #ownerRpc = null;
 
   /**
+   * owner RPC 是否正在关闭（关闭期间拒绝新的 owner RPC 请求）
+   * @type {boolean}
+   */
+  #ownerRpcClosing = false;
+
+  /**
    * 板操作串行链（UI RPC、owner RPC 共用，保证 source 切换期间不混入其它操作）
    * @type {Promise<void>}
    */
@@ -266,6 +272,7 @@ class CoreWorkerRuntime {
     this.#syncBoardId = null;
     this.#coordinatorRetryTimer = null;
     this.#ownerRpc = null;
+    this.#ownerRpcClosing = false;
     this.#boardOpQueue = Promise.resolve();
     this.#boardSize = { width: 0, height: 0 };
     this.#ioPending = new Map();
@@ -520,6 +527,16 @@ class CoreWorkerRuntime {
       return;
     }
 
+    if (this.#ownerRpcClosing) {
+      this.#postMessage({
+        type: "owner-rpc-response",
+        requestId,
+        ok: false,
+        error: "owner 正在关闭",
+      });
+      return;
+    }
+
     const run = async () => {
       try {
         if (this.#boardCore === null || this.#boardApi === null) {
@@ -597,6 +614,7 @@ class CoreWorkerRuntime {
     }
 
     this.#boardGeneration += 1;
+    this.#ownerRpcClosing = false;
     this.#boardSize = {
       width: options.width ?? 0,
       height: options.height ?? 0,
@@ -1083,8 +1101,12 @@ class CoreWorkerRuntime {
    */
   async destroyBoard() {
     this.#boardGeneration += 1;
-    // 先等在途板操作结束，避免 owner RPC 的 source 切换跨过销毁边界
+    // 先关 owner RPC 门闸：新请求立即失败，避免销毁后仍被 source 切换阻塞
+    this.#ownerRpcClosing = true;
+    // 再等在途板操作结束，避免 owner RPC 的 source 切换跨过销毁边界
     await this.#boardOpQueue.catch(() => {});
+    const ownerRpc = this.#ownerRpc;
+    this.#ownerRpc = null;
     if (this.#coordinatorRetryTimer !== null) {
       clearTimeout(this.#coordinatorRetryTimer);
       this.#coordinatorRetryTimer = null;
@@ -1102,18 +1124,17 @@ class CoreWorkerRuntime {
     this.#unsubscribeRemoteActivity = null;
     this.#unsubscribeHitChanged?.();
     this.#unsubscribeHitChanged = null;
-    if (this.#ownerRpc !== null) {
-      const ownerId = this.#ownerRpc.ownerId;
-      this.#ownerRpc = null;
-      try {
-        await this.#forwardIoInvoke("stop_owner_rpc", { ownerId });
-      } catch (error) {
-        this.#log.warn(`停止 owner RPC 失败：${error?.message ?? error}`);
-      }
-    }
+    // 先 flush 写完再停 owner RPC（释放 claim），让等待中的 daemon 接手时盘上数据完整
     if (this.#journaler) {
       await this.#journaler.detach();
       this.#journaler = null;
+    }
+    if (ownerRpc !== null) {
+      try {
+        await this.#forwardIoInvoke("stop_owner_rpc", { ownerId: ownerRpc.ownerId });
+      } catch (error) {
+        this.#log.warn(`停止 owner RPC 失败：${error?.message ?? error}`);
+      }
     }
     this.#destroyAllViewportCores();
     this.#boardApi = null;

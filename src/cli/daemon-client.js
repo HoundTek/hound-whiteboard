@@ -79,11 +79,12 @@ function authenticate(ws, token) {
 /**
  * 创建 RPC 会话面
  * @param {{ url: string, token?: string, source?: string, rootPath?: string }} options - 连接选项
- * @returns {Promise<Object|null>} 会话面（api/source/rootPath/close）；连不上或鉴权失败时为 null
+ * @returns {Promise<Object|null>} 会话面（api/source/rootPath/invoke/isOpen/close）；连不上或鉴权失败时为 null
  *
  * @description
  * 无 token 时按 daemon 协议直连；有 token 时先发 `{token}` 并等待 `{ok:true}`。
  * 每次请求携带调用方 source，owner 端据此切换 HitCommitter。
+ * 连接关闭时挂起请求立即失败，避免对端退出后调用方干等超时。
  */
 async function createRpcSession({ url, token, source, rootPath }) {
   const ws = await openSocket(url);
@@ -101,6 +102,7 @@ async function createRpcSession({ url, token, source, rootPath }) {
   }
 
   let nextId = 1;
+  let closed = false;
   const pending = new Map();
   ws.addEventListener("message", (event) => {
     let message;
@@ -119,6 +121,23 @@ async function createRpcSession({ url, token, source, rootPath }) {
       entry.reject(new Error(message.error ?? "RPC 调用失败"));
     }
   });
+  /**
+   * 使全部挂起请求失败
+   * @param {string} reason - 失败原因
+   * @returns {void}
+   */
+  function failPending(reason) {
+    for (const [id, entry] of pending) {
+      pending.delete(id);
+      clearTimeout(entry.timer);
+      entry.reject(new Error(reason));
+    }
+  }
+
+  ws.addEventListener("close", () => {
+    closed = true;
+    failPending("RPC 连接已关闭");
+  });
 
   /**
    * 发送一次 RPC 调用
@@ -128,6 +147,9 @@ async function createRpcSession({ url, token, source, rootPath }) {
    * @returns {Promise<*>} 结果
    */
   function invoke(route, params = {}, sourceOverride) {
+    if (closed) {
+      return Promise.reject(new Error("RPC 连接已关闭"));
+    }
     const id = nextId;
     nextId += 1;
     return new Promise((resolve, reject) => {
@@ -180,7 +202,13 @@ async function createRpcSession({ url, token, source, rootPath }) {
       hold: () => invoke("daemon-hold", {}),
       release: () => invoke("daemon-release", {}),
     },
+    isOpen() {
+      // readyState 1 = OPEN；实例常量在部分 WebSocket 实现上不存在，用数值
+      return !closed && ws.readyState === 1;
+    },
     close() {
+      closed = true;
+      failPending("RPC 连接已关闭");
       try {
         ws.close();
       } catch {

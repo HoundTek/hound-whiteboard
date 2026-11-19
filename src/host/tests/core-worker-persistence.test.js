@@ -467,4 +467,49 @@ describe("CoreWorker 持久化接线", () => {
     const ioInvokes = host.postedMessages.filter((m) => m.type === "io-invoke");
     expect(ioInvokes).toHaveLength(0);
   });
+
+  test("销毁时先 flush 落盘再释放 owner claim", async () => {
+    const { host, runtime, handler, driver, calls } = await setup();
+    await createStroke(host, handler, "demo/1");
+
+    await destroyRuntime(runtime, host, handler);
+
+    const stopIndex = calls.indexOf("stop_owner_rpc");
+    const lastWriteIndex = calls.lastIndexOf("safe_io_fs_write");
+    expect(stopIndex).toBeGreaterThanOrEqual(0);
+    expect(lastWriteIndex).toBeGreaterThanOrEqual(0);
+    expect(stopIndex).toBeGreaterThan(lastWriteIndex);
+    // claim 释放前对象已完整落盘
+    expect(await driver.read("mem", "objects/demo%2F1.json")).toContain("demo/1");
+  });
+
+  test("销毁期间 owner RPC 直接拒绝", async () => {
+    const { host, runtime, handler } = await setup();
+    const destroyed = runtime.destroyBoard();
+    let settled = false;
+    destroyed.finally(() => {
+      settled = true;
+    });
+    host.emit({
+      type: "owner-rpc-request",
+      requestId: "closing-1",
+      route: "queryBoardInfo",
+      params: {},
+    });
+    for (let i = 0; i < 200 && !settled; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await pumpIoOnce(host, handler);
+    }
+    await destroyed;
+
+    const response = host.postedMessages.find(
+      (m) => m.type === "owner-rpc-response" && m.requestId === "closing-1",
+    );
+    expect(response).toMatchObject({ ok: false, error: "owner 正在关闭" });
+    expect(
+      host.postedMessages.find(
+        (m) => m.type === "owner-rpc-response" && m.requestId === "closing-1" && m.ok,
+      ),
+    ).toBeUndefined();
+  });
 });

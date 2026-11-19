@@ -12,7 +12,7 @@ CLI 是白板的**第二前端**：写命令（add/delete/undo/redo/choose/uncho
 
 ## daemon 与注册表
 
-每块板由一个 **owner** 独占持有并落盘：GUI 打开板时是 owner；无 GUI 时 daemon 可以成为 owner。daemon 有 **owner / proxy 两态**：无活 owner 时它 claim 板目录、持板落盘并开 WebSocket RPC；GUI 持盘时它不写盘，只把 CLI RPC 转发给 GUI owner。daemon 有全局唯一的 **name**（字符集 `[A-Za-z0-9._-]`，不含中文），启动时登记到注册表 `~/.hound-whiteboard/daemons/<name>.json`（条目含 name/rootPath/pid/port/source/boardId/mode/refCount/startedAt），停止时注销。
+每块板由一个 **owner** 独占持有并落盘：GUI 打开板时是 owner；无 GUI 时 daemon 可以成为 owner。daemon 有 **owner / proxy 两态**：无活 owner 时它 claim 板目录、持板落盘并开 WebSocket RPC；GUI 持盘时它不写盘，只把 CLI RPC 转发给 GUI owner；GUI 退出并释放 claim 后，proxy daemon 接管板目录并转为 owner。daemon 有全局唯一的 **name**（字符集 `[A-Za-z0-9._-]`，不含中文），启动时登记到注册表 `~/.hound-whiteboard/daemons/<name>.json`（条目含 name/rootPath/pid/port/source/boardId/mode/refCount/startedAt），停止时注销。
 
 ### 引用计数
 
@@ -39,7 +39,7 @@ hwb daemon stop --name board1            # 强制归零关闭
 ```
 
 - **后台启动**：`daemon start` 以 detached 子进程拉起 daemon 并等待就绪（注册表条目出现 + 端口可连通）后立即返回，终端可继续使用
-- **唯一性**：board 目录的写权由 `.owner.json` owner claim 标记（ownerId/pid/source/transport/claimedAt）；name 与存活 daemon 重复拒绝；活 daemon owner 存在时拒绝第二个 daemon；活 GUI owner 存在时启动 proxy daemon。僵尸条目（进程已死）可覆盖。启动窗口由板目录 owner 锁 `.owner.lock` 互斥（O_EXCL 抢锁、持有者 pid 判活、死 pid 的 stale 锁自动回收），并发 start 只有一个进程能进入，启动完成后锁即释放
+- **唯一性**：board 目录的写权由 `.owner.json` owner claim 标记（ownerId/pid/source/transport/claimedAt）；name 与存活 daemon 重复拒绝；活 daemon owner 存在时拒绝第二个 daemon；活 GUI owner 存在时启动 proxy daemon（GUI 退出后自动接管为 owner）。僵尸条目（进程已死）可覆盖。启动窗口由板目录 owner 锁 `.owner.lock` 互斥（O_EXCL 抢锁、持有者 pid 判活、死 pid 的 stale 锁自动回收），并发 start 只有一个进程能进入，启动完成后锁即释放
 - **板必须已存在**：先用 `create` 离线建板，再 `daemon start`
 - **强制关闭**：`daemon stop` 无条件关闭；关闭过程 single-flight，进入关闭状态即拒绝新任务，随后排空已接收任务、落盘（owner 模式）并清理板目录 `.owner.json`（仅 owner 模式）与注册表条目。重复 shutdown 与信号触发等待同一清理承诺。
 - **中继**：仅 owner 模式连中继（`--relay`）；proxy 模式不连 relay，GUI owner 自己直连 relay。`--board-id` 指定 relay 房间，决定与其他端会合；省略时取板目录路径
@@ -47,6 +47,14 @@ hwb daemon stop --name board1            # 强制归零关闭
 ### GUI owner 与 daemon 代理
 
 GUI 打开持久化板时经 Rust `start_owner_rpc` claim 板目录并开本地 owner RPC 端点（host/port/token）；GUI 自己落盘，不再探测/spawn/连接 daemon。CLI `--path` 经该端点读写，请求携带 CLI source；owner 端按 source 切换 `HitCommitter`，CLI 的 undo/redo 只作用于自己的操作。CLI `--daemon <name>` 可启动 proxy daemon，由它把 RPC 转发给 GUI owner；proxy 不写 `.owner.json`，daemon 停止后 GUI claim 不受影响。已有活 daemon owner 时 GUI 开板失败，提示先停止对应 daemon。GUI 正常关窗走销毁路径，停止 owner RPC 并释放 claim；宿主进程被强杀时 claim 端口探测会判 stale，下次开板可回收。本机端（CLI/TUI/MCP/GUI）之间不走 relay；relay 只承载跨机协作。
+
+GUI 退出后 proxy daemon 接管板目录，时序如下：
+
+1. GUI 销毁先设 closing 门闸（新 owner RPC 请求立即返回「owner 正在关闭」），排空在途板操作，再 flush 写完日志流与对象文件；
+2. flush 完成后才停止 owner RPC 并删除 `.owner.json`；flush 期间 claim 仍可连，daemon 不会提前抢盘；
+3. daemon 以 `.owner.json` 为准：claim 消失或持有者已死时重新认领、打开 BoardCore，注册表 `mode` 改为 `owner`；有 `--relay` 时此时才连中继；
+4. 交接由 CLI 请求触发（代理调用失败时当场尝试一次）或默认每 1s 轮询兜底（`handoverPollMs`）；空窗期不排队，交接失败的请求立即报错，由下一次请求或轮询重试；
+5. 交接后 daemon 用自己持久化的 source 分配 id 与落盘，CLI 继续经同一 daemon 端口读写，不需重连。
 
 ## 命令寻址
 
