@@ -145,6 +145,12 @@ async function runDaemonStart(flags) {
   if (typeof flags.port === "string" && flags.port !== "") {
     childArgs.push("--port", flags.port);
   }
+  if (
+    typeof flags["resident-chunks"] === "string" &&
+    flags["resident-chunks"] !== ""
+  ) {
+    childArgs.push("--resident-chunks", flags["resident-chunks"]);
+  }
   const child = spawn(process.execPath, childArgs, {
     detached: true,
     stdio: "ignore",

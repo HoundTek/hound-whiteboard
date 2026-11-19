@@ -14,6 +14,7 @@ import { createJournaler } from "../kernel/store/journaler.js";
 import { createSessionStore } from "../kernel/store/session-store.js";
 import { bindRoot } from "../io/driver/io-driver.js";
 import { createNodeDriver } from "../io/driver/node.js";
+import { createPersistenceAdapter } from "../io/adapter/persistence.js";
 
 import { resolveBoardPath } from "./board-path.js";
 import { t } from "./i18n.js";
@@ -36,17 +37,20 @@ const normalizeChunkSize = (size) =>
  * @param {string} [options.source="cli"] - 协作身份（记录的 source 与新对象 id 前缀）
  * @param {(source: string) => boolean} [options.persistStream] - 日志流落盘判定（daemon 用：不落直连客户端的流）
  * @param {boolean} [options.writeMeta=true] - 是否写本端元数据分片（读会话置 false 保持零写盘）
+ * @param {boolean} [options.partialResidency=false] - 是否懒加载：不读对象文件，区块以 TEMP 状态恢复（daemon owner 用）
  * @returns {Promise<{api: BoardApi, boardCore: BoardCore, store: Object, journaler: Object, meta: Object|null, flush: Function, close: Function}>} 板会话
  *
  * @description
  * 每次调用都是完整的「加载 → 可用」循环：盘上会话恢复进 BoardCore，
  * 日志跟随者以盘上内容为指纹种子挂接；调用方在命令结束后 flush + close。
+ * `partialResidency` 下只读元数据与类型索引，对象实例按区块 FULL 加载。
  */
 async function openBoardSession(rootPath, options = {}) {
   if (typeof rootPath !== "string" || rootPath.trim() === "") {
     throw new Error(t("err.boardPathMissing"));
   }
-  rootPath = resolveBoardPath(rootPath);  const driver = createNodeDriver(rootPath);
+  rootPath = resolveBoardPath(rootPath);
+  const driver = createNodeDriver(rootPath);
   const { rootId } = await driver.registerRoot(rootPath);
   const store = createSessionStore(bindRoot(driver, rootId));
 
@@ -65,7 +69,9 @@ async function openBoardSession(rootPath, options = {}) {
     await store.create({ boardConfig: { width, height } });
   }
 
-  const session = await store.loadAll();
+  const session = await store.loadAll({
+    includeObjects: !options.partialResidency,
+  });
   const meta = session.meta;
   // 盘上板配置优先：板尺寸是文档数据（决定区块划分），重开必须与原值一致
   const boardCore = new BoardCore({
@@ -77,11 +83,18 @@ async function openBoardSession(rootPath, options = {}) {
     lastTime: meta?.lastTime ?? 0,
     coreIdCounters: meta?.coreIdCounters ?? {},
     objectIdCounters: meta?.objectIdCounters ?? {},
-    // CLI / daemon 常驻持板：关闭区块卸载，查询面口径保持全量
-    chunkUnload: false,
+    // 区块卸载/重载路径经适配器按 objects/ 与 chunks/ 命名读写
+    persistenceAdapter: createPersistenceAdapter({ driver, rootId }),
+    // 部分驻留（daemon owner）按区块懒加载；CLI 短命令保持全量
+    chunkUnload: options.partialResidency === true,
   });
+  if (options.partialResidency === true) {
+    boardCore.setObjectIndexLoader(() => store.readObjectTypeIndex());
+  }
   if (exists) {
-    boardCore.restoreSession(session);
+    boardCore.restoreSession(session, {
+      chunksTemp: options.partialResidency === true,
+    });
   }
 
   const journaler = createJournaler({

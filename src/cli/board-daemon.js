@@ -9,6 +9,11 @@ import { WebSocketServer } from "ws";
 import { openBoardSession } from "./board-session.js";
 import { t } from "./i18n.js";
 import { BOARD_API_ROUTES } from "../kernel/api/board-api-routes.js";
+import { invokeBoardApiRoute } from "../kernel/api/board-api-residency.js";
+import {
+  DEFAULT_OWNER_RESIDENT_CHUNKS,
+  createOwnerResidencyCache,
+} from "../kernel/board/residency-cache.js";
 import { createNetworkCoordinator } from "../host/sync/network-coordinator.js";
 import { createAmendForwarder } from "../host/sync/amend-forwarder.js";
 import {
@@ -98,11 +103,12 @@ async function readDaemonDescriptor(rootPath) {
  * @param {number} [options.port=0] - 监听端口（0 为随机）
  * @param {string} [options.host="127.0.0.1"] - 监听地址
  * @param {number} [options.handoverPollMs=1000] - proxy 模式下轮询 GUI claim 是否消失并接管的间隔（毫秒，0 关闭轮询）
+ * @param {number} [options.residentChunks=32] - owner 模式驻留缓存预算（FULL 持有的区块数）
  * @param {boolean} [options.exitOnZero=true] - 引用归零时是否退出进程
- * @returns {Promise<{name: string, rootPath: string, port: number, source: string, mode: string, close: Function}>} daemon 句柄
+ * @returns {Promise<{name: string, rootPath: string, port: number, source: string, mode: string, close: Function, residencyStats: Function}>} daemon 句柄
  *
  * @description
- * 无活 owner 时进入 owner 模式：写 `.owner.json`、打开 BoardCore 并落盘。
+ * 无活 owner 时进入 owner 模式：写 `.owner.json`、以部分驻留打开 BoardCore 并落盘。
  * 已有活 GUI owner 时进入 proxy 模式：不打开 BoardCore、不写 claim，只把 CLI RPC 转发给 GUI owner；
  * GUI 关闭并释放 claim 后，daemon 经请求触发或轮询接管板目录并切换为 owner 模式。
  * 已有活 daemon owner 时拒绝启动。
@@ -113,6 +119,11 @@ async function startBoardDaemon(options) {
   const rootPath = options?.rootPath;
   if (typeof rootPath !== "string" || rootPath.trim() === "") {
     throw new Error(t("err.boardPathMissing"));
+  }
+  const residentChunks =
+    options?.residentChunks ?? DEFAULT_OWNER_RESIDENT_CHUNKS;
+  if (!Number.isInteger(residentChunks) || residentChunks <= 0) {
+    throw new Error("residentChunks 必须是正整数");
   }
   const releaseOwnerLock = await acquireOwnerLock(rootPath);
   try {
@@ -180,6 +191,8 @@ async function startBoardDaemonLocked(options) {
   let ownerSession = null;
   /** @type {Object|null} owner 模式的 daemon claim */
   let claim = null;
+  /** @type {Object|null} owner 模式的区块驻留缓存 */
+  let residencyCache = null;
   /** @type {Object|null} 注册表镜像条目 */
   let desc = null;
   /** @type {number} 创建者引用 */
@@ -340,17 +353,29 @@ async function startBoardDaemonLocked(options) {
       return false;
     }
     let nextSession = null;
+    let nextCache = null;
     try {
-      nextSession = await openBoardSession(rootPath, { source });
+      nextSession = await openBoardSession(rootPath, {
+        source,
+        partialResidency: true,
+      });
+      nextCache = createOwnerResidencyCache(nextSession.boardCore, {
+        maxChunks: options.residentChunks ?? DEFAULT_OWNER_RESIDENT_CHUNKS,
+      });
     } catch {
+      await nextSession?.close().catch(() => {});
       await releaseOwnerClaim(rootPath, nextClaim.ownerId).catch(() => {});
       return false;
     }
     if (closed) {
       await nextSession.close().catch(() => {});
+      nextCache.destroy();
       await releaseOwnerClaim(rootPath, nextClaim.ownerId).catch(() => {});
       return false;
     }
+    residencyCache?.destroy();
+    residencyCache = nextCache;
+    nextSession.boardCore.setResidencyManager(nextCache);
     session = nextSession;
     claim = nextClaim;
     ownerSession?.close();
@@ -375,7 +400,14 @@ async function startBoardDaemonLocked(options) {
 
   try {
     if (mode === DAEMON_MODE_OWNER) {
-      session = await openBoardSession(rootPath, { source });
+      session = await openBoardSession(rootPath, {
+        source,
+        partialResidency: true,
+      });
+      residencyCache = createOwnerResidencyCache(session.boardCore, {
+        maxChunks: options.residentChunks ?? DEFAULT_OWNER_RESIDENT_CHUNKS,
+      });
+      session.boardCore.setResidencyManager(residencyCache);
       if (options.relayUrl) {
         try {
           await connectRelay();
@@ -446,6 +478,8 @@ async function startBoardDaemonLocked(options) {
     if (session !== null) {
       await session.close().catch(() => {});
     }
+    residencyCache?.destroy();
+    residencyCache = null;
     ownerSession?.close();
     if (claim !== null) {
       removeOwnerClaimFile(rootPath).catch(() => {});
@@ -488,6 +522,8 @@ async function startBoardDaemonLocked(options) {
         await session.flush();
         await session.close();
       }
+      residencyCache?.destroy();
+      residencyCache = null;
       await refSyncTail;
       if (claim !== null) {
         try {
@@ -598,6 +634,9 @@ async function startBoardDaemonLocked(options) {
       return mode;
     },
     close,
+    residencyStats() {
+      return residencyCache?.stats() ?? null;
+    },
   };
 }
 
@@ -617,7 +656,12 @@ async function handleOwnerRpc(session, ws, message) {
     return;
   }
   try {
-    const result = await entry.invoke(session.api, params ?? {});
+    const result = await invokeBoardApiRoute(
+      session.boardCore,
+      session.api,
+      route,
+      params ?? {},
+    );
     if (entry.flush === "sync" || entry.flush === "async") {
       await session.flush();
     }

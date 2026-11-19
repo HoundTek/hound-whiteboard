@@ -1040,6 +1040,166 @@ describe("板 daemon", () => {
     }
   }, 20000);
 
+  test("daemon owner 以部分驻留启动并按需加载对象", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const seed = await openBoardSession(dir, { source: "seed" });
+    let id1 = null;
+    let id2 = null;
+    try {
+      id1 = await seed.api.addObject("StrokeObject", {
+        position: { x: 10, y: 10 },
+        data: { ...STROKE_DATA },
+      });
+      id2 = await seed.api.addObject("StrokeObject", {
+        position: { x: 900, y: 700 },
+        data: { ...STROKE_DATA },
+      });
+      await seed.flush();
+    } finally {
+      await seed.close();
+    }
+
+    const daemon = await startBoardDaemon({
+      rootPath: dir,
+      exitOnZero: false,
+      name: "a5-dt",
+      source: "daemon-a5",
+      residentChunks: 1,
+    });
+    try {
+      expect(daemon.residencyStats()).toMatchObject({
+        budget: 1,
+        fullChunks: 0,
+        residentObjects: 0,
+      });
+
+      const client = await connectDaemonByPath(dir);
+      try {
+        const list = await client.api.queryObjectList();
+        expect(list.objects.map((o) => o.id).sort()).toEqual(
+          [id1, id2].sort(),
+        );
+        expect(list.objects.every((o) => o.type === "StrokeObject")).toBe(
+          true,
+        );
+        expect(daemon.residencyStats().fullChunks).toBe(0);
+
+        const first = await client.api.queryObject(id1);
+        expect(first.data.points).toHaveLength(2);
+        expect(daemon.residencyStats().fullChunks).toBe(1);
+
+        const second = await client.api.queryObject(id2);
+        expect(second.id).toBe(id2);
+        expect(daemon.residencyStats().fullChunks).toBe(1);
+      } finally {
+        client.close();
+      }
+    } finally {
+      await daemon.close();
+      await cleanup();
+    }
+  }, 30000);
+
+  test("daemon owner 驻留缓存保护 AOM 成员", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const seed = await openBoardSession(dir, { source: "seed" });
+    let id1 = null;
+    let id2 = null;
+    try {
+      id1 = await seed.api.addObject("StrokeObject", {
+        position: { x: 10, y: 10 },
+        data: { ...STROKE_DATA },
+      });
+      id2 = await seed.api.addObject("StrokeObject", {
+        position: { x: 900, y: 700 },
+        data: { ...STROKE_DATA },
+      });
+      await seed.flush();
+    } finally {
+      await seed.close();
+    }
+
+    const daemon = await startBoardDaemon({
+      rootPath: dir,
+      exitOnZero: false,
+      name: "a5-pin",
+      source: "daemon-a5",
+      residentChunks: 1,
+    });
+    const client = await connectDaemonByPath(dir);
+    try {
+      await client.api.queryObject(id1);
+      await client.api.addActiveObjects([id1], { choice: "hold" });
+      await client.api.queryObject(id2);
+      expect(daemon.residencyStats().pinnedChunks).toBeGreaterThanOrEqual(1);
+      expect(daemon.residencyStats().fullChunks).toBeGreaterThan(1);
+      expect((await client.api.queryObject(id1)).id).toBe(id1);
+
+      await client.api.discardActiveObjects([id1]);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await client.api.queryObject(id2);
+      expect(daemon.residencyStats().fullChunks).toBe(1);
+    } finally {
+      client.close();
+      await daemon.close();
+      await cleanup();
+    }
+  }, 30000);
+
+  test("部分驻留下删除、撤销与修改跨区块可回读", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const seed = await openBoardSession(dir, { source: "seed" });
+    let id1 = null;
+    let id2 = null;
+    try {
+      id1 = await seed.api.addObject("StrokeObject", {
+        position: { x: 10, y: 10 },
+        data: { ...STROKE_DATA },
+      });
+      id2 = await seed.api.addObject("StrokeObject", {
+        position: { x: 900, y: 700 },
+        data: { ...STROKE_DATA },
+      });
+      await seed.flush();
+    } finally {
+      await seed.close();
+    }
+
+    const daemon = await startBoardDaemon({
+      rootPath: dir,
+      exitOnZero: false,
+      name: "a5-edit",
+      source: "daemon-a5",
+      residentChunks: 1,
+    });
+    const client = await connectDaemonByPath(dir);
+    try {
+      await client.api.queryObject(id1);
+      await client.api.deleteObjects([id2]);
+      let list = await client.api.queryObjectList();
+      expect(list.trash).toContain(id2);
+      expect(list.objects.map((o) => o.id)).not.toContain(id2);
+
+      await client.api.undo();
+      list = await client.api.queryObjectList();
+      expect(list.objects.map((o) => o.id).sort()).toEqual([id1, id2].sort());
+      expect(list.trash).toEqual([]);
+      expect((await client.api.queryObject(id1)).id).toBe(id1);
+
+      await client.api.addActiveObjects([id1]);
+      await client.api.modifyObject(id1, { position: { x: 20, y: 20 } });
+      await client.api.commitObjects([id1]);
+      expect((await client.api.queryObject(id1)).position).toEqual({
+        x: 20,
+        y: 20,
+      });
+    } finally {
+      client.close();
+      await daemon.close();
+      await cleanup();
+    }
+  }, 30000);
+
   test("CLI daemon start 在 GUI owner 下进入 proxy", async () => {
     const { dir, cleanup } = await tempBoard();
     const token = "owner-proxy-cli-token";

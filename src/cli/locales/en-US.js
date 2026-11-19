@@ -89,9 +89,9 @@ export default {
     daemonStart: {
       summary: "Start a board-holding daemon in the background; +1 reference if the same name/board is alive (idempotent)",
       usage:
-        "daemon start --name <name> --path <board-dir> [--source <identity>] [--relay <relay-url>] [--board-id <room>] [--port <port>]",
+        "daemon start --name <name> --path <board-dir> [--source <identity>] [--relay <relay-url>] [--board-id <room>] [--port <port>] [--resident-chunks <count>]",
       description:
-        "Spawns a detached daemon and returns once ready. The board must already exist (create it with hwb create first). Repeating start with the same name and board adds a reference instead of failing; same name with a different board, or a board already held by another daemon, is rejected.",
+        "Spawns a detached daemon and returns once ready. The board must already exist (create it with hwb create first). In owner mode objects load lazily by chunk, with 32 resident chunks by default. Repeating start with the same name and board adds a reference instead of failing; same name with a different board, or a board already held by another daemon, is rejected.",
       flag: {
         name: "Daemon name (charset [A-Za-z0-9._-], globally unique)",
         path: "Board directory (~ expansion supported); must already be created by create",
@@ -99,6 +99,7 @@ export default {
         relay: "Relay address (e.g. ws://127.0.0.1:8377); connects the daemon to cross-machine collaboration",
         "board-id": "Relay room name (defaults to the board directory path)",
         port: "Listening port (auto-assigned when omitted)",
+        "resident-chunks": "Owner residency budget (FULL-held chunks, default 32)",
       },
       examples: `hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024
 hwb daemon start --name board1 --path ~/boards/a

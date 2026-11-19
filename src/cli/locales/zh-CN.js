@@ -89,9 +89,9 @@ export default {
     daemonStart: {
       summary: "后台启动持板 daemon；同名同板已存活时引用 +1（幂等）",
       usage:
-        "daemon start --name <名> --path <板目录> [--source <身份>] [--relay <中继地址>] [--board-id <房间>] [--port <端口>]",
+        "daemon start --name <名> --path <板目录> [--source <身份>] [--relay <中继地址>] [--board-id <房间>] [--port <端口>] [--resident-chunks <区块数>]",
       description:
-        "以 detached 子进程拉起 daemon 并等待就绪后返回。板必须已存在（先用 hwb create 建板）。同名同板重复 start 是引用 +1 而非报错；同名不同板、同板已被其它 daemon 持有均拒绝。",
+        "以 detached 子进程拉起 daemon 并等待就绪后返回。板必须已存在（先用 hwb create 建板）。owner 模式按区块懒加载对象，默认驻留 32 个区块。同名同板重复 start 是引用 +1 而非报错；同名不同板、同板已被其它 daemon 持有均拒绝。",
       flag: {
         name: "daemon 名（字符集 [A-Za-z0-9._-]，全局唯一）",
         path: "板目录（支持 ~ 展开），板必须已由 create 创建",
@@ -99,6 +99,7 @@ export default {
         relay: "中继地址（如 ws://127.0.0.1:8377），连接后进入跨机协作",
         "board-id": "中继房间名（省略时取板目录路径）",
         port: "监听端口（省略时自动分配）",
+        "resident-chunks": "owner 驻留缓存预算（FULL 持有的区块数，默认 32）",
       },
       examples: `hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024
 hwb daemon start --name board1 --path ~/boards/a

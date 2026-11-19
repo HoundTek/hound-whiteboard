@@ -46,6 +46,7 @@ describe("CLI 帮助", () => {
     const { stdout: viaHelp } = await runCli(["help", "daemon", "start"]);
     expect(viaHelp).toContain("用法：hwb daemon start --name");
     expect(viaHelp).toContain("--relay");
+    expect(viaHelp).toContain("--resident-chunks");
     const { stdout: viaFlag } = await runCli(["daemon", "start", "--help"]);
     expect(viaFlag).toBe(viaHelp);
   });
