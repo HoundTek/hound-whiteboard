@@ -28,6 +28,10 @@ import { intersectsRanges, RectangleRange } from "../range/index.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { Chunk } from "../chunk/chunk.js";
 import { BoardCore } from "../board/board-core.js";
+import {
+  collectRecordChunkIds,
+  resolveUndoTarget,
+} from "./undo-transition.js";
 import { createDefaultAomRenderHooks } from "../board/aom-render-hooks.js";
 import { createDefaultPersistenceAdapter } from "../board/persistence-adapter.js";
 import {
@@ -295,8 +299,7 @@ class BoardApi {
     if (objectId == null) {
       throw new Error("createObject requires an explicit object id.");
     }
-    const existingObject = boardCore.getObjectById(objectId);
-    if (existingObject) {
+    if (boardCore.isObjectKnown(objectId)) {
       throw new Error(
         `Duplicate object id ${objectId}: an object with this id already exists.`,
       );
@@ -1497,7 +1500,7 @@ class BoardApi {
       chain: boardCore.undoTree
         .getActiveChain()
         .map((node) => node.shareId),
-      objects: boardCore.getAllObjects().length,
+      objects: boardCore.getKnownObjectIds().size,
       trash: boardCore.trash.size,
       coreIdCounters: meta.coreIdCounters,
       objectIdCounters: meta.objectIdCounters,
@@ -1511,9 +1514,10 @@ class BoardApi {
   queryObjectList() {
     const boardCore = this.#boardCore;
     return {
-      objects: boardCore
-        .getAllObjects()
-        .map((obj) => ({ id: obj.id, type: obj.type ?? obj.constructor.name })),
+      objects: boardCore.getKnownObjectEntries().map((entry) => ({
+        id: entry.id,
+        type: entry.type ?? "Unknown",
+      })),
       trash: [...boardCore.trash.keys()],
     };
   }
@@ -1815,8 +1819,15 @@ class BoardApi {
     }
     for (const obj of derived.values()) {
       // 部分驻留硬约束：经卸载路径合法离场的对象不补回内存（保住 chunkUnload）；
-      // 效果缺失（非驱逐）照常补回。digest 通道已按全量驻留门控，本约束兜底直接调用（RPC 面）
+      // 懒加载打开时「已知但未驻留」的对象属于正常缺席，不当作效果缺失补回。
       if (protectedIds.has(obj.id) || boardCore.isObjectEvicted(obj.id)) continue;
+      if (
+        !boardCore.isFullResidency() &&
+        !boardCore.getObjectById(obj.id) &&
+        boardCore.isObjectKnown(obj.id)
+      ) {
+        continue;
+      }
       this.#addObjectEffect(
         { objectId: obj.id, data: obj.serialize() },
         affectedChunks,
@@ -2143,19 +2154,8 @@ class BoardApi {
     if (tree.head === tree.root) {
       return { undone: false, targetNodeId: null };
     }
-    let targetId = targetNodeId ?? null;
+    const targetId = resolveUndoTarget(boardCore, targetNodeId);
     if (targetId === null) {
-      const source = boardCore.hitCommitter.source;
-      const log = boardCore.operationLog;
-      const chain = tree.getActiveChain();
-      for (let i = chain.length - 1; i >= 0; i--) {
-        if (log.get(chain[i].shareId)?.source === source) {
-          targetId = chain[i].shareId;
-          break;
-        }
-      }
-    }
-    if (targetId === null || !tree.isOnActiveChain(targetId)) {
       return { undone: false, targetNodeId: null };
     }
     const beforeRecords = this.#recordsOfChain(tree.getActiveChain());
@@ -2827,8 +2827,12 @@ class BoardApi {
    */
   async applyRemoteOperations(records) {
     const list = this.#filterIncomingRecords(records);
-    await this.#ensureRecordsCoResident(list);
-    return this.#applyIncomingRecords(list);
+    const release = await this.#ensureRecordsCoResident(list);
+    try {
+      return this.#applyIncomingRecords(list);
+    } finally {
+      release?.();
+    }
   }
 
   /**
@@ -2859,147 +2863,28 @@ class BoardApi {
   }
 
   /**
-   * 收集记录点名的区块 id
-   * @description 取 payload.chunkId、payload.chunks（数组或 before/after 形态）、
-   * 对象覆盖索引，以及从对象快照几何计算的覆盖区块。
-   * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
-   * @returns {Set<number>} 区块 id 集合
-   * @private
-   */
-  #collectRecordChunkIds(records) {
-    const boardCore = this.#boardCore;
-    const chunkIds = new Set();
-    const addChunkId = (value) => {
-      const chunkId = Number(value);
-      if (Number.isInteger(chunkId) && chunkId > 0) chunkIds.add(chunkId);
-    };
-    const addChunksEntries = (entries) => {
-      for (const entry of entries ?? []) addChunkId(entry?.chunkId);
-    };
-    const addSnapshotCover = (snapshot) => {
-      if (snapshot === undefined || snapshot === null) return;
-      if (boardCore.width <= 0 || boardCore.height <= 0) return;
-      let obj;
-      try {
-        obj = deserialize(snapshot);
-      } catch {
-        return;
-      }
-      const rect = getObjectWorldRect(obj);
-      if (!rect) return;
-      for (const chunkId of ChunkObjectManager.calculateCoveredChunkIdsForRange(
-        rect,
-        boardCore.width,
-        boardCore.height,
-      )) {
-        chunkIds.add(chunkId);
-      }
-    };
-
-    const collectRecord = (record) => {
-      const payload = record?.payload ?? {};
-      addChunkId(payload.chunkId);
-      const chunks = payload.chunks;
-      if (Array.isArray(chunks)) {
-        addChunksEntries(chunks);
-      } else if (chunks && typeof chunks === "object") {
-        addChunksEntries(chunks.before);
-        addChunksEntries(chunks.after);
-      }
-      if (typeof payload.objectId === "string") {
-        for (const chunkId of boardCore.getObjectCoverChunks(
-          payload.objectId,
-        ) ?? []) {
-          chunkIds.add(chunkId);
-        }
-      }
-      switch (record?.type) {
-        case OPERATION_TYPES.ADD_OBJECT:
-        case OPERATION_TYPES.DELETE_OBJECT:
-          addSnapshotCover(payload.data);
-          break;
-        case OPERATION_TYPES.MODIFY_OBJECT:
-          addSnapshotCover(payload.before);
-          addSnapshotCover(payload.after);
-          break;
-        default:
-          break;
-      }
-    };
-
-    for (const record of records) collectRecord(record);
-    for (const record of this.#collectRecordsAffectedByTreeOperations(
-      records,
-    )) {
-      collectRecord(record);
-    }
-
-    return chunkIds;
-  }
-
-  /**
-   * 收集撤销/重做/MOVE_HEAD 记录会触及的成员记录
-   * @param {import("../hit/operation.js").OperationRecord[]} records - 到达记录
-   * @returns {import("../hit/operation.js").OperationRecord[]} 被回放的成员记录
-   * @private
-   */
-  #collectRecordsAffectedByTreeOperations(records) {
-    const boardCore = this.#boardCore;
-    const tree = boardCore.undoTree;
-    const log = boardCore.operationLog;
-    const affected = [];
-    const collectNode = (nodeId) => {
-      if (typeof nodeId !== "string") return;
-      const node = tree.findNode(nodeId);
-      if (!node) return;
-      for (const id of node.memberIds) {
-        const record = log.get(id);
-        if (record) affected.push(record);
-      }
-    };
-
-    for (const record of records) {
-      if (
-        record.type === OPERATION_TYPES.UNDO ||
-        record.type === OPERATION_TYPES.MOVE_HEAD
-      ) {
-        collectNode(record.payload?.targetNodeId);
-      } else if (record.type === OPERATION_TYPES.REDO) {
-        const undoRecord = log.get(record.payload?.targetUndoId);
-        collectNode(undoRecord?.payload?.targetNodeId);
-      }
-    }
-
-    return affected;
-  }
-
-  /**
    * 确保记录点名的区块共驻留
-   * @description 区块级 FullLoad，保留到 journaler 下一轮落盘后再释放；
+   * @description 区块级 FullLoad（有驻留缓存时交给缓存），
    * 加载完成后校验重放前置条件，失败时在写日志前抛出。
    * @param {import("../hit/operation.js").OperationRecord[]} records - 分子操作记录
-   * @returns {Promise<void>}
+   * @returns {Promise<(() => void)|null>} 临时 loader 的释放函数；缓存或无需加载时为 null
    * @private
    */
   async #ensureRecordsCoResident(records) {
-    if (records.length === 0) return;
+    if (records.length === 0) return null;
     const boardCore = this.#boardCore;
-    const chunkIds = this.#collectRecordChunkIds(records);
-    const chunksToLoad = [];
-    for (const chunkId of chunkIds) {
-      const chunk = boardCore.getChunkById(chunkId);
-      if (chunk) chunksToLoad.push(chunk);
+    const chunkIds = collectRecordChunkIds(boardCore, records);
+    const release = await boardCore.ensureChunksResident(
+      [...chunkIds],
+      "record-residency",
+    );
+    try {
+      this.#assertRecordsCoResident(records, chunkIds);
+    } catch (error) {
+      release?.();
+      throw error;
     }
-    if (chunksToLoad.length > 0) {
-      const loader = await boardCore.loadChunksAndWaitComplete(
-        chunksToLoad,
-        `remote-replay-${Date.now().toString(36)}-${Math.random()
-          .toString(36)
-          .slice(2, 8)}`,
-      );
-      loader.destroy(300);
-    }
-    this.#assertRecordsCoResident(records, chunkIds);
+    return release;
   }
 
   /**

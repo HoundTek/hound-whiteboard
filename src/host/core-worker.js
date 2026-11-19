@@ -19,6 +19,7 @@ import { createConsolePrinter } from "../utils/log/console-printer.js";
 import { handleDebugQuery } from "./debug-helper.js";
 import { BoardApi } from "../kernel/api/board-api.js";
 import { BOARD_API_ROUTES } from "../kernel/api/board-api-routes.js";
+import { invokeBoardApiRoute } from "../kernel/api/board-api-residency.js";
 import { createTauriDriver } from "../io/driver/tauri.js";
 import { bindRoot } from "../io/driver/io-driver.js";
 import { createPersistenceAdapter } from "../io/adapter/persistence.js";
@@ -547,7 +548,12 @@ class CoreWorkerRuntime {
           throw new Error(`未知 route：${route}`);
         }
         const execute = async () => {
-          const result = await entry.invoke(this.#boardApi, params);
+          const result = await invokeBoardApiRoute(
+            this.#boardCore,
+            this.#boardApi,
+            route,
+            params,
+          );
           if (entry.flush !== "none") {
             if (this.#journaler !== null) {
               await this.#journaler.flush();
@@ -638,6 +644,11 @@ class CoreWorkerRuntime {
       coreIdCounters: persistence?.session?.meta?.coreIdCounters,
       objectIdCounters: persistence?.session?.meta?.objectIdCounters,
     });
+    if (persistence?.store) {
+      this.#boardCore.setObjectIndexLoader(() =>
+        persistence.store.readObjectTypeIndex(),
+      );
+    }
 
     const renderHooks = this.#createViewportRenderHooks();
     this.#boardCore.aomRenderHooks = renderHooks;
@@ -1376,9 +1387,9 @@ class CoreWorkerRuntime {
    * 并按路由条目声明的 flush 时机在调用完成后调度渲染帧 flush。
    * @param {string} method - RPC 方法名
    * @param {Record<string, any>} params - RPC 参数
-   * @returns {*} 调用结果（异步方法返回 Promise）
+   * @returns {Promise<*>} 调用结果
    */
-  #invokeBoardApi(method, params = {}) {
+  async #invokeBoardApi(method, params = {}) {
     const api = this.#boardApi;
     if (!api) {
       throw new Error("BoardApi is not initialized. Call createBoard first.");
@@ -1389,15 +1400,15 @@ class CoreWorkerRuntime {
       throw new Error(`Unknown RPC method: ${method}`);
     }
 
-    const result = route.invoke(api, params);
+    const result = await invokeBoardApiRoute(
+      this.#boardCore,
+      api,
+      method,
+      params,
+    );
 
-    if (route.flush === "sync") {
+    if (route.flush === "sync" || route.flush === "async") {
       this.#scheduleFlushRenderFrames();
-    } else if (route.flush === "async" && result instanceof Promise) {
-      return result.then((value) => {
-        this.#scheduleFlushRenderFrames();
-        return value;
-      });
     }
 
     return result;
