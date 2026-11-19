@@ -1753,6 +1753,24 @@ class ActiveObjectManager {
   }
 
   /**
+   * 列出 AOM 当前纳入的全部对象 id
+   * @description 包含活动对象、被 pickup 纳入的非活动层成员与远程选择成员；
+   * 这些对象在部分驻留下必须保持驻留，供区块缓存做驱逐保护。
+   * @returns {string[]} 对象 id 列表
+   */
+  queryMemberIds() {
+    const ids = new Set(this.onLayer.keys());
+    for (const byName of this.#remoteChoices.values()) {
+      for (const members of byName.values()) {
+        for (const objectId of members) {
+          ids.add(objectId);
+        }
+      }
+    }
+    return [...ids];
+  }
+
+  /**
    * 列出全部远程命名选择（awareness 查询面）
    * @returns {{ source: string, name: string|undefined, ids: string[] }[]} 远程选择列表（按来源与 choice 名展开；匿名为 name undefined）
    */

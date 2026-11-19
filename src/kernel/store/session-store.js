@@ -45,6 +45,9 @@ const META_DIR = "meta";
 /** 区块元数据目录名 */
 const CHUNKS_DIR = "chunks";
 
+/** 类型索引扫描的每批文件数（限制峰值内存） */
+const OBJECT_INDEX_BATCH_SIZE = 64;
+
 /** 日志段文件名前缀 */
 const SEGMENT_PREFIX = "seg-";
 
@@ -238,6 +241,40 @@ function createSessionStore(driver) {
       }),
     );
     return objects.filter((data) => data !== null);
+  };
+
+  /**
+   * 读取目录下全部对象的 id 与类型
+   * @param {string} dir - 目录相对路径
+   * @returns {Promise<Array<{id: string, type: string|null}>>} 类型索引（跳过缺失与损坏文件）
+   *
+   * @description
+   * 分批解析对象文件，只保留 id/type，避免一次性持有全部对象数据；
+   * 供部分驻留的 owner 在不加载对象实例的情况下回答对象清单。
+   */
+  const readObjectTypeIndexIn = async (dir) => {
+    const entries = await driver.ls(dir);
+    const files = entries
+      .filter((entry) => entry.isFile)
+      .map((entry) => entry.name)
+      .filter((name) => decodeObjectFileName(name) !== null);
+    const index = [];
+    for (let offset = 0; offset < files.length; offset += OBJECT_INDEX_BATCH_SIZE) {
+      const batch = files.slice(offset, offset + OBJECT_INDEX_BATCH_SIZE);
+      const items = await Promise.all(
+        batch.map(async (name) => {
+          const data = parseJson(await driver.read(`${dir}/${name}`));
+          if (!data || typeof data !== "object") return null;
+          if (typeof data.id !== "string" || data.id === "") return null;
+          return {
+            id: data.id,
+            type: typeof data.type === "string" ? data.type : null,
+          };
+        }),
+      );
+      index.push(...items.filter((item) => item !== null));
+    }
+    return index;
   };
 
   /**
@@ -467,6 +504,14 @@ function createSessionStore(driver) {
     },
 
     /**
+     * 读取对象类型索引（不加载对象实例）
+     * @returns {Promise<Array<{id: string, type: string|null}>>} `{id, type}` 列表（跳过损坏文件）
+     */
+    async readObjectTypeIndex() {
+      return readObjectTypeIndexIn(OBJECTS_DIR);
+    },
+
+    /**
      * 读取全部 trash 对象数据
      * @returns {Promise<Object[]>} 对象数据数组
      */
@@ -551,16 +596,34 @@ function createSessionStore(driver) {
      * meta 归并：board.json（boardConfig / formatVersion 与存量兜底字段）+ 全部
      * meta/<source>.json 分片——计数表按 key 并入（分片覆盖板级同名字段），lastTime 取最大值。
      */
-    async loadAll() {
-      const [meta, sourceMeta, { records, nextSegmentSeqBySource }, chunkMetadataList, objects, trash] =
-        await Promise.all([
-          this.readMeta(),
-          this.readAllSourceMeta(),
-          this.readAllRecords(),
-          this.readAllChunkMetadata(),
-          this.readAllObjects(),
-          this.readAllTrash(),
-        ]);
+    /**
+     * 聚合读取全部会话数据（打开既有板）
+     * @param {{ includeObjects?: boolean }} [options={}] - 读取选项
+     * @param {boolean} [options.includeObjects=true] - 是否读取对象快照；false 时只返回类型索引
+     * @returns {Object} 会话数据（meta、sourceMeta、records、nextSegmentSeqBySource、chunkMetadataList、objects、objectIndex、trash）
+     *
+     * @description
+     * meta 归并：board.json（boardConfig / formatVersion 与存量兜底字段）+ 全部
+     * meta/<source>.json 分片——计数表按 key 并入（分片覆盖板级同名字段），lastTime 取最大值。
+     * `includeObjects:false` 供部分驻留 owner 使用：不读对象数据，类型索引留待首次查询时
+     * 经 `readObjectTypeIndex()` 构建。
+     */
+    async loadAll({ includeObjects = true } = {}) {
+      const [
+        meta,
+        sourceMeta,
+        { records, nextSegmentSeqBySource },
+        chunkMetadataList,
+        objects,
+        trash,
+      ] = await Promise.all([
+        this.readMeta(),
+        this.readAllSourceMeta(),
+        this.readAllRecords(),
+        this.readAllChunkMetadata(),
+        includeObjects ? this.readAllObjects() : Promise.resolve([]),
+        this.readAllTrash(),
+      ]);
       const merged = mergeSourceMeta(meta, sourceMeta);
       return {
         meta: merged,
@@ -569,6 +632,7 @@ function createSessionStore(driver) {
         nextSegmentSeqBySource,
         chunkMetadataList,
         objects,
+        objectIndex: null,
         trash,
       };
     },

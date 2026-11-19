@@ -59,6 +59,32 @@ describe("SessionStore", () => {
     expect(await store.writeObject(null)).toBe(false);
   });
 
+  test("loadAll({ includeObjects:false }) 跳过对象数据并返回类型索引", async () => {
+    const store = setup();
+    await store.create();
+    await store.writeObject({
+      id: "demo/1",
+      type: "StrokeObject",
+      data: { points: [{ x: 0, y: 0 }] },
+    });
+    await store.writeObject({ id: "demo/2", type: "CircleObject" });
+
+    const full = await store.loadAll();
+    expect(full.objects).toHaveLength(2);
+    expect(full.objectIndex).toBeNull();
+
+    const lazy = await store.loadAll({ includeObjects: false });
+    expect(lazy.objects).toEqual([]);
+    expect(lazy.objectIndex).toBeNull();
+    const index = await store.readObjectTypeIndex();
+    expect(index).toHaveLength(2);
+    expect(index.find((entry) => entry.id === "demo/1")).toEqual({
+      id: "demo/1",
+      type: "StrokeObject",
+    });
+    expect(lazy.records).toEqual([]);
+  });
+
   test("trash 条目写入与两侧移除", async () => {
     const store = setup();
     await store.create();

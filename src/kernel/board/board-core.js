@@ -206,6 +206,42 @@ class BoardCore {
   #chunkUnloadEnabled = true;
 
   /**
+   * 对象类型索引（对象 id → 类型名）
+   * @description 部分驻留时无需对象实例即可回答对象清单；由类型索引加载器或实例注册填充。
+   * @type {Map<string, string|null>}
+   * @private
+   */
+  #objectTypes = new Map();
+
+  /**
+   * 对象类型索引加载器（部分驻留时扫描 objects/，只返回 id/type）
+   * @type {(() => Promise<Array<{id: string, type: string|null}>>)|null}
+   * @private
+   */
+  #objectIndexLoader = null;
+
+  /**
+   * 类型索引是否已完整加载
+   * @type {boolean}
+   * @private
+   */
+  #objectIndexLoaded = false;
+
+  /**
+   * 类型索引加载中的承诺（并发去重）
+   * @type {Promise<void>|null}
+   * @private
+   */
+  #objectIndexPromise = null;
+
+  /**
+   * 驻留管理器（部分驻留 owner 的区块缓存；未设置时按需用临时 loader）
+   * @type {{ensureChunks: Function}|null}
+   * @private
+   */
+  #residencyManager = null;
+
+  /**
    * 日志 Logger
    * @type {Logger}
    */
@@ -369,6 +405,17 @@ class BoardCore {
    */
   async loadChunksAndWaitComplete(chunks, requesterId) {
     const loader = this.createChunkLoader(requesterId);
+    await this.loadChunksIntoLoader(loader, chunks);
+    return loader;
+  }
+
+  /**
+   * 让指定 loader 以 FULL 策略持有区块并等待加载完成
+   * @param {ChunkLoader} loader - 已创建的 loader（会被 track 传入区块）
+   * @param {Chunk[]} chunks - 待加载的区块实例
+   * @returns {Promise<void>}
+   */
+  async loadChunksIntoLoader(loader, chunks) {
     await Promise.all(
       chunks.map((chunk) => {
         loader.trackChunk(chunk);
@@ -384,11 +431,12 @@ class BoardCore {
           };
           this.chunkLoadEventBus.on(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, handler);
         });
-        loader.emitLoadRequest(chunk, { strategy: "full" });
+        loader.emitLoadRequest(chunk, {
+          strategy: CHUNK_LOAD_STRATEGIES.FULL,
+        });
         return promise;
       }),
     );
-    return loader;
   }
 
   /**
@@ -478,6 +526,295 @@ class BoardCore {
   }
 
   /**
+   * 设置对象类型索引加载器
+   * @param {(() => Promise<Array<{id: string, type: string|null}>>)|null} loader - 扫描 objects/ 的加载器
+   * @returns {void}
+   */
+  setObjectIndexLoader(loader) {
+    this.#objectIndexLoader = typeof loader === "function" ? loader : null;
+    this.#objectIndexLoaded = false;
+    this.#objectIndexPromise = null;
+  }
+
+  /**
+   * 确保对象类型索引可用
+   * @returns {Promise<void>}
+   *
+   * @description
+   * 全量驻留时直接从实例补齐；部分驻留时经加载器分批扫描 objects/，
+   * 只保留 id/type。加载失败只告警，下一次调用可重试。
+   */
+  async ensureObjectTypeIndex() {
+    if (this.#objectIndexLoaded) return;
+    if (this.isFullResidency()) {
+      for (const [objectId, entry] of this.objectLoaded) {
+        if (!this.#objectTypes.has(objectId)) {
+          this.#objectTypes.set(
+            objectId,
+            entry.obj?.type ?? entry.obj?.constructor?.name ?? null,
+          );
+        }
+      }
+      this.#objectIndexLoaded = true;
+      return;
+    }
+    if (this.#objectIndexPromise !== null) {
+      return this.#objectIndexPromise;
+    }
+    if (this.#objectIndexLoader === null) return;
+
+    this.#objectIndexPromise = (async () => {
+      try {
+        const entries = await this.#objectIndexLoader();
+        for (const entry of entries ?? []) {
+          if (
+            entry &&
+            typeof entry.id === "string" &&
+            !this.#objectTypes.has(entry.id)
+          ) {
+            this.#objectTypes.set(
+              entry.id,
+              typeof entry.type === "string" ? entry.type : null,
+            );
+          }
+        }
+        this.#objectIndexLoaded = true;
+      } catch (error) {
+        this.#log.warn(
+          `对象类型索引加载失败：${error?.message ?? error}`,
+        );
+      } finally {
+        this.#objectIndexPromise = null;
+      }
+    })();
+    return this.#objectIndexPromise;
+  }
+
+  /**
+   * 读取对象类型
+   * @param {string} objectId - 对象 id
+   * @returns {string|null} 类型名；未知时为 null
+   */
+  getObjectType(objectId) {
+    if (this.#objectTypes.has(objectId)) {
+      return this.#objectTypes.get(objectId);
+    }
+    const obj = this.getObjectById(objectId);
+    return obj ? (obj.type ?? obj.constructor?.name ?? null) : null;
+  }
+
+  /**
+   * 列出已知对象的 id 与类型
+   * @description 驻留对象在前（保持既有顺序），其余已知对象按覆盖索引顺序补齐。
+   * @returns {Array<{id: string, type: string|null}>} 对象清单
+   */
+  getKnownObjectEntries() {
+    const entries = [];
+    const seen = new Set();
+    for (const [objectId, entry] of this.objectLoaded) {
+      seen.add(objectId);
+      entries.push({
+        id: objectId,
+        type:
+          this.#objectTypes.get(objectId) ??
+          entry.obj?.type ??
+          entry.obj?.constructor?.name ??
+          null,
+      });
+    }
+    for (const objectId of this.getKnownObjectIds()) {
+      if (seen.has(objectId)) continue;
+      entries.push({ id: objectId, type: this.getObjectType(objectId) });
+    }
+    return entries;
+  }
+
+  /**
+   * 判断对象是否仍在板上（不要求驻留）
+   * @param {string} objectId - 对象 id
+   * @returns {boolean} 是否为已知对象
+   */
+  isObjectKnown(objectId) {
+    if (
+      typeof objectId !== "string" ||
+      objectId === "" ||
+      this.trash.has(objectId)
+    ) {
+      return false;
+    }
+    if (this.#objectCoverChunks.has(objectId)) return true;
+    if (this.objectLoaded.has(objectId)) return true;
+    for (const { chunk } of this.chunkLoaded.values()) {
+      if (chunk?.objectManager?.staticGraph?.hasNode?.(objectId)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * 设置驻留管理器
+   * @param {{ensureChunks: Function}|null} manager - 区块驻留缓存
+   * @returns {void}
+   */
+  setResidencyManager(manager) {
+    this.#residencyManager = manager ?? null;
+  }
+
+  /**
+   * 读取驻留管理器
+   * @returns {{ensureChunks: Function}|null} 区块驻留缓存
+   */
+  getResidencyManager() {
+    return this.#residencyManager;
+  }
+
+  /**
+   * 获取 AOM 成员覆盖的区块集合
+   * @description 活动对象、被 pickup 的非活动层成员与远程活动对象都不得被驱逐。
+   * @returns {Set<number>} 固定区块 id 集合
+   */
+  getPinnedChunkIds() {
+    const pinned = new Set();
+    const aom = this.activeObjectManager;
+    const objectIds =
+      typeof aom?.queryMemberIds === "function" ? aom.queryMemberIds() : [];
+    for (const objectId of objectIds) {
+      const covered = this.getObjectCoverChunks(objectId);
+      for (const chunkId of covered ?? []) {
+        pinned.add(chunkId);
+      }
+    }
+    return pinned;
+  }
+
+  /**
+   * 确保对象实例已驻留
+   * @param {Iterable<string>} objectIds - 对象 id 集合
+   * @param {string} [reason="residency"] - 加载原因（临时 loader 的请求方标识前缀）
+   * @returns {Promise<(() => void)|null>} 临时 loader 的释放函数；缓存或无需加载时为 null
+   * @throws {Error} 已知对象在加载后仍未驻留时抛出
+   */
+  async ensureObjectsResident(objectIds, reason = "residency") {
+    const ids = [
+      ...new Set(
+        (Array.isArray(objectIds) ? objectIds : []).filter(
+          (objectId) => typeof objectId === "string" && objectId !== "",
+        ),
+      ),
+    ];
+    if (ids.length === 0) return null;
+
+    const chunkIds = new Set();
+    for (const objectId of ids) {
+      const covered = this.getObjectCoverChunks(objectId);
+      if (covered !== undefined) {
+        for (const chunkId of covered) chunkIds.add(chunkId);
+        continue;
+      }
+      for (const { chunk } of this.chunkLoaded.values()) {
+        if (chunk?.objectManager?.staticGraph?.hasNode?.(objectId)) {
+          chunkIds.add(chunk.id);
+        }
+      }
+    }
+
+    const release = await this.ensureChunksResident([...chunkIds], reason);
+    const missing = ids.filter(
+      (objectId) =>
+        this.isObjectKnown(objectId) &&
+        !this.objectLoaded.has(objectId) &&
+        !this.trash.has(objectId),
+    );
+    if (missing.length > 0) {
+      release?.();
+      throw new Error(`对象驻留失败：${missing.join(", ")}`);
+    }
+    return release;
+  }
+
+  /**
+   * 确保区块完整驻留
+   * @param {Iterable<number>} chunkIds - 区块 id 集合
+   * @param {string} [reason="residency"] - 加载原因（临时 loader 的请求方标识前缀）
+   * @returns {Promise<(() => void)|null>} 临时 loader 的释放函数；缓存或无需加载时为 null
+   */
+  async ensureChunksResident(chunkIds, reason = "residency") {
+    const ids = [
+      ...new Set(
+        (Array.isArray(chunkIds) ? chunkIds : []).filter(Number.isInteger),
+      ),
+    ];
+    if (ids.length === 0) return null;
+    if (this.#residencyManager !== null) {
+      await this.#residencyManager.ensureChunks(ids);
+      this.#assertChunksFull(ids);
+      return null;
+    }
+    if (this.#chunkUnloadEnabled === false) return null;
+
+    const chunks = ids
+      .map((chunkId) => this.getChunkById(chunkId))
+      .filter(Boolean);
+    const toLoad = chunks.filter(
+      (chunk) => !(chunk.isLoad && !chunk.isTempLoad),
+    );
+    if (toLoad.length === 0) {
+      this.#assertChunksFull(ids);
+      return null;
+    }
+
+    const loader = await this.loadChunksAndWaitComplete(
+      toLoad,
+      `${reason}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    try {
+      this.#assertChunksFull(ids);
+    } catch (error) {
+      loader.destroy(0);
+      throw error;
+    }
+    return () => loader.destroy(300);
+  }
+
+  /**
+   * 断言区块已完整驻留
+   * @param {number[]} chunkIds - 区块 id 集合
+   * @returns {void}
+   * @throws {Error} 任一区块未完整加载时抛出
+   * @private
+   */
+  #assertChunksFull(chunkIds) {
+    const missing = chunkIds.filter((chunkId) => {
+      const chunk = this.getChunkById(chunkId);
+      return !chunk || !chunk.isLoad || chunk.isTempLoad;
+    });
+    if (missing.length > 0) {
+      throw new Error(`区块驻留失败：${missing.join(", ")}`);
+    }
+  }
+
+  /**
+   * 确保区块元数据已加载
+   * @param {Iterable<number>} chunkIds - 区块 id 集合
+   * @returns {Promise<void>}
+   *
+   * @description 供只需要静态图的查询使用：TEMP 加载元数据，不持有 FULL 引用，
+   * 对象实例仍按正常驻留路径管理。
+   */
+  async ensureChunkMetadata(chunkIds) {
+    const ids = [
+      ...new Set(
+        (Array.isArray(chunkIds) ? chunkIds : []).filter(Number.isInteger),
+      ),
+    ];
+    for (const chunkId of ids) {
+      const chunk = this.getChunkById(chunkId);
+      if (chunk && !chunk.isLoad) {
+        await chunk.loadTemp();
+      }
+    }
+  }
+
+  /**
    * 本端来源标识（操作记录 source 与对象 id 前缀；写端身份）
    * @type {string}
    */
@@ -539,13 +876,19 @@ class BoardCore {
    * @param {Array<{chunkId: number, tierGraph: any[], objectCoverIndex: any[]}>} [session.chunkMetadataList] - 区块元数据列表
    * @param {Object[]} [session.objects] - 活动对象序列化数据数组
    * @param {Array<{data: Object, chunks: Array}>} [session.trash] - trash 条目数组
+   * @param {{ chunksTemp?: boolean }} [options={}] - 恢复选项
+   * @param {boolean} [options.chunksTemp=false] - 区块只恢复元数据（TEMP），对象实例留待 FULL 加载
    * @returns {void}
    *
    * @description
    * 打开既有板时调用：层叠图先回填、覆盖索引按静态图重建（决定对象注册时的加载计数），
    * 随后注册活动对象实例，最后恢复 trash 条目（含层位边，供跨会话撤销删除使用）。
+   * `chunksTemp` 供部分驻留 owner 使用：区块保留静态图，但对象实例不随开板载入。
    */
-  restoreSession({ chunkMetadataList = [], objects = [], trash = [] } = {}) {
+  restoreSession(
+    { chunkMetadataList = [], objects = [], trash = [] } = {},
+    { chunksTemp = false } = {},
+  ) {
     for (const { chunkId, tierGraph, objectCoverIndex } of chunkMetadataList) {
       const chunk = this.getChunkById(chunkId);
       if (!chunk) continue;
@@ -555,9 +898,9 @@ class BoardCore {
       chunk.objectManager.staticGraph = DirectedGraph.parse(tierGraph);
       chunk.objectManager.loadObjectCoverChunksFromData(objectCoverIndex);
       chunk.objectManager.syncCoverIndexFromGraph();
-      // 层叠图已回填、覆盖索引已按静态图重建，区块即完整加载态
+      // 层叠图已回填、覆盖索引已按静态图重建；部分驻留时对象实例留待 FULL 加载
       chunk.isLoad = true;
-      chunk.isTempLoad = false;
+      chunk.isTempLoad = chunksTemp;
     }
     for (const data of objects) {
       let obj = null;
@@ -657,6 +1000,10 @@ class BoardCore {
       obj,
       loadedCount,
     });
+    this.#objectTypes.set(
+      obj.id,
+      obj.type ?? obj.constructor?.name ?? null,
+    );
     // 实例回到内存：解除驻留驱逐标记
     this.#evictedObjectIds.delete(obj.id);
 
@@ -837,13 +1184,14 @@ class BoardCore {
   }
 
   /**
-   * 是否全量驻留（无经卸载路径的合法缺失）
+   * 是否全量驻留（全部已知对象都在内存）
    * @description 内容校验和（对象数据口径）只在全量驻留端之间可比；
-   * 部分驻留端（chunkUnload 驱逐了对象实例）跳过内容比对，避免「误报 → 全量物化 → 卸载 → 再误报」循环。
+   * 部分驻留端（chunkUnload 驱逐了对象实例，或懒加载尚未载入对象）跳过内容比对。
    * @returns {boolean} 是否全量驻留
    */
   isFullResidency() {
-    return this.#evictedObjectIds.size === 0;
+    if (this.#evictedObjectIds.size > 0) return false;
+    return this.objectLoaded.size >= this.getKnownObjectIds().size;
   }
 
   /**
@@ -923,7 +1271,7 @@ class BoardCore {
       if (
         this.#chunkUnloadEnabled !== false &&
         entry.loadedCount <= 0 &&
-        !this.activeObjectManager?.isActive?.(objectId) &&
+        !this.activeObjectManager?.has?.(objectId) &&
         !this.activeObjectManager?.isRemoteActive?.(objectId)
       ) {
         this.objectLoaded.delete(objectId);
@@ -1240,7 +1588,7 @@ class BoardCore {
     if (
       this.#chunkUnloadEnabled !== false &&
       entry.loadedCount <= 0 &&
-      !this.activeObjectManager?.isActive?.(objectId) &&
+      !this.activeObjectManager?.has?.(objectId) &&
       !this.activeObjectManager?.isRemoteActive?.(objectId)
     ) {
       this.objectLoaded.delete(objectId);
