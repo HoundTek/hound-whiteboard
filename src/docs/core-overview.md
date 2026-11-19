@@ -85,7 +85,7 @@ Kernel 不依赖 DOM，也不依赖 Worker 宿主：
 6. `BoardApiRpc.createViewport(...)` 在 Worker 中创建 `ViewportCore`
 7. `Viewport.startWorkerSync()` 启动 `viewport-change` 与 `request-render-flush` 循环
 
-`createBoard` 携带有效 `rootPath` 时，Worker 侧装配 tauri driver 自行落盘，并经 Rust `start_owner_rpc` claim 板目录、开本地 owner RPC 端点；已有活 owner 时开板失败，不再探测/spawn daemon。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（demo/whiteboard.js）。
+`createBoard` 携带有效 `rootPath` 时，Worker 侧装配 tauri driver 自行落盘，并经 Rust `start_owner_rpc` claim 板目录、开本地 owner RPC 端点；已有活 owner 时开板失败，不再探测/spawn daemon。GUI 持久化开板按区块懒加载：只读元数据、日志、trash 与区块元数据，对象实例由视口与操作路由按需 FULL 加载。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（demo/whiteboard.js）。
 
 ### demo web 模式
 
@@ -168,7 +168,7 @@ sequenceDiagram
 - `hitTest`、`queryObjects`、`queryChunkObjects` 已接到 Worker 权威状态
 - `undo` / `redo` 已接通（含侧栏按钮与快捷键）
 - 持久化已接通：demo 以 `~/hound-whiteboard/demo-board` 为板目录运行，撤销历史穿越重开
-- CLI 前端已接通：写命令经当前 owner（daemon owner/proxy 或 GUI owner 的本地 RPC），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，无 GUI 时 daemon 是 owner，GUI 持盘时 daemon 是 proxy，GUI 退出释放 claim 后 proxy daemon 接管为 owner；daemon owner 按区块部分驻留（`--resident-chunks`，默认 32），对象实例由路由按需加载。CLI 请求携带自己的 source。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
+- CLI 前端已接通：写命令经当前 owner（daemon owner/proxy 或 GUI owner 的本地 RPC），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，无 GUI 时 daemon 是 owner，GUI 持盘时 daemon 是 proxy，GUI 退出释放 claim 后 proxy daemon 接管为 owner；GUI 与 daemon owner 都按区块部分驻留（daemon 的 `--resident-chunks` 默认 32），对象实例由视口与路由按需加载。CLI 请求携带自己的 source。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
 
 ## 术语定义
 

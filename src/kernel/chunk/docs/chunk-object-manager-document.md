@@ -75,12 +75,13 @@
 chunks/{chunkId}.json
 ```
 
-并恢复两部分内容：
+并恢复三部分内容：
 
 - `tierGraph`
 - `objectCoverIndex`
+- `objectTypes`（可选，旧板缺失时为空数组）
 
-解析 `tierGraph` 后调用 `syncCoverIndexFromGraph()`，把静态图节点归属并回 `BoardCore` 的覆盖索引；懒加载区块因此也能补齐。
+解析 `tierGraph` 后调用 `syncCoverIndexFromGraph()`，把静态图节点归属并回 `BoardCore` 的覆盖索引；懒加载区块因此也能补齐。`objectTypes` 经 `board.ingestObjectTypes()` 并入 BoardCore 类型索引，旧板缺失时由 `ensureObjectTypeIndex()` 回退扫描。
 
 ### `saveChunkMetadata()`
 
@@ -88,6 +89,7 @@ chunks/{chunkId}.json
 
 - `staticGraph.toArray()`
 - `serializeObjectCoverChunks()`
+- 由静态图节点与 `board.getObjectType()` 生成、按 id 排序的 `objectTypes`
 
 写回同一个 `chunks/{chunkId}.json`。
 

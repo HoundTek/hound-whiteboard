@@ -4,7 +4,7 @@
 
 > [!NOTE]
 >
-> **当前状态**：per-source 日志流存储（journaler 按 record.source 写 `hit/{source}/`，加载时多流归并重建 hit 树）、对象文件写权仲裁（远程活动对象跳过、部分驻留写端关闭缺失移除）、元数据分片与离线语义（`meta/{source}.json` 按写端分片、GUI 断线续编与单机降级开板、CLI 无 daemon 自治写）、会话恢复（树重放 + 层叠图回填 + id/时间续号）与跨会话撤销均已落地并固化为回归测试。daemon owner 已接入按区块懒加载（`loadAll({ includeObjects:false })` + 类型索引），GUI 打开仍全量恢复、按路由临时加载。chunks/ 经实测定夺**保留落盘**（万级对象：chunks/ 直读 409ms vs 回放派生 3625ms，详见文件结构文档的决策注记）。
+> **当前状态**：per-source 日志流存储（journaler 按 record.source 写 `hit/{source}/`，加载时多流归并重建 hit 树）、对象文件写权仲裁（远程活动对象跳过、部分驻留写端关闭缺失移除）、元数据分片与离线语义（`meta/{source}.json` 按写端分片、GUI 断线续编与单机降级开板、CLI 无 daemon 自治写）、会话恢复（树重放 + 层叠图回填 + id/时间续号）与跨会话撤销均已落地并固化为回归测试。GUI 与 daemon owner 都按区块懒加载（`loadAll({ includeObjects:false })` + 区块元数据 `objectTypes`；旧板回退扫描类型索引），对象实例由视口与路由按需 FullLoad。chunks/ 经实测定夺**保留落盘**（万级对象：chunks/ 直读 409ms vs 回放派生 3625ms，详见文件结构文档的决策注记）。
 
 ## 模块定位
 
@@ -41,9 +41,9 @@ CLI 在板目录另维护 `.cli-choices.json`（choice 驻留种子），不属�
 
 ## 打开既有板：全量或按需
 
-`sessionStore.loadAll()` 默认读取全部对象快照；`loadAll({ includeObjects: false })` 跳过 `readAllObjects()`，返回 `objects: []`。类型索引不在开板阶段构建：`readObjectTypeIndex()` 在首次 `queryObjectList` 需要类型时按批扫描 `objects/`，只保留 `{id, type}`。布局与 `formatVersion` 不变。
+`sessionStore.loadAll()` 默认读取全部对象快照；`loadAll({ includeObjects: false })` 跳过 `readAllObjects()`，返回 `objects: []`。区块元数据 `chunks/{chunkId}.json` 携带可选的 `objectTypes`（`Array<[objectId, type]>`），`restoreSession` 直接预填 BoardCore 的类型索引；因此新建板首次 `queryObjectList` 不再扫描 `objects/`。旧板缺失该字段时回退到 `readObjectTypeIndex()` 按批扫描一次（只保留 `{id, type}`）。布局与 `formatVersion` 不变。
 
-`openBoardSession(rootPath, { partialResidency: true })` 使用该模式：BoardCore 以 TEMP 状态恢复区块元数据，不注册对象实例；`queryObjectList` 首次调用经类型索引回答清单，查询/写/undo 路由再按区块 FullLoad。journaler 的 `knownObjects` 种子为空，首次加载某区块时可能把其中未变对象重写一次，之后按指纹跳过。
+GUI 与 daemon owner 都使用该模式：BoardCore 以 TEMP 状态恢复区块元数据，不注册对象实例；视口、hitTest、AOM 提交与查询/写/undo 路由再按区块 FullLoad。journaler 的 `knownObjects` 种子为空，但 BoardCore 记录对象从盘加载时的原始 JSON 指纹；首轮 flush 对未修改对象只补指纹、不重写，修改过的对象正常落盘。
 
 ## 落盘语义（日志跟随者）
 

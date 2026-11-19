@@ -32,7 +32,7 @@
 
 > [!NOTE]
 >
-> `.owner.json` 由 owner 维护，记录写权持有者与 transport（daemon 的 name/host/port，或 GUI 的 host/port/token），停止时清理；不属于 kernel store 布局本身。`.owner.lock` 是 claim/release 与 daemon 启动窗口的短时互斥锁，正常释放后不存在。GUI 开板时由 core-worker 经 Rust claim 板目录并开本地 owner RPC 端点；GUI 持盘时 daemon 只做 proxy，不写该文件；GUI 退出释放 claim 后 proxy daemon 接管，并把该文件改写为 daemon transport。daemon owner 的部分驻留不改变任何磁盘布局：对象文件仍全量在 `objects/`，类型索引只在内存中按需扫描。旧的 `.daemon.json` 不再读取，导出时会一并排除。
+> `.owner.json` 由 owner 维护，记录写权持有者与 transport（daemon 的 name/host/port，或 GUI 的 host/port/token），停止时清理；不属于 kernel store 布局本身。`.owner.lock` 是 claim/release 与 daemon 启动窗口的短时互斥锁，正常释放后不存在。GUI 开板时由 core-worker 经 Rust claim 板目录并开本地 owner RPC 端点；GUI 持盘时 daemon 只做 proxy，不写该文件；GUI 退出释放 claim 后 proxy daemon 接管，并把该文件改写为 daemon transport。daemon owner 的部分驻留不改变任何磁盘布局：对象文件仍全量在 `objects/`，类型索引随 `chunks/*.json` 的 `objectTypes` 落盘（旧板首次回退扫描）。旧的 `.daemon.json` 不再读取，导出时会一并排除。
 
 ## 各文件与目录说明
 
@@ -100,12 +100,14 @@ trash 条目文件，文件名编码规则与活动对象相同。内容为完�
 ```json
 {
   "tierGraph": [],
-  "objectCoverIndex": []
+  "objectCoverIndex": [],
+  "objectTypes": []
 }
 ```
 
 - `tierGraph`：区块静态层叠图的数组化结果（`DirectedGraph.toArray()`）
 - `objectCoverIndex`：对象覆盖区块索引，`Array<[objectId, number[]]>`（盘上恒为空——覆盖索引权威副本在 BoardCore，重开时由 tierGraph 节点集表达归属）
+- `objectTypes`：该区块静态图节点的类型索引，`Array<[objectId, typeName]>`，可选字段（旧板缺失）；开板时预填 BoardCore 类型索引，避免首次 `queryObjectList` 扫描 `objects/`，旧板回退扫描一次
 
 落盘由日志跟随者按状态调和（见『日志跟随者』）。
 

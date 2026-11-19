@@ -26,6 +26,7 @@ UI 侧的 `Viewport` 通过 `viewport-change` / `request-render-flush` 消息驱
 | `renderer`                   | 视口渲染器（ViewportRenderer），内部含静态缓存与输出 canvas |
 | `#frameDirty`                | 当前是否存在待回传给 UI 的新帧                              |
 | `#frameId`                   | 已输出帧序号                                                |
+| `#unsubscribeChunkLoad`      | 区块加载完成事件的退订函数，销毁时释放                      |
 
 ## Chunk Buffer
 
@@ -38,6 +39,8 @@ UI 侧的 `Viewport` 通过 `viewport-change` / `request-render-flush` 消息驱
 5. 对不在加载区中的已有区块发起卸载请求（`boardCore.isPersistent()` 为 false 时跳过卸载）
 
 返回当前视口可见区块列表。
+
+区块加载是异步的：`syncChunkBufferWithViewport()` 发起 FULL 请求时的失效早于数据到达。`ViewportCore` 构造时订阅 `boardCore.chunkLoadEventBus` 的 `LOAD_COMPLETE`，完成区块若仍在视口可见集合中，则调用 `renderer.invalidateChunks([chunk])` 并标记帧脏，保证懒加载/平移后新内容无需额外交互即可出现；`destroy()` 负责退订。
 
 ## 渲染管线
 
