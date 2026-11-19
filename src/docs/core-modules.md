@@ -143,7 +143,7 @@ flowchart BT
 
 ## `cli/`
 
-`cli/` 是命令行第二前端：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 RPC 执行——daemon owner 走 daemon WebSocket RPC，GUI owner 走本地 owner RPC（请求携带 CLI source）；读命令既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 owner 存活）。本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」。详见 [../cli/docs/cli-document.md](../cli/docs/cli-document.md)。
+`cli/` 是命令行第二前端：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 RPC 执行——daemon owner 直接落盘，GUI owner 走本地 owner RPC（请求携带 CLI source），GUI 持盘时的 daemon 是 proxy；读命令既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 owner 存活）。本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」。详见 [../cli/docs/cli-document.md](../cli/docs/cli-document.md)。
 
 ## `kernel/`
 

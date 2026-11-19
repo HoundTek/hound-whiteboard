@@ -114,7 +114,7 @@ async function runDaemonStart(flags) {
       t("err.boardNotFoundWithHint", { path: rootPath, boardDir: t("ph.boardDir") }),
     );
   }
-  // 板占用检查：同一板目录只能被一个活 owner 持有（同 name 同板已在上方分支处理）
+  // 板占用检查：活 daemon owner 拒绝；活 GUI owner 允许启动 proxy daemon
   const existingClaim = await readOwnerClaim(rootPath);
   if (existingClaim !== null && (await isOwnerClaimAlive(existingClaim))) {
     if (existingClaim.transport.kind === OWNER_TRANSPORT_KINDS.DAEMON) {
@@ -122,11 +122,9 @@ async function runDaemonStart(flags) {
         t("err.boardOccupied", { port: existingClaim.transport.port }),
       );
     }
-    throw new Error(
-      existingClaim.transport.kind === OWNER_TRANSPORT_KINDS.GUI
-        ? t("err.boardOwnedByGui")
-        : t("err.boardOwnedByOther"),
-    );
+    if (existingClaim.transport.kind !== OWNER_TRANSPORT_KINDS.GUI) {
+      throw new Error(t("err.boardOwnedByOther"));
+    }
   }
   const childArgs = [
     START_DAEMON_PATH,
@@ -186,6 +184,7 @@ async function runDaemonStatus(flags) {
           name: desc.name,
           status: alive ? t("out.statusAlive") : t("out.statusZombie"),
           refCount: desc.refCount ?? 1,
+          mode: desc.mode ?? "owner",
           path: desc.rootPath,
           port: desc.port,
           source: desc.source,
@@ -207,6 +206,7 @@ async function runDaemonStatus(flags) {
           name: desc.name,
           status: alive ? t("out.statusAlive") : t("out.statusZombie"),
           refCount: desc.refCount ?? 1,
+          mode: desc.mode ?? "owner",
           path: desc.rootPath,
           port: desc.port,
           source: desc.source,

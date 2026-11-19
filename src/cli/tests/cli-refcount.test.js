@@ -1,18 +1,10 @@
 /**
  * @file CLI daemon 引用计数端到端测试
- * @description 验证 start 幂等 +1、release 归零退出、stop 强制关闭、GUI 连接引用归属与单一持板约束。
+ * @description 验证 start 幂等 +1、release 归零退出、stop 强制关闭与单一持板约束。
  * @author Zhou Chenyu
  */
 
-import fs from "node:fs";
-import path from "node:path";
 import { jest } from "@jest/globals";
-import { createNetworkCoordinator } from "../../host/sync/network-coordinator.js";
-import { BoardCore } from "../../kernel/board/board-core.js";
-import { BoardApi } from "../../kernel/api/board-api.js";
-import { createDefaultAomRenderHooks } from "../../kernel/board/aom-render-hooks.js";
-import { createDefaultPersistenceAdapter } from "../../kernel/board/persistence-adapter.js";
-
 import {
   runCli,
   runCliJson,
@@ -37,24 +29,6 @@ describe("CLI daemon 引用计数", () => {
     return { dir, daemon, cleanup };
   }
 
-  /** 模拟 GUI 长连接（coordinator 直连 daemon 协作通道） */
-  function makeGui(port, boardId) {
-    const core = new BoardCore({
-      width: 800,
-      height: 600,
-      source: "gui-test",
-      aomRenderHooks: createDefaultAomRenderHooks(),
-      persistenceAdapter: createDefaultPersistenceAdapter(),
-    });
-    const api = new BoardApi(core);
-    const coord = createNetworkCoordinator({
-      boardCore: core,
-      boardApi: api,
-      url: `ws://127.0.0.1:${port}`,
-      boardId,
-    });
-    return { core, api, coord };
-  }
 
   test("start 幂等：同名同板重复 start 引用 +1，不报错", async () => {
     const { dir, daemon, cleanup } = await setup();
@@ -96,44 +70,6 @@ describe("CLI daemon 引用计数", () => {
     }
   });
 
-  test("GUI 连接引用：join +1、断开 -1、连着时 release 杀不掉、断开归零关闭", async () => {
-    const { dir, daemon, cleanup } = await setup();
-    try {
-      const info = await runCliJson(["daemon", "status", "--name", DAEMON]);
-      const gui = makeGui(info.port, dir);
-      await gui.coord.connect();
-      expect((await runCliJson(["daemon", "status", "--name", DAEMON])).refCount).toBe(2);
-
-      // GUI 连着时 release：释放创建者引用，daemon 仍活（GUI 引用还在）
-      await runCli(["daemon", "release", "--name", DAEMON]);
-      expect((await runCliJson(["daemon", "status", "--name", DAEMON])).alive).toBe(true);
-
-      // GUI 断开：创建者已 release 且无客户端 → 归零自动关闭
-      await gui.coord.close();
-      await expect(runCli(["daemon", "status", "--name", DAEMON])).rejects.toMatchObject({ code: 1 });
-    } finally {
-      await daemon.close();
-      cleanup();
-    }
-  });
-
-  test("GUI 断开不误杀：创建者引用保留时 daemon 常驻", async () => {
-    const { dir, daemon, cleanup } = await setup();
-    try {
-      const info = await runCliJson(["daemon", "status", "--name", DAEMON]);
-      const gui = makeGui(info.port, dir);
-      await gui.coord.connect();
-      await gui.coord.close();
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      // 创建者引用（1）保留：daemon 仍活且引用回 1
-      const status = await runCliJson(["daemon", "status", "--name", DAEMON]);
-      expect(status.alive).toBe(true);
-      expect(status.refCount).toBe(1);
-    } finally {
-      await daemon.close();
-      cleanup();
-    }
-  });
 
   test("stop 强制关闭：引用 >0 时也无条件关闭；重启后引用重置", async () => {
     const { dir, daemon, cleanup } = await setup();

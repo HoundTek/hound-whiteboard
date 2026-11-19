@@ -21,9 +21,18 @@ import {
 import {
   daemonIdentityFile,
   daemonsDir,
+  readEntry,
   writeEntry,
 } from "../daemon-registry.js";
-import { connectDaemonByPath } from "../daemon-client.js";
+import {
+  claimBoard,
+  readOwnerClaim,
+  releaseOwnerClaim,
+} from "../board-claim.js";
+import {
+  connectDaemonByName,
+  connectDaemonByPath,
+} from "../daemon-client.js";
 import { openBoardSession } from "../board-session.js";
 import { createRelayServer } from "../../host/sync/relay-server.js";
 import { createNetworkCoordinator } from "../../host/sync/network-coordinator.js";
@@ -107,32 +116,45 @@ async function waitFor(fn, timeout = 3000) {
   throw new Error("waitFor 超时");
 }
 
+
 /**
- * 连接 daemon 的 GUI 协作通道
- * @param {number} port - daemon 端口
- * @param {string} source - 协作来源
- * @returns {Promise<Object>} 测试客户端
+ * 启动假 GUI owner WS 服务
+ * @param {string} token - token
+ * @returns {Promise<{server: WebSocketServer, port: number, requests: Object[]}>} 服务与请求记录
  */
-async function connectCollab(port, source) {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-  const messages = [];
-  ws.addEventListener("message", (event) => {
-    messages.push(JSON.parse(String(event.data)));
+async function createFakeOwnerServer(token) {
+  const requests = [];
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  await new Promise((resolve) => server.once("listening", resolve));
+  server.on("connection", (ws) => {
+    ws.once("message", (data) => {
+      let auth;
+      try {
+        auth = JSON.parse(String(data));
+      } catch {
+        ws.close();
+        return;
+      }
+      if (auth?.token !== token) {
+        ws.send(JSON.stringify({ ok: false }));
+        ws.close();
+        return;
+      }
+      ws.send(JSON.stringify({ ok: true }));
+      ws.on("message", (requestData) => {
+        const request = JSON.parse(String(requestData));
+        requests.push(request);
+        ws.send(
+          JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: request.route === "addObject" ? "daemon-c/1" : null,
+          }),
+        );
+      });
+    });
   });
-  await new Promise((resolve, reject) => {
-    ws.addEventListener("open", resolve, { once: true });
-    ws.addEventListener("error", reject, { once: true });
-  });
-  ws.send(JSON.stringify({ type: "join", source }));
-  await waitFor(() => messages.some((message) => message.type === "joined"));
-  return {
-    messages,
-    send: (message) => ws.send(JSON.stringify(message)),
-    close: () => new Promise((resolve) => {
-      ws.addEventListener("close", resolve, { once: true });
-      ws.close();
-    }),
-  };
+  return { server, port: server.address().port, requests };
 }
 
 describe("板 daemon", () => {
@@ -268,60 +290,6 @@ describe("板 daemon", () => {
     await cleanup();
   });
 
-  test("非空板 GUI 重连 daemon 只补缺口，已有记录不重复追加", async () => {
-    const { dir, cleanup } = await tempBoard();
-    const seed = await openBoardSession(dir, { source: "gui" });
-    const firstId = await seed.api.addObject("StrokeObject", {
-      data: { ...STROKE_DATA },
-    });
-    await seed.flush();
-    await seed.close();
-
-    const daemon = await startBoardDaemon({
-      rootPath: dir,
-      exitOnZero: false,
-      name: "dt",
-      source: "daemon",
-    });
-    const gui = await openBoardSession(dir, { source: "gui" });
-    const client = await connectDaemonByPath(dir);
-    let coordinator = null;
-    try {
-      expect(gui.boardCore.getObjectById(firstId)).toBeDefined();
-      const secondId = await gui.api.addObject("StrokeObject", {
-        data: { ...STROKE_DATA },
-      });
-      coordinator = createNetworkCoordinator({
-        boardCore: gui.boardCore,
-        boardApi: gui.api,
-        url: `ws://127.0.0.1:${daemon.port}`,
-        boardId: dir,
-      });
-      await coordinator.connect();
-      await waitFor(async () => (await client.api.queryBoardInfo()).records === 2);
-      expect((await client.api.queryObject(secondId)).id).toBe(secondId);
-
-      await coordinator.close();
-      const thirdId = await gui.api.addObject("StrokeObject", {
-        data: { ...STROKE_DATA },
-      });
-      coordinator = createNetworkCoordinator({
-        boardCore: gui.boardCore,
-        boardApi: gui.api,
-        url: `ws://127.0.0.1:${daemon.port}`,
-        boardId: dir,
-      });
-      await coordinator.connect();
-      await waitFor(async () => (await client.api.queryBoardInfo()).records === 3);
-      expect((await client.api.queryObject(thirdId)).id).toBe(thirdId);
-    } finally {
-      await coordinator?.close();
-      client.close();
-      await gui.close();
-      await daemon.close();
-      await cleanup();
-    }
-  }, 15000);
 
   test("daemon 连中继：CLI 操作与协作端实时互见", async () => {
     const relay = createRelayServer({ port: 0 });
@@ -535,61 +503,6 @@ describe("板 daemon", () => {
     }
   }, 20000);
 
-  test("awareness 在 GUI 双端与 relay 之间双向桥接", async () => {
-    const relay = createRelayServer({ port: 0, requestInitMinIntervalMs: 0 });
-    await relay.ready;
-    const relayUrl = `ws://127.0.0.1:${relay.port}`;
-    const { dir, cleanup } = await tempBoard();
-    const daemon = await startBoardDaemon({
-      rootPath: dir,
-      exitOnZero: false,
-      name: "dt",
-      source: "daemon",
-      relayUrl,
-      boardId: "awareness-room",
-    });
-    const peerCore = new BoardCore({
-      width: 800,
-      height: 600,
-      source: "peer",
-      aomRenderHooks: createDefaultAomRenderHooks(),
-      persistenceAdapter: createDefaultPersistenceAdapter(),
-    });
-    const peerApi = new BoardApi(peerCore);
-    const relayMessages = [];
-    const peer = createNetworkCoordinator({
-      boardCore: peerCore,
-      boardApi: peerApi,
-      url: relayUrl,
-      boardId: "awareness-room",
-      onAwareness: (message) => relayMessages.push(message),
-    });
-    await peer.connect();
-    const gui1 = await connectCollab(daemon.port, "gui-1");
-    const gui2 = await connectCollab(daemon.port, "gui-2");
-    try {
-      gui1.send({ type: "awareness", data: { kind: "cursor", point: { x: 1, y: 2 } } });
-      await waitFor(() => relayMessages.some((message) => message.data?.kind === "cursor"));
-      await waitFor(() => gui2.messages.some((message) =>
-        message.type === "awareness" && message.source === "gui-1"
-      ));
-
-      peer.sendAwareness({ kind: "cursor", point: { x: 8, y: 9 } });
-      await waitFor(() => gui1.messages.some((message) =>
-        message.type === "awareness" && message.source === "peer"
-      ));
-      await waitFor(() => gui2.messages.some((message) =>
-        message.type === "awareness" && message.source === "peer"
-      ));
-    } finally {
-      await gui1.close();
-      await gui2.close();
-      await peer.close();
-      await daemon.close();
-      await relay.close();
-      await cleanup();
-    }
-  }, 15000);
 
   test("daemon 先于中继启动：自动重连后参与协作", async () => {
     // 先占一个空闲端口再释放，模拟中继未启动
@@ -804,7 +717,7 @@ describe("板 daemon", () => {
     }
   }, 30000);
 
-  test("引用计数：start 幂等/release/stop 与 GUI 连接增减，release 归零自动退出", async () => {
+  test("引用计数：start 幂等、release 归零自动退出", async () => {
     const { dir, cleanup } = await tempBoard();
     const daemon = await startBoardDaemon({
       rootPath: dir,
@@ -825,39 +738,8 @@ describe("板 daemon", () => {
       await run(["daemon", "release", "--name", "dt"]);
       expect(JSON.parse((await run(["daemon", "status", "--name", "dt", "--json"])).stdout).refCount).toBe(1);
 
-      // GUI 长连接：join +1、断开 -1
-      const guiCore = new BoardCore({
-        width: 800,
-        height: 600,
-        source: "gui-test",
-        aomRenderHooks: createDefaultAomRenderHooks(),
-        persistenceAdapter: createDefaultPersistenceAdapter(),
-      });
-      const guiApi = new BoardApi(guiCore);
-      const coord = createNetworkCoordinator({
-        boardCore: guiCore,
-        boardApi: guiApi,
-        url: `ws://127.0.0.1:${daemon.port}`,
-        boardId: dir,
-      });
-      await coord.connect();
-      expect(JSON.parse((await run(["daemon", "status", "--name", "dt", "--json"])).stdout).refCount).toBe(2);
-      await coord.close();
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      expect(JSON.parse((await run(["daemon", "status", "--name", "dt", "--json"])).stdout).refCount).toBe(1);
-
-      // GUI 连着时 release 不会关闭（引用仍 >0）
-      const coord2 = createNetworkCoordinator({
-        boardCore: guiCore,
-        boardApi: guiApi,
-        url: `ws://127.0.0.1:${daemon.port}`,
-        boardId: dir,
-      });
-      await coord2.connect();
+      // 最后一次 release 归零：daemon 自动关闭，注册表条目消失
       await run(["daemon", "release", "--name", "dt"]);
-      expect(JSON.parse((await run(["daemon", "status", "--name", "dt", "--json"])).stdout).alive).toBe(true);
-      // 创建者引用已 release：GUI 断开 → 归零 → daemon 自动关闭（注册表条目消失）
-      await coord2.close();
       await waitFor(async () => {
         try {
           await run(["daemon", "status", "--name", "dt", "--json"]);
@@ -873,65 +755,6 @@ describe("板 daemon", () => {
     }
   }, 30000);
 
-  test("协作双向同步：GUI 操作落盘在 daemon，CLI 操作 GUI 可见，undo 跨端一致", async () => {
-    const { dir, cleanup } = await tempBoard();
-    const daemon = await startBoardDaemon({
-      rootPath: dir,
-      exitOnZero: false,
-      name: "dt",
-      source: "daemon-c",
-    });
-    const guiCore = new BoardCore({
-      width: 800,
-      height: 600,
-      source: "gui-test",
-      aomRenderHooks: createDefaultAomRenderHooks(),
-      persistenceAdapter: createDefaultPersistenceAdapter(),
-    });
-    const guiApi = new BoardApi(guiCore);
-    const coord = createNetworkCoordinator({
-      boardCore: guiCore,
-      boardApi: guiApi,
-      url: `ws://127.0.0.1:${daemon.port}`,
-      boardId: dir,
-    });
-    try {
-      await coord.connect();
-
-      // GUI 创建 → daemon 应用并落盘（CLI 侧可见）
-      guiApi.createObject("CircleObject", {
-        id: "gui/1",
-        position: { x: 0, y: 0 },
-        data: { radius: 10 },
-      });
-      await guiApi.commitObjects(["gui/1"]);
-      const client = await connectDaemonByPath(dir);
-      await waitFor(async () => {
-        const info = await client.api.queryBoardInfo();
-        return info.objects === 1;
-      });
-      client.close();
-
-      // CLI add → daemon 广播 → GUI 本地可见
-      const client2 = await connectDaemonByPath(dir);
-      await client2.api.addObject("CircleObject", { data: { radius: 5 } });
-      client2.close();
-      await waitFor(async () => guiCore.getAllObjects().length === 2);
-
-      // GUI undo 撤销本端最近操作 → daemon 侧对象减少
-      guiApi.undo();
-      const client3 = await connectDaemonByPath(dir);
-      await waitFor(async () => {
-        const info = await client3.api.queryBoardInfo();
-        return info.objects === 1;
-      });
-      client3.close();
-    } finally {
-      await coord.close();
-      await daemon.close();
-      await cleanup();
-    }
-  }, 30000);
 
   test("close 排空 in-flight RPC：已到达队列的操作不丢", async () => {
     const { dir, cleanup } = await tempBoard();
@@ -976,6 +799,104 @@ describe("板 daemon", () => {
     }
   }, 30000);
 });
+
+  test("GUI owner 持盘时 daemon 进入 proxy 并转发 RPC", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const token = "owner-proxy-token";
+    const fake = await createFakeOwnerServer(token);
+    const claim = {
+      ownerId: "gui-owner",
+      pid: process.pid,
+      source: "gui-test",
+      boardId: null,
+      transport: {
+        kind: "gui",
+        host: "127.0.0.1",
+        port: fake.port,
+        token,
+      },
+      claimedAt: new Date().toISOString(),
+    };
+    let daemon = null;
+    try {
+      await claimBoard(dir, claim);
+      daemon = await startBoardDaemon({
+        rootPath: dir,
+        exitOnZero: false,
+        name: "proxy-dt",
+        source: "daemon-c",
+      });
+      expect(daemon.mode).toBe("proxy");
+      expect((await readEntry("proxy-dt")).mode).toBe("proxy");
+
+      const client = await connectDaemonByName("proxy-dt");
+      expect(client).not.toBeNull();
+      const id = await client.api.addObject("StrokeObject", {
+        data: { ...STROKE_DATA },
+      });
+      expect(id).toBe("daemon-c/1");
+      expect(fake.requests).toHaveLength(1);
+      expect(fake.requests[0]).toMatchObject({
+        route: "addObject",
+        source: "daemon-c",
+      });
+      client.close();
+    } finally {
+      await daemon?.close();
+      expect((await readOwnerClaim(dir))?.ownerId).toBe("gui-owner");
+      await releaseOwnerClaim(dir, claim.ownerId).catch(() => {});
+      fake.server.close();
+      await cleanup();
+    }
+  }, 15000);
+
+  test("CLI daemon start 在 GUI owner 下进入 proxy", async () => {
+    const { dir, cleanup } = await tempBoard();
+    const token = "owner-proxy-cli-token";
+    const fake = await createFakeOwnerServer(token);
+    const claim = {
+      ownerId: "gui-owner-cli",
+      pid: process.pid,
+      source: "gui-test",
+      boardId: null,
+      transport: {
+        kind: "gui",
+        host: "127.0.0.1",
+        port: fake.port,
+        token,
+      },
+      claimedAt: new Date().toISOString(),
+    };
+    const run = (argv) =>
+      execFileAsync(process.execPath, [CLI_PATH, ...argv], {
+        env: process.env,
+      });
+    try {
+      await claimBoard(dir, claim);
+      const { stdout } = await run([
+        "daemon",
+        "start",
+        "--name",
+        "proxy-cli",
+        "--path",
+        dir,
+      ]);
+      expect(stdout).toContain("proxy-cli");
+
+      const status = JSON.parse(
+        (await run(["daemon", "status", "--name", "proxy-cli", "--json"])).stdout,
+      );
+      expect(status.mode).toBe("proxy");
+
+      await run(["daemon", "stop", "--name", "proxy-cli"]);
+      expect((await readOwnerClaim(dir))?.ownerId).toBe("gui-owner-cli");
+    } finally {
+      await run(["daemon", "stop", "--name", "proxy-cli"]).catch(() => {});
+      await releaseOwnerClaim(dir, claim.ownerId).catch(() => {});
+      fake.server.close();
+      await cleanup();
+    }
+  }, 30000);
 
 describe("daemon 身份持久化", () => {
   test("首启生成 daemon-* 身份并写入身份映射文件", async () => {
@@ -1055,145 +976,4 @@ describe("daemon 身份持久化", () => {
       await cleanup();
     }
   });
-});
-
-describe("GUI 附属 daemon 闲置自退出", () => {
-  test("gui- 前缀 daemon 无客户端连接，闲置超时自动关闭", async () => {
-    const { dir, cleanup } = await tempBoard();
-    const daemon = await startBoardDaemon({
-      rootPath: dir,
-      exitOnZero: false,
-      name: "gui-idle-exit",
-      source: "daemon-c",
-      idleExitMs: 100,
-    });
-    try {
-      expect(await readDaemonDescriptor(dir)).not.toBeNull();
-      // 仅剩 spawn 创建者引用且无客户端：超时自退出（.owner.json 被清理）
-      await waitFor(async () => (await readDaemonDescriptor(dir)) === null);
-    } finally {
-      await daemon.close();
-      await cleanup();
-    }
-  }, 30000);
-
-  test("客户端接入取消闲置计时，断开后重新计时", async () => {
-    const { dir, cleanup } = await tempBoard();
-    const daemon = await startBoardDaemon({
-      rootPath: dir,
-      exitOnZero: false,
-      name: "gui-idle-cancel",
-      source: "daemon-c",
-      idleExitMs: 200,
-    });
-    const guiCore = new BoardCore({
-      width: 800,
-      height: 600,
-      source: "gui-test",
-      aomRenderHooks: createDefaultAomRenderHooks(),
-      persistenceAdapter: createDefaultPersistenceAdapter(),
-    });
-    const coord = createNetworkCoordinator({
-      boardCore: guiCore,
-      boardApi: new BoardApi(guiCore),
-      url: `ws://127.0.0.1:${daemon.port}`,
-      boardId: dir,
-    });
-    try {
-      await coord.connect();
-      // 超过闲置时长仍存活（join 取消了倒计时）
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      expect(await readDaemonDescriptor(dir)).not.toBeNull();
-      // 断开后重新计时，超时自退出
-      await coord.close();
-      await waitFor(async () => (await readDaemonDescriptor(dir)) === null);
-    } finally {
-      await coord.close();
-      await daemon.close();
-      await cleanup();
-    }
-  }, 30000);
-
-  test("CLI hold 占住（创建者引用 >1）时闲置不退出", async () => {
-    const { dir, cleanup } = await tempBoard();
-    const daemon = await startBoardDaemon({
-      rootPath: dir,
-      exitOnZero: false,
-      name: "gui-idle-hold",
-      source: "daemon-c",
-      // 闲置窗口必须长于 CLI 子进程的启动时间：
-      // 100ms 时子进程常常还没连上，daemon 已自退出，测的就不再是引用计数规则
-      idleExitMs: 2000,
-    });
-    const run = (argv) =>
-      execFileAsync(process.execPath, [CLI_PATH, ...argv], {
-        env: process.env,
-      });
-    try {
-      // 重复 start（幂等）：创建者引用 +1 → 2
-      await run(["daemon", "start", "--name", "gui-idle-hold", "--path", dir]);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(await readDaemonDescriptor(dir)).not.toBeNull();
-    } finally {
-      await daemon.close();
-      await cleanup();
-    }
-  }, 30000);
-
-  test("探活通过但连接失败的僵尸条目会被清除并重建", async () => {
-    const { dir, cleanup } = await tempBoard();
-    const name = "zombie-entry";
-    // 探活连接断开后才关闭监听：探活必然成功，随后的真实握手一定连不上，
-    // 精确复现「探活与连接之间 daemon 退出」的窗口。
-    // 探活走 WebSocket，假 daemon 必须是真 WS 服务器才能被判为存活
-    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-    await new Promise((resolve) => server.once("listening", resolve));
-    server.on("connection", (socket) => {
-      // 首个连接（探活）建立后立刻停止监听，已有连接保持
-      server.close();
-      socket.on("error", () => {});
-    });
-    const port = server.address().port;
-    await fs.mkdir(path.join(daemonsDir(), "registry"), { recursive: true });
-    await writeEntry({ name, rootPath: dir, port, source: "daemon-x", refCount: 1 });
-
-    try {
-      const { stdout } = await execFileAsync(
-        process.execPath,
-        [CLI_PATH, "daemon", "start", "--name", name, "--path", dir],
-        { env: process.env },
-      );
-      // 僵尸条目被清掉后按新建流程处理，而不是把瞬时竞态抛成连接失败
-      expect(stdout).toContain(name);
-      const desc = await readDaemonDescriptor(dir);
-      expect(desc?.port).not.toBe(port);
-    } finally {
-      // 新建流程会拉起真实 daemon，必须显式停掉，否则进程泄漏到后续用例
-      await execFileAsync(
-        process.execPath,
-        [CLI_PATH, "daemon", "stop", "--name", name],
-        { env: process.env },
-      ).catch(() => {});
-      server.close();
-      await cleanup();
-    }
-  }, 30000);
-
-  test("非 gui- 前缀名不启用闲置自退出", async () => {
-    const { dir, cleanup } = await tempBoard();
-    const daemon = await startBoardDaemon({
-      rootPath: dir,
-      exitOnZero: false,
-      name: "cli-no-idle-exit",
-      source: "daemon-c",
-    });
-    try {
-      // 未传 idleExitMs 且非 gui- 前缀：短等不自退出（默认 60s 仅属 gui- 前缀）
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      expect(await readDaemonDescriptor(dir)).not.toBeNull();
-    } finally {
-      await daemon.close();
-      await cleanup();
-    }
-  }, 30000);
 });

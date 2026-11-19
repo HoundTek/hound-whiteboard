@@ -36,7 +36,7 @@ flowchart LR
     GUI -->|"跨机时 syncUrl"| RS
 ```
 
-一块板目录只有一个 owner：GUI 作为 owner 时自己写盘并开本地 owner RPC 端点；CLI 启动的 daemon 作为 owner 时由 daemon 持板并提供 RPC。本机端不经过 relay；relay 只承载跨机协作。
+一块板目录只有一个 owner：GUI 作为 owner 时自己写盘并开本地 owner RPC 端点；GUI 持盘时 daemon 可作为 proxy 转发 CLI RPC；无 GUI 时 daemon 自己 claim 并持板。本机端不经过 relay；relay 只承载跨机协作。
 
 ### UI 线程层
 
@@ -168,7 +168,7 @@ sequenceDiagram
 - `hitTest`、`queryObjects`、`queryChunkObjects` 已接到 Worker 权威状态
 - `undo` / `redo` 已接通（含侧栏按钮与快捷键）
 - 持久化已接通：demo 以 `~/hound-whiteboard/demo-board` 为板目录运行，撤销历史穿越重开
-- CLI 前端已接通：写命令经当前 owner（daemon RPC 或 GUI owner 的本地 RPC），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，CLI 启动的 daemon 是另一种 owner；CLI 请求携带自己的 source。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
+- CLI 前端已接通：写命令经当前 owner（daemon owner/proxy 或 GUI owner 的本地 RPC），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，无 GUI 时 daemon 是 owner，GUI 持盘时 daemon 是 proxy；CLI 请求携带自己的 source。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
 
 ## 术语定义
 

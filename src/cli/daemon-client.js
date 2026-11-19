@@ -124,9 +124,10 @@ async function createRpcSession({ url, token, source, rootPath }) {
    * 发送一次 RPC 调用
    * @param {string} route - route 名
    * @param {Object} [params={}] - 参数
+   * @param {string} [sourceOverride] - 本次请求的 source（缺省用会话 source）
    * @returns {Promise<*>} 结果
    */
-  function invoke(route, params = {}) {
+  function invoke(route, params = {}, sourceOverride) {
     const id = nextId;
     nextId += 1;
     return new Promise((resolve, reject) => {
@@ -136,8 +137,9 @@ async function createRpcSession({ url, token, source, rootPath }) {
       }, INVOKE_TIMEOUT_MS);
       pending.set(id, { resolve, reject, timer });
       const request = { id, route, params };
-      if (typeof source === "string" && source !== "") {
-        request.source = source;
+      const requestSource = sourceOverride ?? source;
+      if (typeof requestSource === "string" && requestSource !== "") {
+        request.source = requestSource;
       }
       ws.send(JSON.stringify(request));
     });
@@ -146,6 +148,7 @@ async function createRpcSession({ url, token, source, rootPath }) {
   return {
     source,
     rootPath,
+    invoke,
     api: {
       addObject: (type, props) => invoke("addObject", { type, props }),
       deleteObjects: (ids) => invoke("deleteObjects", { objectIds: ids }),
