@@ -7,6 +7,7 @@
 
 import { CoreWorkerRuntime } from "../core-worker.js";
 import { createMemoryDriver } from "../../io/driver/memory.js";
+import { installNoopOffscreenCanvas } from "../../test-support/noop-canvas.js";
 
 /**
  * 测试用假 Worker 宿主（io-invoke 由内存驱动模拟的"Rust 侧"应答）
@@ -80,11 +81,12 @@ class FakeWorkerHost {
 /**
  * 创建内存文件系统模拟的 Rust command 处理器
  * @param {{ failStartOwnerRpc?: boolean }} [options={}] - 选项
- * @returns {{ handler: (command: string, args: Object) => Promise<*>, driver: Object, calls: string[] }} 处理器、驱动与调用记录
+ * @returns {{ handler: (command: string, args: Object) => Promise<*>, driver: Object, calls: string[], reads: string[] }} 处理器、驱动、调用记录与读取路径记录
  */
 function createMemoryCommandHandler({ failStartOwnerRpc = false } = {}) {
   const driver = createMemoryDriver({ rootId: "mem" });
   const calls = [];
+  const reads = [];
   const handler = async (command, args) => {
     calls.push(command);
     switch (command) {
@@ -94,6 +96,7 @@ function createMemoryCommandHandler({ failStartOwnerRpc = false } = {}) {
       case "safe_io_unregister_root":
         return true;
       case "safe_io_fs_read":
+        reads.push(args.relPath);
         return driver.read(args.rootId, args.relPath);
       case "safe_io_fs_write":
         return driver.write(args.rootId, args.relPath, args.content);
@@ -125,7 +128,7 @@ function createMemoryCommandHandler({ failStartOwnerRpc = false } = {}) {
         throw new Error(`unknown command ${command}`);
     }
   };
-  return { handler, driver, calls };
+  return { handler, driver, calls, reads };
 }
 
 /** RPC 消息序号 */
@@ -287,14 +290,14 @@ async function setup(options = {}) {
   const host = new FakeWorkerHost();
   const runtime = new CoreWorkerRuntime(host);
   runtime.start();
-  const { handler, driver, calls } = createMemoryCommandHandler(options);
+  const { handler, driver, calls, reads } = createMemoryCommandHandler(options);
   await rpcCall(host, handler, "createBoard", {
     width: 800,
     height: 600,
     rootPath: "/boards/demo",
     source: "demo",
   });
-  return { host, runtime, handler, driver, calls };
+  return { host, runtime, handler, driver, calls, reads };
 }
 
 describe("CoreWorker 持久化接线", () => {
@@ -348,6 +351,93 @@ describe("CoreWorker 持久化接线", () => {
       expect(list.objects.map((obj) => obj.id)).toContain("demo/1");
     } finally {
       await destroyRuntime(runtime, host, first.handler);
+    }
+  });
+
+  test("懒加载开板不读对象文件，首次清单与类型查询走区块元数据", async () => {
+    const first = await setup();
+    await createStroke(first.host, first.handler, "demo/1");
+    await pumpIo(first.host, first.handler);
+    await destroyRuntime(first.runtime, first.host, first.handler);
+
+    const host = new FakeWorkerHost();
+    const runtime = new CoreWorkerRuntime(host);
+    runtime.start();
+    try {
+      first.reads.length = 0;
+      await rpcCall(host, first.handler, "createBoard", {
+        width: 800,
+        height: 600,
+        rootPath: "/boards/demo",
+        source: "demo",
+      });
+      expect(
+        first.reads.filter((relPath) => relPath.startsWith("objects/")),
+      ).toEqual([]);
+
+      const list = await rpcCall(host, first.handler, "queryObjectList");
+      expect(list.objects).toEqual([
+        { id: "demo/1", type: "StrokeObject" },
+      ]);
+      expect(
+        first.reads.filter((relPath) => relPath.startsWith("objects/")),
+      ).toEqual([]);
+
+      const info = await rpcCall(host, first.handler, "queryBoardInfo");
+      expect(info.objects).toBe(1);
+
+      const data = await rpcCall(host, first.handler, "queryObject", {
+        objectId: "demo/1",
+      });
+      expect(data.data.points).toHaveLength(2);
+      expect(
+        first.reads.some((relPath) => relPath.startsWith("objects/")),
+      ).toBe(true);
+    } finally {
+      await destroyRuntime(runtime, host, first.handler);
+    }
+  });
+
+  test("创建视口后按可视区块加载对象文件", async () => {
+    const first = await setup();
+    await createStroke(first.host, first.handler, "demo/1");
+    await pumpIo(first.host, first.handler);
+    await destroyRuntime(first.runtime, first.host, first.handler);
+
+    const host = new FakeWorkerHost();
+    const runtime = new CoreWorkerRuntime(host);
+    runtime.start();
+    const restoreOffscreenCanvas = installNoopOffscreenCanvas();
+    try {
+      await rpcCall(host, first.handler, "createBoard", {
+        width: 800,
+        height: 600,
+        rootPath: "/boards/demo",
+        source: "demo",
+      });
+      first.reads.length = 0;
+
+      await rpcCall(host, first.handler, "createViewport", {
+        options: { viewportId: "main", width: 400, height: 300 },
+      });
+      host.emit({
+        type: "viewport-change",
+        viewportId: "main",
+        origin: { x: 0, y: 0 },
+        zoom: 1,
+        viewportSize: { width: 400, height: 300 },
+      });
+
+      const loaded = await waitFor(async () => {
+        await pumpIoOnce(host, first.handler);
+        return first.reads.some((relPath) =>
+          relPath.startsWith("objects/"),
+        );
+      });
+      expect(loaded).toBe(true);
+    } finally {
+      await destroyRuntime(runtime, host, first.handler);
+      restoreOffscreenCanvas();
     }
   });
 

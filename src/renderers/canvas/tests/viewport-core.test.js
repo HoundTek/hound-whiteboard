@@ -5,6 +5,7 @@
 import { jest } from "@jest/globals";
 
 import { BoardCore } from "../../../kernel/board/board-core.js";
+import { CHUNK_LOAD_EVENTS } from "../../../kernel/chunk/chunk-loader.js";
 import { ViewportCore } from "../viewport-core.js";
 import { RectangleRange } from "../../../kernel/range/index.js";
 import { Vector } from "../../../kernel/utils/math.js";
@@ -84,6 +85,58 @@ describe("ViewportCore", () => {
     expect(viewportCore.getViewportScreenRect()).toEqual(
       new RectangleRange(0, 0, 800, 600),
     );
+  });
+
+  test("可见区块加载完成后应失效并请求新帧", () => {
+    const { boardCore, viewportCore } = createViewportCoreContext();
+    const invalidateSpy = jest.spyOn(
+      viewportCore.renderer,
+      "invalidateChunks",
+    );
+    const markDirtySpy = jest.spyOn(viewportCore, "markFrameDirty");
+
+    const visibleChunk = boardCore.getChunkById(1);
+    visibleChunk.isLoad = true;
+    visibleChunk.isTempLoad = false;
+    boardCore.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, {
+      chunkId: 1,
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith([visibleChunk]);
+    expect(markDirtySpy).toHaveBeenCalled();
+
+    invalidateSpy.mockClear();
+    markDirtySpy.mockClear();
+
+    const invisibleChunk = boardCore.getChunkById(1000);
+    invisibleChunk.isLoad = true;
+    invisibleChunk.isTempLoad = false;
+    boardCore.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, {
+      chunkId: 1000,
+    });
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
+    expect(markDirtySpy).not.toHaveBeenCalled();
+  });
+
+  test("销毁后不再响应区块加载完成事件", () => {
+    const { boardCore, viewportCore } = createViewportCoreContext();
+    const invalidateSpy = jest.spyOn(
+      viewportCore.renderer,
+      "invalidateChunks",
+    );
+
+    viewportCore.destroy();
+    createdViewports.pop();
+
+    const chunk = boardCore.getChunkById(1);
+    chunk.isLoad = true;
+    chunk.isTempLoad = false;
+    boardCore.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, {
+      chunkId: 1,
+    });
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   test("onViewportChange 应触发缓存 / 输出刷新请求", () => {

@@ -612,7 +612,7 @@ class CoreWorkerRuntime {
    *
    * @description
    * rootPath 有效时进入持久化 owner 模式：可写挂载板目录，GUI 自己落盘并启动 owner RPC 端点；
-   * 既有板从会话存储恢复（树、对象、trash、层叠图、计数器）。
+   * 既有板从会话存储恢复（树、trash、层叠图、计数器与对象元数据），对象实例随区块按需加载。
    */
   async createBoard(options = {}) {
     if (this.#boardCore) {
@@ -683,7 +683,7 @@ class CoreWorkerRuntime {
     });
 
     if (persistence) {
-      this.#boardCore.restoreSession(persistence.session);
+      this.#boardCore.restoreSession(persistence.session, { chunksTemp: true });
       // GUI 作为 owner 写全部来源流：本端与 relay 远端记录都由本端落盘；
       // 对象文件按 AOM 活动性仲裁（journaler 内跳过远程活动对象）；
       // chunkUnload 部分驻留下不移除缺失对象文件（显式删除仍生效）
@@ -1082,7 +1082,7 @@ class CoreWorkerRuntime {
           : {},
       );
     }
-    const session = await store.loadAll();
+    const session = await store.loadAll({ includeObjects: false });
     return {
       adapter: createPersistenceAdapter({ driver, rootId }),
       store,

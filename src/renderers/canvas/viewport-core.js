@@ -11,6 +11,7 @@ import { RectangleRange } from "../../kernel/range/index.js";
 import { Vector } from "../../kernel/utils/math.js";
 import { Chunk } from "../../kernel/chunk/chunk.js";
 import {
+  CHUNK_LOAD_EVENTS,
   CHUNK_LOAD_STRATEGIES,
   ChunkLoader,
 } from "../../kernel/chunk/chunk-loader.js";
@@ -122,6 +123,13 @@ class ViewportCore {
   #onFrameDirty;
 
   /**
+   * 区块加载完成事件的退订函数
+   * @type {(() => void) | null}
+   * @private
+   */
+  #unsubscribeChunkLoad = null;
+
+  /**
    * @param {{
    *   boardCore: BoardCore,
    *   viewportId: string | number,
@@ -150,6 +158,18 @@ class ViewportCore {
     this.#onFrameDirty = options.onFrameDirty ?? (() => {});
     this.#chunkLoader = this.#boardCore.createChunkLoader(
       `viewport-${String(this.#viewportId)}`,
+    );
+    // 区块异步加载完成晚于发起加载时的失效：完成时若仍在视口内，补一次静态失效与出帧
+    this.#unsubscribeChunkLoad = this.#boardCore.chunkLoadEventBus.on(
+      CHUNK_LOAD_EVENTS.LOAD_COMPLETE,
+      ({ chunkId }) => {
+        const chunk = this.getVisibleChunksForViewport().find(
+          (candidate) => candidate.id === chunkId,
+        );
+        if (!chunk || !chunk.isLoad || chunk.isTempLoad) return;
+        this.#renderer?.invalidateChunks?.([chunk]);
+        this.markFrameDirty();
+      },
     );
 
     // tile 开关只在此处归一化一次。
@@ -662,6 +682,8 @@ class ViewportCore {
    * 销毁当前 ViewportCore
    */
   destroy() {
+    this.#unsubscribeChunkLoad?.();
+    this.#unsubscribeChunkLoad = null;
     this.#chunkLoader.destroy();
     // 渲染器持调度器与预览定时器，不停会在销毁后继续排帧
     this.#renderer?.destroy?.();
