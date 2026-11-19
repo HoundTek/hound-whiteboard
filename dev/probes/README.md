@@ -42,7 +42,8 @@
 | `tile-zoom-pan.mjs` | 任意缩放档位下的平移成本与覆盖率 | `node dev/probes/tile-zoom-pan.mjs` | 各缩放档位的帧耗时、覆盖率、接缝像素数 |
 | `zoom-cost.mjs` | 缩放档位对单帧耗时的影响 | `node dev/probes/zoom-cost.mjs` | 各档位耗时 |
 | `zoom-preview.mjs` | 缩放预览帧的成本 | `node dev/probes/zoom-preview.mjs` | 预览帧与整帧重建的耗时对比 |
-| `zoom-change-cost.mjs` | 改变缩放档位这一动作本身的成本 | `node dev/probes/zoom-change-cost.mjs` | 各档位的换档耗时 |
+| `zoom-out-chain.mjs` | 连续缩小时的粗层预建、重建块数与覆盖率 | `node dev/probes/zoom-out-chain.mjs` | 各步缩放、层倍率、预建块数、重建增量、覆盖率 |
+| `zoom-change-cost.mjs` | 改变缩放档位这一动作本身的成本 | `node dev/probes/zoom-change-cost.mjs` | 各档位换档耗时与重建块数（含阈值预建） |
 | `render-frame-probe.js` | 运行期抓取单帧渲染状态（被 UI 调试面引用） | 由 `render-frame-probe.test.js` 覆盖 | 帧内的绘制顺序、活动对象、脏区与 tile 状态 |
 
 截图类探针从命令行接收三张图片：
@@ -103,6 +104,7 @@ probe.sampleFrame({
 | 笔画一段粗一段细 | `tile-diff.mjs` | 存在非零差异且落在 tile 边界附近 |
 | 平移时画面发虚 | `tile-pan-phase.mjs` | 亚像素平移出现非零差异 |
 | 提交卡顿 | `tile-commit-cost.mjs` | 倍率 ≤ 1.1 正常；> 1.5 判为卡顿；其间结合 p95 耗时判断 |
+| 连续缩小掉帧或留白 | `zoom-out-chain.mjs` | 覆盖率低于 100%，或预建后重建增量仍接近整片块数 |
 
 ## 两个教训
 

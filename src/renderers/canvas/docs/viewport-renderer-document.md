@@ -202,6 +202,18 @@ tile 的世界边长由层级决定，位图边长 = 世界边长 × 倍率。�
 
 - `getStaticCache()`：返回内部的静态缓存 `OffscreenCanvas`，供调试面板读取
 - `renderStaticCacheToCanvas(targetCanvas, dirtyRects?)`：把缓存内容渲染到外部 canvas，传入 dirtyRects 则先确保缓存最新
+- `getTileDebugInfo()`：返回 tile 缓存与换档复用的调试快照
+  - `enabled`：是否启用 tile 路径
+  - `tileSize`：tile 基准边长
+  - `tileCount` / `dirtyCount` / `bytes`：所有层的 tile 总数、脏块数与字节占用
+  - `rebuildCount`：跨层累计重建块数，层被逐出也不会回退
+  - `level` / `zoom`：当前精确层的层级与缩放
+  - `layers` / `layerZooms`：保留的层数与各层缩放
+  - `layerStates`：每层 `{ zoom, tiles, dirty }` 明细
+  - `prefetchCount`：累计预建 tile 数
+- `getTileBitmapSize()`：当前精确层单块位图边长（设备像素）
+
+这些字段主要供 `dev/probes/zoom-out-chain.mjs`、`dev/probes/zoom-change-cost.mjs` 与调试面板使用，不参与生产逻辑。
 
 ## 构造参数
 
