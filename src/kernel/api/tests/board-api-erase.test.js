@@ -37,6 +37,27 @@ function createStaticStroke(api, id, points = horizontalPoints(), property = {})
 }
 
 describe("BoardApi.eraseData", () => {
+  test("擦除前按候选对象准备覆盖区块驻留并在结束后释放", async () => {
+    const boardCore = createBoardCore();
+    const api = new BoardApi(boardCore);
+    createStaticStroke(api, "s1");
+
+    const release = jest.fn();
+    const ensureSpy = jest
+      .spyOn(boardCore, "ensureObjectsResident")
+      .mockResolvedValue(release);
+
+    await api.eraseData({
+      points: [new Vector(5, 95), new Vector(5, 105)],
+      radius: 1,
+      source: "test",
+    });
+
+    expect(ensureSpy).toHaveBeenCalledWith(["s1"], "route:eraseData");
+    expect(release).toHaveBeenCalledTimes(1);
+    ensureSpy.mockRestore();
+  });
+
   test("擦短一笔时回写剩余点段且对象 id 不变", async () => {
     const boardCore = createBoardCore();
     const api = new BoardApi(boardCore);

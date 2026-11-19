@@ -42,8 +42,15 @@ function createFakeCore() {
     height: 100,
     memoryMode: () => false,
     undoTree: tree,
-    operationLog: { get: (id) => (id === record.id ? record : null) },
-    hitCommitter: { source: "a" },
+    operationLog: {
+      get: (id) => (id === record.id ? record : null),
+      getSupraIdMembers: (supraId) =>
+        supraId === "a/supra-1" ? [record] : [],
+    },
+    hitCommitter: {
+      source: "a",
+      getSupraId: (key) => (key === "gesture" ? "a/supra-1" : null),
+    },
     getObjectCoverChunks: () => new Set([1]),
     ensureObjectTypeIndex: jest.fn(async () => {}),
     ensureChunkMetadata: jest.fn(async () => {}),
@@ -101,6 +108,24 @@ describe("prepareRouteResidency", () => {
       "route-transition",
     );
     expect(release).toBe("release-chunks");
+  });
+
+  test("abortSupra 按超分子成员记录准备区块驻留", async () => {
+    const core = createFakeCore();
+    const release = await prepareRouteResidency(core, "abortSupra", {
+      key: "gesture",
+    });
+    expect(core.ensureChunksResident).toHaveBeenCalledWith(
+      [1],
+      "route-transition",
+    );
+    expect(release).toBe("release-chunks");
+
+    core.ensureChunksResident.mockClear();
+    expect(
+      await prepareRouteResidency(core, "abortSupra", { key: "missing" }),
+    ).toBeNull();
+    expect(core.ensureChunksResident).not.toHaveBeenCalled();
   });
 
   test("内存模式与无准备 route 直接返回 null", async () => {

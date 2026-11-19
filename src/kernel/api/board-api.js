@@ -964,134 +964,142 @@ class BoardApi {
 
     const candidateIds = await this.#collectHitObjects(boardCore, queryRange);
 
-    const modifiedStaticObjects = [];
-    const previousWorldRects = new Map();
-    const splitRebuilds = [];
-    const modifiedInfos = [];
-    for (const objectId of candidateIds) {
-      const obj = boardCore.getObjectById(objectId);
-      if (!obj) continue;
-      if (typeof obj.isErasable !== "function" || !obj.isErasable()) continue;
-      if (typeof obj.eraseData !== "function") continue;
-      // 已被选中的对象（本地或远程活动对象）不能被擦除
-      if (
-        boardCore.activeObjectManager.isActive(objectId) ||
-        boardCore.activeObjectManager.isRemoteActive(objectId)
-      ) {
-        continue;
-      }
-
-      const runs = obj.eraseData(points, radius);
-      if (runs == null) continue;
-
-      if (runs.length === 0) {
-        result.deleted.push(objectId);
-        continue;
-      }
-
-      const zSnapshot = this.#captureZRelations(objectId);
-
-      // 切割前快照旧世界范围：输出层按脏区增量更新，
-      // 被擦区域与回缩残端的旧像素要靠旧范围失效才能清理
-      const previousWorldRect = getObjectWorldRect(obj);
-      if (previousWorldRect) {
-        previousWorldRects.set(objectId, previousWorldRect);
-      }
-
-      const beforeErase = obj.serialize();
-      // 内核复合操作通道：擦除回写是切割效果的原子表达，非用户更改，不经活动对象准入
-      this.#applyObjectPatch(obj, { data: { points: runs[0] } });
-      // 记录延迟到层位边重建完毕后统一物化：modify 携带前后层位边，分裂段 add 携带重建后的实际边
-      modifiedInfos.push({ objectId, beforeErase, zSnapshot });
-      result.modified.push(objectId);
-      modifiedStaticObjects.push(obj);
-
-      if (runs.length > 1) {
-        const serialized = obj.serialize();
-        const splitIds = [];
-        for (let i = 1; i < runs.length; i++) {
-          const newObjectId = boardCore.allocateObjectId(source);
-          this.createObject(serialized.type, {
-            id: newObjectId,
-            position: serialized.position,
-            transform: serialized.transform,
-            property: serialized.property,
-            data: { ...serialized.data, points: runs[i] },
-          });
-          splitIds.push(newObjectId);
-          result.created.push(newObjectId);
+    const release = await boardCore.ensureObjectsResident(
+      candidateIds,
+      "route:eraseData",
+    );
+    try {
+      const modifiedStaticObjects = [];
+      const previousWorldRects = new Map();
+      const splitRebuilds = [];
+      const modifiedInfos = [];
+      for (const objectId of candidateIds) {
+        const obj = boardCore.getObjectById(objectId);
+        if (!obj) continue;
+        if (typeof obj.isErasable !== "function" || !obj.isErasable()) continue;
+        if (typeof obj.eraseData !== "function") continue;
+        // 已被选中的对象（本地或远程活动对象）不能被擦除
+        if (
+          boardCore.activeObjectManager.isActive(objectId) ||
+          boardCore.activeObjectManager.isRemoteActive(objectId)
+        ) {
+          continue;
         }
-        splitRebuilds.push({ originId: objectId, splitIds, zSnapshot });
-      } else {
-        splitRebuilds.push({ originId: objectId, splitIds: [], zSnapshot });
+
+        const runs = obj.eraseData(points, radius);
+        if (runs == null) continue;
+
+        if (runs.length === 0) {
+          result.deleted.push(objectId);
+          continue;
+        }
+
+        const zSnapshot = this.#captureZRelations(objectId);
+
+        // 切割前快照旧世界范围：输出层按脏区增量更新，
+        // 被擦区域与回缩残端的旧像素要靠旧范围失效才能清理
+        const previousWorldRect = getObjectWorldRect(obj);
+        if (previousWorldRect) {
+          previousWorldRects.set(objectId, previousWorldRect);
+        }
+
+        const beforeErase = obj.serialize();
+        // 内核复合操作通道：擦除回写是切割效果的原子表达，非用户更改，不经活动对象准入
+        this.#applyObjectPatch(obj, { data: { points: runs[0] } });
+        // 记录延迟到层位边重建完毕后统一物化：modify 携带前后层位边，分裂段 add 携带重建后的实际边
+        modifiedInfos.push({ objectId, beforeErase, zSnapshot });
+        result.modified.push(objectId);
+        modifiedStaticObjects.push(obj);
+
+        if (runs.length > 1) {
+          const serialized = obj.serialize();
+          const splitIds = [];
+          for (let i = 1; i < runs.length; i++) {
+            const newObjectId = boardCore.allocateObjectId(source);
+            this.createObject(serialized.type, {
+              id: newObjectId,
+              position: serialized.position,
+              transform: serialized.transform,
+              property: serialized.property,
+              data: { ...serialized.data, points: runs[i] },
+            });
+            splitIds.push(newObjectId);
+            result.created.push(newObjectId);
+          }
+          splitRebuilds.push({ originId: objectId, splitIds, zSnapshot });
+        } else {
+          splitRebuilds.push({ originId: objectId, splitIds: [], zSnapshot });
+        }
       }
-    }
 
-    if (result.deleted.length > 0) {
-      this.deleteObjects(result.deleted, { supraKey });
-    }
-    if (result.created.length > 0) {
-      // 分裂段直接提交静态图（不经 commitObjects）：层位边待分裂重建后才确定，
-      // 记录统一在重建后物化，携带重建后的实际边
-      const splitObjects = result.created
-        .map((id) => boardCore.getObjectById(id))
-        .filter(Boolean);
-      await boardCore.activeObjectManager.apply(new Set(splitObjects));
-    }
-
-    const correctedChunks = new Set();
-    for (const { originId, splitIds, zSnapshot } of splitRebuilds) {
-      for (const chunk of this.#rebuildZRelationsAfterSplit(originId, splitIds, zSnapshot)) {
-        correctedChunks.add(chunk);
+      if (result.deleted.length > 0) {
+        this.deleteObjects(result.deleted, { supraKey });
       }
-    }
+      if (result.created.length > 0) {
+        // 分裂段直接提交静态图（不经 commitObjects）：层位边待分裂重建后才确定，
+        // 记录统一在重建后物化，携带重建后的实际边
+        const splitObjects = result.created
+          .map((id) => boardCore.getObjectById(id))
+          .filter(Boolean);
+        await boardCore.activeObjectManager.apply(new Set(splitObjects));
+      }
 
-    // 层位边重建完毕，统一物化记录：擦除回写（modify，携带前后层位边）+
-    // 分裂段（add，携带提交后的实际层位边），重放/远端凭记录边精确应用
-    const committer = boardCore.hitCommitter;
-    for (const { objectId, beforeErase, zSnapshot } of modifiedInfos) {
-      const obj = boardCore.getObjectById(objectId);
-      if (!obj) continue;
-      committer.commitModify({
-        chunkId: this.#resolveObjectChunkId(objectId),
-        objectId,
-        properties: ["data"],
-        before: beforeErase,
-        after: obj.serialize(),
-        chunks: {
-          before: zSnapshot.chunks.map((entry) => ({
-            chunkId: String(entry.chunk.id),
-            below: [...entry.in],
-            above: [...entry.out],
-          })),
-          after: this.#captureLayerEdges(objectId),
-        },
-        supraKey,
-      });
-    }
-    for (const splitId of result.created) {
-      const obj = boardCore.getObjectById(splitId);
-      if (!obj) continue;
-      committer.commitAdd({
-        chunkId: this.#resolveObjectChunkId(splitId),
-        objectId: splitId,
-        data: obj.serialize(),
-        chunks: this.#captureLayerEdges(splitId),
-        supraKey,
-      });
-    }
+      const correctedChunks = new Set();
+      for (const { originId, splitIds, zSnapshot } of splitRebuilds) {
+        for (const chunk of this.#rebuildZRelationsAfterSplit(originId, splitIds, zSnapshot)) {
+          correctedChunks.add(chunk);
+        }
+      }
 
-    if (correctedChunks.size > 0) {
-      boardCore.aomRenderHooks.requestStaticRender([...correctedChunks]);
-    }
-    if (modifiedStaticObjects.length > 0) {
-      boardCore.aomRenderHooks.requestStaticRenderForObjects(
-        modifiedStaticObjects,
-        [],
-        previousWorldRects,
-      );
-    }
+      // 层位边重建完毕，统一物化记录：擦除回写（modify，携带前后层位边）+
+      // 分裂段（add，携带提交后的实际层位边），重放/远端凭记录边精确应用
+      const committer = boardCore.hitCommitter;
+      for (const { objectId, beforeErase, zSnapshot } of modifiedInfos) {
+        const obj = boardCore.getObjectById(objectId);
+        if (!obj) continue;
+        committer.commitModify({
+          chunkId: this.#resolveObjectChunkId(objectId),
+          objectId,
+          properties: ["data"],
+          before: beforeErase,
+          after: obj.serialize(),
+          chunks: {
+            before: zSnapshot.chunks.map((entry) => ({
+              chunkId: String(entry.chunk.id),
+              below: [...entry.in],
+              above: [...entry.out],
+            })),
+            after: this.#captureLayerEdges(objectId),
+          },
+          supraKey,
+        });
+      }
+      for (const splitId of result.created) {
+        const obj = boardCore.getObjectById(splitId);
+        if (!obj) continue;
+        committer.commitAdd({
+          chunkId: this.#resolveObjectChunkId(splitId),
+          objectId: splitId,
+          data: obj.serialize(),
+          chunks: this.#captureLayerEdges(splitId),
+          supraKey,
+        });
+      }
 
+      if (correctedChunks.size > 0) {
+        boardCore.aomRenderHooks.requestStaticRender([...correctedChunks]);
+      }
+      if (modifiedStaticObjects.length > 0) {
+        boardCore.aomRenderHooks.requestStaticRenderForObjects(
+          modifiedStaticObjects,
+          [],
+          previousWorldRects,
+        );
+      }
+
+    } finally {
+      release?.();
+    }
     return result;
   }
 

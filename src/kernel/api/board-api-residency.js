@@ -80,6 +80,15 @@ async function prepareRouteResidency(boardCore, route, params = {}) {
       collectRedoTransitionRecords(boardCore),
     );
   }
+  if (route === "abortSupra") {
+    // 超分子成员可能已随视口卸载离开内存；中止会逐个逆放成员记录，先按记录点名区块准备驻留
+    const supraId = boardCore.hitCommitter?.getSupraId?.(params.key);
+    if (!supraId) return null;
+    return ensureTransitionResident(
+      boardCore,
+      boardCore.operationLog?.getSupraIdMembers?.(supraId) ?? [],
+    );
+  }
   if (route === "repairChainFromLog") {
     // 重建后的链可能包含旧链之外的记录；修复是低频路径，直接按全量日志准备区块
     return ensureTransitionResident(
