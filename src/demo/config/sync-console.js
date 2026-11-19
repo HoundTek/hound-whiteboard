@@ -14,6 +14,8 @@ const RELAY_KEY = "hwb-relay";
 const SOURCE_KEY = "hwb-source";
 /** 板目录覆盖存储键 */
 const BOARD_KEY = "hwb-board";
+/** 刷新前等待板销毁的最长时长（毫秒） */
+const RELOAD_DESTROY_TIMEOUT_MS = 3000;
 
 /**
  * 安装同步控制台辅助
@@ -78,6 +80,34 @@ function installSyncConsole({ getBoard } = {}) {
   };
 
   /**
+   * 销毁当前板后刷新页面
+   * @returns {Promise<void>}
+   *
+   * @description
+   * 页面刷新不经过 Tauri 的关窗销毁钩子，若不先销毁会在 Rust 侧留下 owner RPC
+   * 单例，新页面开板时报「owner RPC 已在运行」。销毁失败或超时不阻塞刷新。
+   */
+  const reloadAfterDestroy = async () => {
+    const api = apiOf();
+    if (api && typeof api.destroyBoard === "function") {
+      let timer = null;
+      try {
+        await Promise.race([
+          api.destroyBoard(),
+          new Promise((resolve) => {
+            timer = setTimeout(resolve, RELOAD_DESTROY_TIMEOUT_MS);
+          }),
+        ]);
+      } catch {
+        // 销毁失败不阻塞刷新
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    globalThis.location?.reload?.();
+  };
+
+  /**
    * 归一化 id 列表参数（单值转数组，未传为 undefined）
    * @param {*} value - 入参
    * @returns {Array|undefined} id 列表
@@ -102,7 +132,7 @@ function installSyncConsole({ getBoard } = {}) {
 
   globalThis.hwb = {
     /**
-     * 设置同步中继地址并刷新
+     * 设置同步中继地址，销毁当前板后刷新
      * @param {string} url - 形如 ws://192.168.1.5:8377 的地址
      * @returns {void}
      */
@@ -112,12 +142,12 @@ function installSyncConsole({ getBoard } = {}) {
         return;
       }
       globalThis.localStorage?.setItem(RELAY_KEY, url);
-      console.log(`已设置中继：${url}，刷新中…`);
-      globalThis.location?.reload?.();
+      console.log(`已设置中继：${url}，关闭当前板后刷新…`);
+      void reloadAfterDestroy();
     },
 
     /**
-     * 设置身份覆盖并刷新（同机多窗口需互不相同）
+     * 设置身份覆盖，销毁当前板后刷新（同机多窗口需互不相同）
      * @param {string} source - 身份标识
      * @returns {void}
      */
@@ -127,12 +157,12 @@ function installSyncConsole({ getBoard } = {}) {
         return;
       }
       globalThis.localStorage?.setItem(SOURCE_KEY, source);
-      console.log(`已设置身份：${source}，刷新中…`);
-      globalThis.location?.reload?.();
+      console.log(`已设置身份：${source}，关闭当前板后刷新…`);
+      void reloadAfterDestroy();
     },
 
     /**
-     * 设置板目录覆盖并刷新（同机多窗口需互不相同）
+     * 设置板目录覆盖，销毁当前板后刷新（同机多窗口需互不相同）
      * @param {string} board - 板目录路径
      * @returns {void}
      */
@@ -142,8 +172,8 @@ function installSyncConsole({ getBoard } = {}) {
         return;
       }
       globalThis.localStorage?.setItem(BOARD_KEY, board);
-      console.log(`已设置板目录：${board}，刷新中…`);
-      globalThis.location?.reload?.();
+      console.log(`已设置板目录：${board}，关闭当前板后刷新…`);
+      void reloadAfterDestroy();
     },
 
     /**
@@ -167,7 +197,7 @@ function installSyncConsole({ getBoard } = {}) {
     },
 
     /**
-     * 清除全部同步配置并刷新（回到离线）
+     * 清除全部同步配置，销毁当前板后刷新（回到离线）
      * @returns {void}
      */
     off() {
@@ -175,8 +205,8 @@ function installSyncConsole({ getBoard } = {}) {
       storage?.removeItem(RELAY_KEY);
       storage?.removeItem(SOURCE_KEY);
       storage?.removeItem(BOARD_KEY);
-      console.log("已清除同步配置，刷新中…");
-      globalThis.location?.reload?.();
+      console.log("已清除同步配置，关闭当前板后刷新…");
+      void reloadAfterDestroy();
     },
 
     /**
@@ -186,11 +216,11 @@ function installSyncConsole({ getBoard } = {}) {
     help() {
       console.log(`HWB 控制台命令
 同步配置
-  hwb.setRelay(url)            设置中继地址（形如 ws://192.168.1.5:8377），自动刷新
-  hwb.setSource(source)        设置本端身份（同机多窗口需互不相同），自动刷新
-  hwb.setBoard(path)           设置板目录路径，自动刷新
+  hwb.setRelay(url)            设置中继地址（形如 ws://192.168.1.5:8377），销毁当前板后刷新
+  hwb.setSource(source)        设置本端身份（同机多窗口需互不相同），销毁当前板后刷新
+  hwb.setBoard(path)           设置板目录路径，销毁当前板后刷新
   hwb.status()                 打印当前同步配置
-  hwb.off()                    清除全部同步配置回离线，自动刷新
+  hwb.off()                    清除全部同步配置回离线，销毁当前板后刷新
 操作
   hwb.undo()                   撤销
   hwb.redo()                   重做

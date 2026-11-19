@@ -77,6 +77,34 @@ describe("同步控制台辅助", () => {
     expect(reload).toHaveBeenCalledTimes(2);
   });
 
+  test("切换板先销毁当前板再刷新", async () => {
+    const { board, api } = makeFakeBoard();
+    const { reload } = setupEnv({ getBoard: () => board });
+    const order = [];
+    api.destroyBoard.mockImplementation(async () => {
+      order.push("destroy");
+    });
+    reload.mockImplementation(() => order.push("reload"));
+
+    globalThis.hwb.setBoard("~/hound-whiteboard/demo-board-2");
+
+    expect(api.destroyBoard).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+    await settle();
+    expect(order).toEqual(["destroy", "reload"]);
+  });
+
+  test("销毁失败时仍然刷新", async () => {
+    const { board, api } = makeFakeBoard();
+    api.destroyBoard.mockRejectedValue(new Error("destroy failed"));
+    const { reload } = setupEnv({ getBoard: () => board });
+
+    globalThis.hwb.setSource("C");
+
+    await settle();
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   test("status 只读打印不刷新", () => {
     const { storage, reload, consoleLog } = setupEnv();
     storage.setItem("hwb-relay", "ws://127.0.0.1:8377");
@@ -114,6 +142,7 @@ function makeFakeBoard() {
   const api = {
     undo: jest.fn(async () => ({ undone: true, forcedEndMolIds: ["core/mol-1"] })),
     redo: jest.fn(async () => ({ redone: true, targetNodeId: "core/op-2" })),
+    destroyBoard: jest.fn(async () => ({ ok: true })),
     queryStateHash: jest.fn(async () => "hash-content"),
     queryChainHash: jest.fn(async () => "hash-chain"),
     queryOpenMols: jest.fn(async () => []),

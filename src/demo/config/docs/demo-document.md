@@ -134,12 +134,12 @@ Tauri 桌面端默认板目录为 `~/hound-whiteboard/demo-board`（首次运行
 
 `sync-console.js` 在页面加载时安装 `window.hwb` 控制台命令（`hwb.help()` 打印全部用法）：
 
-- 同步配置：`hwb.setRelay(url)` / `hwb.setSource(source)` / `hwb.setBoard(board)`（设置后自动刷新）、`hwb.status()`（只读打印）、`hwb.off()`（清除回离线）
+- 同步配置：`hwb.setRelay(url)` / `hwb.setSource(source)` / `hwb.setBoard(board)`（先销毁当前板再刷新）、`hwb.status()`（只读打印）、`hwb.off()`（清除回离线，先销毁当前板再刷新）
 - 操作：`hwb.undo()` / `hwb.redo()`（经 BoardApi，完成后广播 hit 变更清理失效选中）
 - 同步调试：`hwb.digest()`（stateHash / chainHash / openMols 摘要）、`hwb.tree()`（queryUndoTree 树结构）、`hwb.repair()`（手动 repairStateFromLog）、`hwb.reconnect()`（关闭并重建全部同步通道）
 - 调试查询（与调试工具同能力，Worker 侧输出）：`hwb.chunkLoad()` / `hwb.chunks(ids?)` / `hwb.objectLoad()` / `hwb.objects(ids?, chunks?)` / `hwb.aom()` / `hwb.hit()` / `hwb.board()`；UI 侧直接打印：`hwb.viewport(ids?)` / `hwb.devices(mode?)`（`"mermaid"` 输出 Mermaid）
 
-前三项设置后自动刷新页面生效。
+前三项设置与 `off` 会先销毁当前板（停止 owner RPC、flush 落盘）再刷新页面；刷新本身不经过 Tauri 关窗钩子，直接 reload 会在 Rust 侧留下 owner RPC 单例，导致新页面开板报「owner RPC 已在运行」。
 
 ## 协作感知装饰（AwarenessOverlay）
 
