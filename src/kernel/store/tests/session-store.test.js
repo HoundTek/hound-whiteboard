@@ -115,6 +115,7 @@ describe("SessionStore", () => {
     await store.writeChunkMetadata(1, {
       tierGraph: [["a", ["b"]]],
       objectCoverIndex: [["a", [1]]],
+      objectTypes: [["a", "StrokeObject"]],
     });
     await store.writeChunkMetadata(2, { tierGraph: [], objectCoverIndex: [] });
     const list = await store.readAllChunkMetadata();
@@ -122,6 +123,9 @@ describe("SessionStore", () => {
     const chunk1 = list.find((c) => c.chunkId === 1);
     expect(chunk1.tierGraph).toEqual([["a", ["b"]]]);
     expect(chunk1.objectCoverIndex).toEqual([["a", [1]]]);
+    expect(chunk1.objectTypes).toEqual([["a", "StrokeObject"]]);
+    const chunk2 = list.find((c) => c.chunkId === 2);
+    expect(chunk2.objectTypes).toEqual([]);
   });
 
   test("日志段追加与全量读取（per-source 流、流内序号推进）", async () => {

@@ -225,35 +225,49 @@ class ChunkObjectManager {
   }
 
   /**
-   * 加载区块元数据（层叠图 + 覆盖索引）
+   * 加载区块元数据（层叠图 + 覆盖索引 + 对象类型）
    * @returns {Promise<void>} 加载完成
    * @description
    * 经 BoardCore 注入的持久化适配器读取 chunks/{chunkId}.json；
    * 内存模式跳过（默认无操作适配器返回的空元数据会冲掉运行期已建的静态图）。
+   * `objectTypes` 为可选字段，旧板缺失时由 BoardCore 的类型索引回退路径补齐。
    */
   async loadChunkMetadata() {
     const adapter = this.board?.persistenceAdapter;
     if (!adapter || this.board.memoryMode?.()) return;
 
-    const { tierGraph, objectCoverIndex } =
+    const { tierGraph, objectCoverIndex, objectTypes } =
       await adapter.loadChunkMetadata(this.id);
 
     this.staticGraph = DirectedGraph.parse(tierGraph);
     this.loadObjectCoverChunksFromData(objectCoverIndex);
     this.syncCoverIndexFromGraph();
+    this.board?.ingestObjectTypes?.(objectTypes);
   }
 
   /**
-   * 保存区块元数据（层叠图 + 覆盖索引）
+   * 保存区块元数据（层叠图 + 覆盖索引 + 对象类型）
    * @returns {Promise<void>} 保存完成
    */
   async saveChunkMetadata() {
     const adapter = this.board?.persistenceAdapter;
     if (!adapter || this.board.memoryMode?.()) return;
 
+    const objectTypes = [];
+    for (const objectId of this.staticGraph.getNodes()) {
+      const type = this.board?.getObjectType?.(objectId);
+      if (typeof type === "string" && type !== "") {
+        objectTypes.push([String(objectId), type]);
+      }
+    }
+    objectTypes.sort((left, right) =>
+      left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0,
+    );
+
     await adapter.saveChunkMetadata(this.id, {
       tierGraph: this.staticGraph.toArray(),
       objectCoverIndex: this.serializeObjectCoverChunks(),
+      objectTypes,
     });
   }
 

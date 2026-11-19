@@ -20,6 +20,7 @@ describe("createPersistenceAdapter", () => {
     const metadata = {
       tierGraph: [{ id: 1, kind: "tier" }],
       objectCoverIndex: [{ id: 2 }],
+      objectTypes: [["dev-x/core/1", "StrokeObject"]],
     };
 
     expect(await adapter.saveChunkMetadata(0, metadata)).toBe(true);
@@ -27,12 +28,13 @@ describe("createPersistenceAdapter", () => {
     const loaded = await adapter.loadChunkMetadata(0);
     expect(loaded.tierGraph).toEqual(metadata.tierGraph);
     expect(loaded.objectCoverIndex).toEqual(metadata.objectCoverIndex);
+    expect(loaded.objectTypes).toEqual(metadata.objectTypes);
   });
 
   test("缺失的区块元数据返回空结构", async () => {
     const { adapter } = setup();
     const loaded = await adapter.loadChunkMetadata(99);
-    expect(loaded).toEqual({ tierGraph: [], objectCoverIndex: [] });
+    expect(loaded).toEqual({ tierGraph: [], objectCoverIndex: [], objectTypes: [] });
   });
 
   test("非法 chunkId 被拒绝", async () => {
@@ -40,6 +42,7 @@ describe("createPersistenceAdapter", () => {
     expect(await adapter.loadChunkMetadata(1.5)).toEqual({
       tierGraph: [],
       objectCoverIndex: [],
+      objectTypes: [],
     });
     expect(await adapter.saveChunkMetadata("0", { tierGraph: [] })).toBe(false);
   });
@@ -48,7 +51,7 @@ describe("createPersistenceAdapter", () => {
     const { driver, adapter } = setup();
     await driver.write(ROOT_ID, "chunks/0.json", "{broken");
     const loaded = await adapter.loadChunkMetadata(0);
-    expect(loaded).toEqual({ tierGraph: [], objectCoverIndex: [] });
+    expect(loaded).toEqual({ tierGraph: [], objectCoverIndex: [], objectTypes: [] });
   });
 
   test("save/load 对象批量往返", async () => {

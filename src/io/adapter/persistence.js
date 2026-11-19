@@ -17,7 +17,7 @@ import { bindRoot } from "../driver/io-driver.js";
  *
  * @description
  * 存储布局：
- * - 区块元数据：{root}/chunks/{chunkId}.json，内容 { tierGraph, objectCoverIndex }
+ * - 区块元数据：{root}/chunks/{chunkId}.json，内容 { tierGraph, objectCoverIndex, objectTypes }
  * - 对象：{root}/objects/{encodeURIComponent(objectId)}.json，扁平存储每对象一文件
  *   （与 session-store 同一命名，布局 v2 下对象文件由日志跟随者代写，本适配器负责区块卸载/重载路径）
  */
@@ -58,14 +58,14 @@ export const createPersistenceAdapter = ({ driver, rootId }) => {
     /**
      * 加载区块元数据
      * @param {number} chunkId - 区块 id
-     * @returns {Promise<{tierGraph: any[], objectCoverIndex: any[]}>} 区块元数据
+     * @returns {Promise<{tierGraph: any[], objectCoverIndex: any[], objectTypes: Array<[string, string|null]>}>} 区块元数据
      */
     async loadChunkMetadata(chunkId) {
       const rel = chunkMetaRel(chunkId);
-      if (rel === null) return { tierGraph: [], objectCoverIndex: [] };
+      if (rel === null) return { tierGraph: [], objectCoverIndex: [], objectTypes: [] };
 
       const content = await d.read(rel);
-      if (content === null) return { tierGraph: [], objectCoverIndex: [] };
+      if (content === null) return { tierGraph: [], objectCoverIndex: [], objectTypes: [] };
 
       try {
         const data = JSON.parse(content);
@@ -74,16 +74,17 @@ export const createPersistenceAdapter = ({ driver, rootId }) => {
           objectCoverIndex: Array.isArray(data?.objectCoverIndex)
             ? data.objectCoverIndex
             : [],
+          objectTypes: Array.isArray(data?.objectTypes) ? data.objectTypes : [],
         };
       } catch {
-        return { tierGraph: [], objectCoverIndex: [] };
+        return { tierGraph: [], objectCoverIndex: [], objectTypes: [] };
       }
     },
 
     /**
      * 保存区块元数据
      * @param {number} chunkId - 区块 id
-     * @param {{tierGraph: any[], objectCoverIndex: any[]}} metadata - 区块元数据
+     * @param {{tierGraph: any[], objectCoverIndex: any[], objectTypes?: Array<[string, string|null]>}} metadata - 区块元数据
      * @returns {Promise<boolean>} 是否成功
      */
     async saveChunkMetadata(chunkId, metadata) {
@@ -96,6 +97,9 @@ export const createPersistenceAdapter = ({ driver, rootId }) => {
         tierGraph: metadata.tierGraph,
         objectCoverIndex: Array.isArray(metadata.objectCoverIndex)
           ? metadata.objectCoverIndex
+          : [],
+        objectTypes: Array.isArray(metadata.objectTypes)
+          ? metadata.objectTypes
           : [],
       });
 

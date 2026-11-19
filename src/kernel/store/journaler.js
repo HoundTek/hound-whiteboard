@@ -115,6 +115,13 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
       liveIds.add(obj.id);
       const prev = lastSync.get(obj.id);
       if (prev?.json === json && prev.location === "objects") continue;
+      if (prev === undefined) {
+        const pristine = boardCore.getPristineObjectJson?.(obj.id);
+        if (pristine === json) {
+          lastSync.set(obj.id, { location: "objects", json });
+          continue;
+        }
+      }
       if ((await store.writeObject(data)) === false) {
         throw new Error("存储驱动写对象失败");
       }
@@ -177,9 +184,20 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
   const reconcileChunks = async () => {
     for (const { chunk } of boardCore.chunkLoaded.values()) {
       if (!chunk?.objectManager) continue;
+      const objectTypes = [];
+      for (const objectId of chunk.objectManager.staticGraph.getNodes()) {
+        const type = boardCore.getObjectType?.(objectId);
+        if (typeof type === "string" && type !== "") {
+          objectTypes.push([String(objectId), type]);
+        }
+      }
+      objectTypes.sort((left, right) =>
+        left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0,
+      );
       const metadata = {
         tierGraph: chunk.objectManager.staticGraph.toArray(),
         objectCoverIndex: chunk.objectManager.serializeObjectCoverChunks(),
+        objectTypes,
       };
       const json = JSON.stringify(metadata);
       if (lastChunkSync.get(chunk.id) === json) continue;
@@ -341,7 +359,7 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
      * @param {Object[]} [options.knownObjects=[]] - 盘上已有活动对象数据（指纹种子，避免首 flush 重写）
      * @param {Object[]} [options.knownTrash=[]] - 盘上已有 trash 条目（指纹种子）
      * @param {Object<string, Object>} [options.knownSourceMeta=null] - 盘上各来源的元数据分片（首轮比对种子）
-     * @param {Array<{chunkId: number, tierGraph: Array, objectCoverIndex: Array}>} [options.knownChunkMetadata=[]] - 盘上区块元数据（指纹种子，避免首 flush 重写）
+     * @param {Array<{chunkId: number, tierGraph: Array, objectCoverIndex: Array, objectTypes?: Array<[string, string|null]>}>} [options.knownChunkMetadata=[]] - 盘上区块元数据（指纹种子，避免首 flush 重写）
      * @returns {void}
      */
     attach({ nextSegmentSeqBySource = {}, lastTime = 0, knownObjects = [], knownTrash = [], knownSourceMeta = null, knownChunkMetadata = [] } = {}) {
@@ -376,6 +394,7 @@ function createJournaler({ boardCore, store, collectMeta, persistStream, writeMe
           JSON.stringify({
             tierGraph: metadata.tierGraph ?? [],
             objectCoverIndex: metadata.objectCoverIndex ?? [],
+            objectTypes: metadata.objectTypes ?? [],
           }),
         );
       }

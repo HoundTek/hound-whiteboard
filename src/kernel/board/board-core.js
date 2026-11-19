@@ -235,6 +235,14 @@ class BoardCore {
   #objectIndexPromise = null;
 
   /**
+   * 对象从盘加载时的原始 JSON 指纹（对象 id → JSON）
+   * @description 供 journaler 在首次 flush 时区分「未修改的盘上对象」与「待写对象」。
+   * @type {Map<string, string>}
+   * @private
+   */
+  #pristineObjectJson = new Map();
+
+  /**
    * 驻留管理器（部分驻留 owner 的区块缓存；未设置时按需用临时 loader）
    * @type {{ensureChunks: Function}|null}
    * @private
@@ -487,6 +495,15 @@ class BoardCore {
   }
 
   /**
+   * 读取对象从盘加载时的原始 JSON 指纹
+   * @param {string} objectId - 对象 id
+   * @returns {string|undefined} 原始 JSON；对象不是经区块加载路径从盘读入时为 undefined
+   */
+  getPristineObjectJson(objectId) {
+    return this.#pristineObjectJson.get(objectId);
+  }
+
+  /**
    * 获取对象实例
    * @param {string} objectId - 对象 id
    * @returns {BasicObject | undefined}
@@ -537,12 +554,35 @@ class BoardCore {
   }
 
   /**
+   * 合并区块元数据携带的对象类型
+   * @param {Iterable<[string, string|null]>} [entries=[]] - `[objectId, type]` 列表
+   * @returns {void}
+   *
+   * @description
+   * 只补缺失项，不覆盖实例注册或类型索引已有结果；
+   * 旧板区块元数据缺失该字段时传入空数组，后续由 `ensureObjectTypeIndex` 回退扫描。
+   */
+  ingestObjectTypes(entries = []) {
+    for (const entry of entries ?? []) {
+      if (!Array.isArray(entry)) continue;
+      const [objectId, type] = entry;
+      if (typeof objectId !== "string" || objectId === "") continue;
+      if (this.#objectTypes.has(objectId)) continue;
+      this.#objectTypes.set(
+        objectId,
+        typeof type === "string" ? type : null,
+      );
+    }
+  }
+
+  /**
    * 确保对象类型索引可用
    * @returns {Promise<void>}
    *
    * @description
-   * 全量驻留时直接从实例补齐；部分驻留时经加载器分批扫描 objects/，
-   * 只保留 id/type。加载失败只告警，下一次调用可重试。
+   * 区块元数据已覆盖全部已知对象类型时直接完成（新板开板零扫描）；
+   * 仍有缺失（旧板或异常区块）时回退到加载器分批扫描 objects/，只保留 id/type。
+   * 全量驻留时直接从实例补齐；加载失败只告警，下一次调用可重试。
    */
   async ensureObjectTypeIndex() {
     if (this.#objectIndexLoaded) return;
@@ -555,6 +595,13 @@ class BoardCore {
           );
         }
       }
+      this.#objectIndexLoaded = true;
+      return;
+    }
+    const hasMissingType = [...this.getKnownObjectIds()].some(
+      (objectId) => !this.#objectTypes.has(objectId),
+    );
+    if (!hasMissingType) {
       this.#objectIndexLoaded = true;
       return;
     }
@@ -873,7 +920,7 @@ class BoardCore {
   /**
    * 恢复会话状态（对象、trash 与区块层叠图）
    * @param {Object} session - 会话数据
-   * @param {Array<{chunkId: number, tierGraph: any[], objectCoverIndex: any[]}>} [session.chunkMetadataList] - 区块元数据列表
+   * @param {Array<{chunkId: number, tierGraph: any[], objectCoverIndex: any[], objectTypes?: Array<[string, string|null]>}>} [session.chunkMetadataList] - 区块元数据列表
    * @param {Object[]} [session.objects] - 活动对象序列化数据数组
    * @param {Array<{data: Object, chunks: Array}>} [session.trash] - trash 条目数组
    * @param {{ chunksTemp?: boolean }} [options={}] - 恢复选项
@@ -889,7 +936,13 @@ class BoardCore {
     { chunkMetadataList = [], objects = [], trash = [] } = {},
     { chunksTemp = false } = {},
   ) {
-    for (const { chunkId, tierGraph, objectCoverIndex } of chunkMetadataList) {
+    for (const {
+      chunkId,
+      tierGraph,
+      objectCoverIndex,
+      objectTypes,
+    } of chunkMetadataList) {
+      this.ingestObjectTypes(objectTypes);
       const chunk = this.getChunkById(chunkId);
       if (!chunk) continue;
       if (!chunk.objectManager) {
@@ -1095,6 +1148,7 @@ class BoardCore {
         continue;
       }
       const coveredChunkIds = this.#getEffectiveCoverChunkIds(obj.id, chunk.id);
+      this.#pristineObjectJson.set(obj.id, JSON.stringify(objectData));
       this.registerObjectInstance(obj, { coveredChunkIds });
       loadedObjects.set(obj.id, obj);
     }

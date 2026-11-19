@@ -13,8 +13,8 @@
  * 内存模式使用 createDefaultPersistenceAdapter()（无操作）；
  * 文件模式由 io 包的 createPersistenceAdapter({ driver, rootId }) 实现，存储布局 chunks/{chunkId}.json、objects/{encodeURIComponent(id)}.json。
  * @typedef {Object} PersistenceAdapter
- * @property {(chunkId: number) => Promise<{ tierGraph: any[], objectCoverIndex: any[] }>} loadChunkMetadata - 加载区块元数据（层叠图与覆盖索引）
- * @property {(chunkId: number, metadata: { tierGraph: any[], objectCoverIndex: any[] }) => Promise<boolean>} saveChunkMetadata - 保存区块元数据
+ * @property {(chunkId: number) => Promise<{ tierGraph: any[], objectCoverIndex: any[], objectTypes: Array<[string, string|null]> }>} loadChunkMetadata - 加载区块元数据（层叠图、覆盖索引与对象类型）
+ * @property {(chunkId: number, metadata: { tierGraph: any[], objectCoverIndex: any[], objectTypes?: Array<[string, string|null]> }) => Promise<boolean>} saveChunkMetadata - 保存区块元数据
  * @property {(objectIds: string[]) => Promise<object[]>} loadObjects - 按 id 批量加载对象序列化数据
  * @property {(objects: object[]) => Promise<boolean>} saveObjects - 批量保存对象序列化数据
  * @property {(objectId: string) => Promise<boolean>} deleteObject - 删除对象序列化数据
@@ -29,16 +29,16 @@ function createDefaultPersistenceAdapter() {
     /**
      * 加载区块元数据
      * @param {number} _chunkId - 区块 id
-     * @returns {Promise<{ tierGraph: any[], objectCoverIndex: any[] }>} 空元数据
+     * @returns {Promise<{ tierGraph: any[], objectCoverIndex: any[], objectTypes: Array<[string, string|null]> }>} 空元数据
      */
     async loadChunkMetadata(_chunkId) {
-      return { tierGraph: [], objectCoverIndex: [] };
+      return { tierGraph: [], objectCoverIndex: [], objectTypes: [] };
     },
 
     /**
      * 保存区块元数据
      * @param {number} _chunkId - 区块 id
-     * @param {{ tierGraph: any[], objectCoverIndex: any[] }} _metadata - 区块元数据
+     * @param {{ tierGraph: any[], objectCoverIndex: any[], objectTypes?: Array<[string, string|null]> }} _metadata - 区块元数据
      * @returns {Promise<boolean>} 恒 true
      */
     async saveChunkMetadata(_chunkId, _metadata) {

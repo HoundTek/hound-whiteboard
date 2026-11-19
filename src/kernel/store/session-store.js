@@ -546,7 +546,7 @@ function createSessionStore(driver) {
     /**
      * 写入区块元数据
      * @param {number} chunkId - 区块 id
-     * @param {{tierGraph: any[], objectCoverIndex: any[]}} metadata - 区块元数据
+     * @param {{tierGraph: any[], objectCoverIndex: any[], objectTypes?: Array<[string, string|null]>}} metadata - 区块元数据
      * @returns {Promise<boolean>} 是否成功
      */
     async writeChunkMetadata(chunkId, metadata) {
@@ -558,13 +558,16 @@ function createSessionStore(driver) {
           objectCoverIndex: Array.isArray(metadata.objectCoverIndex)
             ? metadata.objectCoverIndex
             : [],
+          objectTypes: Array.isArray(metadata.objectTypes)
+            ? metadata.objectTypes
+            : [],
         }),
       );
     },
 
     /**
      * 读取全部区块元数据
-     * @returns {Promise<Array<{chunkId: number, tierGraph: any[], objectCoverIndex: any[]}>>} 区块元数据列表
+     * @returns {Promise<Array<{chunkId: number, tierGraph: any[], objectCoverIndex: any[], objectTypes: Array<[string, string|null]>}>>} 区块元数据列表
      */
     async readAllChunkMetadata() {
       const entries = await driver.ls(CHUNKS_DIR);
@@ -581,6 +584,9 @@ function createSessionStore(driver) {
             tierGraph: Array.isArray(data.tierGraph) ? data.tierGraph : [],
             objectCoverIndex: Array.isArray(data.objectCoverIndex)
               ? data.objectCoverIndex
+              : [],
+            objectTypes: Array.isArray(data.objectTypes)
+              ? data.objectTypes
               : [],
           };
         }),
@@ -600,7 +606,7 @@ function createSessionStore(driver) {
      * 聚合读取全部会话数据（打开既有板）
      * @param {{ includeObjects?: boolean }} [options={}] - 读取选项
      * @param {boolean} [options.includeObjects=true] - 是否读取对象快照；false 时只返回类型索引
-     * @returns {Object} 会话数据（meta、sourceMeta、records、nextSegmentSeqBySource、chunkMetadataList、objects、objectIndex、trash）
+     * @returns {Object} 会话数据（meta、sourceMeta、records、nextSegmentSeqBySource、chunkMetadataList、objects、objectIndex、trash）；chunkMetadataList 项含可选 objectTypes
      *
      * @description
      * meta 归并：board.json（boardConfig / formatVersion 与存量兜底字段）+ 全部

@@ -13,6 +13,7 @@ import { BoardCore } from "../../board/board-core.js";
 import { BoardApi } from "../../api/board-api.js";
 import { createDefaultAomRenderHooks } from "../../board/aom-render-hooks.js";
 import { createDefaultPersistenceAdapter } from "../../board/persistence-adapter.js";
+import { createPersistenceAdapter } from "../../../io/adapter/persistence.js";
 import { createAddObjectOperation, createModifyObjectOperation } from "../../hit/operation.js";
 import { createSessionStore } from "../session-store.js";
 import { createJournaler } from "../journaler.js";
@@ -316,6 +317,73 @@ describe("Journaler", () => {
     await createStaticStroke(api, "s2");
     await journaler2.flush();
     expect(writeMetaCount).toBe(1);
+  });
+
+  test("懒加载读入的未修改对象在首轮 flush 不重写", async () => {
+    const driver = createMemoryDriver({ rootId: "mem" });
+    const store = createSessionStore(bindRoot(driver, "mem"));
+    const adapter = createPersistenceAdapter({ driver, rootId: "mem" });
+    await store.create();
+
+    const coreA = new BoardCore({
+      width: 800,
+      height: 600,
+      rootPath: "mem",
+      source: "test",
+      aomRenderHooks: createDefaultAomRenderHooks(),
+      persistenceAdapter: adapter,
+      chunkUnload: true,
+    });
+    const journalerA = createJournaler({ boardCore: coreA, store });
+    journalerA.attach();
+    await createStaticStroke(new BoardApi(coreA), "s1");
+    await journalerA.detach();
+
+    const lazySession = await store.loadAll({ includeObjects: false });
+    const coreB = new BoardCore({
+      width: 800,
+      height: 600,
+      rootPath: "mem",
+      source: "test",
+      aomRenderHooks: createDefaultAomRenderHooks(),
+      persistenceAdapter: adapter,
+      chunkUnload: true,
+    });
+    coreB.setObjectIndexLoader(() => store.readObjectTypeIndex());
+    coreB.restoreSession(lazySession, { chunksTemp: true });
+
+    const writtenIds = [];
+    const countingStore = Object.create(store);
+    countingStore.writeObject = async (data) => {
+      writtenIds.push(data.id);
+      return store.writeObject(data);
+    };
+    const journalerB = createJournaler({
+      boardCore: coreB,
+      store: countingStore,
+    });
+    journalerB.attach({
+      nextSegmentSeqBySource: lazySession.nextSegmentSeqBySource,
+      lastTime: lazySession.meta?.lastTime ?? 0,
+      knownObjects: [],
+      knownTrash: lazySession.trash,
+      knownSourceMeta: lazySession.sourceMeta ?? null,
+      knownChunkMetadata: lazySession.chunkMetadataList,
+    });
+
+    const chunkId = [...coreB.getObjectCoverChunks("s1")][0];
+    await coreB.loadChunkObjectEntries(chunkId);
+    expect(coreB.getObjectById("s1")).toBeDefined();
+
+    await new BoardApi(coreB).addObject("StrokeObject", {
+      position: { x: 200, y: 200 },
+      property: { width: 2 },
+      data: { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
+    });
+    await journalerB.flush();
+
+    expect(writtenIds).not.toContain("s1");
+    expect(writtenIds.length).toBeGreaterThan(0);
   });
 
   test("trash 种子：重开后撤销删除，trash 文件随对象复活移除", async () => {

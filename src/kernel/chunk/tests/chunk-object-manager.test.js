@@ -54,10 +54,13 @@ describe("ChunkObjectManager", () => {
     await driver.registerRoot(boardRoot);
     const adapter = createPersistenceAdapter({ driver, rootId: "local" });
 
+    const ingestedTypes = [];
     const coverChunkBoard = {
       ...createCoverChunkStorage(),
       persistenceAdapter: adapter,
       memoryMode: () => false,
+      getObjectType: (objectId) => (objectId === 15 ? "StrokeObject" : null),
+      ingestObjectTypes: (entries) => ingestedTypes.push(...(entries ?? [])),
     };
     const chunkObjectManager = new ChunkObjectManager(1, coverChunkBoard);
     chunkObjectManager.staticGraph = DirectedGraph.parse([
@@ -69,6 +72,11 @@ describe("ChunkObjectManager", () => {
 
     await chunkObjectManager.saveChunkMetadata();
 
+    const rawMetadata = JSON.parse(
+      fs.readFileSync(path.join(boardRoot, "chunks", "1.json"), "utf8"),
+    );
+    expect(rawMetadata.objectTypes).toEqual([["15", "StrokeObject"]]);
+
     const restoredManager = new ChunkObjectManager(1, coverChunkBoard);
     await restoredManager.loadChunkMetadata();
 
@@ -76,6 +84,8 @@ describe("ChunkObjectManager", () => {
     expect(
       restoredManager.staticGraph.equals(chunkObjectManager.staticGraph),
     ).toBe(true);
+    // 类型在加载时并入 BoardCore 的类型索引
+    expect(ingestedTypes).toEqual([["15", "StrokeObject"]]);
     // 覆盖索引通过 board 存储，COM 序列化时不包含（有 board 时返回 []）
     expect(coverChunkBoard.getObjectCoverChunks(15)).toEqual(new Set([1, 2]));
     expect(coverChunkBoard.getObjectCoverChunks(18)).toEqual(
