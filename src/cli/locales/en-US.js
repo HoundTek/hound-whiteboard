@@ -116,7 +116,7 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
       summary: "Force the reference count to zero and shut down (unconditional; cleans up descriptor and registry)",
       usage: "daemon stop --name <name>",
       description:
-        "Unconditionally shuts down the daemon: drains in-flight writes, persists, and removes the board's .daemon.json and the registry entry.",
+        "Unconditionally shuts down the daemon: drains in-flight writes, persists, and removes the board's .owner.json (owner claim) and the registry entry.",
       flag: { name: "Daemon name" },
       examples: "hwb daemon stop --name board1",
     },
@@ -142,7 +142,7 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
       examples: "hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024",
     },
     export: {
-      summary: "Export a board as .hwb (flat zip, without .daemon.json)",
+      summary: "Export a board as .hwb (flat zip, without runtime markers such as .owner.json)",
       usage: "export --path <board-dir> --out <file.hwb> [--json]",
       description:
         "Offline read, no daemon needed; safe even while a daemon holds the board. board.json sits at the zip root; objects/trash/hit/chunks are packed as-is.",
@@ -295,7 +295,7 @@ hwb unchoose batch --apply --daemon board1`,
     daemonNotRunning: "daemon {name} is not running.",
     daemonNotRegistered: "daemon {name} is not running (no registry entry).",
     daemonStoppedUnreachable: "daemon {name} has stopped (port {port} unreachable).",
-    daemonStartLockContention: "Daemon start lock contention failed (still held after stale lock reclamation).",
+    ownerLockContention: "Board claim lock contention failed (still held after stale lock reclamation).",
     daemonStopNeedName: "daemon stop requires --name {name}.",
     daemonReleaseNeedName: "daemon release requires --name {name}.",
     daemonStopTimeout: "Timed out waiting for daemon {name} shutdown confirmation (registry entry still present).",

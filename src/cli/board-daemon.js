@@ -32,92 +32,24 @@ import {
   readEntry,
   isDaemonAlive,
 } from "./daemon-registry.js";
-import fs from "node:fs/promises";
-import path from "node:path";
-
-/** daemon 描述文件名（写在板目录下，标记板被哪个 daemon 持有） */
-const DAEMON_FILE = ".daemon.json";
-
-/** daemon 启动锁文件名（写在板目录下，护住启动窗口，内容为持有者 pid） */
-const START_LOCK_FILE = ".daemon-start.lock";
-
-/** 启动锁最大抢锁次数（含 stale 锁回收重试） */
-const START_LOCK_MAX_ATTEMPTS = 3;
+import {
+  OWNER_FILE,
+  OWNER_LOCK_FILE,
+  OWNER_TRANSPORT_KINDS,
+  createDaemonOwnerClaim,
+  ownerClaimToDaemonDescriptor,
+} from "../kernel/board/owner-claim.js";
+import {
+  acquireOwnerLock,
+  isOwnerClaimAlive,
+  readOwnerClaim,
+  releaseOwnerClaim,
+  removeOwnerClaimFile,
+  writeOwnerClaim,
+} from "./board-claim.js";
 
 /** GUI 附属 daemon（gui- 前缀名）无客户端连接的闲置自退出时长（毫秒） */
 const GUI_DAEMON_IDLE_EXIT_MS = 60_000;
-
-/**
- * 判定 pid 是否存活
- * @param {number} pid - 进程号
- * @returns {boolean} 是否存活（EPERM 视为存活：进程在但无权发信号）
- */
-function isPidAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error?.code === "EPERM";
-  }
-}
-
-/**
- * 读启动锁文件中的持有者 pid
- * @param {string} lockPath - 锁文件路径
- * @returns {Promise<number|null>} pid；文件缺失或内容非法时为 null
- */
-async function readStartLockPid(lockPath) {
-  try {
-    const text = await fs.readFile(lockPath, "utf-8");
-    const pid = Number.parseInt(text.trim(), 10);
-    return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 抢 daemon 启动锁（板目录 .daemon-start.lock，O_EXCL 创建，内容为持有者 pid）
- * @param {string} rootPath - 板目录
- * @returns {Promise<() => Promise<void>>} 释放函数（幂等）
- * @throws {Error} 锁被活进程持有、或多次回收 stale 锁后仍被占用时
- *
- * @description
- * 锁只护「占用检查 → 写 .daemon.json → 写注册表」启动窗口：两个进程同时 start
- * 同一板目录时只有一个能进入，另一个报错；启动完成后的互斥由既有存活探测承担。
- * 锁已存在时读 pid 判活：活进程（含 EPERM）拒绝启动；死 pid（ESRCH）或内容
- * 不可读按崩溃残留的 stale 锁处理，回收后重试。
- */
-async function acquireStartLock(rootPath) {
-  const lockPath = path.join(rootPath, START_LOCK_FILE);
-  for (let attempt = 0; attempt < START_LOCK_MAX_ATTEMPTS; attempt += 1) {
-    try {
-      await fs.writeFile(lockPath, String(process.pid), { flag: "wx" });
-      let released = false;
-      return async () => {
-        if (released) return;
-        released = true;
-        await fs.rm(lockPath, { force: true });
-      };
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      let holderPid = await readStartLockPid(lockPath);
-      if (holderPid === null) {
-        // 持有者刚创建锁尚未写入 pid 的窗口：稍候重读一次再按 stale 处理
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        holderPid = await readStartLockPid(lockPath);
-      }
-      if (holderPid !== null && isPidAlive(holderPid)) {
-        throw new Error(
-          `另一进程（pid ${holderPid}）正在启动该板目录的 daemon，请稍后重试。`,
-        );
-      }
-      // stale 锁（持有进程已死或内容不可读）：回收后重试
-      await fs.rm(lockPath, { force: true });
-    }
-  }
-  throw new Error(t("err.daemonStartLockContention"));
-}
 
 /**
  * 创建串行任务队列
@@ -153,21 +85,15 @@ function createQueue() {
 }
 
 /**
- * 读取板目录下的 daemon 描述文件
+ * 读取板目录下的 daemon 描述
  * @param {string} rootPath - 板目录
- * @returns {Promise<Object|null>} 描述；不存在或非法时为 null
+ * @returns {Promise<Object|null>} daemon 描述；无 daemon owner 或非法时为 null
  */
 async function readDaemonDescriptor(rootPath) {
-  try {
-    const text = await fs.readFile(path.join(rootPath, DAEMON_FILE), "utf-8");
-    const desc = JSON.parse(text);
-    if (typeof desc?.port !== "number" || typeof desc?.source !== "string") {
-      return null;
-    }
-    return desc;
-  } catch {
-    return null;
-  }
+  const claim = await readOwnerClaim(rootPath);
+  const daemon = ownerClaimToDaemonDescriptor(claim);
+  if (daemon === null) return null;
+  return { ...daemon, rootPath };
 }
 
 /**
@@ -185,10 +111,10 @@ async function readDaemonDescriptor(rootPath) {
  *
  * @description
  * 启动后登记注册表（~/.hound-whiteboard/daemons/<name>.json）并在板目录写入
- * `.daemon.json`（name/pid/port/source/boardId）。name 与存活 daemon 重复、
- * 板目录已被其它活 daemon 持有时拒绝启动。
+ * `.owner.json` owner claim（ownerId/pid/source/boardId/transport/claimedAt）。
+ * name 与存活 daemon 重复、板目录已被其它活 owner 持有时拒绝启动。
  *
- * 启动全程持有板目录启动锁（.daemon-start.lock），「占用检查 → 写 .daemon.json →
+ * 启动全程持有板目录 owner 锁（.owner.lock），「占用检查 → 写 .owner.json →
  * 写注册表」窗口内两个并发 start 只有一个能进入；所有退出路径（含中途失败）都释放锁。
  */
 async function startBoardDaemon(options) {
@@ -196,11 +122,11 @@ async function startBoardDaemon(options) {
   if (typeof rootPath !== "string" || rootPath.trim() === "") {
     throw new Error(t("err.boardPathMissing"));
   }
-  const releaseStartLock = await acquireStartLock(rootPath);
+  const releaseOwnerLock = await acquireOwnerLock(rootPath);
   try {
     return await startBoardDaemonLocked(options);
   } finally {
-    await releaseStartLock();
+    await releaseOwnerLock();
   }
 }
 
@@ -227,11 +153,16 @@ async function startBoardDaemonLocked(options) {
       `daemon ${name} 已在运行（板目录 ${registered.rootPath}，端口 ${registered.port}）。`,
     );
   }
-  // 板目录占用检查：同一板目录只能被一个活 daemon 持有
-  const existing = await readDaemonDescriptor(rootPath);
-  if (existing && (await isDaemonAlive(existing.port))) {
+  // 板目录占用检查：同一板目录只能被一个活 owner 持有
+  const existingClaim = await readOwnerClaim(rootPath);
+  if (existingClaim !== null && (await isOwnerClaimAlive(existingClaim))) {
+    if (existingClaim.transport.kind === OWNER_TRANSPORT_KINDS.DAEMON) {
+      throw new Error(
+        `板目录已有 daemon 在运行（端口 ${existingClaim.transport.port}，身份 ${existingClaim.source}）。`,
+      );
+    }
     throw new Error(
-      `板目录已有 daemon 在运行（端口 ${existing.port}，身份 ${existing.source}）。`,
+      `板目录已被其他持有者认领（pid ${existingClaim.pid}，身份 ${existingClaim.source}）。`,
     );
   }
 
@@ -781,13 +712,28 @@ async function startBoardDaemonLocked(options) {
     refCount: totalRefs(),
     startedAt: new Date().toISOString(),
   };
-  await fs.writeFile(
-    path.join(rootPath, DAEMON_FILE),
-    JSON.stringify(desc, null, 2),
-    "utf-8",
-  );
-  // 注册表登记：CLI 按 name 定位 daemon
-  await writeEntry(desc);
+  const claim = createDaemonOwnerClaim({
+    name,
+    pid: process.pid,
+    source,
+    boardId: options.boardId ?? null,
+    host: options.host ?? "127.0.0.1",
+    port,
+  });
+  try {
+    await writeOwnerClaim(rootPath, claim);
+    // 注册表登记：CLI 按 name 定位 daemon
+    await writeEntry(desc);
+  } catch (error) {
+    await removeOwnerClaimFile(rootPath).catch(() => {});
+    await new Promise((resolve) => wss.close(resolve));
+    amendForwarder?.close();
+    if (coordinator) {
+      await coordinator.close();
+    }
+    await session.close();
+    throw error;
+  }
 
   // GUI 附属 daemon：启动即排闲置自退出（覆盖 spawn 后无人接入的孤儿场景，
   // 如 GUI 侧开板超时回退内存模式）；首个客户端 join 时取消
@@ -823,8 +769,11 @@ async function startBoardDaemonLocked(options) {
       await session.close();
       // 排空镜像写再删除条目：飞行中的 writeEntry 会让条目复活
       await refSyncTail;
-      await fs.rm(path.join(rootPath, DAEMON_FILE), { force: true });
-      await removeEntry(name);
+      try {
+        await releaseOwnerClaim(rootPath, claim.ownerId);
+      } finally {
+        await removeEntry(name);
+      }
     })();
     return closePromise;
   };
@@ -868,8 +817,8 @@ async function handleRpcMessage(session, ws, message) {
 export {
   startBoardDaemon,
   readDaemonDescriptor,
-  DAEMON_FILE,
-  START_LOCK_FILE,
-  acquireStartLock,
+  OWNER_FILE,
+  OWNER_LOCK_FILE,
+  acquireOwnerLock,
   isDaemonAlive,
 };

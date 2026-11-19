@@ -45,7 +45,7 @@ flowchart LR
 
 除 relay 星型房间外，GUI worker 还会直连持板 daemon 的协作通道（`core-worker` 的 `#connectGuiDaemon`）：
 
-- **探测与重连**：每次尝试先重新探测 daemon（重启后端口可能变化，经 `.daemon.json` 描述文件发现）；失败起每 3s 重试（`#scheduleGuiReconnect`）。
+- **探测与重连**：每次尝试先重新探测 daemon（重启后端口可能变化，经 `.owner.json` 的 daemon transport 发现）；失败起每 3s 重试（`#scheduleGuiReconnect`）。
 - **boardId = rootPath**：直连协调器以板根路径作 boardId，与 relay 房间协议同构（join/records/aom/awareness/digest 的单客户端版）。
 - **桥接进房间**：daemon 侧把 GUI 写入的记录经 `sendRecords` 桥进 relay 房间（`board-daemon.js` 的 records 分支），GUI 的操作对远端可见；daemon 连了中继才桥接。
 - **单机降级**：无 daemon（或 daemon 不可达）时 GUI 按单机自治运行，写权仲裁落盘兜底（见会话存储文档），协作通道断开仅按 3s 重试，不阻塞开板。

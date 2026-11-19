@@ -12,8 +12,15 @@ import { t } from "./i18n.js";
 
 /** .hwb 内板元数据文件名（与板目录布局一致） */
 const BOARD_META_FILE = "board.json";
-/** 导出的运行时持有标记（不属于板内容，不打包） */
-const DAEMON_FILE = ".daemon.json";
+/** 运行时标记文件（不属于板内容，不打包） */
+const RUNTIME_MARKERS = new Set([
+  ".owner.json",
+  ".daemon.json",
+  ".owner.lock",
+  ".daemon-start.lock",
+]);
+/** owner claim 原子写临时文件前缀 */
+const RUNTIME_TEMP_PREFIX = ".owner.json.tmp-";
 /** 板格式版本（与 kernel/store 的 FORMAT_VERSION 对齐；导入时校验） */
 const FORMAT_VERSION = 1;
 
@@ -28,7 +35,12 @@ async function collectBoardFiles(root, rel = "") {
   const out = [];
   const entries = await fs.readdir(path.join(root, rel), { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.name === DAEMON_FILE) continue;
+    if (
+      RUNTIME_MARKERS.has(entry.name) ||
+      entry.name.startsWith(RUNTIME_TEMP_PREFIX)
+    ) {
+      continue;
+    }
     const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       out.push(...(await collectBoardFiles(root, entryRel)));
@@ -47,7 +59,7 @@ async function collectBoardFiles(root, rel = "") {
  *
  * @description
  * 板内容 = board.json + objects/trash/hit/chunks + .cli-choices.json（choice 种子）；
- * `.daemon.json` 是运行时持有标记，不导出。导入侧以 board.json 存在为合法板标志。
+ * `.owner.json`、锁文件与旧 `.daemon.json` 是运行时标记，不导出。导入侧以 board.json 存在为合法板标志。
  */
 async function exportBoard(boardRoot, outFile) {
   // 板标志文件先行校验，报友好错误（collectBoardFiles 的 readdir 抛原生 ENOENT）

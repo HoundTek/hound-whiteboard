@@ -26,12 +26,13 @@
   trash/{objectId}.json             # trash 条目
   chunks/{chunkId}.json             # 区块元数据
   hit/{source}/seg-{NNNNNN}.jsonl   # per-source 操作日志流
-  .daemon.json                      # 持板 daemon 探测文件（daemon 运行时存在）
+  .owner.json                       # 板目录 owner claim（ownerId/pid/source/transport/claimedAt）
+  .owner.lock                       # claim/release 与 daemon 启动窗口锁（短时存在）
 ```
 
 > [!NOTE]
 >
-> `.daemon.json` 由持板 daemon 进程维护（name/port 等连接信息，停止时清理），不属于 kernel store 布局本身；GUI 开板时由 core-worker 的建板流程读取（探测活 daemon），用户在板目录中会看到该文件。
+> `.owner.json` 由持板进程维护，记录写权持有者与 transport（daemon 的 name/host/port 或 GUI 标识），停止时清理；不属于 kernel store 布局本身。`.owner.lock` 是 claim/release 与 daemon 启动窗口的短时互斥锁，正常释放后不存在。GUI 开板时由 core-worker 的建板流程读取 daemon transport 探测活 daemon。旧的 `.daemon.json` 不再读取，导出时会一并排除。
 
 ## 各文件与目录说明
 

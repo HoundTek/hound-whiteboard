@@ -1,6 +1,6 @@
 /**
- * @file daemon 启动锁测试
- * @description 验证启动锁互斥（活 pid 持锁拒绝启动）、stale 锁（死 pid）回收与锁释放后可再抢。
+ * @file 板目录 owner 锁测试
+ * @description 验证 owner 锁互斥（活 pid 持锁拒绝认领）、stale 锁（死 pid）回收与锁释放后可再抢。
  * @module cli/tests/daemon-start-lock.test
  * @author Zhou Chenyu
  */
@@ -8,10 +8,8 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  acquireStartLock,
-  START_LOCK_FILE,
-} from "../board-daemon.js";
+import { acquireOwnerLock } from "../board-claim.js";
+import { OWNER_LOCK_FILE } from "../../kernel/board/owner-claim.js";
 import {
   createTestBoard,
   setupCliTestEnv,
@@ -31,18 +29,18 @@ async function exitedChildPid() {
   return child.pid;
 }
 
-describe("daemon 启动锁", () => {
+describe("板目录 owner 锁", () => {
   test("活进程持锁时第二次抢锁报错；释放后可再抢", async () => {
     const { dir, cleanup } = tempBoardDir();
     fs.mkdirSync(dir, { recursive: true });
     try {
       // 本进程持锁（pid 存活）：第二次抢锁拒绝
-      const release = await acquireStartLock(dir);
-      await expect(acquireStartLock(dir)).rejects.toThrow("正在启动");
+      const release = await acquireOwnerLock(dir);
+      await expect(acquireOwnerLock(dir)).rejects.toThrow("正在认领");
       // 释放后锁文件删除，可再抢
       await release();
-      expect(fs.existsSync(path.join(dir, START_LOCK_FILE))).toBe(false);
-      const releaseAgain = await acquireStartLock(dir);
+      expect(fs.existsSync(path.join(dir, OWNER_LOCK_FILE))).toBe(false);
+      const releaseAgain = await acquireOwnerLock(dir);
       await releaseAgain();
     } finally {
       cleanup();
@@ -54,10 +52,10 @@ describe("daemon 启动锁", () => {
     fs.mkdirSync(dir, { recursive: true });
     try {
       const deadPid = await exitedChildPid();
-      fs.writeFileSync(path.join(dir, START_LOCK_FILE), String(deadPid));
-      const release = await acquireStartLock(dir);
+      fs.writeFileSync(path.join(dir, OWNER_LOCK_FILE), String(deadPid));
+      const release = await acquireOwnerLock(dir);
       // 锁被本进程接管（内容换成本进程 pid）
-      const holder = fs.readFileSync(path.join(dir, START_LOCK_FILE), "utf-8");
+      const holder = fs.readFileSync(path.join(dir, OWNER_LOCK_FILE), "utf-8");
       expect(Number.parseInt(holder, 10)).toBe(process.pid);
       await release();
     } finally {
@@ -69,12 +67,12 @@ describe("daemon 启动锁", () => {
     const { dir, cleanup } = tempBoardDir();
     await createTestBoard(dir);
     try {
-      const lockPath = path.join(dir, START_LOCK_FILE);
+      const lockPath = path.join(dir, OWNER_LOCK_FILE);
       // 活锁（本进程 pid）：start 拒绝，且锁文件不被误删
       fs.writeFileSync(lockPath, String(process.pid));
       await expect(
         startTestDaemon("lock-test", dir, { source: "lock" }),
-      ).rejects.toThrow("正在启动");
+      ).rejects.toThrow("正在认领");
       expect(fs.existsSync(lockPath)).toBe(true);
 
       // stale 锁（死 pid）：回收后正常启动，启动完成锁即释放

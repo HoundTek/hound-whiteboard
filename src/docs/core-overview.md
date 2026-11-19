@@ -85,7 +85,7 @@ Kernel 不依赖 DOM，也不依赖 Worker 宿主：
 6. `BoardApiRpc.createViewport(...)` 在 Worker 中创建 `ViewportCore`
 7. `Viewport.startWorkerSync()` 启动 `viewport-change` 与 `request-render-flush` 循环
 
-`createBoard` 携带有效 `rootPath` 时，Worker 侧先探测板目录 `.daemon.json`（core-worker.js:827）：有活 daemon 则只读挂载、零写盘，经协作通道直连；无则装配 tauri driver 自行落盘并请求宿主 spawn daemon（周期重试探测）。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js:656，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（demo/whiteboard.js:57-66）。
+`createBoard` 携带有效 `rootPath` 时，Worker 侧先探测板目录 `.owner.json` 的 daemon transport（core-worker.js:827）：有活 daemon 则只读挂载、零写盘，经协作通道直连；无则装配 tauri driver 自行落盘并请求宿主 spawn daemon（周期重试探测）。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js:656，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（demo/whiteboard.js:57-66）。
 
 ### demo web 模式
 

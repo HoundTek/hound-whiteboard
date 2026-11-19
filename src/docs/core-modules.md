@@ -116,7 +116,7 @@ flowchart BT
 - `viewport-change` / `request-render-flush` 处理
 - `render-frame` 回传
 - 持久化装配：rootPath 有效时注册根目录、恢复会话并挂接日志跟随者
-- daemon 探测：开板时读板目录 `.daemon.json` 探测持板 daemon，有活 daemon 直连协作（只读挂载、零写盘），无则请求宿主 spawn 并周期重试
+- daemon 探测：开板时读板目录 `.owner.json` 的 daemon transport 探测持板 daemon，有活 daemon 直连协作（只读挂载、零写盘），无则请求宿主 spawn 并周期重试
 - 中继连接装配：`syncUrl` 存在时经 `network-coordinator` 连接协作中继，失败自动重试
 
 ### `host/bridges/`

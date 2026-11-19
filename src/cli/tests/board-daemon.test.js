@@ -1,6 +1,6 @@
 /**
  * @file 板 daemon 端到端测试
- * @description 验证 daemon 持板、RPC 命令执行、描述文件生命周期、僵尸回退与经中继的实时互见。
+ * @description 验证 daemon 持板、RPC 命令执行、owner claim 生命周期、僵尸回退与经中继的实时互见。
  * @module cli/tests/board-daemon.test
  * @author Zhou Chenyu
  */
@@ -13,7 +13,11 @@ import { execFile } from "node:child_process";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { startBoardDaemon, readDaemonDescriptor } from "../board-daemon.js";
+import {
+  OWNER_FILE,
+  startBoardDaemon,
+  readDaemonDescriptor,
+} from "../board-daemon.js";
 import {
   daemonIdentityFile,
   daemonsDir,
@@ -179,7 +183,7 @@ describe("板 daemon", () => {
     expect(await readDaemonDescriptor(dir)).toBeNull();
   });
 
-  test("活 daemon 存在时拒绝重复启动；僵尸描述文件回退 null", async () => {
+  test("活 daemon 存在时拒绝重复启动；僵尸 owner claim 回退 null", async () => {
     const { dir, cleanup } = await tempBoard();
     const daemon = await startBoardDaemon({
       rootPath: dir,
@@ -195,10 +199,22 @@ describe("板 daemon", () => {
       await daemon.close();
     }
 
-    // 僵尸描述文件（无活进程）：客户端连接回退 null
+    // 僵尸 owner claim（无活进程）：客户端连接回退 null
     await fs.writeFile(
-      path.join(dir, ".daemon.json"),
-      JSON.stringify({ pid: 1, port: 1, source: "ghost" }),
+      path.join(dir, OWNER_FILE),
+      JSON.stringify({
+        ownerId: "ghost-owner",
+        pid: 1,
+        source: "ghost",
+        boardId: null,
+        transport: {
+          kind: "daemon",
+          name: "ghost",
+          host: "127.0.0.1",
+          port: 1,
+        },
+        claimedAt: new Date().toISOString(),
+      }),
       "utf-8",
     );
     expect(await connectDaemonByPath(dir)).toBeNull();
@@ -1053,7 +1069,7 @@ describe("GUI 附属 daemon 闲置自退出", () => {
     });
     try {
       expect(await readDaemonDescriptor(dir)).not.toBeNull();
-      // 仅剩 spawn 创建者引用且无客户端：超时自退出（.daemon.json 被清理）
+      // 仅剩 spawn 创建者引用且无客户端：超时自退出（.owner.json 被清理）
       await waitFor(async () => (await readDaemonDescriptor(dir)) === null);
     } finally {
       await daemon.close();

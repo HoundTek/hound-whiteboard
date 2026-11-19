@@ -111,11 +111,14 @@ function createMemoryCommandHandler() {
       case "safe_io_fs_mkdir":
         return driver.mkdir(args.rootId, args.relPath);
       case "spawn_board_daemon":
-        // 模拟 Rust 幂等探测：mock 盘 .daemon.json 里的活 daemon 直接返回
+        // 模拟 Rust 幂等探测：mock 盘 .owner.json 里的活 daemon 直接返回
         {
-          const text = await driver.read("mem", ".daemon.json");
-          const desc = JSON.parse(text);
-          return { name: desc.name, port: desc.port };
+          const text = await driver.read("mem", ".owner.json");
+          const claim = JSON.parse(text);
+          return {
+            name: claim.transport.name,
+            port: claim.transport.port,
+          };
         }
       default:
         throw new Error(`unknown command ${command}`);
@@ -232,7 +235,7 @@ async function waitFor(probe, timeoutMs = 2000) {
 }
 
 /**
- * 装配协作模式的 runtime：真 daemon（持板落盘）+ mock 盘预置 .daemon.json（spawn 幂等探测命中，不重复拉起）
+ * 装配协作模式的 runtime：真 daemon（持板落盘）+ mock 盘预置 .owner.json（spawn 幂等探测命中，不重复拉起）
  * @returns {{ host: FakeWorkerHost, runtime: CoreWorkerRuntime, handler: Function, driver: Object, daemon: Object, boardDir: string }} 测试上下文
  */
 async function setup() {
@@ -254,14 +257,22 @@ async function setup() {
     rootPath: boardDir,
     source: "worker-test",
   });
-  // mock 盘预置 .daemon.json：spawn 幂等探测命中（不触发真实 spawn）
+  // mock 盘预置 .owner.json：spawn 幂等探测命中（不触发真实 spawn）
   await driver.write(
     "mem",
-    ".daemon.json",
+    ".owner.json",
     JSON.stringify({
-      name: "worker-test",
-      port: daemon.port,
+      ownerId: "worker-test-owner",
+      pid: process.pid,
       source: "worker-test",
+      boardId: null,
+      transport: {
+        kind: "daemon",
+        name: "worker-test",
+        host: "127.0.0.1",
+        port: daemon.port,
+      },
+      claimedAt: new Date().toISOString(),
     }),
   );
   await rpcCall(host, handler, "createBoard", {
@@ -391,7 +402,7 @@ describe("CoreWorker 持久化接线", () => {
     const runtime = new CoreWorkerRuntime(host);
     runtime.start();
     const { handler, driver } = createMemoryCommandHandler();
-    // mock 盘无 .daemon.json：spawn 幂等探测读不到描述，handler 抛错模拟拉起失败
+    // mock 盘无 .owner.json：spawn 幂等探测读不到描述，handler 抛错模拟拉起失败
     const boardDir = mkdtempSync(path.join(tmpdir(), "hwb-worker-standalone-"));
     try {
       await rpcCall(host, handler, "createBoard", {
@@ -429,7 +440,7 @@ describe("CoreWorker 持久化接线", () => {
   });
 
   test("attach 既有 daemon 时 destroyBoard 不 release（他人 daemon 不误杀）", async () => {
-    // setup() 的 mock 盘预置 .daemon.json：spawn 前探测命中活 daemon → attach，不记 ownership
+    // setup() 的 mock 盘预置 .owner.json：spawn 前探测命中活 daemon → attach，不记 ownership
     const { host, handler, daemon } = await setup();
     try {
       await rpcCall(host, handler, "destroyBoard");
@@ -462,17 +473,25 @@ describe("CoreWorker 持久化接线", () => {
       source: "worker-spawn-test",
       exitOnZero: false,
     });
-    // mock 盘不预置 .daemon.json：spawn 前探测无活 daemon → 记 ownership；
-    // spawn 处理器模拟 Rust 就绪（写描述并返回新实例）
+    // mock 盘不预置 .owner.json：spawn 前探测无活 daemon → 记 ownership；
+    // spawn 处理器模拟 Rust 就绪（写 owner claim 并返回新实例）
     const handler = async (command, args) => {
       if (command === "spawn_board_daemon") {
         await driver.write(
           "mem",
-          ".daemon.json",
+          ".owner.json",
           JSON.stringify({
-            name: daemon.name,
-            port: daemon.port,
+            ownerId: "worker-spawn-owner",
+            pid: process.pid,
             source: "worker-spawn-test",
+            boardId: null,
+            transport: {
+              kind: "daemon",
+              name: daemon.name,
+              host: "127.0.0.1",
+              port: daemon.port,
+            },
+            claimedAt: new Date().toISOString(),
           }),
         );
         return { name: daemon.name, port: daemon.port };

@@ -116,7 +116,7 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
       summary: "强制归零关闭（无条件，清理描述与注册表）",
       usage: "daemon stop --name <名>",
       description:
-        "无条件关闭 daemon：排空在途写、落盘、清理板目录 .daemon.json 与注册表条目。",
+        "无条件关闭 daemon：排空在途写、落盘、清理板目录 .owner.json（owner claim）与注册表条目。",
       flag: { name: "daemon 名" },
       examples: "hwb daemon stop --name board1",
     },
@@ -142,7 +142,7 @@ hwb daemon start --name board1 --path ~/boards/a --relay ws://127.0.0.1:8377 --b
       examples: "hwb create --path ~/boards/a --chunk-width 1024 --chunk-height 1024",
     },
     export: {
-      summary: "导出板为 .hwb（zip 平铺，不含 .daemon.json）",
+      summary: "导出板为 .hwb（zip 平铺，不含 .owner.json 等运行时标记）",
       usage: "export --path <板目录> --out <文件.hwb> [--json]",
       description:
         "离线读操作，不接 daemon；对 daemon 正在持有的板同样安全。zip 内 board.json 在根，objects/trash/hit/chunks 原样打包。",
@@ -294,7 +294,7 @@ hwb unchoose batch --apply --daemon board1`,
     daemonNotRunning: "daemon {name} 未在运行。",
     daemonNotRegistered: "daemon {name} 未在运行（注册表无此条目）。",
     daemonStoppedUnreachable: "daemon {name} 已停止（端口 {port} 不可连通）。",
-    daemonStartLockContention: "daemon 启动锁竞争失败（回收 stale 锁后仍被占用）。",
+    ownerLockContention: "板目录认领锁竞争失败（回收 stale 锁后仍被占用）。",
     daemonStopNeedName: "daemon stop 需要 --name {name}。",
     daemonReleaseNeedName: "daemon release 需要 --name {name}。",
     daemonStopTimeout: "daemon {name} 停机确认超时（注册表条目仍在）。",

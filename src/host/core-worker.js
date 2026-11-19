@@ -26,6 +26,11 @@ import { createSessionStore } from "../kernel/store/session-store.js";
 import { createNetworkCoordinator } from "./sync/network-coordinator.js";
 import { createAmendForwarder } from "./sync/amend-forwarder.js";
 import { createJournaler } from "../kernel/store/journaler.js";
+import {
+  OWNER_FILE,
+  ownerClaimToDaemonDescriptor,
+  parseOwnerClaim,
+} from "../kernel/board/owner-claim.js";
 import { hashString } from "../kernel/utils/hash.js";
 
 /**
@@ -242,7 +247,7 @@ class CoreWorkerRuntime {
   #boardSize = { width: 0, height: 0 };
 
   /**
-   * 持久化只读 driver（协作重连时读 .daemon.json 重新探测用）
+   * 持久化只读 driver（协作重连时读 .owner.json 重新探测用）
    * @type {Object | null}
    */
   #persistenceDriver = null;
@@ -820,7 +825,7 @@ class CoreWorkerRuntime {
   }
 
   /**
-   * 探测板目录的活 daemon（先读 .daemon.json，再按内存中的旧记录兜底）
+   * 探测板目录的活 daemon（先读 .owner.json，再按内存中的旧记录兜底）
    * @returns {Promise<{name: string, port: number}|null>} daemon 信息；无活 daemon 时为 null
    * @private
    */
@@ -828,18 +833,15 @@ class CoreWorkerRuntime {
     const driver = this.#persistenceDriver;
     if (driver !== null) {
       try {
-        const text = await driver.read(this.#persistenceRootId, ".daemon.json");
+        const text = await driver.read(this.#persistenceRootId, OWNER_FILE);
         if (typeof text === "string" && text !== "") {
-          const desc = JSON.parse(text);
-          if (
-            typeof desc?.port === "number" &&
-            (await this.#probeWs(desc.port))
-          ) {
-            return { name: desc.name, port: desc.port };
+          const daemon = ownerClaimToDaemonDescriptor(parseOwnerClaim(text));
+          if (daemon !== null && (await this.#probeWs(daemon.port))) {
+            return { name: daemon.name, port: daemon.port };
           }
         }
       } catch {
-        // 描述文件缺失或损坏：走旧端口兜底
+        // owner claim 缺失或损坏：走旧端口兜底
       }
     }
     if (this.#guiDaemon && (await this.#probeWs(this.#guiDaemon.port))) {

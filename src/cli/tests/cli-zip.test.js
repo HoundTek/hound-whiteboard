@@ -41,7 +41,7 @@ describe("CLI .hwb 打包", () => {
     return { dir, daemon, hwb, cleanup };
   }
 
-  test("export 导出平铺 zip：board.json 在根，排除 .daemon.json", async () => {
+  test("export 导出平铺 zip：board.json 在根，排除 owner claim 等运行时标记", async () => {
     const { dir, daemon, hwb, cleanup } = await setupBoard();
     try {
       await runCli(["export", "--path", dir, "--out", hwb]);
@@ -50,7 +50,10 @@ describe("CLI .hwb 打包", () => {
       expect(names).toContain("board.json");
       expect(names.some((n) => n.startsWith("objects/"))).toBe(true);
       expect(names.some((n) => n.startsWith("hit/"))).toBe(true);
+      expect(names).not.toContain(".owner.json");
       expect(names).not.toContain(".daemon.json");
+      expect(names).not.toContain(".owner.lock");
+      expect(names).not.toContain(".daemon-start.lock");
       // board.json 含格式版本与板配置
       const meta = JSON.parse(zip.readAsText("board.json"));
       expect(meta.formatVersion).toBe(1);

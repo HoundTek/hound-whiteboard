@@ -41,14 +41,14 @@ hwb daemon stop --name board1            # 强制归零关闭
 ```
 
 - **后台启动**：`daemon start` 以 detached 子进程拉起 daemon 并等待就绪（注册表条目出现 + 端口可连通）后立即返回，终端可继续使用
-- **唯一性**：name 与存活 daemon 重复、板目录已被其它活 daemon 持有，均拒绝启动；僵尸条目（进程已死）可覆盖。启动窗口由板目录启动锁 `.daemon-start.lock` 互斥（O_EXCL 抢锁、持有者 pid 判活、死 pid 的 stale 锁自动回收），并发 start 只有一个进程能进入，启动完成后锁即释放
+- **唯一性**：board 目录的写权由 `.owner.json` owner claim 标记（ownerId/pid/source/transport/claimedAt）；name 与存活 daemon 重复、板目录已被其它活 owner 持有，均拒绝启动；僵尸条目（进程已死）可覆盖。启动窗口由板目录 owner 锁 `.owner.lock` 互斥（O_EXCL 抢锁、持有者 pid 判活、死 pid 的 stale 锁自动回收），并发 start 只有一个进程能进入，启动完成后锁即释放
 - **板必须已存在**：先用 `create` 离线建板，再 `daemon start`
-- **强制关闭**：`daemon stop` 无条件关闭；关闭过程 single-flight，进入关闭状态即拒绝新任务，随后排空已接收任务、落盘并清理板目录 `.daemon.json` 与注册表条目。重复 shutdown、闲置退出与信号触发等待同一清理承诺。
+- **强制关闭**：`daemon stop` 无条件关闭；关闭过程 single-flight，进入关闭状态即拒绝新任务，随后排空已接收任务、落盘并清理板目录 `.owner.json` 与注册表条目。重复 shutdown、闲置退出与信号触发等待同一清理承诺。
 - **中继**：daemon 连了中继（`--relay`）时，GUI 的操作与 volatile awareness 经 daemon 桥接进 relay 房间；relay 下行 awareness 同样转发给直连 GUI，跨机协作端实时互见。`--board-id` 指定 relay 房间，决定与其他端会合；省略时取板目录路径
 
 ### GUI 协作
 
-GUI 打开板时检测板目录 `.daemon.json`：有活 daemon 直接作为**协作客户端**（只读挂载板目录、本地 BoardCore 渲染、零写盘、经协作通道与 daemon 双向同步，落盘全在 daemon）；无活 daemon 则请求宿主进程 spawn 一个（name `gui-<板名>-<路径哈希>`，等就绪后连接）。GUI 销毁板时若本端是该 daemon 的 spawn 创建者（本次会话内经宿主 spawn 成功的新实例），断开协作通道后自动发 `daemon release` 回收创建者引用，无其他引用时 daemon 随即自动退出；attach 既有 daemon（CLI 或其他 GUI 启动的）时绝不 release，其创建者引用由 `daemon release` 手动回收。GUI 正常关窗会先走销毁路径（demo 侧拦截 close-requested 销毁 BoardCore，超时兜底放行关窗）；宿主进程被强杀等无机会执行关窗钩子的场景创建者引用会残留，由 daemon 侧闲置自退出兜底回收（见上）。本机端（CLI/TUI/MCP/GUI）之间不走 relay；relay 只承载跨机协作。
+GUI 打开板时检测板目录 `.owner.json` 的 daemon transport：有活 daemon 直接作为**协作客户端**（只读挂载板目录、本地 BoardCore 渲染、零写盘、经协作通道与 daemon 双向同步，落盘全在 daemon）；无活 daemon 则请求宿主进程 spawn 一个（name `gui-<板名>-<路径哈希>`，等就绪后连接）。GUI 销毁板时若本端是该 daemon 的 spawn 创建者（本次会话内经宿主 spawn 成功的新实例），断开协作通道后自动发 `daemon release` 回收创建者引用，无其他引用时 daemon 随即自动退出；attach 既有 daemon（CLI 或其他 GUI 启动的）时绝不 release，其创建者引用由 `daemon release` 手动回收。GUI 正常关窗会先走销毁路径（demo 侧拦截 close-requested 销毁 BoardCore，超时兜底放行关窗）；宿主进程被强杀等无机会执行关窗钩子的场景创建者引用会残留，由 daemon 侧闲置自退出兜底回收（见上）。本机端（CLI/TUI/MCP/GUI）之间不走 relay；relay 只承载跨机协作。
 
 ## 命令寻址
 
@@ -86,10 +86,10 @@ hwb <命令> [--daemon <名> | --path <板目录>] [--标志 值]
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `daemon start --name <名> --path <板目录> [--source <身份>] [--relay <中继地址>] [--board-id <房间>]` | 后台启动持板 daemon；同名同板已存活时引用 +1（幂等）                                                                                                                     |
 | `daemon release --name <名>`                                                                          | 引用 -1；归零且无客户端连接则 daemon 自动退出                                                                                                                            |
-| `daemon stop --name <名>`                                                                             | 强制归零关闭（无条件，清理 `.daemon.json` 与注册表条目）                                                                                                                 |
+| `daemon stop --name <名>`                                                                             | 强制归零关闭（无条件，清理 `.owner.json` 与注册表条目）                                                                                                                  |
 | `daemon status [--name <名>]`                                                                         | 查单个 daemon（name/refCount/板目录/端口/身份/启动时间/存活）；省略 name 列出全部                                                                                        |
 | `create --path <板目录> [--width 800] [--height 600]`                                                 | 离线创建空板；板目录已存在时报错                                                                                                                                         |
-| `export --path <板目录> --out <文件.hwb>`                                                             | 导出板为 .hwb（zip 平铺，board.json 在根；不含 .daemon.json 运行时标记）                                                                                                 |
+| `export --path <板目录> --out <文件.hwb>`                                                             | 导出板为 .hwb（zip 平铺，board.json 在根；不含 .owner.json 等运行时标记）                                                                                                |
 | `import <文件.hwb> --path <板目录>`                                                                   | 导入 .hwb 建板（校验 zip 内 board.json 与 formatVersion；目标须为空/不存在）                                                                                             |
 | `info`                                                                                                | 打印板元数据与统计（板配置、记录数、HEAD、活动链 chain、对象/trash 计数、id 计数器）                                                                                     |
 | `list`                                                                                                | 列出活动对象（id、类型）与 trash 条目                                                                                                                                    |
@@ -133,7 +133,7 @@ CLI 全部用户可见文本（帮助、错误消息、状态输出）走消息�
 
 `.hwb` 是板的单文件交换格式（zip 容器，后缀为 .hwb）：
 
-- **内容**：zip 平铺板目录布局——`board.json` 在 zip 根，`objects/`、`trash/`、`hit/`、`chunks/` 与 `.cli-choices.json`（choice 种子）原样打包；`.daemon.json` 是运行时持有标记，不导出
+- **内容**：zip 平铺板目录布局——`board.json` 在 zip 根，`objects/`、`trash/`、`hit/`、`chunks/` 与 `.cli-choices.json`（choice 种子）原样打包；`.owner.json`、锁文件与旧 `.daemon.json` 是运行时标记，不导出
 - **导出**：`hwb export --path <板目录> --out foo.hwb`，离线读操作（不接 daemon），对 daemon 正在持有的板同样安全（写操作响应前均已落盘）
 - **导入**：`hwb import foo.hwb --path <板目录>`，校验 zip 内 `board.json` 存在且 `formatVersion` 与当前版本一致，目标目录须为空或不存在；导入后即是一块可被 `daemon start` 持有的新板
 - **格式版本**：随 `board.json` 的 `formatVersion` 字段（当前 1），跨版本导入报错

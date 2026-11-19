@@ -2,7 +2,7 @@
 //!
 //! 职责：
 //! - 板不存在时创建骨架（board.json + 目录布局），随后 spawn 持板 daemon 进程
-//! - 轮询板目录 `.daemon.json` 直到 daemon 就绪（端口已写入）
+//! - 轮询板目录 `.owner.json` 直到 daemon 就绪（transport.port 已写入）
 //! - 返回 { name, port }，供 GUI 经协作通道连接
 
 use serde::Serialize;
@@ -22,16 +22,26 @@ pub struct SpawnDaemonResult {
 /// daemon 进程入口（相对本 crate 源码目录的 start-daemon.js）
 const START_DAEMON_JS: &str = "../src/cli/start-daemon.js";
 
-/// 轮询板目录 .daemon.json 直到出现端口字段
+/// 轮询板目录 .owner.json 直到出现 daemon transport 端口
 fn wait_for_daemon(board_path: &Path, timeout: Duration) -> Option<u16> {
-    let daemon_file = board_path.join(".daemon.json");
+    let owner_file = board_path.join(".owner.json");
     let start = Instant::now();
     while start.elapsed() < timeout {
-        if let Ok(text) = fs::read_to_string(&daemon_file) {
+        if let Ok(text) = fs::read_to_string(&owner_file) {
             if let Ok(desc) = serde_json::from_str::<serde_json::Value>(&text) {
-                if let Some(port) = desc.get("port").and_then(|p| p.as_u64()) {
-                    if port > 0 && port <= u64::from(u16::MAX) {
-                        return Some(port as u16);
+                let transport = desc.get("transport");
+                let is_daemon = transport
+                    .and_then(|t| t.get("kind"))
+                    .and_then(|k| k.as_str())
+                    == Some("daemon");
+                if is_daemon {
+                    if let Some(port) = transport
+                        .and_then(|t| t.get("port"))
+                        .and_then(|p| p.as_u64())
+                    {
+                        if port > 0 && port <= u64::from(u16::MAX) {
+                            return Some(port as u16);
+                        }
                     }
                 }
             }
@@ -114,20 +124,26 @@ fn spawn_board_daemon_blocking(
     height: Option<f64>,
 ) -> Result<SpawnDaemonResult, String> {
     let board_path = Path::new(&path);
-    // 幂等探测：板目录已有活 daemon（描述端口可连通）则直接返回，不重复拉起
-    if let Ok(text) = fs::read_to_string(board_path.join(".daemon.json")) {
+    // 幂等探测：板目录已有活 daemon（owner claim 的 transport 端口可连通）则直接返回
+    if let Ok(text) = fs::read_to_string(board_path.join(".owner.json")) {
         if let Ok(desc) = serde_json::from_str::<serde_json::Value>(&text) {
-            let port = desc.get("port").and_then(|p| p.as_u64());
-            let existing = desc
-                .get("name")
-                .and_then(|n| n.as_str())
-                .map(String::from);
-            if let (Some(port), Some(existing)) = (port, existing) {
-                if port > 0 && port <= u64::from(u16::MAX) && port_alive(port as u16) {
-                    return Ok(SpawnDaemonResult {
-                        name: existing,
-                        port: port as u16,
-                    });
+            if let Some(transport) = desc.get("transport") {
+                let kind = transport.get("kind").and_then(|k| k.as_str());
+                if kind != Some("daemon") {
+                    return Err("板目录已被其他持有者认领".to_string());
+                }
+                let port = transport.get("port").and_then(|p| p.as_u64());
+                let existing = transport
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .map(String::from);
+                if let (Some(port), Some(existing)) = (port, existing) {
+                    if port > 0 && port <= u64::from(u16::MAX) && port_alive(port as u16) {
+                        return Ok(SpawnDaemonResult {
+                            name: existing,
+                            port: port as u16,
+                        });
+                    }
                 }
             }
         }

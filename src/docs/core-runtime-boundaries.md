@@ -129,7 +129,7 @@ Worker 不解析 DOM 事件，也不持有 DevicesDAG。
 ### 当前默认运行时
 
 - `CoreWorkerRuntime.createBoard()` 在 `rootPath` 有效时装配 tauri driver、会话恢复与日志跟随者
-- GUI 开板时由 `#probeLiveBoardDaemon()` 探测板目录 `.daemon.json`（core-worker.js）：有活 daemon 则只读挂载、零写盘，经协作通道直连 daemon；无则请求宿主 spawn 并周期重试
+- GUI 开板时由 `#probeLiveBoardDaemon()` 探测板目录 `.owner.json` 的 daemon transport（core-worker.js）：有活 daemon 则只读挂载、零写盘，经协作通道直连 daemon；无则请求宿主 spawn 并周期重试
 - 持板 daemon 进程内的落盘见「CLI daemon 进程」节
 - demo 以 `~/hound-whiteboard/demo-board` 为板目录运行于持久化模式（Tauri 可用时）
 - web demo（浏览器，无 Tauri）无文件系统能力，降级为内存模式 + relay 同步，落盘由持板 daemon 承担（whiteboard.js:51-52）

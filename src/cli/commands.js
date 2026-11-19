@@ -113,7 +113,7 @@ function printResult(flags, jsonValue, humanText) {
  * @returns {Promise<void>}
  *
  * @description
- * 离线读操作，不接 daemon；打包 zip 平铺（board.json 在根），排除 .daemon.json 运行时标记。
+ * 离线读操作，不接 daemon；打包 zip 平铺（board.json 在根），排除 .owner.json 等运行时标记。
  */
 async function cmdExport(flags) {
   const boardRoot = resolveBoardPath(flags.path);

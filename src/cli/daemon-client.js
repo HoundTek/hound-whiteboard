@@ -142,7 +142,7 @@ async function connectDaemonByName(name) {
 }
 
 /**
- * 连接板目录的持有 daemon（板目录 .daemon.json 寻址）
+ * 连接板目录的持有 daemon（板目录 .owner.json 的 daemon transport 寻址）
  * @param {string} rootPath - 板目录
  * @returns {Promise<Object|null>} 会话面；板无持有 daemon 或连不上时为 null
  */
