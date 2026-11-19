@@ -37,19 +37,13 @@ flowchart LR
   GUI <-->|"ws"| RELAY
   CLI <-->|"ws"| RELAY
   WEB <-->|"ws"| RELAY
-  GUI <-->|"ws 直连协作通道<br/>（同协议单客户端版）"| CLI
-  CLI -.->|"sendRecords 桥接<br/>GUI 记录进房间"| RELAY
 ```
 
-### GUI 直连 daemon 拓扑
+### GUI owner 与本地 owner RPC
 
-除 relay 星型房间外，GUI worker 还会直连持板 daemon 的协作通道（`core-worker` 的 `#connectGuiDaemon`）：
+GUI 打开持久化板时不再探测或连接 daemon：GUI 自己 claim 板目录、自己落盘，并由 Rust host 在 `127.0.0.1` 开 owner RPC 端点（claim transport 记录 host/port/token）。CLI 直连该端点在 A2b 接入；A2a 期间 CLI `--path` 遇活 GUI owner 时拒绝直写。
 
-- **探测与重连**：每次尝试先重新探测 daemon（重启后端口可能变化，经 `.owner.json` 的 daemon transport 发现）；失败起每 3s 重试（`#scheduleGuiReconnect`）。
-- **boardId = rootPath**：直连协调器以板根路径作 boardId，与 relay 房间协议同构（join/records/aom/awareness/digest 的单客户端版）。
-- **桥接进房间**：daemon 侧把 GUI 写入的记录经 `sendRecords` 桥进 relay 房间（`board-daemon.js` 的 records 分支），GUI 的操作对远端可见；daemon 连了中继才桥接。
-- **单机降级**：无 daemon（或 daemon 不可达）时 GUI 按单机自治运行，写权仲裁落盘兜底（见会话存储文档），协作通道断开仅按 3s 重试，不阻塞开板。
-- 断线重连后的全量收敛沿用同步机制的 digest / request-init 对账。
+daemon 侧的 `join`/collab 客户端协议保留为过渡路径，A3 将移除；本机端之间仍不走 relay，relay 只承载跨机协作。
 
 ## 消息协议（JSON over WebSocket）
 
@@ -98,7 +92,7 @@ flowchart LR
 - **依赖预检**：除来源序号与 parentId 外，undo/move-head 的 targetNodeId、redo 的 targetUndoId 也必须先到；合法缺依赖记录继续等待，确定非法记录隔离并告警，不触发周期性全量请求放大。
 - **延迟容忍窗**：乱序记录（来源序号空洞 / 父或语义目标未达）入缓冲，500ms 窗到再整理；连续 3 窗仍未补齐则携带 lastSeen 请求缺口。
 - **增量 INIT（lastSeen 握手）**：join 与 peer-joined 时互发 request-init 携带各来源最大序号（lastSeen）；respond-init 仅携带缺口记录（增量请求无缺口时不回应，无 lastSeen 时全量回应供新成员加入）。离线期间的操作是本地日志的未同步段，重连后双向补发缺口即收敛，增量 anti-entropy 之外的兜底仍是周期摘要。
-- **在途分子对账**：request-init 合并本端创建的 openMols 与已消费远端分子的 molId/seq 水位；收到请求时按对方清单对账——对方缺此 molId 则重发 mol-begin（entries 含 begin 时的 create 快照）与全部 amend 段，对方 seq 落后则只补其后的 amend 段。接收端按 molId/seq 去重，结束墓碑阻止旧帧复活预览；CoreWorker 的本地 awareness/amend 扇出到 relay 与 daemon，daemon 再在直连 GUI 与 relay 间桥接。
+- **在途分子对账**：request-init 合并本端创建的 openMols 与已消费远端分子的 molId/seq 水位；收到请求时按对方清单对账——对方缺此 molId 则重发 mol-begin（entries 含 begin 时的 create 快照）与全部 amend 段，对方 seq 落后则只补其后的 amend 段。接收端按 molId/seq 去重，结束墓碑阻止旧帧复活预览；CoreWorker 的本地 awareness/amend 只扇出到 relay，daemon 侧负责把其 CLI/协作客户端的 awareness/amend 桥进 relay。
 - **重连与 AOM 重同步**：socket 断开或收到 peer-left 时按通道释放远程活动来源，只有最后一个持有该来源的通道离开才清锁；同 source 新会话 peer-joined 先清旧活动，再按当前 hold 重广播 choose。宿主每 3s 自动重连。
 
 接入时序（新成员 B 加入已有成员 A 的房间）：

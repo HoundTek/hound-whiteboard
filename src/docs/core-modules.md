@@ -116,7 +116,7 @@ flowchart BT
 - `viewport-change` / `request-render-flush` 处理
 - `render-frame` 回传
 - 持久化装配：rootPath 有效时注册根目录、恢复会话并挂接日志跟随者
-- daemon 探测：开板时读板目录 `.owner.json` 的 daemon transport 探测持板 daemon，有活 daemon 直连协作（只读挂载、零写盘），无则请求宿主 spawn 并周期重试
+- owner claim：开板时经 Rust `start_owner_rpc` claim 板目录并开本地 owner RPC 端点；已有活 owner 时开板失败，不再探测/spawn daemon
 - 中继连接装配：`syncUrl` 存在时经 `network-coordinator` 连接协作中继，失败自动重试
 
 ### `host/bridges/`
@@ -143,7 +143,7 @@ flowchart BT
 
 ## `cli/`
 
-`cli/` 是命令行第二前端：写命令（add/delete/undo/redo/choose/unchoose/modify）一律经持板 daemon 的 WebSocket RPC 执行——与 GUI 调 BoardApi 同一条路，天然并发安全、与 GUI 实时互见；读命令既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 daemon 存活）。本机所有权模型为「一个板文件夹一个持板 daemon，CLI/TUI/MCP/GUI 均为其客户端」。详见 [../cli/docs/cli-document.md](../cli/docs/cli-document.md)。
+`cli/` 是命令行第二前端：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 RPC 执行——daemon owner 走 daemon WebSocket RPC，GUI owner 的直连在 A2b 接入，暂以明确错误拒绝；读命令既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 owner 存活）。本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」。详见 [../cli/docs/cli-document.md](../cli/docs/cli-document.md)。
 
 ## `kernel/`
 

@@ -1,14 +1,14 @@
 # CLI 文档
 
-本文档提供 Hound Whiteboard 命令行前端（`src/cli/`）的概述与使用说明：写操作一律经持板 daemon 执行，读操作可经 daemon 查询或直读板文件，全程 Node 环境，不依赖 GUI、Worker 与渲染管线。
+本文档提供 Hound Whiteboard 命令行前端（`src/cli/`）的概述与使用说明：写操作经当前 owner 执行（daemon RPC；GUI owner 的直连在 A2b 接入），读操作可经 daemon 查询或直读板文件，全程 Node 环境，不依赖 GUI、Worker 与渲染管线。
 
 > [!NOTE]
 >
-> **当前状态**：daemon 管理（start/hold/release/stop/status，按 name 注册表寻址，引用计数模型）、`create` 离线建板、`.hwb` 打包（export/import）、十五个板命令、daemon 连接与直读双寻址、GUI 协作通道（本机直连 daemon，relay 只管跨机）、`--json` 输出契约、并发安全（RPC 串行队列 + 持板侧原子 id 分配）与端到端测试均已落地。
+> **当前状态**：daemon 管理（start/hold/release/stop/status，按 name 注册表寻址，引用计数模型）、`create` 离线建板、`.hwb` 打包（export/import）、十五个板命令、daemon 连接与直读双寻址、GUI owner claim 与本地 owner RPC 端点（GUI 自己落盘，relay 只管跨机）、`--json` 输出契约、并发安全（RPC 串行队列 + 持板侧原子 id 分配）与端到端测试均已落地。
 
 ## 定位
 
-CLI 是白板的**第二前端**：写命令（add/delete/undo/redo/choose/unchoose/modify）一律经持板 daemon 的 WebSocket RPC 执行（与 GUI 调 BoardApi 同一条路，天然并发安全、与 GUI 实时互见）；读命令（info/list/show/inspect/ops/tree/choices）既可经 daemon 查询，也可 `--path` 直读板文件（零写盘，不依赖 daemon 存活）。
+CLI 是白板的**第二前端**：写命令（add/delete/undo/redo/choose/unchoose/modify）经当前 owner 的 WebSocket RPC 执行（daemon owner 走 daemon RPC；GUI owner 的直连在 A2b 接入，A2a 期间拒绝直写）；读命令（info/list/show/inspect/ops/tree/choices）既可经 daemon 查询，也可 `--path` 直读板文件（零写盘）。
 
 ## daemon 与注册表
 
@@ -20,15 +20,15 @@ daemon 进程内维护引用计数（创建者引用 1）：
 
 | 动作                                         | 计数                                                                           |
 | -------------------------------------------- | ------------------------------------------------------------------------------ |
-| `daemon start`（新创建）/ GUI 打开板时 spawn | 初始 1（创建者引用，需 release 释放；GUI spawn 的由 GUI 销毁板时自动 release） |
+| `daemon start`（新创建） | 初始 1（创建者引用，需 release 释放） |
 | `daemon start`（同名同板已存活，幂等）       | +1（重复 start 是"增加持有"而非报错）                                          |
 | GUI 长连接建立 / 断开                        | +1 / -1                                                                        |
 | `hwb daemon release --name <名>`             | -1；归零 → daemon 自动退出                                                     |
 | `hwb daemon stop --name <名>`                | 强制归零、无条件关闭                                                           |
 
 - **start 幂等**：重复 `start`（同名同板）是引用 +1 而非报错——误操作（不知情地两次 start）不会被打断，也不会被一次 release 误关；同名不同板、同板不同名仍报错（name 唯一 + 一个板一个 daemon 约束不变）
-- 自洽性：GUI 连接持有引用，GUI 开着时 release 最多降到 GUI 那份（>0），daemon 不会中途消失
-- **GUI 附属 daemon 闲置自退出**：`gui-` 前缀名（GUI spawn 的会话附属物）在无客户端连接且仅剩 spawn 创建者引用时启动 60s 倒计时，到期自动退出——GUI 异常关闭/宿主进程被杀时创建者引用来不及 release 的兜底；客户端 join 取消计时（GUI 每 3s 重连探测，活着的 GUI 不会误触发），CLI hold（创建者引用 >1）抑制退出
+- 自洽性：CLI hold 持有引用时 release 不会把 daemon 降到 0，daemon 不会中途消失
+- **`gui-` 前缀闲置自退出**：历史 GUI spawn 命名的 daemon 在无客户端连接且仅剩创建者引用时启动 60s 倒计时，到期自动退出；GUI 已不再 spawn daemon，该逻辑仅作遗留兜底，CLI hold（创建者引用 >1）抑制退出
 - refCount 不持久化：daemon 重启/僵尸覆盖后重置为 1；注册表条目镜像当前值供 `status` 展示
 - CLI 短命令不计数（用之前确保 daemon 在，用完不持有）
 
@@ -44,15 +44,15 @@ hwb daemon stop --name board1            # 强制归零关闭
 - **唯一性**：board 目录的写权由 `.owner.json` owner claim 标记（ownerId/pid/source/transport/claimedAt）；name 与存活 daemon 重复、板目录已被其它活 owner 持有，均拒绝启动；僵尸条目（进程已死）可覆盖。启动窗口由板目录 owner 锁 `.owner.lock` 互斥（O_EXCL 抢锁、持有者 pid 判活、死 pid 的 stale 锁自动回收），并发 start 只有一个进程能进入，启动完成后锁即释放
 - **板必须已存在**：先用 `create` 离线建板，再 `daemon start`
 - **强制关闭**：`daemon stop` 无条件关闭；关闭过程 single-flight，进入关闭状态即拒绝新任务，随后排空已接收任务、落盘并清理板目录 `.owner.json` 与注册表条目。重复 shutdown、闲置退出与信号触发等待同一清理承诺。
-- **中继**：daemon 连了中继（`--relay`）时，GUI 的操作与 volatile awareness 经 daemon 桥接进 relay 房间；relay 下行 awareness 同样转发给直连 GUI，跨机协作端实时互见。`--board-id` 指定 relay 房间，决定与其他端会合；省略时取板目录路径
+- **中继**：daemon 连了中继（`--relay`）时，经 daemon 的 CLI/协作客户端的操作与 volatile awareness 桥接进 relay 房间；GUI 自己直连 relay。`--board-id` 指定 relay 房间，决定与其他端会合；省略时取板目录路径
 
 ### GUI 协作
 
-GUI 打开板时检测板目录 `.owner.json` 的 daemon transport：有活 daemon 直接作为**协作客户端**（只读挂载板目录、本地 BoardCore 渲染、零写盘、经协作通道与 daemon 双向同步，落盘全在 daemon）；无活 daemon 则请求宿主进程 spawn 一个（name `gui-<板名>-<路径哈希>`，等就绪后连接）。GUI 销毁板时若本端是该 daemon 的 spawn 创建者（本次会话内经宿主 spawn 成功的新实例），断开协作通道后自动发 `daemon release` 回收创建者引用，无其他引用时 daemon 随即自动退出；attach 既有 daemon（CLI 或其他 GUI 启动的）时绝不 release，其创建者引用由 `daemon release` 手动回收。GUI 正常关窗会先走销毁路径（demo 侧拦截 close-requested 销毁 BoardCore，超时兜底放行关窗）；宿主进程被强杀等无机会执行关窗钩子的场景创建者引用会残留，由 daemon 侧闲置自退出兜底回收（见上）。本机端（CLI/TUI/MCP/GUI）之间不走 relay；relay 只承载跨机协作。
+GUI 打开持久化板时经 Rust `start_owner_rpc` claim 板目录并开本地 owner RPC 端点（host/port/token）；GUI 自己落盘，不再探测/spawn/连接 daemon。已有活 owner（例如 CLI 启动的 daemon）时开板失败，提示先停止对应 owner。GUI 正常关窗走销毁路径，停止 owner RPC 并释放 claim；宿主进程被强杀时 claim 端口探测会判 stale，下次开板可回收。本机端（CLI/TUI/MCP/GUI）之间不走 relay；relay 只承载跨机协作。
 
 ## 命令寻址
 
-- **写命令**（add/delete/undo/redo/choose/unchoose/modify）：用 `--daemon <name>` 或 `--path <板目录>` 寻址；`--path` 形态先探测板目录持有 daemon，有则同走 RPC，无则自治直写自己分片
+- **写命令**（add/delete/undo/redo/choose/unchoose/modify）：`--daemon <name>` 经 daemon RPC；`--path` 先探测当前 owner，daemon owner 同走 RPC，GUI owner 暂时拒绝直写（A2b 接入 owner RPC），无 owner 时自治直写自己分片
 - **读命令**（info/list/show/inspect/ops/tree/choices）：`--daemon <name>` 经 daemon 查询，或 `--path <板目录>` 直读板文件（不接 daemon），二选一且互斥
 - **create**：离线建板，只认 `--path`
 - `--daemon` 与 `--path` 同时给出时报错
@@ -168,7 +168,7 @@ choice 全量修改（--position/--transform/--property/--data）仅单成员 ch
 
 ## 会话生命周期
 
-- **写命令**：CLI 进程按 name 查注册表 → 连持板 daemon → 经 RPC 执行（持板侧同步完成 + 响应前落盘）→ 断开；`--path` 形态先探测板目录持有 daemon（活则同走 RPC），无 daemon 时**自治**：自己加载（对象直读 + 各流归并）→ 执行 → 落自己分片（`hit/<cli-*>/` + `meta/<cli-*>.json` + 影响的对象文件）→ 关闭。自治身份取 `~/.hound-whiteboard/cli-identity.json`（首启生成 `cli-*` 持久化）
+- **写命令**：`--daemon` 按 name 查注册表 → 连 owner daemon → 经 RPC 执行（owner 侧同步完成 + 响应前落盘）→ 断开；`--path` 先探测当前 owner：daemon owner 同走 RPC，GUI owner 暂时拒绝直写（A2b 接入 owner RPC），无 owner 时**自治**：自己加载（对象直读 + 各流归并）→ 执行 → 落自己分片（`hit/<cli-*>/` + `meta/<cli-*>.json` + 影响的对象文件）→ 关闭。自治身份取 `~/.hound-whiteboard/cli-identity.json`（首启生成 `cli-*` 持久化）
 - **读命令直读**：CLI 进程内开 BoardApi 会话加载板（`writeMeta:false` 保持零写盘）→ 查询 → flush（指纹种子保证零写盘）→ 关闭。这个形态使每次直读都走一遍恢复路径——撤销、trash、id 续号在跨进程场景下的正确性被持续检验
 
 ## 关键设计点
@@ -182,8 +182,8 @@ choice 全量修改（--position/--transform/--property/--data）仅单成员 ch
 ## 设计约束
 
 - 无交互与渲染能力：CLI 面向文档操作，不表达视口、选择与 overlay 状态
-- 写路径多写端分片（布局 v2）：各写端（GUI / daemon）只写自己 source 的日志流与自己影响的对象文件（AOM 活动性仲裁），board.json 仍由 daemon 单写；读命令直读只读已落盘状态，与持板者无竞态
-- daemon 是协作枢纽而非写路径单点：写命令优先经 daemon RPC（快路径），daemon 不在时 CLI 自治直写自己分片（慢路径，零依赖）；GUI 断线同样继续落盘（各自分片 + 原子写 + 重开归并兜底）
+- 写路径由 owner 独占（布局 v2）：owner 写日志流与对象文件（AOM 活动性仲裁）；GUI owner 写全部来源流，CLI daemon owner 写其负责的流。非 owner 不直接写目录，读命令直读已落盘状态，与 owner 无竞态
+- daemon 是 CLI 的 owner/代理：写命令经 owner RPC（快路径）；无 owner 时 CLI 自治直写自己分片（慢路径，零依赖）；GUI owner 的直连在 A2b 接入
 - `--chunk-width` / `--chunk-height` 只在建板时生效；改区块边长会让盘上区块归属全部错位，因此创建后不可更改
 
 ## 相关文档

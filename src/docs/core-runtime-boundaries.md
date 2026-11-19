@@ -129,7 +129,7 @@ Worker 不解析 DOM 事件，也不持有 DevicesDAG。
 ### 当前默认运行时
 
 - `CoreWorkerRuntime.createBoard()` 在 `rootPath` 有效时装配 tauri driver、会话恢复与日志跟随者
-- GUI 开板时由 `#probeLiveBoardDaemon()` 探测板目录 `.owner.json` 的 daemon transport（core-worker.js）：有活 daemon 则只读挂载、零写盘，经协作通道直连 daemon；无则请求宿主 spawn 并周期重试
+- GUI 开板时经 Rust `start_owner_rpc` claim 板目录并开本地 owner RPC 端点（core-worker.js）：GUI 自己落盘；已有活 owner 时开板失败
 - 持板 daemon 进程内的落盘见「CLI daemon 进程」节
 - demo 以 `~/hound-whiteboard/demo-board` 为板目录运行于持久化模式（Tauri 可用时）
 - web demo（浏览器，无 Tauri）无文件系统能力，降级为内存模式 + relay 同步，落盘由持板 daemon 承担（whiteboard.js:51-52）
@@ -150,7 +150,7 @@ Worker 不解析 DOM 事件，也不持有 DevicesDAG。
 持板 daemon 是独立 Node 进程，每块板同时最多一个：
 
 - 进程内装配完整 Core：`BoardCore` + `BoardApi` + node driver + 日志跟随者落盘 + WebSocket RPC 服务
-- 本机端（CLI / TUI / MCP / GUI）都是其客户端：写命令一律经 daemon 的 WebSocket RPC 串行执行，与 GUI 实时互见
+- 本机端（CLI / TUI / MCP）写命令经当前 owner 的 RPC 串行执行；GUI 作为 owner 时开本地 owner RPC 端点，CLI 直连在 A2b 接入
 - daemon 连了中继时，本机端的操作经 daemon 桥接进 relay 房间；relay 只承载跨机协作
 - 无 daemon 时 CLI 读命令以 `--path` 自治直读板文件（node driver，零写盘）
 

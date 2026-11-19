@@ -36,7 +36,7 @@ flowchart LR
     GUI -->|"跨机时 syncUrl"| RS
 ```
 
-本机各端（GUI / CLI / TUI / MCP）都直连持板 daemon，不经过 relay；relay 只承载跨机协作。
+一块板目录只有一个 owner：GUI 作为 owner 时自己写盘并开本地 owner RPC 端点；CLI 启动的 daemon 作为 owner 时由 daemon 持板并提供 RPC。本机端不经过 relay；relay 只承载跨机协作。
 
 ### UI 线程层
 
@@ -85,7 +85,7 @@ Kernel 不依赖 DOM，也不依赖 Worker 宿主：
 6. `BoardApiRpc.createViewport(...)` 在 Worker 中创建 `ViewportCore`
 7. `Viewport.startWorkerSync()` 启动 `viewport-change` 与 `request-render-flush` 循环
 
-`createBoard` 携带有效 `rootPath` 时，Worker 侧先探测板目录 `.owner.json` 的 daemon transport（core-worker.js:827）：有活 daemon 则只读挂载、零写盘，经协作通道直连；无则装配 tauri driver 自行落盘并请求宿主 spawn daemon（周期重试探测）。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js:656，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（demo/whiteboard.js:57-66）。
+`createBoard` 携带有效 `rootPath` 时，Worker 侧装配 tauri driver 自行落盘，并经 Rust `start_owner_rpc` claim 板目录、开本地 owner RPC 端点；已有活 owner 时开板失败，不再探测/spawn daemon。`syncUrl` 存在时装配 `network-coordinator` 连接协作中继（core-worker.js，失败自动重试，不阻塞开板）。web demo（浏览器无 Tauri）无文件系统能力，`rootPath` 为空降级内存模式 + relay 同步（demo/whiteboard.js）。
 
 ### demo web 模式
 
@@ -168,7 +168,7 @@ sequenceDiagram
 - `hitTest`、`queryObjects`、`queryChunkObjects` 已接到 Worker 权威状态
 - `undo` / `redo` 已接通（含侧栏按钮与快捷键）
 - 持久化已接通：demo 以 `~/hound-whiteboard/demo-board` 为板目录运行，撤销历史穿越重开
-- CLI 前端已接通：写命令经持板 daemon 执行（`src/cli/`），读命令可直读板文件；本机所有权模型为「一个板文件夹一个持板 daemon，CLI/TUI/MCP/GUI 均为其客户端」——GUI 打开板时只读挂载并经协作通道直连 daemon（零写盘），无 daemon 时由宿主 spawn（引用计数 hold/release 管理生命周期）；relay 只承载跨机协作，多 CLI 并发安全（详见 cli-document.md daemon 章节）
+- CLI 前端已接通：写命令经当前 owner（daemon RPC；GUI owner 的直连在 A2b 接入），读命令可直读板文件；本机所有权模型为「一个板文件夹一个 owner，owner 自己落盘」——GUI 开板即 claim 并开 owner RPC 端点，CLI 启动的 daemon 是另一种 owner；`--path` 遇活 GUI owner 时拒绝直写。relay 只承载跨机协作（详见 cli-document.md daemon 章节）
 
 ## 术语定义
 

@@ -13,6 +13,7 @@ import { SharedStateStore } from "../../../kernel/utils/shared-state-store.js";
 import { DevicesDAG } from "../../devices-dag/index.js";
 import { BoardApiRpc } from "../../../host/bridges/board-api-rpc.js";
 import { attachIoInvokeForwarder } from "../../../host/bridges/io-invoke-forwarder.js";
+import { attachOwnerRpcForwarder } from "../../../host/bridges/owner-rpc-forwarder.js";
 import { Viewport } from "./viewport.js";
 import { DEFAULT_CHUNK_SIZE } from "../../../kernel/board/board-core.js";
 import { joinPath } from "../../../kernel/utils/path.js";
@@ -267,6 +268,8 @@ class Board {
 
     // worker 内驱动的文件操作经主线程转发到 Tauri invoke
     this.#detachIoForwarder = attachIoInvokeForwarder(worker);
+    // GUI owner 的本地 RPC：Tauri 事件与 worker 之间的请求/响应桥
+    attachOwnerRpcForwarder(worker);
 
     try {
       await boardApi.waitUntilReady(

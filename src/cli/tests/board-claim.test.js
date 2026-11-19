@@ -7,9 +7,11 @@
  */
 
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { WebSocketServer } from "ws";
 import {
   OWNER_FILE,
   OWNER_LOCK_FILE,
@@ -82,13 +84,21 @@ describe("板目录 owner claim", () => {
 
   test("活 owner 存在时拒绝第二次 claim", async () => {
     const { dir, cleanup } = await tempBoardDir();
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const port = server.address().port;
     try {
       await claimBoard(dir, {
         ownerId: "live-owner",
         pid: process.pid,
         source: "gui-live",
         boardId: null,
-        transport: { kind: "gui" },
+        transport: {
+          kind: "gui",
+          host: "127.0.0.1",
+          port,
+          token: "live-token",
+        },
         claimedAt: new Date().toISOString(),
       });
 
@@ -104,6 +114,7 @@ describe("板目录 owner claim", () => {
         ),
       ).rejects.toThrow("已被");
     } finally {
+      server.close();
       await cleanup();
     }
   });
@@ -117,7 +128,12 @@ describe("板目录 owner claim", () => {
         pid: deadPid,
         source: "gui-stale",
         boardId: null,
-        transport: { kind: "gui" },
+        transport: {
+          kind: "gui",
+          host: "127.0.0.1",
+          port: 1,
+          token: "stale-token",
+        },
         claimedAt: new Date().toISOString(),
       });
 

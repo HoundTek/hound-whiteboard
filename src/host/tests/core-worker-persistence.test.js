@@ -1,16 +1,12 @@
 /**
  * @file Core Worker 持久化接线测试
- * @description 验证 worker 组合根的持久化装配：tauri driver 经主线程转发落地，重开后会话恢复，撤销历史穿越重开。
+ * @description 验证 worker 持久化装配：GUI 直接落盘、owner claim 生命周期、重开恢复与 owner RPC 分发。
+ * @module host/tests/core-worker-persistence.test
  * @author Zhou Chenyu
  */
 
 import { CoreWorkerRuntime } from "../core-worker.js";
 import { createMemoryDriver } from "../../io/driver/memory.js";
-import { startBoardDaemon, readDaemonDescriptor } from "../../cli/board-daemon.js";
-import { openBoardSession } from "../../cli/board-session.js";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 /**
  * 测试用假 Worker 宿主（io-invoke 由内存驱动模拟的"Rust 侧"应答）
@@ -83,11 +79,14 @@ class FakeWorkerHost {
 
 /**
  * 创建内存文件系统模拟的 Rust command 处理器
- * @returns {{ handler: (command: string, args: Object) => Promise<*>, driver: Object }} 处理器与底层驱动
+ * @param {{ failStartOwnerRpc?: boolean }} [options={}] - 选项
+ * @returns {{ handler: (command: string, args: Object) => Promise<*>, driver: Object, calls: string[] }} 处理器、驱动与调用记录
  */
-function createMemoryCommandHandler() {
+function createMemoryCommandHandler({ failStartOwnerRpc = false } = {}) {
   const driver = createMemoryDriver({ rootId: "mem" });
+  const calls = [];
   const handler = async (command, args) => {
+    calls.push(command);
     switch (command) {
       case "safe_io_register_root":
         // Rust 侧返回纯字符串 root_id（与真实 command 行为一致）
@@ -110,25 +109,51 @@ function createMemoryCommandHandler() {
         return driver.mv(args.rootId, args.srcRel, args.destRel);
       case "safe_io_fs_mkdir":
         return driver.mkdir(args.rootId, args.relPath);
-      case "spawn_board_daemon":
-        // 模拟 Rust 幂等探测：mock 盘 .owner.json 里的活 daemon 直接返回
-        {
-          const text = await driver.read("mem", ".owner.json");
-          const claim = JSON.parse(text);
-          return {
-            name: claim.transport.name,
-            port: claim.transport.port,
-          };
+      case "start_owner_rpc":
+        if (failStartOwnerRpc) {
+          throw new Error("owner RPC 启动失败");
         }
+        return {
+          ownerId: "test-owner",
+          host: "127.0.0.1",
+          port: 1,
+          token: "test-token",
+        };
+      case "stop_owner_rpc":
+        return true;
       default:
         throw new Error(`unknown command ${command}`);
     }
   };
-  return { handler, driver };
+  return { handler, driver, calls };
 }
 
 /** RPC 消息序号 */
 let msgSeq = 0;
+
+/**
+ * 泵送一条 io-invoke 消息
+ * @param {FakeWorkerHost} host - 假宿主
+ * @param {(command: string, args: Object) => Promise<*>} handler - Rust command 处理器
+ * @returns {Promise<void>}
+ */
+async function pumpIoOnce(host, handler) {
+  for (const message of host.postedMessages) {
+    if (message.type !== "io-invoke" || message.__handled) continue;
+    message.__handled = true;
+    try {
+      const result = await handler(message.command, message.args);
+      host.emit({ type: "io-response", msgId: message.msgId, ok: true, result });
+    } catch (error) {
+      host.emit({
+        type: "io-response",
+        msgId: message.msgId,
+        ok: false,
+        error: String(error?.message ?? error),
+      });
+    }
+  }
+}
 
 /**
  * 发送 RPC 并等待响应（期间泵送全部 io-invoke 转发）
@@ -143,21 +168,7 @@ async function rpcCall(host, handler, method, params = {}) {
   host.emit({ type: "rpc", msgId, method, params });
   for (let i = 0; i < 200; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
-    for (const message of host.postedMessages) {
-      if (message.type !== "io-invoke" || message.__handled) continue;
-      message.__handled = true;
-      try {
-        const result = await handler(message.command, message.args);
-        host.emit({ type: "io-response", msgId: message.msgId, ok: true, result });
-      } catch (error) {
-        host.emit({
-          type: "io-response",
-          msgId: message.msgId,
-          ok: false,
-          error: String(error?.message ?? error),
-        });
-      }
-    }
+    await pumpIoOnce(host, handler);
     const response = host.postedMessages.find(
       (m) => m.type === "rpc-response" && m.msgId === msgId,
     );
@@ -170,6 +181,28 @@ async function rpcCall(host, handler, method, params = {}) {
 }
 
 /**
+ * 发送 owner RPC 请求并等待响应
+ * @param {FakeWorkerHost} host - 假宿主
+ * @param {(command: string, args: Object) => Promise<*>} handler - Rust command 处理器
+ * @param {string} requestId - 请求 id
+ * @param {string} route - route 名
+ * @param {Object} [params] - 参数
+ * @returns {Promise<Object>} worker 响应
+ */
+async function ownerRpcCall(host, handler, requestId, route, params = {}) {
+  host.emit({ type: "owner-rpc-request", requestId, route, params });
+  for (let i = 0; i < 200; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await pumpIoOnce(host, handler);
+    const response = host.postedMessages.find(
+      (m) => m.type === "owner-rpc-response" && m.requestId === requestId,
+    );
+    if (response) return response;
+  }
+  throw new Error(`owner rpc ${route} 超时`);
+}
+
+/**
  * 泵送 worker 的 io-invoke 转发直到排空（journaler 微任务合批的落盘由此完成）
  * @param {FakeWorkerHost} host - 假宿主
  * @param {(command: string, args: Object) => Promise<*>} handler - Rust command 处理器
@@ -177,26 +210,44 @@ async function rpcCall(host, handler, method, params = {}) {
  */
 async function pumpIo(host, handler) {
   for (let i = 0; i < 50; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    let handledAny = false;
-    for (const message of host.postedMessages) {
-      if (message.type !== "io-invoke" || message.__handled) continue;
-      message.__handled = true;
-      handledAny = true;
-      try {
-        const result = await handler(message.command, message.args);
-        host.emit({ type: "io-response", msgId: message.msgId, ok: true, result });
-      } catch (error) {
-        host.emit({
-          type: "io-response",
-          msgId: message.msgId,
-          ok: false,
-          error: String(error?.message ?? error),
-        });
-      }
-    }
-    if (!handledAny) return;
+    const before = host.postedMessages.filter((m) => m.type === "io-invoke" && !m.__handled).length;
+    await pumpIoOnce(host, handler);
+    if (before === 0) return;
   }
+}
+
+/**
+ * 轮询等待条件成立
+ * @param {Function} probe - 探测函数
+ * @param {number} [timeoutMs=2000] - 超时毫秒数
+ * @returns {Promise<boolean>} 是否成立
+ */
+async function waitFor(probe, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await probe()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
+/**
+ * 销毁 runtime 并泵送其 io-invoke（stop_owner_rpc）
+ * @param {CoreWorkerRuntime} runtime - 运行时
+ * @param {FakeWorkerHost} host - 假宿主
+ * @param {(command: string, args: Object) => Promise<*>} handler - Rust command 处理器
+ * @returns {Promise<void>}
+ */
+async function destroyRuntime(runtime, host, handler) {
+  let settled = false;
+  const done = runtime.destroyBoard().finally(() => {
+    settled = true;
+  });
+  for (let i = 0; i < 200 && !settled; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await pumpIoOnce(host, handler);
+  }
+  await done;
 }
 
 /**
@@ -220,209 +271,119 @@ async function createStroke(host, handler, id) {
 }
 
 /**
- * 轮询等待条件成立
- * @param {Function} probe - 探测函数
- * @param {number} [timeoutMs=2000] - 超时毫秒数
- * @returns {Promise<boolean>} 是否成立
+ * 装配持久化模式的 runtime
+ * @param {{ failStartOwnerRpc?: boolean }} [options={}] - 选项
+ * @returns {Promise<Object>} 测试上下文
  */
-async function waitFor(probe, timeoutMs = 2000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await probe()) return true;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return false;
-}
-
-/**
- * 装配协作模式的 runtime：真 daemon（持板落盘）+ mock 盘预置 .owner.json（spawn 幂等探测命中，不重复拉起）
- * @returns {{ host: FakeWorkerHost, runtime: CoreWorkerRuntime, handler: Function, driver: Object, daemon: Object, boardDir: string }} 测试上下文
- */
-async function setup() {
+async function setup(options = {}) {
   const host = new FakeWorkerHost();
   const runtime = new CoreWorkerRuntime(host);
   runtime.start();
-  const { handler, driver } = createMemoryCommandHandler();
-  // 真 daemon：临时板目录 + startBoardDaemon（协作通道对端，relay 远端与自身流的落盘者）
-  const boardDir = mkdtempSync(path.join(tmpdir(), "hwb-worker-collab-"));
-  const session = await openBoardSession(boardDir, {
-    create: true,
-    width: 800,
-    height: 600,
-  });
-  await session.flush();
-  await session.close();
-  const daemon = await startBoardDaemon({
-    name: "worker-test",
-    rootPath: boardDir,
-    source: "worker-test",
-  });
-  // mock 盘预置 .owner.json：spawn 幂等探测命中（不触发真实 spawn）
-  await driver.write(
-    "mem",
-    ".owner.json",
-    JSON.stringify({
-      ownerId: "worker-test-owner",
-      pid: process.pid,
-      source: "worker-test",
-      boardId: null,
-      transport: {
-        kind: "daemon",
-        name: "worker-test",
-        host: "127.0.0.1",
-        port: daemon.port,
-      },
-      claimedAt: new Date().toISOString(),
-    }),
-  );
+  const { handler, driver, calls } = createMemoryCommandHandler(options);
   await rpcCall(host, handler, "createBoard", {
     width: 800,
     height: 600,
     rootPath: "/boards/demo",
+    source: "demo",
   });
-  return { host, runtime, handler, driver, daemon, boardDir };
+  return { host, runtime, handler, driver, calls };
 }
 
 describe("CoreWorker 持久化接线", () => {
-  test("rootPath 有效时经协作通道同步 daemon，worker 自写本端流与对象文件（布局 v2）", async () => {
-    const { host, handler, driver, daemon } = await setup();
-    try {
-      await createStroke(host, handler, "demo/1");
-      // 协作同步：worker 操作广播 → daemon 应用 + 落盘
-      const landed = await waitFor(async () => {
-        const s = await openBoardSession(daemon.rootPath, { source: "check" });
-        const found = s.api
-          .queryObjectList()
-          .objects.some((o) => o.id === "demo/1");
-        await s.close();
-        return found;
-      });
-      expect(landed).toBe(true);
-
-      // 布局 v2：worker 自己落盘（本端 source 的日志流 + 对象文件，原子写经 mv 就位）
-      const landedLocal = await waitFor(async () => {
-        await pumpIo(host, handler);
-        const seg = await driver.read("mem", "hit/core/seg-000000.jsonl");
-        const obj = await driver.read("mem", "objects/demo%2F1.json");
-        return typeof seg === "string" && seg.includes('"core/op-1"')
-          && typeof obj === "string" && obj.includes('"demo/1"');
-      });
-      expect(landedLocal).toBe(true);
-      // worker 不写 board.json（daemon 单写）
-      const metaWrites = host.postedMessages.filter(
-        (m) =>
-          m.type === "io-invoke" &&
-          m.command === "safe_io_fs_mv" &&
-          m.args?.destRel === "board.json",
-      );
-      expect(metaWrites).toHaveLength(0);
-    } finally {
-      await daemon.close();
-      rmSync(daemon.rootPath, { recursive: true, force: true });
-    }
-  });
-
-  test("重开后经协作同步恢复，撤销穿越重开", async () => {
-    const { host, handler, driver, daemon } = await setup();
-    try {
-      await createStroke(host, handler, "demo/1");
-      await waitFor(async () => {
-        const s = await openBoardSession(daemon.rootPath, { source: "check" });
-        const found = s.api
-          .queryObjectList()
-          .objects.some((o) => o.id === "demo/1");
-        await s.close();
-        return found;
-      });
-
-      // 排空 io 转发后销毁
-      await rpcCall(host, handler, "queryObjects", { ids: ["demo/1"] });
-      await rpcCall(host, handler, "destroyBoard");
-
-      // 重开同一板：worker 本地盘为空，经协作通道全量同步恢复
-      await rpcCall(host, handler, "createBoard", {
-        width: 800,
-        height: 600,
-        rootPath: "/boards/demo",
-      });
-      const restored = await waitFor(async () => {
-        const objects = await rpcCall(host, handler, "queryObjects", {
-          ids: ["demo/1"],
-        });
-        return objects.length === 1 && objects[0].id === "demo/1";
-      });
-      expect(restored).toBe(true);
-
-      // 撤销穿越重开：worker undo 广播 → daemon 应用，对象消失
-      await rpcCall(host, handler, "undo");
-      const undone = await waitFor(async () => {
-        const s = await openBoardSession(daemon.rootPath, { source: "check" });
-        const found = s.api.queryObjectList().objects.length === 0;
-        await s.close();
-        return found;
-      });
-      expect(undone).toBe(true);
-    } finally {
-      await daemon.close();
-      rmSync(daemon.rootPath, { recursive: true, force: true });
-    }
-    void driver;
-  });
-
-  test("daemon 关闭后 worker 继续落盘本端流与 meta 分片（断线不锁编辑）", async () => {
-    const { host, handler, driver, daemon } = await setup();
+  test("rootPath 有效时 GUI 直接落盘并 claim owner RPC", async () => {
+    const { host, runtime, handler, driver, calls } = await setup();
     try {
       await createStroke(host, handler, "demo/1");
       const landed = await waitFor(async () => {
-        await pumpIo(host, handler);
-        const seg = await driver.read("mem", "hit/core/seg-000000.jsonl");
-        return typeof seg === "string" && seg.includes('"core/op-1"');
+        await pumpIoOnce(host, handler);
+        return (await driver.read("mem", "objects/demo%2F1.json")) !== null;
       });
       expect(landed).toBe(true);
+      await pumpIo(host, handler);
 
-      // 杀死 daemon：worker 不丢编辑能力，继续落自己的分片
-      await daemon.close();
-      await createStroke(host, handler, "demo/2");
-      const landedOffline = await waitFor(async () => {
-        await pumpIo(host, handler);
-        const seg = await driver.read("mem", "hit/core/seg-000001.jsonl");
-        const meta = await driver.read("mem", "meta/core.json");
-        return typeof seg === "string" && seg.includes('"core/op-')
-          && typeof meta === "string" && meta.includes('"lastTime"');
+      const metaLanded = await waitFor(async () => {
+        await pumpIoOnce(host, handler);
+        return (await driver.read("mem", "meta/demo.json")) !== null;
       });
-      expect(landedOffline).toBe(true);
-      await rpcCall(host, handler, "destroyBoard");
+      expect(metaLanded).toBe(true);
+
+      const obj = await driver.read("mem", "objects/demo%2F1.json");
+      const seg = await driver.read("mem", "hit/demo/seg-000000.jsonl");
+      const meta = await driver.read("mem", "meta/demo.json");
+      expect(obj).toContain('"demo/1"');
+      expect(seg).toContain('"demo/op-1"');
+      expect(typeof meta).toBe("string");
+      expect(calls).toContain("start_owner_rpc");
     } finally {
-      rmSync(daemon.rootPath, { recursive: true, force: true });
+      await destroyRuntime(runtime, host, handler);
     }
+    expect(calls).toContain("stop_owner_rpc");
   });
 
-  test("daemon 拉起失败时降级单机模式开板（盘即兜底）", async () => {
+  test("重开后从盘恢复对象", async () => {
+    const first = await setup();
+    await createStroke(first.host, first.handler, "demo/1");
+    await pumpIo(first.host, first.handler);
+    await destroyRuntime(first.runtime, first.host, first.handler);
+
     const host = new FakeWorkerHost();
     const runtime = new CoreWorkerRuntime(host);
     runtime.start();
-    const { handler, driver } = createMemoryCommandHandler();
-    // mock 盘无 .owner.json：spawn 幂等探测读不到描述，handler 抛错模拟拉起失败
-    const boardDir = mkdtempSync(path.join(tmpdir(), "hwb-worker-standalone-"));
     try {
-      await rpcCall(host, handler, "createBoard", {
+      await rpcCall(host, first.handler, "createBoard", {
         width: 800,
         height: 600,
-        rootPath: "/boards/standalone",
+        rootPath: "/boards/demo",
+        source: "demo",
       });
-      await createStroke(host, handler, "demo/1");
-      const landed = await waitFor(async () => {
-        await pumpIo(host, handler);
-        const seg = await driver.read("mem", "hit/core/seg-000000.jsonl");
-        const obj = await driver.read("mem", "objects/demo%2F1.json");
-        const meta = await driver.read("mem", "meta/core.json");
-        return typeof seg === "string" && typeof obj === "string" && typeof meta === "string";
-      });
-      expect(landed).toBe(true);
-      await rpcCall(host, handler, "destroyBoard");
+      const list = await rpcCall(host, first.handler, "queryObjectList");
+      expect(list.objects.map((obj) => obj.id)).toContain("demo/1");
     } finally {
-      rmSync(boardDir, { recursive: true, force: true });
+      await destroyRuntime(runtime, host, first.handler);
     }
+  });
+
+  test("owner RPC 请求经 worker 分发，写路由在响应前 flush", async () => {
+    const { host, handler, runtime, driver } = await setup();
+    try {
+      const response = await ownerRpcCall(host, handler, "r1", "addObject", {
+        type: "StrokeObject",
+        props: {
+          id: "demo/2",
+          position: { x: 0, y: 0 },
+          property: { width: 2 },
+          data: { points: [{ x: 0, y: 0 }, { x: 10, y: 0 }] },
+        },
+      });
+      expect(response.ok).toBe(true);
+      expect(typeof response.result).toBe("string");
+      const obj = await driver.read(
+        "mem",
+        `objects/${encodeURIComponent(response.result)}.json`,
+      );
+      expect(obj).toContain(response.result);
+
+      const unknown = await ownerRpcCall(host, handler, "r2", "nope");
+      expect(unknown.ok).toBe(false);
+      expect(unknown.error).toContain("未知 route");
+    } finally {
+      await destroyRuntime(runtime, host, handler);
+    }
+  });
+
+  test("owner RPC 启动失败时不降级开板", async () => {
+    const host = new FakeWorkerHost();
+    const runtime = new CoreWorkerRuntime(host);
+    runtime.start();
+    const { handler } = createMemoryCommandHandler({ failStartOwnerRpc: true });
+    await expect(
+      rpcCall(host, handler, "createBoard", {
+        width: 800,
+        height: 600,
+        rootPath: "/boards/fail",
+        source: "demo",
+      }),
+    ).rejects.toThrow("owner RPC 启动失败");
   });
 
   test("rootPath 缺省保持内存模式（无 io 转发）", async () => {
@@ -437,82 +398,5 @@ describe("CoreWorker 持久化接线", () => {
 
     const ioInvokes = host.postedMessages.filter((m) => m.type === "io-invoke");
     expect(ioInvokes).toHaveLength(0);
-  });
-
-  test("attach 既有 daemon 时 destroyBoard 不 release（他人 daemon 不误杀）", async () => {
-    // setup() 的 mock 盘预置 .owner.json：spawn 前探测命中活 daemon → attach，不记 ownership
-    const { host, handler, daemon } = await setup();
-    try {
-      await rpcCall(host, handler, "destroyBoard");
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      // 未发 release：daemon 描述保留、进程仍活（创建者引用不归本端）
-      expect(await readDaemonDescriptor(daemon.rootPath)).not.toBeNull();
-    } finally {
-      await daemon.close();
-      rmSync(daemon.rootPath, { recursive: true, force: true });
-    }
-  });
-
-  test("本端 spawn 的 daemon 在 destroyBoard 时自动 release（引用归零自退出）", async () => {
-    const host = new FakeWorkerHost();
-    const runtime = new CoreWorkerRuntime(host);
-    runtime.start();
-    const { handler: baseHandler, driver } = createMemoryCommandHandler();
-    const boardDir = mkdtempSync(path.join(tmpdir(), "hwb-worker-spawn-"));
-    const session = await openBoardSession(boardDir, {
-      create: true,
-      width: 800,
-      height: 600,
-    });
-    await session.flush();
-    await session.close();
-    // 模拟 GUI spawn 的 daemon：归零只清理不退出（进程退出会杀掉测试进程）
-    const daemon = await startBoardDaemon({
-      name: "worker-spawn-test",
-      rootPath: boardDir,
-      source: "worker-spawn-test",
-      exitOnZero: false,
-    });
-    // mock 盘不预置 .owner.json：spawn 前探测无活 daemon → 记 ownership；
-    // spawn 处理器模拟 Rust 就绪（写 owner claim 并返回新实例）
-    const handler = async (command, args) => {
-      if (command === "spawn_board_daemon") {
-        await driver.write(
-          "mem",
-          ".owner.json",
-          JSON.stringify({
-            ownerId: "worker-spawn-owner",
-            pid: process.pid,
-            source: "worker-spawn-test",
-            boardId: null,
-            transport: {
-              kind: "daemon",
-              name: daemon.name,
-              host: "127.0.0.1",
-              port: daemon.port,
-            },
-            claimedAt: new Date().toISOString(),
-          }),
-        );
-        return { name: daemon.name, port: daemon.port };
-      }
-      return baseHandler(command, args);
-    };
-    try {
-      await rpcCall(host, handler, "createBoard", {
-        width: 800,
-        height: 600,
-        rootPath: "/boards/spawned",
-      });
-      // destroy：协作 WS 断开（clientRefs 归零）+ release（ownerRefs 归零）→ daemon 自动关闭
-      await rpcCall(host, handler, "destroyBoard");
-      const gone = await waitFor(
-        async () => (await readDaemonDescriptor(boardDir)) === null,
-      );
-      expect(gone).toBe(true);
-    } finally {
-      await daemon.close();
-      rmSync(boardDir, { recursive: true, force: true });
-    }
   });
 });

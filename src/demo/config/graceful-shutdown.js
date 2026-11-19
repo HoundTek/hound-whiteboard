@@ -1,14 +1,14 @@
 /**
  * @file 关窗销毁
- * @description 窗口关闭前销毁 BoardCore（含板 daemon 创建者引用回收），销毁失败或超时不阻塞关窗。
+ * @description 窗口关闭前销毁 BoardCore（停止 owner RPC 并释放 claim），销毁失败或超时不阻塞关窗。
  * @module demo/config/graceful-shutdown
  * @author Zhou Chenyu
  */
 
 /**
  * 关窗销毁的最长等待时长（毫秒）
- * @description 防止 destroyBoard 挂起卡死关窗；destroyBoard 内的 daemon release 协议
- * 自身带 2s 超时（见 core-worker 的 releaseOwnedGuiDaemon），此处外层再兜 3s。
+ * @description 防止 destroyBoard 挂起卡死关窗；stop_owner_rpc 与 journaler detach
+ * 都可能等待 IO，此处外层兜 3s。
  * @type {number}
  */
 const CLOSE_DESTROY_TIMEOUT_MS = 3000;
@@ -20,10 +20,9 @@ const CLOSE_DESTROY_TIMEOUT_MS = 3000;
  * @returns {Promise<void>} 钩子注册完成
  *
  * @description
- * Tauri 桌面端：拦下 close-requested 事件，先销毁 BoardCore（触发板 daemon 创建者引用
- * release，无其他引用时 daemon 随即退出）再真正关窗。web 端（浏览器 demo）仅能挂
- * beforeunload 尽力而为，页面销毁不保证异步完成，残留引用由 daemon 闲置自退出兜底。
- * 宿主进程被强杀（^C 等）时本钩子无机会执行，同样由 daemon 闲置自退出兜底。
+ * Tauri 桌面端：拦下 close-requested 事件，先销毁 BoardCore（停止 owner RPC 并释放
+ * claim）再真正关窗。web 端（浏览器 demo）仅能挂 beforeunload 尽力而为，页面销毁不保证
+ * 异步完成；宿主进程被强杀（^C 等）时 claim 端口探测会判 stale，下次开板可回收。
  */
 async function installGracefulShutdown(boardApi, options = {}) {
   const { tauriAvailable = false, closeTimeoutMs = CLOSE_DESTROY_TIMEOUT_MS } =

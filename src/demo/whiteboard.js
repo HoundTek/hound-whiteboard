@@ -54,7 +54,7 @@ async function bootstrapWhiteboard() {
   const boardPath =
     query.get("board") ?? storage?.getItem?.("hwb-board") ?? undefined;
   // 无 Tauri（浏览器 web demo）：无文件系统能力，降级为内存模式 + relay 同步，
-  // 落盘由持板 daemon 承担（relay 来源的记录由 daemon 落盘）；?board= 在 web 下随之失效
+  // 不落盘；?board= 在 web 下随之失效
   const tauriAvailable = Boolean(
     globalThis.__TAURI__?.core?.invoke ?? globalThis.__TAURI_INTERNALS__?.invoke,
   );
@@ -89,7 +89,7 @@ async function bootstrapWhiteboard() {
     },
   );
 
-  // 关窗前销毁 BoardCore：回收板 daemon 创建者引用，daemon 无其他引用时随即退出
+  // 关窗前销毁 BoardCore：停止 owner RPC 并释放板目录 claim
   await installGracefulShutdown(board.getBoardApi(), { tauriAvailable });
 
   const viewport = board.createViewport(

@@ -122,6 +122,19 @@ function parseOwnerClaim(value) {
       return null;
     }
   }
+  if (transport.kind === OWNER_TRANSPORT_KINDS.GUI) {
+    if (
+      typeof transport.host !== "string" ||
+      transport.host === "" ||
+      !Number.isInteger(transport.port) ||
+      transport.port <= 0 ||
+      transport.port > 65535 ||
+      typeof transport.token !== "string" ||
+      transport.token === ""
+    ) {
+      return null;
+    }
+  }
 
   return {
     ownerId: claim.ownerId,

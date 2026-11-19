@@ -1,6 +1,6 @@
 /**
  * @file enable-worker-with-fallback 测试
- * @description 验证持久化开板失败回退内存模式的装配策略。
+ * @description 验证持久化开板失败回退内存模式的装配策略，以及 owner 冲突时不回退。
  * @module demo/config/tests/enable-worker-with-fallback.test
  * @author Zhou Chenyu
  */
@@ -67,6 +67,23 @@ describe("enableWorkerWithFallback", () => {
     expect(board.rootPath).toBeUndefined();
     expect(onFallback).toHaveBeenCalledWith(failure);
     expect(board.enableWorkerMode).toHaveBeenCalledTimes(2);
+  });
+
+  test("owner 冲突时直接抛出，不回退内存模式", async () => {
+    const conflict = new Error("板目录已被其他持有者认领");
+    const board = makeBoard({
+      enableWorkerMode: jest.fn().mockRejectedValue(conflict),
+    });
+    const worker = makeWorker();
+    const onFallback = jest.fn();
+
+    await expect(
+      enableWorkerWithFallback(board, () => worker, { onFallback }),
+    ).rejects.toBe(conflict);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    expect(onFallback).not.toHaveBeenCalled();
+    expect(board.rootPath).toBe("/board");
+    expect(board.enableWorkerMode).toHaveBeenCalledTimes(1);
   });
 
   test("内存模式开板失败（无 rootPath）时直接抛出，不重试", async () => {

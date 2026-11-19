@@ -293,10 +293,10 @@ async function startBoardDaemonLocked(options) {
 
   /**
    * 闲置自退出时长（毫秒）；null 表示不启用
-   * @description GUI spawn 的 daemon（`gui-` 前缀名，见 core-worker 的 guiDaemonNameFromPath）
-   * 是 GUI 会话的附属物：GUI 异常关闭或宿主进程被杀时创建者引用来不及 release，
-   * 无客户端连接的 daemon 空转无意义，闲置超时自退出兜底（仅剩 spawn 创建者引用时生效；
-   * CLI hold 占住的不退）。join 接入即取消，断连后重新计时。
+   * @description `gui-` 前缀 daemon 是历史 GUI spawn 命名的附属物：GUI 异常关闭或
+   * 宿主进程被杀时创建者引用来不及 release，无客户端连接的 daemon 空转无意义，
+   * 闲置超时自退出兜底（仅剩 spawn 创建者引用时生效；CLI hold 占住的不退）。
+   * join 接入即取消，断连后重新计时。
    * @type {number|null}
    */
   const idleExitMs =

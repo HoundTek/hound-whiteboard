@@ -20,7 +20,8 @@ import {
   isEntryAlive,
   listEntries,
 } from "./daemon-registry.js";
-import { readDaemonDescriptor, isDaemonAlive } from "./board-daemon.js";
+import { isOwnerClaimAlive, readOwnerClaim } from "./board-claim.js";
+import { OWNER_TRANSPORT_KINDS } from "../kernel/board/owner-claim.js";
 import { resolveBoardPath } from "./board-path.js";
 import { parseArgv } from "./args.js";
 import { initI18n, t } from "./i18n.js";
@@ -112,10 +113,19 @@ async function runDaemonStart(flags) {
       t("err.boardNotFoundWithHint", { path: rootPath, boardDir: t("ph.boardDir") }),
     );
   }
-  // 板占用检查：同一板目录只能被一个活 daemon 持有（同 name 同板已在上方分支处理）
-  const existing = await readDaemonDescriptor(rootPath);
-  if (existing && (await isDaemonAlive(existing.port))) {
-    throw new Error(t("err.boardOccupied", { port: existing.port }));
+  // 板占用检查：同一板目录只能被一个活 owner 持有（同 name 同板已在上方分支处理）
+  const existingClaim = await readOwnerClaim(rootPath);
+  if (existingClaim !== null && (await isOwnerClaimAlive(existingClaim))) {
+    if (existingClaim.transport.kind === OWNER_TRANSPORT_KINDS.DAEMON) {
+      throw new Error(
+        t("err.boardOccupied", { port: existingClaim.transport.port }),
+      );
+    }
+    throw new Error(
+      existingClaim.transport.kind === OWNER_TRANSPORT_KINDS.GUI
+        ? t("err.boardOwnedByGui")
+        : t("err.boardOwnedByOther"),
+    );
   }
   const childArgs = [
     START_DAEMON_PATH,
@@ -422,6 +432,14 @@ async function main() {
         live.close();
       }
       return;
+    }
+    const ownerClaim = await readOwnerClaim(board);
+    if (ownerClaim !== null && (await isOwnerClaimAlive(ownerClaim))) {
+      throw new Error(
+        ownerClaim.transport.kind === OWNER_TRANSPORT_KINDS.GUI
+          ? t("err.boardOwnedByGui")
+          : t("err.boardOwnedByOther"),
+      );
     }
     const session = await openBoardSession(board, {
       create: false,

@@ -1,12 +1,11 @@
 /**
- * @file Core Worker 连接竞态与 daemon 命名测试
- * @description 验证 connect/destroy 竞态下协调器被关闭不泄漏，及 GUI daemon 名按完整路径去重且合法。
+ * @file Core Worker 连接竞态测试
+ * @description 验证 connect/destroy 竞态下协调器被关闭不泄漏。
  * @module host/tests/core-worker-connect-race.test
  * @author Zhou Chenyu
  */
 
 import { jest } from "@jest/globals";
-import { isValidDaemonName } from "../../cli/daemon-registry.js";
 
 /**
  * 已创建的 mock 协调器实例（按创建顺序）
@@ -37,9 +36,7 @@ jest.unstable_mockModule("../sync/network-coordinator.js", () => ({
   },
 }));
 
-const { CoreWorkerRuntime, guiDaemonNameFromPath } = await import(
-  "../core-worker.js"
-);
+const { CoreWorkerRuntime } = await import("../core-worker.js");
 
 /**
  * 测试用假 Worker 宿主
@@ -237,23 +234,5 @@ describe("调试重连", () => {
     host.emit({ type: "awareness-send", data: { kind: "cursor" } });
     await until(() => newOne.awarenessSent.length === 1, "awareness 送达新协调器");
     expect(oldOne.awarenessSent).toHaveLength(0);
-  });
-});
-
-describe("guiDaemonNameFromPath", () => {
-  test("同 basename 不同完整路径派生不同 daemon 名，且名字合法", () => {
-    const nameA = `gui-${guiDaemonNameFromPath("/home/user/a/board")}`;
-    const nameB = `gui-${guiDaemonNameFromPath("/home/user/b/board")}`;
-    expect(nameA).not.toBe(nameB);
-    expect(nameA).toMatch(/^gui-board-[0-9a-f]{8}$/);
-    expect(isValidDaemonName(nameA)).toBe(true);
-    expect(isValidDaemonName(nameB)).toBe(true);
-  });
-
-  test("同一路径派生名稳定，特殊字符清洗后仍合法", () => {
-    const rootPath = "/data/my boards/白板 v2";
-    const name = `gui-${guiDaemonNameFromPath(rootPath)}`;
-    expect(name).toBe(`gui-${guiDaemonNameFromPath(rootPath)}`);
-    expect(isValidDaemonName(name)).toBe(true);
   });
 });

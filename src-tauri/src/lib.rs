@@ -24,8 +24,11 @@ pub fn run() {
             commands::zip::safe_io_zip_from,
             commands::zip::safe_io_zip_extract,
             commands::zip::safe_io_zip_list,
-            commands::daemon::spawn_board_daemon,
+            commands::owner_rpc::start_owner_rpc,
+            commands::owner_rpc::stop_owner_rpc,
+            commands::owner_rpc::owner_rpc_respond,
         ])
+        .manage(commands::owner_rpc::OwnerRpcState::default())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

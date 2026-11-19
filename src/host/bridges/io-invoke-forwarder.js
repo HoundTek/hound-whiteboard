@@ -59,4 +59,4 @@ function attachIoInvokeForwarder(endpoint, invoke) {
   return () => endpoint.removeEventListener("message", listener);
 }
 
-export { attachIoInvokeForwarder };
+export { attachIoInvokeForwarder, resolveTauriInvoke };

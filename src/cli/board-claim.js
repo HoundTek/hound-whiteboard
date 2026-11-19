@@ -152,7 +152,10 @@ async function removeOwnerClaimFile(rootPath) {
 async function isOwnerClaimAlive(claim) {
   const parsed = parseOwnerClaim(claim);
   if (parsed === null) return false;
-  if (parsed.transport.kind === OWNER_TRANSPORT_KINDS.DAEMON) {
+  if (
+    parsed.transport.kind === OWNER_TRANSPORT_KINDS.DAEMON ||
+    typeof parsed.transport.port === "number"
+  ) {
     return isDaemonAlive(parsed.transport.port);
   }
   return isPidAlive(parsed.pid);
