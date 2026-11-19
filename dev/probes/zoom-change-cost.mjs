@@ -1,6 +1,6 @@
 /**
  * @file 缩放变更一帧的实际代价
- * @description 测量各档位下改变缩放时整片 tile 重建的耗时与块数，用于区分「回访」与「新倍率」两种成本。
+ * @description 测量各档位下改变缩放时的重建块数与耗时（含阈值预建），用于区分「回访」与「新倍率」两种成本。
  * @author Zhou Chenyu
  */
 import { createCanvas } from "@napi-rs/canvas";

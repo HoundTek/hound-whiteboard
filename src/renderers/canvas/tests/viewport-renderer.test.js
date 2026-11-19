@@ -1595,7 +1595,7 @@ describe("ViewportRenderer", () => {
       }
     });
 
-    test("缩放变更时用上一帧缩放合成，不重建 tile", () => {
+    test("缩放变更时复用历史 tile 层缩放合成，不重建 tile", () => {
       const { renderer, viewport, chunk, outputCalls } = createTileScenario([
         new Vector(20, 20),
       ]);
@@ -1613,11 +1613,26 @@ describe("ViewportRenderer", () => {
       const draws = outputCalls.filter(
         (call) => call[0] === "output" && call[1] === "drawImage",
       );
-      // 快照按 1.2 倍拉伸后合成一次，而不是逐对象重绘
-      expect(draws).toHaveLength(1);
-      // 记录格式为 [label, method, image, offsetX, offsetY, width, height]
-      expect(draws[0][5]).toBeCloseTo(800 * 1.2);
-      expect(draws[0][6]).toBeCloseTo(600 * 1.2);
+      // 历史层按 1.2 倍逐块缩放合成，而不是整片重新光栅化
+      expect(draws.length).toBeGreaterThan(1);
+      expect(Math.abs(draws[0][9] - 512 * 1.2)).toBeLessThanOrEqual(1);
+      expect(Math.abs(draws[0][10] - 512 * 1.2)).toBeLessThanOrEqual(1);
+    });
+
+    test("缩小到阈值后预建更粗的 tile 层", () => {
+      const { renderer, viewport, chunk } = createTileScenario([
+        new Vector(20, 20),
+      ]);
+
+      viewport.zoom = 0.9;
+      renderer.invalidateChunks([chunk], [chunk], {
+        previousViewportState: { zoom: 1, origin: { x: 0, y: 0 } },
+      });
+      renderer.flush([new RectangleRange(0, 0, 800, 600)]);
+
+      const info = renderer.getTileDebugInfo();
+      expect(info.layerZooms).toContain(0.5);
+      expect(info.prefetchCount).toBeGreaterThan(0);
     });
 
     test("手势结束时立即提交预览并重建", () => {

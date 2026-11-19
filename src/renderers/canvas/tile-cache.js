@@ -158,6 +158,15 @@ class TileStore {
   }
 
   /**
+   * 读取当前层全部 tile
+   * @description 多层预览需要遍历非当前层的已缓存 tile；返回快照数组，避免调用方边遍历边逐出。
+   * @returns {TileEntry[]} tile 列表
+   */
+  getTiles() {
+    return [...this.#tiles.values()];
+  }
+
+  /**
    * 计算 tile 键
    * @param {number} tx - 横向 tile 序号
    * @param {number} ty - 纵向 tile 序号

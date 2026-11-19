@@ -166,6 +166,23 @@ describe("缩放预览的像素输出", () => {
     }
   });
 
+  test("缩小 10% 复用历史 tile 层，预览帧不留白", async () => {
+    const { viewport, renderer } = await createFilledViewport();
+    try {
+      viewport.onViewportChange({
+        origin: { x: 0, y: 0 },
+        zoom: 0.9,
+        viewportSize: { ...VIEWPORT },
+      });
+      viewport.flushRenderFrame();
+
+      // 旧层缓存边距覆盖缩小后的视口，不应退回整帧重建
+      expect(opaqueRatio(renderer)).toBeGreaterThan(0.95);
+    } finally {
+      viewport.destroy();
+    }
+  });
+
   test("缩小后活动层对象仍然压在上层", async () => {
     const { viewport, renderer, boardCore, aom } = await createFilledViewport();
     try {

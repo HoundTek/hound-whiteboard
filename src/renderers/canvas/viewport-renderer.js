@@ -19,7 +19,11 @@ import {
   RenderScheduler,
   createRectangleDirtyRectMerger,
 } from "./render-scheduler.js";
-import { TileStore, DEFAULT_TILE_SIZE } from "./tile-cache.js";
+import {
+  TileStore,
+  DEFAULT_TILE_SIZE,
+  DEFAULT_TILE_BUDGET_BYTES,
+} from "./tile-cache.js";
 import {
   tileBoundaryDevice,
   tileContentOrigin,
@@ -49,6 +53,40 @@ import {
  * 缓存字节数约等于视口面积乘以 `(1 + 2 × 该值)²`，这里取 0.10 使覆盖面积只多 44%。
  */
 const TILE_CACHE_MARGIN_RATIO = 0.1;
+
+/**
+ * 保留的 tile 层上限
+ * @description 当前精确层之外，最多再保留两个历史缩放层供换档复用；超出按最久未用逐层丢弃。
+ * @type {number}
+ */
+const TILE_LAYER_LIMIT = 3;
+
+/**
+ * 触发预建更粗 tile 层的缩放比例
+ * @description 当前缩放低于活动层缩放的该比例时，开始为下一粗层补 tile。
+ * @type {number}
+ */
+const PREFETCH_TRIGGER_RATIO = 0.9;
+
+/**
+ * 每帧预建的 tile 数上限
+ * @description 预建在输出帧完成后执行，单帧只补少量 tile，避免拖慢缩放手势。
+ * @type {number}
+ */
+const PREFETCH_TILES_PER_FRAME = 3;
+
+/**
+ * 预建粗层的最低缩放
+ * @type {number}
+ */
+const MIN_PREFETCH_ZOOM = 0.05;
+
+/**
+ * 允许用历史层放大/缩小覆盖的最大倍率差
+ * @description 差距过大时补 tile 的成本接近整帧重建，直接回退重建。
+ * @type {number}
+ */
+const PREFETCH_MAX_SCALE = 1.5;
 
 /**
  * 缩放预览允许的累计拉伸倍数
@@ -164,11 +202,54 @@ class ViewportRenderer extends Renderer {
   #resolveOutputThresholds;
 
   /**
-   * 世界空间 tile 缓存
+   * 世界空间 tile 缓存（当前精确倍率层）
    * @type {TileStore}
    * @private
    */
   #tileStore;
+
+  /**
+   * 多层 tile 缓存
+   * @description 键为缩放倍率与设备倍率；手势缩放时复用最近层，停止后重建当前精确层。
+   * @type {Map<string, {key: string, store: TileStore, zoom: number, deviceScale: number, lastUsed: number}>}
+   * @private
+   */
+  #tileLayers;
+
+  /**
+   * 多层缓存访问序号
+   * @type {number}
+   * @private
+   */
+  #tileLayerSeq;
+
+  /**
+   * 创建 tile 层的公共选项
+   * @type {{tileSize: number, maxBytes: number}}
+   * @private
+   */
+  #tileStoreOptions;
+
+  /**
+   * 当前精确 tile 层
+   * @type {Object|null}
+   * @private
+   */
+  #currentTileLayer = null;
+
+  /**
+   * 累计预建的 tile 数（调试用）
+   * @type {number}
+   * @private
+   */
+  #prefetchCount = 0;
+
+  /**
+   * 累计 tile 重建数（跨层单调，调试用）
+   * @type {number}
+   * @private
+   */
+  #tileRebuildCount = 0;
 
   /**
    * 是否允许使用 tile 缓存
@@ -201,8 +282,14 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 缩放预览状态
-   * @description 非空时输出层直接缩放合成 `snapshot`，跳过缓存与 tile 重建。
-   * @type {{ zoom: number, origin: { x: number, y: number }, snapshot: CanvasImageSource } | null}
+   * @description 非空时输出层跳过正常重建；tile 模式缩放已有 tile 层，非 tile 模式缩放 `snapshot`。
+   * @type {{
+   *   zoom: number,
+   *   origin: { x: number, y: number },
+   *   deviceScale: number,
+   *   layer?: {key: string, store: TileStore, zoom: number, deviceScale: number, lastUsed: number},
+   *   snapshot?: CanvasImageSource
+   * } | null}
    * @private
    */
   #zoomPreview;
@@ -252,11 +339,26 @@ class ViewportRenderer extends Renderer {
       Number.isFinite(options.tileCacheMargin) && options.tileCacheMargin >= 0
         ? options.tileCacheMargin
         : TILE_CACHE_MARGIN_RATIO;
-    this.#tileStore = new TileStore({
+    this.#tileLayers = new Map();
+    this.#tileLayerSeq = 0;
+    this.#tileStoreOptions = {
       tileSize: options.tileSize ?? DEFAULT_TILE_SIZE,
+      maxBytes: options.tileBudgetBytes ?? DEFAULT_TILE_BUDGET_BYTES,
+    };
+    this.#tileStore = new TileStore({
+      ...this.#tileStoreOptions,
       deviceScale: this._deviceScale,
-      maxBytes: options.tileBudgetBytes,
     });
+    this.#tileLayers.set(this.#tileLayerKey(1, this._deviceScale), {
+      key: this.#tileLayerKey(1, this._deviceScale),
+      store: this.#tileStore,
+      zoom: 1,
+      deviceScale: this._deviceScale,
+      lastUsed: ++this.#tileLayerSeq,
+    });
+    this.#currentTileLayer = this.#tileLayers.get(
+      this.#tileLayerKey(1, this._deviceScale),
+    );
     this.#tilesEnabled = options.tiles !== false;
 
     this.#zoomPreview = null;
@@ -830,10 +932,9 @@ class ViewportRenderer extends Renderer {
    * 缩放变更时尝试进入预览路径
    * @description
    * 缩放是连续运动，逐帧重新光栅化全部静态对象会成为主要开销（600 笔画约 17ms）。
-   * 预览把上一帧位图按缩放比拉伸合成，单帧成本降到一次 drawImage。
-   * 三个条件同时满足才启用：单步变化小（连续手势）、方向为放大（快照覆盖视口）、
-   * 相对快照的累计拉伸不超过可接受模糊度。
-   * 缩小会露出快照未覆盖的区域，留白比重新光栅化更刺眼，因此直接重建。
+   * 优先复用历史 tile 层：层覆盖当前视口时直接按世界矩形缩放合成，放大缩小都可用；
+   * 没有可覆盖的 tile 层时退回上一帧位图快照，只接管放大方向。
+   * 缩放停止后由 `commitZoomPreview()` 按精确倍率补一帧清晰内容。
    * @param {{ origin?: { x: number, y: number }, zoom?: number }} [previousViewportState={}] - 变更前视口状态
    * @returns {boolean} 是否已接管本次渲染
    * @private
@@ -851,6 +952,51 @@ class ViewportRenderer extends Renderer {
     if (!this.#hasRenderedFrame) return false;
 
     const current = this.#zoomPreview;
+    const worldRect = this.viewport?.getViewportWorldRect?.();
+    const deviceScale = this._deviceScale ?? 1;
+
+    // 已在使用历史 tile 层：手势继续时沿用同一层，直到它不再覆盖视口或拉伸过大
+    if (current?.layer) {
+      const accumulatedScale = zoom / current.zoom;
+      if (
+        worldRect &&
+        accumulatedScale <= ZOOM_PREVIEW_MAX_SCALE &&
+        this.#tileLayerCoversWorldRect(current.layer, worldRect)
+      ) {
+        this.#ensureLayerTilesForWorldRect(current.layer, worldRect);
+        this.#scheduleZoomPreviewSettle();
+        return true;
+      }
+      this.#exitZoomPreview();
+    }
+
+    // 优先复用覆盖当前视口的层：可以是上一帧层，也可以是阈值预建的更粗层
+    const tileStepScale = zoom / previousZoom;
+    const tileLayer = this.#useTiles()
+      ? this.#findCoveringTileLayer(zoom, deviceScale, worldRect)
+      : null;
+    const tileUpscale = tileLayer ? zoom / tileLayer.zoom : 1;
+    if (
+      tileLayer &&
+      tileStepScale <= ZOOM_PREVIEW_MAX_STEP &&
+      (tileLayer.zoom >= zoom || tileUpscale <= ZOOM_PREVIEW_MAX_SCALE)
+    ) {
+      // 选中层可能只建了部分 tile；按该层倍率补齐当前视口，避免半成品上屏
+      this.#ensureLayerTilesForWorldRect(tileLayer, worldRect);
+      tileLayer.lastUsed = ++this.#tileLayerSeq;
+      this.#zoomPreview = {
+        zoom: tileLayer.zoom,
+        origin: {
+          x: previousViewportState?.origin?.x ?? 0,
+          y: previousViewportState?.origin?.y ?? 0,
+        },
+        deviceScale,
+        layer: tileLayer,
+      };
+      this.#scheduleZoomPreviewSettle();
+      return true;
+    }
+
     const baseZoom = current ? current.zoom : previousZoom;
     const accumulatedScale = zoom / baseZoom;
     const stepScale = zoom / previousZoom;
@@ -880,6 +1026,7 @@ class ViewportRenderer extends Renderer {
           x: previousViewportState?.origin?.x ?? 0,
           y: previousViewportState?.origin?.y ?? 0,
         },
+        deviceScale,
         snapshot,
       };
     }
@@ -942,7 +1089,6 @@ class ViewportRenderer extends Renderer {
     // 按最终倍率重建清晰内容。必须同时失效输出调度器，
     // 否则输出帧不会重绘，画面会停留在拉伸预览上
     this.#cacheDirty = true;
-    this.#tileStore.markAllDirty();
     this.invalidateViewport();
     return true;
   }
@@ -1013,6 +1159,34 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
+   * 用历史 tile 层渲染缩放预览
+   * @description 静态内容按当前视口缩放合成历史层，AOM 活动对象按当前倍率单独绘制，
+   * 避免活动层被静态层盖住；层未覆盖的区域保持空白，由停止后的精确帧补齐。
+   * @param {CanvasRenderingContext2D} ctx - 输出画布上下文
+   * @private
+   */
+  #renderTilePreview(ctx) {
+    const preview = this.#zoomPreview;
+    if (!preview?.layer) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.clear();
+    ctx.restore();
+
+    this.#drawTiles(ctx, [], preview.layer);
+
+    const entries = this.createDrawableEntries(
+      this.collectActiveDrawables(),
+    );
+    const viewportContext = this.createViewportContext(ctx);
+    for (const entry of entries) {
+      if (!OBJECT_DRAW_STRATEGIES.has(entry.object.constructor)) continue;
+      this.drawObjectWithPreview(viewportContext, entry.object);
+    }
+  }
+
+  /**
    * 当前是否使用世界空间 tile 缓存
    * @description
    * 视口能提供世界矩形时启用。tile 的格子间距随缩放取档，像素内容始终按当前缩放光栅化，
@@ -1045,11 +1219,11 @@ class ViewportRenderer extends Renderer {
       const padding = this.getObjectScreenPadding(objectInstance) / (zoom || 1);
       const currentRect = this.getObjectWorldRect(objectInstance);
       if (currentRect) {
-        this.#tileStore.markDirtyWorldRect(currentRect.inflate(padding));
+        this.#markTileContentDirty(currentRect.inflate(padding));
       }
       const previousRect = previousWorldRects?.get?.(objectInstance.id);
       if (previousRect) {
-        this.#tileStore.markDirtyWorldRect(previousRect.inflate(padding));
+        this.#markTileContentDirty(previousRect.inflate(padding));
       }
     }
   }
@@ -1085,13 +1259,138 @@ class ViewportRenderer extends Renderer {
     for (const chunk of current) {
       if (previousIds.has(chunk.id)) continue;
       const worldRect = this.getChunkWorldRect(chunk);
-      if (worldRect) this.#tileStore.markDirtyWorldRect(worldRect);
+      if (worldRect) this.#markTileContentDirty(worldRect);
     }
     for (const chunk of previous) {
       if (currentIds.has(chunk.id)) continue;
       const worldRect = this.getChunkWorldRect(chunk);
-      if (worldRect) this.#tileStore.markDirtyWorldRect(worldRect);
+      if (worldRect) this.#markTileContentDirty(worldRect);
     }
+  }
+
+  /**
+   * 计算 tile 层键
+   * @param {number} zoom - 光栅缩放倍率
+   * @param {number} deviceScale - 设备像素倍率
+   * @returns {string} 层键
+   * @private
+   */
+  #tileLayerKey(zoom, deviceScale) {
+    return `${zoom.toFixed(6)}:${deviceScale.toFixed(4)}`;
+  }
+
+  /**
+   * 获取或创建 tile 层
+   * @param {number} zoom - 光栅缩放倍率
+   * @param {number} deviceScale - 设备像素倍率
+   * @returns {Object} tile 层
+   * @private
+   */
+  #getOrCreateTileLayer(zoom, deviceScale) {
+    const normalizedZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const normalizedScale =
+      Number.isFinite(deviceScale) && deviceScale > 0 ? deviceScale : 1;
+    const key = this.#tileLayerKey(normalizedZoom, normalizedScale);
+    const existing = this.#tileLayers.get(key);
+    if (existing) {
+      existing.lastUsed = ++this.#tileLayerSeq;
+      return existing;
+    }
+
+    const store = new TileStore({
+      ...this.#tileStoreOptions,
+      deviceScale: normalizedScale,
+    });
+    store.setRasterScale(normalizedZoom, normalizedScale);
+    const layer = {
+      key,
+      store,
+      zoom: normalizedZoom,
+      deviceScale: normalizedScale,
+      lastUsed: ++this.#tileLayerSeq,
+    };
+    this.#tileLayers.set(key, layer);
+    this.#enforceTileLayerBudget(key);
+    return layer;
+  }
+
+  /**
+   * 按总量预算逐出历史 tile 层
+   * @description 当前层优先保留；历史层按最近使用顺序整层丢弃，当前层再按字节预算逐块收敛。
+   * @param {string} currentKey - 当前层键
+   * @private
+   */
+  #enforceTileLayerBudget(currentKey) {
+    const budget = this.#tileStoreOptions.maxBytes;
+    const layers = [...this.#tileLayers.values()].sort(
+      (left, right) => left.lastUsed - right.lastUsed,
+    );
+    let totalBytes = layers.reduce(
+      (sum, layer) => sum + layer.store.usedBytes,
+      0,
+    );
+
+    for (const layer of layers) {
+      if (
+        totalBytes <= budget &&
+        this.#tileLayers.size <= TILE_LAYER_LIMIT
+      ) {
+        break;
+      }
+      if (layer.key === currentKey) continue;
+      if (layer === this.#currentTileLayer) continue;
+      if (this.#zoomPreview?.layer === layer) continue;
+      totalBytes -= layer.store.usedBytes;
+      layer.store.clear();
+      this.#tileLayers.delete(layer.key);
+    }
+
+    const current = this.#tileLayers.get(currentKey);
+    if (current) {
+      current.store.maxBytes = budget;
+      current.store.evictToBudget();
+    }
+  }
+
+  /**
+   * 标记 tile 内容失效
+   * @description 内容变化对所有历史层同样成立，逐层标记避免预览复用过期像素。
+   * @param {RectangleRange | Object} worldRect - 变化的世界矩形
+   * @returns {void}
+   * @private
+   */
+  #markTileContentDirty(worldRect) {
+    for (const layer of this.#tileLayers.values()) {
+      layer.store.markDirtyWorldRect(worldRect);
+    }
+  }
+
+  /**
+   * 判断 tile 层是否覆盖指定世界矩形
+   * @param {Object} layer - tile 层
+   * @param {RectangleRange} worldRect - 目标世界矩形
+   * @returns {boolean} 是否完整覆盖
+   * @private
+   */
+  #tileLayerCoversWorldRect(layer, worldRect) {
+    if (!layer || !worldRect) return false;
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const tile of layer.store.getTiles()) {
+      left = Math.min(left, tile.worldRect.left);
+      top = Math.min(top, tile.worldRect.top);
+      right = Math.max(right, tile.worldRect.left + tile.worldRect.width);
+      bottom = Math.max(bottom, tile.worldRect.top + tile.worldRect.height);
+    }
+    if (!Number.isFinite(left)) return false;
+    return (
+      left <= worldRect.left &&
+      top <= worldRect.top &&
+      right >= worldRect.left + worldRect.width &&
+      bottom >= worldRect.top + worldRect.height
+    );
   }
 
   /**
@@ -1110,8 +1409,10 @@ class ViewportRenderer extends Renderer {
 
     const zoom = this.viewport?.zoom ?? 1;
     const deviceScale = this._deviceScale ?? 1;
-    // 像素内容取决于缩放与设备倍率，两者变化会让整片 tile 失效
-    this.#tileStore.setRasterScale(zoom, deviceScale);
+    const layer = this.#getOrCreateTileLayer(zoom, deviceScale);
+    this.#tileStore = layer.store;
+    this.#currentTileLayer = layer;
+    layer.store.setRasterScale(zoom, deviceScale);
 
     const cacheWorldRect = this.#expandWorldRect(
       worldRect,
@@ -1125,24 +1426,160 @@ class ViewportRenderer extends Renderer {
     );
 
     if (dirtyTiles.length > 0) {
-      // padding 与对象自身相关而与 tile 无关，先算一次，避免 tile 数 × 对象数的重复解析
-      const items = this.#collectCacheDrawables().map((objectInstance) => {
-        const paddedWorldRect = this.getObjectWorldRect(objectInstance);
-        if (!paddedWorldRect)
-          return { object: objectInstance, paddedWorldRect: undefined };
-        const padding = this.getObjectScreenPadding(objectInstance) / zoom;
-        return {
-          object: objectInstance,
-          paddedWorldRect: paddedWorldRect.inflate(padding),
-        };
-      });
+      const items = this.#collectTileDrawableItems(zoom);
       for (const tile of dirtyTiles) {
         this.#renderTile(tile, items);
       }
     }
 
     this.#tileStore.evictToBudget();
+    this.#enforceTileLayerBudget(layer.key);
     return tiles;
+  }
+
+  /**
+   * 收集指定缩放层的 tile 绘制条目
+   * @param {number} zoom - 该层的光栅缩放倍率
+   * @returns {Array<{object: BasicObject, paddedWorldRect?: RectangleRange}>} 绘制条目
+   * @private
+   */
+  #collectTileDrawableItems(zoom) {
+    // padding 与对象自身相关而与 tile 无关，先算一次，避免 tile 数 × 对象数的重复解析
+    return this.#collectCacheDrawables().map((objectInstance) => {
+      const paddedWorldRect = this.getObjectWorldRect(objectInstance);
+      if (!paddedWorldRect)
+        return { object: objectInstance, paddedWorldRect: undefined };
+      const padding = this.getObjectScreenPadding(objectInstance) / zoom;
+      return {
+        object: objectInstance,
+        paddedWorldRect: paddedWorldRect.inflate(padding),
+      };
+    });
+  }
+
+  /**
+   * 在指定历史层上补齐覆盖世界矩形的 dirty tile
+   * @description 预览缩小方向可能需要旧层缓存边距内的 tile；
+   * 按旧层倍率光栅化少量缺口，避免整片按新倍率重建。
+   * @param {Object} layer - tile 层
+   * @param {RectangleRange} worldRect - 需要覆盖的世界矩形
+   * @returns {void}
+   * @private
+   */
+  #ensureLayerTilesForWorldRect(layer, worldRect) {
+    if (!layer || !worldRect) return;
+    const tiles = layer.store.ensure(worldRect);
+    const dirtyTiles = tiles.filter((tile) => layer.store.isDirty(tile));
+    if (dirtyTiles.length === 0) return;
+
+    const items = this.#collectTileDrawableItems(layer.zoom);
+    for (const tile of dirtyTiles) {
+      this.#renderTile(
+        tile,
+        items,
+        layer.zoom,
+        layer.deviceScale,
+        layer.store,
+      );
+    }
+    layer.store.evictToBudget();
+  }
+
+  /**
+   * 选择覆盖当前视口的最佳 tile 层
+   * @description 取覆盖当前视口、同设备倍率的高倍率层（缩放后更清晰）；
+   * 选中后由调用方补齐当前视口内的 dirty tile，避免半成品层直接上屏。
+   * @param {number} zoom - 当前缩放倍率
+   * @param {number} deviceScale - 设备像素倍率
+   * @param {RectangleRange} worldRect - 当前视口世界矩形
+   * @returns {Object|null} 可用层
+   * @private
+   */
+  #findCoveringTileLayer(zoom, deviceScale, worldRect) {
+    if (!worldRect) return null;
+    const layers = [...this.#tileLayers.values()].filter(
+      (layer) =>
+        layer.deviceScale === deviceScale && layer.store.size > 0,
+    );
+    const covering = layers
+      .filter(
+        (layer) =>
+          this.#tileLayerCoversWorldRect(layer, worldRect) &&
+          Math.max(layer.zoom / zoom, zoom / layer.zoom) <=
+            PREFETCH_MAX_SCALE,
+      )
+      .sort((left, right) => right.zoom - left.zoom);
+    if (covering.length > 0) return covering[0];
+
+    // 没有现成覆盖层时，选倍率最接近的层，补齐当前视口
+    const fallback = layers
+      .map((layer) => ({
+        layer,
+        ratio: Math.max(layer.zoom / zoom, zoom / layer.zoom),
+      }))
+      .filter((entry) => entry.ratio <= PREFETCH_MAX_SCALE)
+      .sort((left, right) => left.ratio - right.ratio)[0];
+    return fallback?.layer ?? null;
+  }
+
+  /**
+   * 增量预建 tile 层
+   * @param {Object} layer - 目标层
+   * @param {RectangleRange} worldRect - 需要覆盖的世界矩形
+   * @param {number} maxTiles - 本次最多光栅化的 tile 数
+   * @returns {number} 本次实际光栅化的 tile 数
+   * @private
+   */
+  #buildLayerTilesIncremental(layer, worldRect, maxTiles) {
+    if (!layer || !worldRect || maxTiles <= 0) return 0;
+    const tiles = layer.store.ensure(worldRect);
+    const dirtyTiles = tiles.filter((tile) => layer.store.isDirty(tile));
+    if (dirtyTiles.length === 0) return 0;
+
+    const batch = dirtyTiles.slice(0, maxTiles);
+    const items = this.#collectTileDrawableItems(layer.zoom);
+    for (const tile of batch) {
+      this.#renderTile(
+        tile,
+        items,
+        layer.zoom,
+        layer.deviceScale,
+        layer.store,
+      );
+    }
+    this.#prefetchCount += batch.length;
+    layer.store.evictToBudget();
+    return batch.length;
+  }
+
+  /**
+   * 按阈值预建更粗的 tile 层
+   * @description 当前缩放接近活动层缓存覆盖极限时，逐帧补下一粗层，供继续缩小直接命中。
+   * @returns {void}
+   * @private
+   */
+  #prefetchCoarserLayer() {
+    if (!this.#useTiles()) return;
+    const zoom = this.viewport?.zoom ?? 1;
+    const deviceScale = this._deviceScale ?? 1;
+    const activeLayer = this.#zoomPreview?.layer ?? this.#currentTileLayer;
+    if (!activeLayer || !Number.isFinite(activeLayer.zoom)) return;
+    const worldRect = this.viewport?.getViewportWorldRect?.();
+    if (!worldRect) return;
+    const prefetchRect = this.#expandWorldRect(worldRect, 0.15);
+
+    if (zoom > activeLayer.zoom * PREFETCH_TRIGGER_RATIO) return;
+
+    const targetZoom = activeLayer.zoom / 2;
+    if (targetZoom < MIN_PREFETCH_ZOOM) return;
+
+    const targetLayer = this.#getOrCreateTileLayer(targetZoom, deviceScale);
+    this.#buildLayerTilesIncremental(
+      targetLayer,
+      prefetchRect,
+      PREFETCH_TILES_PER_FRAME,
+    );
+    this.#enforceTileLayerBudget(targetLayer.key);
   }
 
   /**
@@ -1170,18 +1607,26 @@ class ViewportRenderer extends Renderer {
    * 每个 tile 都重画所有与之相交的对象，跨 tile 对象的过绘是保持层叠正确的代价。
    * @param {import("./tile-cache.js").TileEntry} tile - 目标 tile
    * @param {Array<{object: BasicObject, paddedWorldRect?: RectangleRange}>} items - 按层叠顺序排列的静态对象，已含外扩范围
+   * @param {number} [zoom=this.viewport?.zoom ?? 1] - 光栅缩放倍率
+   * @param {number} [deviceScale=this._deviceScale ?? 1] - 设备像素倍率
+   * @param {import("./tile-cache.js").TileStore} [store=this.#tileStore] - 该 tile 所属的层
    * @returns {RectangleRange[]} 本次重建覆盖的 tile 内矩形
    * @private
    */
-  #renderTile(tile, items) {
+  #renderTile(
+    tile,
+    items,
+    zoom = this.viewport?.zoom ?? 1,
+    deviceScale = this._deviceScale ?? 1,
+    store = this.#tileStore,
+  ) {
     const ctx = tile.canvas?.getContext?.("2d") ?? null;
     if (!ctx) {
-      this.#tileStore.markRebuilt(tile);
+      store.markRebuilt(tile);
+      this.#tileRebuildCount += 1;
       return [];
     }
 
-    const zoom = this.viewport?.zoom ?? 1;
-    const deviceScale = this._deviceScale ?? 1;
     const cssWidth = tile.deviceRect.width / deviceScale;
     const cssHeight = tile.deviceRect.height / deviceScale;
     const fullRect = new RectangleRange(0, 0, cssWidth, cssHeight);
@@ -1228,7 +1673,8 @@ class ViewportRenderer extends Renderer {
     // 提交后能在边界上看到一条直边；整块重画不会切任何对象。
     this.clearRegion(ctx, fullRect);
     this.renderRegion(ctx, viewportContext, entries, fullRect);
-    this.#tileStore.markRebuilt(tile);
+    store.markRebuilt(tile);
+    this.#tileRebuildCount += 1;
     return [fullRect];
   }
 
@@ -1237,19 +1683,23 @@ class ViewportRenderer extends Renderer {
    * @description
    * 不再经过静态缓存画布，平移省一次全屏拷贝、提交省一次增量拷贝。
    * 给定脏区时逐区裁剪，只画与该脏区相交的 tile；否则画出视口内全部 tile。
+   * 传入 `layer` 时可合成非当前缩放层：按世界矩形缩放到当前视口，供换档预览复用。
    * @param {CanvasRenderingContext2D} ctx - 目标上下文
    * @param {RectangleRange[]} [dirtyRects=[]] - 屏幕脏区
+   * @param {Object|null} [layer=null] - 要合成的 tile 层；缺省为当前精确层
    * @returns {boolean} 是否完成合成，false 表示视口信息不足需回退缓存拷贝
    * @private
    */
-  #drawTiles(ctx, dirtyRects = []) {
+  #drawTiles(ctx, dirtyRects = [], layer = null) {
     const viewportWorldRect = this.viewport?.getViewportWorldRect?.();
     if (!viewportWorldRect) return false;
 
-    const tiles = this.#ensureCleanTiles();
     const zoom = this.viewport?.zoom ?? 1;
-    const origin = this.viewport?.origin ?? { x: 0, y: 0 };
     const deviceScale = this._deviceScale ?? 1;
+    const targetLayer =
+      layer ?? this.#getOrCreateTileLayer(zoom, deviceScale);
+    const tiles = layer ? targetLayer.store.getTiles() : this.#ensureCleanTiles();
+    const origin = this.viewport?.origin ?? { x: 0, y: 0 };
     // 原点已吸附到整数设备像素，因此贴图位置全是整数，搬运不需要重采样
     const originDeviceX = origin.x * zoom * deviceScale;
     const originDeviceY = origin.y * zoom * deviceScale;
@@ -1267,6 +1717,66 @@ class ViewportRenderer extends Renderer {
         : viewportRect
           ? [toDeviceClip(viewportRect)]
           : [null];
+
+    const scaled =
+      targetLayer.zoom !== zoom ||
+      targetLayer.deviceScale !== deviceScale;
+    if (scaled) {
+      // 历史层按世界矩形缩放：目标位置与尺寸由当前视口换算，块边界取整避免接缝
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const hasClip = clipRects.some((clipRect) => clipRect !== null);
+      if (hasClip) {
+        ctx.beginPath();
+        for (const clipRect of clipRects) {
+          if (!clipRect) continue;
+          ctx.rect(
+            clipRect.left,
+            clipRect.top,
+            clipRect.right - clipRect.left,
+            clipRect.bottom - clipRect.top,
+          );
+        }
+        ctx.clip();
+      }
+      ctx.imageSmoothingEnabled = true;
+      for (const tile of tiles) {
+        if (!intersectsRanges(tile.worldRect, viewportWorldRect)) continue;
+        const destLeft = Math.round(
+          (tile.worldRect.left - origin.x) * zoom * deviceScale,
+        );
+        const destTop = Math.round(
+          (tile.worldRect.top - origin.y) * zoom * deviceScale,
+        );
+        const destRight = Math.round(
+          (tile.worldRect.left + tile.worldRect.width - origin.x) *
+            zoom *
+            deviceScale,
+        );
+        const destBottom = Math.round(
+          (tile.worldRect.top + tile.worldRect.height - origin.y) *
+            zoom *
+            deviceScale,
+        );
+        const destWidth = destRight - destLeft;
+        const destHeight = destBottom - destTop;
+        if (destWidth <= 0 || destHeight <= 0) continue;
+        targetLayer.store.touch(tile);
+        ctx.drawImage(
+          tile.canvas,
+          0,
+          0,
+          tile.canvas.width,
+          tile.canvas.height,
+          destLeft,
+          destTop,
+          destWidth,
+          destHeight,
+        );
+      }
+      ctx.restore();
+      return true;
+    }
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1286,7 +1796,7 @@ class ViewportRenderer extends Renderer {
           continue;
         }
 
-        this.#tileStore.touch(tile);
+        targetLayer.store.touch(tile);
         // 只搬限定区内那一块：以整图配小裁剪区会把像素搬运量放大数十倍
         const sourceLeft = clipRect
           ? Math.max(0, Math.round(clipRect.left) - destLeft)
@@ -1331,18 +1841,38 @@ class ViewportRenderer extends Renderer {
 
   /**
    * 读取 tile 缓存调试信息
-   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number, bytes: number, level: number, zoom: number }}
+   * @returns {{ enabled: boolean, tileSize: number, tileCount: number, dirtyCount: number, rebuildCount: number, bytes: number, level: number, zoom: number, layers: number, layerZooms: number[], layerStates: Array<{zoom: number, tiles: number, dirty: number}>, prefetchCount: number }}
    */
   getTileDebugInfo() {
+    let tileCount = 0;
+    let dirtyCount = 0;
+    let bytes = 0;
+    for (const layer of this.#tileLayers.values()) {
+      tileCount += layer.store.size;
+      dirtyCount += layer.store.countDirty();
+      bytes += layer.store.usedBytes;
+    }
     return {
       enabled: this.#useTiles(),
       tileSize: this.#tileStore.tileSize,
-      tileCount: this.#tileStore.size,
-      dirtyCount: this.#tileStore.countDirty(),
-      rebuildCount: this.#tileStore.rebuildCount,
-      bytes: this.#tileStore.usedBytes,
+      tileCount,
+      dirtyCount,
+      rebuildCount: this.#tileRebuildCount,
+      bytes,
       level: this.#tileStore.level,
       zoom: this.#tileStore.zoom,
+      layers: this.#tileLayers.size,
+      layerZooms: [...this.#tileLayers.values()]
+        .map((layer) => layer.zoom)
+        .sort((left, right) => left - right),
+      layerStates: [...this.#tileLayers.values()]
+        .sort((left, right) => left.zoom - right.zoom)
+        .map((layer) => ({
+          zoom: layer.zoom,
+          tiles: layer.store.size,
+          dirty: layer.store.countDirty(),
+        })),
+      prefetchCount: this.#prefetchCount,
     };
   }
 
@@ -1449,9 +1979,14 @@ class ViewportRenderer extends Renderer {
     const outputCtx = this._getContext();
     if (!outputCtx) return [];
 
-    // 缩放预览直接缩放合成上一帧，跳过缓存拷贝与 AOM 重绘
+    // 缩放预览跳过正常缓存重建：tile 层按世界矩形缩放，位图快照按倍率拉伸
     if (this.#zoomPreview) {
-      this.#renderZoomPreview(outputCtx);
+      if (this.#zoomPreview.layer) {
+        this.#renderTilePreview(outputCtx);
+      } else {
+        this.#renderZoomPreview(outputCtx);
+      }
+      this.#prefetchCoarserLayer();
       return [];
     }
 
@@ -1528,6 +2063,7 @@ class ViewportRenderer extends Renderer {
     // 保存状态供下一帧使用
     this.#previousAomEntries = drawableEntries;
     this.#objectSnapshotRects.clear();
+    this.#prefetchCoarserLayer();
 
     return aomDrawables;
   }
