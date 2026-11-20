@@ -73,6 +73,27 @@ async function reconnectEnd(end, port, boardId, options = {}) {
 }
 
 /**
+ * 在超时后拒绝的 Promise 竞速
+ * @param {Promise<*>} promise - 原 Promise
+ * @param {number} timeoutMs - 超时毫秒数
+ * @param {string} label - 超时错误中的阶段描述
+ * @returns {Promise<*>} 原 Promise 的结果
+ */
+async function withTimeout(promise, timeoutMs, label) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} 超时`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * 创建并提交一笔静态笔画
  * @param {BoardApi} api - 内核 API
  * @param {string} id - 对象 id
@@ -163,10 +184,16 @@ describe("网络协调器", () => {
 
   afterEach(async () => {
     for (const end of ends) {
-      await end.coordinator.close();
+      const closing = end.coordinator.close();
+      closing.catch(() => { });
+      await withTimeout(closing, 5000, `${end.source} coordinator.close`);
     }
     ends = [];
-    await server?.close();
+    if (server !== null) {
+      const closing = server.close();
+      closing.catch(() => { });
+      await withTimeout(closing, 5000, "relay server.close");
+    }
     server = null;
   });
 
@@ -176,6 +203,10 @@ describe("网络协调器", () => {
     const a = await connectEnd("a", server.port, "board-1");
     const b = await connectEnd("b", server.port, "board-1");
     ends = [a, b];
+    const repairSpies = [a, b].flatMap((end) => [
+      jest.spyOn(end.api, "repairStateFromLog"),
+      jest.spyOn(end.api, "repairChainFromLog"),
+    ]);
 
     // a 增：b 收敛
     await createStroke(a.api, "a/1");
@@ -189,11 +220,11 @@ describe("网络协调器", () => {
     b.api.modifyObject("a/1", { position: { x: 50, y: 0 } });
     await b.api.commitObjects(["a/1"]);
     await until(
-      () => b.boardCore.getObjectById("a/1").position.x === 50,
+      () => b.boardCore.getObjectById("a/1")?.position.x === 50,
       "b 本地位置生效",
     );
     await until(
-      () => a.boardCore.getObjectById("a/1").position.x === 50,
+      () => a.boardCore.getObjectById("a/1")?.position.x === 50,
       "a 收到 b 的修改",
     );
 
@@ -201,14 +232,22 @@ describe("网络协调器", () => {
     const bModifyNodeId = a.boardCore.undoTree.head.shareId;
     a.api.undo(bModifyNodeId);
     await until(
-      () => a.boardCore.getObjectById("a/1").position.x === 0,
+      () => a.boardCore.getObjectById("a/1")?.position.x === 0,
       "a 撤销生效",
     );
     await until(
-      () => b.boardCore.getObjectById("a/1").position.x === 0,
+      () => b.boardCore.getObjectById("a/1")?.position.x === 0,
       "b 收敛撤销",
     );
 
+    // 正常收敛不应依赖自愈；自愈被触发说明 digest 在效果放完前就作了比对
+    for (const spy of repairSpies) {
+      expect(spy).not.toHaveBeenCalled();
+    }
+    await until(
+      () => logIds(a.boardCore).length === logIds(b.boardCore).length,
+      "两端日志长度一致",
+    );
     expect(logIds(a.boardCore).sort()).toEqual(logIds(b.boardCore).sort());
   });
 
@@ -609,7 +648,7 @@ describe("网络协调器", () => {
       "b 收到 mol-end",
     );
     await until(
-      () => b.boardCore.getObjectById("a/1").position.x === 80,
+      () => b.boardCore.getObjectById("a/1")?.position.x === 80,
       "b 收敛定稿位置",
     );
 

@@ -214,32 +214,54 @@ async function ownerRpcCall(
 }
 
 /**
- * 泵送 worker 的 io-invoke 转发直到排空（journaler 微任务合批的落盘由此完成）
+ * 泵送 worker 的 io-invoke 转发直到静止
+ * @description
+ * journaler 的落盘由微任务合批触发，单次泵送返回时可能还有新消息尚未入队；
+ * 连续两轮（中间让出一个宏任务）都没有未处理消息才判定静止。
  * @param {FakeWorkerHost} host - 假宿主
  * @param {(command: string, args: Object) => Promise<*>} handler - Rust command 处理器
+ * @param {number} [timeoutMs=4000] - 超时毫秒数
  * @returns {Promise<void>}
  */
-async function pumpIo(host, handler) {
-  for (let i = 0; i < 50; i++) {
-    const before = host.postedMessages.filter((m) => m.type === "io-invoke" && !m.__handled).length;
+async function drainIo(host, handler, timeoutMs = 4000) {
+  const deadline = Date.now() + timeoutMs;
+  let quietPasses = 0;
+  while (Date.now() < deadline) {
+    const pending = host.postedMessages.filter(
+      (m) => m.type === "io-invoke" && !m.__handled,
+    ).length;
+    if (pending === 0) {
+      quietPasses += 1;
+      if (quietPasses >= 2) return;
+    } else {
+      quietPasses = 0;
+    }
     await pumpIoOnce(host, handler);
-    if (before === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
+  const pending = host.postedMessages.filter(
+    (m) => m.type === "io-invoke" && !m.__handled,
+  ).length;
+  throw new Error(`io 排空超时（仍有 ${pending} 条未处理）`);
 }
 
 /**
- * 轮询等待条件成立
- * @param {Function} probe - 探测函数
- * @param {number} [timeoutMs=2000] - 超时毫秒数
- * @returns {Promise<boolean>} 是否成立
+ * 边泵送 IO 边等待条件成立
+ * @param {FakeWorkerHost} host - 假宿主
+ * @param {(command: string, args: Object) => Promise<*>} handler - Rust command 处理器
+ * @param {Function} probe - 条件探测函数
+ * @param {string} label - 超时错误中的条件描述
+ * @param {number} [timeoutMs=4000] - 超时毫秒数
+ * @returns {Promise<void>}
  */
-async function waitFor(probe, timeoutMs = 2000) {
+async function pumpUntil(host, handler, probe, label, timeoutMs = 4000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await probe()) return true;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await pumpIoOnce(host, handler);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (await probe()) return;
   }
-  return false;
+  throw new Error(`${label} 超时`);
 }
 
 /**
@@ -254,10 +276,8 @@ async function destroyRuntime(runtime, host, handler) {
   const done = runtime.destroyBoard().finally(() => {
     settled = true;
   });
-  for (let i = 0; i < 200 && !settled; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await pumpIoOnce(host, handler);
-  }
+  done.catch(() => { });
+  await pumpUntil(host, handler, () => settled, "destroyBoard 完成");
   await done;
 }
 
@@ -305,18 +325,7 @@ describe("CoreWorker 持久化接线", () => {
     const { host, runtime, handler, driver, calls } = await setup();
     try {
       await createStroke(host, handler, "demo/1");
-      const landed = await waitFor(async () => {
-        await pumpIoOnce(host, handler);
-        return (await driver.read("mem", "objects/demo%2F1.json")) !== null;
-      });
-      expect(landed).toBe(true);
-      await pumpIo(host, handler);
-
-      const metaLanded = await waitFor(async () => {
-        await pumpIoOnce(host, handler);
-        return (await driver.read("mem", "meta/demo.json")) !== null;
-      });
-      expect(metaLanded).toBe(true);
+      await drainIo(host, handler);
 
       const obj = await driver.read("mem", "objects/demo%2F1.json");
       const seg = await driver.read("mem", "hit/demo/seg-000000.jsonl");
@@ -334,7 +343,7 @@ describe("CoreWorker 持久化接线", () => {
   test("重开后从盘恢复对象", async () => {
     const first = await setup();
     await createStroke(first.host, first.handler, "demo/1");
-    await pumpIo(first.host, first.handler);
+    await drainIo(first.host, first.handler);
     await destroyRuntime(first.runtime, first.host, first.handler);
 
     const host = new FakeWorkerHost();
@@ -357,7 +366,7 @@ describe("CoreWorker 持久化接线", () => {
   test("懒加载开板不读对象文件，首次清单与类型查询走区块元数据", async () => {
     const first = await setup();
     await createStroke(first.host, first.handler, "demo/1");
-    await pumpIo(first.host, first.handler);
+    await drainIo(first.host, first.handler);
     await destroyRuntime(first.runtime, first.host, first.handler);
 
     const host = new FakeWorkerHost();
@@ -401,7 +410,7 @@ describe("CoreWorker 持久化接线", () => {
   test("创建视口后按可视区块加载对象文件", async () => {
     const first = await setup();
     await createStroke(first.host, first.handler, "demo/1");
-    await pumpIo(first.host, first.handler);
+    await drainIo(first.host, first.handler);
     await destroyRuntime(first.runtime, first.host, first.handler);
 
     const host = new FakeWorkerHost();
@@ -428,13 +437,13 @@ describe("CoreWorker 持久化接线", () => {
         viewportSize: { width: 400, height: 300 },
       });
 
-      const loaded = await waitFor(async () => {
-        await pumpIoOnce(host, first.handler);
-        return first.reads.some((relPath) =>
-          relPath.startsWith("objects/"),
-        );
-      });
-      expect(loaded).toBe(true);
+      await pumpUntil(
+        host,
+        first.handler,
+        () =>
+          first.reads.some((relPath) => relPath.startsWith("objects/")),
+        "区块对象载入",
+      );
     } finally {
       await destroyRuntime(runtime, host, first.handler);
       restoreOffscreenCanvas();
@@ -577,20 +586,18 @@ describe("CoreWorker 持久化接线", () => {
     const { host, runtime, handler } = await setup();
     const destroyed = runtime.destroyBoard();
     let settled = false;
-    destroyed.finally(() => {
+    const tracked = destroyed.finally(() => {
       settled = true;
     });
+    tracked.catch(() => { });
     host.emit({
       type: "owner-rpc-request",
       requestId: "closing-1",
       route: "queryBoardInfo",
       params: {},
     });
-    for (let i = 0; i < 200 && !settled; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      await pumpIoOnce(host, handler);
-    }
-    await destroyed;
+    await pumpUntil(host, handler, () => settled, "destroyBoard 完成");
+    await tracked;
 
     const response = host.postedMessages.find(
       (m) => m.type === "owner-rpc-response" && m.requestId === "closing-1",
