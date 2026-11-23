@@ -17,12 +17,12 @@ yarn build:quick                # 仅构建（跳过依赖安装和图标）
 
 # 测试
 yarn test                       # 运行全部测试
+yarn test path/to/test.test.js  # 单文件：参数会追加到脚本命令末尾，直接透传给 jest
+yarn test -t "pattern"          # 按名称过滤；可与路径组合：yarn test path/to/a.test.js -t "pattern"
 
-# 单文件 / 按名称过滤：yarn test 的 flag 内联在脚本里，npx 直接调用不继承，需自带 NODE_OPTIONS
+# 只有绕过脚本直接调 jest 时才需自带 flag（npx 不继承 package.json 的脚本）
 NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' \
-  npx jest path/to/test.test.js # 运行单个测试文件
-NODE_OPTIONS='--experimental-vm-modules --localstorage-file=/tmp/jest-localstorage' \
-  npx jest -t "pattern"         # 按名称过滤
+  npx jest path/to/test.test.js
 
 # CI 检查
 yarn ci-check                   # 文档链接 + @module 路径 + kernel 许可证头检查
