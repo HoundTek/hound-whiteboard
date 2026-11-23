@@ -55,6 +55,20 @@ BOX=224,216,471,445 node dev/probes/screenshot-blend.mjs a.png b.png c.png
 
 `BOX` 指定画布区域，省略时用 `224,216,471,445`（已知样本的位置）。
 
+## 浏览器端探针
+
+`yarn probe:web` 起静态服务后，用 Safari 打开：
+
+```text
+http://127.0.0.1:8010/dev/web-probe/index.html
+```
+
+- 默认跑 `dev/probes/scenarios.js` 的对象数扫描，`?sweep=points` 切点数扫描
+- `?mode=zoom-chain` 跑连续缩小探针：从 100% 起每步乘 0.9，输出层倍率、预建增量、重建增量、缓存合计、帧耗时与覆盖率
+- 结果分别挂在 `window.__probeResults` / `window.__zoomChainResults`，可直接从控制台复制
+
+浏览器的读数会先等光栅化完成（读一个像素建立栅栏），与 Node 侧同步 CPU 光栅化的口径不同，绝对值不要直接混用。
+
 ## 渲染帧指纹探针
 
 `render-frame-probe.js` 是模块化的指纹采集器，不是独立脚本。它把每帧的

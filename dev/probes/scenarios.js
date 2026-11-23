@@ -72,7 +72,7 @@ function createStrokePoints(count, random) {
  * @param {Object} boardCore - 板
  * @returns {void}
  */
-function installRenderHooks(viewport, boardCore) {
+export function installRenderHooks(viewport, boardCore) {
   const renderer = viewport.renderer;
 
   boardCore.activeObjectManager.renderHooks = {
@@ -157,7 +157,7 @@ export async function createFixture(options = {}) {
  * @param {Object} renderer - 渲染器
  * @returns {void}
  */
-function syncRaster(renderer) {
+export function syncRaster(renderer) {
   const canvas = renderer?.canvas;
   if (!canvas) return;
   canvas.getContext("2d").getImageData(0, 0, 1, 1);
