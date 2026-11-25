@@ -150,6 +150,58 @@ describe("AOM 远程活动", () => {
     expect(b.boardCore.activeObjectManager.isRemoteActive("a/1")).toBe(false);
   });
 
+  test("本地删除已选对象发射 unchoose，远端立即释放", async () => {
+    const { boardCore, api } = createEnd("a");
+    await createStroke(api, "a/1");
+    await api.addActiveObjects(["a/1"]);
+
+    const events = [];
+    boardCore.activityEventBus.on("activity", (event) => events.push(event));
+    api.deleteObjects(["a/1"]);
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: "unchoose",
+        ids: ["a/1"],
+        source: "a",
+      }),
+    ]);
+  });
+
+  test("远端只收到 delete 记录时撤销远程选择并冲刷通知", async () => {
+    const a = createEnd("a");
+    const b = createEnd("b");
+    await createStroke(a.api, "a/1");
+    await b.api.applyRemoteOperations(recordsOf(a.boardCore));
+
+    await a.api.addActiveObjects(["a/1"]);
+    const chooseRecords = recordsOf(a.boardCore).slice(1);
+    await b.api.applyRemoteOperations(chooseRecords);
+    expect(
+      b.boardCore.activeObjectManager.isRemoteActive("a/1"),
+    ).toBe(true);
+
+    const notices = [];
+    b.boardCore.activityEventBus.on("remote-activity", (event) =>
+      notices.push(event),
+    );
+
+    a.api.deleteObjects(["a/1"]);
+    const deleteRecords = recordsOf(a.boardCore).filter(
+      (record) => record.type === "delete-object",
+    );
+    await b.api.applyRemoteOperations(deleteRecords);
+
+    expect(b.boardCore.getObjectById("a/1")).toBeUndefined();
+    expect(b.api.queryObjectList().objects).toEqual([]);
+    expect(
+      b.boardCore.activeObjectManager.isRemoteActive("a/1"),
+    ).toBe(false);
+    expect(b.api.queryRemoteChoices()).toEqual([]);
+    expect(notices).toHaveLength(1);
+    expect(notices[0].ids).toContain("a/1");
+  });
+
   test("并发 choose 冲突：本地活跃优先，远程登记被忽略且两端一致", async () => {
     const a = createEnd("a");
     const b = createEnd("b");

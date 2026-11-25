@@ -38,7 +38,7 @@
 
 - `addAwarenessListener(listener)` — 注册 awareness 消息监听（Worker 下行的协作感知通知）
 - `removeAwarenessListener(listener)` — 注销监听
-- `sendAwareness(data)` — 发送 awareness 消息到 Worker（经协调器 volatile 广播，如 `{ kind: "cursor", point }`）
+- `sendAwareness(data)` — 发送 awareness 消息到 Worker（经协调器 volatile 广播，如 `{ kind: "cursor", point }` 或 `{ kind: "selection-region", worldRect }`）
 
 ## 设备图挂载
 
@@ -68,7 +68,7 @@
 
 - `render-frame`：含 `liveBitmap`（已合成 base + live 层）
 - `render-dirty`：Worker 内容变脏时通知 UI 唤醒休眠的 flush 循环
-- `awareness`：协作感知下行，`awarenessType` 区分载荷（`remote-activity` / `hit-changed` / `cursor` / `mol-begin` / `mol-amend` / `mol-end` / `mol-abort` / `peer-left` / `disconnect`）；`Viewport` 分发到 `addAwarenessListener` 注册的监听器
+- `awareness`：协作感知下行，`awarenessType` 区分载荷（`remote-activity` / `hit-changed` / `cursor` / `selection-region` / `mol-begin` / `mol-amend` / `mol-end` / `mol-abort` / `peer-left` / `disconnect`）；`Viewport` 分发到 `addAwarenessListener` 注册的监听器。`selection-region` 的 `worldRect` 为 null 表示框选结束。
 
 ## 当前状态
 

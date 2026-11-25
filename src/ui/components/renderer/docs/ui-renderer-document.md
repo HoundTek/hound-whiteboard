@@ -111,6 +111,7 @@ createCompatSelectionEntriesForSummaries(objects, "modifier", viewport);
 
 - 远程命名选择的按来源着色虚线框与来源标签（`awareness-choice:{source}`）
 - 远程光标
+- 远程正在拖拽的框选矩形（`awareness-selection-region:{source}`，2s 无更新超时）
 - 远程创建中对象的预览（手势中间帧框随预览位置画）
 
 数据经 `queryRemoteChoices` / `queryObjects` 拉取，由 awareness 消息驱动刷新；

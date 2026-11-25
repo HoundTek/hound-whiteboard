@@ -82,8 +82,8 @@ daemon 不再参与 GUI 协作协议：GUI 持盘时 daemon 只代理 CLI RPC，
 - 订阅 `operationLog.onAppend`：仅广播本端 source 的记录（远程应用的记录过滤，防回环放大）。
 - **微任务合批**：同一同步行程内连续产生的记录合为一批发出（如 endSupra 强制闭合在途分子并追加 close-supra 的同步连发），接收端同批接入；成员记录本就独立有效，合批只为同批美观（接入侧按 supraId 成组同批应用，见下）。
 - 订阅 `activityEventBus`：手势内 choose/commit 事件即时广播（choose 记录即时入日志挂 supraId、随记录通道收敛；此通道提供手势内的即时互斥与实时可见性，不等记录通道）。choose 事件携带 `choice`（命名选择名，匿名缺省）；unchoose/commit 事件按（来源，对象）注销，无需携带。
-- **awareness 通道**：光标位置经 `sendAwareness` 走 volatile 通道广播，接收端由 `onAwareness` 回调转发宿主（只画不存）；peer-left 以 `{kind:"peer-left"}` 通知，供接收端清理远程光标。远程选择的装饰走 aom 可靠通道与 remote-activity 通知，不经 volatile 通道。
-- **分子中间帧预览**：分子写入口在内核事件总线发射 amend 事件（begin-mol / amend / end-mol / abort-mol），`amend-forwarder.js` 负责转发：begin-mol 即时发出（不合批）；amend 按 33ms 间隔节流合批（position/transform/data 绝对值后帧盖前帧、append items 按序累积、seq 取批内最大）打包为 mol-amend 发出；end-mol 先冲出残余缓冲再即时发 mol-end，abort-mol 丢弃该分子缓冲后即时发 mol-abort。均经 volatile 通道广播；接收端只画不存，丢了不补，分子记录经可靠通道到达后按记录定格归位。本端断线时协调器经 `onDisconnect` 通知 UI 清空全部预览与光标（对端手势状态不可信），重连后各自重建。
+- **awareness 通道**：光标位置与正在拖拽的框选矩形经 `sendAwareness` 走 volatile 通道广播，接收端由 `onAwareness` 回调转发宿主（只画不存）；框选矩形按 50ms 节流，结束时发送 `worldRect:null`，接收端另以 2s 无更新超时兜底。peer-left 以 `{kind:"peer-left"}` 通知，供接收端清理远程光标与框选矩形。远程选择装饰走 aom 可靠通道与 remote-activity 通知，不经 volatile 通道。
+- **分子中间帧预览**：分子写入口在内核事件总线发射 amend 事件（begin-mol / amend / end-mol / abort-mol），`amend-forwarder.js` 负责转发：begin-mol 即时发出（不合批）；amend 按 33ms 间隔节流合批（position/transform/data 绝对值后帧盖前帧、append items 按序累积、seq 取批内最大）打包为 mol-amend 发出；end-mol 先冲出残余缓冲再即时发 mol-end，abort-mol 丢弃该分子缓冲后即时发 mol-abort。均经 volatile 通道广播；接收端只画不存，丢了不补，分子记录经可靠通道到达后按记录定格归位。接收端的对象本体按预览位置参与 tile 收集、剔除与绘制，旧/新预览位置同时标脏；本端断线时协调器经 `onDisconnect` 通知 UI 清空全部预览与光标（对端手势状态不可信），重连后各自重建。
 
 ### 远端 → 本地
 
@@ -127,6 +127,7 @@ sequenceDiagram
 
 - **日志是权威**：choose/unchoose 是日志中的分子操作，随记录同步；`#transitionEffects` 按记录 source 路由——远程 choose 登记远程活动（`isRemoteActive`），不进本地活动集；本地 choose 效果撤销该对象的远程登记（并发冲突按链序收敛）。choose/unchoose 记录携带 `choice`（命名选择名）：远程端除互斥外还能看到对端的 choice 名，全量重建后标签保留（命名迁移只经活动事件传播，重建后按首次登记呈现）。
 - **trash 一致性**：delete 记录携带对象快照与层位边，接收端凭以重建 trash 条目；「对象在册即无 trash 条目」不变量由 add/restore 效果维护。
+- **删除后的远程选择**：删除已选对象时发送端补发 `unchoose` 活动事件；接收端应用 delete 记录时撤销该对象全部远程 choice 并冲刷 `remote-activity`，实时消息丢失或 INIT 回放后都不残留选择框。
 - **状态收敛**：各端日志补齐后树 = f(日志)，根到 HEAD 确定性回放得到同一状态；性质测试以随机种子脚本 + 任意交错投递断言三端摘要全等（`src/kernel/api/tests/sync-convergence.test.js`）。
 
 ## 设计约束

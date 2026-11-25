@@ -104,12 +104,18 @@ class Renderer extends CanvasHost {
    * @param {string} objectId - 对象 id
    * @param {{ x: number, y: number }} position - 预览位置
    * @returns {void}
+   *
+   * @description 位置变化时交给子类失效旧/新预览区域；重复位置不重复失效。
    */
   setPreviewPosition(objectId, position) {
     if (typeof position?.x !== "number" || typeof position?.y !== "number") {
       return;
     }
-    this.#previewPositions.set(objectId, { x: position.x, y: position.y });
+    const previous = this.#previewPositions.get(objectId);
+    if (previous?.x === position.x && previous?.y === position.y) return;
+    const next = { x: position.x, y: position.y };
+    this.#previewPositions.set(objectId, next);
+    this._onPreviewPositionsChanged([{ objectId, previous, next }]);
   }
 
   /**
@@ -118,7 +124,12 @@ class Renderer extends CanvasHost {
    * @returns {void}
    */
   clearPreviewPosition(objectId) {
+    const previous = this.#previewPositions.get(objectId);
+    if (previous === undefined) return;
     this.#previewPositions.delete(objectId);
+    this._onPreviewPositionsChanged([
+      { objectId, previous, next: undefined },
+    ]);
   }
 
   /**
@@ -126,7 +137,70 @@ class Renderer extends CanvasHost {
    * @returns {void}
    */
   clearAllPreviewPositions() {
+    if (this.#previewPositions.size === 0) return;
+    const changes = [...this.#previewPositions].map(([objectId, previous]) => ({
+      objectId,
+      previous,
+      next: undefined,
+    }));
     this.#previewPositions.clear();
+    this._onPreviewPositionsChanged(changes);
+  }
+
+  /**
+   * 预览坐标变更钩子
+   * @param {{ objectId: string, previous?: { x: number, y: number }, next?: { x: number, y: number } }[]} changes - 变更列表
+   * @returns {void}
+   * @protected
+   *
+   * @description
+   * 基类不维护缓存，收到变更后无需处理；子类据此失效旧预览位置与新预览位置。
+   */
+  _onPreviewPositionsChanged(changes) {}
+
+  /**
+   * 按指定位置计算对象的世界矩形，不修改对象数据
+   * @param {BasicObject} objectInstance - 对象实例
+   * @param {{ x: number, y: number } | undefined} position - 渲染位置；缺省按数据位置
+   * @returns {RectangleRange | undefined} 世界矩形
+   * @protected
+   */
+  getObjectWorldRectAtPosition(objectInstance, position) {
+    const worldRect = this.getObjectWorldRect(objectInstance);
+    if (!worldRect || !position) return worldRect;
+    const offsetX = position.x - (objectInstance?.position?.x ?? 0);
+    const offsetY = position.y - (objectInstance?.position?.y ?? 0);
+    return new RectangleRange(
+      worldRect.left + offsetX,
+      worldRect.top + offsetY,
+      worldRect.width,
+      worldRect.height,
+    );
+  }
+
+  /**
+   * 取对象当前预览位置对应的世界矩形
+   * @param {BasicObject} objectInstance - 对象实例
+   * @returns {RectangleRange | undefined} 世界矩形
+   */
+  getObjectWorldRectWithPreview(objectInstance) {
+    return this.getObjectWorldRectAtPosition(
+      objectInstance,
+      this._getPreviewPosition(objectInstance.id),
+    );
+  }
+
+  /**
+   * 取对象当前预览位置对应的屏幕矩形
+   * @param {BasicObject} objectInstance - 对象实例
+   * @returns {RectangleRange | undefined} 屏幕矩形
+   */
+  getObjectScreenRectWithPreview(objectInstance) {
+    const worldRect = this.getObjectWorldRectWithPreview(objectInstance);
+    if (!worldRect) return undefined;
+    const screenRect = this.viewport?.worldRectToScreenRect?.(worldRect);
+    if (!screenRect) return undefined;
+    return screenRect.inflate(this.getObjectScreenPadding(objectInstance));
   }
 
   /**
@@ -256,7 +330,7 @@ class Renderer extends CanvasHost {
     return drawables.map((objectInstance) => ({
       objectId: objectInstance.id,
       object: objectInstance,
-      screenRect: this.getObjectScreenRect(objectInstance),
+      screenRect: this.getObjectScreenRectWithPreview(objectInstance),
     }));
   }
 
@@ -424,7 +498,7 @@ class Renderer extends CanvasHost {
     dirtyRects,
   ) {
     if (!Array.isArray(dirtyRects) || dirtyRects.length === 0) {
-      drawObject(viewportContext, objectInstance);
+      this.drawObjectWithPreview(viewportContext, objectInstance);
       return;
     }
 
@@ -433,7 +507,7 @@ class Renderer extends CanvasHost {
       .filter(Boolean);
 
     if (clipRects.length === 0) {
-      drawObject(viewportContext, objectInstance);
+      this.drawObjectWithPreview(viewportContext, objectInstance);
       return;
     }
 
@@ -445,7 +519,7 @@ class Renderer extends CanvasHost {
     }
 
     ctx.clip();
-    drawObject(viewportContext, objectInstance);
+    this.drawObjectWithPreview(viewportContext, objectInstance);
     ctx.restore();
   }
 

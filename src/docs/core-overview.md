@@ -46,7 +46,7 @@ UI 线程负责：
 - `Viewport`：DOM canvas、overlay、坐标换算、Worker 同步
 - `devices-dag/`：设备子图、prefix、tool 与输入路由
 - `UiRenderer`：UI overlay 渲染
-- `AwarenessOverlay`：协作感知装饰层（远程选择按来源着色框与来源标签、远程光标、远程手势中间帧预览）
+- `AwarenessOverlay`：协作感知装饰层（远程选择按来源着色框与来源标签、远程光标、远程框选矩形、远程手势中间帧预览）
 - `BoardApiRpc`：把 UI 侧读写请求转成 Worker RPC
 
 ### Worker 层

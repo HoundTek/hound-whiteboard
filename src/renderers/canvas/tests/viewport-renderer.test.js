@@ -777,22 +777,69 @@ describe("ViewportRenderer", () => {
     );
   });
 
-  test("预览坐标不影响剔除用的屏幕矩形", () => {
-    const { renderer, objects, ctxCalls, renderCalls } = createCacheScenario([
+  test("预览坐标参与剔除与失效，对象数据位置不变", () => {
+    const { renderer, objects, renderCalls } = createCacheScenario([
       new Vector(20, 20),
       new Vector(500, 400),
     ]);
 
-    // 预览把对象挪到远处，但数据坐标仍在原处；脏区按数据坐标计算
     renderer.setPreviewPosition(1, new Vector(600, 500));
     renderer.invalidateCachedObjects([objects[0]]);
     renderer.flush();
 
-    // 预览只影响绘制位置，剔除与失效仍按数据坐标计算
+    // 剔除矩形跟随预览位置，数据坐标保持不变
+    const [entry] = renderer.createDrawableEntries([objects[0]]);
+    expect(entry.screenRect.left).toBe(598);
+    expect(entry.screenRect.top).toBe(498);
     expect(objects[0].position.x).toBe(20);
     expect(objects[0].position.y).toBe(20);
     expect(
       renderCalls.filter(([, label]) => label === "cache").length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("AOM 对象按预览位置绘制，清除后回到数据位置", () => {
+    const renderCalls = [];
+    const outputCalls = [];
+    const active = new FakeRectObject(1, new Vector(20, 20), renderCalls);
+    const outputCanvas = createCanvas(
+      800,
+      600,
+      createContext("output", outputCalls),
+    );
+    const { viewport, aom } = createViewportContext({
+      activeObjects: [active],
+      outputCanvas,
+    });
+    const renderer = trackRenderer(
+      new ViewportRenderer(viewport, aom, { canvas: outputCanvas }),
+    );
+    renderer._scheduler.scheduleFrame = () => 0;
+    renderer.flush();
+
+    renderer.setPreviewPosition(1, new Vector(60, 40));
+    renderer.flush();
+    expect(outputCalls).toContainEqual([
+      "output",
+      "setTransform",
+      1,
+      0,
+      0,
+      1,
+      60,
+      40,
+    ]);
+    expect(active.position.serialize()).toEqual({ x: 20, y: 20 });
+
+    renderer.clearPreviewPosition(1);
+    renderer.flush();
+    expect(
+      outputCalls.filter(
+        (call) =>
+          call[1] === "setTransform" &&
+          call[6] === 20 &&
+          call[7] === 20,
+      ).length,
     ).toBeGreaterThan(0);
   });
 
@@ -1831,6 +1878,34 @@ describe("ViewportRenderer", () => {
       expect(renderCalls.filter(([, label]) => label === "output")).toEqual([
         [1, "output"],
       ]);
+    });
+
+    test("预览位置变化标记旧/新 tile，并让对象按新位置进入 tile", () => {
+      const { renderer, objects } = createTileScenario([new Vector(20, 20)]);
+      const before = renderer.getTileDebugInfo();
+      expect(before.dirtyCount).toBe(0);
+
+      renderer.setPreviewPosition(1, new Vector(700, 500));
+      const afterSet = renderer.getTileDebugInfo();
+      expect(afterSet.dirtyCount).toBeGreaterThan(0);
+
+      const [previewEntry] = renderer.createDrawableEntries([objects[0]]);
+      expect(previewEntry.screenRect.left).toBe(698);
+      expect(previewEntry.screenRect.top).toBe(498);
+
+      renderer.flush();
+      const afterFlush = renderer.getTileDebugInfo();
+      expect(afterFlush.rebuildCount).toBeGreaterThan(before.rebuildCount);
+      expect(objects[0].position.x).toBe(20);
+      expect(objects[0].position.y).toBe(20);
+
+      renderer.clearPreviewPosition(1);
+      expect(
+        renderer.getTileDebugInfo().dirtyCount,
+      ).toBeGreaterThan(0);
+      const [restoredEntry] = renderer.createDrawableEntries([objects[0]]);
+      expect(restoredEntry.screenRect.left).toBe(18);
+      expect(restoredEntry.screenRect.top).toBe(18);
     });
 
     test("缩放档位非 1 时同样使用 tile，层级随缩放取档", () => {

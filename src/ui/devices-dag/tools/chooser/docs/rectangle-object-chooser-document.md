@@ -39,6 +39,7 @@ flowchart LR
 2. 若无起点则以当前 position 为起点
 3. 通过 `createSelectionWorldRect` 计算 `startPosition → position` 矩形
 4. 写回节点 state
+5. 经 `viewport.sendAwareness` 广播 `{ kind: "selection-region", worldRect }`，按 50ms 节流
 
 ### `hasSelectionRegion(context)`
 
@@ -46,7 +47,7 @@ flowchart LR
 
 ### `clearSelectionRegion(context)`
 
-清空节点 state 中的全部拖拽字段，代理到 `clearSelectionDragState`。
+清空节点 state 中的全部拖拽字段，代理到 `clearSelectionDragState`；若当前框选已广播过，则立即发送 `{ kind: "selection-region", worldRect: null }` 让协作端移除矩形。
 
 ### `getSelectionRegion(context)`
 
@@ -106,6 +107,9 @@ RECTANGLE_SELECTION_OVERLAY_LINE_DASH = [4, 4];
 
 不调用 `super.collectUiOverlayEntries()`，因此基类 `ObjectChooserTool` 中的选中对象高亮条目不会被收集。
 选中对象的外框由 handoff 切换后的 modifier 负责绘制。
+
+拖拽矩形同时经 awareness volatile 通道广播，远程端由 `AwarenessOverlay` 按来源着色绘制。
+该矩形不写日志、不参与收敛；结束消息丢失时按 2s 无更新超时清理。
 
 ## 卸载
 

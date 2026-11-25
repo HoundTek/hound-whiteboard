@@ -30,6 +30,12 @@ const CURSOR_REPORT_THROTTLE_MS = 50;
 const CURSOR_EXPIRY_MS = 3000;
 
 /**
+ * 远程框选矩形的过期时长（毫秒，无更新即消失）
+ * @type {number}
+ */
+const SELECTION_REGION_EXPIRY_MS = 2000;
+
+/**
  * 来源标识的默认取色（稳定哈希 → HSL 色相环）
  * @param {string} source - 来源标识
  * @returns {string} CSS 颜色
@@ -114,6 +120,13 @@ class AwarenessOverlay {
    * @private
    */
   #cursors = new Map();
+
+  /**
+   * 远程拖拽框选矩形（来源 → 矩形与过期定时器）
+   * @type {Map<string, { worldRect: RectangleRange, expiryTimer: ReturnType<typeof setTimeout> | null }>}
+   * @private
+   */
+  #selectionRegions = new Map();
 
   /**
    * 本端光标上报的 pointermove 监听引用
@@ -218,6 +231,10 @@ class AwarenessOverlay {
       if (cursor.expiryTimer !== null) clearTimeout(cursor.expiryTimer);
     }
     this.#cursors.clear();
+    for (const region of this.#selectionRegions.values()) {
+      if (region.expiryTimer !== null) clearTimeout(region.expiryTimer);
+    }
+    this.#selectionRegions.clear();
     this.#previews.clear();
     this.#molIndex.clear();
     this.#molStates.clear();
@@ -240,6 +257,12 @@ class AwarenessOverlay {
       case "cursor":
         this.#applyRemoteCursor(message.source, message.data?.point);
         return;
+      case "selection-region":
+        this.#applySelectionRegion(
+          message.source,
+          message.data?.worldRect,
+        );
+        return;
       case "mol-begin":
       case "mol-amend":
       case "mol-end":
@@ -248,6 +271,7 @@ class AwarenessOverlay {
         return;
       case "peer-left":
         this.#dropRemoteCursor(message.source);
+        this.#dropSelectionRegion(message.source);
         this.#dropSourcePreviews(message.source);
         return;
       case "disconnect":
@@ -269,6 +293,10 @@ class AwarenessOverlay {
       if (cursor.expiryTimer !== null) clearTimeout(cursor.expiryTimer);
     }
     this.#cursors.clear();
+    for (const region of this.#selectionRegions.values()) {
+      if (region.expiryTimer !== null) clearTimeout(region.expiryTimer);
+    }
+    this.#selectionRegions.clear();
     this.#previews.clear();
     this.#molIndex.clear();
     this.#molStates.clear();
@@ -529,6 +557,45 @@ class AwarenessOverlay {
   }
 
   /**
+   * 应用远程框选矩形
+   * @param {string} source - 来源标识
+   * @param {Object | null} worldRect - 世界矩形；null 表示框选结束
+   * @returns {void}
+   * @private
+   */
+  #applySelectionRegion(source, worldRect) {
+    if (typeof source !== "string" || source === "") return;
+    if (worldRect === null) {
+      this.#dropSelectionRegion(source);
+      return;
+    }
+    const rect = RectangleRange.fromRectLike(worldRect);
+    if (!rect) return;
+
+    const existing = this.#selectionRegions.get(source);
+    if (existing?.expiryTimer != null) clearTimeout(existing.expiryTimer);
+    const expiryTimer = setTimeout(() => {
+      this.#dropSelectionRegion(source);
+    }, SELECTION_REGION_EXPIRY_MS);
+    this.#selectionRegions.set(source, { worldRect: rect, expiryTimer });
+    this.#viewport.uiRenderer?.invalidateViewport?.();
+  }
+
+  /**
+   * 移除远程框选矩形
+   * @param {string} source - 来源标识
+   * @returns {void}
+   * @private
+   */
+  #dropSelectionRegion(source) {
+    const region = this.#selectionRegions.get(source);
+    if (region === undefined) return;
+    if (region.expiryTimer !== null) clearTimeout(region.expiryTimer);
+    this.#selectionRegions.delete(source);
+    this.#viewport.uiRenderer?.invalidateViewport?.();
+  }
+
+  /**
    * 启动本端光标上报（pointermove 节流）
    * @returns {void}
    * @private
@@ -662,6 +729,18 @@ class AwarenessOverlay {
       if (labelEntry) {
         entries.push(labelEntry);
       }
+    }
+    for (const [source, region] of this.#selectionRegions) {
+      entries.push({
+        source: `awareness-selection-region:${source}`,
+        type: "rect",
+        geometry: { worldRect: region.worldRect },
+        style: {
+          strokeStyle: this.#resolveColor(source),
+          lineWidth: 1.5,
+          lineDash: [4, 4],
+        },
+      });
     }
     for (const [source, cursor] of this.#cursors) {
       entries.push(this.#createCursorEntry(source, cursor));

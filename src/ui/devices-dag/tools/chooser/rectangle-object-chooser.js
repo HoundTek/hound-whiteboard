@@ -15,6 +15,12 @@ const RECTANGLE_SELECTION_OVERLAY_LINE_WIDTH = 1;
 const RECTANGLE_SELECTION_OVERLAY_LINE_DASH = Object.freeze([4, 4]);
 
 /**
+ * 框选矩形 awareness 上报节流间隔（毫秒）
+ * @type {number}
+ */
+const SELECTION_REGION_AWARENESS_INTERVAL_MS = 50;
+
+/**
  * 矩形框选拖拽状态
  * @typedef {Object} RectangleSelectionDragState
  * @property {boolean} isSelecting - 当前是否已进入拖拽选择手势
@@ -43,6 +49,20 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
     isSelecting: false,
     worldRect: undefined,
   };
+
+  /**
+   * 上一次广播框选矩形的时刻
+   * @type {number}
+   * @private
+   */
+  #selectionRegionLastSentAt = 0;
+
+  /**
+   * 当前是否已向协作端广播过框选矩形
+   * @type {boolean}
+   * @private
+   */
+  #selectionRegionPublished = false;
 
   /**
    * 重置矩形框选工具的临时状态
@@ -157,6 +177,45 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   }
 
   /**
+   * 广播当前框选矩形（volatile，只画不存）
+   * @param {import("../../dag-type.js").DevicesDAGHandlerContext} [context={}] - 设备图处理器上下文
+   * @param {RectangleRange | null} worldRect - 当前框选矩形，null 表示结束
+   * @param {{ immediate?: boolean }} [options={}] - 是否跳过节流立即发送
+   * @returns {void}
+   * @private
+   */
+  #syncSelectionRegionAwareness(context = {}, worldRect, options = {}) {
+    const viewport = context.services?.viewport;
+    if (typeof viewport?.sendAwareness !== "function") return;
+
+    if (worldRect === null && !this.#selectionRegionPublished) return;
+    const now = Date.now();
+    if (
+      worldRect !== null &&
+      options.immediate !== true &&
+      now - this.#selectionRegionLastSentAt <
+        SELECTION_REGION_AWARENESS_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    this.#selectionRegionLastSentAt = now;
+    this.#selectionRegionPublished = worldRect !== null;
+    viewport.sendAwareness({
+      kind: "selection-region",
+      worldRect:
+        worldRect === null
+          ? null
+          : {
+              left: worldRect.left,
+              top: worldRect.top,
+              width: worldRect.width,
+              height: worldRect.height,
+            },
+    });
+  }
+
+  /**
    * 用新位置更新框选矩形
    * @param {Vector} position - 最新拖拽位置
    * @param {import("../../dag-type.js").DevicesDAGHandlerContext} context - 设备图处理器上下文
@@ -174,6 +233,9 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
       worldRect,
     });
     this._overlayDragState = { isSelecting: true, worldRect };
+    if (worldRect) {
+      this.#syncSelectionRegionAwareness(context, worldRect);
+    }
   }
 
   /**
@@ -193,6 +255,8 @@ class RectangleObjectChooserTool extends ObjectChooserTool {
   clearSelectionRegion(context = {}) {
     this.clearSelectionDragState(context);
     this._overlayDragState = { isSelecting: false, worldRect: undefined };
+    this.#syncSelectionRegionAwareness(context, null, { immediate: true });
+    this.#selectionRegionLastSentAt = 0;
   }
 
   /**

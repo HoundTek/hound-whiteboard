@@ -147,7 +147,8 @@ Tauri 桌面端默认板目录为 `~/hound-whiteboard/demo-board`（首次运行
 
 - 远程命名选择的按来源着色框与来源标签（经 `queryRemoteChoices` 拉取，worker 的 awareness 消息驱动刷新）
 - 远程光标（本端 pointermove 节流上报，远程光标无更新超时消失）
-- 远程手势中间帧预览（对象 id → 预览状态，peer-left 按来源清理）
+- 远程拖拽中的框选矩形（awareness 节流广播，结束消息或 2s 超时清除）
+- 远程手势中间帧预览（对象 id → 预览状态，对象本体按预览位置跟随，peer-left 按来源清理）
 
 远程文档变化经 `viewport.addAwarenessListener` 广播 `hit:changed` 信号到 tool-switcher 与 secondary-chooser，让工具清理失效选中（幽灵选择）。
 

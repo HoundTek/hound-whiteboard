@@ -183,11 +183,13 @@ tile 的世界边长由层级决定，位图边长 = 世界边长 × 倍率。�
 
 `Renderer` 基类（`renderer.js`）维护一张预览坐标表（对象 id → 预览位置）：
 
-- `setPreviewPosition(objectId, position)` — 写入预览坐标
+- `setPreviewPosition(objectId, position)` — 写入预览坐标并失效旧/新位置
 - `clearPreviewPosition(objectId)` — 清除单个对象的预览（手势终点或记录归位后）
 - `clearAllPreviewPositions()` — 清空全部预览（断线时对端手势状态不可信）
 
-`ViewportRenderer` 重画静态缓存时按预览坐标临时覆盖对象的 `position`，画完还原——只影响渲染视图，不改对象数据。
+`ViewportRenderer` 重画静态缓存与 tile 时按预览坐标临时覆盖对象的 `position`，画完还原——只影响渲染视图，不改对象数据。
+预览位置同时参与世界矩形、屏幕剔除与 tile 条目收集：对象移动到新 tile 时会在新位置被光栅化。
+预览变更按对象旧位置与新位置分别标脏 tile、失效输出屏幕矩形，不退回整片重建；AOM 对象经输出层 `drawObjectWithPreview` 绘制。
 
 预览由 amend volatile 通道的分子消息驱动（`core-worker.js` 的 `#applyMolMessages`）：
 
@@ -196,7 +198,7 @@ tile 的世界边长由层级决定，位图边长 = 世界边长 × 倍率。�
 - `mol-end` / `mol-abort` 清除该分子的全部预览
 - 每个分子挂 3s 超时兜底，消息中断时预览不残留；断线时清空全部预览并全量重画
 
-预览变化后触发全量缓存重画（`#requestStaticRender`），对象数据在分子记录到达时归位。
+预览变化后由 `#requestStaticRender` 调度帧；脏 tile 只重建预览覆盖到的块。对象数据在分子记录到达时归位。
 
 ## 调试 API
 

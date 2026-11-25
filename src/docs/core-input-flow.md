@@ -70,7 +70,7 @@ flowchart LR
 
 `Board` 自己不做设备语义判断，只负责把已经归属的信号送进唯一的白板级设备图。
 
-远端手势的中间帧不经本地输入路由：它们经 awareness 通道进入 `AwarenessOverlay` 做预览（只画不存），对象数据随分子记录到达时归位。
+远端手势的中间帧不经本地输入路由：它们经 awareness 通道进入 `AwarenessOverlay` 绘制框与创建预览，同时由 `core-worker` 把预览坐标交给渲染器让对象本体跟随；均只画不存，对象数据随分子记录到达时归位。
 
 ### 3. viewport 根节点声明 services
 

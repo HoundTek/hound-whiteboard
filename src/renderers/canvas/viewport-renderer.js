@@ -813,6 +813,65 @@ class ViewportRenderer extends Renderer {
   }
 
   /**
+   * 预览坐标变化后失效旧位置与新位置
+   * @param {{ objectId: string, previous?: { x: number, y: number }, next?: { x: number, y: number } }[]} changes - 预览变更列表
+   * @returns {void}
+   * @protected
+   *
+   * @description
+   * 静态对象同时标记旧/新预览位置覆盖的 tile，并失效两侧屏幕脏区；
+   * 活动对象不进入 tile，只失效输出层。精确失效避免每帧整片重建。
+   */
+  _onPreviewPositionsChanged(changes) {
+    const list = Array.isArray(changes) ? changes : [];
+    if (list.length === 0) return;
+
+    this.#exitZoomPreview();
+    const zoom = this.viewport?.zoom ?? 1;
+    const previousEntryIndex = this.indexDrawableEntries(
+      this.#previousAomEntries,
+    );
+
+    for (const change of list) {
+      const objectInstance = this.resolveStaticObjectFromChunks(
+        change.objectId,
+      );
+      if (!(objectInstance instanceof BasicObject)) continue;
+
+      const padding = this.getObjectScreenPadding(objectInstance);
+      const worldRects = [change.previous, change.next]
+        .map((position) =>
+          this.getObjectWorldRectAtPosition(objectInstance, position),
+        )
+        .filter(Boolean);
+      if (worldRects.length === 0) continue;
+
+      if (!this.#aom?.has?.(change.objectId)) {
+        this.#cacheDirty = true;
+        for (const worldRect of worldRects) {
+          this.#markTileContentDirty(
+            worldRect.inflate(padding / (zoom || 1)),
+          );
+        }
+      }
+
+      for (const worldRect of worldRects) {
+        const screenRect =
+          this.viewport?.worldRectToScreenRect?.(worldRect);
+        if (screenRect) {
+          this.#outputScheduler.invalidate(screenRect.inflate(padding));
+        }
+      }
+
+      const previousDrawnRects =
+        previousEntryIndex.get(change.objectId)?.drawnRects ?? [];
+      for (const drawnRect of previousDrawnRects) {
+        this.#outputScheduler.invalidate(drawnRect);
+      }
+    }
+  }
+
+  /**
    * 失效区块对应的屏幕脏区（缓存层 + 输出层）
    * @param {Iterable<*>} [chunks = []] - 当前区块集合
    * @param {Iterable<*>} [previousChunks = []] - 变更前区块集合
@@ -1446,7 +1505,7 @@ class ViewportRenderer extends Renderer {
   #collectTileDrawableItems(zoom) {
     // padding 与对象自身相关而与 tile 无关，先算一次，避免 tile 数 × 对象数的重复解析
     return this.#collectCacheDrawables().map((objectInstance) => {
-      const paddedWorldRect = this.getObjectWorldRect(objectInstance);
+      const paddedWorldRect = this.getObjectWorldRectWithPreview(objectInstance);
       if (!paddedWorldRect)
         return { object: objectInstance, paddedWorldRect: undefined };
       const padding = this.getObjectScreenPadding(objectInstance) / zoom;

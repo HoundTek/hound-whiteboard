@@ -56,7 +56,7 @@ flowchart BT
 
 - `ui-renderer.js`：UI overlay 渲染器
 - `ui-overlay-factory.js`：UI overlay 条目工厂
-- `awareness-overlay.js`：协作感知装饰层（远程命名选择按来源着色框与来源标签、远程光标、远程手势中间帧预览，只画不存）
+- `awareness-overlay.js`：协作感知装饰层（远程命名选择按来源着色框与来源标签、远程光标、远程框选矩形、远程手势中间帧预览，只画不存）
 
 ### `ui/devices-dag/`
 

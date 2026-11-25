@@ -293,4 +293,131 @@ describe("RectangleObjectChooserTool", () => {
     expect(deviceContext.services.board.getObjectById).not.toHaveBeenCalled();
     expect(stateAccess.getState()).toEqual({ objects: [selectedSummary] });
   });
+
+  test("拖拽框选广播 selection-region，结束时发送 null", async () => {
+    const nowSpy = jest.spyOn(Date, "now");
+    try {
+      nowSpy.mockReturnValue(1000);
+      const tool = new RectangleObjectChooserTool();
+      const stateAccess = createStateAccess();
+      const sendAwareness = jest.fn();
+      const boardApi = {
+        hitTest: jest.fn(async () => []),
+        queryObjects: jest.fn(async () => []),
+        addActiveObjects: jest.fn(),
+        discardActiveObjects: jest.fn(),
+      };
+      const deviceContext = {
+        services: {
+          boardApi,
+          viewport: {
+            requestViewportUiRender: jest.fn(),
+            sendAwareness,
+          },
+        },
+        path: "/main/mouse/secondary/tool",
+        getNodeState: stateAccess.getState,
+        setNodeState: stateAccess.setState,
+      };
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(0, 0) } },
+          ],
+        },
+        deviceContext,
+      );
+      nowSpy.mockReturnValue(1100);
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(30, 40) } },
+          ],
+        },
+        deviceContext,
+      );
+
+      expect(sendAwareness).toHaveBeenLastCalledWith({
+        kind: "selection-region",
+        worldRect: { left: 0, top: 0, width: 30, height: 40 },
+      });
+
+      tool.process(
+        {
+          signals: [
+            { type: "position", context: { value: new Vector(30, 40) } },
+            { type: "end", context: {} },
+          ],
+        },
+        deviceContext,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(sendAwareness).toHaveBeenLastCalledWith({
+        kind: "selection-region",
+        worldRect: null,
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  test("取消框选发送 null 清除远端矩形", () => {
+    const tool = new RectangleObjectChooserTool();
+    const stateAccess = createStateAccess();
+    const sendAwareness = jest.fn();
+    const deviceContext = {
+      services: {
+        boardApi: {
+          hitTest: jest.fn(async () => []),
+          queryObjects: jest.fn(async () => []),
+          addActiveObjects: jest.fn(),
+          discardActiveObjects: jest.fn(),
+        },
+        viewport: {
+          requestViewportUiRender: jest.fn(),
+          sendAwareness,
+        },
+      },
+      path: "/main/mouse/secondary/tool",
+      getNodeState: stateAccess.getState,
+      setNodeState: stateAccess.setState,
+    };
+
+    tool.process(
+      {
+        signals: [
+          { type: "position", context: { value: new Vector(0, 0) } },
+        ],
+      },
+      deviceContext,
+    );
+    tool.process(
+      {
+        signals: [{ type: "cancel", context: {} }],
+      },
+      deviceContext,
+    );
+
+    expect(sendAwareness).toHaveBeenLastCalledWith({
+      kind: "selection-region",
+      worldRect: null,
+    });
+  });
+
+  test("未广播过框选矩形时清空不发多余消息", () => {
+    const tool = new RectangleObjectChooserTool();
+    const sendAwareness = jest.fn();
+    const context = {
+      services: {
+        viewport: { sendAwareness },
+      },
+      getNodeState: () => ({}),
+      setNodeState: jest.fn(),
+    };
+
+    tool.clearSelectionRegion(context);
+    expect(sendAwareness).not.toHaveBeenCalled();
+  });
 });

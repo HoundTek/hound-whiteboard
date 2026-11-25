@@ -559,4 +559,87 @@ describe("AwarenessOverlay", () => {
     expect(provider().find((e) => e.objectId === "b/11")).toBeUndefined();
     overlay.stop();
   });
+
+  test("远程框选矩形：更新、清空、peer-left 与超时清除", async () => {
+    jest.useFakeTimers();
+    try {
+      const boardApi = createMockBoardApi();
+      const viewport = createMockViewport();
+      const overlay = new AwarenessOverlay({ boardApi, viewport });
+      overlay.start();
+      await overlay.refresh();
+      const provider = viewport.registerUiOverlayProvider.mock.calls[0][0];
+      const regionEntries = () =>
+        provider().filter((entry) =>
+          entry.source.startsWith("awareness-selection-region:"),
+        );
+
+      viewport.emitAwareness({
+        type: "awareness",
+        awarenessType: "selection-region",
+        source: "dev-b",
+        data: {
+          kind: "selection-region",
+          worldRect: { left: 1, top: 2, width: 30, height: 40 },
+        },
+      });
+      expect(regionEntries()).toHaveLength(1);
+      expect(regionEntries()[0].geometry.worldRect).toEqual(
+        new RectangleRange(1, 2, 30, 40),
+      );
+      expect(regionEntries()[0].style.lineDash).toEqual([4, 4]);
+
+      viewport.emitAwareness({
+        type: "awareness",
+        awarenessType: "selection-region",
+        source: "dev-b",
+        data: {
+          kind: "selection-region",
+          worldRect: { left: 10, top: 20, width: 50, height: 60 },
+        },
+      });
+      expect(regionEntries()[0].geometry.worldRect).toEqual(
+        new RectangleRange(10, 20, 50, 60),
+      );
+
+      viewport.emitAwareness({
+        type: "awareness",
+        awarenessType: "selection-region",
+        source: "dev-b",
+        data: { kind: "selection-region", worldRect: null },
+      });
+      expect(regionEntries()).toEqual([]);
+
+      viewport.emitAwareness({
+        type: "awareness",
+        awarenessType: "selection-region",
+        source: "dev-b",
+        data: {
+          kind: "selection-region",
+          worldRect: { left: 0, top: 0, width: 10, height: 10 },
+        },
+      });
+      viewport.emitAwareness({
+        type: "awareness",
+        awarenessType: "peer-left",
+        source: "dev-b",
+      });
+      expect(regionEntries()).toEqual([]);
+
+      viewport.emitAwareness({
+        type: "awareness",
+        awarenessType: "selection-region",
+        source: "dev-b",
+        data: {
+          kind: "selection-region",
+          worldRect: { left: 0, top: 0, width: 10, height: 10 },
+        },
+      });
+      jest.advanceTimersByTime(2100);
+      expect(regionEntries()).toEqual([]);
+      overlay.stop();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

@@ -713,6 +713,10 @@ class BoardApi {
 
     if (activeToDiscard.length > 0) {
       aom.discard(new Set(activeToDiscard));
+      this.#emitActivity(
+        "unchoose",
+        activeToDiscard.map((obj) => obj.id),
+      );
     }
 
     const committer = boardCore.hitCommitter;
@@ -2535,6 +2539,11 @@ class BoardApi {
     if (aom.onLayer.get(objectId)) {
       aom.removeObjectFromLayer(objectId);
       aom.unregisterTrackedActiveObject(objectId);
+    }
+    if (aom.isRemoteActive(objectId)) {
+      aom.revokeRemoteActive(objectId);
+      this.#remoteChoicesDirty = true;
+      this.#remoteChoicesDirtyIds.add(objectId);
     }
     boardCore.objectLoaded.delete(objectId);
     boardCore.unsetObjectCoverChunks(objectId);
