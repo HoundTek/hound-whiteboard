@@ -1454,10 +1454,38 @@ class BoardCore {
       return chunk.isTempLoad ? false : chunk.downgradeToTemp();
     }
 
-    if (!chunk.isLoad) return false;
+    if (!chunk.isLoad) {
+      this.#releaseChunkLoadedState(chunk);
+      return false;
+    }
     const unloaded = chunk.isTempLoad ? chunk.unloadTemp() : chunk.unload();
     this.unloadChunkObjectEntries(chunk);
+    if (unloaded) {
+      this.#releaseChunkLoadedState(chunk);
+    }
     return unloaded;
+  }
+
+  /**
+   * 回收完全卸载后的区块状态槽
+   * @description
+   * 只有没有 loader 持有、Chunk 已退出加载状态、且没有静态图层/写缓冲时才移除；
+   * 根加载器仍保留 Chunk 实例作为身份缓存，下次加载复用同一实例。
+   * @param {import("../chunk/chunk.js").Chunk} chunk - 区块
+   * @returns {boolean} 是否移除了状态槽
+   * @private
+   */
+  #releaseChunkLoadedState(chunk) {
+    const chunkState = this.chunkLoaded.get(chunk.id);
+    if (!chunkState) return false;
+    if (chunk.isLoad) return false;
+    if (chunk.objectManager) return false;
+    if ((chunkState.fullLoadedCount ?? 0) > 0) return false;
+    if ((chunkState.tempLoadedCount ?? 0) > 0) return false;
+    if ((chunkState.loaderStrategy?.size ?? 0) > 0) return false;
+
+    this.chunkLoaded.delete(chunk.id);
+    return true;
   }
 
   /**
@@ -1500,7 +1528,8 @@ class BoardCore {
    */
   #getOrCreateChunkLoadedState(chunkId) {
     if (!this.chunkLoaded.has(chunkId)) {
-      const chunk = Chunk.fromId(chunkId);
+      const chunk =
+        this.rootChunkLoader?.chunksLoaded.get(chunkId) ?? Chunk.fromId(chunkId);
       chunk.board = this;
       this.chunkLoaded.set(chunkId, {
         chunk,

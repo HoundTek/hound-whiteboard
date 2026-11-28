@@ -17,6 +17,7 @@ import { BoardCore } from "../board-core.js";
 import { BoardApi } from "../../api/board-api.js";
 import { prepareRouteResidency } from "../../api/board-api-residency.js";
 import { createDefaultAomRenderHooks } from "../aom-render-hooks.js";
+import { CHUNK_LOAD_EVENTS } from "../../chunk/chunk-loader.js";
 
 /**
  * 创建共享 memory 驱动的持久化板
@@ -118,6 +119,73 @@ describe("部分驻留与懒加载", () => {
     },
     15000,
   );
+
+  test("完全卸载后回收 chunkLoaded 状态槽并复用 Chunk 实例", async () => {
+    const board = createBoard();
+    await board.store.create();
+    const { boardCore, api } = board;
+    const id = await api.addObject("StrokeObject", {
+      position: { x: 10, y: 10 },
+      data: strokeData(),
+    });
+    await board.journaler.flush();
+    await settleUnload();
+
+    const chunkId = [...boardCore.getObjectCoverChunks(id)][0];
+    const chunk = boardCore.getChunkById(chunkId);
+    const loader = boardCore.createChunkLoader("test-loader");
+    await boardCore.loadChunksIntoLoader(loader, [chunk]);
+    expect(boardCore.chunkLoaded.get(chunkId).fullLoadedCount).toBe(1);
+    expect(boardCore.getObjectById(id)).toBeDefined();
+
+    loader.destroy();
+    await settleUnload();
+
+    expect(chunk.isLoad).toBe(false);
+    expect(boardCore.chunkLoaded.has(chunkId)).toBe(false);
+    expect(boardCore.getObjectById(id)).toBeUndefined();
+    expect(boardCore.getChunkById(chunkId)).toBe(chunk);
+
+    const reloadLoader = boardCore.createChunkLoader("reload-loader");
+    const reloadedChunk = boardCore.getChunkById(chunkId);
+    expect(reloadedChunk).toBe(chunk);
+    await boardCore.loadChunksIntoLoader(reloadLoader, [reloadedChunk]);
+    expect(boardCore.getObjectById(id)?.id).toBe(id);
+    expect(boardCore.chunkLoaded.get(chunkId).fullLoadedCount).toBe(1);
+
+    reloadLoader.destroy();
+    await settleUnload();
+  }, 15000);
+
+  test("AOM 写缓冲状态槽不随空卸载请求回收", async () => {
+    const board = createBoard();
+    await board.store.create();
+    const { boardCore } = board;
+
+    const chunk = boardCore.getChunkById(1);
+    chunk.isLoad = false;
+    chunk.isTempLoad = false;
+    chunk.objectManager = {
+      staticGraph: { getNodes: () => [] },
+    };
+    const state = boardCore.chunkLoaded.get(1);
+    state.tempLoadedCount = 1;
+    state.fullLoadedCount = 0;
+    state.loaderStrategy = new Map([["test-loader", "temp"]]);
+
+    const results = boardCore.chunkLoadEventBus.emit(
+      CHUNK_LOAD_EVENTS.REQUEST_UNLOAD,
+      {
+        requesterId: "test-loader",
+        chunk,
+      },
+    );
+    await results[0];
+
+    expect(boardCore.chunkLoaded.has(1)).toBe(true);
+    expect(boardCore.chunkLoaded.get(1).tempLoadedCount).toBe(0);
+    expect(chunk.objectManager).toBeDefined();
+  });
 
   test("区块元数据带类型时首次清单不扫描 objects/", async () => {
     const first = createBoard();

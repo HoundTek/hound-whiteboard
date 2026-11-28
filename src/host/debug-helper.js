@@ -41,17 +41,46 @@ function handleDebugQuery(boardCore, query, params = {}) {
 }
 
 /**
+ * 判断区块状态类别
+ * @param {import("../kernel/chunk/chunk.js").Chunk | undefined} chunk - 区块实例
+ * @param {Object} state - chunkLoaded 状态
+ * @returns {"FULL" | "TEMP" | "WRITE_BUFFER" | "EMPTY"} 状态类别
+ */
+function chunkStateKind(chunk, state) {
+  const fullLoadedCount = state?.fullLoadedCount ?? 0;
+  const tempLoadedCount = state?.tempLoadedCount ?? 0;
+  if (fullLoadedCount > 0 || (chunk?.isLoad && !chunk.isTempLoad)) {
+    return "FULL";
+  }
+  if (tempLoadedCount > 0 || (chunk?.isLoad && chunk.isTempLoad)) {
+    return "TEMP";
+  }
+  if (chunk?.objectManager) return "WRITE_BUFFER";
+  return "EMPTY";
+}
+
+/**
  * 输出所有区块加载状态
  * @param {import("../kernel/board/board-core.js").BoardCore} boardCore
  * @returns {void}
  */
 function logChunkLoadState(boardCore) {
   const loaded = Array.from(boardCore.chunkLoaded.entries()).map(
-    ([id, state]) => ({
-      chunkId: id,
-      tempLoadedCount: state?.tempLoadedCount ?? 0,
-      fullLoadedCount: state?.fullLoadedCount ?? 0,
-    }),
+    ([id, state]) => {
+      const chunk = state?.chunk;
+      return {
+        chunkId: id,
+        kind: chunkStateKind(chunk, state),
+        tempLoadedCount: state?.tempLoadedCount ?? 0,
+        fullLoadedCount: state?.fullLoadedCount ?? 0,
+        loaderCount: state?.loaderStrategy?.size ?? 0,
+        isLoad: chunk?.isLoad ?? false,
+        isTempLoad: chunk?.isTempLoad ?? false,
+        hasGraph: Boolean(chunk?.objectManager),
+        graphNodes:
+          chunk?.objectManager?.staticGraph?.getNodes?.().length ?? 0,
+      };
+    },
   );
   debugLog.debug("chunkLoadState:", loaded);
 }
@@ -192,6 +221,7 @@ function logBoardState(boardCore) {
     rootPath: boardCore.rootPath,
     chunkIds: [...boardCore.chunkLoaded.keys()].sort((a, b) => a - b),
     objectIds: [...boardCore.objectLoaded.keys()].sort((a, b) => a - b),
+    knownObjectCount: boardCore.getKnownObjectIds?.().size ?? 0,
     activeObjectCount: aom?.activeObjectIndex?.size ?? 0,
   });
 }

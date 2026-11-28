@@ -182,7 +182,7 @@ describe("Multiple ChunkLoader", () => {
     expect(getChunkLoadState(board, 6).fullLoadedCount).toBe(1);
 
     await requestUnload(board, chunk1, loader2.requesterId);
-    expect(getChunkLoadState(board, 6).fullLoadedCount).toBe(0);
+    expect(boardCore.chunkLoaded.has(6)).toBe(false);
   });
 
   test("所有完整加载释放后区块应降级为临时加载（若仍有临时引用）", async () => {
@@ -203,7 +203,7 @@ describe("Multiple ChunkLoader", () => {
     // 临时持有者释放 → 应完全卸载（unloadTemp）
     await requestUnload(board, chunk2, tempLoader.requesterId);
     expect(chunk2.unloadTemp).toHaveBeenCalledTimes(1);
-    expect(getChunkLoadState(board, 1).tempLoadedCount).toBe(0);
+    expect(boardCore.chunkLoaded.has(1)).toBe(false);
   });
 
   test("同一 requester 重复发送 full 请求时引用计数不变", async () => {

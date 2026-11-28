@@ -26,7 +26,7 @@ UI 侧的 `Board` facade 通过 `BoardApiRpc` 与 Worker 侧的 `BoardCore` 通�
 | `hitCommitter`        | hit 提交器，分子操作的 commit 边界单点                                                |
 | `trash`               | 已删除对象的回收站（objectId → 删除时刻的全量序列化与各区块层位边集）                 |
 | `activeObjectManager` | AOM 实例，管理活动对象集合与动态层关系                                                |
-| `chunkLoaded`         | `Map<chunkId, BoardChunkLoadedState>`，记录各区块的加载计数与 loader 策略             |
+| `chunkLoaded`         | `Map<chunkId, BoardChunkLoadedState>`，记录各区块的加载计数、loader 策略与状态槽（TEMP 元数据、FULL、AOM 写缓冲、空壳） |
 | `objectLoaded`        | `Map<objectId, BoardObjectLoadedState>`，白板级对象实例注册表                         |
 | `chunkLoadEventBus`   | 区块加载事件总线（REQUEST_LOAD / REQUEST_UNLOAD / LOAD_COMPLETE）                     |
 | `activityEventBus`    | AOM 活动事件总线（ephemeral），本地 choose/unchoose/commit 手势事件即时广播，不经日志 |
@@ -51,6 +51,19 @@ UI 侧的 `Board` facade 通过 `BoardApiRpc` 与 Worker 侧的 `BoardCore` 通�
 - `getPinnedChunkIds()`：AOM 全部成员（活动对象、pickup 的非活动层成员、远程选择成员）覆盖区块的并集；`unloadChunkObjectEntries` 与 `#syncObjectEntryForChunk` 也不会移除任何仍在 AOM 中的对象。
 
 区块缓存本身见 [residency-cache-document.md](./residency-cache-document.md)。
+
+## 区块状态槽
+
+`chunkLoaded` 的计数只表示当前有多少 loader 持有该区块，**counts 0 不等于内容为空**。同一个 Map 里有四类状态：
+
+| `kind` | 判据 | 含义 |
+| --- | --- | --- |
+| `FULL` | `fullLoadedCount > 0`，或 `isLoad && !isTempLoad` | 对象实例已载入 |
+| `TEMP` | `tempLoadedCount > 0`，或 `isLoad && isTempLoad` | 只回了层叠图/元数据，没有对象实例；开板恢复的元数据也属于这一态 |
+| `WRITE_BUFFER` | `!isLoad` 且存在 `objectManager` | AOM 在未加载区块上写入的静态图层/写缓冲 |
+| `EMPTY` | 其余 | 没有 loader、没有静态图的空壳 |
+
+完全卸载时只有 `EMPTY` 状态槽会被回收；`WRITE_BUFFER` 仍可能被 journaler 调和写盘，不能删。调试查询 `chunkLoadState` 会输出 `kind`、`isLoad`、`isTempLoad`、`hasGraph`、`graphNodes` 与 `loaderCount`。
 
 ## 对象活性与显式删除
 
