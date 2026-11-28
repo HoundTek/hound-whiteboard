@@ -11,7 +11,11 @@ import {
   parseOperationId,
   compareTimeMarks,
   validateOperation,
+  normalizeOperationRecord,
 } from "./operation.js";
+import { canonicalJson } from "../utils/canonical-json.js";
+import { HashTrie } from "../utils/hash-trie.js";
+import { hashString } from "../utils/hash.js";
 
 /**
  * 操作日志
@@ -65,6 +69,20 @@ class OperationLog {
   #lastTime = new Map();
 
   /**
+   * 各 source 记录流的滚动哈希
+   * @type {Map<string, string>}
+   * @private
+   */
+  #sourceHashes = new Map();
+
+  /**
+   * 各 source 流哈希组成的增量索引
+   * @type {HashTrie}
+   * @private
+   */
+  #sourceHashTrie = new HashTrie();
+
+  /**
    * 追加事件订阅者集合
    * @type {Set<(record: Object) => void>}
    */
@@ -89,6 +107,14 @@ class OperationLog {
    */
   get size() {
     return this.#records.length;
+  }
+
+  /**
+   * 全部规范化记录内容的增量根哈希
+   * @type {string}
+   */
+  get rootHash() {
+    return this.#sourceHashTrie.rootHash;
   }
 
   /**
@@ -153,6 +179,12 @@ class OperationLog {
     }
     this.#nextSeq.set(record.source, expected + 1);
     this.#lastTime.set(record.source, record.time);
+    const previousHash = this.#sourceHashes.get(record.source) ?? "";
+    const sourceHash = hashString(
+      `${previousHash}\u0000${canonicalJson(normalizeOperationRecord(record))}`,
+    );
+    this.#sourceHashes.set(record.source, sourceHash);
+    this.#sourceHashTrie.set(record.source, sourceHash);
     for (const listener of this.#appendListeners) {
       listener(record);
     }

@@ -669,6 +669,20 @@ function _validateLayerEdgeChunks(chunks, errors, label) {
   }
 }
 
+/**
+ * 归一化记录的可选容器字段
+ * @param {OperationRecord} record - 操作记录
+ * @returns {OperationRecord} 归一化记录
+ */
+function normalizeOperationRecord(record) {
+  return {
+    ...record,
+    molId: record.molId ?? null,
+    supraId: record.supraId ?? null,
+    discard: record.discard ?? false,
+  };
+}
+
 export {
   OPERATION_TYPES,
   OPERATION_EFFECT_KINDS,
@@ -693,4 +707,5 @@ export {
   createRedoOperation,
   createCloseSupraOperation,
   validateOperation,
+  normalizeOperationRecord,
 };

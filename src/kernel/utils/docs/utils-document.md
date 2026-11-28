@@ -10,7 +10,7 @@
 - 图与事件：`directed-graph.js`、`event-bus.js`
 - 共享状态：`shared-state-store.js`
 - 计数与随机：`counter-pool.js`、`random.js`、`incremental-id-pool.js`
-- 哈希：`hash.js`（FNV-1a，digest stateHash 基础设施）
+- 哈希与规范化：`hash.js`（FNV-1a）、`hash-trie.js`（增量摘要与分歧定位）、`canonical-json.js`（键序无关 JSON）
 - 数学与几何：`math.js`、`math-algorithm.js`
 - 逻辑路径：`path.js`
 

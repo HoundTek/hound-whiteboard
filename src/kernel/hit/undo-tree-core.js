@@ -13,6 +13,7 @@ import {
   compareRecords,
   parseOperationId,
 } from "./operation.js";
+import { ActiveChainIndex } from "./active-chain-index.js";
 
 /**
  * 分子节点
@@ -129,6 +130,27 @@ class UndoTree {
   #undoRegistry = new Map();
 
   /**
+   * 活动记录序列与增量哈希索引
+   * @type {ActiveChainIndex}
+   * @private
+   */
+  #activeChain = new ActiveChainIndex();
+
+  /**
+   * 活动记录变化订阅者
+   * @type {Set<(change: {diverge: number, removed: Object[], added: Object[]}) => void>}
+   * @private
+   */
+  #activeChainListeners = new Set();
+
+  /**
+   * 是否正在全量重建（重建结束后统一替换活动索引）
+   * @type {boolean}
+   * @private
+   */
+  #rebuilding = false;
+
+  /**
    * 构造时间回溯树
    * @param {import("./operation-log.js").OperationLog} log - 数据池（操作日志）
    */
@@ -152,6 +174,24 @@ class UndoTree {
    */
   get head() {
     return this.#head;
+  }
+
+  /**
+   * 活动记录序列的增量根哈希
+   * @type {string}
+   */
+  get chainHash() {
+    return this.#activeChain.rootHash;
+  }
+
+  /**
+   * 订阅活动记录序列变化
+   * @param {(change: {diverge: number, removed: Object[], added: Object[]}) => void} listener - 变化监听器
+   * @returns {() => void} 退订函数
+   */
+  onActiveChainChange(listener) {
+    this.#activeChainListeners.add(listener);
+    return () => this.#activeChainListeners.delete(listener);
   }
 
   /**
@@ -282,6 +322,9 @@ class UndoTree {
       this.#compareRecords(record, this.#timeRecordOfNode(this.#head)) > 0
     ) {
       this.#head.memberIds.push(record.id);
+      if (!this.#rebuilding) {
+        this.#emitActiveChainChange(this.#activeChain.append([record]));
+      }
       return this.#head;
     }
     if (this.#head === this.#root || this.#compareRecords(record, this.#timeRecordOfNode(this.#head)) > 0) {
@@ -308,9 +351,17 @@ class UndoTree {
     // 旧形态成员分批到达时并入既有节点，效果重放读取同一成员全集
     const existing = this.getActiveNode(shareId);
     if (existing !== null) {
+      const previousIds = new Set(existing.memberIds);
+      const addedMembers = members.filter((member) => !previousIds.has(member.id));
+      const successor = existing.children.find((child) => this.#activeByShareId.has(child.shareId)) ?? null;
       existing.memberIds = [
         ...new Set([...existing.memberIds, ...members.map((member) => member.id)]),
       ];
+      if (!this.#rebuilding && addedMembers.length > 0) {
+        this.#emitActiveChainChange(
+          this.#activeChain.insertBefore(successor?.memberIds[0] ?? null, addedMembers),
+        );
+      }
       return existing;
     }
     const info = { memberIds: members.map((member) => member.id) };
@@ -350,6 +401,9 @@ class UndoTree {
     if (target === this.#head) {
       this.#head = target.parent;
       this.#rebuildActiveIndex();
+      if (!this.#rebuilding) {
+        this.#emitActiveChainChange(this.#activeChain.remove(target.memberIds));
+      }
       return null;
     }
     const forkPoint = target.parent;
@@ -383,6 +437,9 @@ class UndoTree {
     }
     this.#head = parent;
     this.#rebuildActiveIndex();
+    if (!this.#rebuilding) {
+      this.#emitActiveChainChange(this.#activeChain.remove(target.memberIds));
+    }
     return null;
   }
 
@@ -497,6 +554,9 @@ class UndoTree {
     this.#insertChildSorted(this.#head, node);
     this.#head = node;
     this.#rebuildActiveIndex();
+    if (!this.#rebuilding) {
+      this.#emitActiveChainChange(this.#activeChain.append(this.#recordsOfActiveNode(node)));
+    }
     return node;
   }
 
@@ -524,6 +584,11 @@ class UndoTree {
     successor.parent = node;
     this.#shiftDepth(successor, delta);
     this.#rebuildActiveIndex();
+    if (!this.#rebuilding) {
+      this.#emitActiveChainChange(
+        this.#activeChain.insertBefore(successor.memberIds[0], this.#recordsOfActiveNode(node)),
+      );
+    }
     return node;
   }
 
@@ -608,6 +673,13 @@ class UndoTree {
       this.#shiftDepth(successor, node.depth + 1 - successor.depth);
     }
     this.#rebuildActiveIndex();
+    if (!this.#rebuilding) {
+      const records = this.#recordsOfActiveNode(node);
+      const change = successor === null
+        ? this.#activeChain.append(records)
+        : this.#activeChain.insertBefore(successor.memberIds[0], records);
+      this.#emitActiveChainChange(change);
+    }
   }
 
   /**
@@ -622,6 +694,7 @@ class UndoTree {
     }
     this.#head = node;
     this.#rebuildActiveIndex();
+    this.#replaceActiveChain();
     return true;
   }
 
@@ -634,61 +707,69 @@ class UndoTree {
    * @returns {void}
    */
   rebuild() {
-    this.#root = new MolecularNode(null, null);
-    this.#head = this.#root;
-    this.#activeByShareId = new Map();
-    this.#undoRegistry = new Map();
-    const units = [];
-    const legacyGroups = new Map();
-    for (const record of this.#log.toArray()) {
-      if (record.supraOpId === null) {
-        units.push(record);
-      } else {
-        let group = legacyGroups.get(record.supraOpId);
-        if (group === undefined) {
-          group = [];
-          legacyGroups.set(record.supraOpId, group);
-          units.push(group);
+    this.#rebuilding = true;
+    let completed = false;
+    try {
+      this.#root = new MolecularNode(null, null);
+      this.#head = this.#root;
+      this.#activeByShareId = new Map();
+      this.#undoRegistry = new Map();
+      const units = [];
+      const legacyGroups = new Map();
+      for (const record of this.#log.toArray()) {
+        if (record.supraOpId === null) {
+          units.push(record);
+        } else {
+          let group = legacyGroups.get(record.supraOpId);
+          if (group === undefined) {
+            group = [];
+            legacyGroups.set(record.supraOpId, group);
+            units.push(group);
+          }
+          group.push(record);
         }
-        group.push(record);
       }
-    }
-    // 单元定序：旧超分子组取末分子时间标记（完成时刻），单条记录取自身，保证确定性全序
-    units.sort((a, b) => {
-      const reprA = Array.isArray(a) ? a[a.length - 1] : a;
-      const reprB = Array.isArray(b) ? b[b.length - 1] : b;
-      return compareRecords(reprA, reprB);
-    });
-    const appliedIds = new Set();
-    /**
-     * 应用一个派生单元并登记其记录
-     * @param {Object|Object[]} unit - 单条记录或旧超分子成员组
-     * @returns {void}
-     */
-    const applyUnit = (unit) => {
-      if (Array.isArray(unit)) {
-        this.applySupraNode(unit);
-        for (const record of unit) appliedIds.add(record.id);
-      } else {
-        this.applyRecord(unit);
-        appliedIds.add(unit.id);
-      }
-    };
-    while (units.length > 0) {
-      let index = units.findIndex((unit) => {
-        if (Array.isArray(unit)) return true;
-        let dependency = null;
-        if (unit.type === OPERATION_TYPES.UNDO || unit.type === OPERATION_TYPES.MOVE_HEAD) {
-          dependency = unit.payload.targetNodeId;
-        } else if (unit.type === OPERATION_TYPES.REDO) {
-          dependency = unit.payload.targetUndoId;
-        }
-        return dependency === null || appliedIds.has(dependency);
+      // 单元定序：旧超分子组取末分子时间标记（完成时刻），单条记录取自身，保证确定性全序
+      units.sort((a, b) => {
+        const reprA = Array.isArray(a) ? a[a.length - 1] : a;
+        const reprB = Array.isArray(b) ? b[b.length - 1] : b;
+        return compareRecords(reprA, reprB);
       });
-      // 缺失目标或循环依赖的损坏日志仍按确定顺序落地，由效果修复与校验和暴露问题
-      if (index === -1) index = 0;
-      const [unit] = units.splice(index, 1);
-      applyUnit(unit);
+      const appliedIds = new Set();
+      /**
+       * 应用一个派生单元并登记其记录
+       * @param {Object|Object[]} unit - 单条记录或旧超分子成员组
+       * @returns {void}
+       */
+      const applyUnit = (unit) => {
+        if (Array.isArray(unit)) {
+          this.applySupraNode(unit);
+          for (const record of unit) appliedIds.add(record.id);
+        } else {
+          this.applyRecord(unit);
+          appliedIds.add(unit.id);
+        }
+      };
+      while (units.length > 0) {
+        let index = units.findIndex((unit) => {
+          if (Array.isArray(unit)) return true;
+          let dependency = null;
+          if (unit.type === OPERATION_TYPES.UNDO || unit.type === OPERATION_TYPES.MOVE_HEAD) {
+            dependency = unit.payload.targetNodeId;
+          } else if (unit.type === OPERATION_TYPES.REDO) {
+            dependency = unit.payload.targetUndoId;
+          }
+          return dependency === null || appliedIds.has(dependency);
+        });
+        // 缺失目标或循环依赖的损坏日志仍按确定顺序落地，由效果修复与校验和暴露问题
+        if (index === -1) index = 0;
+        const [unit] = units.splice(index, 1);
+        applyUnit(unit);
+      }
+      completed = true;
+    } finally {
+      this.#rebuilding = false;
+      if (completed) this.#replaceActiveChain();
     }
   }
 
@@ -711,6 +792,37 @@ class UndoTree {
    */
   #timeRecordOfNode(node) {
     return this.#log.get(node.memberIds[node.memberIds.length - 1] ?? node.shareId);
+  }
+
+  /**
+   * 读取节点承载的活动记录
+   * @param {MolecularNode} node - 分子节点
+   * @returns {import("./operation.js").OperationRecord[]} 活动记录
+   * @private
+   */
+  #recordsOfActiveNode(node) {
+    return node.memberIds.map((id) => this.#log.get(id)).filter(Boolean);
+  }
+
+  /**
+   * 以当前活动链统一替换增量索引
+   * @returns {void}
+   * @private
+   */
+  #replaceActiveChain() {
+    const records = this.getActiveChain().flatMap((node) => this.#recordsOfActiveNode(node));
+    this.#emitActiveChainChange(this.#activeChain.replace(records));
+  }
+
+  /**
+   * 发布活动记录变化
+   * @param {{diverge: number, removed: Object[], added: Object[]}} change - 链变化
+   * @returns {void}
+   * @private
+   */
+  #emitActiveChainChange(change) {
+    if (change.removed.length === 0 && change.added.length === 0) return;
+    for (const listener of this.#activeChainListeners) listener(change);
   }
 
   /**
@@ -775,13 +887,12 @@ class UndoTree {
    * @private
    */
   #findNode(node, shareId) {
-    if (node.shareId === shareId) {
-      return node;
-    }
-    for (const child of node.children) {
-      const found = this.#findNode(child, shareId);
-      if (found !== null) {
-        return found;
+    const stack = [node];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (current.shareId === shareId) return current;
+      for (let index = current.children.length - 1; index >= 0; index -= 1) {
+        stack.push(current.children[index]);
       }
     }
     return null;
