@@ -21,6 +21,7 @@ const benchmarks = [
   { name: "Worker RPC", file: "worker-rpc.bench.js" },
   { name: "Interaction Frame", file: "interaction-frame.bench.js" },
   { name: "Chunk Rebuild", file: "chunk-rebuild.bench.js" },
+  { name: "Sync Repair", file: "sync-repair.bench.js" },
 ];
 
 benchmarks.forEach((bench, index) => {

@@ -51,6 +51,7 @@ UI Kit 另由 [HoundTek/hound-react-ui-kit](https://github.com/HoundTek/hound-re
 │   │   ├── board/               # Board 权威状态（BoardCore 静态图 / AOM / render-hooks 缝）
 │   │   ├── hit/                 # 操作日志与时间回溯树
 │   │   ├── store/               # 会话存储（per-source 日志流与 meta 分片、写权仲裁落盘、恢复）
+│   │   ├── projection/          # 应然/物化投影、增量摘要与局部自愈
 │   │   ├── api/                 # BoardApi 契约面
 │   │   ├── utils/               # 内核工具（id 池、图、数学）
 │   │   └── types/               # 类型定义
@@ -182,6 +183,7 @@ hwb.off();
 | `yarn check:modules` | 检查文件头 `@module` 路径与实际目录是否一致         |
 | `yarn check:license` | 检查 `src/kernel/` 文件是否带 MIT 许可证头          |
 | `yarn bench`         | 运行全部性能基准                                    |
+| `yarn bench:sync`    | 同步局部自愈、摘要查询与链重建基准                  |
 
 CI 流水线定义见 `.github/workflows/ci.yml`，推送到 `master` / `develop` 或向 `master` 提 PR 时自动运行。
 
@@ -257,7 +259,7 @@ CI 流水线定义见 `.github/workflows/ci.yml`，推送到 `master` / `develop
 - 协作同步：[src/host/sync/docs/sync-document.md](src/host/sync/docs/sync-document.md)
 - CLI：[src/cli/docs/cli-document.md](src/cli/docs/cli-document.md)
 - 模块文档：各核心模块的 `docs/` 目录下有 `*-document.md`（如 `src/kernel/board/docs/`、`src/ui/devices-dag/docs/`）
-- 模块索引：[kernel/utils](src/kernel/utils/docs/utils-document.md)、[utils](src/utils/utils-document.md)
+- 模块索引：[kernel/utils](src/kernel/utils/docs/utils-document.md)、[kernel/projection](src/kernel/projection/docs/projection-document.md)、[utils](src/utils/utils-document.md)
 - 概念设计（尚无运行时代码）：[取景框](src/ui/frame/docs/frame-document.md)、[导引链](src/ui/frame/docs/guiding-chain-document.md)、[演示序列构想](dev/whiteboard-guided-navigation-and-presentation-mode.md)
 - 开发期文档：[dev/probes/README.md](dev/probes/README.md)（渲染诊断探针）、[安全边界存档](dev/electron-security-boundary-and-safe-io.md)（Electron 时期设计笔记）
 

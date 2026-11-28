@@ -13,6 +13,7 @@ import { bindRoot } from "../src/io/driver/io-driver.js";
 import { createSessionStore } from "../src/kernel/store/session-store.js";
 import { BoardCore } from "../src/kernel/board/board-core.js";
 import { BoardApi } from "../src/kernel/api/board-api.js";
+import { collectRecordChunkIds } from "../src/kernel/api/undo-transition.js";
 import { intersectsRanges, RectangleRange } from "../src/kernel/range/index.js";
 import { printHeader, printFooter } from "./helpers.js";
 
@@ -181,7 +182,14 @@ async function loadReplayDerived() {
     source: "bench-read",
     chunkUnload: false,
   });
-  new BoardApi(boardCore).applyRemoteOperations(records);
+  const chunkMetadataList = [...collectRecordChunkIds(boardCore, records)].map((chunkId) => ({
+    chunkId,
+    tierGraph: [],
+    objectCoverIndex: [],
+    objectTypes: [],
+  }));
+  boardCore.restoreSession({ chunkMetadataList });
+  await new BoardApi(boardCore).applyRemoteOperations(records);
   return boardCore;
 }
 
