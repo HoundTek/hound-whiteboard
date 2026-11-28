@@ -45,7 +45,7 @@ UI 侧的 `Board` facade 通过 `BoardApiRpc` 与 Worker 侧的 `BoardCore` 通�
 - `restoreSession(session, { chunksTemp: true })`：只回填区块静态图、覆盖索引与对象类型，区块标记 TEMP，不注册对象实例；后续 FULL 请求经 `loadFull()` + `syncChunkObjectEntries()` 从 `objects/` 读回对象。GUI 持久化开板与 daemon owner 都走该模式。
 - `setObjectIndexLoader(fn)` / `ensureObjectTypeIndex()`：区块元数据 `objectTypes` 已覆盖全部已知对象时直接完成；仍有缺失（旧板）才调用加载器扫描 `objects/` 回退。`getKnownObjectEntries()` 先列驻留对象，再补覆盖索引中的未驻留对象。
 - `getPristineObjectJson(id)`：对象经区块加载路径从盘读入时的原始 JSON 指纹，供 journaler 首轮 flush 跳过未修改对象的重写。
-- `getKnownObjectIds()` 与 `isObjectKnown()` 不随驱逐缩小；`isFullResidency()` 要求无驱逐标记且驻留对象数覆盖全部已知对象，懒加载/部分驻留端返回 false，digest 的 `stateHash` 比对据此门控。
+- `getKnownObjectIds()` 与 `isObjectKnown()` 不随驱逐缩小；`isFullResidency()` 要求无驱逐标记且驻留对象数覆盖全部已知对象，懒加载/部分驻留端返回 false。该字段仅作诊断；物化摘要保留合法未驻留对象的逻辑状态，不再据此门控。`isObjectLegallyUnloaded(id)` 只按该对象覆盖区块判断是否没有 FULL 持有，供局部修复避免全对象扫描。
 - `ensureObjectsResident(ids)` / `ensureChunksResident(ids)`：有驻留管理器时交给缓存，否则用临时 loader FullLoad 并返回 `destroy(300)` 的释放函数；`ensureChunkMetadata(ids)` 只加载 TEMP 元数据。
 - `loadChunksIntoLoader(loader, chunks)`：让指定 loader 以 FULL 持有区块并等待加载完成，供驻留缓存复用。
 - `getPinnedChunkIds()`：AOM 全部成员（活动对象、pickup 的非活动层成员、远程选择成员）覆盖区块的并集；`unloadChunkObjectEntries` 与 `#syncObjectEntryForChunk` 也不会移除任何仍在 AOM 中的对象。

@@ -684,6 +684,7 @@ class CoreWorkerRuntime {
 
     if (persistence) {
       this.#boardCore.restoreSession(persistence.session, { chunksTemp: true });
+      this.#boardApi.refreshMaterializedProjection();
       // GUI 作为 owner 写全部来源流：本端与 relay 远端记录都由本端落盘；
       // 对象文件按 AOM 活动性仲裁（journaler 内跳过远程活动对象）；
       // chunkUnload 部分驻留下不移除缺失对象文件（显式删除仍生效）

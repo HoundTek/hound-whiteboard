@@ -276,7 +276,7 @@ stateDiagram-v2
 
 ### digest 与自愈
 
-协作端周期交换 digest（`{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`）做对账：`logSize` / `head` 比对日志水位，`openMols` 对账未闭合分子，`chainHash` 是活动链的确定性校验和（驻留无关），`stateHash` 是已驻留对象状态的确定性校验和（仅两端全量驻留时可比）。`chainHash` 分歧时请求全量重建；`stateHash` 分歧时经 `repairStateFromLog` 自愈——从本端日志重放派生对象状态并对齐活体（效果层修复，不改写日志）。
+协作端周期交换 digest（`{logSize, logHash, head, objects, chainHash, stateHash, derivedStateHash, layerHash, derivedLayerHash, fullResidency, openMols}`）做对账：`logSize` / `logHash` / `head` 比对日志水位与内容，`openMols` 对账未闭合分子，`chainHash` 是活动链的增量校验和，`stateHash` / `layerHash` 是物化对象与静态图摘要，derived 对应字段是活动链应然投影。`chainHash` 分歧时请求全量重建；物化对象或层序分歧时经 `repairStateFromLog` 只修不同叶子，不改写日志、不回放全日志。
 
 落盘权威属于 owner：每块板由一个 owner 独占落盘（进程内 BoardCore + 日志跟随者）。GUI 作为 owner 时由 Worker 内装配的日志跟随者直接落盘并开本地 owner RPC 端点；CLI 启动的 daemon 作为 owner 时由 daemon 落盘，GUI 退出释放 claim 后 proxy daemon 接管落盘。daemon owner 按区块部分驻留：开板只载日志、trash 与区块元数据，对象实例由查询/写/undo 路由按需 FullLoad，驻留预算由 `--resident-chunks` 控制。非 owner 不直接写目录。
 
@@ -313,7 +313,7 @@ flowchart LR
 - **超分子（supra）**：以 `supraId` 归组同会话分子记录，`close-supra` 触发树级折叠
 - **层位边**：对象操作记录与 trash 条目携带的 `below` / `above` 前驱后继，回图与回放的层位依据
 - **choice（命名选择）**：活动对象的命名分组，跨端以 `"{source}/{choice}"` 区分同名 choice
-- **digest**：协作对账摘要 `{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`，chainHash 分歧请求全量重建，stateHash 分歧经 `repairStateFromLog` 自愈
+- **digest**：协作对账摘要 `{logSize, logHash, head, objects, chainHash, stateHash, derivedStateHash, layerHash, derivedLayerHash, fullResidency, openMols}`，chainHash 分歧请求全量重建，物化对象与层序分歧经 `repairStateFromLog` 局部自愈
 
 ## 相关文档
 

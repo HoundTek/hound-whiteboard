@@ -347,6 +347,62 @@ const BOARD_API_ROUTES = {
   },
 
   /**
+   * 查询规范化操作日志的增量根哈希（同步 digest 用）
+   */
+  queryLogHash: {
+    invoke: (api) => api.queryLogHash(),
+    flush: "none",
+  },
+
+  /**
+   * 查询活动链派生的应然层序根哈希
+   */
+  queryDerivedLayerHash: {
+    invoke: (api) => api.queryDerivedLayerHash(),
+    flush: "none",
+  },
+
+  /**
+   * 查询实际物化静态图的层序根哈希
+   */
+  queryLayerHash: {
+    invoke: (api) => api.queryLayerHash(),
+    flush: "none",
+  },
+
+  /**
+   * 查询活动链派生的应然对象状态根哈希
+   */
+  queryDerivedStateHash: {
+    invoke: (api) => api.queryDerivedStateHash(),
+    flush: "none",
+  },
+
+  /**
+   * 重捕实际物化状态（调试与显式失效处理）
+   */
+  refreshMaterializedProjection: {
+    invoke: (api, options) => api.refreshMaterializedProjection(options),
+    flush: "none",
+  },
+
+  /**
+   * 等待已排定的物化重捕完成
+   */
+  flushProjection: {
+    invoke: (api) => api.flushProjection(),
+    flush: "none",
+  },
+
+  /**
+   * 从当前活动链重建应然投影（索引失效兜底）
+   */
+  rebuildDerivedProjection: {
+    invoke: (api) => api.rebuildDerivedProjection(),
+    flush: "none",
+  },
+
+  /**
    * 计算对象状态的确定性校验和（同步 digest 用）
    */
   queryStateHash: {
@@ -371,7 +427,7 @@ const BOARD_API_ROUTES = {
   },
 
   /**
-   * 从本端日志重放派生对象状态并对齐活体（效果层分歧自愈）
+   * 从活动链派生投影局部修复物化对象与静态图（效果层分歧自愈）
    */
   repairStateFromLog: {
     invoke: (api) => api.repairStateFromLog(),

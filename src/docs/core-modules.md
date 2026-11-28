@@ -130,7 +130,7 @@ flowchart BT
 
 ### `host/sync/`
 
-- `network-coordinator.js`：BoardApi 的同步宿主薄包装——本地操作经中继广播，远程记录经延迟容忍窗接入 `applyRemoteOperations`；周期 digest（`{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`）比对、openMols 对账，chainHash 分歧请求全量重建，stateHash 分歧（仅两端全量驻留时可比）经 `repairStateFromLog` 自愈
+- `network-coordinator.js`：BoardApi 的同步宿主薄包装——本地操作经中继广播，远程记录经延迟容忍窗接入 `applyRemoteOperations`；周期 digest（`{logSize, logHash, head, objects, chainHash, stateHash, derivedStateHash, layerHash, derivedLayerHash, fullResidency, openMols}`）比对、openMols 对账，chainHash 分歧请求全量重建，物化对象与层序分歧经 `repairStateFromLog` 局部自愈
 - `relay-server.js`：按板房间组织的 WebSocket 无状态中继（成员管理、消息转发、INIT 定向），不缓存任何记录
 - `amend-forwarder.js`：订阅内核分子生命周期 amend 事件，begin/end/abort 即时转发，中间帧节流合批后经协调器 volatile 通道广播
 - `remote-record-ingestor.js`：为各同步通道提供共享的记录去重、依赖预检、乱序缓冲与权威日志水位驱动接入
@@ -173,9 +173,18 @@ flowchart BT
 
 详见 `kernel/hit/docs/` 四篇文档。
 
+### `kernel/projection/`
+
+- `derived-board-projection.js` / `derived-layer-projection.js`：以纯序列化快照正放、逆放活动记录，维护应然对象、trash、覆盖索引与静态图。
+- `materialized-board-projection.js`：从 BoardCore 捕获实际物化对象与静态图摘要，合法未驻留内容保留逻辑叶子。
+- `board-projection.js`：订阅 active-chain 过渡，协调应然/物化索引与微任务重捕，提供局部分歧定位。
+- `HashTrie` 与 `ActiveChainIndex` 分别支撑对象/图摘要和链摘要的增量查询；普通自愈不回放全日志。
+
+详见 [白板投影内核文档](../kernel/projection/docs/projection-document.md)。
+
 ### `kernel/api/`
 
-- `board-api.js`：BoardApi 契约面（对象操作、AOM 控制、擦除、撤销/重做、远端应用入口、会话元数据；分子面 `beginMol` / `amendMol` / `endMol` / `abortMol` 与超分子面 `beginSupra` / `endSupra` / `abortSupra`；digest 面 `queryOpenMols` / `queryMolAmendSince` / `queryStateHash` / `repairStateFromLog`）
+- `board-api.js`：BoardApi 契约面（对象操作、AOM 控制、擦除、撤销/重做、远端应用入口、会话元数据；分子面 `beginMol` / `amendMol` / `endMol` / `abortMol` 与超分子面 `beginSupra` / `endSupra` / `abortSupra`；digest 面 `queryOpenMols` / `queryMolAmendSince` / `queryLogHash` / `queryStateHash` / `queryDerivedStateHash` / `queryLayerHash` / `queryDerivedLayerHash` / `repairStateFromLog`）
 - `board-api-routes.js`：RPC 路由表（方法名到契约面方法的分发与 flush 策略）
 
 ### `kernel/store/`

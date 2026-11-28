@@ -16,9 +16,14 @@ import {
   getOperationEffectKind,
   compareRecords,
   validateOperation,
+  normalizeOperationRecord,
 } from "../hit/operation.js";
 import { Matrix, Vector } from "../utils/math.js";
-import { hashString } from "../utils/hash.js";
+import { canonicalJson } from "../utils/canonical-json.js";
+import { BoardProjection } from "../projection/board-projection.js";
+import { getSerializedObjectWorldRect } from "../objects/object-geometry.js";
+import { addLayerEdgeIfAcyclic, hashLayerGraph } from "../board/layer-edges.js";
+import { DirectedGraph } from "../utils/directed-graph.js";
 import {
   buildObjectDetails,
   buildObjectSummary,
@@ -27,13 +32,10 @@ import { IncrementalIdPool } from "../utils/incremental-id-pool.js";
 import { intersectsRanges, RectangleRange } from "../range/index.js";
 import { ChunkObjectManager } from "../chunk/chunk-object-manager.js";
 import { Chunk } from "../chunk/chunk.js";
-import { BoardCore } from "../board/board-core.js";
 import {
   collectRecordChunkIds,
   resolveUndoTarget,
 } from "./undo-transition.js";
-import { createDefaultAomRenderHooks } from "../board/aom-render-hooks.js";
-import { createDefaultPersistenceAdapter } from "../board/persistence-adapter.js";
 import {
   ANONYMOUS_CHOICE_NAME,
   isValidChoiceName,
@@ -62,44 +64,12 @@ function hasStaticBoardObject(boardCore, objectId) {
 }
 
 /**
- * 生成对象键序无关的确定性 JSON
- * @param {*} value - 待序列化值
- * @returns {string} 确定性 JSON
- */
-function canonicalJson(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
-  }
-  if (value !== null && typeof value === "object") {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-}
-
-/**
  * 深拷贝可 JSON 序列化的快照
  * @param {*} value - 快照值
  * @returns {*} 独立快照
  */
 function cloneSnapshot(value) {
   return JSON.parse(JSON.stringify(value));
-}
-
-/**
- * 归一化记录的可选容器字段
- * @param {Object} record - 操作记录
- * @returns {Object} 归一化记录
- */
-function normalizeOperationRecord(record) {
-  return {
-    ...record,
-    molId: record.molId ?? null,
-    supraId: record.supraId ?? null,
-    discard: record.discard ?? false,
-  };
 }
 
 /**
@@ -125,34 +95,6 @@ function getObjectWorldRect(obj) {
 }
 
 /**
- * 在静态状态图中加边（防御成环）
- * @description 记录携带的层位边来自真实 DAG、缝合边来自后到者居上规则，理论上不成环；
- * 但跨端交错与撤销过渡的中间态图可能短暂偏离，加边前以可达性检查兜底（成环则跳过该边）。
- * @param {import("../utils/directed-graph.js").DirectedGraph<string>} graph - 静态状态图
- * @param {string} from - 起点（在下者）
- * @param {string} to - 终点（在上者）
- * @returns {boolean} 是否实际写入
- */
-function addLayerEdgeIfAcyclic(graph, from, to) {
-  if (from === to || !graph.hasNode(from) || !graph.hasNode(to)) return false;
-  if (graph.hasEdge(from, to)) return false;
-  const stack = [to];
-  const visited = new Set([to]);
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (current === from) return false;
-    for (const next of graph.neighborsUnsafe(current) ?? []) {
-      if (!visited.has(next)) {
-        visited.add(next);
-        stack.push(next);
-      }
-    }
-  }
-  graph.addEdgeUnsafe(from, to);
-  return true;
-}
-
-/**
  * Engine 侧 BoardApi
  * @class
  * @description
@@ -167,6 +109,27 @@ class BoardApi {
    * @type {import("../board/board-core.js").BoardCore}
    */
   #boardCore;
+
+  /**
+   * 应然与物化投影协调器
+   * @type {BoardProjection}
+   * @private
+   */
+  #projection;
+
+  /**
+   * 等待相关区块 FULL 加载后修复的对象投影
+   * @type {Map<string, Object>}
+   * @private
+   */
+  #pendingObjectRepairs = new Map();
+
+  /**
+   * 等待区块元数据加载后修复的层序投影
+   * @type {Map<number, DirectedGraph|undefined>}
+   * @private
+   */
+  #pendingLayerRepairs = new Map();
 
   /**
    * 数据擦除的串行队列
@@ -227,6 +190,12 @@ class BoardApi {
    */
   constructor(boardCore) {
     this.#boardCore = boardCore;
+    this.#projection = new BoardProjection(boardCore, {
+      onChunkLoad: (chunkId) => {
+        this.#repairPendingObjectsForChunk(chunkId);
+        this.#repairPendingLayerForChunk(chunkId);
+      },
+    });
   }
 
   /**
@@ -1581,8 +1550,11 @@ class BoardApi {
       boardCore.operationLog.toJSON().map((record) => [record.id, record]),
     );
     const nodes = [];
-    const walk = (parent) => {
-      for (const child of parent.children) {
+    const stack = [tree.root];
+    while (stack.length > 0) {
+      const parent = stack.pop();
+      if (parent !== tree.root) {
+        const child = parent;
         const record = recordById.get(child.shareId);
         // 多记录节点（增量式分子/聚合节点）以节点 memberIds 为准展开成员类型；
         // discard 型取消选择成员标注 (discard) 后缀
@@ -1600,7 +1572,7 @@ class BoardApi {
             : null;
         nodes.push({
           id: child.shareId,
-          parentId: parent.shareId ?? null,
+          parentId: child.parent?.shareId ?? null,
           depth: child.depth,
           type:
             record == null
@@ -1615,10 +1587,11 @@ class BoardApi {
           active: activeIds.has(child.shareId),
           isHead: child === tree.head,
         });
-        walk(child);
       }
-    };
-    walk(tree.root);
+      for (let index = parent.children.length - 1; index >= 0; index -= 1) {
+        stack.push(parent.children[index]);
+      }
+    }
     return {
       head: tree.head?.shareId ?? null,
       activeChain,
@@ -1689,44 +1662,79 @@ class BoardApi {
   }
 
   /**
-   * 计算对象状态的确定性校验和
-   * @description 口径为**已驻留**对象数据（按 id 排序的 serialize JSON）与 trash 条目；不含 AOM
-   * 成员身份与区块层序（各端已载区块集随视口不同，纳入会误报）。只在全量驻留端
-   * （`boardCore.isFullResidency()`）之间可比：部分驻留端的已载集合随视口漂移，跨端比对必误报。
-   * 供同步 digest 发现效果层分歧（日志一致但效果未放全）。
-   * @returns {string} 状态校验和
+   * 查询规范化操作日志的增量根哈希
+   * @returns {string} 日志校验和
    */
-  queryStateHash() {
-    const boardCore = this.#boardCore;
-    const parts = [];
-    const objects = boardCore
-      .getAllObjects()
-      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    for (const obj of objects) {
-      parts.push(JSON.stringify(obj.serialize()));
-    }
-    parts.push("|trash|");
-    const trashIds = [...boardCore.trash.keys()].sort();
-    for (const id of trashIds) {
-      parts.push(id, JSON.stringify(boardCore.trash.get(id)));
-    }
-    return hashString(parts.join(""));
+  queryLogHash() {
+    return this.#boardCore.operationLog.rootHash;
   }
 
   /**
-   * 计算活动链的确定性校验和
+   * 查询活动链派生的应然层序根哈希
+   * @returns {string} 应然层序校验和
+   */
+  queryDerivedLayerHash() {
+    return this.#projection.derivedLayerHash;
+  }
+
+  /**
+   * 查询实际物化静态图的层序根哈希
+   * @returns {string} 物化层序校验和
+   */
+  queryLayerHash() {
+    return this.#projection.layerHash;
+  }
+
+  /**
+   * 查询活动链派生的应然对象状态根哈希
+   * @returns {string} 应然状态校验和
+   */
+  queryDerivedStateHash() {
+    return this.#projection.derivedStateHash;
+  }
+
+  /**
+   * 重捕实际物化状态
+   * @param {{objectIds?: Iterable<string>, chunkIds?: Iterable<number>}} [options] - 定点重捕选项
+   * @returns {void}
+   */
+  refreshMaterializedProjection(options = {}) {
+    this.#projection.refreshMaterialized(options);
+  }
+
+  /**
+   * 等待已排定的物化重捕完成
+   * @returns {Promise<void>}
+   */
+  async flushProjection() {
+    await this.#projection.flush();
+  }
+
+  /**
+   * 从当前活动链重建应然投影（索引失效兜底）
+   * @returns {void}
+   */
+  rebuildDerivedProjection() {
+    this.#projection.rebuildDerived();
+  }
+
+  /**
+   * 查询实际物化对象状态的增量校验和
+   * @description 覆盖对象与 trash 的逻辑状态，合法驱逐不删除叶子，因此不依赖全量驻留。
+   * @returns {string} 状态校验和
+   */
+  queryStateHash() {
+    return this.#projection.stateHash;
+  }
+
+  /**
+   * 查询活动链的增量校验和
    * @description 口径为活动链全部节点的成员记录 id 序列（链序）。活动链是 f(日志) 的派生态，
    * 与对象驻留无关，任意两端在日志一致时可比：链校验和分歧说明本地树的派生与对端不一致。
    * @returns {string} 活动链校验和
    */
   queryChainHash() {
-    const parts = [];
-    for (const node of this.#boardCore.undoTree.getActiveChain()) {
-      for (const id of node.memberIds) {
-        parts.push(id);
-      }
-    }
-    return hashString(parts.join(""));
+    return this.#boardCore.undoTree.chainHash;
   }
 
   /**
@@ -1782,14 +1790,9 @@ class BoardApi {
   }
 
   /**
-   * 从本端日志重放派生对象状态并对齐活体（效果层分歧自愈）
-   * @description 正确性定义为「对象状态 == f(日志)」：scratch 核心按日志序纯增量重放全部
-   * 记录得到派生态（undo/redo/折叠随回放自然呈现，永不触发重建），与活体逐对象比对后以
-   * remove+add 对齐（addObjectEffect 自带区块落座与层序，绕开跨区块重排位问题），trash 全量
-   * 对齐，层位边逐已载区块比对重写（digest 口径不含层序，边级分歧借此通道自愈）。
-   * 派生态多出但经卸载路径合法离场（驻留驱逐）的对象不补回内存（部分驻留硬约束，保住 chunkUnload）。
-   * 本地有未闭合分子时拒绝修复；无 open mol 但有未提交修改的活动对象逐项跳过，
-   * 保留其实例与 choice，含本地活动对象的区块层位同样跳过对齐。
+   * 从活动链派生投影修复物化状态（效果层分歧自愈）
+   * @description 比较应然与物化哈希索引，只调和分歧对象；不创建 scratch 核心或重放全日志。
+   * 未提交本地修改逐项保护，合法未驻留对象延期到对应区块 FULL 加载后修复。
    * @returns {{ repaired: boolean, fixedIds: string[] }} 修复结果；repaired=false 表示被门拒绝或无分歧
    */
   repairStateFromLog() {
@@ -1797,107 +1800,212 @@ class BoardApi {
     if (this.queryOpenMols().length > 0) {
       return { repaired: false, fixedIds: [] };
     }
-    const scratchCore = new BoardCore({
-      width: boardCore.width,
-      height: boardCore.height,
-      source: "__repair__",
-      chunkUnload: false,
-      aomRenderHooks: createDefaultAomRenderHooks(),
-      persistenceAdapter: createDefaultPersistenceAdapter(),
-    });
-    const scratchApi = new BoardApi(scratchCore);
-    scratchApi.#applyRemoteOperationsCore(boardCore.operationLog.toJSON());
-
     const affectedChunks = new Set();
     const fixedIds = new Set();
     const protectedIds = this.#uncommittedLocalObjectIds();
-    const canonical = (obj) => JSON.stringify(obj.serialize());
-    const derived = new Map(
-      scratchCore.getAllObjects().map((obj) => [obj.id, obj]),
-    );
-    for (const live of boardCore.getAllObjects()) {
-      if (protectedIds.has(live.id)) {
-        derived.delete(live.id);
+    const objectIds = this.#projection.diffStateKeys();
+    for (const id of objectIds) {
+      if (protectedIds.has(id)) {
+        this.#pendingObjectRepairs.delete(id);
         continue;
       }
-      const want = derived.get(live.id);
-      if (want !== undefined && canonical(want) === canonical(live)) {
-        derived.delete(live.id);
-        continue;
-      }
-      // 活体多出或数据分歧：先移除（新增与改判的重建统一走下方 addObjectEffect）
-      this.#removeObjectEffect(live.id, affectedChunks);
-      fixedIds.add(live.id);
-    }
-    for (const obj of derived.values()) {
-      // 部分驻留硬约束：经卸载路径合法离场的对象不补回内存（保住 chunkUnload）；
-      // 懒加载打开时「已知但未驻留」的对象属于正常缺席，不当作效果缺失补回。
-      if (protectedIds.has(obj.id) || boardCore.isObjectEvicted(obj.id)) continue;
-      if (
-        !boardCore.isFullResidency() &&
-        !boardCore.getObjectById(obj.id) &&
-        boardCore.isObjectKnown(obj.id)
-      ) {
-        continue;
-      }
-      this.#addObjectEffect(
-        { objectId: obj.id, data: obj.serialize() },
+      const changed = this.#reconcileObjectFromProjection(
+        id,
+        this.#projection.getDerivedObject(id),
         affectedChunks,
       );
-      fixedIds.add(obj.id);
+      if (changed) fixedIds.add(id);
     }
-
-    // trash 全量对齐（条目随删除/恢复记录落定，分歧时整体替换）
-    const trashOf = (core) =>
-      JSON.stringify(
-        [...core.trash.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    this.refreshMaterializedProjection({
+      objectIds: objectIds.filter((id) => !protectedIds.has(id)),
+    });
+    const chunkIds = this.#projection.diffLayerKeys();
+    for (const chunkId of chunkIds) {
+      const changed = this.#reconcileLayerFromProjection(
+        chunkId,
+        this.#projection.getDerivedGraph(chunkId),
+        affectedChunks,
       );
-    const trashChanged = trashOf(boardCore) !== trashOf(scratchCore);
-    if (trashChanged) {
-      boardCore.trash.clear();
-      for (const [id, entry] of scratchCore.trash) {
-        boardCore.trash.set(id, JSON.parse(JSON.stringify(entry)));
-      }
+      if (changed) fixedIds.add(`chunk:${chunkId}`);
     }
-
-    // 层位边对齐：派生态的边集是 f(日志) 的权威层位，逐已载区块比对并重写分歧
-    const aom = boardCore.activeObjectManager;
-    for (const { chunk } of boardCore.chunkLoaded.values()) {
-      const graph = chunk?.objectManager?.staticGraph;
-      if (!graph) continue;
-      const nodes = [...graph.getNodes()];
-      // 本地未闭合会话的主体合法偏离派生态（提交时重算居上），其所在区块跳过
-      if (nodes.some((id) => aom.isActive(id))) continue;
-      const derivedGraph = scratchCore.getChunkById(chunk.id)?.objectManager?.staticGraph;
-      const edgesOf = (g) =>
-        [...g.getNodes()]
-          .flatMap((id) => [...(g.neighborsUnsafe(id) ?? [])].map((to) => `${id}${to}`))
-          .sort()
-          .join("");
-      const localEdges = edgesOf(graph);
-      const derivedEdges = derivedGraph ? edgesOf(derivedGraph) : "";
-      if (localEdges === derivedEdges) continue;
-      for (const id of nodes) graph.deleteAllEdgesOfNode(id);
-      if (derivedGraph) {
-        for (const id of derivedGraph.getNodes()) {
-          for (const to of derivedGraph.neighborsUnsafe(id) ?? []) {
-            addLayerEdgeIfAcyclic(graph, id, to);
-          }
-        }
-      }
-      affectedChunks.add(chunk);
-      fixedIds.add(`chunk:${chunk.id}`);
-    }
-
+    this.refreshMaterializedProjection({ chunkIds });
     if (affectedChunks.size > 0) {
       boardCore.aomRenderHooks.requestStaticRender([...affectedChunks]);
     }
-    const repaired = fixedIds.size > 0 || trashChanged;
+    const repaired = fixedIds.size > 0;
     if (repaired) {
-      // 文档状态变化：UI 工具凭此清理本地失效选中（同远端应用路径）
       boardCore.activityEventBus.emit("hit-changed", { time: Date.now() });
     }
     return { repaired, fixedIds: [...fixedIds] };
+  }
+
+  /**
+   * 按应然投影调和单个区块静态图
+   * @param {number} chunkId - 区块 id
+   * @param {DirectedGraph|undefined} expectedGraph - 应然静态图
+   * @param {Set<import("../chunk/chunk.js").Chunk>} affectedChunks - 受影响区块集合
+   * @param {boolean} [deferUnloaded=true] - 是否允许延期未加载区块
+   * @returns {boolean} 是否实际重写静态图
+   * @private
+   */
+  #reconcileLayerFromProjection(chunkId, expectedGraph, affectedChunks, deferUnloaded = true) {
+    const boardCore = this.#boardCore;
+    const chunk = boardCore.getChunkById(chunkId);
+    const manager = chunk?.objectManager;
+    if (!manager?.staticGraph) {
+      if (deferUnloaded && expectedGraph) {
+        this.#pendingLayerRepairs.set(chunkId, expectedGraph);
+      }
+      return false;
+    }
+    this.#pendingLayerRepairs.delete(chunkId);
+    const graph = manager.staticGraph;
+    if ([...graph.getNodes()].some((id) => boardCore.activeObjectManager.isActive(id))) {
+      return false;
+    }
+    const currentHash = graph.getNodes().length > 0 ? hashLayerGraph(graph) : undefined;
+    const expectedHash = expectedGraph?.getNodes().length > 0 ? hashLayerGraph(expectedGraph) : undefined;
+    if (currentHash === expectedHash) return false;
+    manager.staticGraph = expectedGraph ? DirectedGraph.parse(expectedGraph.toArray()) : new DirectedGraph();
+    manager.syncCoverIndexFromGraph();
+    affectedChunks.add(chunk);
+    return true;
+  }
+
+  /**
+   * 在区块元数据加载后应用延期层序修复
+   * @param {number} chunkId - 区块 id
+   * @returns {void}
+   * @private
+   */
+  #repairPendingLayerForChunk(chunkId) {
+    if (!this.#pendingLayerRepairs.has(chunkId)) return;
+    const affectedChunks = new Set();
+    const changed = this.#reconcileLayerFromProjection(
+      chunkId,
+      this.#pendingLayerRepairs.get(chunkId),
+      affectedChunks,
+      false,
+    );
+    if (!changed) return;
+    this.refreshMaterializedProjection({ chunkIds: [chunkId] });
+    this.#boardCore.aomRenderHooks.requestStaticRender([...affectedChunks]);
+    this.#boardCore.activityEventBus.emit("hit-changed", { time: Date.now() });
+  }
+
+  /**
+   * 按应然投影调和单个对象
+   * @param {string} id - 对象 id
+   * @param {{location: "objects"|"trash"|"absent", data?: Object, chunks?: Array}} expected - 应然投影
+   * @param {Set<import("../chunk/chunk.js").Chunk>} affectedChunks - 受影响区块集合
+   * @param {boolean} [deferNonresident=true] - 是否允许延期未驻留对象
+   * @returns {boolean} 是否实际修改了活体或 trash
+   * @private
+   */
+  #reconcileObjectFromProjection(id, expected, affectedChunks, deferNonresident = true) {
+    const boardCore = this.#boardCore;
+    const live = boardCore.getObjectById(id);
+    if (
+      deferNonresident &&
+      expected.location === "objects" &&
+      !live &&
+      !boardCore.trash.has(id) &&
+      boardCore.isObjectLegallyUnloaded(id)
+    ) {
+      this.#pendingObjectRepairs.set(id, expected);
+      return false;
+    }
+    this.#pendingObjectRepairs.delete(id);
+    let changed = false;
+    if (expected.location === "objects") {
+      if (live && canonicalJson(live.serialize()) === canonicalJson(expected.data)) {
+        if (boardCore.trash.delete(id)) changed = true;
+        return changed;
+      }
+      if (live) {
+        this.#removeObjectEffect(id, affectedChunks);
+        changed = true;
+      }
+      if (boardCore.trash.delete(id)) changed = true;
+      this.#addObjectEffect({ objectId: id, data: expected.data }, affectedChunks);
+      return true;
+    }
+    if (expected.location === "trash") {
+      if (live) {
+        this.#removeObjectEffect(id, affectedChunks);
+        changed = true;
+      }
+      const current = boardCore.trash.get(id);
+      const canonicalTrash = (entry) => canonicalJson({
+        data: entry.data,
+        chunks: (entry.chunks ?? []).map((chunk) => ({
+          ...chunk,
+          below: [...(chunk.below ?? [])],
+          above: [...(chunk.above ?? [])],
+        })),
+      });
+      if (current && canonicalTrash(current) === canonicalTrash(expected)) {
+        return changed;
+      }
+      boardCore.trash.set(id, {
+        data: expected.data,
+        chunks: (expected.chunks ?? []).map((chunk) => ({
+          ...chunk,
+          below: [...(chunk.below ?? [])],
+          above: [...(chunk.above ?? [])],
+        })),
+      });
+      return true;
+    }
+    if (live) {
+      this.#removeObjectEffect(id, affectedChunks);
+      changed = true;
+    }
+    if (boardCore.trash.delete(id)) changed = true;
+    return changed;
+  }
+
+  /**
+   * 在区块 FULL 加载后应用延期对象修复
+   * @param {number} chunkId - 区块 id
+   * @returns {void}
+   * @private
+   */
+  #repairPendingObjectsForChunk(chunkId) {
+    if (this.#pendingObjectRepairs.size === 0) return;
+    const boardCore = this.#boardCore;
+    const chunk = boardCore.chunkLoaded.get(chunkId)?.chunk;
+    if (!chunk?.isLoad || chunk.isTempLoad) return;
+    const affectedChunks = new Set();
+    const repairedIds = [];
+    for (const [id, expected] of this.#pendingObjectRepairs) {
+      const covered = new Set(boardCore.getObjectCoverChunks(id) ?? []);
+      if (!covered.has(chunkId) && expected.location === "objects") {
+        const rect = getSerializedObjectWorldRect(expected.data);
+        if (rect) {
+          for (const coveredId of ChunkObjectManager.calculateCoveredChunkIdsForRange(
+            rect,
+            boardCore.width,
+            boardCore.height,
+          )) {
+            covered.add(coveredId);
+          }
+        }
+      }
+      if (!covered.has(chunkId)) continue;
+      if (this.#reconcileObjectFromProjection(id, expected, affectedChunks, false)) {
+        repairedIds.push(id);
+      } else {
+        this.#pendingObjectRepairs.delete(id);
+      }
+    }
+    if (repairedIds.length > 0) {
+      this.refreshMaterializedProjection({ objectIds: repairedIds });
+      boardCore.activityEventBus.emit("hit-changed", { time: Date.now() });
+    }
+    if (affectedChunks.size > 0) {
+      boardCore.aomRenderHooks.requestStaticRender([...affectedChunks]);
+    }
   }
 
   /**

@@ -386,7 +386,8 @@ describe("层位边效果记录与重放", () => {
     }
     expect(hasLayerEdge(boardCore, "y", "x")).toBe(true);
 
-    // 对象数据与 trash 无分歧（digest 口径不可见），层位边由 repair 对齐派生态
+    // 对象数据与 trash 无分歧，层位边由独立 layerHash 定位并对齐派生态
+    api.refreshMaterializedProjection({ chunkIds: [...boardCore.chunkLoaded.keys()] });
     const { repaired } = api.repairStateFromLog();
     expect(repaired).toBe(true);
     expect(hasLayerEdge(boardCore, "x", "y")).toBe(true);

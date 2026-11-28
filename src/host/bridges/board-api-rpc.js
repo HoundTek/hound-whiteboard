@@ -684,7 +684,64 @@ class BoardApiRpc {
   }
 
   /**
-   * 计算对象状态的确定性校验和（已驻留口径，同步 digest 用）
+   * 查询规范化操作日志的增量根哈希
+   * @returns {Promise<string>} 日志校验和
+   */
+  async queryLogHash() {
+    return this.#call("queryLogHash", {});
+  }
+
+  /**
+   * 查询活动链派生的应然对象状态根哈希
+   * @returns {Promise<string>} 应然状态校验和
+   */
+  async queryDerivedStateHash() {
+    return this.#call("queryDerivedStateHash", {});
+  }
+
+  /**
+   * 查询活动链派生的应然层序根哈希
+   * @returns {Promise<string>} 应然层序校验和
+   */
+  async queryDerivedLayerHash() {
+    return this.#call("queryDerivedLayerHash", {});
+  }
+
+  /**
+   * 查询实际物化静态图的层序根哈希
+   * @returns {Promise<string>} 物化层序校验和
+   */
+  async queryLayerHash() {
+    return this.#call("queryLayerHash", {});
+  }
+
+  /**
+   * 重捕实际物化状态
+   * @param {{objectIds?: string[], chunkIds?: number[]}} [options] - 定点重捕选项
+   * @returns {Promise<void>}
+   */
+  async refreshMaterializedProjection(options = {}) {
+    return this.#call("refreshMaterializedProjection", options);
+  }
+
+  /**
+   * 等待已排定的物化重捕完成
+   * @returns {Promise<void>}
+   */
+  async flushProjection() {
+    return this.#call("flushProjection", {});
+  }
+
+  /**
+   * 从当前活动链重建应然投影（索引失效兜底）
+   * @returns {Promise<void>}
+   */
+  async rebuildDerivedProjection() {
+    return this.#call("rebuildDerivedProjection", {});
+  }
+
+  /**
+   * 计算对象状态的确定性校验和（驻留无关的逻辑状态，同步 digest 用）
    * @returns {Promise<string>} 状态校验和
    */
   async queryStateHash() {
@@ -708,7 +765,7 @@ class BoardApiRpc {
   }
 
   /**
-   * 从本端日志重放派生对象状态并对齐活体（效果层分歧自愈）
+   * 从活动链派生投影局部修复物化对象与静态图
    * @returns {Promise<{ repaired: boolean, fixedIds: string[] }>} 修复结果
    */
   async repairStateFromLog() {

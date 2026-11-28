@@ -173,15 +173,34 @@ class StrokeObject extends BasicObject {
       return cached.pathRange;
     }
 
-    const points = this.rich.localPathRange.points.map((p) =>
-      Vector.mulMatrix(this.transform, p),
-    );
-    const pathRange = new PathRange(points);
+    const pathRange = StrokeObject.createWorldPathRange(this.data, this.transform);
     this.rich.worldPathRangeCache = {
       version: this.geometryVersion,
       pathRange,
     };
     return pathRange;
+  }
+
+  /**
+   * 从原始点列构造世界路径范围
+   * @param {Record<string, any>} data - 点列数据
+   * @param {Matrix} transform - 变换矩阵
+   * @returns {PathRange} 世界路径范围
+   */
+  static createWorldPathRange(data, transform) {
+    const points = (data.points ?? []).map((point) =>
+      Vector.mulMatrix(transform, new Vector(point.x, point.y)),
+    );
+    return new PathRange(points);
+  }
+
+  /**
+   * 从序列化快照构造世界路径范围
+   * @param {Object} serialized - 序列化快照
+   * @returns {PathRange} 世界路径范围
+   */
+  static rangeFromSerialized(serialized) {
+    return StrokeObject.createWorldPathRange(serialized.data ?? {}, Matrix.parse(serialized.transform));
   }
 
   _onDataChange(keys) {

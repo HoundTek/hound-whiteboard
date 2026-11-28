@@ -71,12 +71,31 @@ class EllipseObject extends GraphObject {
     );
   }
 
-  getRange() {
+  /**
+   * 从原始数据构造世界范围
+   * @param {Record<string, any>} data - 双轴半径数据
+   * @param {Matrix} transform - 变换矩阵
+   * @returns {EllipseRange} 世界范围
+   */
+  static createRange(data, transform) {
     return new EllipseRange(
       new Vector(0, 0),
-      this.data.radiusX ?? 0,
-      this.data.radiusY ?? 0,
-    ).transform(this.transform);
+      data.radiusX ?? 0,
+      data.radiusY ?? 0,
+    ).transform(transform);
+  }
+
+  /**
+   * 从序列化快照构造世界范围
+   * @param {Object} serialized - 序列化快照
+   * @returns {EllipseRange} 世界范围
+   */
+  static rangeFromSerialized(serialized) {
+    return EllipseObject.createRange(serialized.data ?? {}, Matrix.parse(serialized.transform));
+  }
+
+  getRange() {
+    return EllipseObject.createRange(this.data, this.transform);
   }
 
   serialize() {

@@ -116,7 +116,7 @@ sequenceDiagram
   Note over B: 乱序记录入缓冲，500ms 窗×3 仍未补齐<br/>→ 广播 request-init(lastSeen) 补缺口
 ```
 
-- **周期摘要**：30s 广播 `{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`；日志落后或同长 HEAD 分歧时携带 lastSeen 请求缺口。日志与 HEAD 一致但 chainHash 分歧时经 `repairChainFromLog` 从权威日志重建 undo tree 并对齐效果，无需重收相同记录；stateHash 分歧时经 `repairStateFromLog` 对齐活体、trash 与已载区块层位边。stateHash 口径为**已驻留**对象数据与 trash，仅两端均全量驻留（`fullResidency`）时可比；任一端 openMols > 0 时跳过本轮对象比对。修复保护本地未提交对象与 choice，有未提交工作的对象延期修复，无修改的持有选择保留。
+- **周期摘要**：30s 广播 `{logSize, logHash, head, objects, chainHash, stateHash, derivedStateHash, layerHash, derivedLayerHash, fullResidency, openMols}`；日志落后、同长 HEAD 分歧或 logHash 分歧时携带 lastSeen 请求缺口。日志与 HEAD 一致但 chainHash 分歧时经 `repairChainFromLog` 从权威日志重建 undo tree，无需重收相同记录。derived 根分歧时先重建本端应然投影；物化 `stateHash` / `layerHash` 分歧时经 `repairStateFromLog` 只修复不同对象或区块，不创建 scratch 核心、不回放全日志。对象与层序摘要都保留合法未驻留内容的逻辑状态，不再以 `fullResidency` 门控；任一端 openMols > 0 时跳过本轮物化比对。修复保护本地未提交对象与 choice，有未提交工作的对象延期修复，无修改的持有选择保留。
 
 ### 连接生命周期
 
@@ -128,7 +128,7 @@ sequenceDiagram
 - **日志是权威**：choose/unchoose 是日志中的分子操作，随记录同步；`#transitionEffects` 按记录 source 路由——远程 choose 登记远程活动（`isRemoteActive`），不进本地活动集；本地 choose 效果撤销该对象的远程登记（并发冲突按链序收敛）。choose/unchoose 记录携带 `choice`（命名选择名）：远程端除互斥外还能看到对端的 choice 名，全量重建后标签保留（命名迁移只经活动事件传播，重建后按首次登记呈现）。
 - **trash 一致性**：delete 记录携带对象快照与层位边，接收端凭以重建 trash 条目；「对象在册即无 trash 条目」不变量由 add/restore 效果维护。
 - **删除后的远程选择**：删除已选对象时发送端补发 `unchoose` 活动事件；接收端应用 delete 记录时撤销该对象全部远程 choice 并冲刷 `remote-activity`，实时消息丢失或 INIT 回放后都不残留选择框。
-- **状态收敛**：各端日志补齐后树 = f(日志)，根到 HEAD 确定性回放得到同一状态；性质测试以随机种子脚本 + 任意交错投递断言三端摘要全等（`src/kernel/api/tests/sync-convergence.test.js`）。
+- **状态收敛**：各端日志补齐后树 = f(日志)，根到 HEAD 的活动记录再投影为对象、trash 与静态图；性质测试以随机种子脚本 + 任意交错投递断言三端实际状态、应然/物化对象根与层序根全等（`src/kernel/api/tests/sync-convergence.test.js`）。
 
 ## 设计约束
 

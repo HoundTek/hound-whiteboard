@@ -157,7 +157,7 @@ sequenceDiagram
     end
 ```
 
-本地操作 commit 后经中继广播；对端在 500ms 延迟容忍窗内把远程记录接入 `applyRemoteOperations`（窗内乱序按确定性定序吸收）。每 30s 周期交换 digest 对账，`chainHash`（活动链校验和，驻留无关）分歧时请求全量重建；`stateHash`（已驻留对象口径，仅两端全量驻留时可比）分歧时经 `repairStateFromLog` 从本端日志重放派生状态并对齐活体（效果层修复，不改写日志）。
+本地操作 commit 后经中继广播；对端在 500ms 延迟容忍窗内把远程记录接入 `applyRemoteOperations`（窗内乱序按确定性定序吸收）。每 30s 周期交换 digest 对账，`chainHash`（活动链校验和，驻留无关）分歧时请求全量重建；物化 `stateHash` / `layerHash` 分歧时经 `repairStateFromLog` 只修不同对象或区块（不改写日志，不回放全日志）。
 
 ## 当前状态
 
@@ -180,7 +180,7 @@ sequenceDiagram
 - **choice（命名选择）**：活动对象的命名分组，跨端以 `"{source}/{choice}"` 区分同名 choice
 - **分子 / 超分子**：手势高频写的记录单位（`beginMol` / `amendMol` / `endMol` / `abortMol`）与会话归组单位（`supraId`，`close-supra` 折叠）
 - **层位边**：对象操作记录与 trash 条目携带的 `below` / `above` 前驱后继，回图与回放的层位依据
-- **digest / 自愈**：协作对账摘要 `{logSize, head, objects, chainHash, stateHash, fullResidency, openMols}`，chainHash 分歧请求全量重建，stateHash 分歧经 `repairStateFromLog` 效果层自愈
+- **digest / 自愈**：协作对账摘要 `{logSize, logHash, head, objects, chainHash, stateHash, derivedStateHash, layerHash, derivedLayerHash, fullResidency, openMols}`，chainHash 分歧请求全量重建，物化对象与层序分歧经 `repairStateFromLog` 局部自愈
 
 ## 相关文档
 

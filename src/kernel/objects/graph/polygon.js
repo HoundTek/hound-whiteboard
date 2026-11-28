@@ -45,9 +45,7 @@ class PolygonObject extends GraphObject {
     if (keys.includes("points") && Array.isArray(this.data.points)) {
       const vecs = this.data.points.map((p) => new Vector(p.x, p.y));
       this.rich.localPolygonRange = new PolygonRange(vecs);
-      this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(
-        this.transform,
-      );
+      this.rich.worldPolygonRange = PolygonObject.createWorldRange(this.data, this.transform);
       this.calculateConvexHull();
       this.calculateRectangle();
     }
@@ -78,8 +76,28 @@ class PolygonObject extends GraphObject {
    */
   setTransform(trans) {
     this.transform = trans;
-    this.rich.worldPolygonRange = this.rich.localPolygonRange.transform(trans);
+    this.rich.worldPolygonRange = PolygonObject.createWorldRange(this.data, trans);
     this.calculateRectangle();
+  }
+
+  /**
+   * 从原始点列构造世界多边形范围
+   * @param {Record<string, any>} data - 点列数据
+   * @param {Matrix} transform - 变换矩阵
+   * @returns {PolygonRange} 世界多边形范围
+   */
+  static createWorldRange(data, transform) {
+    const points = (data.points ?? []).map((point) => new Vector(point.x, point.y));
+    return new PolygonRange(points).transform(transform);
+  }
+
+  /**
+   * 从序列化快照构造世界多边形范围
+   * @param {Object} serialized - 序列化快照
+   * @returns {PolygonRange} 世界多边形范围
+   */
+  static rangeFromSerialized(serialized) {
+    return PolygonObject.createWorldRange(serialized.data ?? {}, Matrix.parse(serialized.transform));
   }
 
   getRange() {

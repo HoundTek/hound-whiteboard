@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 
+import { jest } from "@jest/globals";
 import { BoardApi } from "../board-api.js";
 import { BoardCore } from "../../board/board-core.js";
 import { createDefaultAomRenderHooks } from "../../board/aom-render-hooks.js";
 import { createDefaultPersistenceAdapter } from "../../board/persistence-adapter.js";
+import { CHUNK_LOAD_EVENTS } from "../../chunk/chunk-loader.js";
 
 /**
  * 创建一个端（独立的 BoardCore 与 BoardApi）
@@ -68,11 +70,20 @@ describe("日志重放自愈（效果层分歧修复）", () => {
       }
     }
     A.boardCore.objectLoaded.delete("a/2");
+    A.api.refreshMaterializedProjection({ objectIds: ["a/1", "a/2"] });
     expect(A.api.queryStateHash()).not.toBe(wantHash);
 
+    const toJSON = jest.spyOn(A.boardCore.operationLog, "toJSON");
+    const toArray = jest.spyOn(A.boardCore.operationLog, "toArray");
+    const toSortedArray = jest.spyOn(A.boardCore.operationLog, "toSortedArray");
+    const rebuild = jest.spyOn(A.boardCore.undoTree, "rebuild");
     const result = A.api.repairStateFromLog();
     expect(result.repaired).toBe(true);
     expect(result.fixedIds).toEqual(expect.arrayContaining(["a/1", "a/2"]));
+    expect(toJSON).not.toHaveBeenCalled();
+    expect(toArray).not.toHaveBeenCalled();
+    expect(toSortedArray).not.toHaveBeenCalled();
+    expect(rebuild).not.toHaveBeenCalled();
     expect(A.api.queryObject("a/1").position).toEqual({ x: 200, y: 100 });
     expect(A.api.queryObject("a/2").position).toEqual({ x: 200, y: 300 });
     expect(A.api.queryStateHash()).toBe(wantHash);
@@ -89,6 +100,7 @@ describe("日志重放自愈（效果层分歧修复）", () => {
 
     // trash 条目丢失（恢复记录的效果没放全）
     A.boardCore.trash.delete("a/1");
+    A.api.refreshMaterializedProjection({ objectIds: ["a/1"] });
     expect(A.api.queryStateHash()).not.toBe(wantHash);
 
     const result = A.api.repairStateFromLog();
@@ -150,6 +162,7 @@ describe("日志重放自愈（效果层分歧修复）", () => {
     await createStaticStroke(A.api, "a/2", 300);
     await A.api.addActiveObjects(["a/1"], { choice: "hold" });
     A.boardCore.getObjectById("a/2").position.x = 999;
+    A.api.refreshMaterializedProjection({ objectIds: ["a/2"] });
 
     const result = A.api.repairStateFromLog();
     expect(result.fixedIds).toEqual(["a/2"]);
@@ -169,11 +182,63 @@ describe("日志重放自愈（效果层分歧修复）", () => {
     A.boardCore.unloadChunkObjectEntries(chunkId);
     expect(A.boardCore.getObjectById("a/1")).toBeUndefined();
     expect(A.boardCore.isFullResidency()).toBe(false);
+    expect(A.boardCore.isObjectLegallyUnloaded("a/1")).toBe(true);
 
     const result = A.api.repairStateFromLog();
     // a/1 的覆盖区块未载：不补回内存，等区块重载时走正常驻留路径
     expect(A.boardCore.getObjectById("a/1")).toBeUndefined();
     expect(result.fixedIds).not.toContain("a/1");
+  });
+});
+
+describe("局部投影修复的复杂度与延期路径", () => {
+  test("百条日志只修一个对象，不读取全日志、不扫描全对象", async () => {
+    const A = createEnd("a");
+    for (let index = 0; index < 100; index += 1) {
+      await createStaticStroke(A.api, `a/${index + 1}`, index * 10);
+    }
+    expect(A.boardCore.operationLog.size).toBeGreaterThanOrEqual(100);
+    A.boardCore.getObjectById("a/50").position.x = 999;
+    A.api.refreshMaterializedProjection({ objectIds: ["a/50"] });
+    const toJSON = jest.spyOn(A.boardCore.operationLog, "toJSON");
+    const toArray = jest.spyOn(A.boardCore.operationLog, "toArray");
+    const toSortedArray = jest.spyOn(A.boardCore.operationLog, "toSortedArray");
+    const rebuild = jest.spyOn(A.boardCore.undoTree, "rebuild");
+    const getAllObjects = jest.spyOn(A.boardCore, "getAllObjects");
+
+    const result = A.api.repairStateFromLog();
+    expect(result.fixedIds).toEqual(["a/50"]);
+    expect(A.api.queryObject("a/50").position.x).toBe(100);
+    expect(A.api.queryObject("a/1").position.x).toBe(100);
+    expect(A.api.queryStateHash()).toBe(A.api.queryDerivedStateHash());
+    expect(toJSON).not.toHaveBeenCalled();
+    expect(toArray).not.toHaveBeenCalled();
+    expect(toSortedArray).not.toHaveBeenCalled();
+    expect(rebuild).not.toHaveBeenCalled();
+    expect(getAllObjects).not.toHaveBeenCalled();
+  });
+
+  test("合法驱逐后的 pending 在区块加载完成时应用", async () => {
+    const A = createEnd("a");
+    await createStaticStroke(A.api, "a/1");
+    const obj = A.boardCore.getObjectById("a/1");
+    obj.position.x = 999;
+    A.api.refreshMaterializedProjection({ objectIds: ["a/1"] });
+    const chunkId = [...A.boardCore.chunkLoaded.keys()][0];
+    A.boardCore.chunkLoaded.get(chunkId).fullLoadedCount = 0;
+    A.boardCore.getChunkById(chunkId).isLoad = false;
+    A.boardCore.unloadChunkObjectEntries(chunkId);
+
+    expect(A.api.repairStateFromLog()).toEqual({ repaired: false, fixedIds: [] });
+    const chunk = A.boardCore.getChunkById(chunkId);
+    chunk.isLoad = true;
+    chunk.isTempLoad = false;
+    A.boardCore.chunkLoaded.get(chunkId).fullLoadedCount = 1;
+    A.boardCore.registerObjectInstance(obj);
+    A.boardCore.chunkLoadEventBus.emit(CHUNK_LOAD_EVENTS.LOAD_COMPLETE, { chunkId });
+
+    expect(A.boardCore.getObjectById("a/1").position.x).toBe(100);
+    expect(A.api.queryStateHash()).toBe(A.api.queryDerivedStateHash());
   });
 });
 

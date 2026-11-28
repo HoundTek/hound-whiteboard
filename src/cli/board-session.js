@@ -114,6 +114,7 @@ async function openBoardSession(rootPath, options = {}) {
   });
 
   const api = new BoardApi(boardCore);
+  api.refreshMaterializedProjection();
   return {
     api,
     boardCore,

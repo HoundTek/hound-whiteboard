@@ -232,31 +232,39 @@ function createNetworkCoordinator(options) {
 
   /**
    * 计算本端状态摘要
-   * @returns {{logSize: number, head: ?string, objects: number, chainHash: string, stateHash: string, fullResidency: boolean, openMols: number}} 摘要
+   * @returns {{logSize: number, logHash: string, head: ?string, objects: number, chainHash: string, stateHash: string, derivedStateHash: string, layerHash: string, derivedLayerHash: string, fullResidency: boolean, openMols: number}} 摘要
    */
   const localDigest = () => ({
     logSize: log.size,
+    logHash: boardApi.queryLogHash(),
     head: boardCore.undoTree.head?.shareId ?? null,
     objects: boardCore.getAllObjects().length,
     chainHash: boardApi.queryChainHash(),
     stateHash: boardApi.queryStateHash(),
+    derivedStateHash: boardApi.queryDerivedStateHash(),
+    layerHash: boardApi.queryLayerHash(),
+    derivedLayerHash: boardApi.queryDerivedLayerHash(),
     fullResidency: boardCore.isFullResidency(),
     openMols: boardApi.queryOpenMols().length,
   });
 
   /**
-   * 处理远程摘要：日志落后或 HEAD 分歧时补缺口；日志一致而派生链分歧时本地重建
+   * 处理远程摘要：先补日志，再修派生链，最后局部调和物化对象与静态图
    * @param {Object} digest - 远程摘要
    * @returns {void}
    */
   const handleDigest = (digest) => {
     if (!digest || typeof digest.logSize !== "number") return;
-    const local = localDigest();
+    let local = localDigest();
     if (digest.logSize > local.logSize) {
       sendRequestInit(localLastSeen());
       return;
     }
     if (digest.logSize === local.logSize && digest.head !== local.head) {
+      sendRequestInit(localLastSeen());
+      return;
+    }
+    if (typeof digest.logHash === "string" && digest.logHash !== local.logHash) {
       sendRequestInit(localLastSeen());
       return;
     }
@@ -272,26 +280,35 @@ function createNetworkCoordinator(options) {
       }
       return;
     }
-    // 效果层分歧（日志逐字节一致但效果未放全）：内容校验和口径为已驻留对象，
-    // 仅两端均全量驻留时可比（部分驻留端已载集合随视口漂移，比对必误报并引发
-    // 「全量物化 → 卸载 → 再误报」循环）；f(日志) 确定，本地重放即得正确状态；
-    // 任一端有未闭合分子时活体合法偏离派生态，跳过本轮比对
-    if (
-      digest.fullResidency === true &&
-      local.fullResidency &&
-      typeof digest.stateHash === "string" &&
-      digest.logSize === local.logSize &&
-      digest.head === local.head &&
-      digest.stateHash !== local.stateHash &&
-      digest.openMols === 0 &&
-      boardApi.queryOpenMols().length === 0
-    ) {
-      const result = boardApi.repairStateFromLog();
-      if (result.repaired) {
-        console.warn(
-          `[sync] 检测到效果层分歧，已从日志重放自愈（对象 ${result.fixedIds.join(", ")}）`,
-        );
+    if (digest.openMols !== 0 || boardApi.queryOpenMols().length > 0) return;
+    const hasDerivedState = typeof digest.derivedStateHash === "string";
+    const hasDerivedLayer = typeof digest.derivedLayerHash === "string";
+    const derivedMismatch =
+      (hasDerivedState && digest.derivedStateHash !== local.derivedStateHash) ||
+      (hasDerivedLayer && digest.derivedLayerHash !== local.derivedLayerHash);
+    if (derivedMismatch) {
+      boardApi.rebuildDerivedProjection();
+      local = localDigest();
+      if (
+        (hasDerivedState && digest.derivedStateHash !== local.derivedStateHash) ||
+        (hasDerivedLayer && digest.derivedLayerHash !== local.derivedLayerHash)
+      ) {
+        console.warn("[sync] 应然投影重建后仍有分歧，跳过本轮物化修复");
+        return;
       }
+    }
+    const stateMismatch =
+      hasDerivedState &&
+      typeof digest.stateHash === "string" &&
+      (digest.stateHash !== local.stateHash || local.stateHash !== local.derivedStateHash);
+    const layerMismatch =
+      hasDerivedLayer &&
+      typeof digest.layerHash === "string" &&
+      (digest.layerHash !== local.layerHash || local.layerHash !== local.derivedLayerHash);
+    if (!stateMismatch && !layerMismatch) return;
+    const result = boardApi.repairStateFromLog();
+    if (result.repaired) {
+      console.warn(`[sync] 检测到物化分歧，已局部自愈（${result.fixedIds.join(", ")}）`);
     }
   };
 

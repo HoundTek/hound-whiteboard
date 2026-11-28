@@ -71,6 +71,29 @@ function deserialize(data) {
 }
 
 /**
+ * 从序列化数据构造对象世界范围（不包含 position 位移）
+ * @param {string | JSON} data - 序列化对象数据
+ * @returns {import("../range/index.js").Range} 对象世界范围
+ * @throws {TypeError} 数据格式、对象类型或快照几何接口不受支持时抛出
+ */
+function getSerializedObjectRange(data) {
+  const serializedObject = normalizeSerializedObject(data);
+  if (
+    !serializedObject ||
+    typeof serializedObject !== "object" ||
+    Array.isArray(serializedObject) ||
+    typeof serializedObject.type !== "string"
+  ) {
+    throw new TypeError("Serialized object must contain a string type field");
+  }
+  const parser = parserRegistry.get(serializedObject.type);
+  if (!parser || typeof parser.rangeFromSerialized !== "function") {
+    throw new TypeError(`Unsupported snapshot geometry: ${serializedObject.type}`);
+  }
+  return parser.rangeFromSerialized(serializedObject);
+}
+
+/**
  * 注册自定义反序列化器
  * @param {string} type - 对象类型字符串，用于标识反序列化器
  * @param {{parse: function}} parser - 反序列化器类，必须实现一个静态 parse 方法
@@ -90,4 +113,4 @@ function registerDeserializer(type, parser) {
   parserRegistry.set(type, parser);
 }
 
-export { deserialize, registerDeserializer };
+export { deserialize, registerDeserializer, getSerializedObjectRange };

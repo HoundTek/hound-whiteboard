@@ -741,6 +741,25 @@ describe("网络协调器", () => {
     await raw.close();
   });
 
+  test("同长度同 HEAD 但 logHash 分歧时先请求日志", async () => {
+    server = createRelayServer({ port: 0, requestInitMinIntervalMs: 0 });
+    await server.ready;
+    const a = await connectEnd("a", server.port, "board-1");
+    ends = [a];
+    const raw = await connectRawClient(server.port, "board-1", "watcher");
+    raw.messages.length = 0;
+    raw.send({
+      type: "digest",
+      digest: { logSize: 0, logHash: "bogus-log-hash", head: null },
+    });
+
+    await until(
+      () => raw.messages.some((message) => message.type === "request-init"),
+      "logHash 分歧触发 request-init",
+    );
+    await raw.close();
+  });
+
   test("效果层分歧经 digest 校验和发现并自愈", async () => {
     server = createRelayServer({ port: 0 });
     await server.ready;
@@ -761,14 +780,45 @@ describe("网络协调器", () => {
 
     // 注入效果层分歧（绕过记录直接改实例）：日志逐字节一致但效果未放全的形态
     b.boardCore.getObjectById("a/1").position.x = 999;
+    b.api.refreshMaterializedProjection({ objectIds: ["a/1"] });
     expect(a.api.queryStateHash()).not.toBe(b.api.queryStateHash());
 
-    // digest 往返后 b 端从日志重放自愈：校验和与对象数据重新一致
+    // digest 往返后 b 端凭本地应然投影自愈：校验和与对象数据重新一致
     await until(
       () => a.api.queryStateHash() === b.api.queryStateHash(),
       "b 端自愈后校验和重新一致",
     );
     expect(b.boardCore.getObjectById("a/1").position.x).toBe(5);
+  });
+
+  test("层位边单独分歧经 layerHash 发现并局部自愈", async () => {
+    server = createRelayServer({ port: 0 });
+    await server.ready;
+    const a = await connectEnd("a", server.port, "board-1", { digestIntervalMs: 50 });
+    const b = await connectEnd("b", server.port, "board-1", { digestIntervalMs: 50 });
+    ends = [a, b];
+    await createStroke(a.api, "a/1");
+    await createStroke(a.api, "a/2");
+    await until(() => b.boardCore.getObjectById("a/2") != null, "b 收到两个对象");
+    const chunkId = [...b.boardCore.chunkLoaded.keys()][0];
+    const graph = b.boardCore.getChunkById(chunkId).objectManager.staticGraph;
+    await until(() => graph.hasEdge("a/1", "a/2"), "b 层位边收敛");
+
+    graph.deleteEdgeUnsafe("a/1", "a/2");
+    graph.addEdgeUnsafe("a/2", "a/1");
+    b.api.refreshMaterializedProjection({ chunkIds: [chunkId] });
+    expect(a.api.queryLayerHash()).not.toBe(b.api.queryLayerHash());
+    expect(a.api.queryStateHash()).toBe(b.api.queryStateHash());
+    const rebuild = jest.spyOn(b.boardCore.undoTree, "rebuild");
+
+    await until(
+      () => a.api.queryLayerHash() === b.api.queryLayerHash(),
+      "层序摘要重新一致",
+    );
+    const repairedGraph = b.boardCore.getChunkById(chunkId).objectManager.staticGraph;
+    expect(repairedGraph.hasEdge("a/1", "a/2")).toBe(true);
+    expect(repairedGraph.hasEdge("a/2", "a/1")).toBe(false);
+    expect(rebuild).not.toHaveBeenCalled();
   });
 
   test("派生链校验和分歧直接本地重建，不重复请求相同日志", async () => {
@@ -800,7 +850,7 @@ describe("网络协调器", () => {
     await raw.close();
   });
 
-  test("部分驻留端跳过内容校验和比对：不误报、不物化、不请求全量", async () => {
+  test("部分驻留端内容摘要不误报、不物化、不请求全量", async () => {
     server = createRelayServer({ port: 0 });
     await server.ready;
     const a = await connectEnd("a", server.port, "board-1", {
@@ -814,13 +864,14 @@ describe("网络协调器", () => {
     await createStroke(a.api, "a/1", 5);
     await until(() => b.boardCore.getObjectById("a/1") != null, "b 收到 a/1");
 
-    // b 端模拟区块卸载 → 部分驻留：两端内容校验和必然不同（旧行为会每轮误报并全量物化）
+    // b 端模拟区块卸载 → 部分驻留：逻辑状态摘要应保持不变（旧行为会每轮误报并全量物化）
     const chunkId = [...b.boardCore.chunkLoaded.keys()][0];
     b.boardCore.chunkLoaded.get(chunkId).fullLoadedCount = 0;
     b.boardCore.getChunkById(chunkId).isLoad = false;
     b.boardCore.unloadChunkObjectEntries(chunkId);
     expect(b.boardCore.isFullResidency()).toBe(false);
-    expect(a.api.queryStateHash()).not.toBe(b.api.queryStateHash());
+    // 物化哈希保留合法未驻留对象的逻辑状态，不因视口驱逐产生分歧
+    expect(a.api.queryStateHash()).toBe(b.api.queryStateHash());
 
     // 多轮 digest 后：不触发修复（对象不回内存），两端日志仍一致（未触发全量重建）
     await new Promise((resolve) => setTimeout(resolve, 300));

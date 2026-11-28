@@ -65,12 +65,28 @@ class CircleObject extends GraphObject {
     );
   }
 
+  /**
+   * 从原始数据构造世界范围
+   * @param {Record<string, any>} data - 半径数据
+   * @param {Matrix} transform - 变换矩阵
+   * @returns {EllipseRange} 世界范围
+   */
+  static createRange(data, transform) {
+    const radius = data.radius ?? 0;
+    return new EllipseRange(new Vector(0, 0), radius, radius).transform(transform);
+  }
+
+  /**
+   * 从序列化快照构造世界范围
+   * @param {Object} serialized - 序列化快照
+   * @returns {EllipseRange} 世界范围
+   */
+  static rangeFromSerialized(serialized) {
+    return CircleObject.createRange(serialized.data ?? {}, Matrix.parse(serialized.transform));
+  }
+
   getRange() {
-    return new EllipseRange(
-      new Vector(0, 0),
-      this.data.radius,
-      this.data.radius,
-    ).transform(this.transform);
+    return CircleObject.createRange(this.data, this.transform);
   }
 
   serialize() {

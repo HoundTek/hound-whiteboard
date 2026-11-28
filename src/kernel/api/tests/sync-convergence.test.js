@@ -47,10 +47,11 @@ function createEnd(source, now) {
 
 /**
  * 计算端的状态摘要（收敛断言口径）
- * @param {BoardCore} boardCore - 白板核心
+ * @param {{boardCore: BoardCore, api: BoardApi}} end - 白板端
  * @returns {Object} 状态摘要
  */
-function digestOf(boardCore) {
+function digestOf(end) {
+  const { boardCore, api } = end;
   const objects = {};
   for (const obj of boardCore.getAllObjects()) {
     objects[obj.id] = JSON.stringify(obj.serialize());
@@ -63,6 +64,10 @@ function digestOf(boardCore) {
     head: boardCore.undoTree.head?.shareId ?? null,
     objects,
     trash: [...boardCore.trash.keys()].sort(),
+    stateHash: api.queryStateHash(),
+    derivedStateHash: api.queryDerivedStateHash(),
+    layerHash: api.queryLayerHash(),
+    derivedLayerHash: api.queryDerivedLayerHash(),
   };
 }
 
@@ -257,7 +262,7 @@ describe("同步收敛性质", () => {
       await drainAll();
 
       const [first, ...rest] = ends.map((end) =>
-        JSON.stringify(digestOf(end.boardCore)),
+        JSON.stringify(digestOf(end)),
       );
       for (const other of rest) {
         expect(other).toBe(first);

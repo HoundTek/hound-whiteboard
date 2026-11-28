@@ -104,7 +104,7 @@ DAG 内经 `services.sharedState` 注入，图外代码持 `Board` 引用直接�
 - `queryOpenMols()`
 - `queryMolAmendSince(molId, sinceSeq)` — 取指定分子在 seq 水位之后的 amend 段（断线重连对账重发用）
 - `queryStateHash()` — 对象状态确定性校验和（digest 比对用）
-- `repairStateFromLog()` — 从本端日志重放派生对象状态并对齐活体（digest 分歧自愈）
+- `repairStateFromLog()` — 从活动链派生投影局部修复物化对象与静态图（digest 分歧自愈）
 - `requestDebug(query, extra?)`
 
 ### 撤销/重做与其他

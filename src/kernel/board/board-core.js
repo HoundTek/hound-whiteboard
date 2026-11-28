@@ -1229,6 +1229,32 @@ class BoardCore {
   }
 
   /**
+   * 判断对象是否因覆盖区块均未 FULL 持有而合法未驻留
+   * @description 只读取该对象覆盖索引与区块状态，不扫描全对象集合。
+   * @param {string} objectId - 对象 id
+   * @returns {boolean} 是否合法未驻留
+   */
+  isObjectLegallyUnloaded(objectId) {
+    if (this.isObjectEvicted(objectId)) return true;
+    if (!this.isObjectKnown(objectId)) return false;
+    const coveredChunkIds = this.getObjectCoverChunks(objectId);
+    if (coveredChunkIds && coveredChunkIds.size > 0) {
+      for (const chunkId of coveredChunkIds) {
+        const chunk = this.getChunkById(chunkId);
+        if (chunk?.isLoad && !chunk.isTempLoad) return false;
+      }
+      return true;
+    }
+    let foundOnlyTemp = false;
+    for (const { chunk } of this.chunkLoaded.values()) {
+      if (!chunk?.objectManager?.staticGraph?.hasNode(objectId)) continue;
+      if (chunk.isLoad && !chunk.isTempLoad) return false;
+      foundOnlyTemp = true;
+    }
+    return foundOnlyTemp;
+  }
+
+  /**
    * 对象是否处于驻留驱逐状态（经卸载路径合法离场）
    * @param {string} objectId - 对象 id
    * @returns {boolean} 是否被驱逐
@@ -1239,8 +1265,7 @@ class BoardCore {
 
   /**
    * 是否全量驻留（全部已知对象都在内存）
-   * @description 内容校验和（对象数据口径）只在全量驻留端之间可比；
-   * 部分驻留端（chunkUnload 驱逐了对象实例，或懒加载尚未载入对象）跳过内容比对。
+   * @description 仅作驻留诊断；对象与层序摘要使用逻辑状态，不再以本结果门控。
    * @returns {boolean} 是否全量驻留
    */
   isFullResidency() {
